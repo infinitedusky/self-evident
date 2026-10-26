@@ -493,6 +493,20 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Self Evident from Claude Code, over MCP (Sandy, 2026-10-26)
+
+Sandy, ahead of a new job on a big shared repo: "My biggest goal is to be fast… I want to think about how we can use
+it in VS Code, if it is helpful. I can't have the UI slowing things down." Agreed order: MCP first (half a day, and it
+makes the team test real), then GitHub sync, then a stacked pull request per task, tested on Corner Shop with a second
+GitHub account on the laptop acting as a plain teammate (no Self Evident there).
+- The agent's engine tools moved to one shared module (`tools.ts`); the web UI's conversations and the new MCP
+  endpoint both use it, so they never drift.
+- `POST /api/mcp/<appId>`: the official MCP SDK's web-standard Streamable HTTP transport, stateless, JSON responses,
+  DNS-rebinding protection (localhost hosts only). Read-only tools carry the read-only hint. Planning starts and
+  returns at once over MCP (a call that waits minutes can time out); the conversations here still wait for it.
+- `pnpm se connect` finds the app from the repo you are in (a worktree resolves to its main checkout) and prints the
+  `claude mcp add --scope local …` line.
+
 ## Observe is the app's signals; My Stuff is ours (Sandy, 2026-10-26)
 
 Sandy: "Needs you shows up in Observe. That isn't good. Observe is about the app signals, not what we are doing in

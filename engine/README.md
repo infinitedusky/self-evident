@@ -21,6 +21,20 @@ pnpm start      # or: the engine alone on http://localhost:4000, serving the bui
 ```
 
 Migrations run when the engine boots. The API is under `/api` (`GET /api` lists the routes); the UI is served at `/`.
+## From Claude Code (VS Code or the terminal)
+
+The engine is also an MCP server, one per app, with the same tools as the agent in the web UI: what needs you
+(`now`), projects and their graphs, plan a task, start, pause, retry, to-dos and their checklists, the backlog. In a
+checkout of the app's repo:
+
+```bash
+pnpm --dir <self-evident>/engine se connect .      # prints the one command to run, e.g.
+claude mcp add --scope local --transport http self-evident http://localhost:4000/api/mcp/app_…
+```
+
+Local scope keeps it to you and that repo; nothing is written into the repo. Then ask Claude Code "what needs me?".
+The web UI stays useful for watching (the graph, a project, the to-do lists); nothing waits on it.
+
 In here, `pnpm serve` runs just the engine and `pnpm se …` is the CLI (against `ENGINE_URL`, default `http://localhost:4000/api`):
 
 ```bash

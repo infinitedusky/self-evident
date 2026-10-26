@@ -2,7 +2,9 @@
  * `if`: the engine's CLI. A client like any other: it talks to the server over HTTP and watches /events.
  * Only `migrate` touches the database directly.
  */
+import { execFileSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
 import { Command } from 'commander'
 
 const ENGINE_URL = process.env.ENGINE_URL ?? 'http://localhost:4000/api'
@@ -39,6 +41,20 @@ program.command('app').argument('<name>').requiredOption('-w, --workspace <id>')
 program.command('repo').argument('<fullName>', 'owner/name on GitHub').requiredOption('-a, --app <id>').requiredOption('-p, --path <dir>', 'local main checkout; worktrees go in <dir>-worktrees/')
   .description("register an app's repo").action(async (fullName: string, o: { app: string; path: string }) => {
     console.log(JSON.stringify(await api('POST', '/repos', { appId: o.app, fullName, localPath: o.path })))
+  })
+
+program.command('connect').argument('[dir]', 'a checkout of the app\'s repo (a worktree is fine)', '.')
+  .description('print the command that connects Claude Code (VS Code or terminal) to this app\'s engine tools over MCP')
+  .action(async (dir: string) => {
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: resolve(dir), encoding: 'utf8' }).trim()
+    const top = git('rev-parse', '--show-toplevel')
+    const main = dirname(resolve(top, git('rev-parse', '--git-common-dir'))) // a worktree resolves to its main checkout
+    const apps = await api<{ id: string; name: string; repos: { localPath: string | null }[] }[]>('GET', '/apps')
+    const a = apps.find((x) => x.repos.some((r) => r.localPath && [top, main].includes(resolve(r.localPath))))
+    if (!a) { console.error(`No app has ${main} as its repo. Add it in Settings, or: pnpm se repo <owner/name> -a <appId> -p ${main}`); process.exitCode = 1; return }
+    const url = `${ENGINE_URL.replace(/\/api$/, '')}/api/mcp/${a.id}`
+    console.log(`${a.name} (${a.id}). In ${top}, run once:\n\n  claude mcp add --scope local --transport http self-evident ${url}\n`)
+    console.log('Local scope: only you, only in this repo; nothing is written into the repo. Then ask Claude Code "what needs me?"')
   })
 
 const project = program.command('project').description('projects are tasks in order; tasks are made of phases')

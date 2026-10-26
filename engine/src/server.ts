@@ -18,6 +18,7 @@ import { newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { answerPermission, closeTalks, endTalk, interruptTalk, listTalks, renameTalk, say, setAutoApprove, startTalk, talkTranscript, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
+import { handleMcp } from './mcp.js'
 import { addChecklist, draftChecklist, completeTodo, createTodo, dropTodo, getTodo, itemToTodo, listTodos, removeChecklistItem, reopenTodo, setChecklistItem, updateTodo } from './todos.js'
 import { addIdea, addItems, coverItem, dropItem, itemToTask, listBacklog, reopenItem } from './backlog.js'
 import { now } from './now.js'
@@ -57,6 +58,7 @@ export function buildApp(bus: EventBus) {
       'POST /projects/:id/tasks': '{title, brief?, description?} — a task at the end of the project',
       'POST /projects/:id/start': 'run it: worktrees, agent runs, landing, PR', 'POST /projects/:id/tick?room=N': 'one dispatch pass for a draft (no launching)',
       'POST /phases/:id/status': '{status} — by hand, for drafts',
+      'POST /mcp/:appId': 'the engine as an MCP server for Claude Code, scoped to one app (pnpm se connect prints the command)',
       'GET /events?since=SEQ&app=&project=&task=&phase=': 'SSE: replay from SEQ, then live',
     },
     cli: 'pnpm if --help  (engine/README.md)',
@@ -249,6 +251,9 @@ export function buildApp(bus: EventBus) {
     if (!PHASE_STATUSES.includes(status)) return c.json({ error: `status must be one of ${PHASE_STATUSES.join(', ')}` }, 400)
     try { return c.json(await setPhaseStatus(c.req.param('id'), status)) } catch (err) { return planError(c, err, 404) }
   })
+
+  // Claude Code (VS Code or terminal) drives the engine through MCP: the same tools as the conversations here.
+  api.all('/mcp/:appId', (c) => handleMcp(c.req.param('appId'), c.req.raw, Number(process.env.PORT ?? 4000)))
 
   // The live feed: replay from ?since=<seq>, then stream as events are committed.
   api.get('/events', (c) => {
