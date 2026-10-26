@@ -43,6 +43,7 @@ export function Now() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {error && <Badge tone="warn" dot>{error}</Badge>}
+          <button className="btn quiet" disabled={busy === 'sync'} onClick={() => act('sync', () => engine.syncGithub(app.id))} title="Read GitHub now: reviews, checks, merges, main moving (also every two minutes)">{busy === 'sync' ? 'Syncing…' : 'Sync with GitHub'}</button>
           <Link to="/projects/new" className="btn">New project</Link>
         </div>
       </div>
@@ -76,8 +77,15 @@ export function Now() {
   )
 }
 
+/** A PR's standing on GitHub, as the last sync saw it. */
+function prState(a: { review: string | null; checks: string }) {
+  const review = a.review === 'APPROVED' ? 'approved' : a.review === 'CHANGES_REQUESTED' ? 'changes requested' : a.review === 'REVIEW_REQUIRED' ? 'waiting for review' : 'no review yet'
+  const checks = a.checks === 'passing' ? 'checks passing' : a.checks === 'failing' ? 'checks failing' : a.checks === 'pending' ? 'checks running' : 'no checks'
+  return `${review}, ${checks}${a.review === 'APPROVED' && a.checks !== 'failing' && a.checks !== 'pending' ? ': ready to merge' : ''}`
+}
+
 function AttentionRow({ a, busy, act }: { a: Attention; busy: string | null; act: (key: string, fn: () => Promise<unknown>) => Promise<void> }) {
-  const where = <span className="faint">{a.appName} · <Link to={`/projects/${a.projectId}`}>{a.planTitle}</Link></span>
+  const where = 'projectId' in a && a.projectId && 'planTitle' in a ? <span className="faint">{a.appName} · <Link to={`/projects/${a.projectId}`}>{a.planTitle}</Link></span> : <span className="faint">{a.appName}</span>
   switch (a.kind) {
     case 'failed_phase': return (
       <li><Badge tone="bad">failed</Badge><div><strong>#{a.number} {a.title}</strong> {where}{a.error && <div className="muted" style={{ fontSize: 13 }}>{a.error.slice(0, 200)}</div>}</div>
@@ -100,7 +108,21 @@ function AttentionRow({ a, busy, act }: { a: Attention; busy: string | null; act
       <li><Badge tone="warn">backlog</Badge><div><strong>{a.planTitle}</strong> <span className="faint">{a.appName} · the work has landed; {a.open} backlog item{a.open === 1 ? '' : 's'} still open: {a.items.join('; ')}</span></div>
         <Link className="btn quiet small" to={`/projects/${a.projectId}`}>Settle them</Link></li>)
     case 'merge_pr': return (
-      <li><Badge tone="ok">landed</Badge><div><strong>{a.planTitle}</strong> <span className="faint">{a.appName} · every phase landed; the PR is waiting</span></div>
+      <li><Badge tone={a.review === 'CHANGES_REQUESTED' || a.checks === 'failing' ? 'bad' : a.review === 'APPROVED' && a.checks !== 'pending' ? 'ok' : 'neutral'}>landed</Badge>
+        <div><strong>{a.planTitle}</strong> <span className="faint">{a.appName} · every phase landed; {prState(a)}</span>{a.failing.length > 0 && <div className="muted" style={{ fontSize: 13 }}>Failing: {a.failing.join(', ')}</div>}</div>
+        {a.url ? <a className="btn quiet small" href={a.url} target="_blank" rel="noreferrer">PR #{a.prNumber}</a> : null}</li>)
+    case 'pr_feedback': return (
+      <li><Badge tone="bad">{a.review === 'CHANGES_REQUESTED' ? 'changes asked' : 'checks failing'}</Badge>
+        <div><strong>{a.planTitle}</strong> <span className="faint">{a.appName} · {prState(a)}</span>{a.failing.length > 0 && <div className="muted" style={{ fontSize: 13 }}>Failing: {a.failing.join(', ')}</div>}</div>
+        {a.url ? <a className="btn quiet small" href={a.url} target="_blank" rel="noreferrer">PR #{a.prNumber}</a> : null}</li>)
+    case 'behind_main': return (
+      <li><Badge tone="bad">conflict</Badge><div><strong>{a.planTitle}</strong> <span className="faint">{a.appName} · main moved ({a.commits} commit{a.commits === 1 ? '' : 's'}) and conflicts with this project's branch</span><div className="muted" style={{ fontSize: 13 }}>In: {a.files.split('\n').join(', ')}</div></div>
+        <Link className="btn quiet small" to={`/projects/${a.projectId}`}>Look</Link></li>)
+    case 'review': return (
+      <li><Badge tone="warn">review</Badge><div><strong>#{a.prNumber} {a.title}</strong> <span className="faint">{a.appName}{a.author ? ` · from ${a.author}` : ''} · your review is asked</span></div>
+        {a.url ? <a className="btn small" href={a.url} target="_blank" rel="noreferrer">Review</a> : null}</li>)
+    case 'overlap': return (
+      <li><Badge tone="warn">heads up</Badge><div><strong>#{a.prNumber} {a.title}</strong> <span className="faint">{a.appName}{a.author ? ` · ${a.author}` : ''} · touches what <Link to={`/projects/${a.projectId}`}>{a.planTitle}</Link> is building</span><div className="muted" style={{ fontSize: 13 }}>{a.files.join(', ')}</div></div>
         {a.url ? <a className="btn quiet small" href={a.url} target="_blank" rel="noreferrer">PR #{a.prNumber}</a> : null}</li>)
   }
 }

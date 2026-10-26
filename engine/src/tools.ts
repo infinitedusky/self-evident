@@ -14,6 +14,7 @@ import { now } from './now.js'
 import { answerQuestion, finishPlanning, preparePlanning } from './planner.js'
 import { createProject, listProjects, PlanError, projectGraph } from './projects.js'
 import { runner } from './runner.js'
+import { syncApp } from './github.js'
 import { addChecklist, completeTodo, createTodo, dropTodo, itemToTodo, listTodos, setChecklistItem, updateTodo } from './todos.js'
 
 export type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean }
@@ -72,6 +73,7 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         async (a) => tryIt(async () => { await ownTodo(a.todoId); return a.drop ? dropTodo(a.todoId, a.drop, actor) : completeTodo(a.todoId, actor) })),
       def('backlog_todo', 'Make an open backlog item a to-do of the app (work outside the code), with a checklist you draft.', { itemId: z.string(), title: z.string().optional(), checklist: z.array(z.object({ text: z.string(), waitingOn: z.string().optional() })).optional() },
         async (a) => tryIt(async () => { await ownItem(a.itemId); return itemToTodo(a.itemId, a, actor) })),
+      def('sync_github', 'Read GitHub now for this app (it also happens every two minutes): our pull requests merged, reviewed, checks; teammates\' pull requests and reviews asked of the person; main merged into open project branches, conflicts reported.', {}, async () => tryIt(() => syncApp(appId))),
       def('plan_task', `Run the planner on a task of this app (minutes): reads the repo and the brief, writes phases, decisions and questions. ${opts.waitForPlanner ? 'Returns when done.' : 'Returns at once; the outcome shows in now and project_graph.'}`, { taskId: z.string() }, async (a) => tryIt(async () => { await ownTask(a.taskId); const ctx = await preparePlanning(a.taskId, { actor }); const done = finishPlanning(ctx, { onPlanned: () => void runner.dispatch() }); if (opts.waitForPlanner) return done; void done; return { started: true, runId: ctx.runId, note: 'planning takes a few minutes; the outcome shows in now (My Stuff) and project_graph' } })),
       def('answer_question', 'Answer one of the planner\'s questions on the person\'s behalf; say so to them first.', { questionId: z.string(), answer: z.string() }, async (a) => tryIt(async () => { await ownQuestion(a.questionId); return answerQuestion(a.questionId, a.answer, actor) })),
       def('start_project', 'Run a project of this app: integration branch, a worktree and an agent per phase, landing, PR.', { projectId: z.string() }, async (a) => tryIt(async () => { await ownProject(a.projectId); return runner.startProject(a.projectId) })),

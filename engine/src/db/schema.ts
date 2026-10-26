@@ -263,6 +263,19 @@ export const event = pgTable('event', { // [IF] append-only live stream; the gra
 }, (t) => [index('event_workspace_seq').on(t.workspaceId, t.seq), index('event_phase_seq').on(t.phaseId, t.seq),
   index('event_project_seq').on(t.projectId, t.seq), index('event_app_seq').on(t.appId, t.seq)])
 
+// Pull requests Self Evident did not open (a teammate's, or the person's own by hand), kept from GitHub by the sync:
+// a review requested from the person shows in My Stuff, and one that touches files our open work claims is flagged.
+export const outsidePr = pgTable('outside_pr', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(), appId: appId(), repoId: text('repo_id').notNull().references(() => repo.id),
+  number: integer('number').notNull(), title: text('title').notNull(), author: text('author'), url: text('url'),
+  state: text('state').notNull(), draft: boolean('draft').notNull().default(false),
+  headBranch: text('head_branch'), baseBranch: text('base_branch'),
+  reviewRequested: boolean('review_requested').notNull().default(false), // from the person the engine runs as
+  reviewDecision: text('review_decision'), files: jsonb('files').notNull().default([]), // changed paths
+  updatedAt: timestamp('updated_at', { withTimezone: true }), syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('outside_pr_repo_number').on(t.repoId, t.number), index('outside_pr_app').on(t.appId, t.state),
+  inList('outside_pr_state', t.state, ['open', 'merged', 'closed'])])
+
 export const pr = pgTable('pr', { // [LS] githubPullRequests + review hub; [IF] pitch. One per project (its integration branch).
   id: id(), appId: appId(), projectId: text('project_id').notNull().references(() => project.id), repoId: text('repo_id').references(() => repo.id),
   number: integer('number'), url: text('url'), headBranch: text('head_branch'), baseBranch: text('base_branch'),
