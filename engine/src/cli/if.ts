@@ -46,7 +46,8 @@ program.command('repo').argument('<fullName>', 'owner/name on GitHub').requiredO
 program.command('connect').argument('[dir]', 'a checkout of the app\'s repo (a worktree is fine)', '.')
   .description('print the command that connects Claude Code (VS Code or terminal) to this app\'s engine tools over MCP')
   .action(async (dir: string) => {
-    const git = (...args: string[]) => execFileSync('git', args, { cwd: resolve(dir), encoding: 'utf8' }).trim()
+    const from = resolve(process.env.INIT_CWD ?? process.cwd(), dir) // pnpm --dir runs us in engine/; INIT_CWD is where you were
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: from, encoding: 'utf8' }).trim()
     const top = git('rev-parse', '--show-toplevel')
     const main = dirname(resolve(top, git('rev-parse', '--git-common-dir'))) // a worktree resolves to its main checkout
     const apps = await api<{ id: string; name: string; repos: { localPath: string | null }[] }[]>('GET', '/apps')
