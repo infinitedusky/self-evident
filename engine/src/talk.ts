@@ -19,6 +19,8 @@ import { rank, riskOf, type Risk } from './risk.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { createIdea, listIdeas } from './ideas.js'
 import { addIdea, addItems, coverItem, dropItem, itemToTask } from './backlog.js'
+import { addChecklist, completeTodo, createTodo, dropTodo, itemToTodo, listTodos, setChecklistItem, updateTodo } from './todos.js'
+import { checklistItem, todo } from './db/schema.js'
 import { backlogItem } from './db/schema.js'
 import { now } from './now.js'
 import { answerQuestion, finishPlanning, preparePlanning } from './planner.js'
@@ -32,7 +34,7 @@ const PERMISSION_TIMEOUT_MS = 10 * 60_000
 
 const talkPrompt = (cwd: string, branch: string | null, base: string) => `You are Self Evident's agent (Self Evident: software that proves itself — observe, learn, ideate, mockup, build), talking with the person who runs it, in its own web UI.
 The factory builds software from ideas: idea → project (tasks in order) → task (a title and a brief) → phase (one agent, one worktree, one commit) → step. Read CLAUDE.md, LOG.md and SHAPE.md in this checkout when you need the history; LOG.md's top entries are the latest decisions.
-You have the engine as tools (mcp__engine__*): see what needs attention, keep ideas, make projects, keep each project's backlog (everything it has to cover; when the person mentions something a project should not forget, add it), run the planner on a task, answer its questions, start or cancel projects, read the event log. Use them rather than describing what the person should click.
+You have the engine as tools (mcp__engine__*): see what needs attention, keep ideas, make projects, keep each project's backlog (everything it has to cover; when the person mentions something a project should not forget, add it), keep the app's to-dos (work outside the code: accounts, approvals, people, checks; when the person mentions one, make it with a checklist you draft, and check lines off as they get done), run the planner on a task, answer its questions, start or cancel projects, read the event log. Use them rather than describing what the person should click.
 You can read, search and edit files and run commands here, as in any Claude Code session. The engine rates every action's risk (free, cheap, moderate, expensive); up to the person's threshold it runs without asking and is logged, above it a card asks them. Expensive things (main, force, deletes, merges, publishing, starting a project) always ask. Work on a branch in a worktree, never in a checkout that is on main; say what each action is for.
 You work in your own worktree, ${cwd}, on branch ${branch ?? '(none)'} cut from ${base}: edit and commit there; push and open a pull request when the work is ready (both ask).
 How this person works: PRs only, main is production; short answers that lead with the answer; questions are questions, not instructions to change things; give a recommendation, not a survey; write decisions into LOG.md or SHAPE.md the moment they are made; one git worktree per branch, never the main checkout.`
@@ -77,6 +79,8 @@ function engineTools(appId: string, sessionId?: string) {
   const ownProject = async (projectId: string) => { const g = await projectGraph(projectId); if (!g || g.project.appId !== appId) throw foreign(); return g }
   const ownTask = async (taskId: string) => { const [t] = await db.select().from(task).where(eq(task.id, taskId)); if (!t || t.appId !== appId) throw foreign(); return t }
   const ownItem = async (itemId: string) => { const [i] = await db.select().from(backlogItem).where(eq(backlogItem.id, itemId)); if (!i || i.appId !== appId) throw foreign(); return i }
+  const ownTodo = async (todoId: string) => { const [t] = await db.select().from(todo).where(eq(todo.id, todoId)); if (!t || t.appId !== appId) throw foreign(); return t }
+  const ownLine = async (itemId: number) => { const [l] = await db.select().from(checklistItem).where(eq(checklistItem.id, itemId)); if (!l || l.appId !== appId) throw foreign(); return l }
   const ownQuestion = async (questionId: string) => { const [q] = await db.select().from(question).where(eq(question.id, questionId)); if (!q || q.appId !== appId) throw foreign(); return q }
   return createSdkMcpServer({
     name: 'engine', version: '0.2.0',
@@ -100,6 +104,22 @@ function engineTools(appId: string, sessionId?: string) {
         async (a) => tryIt(async () => { await ownItem(a.itemId); const out = await coverItem(a.itemId, a.taskId, a.reason, 'agent'); void runner.dispatch(); return out })),
       tool('backlog_drop', 'Drop an open backlog item, with the reason (required). Ask the person first unless they said so.', { itemId: z.string(), reason: z.string() },
         async (a) => tryIt(async () => { await ownItem(a.itemId); const out = await dropItem(a.itemId, a.reason, 'agent'); void runner.dispatch(); return out })),
+      tool('todos', 'This app\'s to-dos: the work around the code (accounts, approvals, people, checks), each with its checklist and the project it unblocks.', {}, async () => tryIt(() => listTodos(appId))),
+      tool('create_todo', 'Keep a to-do in this app: work outside the code. Draft its checklist yourself (concrete lines, in order; mark a line waitingOn when someone else has it, e.g. "Apple\'s review"). owner: person (they do it) or agent (you can do it here). projectId: the project it unblocks, if any.', {
+        title: z.string(), notes: z.string().optional(), owner: z.enum(['person', 'agent']).optional(), projectId: z.string().optional(),
+        checklist: z.array(z.object({ text: z.string(), waitingOn: z.string().optional() })).optional(),
+      }, async (a) => tryIt(async () => { if (a.projectId) await ownProject(a.projectId); return createTodo({ ...a, appId }, 'agent') })),
+      tool('update_todo', 'Change a to-do of this app: title, notes, owner, the project it unblocks; or add checklist lines (addChecklist).', {
+        todoId: z.string(), title: z.string().optional(), notes: z.string().optional(), owner: z.enum(['person', 'agent']).optional(), projectId: z.string().optional(),
+        addChecklist: z.array(z.object({ text: z.string(), waitingOn: z.string().optional() })).optional(),
+      }, async (a) => tryIt(async () => { await ownTodo(a.todoId); if (a.projectId) await ownProject(a.projectId); const { todoId, addChecklist: more, ...rest } = a; if (Object.keys(rest).length) await updateTodo(todoId, rest, 'agent'); return more?.length ? addChecklist(todoId, more, 'agent') : (await listTodos(appId)).find((t) => t.id === todoId) })),
+      tool('check_item', 'Check or uncheck a line of a to-do\'s checklist, or mark it waiting on someone (waitingOn; empty string clears). Check a line only when it is done: you did it, the person said so, or you verified it.', {
+        itemId: z.number(), done: z.boolean().optional(), waitingOn: z.string().optional(),
+      }, async (a) => tryIt(async () => { await ownLine(a.itemId); return setChecklistItem(a.itemId, { done: a.done, waitingOn: a.waitingOn }, 'agent') })),
+      tool('finish_todo', 'Mark a to-do of this app done (when its checklist was wrong or the rest no longer matters), or drop it with a reason.', { todoId: z.string(), drop: z.string().optional().describe('the reason, to drop it instead') },
+        async (a) => tryIt(async () => { await ownTodo(a.todoId); return a.drop ? dropTodo(a.todoId, a.drop, 'agent') : completeTodo(a.todoId, 'agent') })),
+      tool('backlog_todo', 'Make an open backlog item a to-do of the app (work outside the code), with a checklist you draft.', { itemId: z.string(), title: z.string().optional(), checklist: z.array(z.object({ text: z.string(), waitingOn: z.string().optional() })).optional() },
+        async (a) => tryIt(async () => { await ownItem(a.itemId); return itemToTodo(a.itemId, a, 'agent') })),
       tool('plan_task', 'Run the planner on a task of this app (minutes): reads the repo and the brief, writes phases, decisions and questions. Returns when done.', { taskId: z.string() }, async (a) => tryIt(async () => { await ownTask(a.taskId); return finishPlanning(await preparePlanning(a.taskId, { actor: 'agent' }), { onPlanned: () => void runner.dispatch() }) })),
       tool('answer_question', 'Answer one of the planner\'s questions on the person\'s behalf; say so to them first.', { questionId: z.string(), answer: z.string() }, async (a) => tryIt(async () => { await ownQuestion(a.questionId); return answerQuestion(a.questionId, a.answer, 'agent') })),
       tool('start_project', 'Run a project of this app: integration branch, a worktree and an agent per phase, landing, PR.', { projectId: z.string() }, async (a) => tryIt(async () => { await ownProject(a.projectId); return runner.startProject(a.projectId) })),

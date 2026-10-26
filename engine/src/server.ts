@@ -18,6 +18,7 @@ import { newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { answerPermission, closeTalks, endTalk, interruptTalk, listTalks, renameTalk, say, setAutoApprove, startTalk, talkTranscript, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
+import { addChecklist, draftChecklist, completeTodo, createTodo, dropTodo, getTodo, itemToTodo, listTodos, removeChecklistItem, reopenTodo, setChecklistItem, updateTodo } from './todos.js'
 import { addIdea, addItems, coverItem, dropItem, itemToTask, listBacklog, reopenItem } from './backlog.js'
 import { now } from './now.js'
 import { startStorybook, stopStorybooks, storybookStatus } from './storybook.js'
@@ -50,6 +51,9 @@ export function buildApp(bus: EventBus) {
       'POST /questions/:id/answer': '{answer}',
       'GET /projects/:id/backlog': 'everything the project has to cover', 'POST /projects/:id/backlog': '{text, body?} | {items: [{text, body?}]} | {ideaId}',
       'POST /backlog/:id/task': '{title?, brief?} — the item becomes a new task at the end', 'POST /backlog/:id/cover': '{taskId, reason?}', 'POST /backlog/:id/drop': '{reason}', 'POST /backlog/:id/reopen': '',
+      'GET /todos?app=': 'the app\'s to-dos with their checklists', 'POST /todos': '{appId, title, notes?, owner?, projectId?, checklist?: [text | {text, waitingOn?}]}',
+      'PATCH /todos/:id': '{title?, notes?, owner?, projectId?}', 'POST /todos/:id/checklist': '{items}', 'PATCH /checklist/:id': '{done?, waitingOn?, text?}', 'DELETE /checklist/:id': '',
+      'POST /todos/:id/draft': 'the agent drafts the checklist, or what is missing from it', 'POST /todos/:id/done': '', 'POST /todos/:id/drop': '{reason}', 'POST /todos/:id/reopen': '', 'POST /backlog/:id/todo': '{title?, checklist?} — the item is work outside the code',
       'POST /projects/:id/tasks': '{title, brief?, description?} — a task at the end of the project',
       'POST /projects/:id/start': 'run it: worktrees, agent runs, landing, PR', 'POST /projects/:id/tick?room=N': 'one dispatch pass for a draft (no launching)',
       'POST /phases/:id/status': '{status} — by hand, for drafts',
@@ -207,6 +211,22 @@ export function buildApp(bus: EventBus) {
   api.post('/backlog/:id/drop', async (c) => {
     const { reason } = await c.req.json<{ reason: string }>()
     try { return c.json(settle(await dropItem(c.req.param('id'), reason, 'user'))) } catch (err) { return planError(c, err) }
+  })
+  // To-dos: the work around the code, with a checklist. They belong to the app; a project shows the ones that unblock it.
+  api.get('/todos', async (c) => { const a = c.req.query('app'); return a ? c.json(await listTodos(a)) : c.json({ error: 'app is required: one app at a time' }, 400) })
+  api.post('/todos', async (c) => { try { return c.json(await createTodo(await c.req.json(), 'user'), 201) } catch (err) { return planError(c, err) } })
+  api.get('/todos/:id', async (c) => { try { return c.json(await getTodo(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
+  api.patch('/todos/:id', async (c) => { try { return c.json(await updateTodo(c.req.param('id'), await c.req.json(), 'user')) } catch (err) { return planError(c, err) } })
+  api.post('/todos/:id/checklist', async (c) => { const { items } = await c.req.json<{ items: (string | { text: string; waitingOn?: string })[] }>(); try { return c.json(await addChecklist(c.req.param('id'), items ?? [], 'user')) } catch (err) { return planError(c, err) } })
+  api.patch('/checklist/:id', async (c) => { try { return c.json(await setChecklistItem(Number(c.req.param('id')), await c.req.json(), 'user')) } catch (err) { return planError(c, err) } })
+  api.delete('/checklist/:id', async (c) => { try { return c.json(await removeChecklistItem(Number(c.req.param('id')), 'user')) } catch (err) { return planError(c, err) } })
+  api.post('/todos/:id/draft', async (c) => { try { return c.json(await draftChecklist(c.req.param('id'))) } catch (err) { return planError(c, err) } }) // the agent drafts the checklist (a minute)
+  api.post('/todos/:id/done', async (c) => { try { return c.json(await completeTodo(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
+  api.post('/todos/:id/drop', async (c) => { const { reason } = await c.req.json<{ reason: string }>(); try { return c.json(await dropTodo(c.req.param('id'), reason, 'user')) } catch (err) { return planError(c, err) } })
+  api.post('/todos/:id/reopen', async (c) => { try { return c.json(await reopenTodo(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
+  api.post('/backlog/:id/todo', async (c) => {
+    const body = await c.req.json<{ title?: string; checklist?: string[] }>().catch(() => ({}))
+    try { return c.json(settle(await itemToTodo(c.req.param('id'), body, 'user')), 201) } catch (err) { return planError(c, err) }
   })
   api.post('/backlog/:id/reopen', async (c) => { try { return c.json(await reopenItem(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
 

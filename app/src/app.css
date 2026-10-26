@@ -217,3 +217,17 @@ a.badge { text-decoration: none; }
 .backlog select.small { padding: 3px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 13px var(--sans); max-width: 220px; }
 .linkish { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; font-size: 13px; }
 @media (max-width: 700px) { .backlog-items li { flex-direction: column; } .backlog-actions { justify-content: flex-start; } }
+
+/* To-dos: work around the code, each with a checklist. */
+.todo-list { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); align-items: start; }
+.card.todo.done, .card.todo.dropped { opacity: .75; }
+.checklist { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; }
+.checklist li { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; }
+.checklist li label { display: flex; gap: 8px; align-items: baseline; flex: 1; cursor: pointer; font-weight: 400; }
+.checklist li input { margin: 0; }
+.checklist li.done span { text-decoration: line-through; color: var(--ink-faint); }
+.checklist .line-actions { display: flex; gap: 6px; opacity: 0; }
+.checklist li:hover .line-actions, .checklist li:focus-within .line-actions { opacity: 1; }
+.todo-notes { white-space: pre-wrap; margin: 8px 0 0; font-size: 14px; color: var(--ink-soft); cursor: text; }
+button.badge { border: 0; cursor: pointer; }
+@media (max-width: 700px) { .todo-list { grid-template-columns: 1fr; } .checklist .line-actions { opacity: 1; } }

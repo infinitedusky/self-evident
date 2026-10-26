@@ -18,13 +18,14 @@ let popup: Window | null = null
 
 /** Where the person is, from the route: enough for the agent to look the rest up. */
 export function contextFor(pathname: string, search: string): TalkContext {
-  const project = pathname.match(/^\/projects\/(plan_[A-Za-z0-9_-]+)/)?.[1]
+  const project = pathname.match(/^\/projects\/((?:plan|proj)_[A-Za-z0-9_-]+)/)?.[1]
   const app = new URLSearchParams(search).get('app') ?? undefined
   if (project) return { path: pathname, projectId: project, label: 'this project' }
   if (pathname === '/projects/new') return { path: pathname, label: 'the project composer' }
   if (pathname.startsWith('/projects')) return { path: pathname, label: 'the projects list' }
   if (pathname.startsWith('/build')) return { path: pathname, label: 'Build' }
   if (pathname.startsWith('/tasks')) return { path: pathname, label: 'the task list' }
+  if (pathname.startsWith('/todos')) return { path: pathname, label: 'the to-dos (work outside the code)' }
   if (pathname.startsWith('/validate')) return { path: pathname, label: 'Validate' }
   if (pathname.startsWith('/mockups')) return { path: pathname, label: 'the mockups (Storybook)' }
   if (pathname.startsWith('/ideas')) return { path: pathname, label: 'Ideate (the inbox)' }

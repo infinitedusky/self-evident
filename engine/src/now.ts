@@ -2,9 +2,9 @@
  * The front door: what is running, what needs a person, what just happened. Nothing here has state of its own;
  * it is all read from the project, task, phase, question, pr, run, step and event tables, so it is always true.
  */
-import { and, desc, eq, inArray, ne, notInArray } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, ne, notInArray } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, backlogItem, event, phase, project, pr, question, run, step, task } from './db/schema.js'
+import { app, backlogItem, checklistItem, todo, event, phase, project, pr, question, run, step, task } from './db/schema.js'
 
 const LIVE = ['running', 'merging', 'testing', 'awaiting_answer']
 const NOISE = ['run.tool_call', 'run.tool_result', 'run.rate_limit', 'run.message', 'talk.message', 'talk.permission', 'talk.result'] // conversations have their own place
@@ -15,6 +15,7 @@ export type Attention =
   | { kind: 'run_project'; projectId: string; planTitle: string; appName: string; phases: number }
   | { kind: 'plan_task'; projectId: string; planTitle: string; appName: string; taskId: string; taskNumber: number; taskTitle: string }
   | { kind: 'backlog'; projectId: string; planTitle: string; appName: string; open: number; items: string[] }
+  | { kind: 'todo'; todoId: string; number: number; title: string; owner: string; projectId: string | null; planTitle: string | null; appName: string; done: number; total: number; next: string | null; waitingOn: string[] }
   | { kind: 'merge_pr'; projectId: string; planTitle: string; appName: string; prNumber: number | null; url: string | null }
 
 export async function now(appId?: string) {
@@ -80,6 +81,17 @@ export async function now(appId?: string) {
     const thePr = prs.find((q) => q.projectId === p.id)
     if (thePr && thePr.status === 'open') needsYou.push({ kind: 'merge_pr', ...tag(p), prNumber: thePr.number, url: thePr.url })
   }
+
+  // To-dos: work outside the code. What waits on a person first; one whose only open lines wait on someone else after.
+  const todos = await db.select().from(todo).where(appId ? and(eq(todo.status, 'open'), eq(todo.appId, appId)) : eq(todo.status, 'open'))
+  const lines = todos.length ? await db.select().from(checklistItem).where(inArray(checklistItem.todoId, todos.map((t) => t.id))).orderBy(asc(checklistItem.position), asc(checklistItem.id)) : []
+  const todoRows = todos.map((t) => {
+    const mine = lines.filter((l) => l.todoId === t.id), open = mine.filter((l) => !l.done)
+    return { kind: 'todo' as const, todoId: t.id, number: t.number, title: t.title, owner: t.owner, projectId: t.projectId, planTitle: projects.find((p) => p.id === t.projectId)?.title ?? null, appName: appName(t.appId),
+      done: mine.length - open.length, total: mine.length, next: open.find((l) => !l.waitingOn)?.text ?? null, waitingOn: [...new Set(open.filter((l) => l.waitingOn).map((l) => l.waitingOn!))] }
+  })
+  const stalled = (r: typeof todoRows[number]) => r.total > 0 && !r.next && r.waitingOn.length > 0
+  needsYou.push(...todoRows.filter((r) => !stalled(r)).sort((a, b) => a.number - b.number), ...todoRows.filter(stalled).sort((a, b) => a.number - b.number))
 
   return { running, needsYou, recent: recent.reverse(), counts: { projects: projects.length, running: running.length, needsYou: needsYou.length } }
 }

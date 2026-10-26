@@ -1,6 +1,7 @@
 /**
  * The engine's schema. Git holds code; this holds all state; the engine is the single writer.
  * From research/parallel-engine.md §5: [LS] Lightsprint-derived, [ID] InDusk run-the-graph, [IF] ours.
+ * Beside projects, an app has to-dos (work outside the code, each with a checklist).
  * Hierarchy: idea → project (a backlog, and tasks in order) → task (authored: title + brief) → phase (the atomic unit the engine runs)
  * → step (the builder's own todo list while it builds a phase).
  * IDs are prefixed short strings (ids.ts). State tables are the truth; `event` is the append-only log and live feed.
@@ -110,6 +111,32 @@ export const task = pgTable('task', { // authored: a title and a brief (like an 
   foreignKey({ name: 'task_project_app_fk', columns: [t.projectId, t.appId], foreignColumns: [project.id, project.appId] }),
   foreignKey({ name: 'task_idea_app_fk', columns: [t.ideaId, t.appId], foreignColumns: [idea.id, idea.appId] })])
 
+// To-dos: the work around the code (Sandy, 2026-10-26): accounts, approvals, people, checks. A to-do belongs to the
+// app, beside its projects, never inside one; it is owned by the person or the agent, can point at the project it
+// unblocks, and has a checklist (one level). It is done when its checklist is, or when a person says so.
+export const TODO_OWNERS = ['person', 'agent'] as const
+export const TODO_STATUSES = ['open', 'done', 'dropped'] as const
+export const todo = pgTable('todo', {
+  id: id(), appId: appId(), number: integer('number').notNull(),
+  title: text('title').notNull(), notes: text('notes'), // notes: Markdown, anything worth keeping (links, who, what was said)
+  owner: text('owner').notNull().default('person'), status: text('status').notNull().default('open'),
+  projectId: text('project_id').references(() => project.id), // the project it unblocks, if any
+  reason: text('reason'), // dropped: why
+  createdBy: text('created_by'), createdAt: createdAt(), updatedAt: timestamp('updated_at', { withTimezone: true }),
+  closedBy: text('closed_by'), closedAt: timestamp('closed_at', { withTimezone: true }),
+}, (t) => [uniqueIndex('todo_app_number').on(t.appId, t.number), uniqueIndex('todo_id_app').on(t.id, t.appId), index('todo_app').on(t.appId),
+  inList('todo_owner', t.owner, TODO_OWNERS), inList('todo_status', t.status, TODO_STATUSES),
+  check('todo_dropped_reason', sql`${t.status} <> 'dropped' or ${t.reason} is not null`),
+  foreignKey({ name: 'todo_project_app_fk', columns: [t.projectId, t.appId], foreignColumns: [project.id, project.appId] })])
+
+export const checklistItem = pgTable('checklist_item', { // one line of a to-do's checklist
+  id: bigserial('id', { mode: 'number' }).primaryKey(), appId: appId(), todoId: text('todo_id').notNull().references(() => todo.id),
+  position: integer('position').notNull().default(0), text: text('text').notNull(),
+  done: boolean('done').notNull().default(false), doneBy: text('done_by'), doneAt: timestamp('done_at', { withTimezone: true }),
+  waitingOn: text('waiting_on'), // someone else has it: "Apple's review"
+}, (t) => [index('checklist_item_todo').on(t.todoId),
+  foreignKey({ name: 'checklist_item_todo_app_fk', columns: [t.todoId, t.appId], foreignColumns: [todo.id, todo.appId] })])
+
 // A project's backlog: everything it has to cover, so nothing is forgotten (Sandy, 2026-10-23: "this is what I need to
 // accomplish and I know it's all here"). An item comes from a person, the agent, an idea, the planner or a builder; it
 // ends covered by a task (a new one, or one that already does it) or dropped with a reason. A project lands only when
@@ -123,12 +150,14 @@ export const backlogItem = pgTable('backlog_item', {
   ideaId: text('idea_id').references(() => idea.id), // the idea it came from, if any
   state: text('state').notNull().default('open'),
   taskId: text('task_id').references(() => task.id), // covered: the task that does it
+  todoId: text('todo_id').references(() => todo.id), // or the to-do that does it: work outside the code
   reason: text('reason'), // dropped: why; covered: how, when it is not obvious
   createdBy: text('created_by'), createdAt: createdAt(),
   resolvedBy: text('resolved_by'), resolvedAt: timestamp('resolved_at', { withTimezone: true }),
 }, (t) => [index('backlog_item_project').on(t.projectId), inList('backlog_item_source', t.source, BACKLOG_SOURCES), inList('backlog_item_state', t.state, BACKLOG_STATES),
-  check('backlog_item_resolution', sql`(${t.state} = 'open') or (${t.state} = 'covered' and ${t.taskId} is not null) or (${t.state} = 'dropped' and ${t.reason} is not null)`),
+  check('backlog_item_resolution', sql`(${t.state} = 'open') or (${t.state} = 'covered' and (${t.taskId} is not null or ${t.todoId} is not null)) or (${t.state} = 'dropped' and ${t.reason} is not null)`),
   foreignKey({ name: 'backlog_item_project_app_fk', columns: [t.projectId, t.appId], foreignColumns: [project.id, project.appId] }),
+  foreignKey({ name: 'backlog_item_todo_app_fk', columns: [t.todoId, t.appId], foreignColumns: [todo.id, todo.appId] }),
   foreignKey({ name: 'backlog_item_task_app_fk', columns: [t.taskId, t.appId], foreignColumns: [task.id, task.appId] }),
   foreignKey({ name: 'backlog_item_idea_app_fk', columns: [t.ideaId, t.appId], foreignColumns: [idea.id, idea.appId] })])
 

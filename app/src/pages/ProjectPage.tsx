@@ -9,6 +9,7 @@ import { PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
 import { Brief } from '../components/Brief'
 import { engine, useLiveProject, type BacklogItem, type Graph, type IdeaRow, type Decision, type Event, type GraphPhase, type GraphTask, type Question } from '../engine'
 import { useCurrentApp } from '../current-app'
+import { TodoCard } from './Todos'
 
 const PROJECT_TONE: Record<string, Tone> = { paused: 'warn', drafting: 'neutral', proposed: 'neutral', approved: 'neutral', running: 'accent', landed: 'ok', stopped: 'warn', superseded: 'neutral' }
 const COST_TONE: Record<string, Tone> = { cheap: 'neutral', moderate: 'warn', expensive: 'bad' }
@@ -70,6 +71,14 @@ export function ProjectPage() {
       </div>
 
       <BacklogPanel graph={graph} busy={busy} act={act} />
+
+      {graph.todos?.length > 0 && (
+        <section className="panel" data-component="ProjectTodos">
+          <h2>To-dos it waits on {graph.todos.filter((t) => t.status === 'open').length > 0 && <Badge tone="warn">{graph.todos.filter((t) => t.status === 'open').length} open</Badge>}</h2>
+          <p className="muted" style={{ margin: '0 0 10px', fontSize: 14 }}>Work outside the code this project needs. They belong to the app; <Link to="/todos">all to-dos</Link>.</p>
+          <div className="todo-list">{graph.todos.map((t) => <TodoCard key={t.id} todo={t} compact onChange={() => undefined} onError={(e) => window.alert(e)} />)}</div>
+        </section>
+      )}
 
       <ol className="task-strip">
         {graph.tasks.map((t) => (
@@ -143,6 +152,7 @@ function BacklogPanel({ graph, busy, act }: { graph: Graph; busy: boolean; act: 
           <div><span>{i.text}</span> <Badge>{SOURCE_LABEL[i.source]}</Badge>{i.body && <div className="faint" style={{ fontSize: 13 }}>{i.body}</div>}</div>
           {!closed && <span className="backlog-actions">
             <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.itemToTask(i.id))} title="A new task at the end of the project">Make a task</button>
+            <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.itemToTodo(i.id))} title="Work outside the code: a to-do of the app, with a checklist">To-do</button>
             {graph.tasks.length > 0 && <select className="small" disabled={busy} value="" onChange={(e) => { const id = e.target.value; if (id) void act(() => engine.coverItem(i.id, id)) }} title="A task the project already has does this">
               <option value="">Covered by…</option>
               {graph.tasks.map((t) => <option key={t.id} value={t.id}>task #{t.number} {t.title}</option>)}
@@ -166,7 +176,7 @@ function BacklogPanel({ graph, busy, act }: { graph: Graph; busy: boolean; act: 
           {showDone && <ul className="backlog-items done">{done.map((i) => (
             <li key={i.id}>
               <div><span>{i.text}</span> <Badge>{SOURCE_LABEL[i.source]}</Badge>
-                <div className="faint" style={{ fontSize: 13 }}>{i.state === 'covered' ? `→ ${taskLabel(i.taskId)}${i.reason ? ` (${i.reason})` : ''}` : `dropped: ${i.reason}`}</div></div>
+                <div className="faint" style={{ fontSize: 13 }}>{i.state === 'covered' ? `→ ${i.todoId ? 'a to-do' : taskLabel(i.taskId)}${i.reason ? ` (${i.reason})` : ''}` : `dropped: ${i.reason}`}</div></div>
               {!closed && <span className="backlog-actions"><button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.reopenItem(i.id))}>Reopen</button></span>}
             </li>))}</ul>}
         </div>
