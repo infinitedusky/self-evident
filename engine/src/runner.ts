@@ -49,7 +49,9 @@ export class Runner {
     if (!r) throw new PlanError(`app ${a.name} has no repo with a local path`)
     const g = (await projectGraph(projectId))!
     if (!g.phases.length) throw new PlanError('this project has no phases yet; project its tasks first')
-    const sha = await ensureBranch(r.localPath!, p.integrationBranch!, a.defaultBranch)
+    // From main as it is on GitHub when there is a remote (a teammate may have merged since the local main was pulled).
+    const fetched = (await git(r.localPath!, ['fetch', '-q', 'origin', a.defaultBranch], { allowFail: true })).code === 0
+    const sha = await ensureBranch(r.localPath!, p.integrationBranch!, fetched ? `origin/${a.defaultBranch}` : a.defaultBranch)
     await db.update(project).set({ status: 'running' }).where(eq(project.id, projectId))
     await this.emit({ ...ctx.base, type: 'project.started', payload: { integrationBranch: p.integrationBranch, from: a.defaultBranch, sha } })
     void this.dispatch()

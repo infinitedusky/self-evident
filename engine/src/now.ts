@@ -4,7 +4,7 @@
  */
 import { and, asc, desc, eq, inArray, ne, notInArray } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, backlogItem, checklistItem, todo, event, phase, project, pr, question, run, step, task } from './db/schema.js'
+import { app, backlogItem, checklistItem, outsidePr, phaseFileClaim, todo, event, phase, project, pr, question, run, step, task } from './db/schema.js'
 
 const LIVE = ['running', 'merging', 'testing', 'awaiting_answer']
 const NOISE = ['run.tool_call', 'run.tool_result', 'run.rate_limit', 'run.message', 'talk.message', 'talk.permission', 'talk.result'] // conversations have their own place
@@ -16,7 +16,11 @@ export type Attention =
   | { kind: 'plan_task'; projectId: string; planTitle: string; appName: string; taskId: string; taskNumber: number; taskTitle: string }
   | { kind: 'backlog'; projectId: string; planTitle: string; appName: string; open: number; items: string[] }
   | { kind: 'todo'; todoId: string; number: number; title: string; owner: string; projectId: string | null; planTitle: string | null; appName: string; done: number; total: number; next: string | null; waitingOn: string[] }
-  | { kind: 'merge_pr'; projectId: string; planTitle: string; appName: string; prNumber: number | null; url: string | null }
+  | { kind: 'merge_pr'; projectId: string; planTitle: string; appName: string; prNumber: number | null; url: string | null; review: string | null; checks: string; failing: string[] }
+  | { kind: 'pr_feedback'; projectId: string; planTitle: string; appName: string; prNumber: number | null; url: string | null; review: string | null; checks: string; failing: string[] }
+  | { kind: 'behind_main'; projectId: string; planTitle: string; appName: string; files: string; commits: number }
+  | { kind: 'review'; appName: string; prNumber: number; title: string; author: string | null; url: string | null }
+  | { kind: 'overlap'; appName: string; prNumber: number; title: string; author: string | null; url: string | null; files: string[]; projectId: string; planTitle: string }
 
 export async function now(appId?: string) {
   const projects = await db.select().from(project).where(appId ? and(ne(project.status, 'superseded'), eq(project.appId, appId)) : ne(project.status, 'superseded')).orderBy(desc(project.createdAt))
@@ -77,9 +81,32 @@ export async function now(appId?: string) {
     const allPlanned = tasks.filter((t) => t.projectId === p.id).every((t) => mine.some((x) => x.taskId === t.id))
     if (items.length && allPlanned && mine.length && mine.every((x) => x.status === 'done')) needsYou.push({ kind: 'backlog', ...tag(p), open: items.length, items: items.map((i) => i.text).slice(0, 5) })
   }
-  for (const p of projects.filter((x) => x.status === 'landed')) {
+  // GitHub, as the sync last saw it: our PRs (review, checks), main moving under a project, teammates' PRs.
+  const sig = (q: typeof prs[number]) => { const s = (q.signals ?? {}) as { review?: string | null; checks?: string; failing?: string[] }; return { review: s.review ?? null, checks: s.checks ?? 'none', failing: s.failing ?? [] } }
+  for (const p of projects) {
     const thePr = prs.find((q) => q.projectId === p.id)
-    if (thePr && thePr.status === 'open') needsYou.push({ kind: 'merge_pr', ...tag(p), prNumber: thePr.number, url: thePr.url })
+    if (!thePr || !['open', 'draft'].includes(thePr.status)) continue
+    const s = sig(thePr)
+    if (p.status === 'landed') needsYou.push({ kind: 'merge_pr', ...tag(p), prNumber: thePr.number, url: thePr.url, ...s })
+    else if (s.review === 'CHANGES_REQUESTED' || s.checks === 'failing') needsYou.push({ kind: 'pr_feedback', ...tag(p), prNumber: thePr.number, url: thePr.url, ...s })
+  }
+  const projectIdsAll = projects.map((p) => p.id)
+  const mainEvents = projectIdsAll.length ? await db.select().from(event).where(and(inArray(event.projectId, projectIdsAll), inArray(event.type, ['project.caught_up', 'project.behind_main']))).orderBy(desc(event.seq)) : []
+  for (const p of projects.filter((x) => !['stopped', 'superseded'].includes(x.status))) {
+    const last = mainEvents.find((e) => e.projectId === p.id)
+    if (last?.type === 'project.behind_main') needsYou.push({ kind: 'behind_main', ...tag(p), files: String((last.payload as any).files ?? ''), commits: Number((last.payload as any).commits ?? 0) })
+  }
+  const outside = await db.select().from(outsidePr).where(appId ? and(eq(outsidePr.state, 'open'), eq(outsidePr.appId, appId)) : eq(outsidePr.state, 'open'))
+  for (const o of outside.filter((x) => x.reviewRequested && !x.draft)) needsYou.push({ kind: 'review', appName: appName(o.appId), prNumber: o.number, title: o.title, author: o.author, url: o.url })
+  const live = phases.filter((x) => !['done', 'failed', 'cancelled'].includes(x.status) && projects.find((p) => p.id === x.projectId && ['running', 'paused'].includes(p.status)))
+  const claims = live.length ? await db.select().from(phaseFileClaim).where(inArray(phaseFileClaim.phaseId, live.map((x) => x.id))) : []
+  for (const o of outside) {
+    const files = (o.files as string[]) ?? []
+    for (const p of projects.filter((x) => ['running', 'paused'].includes(x.status) && x.appId === o.appId)) {
+      const mine = claims.filter((c) => live.some((x) => x.id === c.phaseId && x.projectId === p.id)).map((c) => c.path.replace(/\/+$/, ''))
+      const hit = files.filter((f) => mine.some((m) => f === m || f.startsWith(m + '/') || m.startsWith(f + '/')))
+      if (hit.length) needsYou.push({ kind: 'overlap', appName: appName(o.appId), prNumber: o.number, title: o.title, author: o.author, url: o.url, files: hit.slice(0, 8), projectId: p.id, planTitle: p.title })
+    }
   }
 
   // To-dos: work outside the code. What waits on a person first; one whose only open lines wait on someone else after.

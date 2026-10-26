@@ -493,6 +493,25 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## GitHub sync (2026-10-26)
+
+Second of three for team work (after MCP; before a stacked PR per task). The engine now reads GitHub through the
+person's `gh` login every two minutes (and on demand: My Stuff's "Sync with GitHub", `POST /apps/:id/sync`, the
+`sync_github` tool):
+- **Our PRs**: merged or closed (the stale "PR waiting" rows go), the review decision, CI checks as one word
+  (passing, failing, pending, none) with what failed, mergeable. Changes become events (`pr.merged`, `pr.review`,
+  `pr.checks`).
+- **PRs we did not open** (a teammate's, or one made by hand): table `outside_pr` (migration 0012) with the review
+  asked of the person and the files each changes.
+- **Main moving**: the default branch is fetched and merged into every open project's branch in a scratch worktree,
+  under the landing lock; pushed when the branch already has a PR. A conflict is reported, never resolved
+  (`project.behind_main`, with the files). New projects now branch from `origin/<main>` after a fetch, not from a
+  local main that may be stale.
+- **My Stuff**: changes requested or checks failing on our PR; "landed" rows say approved / waiting for review /
+  checks state, and "ready to merge"; main conflicts with a project; a teammate's PR asking for your review; a
+  teammate's PR touching files a running project claims.
+- Corner Shop has no CI yet; the team test needs a workflow there.
+
 ## Self Evident from Claude Code, over MCP (Sandy, 2026-10-26)
 
 Sandy, ahead of a new job on a big shared repo: "My biggest goal is to be fast… I want to think about how we can use

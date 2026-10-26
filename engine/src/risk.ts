@@ -37,6 +37,7 @@ const ENGINE: Record<string, [Risk, string]> = {
   check_item: ['cheap', 'checks a line off; uncheck undoes it'],
   finish_todo: ['cheap', 'closes a to-do; reopen undoes it'],
   backlog_todo: ['cheap', 'moves a backlog item to a to-do; reopen undoes it'],
+  sync_github: ['cheap', 'reads GitHub; merges main into open project branches, conflicts only reported'],
   start_project: ['expensive', 'runs agents, spends money, opens a pull request'],
 }
 

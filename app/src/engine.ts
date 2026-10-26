@@ -64,7 +64,11 @@ export type Attention =
   | { kind: 'plan_task'; projectId: string; planTitle: string; appName: string; taskId: string; taskNumber: number; taskTitle: string }
   | { kind: 'backlog'; projectId: string; planTitle: string; appName: string; open: number; items: string[] }
   | { kind: 'todo'; todoId: string; number: number; title: string; owner: string; projectId: string | null; planTitle: string | null; appName: string; done: number; total: number; next: string | null; waitingOn: string[] }
-  | { kind: 'merge_pr'; projectId: string; planTitle: string; appName: string; prNumber: number | null; url: string | null }
+  | { kind: 'merge_pr'; projectId: string; planTitle: string; appName: string; prNumber: number | null; url: string | null; review: string | null; checks: string; failing: string[] }
+  | { kind: 'pr_feedback'; projectId: string; planTitle: string; appName: string; prNumber: number | null; url: string | null; review: string | null; checks: string; failing: string[] }
+  | { kind: 'behind_main'; projectId: string; planTitle: string; appName: string; files: string; commits: number }
+  | { kind: 'review'; appName: string; prNumber: number; title: string; author: string | null; url: string | null }
+  | { kind: 'overlap'; appName: string; prNumber: number; title: string; author: string | null; url: string | null; files: string[]; projectId: string; planTitle: string }
 export interface RunningPlan {
   projectId: string; planTitle: string; appName: string; status: string; integrationBranch: string | null
   phases: { total: number; done: number; failed: number }
@@ -134,6 +138,7 @@ export const engine = {
   dropTodo: (id: string, reason: string) => call<Todo>('POST', `/todos/${id}/drop`, { reason }),
   reopenTodo: (id: string) => call<Todo>('POST', `/todos/${id}/reopen`),
   itemToTodo: (itemId: string) => call<Todo>('POST', `/backlog/${itemId}/todo`, {}),
+  syncGithub: (appId: string) => call<{ prs?: { changes: string[] }; catchUp?: { projectId: string; state: string }[]; error?: string }>('POST', `/apps/${appId}/sync`),
   pause: (projectId: string) => call<unknown>('POST', `/projects/${projectId}/pause`),
   resume: (projectId: string) => call<unknown>('POST', `/projects/${projectId}/resume`),
   releaseHold: () => call<unknown>('POST', '/engine/release'),
@@ -145,6 +150,7 @@ export const EVENT_TYPES = [
   'project.created', 'project.started', 'project.landed', 'project.cleaned', 'task.created',
   'task.planning', 'task.planned', 'task.plan_failed', 'task.plan_waiting', 'task.cleared', 'project.cancelled', 'question.asked', 'question.answered',
   'talk.message', 'talk.permission', 'talk.result', 'idea.created', 'project.paused', 'project.resumed', 'engine.hold', 'engine.resumed',
+  'pr.merged', 'pr.closed', 'pr.review', 'pr.checks', 'review.requested', 'project.caught_up', 'project.behind_main',
   'todo.created', 'todo.updated', 'todo.checked', 'todo.done', 'todo.dropped', 'todo.reopened',
   'backlog.added', 'backlog.covered', 'backlog.dropped', 'backlog.reopened', 'backlog.error', 'project.backlog_open',
   'phase.created', 'phase.status', 'phase.held', 'phase.retry', 'phase.failed', 'phase.error', 'phase.interrupted',
