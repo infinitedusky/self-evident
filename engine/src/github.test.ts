@@ -31,7 +31,8 @@ try { await db.execute('select 1') } catch { reachable = false }
 describe.skipIf(!reachable)('github sync', () => {
   const wsId = newId('workspace')
   let appId: string, repoId: string, local: string, teammate: string
-  const fake = (prs: GhPr[]): GitHubApi => ({ me: async () => 'sandy', listPrs: async () => prs })
+  const retargeted: [number, string][] = []
+  const fake = (prs: GhPr[]): GitHubApi => ({ me: async () => 'sandy', listPrs: async () => prs, retarget: async (_f, n, base) => { retargeted.push([n, base]) } })
   beforeAll(async () => {
     const dir = await mkdtemp(join(tmpdir(), 'if-github-'))
     await git(dir, ['init', '-q', '--bare', '-b', 'main', 'origin.git'])
@@ -73,6 +74,30 @@ describe.skipIf(!reachable)('github sync', () => {
     expect((await db.select().from(pr).where(eq(pr.projectId, p.id)))[0].status).toBe('merged')
     expect((await db.select().from(outsidePr).where(eq(outsidePr.number, 8)))[0].state).toBe('merged')
     expect((await now(appId)).needsYou.some((n) => n.kind === 'review' || n.kind === 'overlap')).toBe(false)
+    await db.update(project).set({ status: 'superseded' }).where(eq(project.id, p.id))
+  })
+
+  it('stacked PRs: when the bottom one merges, the next retargets to main and its branch catches up from main', async () => {
+    const { project: p, tasks } = await createProject({ appId, title: 'stack', tasks: [{ title: 'One' }, { title: 'Two' }] })
+    await db.update(project).set({ status: 'running' }).where(eq(project.id, p.id))
+    const b1 = `${p.integrationBranch}--t${tasks[0].number}`, b2 = `${p.integrationBranch}--t${tasks[1].number}`
+    await git(local, ['fetch', '-q', 'origin']); await git(local, ['branch', b1, 'origin/main']); await git(local, ['branch', b2, b1])
+    await db.insert(pr).values([
+      { id: newId('pr'), appId, projectId: p.id, taskId: tasks[0].id, repoId, number: 11, status: 'open', headBranch: b1, baseBranch: 'main' },
+      { id: newId('pr'), appId, projectId: p.id, taskId: tasks[1].id, repoId, number: 12, status: 'open', headBranch: b2, baseBranch: b1 },
+    ])
+    const one: GhPr = { number: 11, title: 'One', url: 'u11', state: 'MERGED', isDraft: false, headRefName: b1, baseRefName: 'main' }
+    const two: GhPr = { number: 12, title: 'Two', url: 'u12', state: 'OPEN', isDraft: false, headRefName: b2, baseRefName: b1 }
+    const out = await syncPrs(appId, fake([one, two]))
+    expect(out.changes).toEqual(expect.arrayContaining(['#11 pr.merged', '#12 retargeted']))
+    expect(retargeted).toContainEqual([12, 'main'])
+    expect((await db.select().from(pr).where(eq(pr.number, 12)))[0].baseBranch).toBe('main')
+    expect((await now(appId)).needsYou.some((n) => n.kind === 'review' || n.kind === 'overlap')).toBe(false) // our task branches are not a teammate's
+
+    await writeFile(join(teammate, 'news.md'), 'news\n'); await commitAll(teammate, 'news'); await git(teammate, ['push', '-q', 'origin', 'main'])
+    const caught = await catchUpApp(appId)
+    expect(caught.find((x) => x.projectId === p.id)).toMatchObject({ state: 'caught_up' })
+    expect((await git(local, ['show', `${b2}:news.md`])).stdout).toBe('news')
     await db.update(project).set({ status: 'superseded' }).where(eq(project.id, p.id))
   })
 

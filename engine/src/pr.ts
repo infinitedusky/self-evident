@@ -22,7 +22,7 @@ export async function ensureProjectPr(i: PrInput): Promise<{ number: number; url
   const gh = (args: string[]) => execFileP('gh', args, { cwd: i.repoPath }).then((r) => r.stdout.trim())
   const existing = JSON.parse(await gh(['pr', 'list', '-R', i.fullName, '--head', i.integrationBranch, '--state', 'open', '--json', 'number,url']))
   if (existing.length) {
-    await gh(['pr', 'edit', String(existing[0].number), '-R', i.fullName, '--title', i.title, '--body', i.body])
+    await gh(['pr', 'edit', String(existing[0].number), '-R', i.fullName, '--title', i.title, '--body', i.body, '--base', i.base]) // a stacked PR retargets when the one below merges
     return { number: existing[0].number, url: existing[0].url, created: false }
   }
   const url = await gh(['pr', 'create', '-R', i.fullName, '--base', i.base, '--head', i.integrationBranch, '--title', i.title, '--body', i.body])

@@ -84,11 +84,16 @@ export async function now(appId?: string) {
   // GitHub, as the sync last saw it: our PRs (review, checks), main moving under a project, teammates' PRs.
   const sig = (q: typeof prs[number]) => { const s = (q.signals ?? {}) as { review?: string | null; checks?: string; failing?: string[] }; return { review: s.review ?? null, checks: s.checks ?? 'none', failing: s.failing ?? [] } }
   for (const p of projects) {
-    const thePr = prs.find((q) => q.projectId === p.id)
-    if (!thePr || !['open', 'draft'].includes(thePr.status)) continue
-    const s = sig(thePr)
-    if (p.status === 'landed') needsYou.push({ kind: 'merge_pr', ...tag(p), prNumber: thePr.number, url: thePr.url, ...s })
-    else if (s.review === 'CHANGES_REQUESTED' || s.checks === 'failing') needsYou.push({ kind: 'pr_feedback', ...tag(p), prNumber: thePr.number, url: thePr.url, ...s })
+    for (const thePr of prs.filter((q) => q.projectId === p.id && ['open', 'draft'].includes(q.status))) {
+      const s = sig(thePr)
+      const t = thePr.taskId ? tasks.find((q) => q.id === thePr.taskId) : null
+      const mine = t ? phases.filter((x) => x.taskId === t.id) : []
+      // A task's PR (stacked) is ready once its own phases have landed, while later tasks still build; the project's one PR once the project has.
+      const ready = t ? mine.length > 0 && mine.every((x) => x.status === 'done') : p.status === 'landed'
+      const row = { ...tag(p), planTitle: t ? `${p.title} · task #${t.number} ${t.title}` : p.title, prNumber: thePr.number, url: thePr.url, ...s }
+      if (ready) needsYou.push({ kind: 'merge_pr', ...row })
+      else if (s.review === 'CHANGES_REQUESTED' || s.checks === 'failing') needsYou.push({ kind: 'pr_feedback', ...row })
+    }
   }
   const projectIdsAll = projects.map((p) => p.id)
   const mainEvents = projectIdsAll.length ? await db.select().from(event).where(and(inArray(event.projectId, projectIdsAll), inArray(event.type, ['project.caught_up', 'project.behind_main']))).orderBy(desc(event.seq)) : []
