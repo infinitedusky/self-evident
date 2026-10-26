@@ -314,7 +314,8 @@ Details and sources in `research/`.
   or ticked by hand. Open to-dos show on Now under "needs you"; their page
   sits under Plan beside Projects and Tasks. A backlog item can also end as a
   to-do. "Task" stays the dev unit. Grouping to-dos into goals waits until
-  there is a real need.
+  there is a real need. Built 2026-10-26 (PR #45); the agent drafts a
+  checklist on request, looking up how the thing is done today.
 
 ## Open questions
 

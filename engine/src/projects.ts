@@ -6,7 +6,7 @@
  */
 import { and, asc, desc, eq, inArray, notInArray, sql } from 'drizzle-orm'
 import { db, type Tx } from './db/client.js'
-import { app, backlogItem, decision, event, idea, phase, phaseDependency, phaseFileClaim, project, pr, question, run, step, task, type PhaseStatus } from './db/schema.js'
+import { app, backlogItem, checklistItem, todo, decision, event, idea, phase, phaseDependency, phaseFileClaim, project, pr, question, run, step, task, type PhaseStatus } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { claimsOverlap, findCycle, pickTasksToStart, type SchedTask } from './scheduler.js'
@@ -133,6 +133,8 @@ async function loadProject(tx: Tx | typeof db, projectId: string) {
   const decisions = await tx.select().from(decision).where(eq(decision.projectId, projectId))
   const questions = await tx.select().from(question).where(eq(question.projectId, projectId)).orderBy(asc(question.askedAt))
   const backlog = await tx.select().from(backlogItem).where(eq(backlogItem.projectId, projectId)).orderBy(asc(backlogItem.createdAt))
+  const todos = await tx.select().from(todo).where(eq(todo.projectId, projectId)).orderBy(asc(todo.number))
+  const lines = todos.length ? await tx.select().from(checklistItem).where(inArray(checklistItem.todoId, todos.map((t) => t.id))).orderBy(asc(checklistItem.position)) : []
   const full = phases.map((x) => {
     const last = runs.filter((r) => r.phaseId === x.id).sort((r, q) => q.attempt - r.attempt)[0] ?? null
     return {
@@ -146,6 +148,7 @@ async function loadProject(tx: Tx | typeof db, projectId: string) {
   const order = orderEdges(full, tasks)
   return {
     project: p, app: { id: a.id, name: a.name, defaultBranch: a.defaultBranch, workspaceId: a.workspaceId }, pr: thePr ?? null,
+    todos: todos.map((t) => ({ ...t, checklist: lines.filter((l) => l.todoId === t.id) })), // work outside the code that unblocks this project
     backlog, // everything the project has to cover: open, covered by a task, or dropped with a reason
     decisions, questions, // the planner's: what it settled (provisional until approved) and what it could not
     tasks: tasks.map((t) => ({ ...t, phaseIds: phases.filter((x) => x.taskId === t.id).map((x) => x.id) })),

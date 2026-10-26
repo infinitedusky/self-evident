@@ -7,7 +7,7 @@ const STAGES: { to: string; icon: string; label: string; also?: RegExp; sub?: { 
   { to: '/', icon: '🔭', label: 'Observe' },
   { to: '/learn', icon: '🧠', label: 'Learn' },
   { to: '/ideas', icon: '💡', label: 'Ideate' },
-  { to: '/projects', icon: '📋', label: 'Plan', also: /^\/(projects|tasks)/, sub: [{ to: '/projects', label: 'Projects' }, { to: '/tasks', label: 'Tasks' }] },
+  { to: '/projects', icon: '📋', label: 'Plan', also: /^\/(projects|tasks|todos)/, sub: [{ to: '/projects', label: 'Projects' }, { to: '/tasks', label: 'Tasks' }, { to: '/todos', label: 'To-dos' }] },
   { to: '/validate', icon: '🧪', label: 'Validate', sub: [{ to: '/mockups', label: 'Mockups' }] },
   { to: '/build', icon: '🔨', label: 'Build', also: /^\/graph/, sub: [{ to: '/graph', label: 'Graph' }] },
 ]

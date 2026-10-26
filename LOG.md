@@ -493,6 +493,24 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## To-dos, built (Sandy, 2026-10-26: "can we build this? … really helpful right now for Homework Gate")
+
+- Tables `todo` (numbered per app; owner person or agent; open, done or dropped with a reason; the project it
+  unblocks) and `checklist_item` (one level; checked by whom; `waiting_on` for a line someone else has). Migration
+  0011; a backlog item can now be covered by a to-do as well as a task.
+- Done when the last line is checked; unchecking a line, or adding one, opens it again; a person can mark it done
+  whatever the list says.
+- **The agent drafts the checklist**: one model call with web search (Apple's process changes), told what the list
+  already has. On Homework Gate's "Get approved for Apple" it drafted the path from two-factor sign-in and enrollment
+  through the Family Controls (Distribution) request, marking Apple's waits. Two prompt fixes from that first draft:
+  start from the beginning (it had assumed enrollment was done), and no lines about the tracker itself.
+- Plan → To-dos (filters, cards with the checklist, notes, waiting badges only when every open line waits on someone
+  else); Now lists open to-dos with the next line, stalled ones after; a project shows the to-dos it waits on; a
+  backlog item has a "To-do" button. Agent tools: `todos`, `create_todo`, `update_todo`, `check_item`, `finish_todo`,
+  `backlog_todo`.
+- Found on the way: the agent drawer only recognised old `plan_` project ids, so on new projects it never knew which
+  project you were on. Fixed.
+
 ## To-dos with a checklist; strategy and modes still open (Sandy, 2026-10-26)
 
 Sandy asked where things like "get approved for Apple", "call Naya and get her fully set up" and "confirm PostHog

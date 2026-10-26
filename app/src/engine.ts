@@ -19,7 +19,10 @@ export interface GraphTask { id: string; number: number; position: number; title
 export interface Decision { id: string; taskId: string | null; question: string; options: { key: string; text: string; recommended: boolean }[]; chosen: string | null; provisional: boolean; rationale: string | null }
 export interface Question { id: string; taskId: string | null; text: string; options: { label: string; description: string; changes: string[]; recommended: boolean }[]; reason: string | null; cost: 'cheap' | 'moderate' | 'expensive' | null; status: string; answer: string | null }
 /** A line on a project's backlog: open, covered by a task, or dropped with a reason. */
-export interface BacklogItem { id: string; text: string; body: string | null; source: 'person' | 'agent' | 'idea' | 'planner' | 'builder'; ideaId: string | null; state: 'open' | 'covered' | 'dropped'; taskId: string | null; reason: string | null; createdAt: string }
+export interface BacklogItem { id: string; text: string; body: string | null; source: 'person' | 'agent' | 'idea' | 'planner' | 'builder'; ideaId: string | null; state: 'open' | 'covered' | 'dropped'; taskId: string | null; todoId?: string | null; reason: string | null; createdAt: string }
+/** Work around the code, with a checklist: on the app, beside its projects. */
+export interface ChecklistLine { id: number; todoId: string; position: number; text: string; done: boolean; doneBy: string | null; waitingOn: string | null }
+export interface Todo { id: string; appId: string; number: number; title: string; notes: string | null; owner: 'person' | 'agent'; status: 'open' | 'done' | 'dropped'; projectId: string | null; reason: string | null; createdAt: string; closedAt: string | null; checklist: ChecklistLine[]; project?: { id: string; title: string; status: string } | null }
 export interface Graph {
   project: { id: string; title: string; status: string; integrationBranch: string | null; spec: string | null; createdAt: string }
   app: { id: string; name: string; defaultBranch: string }
@@ -27,6 +30,7 @@ export interface Graph {
   tasks: GraphTask[]
   phases: GraphPhase[]
   backlog: BacklogItem[]
+  todos: Todo[] // work outside the code that unblocks this project
   decisions: Decision[]
   questions: Question[]
   conflicts: [string, string][] // open phases that claim the same path: they take turns
@@ -59,6 +63,7 @@ export type Attention =
   | { kind: 'run_project'; projectId: string; planTitle: string; appName: string; phases: number }
   | { kind: 'plan_task'; projectId: string; planTitle: string; appName: string; taskId: string; taskNumber: number; taskTitle: string }
   | { kind: 'backlog'; projectId: string; planTitle: string; appName: string; open: number; items: string[] }
+  | { kind: 'todo'; todoId: string; number: number; title: string; owner: string; projectId: string | null; planTitle: string | null; appName: string; done: number; total: number; next: string | null; waitingOn: string[] }
   | { kind: 'merge_pr'; projectId: string; planTitle: string; appName: string; prNumber: number | null; url: string | null }
 export interface RunningPlan {
   projectId: string; planTitle: string; appName: string; status: string; integrationBranch: string | null
@@ -118,6 +123,17 @@ export const engine = {
   coverItem: (itemId: string, taskId: string) => call<unknown>('POST', `/backlog/${itemId}/cover`, { taskId }),
   dropItem: (itemId: string, reason: string) => call<unknown>('POST', `/backlog/${itemId}/drop`, { reason }),
   reopenItem: (itemId: string) => call<unknown>('POST', `/backlog/${itemId}/reopen`, {}),
+  todos: (appId: string) => call<Todo[]>('GET', `/todos?app=${appId}`),
+  createTodo: (body: { appId: string; title: string; notes?: string; owner?: 'person' | 'agent'; projectId?: string; checklist?: string[] }) => call<Todo>('POST', '/todos', body),
+  updateTodo: (id: string, body: { title?: string; notes?: string | null; owner?: 'person' | 'agent'; projectId?: string | null }) => call<Todo>('PATCH', `/todos/${id}`, body),
+  addChecklist: (id: string, items: string[]) => call<Todo>('POST', `/todos/${id}/checklist`, { items }),
+  setLine: (lineId: number, body: { done?: boolean; waitingOn?: string | null; text?: string }) => call<Todo>('PATCH', `/checklist/${lineId}`, body),
+  removeLine: (lineId: number) => call<Todo>('DELETE', `/checklist/${lineId}`),
+  draftChecklist: (id: string) => call<Todo>('POST', `/todos/${id}/draft`),
+  todoDone: (id: string) => call<Todo>('POST', `/todos/${id}/done`),
+  dropTodo: (id: string, reason: string) => call<Todo>('POST', `/todos/${id}/drop`, { reason }),
+  reopenTodo: (id: string) => call<Todo>('POST', `/todos/${id}/reopen`),
+  itemToTodo: (itemId: string) => call<Todo>('POST', `/backlog/${itemId}/todo`, {}),
   pause: (projectId: string) => call<unknown>('POST', `/projects/${projectId}/pause`),
   resume: (projectId: string) => call<unknown>('POST', `/projects/${projectId}/resume`),
   releaseHold: () => call<unknown>('POST', '/engine/release'),
@@ -129,6 +145,7 @@ export const EVENT_TYPES = [
   'project.created', 'project.started', 'project.landed', 'project.cleaned', 'task.created',
   'task.planning', 'task.planned', 'task.plan_failed', 'task.plan_waiting', 'task.cleared', 'project.cancelled', 'question.asked', 'question.answered',
   'talk.message', 'talk.permission', 'talk.result', 'idea.created', 'project.paused', 'project.resumed', 'engine.hold', 'engine.resumed',
+  'todo.created', 'todo.updated', 'todo.checked', 'todo.done', 'todo.dropped', 'todo.reopened',
   'backlog.added', 'backlog.covered', 'backlog.dropped', 'backlog.reopened', 'backlog.error', 'project.backlog_open',
   'phase.created', 'phase.status', 'phase.held', 'phase.retry', 'phase.failed', 'phase.error', 'phase.interrupted',
   'run.started', 'run.message', 'run.steps', 'run.tool_call', 'run.tool_result', 'run.result', 'run.error', 'run.rate_limit',

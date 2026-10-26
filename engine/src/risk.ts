@@ -18,7 +18,7 @@ export interface RiskContext { cwd: string; branch?: string | null } // branch: 
 
 const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch'])
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
-const ENGINE_FREE = new Set(['now', 'projects', 'project_graph', 'ideas', 'events'])
+const ENGINE_FREE = new Set(['now', 'projects', 'project_graph', 'ideas', 'events', 'todos'])
 const ENGINE: Record<string, [Risk, string]> = {
   create_idea: ['cheap', 'keeps an idea; easy to drop'],
   create_project: ['cheap', 'a draft project; nothing runs'],
@@ -32,6 +32,11 @@ const ENGINE: Record<string, [Risk, string]> = {
   backlog_cover: ['cheap', 'marks an item covered by a task; reopen undoes it'],
   backlog_drop: ['cheap', 'drops an item with a reason; reopen undoes it'],
   backlog_task: ['moderate', 'adds a task; in a running project the planner runs on it'],
+  create_todo: ['cheap', 'a to-do with a checklist; easy to drop'],
+  update_todo: ['cheap', 'edits a to-do; easy to change back'],
+  check_item: ['cheap', 'checks a line off; uncheck undoes it'],
+  finish_todo: ['cheap', 'closes a to-do; reopen undoes it'],
+  backlog_todo: ['cheap', 'moves a backlog item to a to-do; reopen undoes it'],
   start_project: ['expensive', 'runs agents, spends money, opens a pull request'],
 }
 
