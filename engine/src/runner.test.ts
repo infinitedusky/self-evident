@@ -232,6 +232,23 @@ describe.skipIf(!reachable)('runner', () => {
     expect(g.phases.map((x) => x.status)).toEqual(['done', 'done'])
   })
 
+  it('stacked PRs (pr_mode task): each task lands on its own branch, cut from the task before it', async () => {
+    const stackApp = newId('app')
+    await db.insert(app).values({ id: stackApp, workspaceId: wsId, name: 'stacked app', setup: { test_cmd: 'test -f README.md', pr_mode: 'task' } })
+    await db.insert(repo).values({ id: newId('repo'), appId: stackApp, fullName: '', localPath: repoPath })
+    const { project: p, tasks } = await createProject({ appId: stackApp, title: 'stacked', tasks: [one('One', [{ key: 'x', title: 'X', files: ['x.txt'] }]), one('Two', [{ key: 'y', title: 'Y', files: ['y.txt'] }])] })
+    const runner = new Runner({ execute: commits('st'), sessionsMax: 2 })
+    await runner.startProject(p.id)
+    await until(cleaned(p.id))
+    const [b1, b2] = tasks.map((t) => `${p.integrationBranch}--t${t.number}`)
+    const files = async (b: string) => (await git(repoPath, ['ls-tree', '--name-only', b])).stdout.split('\n').filter((f) => f.startsWith('st-'))
+    const [x, y] = (await projectGraph(p.id))!.phases.map((q) => `st-${q.number}.txt`)
+    expect(await files(b1)).toEqual([x])
+    expect((await files(b2)).sort()).toEqual([x, y].sort()) // task two started where task one ended
+    expect(await files(p.integrationBranch!)).toEqual([]) // the project's branch is only the starting point
+    await db.update(project).set({ status: 'superseded' }).where(eq(project.id, p.id))
+  })
+
   it('stores the builder\'s todo list as the phase\'s steps, latest list wins', async () => {
     const { project: p, phases } = await createProject({ appId, title: 'steps', tasks: [one('T', [{ key: 's', title: 'S', files: ['s.txt'] }])] })
     const runner = new Runner({ execute: async (i) => {

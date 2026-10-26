@@ -493,6 +493,17 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Stacked PRs: one per task, for a team (2026-10-26)
+
+The third of three for team work. A per-app setting (Settings → Pull requests; `setup.pr_mode`): **one per project**
+(as before) or **one per task, stacked**. In task mode each task lands on its own branch (`project/<id>--t<n>`, a
+sibling of the project's branch, since git cannot hold `a` and `a/b`), cut from the previous task's branch; its PR is
+against the previous task's PR while that one is open, else main, and says so ("stacked on #n: merge that first"). A
+task's PR shows as ready to merge in My Stuff as soon as its own phases have landed, while later tasks still build.
+The sync retargets the next PR to main when the one below merges and catches each task branch up from what it is
+stacked on. Next: try it on Corner Shop with the laptop as a teammate (needs a CI workflow there and branch
+protection, which is Sandy's call).
+
 ## GitHub sync (2026-10-26)
 
 Second of three for team work (after MCP; before a stacked PR per task). The engine now reads GitHub through the

@@ -10,7 +10,8 @@ import { app, backlogItem, event, phase, project, pr as prTable, repo, run, step
 import { appendEvent, type NewEvent } from './events.js'
 import { addItems, laterFrom } from './backlog.js'
 import { runTask, type Execute } from './executor.js'
-import { addWorktree, ensureBranch, git, headSha, removeWorktree } from './git.js'
+import { addWorktree, branchExists, ensureBranch, git, headSha, removeWorktree } from './git.js'
+import { landingBranch, prMode, stackBase, taskBranch, taskStart } from './branches.js'
 import { newId } from './ids.js'
 import { land, withLock } from './landing.js'
 import { ensureProjectPr, prBody } from './pr.js'
@@ -112,12 +113,20 @@ export class Runner {
     const branch = x.branch ?? `phase/${p.id}/${x.number}`
     const worktreePath = x.worktreePath ?? join(`${r!.localPath}-worktrees`, `${p.id}--${x.number}`)
     const pb = { ...base, taskId: x.taskId, phaseId }
+    const mode = prMode(a.setup)
+    const onto = landingBranch(mode, p.integrationBranch!, t) // the project's branch, or the task's own (stacked PRs)
     // Worktree and branch creation touch the repo's refs: one at a time per repo. A failure here is an attempt too.
     let baseSha: string
     try {
       baseSha = await withLock(`git:${r!.localPath}`, async () => {
-        await addWorktree(r!.localPath!, worktreePath, branch, p.integrationBranch!)
-        return headSha(r!.localPath!, p.integrationBranch!)
+        if (mode === 'task' && !(await branchExists(r!.localPath!, onto))) { // a task's branch starts where the task before it ended
+          const tasks = await db.select().from(task).where(eq(task.projectId, projectId))
+          const existing = new Set<string>()
+          for (const q of tasks) { const b = taskBranch(p.integrationBranch!, q.number); if (await branchExists(r!.localPath!, b)) existing.add(b) }
+          await git(r!.localPath!, ['branch', onto, taskStart(p.integrationBranch!, t, tasks, existing)])
+        }
+        await addWorktree(r!.localPath!, worktreePath, branch, onto)
+        return headSha(r!.localPath!, onto)
       })
     } catch (err: any) {
       const attempt = x.attempt + 1
@@ -160,7 +169,7 @@ export class Runner {
     await db.update(phase).set({ status: 'merging', updatedAt: new Date() }).where(eq(phase.id, phaseId))
     await this.emit({ ...rb, type: 'phase.status', payload: { from: 'running', to: 'merging' } })
     const landed = await withLock(`land:${projectId}`, () => land({
-      repoPath: r!.localPath!, worktreePath, integrationBranch: p.integrationBranch!, testCmd: setup.test_cmd,
+      repoPath: r!.localPath!, worktreePath, integrationBranch: onto, testCmd: setup.test_cmd,
       onEvent: async (type, payload) => { await this.emit({ ...rb, type, payload }) },
     }))
     if (!landed.ok) return this.failed(phaseId, attempt, x.maxAttempts, `landing failed at ${landed.stage}: ${landed.detail}`, rb)
@@ -169,7 +178,7 @@ export class Runner {
     await this.emit({ ...rb, type: 'phase.status', payload: { from: 'merging', to: 'done', sha: landed.sha } })
     const later = laterFrom(result.summary) // what the builder noticed and left for later joins the backlog, once its work has landed
     if (later.length) await addItems(projectId, later.map((text) => ({ text, source: 'builder' as const, sourceRef: { phaseId, runId } })), `agent:${runId}`).catch((err) => this.emit({ ...rb, type: 'backlog.error', payload: { error: String(err?.message ?? err) } }))
-    await withLock(`land:${projectId}`, () => this.updatePr(projectId)).catch((err) => this.emit({ ...rb, type: 'pr.error', payload: { error: String(err?.message ?? err) } }))
+    await withLock(`land:${projectId}`, () => this.updatePr(projectId, mode === 'task' ? x.taskId : undefined)).catch((err) => this.emit({ ...rb, type: 'pr.error', payload: { error: String(err?.message ?? err) } }))
     this.active.delete(phaseId)
     await this.dispatch()
   }
@@ -359,26 +368,37 @@ export class Runner {
     return { phase: x.number, fresh: !!opts.fresh, resumed }
   }
 
-  private async updatePr(projectId: string) {
+  /**
+   * The project's PR (one per project), or a task's (stacked: against the task before it while that PR is open,
+   * else main). Opened at the first landing, updated after every one.
+   */
+  private async updatePr(projectId: string, taskId?: string) {
     const { p, a, r, base } = await this.context(projectId)
     if (!r?.fullName) return
     const tasks = await db.select().from(task).where(eq(task.projectId, projectId)).orderBy(asc(task.position))
     const phases = await db.select().from(phase).where(eq(phase.projectId, projectId)).orderBy(asc(phase.position))
-    const done = phases.filter((x) => x.status === 'done')
+    const mine = taskId ? phases.filter((x) => x.taskId === taskId) : phases
+    const done = mine.filter((x) => x.status === 'done')
     const runs = done.length ? await db.select().from(run).where(and(inArray(run.phaseId, done.map((x) => x.id)), eq(run.status, 'completed'))) : []
     const landed = done.map((x) => {
       const last = runs.filter((q) => q.phaseId === x.id).sort((q, w) => w.attempt - q.attempt)[0]
       const t = tasks.find((q) => q.id === x.taskId)
-      return { number: x.number, title: `${x.title}${t ? ` (task #${t.number}: ${t.title})` : ''}`, summary: last?.summary, costUsd: last?.costUsd ? Number(last.costUsd) : null, sha: null }
+      return { number: x.number, title: `${x.title}${t && !taskId ? ` (task #${t.number}: ${t.title})` : ''}`, summary: last?.summary, costUsd: last?.costUsd ? Number(last.costUsd) : null, sha: null }
     })
-    const backlog = await db.select().from(backlogItem).where(eq(backlogItem.projectId, projectId))
-    const body = prBody(p, landed, phases.filter((x) => x.status !== 'done').map((x) => ({ number: x.number, title: x.title })), backlog)
-    const result = await ensureProjectPr({ repoPath: r.localPath!, fullName: r.fullName, integrationBranch: p.integrationBranch!, base: a.defaultBranch, title: p.title, body })
-    const [existing] = await db.select().from(prTable).where(eq(prTable.projectId, projectId))
-    if (!existing) {
-      await db.insert(prTable).values({ id: newId('pr'), appId: a.id, projectId, repoId: r.id, number: result.number, url: result.url, headBranch: p.integrationBranch, baseBranch: a.defaultBranch, status: 'open', openedAt: new Date() })
-    }
-    await this.emit({ ...base, type: result.created ? 'pr.opened' : 'pr.updated', payload: { number: result.number, url: result.url, landed: landed.length } })
+    const backlog = taskId ? [] : await db.select().from(backlogItem).where(eq(backlogItem.projectId, projectId))
+    const prs = await db.select().from(prTable).where(eq(prTable.projectId, projectId))
+    const t = taskId ? tasks.find((q) => q.id === taskId)! : null
+    const head = t ? taskBranch(p.integrationBranch!, t.number) : p.integrationBranch!
+    const stack = t ? stackBase(a.defaultBranch, t, tasks, prs) : { base: a.defaultBranch, on: null }
+    const k = t ? tasks.findIndex((q) => q.id === t.id) + 1 : 0
+    const title = t ? `${t.title} (${p.title}, ${k} of ${tasks.length})` : p.title
+    const intro = t ? { ...p, title: `${p.title}, task ${k} of ${tasks.length}: ${t.title}`, spec: [t.description, stack.on ? `Stacked on #${stack.on}: review and merge that one first; this PR then retargets to ${a.defaultBranch}.` : null].filter(Boolean).join('\n\n') || p.spec } : p
+    const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done').map((x) => ({ number: x.number, title: x.title })), backlog)
+    const result = await ensureProjectPr({ repoPath: r.localPath!, fullName: r.fullName, integrationBranch: head, base: stack.base, title, body })
+    const existing = prs.find((q) => (taskId ? q.taskId === taskId : !q.taskId))
+    if (!existing) await db.insert(prTable).values({ id: newId('pr'), appId: a.id, projectId, taskId: taskId ?? null, repoId: r.id, number: result.number, url: result.url, headBranch: head, baseBranch: stack.base, status: 'open', openedAt: new Date() })
+    else if (existing.baseBranch !== stack.base) await db.update(prTable).set({ baseBranch: stack.base }).where(eq(prTable.id, existing.id))
+    await this.emit({ ...base, ...(taskId ? { taskId } : {}), type: result.created ? 'pr.opened' : 'pr.updated', payload: { number: result.number, url: result.url, landed: landed.length, base: stack.base } })
   }
 
   private async context(projectId: string) {

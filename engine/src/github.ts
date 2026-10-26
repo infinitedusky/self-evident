@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { and, eq, inArray, isNotNull, notInArray } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, outsidePr, pr as prTable, project, repo } from './db/schema.js'
+import { app, outsidePr, pr as prTable, project, repo, task } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { addWorktree, branchExists, git, headSha, isAncestor, mergeInto, push, removeWorktree, fastForward } from './git.js'
 import { withLock } from './landing.js'
@@ -26,12 +26,13 @@ export interface GhPr {
   statusCheckRollup?: { name?: string; context?: string; status?: string; conclusion?: string; state?: string }[]
   mergeable?: string; mergedAt?: string | null; updatedAt?: string; files?: { path: string }[]; mergeCommit?: { oid: string } | null
 }
-export interface GitHubApi { me: () => Promise<string>; listPrs: (fullName: string, cwd: string) => Promise<GhPr[]> }
+export interface GitHubApi { me: () => Promise<string>; listPrs: (fullName: string, cwd: string) => Promise<GhPr[]>; retarget: (fullName: string, number: number, base: string, cwd: string) => Promise<void> }
 
 const FIELDS = 'number,title,url,state,isDraft,author,headRefName,baseRefName,reviewDecision,reviewRequests,statusCheckRollup,mergeable,mergedAt,updatedAt,files,mergeCommit'
 let login: string | null = null
 export const ghCli: GitHubApi = {
   me: async () => (login ??= (await execFileP('gh', ['api', 'user', '--jq', '.login'])).stdout.trim()),
+  retarget: async (fullName, number, base, cwd) => { await execFileP('gh', ['pr', 'edit', String(number), '-R', fullName, '--base', base], { cwd }) },
   listPrs: async (fullName, cwd) => JSON.parse((await execFileP('gh', ['pr', 'list', '-R', fullName, '--state', 'all', '--limit', '60', '--json', FIELDS], { cwd, maxBuffer: 32 * 1024 * 1024 })).stdout),
 }
 
@@ -60,7 +61,7 @@ export async function syncPrs(appId: string, api: GitHubApi = ghCli) {
     const ours = await db.select().from(prTable).where(eq(prTable.appId, appId))
     for (const g of all) {
       const known = ours.find((x) => x.number === g.number && (x.repoId === r.id || !x.repoId))
-      const p = projects.find((x) => x.integrationBranch === g.headRefName)
+      const p = projects.find((x) => x.integrationBranch === g.headRefName || g.headRefName.startsWith(`${x.integrationBranch}--t`)) // the project's branch, or one of its task branches
       if (!known && !p) { await keepOutside(appId, r.id, g, me); continue } // not ours: a teammate's, or opened by hand
       if (!known) continue // our branch, but a PR we never recorded: leave it
       const checks = checksOf(g.statusCheckRollup)
@@ -75,6 +76,16 @@ export async function syncPrs(appId: string, api: GitHubApi = ghCli) {
       if (before.status !== status && (status === 'merged' || status === 'closed')) await say(`pr.${status}`, { title: g.title })
       if ((prev.review ?? null) !== signals.review && signals.review) await say('pr.review', { decision: signals.review })
       if ((prev.checks ?? 'none') !== signals.checks && signals.checks !== 'pending') await say('pr.checks', { state: signals.checks, failing: signals.failing })
+    }
+    // A stack: once the PR a task's PR was stacked on has merged (or closed), point the next one at main.
+    const rows = await db.select().from(prTable).where(eq(prTable.appId, appId))
+    for (const q of rows.filter((x) => ['open', 'draft'].includes(x.status) && x.number && x.baseBranch && x.baseBranch !== a.defaultBranch)) {
+      const below = rows.find((x) => x.headBranch === q.baseBranch && x.projectId === q.projectId)
+      if (!below || ['open', 'draft'].includes(below.status)) continue
+      await api.retarget(r.fullName, q.number!, a.defaultBranch, r.localPath!)
+      await db.update(prTable).set({ baseBranch: a.defaultBranch }).where(eq(prTable.id, q.id))
+      changes.push(`#${q.number} retargeted`)
+      await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId, projectId: q.projectId, ...(q.taskId ? { taskId: q.taskId } : {}), actor: 'github', type: 'pr.retargeted', payload: { number: q.number, base: a.defaultBranch, after: below.number } }))
     }
   }
   return { me, changes }
@@ -96,44 +107,63 @@ async function keepOutside(appId: string, repoId: string, g: GhPr, me: string) {
 }
 
 /**
- * Main moved: merge the app's default branch (as on origin) into one project's branch, in a scratch worktree, under
- * the landing lock. Pushed if the branch is already on GitHub (it has a PR). A conflict is reported, not resolved.
+ * Main moved: merge it into a project's open branches, in a scratch worktree, under the landing lock. One PR per
+ * project: the project's branch, from main. Stacked PRs: each task branch with an open PR, from what it is stacked
+ * on (main, or the task branch below it, already caught up in this pass). Pushed when the branch has a PR. A
+ * conflict is reported, not resolved.
  */
 export async function catchUp(projectId: string): Promise<{ state: 'current' | 'caught_up' | 'conflict' | 'skipped'; files?: string; commits?: number }> {
   const [p] = await db.select().from(project).where(eq(project.id, projectId))
   if (!p?.integrationBranch) return { state: 'skipped' }
   const [a] = await db.select().from(app).where(eq(app.id, p.appId))
   const [r] = await db.select().from(repo).where(eq(repo.appId, p.appId))
-  if (!r?.localPath || !(await branchExists(r.localPath, p.integrationBranch))) return { state: 'skipped' }
+  if (!r?.localPath) return { state: 'skipped' }
+  const main = `origin/${a.defaultBranch}`
+  if ((await git(r.localPath, ['rev-parse', '--verify', '-q', main], { allowFail: true })).code !== 0) return { state: 'skipped' }
+  const prs = await db.select().from(prTable).where(eq(prTable.projectId, p.id))
+  const tasks = await db.select().from(task).where(eq(task.projectId, p.id))
+  const stacked = prs.filter((q) => q.taskId && q.headBranch && ['open', 'draft'].includes(q.status))
+    .sort((x, y) => (tasks.find((t) => t.id === x.taskId)?.position ?? 0) - (tasks.find((t) => t.id === y.taskId)?.position ?? 0))
+  const targets = stacked.length
+    ? stacked.map((q) => ({ branch: q.headBranch!, from: q.baseBranch && q.baseBranch !== a.defaultBranch ? q.baseBranch : main, pushed: true }))
+    : [{ branch: p.integrationBranch, from: main, pushed: prs.some((q) => !q.taskId && q.number) }]
   return withLock(`land:${projectId}`, async () => {
-    const main = `origin/${a.defaultBranch}`
-    if ((await git(r.localPath!, ['rev-parse', '--verify', '-q', main], { allowFail: true })).code !== 0) return { state: 'skipped' as const }
-    if (await isAncestor(r.localPath!, main, p.integrationBranch!)) return { state: 'current' as const }
-    const commits = Number((await git(r.localPath!, ['rev-list', '--count', `${p.integrationBranch}..${main}`])).stdout) || 0
-    const path = join(`${r.localPath}-worktrees`, `${p.id}--catch-up`)
-    const branch = `catch-up/${p.id}`
-    const base = { workspaceId: a.workspaceId, appId: a.id, projectId: p.id, actor: 'github' }
-    const old = await headSha(r.localPath!, p.integrationBranch!)
-    try {
-      await git(r.localPath!, ['branch', '-f', branch, old])
-      await addWorktree(r.localPath!, path, branch, old)
-      const merged = await mergeInto(path, main)
-      if (!merged.ok) {
-        await db.transaction((tx) => appendEvent(tx, { ...base, type: 'project.behind_main', payload: { files: merged.conflict, commits, branch: p.integrationBranch } }))
-        return { state: 'conflict' as const, files: merged.conflict, commits }
-      }
-      const sha = await headSha(path)
-      const ff = await fastForward(r.localPath!, p.integrationBranch!, sha, old)
-      if (!ff.ok) return { state: 'skipped' as const } // it moved under us; the next pass tries again
-      const [thePr] = await db.select().from(prTable).where(eq(prTable.projectId, p.id))
-      if (thePr?.number && r.fullName) await push(r.localPath!, p.integrationBranch!)
-      await db.transaction((tx) => appendEvent(tx, { ...base, type: 'project.caught_up', payload: { commits, sha, pushed: !!thePr?.number } }))
-      return { state: 'caught_up' as const, commits }
-    } finally {
-      await removeWorktree(r.localPath!, path)
-      await git(r.localPath!, ['branch', '-D', branch], { allowFail: true })
+    let result: { state: 'current' | 'caught_up' | 'conflict' | 'skipped'; files?: string; commits?: number } = { state: 'current' }
+    for (const t of targets) {
+      if (!(await branchExists(r.localPath!, t.branch))) continue
+      const one = await mergeFrom(p, a, r.localPath!, t.branch, t.from, t.pushed && !!r.fullName)
+      if (one.state === 'conflict') return one // the branches above it wait for this one
+      if (one.state === 'caught_up') result = { state: 'caught_up', commits: (result.commits ?? 0) + (one.commits ?? 0) }
     }
+    return result
   })
+}
+
+async function mergeFrom(p: typeof project.$inferSelect, a: typeof app.$inferSelect, repoPath: string, branchName: string, from: string, pushIt: boolean) {
+  if (await isAncestor(repoPath, from, branchName)) return { state: 'current' as const }
+  const commits = Number((await git(repoPath, ['rev-list', '--count', `${branchName}..${from}`])).stdout) || 0
+  const path = join(`${repoPath}-worktrees`, `${p.id}--catch-up`)
+  const scratch = `catch-up/${p.id}`
+  const base = { workspaceId: a.workspaceId, appId: a.id, projectId: p.id, actor: 'github' }
+  const old = await headSha(repoPath, branchName)
+  try {
+    await git(repoPath, ['branch', '-f', scratch, old])
+    await addWorktree(repoPath, path, scratch, old)
+    const merged = await mergeInto(path, from)
+    if (!merged.ok) {
+      await db.transaction((tx) => appendEvent(tx, { ...base, type: 'project.behind_main', payload: { files: merged.conflict, commits, branch: branchName, from } }))
+      return { state: 'conflict' as const, files: merged.conflict, commits }
+    }
+    const sha = await headSha(path)
+    const ff = await fastForward(repoPath, branchName, sha, old)
+    if (!ff.ok) return { state: 'skipped' as const } // it moved under us; the next pass tries again
+    if (pushIt) await push(repoPath, branchName)
+    await db.transaction((tx) => appendEvent(tx, { ...base, type: 'project.caught_up', payload: { commits, sha, branch: branchName, from, pushed: pushIt } }))
+    return { state: 'caught_up' as const, commits }
+  } finally {
+    await removeWorktree(repoPath, path)
+    await git(repoPath, ['branch', '-D', scratch], { allowFail: true })
+  }
 }
 
 /** Fetch the default branch, then bring every open project of the app up to date with it. */
@@ -143,12 +173,12 @@ export async function catchUpApp(appId: string) {
   if (!a || !r?.localPath) return []
   const fetched = await git(r.localPath, ['fetch', '-q', 'origin', a.defaultBranch], { allowFail: true })
   if (fetched.code !== 0) return []
-  const open = await db.select().from(project).where(and(eq(project.appId, appId), notInArray(project.status, ['stopped', 'superseded', 'drafting', 'proposed', 'approved'])))
-  const prs = open.length ? await db.select().from(prTable).where(inArray(prTable.projectId, open.map((p) => p.id))) : []
+  const live = await db.select().from(project).where(and(eq(project.appId, appId), notInArray(project.status, ['stopped', 'superseded', 'drafting', 'proposed', 'approved'])))
+  const prs = live.length ? await db.select().from(prTable).where(inArray(prTable.projectId, live.map((p) => p.id))) : []
   const out = []
-  for (const p of open) {
-    const thePr = prs.find((x) => x.projectId === p.id)
-    if (p.status === 'landed' && (!thePr || thePr.status === 'merged' || thePr.status === 'closed')) continue // done with
+  for (const p of live) {
+    const open = prs.filter((x) => x.projectId === p.id && ['open', 'draft'].includes(x.status))
+    if (p.status === 'landed' && !open.length) continue // done with: every PR merged or closed
     out.push({ projectId: p.id, ...(await catchUp(p.id)) })
   }
   return out

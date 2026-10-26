@@ -276,8 +276,9 @@ export const outsidePr = pgTable('outside_pr', {
 }, (t) => [uniqueIndex('outside_pr_repo_number').on(t.repoId, t.number), index('outside_pr_app').on(t.appId, t.state),
   inList('outside_pr_state', t.state, ['open', 'merged', 'closed'])])
 
-export const pr = pgTable('pr', { // [LS] githubPullRequests + review hub; [IF] pitch. One per project (its integration branch).
+export const pr = pgTable('pr', { // [LS] githubPullRequests + review hub; [IF] pitch. One per project, or one per task when stacked.
   id: id(), appId: appId(), projectId: text('project_id').notNull().references(() => project.id), repoId: text('repo_id').references(() => repo.id),
+  taskId: text('task_id').references(() => task.id), // a PR per task (stacked, setup.pr_mode = 'task'); null: the project's one PR
   number: integer('number'), url: text('url'), headBranch: text('head_branch'), baseBranch: text('base_branch'),
   headSha: text('head_sha'), mergeSha: text('merge_sha'), status: text('status').notNull(),
   additions: integer('additions'), deletions: integer('deletions'), changedFiles: integer('changed_files'),

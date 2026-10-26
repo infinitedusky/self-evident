@@ -41,7 +41,7 @@ export interface GraphFile { path: string; phases: string[]; heldBy: string | nu
 export interface ProjectSummary { id: string; title: string; status: string; createdAt: string; ideaId?: string | null; app: { id: string; name: string } | null; taskCount: number; backlogOpen?: number; phases: Record<string, number> }
 export interface TaskRow { id: string; number: number; title: string; description: string | null; position: number; project: { id: string; title: string; status: string }; phases: Record<string, number>; planning: string | null }
 export interface IdeaRow { id: string; appId: string; number: number; title: string; body: string | null; lane: string }
-export interface AppSetup { storybook_url?: string; storybook_cmd?: string; test_cmd?: string; preview_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number }
+export interface AppSetup { pr_mode?: 'project' | 'task'; storybook_url?: string; storybook_cmd?: string; test_cmd?: string; preview_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number }
 export interface Repo { id: string; appId: string; fullName: string; localPath: string | null; baseBranch: string | null }
 export interface App { id: string; workspaceId?: string; name: string; defaultBranch: string; setup?: AppSetup; repos?: Repo[] }
 export interface Workspace { id: string; name: string }
@@ -150,7 +150,7 @@ export const EVENT_TYPES = [
   'project.created', 'project.started', 'project.landed', 'project.cleaned', 'task.created',
   'task.planning', 'task.planned', 'task.plan_failed', 'task.plan_waiting', 'task.cleared', 'project.cancelled', 'question.asked', 'question.answered',
   'talk.message', 'talk.permission', 'talk.result', 'idea.created', 'project.paused', 'project.resumed', 'engine.hold', 'engine.resumed',
-  'pr.merged', 'pr.closed', 'pr.review', 'pr.checks', 'review.requested', 'project.caught_up', 'project.behind_main',
+  'pr.merged', 'pr.closed', 'pr.retargeted', 'pr.review', 'pr.checks', 'review.requested', 'project.caught_up', 'project.behind_main',
   'todo.created', 'todo.updated', 'todo.checked', 'todo.done', 'todo.dropped', 'todo.reopened',
   'backlog.added', 'backlog.covered', 'backlog.dropped', 'backlog.reopened', 'backlog.error', 'project.backlog_open',
   'phase.created', 'phase.status', 'phase.held', 'phase.retry', 'phase.failed', 'phase.error', 'phase.interrupted',
