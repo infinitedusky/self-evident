@@ -301,7 +301,36 @@ Details and sources in `research/`.
   front door says what is left. The pull request lists what was left out on
   purpose, with why.
 
+- **To-dos: the work around the code** (Sandy, 2026-10-26). Getting approved
+  by Apple, calling Naya and getting her set up, confirming PostHog matches
+  her anonymously: not strategy, not dev tasks, but what decides whether the
+  work counts. A to-do belongs to the **app**, beside its projects, never
+  inside one (a project exists to produce code: a branch, a PR, phases; a
+  to-do has none of that). It is owned by the person or the agent, can point
+  at what it unblocks (a project, a strategy's evidence), and has a
+  **checklist** (one level; Sandy: "we could just call it a checklist"),
+  which the agent drafts and the person edits. A checklist item can be marked
+  as waiting on someone else (Apple's review). Done when the checklist is,
+  or ticked by hand. Open to-dos show on Now under "needs you"; their page
+  sits under Plan beside Projects and Tasks. A backlog item can also end as a
+  to-do. "Task" stays the dev unit. Grouping to-dos into goals waits until
+  there is a real need.
+
 ## Open questions
+
+- **A strategy section in Ideate** (Sandy, 2026-10-26): a longer-term bet,
+  the assumptions it rests on, and how to get the evidence for each (talk to
+  25 customers, with scripts the agent writes; experiments; baselines).
+  Proposed: a strategy's evidence work is to-dos and projects linked to its
+  assumptions; results flow into Learn. Not yet decided.
+- **Modes: same feel, different gates** (Sandy, 2026-10-26): Homework Gate
+  shows the full loop is too much before there is a wedge. A "wedge hunter"
+  mode skips Observe and Learn and builds in any order, while laying the
+  groundwork from day one (OpenTelemetry and PostHog everywhere, flags on
+  features); skipped rigor is flagged, not enforced. A stricter mode makes
+  hypotheses and baselines required. Proposed: the mode is per app, wedge by
+  default. Open: whether one project can opt into the strict mode inside a
+  wedge app.
 
 - Comps: who already does each part (`research/comps-*.md`).
 - The best route from idea to funding, and what evidence each idea should

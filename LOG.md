@@ -493,6 +493,20 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## To-dos with a checklist; strategy and modes still open (Sandy, 2026-10-26)
+
+Sandy asked where things like "get approved for Apple", "call Naya and get her fully set up" and "confirm PostHog
+can match her anonymously" go: "strategy is one thing, but it's not really tactics either… like housekeeping." Then:
+"are these a type of plan that sit outside the regular structure?" Agreed: they are **to-dos** on the app, outside
+projects, linked to what they unblock, each with a **checklist** (Sandy: "get approved for Apple includes a lot of
+things… we could just call it a checklist"). Goals as a grouping were floated and deferred. The rule is in SHAPE.md
+under Decided. Not built yet.
+
+Raised in the same conversation and still open (SHAPE.md, Open questions): a **strategy** section in Ideate (a
+longer-term bet and how to get the evidence for it, including talking to customers with scripts), and **modes**
+(a "wedge hunter" mode that skips Observe and Learn and builds fast while putting telemetry everywhere from day one;
+the feel stays the same, only the gates change).
+
 ## A project has a backlog (Sandy, 2026-10-23)
 
 Sandy: a project "should have tasks, but it should also have like backlog or something… somehow linked to the
