@@ -20,6 +20,7 @@ import { Learn } from './pages/Learn'
 import { Validate } from './pages/Validate'
 import { Mockups } from './pages/Mockups'
 import { Tasks } from './pages/Tasks'
+import { Observe } from './pages/Observe'
 import { Todos } from './pages/Todos'
 
 /** Links from before projects were called projects. */
@@ -39,6 +40,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="*" element={<Shell>
           <Routes>
             <Route path="/" element={<Now />} />
+            <Route path="/observe" element={<Observe />} />
             <Route path="/learn" element={<Learn />} />
             <Route path="/projects" element={<Projects mode="project" />} />
             <Route path="/plan" element={<Navigate to="/projects" replace />} />

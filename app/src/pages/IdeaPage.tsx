@@ -8,7 +8,7 @@ export function IdeaPage({ idea }: { idea: Idea }) {
   const lane = LANES.find((l) => l.id === idea.lane)!
   return (
     <>
-      <p className="mono"><Link to="/">← Ideas</Link></p>
+      <p className="mono"><Link to="/ideas">← Ideas</Link></p>
       <div className="page-head">
         <div>
           <h1>{idea.title}</h1>

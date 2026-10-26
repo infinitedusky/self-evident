@@ -32,7 +32,8 @@ export function contextFor(pathname: string, search: string): TalkContext {
   if (pathname.startsWith('/learn')) return { path: pathname, label: 'Learn' }
   if (pathname.startsWith('/graph')) return { path: pathname, appId: app, label: 'the graph' }
   if (pathname.startsWith('/settings')) return { path: pathname, label: 'settings' }
-  return { path: pathname, label: 'Observe' }
+  if (pathname.startsWith('/observe')) return { path: pathname, label: 'Observe (the app\'s metrics and promises)' }
+  return { path: pathname, label: 'My Stuff (what needs you, what is running)' }
 }
 
 const remember = (k: string, v: string | null) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v) } catch { /* fine */ } }

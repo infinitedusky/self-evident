@@ -493,6 +493,17 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Observe is the app's signals; My Stuff is ours (Sandy, 2026-10-26)
+
+Sandy: "Needs you shows up in Observe. That isn't good. Observe is about the app signals, not what we are doing in
+Self Evident. Observe should be a set of metrics and any promises' status. We then Learn by testing hypotheses
+against that data." And: "Above Settings there should be a My Stuff." The front door (needs you, running, just
+happened) is now **My Stuff**, below the rule with Settings, outside the loop, and still the page that opens first
+(`/`). **Observe** moved to `/observe` and holds the app's metrics and promises; both are honest placeholders until
+Self Evident reads PostHog back (its query API, the app's own key) and promises (clauses and sensors as OpenTelemetry
+spans) exist. Open: the first metrics for Homework Gate (proposed: nights started, gates opened, quiz pass rate, cost
+per night).
+
 ## To-dos, built (Sandy, 2026-10-26: "can we build this? … really helpful right now for Homework Gate")
 
 - Tables `todo` (numbered per app; owner person or agent; open, done or dropped with a reason; the project it
