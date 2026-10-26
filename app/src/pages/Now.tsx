@@ -1,5 +1,6 @@
 /**
- * The front door: what needs you, what's running, what just happened. Everything is a click from here. Refreshes
+ * My Stuff, the front door: what needs you, what's running, what just happened, in Self Evident. Not Observe: that
+ * is the app's own signals. Everything is a click from here. Refreshes
  * on every event the engine logs (one refetch per burst), so it is never stale by more than a moment.
  */
 import { useEffect, useRef, useState } from 'react'
@@ -37,7 +38,7 @@ export function Now() {
     <>
       <div className="page-head">
         <div>
-          <h1>🔭 Observe{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
+          <h1>📌 My Stuff{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
           <p className="muted" style={{ margin: '4px 0 0' }}>{data.counts.running} running · {data.counts.needsYou} need{data.counts.needsYou === 1 ? 's' : ''} you · {data.counts.projects} project{data.counts.projects === 1 ? '' : 's'}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
