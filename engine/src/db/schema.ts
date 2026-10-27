@@ -70,7 +70,9 @@ export type RunStatus = (typeof RUN_STATUSES)[number]
 
 // Tenancy from day one: everything belongs to a workspace; everything below an app belongs to that app.
 export const workspace = pgTable('workspace', {
-  id: id(), name: text('name').notNull(), createdAt: createdAt(),
+  id: id(), name: text('name').notNull(),
+  settings: jsonb('settings').notNull().default({}), // integrations: the workspace's values, each app may override (integrations.ts)
+  createdAt: createdAt(),
 })
 
 export const user = pgTable('user', { // [LS]

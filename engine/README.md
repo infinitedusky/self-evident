@@ -114,6 +114,7 @@ committed event as it happens, via Postgres `LISTEN/NOTIFY`. Several clients can
 | `src/github.ts` | The sync: our PRs (merged issues become Done), teammates' PRs, main into open project branches. |
 | `src/runner.ts` | Start a project, dispatch ready builds under the cap across projects, launch, land, retry, keep the PR current, clean up, recover. |
 | `src/skills.ts` | The factory's skill layer, by role: `engine/plugin/` (our own skills) and REA as Agent SDK plugins for the talk agent and the planner, the named skill list, and REA's tools rated from its own catalogue. The app repo's `.claude/skills/` is the other layer. |
+| `src/integrations.ts` | The integrations (PostHog, Datadog): their fields, set under All apps (`workspace.settings`) and overridden per app field by field (`app.setup.integrations`). Never keys: a field names the `.env` variable. |
 | `src/summary.ts` | The Summary page's focus section, written by a model from the facts, stated goals first. |
 | `src/db/copy-legacy.ts` | One-off: the database from before the Linear shape into this one. |
 | `src/cli/if.ts` | The `se` CLI. A client; only `migrate` touches the database. |

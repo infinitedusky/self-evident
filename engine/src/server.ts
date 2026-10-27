@@ -31,6 +31,8 @@ import { startStorybook, stopStorybooks, storybookStatus } from './storybook.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { runner } from './runner.js'
+import { cleanValues, effectiveIntegrations, INTEGRATIONS, type Values } from './integrations.js'
+import { appSkills, describeSkills } from './skills.js'
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
 
@@ -94,8 +96,29 @@ export function buildApp(bus: EventBus) {
     const [apps, repos] = await Promise.all([db.select().from(appTable), db.select().from(repoTable)])
     return c.json(apps.map((a) => ({ ...a, repos: repos.filter((r) => r.appId === a.id) })))
   })
+  // Settings: the workspace's integrations and the factory's skills; an app's own view is the merge, plus its repo's skills.
+  api.get('/settings', async (c) => {
+    const [w] = await db.select().from(workspace).limit(1)
+    return c.json({ workspace: w ?? null, integrations: INTEGRATIONS, values: ((w?.settings ?? {}) as { integrations?: Values }).integrations ?? {}, skills: describeSkills() })
+  })
+  api.patch('/workspaces/:id', async (c) => {
+    const body = await c.req.json<{ name?: string; integrations?: Values }>()
+    const [w] = await db.select().from(workspace).where(eq(workspace.id, c.req.param('id')))
+    if (!w) return c.json({ error: 'no such workspace' }, 404)
+    const settings = { ...(w.settings as object), ...(body.integrations ? { integrations: cleanValues(body.integrations) } : {}) }
+    const [row] = await db.update(workspace).set({ ...(body.name?.trim() ? { name: body.name.trim() } : {}), settings }).where(eq(workspace.id, w.id)).returning()
+    return c.json(row)
+  })
+  api.get('/apps/:id/settings', async (c) => {
+    const [a] = await db.select().from(appTable).where(eq(appTable.id, c.req.param('id')))
+    if (!a) return c.json({ error: 'no such app' }, 404)
+    const [[w], [r]] = await Promise.all([db.select().from(workspace).where(eq(workspace.id, a.workspaceId)), db.select().from(repoTable).where(eq(repoTable.appId, a.id))])
+    const shared = ((w?.settings ?? {}) as { integrations?: Values }).integrations
+    return c.json({ integrations: effectiveIntegrations(shared, (a.setup as { integrations?: Values }).integrations), skills: r?.localPath ? appSkills(r.localPath) : [] })
+  })
   api.patch('/apps/:id', async (c) => {
     const body = await c.req.json<{ name?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
+    if (body.setup && 'integrations' in body.setup) body.setup.integrations = cleanValues(body.setup.integrations)
     const [row] = await db.update(appTable).set({ ...(body.name ? { name: body.name } : {}), ...(body.defaultBranch ? { defaultBranch: body.defaultBranch } : {}), ...(body.setup ? { setup: body.setup } : {}) })
       .where(eq(appTable.id, c.req.param('id'))).returning()
     return row ? c.json(row) : c.json({ error: 'no such app' }, 404)
