@@ -250,3 +250,26 @@ button.badge { border: 0; cursor: pointer; }
 .sub-issues .sub-issue { display: grid; grid-template-columns: 72px 1fr auto; gap: 12px; align-items: start; }
 .sub-issues .sub-issue.done > div a, .sub-issues .sub-issue.canceled > div a { color: var(--ink-soft); }
 .chip-order { display: inline-flex; gap: 2px; } .chip-order button { padding: 0 3px; }
+
+/* Settings: a side list (Self Evident, then each app) and the chosen page; groups instead of one long form. */
+.settings { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; align-items: start; }
+.settings-side { position: sticky; top: 20px; display: grid; gap: 2px; }
+.settings-side .link { display: block; padding: 7px 10px; border-radius: 8px; text-decoration: none; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-side .link.active { background: var(--accent-wash); color: var(--ink); font-weight: 600; }
+.settings-side-label { margin: 14px 10px 4px; }
+.settings-add { display: flex; gap: 6px; margin-top: 8px; }
+.settings-add input { min-width: 0; flex: 1; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 13px var(--sans); }
+.settings-add .btn { padding: 6px 10px; font-size: 13px; }
+.settings-lead { margin: 0 0 12px; }
+.settings-desc { font-size: 13px; margin-top: 2px; }
+.settings-h3 { font: 600 14px var(--sans); margin: 18px 0 4px; }
+.settings-group { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--line); }
+.settings-group:first-of-type { border-top: 0; margin-top: 4px; padding-top: 0; }
+.settings-group-head { margin-bottom: 8px; }
+.settings-group .settings-h3 { margin-top: 0; }
+.settings-save { display: flex; gap: 10px; align-items: center; margin-top: 18px; }
+.settings-save .bad { color: var(--bad); }
+.form-grid label .badge { margin-left: 4px; vertical-align: 1px; text-transform: none; letter-spacing: 0; }
+@media (max-width: 760px) { .settings { grid-template-columns: 1fr; } .settings-side { position: static; } }
+.settings .form-grid input::placeholder { color: var(--ink-faint); font-style: italic; opacity: 1; }
+.settings-group .settings-group { border-top: 1px dashed var(--line); }
