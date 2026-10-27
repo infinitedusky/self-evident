@@ -1,8 +1,8 @@
 /** The MCP endpoint, spoken to the way Claude Code does: initialize, list the tools, call one; foreign hosts are refused. */
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, todo, workspace } from './db/schema.js'
+import { app, issue, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { handleMcp } from './mcp.js'
 import { createTodo } from './todos.js'
@@ -21,9 +21,9 @@ describe.skipIf(!reachable)('mcp', () => {
   beforeAll(async () => {
     appId = newId('app')
     await db.insert(workspace).values({ id: wsId, name: 'mcp test' })
-    await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'Shop' })
+    await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'Shop', key: appId.slice(-6).toUpperCase() })
   })
-  afterAll(async () => { await db.update(todo).set({ status: 'dropped', reason: 'test' }).where(eq(todo.appId, appId)); await pool.end() })
+  afterAll(async () => { await db.update(issue).set({ state: 'canceled', reason: 'test' }).where(and(eq(issue.appId, appId), isNull(issue.parentId))); await pool.end() })
 
   it('initializes, lists the engine tools with read-only hints, and runs one against the app in the URL', async () => {
     const init = await (await handleMcp(appId, rpc(1, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } }), 4000)).json()
@@ -32,7 +32,7 @@ describe.skipIf(!reachable)('mcp', () => {
 
     const list = await (await handleMcp(appId, rpc(2, 'tools/list'), 4000)).json()
     const tools = list.result.tools as { name: string; annotations?: { readOnlyHint?: boolean } }[]
-    expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(['now', 'todos', 'create_todo', 'check_item', 'plan_task', 'start_project']))
+    expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(['now', 'todos', 'create_todo', 'check_item', 'plan_issue', 'start_project']))
     expect(tools.find((t) => t.name === 'now')?.annotations?.readOnlyHint).toBe(true)
     expect(tools.find((t) => t.name === 'start_project')?.annotations?.readOnlyHint).toBe(false)
 

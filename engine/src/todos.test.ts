@@ -22,7 +22,7 @@ describe.skipIf(!reachable)('todos', () => {
   beforeAll(async () => {
     appId = newId('app'); otherApp = newId('app')
     await db.insert(workspace).values({ id: wsId, name: 'todos test' })
-    await db.insert(app).values([{ id: appId, workspaceId: wsId, name: 'fake app' }, { id: otherApp, workspaceId: wsId, name: 'other app' }])
+    await db.insert(app).values([{ id: appId, workspaceId: wsId, name: 'fake app', key: appId.slice(-6).toUpperCase() }, { id: otherApp, workspaceId: wsId, name: 'other app', key: otherApp.slice(-6).toUpperCase() }])
   })
   afterAll(async () => {
     await db.update(project).set({ status: 'superseded' }).where(eq(project.appId, appId))
@@ -31,7 +31,8 @@ describe.skipIf(!reachable)('todos', () => {
 
   it('keeps a to-do with its checklist; checking the last line finishes it, unchecking one opens it again', async () => {
     const t = await createTodo({ appId, title: ' Get approved for Apple ', checklist: ['Enroll in the developer program', { text: 'Request Family Controls', waitingOn: "Apple's review" }, '  '] })
-    expect(t).toMatchObject({ number: 1, title: 'Get approved for Apple', owner: 'person', status: 'open' })
+    expect(t).toMatchObject({ number: 1, kind: 'todo', title: 'Get approved for Apple', owner: 'person', status: 'open', state: 'todo' })
+    expect(t.checklist.map((l) => l.number)).toEqual([2, 3]) // the lines are sub-issues, numbered with everything else
     expect(t.checklist.map((l) => [l.text, l.waitingOn, l.done])).toEqual([['Enroll in the developer program', null, false], ['Request Family Controls', "Apple's review", false]])
 
     let after = await setChecklistItem(t.checklist[0].id, { done: true })
@@ -52,16 +53,16 @@ describe.skipIf(!reachable)('todos', () => {
     expect(await completeTodo(t.id)).toMatchObject({ status: 'done' }) // a person can say it is done whatever the list says
   })
 
-  it('a backlog item becomes a to-do that unblocks its project, which shows it; another app\'s project is refused', async () => {
-    const { project: p } = await createProject({ appId, title: 'iPhone gate', tasks: [{ title: 'Native lock' }] })
+  it('a backlog issue becomes a to-do that unblocks its project, which shows it; another app\'s project is refused', async () => {
+    const { project: p } = await createProject({ appId, name: 'iPhone gate', issues: [{ title: 'Native lock' }] })
     const [item] = await addItems(p.id, [{ text: 'Get Naya set up', body: 'she tests it first' }])
     const t = await itemToTodo(item.id, { checklist: ['Call Naya', 'Install it on her phone'] })
-    expect(t).toMatchObject({ title: 'Get Naya set up', notes: 'she tests it first', projectId: p.id })
-    expect((await listBacklog(p.id))[0]).toMatchObject({ state: 'covered', todoId: t.id, taskId: null })
+    expect(t).toMatchObject({ id: item.id, kind: 'todo', title: 'Get Naya set up', notes: 'she tests it first', projectId: p.id, status: 'open' })
+    expect((await listBacklog(p.id)).filter((b) => b.state === 'backlog')).toEqual([]) // it left the backlog: it is a to-do now
     const g = (await projectGraph(p.id))!
     expect(g.todos.map((x) => [x.title, x.checklist.length])).toEqual([['Get Naya set up', 2]])
 
-    const { project: foreign } = await createProject({ appId: otherApp, title: 'elsewhere', tasks: [{ title: 'x' }] })
+    const { project: foreign } = await createProject({ appId: otherApp, name: 'elsewhere', issues: [{ title: 'x' }] })
     await expect(createTodo({ appId, title: 'x', projectId: foreign.id })).rejects.toThrow(/not in this app/)
     await db.update(project).set({ status: 'superseded' }).where(eq(project.id, foreign.id))
   })

@@ -1,2 +1,0 @@
-ALTER TABLE "session" ADD COLUMN "auto_approve" text DEFAULT 'cheap' NOT NULL;--> statement-breakpoint
-ALTER TABLE "session" ADD CONSTRAINT "session_auto_approve" CHECK ("session"."auto_approve" in ('free', 'cheap', 'moderate'));

@@ -1,5 +1,5 @@
 /**
- * Ideas: the inbox. An idea is a title and a body, captured in a moment; it becomes one task (a project of one) or a
+ * Ideas: the inbox. An idea is a title and a body, captured in a moment; it becomes one issue (a project of one) or a
  * project of several. Nothing is lost: an idea that never becomes a project stays in the inbox with its lane.
  */
 import { desc, eq, sql } from 'drizzle-orm'
@@ -25,12 +25,12 @@ export async function createIdea(input: { appId: string; title: string; body?: s
   })
 }
 
-/** An idea becomes a project: one task by default (the idea's title, its body as the brief), or the tasks given. */
-export async function projectFromIdea(ideaId: string, tasks?: { title: string; brief?: string }[]) {
+/** An idea becomes a project: one issue by default (the idea's title, its body as the brief), or the issues given. */
+export async function projectFromIdea(ideaId: string, issues?: { title: string; brief?: string }[]) {
   const [i] = await db.select().from(idea).where(eq(idea.id, ideaId))
   if (!i) throw new PlanError(`no idea ${ideaId}`)
   return createProject({ // createProject moves the idea to the 'build' lane
-    appId: i.appId, title: i.title, spec: i.body ?? undefined, ideaId: i.id,
-    tasks: tasks?.length ? tasks : [{ title: i.title, brief: i.body ?? undefined }],
+    appId: i.appId, name: i.title, content: i.body ?? undefined, ideaId: i.id,
+    issues: issues?.length ? issues : [{ title: i.title, brief: i.body ?? undefined }],
   })
 }

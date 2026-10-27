@@ -1,27 +1,30 @@
 /**
  * The summary page, written by a model from what the engine knows, so a person walking in can read where things
  * stand. First section, focus: what everyone (the person, the agents, teammates) is working on, and the goals near,
- * mid and long term, the way a Monday-morning round of the room would go. Goals are inferred from the work, not stated
- * anywhere yet, so every line cites the rows it came from (`refs`) and the facts are kept beside the text.
+ * mid and long term, the way a Monday-morning round of the room would go. Goals come from the initiatives and cycles
+ * a person stated, and otherwise are inferred from the work; every line cites the rows it came from (`refs`) and the
+ * facts are kept beside the text.
  *
  * Rewritten when a person asks, or by the schedule when the newest is older than a day and something has happened
  * since. One model call, no tools, structured output.
  */
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import { and, desc, eq, gt, gte, inArray, max, ne, notInArray } from 'drizzle-orm'
+import { and, desc, eq, gt, gte, inArray, isNull, max, ne, notInArray } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, backlogItem, event, idea, outsidePr, phase, pr, project, question, summary, task } from './db/schema.js'
+import { app, build, event, idea, issue, outsidePr, pr, project, question, summary } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { ghCli } from './github.js'
 import { NOISE, now } from './now.js'
-import { PlanError } from './projects.js'
+import { listCycles, listInitiatives } from './goals.js'
+import { identifier, PlanError } from './issues.js'
 
-type Ref = { kind: 'project' | 'task' | 'todo' | 'idea' | 'question' | 'pr' | 'teammate_pr'; label: string; projectId?: string; url?: string | null }
+type Ref = { kind: 'project' | 'issue' | 'todo' | 'idea' | 'question' | 'pr' | 'teammate_pr' | 'initiative' | 'cycle'; label: string; projectId?: string; url?: string | null }
 type Line = { text: string; refs: string[] }
 export type FocusBody = {
   headline: string
   people: { who: string; doing: Line[] }[]
   goals: { near: Line[]; mid: Line[]; long: Line[] }
+  stated?: boolean // the goals rest on initiatives or a cycle someone stated, not only on the work
   links: Record<string, Ref> // every ref the facts offered, so the page can link what the text cites
 }
 
@@ -34,78 +37,96 @@ const SCHEMA = {
     goals: { type: 'object', additionalProperties: false, required: ['near', 'mid', 'long'], properties: { near: LINES, mid: LINES, long: LINES } },
   },
 }
-const WEEK_TYPES = ['project.created', 'project.started', 'project.landed', 'task.planned', 'pr.merged', 'todo.created', 'todo.done', 'todo.dropped', 'idea.created', 'question.answered']
+const WEEK_TYPES = ['project.created', 'project.started', 'project.landed', 'issue.planned', 'issue.state', 'pr.merged', 'idea.created', 'question.answered', 'initiative.created', 'cycle.created']
 
 /** Everything the focus section is written from, compact enough to hand a model whole, and the refs it may cite. */
 export async function focusFacts(appId: string, opts: { me?: () => Promise<string> } = {}) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError(`no app ${appId}`)
   const links: Record<string, Ref> = {}
+  const name = (n: number) => identifier(a.key, n)
   const projects = await db.select().from(project).where(and(eq(project.appId, appId), notInArray(project.status, ['superseded']))).orderBy(desc(project.createdAt))
   const pids = projects.map((p) => p.id)
-  const tasks = pids.length ? await db.select().from(task).where(inArray(task.projectId, pids)) : []
-  const phases = pids.length ? await db.select().from(phase).where(inArray(phase.projectId, pids)) : []
-  const items = pids.length ? await db.select().from(backlogItem).where(and(inArray(backlogItem.projectId, pids), eq(backlogItem.state, 'open'))) : []
+  const issues = pids.length ? await db.select().from(issue).where(and(inArray(issue.projectId, pids), eq(issue.kind, 'code'))) : []
+  const subIds = issues.filter((i) => i.parentId).map((i) => i.id)
+  const builds = subIds.length ? await db.select().from(build).where(inArray(build.issueId, subIds)) : []
+  const loose = await db.select().from(issue).where(and(eq(issue.appId, appId), eq(issue.kind, 'code'), isNull(issue.projectId), isNull(issue.parentId), notInArray(issue.state, ['done', 'canceled', 'duplicate'])))
   const prs = pids.length ? await db.select().from(pr).where(inArray(pr.projectId, pids)) : []
   const ideas = await db.select().from(idea).where(and(eq(idea.appId, appId), ne(idea.lane, 'killed')))
   const questions = await db.select().from(question).where(and(eq(question.appId, appId), eq(question.status, 'open')))
   const teammates = await db.select().from(outsidePr).where(and(eq(outsidePr.appId, appId), eq(outsidePr.state, 'open')))
+  const initiatives = (await listInitiatives(appId)).filter((i) => i.status !== 'completed')
+  const cycles = (await listCycles(appId)).filter((c) => c.current || c.startsAt > new Date().toISOString().slice(0, 10)).slice(0, 2)
   const me = teammates.length ? await (opts.me ?? ghCli.me)().catch(() => null) : null // the person's own PRs, opened by hand, are theirs, not a teammate's
   const n = await now(appId)
   const since = new Date(Date.now() - 7 * 86_400_000)
   const week = await db.select().from(event).where(and(eq(event.appId, appId), inArray(event.type, WEEK_TYPES), gte(event.ts, since))).orderBy(event.seq)
+  const status = (id: string) => builds.find((b) => b.issueId === id)?.status ?? 'queued'
 
   for (const i of ideas) links[i.id] = { kind: 'idea', label: `idea #${i.number} ${i.title}` }
+  for (const i of initiatives) links[i.id] = { kind: 'initiative', label: i.name }
+  for (const c of cycles) links[c.id] = { kind: 'cycle', label: c.name ?? `cycle ${c.number} (${c.startsAt} to ${c.endsAt})` }
+  for (const i of loose) links[i.id] = { kind: 'issue', label: `${name(i.number)} ${i.title}` }
   const projectFacts = projects.filter((p) => p.status !== 'stopped' || p.createdAt > since).map((p) => {
-    links[p.id] = { kind: 'project', label: p.title, projectId: p.id }
+    links[p.id] = { kind: 'project', label: p.name, projectId: p.id }
     const myPrs = prs.filter((q) => q.projectId === p.id && ['open', 'draft'].includes(q.status))
     for (const q of myPrs) if (q.number) links[`pr#${q.number}`] = { kind: 'pr', label: `PR #${q.number}`, url: q.url, projectId: p.id }
+    const mine = issues.filter((i) => i.projectId === p.id && !i.parentId)
     return {
-      id: p.id, title: p.title, status: p.status, why: p.spec?.slice(0, 600) ?? null, createdAt: p.createdAt.toISOString().slice(0, 10),
+      id: p.id, name: p.name, status: p.status, why: p.content?.slice(0, 600) ?? null, createdAt: p.createdAt.toISOString().slice(0, 10),
       idea: p.ideaId ? links[p.ideaId]?.label ?? null : null,
-      tasks: tasks.filter((t) => t.projectId === p.id).sort((x, y) => x.position - y.position).map((t) => {
-        links[t.id] = { kind: 'task', label: `task #${t.number} ${t.title}`, projectId: p.id }
-        const mine = phases.filter((x) => x.taskId === t.id)
-        return { id: t.id, number: t.number, title: t.title, description: t.description, phases: { total: mine.length, done: mine.filter((x) => x.status === 'done').length, failed: mine.filter((x) => x.status === 'failed').length, building: mine.filter((x) => ['running', 'merging', 'testing', 'awaiting_answer'].includes(x.status)).length } }
+      issues: mine.filter((t) => !['backlog', 'triage', 'duplicate'].includes(t.state)).sort((x, y) => x.sortOrder - y.sortOrder).map((t) => {
+        links[t.id] = { kind: 'issue', label: `${name(t.number)} ${t.title}`, projectId: p.id }
+        const subs = issues.filter((x) => x.parentId === t.id)
+        return { id: t.id, identifier: name(t.number), title: t.title, description: t.description, state: t.state, subIssues: { total: subs.length, done: subs.filter((x) => status(x.id) === 'done').length, failed: subs.filter((x) => status(x.id) === 'failed').length, building: subs.filter((x) => ['running', 'merging', 'testing', 'awaiting_answer'].includes(status(x.id))).length } }
       }),
-      backlogOpen: items.filter((i) => i.projectId === p.id).map((i) => i.text),
+      backlogOpen: mine.filter((i) => i.state === 'backlog').map((i) => i.title),
       prs: myPrs.map((q) => ({ ref: q.number ? `pr#${q.number}` : null, status: q.status, ...(q.signals as object) })),
     }
   })
   for (const q of questions) links[q.id] = { kind: 'question', label: q.text.slice(0, 80), projectId: q.projectId ?? undefined }
   const todos = n.needsYou.filter((x) => x.kind === 'todo')
-  for (const t of todos) links[t.todoId] = { kind: 'todo', label: `to-do #${t.number} ${t.title}` }
+  for (const t of todos) links[t.todoId] = { kind: 'todo', label: `${t.identifier} ${t.title}` }
   for (const o of teammates) links[`teammate#${o.number}`] = { kind: 'teammate_pr', label: `#${o.number} ${o.title}`, url: o.url }
 
   const facts = {
     app: a.name, today: new Date().toISOString().slice(0, 10),
+    statedGoals: {
+      initiatives: initiatives.map((i) => ({ id: i.id, name: i.name, description: i.description, status: i.status, targetDate: i.targetDate, projects: i.projects.map((p) => p.id) })),
+      cycles: cycles.map((c) => ({ id: c.id, name: c.name, startsAt: c.startsAt, endsAt: c.endsAt, current: c.current, description: c.description, issues: c.issues.map((i) => ({ id: i.id, identifier: i.identifier, title: i.title, state: i.state })) })),
+    },
     projects: projectFacts,
-    buildingNow: n.running.flatMap((r) => r.live.map((x) => ({ project: r.projectId, phase: x.title, status: x.status, step: x.step }))),
+    issuesInNoProject: loose.map((i) => ({ id: i.id, identifier: name(i.number), title: i.title, state: i.state })),
+    buildingNow: n.running.flatMap((r) => r.live.map((x) => ({ project: r.projectId, subIssue: `${x.identifier} ${x.title}`, status: x.status, step: x.step }))),
     needsThePerson: n.needsYou.filter((x) => x.kind !== 'todo').map((x) => ({ kind: x.kind, ...('projectId' in x ? { project: x.projectId } : {}), ...('text' in x ? { text: x.text } : {}), ...('title' in x ? { title: x.title } : {}) })),
     openQuestions: questions.map((q) => ({ id: q.id, project: q.projectId, text: q.text, askedAt: q.askedAt.toISOString().slice(0, 10) })),
-    todos: todos.map((t) => ({ id: t.todoId, title: t.title, owner: t.owner === 'agent' ? 'the agent' : 'the person', project: t.projectId, done: t.done, total: t.total, next: t.next, waitingOn: t.waitingOn })),
+    todos: todos.map((t) => ({ id: t.todoId, identifier: t.identifier, title: t.title, owner: t.owner === 'agent' ? 'the agent' : 'the person', project: t.projectId, done: t.done, total: t.total, next: t.next, waitingOn: t.waitingOn })),
     theirOwnPullRequests: teammates.filter((o) => me && o.author === me).map((o) => ({ ref: `teammate#${o.number}`, title: o.title, draft: o.draft })),
     teammates: teammates.filter((o) => !me || o.author !== me).map((o) => ({ ref: `teammate#${o.number}`, author: o.author, title: o.title, draft: o.draft, reviewRequestedFromThePerson: o.reviewRequested })),
     ideas: ideas.map((i) => ({ id: i.id, title: i.title, lane: i.lane, hypothesis: i.hypothesis })),
-    lastSevenDays: week.map((e) => ({ day: e.ts.toISOString().slice(0, 10), type: e.type, project: e.projectId, task: e.taskId, ...(e.payload as object) })).slice(-80),
+    lastSevenDays: week.map((e) => ({ day: e.ts.toISOString().slice(0, 10), type: e.type, project: e.projectId, issue: e.issueId, ...(e.payload as object) })).slice(-80),
   }
-  return { facts, links, workspaceId: a.workspaceId, setup: (a.setup ?? {}) as { model?: string } }
+  return { facts, links, stated: initiatives.length > 0 || cycles.length > 0, workspaceId: a.workspaceId, setup: (a.setup ?? {}) as { model?: string } }
 }
 
-function prompt(facts: unknown) {
+function prompt(facts: { statedGoals: { initiatives: unknown[]; cycles: unknown[] } }) {
+  const stated = facts.statedGoals.initiatives.length > 0 || facts.statedGoals.cycles.length > 0
   return [
     'You are writing the "What we are focused on" section of a summary page for one app built with Self Evident, a factory where agents plan and build the work.',
     'Picture the person who owns the app walking in on Monday morning and asking everyone in the room: what are you working on, and remind me where we are headed.',
     '',
     'Write, from the facts below and nothing else:',
     '- headline: one or two sentences, the state of the work in plain words.',
-    '- people: one entry per who, each with what they are doing now. "You" (the person: what waits on them, their to-dos, their open questions to answer, and the pull requests they opened by hand, in theirOwnPullRequests); "The builders" (agents building phases right now, and what they are on); "The planner" (only if a task is being planned or waits on an answer); the agent\'s own to-dos as "The agent"; each teammate by their GitHub name, from their open pull requests. Leave out anyone with nothing going on.',
-    '- goals.near: what should be true by the end of this week, from what is in flight and what waits on the person.',
-    '- goals.mid: the next few weeks, from projects proposed or planned but not started, open to-dos, open backlog.',
-    '- goals.long: where the app is headed, from its ideas and the reasons given for its projects.',
+    '- people: one entry per who, each with what they are doing now. "You" (the person: what waits on them, their to-dos, their open questions to answer, and the pull requests they opened by hand, in theirOwnPullRequests); "The builders" (agents building sub-issues right now, and what they are on); "The planner" (only if an issue is being planned or waits on an answer); the agent\'s own to-dos as "The agent"; each teammate by their GitHub name, from their open pull requests. Leave out anyone with nothing going on.',
+    '- goals.near: what should be true by the end of this week' + (stated ? ': the current cycle first, when there is one,' : '') + ' from what is in flight and what waits on the person.',
+    '- goals.mid: the next few weeks, from projects proposed or planned but not started, open to-dos, open backlog' + (stated ? ', and the next cycle' : '') + '.',
+    '- goals.long: where the app is headed' + (stated ? ': the initiatives, as stated, first; then' : ', from') + ' its ideas and the reasons given for its projects.',
     '',
-    'Every line cites the ids it rests on in refs: project ids (proj_…), task ids (task_…), to-do ids (todo_…), idea ids (idea_…), question ids (q_…), our pull requests as "pr#N", the others (a teammate\'s, or the person\'s own opened by hand) as "teammate#N". A line with no ref is not allowed: if the facts do not support it, leave it out.',
-    'These goals are inferred; nobody stated them. Say what the work points at, not what you would want. Fewer lines are better than padded ones; an empty list is fine.',
+    'Every line cites the ids it rests on in refs: initiative ids (init_…), cycle ids (cyc_…), project ids (proj_…), issue ids (iss_…, task_…, ph_…), to-do ids, idea ids (idea_…), question ids (q_…), our pull requests as "pr#N", the others (a teammate\'s, or the person\'s own opened by hand) as "teammate#N". A line with no ref is not allowed: if the facts do not support it, leave it out.',
+    stated
+      ? 'Goals in statedGoals were stated by a person: keep their words and cite them. Anything else you add about where things are headed is inferred from the work; say what the work points at, not what you would want.'
+      : 'These goals are inferred; nobody stated them. Say what the work points at, not what you would want.',
+    'Fewer lines are better than padded ones; an empty list is fine. Name issues by their identifier (like HG-12) when you name one.',
     'Plain words that read aloud. No file names, functions, tables, branches or routes. Short lines, one thing each.',
     '',
     JSON.stringify(facts, null, 1),
@@ -136,7 +157,7 @@ export async function writeFocus(appId: string, opts: { trigger?: 'person' | 'sc
   if (writing.has(key)) return null
   writing.add(key)
   try {
-    const { facts, links, workspaceId, setup } = await focusFacts(appId)
+    const { facts, links, stated, workspaceId, setup } = await focusFacts(appId)
     const through = await lastSeq(appId)
     await db.transaction((tx) => appendEvent(tx, { workspaceId, appId, actor: 'engine', type: 'summary.writing', payload: { section: 'focus' } }))
     try {
@@ -146,7 +167,7 @@ export async function writeFocus(appId: string, opts: { trigger?: 'person' | 'sc
         headline: got.body.headline?.trim() ?? '',
         people: (got.body.people ?? []).map((p) => ({ who: p.who.trim(), doing: keep(p.doing) })).filter((p) => p.who && p.doing.length),
         goals: { near: keep(got.body.goals?.near), mid: keep(got.body.goals?.mid), long: keep(got.body.goals?.long) },
-        links,
+        links, stated,
       }
       const [row] = await db.insert(summary).values({ appId, section: 'focus', body, facts, throughSeq: through, model: got.model ?? null, costUsd: got.costUsd == null ? null : String(got.costUsd), trigger: opts.trigger ?? 'person' }).returning()
       await db.transaction((tx) => appendEvent(tx, { workspaceId, appId, actor: 'engine', type: 'summary.written', payload: { section: 'focus', id: row.id, trigger: row.trigger } }))
