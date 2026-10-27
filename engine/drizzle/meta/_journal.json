@@ -8,6 +8,13 @@
       "when": 1793141183140,
       "tag": "0000_linear_shape",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793144637096,
+      "tag": "0001_workspace_settings",
+      "breakpoints": true
     }
   ]
 }

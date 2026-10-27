@@ -12,32 +12,66 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parse } from 'yaml'
 import type { Risk } from './risk.js'
 
-export type Role = 'talk' | 'planner'
+export type Role = 'talk' | 'planner' | 'builder'
+type Source = 'self-evident' | 'rea-agents'
 
 const OWN_PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 const REA_ROOT = dirname(createRequire(import.meta.url).resolve('rea-agents/package.json'))
+const PLUGIN_ROOT: Record<Source, string> = { 'self-evident': OWN_PLUGIN, 'rea-agents': REA_ROOT }
+
+/** Which of the factory's plugins each role gets. The builder builds what the plan says. */
+export const ROLE_PLUGINS: Record<Role, Source[]> = { talk: ['self-evident', 'rea-agents'], planner: ['self-evident', 'rea-agents'], builder: [] }
 
 /** Skill folders under a directory; a missing directory has none. */
 const skillDirs = (dir: string) => { try { return readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name) } catch { return [] } }
 
 /**
- * The plugins, the MCP servers they need, and the skills the session may see, named: ours, REA's, and the app repo's
- * own (`<cwd>/.claude/skills/`). Named so Claude Code's bundled skills (schedule, loop, update-config…) stay out.
+ * The plugins, the MCP servers they need, and the skills the session may see, named: its plugins', and the app
+ * repo's own (`<cwd>/.claude/skills/`). Named so Claude Code's bundled skills (schedule, loop, update-config…) stay out.
  */
-export function skillOptions(_role: Role, cwd: string): { plugins: SdkPluginConfig[]; mcpServers: Record<string, McpServerConfig>; skills: string[] } {
+export function skillOptions(role: Role, cwd: string): { plugins: SdkPluginConfig[]; mcpServers: Record<string, McpServerConfig>; skills: string[] } {
+  const sources = ROLE_PLUGINS[role]
   return {
-    plugins: [{ type: 'local', path: OWN_PLUGIN }, { type: 'local', path: REA_ROOT }],
+    plugins: sources.map((src) => ({ type: 'local', path: PLUGIN_ROOT[src] })),
     // REA 6.8.0 ships its skill without a plugin manifest, so its server is started here; same Node as the engine.
-    mcpServers: { rea: { type: 'stdio', command: process.execPath, args: [join(REA_ROOT, 'scripts', 'rea.mjs'), 'mcp'] } },
+    mcpServers: sources.includes('rea-agents') ? { rea: { type: 'stdio', command: process.execPath, args: [join(REA_ROOT, 'scripts', 'rea.mjs'), 'mcp'] } } : {},
     skills: [
-      ...skillDirs(join(OWN_PLUGIN, 'skills')).map((n) => `self-evident:${n}`),
-      ...skillDirs(join(REA_ROOT, 'skills')).map((n) => `rea-agents:${n}`),
+      ...sources.flatMap((src) => skillDirs(join(PLUGIN_ROOT[src], 'skills')).map((n) => `${src}:${n}`)),
       ...skillDirs(join(cwd, '.claude', 'skills')),
     ],
   }
 }
+
+export interface SkillInfo { name: string; description: string; source: Source | 'app' }
+
+/** Each skill under a directory, named and described from its SKILL.md frontmatter. */
+function readSkills(dir: string, source: SkillInfo['source']): SkillInfo[] {
+  return skillDirs(dir).map((d) => {
+    let meta: { name?: string; description?: string } = {}
+    try { meta = parse(readFileSync(join(dir, d, 'SKILL.md'), 'utf8').split(/^---\s*$/m)[1] ?? '') ?? {} } catch { /* no SKILL.md, or no frontmatter */ }
+    return { name: source === 'app' ? d : `${source}:${d}`, description: meta.description ?? '', source }
+  })
+}
+
+/** The app-wide layer, for Settings: each plugin, its skills, who gets it, and REA's tools by rating. */
+export function describeSkills() {
+  const reaVersion = JSON.parse(readFileSync(join(REA_ROOT, 'package.json'), 'utf8')).version as string
+  const ratings = { free: 0, moderate: 0, expensive: 0 } as Record<Risk, number>
+  for (const name of reaCatalogue().keys()) ratings[reaRisk(name).risk]++
+  const plugins = (Object.keys(PLUGIN_ROOT) as Source[]).map((source) => ({
+    name: source,
+    version: source === 'rea-agents' ? reaVersion : null,
+    roles: (Object.keys(ROLE_PLUGINS) as Role[]).filter((r) => ROLE_PLUGINS[r].includes(source)),
+    skills: readSkills(join(PLUGIN_ROOT[source], 'skills'), source),
+  }))
+  return { roles: ROLE_PLUGINS, plugins, rea: { version: reaVersion, tools: reaCatalogue().size, ratings } }
+}
+
+/** The app layer: the skills in an app repo's own `.claude/skills/`. */
+export const appSkills = (repoPath: string) => readSkills(join(repoPath, '.claude', 'skills'), 'app')
 
 /**
  * REA's tools rated from REA's own catalogue (the MCP annotations each tool declares), never a list kept here.
@@ -47,10 +81,8 @@ export function skillOptions(_role: Role, cwd: string): { plugins: SdkPluginConf
  */
 type Hints = { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }
 let catalogue: Map<string, Hints> | null = null
-const hintsOf = (name: string) => {
-  catalogue ??= new Map((JSON.parse(readFileSync(join(REA_ROOT, 'dist', 'mcp-catalog.json'), 'utf8')).tools as { name: string; annotations?: Hints }[]).map((t) => [t.name, t.annotations ?? {}]))
-  return catalogue.get(name)
-}
+const reaCatalogue = () => catalogue ??= new Map((JSON.parse(readFileSync(join(REA_ROOT, 'dist', 'mcp-catalog.json'), 'utf8')).tools as { name: string; annotations?: Hints }[]).map((t) => [t.name, t.annotations ?? {}]))
+const hintsOf = (name: string) => reaCatalogue().get(name)
 
 export function reaRisk(name: string): { risk: Risk; why: string } {
   const h = hintsOf(name)

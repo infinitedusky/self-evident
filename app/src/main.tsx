@@ -4,7 +4,6 @@ import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router'
 import './tokens.css'
 import './app.css'
 import { findIdea, ideas } from './ideas'
-import { modules } from './providers'
 import { CurrentAppProvider } from './current-app'
 import { Shell } from './components/Shell'
 import { AgentWindow } from './components/TalkDrawer'
@@ -61,7 +60,8 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/graph" element={<AppGraph />} />
             <Route path="/projects/new" element={<NewProject />} />
             <Route path="/projects/:id" element={<ProjectPage />} />
-            <Route path="/settings" element={<Settings modules={modules} />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/settings/apps/:id" element={<Settings />} />
           </Routes>
           </Shell>} />
         </Routes>

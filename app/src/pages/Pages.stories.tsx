@@ -4,7 +4,6 @@ import { Board } from './Board'
 import { IdeaPage } from './IdeaPage'
 import { Settings } from './Settings'
 import { ideas } from '../ideas'
-import { modules } from '../providers'
 import { bareIdea, sampleIdea } from '../fixtures'
 
 // Page stories use the real idea files where they exist, and labelled samples for other states.
@@ -17,4 +16,4 @@ export const BoardToday: Story = { render: () => page(<Board ideas={ideas} />) }
 export const BoardEmpty: Story = { render: () => page(<Board ideas={[]} />) }
 export const IdeaWithPRs: Story = { render: () => page(<IdeaPage idea={sampleIdea} />) }
 export const IdeaJustCaptured: Story = { render: () => page(<IdeaPage idea={bareIdea} />) }
-export const SettingsToday: Story = { render: () => page(<Settings modules={modules} />) }
+export const SettingsToday: Story = { render: () => page(<Settings />) }
