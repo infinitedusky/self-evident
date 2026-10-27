@@ -12,3 +12,7 @@ engine and the UI. Work in a git worktree per branch, never in the main checkout
 factory by hand on Homework Gate first and logging each step; the tool gets
 built from that log. Keep it light: no plan ceremony, no gates. When something
 is decided, write it into LOG.md or SHAPE.md before moving on.
+
+**Everything is observed** (Sandy, 2026-10-27). Whatever we build that runs, here or in an app we make, sends its
+logs to a central place (PostHog Logs, over OpenTelemetry) with a level on every line, and errors alert. Wire it in
+the same PR as the thing itself. Never ask Sandy to send a log file.

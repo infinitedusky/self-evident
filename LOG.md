@@ -493,6 +493,20 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Everything is observed (Sandy, 2026-10-27: "part of our DNA")
+
+"When we build things we use telemetry." Anything we build that runs (a server, an app on a family's computer, a
+background service, a script) sends its logs to one central place, each line with a level, and errors alert right
+away. Nobody fetches a log file to find out what happened; if a test needs a log sent over, that's a bug in the
+build. It came up testing Homework Gate's Windows and Mac lock: both apps only wrote local files.
+
+How, for Homework Gate (PRs #72 Windows, #73 server, #74 Mac): standard OpenTelemetry into PostHog Logs, with
+PostHog log alerts on error and fatal. One `service.name` per program, an install id per computer, the environment,
+lines held on disk while offline, no homework text or names. It is the first invariant in Homework Gate's CLAUDE.md.
+
+For the factory: every app it builds gets this from its first PR, and a PR that adds something that runs without its
+logs wired is not done. The engine and app here owe the same (not yet: a to-do).
+
 ## Summary page, first section: what we're focused on (Sandy, 2026-10-27)
 
 A page the agent writes from everything the engine knows (nav: 📰 Summary, above My Stuff). The first section is the
