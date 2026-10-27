@@ -493,6 +493,28 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Skills in two layers; REA for reverse engineering (Sandy, 2026-10-27)
+
+Sandy wants the agents able to study a feature someone else has shipped, to move fast on building our own. That
+is REA (`rea-agents`, github.com/morluto/rea): one MCP server over Ghidra/IDA/Hopper, JADX, browser capture,
+Electron/ASAR, .NET and ~25 format readers, with a skill that says when to use it. Its real reach: near-source for
+web, Electron, .NET, Java and Python; one function at a time for native code; nothing on a server.
+
+- **Two layers.** An app repo's `.claude/skills/` is about working on that app (the catalogue's "adopt",
+  `research/skills.md`). `engine/plugin/` is what the factory brings to every app: our own skills (none yet; a
+  folder under `engine/plugin/skills/`) and third-party plugins like REA. Both load through the Agent SDK
+  (`plugins`, `skills`); no skill system of our own.
+- **Who gets it:** the talk agent and the planner. The builder builds what the plan says and gets neither.
+- **Named, not all:** each session's `skills` lists ours, REA's and the app repo's, so Claude Code's bundled skills
+  (schedule, loop, update-config…) stay hidden. Checked against a live session: the model sees exactly those.
+- **Gating, from REA's own catalogue** (each tool's MCP hints, `engine/src/skills.ts`): reads and local work are
+  free; REA's own session edits and anything reaching outside (a browser, a device, an external analyser) are
+  moderate; running or changing the target is expensive and always asks. The planner has no one to ask, so it gets
+  only the free ones. Trade-off taken: REA labels some static readers open-world because they launch an analyser
+  (`analyze_javascript_application`, JADX), so those ask at the default threshold.
+- REA 6.8.0 ships its skill without a plugin manifest; the engine starts `rea mcp` itself. Its next release bundles
+  the server in the plugin, and that line can go. REA asks for Node ≥24.22.1; it runs on our 24.15.0 so far.
+
 ## Rebuilt in Linear's shape (Sandy, 2026-10-27: "rebuilding from scratch can be easier")
 
 Step 1 of "Shaped like Linear", done as a new database rather than a conversion: schema written fresh, migration
