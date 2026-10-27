@@ -513,7 +513,8 @@ web, Electron, .NET, Java and Python; one function at a time for native code; no
   only the free ones. Trade-off taken: REA labels some static readers open-world because they launch an analyser
   (`analyze_javascript_application`, JADX), so those ask at the default threshold.
 - REA 6.8.0 ships its skill without a plugin manifest; the engine starts `rea mcp` itself. Its next release bundles
-  the server in the plugin, and that line can go. REA asks for Node ≥24.22.1; it runs on our 24.15.0 so far.
+  the server in the plugin, and that line can go. REA asks for Node ≥24.22.1; the operator's machine moved to 24.22.1 for it (mise), and a first real analysis
+  (`analyze-javascript-application` on our own `app/`) completed there.
 
 ## Rebuilt in Linear's shape (Sandy, 2026-10-27: "rebuilding from scratch can be easier")
 
