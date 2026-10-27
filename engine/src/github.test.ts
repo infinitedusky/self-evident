@@ -9,12 +9,13 @@ import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, event, outsidePr, phaseFileClaim, pr, project, repo, workspace } from './db/schema.js'
+import { app, event, fileClaim, outsidePr, pr, project, repo, workspace } from './db/schema.js'
+import { getIssue } from './issues.js'
 import { commitAll, git } from './git.js'
 import { catchUpApp, checksOf, syncPrs, type GhPr, type GitHubApi } from './github.js'
 import { newId } from './ids.js'
 import { now } from './now.js'
-import { createProject } from './projects.js'
+import { createProject, setBuildStatus } from './projects.js'
 
 describe('checksOf', () => {
   it('reads the rollup as one word', () => {
@@ -45,13 +46,13 @@ describe.skipIf(!reachable)('github sync', () => {
     await git(teammate, ['pull', '-q', 'origin', 'main'])
     appId = newId('app'); repoId = newId('repo')
     await db.insert(workspace).values({ id: wsId, name: 'github test' })
-    await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'shop' })
+    await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'shop', key: appId.slice(-6).toUpperCase() })
     await db.insert(repo).values({ id: repoId, appId, fullName: 'o/shop', localPath: local })
   })
   afterAll(async () => { await db.update(project).set({ status: 'superseded' }).where(eq(project.appId, appId)); await pool.end() })
 
-  it('records our PR merged and reviewed; keeps a teammate\'s PR, its review request, and where it touches our work', async () => {
-    const { project: p, phases } = await createProject({ appId, title: 'cart', tasks: [{ title: 'Cart', phases: [{ key: 'a', title: 'Cart page', files: ['app/cart'] }] }] })
+  it('records our PR merged (its issues done) and reviewed; keeps a teammate\'s PR, its review request, and where it touches our work', async () => {
+    const { project: p, issues, subIssues: phases } = await createProject({ appId, name: 'cart', issues: [{ title: 'Cart', subIssues: [{ key: 'a', title: 'Cart page', files: ['app/cart'] }] }] })
     await db.update(project).set({ status: 'running' }).where(eq(project.id, p.id))
     await db.insert(pr).values({ id: newId('pr'), appId, projectId: p.id, repoId, number: 7, status: 'open', headBranch: p.integrationBranch })
     const ours: GhPr = { number: 7, title: 'cart', url: 'u7', state: 'OPEN', isDraft: false, headRefName: p.integrationBranch!, baseRefName: 'main', reviewDecision: 'CHANGES_REQUESTED', statusCheckRollup: [{ name: 'test', status: 'COMPLETED', conclusion: 'FAILURE' }] }
@@ -62,29 +63,33 @@ describe.skipIf(!reachable)('github sync', () => {
     expect(row.signals).toMatchObject({ review: 'CHANGES_REQUESTED', checks: 'failing', failing: ['test'] })
     const [o] = await db.select().from(outsidePr).where(and(eq(outsidePr.repoId, repoId), eq(outsidePr.number, 8)))
     expect(o).toMatchObject({ author: 'mate', reviewRequested: true, state: 'open', files: ['app/cart/page.tsx', 'lib/discounts.ts'] })
-    expect((await db.select().from(phaseFileClaim).where(eq(phaseFileClaim.phaseId, phases[0].id))).map((c) => c.path)).toEqual(['app/cart'])
+    expect((await db.select().from(fileClaim).where(eq(fileClaim.issueId, phases[0].id))).map((c) => c.path)).toEqual(['app/cart'])
 
     const needs = (await now(appId)).needsYou
     expect(needs.find((n) => n.kind === 'pr_feedback')).toMatchObject({ prNumber: 7, review: 'CHANGES_REQUESTED', checks: 'failing' })
     expect(needs.find((n) => n.kind === 'review')).toMatchObject({ prNumber: 8, author: 'mate' })
     expect(needs.find((n) => n.kind === 'overlap')).toMatchObject({ prNumber: 8, files: ['app/cart/page.tsx'], projectId: p.id })
 
+    await setBuildStatus(phases[0].id, 'done')
+    expect((await getIssue(db, issues[0].id)).state).toBe('in_review')
     const second = await syncPrs(appId, fake([{ ...ours, state: 'MERGED', reviewDecision: 'APPROVED', statusCheckRollup: [{ name: 'test', status: 'COMPLETED', conclusion: 'SUCCESS' }] }, { ...theirs, state: 'MERGED' }]))
     expect(second.changes).toEqual(expect.arrayContaining(['#7 pr.merged', '#7 pr.review', '#7 pr.checks']))
     expect((await db.select().from(pr).where(eq(pr.projectId, p.id)))[0].status).toBe('merged')
+    expect((await getIssue(db, issues[0].id)).state).toBe('done') // Linear's way: the PR merged, the issue is done
     expect((await db.select().from(outsidePr).where(eq(outsidePr.number, 8)))[0].state).toBe('merged')
     expect((await now(appId)).needsYou.some((n) => n.kind === 'review' || n.kind === 'overlap')).toBe(false)
     await db.update(project).set({ status: 'superseded' }).where(eq(project.id, p.id))
   })
 
   it('stacked PRs: when the bottom one merges, the next retargets to main and its branch catches up from main', async () => {
-    const { project: p, tasks } = await createProject({ appId, title: 'stack', tasks: [{ title: 'One' }, { title: 'Two' }] })
+    const { project: p, issues: tasks } = await createProject({ appId, name: 'stack', issues: [{ title: 'One' }, { title: 'Two' }] })
     await db.update(project).set({ status: 'running' }).where(eq(project.id, p.id))
-    const b1 = `${p.integrationBranch}--t${tasks[0].number}`, b2 = `${p.integrationBranch}--t${tasks[1].number}`
+    const id = (n: number) => `${appId.slice(-6).toLowerCase()}-${n}`
+    const b1 = `${p.integrationBranch}--${id(tasks[0].number)}`, b2 = `${p.integrationBranch}--${id(tasks[1].number)}`
     await git(local, ['fetch', '-q', 'origin']); await git(local, ['branch', b1, 'origin/main']); await git(local, ['branch', b2, b1])
     await db.insert(pr).values([
-      { id: newId('pr'), appId, projectId: p.id, taskId: tasks[0].id, repoId, number: 11, status: 'open', headBranch: b1, baseBranch: 'main' },
-      { id: newId('pr'), appId, projectId: p.id, taskId: tasks[1].id, repoId, number: 12, status: 'open', headBranch: b2, baseBranch: b1 },
+      { id: newId('pr'), appId, projectId: p.id, issueId: tasks[0].id, repoId, number: 11, status: 'open', headBranch: b1, baseBranch: 'main' },
+      { id: newId('pr'), appId, projectId: p.id, issueId: tasks[1].id, repoId, number: 12, status: 'open', headBranch: b2, baseBranch: b1 },
     ])
     const one: GhPr = { number: 11, title: 'One', url: 'u11', state: 'MERGED', isDraft: false, headRefName: b1, baseRefName: 'main' }
     const two: GhPr = { number: 12, title: 'Two', url: 'u12', state: 'OPEN', isDraft: false, headRefName: b2, baseRefName: b1 }
@@ -92,7 +97,7 @@ describe.skipIf(!reachable)('github sync', () => {
     expect(out.changes).toEqual(expect.arrayContaining(['#11 pr.merged', '#12 retargeted']))
     expect(retargeted).toContainEqual([12, 'main'])
     expect((await db.select().from(pr).where(eq(pr.number, 12)))[0].baseBranch).toBe('main')
-    expect((await now(appId)).needsYou.some((n) => n.kind === 'review' || n.kind === 'overlap')).toBe(false) // our task branches are not a teammate's
+    expect((await now(appId)).needsYou.some((n) => n.kind === 'review' || n.kind === 'overlap')).toBe(false) // our issue branches are not a teammate's
 
     await writeFile(join(teammate, 'news.md'), 'news\n'); await commitAll(teammate, 'news'); await git(teammate, ['push', '-q', 'origin', 'main'])
     const caught = await catchUpApp(appId)
@@ -102,7 +107,7 @@ describe.skipIf(!reachable)('github sync', () => {
   })
 
   it('merges main into a running project\'s branch when a teammate merges, and reports a conflict instead of resolving it', async () => {
-    const { project: p } = await createProject({ appId, title: 'saved carts', tasks: [{ title: 'Saved carts' }] })
+    const { project: p } = await createProject({ appId, name: 'saved carts', issues: [{ title: 'Saved carts' }] })
     await db.update(project).set({ status: 'running' }).where(eq(project.id, p.id))
     await git(local, ['branch', p.integrationBranch!, 'origin/main'])
 

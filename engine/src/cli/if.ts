@@ -18,7 +18,7 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
   return JSON.parse(text) as T
 }
 
-const program = new Command('se').description('Self Evident engine: idea → project (tasks in order) → task → phase → step')
+const program = new Command('se').description('Self Evident engine, shaped like Linear: initiative → project (issues in order) → issue → sub-issue → step')
 
 program.command('migrate').description('apply database migrations').action(async () => { await import('../db/migrate.js') })
 
@@ -27,7 +27,7 @@ program.command('workspace').argument('<name>').description('create a workspace'
 })
 
 program.command('app').argument('<name>').requiredOption('-w, --workspace <id>').option('-b, --branch <name>', 'default branch', 'main')
-  .option('--test-cmd <cmd>', 'how to run the tests in a worktree').option('--model <model>', 'model for phase runs')
+  .option('--test-cmd <cmd>', 'how to run the tests in a worktree').option('--model <model>', 'model for agent runs')
   .option('--max-budget-usd <n>').option('--max-turns <n>')
   .description('register an app (a stack of repos)').action(async (name: string, o: { workspace: string; branch: string; testCmd?: string; model?: string; maxBudgetUsd?: string; maxTurns?: string }) => {
     const setup: Record<string, unknown> = {}
@@ -58,34 +58,36 @@ program.command('connect').argument('[dir]', 'a checkout of the app\'s repo (a w
     console.log('Local scope: only you, only in this repo; nothing is written into the repo. Then ask Claude Code "what needs me?"')
   })
 
-const project = program.command('project').description('projects are tasks in order; tasks are made of phases')
+const project = program.command('project').description('projects are issues in order; a code issue is built in sub-issues')
 
-project.command('create').requiredOption('-a, --app <id>').requiredOption('-t, --title <title>').option('-s, --spec <text>', 'why: the idea behind it')
-  .requiredOption('-f, --tasks <file>', 'JSON: [{title, brief?, phases?: [{key, title, brief?, dependsOn?, files?}]}]')
-  .action(async (o: { app: string; title: string; spec?: string; tasks: string }) => {
-    const tasks = JSON.parse(await readFile(o.tasks, 'utf8'))
-    const out = await api<{ project: { id: string }; tasks: { id: string; number: number; title: string }[]; phases: { id: string; number: number; title: string; taskId: string }[] }>('POST', '/projects', { appId: o.app, title: o.title, spec: o.spec, tasks })
+project.command('create').requiredOption('-a, --app <id>').requiredOption('-n, --name <name>').option('-c, --content <text>', 'why: the idea behind it')
+  .requiredOption('-f, --issues <file>', 'JSON: [{title, brief?, subIssues?: [{key, title, brief?, dependsOn?, files?}]}]')
+  .action(async (o: { app: string; name: string; content?: string; issues: string }) => {
+    const issues = JSON.parse(await readFile(o.issues, 'utf8'))
+    const out = await api<{ project: { id: string }; issues: { id: string; number: number; title: string }[]; subIssues: { id: string; number: number; title: string; parentId: string }[] }>('POST', '/projects', { appId: o.app, name: o.name, content: o.content, issues })
     console.log(`project ${out.project.id}`)
-    for (const t of out.tasks) {
-      console.log(`  task ${t.id}  #${t.number}  ${t.title}`)
-      for (const x of out.phases.filter((q) => q.taskId === t.id)) console.log(`    phase ${x.id}  #${x.number}  ${x.title}`)
+    for (const t of out.issues) {
+      console.log(`  issue ${t.id}  #${t.number}  ${t.title}`)
+      for (const x of out.subIssues.filter((q) => q.parentId === t.id)) console.log(`    sub-issue ${x.id}  #${x.number}  ${x.title}`)
     }
   })
 
 project.command('graph').argument('<projectId>').action(async (projectId: string) => {
-  const g = await api<{ project: { title: string; status: string; integrationBranch: string }; pr: { number: number; url: string } | null; tasks: any[]; phases: any[] }>('GET', `/projects/${projectId}/graph`)
-  console.log(`${g.project.title}  [${g.project.status}]  (${g.project.integrationBranch})${g.pr ? `  PR #${g.pr.number}` : ''}`)
-  for (const t of g.tasks) {
-    console.log(`  task #${t.number} ${t.title}`)
-    for (const x of g.phases.filter((q) => q.taskId === t.id)) {
-      const num = (d: string) => '#' + (g.phases.find((q) => q.id === d)?.number ?? d)
-      const deps = x.dependsOn.length ? `  ← ${x.dependsOn.map(num).join(', ')}` : ''
-      const after = x.orderedAfter?.length ? `  ⇐ ${x.orderedAfter.map(num).join(', ')} (task order)` : ''
+  const g = await api<{ project: { name: string; status: string; integrationBranch: string }; pr: { number: number; url: string } | null; issues: any[]; subIssues: any[]; backlog: any[] }>('GET', `/projects/${projectId}/graph`)
+  console.log(`${g.project.name}  [${g.project.status}]  (${g.project.integrationBranch})${g.pr ? `  PR #${g.pr.number}` : ''}`)
+  for (const t of g.issues) {
+    console.log(`  ${t.identifier} ${t.title}  [${t.state}]`)
+    for (const x of g.subIssues.filter((q) => q.parentId === t.id)) {
+      const name = (d: string) => g.subIssues.find((q) => q.id === d)?.identifier ?? d
+      const deps = x.dependsOn.length ? `  ← ${x.dependsOn.map(name).join(', ')}` : ''
+      const after = x.orderedAfter?.length ? `  ⇐ ${x.orderedAfter.map(name).join(', ')} (issue order)` : ''
       const held = x.heldReason ? `  [held: ${x.heldReason}]` : ''
-      console.log(`    ${x.status.padEnd(15)} ${x.id}  #${x.number} ${x.title}${deps}${after}${held}`)
+      console.log(`    ${x.status.padEnd(15)} ${x.id}  ${x.identifier} ${x.title}${deps}${after}${held}`)
       for (const s of x.steps ?? []) console.log(`      ${s.status === 'completed' ? '✓' : s.status === 'in_progress' ? '●' : '○'} ${s.text}`)
     }
   }
+  const open = g.backlog.filter((i) => i.state === 'backlog')
+  if (open.length) console.log(`  backlog: ${open.map((i) => `${i.identifier} ${i.title}`).join('; ')}`)
 })
 
 project.command('start').argument('<projectId>').description('run the project: worktrees, agent runs, landing, PR')
@@ -96,25 +98,24 @@ project.command('tick').argument('<projectId>').option('-r, --room <n>', 'free s
     console.log(JSON.stringify(await api('POST', `/projects/${projectId}/tick${o.room ? `?room=${o.room}` : ''}`), null, 2))
   })
 
-const task = program.command('task').description('tasks are authored; the planner (or you) adds their phases')
-task.command('phases').argument('<taskId>').requiredOption('-f, --file <file>', 'JSON: [{key, title, brief?, dependsOn?, files?}]')
-  .description('add phases to a task').action(async (taskId: string, o: { file: string }) => {
-    const rows = await api<any[]>('POST', `/tasks/${taskId}/phases`, JSON.parse(await readFile(o.file, 'utf8')))
-    for (const x of rows) console.log(`  phase ${x.id}  #${x.number}  ${x.title}`)
+const issue = program.command('issue').description('issues are authored; the planner (or you) adds a code issue\'s sub-issues')
+issue.command('sub-issues').argument('<issueId>').requiredOption('-f, --file <file>', 'JSON: [{key, title, brief?, dependsOn?, files?}]')
+  .description('add sub-issues to a code issue').action(async (issueId: string, o: { file: string }) => {
+    const rows = await api<any[]>('POST', `/issues/${issueId}/sub-issues`, JSON.parse(await readFile(o.file, 'utf8')))
+    for (const x of rows) console.log(`  sub-issue ${x.id}  #${x.number}  ${x.title}`)
   })
-task.command('plan').argument('<taskId>').description("the planner: the task's brief → phases, decisions and questions (one read-only agent run; minutes)")
-  .action(async (taskId: string) => {
-    const out = await api<any>('POST', `/tasks/${taskId}/plan?wait=1`)
-    for (const x of out.phases) console.log(`  phase ${x.id}  #${x.number}  ${x.title}`)
+issue.command('plan').argument('<issueId>').description("the planner: the issue's brief → sub-issues, decisions and questions (one read-only agent run; minutes)")
+  .action(async (issueId: string) => {
+    const out = await api<any>('POST', `/issues/${issueId}/plan?wait=1`)
+    for (const x of out.subIssues) console.log(`  sub-issue ${x.id}  #${x.number}  ${x.title}`)
     for (const d of out.decisions) console.log(`  decided  ${d.question} → ${d.options[0]?.text}  (${d.rationale})`)
     for (const q of out.questions) console.log(`  question ${q.id} [${q.cost}]  ${q.text}  (recommends ${q.options.find((o: any) => o.recommended)?.label})`)
     console.log(`  run ${out.runId}  $${Number(out.costUsd ?? 0).toFixed(2)} est.`)
   })
+issue.command('build').argument('<issueId>').argument('<status>').description('set a sub-issue\'s build status by hand, for drafts')
+  .action(async (issueId: string, status: string) => { console.log(JSON.stringify(await api('POST', `/issues/${issueId}/build`, { status }))) })
 program.command('question').command('answer').argument('<questionId>').argument('<answer>')
   .action(async (questionId: string, answer: string) => { console.log(JSON.stringify(await api('POST', `/questions/${questionId}/answer`, { answer }))) })
-
-program.command('phase').command('status').argument('<phaseId>').argument('<status>').description('by hand, for drafts')
-  .action(async (phaseId: string, status: string) => { console.log(JSON.stringify(await api('POST', `/phases/${phaseId}/status`, { status }))) })
 
 program.command('watch').option('-s, --since <seq>', 'replay from this sequence number', '0').option('-p, --project <id>').option('-a, --app <id>').option('-w, --workspace <id>')
   .description('follow the event log').action(async (o: { since: string; project?: string; app?: string; workspace?: string }) => {
@@ -137,7 +138,7 @@ program.command('watch').option('-s, --since <seq>', 'replay from this sequence 
         const type = frame.split('\n').find((l) => l.startsWith('event:'))?.slice(6).trim()
         if (type === 'ping' || !data) continue
         const e = JSON.parse(data)
-        const who = e.phaseId ?? e.taskId ?? e.projectId ?? e.appId ?? ''
+        const who = e.issueId ?? e.projectId ?? e.appId ?? ''
         console.log(`${String(e.seq).padStart(6)}  ${e.ts.slice(11, 19)}  ${e.type.padEnd(16)} ${who}  ${JSON.stringify(e.payload)}`)
       }
     }

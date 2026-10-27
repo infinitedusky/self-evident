@@ -90,9 +90,9 @@ function AppCard({ app, onSaved, onError }: { app: App; onSaved: () => Promise<u
         <label>Local checkout<input className="mono" value={repo.localPath ?? ''} onChange={(e) => setRepo({ ...repo, localPath: e.target.value })} placeholder="/absolute/path/to/the/repo, on its default branch" /></label>
         <label>Storybook URL<input className="mono" value={setup.storybook_url ?? ''} onChange={(e) => setSetup({ ...setup, storybook_url: e.target.value })} placeholder="http://localhost:6006" /></label>
         <label>Storybook command<input className="mono" value={setup.storybook_cmd ?? ''} onChange={(e) => setSetup({ ...setup, storybook_cmd: e.target.value })} placeholder="cd web && pnpm storybook --no-open" /></label>
-        <label style={{ gridColumn: '1 / -1' }}>Pull requests<select value={setup.pr_mode ?? 'project'} onChange={(e) => setSetup({ ...setup, pr_mode: e.target.value as 'project' | 'task' })}>
-          <option value="project">One per project: every task lands on the project's branch</option>
-          <option value="task">One per task, stacked: small PRs for a team; each merges on its own</option>
+        <label style={{ gridColumn: '1 / -1' }}>Pull requests<select value={setup.pr_mode ?? 'project'} onChange={(e) => setSetup({ ...setup, pr_mode: e.target.value as 'project' | 'issue' })}>
+          <option value="project">One per project: every issue lands on the project's branch</option>
+          <option value="issue">One per issue, stacked: small PRs for a team; each merges on its own</option>
         </select></label>
         <label style={{ gridColumn: '1 / -1' }}>Test command<input className="mono" value={setup.test_cmd ?? ''} onChange={(e) => setSetup({ ...setup, test_cmd: e.target.value })} placeholder="runs in the worktree on the merged commit; must exit 0 to land" /></label>
         <label>Model<input className="mono" value={setup.model ?? ''} onChange={(e) => setSetup({ ...setup, model: e.target.value })} placeholder="default: the agent's own" /></label>

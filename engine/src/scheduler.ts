@@ -1,9 +1,9 @@
 /**
- * The scheduler: a pure function over rows. No clock, no I/O. Given the phases (it calls them tasks internally) it says which to start now
+ * The scheduler: a pure function over rows. No clock, no I/O. Given the code sub-issues (it calls them tasks internally) it says which to start now
  * and why every other candidate is held. It picks one task at a time, so two tasks freed together never claim
  * the same file. (InDusk run-the-graph ADR D3, never built there.)
  */
-import type { PhaseStatus as TaskStatus } from './db/schema.js'
+import type { BuildStatus as TaskStatus } from './db/schema.js'
 
 export interface SchedTask {
   id: string

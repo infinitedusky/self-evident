@@ -16,14 +16,14 @@ describe.skipIf(!reachable)('ideas', () => {
   beforeAll(async () => {
     appId = newId('app')
     await db.insert(workspace).values({ id: wsId, name: 'ideas test' })
-    await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'fake app' })
+    await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'fake app', key: appId.slice(-6).toUpperCase() })
   })
   afterAll(async () => {
     await db.update(project).set({ status: 'superseded' }).where(eq(project.appId, appId))
     await pool.end()
   })
 
-  it('keeps an idea, numbers it per app, and turns it into a project of one task with the body as the brief', async () => {
+  it('keeps an idea, numbers it per app, and turns it into a project of one issue with the body as the brief', async () => {
     const a = await createIdea({ appId, title: '  Spaced repetition  ', body: 'What you missed comes back.' })
     const b = await createIdea({ appId, title: 'Second' })
     expect([a.number, b.number]).toEqual([1, 2])
@@ -32,12 +32,12 @@ describe.skipIf(!reachable)('ideas', () => {
 
     const out = await projectFromIdea(a.id)
     const g = (await projectGraph(out.project.id))!
-    expect(g.project).toMatchObject({ title: 'Spaced repetition', spec: 'What you missed comes back.', ideaId: a.id })
-    expect(g.tasks.map((t) => [t.title, t.brief])).toEqual([['Spaced repetition', 'What you missed comes back.']])
+    expect(g.project).toMatchObject({ name: 'Spaced repetition', content: 'What you missed comes back.', ideaId: a.id })
+    expect(g.issues.map((t) => [t.title, t.brief])).toEqual([['Spaced repetition', 'What you missed comes back.']])
     expect((await db.select().from(idea).where(eq(idea.id, a.id)))[0].lane).not.toBe('inbox')
 
     const many = await projectFromIdea(b.id, [{ title: 'First part' }, { title: 'Second part', brief: 'after the first' }])
-    expect((await projectGraph(many.project.id))!.tasks.map((t) => t.title)).toEqual(['First part', 'Second part'])
+    expect((await projectGraph(many.project.id))!.issues.map((t) => t.title)).toEqual(['First part', 'Second part'])
   })
 
   it('refuses an empty title', async () => {

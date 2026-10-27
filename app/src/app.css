@@ -244,3 +244,9 @@ button.badge { border: 0; cursor: pointer; }
 .summary-lines li:first-child { border-top: 0; }
 .summary-refs { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 3px; }
 .summary-refs .ref { color: var(--ink-faint); text-decoration: none; } .summary-refs a.ref:hover { color: var(--accent); }
+
+/* An issue's sub-issues, as a list: identifier, what it is, where it stands. */
+.sub-issues { list-style: none; margin: 0; padding: 0; }
+.sub-issues .sub-issue { display: grid; grid-template-columns: 72px 1fr auto; gap: 12px; align-items: start; }
+.sub-issues .sub-issue.done > div a, .sub-issues .sub-issue.canceled > div a { color: var(--ink-soft); }
+.chip-order { display: inline-flex; gap: 2px; } .chip-order button { padding: 0 3px; }

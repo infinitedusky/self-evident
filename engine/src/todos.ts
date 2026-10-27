@@ -1,17 +1,17 @@
 /**
  * To-dos: the work around the code. Getting approved by Apple, getting a tester set up, confirming the telemetry sees
- * her: not strategy, not dev tasks, but what decides whether the work counts. A to-do belongs to the app (beside its
- * projects, never inside one), is owned by the person or the agent, can point at the project it unblocks, and has a
- * checklist, one level deep. A checklist line can be waiting on someone else ("Apple's review"). The to-do is done
- * when every line is checked, or when a person says so; unchecking a line of a done to-do opens it again.
+ * her: not strategy, not code, but what decides whether the work counts. Linear's way: an issue (kind `todo`), with
+ * its checklist as sub-issues, one level deep. It belongs to the app, can sit in the project it unblocks, and is the
+ * person's (assignee) or handed to the agent (delegate). A checklist line can be waiting on someone else ("Apple's
+ * review"). The to-do is done when every line is, or when a person says so; unchecking a line of a done to-do opens
+ * it again.
  */
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import { and, asc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 import { db, type Tx } from './db/client.js'
-import { app, backlogItem, checklistItem, project, todo } from './db/schema.js'
+import { app, issue, project } from './db/schema.js'
 import { appendEvent } from './events.js'
-import { newId } from './ids.js'
-import { PlanError } from './projects.js'
+import { getIssue, identifier, insertIssues, nextSort, PlanError, setState, type Issue } from './issues.js'
 
 export type TodoOwner = 'person' | 'agent'
 export type NewChecklistItem = string | { text: string; waitingOn?: string }
@@ -20,11 +20,12 @@ export interface NewTodo { appId: string; title: string; notes?: string; owner?:
 const clean = (items: NewChecklistItem[] = []) => items.map((i) => (typeof i === 'string' ? { text: i } : i))
   .map((i) => ({ text: i.text?.trim().replace(/\s+/g, ' ') ?? '', waitingOn: i.waitingOn?.trim() || null })).filter((i) => i.text)
 
+const isOpen = (i: Issue) => !['done', 'canceled', 'duplicate'].includes(i.state)
+
 async function load(tx: Tx | typeof db, todoId: string) {
-  const [t] = await tx.select().from(todo).where(eq(todo.id, todoId))
-  if (!t) throw new PlanError(`no to-do ${todoId}`)
-  const [a] = await tx.select().from(app).where(eq(app.id, t.appId))
-  return { t, base: { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId ?? undefined } }
+  const t = await getIssue(tx, todoId)
+  if (t.kind !== 'todo' || t.parentId) throw new PlanError(`${todoId} is not a to-do`)
+  return t
 }
 
 async function checkProject(tx: Tx | typeof db, appId: string, projectId?: string | null) {
@@ -33,22 +34,35 @@ async function checkProject(tx: Tx | typeof db, appId: string, projectId?: strin
   if (!p || p.appId !== appId) throw new PlanError('that project is not in this app')
 }
 
+/** A to-do as the page shows it: the issue, who has it, its checklist, and the project it unblocks. */
+function view(t: Issue, key: string, lines: Issue[], projects: { id: string; name: string; status: string }[]) {
+  return {
+    ...t, identifier: identifier(key, t.number), notes: t.description, owner: (t.delegate === 'agent' ? 'agent' : 'person') as TodoOwner,
+    status: t.state === 'done' ? 'done' : t.state === 'canceled' ? 'dropped' : 'open',
+    checklist: lines.filter((l) => l.parentId === t.id).map((l) => ({ ...l, identifier: identifier(key, l.number), text: l.title, done: l.state === 'done', position: l.sortOrder })),
+    project: projects.find((p) => p.id === t.projectId) ?? null,
+  }
+}
+
 /** Every to-do of an app with its checklist and the project it unblocks: open first, then done and dropped, newest first. */
 export async function listTodos(appId: string, opts: { projectId?: string } = {}) {
-  const rows = await db.select().from(todo).where(opts.projectId ? and(eq(todo.appId, appId), eq(todo.projectId, opts.projectId)) : eq(todo.appId, appId))
-  const ids = rows.map((t) => t.id)
-  const items = ids.length ? await db.select().from(checklistItem).where(inArray(checklistItem.todoId, ids)).orderBy(asc(checklistItem.position), asc(checklistItem.id)) : []
+  const [a] = await db.select().from(app).where(eq(app.id, appId))
+  if (!a) throw new PlanError(`no app ${appId}`)
+  const where = [eq(issue.appId, appId), eq(issue.kind, 'todo'), isNull(issue.parentId)]
+  if (opts.projectId) where.push(eq(issue.projectId, opts.projectId))
+  const rows = await db.select().from(issue).where(and(...where))
+  const lines = rows.length ? await db.select().from(issue).where(inArray(issue.parentId, rows.map((t) => t.id))).orderBy(asc(issue.sortOrder), asc(issue.number)) : []
   const pids = [...new Set(rows.map((t) => t.projectId).filter(Boolean))] as string[]
-  const projects = pids.length ? await db.select({ id: project.id, title: project.title, status: project.status }).from(project).where(inArray(project.id, pids)) : []
-  const rank = { open: 0, done: 1, dropped: 2 } as Record<string, number>
+  const projects = pids.length ? await db.select({ id: project.id, name: project.name, status: project.status }).from(project).where(inArray(project.id, pids)) : []
+  const rank = (t: Issue) => (isOpen(t) ? 0 : t.state === 'done' ? 1 : 2)
+  const closedAt = (t: Issue) => (t.completedAt ?? t.canceledAt)?.getTime() ?? 0
   return rows
-    .sort((a, b) => rank[a.status] - rank[b.status] || (a.status === 'open' ? a.number - b.number : (b.closedAt?.getTime() ?? 0) - (a.closedAt?.getTime() ?? 0)))
-    .map((t) => ({ ...t, checklist: items.filter((i) => i.todoId === t.id), project: projects.find((p) => p.id === t.projectId) ?? null }))
+    .sort((x, y) => rank(x) - rank(y) || (isOpen(x) ? x.number - y.number : closedAt(y) - closedAt(x)))
+    .map((t) => view(t, a.key, lines, projects))
 }
 
 export async function getTodo(todoId: string) {
-  const [t] = await db.select().from(todo).where(eq(todo.id, todoId))
-  if (!t) throw new PlanError(`no to-do ${todoId}`)
+  const t = await load(db, todoId)
   return (await listTodos(t.appId)).find((x) => x.id === todoId)!
 }
 
@@ -60,33 +74,30 @@ export async function createTodo(input: NewTodo, actor = 'user') {
 
 async function insertTodo(tx: Tx, input: NewTodo, actor: string) {
   if (!input.title?.trim()) throw new PlanError('a to-do needs a title')
-  {
-    const [a] = await tx.select().from(app).where(eq(app.id, input.appId))
-    if (!a) throw new PlanError(`no app ${input.appId}`)
-    await checkProject(tx, a.id, input.projectId)
-    const [{ max }] = await tx.select({ max: sql<number>`coalesce(max(${todo.number}), 0)` }).from(todo).where(eq(todo.appId, a.id))
-    const [t] = await tx.insert(todo).values({
-      id: newId('todo'), appId: a.id, number: Number(max) + 1, title: input.title.trim(), notes: input.notes?.trim() || null,
-      owner: input.owner ?? 'person', projectId: input.projectId ?? null, createdBy: actor,
-    }).returning()
-    const lines = clean(input.checklist)
-    if (lines.length) await tx.insert(checklistItem).values(lines.map((l, i) => ({ appId: a.id, todoId: t.id, position: i, text: l.text, waitingOn: l.waitingOn })))
-    await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId ?? undefined, actor, type: 'todo.created', payload: { todoId: t.id, number: t.number, title: t.title, owner: t.owner, checklist: lines.length } })
-    return t
-  }
+  await checkProject(tx, input.appId, input.projectId)
+  const [t] = await insertIssues(tx, input.appId, [{
+    kind: 'todo', title: input.title, description: input.notes, projectId: input.projectId ?? null, delegate: input.owner === 'agent' ? 'agent' : null,
+    sortOrder: await nextSort(tx, { appId: input.appId, projectId: input.projectId ?? null }),
+  }], actor)
+  const lines = clean(input.checklist)
+  await insertIssues(tx, input.appId, lines.map((l, i) => ({ kind: 'todo' as const, parentId: t.id, projectId: t.projectId, title: l.text, waitingOn: l.waitingOn, sortOrder: i })), actor)
+  return t
 }
 
 export async function updateTodo(todoId: string, input: { title?: string; notes?: string | null; owner?: TodoOwner; projectId?: string | null }, actor = 'user') {
   await db.transaction(async (tx) => {
-    const { t, base } = await load(tx, todoId)
+    const t = await load(tx, todoId)
     if (input.projectId !== undefined) await checkProject(tx, t.appId, input.projectId)
     if (input.title !== undefined && !input.title.trim()) throw new PlanError('a to-do needs a title')
     const set = {
-      ...(input.title !== undefined ? { title: input.title.trim() } : {}), ...(input.notes !== undefined ? { notes: input.notes?.trim() || null } : {}),
-      ...(input.owner ? { owner: input.owner } : {}), ...(input.projectId !== undefined ? { projectId: input.projectId || null } : {}), updatedAt: new Date(),
+      ...(input.title !== undefined ? { title: input.title.trim() } : {}), ...(input.notes !== undefined ? { description: input.notes?.trim() || null } : {}),
+      ...(input.owner ? { delegate: input.owner === 'agent' ? 'agent' : null } : {}), ...(input.projectId !== undefined ? { projectId: input.projectId || null } : {}),
     }
-    await tx.update(todo).set(set).where(eq(todo.id, todoId))
-    await appendEvent(tx, { ...base, projectId: (input.projectId ?? t.projectId) ?? undefined, actor, type: 'todo.updated', payload: { todoId, number: t.number, changed: Object.keys(set).filter((k) => k !== 'updatedAt') } })
+    if (!Object.keys(set).length) return
+    await tx.update(issue).set({ ...set, updatedAt: new Date() }).where(eq(issue.id, todoId))
+    if (input.projectId !== undefined) await tx.update(issue).set({ projectId: input.projectId || null }).where(eq(issue.parentId, todoId))
+    const [a] = await tx.select().from(app).where(eq(app.id, t.appId))
+    await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: (input.projectId ?? t.projectId) ?? null, issueId: t.id, actor, type: 'issue.updated', payload: { identifier: identifier(a.key, t.number), changed: Object.keys(set) } })
   })
   return getTodo(todoId)
 }
@@ -94,13 +105,12 @@ export async function updateTodo(todoId: string, input: { title?: string; notes?
 /** Add lines to the end of a to-do's checklist. A done to-do with new, unchecked lines is open again. */
 export async function addChecklist(todoId: string, items: NewChecklistItem[], actor = 'user') {
   await db.transaction(async (tx) => {
-    const { t, base } = await load(tx, todoId)
+    const t = await load(tx, todoId)
     const lines = clean(items)
     if (!lines.length) return
-    const [{ max }] = await tx.select({ max: sql<number>`coalesce(max(${checklistItem.position}), -1)` }).from(checklistItem).where(eq(checklistItem.todoId, todoId))
-    await tx.insert(checklistItem).values(lines.map((l, i) => ({ appId: t.appId, todoId, position: Number(max) + 1 + i, text: l.text, waitingOn: l.waitingOn })))
-    await appendEvent(tx, { ...base, actor, type: 'todo.updated', payload: { todoId, number: t.number, added: lines.map((l) => l.text) } })
-    if (t.status === 'done') await reopenIn(tx, t, base, actor, 'new checklist lines')
+    const start = await nextSort(tx, { parentId: todoId })
+    await insertIssues(tx, t.appId, lines.map((l, i) => ({ kind: 'todo' as const, parentId: t.id, projectId: t.projectId, title: l.text, waitingOn: l.waitingOn, sortOrder: start + i })), actor)
+    if (t.state === 'done') await setState(tx, t, 'todo', { actor, reason: 'new checklist lines' })
   })
   return getTodo(todoId)
 }
@@ -109,57 +119,47 @@ export async function addChecklist(todoId: string, items: NewChecklistItem[], ac
  * Change one checklist line: check it, uncheck it, mark it waiting on someone, or reword it. Checking the last open
  * line finishes the to-do; unchecking a line of a done to-do opens it again.
  */
-export async function setChecklistItem(itemId: number, input: { done?: boolean; waitingOn?: string | null; text?: string }, actor = 'user') {
+export async function setChecklistItem(lineId: string, input: { done?: boolean; waitingOn?: string | null; text?: string }, actor = 'user') {
   const todoId = await db.transaction(async (tx) => {
-    const [i] = await tx.select().from(checklistItem).where(eq(checklistItem.id, itemId))
-    if (!i) throw new PlanError(`no checklist line ${itemId}`)
-    const { t, base } = await load(tx, i.todoId)
-    if (t.status === 'dropped') throw new PlanError('that to-do was dropped; reopen it first')
+    const l = await getIssue(tx, lineId)
+    if (!l.parentId) throw new PlanError(`${lineId} is not a checklist line`)
+    const t = await load(tx, l.parentId)
+    if (t.state === 'canceled') throw new PlanError('that to-do was dropped; reopen it first')
     if (input.text !== undefined && !input.text.trim()) throw new PlanError('a checklist line needs text')
-    const set = {
-      ...(input.done !== undefined ? { done: input.done, doneBy: input.done ? actor : null, doneAt: input.done ? new Date() : null } : {}),
-      ...(input.waitingOn !== undefined ? { waitingOn: input.waitingOn?.trim() || null } : {}),
-      ...(input.text !== undefined ? { text: input.text.trim() } : {}),
+    const set = { ...(input.waitingOn !== undefined ? { waitingOn: input.waitingOn?.trim() || null } : {}), ...(input.text !== undefined ? { title: input.text.trim() } : {}) }
+    if (Object.keys(set).length) {
+      await tx.update(issue).set({ ...set, updatedAt: new Date() }).where(eq(issue.id, lineId))
+      const [a] = await tx.select().from(app).where(eq(app.id, l.appId))
+      await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: l.projectId, issueId: lineId, actor, type: 'issue.updated', payload: { identifier: identifier(a.key, l.number), changed: Object.keys(set), parentId: t.id, ...set } })
     }
-    if (!Object.keys(set).length) return t.id
-    await tx.update(checklistItem).set(set).where(eq(checklistItem.id, itemId))
-    await appendEvent(tx, { ...base, actor, type: 'todo.checked', payload: { todoId: t.id, number: t.number, item: input.text?.trim() ?? i.text, done: input.done ?? i.done, waitingOn: input.waitingOn !== undefined ? input.waitingOn?.trim() || null : i.waitingOn } })
-    const lines = await tx.select().from(checklistItem).where(eq(checklistItem.todoId, t.id))
-    if (t.status === 'open' && input.done && lines.every((l) => l.done)) await closeIn(tx, t, base, actor, 'done')
-    if (t.status === 'done' && input.done === false) await reopenIn(tx, t, base, actor, `unchecked "${i.text}"`)
+    if (input.done !== undefined && input.done !== (l.state === 'done')) await setState(tx, await getIssue(tx, lineId), input.done ? 'done' : 'todo', { actor })
+    const lines = await tx.select().from(issue).where(eq(issue.parentId, t.id))
+    if (isOpen(t) && input.done && lines.every((x) => x.state === 'done' || x.state === 'canceled')) await setState(tx, t, 'done', { actor })
+    if (t.state === 'done' && input.done === false) await setState(tx, t, 'todo', { actor, reason: `unchecked "${l.title}"` })
     return t.id
   })
   return getTodo(todoId)
 }
 
-export async function removeChecklistItem(itemId: number, actor = 'user') {
+export async function removeChecklistItem(lineId: string, actor = 'user') {
   const todoId = await db.transaction(async (tx) => {
-    const [i] = await tx.select().from(checklistItem).where(eq(checklistItem.id, itemId))
-    if (!i) throw new PlanError(`no checklist line ${itemId}`)
-    const { t, base } = await load(tx, i.todoId)
-    await tx.delete(checklistItem).where(eq(checklistItem.id, itemId))
-    await appendEvent(tx, { ...base, actor, type: 'todo.updated', payload: { todoId: t.id, number: t.number, removed: i.text } })
+    const l = await getIssue(tx, lineId)
+    if (!l.parentId) throw new PlanError(`${lineId} is not a checklist line`)
+    const t = await load(tx, l.parentId)
+    await tx.delete(issue).where(eq(issue.id, lineId))
+    const [a] = await tx.select().from(app).where(eq(app.id, t.appId))
+    await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'issue.updated', payload: { identifier: identifier(a.key, t.number), changed: ['checklist'], removed: l.title } })
     return t.id
   })
   return getTodo(todoId)
-}
-
-async function closeIn(tx: Tx, t: typeof todo.$inferSelect, base: { workspaceId: string; appId: string; projectId?: string }, actor: string, status: 'done' | 'dropped', reason?: string) {
-  await tx.update(todo).set({ status, reason: status === 'dropped' ? reason! : null, closedBy: actor, closedAt: new Date(), updatedAt: new Date() }).where(eq(todo.id, t.id))
-  await appendEvent(tx, { ...base, actor, type: status === 'done' ? 'todo.done' : 'todo.dropped', payload: { todoId: t.id, number: t.number, title: t.title, ...(reason ? { reason } : {}) } })
-}
-
-async function reopenIn(tx: Tx, t: typeof todo.$inferSelect, base: { workspaceId: string; appId: string; projectId?: string }, actor: string, why: string) {
-  await tx.update(todo).set({ status: 'open', reason: null, closedBy: null, closedAt: null, updatedAt: new Date() }).where(eq(todo.id, t.id))
-  await appendEvent(tx, { ...base, actor, type: 'todo.reopened', payload: { todoId: t.id, number: t.number, title: t.title, why } })
 }
 
 /** A person says it is done, whatever the checklist says (the list was wrong, or the rest no longer matters). */
 export async function completeTodo(todoId: string, actor = 'user') {
   await db.transaction(async (tx) => {
-    const { t, base } = await load(tx, todoId)
-    if (t.status !== 'open') throw new PlanError(`to-do #${t.number} is already ${t.status}`)
-    await closeIn(tx, t, base, actor, 'done')
+    const t = await load(tx, todoId)
+    if (!isOpen(t)) throw new PlanError(`that to-do is already ${t.state}`)
+    await setState(tx, t, 'done', { actor })
   })
   return getTodo(todoId)
 }
@@ -167,36 +167,34 @@ export async function completeTodo(todoId: string, actor = 'user') {
 export async function dropTodo(todoId: string, reason: string, actor = 'user') {
   if (!reason?.trim()) throw new PlanError('say why it is dropped')
   await db.transaction(async (tx) => {
-    const { t, base } = await load(tx, todoId)
-    if (t.status !== 'open') throw new PlanError(`to-do #${t.number} is already ${t.status}`)
-    await closeIn(tx, t, base, actor, 'dropped', reason.trim())
+    const t = await load(tx, todoId)
+    if (!isOpen(t)) throw new PlanError(`that to-do is already ${t.state}`)
+    await setState(tx, t, 'canceled', { actor, reason })
   })
   return getTodo(todoId)
 }
 
 export async function reopenTodo(todoId: string, actor = 'user') {
   await db.transaction(async (tx) => {
-    const { t, base } = await load(tx, todoId)
-    if (t.status !== 'open') await reopenIn(tx, t, base, actor, 'reopened')
+    const t = await load(tx, todoId)
+    if (!isOpen(t)) await setState(tx, t, 'todo', { actor, reason: 'reopened' })
   })
   return getTodo(todoId)
 }
 
-/** An open backlog item is work outside the code: it becomes a to-do of the app, unblocking the item's project. */
-export async function itemToTodo(itemId: string, input: { title?: string; checklist?: NewChecklistItem[]; owner?: TodoOwner } = {}, actor = 'user') {
-  const id = await db.transaction(async (tx) => {
-    const [i] = await tx.select().from(backlogItem).where(eq(backlogItem.id, itemId))
-    if (!i) throw new PlanError(`no backlog item ${itemId}`)
-    if (i.state !== 'open') throw new PlanError(`that item is already ${i.state}`)
+/** A backlog issue is work outside the code: it becomes a to-do, still in its project (which it unblocks). */
+export async function itemToTodo(issueId: string, input: { title?: string; checklist?: NewChecklistItem[]; owner?: TodoOwner } = {}, actor = 'user') {
+  await db.transaction(async (tx) => {
+    const i = await getIssue(tx, issueId)
+    if (i.state !== 'backlog' || !i.projectId) throw new PlanError(`that issue is ${i.state}, not in a project's backlog`)
     const [p] = await tx.select().from(project).where(eq(project.id, i.projectId))
     if (['landed', 'stopped', 'superseded'].includes(p.status)) throw new PlanError(`project is ${p.status}; its backlog is closed`)
-    const t = await insertTodo(tx, { appId: i.appId, title: input.title?.trim() || i.text, notes: i.body ?? undefined, owner: input.owner, projectId: i.projectId, checklist: input.checklist }, actor)
-    await tx.update(backlogItem).set({ state: 'covered', todoId: t.id, resolvedBy: actor, resolvedAt: new Date() }).where(eq(backlogItem.id, itemId))
-    const [a] = await tx.select().from(app).where(eq(app.id, i.appId))
-    await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: i.projectId, actor, type: 'backlog.covered', payload: { itemId, text: i.text, todoNumber: t.number } })
-    return t.id
+    await tx.update(issue).set({ kind: 'todo', title: input.title?.trim() || i.title, delegate: input.owner === 'agent' ? 'agent' : null, updatedAt: new Date() }).where(eq(issue.id, issueId))
+    const lines = clean(input.checklist)
+    await insertIssues(tx, i.appId, lines.map((l, n) => ({ kind: 'todo' as const, parentId: i.id, projectId: i.projectId, title: l.text, waitingOn: l.waitingOn, sortOrder: n })), actor)
+    await setState(tx, await getIssue(tx, issueId), 'todo', { actor })
   })
-  return getTodo(id)
+  return getTodo(issueId)
 }
 
 const DRAFT_SCHEMA = {
@@ -215,7 +213,7 @@ export async function draftChecklist(todoId: string, opts: { model?: string; dra
   const prompt = [
     `Draft the checklist for a to-do of the app "${a.name}": ${t.title}`,
     t.notes ? `Notes on it:\n${t.notes}` : '',
-    t.project ? `It unblocks the project "${t.project.title}".` : '',
+    t.project ? `It unblocks the project "${t.project.name}".` : '',
     t.checklist.length ? `It already has these lines; return only what is missing:\n${t.checklist.map((l) => `- ${l.text}`).join('\n')}` : '',
     '',
     'This is work outside the code: accounts, approvals, people, checks. Write the concrete steps a person (or an agent with a browser and an API key) takes, in order, so nothing is forgotten.',

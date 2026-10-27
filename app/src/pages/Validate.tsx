@@ -14,7 +14,7 @@ export function Validate() {
         <ul style={{ margin: 0, paddingLeft: 18 }}>
           <li>Homework Gate's Storybook, every page in every state from the real templates: <a href="http://localhost:6006" target="_blank" rel="noreferrer">localhost:6006</a>.</li>
           <li>The spaced-repetition proof of concept, eight screens with the two open questions as variants: <a href="http://localhost:6008" target="_blank" rel="noreferrer">localhost:6008</a> (homework-gate PR #18).</li>
-          <li>Every phase lands only after the app's test command passes on the merged commit; the story suite is part of it.</li>
+          <li>Every sub-issue lands only after the app's test command passes on the merged commit; the story suite is part of it.</li>
         </ul>
       </section>
       <section className="panel">

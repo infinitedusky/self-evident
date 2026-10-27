@@ -1,5 +1,5 @@
 /**
- * The planner: a task's brief → phases, decisions and questions, as rows. InDusk's approach on the new foundation:
+ * The planner: an issue's brief → sub-issues, decisions and questions, as rows. InDusk's approach on the new foundation:
  * one agent run with read-only tools on the repo, returning one validated object (Agent SDK structured output),
  * with a self-review pass inside the same run. Nothing is decided silently: a choice the planner settles from the
  * brief and the code is a decision (provisional until a person approves); one it cannot settle is a question. The
@@ -8,20 +8,21 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, decision, question, repo, run, task } from './db/schema.js'
+import { app, decision, issue, question, repo, run } from './db/schema.js'
 import { appendEvent, type NewEvent } from './events.js'
 import { handle } from './executor.js'
 import { guardOptions, readerGuard } from './guard.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { newId } from './ids.js'
 import { addItems } from './backlog.js'
-import { addPhases, PlanError, projectGraph, type NewPhase } from './projects.js'
+import { identifier } from './issues.js'
+import { addSubIssues, PlanError, projectGraph, type NewSubIssue } from './projects.js'
 
 export interface ProposeInput {
   repoPath: string
-  task: { number: number; title: string; brief: string | null }
-  project: { title: string; spec: string | null }
-  earlier: { number: number; title: string; phases: { number: number; title: string }[] }[] // tasks before this one in the project
+  issue: { identifier: string; title: string; brief: string | null }
+  project: { name: string; content: string | null }
+  earlier: { identifier: string; title: string; subIssues: { identifier: string; title: string }[] }[] // issues before this one in the project
   testCmd?: string
   model?: string
   maxTurns?: number
@@ -42,7 +43,7 @@ export interface Proposal {
   decisions: { title: string; chosen: string; rejected: string[]; reason: string }[]
   questions: { question: string; options: { label: string; description: string; changes: Changes[] }[]; recommended: string; reason: string; cost: Cost }[]
   notes: string
-  later?: { text: string; why: string }[] // noticed, not this task's to do; joins the project's backlog
+  later?: { text: string; why: string }[] // noticed, not this issue's to do; joins the project's backlog
 }
 export interface ProposeOutput { status: 'completed' | 'failed'; proposal?: Proposal; agentSessionId?: string; costUsd?: number; numTurns?: number; error?: string }
 export type Propose = (i: ProposeInput) => Promise<ProposeOutput>
@@ -71,40 +72,40 @@ export const PROPOSAL_SCHEMA = obj({
 
 function prompt(i: ProposeInput): string {
   const earlier = i.earlier.length
-    ? i.earlier.map((t) => `  - task #${t.number} ${t.title}${t.phases.length ? `: ${t.phases.map((p) => `#${p.number} ${p.title}`).join('; ')}` : ' (no phases yet)'}`).join('\n')
-    : '  (none: this is the first task)'
+    ? i.earlier.map((t) => `  - ${t.identifier} ${t.title}${t.subIssues.length ? `: ${t.subIssues.map((p) => `${p.identifier} ${p.title}`).join('; ')}` : ' (not planned yet)'}`).join('\n')
+    : '  (none: this is the first issue)'
   return [
-    `You are planning task #${i.task.number}: ${i.task.title}`,
-    `It is part of the project "${i.project.title}".`,
+    `You are planning ${i.issue.identifier}: ${i.issue.title}`,
+    `It is part of the project "${i.project.name}".`,
     '',
-    i.task.brief ?? '(The task has no brief beyond its title.)',
-    i.project.spec ? `\nWhy the project exists:\n${i.project.spec}` : '',
+    i.issue.brief ?? '(The issue has no brief beyond its title.)',
+    i.project.content ? `\nWhy the project exists:\n${i.project.content}` : '',
     '',
-    'Tasks earlier in the project (their phases land before yours start; you need not depend on them explicitly):',
+    'Issues earlier in the project (their sub-issues land before yours start; you need not depend on them explicitly):',
     earlier,
     '',
-    'Read the repository until you understand where this change lives: the files, the tests, the conventions, what already exists. You have read-only tools; you change nothing. Then cut the task into phases.',
+    'Read the repository until you understand where this change lives: the files, the tests, the conventions, what already exists. You have read-only tools; you change nothing. Then cut the issue into sub-issues.',
     '',
-    'Phases:',
-    '- One phase is one agent in one git worktree making one commit. Each phase lands on its own, so each must leave the tests passing by itself. Phases of this task that share no files run at the same time.',
-    '- Cut by what each phase produces and consumes: granular enough to track, not so granular they are busywork. Most tasks are one to six phases; a small task is one phase.',
-    '- files: the paths (files or directories, relative to the repository root) the phase will change. Two phases that share a path never run at once. Declare honestly: a phase with no files declared claims the whole app.',
-    '- depends_on: keys of phases in this task whose result this phase needs. Prefer fewer; a shared file already serializes two phases.',
+    'Sub-issues (returned in `phases`):',
+    '- One sub-issue is one agent in one git worktree making one commit. Each lands on its own, so each must leave the tests passing by itself. Sub-issues of this issue that share no files are built at the same time.',
+    '- Cut by what each produces and consumes: granular enough to track, not so granular they are busywork. Most issues are one to six sub-issues; a small issue is one.',
+    '- files: the paths (files or directories, relative to the repository root) the sub-issue will change. Two that share a path never build at once. Declare honestly: one with no files declared claims the whole app.',
+    '- depends_on: keys of sub-issues in this issue whose result this one needs. Prefer fewer; a shared file already serializes two.',
     '- title: what will be true when it lands, in plain words ("Parents sign in with Clerk"), not the code change.',
     '- description: one to three short sentences for the person who asked for this, who may never read the code: what will be different for the people using the app, and why it matters. No file names, functions, columns, routes or environment variables. Write it so it reads aloud.',
     '- summary: for the builder, in short paragraphs (a blank line between them, at most four sentences each): what the phase does in this codebase and why. File names and code go in backticks.',
     '- steps: the work in order, one action each, each with a technical note (the file, the function, the approach) so the builder does not rediscover it. Keep each step to one sentence; put detail in the note.',
     '- checks: behavioural checks a non-engineer could read aloud, with the command and the expected result where there is one.',
     '- done_when: one sentence.',
-    i.testCmd ? `- The tests run with: ${i.testCmd}` : '- There is no test command configured; say in each phase how it is verified.',
+    i.testCmd ? `- The tests run with: ${i.testCmd}` : '- There is no test command configured; say in each sub-issue how it is verified.',
     '',
     'Decisions and questions:',
     '- A choice you can settle from the brief and the code: settle it, and record it as a decision with the alternatives you rejected and the reason. Never settle such a choice silently.',
     '- A choice the brief does not settle, where the person might reasonably want it either way: ask it as a question. Give at least two options, say which you recommend and why, and for each option say what it changes (brief, promise, look, gate) when it changes what was agreed. Rate the cost of getting it wrong: cheap (easy to undo), moderate, expensive. Plan the phases as if your recommendation were chosen.',
     '- notes: what you assumed, and anything in the brief you could not place in the code.',
-    '- later: things you noticed that this task should not do but the project should not forget (a bug nearby, a follow-up the brief implies, something an earlier task left undone). One plain line each, and why. They join the project\'s backlog, where a person makes them tasks or drops them. Empty if none.',
+    '- later: things you noticed that this issue should not do but the project should not forget (a bug nearby, a follow-up the brief implies, something an earlier issue left undone). One plain line each, and why. They join the project\'s backlog, where a person takes them on or drops them. Empty if none.',
     '',
-    'Before you answer, review your own project once: does it build what the brief asks and nothing it does not? What else would have to change for it to hold? What would the phases do that the brief never asked for? Fix what you find, then answer.',
+    'Before you answer, review your own plan once: does it build what the brief asks and nothing it does not? What else would have to change for it to hold? What would the sub-issues do that the brief never asked for? Fix what you find, then answer.',
   ].join('\n')
 }
 
@@ -149,9 +150,8 @@ export function questionCost(q: Proposal['questions'][number]): Cost {
   return q.options.some((o) => (o.changes ?? []).length > 0) ? 'expensive' : q.cost
 }
 
-/** The phase's brief, as the builder will read it: the summary, then the steps, checks and done-when the planner wrote. */
-/** The phase's brief, as Markdown: the summary, then steps (each with its technical note under it), checks and done-when. */
-export function phaseBrief(p: Proposal['phases'][number]): string {
+/** The sub-issue's brief, as Markdown: the summary, then steps (each with its technical note under it), checks and done-when. */
+export function subIssueBrief(p: Proposal['phases'][number]): string {
   const steps = p.steps.map((s, n) => `${n + 1}. ${s.text}${s.technical ? `\n   - ${s.technical}` : ''}`).join('\n')
   const checks = p.checks.map((c) => `- ${c.statement}${c.command ? ` — \`${c.command}\`${c.expected ? ` → ${c.expected}` : ''}` : ''}`).join('\n')
   return [p.summary.trim(), steps && `### Steps\n\n${steps}`, checks && `### Checks\n\n${checks}`, p.done_when && `**Done when:** ${p.done_when.trim()}`].filter(Boolean).join('\n\n')
@@ -159,14 +159,14 @@ export function phaseBrief(p: Proposal['phases'][number]): string {
 
 /** Shape problems the schema cannot catch. Throws PlanError. */
 export function validateProposal(p: Proposal) {
-  if (!Array.isArray(p?.phases) || !p.phases.length) throw new PlanError('the proposal has no phases')
+  if (!Array.isArray(p?.phases) || !p.phases.length) throw new PlanError('the proposal has no sub-issues')
   const keys = new Set<string>()
   for (const x of p.phases) {
-    if (!x.key?.trim() || !x.title?.trim()) throw new PlanError('every phase needs a key and a title')
-    if (keys.has(x.key)) throw new PlanError(`phase key ${x.key} is used twice`)
+    if (!x.key?.trim() || !x.title?.trim()) throw new PlanError('every sub-issue needs a key and a title')
+    if (keys.has(x.key)) throw new PlanError(`sub-issue key ${x.key} is used twice`)
     keys.add(x.key)
   }
-  for (const x of p.phases) for (const d of x.depends_on ?? []) if (!keys.has(d)) throw new PlanError(`phase ${x.key} depends on unknown phase ${d}`)
+  for (const x of p.phases) for (const d of x.depends_on ?? []) if (!keys.has(d)) throw new PlanError(`sub-issue ${x.key} depends on unknown sub-issue ${d}`)
   for (const q of p.questions ?? []) {
     if ((q.options?.length ?? 0) < 2) throw new PlanError(`question "${q.question}" needs at least two options`)
     if (!q.options.some((o) => o.label === q.recommended)) throw new PlanError(`question "${q.question}" recommends an option it does not offer`)
@@ -176,38 +176,42 @@ export function validateProposal(p: Proposal) {
 interface AppSetup { test_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number }
 
 export interface PlanningContext {
-  runId: string; taskId: string; projectId: string; appId: string; attempt: number
+  runId: string; issueId: string; projectId: string; appId: string; attempt: number
   input: Omit<ProposeInput, 'onEvent' | 'abort'>
   base: Omit<NewEvent, 'type'>
 }
 
 const emit = (e: NewEvent) => db.transaction((tx) => appendEvent(tx, e))
 
-/** Checks the task can be planned, records the run, announces it. Throws PlanError before anything is written. */
-export async function preparePlanning(taskId: string, opts: { actor?: string } = {}): Promise<PlanningContext> {
-  const [t] = await db.select().from(task).where(eq(task.id, taskId))
-  if (!t) throw new PlanError(`no task ${taskId}`)
+/** Checks the issue can be planned, records the run, announces it. Throws PlanError before anything is written. */
+export async function preparePlanning(issueId: string, opts: { actor?: string } = {}): Promise<PlanningContext> {
+  const [t] = await db.select().from(issue).where(eq(issue.id, issueId))
+  if (!t) throw new PlanError(`no issue ${issueId}`)
+  if (t.kind !== 'code' || t.parentId) throw new PlanError('only a top-level code issue is planned')
+  if (!t.projectId) throw new PlanError(`${t.title}: add it to a project before planning it`)
   const g = (await projectGraph(t.projectId))!
-  const mine = g.phases.filter((x) => x.taskId === taskId)
-  if (mine.length) throw new PlanError(`task #${t.number} already has ${mine.length} phase${mine.length > 1 ? 's' : ''}; it is planned`)
-  if (['landed', 'stopped', 'superseded'].includes(g.project.status)) throw new PlanError(`project is ${g.project.status}; it takes no more planning`) // drafts, and running or paused projects planning their next task
+  const mine = g.subIssues.filter((x) => x.parentId === issueId)
+  const name = identifier(g.app.key, t.number)
+  if (mine.length) throw new PlanError(`${name} already has ${mine.length} sub-issue${mine.length > 1 ? 's' : ''}; it is planned`)
+  if (['landed', 'stopped', 'superseded'].includes(g.project.status)) throw new PlanError(`project is ${g.project.status}; it takes no more planning`) // drafts, and running or paused projects planning their next issue
+  if (['backlog', 'triage', 'canceled', 'duplicate', 'done'].includes(t.state)) throw new PlanError(`${name} is ${t.state}; take it on first`)
   const [a] = await db.select().from(app).where(eq(app.id, t.appId))
   const [r] = await db.select().from(repo).where(eq(repo.appId, t.appId))
   if (!r?.localPath) throw new PlanError(`app ${a.name} has no repo with a local path`)
   const setup = (a.setup ?? {}) as AppSetup
-  const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(run).where(and(eq(run.taskId, taskId), eq(run.kind, 'plan')))
+  const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(run).where(and(eq(run.issueId, issueId), eq(run.kind, 'plan')))
   const attempt = Number(n) + 1
   const runId = newId('run')
-  await db.insert(run).values({ id: runId, appId: a.id, taskId, attempt, kind: 'plan', agent: 'claude-code', model: setup.model ?? null, status: 'working', budgetCapUsd: setup.max_budget_usd?.toString() ?? null })
-  const base: Omit<NewEvent, 'type'> = { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, taskId, runId, actor: opts.actor ?? 'engine' }
-  await emit({ ...base, type: 'task.planning', payload: { attempt, number: t.number, title: t.title } })
-  const earlier = g.tasks.filter((x) => x.position < t.position).map((x) => ({
-    number: x.number, title: x.title, phases: g.phases.filter((p) => p.taskId === x.id).map((p) => ({ number: p.number, title: p.title })),
+  await db.insert(run).values({ id: runId, appId: a.id, issueId, attempt, kind: 'plan', agent: 'claude-code', model: setup.model ?? null, status: 'working', budgetCapUsd: setup.max_budget_usd?.toString() ?? null })
+  const base: Omit<NewEvent, 'type'> = { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId, runId, actor: opts.actor ?? 'engine' }
+  await emit({ ...base, type: 'issue.planning', payload: { attempt, identifier: name, title: t.title } })
+  const earlier = g.issues.filter((x) => x.sortOrder < t.sortOrder && x.state !== 'canceled').map((x) => ({
+    identifier: x.identifier, title: x.title, subIssues: g.subIssues.filter((p) => p.parentId === x.id).map((p) => ({ identifier: p.identifier, title: p.title })),
   }))
   return {
-    runId, taskId, projectId: t.projectId, appId: a.id, attempt, base,
+    runId, issueId, projectId: t.projectId, appId: a.id, attempt, base,
     input: {
-      repoPath: r.localPath, task: { number: t.number, title: t.title, brief: t.brief }, project: { title: g.project.title, spec: g.project.spec }, earlier,
+      repoPath: r.localPath, issue: { identifier: name, title: t.title, brief: t.brief }, project: { name: g.project.name, content: g.project.content }, earlier,
       testCmd: setup.test_cmd, model: setup.model, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }
@@ -215,33 +219,33 @@ export async function preparePlanning(taskId: string, opts: { actor?: string } =
 
 export interface PlanningResult {
   status: 'completed' | 'failed' | 'waiting'; runId: string; costUsd?: number; error?: string; retryAt?: string
-  phases: { id: string; number: number; title: string }[]
+  subIssues: { id: string; number: number; title: string }[]
   decisions: (typeof decision.$inferSelect)[]
   questions: (typeof question.$inferSelect)[]
 }
 
-/** Runs the planner and writes what it proposed. Never throws: a failure is a failed run and a task.plan_failed event. */
-const outagesByTask = new Map<string, number>() // planner outages in a row, per task: the backoff level
+/** Runs the planner and writes what it proposed. Never throws: a failure is a failed run and an issue.plan_failed event. */
+const outagesByIssue = new Map<string, number>() // planner outages in a row, per issue: the backoff level
 
 export async function finishPlanning(ctx: PlanningContext, opts: { propose?: Propose; abort?: AbortController; retryAfterMs?: (minutes: number) => number; onPlanned?: () => void } = {}): Promise<PlanningResult> {
   const propose = opts.propose ?? proposeWithAgent
   const onEvent: ProposeInput['onEvent'] = async (type, payload) => { await emit({ ...ctx.base, actor: `agent:${ctx.runId}`, type, payload }) }
   const failed = async (error: string, out?: ProposeOutput): Promise<PlanningResult> => {
     await db.update(run).set({ status: 'failed', endedAt: new Date(), error, costUsd: out?.costUsd?.toString() ?? null, agentSessionId: out?.agentSessionId ?? null }).where(eq(run.id, ctx.runId))
-    await emit({ ...ctx.base, type: 'task.plan_failed', payload: { attempt: ctx.attempt, error } })
-    return { status: 'failed', runId: ctx.runId, error, costUsd: out?.costUsd, phases: [], decisions: [], questions: [] }
+    await emit({ ...ctx.base, type: 'issue.plan_failed', payload: { attempt: ctx.attempt, error } })
+    return { status: 'failed', runId: ctx.runId, error, costUsd: out?.costUsd, subIssues: [], decisions: [], questions: [] }
   }
   // Losing the model is not the planner's failure: the run is interrupted, and planning starts again after a backoff.
   const waiting = async (error: string, out?: ProposeOutput): Promise<PlanningResult> => {
-    const level = outagesByTask.get(ctx.taskId) ?? 0
-    outagesByTask.set(ctx.taskId, level + 1)
+    const level = outagesByIssue.get(ctx.issueId) ?? 0
+    outagesByIssue.set(ctx.issueId, level + 1)
     const minutes = holdMinutes(level)
     const ms = opts.retryAfterMs ? opts.retryAfterMs(minutes) : minutes * 60_000
     const retryAt = new Date(Date.now() + ms).toISOString()
     await db.update(run).set({ status: 'interrupted', endedAt: new Date(), error: `outage: ${error.slice(0, 400)}`, costUsd: out?.costUsd?.toString() ?? null }).where(eq(run.id, ctx.runId))
-    await emit({ ...ctx.base, type: 'task.plan_waiting', payload: { attempt: ctx.attempt, error: error.slice(0, 400), retryAt, minutes } })
-    setTimeout(() => { void preparePlanning(ctx.taskId, { actor: 'engine' }).then((next) => finishPlanning(next, opts)).catch(() => {}) }, ms)
-    return { status: 'waiting', runId: ctx.runId, error, retryAt, phases: [], decisions: [], questions: [] }
+    await emit({ ...ctx.base, type: 'issue.plan_waiting', payload: { attempt: ctx.attempt, error: error.slice(0, 400), retryAt, minutes } })
+    setTimeout(() => { void preparePlanning(ctx.issueId, { actor: 'engine' }).then((next) => finishPlanning(next, opts)).catch(() => {}) }, ms)
+    return { status: 'waiting', runId: ctx.runId, error, retryAt, subIssues: [], decisions: [], questions: [] }
   }
   let out: ProposeOutput
   try { out = await propose({ ...ctx.input, abort: opts.abort, onEvent }) } catch (err: any) {
@@ -250,57 +254,57 @@ export async function finishPlanning(ctx: PlanningContext, opts: { propose?: Pro
   }
   if (out.status !== 'completed' && isOutage(out.error)) return waiting(out.error!, out)
   if (out.status !== 'completed' || !out.proposal) return failed(out.error ?? 'the planner did not finish', out)
-  outagesByTask.delete(ctx.taskId)
+  outagesByIssue.delete(ctx.issueId)
   const proposal = out.proposal
   try { validateProposal(proposal) } catch (err: any) { return failed(err.message, out) }
 
   try {
     const written = await db.transaction(async (tx) => {
-      const phases = await addPhases(ctx.taskId, proposal.phases.map((p): NewPhase => ({
-        key: p.key, title: p.title, description: p.description?.trim() || undefined, brief: phaseBrief(p), dependsOn: p.depends_on ?? [], files: p.files ?? [],
+      const subs = await addSubIssues(ctx.issueId, proposal.phases.map((p): NewSubIssue => ({
+        key: p.key, title: p.title, description: p.description?.trim() || undefined, brief: subIssueBrief(p), dependsOn: p.depends_on ?? [], files: p.files ?? [],
       })), 'planner', tx)
       const decisions = proposal.decisions.length ? await tx.insert(decision).values(proposal.decisions.map((d) => ({
-        id: newId('decision'), appId: ctx.appId, projectId: ctx.projectId, taskId: ctx.taskId, runId: ctx.runId, question: d.title,
+        id: newId('decision'), appId: ctx.appId, projectId: ctx.projectId, issueId: ctx.issueId, runId: ctx.runId, question: d.title,
         options: [{ key: 'A', text: d.chosen, recommended: true }, ...d.rejected.map((r, n) => ({ key: String.fromCharCode(66 + n), text: r, recommended: false }))],
         chosen: 'A', provisional: true, rationale: d.reason,
       }))).returning() : []
       const questions = proposal.questions.length ? await tx.insert(question).values(proposal.questions.map((q) => ({
-        id: newId('question'), appId: ctx.appId, projectId: ctx.projectId, taskId: ctx.taskId, runId: ctx.runId, text: q.question,
+        id: newId('question'), appId: ctx.appId, projectId: ctx.projectId, issueId: ctx.issueId, runId: ctx.runId, text: q.question,
         options: q.options.map((o) => ({ ...o, recommended: o.label === q.recommended })), reason: q.reason, cost: questionCost(q), status: 'open',
       }))).returning() : []
       for (const q of questions) await appendEvent(tx, { ...ctx.base, type: 'question.asked', payload: { questionId: q.id, text: q.text, cost: q.cost } })
-      const later = await addItems(ctx.projectId, (proposal.later ?? []).map((l) => ({ text: l.text, body: l.why || undefined, source: 'planner' as const, sourceRef: { taskId: ctx.taskId, runId: ctx.runId } })), 'planner', tx)
+      const later = await addItems(ctx.projectId, (proposal.later ?? []).map((l) => ({ text: l.text, body: l.why || undefined, source: 'planner' as const, sourceRef: { issueId: ctx.issueId, runId: ctx.runId } })), 'planner', tx)
       await tx.update(run).set({
         status: 'completed', endedAt: new Date(), costUsd: out.costUsd?.toString() ?? null, agentSessionId: out.agentSessionId ?? null,
-        summary: [proposal.notes?.trim(), `${phases.length} phase(s), ${decisions.length} decision(s), ${questions.length} question(s)`].filter(Boolean).join('\n\n'),
+        summary: [proposal.notes?.trim(), `${subs.length} sub-issue(s), ${decisions.length} decision(s), ${questions.length} question(s)`].filter(Boolean).join('\n\n'),
       }).where(eq(run.id, ctx.runId))
-      await appendEvent(tx, { ...ctx.base, type: 'task.planned', payload: {
-        attempt: ctx.attempt, phases: phases.map((p) => ({ id: p.id, number: p.number, title: p.title })),
+      await appendEvent(tx, { ...ctx.base, type: 'issue.planned', payload: {
+        attempt: ctx.attempt, subIssues: subs.map((p) => ({ id: p.id, number: p.number, title: p.title })),
         decisions: decisions.length, questions: questions.length, later: later.length, costUsd: out.costUsd ?? null, notes: proposal.notes ?? '',
       } })
-      return { phases, decisions, questions }
+      return { subs, decisions, questions }
     })
-    opts.onPlanned?.() // e.g. the runner: the new phases can run now
-    return { status: 'completed', runId: ctx.runId, costUsd: out.costUsd, phases: written.phases.map((p) => ({ id: p.id, number: p.number, title: p.title })), decisions: written.decisions, questions: written.questions }
+    opts.onPlanned?.() // e.g. the runner: the new sub-issues can be built now
+    return { status: 'completed', runId: ctx.runId, costUsd: out.costUsd, subIssues: written.subs.map((p) => ({ id: p.id, number: p.number, title: p.title })), decisions: written.decisions, questions: written.questions }
   } catch (err: any) {
     return failed(`the proposal could not be saved: ${err?.message ?? err}`, out)
   }
 }
 
 /** The whole thing, for the CLI and tests. */
-export async function planTask(taskId: string, opts: { propose?: Propose; actor?: string; retryAfterMs?: (minutes: number) => number; onPlanned?: () => void } = {}) {
-  return finishPlanning(await preparePlanning(taskId, opts), opts)
+export async function planIssue(issueId: string, opts: { propose?: Propose; actor?: string; retryAfterMs?: (minutes: number) => number; onPlanned?: () => void } = {}) {
+  return finishPlanning(await preparePlanning(issueId, opts), opts)
 }
 
-/** After a restart: a planner run that was working is gone; say so, and the task can be planned again. */
+/** After a restart: a planner run that was working is gone; say so, and the issue can be planned again. */
 export async function recoverPlanning() {
   const stranded = await db.select().from(run).where(and(eq(run.kind, 'plan'), eq(run.status, 'working')))
   for (const r of stranded) {
     await db.update(run).set({ status: 'interrupted', endedAt: new Date(), error: 'engine restarted' }).where(eq(run.id, r.id))
-    const [t] = r.taskId ? await db.select().from(task).where(eq(task.id, r.taskId)) : []
+    const [t] = r.issueId ? await db.select().from(issue).where(eq(issue.id, r.issueId)) : []
     if (!t) continue
     const [a] = await db.select().from(app).where(eq(app.id, t.appId))
-    await emit({ workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, taskId: t.id, runId: r.id, actor: 'engine', type: 'task.plan_failed', payload: { attempt: r.attempt, error: 'engine restarted while planning' } })
+    await emit({ workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, runId: r.id, actor: 'engine', type: 'issue.plan_failed', payload: { attempt: r.attempt, error: 'engine restarted while planning' } })
   }
   return stranded.length
 }
@@ -310,10 +314,10 @@ export async function answerQuestion(questionId: string, answer: string, actor =
   const [q] = await db.select().from(question).where(eq(question.id, questionId))
   if (!q) throw new PlanError(`no question ${questionId}`)
   const [row] = await db.update(question).set({ status: 'answered', answer, answeredBy: actor, answeredAt: new Date() }).where(eq(question.id, questionId)).returning()
-  const [t] = q.taskId ? await db.select().from(task).where(eq(task.id, q.taskId)) : []
+  const [t] = q.issueId ? await db.select().from(issue).where(eq(issue.id, q.issueId)) : []
   if (t) {
     const [a] = await db.select().from(app).where(eq(app.id, t.appId))
-    await emit({ workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, taskId: t.id, actor, type: 'question.answered', payload: { questionId, answer } })
+    await emit({ workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'question.answered', payload: { questionId, answer } })
   }
   return row
 }

@@ -493,6 +493,32 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Rebuilt in Linear's shape (Sandy, 2026-10-27: "rebuilding from scratch can be easier")
+
+Step 1 of "Shaped like Linear", done as a new database rather than a conversion: schema written fresh, migration
+history restarted, the old `ideafactory` database kept untouched and copied over by a one-off script
+(`engine/src/db/copy-legacy.ts`: ids kept, so branches, PRs, links and summaries still point at the same things).
+- **One table of issues.** Tasks, phases, to-dos, checklist lines and backlog items are all issues: `kind` code or
+  todo; a sub-issue has a parent. Numbered once per app with the app's key: HG-1…HG-193, CS-1…, AP-1… (the copy
+  numbers them in the order they were made). Issues can live in no project, be moved into one (at the end), and be
+  ordered among their siblings.
+- **Linear's states** (Triage, Backlog, Todo, In progress, In review, Done, Canceled, Duplicate) with their types. A
+  code issue follows its sub-issues (any started: In progress; all landed: In review); its PR merging makes it Done.
+  Planned but not started stays Todo.
+- **The backlog is issues in a project's Backlog.** Take one on (Todo at the end), make it a to-do, mark it a
+  duplicate of the issue that covers it, or cancel it with a reason. The project still lands only when none is left.
+- **What is ours stays beside the plan**, keyed by issue id: `build` (the engine's status, attempts, worktree for a
+  code sub-issue; the sub-issue's state follows it), file claims, runs, steps, questions, decisions, PRs. Phase
+  dependencies are `blocks` relations.
+- **Goals can be stated:** initiatives (with their projects) and cycles (dates, with their issues). The Summary reads
+  them first and says whether its goals are stated or inferred. No pages for them yet: ask the agent.
+- **Names everywhere:** routes (`/issues…`, `/backlog/:id/take|duplicate|drop`), events (`issue.*`, `build.*`), MCP
+  tools (`plan_issue`, `create_issue`, `set_issue_state`, `reorder_issues`, `initiatives`, `cycles`…), the UI (Plan →
+  Projects, Issues, To-dos; an issue page lists its sub-issues; a draft's issues reorder with ← →). Stacked PR
+  branches are `project/<id>--hg-12`, so Linear's GitHub integration can link them.
+- Not done yet: the plan-store boundary (step 2) and Linear itself (step 3); goals pages; creation through the
+  conversation (the dock).
+
 ## Shaped like Linear (Sandy, 2026-10-27)
 
 From the team conversation: on a big shared repo the plan lives in a tracker, probably Linear. Sandy: "we build ours

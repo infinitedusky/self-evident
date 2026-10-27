@@ -85,7 +85,7 @@ function NewTodo({ appId, projects, onMade, onError }: { appId: string; projects
     <section className="panel form-grid" data-component="NewTodo">
       <label>What needs doing<input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Get approved for Apple" onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void make() }} /></label>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <label style={{ flex: 1, minWidth: 200 }}>Unblocks<select value={projectId} onChange={(e) => setProjectId(e.target.value)}><option value="">No project</option>{open.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
+        <label style={{ flex: 1, minWidth: 200 }}>Unblocks<select value={projectId} onChange={(e) => setProjectId(e.target.value)}><option value="">No project</option>{open.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
         <label style={{ minWidth: 160 }}>Who<select value={owner} onChange={(e) => setOwner(e.target.value as 'person' | 'agent')}><option value="person">You</option><option value="agent">The agent</option></select></label>
       </div>
       <label>Checklist <span className="faint">(one line each; optional)</span><textarea rows={4} value={lines} onChange={(e) => setLines(e.target.value)} placeholder={'Enroll in the Apple Developer Program\nRequest the Family Controls entitlement'} /></label>
@@ -113,7 +113,7 @@ export function TodoCard({ todo: t, projects = [], onChange, onError, compact = 
   return (
     <div id={t.id} className={`card todo ${t.status}`} data-component="TodoCard">
       <div className="card-head">
-        <span className="mono faint" style={{ whiteSpace: 'nowrap' }}>to-do #{t.number}</span>
+        <span className="mono faint" style={{ whiteSpace: 'nowrap' }}>{t.identifier}</span>
         <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {waiting.map((w) => <Badge key={w} tone="warn">waiting on {w}</Badge>)}
           {t.checklist.length > 0 && <Badge tone={done === t.checklist.length ? 'ok' : 'neutral'}>{done}/{t.checklist.length}</Badge>}
@@ -122,7 +122,7 @@ export function TodoCard({ todo: t, projects = [], onChange, onError, compact = 
         </span>
       </div>
       <div className="card-title">{t.title}</div>
-      {project && !compact && <div className="faint" style={{ fontSize: 13 }}>Unblocks <Link to={`/projects/${project.id}`}>{project.title}</Link></div>}
+      {project && !compact && <div className="faint" style={{ fontSize: 13 }}>Unblocks <Link to={`/projects/${project.id}`}>{project.name}</Link></div>}
       {t.status === 'dropped' && t.reason && <div className="faint" style={{ fontSize: 13 }}>Dropped: {t.reason}</div>}
       {t.checklist.length > 0 && (
         <ul className="checklist">
