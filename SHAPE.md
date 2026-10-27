@@ -253,7 +253,9 @@ Details and sources in `research/`.
   which were a flat list with overlaps settled by hand in a README "decision
   matrix". Keep it light: a module is a named role + manifest; no generic
   adapter code until a second provider for a role is real. Settings shows each
-  role with its provider(s) — PostHog the only telemetry option for now.
+  role with its provider(s) — PostHog the only telemetry option for now. An
+  integration's values are set once under All apps and overridden per app, field
+  by field (LOG, "Settings: All apps, then each app").
 
 - **Foundational decisions are drawn out, not automated** (Sandy,
   2026-10-20). Automating setup early takes decisions out of the person's

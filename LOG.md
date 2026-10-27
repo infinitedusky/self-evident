@@ -493,6 +493,25 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Settings: All apps, then each app; apps override (Sandy, 2026-10-27)
+
+Settings was every app as one long form, stacked. Now it is a page with its own side list: **All apps** first, then
+one entry per app (Sandy picked this over nav sub-items or tabs, so every app stays reachable from Settings whatever
+the current app is).
+
+- **All apps** shows what every app gets: which skills each agent sees (talk and planner: ours and REA; the
+  builder: none), each plugin's skills with their descriptions, REA's 229 tools by rating (121 free, 84 moderate,
+  24 expensive), and the integrations' shared values. It is read from the engine (`GET /settings`, from
+  `skills.ts` and `integrations.ts`), not a static list; `app/src/providers.ts` is gone.
+- **An app** is grouped: Repo, Agents (with the skills in its own `.claude/skills/`), Landing, Storybook,
+  Integrations. One Save.
+- **Apps override, field by field** (Sandy: "PostHog may get overridden on a specific project"). An integration's
+  values are set under All apps (`workspace.settings.integrations`, a new column) and each app may override any
+  field (`app.setup.integrations`); an empty field inherits, shown in italics, an override is marked. Keys and
+  tokens are never stored: a field names the `.env` variable that holds one.
+- Plugins per agent are shown, not switched: switching them would need stored state and nothing asks for it yet.
+  Next candidates for the same override pattern: the agents' model, budget and turns as All-apps defaults.
+
 ## Skills in two layers; REA for reverse engineering (Sandy, 2026-10-27)
 
 Sandy wants the agents able to study a feature someone else has shipped, to move fast on building our own. That
