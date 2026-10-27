@@ -12,6 +12,7 @@ import { app, decision, issue, question, repo, run } from './db/schema.js'
 import { appendEvent, type NewEvent } from './events.js'
 import { handle } from './executor.js'
 import { guardOptions, readerGuard } from './guard.js'
+import { reaRisk, skillOptions } from './skills.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { newId } from './ids.js'
 import { addItems } from './backlog.js'
@@ -109,7 +110,8 @@ function prompt(i: ProposeInput): string {
   ].join('\n')
 }
 
-const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS']
+const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'Skill']
+const reaReads = (tool: string) => tool.startsWith('mcp__rea__') && reaRisk(tool.slice('mcp__rea__'.length)).risk === 'free' // no one to ask: the rest is refused
 
 /** The real planner: one Claude Code run, read-only in the repo, ending in a structured proposal. */
 export const proposeWithAgent: Propose = async (i) => {
@@ -129,7 +131,8 @@ export const proposeWithAgent: Propose = async (i) => {
         allowedTools: READ_TOOLS, // auto-approved; the guard decides Bash (see guard.ts)
         permissionMode: 'default',
         outputFormat: { type: 'json_schema', schema: PROPOSAL_SCHEMA },
-        ...guardOptions(readerGuard(READ_TOOLS)),
+        ...skillOptions('planner', i.repoPath),
+        ...guardOptions(readerGuard(READ_TOOLS, reaReads)),
       },
     })) {
       if (m.type === 'result') structured = (m as any).structured_output

@@ -9,6 +9,7 @@
  *   expensive hard to undo or outward-facing: main, force, deletes, merges, publishing, anything outside the checkout
  */
 import { resolve, sep } from 'node:path'
+import { reaRisk } from './skills.js'
 
 export type Risk = 'free' | 'cheap' | 'moderate' | 'expensive'
 export const RISKS: Risk[] = ['free', 'cheap', 'moderate', 'expensive']
@@ -16,7 +17,7 @@ export const rank = (r: Risk) => RISKS.indexOf(r)
 
 export interface RiskContext { cwd: string; branch?: string | null } // branch: what the checkout at cwd has checked out
 
-const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch'])
+const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']) // Skill loads instructions; what they lead to is rated on its own
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 const ENGINE_FREE = new Set(['now', 'projects', 'project_graph', 'issue', 'issues', 'ideas', 'events', 'todos', 'initiatives', 'cycles'])
 const ENGINE: Record<string, [Risk, string]> = {
@@ -61,6 +62,7 @@ export function riskOf(tool: string, input: Record<string, unknown>, ctx: RiskCo
     const e = ENGINE[name]
     return e ? { risk: e[0], why: e[1] } : { risk: 'moderate', why: 'an engine action' }
   }
+  if (tool.startsWith('mcp__rea__')) return reaRisk(tool.slice('mcp__rea__'.length))
   if (EDIT_TOOLS.has(tool)) {
     const file = String(input.file_path ?? input.notebook_path ?? '')
     const root = resolve(ctx.cwd) + sep
