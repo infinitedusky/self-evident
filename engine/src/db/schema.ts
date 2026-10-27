@@ -13,7 +13,7 @@
  */
 import { sql } from 'drizzle-orm'
 import {
-  bigserial, boolean, check, date, foreignKey, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp,
+  bigint, bigserial, boolean, check, date, foreignKey, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp,
   uniqueIndex,
 } from 'drizzle-orm/pg-core'
 
@@ -275,6 +275,17 @@ export const outsidePr = pgTable('outside_pr', {
   updatedAt: timestamp('updated_at', { withTimezone: true }), syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('outside_pr_repo_number').on(t.repoId, t.number), index('outside_pr_app').on(t.appId, t.state),
   inList('outside_pr_state', t.state, ['open', 'merged', 'closed'])])
+
+// The summary page: sections written by a model from everything the engine knows about an app, rewritten when
+// stale (a day, by default) and something has happened since, or when a person asks. Each write is kept: the newest
+// is the page; `facts` is what it was written from, so every line can be checked; `through_seq` is the last event seen.
+export const SUMMARY_SECTIONS = ['focus'] as const
+export const summary = pgTable('summary', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(), appId: appId(), section: text('section').notNull(),
+  body: jsonb('body').notNull(), facts: jsonb('facts').notNull(), throughSeq: bigint('through_seq', { mode: 'number' }).notNull().default(0),
+  model: text('model'), costUsd: numeric('cost_usd'), trigger: text('trigger').notNull(), createdAt: createdAt(),
+}, (t) => [index('summary_app_section').on(t.appId, t.section, t.id), inList('summary_section', t.section, SUMMARY_SECTIONS),
+  inList('summary_trigger', t.trigger, ['person', 'schedule'])])
 
 export const pr = pgTable('pr', { // [LS] githubPullRequests + review hub; [IF] pitch. One per project, or one per task when stacked.
   id: id(), appId: appId(), projectId: text('project_id').notNull().references(() => project.id), repoId: text('repo_id').references(() => repo.id),

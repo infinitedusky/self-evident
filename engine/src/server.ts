@@ -23,6 +23,7 @@ import { lastSync, startSync, syncApp } from './github.js'
 import { addChecklist, draftChecklist, completeTodo, createTodo, dropTodo, getTodo, itemToTodo, listTodos, removeChecklistItem, reopenTodo, setChecklistItem, updateTodo } from './todos.js'
 import { addIdea, addItems, coverItem, dropItem, itemToTask, listBacklog, reopenItem } from './backlog.js'
 import { now } from './now.js'
+import { latestFocus, startSummaries, writeFocus } from './summary.js'
 import { startStorybook, stopStorybooks, storybookStatus } from './storybook.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { listTasks, addPhases, addTask, appGraph, clearPhases, createProject, listProjects, PlanError, projectGraph, setPhaseStatus, tick } from './projects.js'
@@ -59,6 +60,8 @@ export function buildApp(bus: EventBus) {
       'POST /projects/:id/tasks': '{title, brief?, description?} — a task at the end of the project',
       'POST /projects/:id/start': 'run it: worktrees, agent runs, landing, PR', 'POST /projects/:id/tick?room=N': 'one dispatch pass for a draft (no launching)',
       'POST /phases/:id/status': '{status} — by hand, for drafts',
+      'GET /apps/:id/summary': 'the summary page: the newest focus section (what everyone is on, goals near, mid, long), whether one is being written, whether it is stale',
+      'POST /apps/:id/summary': 'write the focus section now (202); summary.written or summary.failed says when',
       'POST /apps/:id/sync': 'read GitHub now: our PRs (merged, review, checks), others\' PRs, main into open project branches (also every 2 minutes)',
       'POST /mcp/:appId': 'the engine as an MCP server for Claude Code, scoped to one app (pnpm se connect prints the command)',
       'GET /events?since=SEQ&app=&project=&task=&phase=': 'SSE: replay from SEQ, then live',
@@ -243,6 +246,12 @@ export function buildApp(bus: EventBus) {
   api.post('/projects/:id/pause', async (c) => { try { return c.json(await runner.pauseProject(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/projects/:id/resume', async (c) => { try { return c.json(await runner.resumeProject(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/sync', async (c) => c.json(await syncApp(c.req.param('id')))) // GitHub now: PRs, reviews, checks, main
+  api.get('/apps/:id/summary', async (c) => c.json(await latestFocus(c.req.param('id'))))
+  api.post('/apps/:id/summary', (c) => { // a model call of a minute or so: answer now, the event says when it is there
+    const id = c.req.param('id')
+    void writeFocus(id, { trigger: 'person' }).catch((err) => console.log(`[summary] ${id}: ${err.message}`))
+    return c.json({ started: true }, 202)
+  })
   api.get('/apps/:id/sync', (c) => c.json(lastSync.get(c.req.param('id')) ?? null))
   api.get('/engine', (c) => c.json({ hold: runner.hold })) // is the engine waiting for the model?
   api.post('/engine/release', async (c) => c.json(await runner.releaseHold())) // try the model now
@@ -309,7 +318,8 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const port = Number(process.env.PORT ?? 4000)
   serve({ fetch: buildApp(bus).fetch, port }, (info) => console.log(`engine listening on http://localhost:${info.port}  (API under /api; UI at / when built)`))
   const stopSync = process.env.GITHUB_SYNC === '0' ? () => undefined : startSync(Number(process.env.GITHUB_SYNC_MINUTES ?? 2)) // GitHub: reviews, checks, merges, main moving
-  const shutdown = async () => { stopSync(); stopStorybooks(); closeTalks(); await runner.shutdown(); await bus.stop(); await pool.end(); process.exit(0) }
+  const stopSummaries = process.env.SUMMARY === '0' ? () => undefined : startSummaries(Number(process.env.SUMMARY_HOURS ?? 24)) // the summary page, rewritten when a day old and something moved
+  const shutdown = async () => { stopSync(); stopSummaries(); stopStorybooks(); closeTalks(); await runner.shutdown(); await bus.stop(); await pool.end(); process.exit(0) }
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
 }

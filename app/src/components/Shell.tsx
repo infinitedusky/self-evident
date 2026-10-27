@@ -3,7 +3,8 @@ import { useCurrentApp } from '../current-app'
 import { TalkDrawer } from './TalkDrawer'
 
 /**
- * The nav is the loop: one stage per line, its icon in front. Below the rule, outside the loop: My Stuff (what is
+ * The nav is the loop: one stage per line, its icon in front. Below the rule, outside the loop: Summary (the agent's
+ * write-up of where things stand), My Stuff (what is
  * happening in Self Evident and what needs you, the page that opens first) and Settings. The wordmark sits above;
  * the agent is the drawer, not a page.
  */
@@ -36,6 +37,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </div>
         ))}
         <div className="nav-rule" />
+        <NavLink to="/summary" className={({ isActive }) => cls(isActive)}><span className="ico" aria-hidden="true">📰</span>Summary</NavLink>
         <NavLink to="/" end className={({ isActive }) => cls(isActive)}><span className="ico" aria-hidden="true">📌</span>My Stuff</NavLink>
         <NavLink to="/settings" className={({ isActive }) => cls(isActive)}><span className="ico" aria-hidden="true">⚙️</span>Settings</NavLink>
         <div className="apps">

@@ -7,7 +7,7 @@ import { db } from './db/client.js'
 import { app, backlogItem, checklistItem, outsidePr, phaseFileClaim, todo, event, phase, project, pr, question, run, step, task } from './db/schema.js'
 
 const LIVE = ['running', 'merging', 'testing', 'awaiting_answer']
-const NOISE = ['run.tool_call', 'run.tool_result', 'run.rate_limit', 'run.message', 'talk.message', 'talk.permission', 'talk.result'] // conversations have their own place
+export const NOISE = ['run.tool_call', 'run.tool_result', 'run.rate_limit', 'run.message', 'talk.message', 'talk.permission', 'talk.result'] // conversations have their own place
 
 export type Attention =
   | { kind: 'failed_phase'; projectId: string; planTitle: string; appName: string; phaseId: string; number: number; title: string; error: string | null }

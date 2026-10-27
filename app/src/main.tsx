@@ -22,6 +22,7 @@ import { Mockups } from './pages/Mockups'
 import { Tasks } from './pages/Tasks'
 import { Observe } from './pages/Observe'
 import { Todos } from './pages/Todos'
+import { Summary } from './pages/Summary'
 
 /** Links from before projects were called projects. */
 function OldPlanLink() { return <Navigate to={`/projects/${useParams().id}`} replace /> }
@@ -40,6 +41,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="*" element={<Shell>
           <Routes>
             <Route path="/" element={<Now />} />
+            <Route path="/summary" element={<Summary />} />
             <Route path="/observe" element={<Observe />} />
             <Route path="/learn" element={<Learn />} />
             <Route path="/projects" element={<Projects mode="project" />} />
