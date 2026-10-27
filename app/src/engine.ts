@@ -76,6 +76,10 @@ export interface RunningPlan {
   held: { id: string; number: number; title: string; reason: string | null }[]
   pr: { number: number | null; url: string | null; status: string } | null
 }
+export interface FocusRef { kind: 'project' | 'task' | 'todo' | 'idea' | 'question' | 'pr' | 'teammate_pr'; label: string; projectId?: string; url?: string | null }
+export interface FocusLine { text: string; refs: string[] }
+export interface FocusBody { headline: string; people: { who: string; doing: FocusLine[] }[]; goals: { near: FocusLine[]; mid: FocusLine[]; long: FocusLine[] }; links: Record<string, FocusRef> }
+export interface SummaryState { focus: { id: number; body: FocusBody; createdAt: string; trigger: 'person' | 'schedule'; costUsd: string | null } | null; writing: boolean; stale: boolean }
 export interface Hold { until: string; reason: string; level: number }
 export interface Now { hold?: Hold | null; running: RunningPlan[]; needsYou: Attention[]; recent: Event[]; counts: { projects: number; running: number; needsYou: number } }
 
@@ -138,6 +142,8 @@ export const engine = {
   dropTodo: (id: string, reason: string) => call<Todo>('POST', `/todos/${id}/drop`, { reason }),
   reopenTodo: (id: string) => call<Todo>('POST', `/todos/${id}/reopen`),
   itemToTodo: (itemId: string) => call<Todo>('POST', `/backlog/${itemId}/todo`, {}),
+  summary: (appId: string) => call<SummaryState>('GET', `/apps/${appId}/summary`),
+  writeSummary: (appId: string) => call<{ started: boolean }>('POST', `/apps/${appId}/summary`),
   syncGithub: (appId: string) => call<{ prs?: { changes: string[] }; catchUp?: { projectId: string; state: string }[]; error?: string }>('POST', `/apps/${appId}/sync`),
   pause: (projectId: string) => call<unknown>('POST', `/projects/${projectId}/pause`),
   resume: (projectId: string) => call<unknown>('POST', `/projects/${projectId}/resume`),
