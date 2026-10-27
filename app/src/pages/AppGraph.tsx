@@ -1,19 +1,19 @@
 /**
- * The top level: every phase of every project in an app, on one canvas. Dependencies as solid edges; unfinished phases
- * that share a file as dashed links (they will never run at once). Live over the app's event stream.
+ * The top level: every code sub-issue of every project in an app, on one canvas. Dependencies as solid edges; unbuilt
+ * sub-issues that share a file as dashed links (they will never build at once). Live over the app's event stream.
  */
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { Badge, type Tone } from '../components/Badge'
 import { PlanGraphView } from '../components/PlanGraphView'
-import { API, EVENT_TYPES, type App, type GraphFile, type GraphPhase } from '../engine'
+import { API, EVENT_TYPES, type App, type GraphFile, type GraphIssue, type GraphSubIssue } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 interface AppGraphData {
   app: App
-  projects: { id: string; title: string; status: string; pr: { number: number; url: string } | null }[]
-  tasks: { id: string; projectId: string; number: number; position: number; title: string }[]
-  phases: GraphPhase[]
+  projects: { id: string; name: string; status: string; pr: { number: number | null; url: string | null } | null }[]
+  issues: GraphIssue[]
+  subIssues: GraphSubIssue[]
   conflicts: [string, string][]
   files?: GraphFile[]
 }
@@ -48,15 +48,15 @@ export function AppGraph() {
     return () => { closed = true; es.close(); window.clearTimeout(timer.current) }
   }, [appId])
 
-  const selected = data?.phases.find((p) => p.id === selectedId)
-  const taskOf = (p: GraphPhase) => data?.tasks.find((t) => t.id === p.taskId)
-  const projectOf = (p: GraphPhase) => data?.projects.find((x) => x.id === p.projectId)
+  const selected = data?.subIssues.find((p) => p.id === selectedId)
+  const issueOf = (p: GraphSubIssue) => data?.issues.find((t) => t.id === p.parentId)
+  const projectOf = (p: GraphSubIssue) => data?.projects.find((x) => x.id === p.projectId)
   return (
     <>
       <div className="page-head">
         <div>
           <h1>Graph{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
-          <p className="muted" style={{ margin: '4px 0 0' }}>Every phase of every project. An arrow is a wait: the phase at its head starts after the one at its tail lands. Phases that touch the same file take turns; that shows on the node when it happens.</p>
+          <p className="muted" style={{ margin: '4px 0 0' }}>Every sub-issue being built, across projects. An arrow is a wait: the sub-issue at its head starts after the one at its tail lands. Ones that touch the same file take turns; that shows on the node when it happens.</p>
         </div>
       </div>
       {error && !data && <div className="empty">The engine isn't reachable: {error}</div>}
@@ -64,22 +64,22 @@ export function AppGraph() {
         <>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
             {data.projects.map((p) => (
-              <Link key={p.id} to={`/projects/${p.id}`} className={`badge ${PROJECT_TONE[p.status] ?? ''}`}>{p.title}{p.pr ? ` · PR #${p.pr.number}` : ''}</Link>
+              <Link key={p.id} to={`/projects/${p.id}`} className={`badge ${PROJECT_TONE[p.status] ?? ''}`}>{p.name}{p.pr ? ` · PR #${p.pr.number}` : ''}</Link>
             ))}
             {error && <Badge tone="warn" dot>{error}</Badge>}
           </div>
-          {data.phases.length
-            ? <PlanGraphView phases={data.phases} files={data.files} storageKey={data.app.id} labels={Object.fromEntries(data.phases.map((p) => [p.id, short(taskOf(p)?.title ?? projectOf(p)?.title ?? '')]))} selectedId={selectedId} onSelect={(p) => setSelectedId(p.id)} tall />
-            : <div className="empty">No phases in {data.app.name} yet.</div>}
+          {data.subIssues.length
+            ? <PlanGraphView subIssues={data.subIssues} files={data.files} storageKey={data.app.id} labels={Object.fromEntries(data.subIssues.map((p) => [p.id, short(issueOf(p)?.title ?? projectOf(p)?.name ?? '')]))} selectedId={selectedId} onSelect={(p) => setSelectedId(p.id)} tall />
+            : <div className="empty">Nothing planned in {data.app.name} yet.</div>}
           {selected && (
             <section className="panel">
-              <h2>#{selected.number} {selected.title} <Badge>{projectOf(selected)?.title}</Badge></h2>
+              <h2><Link to={`/issues/${selected.id}`}>{selected.identifier}</Link> {selected.title} <Badge>{projectOf(selected)?.name}</Badge></h2>
               <dl className="fields">
-                <dt>Status</dt><dd>{selected.status}{selected.heldReason ? ` — ${selected.heldReason}` : ''}</dd>
-                <dt>Task</dt><dd>{taskOf(selected) ? `#${taskOf(selected)!.number} ${taskOf(selected)!.title}` : '—'}</dd>
+                <dt>Build</dt><dd>{selected.status}{selected.heldReason ? ` — ${selected.heldReason}` : ''}</dd>
+                <dt>Issue</dt><dd>{issueOf(selected) ? <Link to={`/issues/${issueOf(selected)!.id}`}>{issueOf(selected)!.identifier} {issueOf(selected)!.title}</Link> : '—'}</dd>
                 <dt>Files</dt><dd>{selected.files.length ? <span className="mono">{selected.files.join(', ')}</span> : <span className="faint">None declared: claims the whole app.</span>}</dd>
-                <dt>Shares files with</dt><dd>{data.conflicts.filter((c) => c.includes(selected.id)).map((c) => c.find((x) => x !== selected.id)).map((id) => data.phases.find((p) => p.id === id)).filter(Boolean).map((p) => `#${p!.number} ${p!.title} (${projectOf(p!)?.title})`).join('; ') || <span className="faint">Nothing open.</span>}</dd>
-                <dt>Plan</dt><dd><Link to={`/projects/${selected.projectId}`}>{projectOf(selected)?.title}</Link></dd>
+                <dt>Shares files with</dt><dd>{data.conflicts.filter((c) => c.includes(selected.id)).map((c) => c.find((x) => x !== selected.id)).map((id) => data.subIssues.find((p) => p.id === id)).filter(Boolean).map((p) => `${p!.identifier} ${p!.title} (${projectOf(p!)?.name})`).join('; ') || <span className="faint">Nothing open.</span>}</dd>
+                <dt>Project</dt><dd><Link to={`/projects/${selected.projectId}`}>{projectOf(selected)?.name}</Link></dd>
               </dl>
             </section>
           )}

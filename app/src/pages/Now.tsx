@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge, type Tone } from '../components/Badge'
-import { API, engine, EVENT_TYPES, type Attention, type Event, type Now as NowData, type RunningPlan } from '../engine'
+import { API, engine, EVENT_TYPES, type Attention, type Event, type Now as NowData, type RunningProject } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const COST_TONE: Record<string, Tone> = { cheap: 'neutral', moderate: 'warn', expensive: 'bad' }
@@ -85,65 +85,65 @@ function prState(a: { review: string | null; checks: string }) {
 }
 
 function AttentionRow({ a, busy, act }: { a: Attention; busy: string | null; act: (key: string, fn: () => Promise<unknown>) => Promise<void> }) {
-  const where = 'projectId' in a && a.projectId && 'planTitle' in a ? <span className="faint">{a.appName} · <Link to={`/projects/${a.projectId}`}>{a.planTitle}</Link></span> : <span className="faint">{a.appName}</span>
+  const where = 'projectId' in a && a.projectId && 'projectName' in a ? <span className="faint">{a.appName} · <Link to={`/projects/${a.projectId}`}>{a.projectName}</Link></span> : <span className="faint">{a.appName}</span>
   switch (a.kind) {
-    case 'failed_phase': return (
-      <li><Badge tone="bad">failed</Badge><div><strong>#{a.number} {a.title}</strong> {where}{a.error && <div className="muted" style={{ fontSize: 13 }}>{a.error.slice(0, 200)}</div>}</div>
-        <span style={{ display: 'flex', gap: 6 }}><button className="btn small" disabled={busy === a.phaseId} onClick={() => act(a.phaseId, () => engine.retry(a.phaseId))}>Retry</button><Link className="btn quiet small" to={`/projects/${a.projectId}`}>Look</Link></span></li>)
+    case 'failed_build': return (
+      <li><Badge tone="bad">failed</Badge><div><strong><Link to={`/issues/${a.issueId}`}>{a.identifier}</Link> {a.title}</strong> {where}{a.error && <div className="muted" style={{ fontSize: 13 }}>{a.error.slice(0, 200)}</div>}</div>
+        <span style={{ display: 'flex', gap: 6 }}><button className="btn small" disabled={busy === a.issueId} onClick={() => act(a.issueId, () => engine.retry(a.issueId))}>Retry</button><Link className="btn quiet small" to={`/projects/${a.projectId}`}>Look</Link></span></li>)
     case 'question': return (
-      <li><Badge tone={COST_TONE[a.cost ?? ''] ?? 'neutral'}>question</Badge><div><strong>{a.text}</strong> {where}{a.taskNumber != null && <span className="faint"> · task #{a.taskNumber}</span>}</div>
+      <li><Badge tone={COST_TONE[a.cost ?? ''] ?? 'neutral'}>question</Badge><div><strong>{a.text}</strong> {where}{a.issueIdentifier && <span className="faint"> · {a.issueIdentifier}</span>}</div>
         <Link className="btn quiet small" to={`/projects/${a.projectId}`}>Answer</Link></li>)
     case 'run_project': return (
-      <li><Badge tone="ok">ready</Badge><div><strong>{a.planTitle}</strong> <span className="faint">{a.appName} · {a.phases} phase{a.phases === 1 ? '' : 's'} planned, nothing open</span></div>
+      <li><Badge tone="ok">ready</Badge><div><strong>{a.projectName}</strong> <span className="faint">{a.appName} · {a.subIssues} sub-issue{a.subIssues === 1 ? '' : 's'} planned, nothing open</span></div>
         <button className="btn small" disabled={busy === a.projectId} onClick={() => act(a.projectId, () => engine.start(a.projectId))}>Run it</button></li>)
-    case 'plan_task': return (
-      <li><Badge>draft</Badge><div><strong>task #{a.taskNumber} {a.taskTitle}</strong> {where} <span className="faint">· no phases yet</span></div>
-        <button className="btn small" disabled={busy === a.taskId} onClick={() => act(a.taskId, () => engine.planTask(a.taskId))}>Plan it</button></li>)
+    case 'plan_issue': return (
+      <li><Badge>draft</Badge><div><strong><Link to={`/issues/${a.issueId}`}>{a.identifier}</Link> {a.issueTitle}</strong> {where} <span className="faint">· not planned yet</span></div>
+        <button className="btn small" disabled={busy === a.issueId} onClick={() => act(a.issueId, () => engine.planIssue(a.issueId))}>Plan it</button></li>)
     case 'todo': return (
       <li><Badge tone={a.next ? (a.owner === 'agent' ? 'accent' : 'warn') : 'neutral'}>{a.next ? (a.owner === 'agent' ? 'agent to-do' : 'to-do') : 'waiting'}</Badge>
-        <div><strong><Link to={`/todos#${a.todoId}`}>{a.title}</Link></strong> <span className="faint">{a.appName}{a.planTitle && a.projectId ? <> · unblocks <Link to={`/projects/${a.projectId}`}>{a.planTitle}</Link></> : null}{a.total ? ` · ${a.done}/${a.total}` : ''}</span>
+        <div><strong><Link to={`/todos#${a.todoId}`}>{a.title}</Link></strong> <span className="faint">{a.identifier} · {a.appName}{a.projectName && a.projectId ? <> · unblocks <Link to={`/projects/${a.projectId}`}>{a.projectName}</Link></> : null}{a.total ? ` · ${a.done}/${a.total}` : ''}</span>
           {a.next ? <div className="muted" style={{ fontSize: 13 }}>Next: {a.next}</div> : a.waitingOn.length ? <div className="muted" style={{ fontSize: 13 }}>Waiting on {a.waitingOn.join(', ')}</div> : !a.total ? <div className="muted" style={{ fontSize: 13 }}>No checklist yet</div> : null}</div>
         <Link className="btn quiet small" to={`/todos#${a.todoId}`}>Open</Link></li>)
     case 'backlog': return (
-      <li><Badge tone="warn">backlog</Badge><div><strong>{a.planTitle}</strong> <span className="faint">{a.appName} · the work has landed; {a.open} backlog item{a.open === 1 ? '' : 's'} still open: {a.items.join('; ')}</span></div>
+      <li><Badge tone="warn">backlog</Badge><div><strong>{a.projectName}</strong> <span className="faint">{a.appName} · the work has landed; {a.open} issue{a.open === 1 ? '' : 's'} still in the backlog: {a.items.join('; ')}</span></div>
         <Link className="btn quiet small" to={`/projects/${a.projectId}`}>Settle them</Link></li>)
     case 'merge_pr': return (
       <li><Badge tone={a.review === 'CHANGES_REQUESTED' || a.checks === 'failing' ? 'bad' : a.review === 'APPROVED' && a.checks !== 'pending' ? 'ok' : 'neutral'}>landed</Badge>
-        <div><strong>{a.planTitle}</strong> <span className="faint">{a.appName} · every phase landed; {prState(a)}</span>{a.failing.length > 0 && <div className="muted" style={{ fontSize: 13 }}>Failing: {a.failing.join(', ')}</div>}</div>
+        <div><strong>{a.projectName}</strong> <span className="faint">{a.appName} · everything landed; {prState(a)}</span>{a.failing.length > 0 && <div className="muted" style={{ fontSize: 13 }}>Failing: {a.failing.join(', ')}</div>}</div>
         {a.url ? <a className="btn quiet small" href={a.url} target="_blank" rel="noreferrer">PR #{a.prNumber}</a> : null}</li>)
     case 'pr_feedback': return (
       <li><Badge tone="bad">{a.review === 'CHANGES_REQUESTED' ? 'changes asked' : 'checks failing'}</Badge>
-        <div><strong>{a.planTitle}</strong> <span className="faint">{a.appName} · {prState(a)}</span>{a.failing.length > 0 && <div className="muted" style={{ fontSize: 13 }}>Failing: {a.failing.join(', ')}</div>}</div>
+        <div><strong>{a.projectName}</strong> <span className="faint">{a.appName} · {prState(a)}</span>{a.failing.length > 0 && <div className="muted" style={{ fontSize: 13 }}>Failing: {a.failing.join(', ')}</div>}</div>
         {a.url ? <a className="btn quiet small" href={a.url} target="_blank" rel="noreferrer">PR #{a.prNumber}</a> : null}</li>)
     case 'behind_main': return (
-      <li><Badge tone="bad">conflict</Badge><div><strong>{a.planTitle}</strong> <span className="faint">{a.appName} · main moved ({a.commits} commit{a.commits === 1 ? '' : 's'}) and conflicts with this project's branch</span><div className="muted" style={{ fontSize: 13 }}>In: {a.files.split('\n').join(', ')}</div></div>
+      <li><Badge tone="bad">conflict</Badge><div><strong>{a.projectName}</strong> <span className="faint">{a.appName} · main moved ({a.commits} commit{a.commits === 1 ? '' : 's'}) and conflicts with this project's branch</span><div className="muted" style={{ fontSize: 13 }}>In: {a.files.split('\n').join(', ')}</div></div>
         <Link className="btn quiet small" to={`/projects/${a.projectId}`}>Look</Link></li>)
     case 'review': return (
       <li><Badge tone="warn">review</Badge><div><strong>#{a.prNumber} {a.title}</strong> <span className="faint">{a.appName}{a.author ? ` · from ${a.author}` : ''} · your review is asked</span></div>
         {a.url ? <a className="btn small" href={a.url} target="_blank" rel="noreferrer">Review</a> : null}</li>)
     case 'overlap': return (
-      <li><Badge tone="warn">heads up</Badge><div><strong>#{a.prNumber} {a.title}</strong> <span className="faint">{a.appName}{a.author ? ` · ${a.author}` : ''} · touches what <Link to={`/projects/${a.projectId}`}>{a.planTitle}</Link> is building</span><div className="muted" style={{ fontSize: 13 }}>{a.files.join(', ')}</div></div>
+      <li><Badge tone="warn">heads up</Badge><div><strong>#{a.prNumber} {a.title}</strong> <span className="faint">{a.appName}{a.author ? ` · ${a.author}` : ''} · touches what <Link to={`/projects/${a.projectId}`}>{a.projectName}</Link> is building</span><div className="muted" style={{ fontSize: 13 }}>{a.files.join(', ')}</div></div>
         {a.url ? <a className="btn quiet small" href={a.url} target="_blank" rel="noreferrer">PR #{a.prNumber}</a> : null}</li>)
   }
 }
 
-function RunningCard({ r }: { r: RunningPlan }) {
+function RunningCard({ r }: { r: RunningProject }) {
   return (
     <div className="card" data-component="RunningCard">
       <div className="card-head">
         <span className="faint">{r.appName}</span>
         <span style={{ display: 'flex', gap: 4 }}>
-          <Badge tone="accent" dot>{r.phases.done}/{r.phases.total} landed</Badge>
-          {r.phases.failed > 0 && <Badge tone="bad">{r.phases.failed} failed</Badge>}
+          <Badge tone="accent" dot>{r.builds.done}/{r.builds.total} landed</Badge>
+          {r.builds.failed > 0 && <Badge tone="bad">{r.builds.failed} failed</Badge>}
           {r.pr && <a className="badge accent" href={r.pr.url ?? '#'} target="_blank" rel="noreferrer">PR #{r.pr.number}</a>}
         </span>
       </div>
-      <div className="card-title"><Link to={`/projects/${r.projectId}`}>{r.planTitle}</Link></div>
+      <div className="card-title"><Link to={`/projects/${r.projectId}`}>{r.projectName}</Link></div>
       {r.live.map((x) => (
-        <div key={x.id} style={{ marginTop: 6 }}><span className="mono faint">#{x.number}</span> {x.title} <Badge tone="accent" dot>{x.status}</Badge>
+        <div key={x.id} style={{ marginTop: 6 }}><Link className="mono faint" to={`/issues/${x.id}`}>{x.identifier}</Link> {x.title} <Badge tone="accent" dot>{x.status}</Badge>
           {x.step && <div className="muted" style={{ fontSize: 13 }}>→ {x.step}</div>}</div>
       ))}
-      {r.held.length > 0 && <div className="faint" style={{ marginTop: 6, fontSize: 13 }}>Waiting: {r.held.map((h) => `#${h.number} (${h.reason})`).join('; ')}</div>}
+      {r.held.length > 0 && <div className="faint" style={{ marginTop: 6, fontSize: 13 }}>Waiting: {r.held.map((h) => `${h.identifier} (${h.reason})`).join('; ')}</div>}
     </div>
   )
 }
@@ -167,14 +167,14 @@ function Recent({ events }: { events: Event[] }) {
 function describe(e: Event): string {
   const p = e.payload as any
   switch (e.type) {
-    case 'project.created': return `${p.title} · ${p.tasks} task(s)`
-    case 'task.created': return `#${p.number} ${p.title}`
-    case 'phase.created': return `#${p.number} ${p.title}`
-    case 'phase.status': return `${p.from} → ${p.to}`
-    case 'phase.held': return p.reason
-    case 'task.planning': return `planning task #${p.number}`
-    case 'task.planned': return `${(p.phases ?? []).length} phases · ${p.decisions} decisions · ${p.questions} questions`
-    case 'task.plan_failed': return String(p.error).slice(0, 120)
+    case 'project.created': return `${p.name ?? p.title} · ${p.issues ?? p.tasks} issue(s)`
+    case 'issue.created': return `${p.identifier ?? `#${p.number}`} ${p.title}`
+    case 'issue.state': return `${p.identifier ?? ''} ${p.title ?? ''}: ${p.from} → ${p.to}${p.reason ? ` (${p.reason})` : ''}`
+    case 'build.status': return `${p.identifier ?? ''} ${p.from} → ${p.to}`
+    case 'build.held': return p.reason
+    case 'issue.planning': return `planning ${p.identifier ?? `#${p.number}`}`
+    case 'issue.planned': return `${(p.subIssues ?? p.phases ?? []).length} sub-issues · ${p.decisions} decisions · ${p.questions} questions`
+    case 'issue.plan_failed': return String(p.error).slice(0, 120)
     case 'question.asked': return `[${p.cost}] ${p.text}`
     case 'question.answered': return String(p.answer)
     case 'run.result': return `${p.subtype} · $${Number(p.costUsd ?? 0).toFixed(2)}`

@@ -17,7 +17,7 @@ export function Learn() {
         <h2>Lands here</h2>
         <ul style={{ margin: 0, paddingLeft: 18 }}>
           <li><strong>Evidence per idea</strong>: the baseline captured when an idea is kept, the finding after it ships, the verdict.</li>
-          <li><strong>The guard</strong>: a sensor compared against its baseline after a merge; a breach reverts the PR or opens a fix task.</li>
+          <li><strong>The guard</strong>: a sensor compared against its baseline after a merge; a breach reverts the PR or opens a fix issue.</li>
           <li><strong>Clauses and sensors</strong>: the promises the app asserts about itself, as OpenTelemetry spans into PostHog.</li>
         </ul>
       </section>

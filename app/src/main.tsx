@@ -19,7 +19,8 @@ import { Now } from './pages/Now'
 import { Learn } from './pages/Learn'
 import { Validate } from './pages/Validate'
 import { Mockups } from './pages/Mockups'
-import { Tasks } from './pages/Tasks'
+import { Issues } from './pages/Issues'
+import { IssuePage } from './pages/IssuePage'
 import { Observe } from './pages/Observe'
 import { Todos } from './pages/Todos'
 import { Summary } from './pages/Summary'
@@ -48,7 +49,9 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/plan" element={<Navigate to="/projects" replace />} />
             <Route path="/plans" element={<Navigate to="/projects" replace />} />
             <Route path="/plans/:id" element={<OldPlanLink />} />
-            <Route path="/tasks" element={<Tasks />} />
+            <Route path="/issues" element={<Issues />} />
+            <Route path="/issues/:id" element={<IssuePage />} />
+            <Route path="/tasks" element={<Navigate to="/issues" replace />} />
             <Route path="/todos" element={<Todos />} />
             <Route path="/validate" element={<Validate />} />
             <Route path="/mockups" element={<Mockups />} />

@@ -42,7 +42,7 @@ export function Board({ ideas }: { ideas: Idea[] }) {
       <div className="page-head">
         <div>
           <h1>💡 Ideate{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
-          <p className="muted" style={{ margin: '4px 0 0' }}>Type it, it's kept. When its time comes, it becomes one task, or a project of several.</p>
+          <p className="muted" style={{ margin: '4px 0 0' }}>Type it, it's kept. When its time comes, it becomes one issue, or a project of several.</p>
         </div>
         <span className="mono faint">{inbox.length} in the inbox</span>
       </div>
@@ -50,7 +50,7 @@ export function Board({ ideas }: { ideas: Idea[] }) {
       <section className="panel">
         <div className="form-grid">
           <label style={{ gridColumn: '1 / -1' }}>Idea<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="One line: what should be true?" onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) void add() }} /></label>
-          <label style={{ gridColumn: '1 / -1' }}>Why, and anything already decided (optional)<textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder="This becomes the task's brief when the idea is planned." /></label>
+          <label style={{ gridColumn: '1 / -1' }}>Why, and anything already decided (optional)<textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder="This becomes the issue's brief when the idea is planned." /></label>
           <div className="faint" style={{ alignSelf: 'end', fontSize: 13 }}>For {app?.name ?? '…'} (pick another app in the nav)</div>
           <div style={{ alignSelf: 'end' }}><button className="btn" disabled={!title.trim() || !appId || busy === 'add'} onClick={add}>Keep it</button></div>
         </div>
@@ -67,8 +67,8 @@ export function Board({ ideas }: { ideas: Idea[] }) {
                 <div><strong>{i.title}</strong>{i.body && <div className="muted" style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{i.body}</div>}
                   <div className="faint" style={{ fontSize: 12 }}>{apps.find((a) => a.id === i.appId)?.name}</div></div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn small" disabled={busy === i.id} onClick={() => makePlan(i.id)} title="A project of one task: this title, this brief">Make it a task</button>
-                  <Link className="btn quiet small" to={`/projects/new?idea=${i.id}`} title="A project of several tasks, in order">Break it down</Link>
+                  <button className="btn small" disabled={busy === i.id} onClick={() => makePlan(i.id)} title="A project of one issue: this title, this brief">Make it an issue</button>
+                  <Link className="btn quiet small" to={`/projects/new?idea=${i.id}`} title="A project of several issues, in order">Break it down</Link>
                 </div>
               </li>
             ))}

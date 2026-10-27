@@ -1,5 +1,5 @@
 /**
- * The composer: a project as tasks in order (title + brief, what you author), each with its phases. Phases are what the
+ * The composer: a project as issues in order (title + brief, what you author), each with its sub-issues. Sub-issues are what the
  * planner will propose from the brief; until it exists you can write them here. Straight into the engine.
  */
 import { useEffect, useState } from 'react'
@@ -43,13 +43,13 @@ export function NewProject() {
     try {
       const body = tasks.filter((t) => t.title.trim()).map((t) => ({
         title: t.title.trim(), description: t.description.trim() || undefined, brief: t.brief.trim() || undefined,
-        phases: t.phases.filter((p) => p.title.trim()).map((p) => ({
+        subIssues: t.phases.filter((p) => p.title.trim()).map((p) => ({
           key: p.key, title: p.title.trim(), description: p.description.trim() || undefined, brief: p.brief.trim() || undefined, dependsOn: p.dependsOn,
           files: p.files.split(',').map((f) => f.trim()).filter(Boolean),
         })),
       }))
-      if (!body.length) throw new Error('add at least one task with a title')
-      const { project } = await engine.createProject({ appId, title: title.trim(), spec: spec.trim() || undefined, ideaId: ideaId ?? undefined, tasks: body })
+      if (!body.length) throw new Error('add at least one issue with a title')
+      const { project } = await engine.createProject({ appId, name: title.trim(), content: spec.trim() || undefined, ideaId: ideaId ?? undefined, issues: body })
       nav(`/projects/${project.id}`)
     } catch (e: any) { setError(String(e.message ?? e)) } finally { setBusy(false) }
   }
@@ -61,18 +61,18 @@ export function NewProject() {
       <section className="panel">
         <div className="form-grid">
           <label>App<select value={appId} onChange={(e) => setAppId(e.target.value)}>{apps.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
-          <label>Title<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What this project changes, in a line" /></label>
+          <label>Name<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What this project changes, in a line" /></label>
           <label style={{ gridColumn: '1 / -1' }}>Why (optional)<textarea value={spec} onChange={(e) => setSpec(e.target.value)} rows={2} placeholder="The idea or hypothesis behind it; goes in the PR" /></label>
         </div>
       </section>
 
       <section className="panel">
-        <h2>Tasks, in order</h2>
-        <p className="muted" style={{ margin: '0 0 12px' }}>A task is a title and a brief: what to change and why. Tasks run in order. Each task becomes phases, one agent each in its own worktree; write them below or leave them for the planner.</p>
+        <h2>Issues, in order</h2>
+        <p className="muted" style={{ margin: '0 0 12px' }}>An issue is a title and a brief: what to change and why. Issues are built in order. Each is planned into sub-issues, one agent each in its own worktree; write them below or leave them for the planner.</p>
         {tasks.map((t, ti) => (
           <div className="task-block" key={t.key} data-component="TaskRow">
-            <div className="task-block-head"><span className="mono faint">task {ti + 1}</span>
-              <button className="btn quiet" onClick={() => setTasks((ts) => ts.filter((_, j) => j !== ti))} aria-label="remove task">×</button></div>
+            <div className="task-block-head"><span className="mono faint">issue {ti + 1}</span>
+              <button className="btn quiet" onClick={() => setTasks((ts) => ts.filter((_, j) => j !== ti))} aria-label="remove issue">×</button></div>
             <div className="form-grid">
               <label>Title<input value={t.title} onChange={(e) => updateTask(ti, { title: e.target.value })} placeholder="Harden the POC" /></label>
               <label style={{ gridColumn: '1 / -1' }}>What will be different<textarea value={t.description} onChange={(e) => updateTask(ti, { description: e.target.value })} rows={2} placeholder="One to three plain sentences, for a person: what changes for the people using the app, and why. No file names." /></label>
@@ -83,7 +83,7 @@ export function NewProject() {
                 <div className="task-row" key={p.key}>
                   <div className="mono faint">{ti + 1}.{pi + 1}</div>
                   <div className="form-grid">
-                    <label>Phase<input value={p.title} onChange={(e) => updatePhase(ti, pi, { title: e.target.value })} placeholder="Add a GET /health endpoint" /></label>
+                    <label>Sub-issue<input value={p.title} onChange={(e) => updatePhase(ti, pi, { title: e.target.value })} placeholder="Add a GET /health endpoint" /></label>
                     <label>Files (comma-separated)<input className="mono" value={p.files} onChange={(e) => updatePhase(ti, pi, { files: e.target.value })} placeholder="poc/hg/app.py, poc/tests/test_health.py" /></label>
                     <label style={{ gridColumn: '1 / -1' }}>Brief<textarea value={p.brief} onChange={(e) => updatePhase(ti, pi, { brief: e.target.value })} rows={2} placeholder="What to do, what done looks like, what not to touch." /></label>
                     <div style={{ gridColumn: '1 / -1' }}>
@@ -93,21 +93,21 @@ export function NewProject() {
                           <label key={o.key} className="inline"><input type="checkbox" checked={p.dependsOn.includes(o.key)}
                             onChange={(e) => updatePhase(ti, pi, { dependsOn: e.target.checked ? [...p.dependsOn, o.key] : p.dependsOn.filter((k) => k !== o.key) })} /> {o.title}</label>
                         ))}
-                        {earlierPhases(ti, pi).length === 0 && <span className="faint">No other titled phases yet. Task order already applies.</span>}
+                        {earlierPhases(ti, pi).length === 0 && <span className="faint">No other titled sub-issues yet. Issue order already applies.</span>}
                       </div>
                     </div>
                   </div>
-                  <button className="btn quiet" onClick={() => updateTask(ti, { phases: t.phases.filter((_, j) => j !== pi) })} aria-label="remove phase">×</button>
+                  <button className="btn quiet" onClick={() => updateTask(ti, { phases: t.phases.filter((_, j) => j !== pi) })} aria-label="remove sub-issue">×</button>
                 </div>
               ))}
-              <button className="btn quiet" onClick={() => updateTask(ti, { phases: [...t.phases, blankPhase()] })}>+ Add a phase</button>
+              <button className="btn quiet" onClick={() => updateTask(ti, { phases: [...t.phases, blankPhase()] })}>+ Add a sub-issue</button>
             </div>
           </div>
         ))}
-        <button className="btn quiet" onClick={() => setTasks((ts) => [...ts, blankTask()])}>+ Add a task</button>
+        <button className="btn quiet" onClick={() => setTasks((ts) => [...ts, blankTask()])}>+ Add an issue</button>
       </section>
       {error && <div className="empty bad">{error}</div>}
-      <p><button className="btn" disabled={busy || !title.trim() || !appId} onClick={submit}>Create project</button> <span className="faint">You run it from the project page once it has phases.</span></p>
+      <p><button className="btn" disabled={busy || !title.trim() || !appId} onClick={submit}>Create project</button> <span className="faint">You run it from the project page once its issues are planned.</span></p>
     </>
   )
 }
