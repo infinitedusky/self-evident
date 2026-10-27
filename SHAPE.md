@@ -329,6 +329,39 @@ Details and sources in `research/`.
   them. Rewritten daily when something has moved, or on asking. Sits above My
   Stuff.
 
+- **Shaped like Linear: connect it or run it ourselves** (Sandy, 2026-10-27:
+  "we build ours to match Linear and then we can slip it in. We can connect
+  it or we can manage it ourselves"). On a team the plan lives in the
+  tracker everyone already uses; solo, Self Evident keeps it. So our plan
+  takes Linear's names and shapes, and the store behind it is either our
+  database or a connected Linear workspace (its official SDK and MCP
+  server), per app. What Linear has no place for stays ours either way and
+  links to its records: the engine's execution (worktrees, file claims,
+  landing, cost), Observe and Learn (metrics, promises, hypotheses,
+  evidence), Validate (mockups), and decision records.
+
+  | Ours today | Linear |
+  |---|---|
+  | App | Team (its own statuses, cycles, triage) |
+  | Goals (inferred on the Summary) | Initiative |
+  | Near-term goals | Cycle |
+  | Idea in the inbox | Triage issue; its hypothesis and evidence stay ours |
+  | Project | Project (milestones, documents, updates) |
+  | Task | Issue: one branch, one PR, linked by Linear's GitHub integration |
+  | Phase | Sub-issue, delegated to the builder agent |
+  | Run | Agent session; its messages and tool calls are activities |
+  | Step | The agent session's plan (a checklist) |
+  | Planner or builder question | An elicitation on the agent session |
+  | Phase dependency | Blocked-by relation |
+  | Backlog item | Issue in Backlog; dropped is Canceled with a comment |
+  | To-do and checklist | Issue (no branch) with sub-issues; the agent's are delegated to it |
+  | Summary, what we're focused on | Project and initiative updates, with health |
+  | My Stuff | My Issues and Inbox |
+
+  Statuses keep our meanings under Linear's categories (triage, backlog,
+  unstarted, started, completed, canceled). Open: whether phases are worth
+  showing as sub-issues on a busy team, or stay inside the engine there.
+
 ## Open questions
 
 - **A strategy section in Ideate** (Sandy, 2026-10-26): a longer-term bet,

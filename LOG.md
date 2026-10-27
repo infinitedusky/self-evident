@@ -493,6 +493,20 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Shaped like Linear (Sandy, 2026-10-27)
+
+From the team conversation: on a big shared repo the plan lives in a tracker, probably Linear. Sandy: "we build ours
+to match Linear and then we can slip it in. We can connect it or we can manage it ourselves." The mapping is in
+SHAPE.md under Decided. Linear's agent model fits the engine closely: an agent delegated an issue gets an agent
+session (our run), reports activities (thoughts, tool calls, questions, responses, errors), and shows a plan as a
+checklist (our steps). Next, in order:
+1. Rename to Linear's names and shapes in our own store (schema, engine, UI, MCP tools), statuses under Linear's
+   categories. Initiatives and cycles added, so goals are stated rather than inferred.
+2. A plan-store boundary in the engine: the planner, runner, Summary and tools read and write the plan through it,
+   never the tables directly. Our database is the first implementation.
+3. Linear as the second, per app: `@linear/sdk`, webhooks in, the agent session API for builds. Our own data
+   (file claims, cost, evidence, decisions) is kept by Linear id.
+
 ## Summary page, first section: what we're focused on (Sandy, 2026-10-27)
 
 A page the agent writes from everything the engine knows (nav: 📰 Summary, above My Stuff). The first section is the
