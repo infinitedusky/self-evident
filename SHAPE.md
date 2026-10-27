@@ -317,6 +317,18 @@ Details and sources in `research/`.
   there is a real need. Built 2026-10-26 (PR #45); the agent drafts a
   checklist on request, looking up how the thing is done today.
 
+- **Summary: a page the agent writes** (Sandy, 2026-10-27: "like a dashboard
+  but one that is regularly built by AI"). Sections: what we are focused on,
+  state of the app, observability highlights, learnings, open questions (each
+  with where, when and why it was asked). First built: **focus**, "if I walked
+  in on Monday morning and asked everyone what they are working on, and to
+  remind me of near, mid and long term goals". Who is on what (you, the
+  builders, the planner, the agent's to-dos, each teammate), then goals this
+  week, next few weeks, long term. Goals are inferred from the work for now;
+  nobody states them yet. Every line cites the rows it came from and links
+  them. Rewritten daily when something has moved, or on asking. Sits above My
+  Stuff.
+
 ## Open questions
 
 - **A strategy section in Ideate** (Sandy, 2026-10-26): a longer-term bet,

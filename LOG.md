@@ -493,6 +493,18 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Summary page, first section: what we're focused on (Sandy, 2026-10-27)
+
+A page the agent writes from everything the engine knows (nav: 📰 Summary, above My Stuff). The first section is the
+Monday-morning round of the room: who is on what (you, the builders, the planner, the agent's to-dos, each teammate
+by GitHub name; your own hand-opened PRs count as yours, by your `gh` login), then goals this week, next few weeks,
+long term. One model call, no tools, structured output, about $0.20 on Homework Gate. Each line must cite ids
+from the facts (projects, tasks, to-dos, ideas, questions, PRs); refs the model makes up are dropped, and a line left
+with none is dropped too. Every write is kept (`summary` table) with the facts it was written from. Rewritten
+when the newest is a day old and something has happened since (checked every 30 minutes; `SUMMARY=0` off,
+`SUMMARY_HOURS` to change), or on "Rewrite now". Goals are inferred; stating them is the next step if they read
+wrong. The other sections (state of the app, observability, learnings, open questions) show as placeholders.
+
 ## Stacked PRs: one per task, for a team (2026-10-26)
 
 The third of three for team work. A per-app setting (Settings → Pull requests; `setup.pr_mode`): **one per project**
