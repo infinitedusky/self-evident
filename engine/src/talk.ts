@@ -17,9 +17,10 @@ import { newId } from './ids.js'
 import { rank, riskOf, type Risk } from './risk.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { engineTools } from './tools.js'
+import { skillOptions } from './skills.js'
 import { issueDetail, PlanError, projectGraph } from './projects.js'
 
-const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch']
+const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']
 const ASK_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash']
 const PERMISSION_TIMEOUT_MS = 10 * 60_000
 
@@ -155,6 +156,7 @@ async function open(sessionId: string): Promise<Live> {
   const setup = (a?.setup ?? {}) as { model?: string }
   const input = inputQueue()
   const entry: Live = { q: null as unknown as Query, push: input.push, close: input.close, pending: new Map(), rated: new Map(), outages: 0, always: new Set(), busy: false, autoApprove: (s.autoApprove as Risk) ?? 'cheap', cwd: s.cwd! }
+  const skills = skillOptions('talk', s.cwd!)
   const q = query({
     prompt: input.it,
     options: {
@@ -163,7 +165,8 @@ async function open(sessionId: string): Promise<Live> {
       model: setup.model,
       settingSources: ['project'],
       systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main') },
-      mcpServers: { engine: engineServer(s.appId, s.id) },
+      ...skills,
+      mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...ASK_TOOLS],
       allowedTools: READ_TOOLS, // everything else is rated by the hook (the hook sees every call; allowedTools would not)
       permissionMode: 'default',

@@ -1,0 +1,5 @@
+{
+  "name": "self-evident",
+  "description": "Self Evident's own skills: what the factory brings to every app's agents. One folder per skill under skills/.",
+  "skills": "./skills"
+}
