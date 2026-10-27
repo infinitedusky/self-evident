@@ -361,6 +361,9 @@ Details and sources in `research/`.
   Statuses keep our meanings under Linear's categories (triage, backlog,
   unstarted, started, completed, canceled). Open: whether phases are worth
   showing as sub-issues on a busy team, or stay inside the engine there.
+  Step 1 built 2026-10-27: our own store has this shape (a fresh database,
+  the old one copied over); the engine's execution of a sub-issue is its
+  `build`, kept beside the issue.
 
 ## Open questions
 
