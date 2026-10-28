@@ -1,6 +1,6 @@
 {
-  "id": "c8fa08d5-a3d2-44da-85ca-d7ed6c06aad7",
-  "prevId": "1f4fd55d-9ec7-46db-a23f-857abbea6fe8",
+  "id": "fd746c11-1996-4b54-99b3-36da6afc3a38",
+  "prevId": "8a2ace4d-ccce-434d-87c6-ee0441b42ee0",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -22,6 +22,12 @@
         },
         "name": {
           "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -48,7 +54,29 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "app_workspace_key": {
+          "name": "app_workspace_key",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "app_workspace_id_workspace_id_fk": {
           "name": "app_workspace_id_workspace_id_fk",
@@ -70,6 +98,282 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.build": {
+      "name": "build",
+      "schema": "",
+      "columns": {
+        "issue_id": {
+          "name": "issue_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "attempt": {
+          "name": "attempt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "max_attempts": {
+          "name": "max_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 3
+        },
+        "branch": {
+          "name": "branch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "worktree_path": {
+          "name": "worktree_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_sha": {
+          "name": "base_sha",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "requires_schema_change": {
+          "name": "requires_schema_change",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "held_reason": {
+          "name": "held_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "build_app_status": {
+          "name": "build_app_status",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "build_issue_id_issue_id_fk": {
+          "name": "build_issue_id_issue_id_fk",
+          "tableFrom": "build",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "build_app_id_app_id_fk": {
+          "name": "build_app_id_app_id_fk",
+          "tableFrom": "build",
+          "tableTo": "app",
+          "columnsFrom": [
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "build_issue_app_fk": {
+          "name": "build_issue_app_fk",
+          "tableFrom": "build",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "build_status": {
+          "name": "build_status",
+          "value": "\"build\".\"status\" in ('queued', 'ready', 'running', 'awaiting_answer', 'merging', 'testing', 'done', 'failed', 'cancelled')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.cycle": {
+      "name": "cycle",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "number": {
+          "name": "number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "starts_at": {
+          "name": "starts_at",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ends_at": {
+          "name": "ends_at",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "cycle_app_number": {
+          "name": "cycle_app_number",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "cycle_id_app": {
+          "name": "cycle_id_app",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "cycle_app_id_app_id_fk": {
+          "name": "cycle_app_id_app_id_fk",
+          "tableFrom": "cycle",
+          "tableTo": "app",
+          "columnsFrom": [
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "cycle_dates": {
+          "name": "cycle_dates",
+          "value": "\"cycle\".\"ends_at\" >= \"cycle\".\"starts_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.decision": {
       "name": "decision",
       "schema": "",
@@ -80,20 +384,26 @@
           "primaryKey": true,
           "notNull": true
         },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "idea_id": {
           "name": "idea_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "plan_id": {
-          "name": "plan_id",
+        "project_id": {
+          "name": "project_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "task_id": {
-          "name": "task_id",
+        "issue_id": {
+          "name": "issue_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -148,8 +458,67 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "decision_app": {
+          "name": "decision_app",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "decision_project": {
+          "name": "decision_project",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "decision_issue": {
+          "name": "decision_issue",
+          "columns": [
+            {
+              "expression": "issue_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
+        "decision_app_id_app_id_fk": {
+          "name": "decision_app_id_app_id_fk",
+          "tableFrom": "decision",
+          "tableTo": "app",
+          "columnsFrom": [
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "decision_idea_id_idea_id_fk": {
           "name": "decision_idea_id_idea_id_fk",
           "tableFrom": "decision",
@@ -163,12 +532,25 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "decision_plan_id_plan_id_fk": {
-          "name": "decision_plan_id_plan_id_fk",
+        "decision_project_id_project_id_fk": {
+          "name": "decision_project_id_project_id_fk",
           "tableFrom": "decision",
-          "tableTo": "plan",
+          "tableTo": "project",
           "columnsFrom": [
-            "plan_id"
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "decision_issue_id_issue_id_fk": {
+          "name": "decision_issue_id_issue_id_fk",
+          "tableFrom": "decision",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id"
           ],
           "columnsTo": [
             "id"
@@ -185,6 +567,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "decision_project_app_fk": {
+          "name": "decision_project_app_fk",
+          "tableFrom": "decision",
+          "tableTo": "project",
+          "columnsFrom": [
+            "project_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -223,7 +620,7 @@
           "name": "app_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "idea_id": {
           "name": "idea_id",
@@ -231,20 +628,14 @@
           "primaryKey": false,
           "notNull": false
         },
-        "plan_id": {
-          "name": "plan_id",
+        "project_id": {
+          "name": "project_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "task_id": {
-          "name": "task_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "phase_id": {
-          "name": "phase_id",
+        "issue_id": {
+          "name": "issue_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -303,11 +694,11 @@
           "method": "btree",
           "with": {}
         },
-        "event_phase_seq": {
-          "name": "event_phase_seq",
+        "event_issue_seq": {
+          "name": "event_issue_seq",
           "columns": [
             {
-              "expression": "phase_id",
+              "expression": "issue_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -324,11 +715,11 @@
           "method": "btree",
           "with": {}
         },
-        "event_plan_seq": {
-          "name": "event_plan_seq",
+        "event_project_seq": {
+          "name": "event_project_seq",
           "columns": [
             {
-              "expression": "plan_id",
+              "expression": "project_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -367,7 +758,21 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "event_app_id_app_id_fk": {
+          "name": "event_app_id_app_id_fk",
+          "tableFrom": "event",
+          "tableTo": "app",
+          "columnsFrom": [
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -382,6 +787,12 @@
           "name": "id",
           "type": "bigserial",
           "primaryKey": true,
+          "notNull": true
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
           "notNull": true
         },
         "idea_id": {
@@ -458,8 +869,37 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "evidence_app": {
+          "name": "evidence_app",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
+        "evidence_app_id_app_id_fk": {
+          "name": "evidence_app_id_app_id_fk",
+          "tableFrom": "evidence",
+          "tableTo": "app",
+          "columnsFrom": [
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "evidence_idea_id_idea_id_fk": {
           "name": "evidence_idea_id_idea_id_fk",
           "tableFrom": "evidence",
@@ -469,6 +909,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "evidence_idea_app_fk": {
+          "name": "evidence_idea_app_fk",
+          "tableFrom": "evidence",
+          "tableTo": "idea",
+          "columnsFrom": [
+            "idea_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -483,6 +938,87 @@
           "value": "\"evidence\".\"kind\" in ('baseline', 'finding', 'verdict', 'guard', 'post_ship')"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.file_claim": {
+      "name": "file_claim",
+      "schema": "",
+      "columns": {
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issue_id": {
+          "name": "issue_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "file_claim_app_id_app_id_fk": {
+          "name": "file_claim_app_id_app_id_fk",
+          "tableFrom": "file_claim",
+          "tableTo": "app",
+          "columnsFrom": [
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "file_claim_issue_id_issue_id_fk": {
+          "name": "file_claim_issue_id_issue_id_fk",
+          "tableFrom": "file_claim",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "file_claim_issue_app_fk": {
+          "name": "file_claim_issue_app_fk",
+          "tableFrom": "file_claim",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "file_claim_issue_id_path_pk": {
+          "name": "file_claim_issue_id_path_pk",
+          "columns": [
+            "issue_id",
+            "path"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.idea": {
@@ -622,6 +1158,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "idea_id_app": {
+          "name": "idea_id_app",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -671,8 +1228,8 @@
       },
       "isRLSEnabled": false
     },
-    "public.phase": {
-      "name": "phase",
+    "public.initiative": {
+      "name": "initiative",
       "schema": "",
       "columns": {
         "id": {
@@ -681,38 +1238,26 @@
           "primaryKey": true,
           "notNull": true
         },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "app_id": {
           "name": "app_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "plan_id": {
-          "name": "plan_id",
+        "name": {
+          "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "task_id": {
-          "name": "task_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "number": {
-          "name": "number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "brief": {
-          "name": "brief",
+        "description": {
+          "name": "description",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -722,81 +1267,29 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'queued'"
+          "default": "'active'"
         },
-        "attempt": {
-          "name": "attempt",
+        "target_date": {
+          "name": "target_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "owner": {
+          "name": "owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sort_order": {
+          "name": "sort_order",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "default": 0
-        },
-        "max_attempts": {
-          "name": "max_attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 3
-        },
-        "branch": {
-          "name": "branch",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "worktree_path": {
-          "name": "worktree_path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "base_sha": {
-          "name": "base_sha",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "size": {
-          "name": "size",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "priority": {
-          "name": "priority",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "position": {
-          "name": "position",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "requires_schema_change": {
-          "name": "requires_schema_change",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "held_reason": {
-          "name": "held_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_by": {
           "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pr_id": {
-          "name": "pr_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -816,8 +1309,303 @@
         }
       },
       "indexes": {
-        "phase_app_number": {
-          "name": "phase_app_number",
+        "initiative_workspace": {
+          "name": "initiative_workspace",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "initiative_workspace_id_workspace_id_fk": {
+          "name": "initiative_workspace_id_workspace_id_fk",
+          "tableFrom": "initiative",
+          "tableTo": "workspace",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "initiative_app_id_app_id_fk": {
+          "name": "initiative_app_id_app_id_fk",
+          "tableFrom": "initiative",
+          "tableTo": "app",
+          "columnsFrom": [
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "initiative_status": {
+          "name": "initiative_status",
+          "value": "\"initiative\".\"status\" in ('planned', 'active', 'completed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.initiative_project": {
+      "name": "initiative_project",
+      "schema": "",
+      "columns": {
+        "initiative_id": {
+          "name": "initiative_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "initiative_project_initiative_id_initiative_id_fk": {
+          "name": "initiative_project_initiative_id_initiative_id_fk",
+          "tableFrom": "initiative_project",
+          "tableTo": "initiative",
+          "columnsFrom": [
+            "initiative_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "initiative_project_project_id_project_id_fk": {
+          "name": "initiative_project_project_id_project_id_fk",
+          "tableFrom": "initiative_project",
+          "tableTo": "project",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "initiative_project_initiative_id_project_id_pk": {
+          "name": "initiative_project_initiative_id_project_id_pk",
+          "columns": [
+            "initiative_id",
+            "project_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.issue": {
+      "name": "issue",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "number": {
+          "name": "number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'code'"
+        },
+        "parent_id": {
+          "name": "parent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cycle_id": {
+          "name": "cycle_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idea_id": {
+          "name": "idea_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "brief": {
+          "name": "brief",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'todo'"
+        },
+        "priority": {
+          "name": "priority",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "estimate": {
+          "name": "estimate",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "assignee": {
+          "name": "assignee",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delegate": {
+          "name": "delegate",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "waiting_on": {
+          "name": "waiting_on",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'person'"
+        },
+        "source_ref": {
+          "name": "source_ref",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "canceled_at": {
+          "name": "canceled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closed_by": {
+          "name": "closed_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "issue_app_number": {
+          "name": "issue_app_number",
           "columns": [
             {
               "expression": "app_id",
@@ -837,11 +1625,38 @@
           "method": "btree",
           "with": {}
         },
-        "phase_plan": {
-          "name": "phase_plan",
+        "issue_id_app": {
+          "name": "issue_id_app",
           "columns": [
             {
-              "expression": "plan_id",
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "issue_app_state": {
+          "name": "issue_app_state",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -852,11 +1667,26 @@
           "method": "btree",
           "with": {}
         },
-        "phase_task": {
-          "name": "phase_task",
+        "issue_project": {
+          "name": "issue_project",
           "columns": [
             {
-              "expression": "task_id",
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "issue_parent": {
+          "name": "issue_parent",
+          "columns": [
+            {
+              "expression": "parent_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -869,9 +1699,9 @@
         }
       },
       "foreignKeys": {
-        "phase_app_id_app_id_fk": {
-          "name": "phase_app_id_app_id_fk",
-          "tableFrom": "phase",
+        "issue_app_id_app_id_fk": {
+          "name": "issue_app_id_app_id_fk",
+          "tableFrom": "issue",
           "tableTo": "app",
           "columnsFrom": [
             "app_id"
@@ -882,12 +1712,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "phase_plan_id_plan_id_fk": {
-          "name": "phase_plan_id_plan_id_fk",
-          "tableFrom": "phase",
-          "tableTo": "plan",
+        "issue_parent_id_issue_id_fk": {
+          "name": "issue_parent_id_issue_id_fk",
+          "tableFrom": "issue",
+          "tableTo": "issue",
           "columnsFrom": [
-            "plan_id"
+            "parent_id"
           ],
           "columnsTo": [
             "id"
@@ -895,60 +1725,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "phase_task_id_task_id_fk": {
-          "name": "phase_task_id_task_id_fk",
-          "tableFrom": "phase",
-          "tableTo": "task",
+        "issue_project_id_project_id_fk": {
+          "name": "issue_project_id_project_id_fk",
+          "tableFrom": "issue",
+          "tableTo": "project",
           "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "phase_status": {
-          "name": "phase_status",
-          "value": "\"phase\".\"status\" in ('queued', 'ready', 'running', 'awaiting_answer', 'merging', 'testing', 'done', 'failed', 'cancelled')"
-        },
-        "phase_size": {
-          "name": "phase_size",
-          "value": "\"phase\".\"size\" is null or \"phase\".\"size\" in ('S', 'M', 'L', 'XL')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.phase_dependency": {
-      "name": "phase_dependency",
-      "schema": "",
-      "columns": {
-        "phase_id": {
-          "name": "phase_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "depends_on_phase_id": {
-          "name": "depends_on_phase_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "phase_dependency_phase_id_phase_id_fk": {
-          "name": "phase_dependency_phase_id_phase_id_fk",
-          "tableFrom": "phase_dependency",
-          "tableTo": "phase",
-          "columnsFrom": [
-            "phase_id"
+            "project_id"
           ],
           "columnsTo": [
             "id"
@@ -956,144 +1738,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "phase_dependency_depends_on_phase_id_phase_id_fk": {
-          "name": "phase_dependency_depends_on_phase_id_phase_id_fk",
-          "tableFrom": "phase_dependency",
-          "tableTo": "phase",
+        "issue_cycle_id_cycle_id_fk": {
+          "name": "issue_cycle_id_cycle_id_fk",
+          "tableFrom": "issue",
+          "tableTo": "cycle",
           "columnsFrom": [
-            "depends_on_phase_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "phase_dependency_phase_id_depends_on_phase_id_pk": {
-          "name": "phase_dependency_phase_id_depends_on_phase_id_pk",
-          "columns": [
-            "phase_id",
-            "depends_on_phase_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.phase_file_claim": {
-      "name": "phase_file_claim",
-      "schema": "",
-      "columns": {
-        "phase_id": {
-          "name": "phase_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "path": {
-          "name": "path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "phase_file_claim_phase_id_phase_id_fk": {
-          "name": "phase_file_claim_phase_id_phase_id_fk",
-          "tableFrom": "phase_file_claim",
-          "tableTo": "phase",
-          "columnsFrom": [
-            "phase_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "phase_file_claim_phase_id_path_pk": {
-          "name": "phase_file_claim_phase_id_path_pk",
-          "columns": [
-            "phase_id",
-            "path"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.plan": {
-      "name": "plan",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "app_id": {
-          "name": "app_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "idea_id": {
-          "name": "idea_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'drafting'"
-        },
-        "integration_branch": {
-          "name": "integration_branch",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "spec": {
-          "name": "spec",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "plan_app_id_app_id_fk": {
-          "name": "plan_app_id_app_id_fk",
-          "tableFrom": "plan",
-          "tableTo": "app",
-          "columnsFrom": [
-            "app_id"
+            "cycle_id"
           ],
           "columnsTo": [
             "id"
@@ -1101,9 +1751,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "plan_idea_id_idea_id_fk": {
-          "name": "plan_idea_id_idea_id_fk",
-          "tableFrom": "plan",
+        "issue_idea_id_idea_id_fk": {
+          "name": "issue_idea_id_idea_id_fk",
+          "tableFrom": "issue",
           "tableTo": "idea",
           "columnsFrom": [
             "idea_id"
@@ -1113,15 +1763,439 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "issue_parent_app_fk": {
+          "name": "issue_parent_app_fk",
+          "tableFrom": "issue",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "parent_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "issue_project_app_fk": {
+          "name": "issue_project_app_fk",
+          "tableFrom": "issue",
+          "tableTo": "project",
+          "columnsFrom": [
+            "project_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "issue_cycle_app_fk": {
+          "name": "issue_cycle_app_fk",
+          "tableFrom": "issue",
+          "tableTo": "cycle",
+          "columnsFrom": [
+            "cycle_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "issue_idea_app_fk": {
+          "name": "issue_idea_app_fk",
+          "tableFrom": "issue",
+          "tableTo": "idea",
+          "columnsFrom": [
+            "idea_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "plan_status": {
-          "name": "plan_status",
-          "value": "\"plan\".\"status\" in ('drafting', 'proposed', 'approved', 'running', 'landed', 'superseded')"
+        "issue_kind": {
+          "name": "issue_kind",
+          "value": "\"issue\".\"kind\" in ('code', 'todo')"
+        },
+        "issue_state": {
+          "name": "issue_state",
+          "value": "\"issue\".\"state\" in ('triage', 'backlog', 'todo', 'in_progress', 'in_review', 'done', 'canceled', 'duplicate')"
+        },
+        "issue_source": {
+          "name": "issue_source",
+          "value": "\"issue\".\"source\" in ('person', 'agent', 'idea', 'planner', 'builder')"
+        },
+        "issue_delegate": {
+          "name": "issue_delegate",
+          "value": "\"issue\".\"delegate\" is null or \"issue\".\"delegate\" in ('builder', 'planner', 'agent')"
+        },
+        "issue_priority": {
+          "name": "issue_priority",
+          "value": "\"issue\".\"priority\" between 0 and 4"
+        },
+        "issue_estimate": {
+          "name": "issue_estimate",
+          "value": "\"issue\".\"estimate\" is null or \"issue\".\"estimate\" in ('S', 'M', 'L', 'XL')"
+        },
+        "issue_canceled_reason": {
+          "name": "issue_canceled_reason",
+          "value": "\"issue\".\"state\" <> 'canceled' or \"issue\".\"reason\" is not null or \"issue\".\"parent_id\" is not null"
+        },
+        "issue_not_own_parent": {
+          "name": "issue_not_own_parent",
+          "value": "\"issue\".\"parent_id\" is null or \"issue\".\"parent_id\" <> \"issue\".\"id\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.issue_relation": {
+      "name": "issue_relation",
+      "schema": "",
+      "columns": {
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issue_id": {
+          "name": "issue_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "related_issue_id": {
+          "name": "related_issue_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "issue_relation_related": {
+          "name": "issue_relation_related",
+          "columns": [
+            {
+              "expression": "related_issue_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "issue_relation_app_id_app_id_fk": {
+          "name": "issue_relation_app_id_app_id_fk",
+          "tableFrom": "issue_relation",
+          "tableTo": "app",
+          "columnsFrom": [
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "issue_relation_issue_id_issue_id_fk": {
+          "name": "issue_relation_issue_id_issue_id_fk",
+          "tableFrom": "issue_relation",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "issue_relation_related_issue_id_issue_id_fk": {
+          "name": "issue_relation_related_issue_id_issue_id_fk",
+          "tableFrom": "issue_relation",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "related_issue_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "issue_relation_issue_app_fk": {
+          "name": "issue_relation_issue_app_fk",
+          "tableFrom": "issue_relation",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "issue_relation_related_app_fk": {
+          "name": "issue_relation_related_app_fk",
+          "tableFrom": "issue_relation",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "related_issue_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "issue_relation_issue_id_related_issue_id_type_pk": {
+          "name": "issue_relation_issue_id_related_issue_id_type_pk",
+          "columns": [
+            "issue_id",
+            "related_issue_id",
+            "type"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "issue_relation_type": {
+          "name": "issue_relation_type",
+          "value": "\"issue_relation\".\"type\" in ('blocks', 'related', 'duplicate')"
+        },
+        "issue_relation_self": {
+          "name": "issue_relation_self",
+          "value": "\"issue_relation\".\"issue_id\" <> \"issue_relation\".\"related_issue_id\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.outside_pr": {
+      "name": "outside_pr",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "repo_id": {
+          "name": "repo_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "number": {
+          "name": "number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "author": {
+          "name": "author",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "draft": {
+          "name": "draft",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "head_branch": {
+          "name": "head_branch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_branch": {
+          "name": "base_branch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "review_requested": {
+          "name": "review_requested",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "review_decision": {
+          "name": "review_decision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "files": {
+          "name": "files",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "synced_at": {
+          "name": "synced_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "outside_pr_repo_number": {
+          "name": "outside_pr_repo_number",
+          "columns": [
+            {
+              "expression": "repo_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "outside_pr_app": {
+          "name": "outside_pr_app",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "outside_pr_app_id_app_id_fk": {
+          "name": "outside_pr_app_id_app_id_fk",
+          "tableFrom": "outside_pr",
+          "tableTo": "app",
+          "columnsFrom": [
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "outside_pr_repo_id_repo_id_fk": {
+          "name": "outside_pr_repo_id_repo_id_fk",
+          "tableFrom": "outside_pr",
+          "tableTo": "repo",
+          "columnsFrom": [
+            "repo_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "outside_pr_state": {
+          "name": "outside_pr_state",
+          "value": "\"outside_pr\".\"state\" in ('open', 'merged', 'closed')"
         }
       },
       "isRLSEnabled": false
@@ -1136,14 +2210,26 @@
           "primaryKey": true,
           "notNull": true
         },
-        "plan_id": {
-          "name": "plan_id",
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
         "repo_id": {
           "name": "repo_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "issue_id": {
+          "name": "issue_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1260,15 +2346,49 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "pr_app": {
+          "name": "pr_app",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
-        "pr_plan_id_plan_id_fk": {
-          "name": "pr_plan_id_plan_id_fk",
+        "pr_app_id_app_id_fk": {
+          "name": "pr_app_id_app_id_fk",
           "tableFrom": "pr",
-          "tableTo": "plan",
+          "tableTo": "app",
           "columnsFrom": [
-            "plan_id"
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "pr_project_id_project_id_fk": {
+          "name": "pr_project_id_project_id_fk",
+          "tableFrom": "pr",
+          "tableTo": "project",
+          "columnsFrom": [
+            "project_id"
           ],
           "columnsTo": [
             "id"
@@ -1288,6 +2408,34 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "pr_issue_id_issue_id_fk": {
+          "name": "pr_issue_id_issue_id_fk",
+          "tableFrom": "pr",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "pr_project_app_fk": {
+          "name": "pr_project_app_fk",
+          "tableFrom": "pr",
+          "tableTo": "project",
+          "columnsFrom": [
+            "project_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1297,6 +2445,201 @@
         "pr_status": {
           "name": "pr_status",
           "value": "\"pr\".\"status\" in ('draft', 'open', 'queued', 'merged', 'closed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.project": {
+      "name": "project",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idea_id": {
+          "name": "idea_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'drafting'"
+        },
+        "integration_branch": {
+          "name": "integration_branch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lead": {
+          "name": "lead",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "priority": {
+          "name": "priority",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "start_date": {
+          "name": "start_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "target_date": {
+          "name": "target_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "project_id_app": {
+          "name": "project_id_app",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "project_app": {
+          "name": "project_app",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "project_app_id_app_id_fk": {
+          "name": "project_app_id_app_id_fk",
+          "tableFrom": "project",
+          "tableTo": "app",
+          "columnsFrom": [
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "project_idea_id_idea_id_fk": {
+          "name": "project_idea_id_idea_id_fk",
+          "tableFrom": "project",
+          "tableTo": "idea",
+          "columnsFrom": [
+            "idea_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "project_idea_app_fk": {
+          "name": "project_idea_app_fk",
+          "tableFrom": "project",
+          "tableTo": "idea",
+          "columnsFrom": [
+            "idea_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "project_status": {
+          "name": "project_status",
+          "value": "\"project\".\"status\" in ('drafting', 'proposed', 'approved', 'running', 'paused', 'landed', 'stopped', 'superseded')"
+        },
+        "project_priority": {
+          "name": "project_priority",
+          "value": "\"project\".\"priority\" between 0 and 4"
         }
       },
       "isRLSEnabled": false
@@ -1420,26 +2763,26 @@
           "primaryKey": true,
           "notNull": true
         },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "idea_id": {
           "name": "idea_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "plan_id": {
-          "name": "plan_id",
+        "project_id": {
+          "name": "project_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "task_id": {
-          "name": "task_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "phase_id": {
-          "name": "phase_id",
+        "issue_id": {
+          "name": "issue_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1507,8 +2850,74 @@
           "default": "now()"
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
+      "indexes": {
+        "question_app": {
+          "name": "question_app",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "question_project": {
+          "name": "question_project",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "question_app_id_app_id_fk": {
+          "name": "question_app_id_app_id_fk",
+          "tableFrom": "question",
+          "tableTo": "app",
+          "columnsFrom": [
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "question_project_app_fk": {
+          "name": "question_project_app_fk",
+          "tableFrom": "question",
+          "tableTo": "project",
+          "columnsFrom": [
+            "project_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1562,7 +2971,23 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "repo_app": {
+          "name": "repo_app",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "repo_app_id_app_id_fk": {
           "name": "repo_app_id_app_id_fk",
@@ -1594,14 +3019,14 @@
           "primaryKey": true,
           "notNull": true
         },
-        "phase_id": {
-          "name": "phase_id",
+        "app_id": {
+          "name": "app_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "task_id": {
-          "name": "task_id",
+        "issue_id": {
+          "name": "issue_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1700,11 +3125,32 @@
         }
       },
       "indexes": {
-        "run_phase": {
-          "name": "run_phase",
+        "run_issue": {
+          "name": "run_issue",
           "columns": [
             {
-              "expression": "phase_id",
+              "expression": "issue_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "run_app": {
+          "name": "run_app",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1717,12 +3163,12 @@
         }
       },
       "foreignKeys": {
-        "run_phase_id_phase_id_fk": {
-          "name": "run_phase_id_phase_id_fk",
+        "run_app_id_app_id_fk": {
+          "name": "run_app_id_app_id_fk",
           "tableFrom": "run",
-          "tableTo": "phase",
+          "tableTo": "app",
           "columnsFrom": [
-            "phase_id"
+            "app_id"
           ],
           "columnsTo": [
             "id"
@@ -1730,12 +3176,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "run_task_id_task_id_fk": {
-          "name": "run_task_id_task_id_fk",
+        "run_issue_id_issue_id_fk": {
+          "name": "run_issue_id_issue_id_fk",
           "tableFrom": "run",
-          "tableTo": "task",
+          "tableTo": "issue",
           "columnsFrom": [
-            "task_id"
+            "issue_id"
           ],
           "columnsTo": [
             "id"
@@ -1752,6 +3198,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "run_issue_app_fk": {
+          "name": "run_issue_app_fk",
+          "tableFrom": "run",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -1782,11 +3243,66 @@
           "primaryKey": true,
           "notNull": true
         },
-        "phase_id": {
-          "name": "phase_id",
+        "app_id": {
+          "name": "app_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'talk'"
+        },
+        "issue_id": {
+          "name": "issue_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cwd": {
+          "name": "cwd",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "branch": {
+          "name": "branch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "worktree_path": {
+          "name": "worktree_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subject": {
+          "name": "subject",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subject_ref": {
+          "name": "subject_ref",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "agent_session_id": {
+          "name": "agent_session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "status": {
           "name": "status",
@@ -1807,19 +3323,103 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "last_active_at": {
+          "name": "last_active_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "auto_approve": {
+          "name": "auto_approve",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'cheap'"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "session_id_app": {
+          "name": "session_id_app",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "session_app": {
+          "name": "session_app",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
-        "session_phase_id_phase_id_fk": {
-          "name": "session_phase_id_phase_id_fk",
+        "session_app_id_app_id_fk": {
+          "name": "session_app_id_app_id_fk",
           "tableFrom": "session",
-          "tableTo": "phase",
+          "tableTo": "app",
           "columnsFrom": [
-            "phase_id"
+            "app_id"
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "session_issue_id_issue_id_fk": {
+          "name": "session_issue_id_issue_id_fk",
+          "tableFrom": "session",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "session_issue_app_fk": {
+          "name": "session_issue_app_fk",
+          "tableFrom": "session",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -1832,6 +3432,14 @@
         "session_status": {
           "name": "session_status",
           "value": "\"session\".\"status\" in ('open', 'ended')"
+        },
+        "session_kind": {
+          "name": "session_kind",
+          "value": "\"session\".\"kind\" in ('talk', 'issue')"
+        },
+        "session_auto_approve": {
+          "name": "session_auto_approve",
+          "value": "\"session\".\"auto_approve\" in ('free', 'cheap', 'moderate')"
         }
       },
       "isRLSEnabled": false
@@ -1846,6 +3454,12 @@
           "primaryKey": true,
           "notNull": true
         },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "session_id": {
           "name": "session_id",
           "type": "text",
@@ -1858,11 +3472,24 @@
           "primaryKey": false,
           "notNull": true
         },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'text'"
+        },
         "body": {
           "name": "body",
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "attachments": {
           "name": "attachments",
@@ -1875,7 +3502,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'queued'"
+          "default": "'sent'"
         },
         "queued_at": {
           "name": "queued_at",
@@ -1891,8 +3518,43 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "session_message_session": {
+          "name": "session_message_session",
+          "columns": [
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
+        "session_message_app_id_app_id_fk": {
+          "name": "session_message_app_id_app_id_fk",
+          "tableFrom": "session_message",
+          "tableTo": "app",
+          "columnsFrom": [
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "session_message_session_id_session_id_fk": {
           "name": "session_message_session_id_session_id_fk",
           "tableFrom": "session_message",
@@ -1902,6 +3564,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "session_message_session_app_fk": {
+          "name": "session_message_session_app_fk",
+          "tableFrom": "session_message",
+          "tableTo": "session",
+          "columnsFrom": [
+            "session_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -1928,8 +3605,14 @@
           "primaryKey": true,
           "notNull": true
         },
-        "phase_id": {
-          "name": "phase_id",
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issue_id": {
+          "name": "issue_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -1968,11 +3651,11 @@
         }
       },
       "indexes": {
-        "step_phase": {
-          "name": "step_phase",
+        "step_issue": {
+          "name": "step_issue",
           "columns": [
             {
-              "expression": "phase_id",
+              "expression": "issue_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1985,15 +3668,43 @@
         }
       },
       "foreignKeys": {
-        "step_phase_id_phase_id_fk": {
-          "name": "step_phase_id_phase_id_fk",
+        "step_app_id_app_id_fk": {
+          "name": "step_app_id_app_id_fk",
           "tableFrom": "step",
-          "tableTo": "phase",
+          "tableTo": "app",
           "columnsFrom": [
-            "phase_id"
+            "app_id"
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "step_issue_id_issue_id_fk": {
+          "name": "step_issue_id_issue_id_fk",
+          "tableFrom": "step",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "step_issue_app_fk": {
+          "name": "step_issue_app_fk",
+          "tableFrom": "step",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -2010,13 +3721,13 @@
       },
       "isRLSEnabled": false
     },
-    "public.task": {
-      "name": "task",
+    "public.summary": {
+      "name": "summary",
       "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "bigserial",
           "primaryKey": true,
           "notNull": true
         },
@@ -2026,48 +3737,48 @@
           "primaryKey": false,
           "notNull": true
         },
-        "plan_id": {
-          "name": "plan_id",
+        "section": {
+          "name": "section",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "idea_id": {
-          "name": "idea_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "number": {
-          "name": "number",
-          "type": "integer",
+        "body": {
+          "name": "body",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": true
         },
-        "position": {
-          "name": "position",
-          "type": "integer",
+        "facts": {
+          "name": "facts",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "through_seq": {
+          "name": "through_seq",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true,
           "default": 0
         },
-        "title": {
-          "name": "title",
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cost_usd": {
+          "name": "cost_usd",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trigger": {
+          "name": "trigger",
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "brief": {
-          "name": "brief",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -2075,17 +3786,11 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
-        "task_app_number": {
-          "name": "task_app_number",
+        "summary_app_section": {
+          "name": "summary_app_section",
           "columns": [
             {
               "expression": "app_id",
@@ -2094,22 +3799,13 @@
               "nulls": "last"
             },
             {
-              "expression": "number",
+              "expression": "section",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "task_plan": {
-          "name": "task_plan",
-          "columns": [
+            },
             {
-              "expression": "plan_id",
+              "expression": "id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2122,38 +3818,12 @@
         }
       },
       "foreignKeys": {
-        "task_app_id_app_id_fk": {
-          "name": "task_app_id_app_id_fk",
-          "tableFrom": "task",
+        "summary_app_id_app_id_fk": {
+          "name": "summary_app_id_app_id_fk",
+          "tableFrom": "summary",
           "tableTo": "app",
           "columnsFrom": [
             "app_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "task_plan_id_plan_id_fk": {
-          "name": "task_plan_id_plan_id_fk",
-          "tableFrom": "task",
-          "tableTo": "plan",
-          "columnsFrom": [
-            "plan_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "task_idea_id_idea_id_fk": {
-          "name": "task_idea_id_idea_id_fk",
-          "tableFrom": "task",
-          "tableTo": "idea",
-          "columnsFrom": [
-            "idea_id"
           ],
           "columnsTo": [
             "id"
@@ -2165,7 +3835,16 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "summary_section": {
+          "name": "summary_section",
+          "value": "\"summary\".\"section\" in ('focus')"
+        },
+        "summary_trigger": {
+          "name": "summary_trigger",
+          "value": "\"summary\".\"trigger\" in ('person', 'schedule')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.user": {
@@ -2254,8 +3933,14 @@
           "primaryKey": true,
           "notNull": true
         },
-        "phase_id": {
-          "name": "phase_id",
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issue_id": {
+          "name": "issue_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -2317,11 +4002,11 @@
         }
       },
       "indexes": {
-        "verification_phase_name": {
-          "name": "verification_phase_name",
+        "verification_issue_name": {
+          "name": "verification_issue_name",
           "columns": [
             {
-              "expression": "phase_id",
+              "expression": "issue_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2337,15 +4022,43 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "verification_app": {
+          "name": "verification_app",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
-        "verification_phase_id_phase_id_fk": {
-          "name": "verification_phase_id_phase_id_fk",
+        "verification_app_id_app_id_fk": {
+          "name": "verification_app_id_app_id_fk",
           "tableFrom": "verification",
-          "tableTo": "phase",
+          "tableTo": "app",
           "columnsFrom": [
-            "phase_id"
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "verification_issue_id_issue_id_fk": {
+          "name": "verification_issue_id_issue_id_fk",
+          "tableFrom": "verification",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id"
           ],
           "columnsTo": [
             "id"
@@ -2375,6 +4088,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "verification_issue_app_fk": {
+          "name": "verification_issue_app_fk",
+          "tableFrom": "verification",
+          "tableTo": "issue",
+          "columnsFrom": [
+            "issue_id",
+            "app_id"
+          ],
+          "columnsTo": [
+            "id",
+            "app_id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -2410,6 +4138,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "settings": {
+          "name": "settings",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
         },
         "created_at": {
           "name": "created_at",

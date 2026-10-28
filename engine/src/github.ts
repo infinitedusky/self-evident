@@ -12,9 +12,10 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { and, eq, inArray, isNotNull, notInArray } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, outsidePr, pr as prTable, project, repo, task } from './db/schema.js'
+import { app, issue, outsidePr, pr as prTable, project, repo } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { addWorktree, branchExists, git, headSha, isAncestor, mergeInto, push, removeWorktree, fastForward } from './git.js'
+import { setState } from './issues.js'
 import { withLock } from './landing.js'
 
 const execFileP = promisify(execFile)
@@ -61,7 +62,7 @@ export async function syncPrs(appId: string, api: GitHubApi = ghCli) {
     const ours = await db.select().from(prTable).where(eq(prTable.appId, appId))
     for (const g of all) {
       const known = ours.find((x) => x.number === g.number && (x.repoId === r.id || !x.repoId))
-      const p = projects.find((x) => x.integrationBranch === g.headRefName || g.headRefName.startsWith(`${x.integrationBranch}--t`)) // the project's branch, or one of its task branches
+      const p = projects.find((x) => x.integrationBranch === g.headRefName || g.headRefName.startsWith(`${x.integrationBranch}--`)) // the project's branch, or one of its issue branches
       if (!known && !p) { await keepOutside(appId, r.id, g, me); continue } // not ours: a teammate's, or opened by hand
       if (!known) continue // our branch, but a PR we never recorded: leave it
       const checks = checksOf(g.statusCheckRollup)
@@ -74,10 +75,11 @@ export async function syncPrs(appId: string, api: GitHubApi = ghCli) {
       const base = { workspaceId: a.workspaceId, appId, projectId, actor: 'github' }
       const say = async (type: string, payload: Record<string, unknown>) => { changes.push(`#${g.number} ${type}`); await db.transaction((tx) => appendEvent(tx, { ...base, type, payload: { number: g.number, url: g.url, ...payload } })) }
       if (before.status !== status && (status === 'merged' || status === 'closed')) await say(`pr.${status}`, { title: g.title })
+      if (before.status !== status && status === 'merged') await mergedDone(projectId, before.issueId) // Linear's way: the PR merged, its issues are done
       if ((prev.review ?? null) !== signals.review && signals.review) await say('pr.review', { decision: signals.review })
       if ((prev.checks ?? 'none') !== signals.checks && signals.checks !== 'pending') await say('pr.checks', { state: signals.checks, failing: signals.failing })
     }
-    // A stack: once the PR a task's PR was stacked on has merged (or closed), point the next one at main.
+    // A stack: once the PR an issue's PR was stacked on has merged (or closed), point the next one at main.
     const rows = await db.select().from(prTable).where(eq(prTable.appId, appId))
     for (const q of rows.filter((x) => ['open', 'draft'].includes(x.status) && x.number && x.baseBranch && x.baseBranch !== a.defaultBranch)) {
       const below = rows.find((x) => x.headBranch === q.baseBranch && x.projectId === q.projectId)
@@ -85,10 +87,19 @@ export async function syncPrs(appId: string, api: GitHubApi = ghCli) {
       await api.retarget(r.fullName, q.number!, a.defaultBranch, r.localPath!)
       await db.update(prTable).set({ baseBranch: a.defaultBranch }).where(eq(prTable.id, q.id))
       changes.push(`#${q.number} retargeted`)
-      await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId, projectId: q.projectId, ...(q.taskId ? { taskId: q.taskId } : {}), actor: 'github', type: 'pr.retargeted', payload: { number: q.number, base: a.defaultBranch, after: below.number } }))
+      await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId, projectId: q.projectId, ...(q.issueId ? { issueId: q.issueId } : {}), actor: 'github', type: 'pr.retargeted', payload: { number: q.number, base: a.defaultBranch, after: below.number } }))
     }
   }
   return { me, changes }
+}
+
+/** A PR merged: the code issues it carried are done (one issue's, when stacked; else every issue of the project in review). */
+async function mergedDone(projectId: string, issueId: string | null) {
+  await db.transaction(async (tx) => {
+    const rows = issueId ? await tx.select().from(issue).where(eq(issue.id, issueId))
+      : await tx.select().from(issue).where(and(eq(issue.projectId, projectId), eq(issue.kind, 'code'), eq(issue.state, 'in_review')))
+    for (const i of rows.filter((x) => !x.parentId && x.state === 'in_review')) await setState(tx, i, 'done', { actor: 'github' })
+  })
 }
 
 async function keepOutside(appId: string, repoId: string, g: GhPr, me: string) {
@@ -108,8 +119,8 @@ async function keepOutside(appId: string, repoId: string, g: GhPr, me: string) {
 
 /**
  * Main moved: merge it into a project's open branches, in a scratch worktree, under the landing lock. One PR per
- * project: the project's branch, from main. Stacked PRs: each task branch with an open PR, from what it is stacked
- * on (main, or the task branch below it, already caught up in this pass). Pushed when the branch has a PR. A
+ * project: the project's branch, from main. Stacked PRs: each issue branch with an open PR, from what it is stacked
+ * on (main, or the issue branch below it, already caught up in this pass). Pushed when the branch has a PR. A
  * conflict is reported, not resolved.
  */
 export async function catchUp(projectId: string): Promise<{ state: 'current' | 'caught_up' | 'conflict' | 'skipped'; files?: string; commits?: number }> {
@@ -121,12 +132,12 @@ export async function catchUp(projectId: string): Promise<{ state: 'current' | '
   const main = `origin/${a.defaultBranch}`
   if ((await git(r.localPath, ['rev-parse', '--verify', '-q', main], { allowFail: true })).code !== 0) return { state: 'skipped' }
   const prs = await db.select().from(prTable).where(eq(prTable.projectId, p.id))
-  const tasks = await db.select().from(task).where(eq(task.projectId, p.id))
-  const stacked = prs.filter((q) => q.taskId && q.headBranch && ['open', 'draft'].includes(q.status))
-    .sort((x, y) => (tasks.find((t) => t.id === x.taskId)?.position ?? 0) - (tasks.find((t) => t.id === y.taskId)?.position ?? 0))
+  const issues = await db.select().from(issue).where(eq(issue.projectId, p.id))
+  const stacked = prs.filter((q) => q.issueId && q.headBranch && ['open', 'draft'].includes(q.status))
+    .sort((x, y) => (issues.find((t) => t.id === x.issueId)?.sortOrder ?? 0) - (issues.find((t) => t.id === y.issueId)?.sortOrder ?? 0))
   const targets = stacked.length
     ? stacked.map((q) => ({ branch: q.headBranch!, from: q.baseBranch && q.baseBranch !== a.defaultBranch ? q.baseBranch : main, pushed: true }))
-    : [{ branch: p.integrationBranch, from: main, pushed: prs.some((q) => !q.taskId && q.number) }]
+    : [{ branch: p.integrationBranch, from: main, pushed: prs.some((q) => !q.issueId && q.number) }]
   return withLock(`land:${projectId}`, async () => {
     let result: { state: 'current' | 'caught_up' | 'conflict' | 'skipped'; files?: string; commits?: number } = { state: 'current' }
     for (const t of targets) {

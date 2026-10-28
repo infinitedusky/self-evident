@@ -9,6 +9,7 @@
  *   expensive hard to undo or outward-facing: main, force, deletes, merges, publishing, anything outside the checkout
  */
 import { resolve, sep } from 'node:path'
+import { reaRisk } from './skills.js'
 
 export type Risk = 'free' | 'cheap' | 'moderate' | 'expensive'
 export const RISKS: Risk[] = ['free', 'cheap', 'moderate', 'expensive']
@@ -16,27 +17,34 @@ export const rank = (r: Risk) => RISKS.indexOf(r)
 
 export interface RiskContext { cwd: string; branch?: string | null } // branch: what the checkout at cwd has checked out
 
-const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch'])
+const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']) // Skill loads instructions; what they lead to is rated on its own
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
-const ENGINE_FREE = new Set(['now', 'projects', 'project_graph', 'ideas', 'events', 'todos'])
+const ENGINE_FREE = new Set(['now', 'projects', 'project_graph', 'issue', 'issues', 'ideas', 'events', 'todos', 'initiatives', 'cycles'])
 const ENGINE: Record<string, [Risk, string]> = {
   create_idea: ['cheap', 'keeps an idea; easy to drop'],
   create_project: ['cheap', 'a draft project; nothing runs'],
-  plan_task: ['moderate', 'runs the planner: minutes and money'],
+  create_issue: ['cheap', 'an issue; easy to cancel'],
+  update_issue: ['cheap', 'edits an issue; easy to change back'],
+  set_issue_state: ['cheap', 'moves an issue; moving it back undoes it'],
+  reorder_issues: ['cheap', 'changes the order; reorder undoes it'],
+  plan_issue: ['moderate', 'runs the planner: minutes and money'],
   answer_question: ['moderate', "answers a question on the person's behalf"],
   cancel_project: ['moderate', 'stops running agents'],
-  retry_phase: ['moderate', 'runs an agent again: minutes and money'],
+  retry_build: ['moderate', 'runs an agent again: minutes and money'],
   pause_project: ['cheap', 'stops agents, keeps their place; resume undoes it'],
   resume_project: ['moderate', 'runs agents again: minutes and money'],
-  backlog_add: ['cheap', 'a line on a project\'s backlog; easy to drop'],
-  backlog_cover: ['cheap', 'marks an item covered by a task; reopen undoes it'],
-  backlog_drop: ['cheap', 'drops an item with a reason; reopen undoes it'],
-  backlog_task: ['moderate', 'adds a task; in a running project the planner runs on it'],
+  backlog_add: ['cheap', 'an issue in a project\'s backlog; easy to drop'],
+  backlog_duplicate: ['cheap', 'marks a backlog issue covered by another; reopen undoes it'],
+  backlog_drop: ['cheap', 'cancels a backlog issue with a reason; reopen undoes it'],
+  backlog_take: ['moderate', 'takes a backlog issue on; in a running project the planner runs on it'],
   create_todo: ['cheap', 'a to-do with a checklist; easy to drop'],
   update_todo: ['cheap', 'edits a to-do; easy to change back'],
   check_item: ['cheap', 'checks a line off; uncheck undoes it'],
   finish_todo: ['cheap', 'closes a to-do; reopen undoes it'],
-  backlog_todo: ['cheap', 'moves a backlog item to a to-do; reopen undoes it'],
+  backlog_todo: ['cheap', 'makes a backlog issue a to-do; easy to change back'],
+  create_initiative: ['cheap', 'states a goal; easy to change'],
+  update_initiative: ['cheap', 'edits a goal; easy to change back'],
+  create_cycle: ['cheap', 'a stretch of time with its issues; easy to change'],
   sync_github: ['cheap', 'reads GitHub; merges main into open project branches, conflicts only reported'],
   start_project: ['expensive', 'runs agents, spends money, opens a pull request'],
 }
@@ -54,6 +62,7 @@ export function riskOf(tool: string, input: Record<string, unknown>, ctx: RiskCo
     const e = ENGINE[name]
     return e ? { risk: e[0], why: e[1] } : { risk: 'moderate', why: 'an engine action' }
   }
+  if (tool.startsWith('mcp__rea__')) return reaRisk(tool.slice('mcp__rea__'.length))
   if (EDIT_TOOLS.has(tool)) {
     const file = String(input.file_path ?? input.notebook_path ?? '')
     const root = resolve(ctx.cwd) + sep

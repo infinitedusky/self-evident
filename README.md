@@ -22,8 +22,8 @@ pnpm dev          # Postgres (Docker) + the engine + the UI → http://localhost
 
 You need Docker, Node 24, pnpm, and Claude Code signed in (the agents run on your Claude login in development;
 a product deployment sets `ANTHROPIC_API_KEY`). First run: **Settings** → add an app (a repo with a local
-checkout, its test command), then **Ideate** → keep an idea → make it a task → **Plan** → Plan it. The planner reads
-the repo and comes back with phases, decisions and the questions it could not settle. The agent in the corner
+checkout, its test command), then **Ideate** → keep an idea → make it an issue → **Plan** → Plan it. The planner reads
+the repo and comes back with sub-issues, decisions and the questions it could not settle. The agent in the corner
 (or ⌘J) knows which page you are on; ask it to do any of this for you.
 
 ## Where things stand

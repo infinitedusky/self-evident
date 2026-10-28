@@ -43,10 +43,10 @@ export function builderGuard(worktreePath: string, readTools: string[], editTool
   }
 }
 
-/** A planner: reads, and runs only shell commands that read. */
-export function readerGuard(readTools: string[]): Guard {
+/** A planner: reads, and runs only shell commands that read. `reads` admits other tools that only read (REA's free ones). */
+export function readerGuard(readTools: string[], reads: (tool: string) => boolean = () => false): Guard {
   return (tool, input) => {
-    if (readTools.includes(tool)) return { allow: true }
+    if (readTools.includes(tool) || reads(tool)) return { allow: true }
     if (tool === 'StructuredOutput') return { allow: true } // how the SDK hands in the planner's answer (outputFormat); it changes nothing
     if (tool === 'Bash' && READ_ONLY_BASH.test(String(input.command ?? ''))) return { allow: true }
     return { allow: false, reason: 'The planner reads; it changes nothing. Use Read, Glob, Grep, or a read-only git, ls, cat, head, tail, wc, find or tree command.' }

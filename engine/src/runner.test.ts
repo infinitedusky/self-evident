@@ -1,6 +1,6 @@
 /**
  * The runner with a fake executor against a throwaway git repo and the test database: parallel under the cap,
- * dependents after their parents land, task order, two projects at once, retries with the reason, recovery after a
+ * dependents after their parents land, issue order, two projects at once, retries with the reason, recovery after a
  * restart, steps from the builder, cleanup. The fake executor writes a file and commits, like an agent would.
  */
 import { mkdtemp, writeFile } from 'node:fs/promises'
@@ -9,13 +9,13 @@ import { join } from 'node:path'
 import { eq, inArray } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, event, phase, project, repo, run, step, workspace } from './db/schema.js'
+import { app, build, event, project, repo, run, step, workspace } from './db/schema.js'
 import type { Execute } from './executor.js'
 import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
 import { createProject, projectGraph } from './projects.js'
 import { Runner } from './runner.js'
-import { addItems, dropItem, itemToTask } from './backlog.js'
+import { addItems, dropItem, promote } from './backlog.js'
 import type { Propose } from './planner.js'
 
 let reachable = true
@@ -40,7 +40,7 @@ describe.skipIf(!reachable)('runner', () => {
     await writeFile(join(repoPath, 'README.md'), 'hi\n'); await commitAll(repoPath, 'init')
     appId = newId('app')
     await db.insert(workspace).values({ id: wsId, name: 'runner test' })
-    await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'fake app', setup: { test_cmd: 'test -f README.md' } })
+    await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'fake app', key: appId.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md' } })
     await db.insert(repo).values({ id: newId('repo'), appId, fullName: '', localPath: repoPath }) // no fullName: no PR step
   })
   afterAll(async () => {
@@ -50,14 +50,14 @@ describe.skipIf(!reachable)('runner', () => {
 
   const commits = (tag: string): Execute => async (i) => {
     await sleep(150)
-    await writeFile(join(i.worktreePath, `${tag}-${i.phase.number}.txt`), 'x\n')
-    await commitAll(i.worktreePath, `phase ${i.phase.number}`)
-    return { status: 'completed', summary: `did ${i.phase.title}`, costUsd: 0 }
+    await writeFile(join(i.worktreePath, `${tag}-${i.subIssue.identifier}.txt`), 'x\n')
+    await commitAll(i.worktreePath, `build ${i.subIssue.identifier}`)
+    return { status: 'completed', summary: `did ${i.subIssue.title}`, costUsd: 0 }
   }
-  const one = (title: string, phases: { key: string; title: string; files?: string[]; dependsOn?: string[] }[]) => ({ title, phases })
+  const one = (title: string, subIssues: { key: string; title: string; files?: string[]; dependsOn?: string[] }[]) => ({ title, subIssues })
 
   it('runs independent phases in parallel under the cap, dependents only after their parents land, then cleans up', async () => {
-    const { project: p, phases } = await createProject({ appId, title: 'parallel', tasks: [one('T', [
+    const { project: p, subIssues: phases } = await createProject({ appId, name: 'parallel', issues: [one('T', [
       { key: 'a', title: 'A', files: ['a.txt'] }, { key: 'b', title: 'B', files: ['b.txt'] }, { key: 'c', title: 'C', files: ['c.txt'] },
       { key: 'd', title: 'D', dependsOn: ['a', 'b', 'c'], files: ['d.txt'] },
     ])] })
@@ -65,7 +65,7 @@ describe.skipIf(!reachable)('runner', () => {
     let live = 0, maxLive = 0, parentsWhenDStarted: string[] = []
     const execute: Execute = async (i) => {
       live++; maxLive = Math.max(maxLive, live)
-      if (i.phase.title === 'D') parentsWhenDStarted = (await db.select().from(phase).where(inArray(phase.id, parents))).map((x) => x.status)
+      if (i.subIssue.title === 'D') parentsWhenDStarted = (await db.select().from(build).where(inArray(build.issueId, parents))).map((x) => x.status)
       try { return await commits('f')(i) } finally { live-- }
     }
     const runner = new Runner({ execute, sessionsMax: 2 })
@@ -74,99 +74,99 @@ describe.skipIf(!reachable)('runner', () => {
     expect(maxLive).toBe(2)
     expect(parentsWhenDStarted).toEqual(['done', 'done', 'done'])
     const g = (await projectGraph(p.id))!
-    expect(g.phases.map((x) => x.status)).toEqual(['done', 'done', 'done', 'done'])
-    for (const n of [1, 2, 3, 4]) expect((await git(repoPath, ['show', `${p.integrationBranch}:f-${n}.txt`])).stdout).toBe('x')
-    const held = (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => e.type === 'phase.held').map((e) => (e.payload as any).reason)
+    expect(g.subIssues.map((x) => x.status)).toEqual(['done', 'done', 'done', 'done'])
+    for (const x of g.subIssues) expect((await git(repoPath, ['show', `${p.integrationBranch}:f-${x.identifier}.txt`])).stdout).toBe('x')
+    const held = (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => e.type === 'build.held').map((e) => (e.payload as any).reason)
     expect(held.some((r) => r === 'at the session cap')).toBe(true)
     expect(held.some((r) => r.startsWith('waiting on'))).toBe(true)
     expect((await git(repoPath, ['worktree', 'list', '--porcelain'])).stdout.split('\n').filter((l) => l.includes('-worktrees/'))).toEqual([])
-    expect(g.phases.every((x) => x.worktreePath === null)).toBe(true)
+    expect(g.subIssues.every((x) => x.worktreePath === null)).toBe(true)
   })
 
-  it('task order is a dependency: a later task\'s phases start only after the earlier task\'s phases land', async () => {
-    const { project: p } = await createProject({ appId, title: 'ordered', tasks: [
+  it('issue order is a dependency: a later issue\'s sub-issues start only after the earlier issue\'s land', async () => {
+    const { project: p } = await createProject({ appId, name: 'ordered', issues: [
       one('first', [{ key: 'a', title: 'A', files: ['oa.txt'] }, { key: 'b', title: 'B', files: ['ob.txt'] }]),
       one('second', [{ key: 'c', title: 'C', files: ['oc.txt'] }]),
     ] })
     const order: string[] = []; let firstDoneWhenCStarted = false
     const runner = new Runner({ execute: async (i) => {
-      order.push(i.phase.title)
-      if (i.phase.title === 'C') firstDoneWhenCStarted = (await db.select().from(phase).where(eq(phase.projectId, p.id))).filter((x) => x.title !== 'C').every((x) => x.status === 'done')
+      order.push(i.subIssue.title)
+      if (i.subIssue.title === 'C') firstDoneWhenCStarted = (await projectGraph(p.id))!.subIssues.filter((x) => x.title !== 'C').every((x) => x.status === 'done')
       return commits('o')(i)
     }, sessionsMax: 4 })
     await runner.startProject(p.id)
     await until(cleaned(p.id))
     expect(order.indexOf('C')).toBe(2)
     expect(firstDoneWhenCStarted).toBe(true)
-    const held = (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => e.type === 'phase.held').map((e) => (e.payload as any).reason)
+    const held = (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => e.type === 'build.held').map((e) => (e.payload as any).reason)
     expect(held.some((r) => /earlier in the project/.test(r))).toBe(true)
   })
 
-  it('runs phases from different projects at once, but never two that share a file, and lands both projects', async () => {
-    const A = await createProject({ appId, title: 'project A', tasks: [one('T', [{ key: 'a1', title: 'A1', files: ['shared.txt'] }, { key: 'a2', title: 'A2', files: ['only-a.txt'] }])] })
-    const B = await createProject({ appId, title: 'project B', tasks: [one('T', [{ key: 'b1', title: 'B1', files: ['shared.txt'] }, { key: 'b2', title: 'B2', files: ['only-b.txt'] }])] })
+  it('builds sub-issues from different projects at once, but never two that share a file, and lands both projects', async () => {
+    const A = await createProject({ appId, name: 'project A', issues: [one('T', [{ key: 'a1', title: 'A1', files: ['shared.txt'] }, { key: 'a2', title: 'A2', files: ['only-a.txt'] }])] })
+    const B = await createProject({ appId, name: 'project B', issues: [one('T', [{ key: 'b1', title: 'B1', files: ['shared.txt'] }, { key: 'b2', title: 'B2', files: ['only-b.txt'] }])] })
     const live = new Set<string>(); const overlapsOnShared: string[][] = []; let maxLive = 0
     const execute: Execute = async (i) => {
-      live.add(i.phase.title); maxLive = Math.max(maxLive, live.size)
+      live.add(i.subIssue.title); maxLive = Math.max(maxLive, live.size)
       if (i.files.includes('shared.txt')) overlapsOnShared.push([...live].filter((x) => ['A1', 'B1'].includes(x)))
-      try { return await commits('x')(i) } finally { live.delete(i.phase.title) }
+      try { return await commits('x')(i) } finally { live.delete(i.subIssue.title) }
     }
     const runner = new Runner({ execute, sessionsMax: 4 })
     await runner.startProject(A.project.id); await runner.startProject(B.project.id)
     await until(async () => (await cleaned(A.project.id)()) && (await cleaned(B.project.id)()))
     expect(maxLive).toBeGreaterThanOrEqual(2)
     for (const snapshot of overlapsOnShared) expect(snapshot.length).toBe(1)
-    const held = (await db.select().from(event).where(inArray(event.projectId, [A.project.id, B.project.id]))).filter((e) => e.type === 'phase.held').map((e) => (e.payload as any).reason)
-    expect(held.some((r) => /waiting on phase #\d+ \(.+\) \(another project\)/.test(r))).toBe(true)
+    const held = (await db.select().from(event).where(inArray(event.projectId, [A.project.id, B.project.id]))).filter((e) => e.type === 'build.held').map((e) => (e.payload as any).reason)
+    expect(held.some((r) => /waiting on [A-Z0-9]+-\d+ \(.+\) \(another project\)/.test(r))).toBe(true)
   })
 
   it('retries a failed run with the reason, and gives up after max attempts', async () => {
-    const { project: p, phases } = await createProject({ appId, title: 'retries', tasks: [one('T', [{ key: 'x', title: 'X', files: ['x.txt'] }])] })
+    const { project: p, subIssues: phases } = await createProject({ appId, name: 'retries', issues: [one('T', [{ key: 'x', title: 'X', files: ['x.txt'] }])] })
     const reasons: (string | undefined)[] = []
     const runner = new Runner({ execute: async (i) => { reasons.push(i.previousFailure); return { status: 'failed', error: 'boom' } }, sessionsMax: 2 })
     await runner.startProject(p.id)
-    await until(async () => (await projectGraph(p.id))!.phases[0].status === 'failed')
-    expect((await projectGraph(p.id))!.phases[0].attempt).toBe(3)
+    await until(async () => (await projectGraph(p.id))!.subIssues[0].status === 'failed')
+    expect((await projectGraph(p.id))!.subIssues[0].attempt).toBe(3)
     expect(reasons[0]).toBeUndefined(); expect(reasons[1]).toContain('boom'); expect(reasons[2]).toContain('boom')
-    const types = (await db.select().from(event).where(eq(event.phaseId, phases[0].id))).map((e) => e.type)
-    expect(types.filter((x) => x === 'phase.retry')).toHaveLength(2)
-    expect(types.filter((x) => x === 'phase.failed')).toHaveLength(1)
+    const types = (await db.select().from(event).where(eq(event.issueId, phases[0].id))).map((e) => e.type)
+    expect(types.filter((x) => x === 'build.retry')).toHaveLength(2)
+    expect(types.filter((x) => x === 'build.failed')).toHaveLength(1)
   })
 
-  it('a person retries a failed phase: three more attempts, told why it failed, then it lands', async () => {
-    const { project: p, phases } = await createProject({ appId, title: 'retry by hand', tasks: [one('T', [{ key: 'r', title: 'R', files: ['r.txt'] }])] })
+  it('a person retries a failed sub-issue: three more attempts, told why it failed, then it lands', async () => {
+    const { project: p, subIssues: phases } = await createProject({ appId, name: 'retry by hand', issues: [one('T', [{ key: 'r', title: 'R', files: ['r.txt'] }])] })
     let fail = true
     const told: (string | undefined)[] = []
     const runner = new Runner({ execute: async (i) => { told.push(i.previousFailure); return fail ? { status: 'failed', error: 'flaky' } : commits('r')(i) }, sessionsMax: 2 })
     await runner.startProject(p.id)
-    await until(async () => (await projectGraph(p.id))!.phases[0].status === 'failed')
+    await until(async () => (await projectGraph(p.id))!.subIssues[0].status === 'failed')
     fail = false
-    await expect(runner.retryPhase(phases[0].id)).resolves.toMatchObject({ fresh: false })
+    await expect(runner.retry(phases[0].id)).resolves.toMatchObject({ fresh: false })
     await until(cleaned(p.id))
     const after = (await projectGraph(p.id))!
-    expect(after.phases[0]).toMatchObject({ status: 'done', attempt: 4, maxAttempts: 6 })
+    expect(after.subIssues[0]).toMatchObject({ status: 'done', attempt: 4, maxAttempts: 6 })
     expect(told.at(-1)).toContain('flaky')
-    await expect(runner.retryPhase(phases[0].id)).rejects.toThrow(/only a failed or cancelled/)
+    await expect(runner.retry(phases[0].id)).rejects.toThrow(/only a failed or cancelled/)
   })
 
-  it('losing the model is not a failure: the attempt is given back, the engine holds, and the phase resumes', async () => {
-    const { project: p, phases } = await createProject({ appId, title: 'outage', tasks: [one('T', [{ key: 'o', title: 'O', files: ['o.txt'] }])] })
+  it('losing the model is not a failure: the attempt is given back, the engine holds, and the sub-issue resumes', async () => {
+    const { project: p, subIssues: phases } = await createProject({ appId, name: 'outage', issues: [one('T', [{ key: 'o', title: 'O', files: ['o.txt'] }])] })
     let calls = 0
     const runner = new Runner({ execute: async (i) => (++calls === 1 ? { status: 'failed', error: 'API Error: 529 overloaded_error' } : commits('o')(i)), sessionsMax: 2 })
     await runner.startProject(p.id)
     await until(async () => !!runner.hold)
-    const held = (await projectGraph(p.id))!.phases[0]
+    const held = (await projectGraph(p.id))!.subIssues[0]
     expect(held).toMatchObject({ status: 'queued', attempt: 0 })
     expect(held.heldReason).toContain('waiting for the model')
     await runner.releaseHold()
     await until(cleaned(p.id))
-    expect((await projectGraph(p.id))!.phases[0]).toMatchObject({ status: 'done', attempt: 1 })
-    const types = (await db.select().from(event).where(eq(event.phaseId, phases[0].id))).map((e) => e.type)
-    expect(types).toContain('engine.hold'); expect(types).not.toContain('phase.retry'); expect(types).not.toContain('phase.failed')
+    expect((await projectGraph(p.id))!.subIssues[0]).toMatchObject({ status: 'done', attempt: 1 })
+    const types = (await db.select().from(event).where(eq(event.issueId, phases[0].id))).map((e) => e.type)
+    expect(types).toContain('engine.hold'); expect(types).not.toContain('build.retry'); expect(types).not.toContain('build.failed')
   })
 
   it('pause stops running agents without failing them; resume picks them up from their session', async () => {
-    const { project: p, phases } = await createProject({ appId, title: 'pause', tasks: [one('T', [{ key: 'q', title: 'Q', files: ['q.txt'] }])] })
+    const { project: p, subIssues: phases } = await createProject({ appId, name: 'pause', issues: [one('T', [{ key: 'q', title: 'Q', files: ['q.txt'] }])] })
     const resumedWith: (string | undefined)[] = []
     let first = true
     const runner = new Runner({ execute: async (i) => {
@@ -175,26 +175,26 @@ describe.skipIf(!reachable)('runner', () => {
       return commits('q')(i)
     }, sessionsMax: 2 })
     await runner.startProject(p.id)
-    await until(async () => (await projectGraph(p.id))!.phases[0].status === 'running')
-    await db.update(run).set({ agentSessionId: 'sess-pause' }).where(eq(run.phaseId, phases[0].id))
+    await until(async () => (await projectGraph(p.id))!.subIssues[0].status === 'running')
+    await db.update(run).set({ agentSessionId: 'sess-pause' }).where(eq(run.issueId, phases[0].id))
     await runner.pauseProject(p.id)
-    await until(async () => (await db.select().from(run).where(eq(run.phaseId, phases[0].id)))[0].status === 'interrupted')
+    await until(async () => (await db.select().from(run).where(eq(run.issueId, phases[0].id)))[0].status === 'interrupted')
     expect((await projectGraph(p.id))!).toMatchObject({ project: { status: 'paused' } })
-    expect((await projectGraph(p.id))!.phases[0]).toMatchObject({ status: 'queued', attempt: 1 })
+    expect((await projectGraph(p.id))!.subIssues[0]).toMatchObject({ status: 'queued', attempt: 1 })
     await runner.resumeProject(p.id)
     await until(cleaned(p.id))
-    expect((await projectGraph(p.id))!.phases[0].status).toBe('done')
+    expect((await projectGraph(p.id))!.subIssues[0].status).toBe('done')
     expect(resumedWith).toEqual([undefined, 'sess-pause'])
   })
 
-  it('runs task by task: the next task is planned when the earlier ones land, and the project lands only when every task has', async () => {
-    const { project: p, tasks } = await createProject({ appId, title: 'task by task', tasks: [
+  it('runs issue by issue: the next issue is planned when the earlier ones land, and the project lands only when every issue has', async () => {
+    const { project: p, issues: tasks } = await createProject({ appId, name: 'task by task', issues: [
       one('First', [{ key: 'f', title: 'F', files: ['f.txt'] }]),
       { title: 'Second', brief: 'planned after the first lands' },
     ] })
     const plannedAfter: string[] = []
     const propose: Propose = async (i) => {
-      plannedAfter.push((await projectGraph(p.id))!.phases.map((x) => x.status).join(','))
+      plannedAfter.push((await projectGraph(p.id))!.subIssues.map((x) => x.status).join(','))
       return { status: 'completed', costUsd: 0, proposal: {
         phases: [{ key: 's', title: 'S', description: 'second', summary: 's', depends_on: [], files: ['s.txt'], steps: [], checks: [], done_when: '' }],
         decisions: [], questions: [], notes: '' } }
@@ -204,13 +204,13 @@ describe.skipIf(!reachable)('runner', () => {
     await until(cleaned(p.id))
     const g = (await projectGraph(p.id))!
     expect(g.project.status).toBe('landed')
-    expect(g.phases.map((x) => [g.tasks.find((t) => t.id === x.taskId)!.title, x.status])).toEqual([['First', 'done'], ['Second', 'done']])
-    expect(plannedAfter).toEqual(['done']) // the second task was planned once, after the first had landed
+    expect(g.subIssues.map((x) => [g.issues.find((t) => t.id === x.parentId)!.title, x.status])).toEqual([['First', 'done'], ['Second', 'done']])
+    expect(plannedAfter).toEqual(['done']) // the second issue was planned once, after the first had landed
     expect(tasks).toHaveLength(2)
   })
 
-  it('a project with open backlog items waits instead of landing; a builder\'s Later: lines join the backlog', async () => {
-    const { project: p } = await createProject({ appId, title: 'backlog gate', tasks: [one('T', [{ key: 'b', title: 'B', files: ['b.txt'] }])] })
+  it('a project with issues left in its backlog waits instead of landing; a builder\'s Later: lines join the backlog', async () => {
+    const { project: p } = await createProject({ appId, name: 'backlog gate', issues: [one('T', [{ key: 'b', title: 'B', files: ['b.txt'] }])] })
     const [kept] = await addItems(p.id, [{ text: 'Refunds' }])
     const runner = new Runner({ execute: async (i) => ({ ...(await commits('bg')(i)), summary: 'did B\n\nLater:\n- The header link 404s' }), sessionsMax: 2 })
     await runner.startProject(p.id)
@@ -218,9 +218,9 @@ describe.skipIf(!reachable)('runner', () => {
     await until(waiting)
     let g = (await projectGraph(p.id))!
     expect(g.project.status).toBe('running')
-    expect(g.backlog.map((b) => [b.text, b.source, b.state])).toEqual([['Refunds', 'person', 'open'], ['The header link 404s', 'builder', 'open']])
+    expect(g.backlog.map((b) => [b.title, b.source, b.state])).toEqual([['Refunds', 'person', 'backlog'], ['The header link 404s', 'builder', 'backlog']])
     await dropItem(kept.id, 'not in this project')
-    await itemToTask(g.backlog[1].id) // a new task: planned and built before the project lands
+    await promote(g.backlog[1].id) // taken on: planned and built before the project lands
     const propose: Propose = async () => ({ status: 'completed', costUsd: 0, proposal: {
       phases: [{ key: 'h', title: 'H', description: 'h', summary: 'h', depends_on: [], files: ['h.txt'], steps: [], checks: [], done_when: '' }], decisions: [], questions: [], notes: '' } })
     const again = new Runner({ execute: commits('bg2'), sessionsMax: 2, propose })
@@ -228,29 +228,29 @@ describe.skipIf(!reachable)('runner', () => {
     await until(cleaned(p.id))
     g = (await projectGraph(p.id))!
     expect(g.project.status).toBe('landed')
-    expect(g.tasks.map((t) => t.title)).toEqual(['T', 'The header link 404s'])
-    expect(g.phases.map((x) => x.status)).toEqual(['done', 'done'])
+    expect(g.issues.map((t) => t.title)).toEqual(['T', 'The header link 404s'])
+    expect(g.subIssues.map((x) => x.status)).toEqual(['done', 'done'])
   })
 
-  it('stacked PRs (pr_mode task): each task lands on its own branch, cut from the task before it', async () => {
+  it('stacked PRs (pr_mode issue): each issue lands on its own branch, named for Linear, cut from the issue before it', async () => {
     const stackApp = newId('app')
-    await db.insert(app).values({ id: stackApp, workspaceId: wsId, name: 'stacked app', setup: { test_cmd: 'test -f README.md', pr_mode: 'task' } })
+    await db.insert(app).values({ id: stackApp, workspaceId: wsId, name: 'stacked app', key: stackApp.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md', pr_mode: 'issue' } })
     await db.insert(repo).values({ id: newId('repo'), appId: stackApp, fullName: '', localPath: repoPath })
-    const { project: p, tasks } = await createProject({ appId: stackApp, title: 'stacked', tasks: [one('One', [{ key: 'x', title: 'X', files: ['x.txt'] }]), one('Two', [{ key: 'y', title: 'Y', files: ['y.txt'] }])] })
+    const { project: p, issues: tasks } = await createProject({ appId: stackApp, name: 'stacked', issues: [one('One', [{ key: 'x', title: 'X', files: ['x.txt'] }]), one('Two', [{ key: 'y', title: 'Y', files: ['y.txt'] }])] })
     const runner = new Runner({ execute: commits('st'), sessionsMax: 2 })
     await runner.startProject(p.id)
     await until(cleaned(p.id))
-    const [b1, b2] = tasks.map((t) => `${p.integrationBranch}--t${t.number}`)
+    const [b1, b2] = tasks.map((t) => `${p.integrationBranch}--${stackApp.slice(-6).toLowerCase()}-${t.number}`)
     const files = async (b: string) => (await git(repoPath, ['ls-tree', '--name-only', b])).stdout.split('\n').filter((f) => f.startsWith('st-'))
-    const [x, y] = (await projectGraph(p.id))!.phases.map((q) => `st-${q.number}.txt`)
+    const [x, y] = (await projectGraph(p.id))!.subIssues.map((q) => `st-${q.identifier}.txt`)
     expect(await files(b1)).toEqual([x])
-    expect((await files(b2)).sort()).toEqual([x, y].sort()) // task two started where task one ended
+    expect((await files(b2)).sort()).toEqual([x, y].sort()) // issue two started where issue one ended
     expect(await files(p.integrationBranch!)).toEqual([]) // the project's branch is only the starting point
     await db.update(project).set({ status: 'superseded' }).where(eq(project.id, p.id))
   })
 
-  it('stores the builder\'s todo list as the phase\'s steps, latest list wins', async () => {
-    const { project: p, phases } = await createProject({ appId, title: 'steps', tasks: [one('T', [{ key: 's', title: 'S', files: ['s.txt'] }])] })
+  it('stores the builder\'s todo list as the sub-issue\'s steps, latest list wins', async () => {
+    const { project: p, subIssues: phases } = await createProject({ appId, name: 'steps', issues: [one('T', [{ key: 's', title: 'S', files: ['s.txt'] }])] })
     const runner = new Runner({ execute: async (i) => {
       await i.onEvent('run.steps', { steps: [{ text: 'read the code', status: 'completed' }, { text: 'write it', status: 'in_progress' }, { text: 'test it', status: 'pending' }] })
       await i.onEvent('run.steps', { steps: [{ text: 'read the code', status: 'completed' }, { text: 'write it', status: 'completed' }, { text: 'test it', status: 'in_progress' }] })
@@ -258,26 +258,26 @@ describe.skipIf(!reachable)('runner', () => {
     }, sessionsMax: 2 })
     await runner.startProject(p.id)
     await until(cleaned(p.id))
-    const rows = await db.select().from(step).where(eq(step.phaseId, phases[0].id))
+    const rows = await db.select().from(step).where(eq(step.issueId, phases[0].id))
     expect(rows.map((r) => [r.position, r.text, r.status])).toEqual([[0, 'read the code', 'completed'], [1, 'write it', 'completed'], [2, 'test it', 'in_progress']])
-    expect((await projectGraph(p.id))!.phases[0].steps.map((s) => s.text)).toEqual(['read the code', 'write it', 'test it'])
+    expect((await projectGraph(p.id))!.subIssues[0].steps.map((s) => s.text)).toEqual(['read the code', 'write it', 'test it'])
   })
 
-  it('recover() re-queues phases that were running, marks their runs interrupted, and resumes the agent session', async () => {
-    const { project: p, phases } = await createProject({ appId, title: 'recovery', tasks: [one('T', [{ key: 'r', title: 'R', files: ['r.txt'] }])] })
+  it('recover() re-queues builds that were running, marks their runs interrupted, and resumes the agent session', async () => {
+    const { project: p, subIssues: phases } = await createProject({ appId, name: 'recovery', issues: [one('T', [{ key: 'r', title: 'R', files: ['r.txt'] }])] })
     await db.update(project).set({ status: 'running' }).where(eq(project.id, p.id))
-    await db.update(phase).set({ status: 'running', attempt: 1 }).where(eq(phase.id, phases[0].id))
-    await db.insert(run).values({ id: newId('run'), appId, phaseId: phases[0].id, attempt: 1, kind: 'build', agent: 'claude-code', status: 'working', agentSessionId: 'sess-123' })
+    await db.update(build).set({ status: 'running', attempt: 1 }).where(eq(build.issueId, phases[0].id))
+    await db.insert(run).values({ id: newId('run'), appId, issueId: phases[0].id, attempt: 1, kind: 'build', agent: 'claude-code', status: 'working', agentSessionId: 'sess-123' })
     await git(repoPath, ['branch', p.integrationBranch!, 'main'])
     let resumed: string | undefined
     const runner = new Runner({ execute: async (i) => { resumed = i.resumeSessionId; return commits('r')(i) }, sessionsMax: 2 })
     const r = await runner.recover()
-    expect(r.phases).toBeGreaterThanOrEqual(1)
+    expect(r.builds).toBeGreaterThanOrEqual(1)
     await until(cleaned(p.id))
     expect(resumed).toBe('sess-123')
-    const runs = await db.select().from(run).where(eq(run.phaseId, phases[0].id))
+    const runs = await db.select().from(run).where(eq(run.issueId, phases[0].id))
     expect(runs.map((x) => x.status).sort()).toEqual(['completed', 'interrupted'])
-    const types = (await db.select().from(event).where(eq(event.phaseId, phases[0].id))).map((e) => e.type)
-    expect(types).toContain('phase.interrupted')
+    const types = (await db.select().from(event).where(eq(event.issueId, phases[0].id))).map((e) => e.type)
+    expect(types).toContain('build.interrupted')
   })
 })

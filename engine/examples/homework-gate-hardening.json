@@ -2,7 +2,7 @@
   {
     "title": "Harden the POC",
     "brief": "Three independent hardening changes that can run at once.",
-    "phases": [
+    "subIssues": [
       {
         "key": "config",
         "title": "Validate numeric settings at startup",
@@ -26,7 +26,7 @@
   {
     "title": "Document the hardening",
     "brief": "After the hardening task lands: one sentence in the README.",
-    "phases": [
+    "subIssues": [
       {
         "key": "readme",
         "title": "README: settings are validated at startup",

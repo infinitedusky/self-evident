@@ -16,8 +16,7 @@ export interface NewEvent {
   appId: string
   ideaId?: string | null
   projectId?: string | null
-  taskId?: string | null
-  phaseId?: string | null
+  issueId?: string | null
   runId?: string | null
   sessionId?: string | null
   actor: string
@@ -31,15 +30,14 @@ export async function appendEvent(tx: Tx, e: NewEvent): Promise<number> {
   return row.seq
 }
 
-export interface EventFilter { workspaceId?: string; appId?: string; projectId?: string; taskId?: string; phaseId?: string }
+export interface EventFilter { workspaceId?: string; appId?: string; projectId?: string; issueId?: string }
 
 export async function eventsSince(since: number, filter: EventFilter = {}, limit = 500) {
   const where = [gt(event.seq, since)]
   if (filter.workspaceId) where.push(eq(event.workspaceId, filter.workspaceId))
   if (filter.appId) where.push(eq(event.appId, filter.appId))
   if (filter.projectId) where.push(eq(event.projectId, filter.projectId))
-  if (filter.taskId) where.push(eq(event.taskId, filter.taskId))
-  if (filter.phaseId) where.push(eq(event.phaseId, filter.phaseId))
+  if (filter.issueId) where.push(eq(event.issueId, filter.issueId))
   return db.select().from(event).where(and(...where)).orderBy(asc(event.seq)).limit(limit)
 }
 

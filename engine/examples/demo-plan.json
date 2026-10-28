@@ -1,8 +1,8 @@
 [
   {
     "title": "Settings and the gate",
-    "brief": "Made up for the demo: the shape of the gate work, as tasks and phases.",
-    "phases": [
+    "brief": "Made up for the demo: the shape of the gate work, as issues and sub-issues.",
+    "subIssues": [
       { "key": "schema", "title": "Add the settings table", "files": ["poc/hg/db.py"], "priority": 1 },
       { "key": "locks", "title": "Unlock periods the parent sets", "files": ["poc/hg/locks.py", "poc/hg/templates/parent.html"] },
       { "key": "gate", "title": "Allowlist-only locking in NextDNS", "files": ["poc/hg/gate.py"] },
@@ -12,7 +12,7 @@
   {
     "title": "Document it",
     "brief": "Runs after the first task has landed: tasks in a plan are in order.",
-    "phases": [
+    "subIssues": [
       { "key": "docs", "title": "README: the gate and the schedule", "files": ["poc/README.md"] }
     ]
   }

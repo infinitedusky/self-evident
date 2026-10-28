@@ -2,7 +2,7 @@
   {
     "title": "A health endpoint for the POC",
     "brief": "Tunnels and uptime checks need something cheap to hit. One phase.",
-    "phases": [
+    "subIssues": [
       {
         "key": "health",
         "title": "Add a GET /health endpoint to the POC",

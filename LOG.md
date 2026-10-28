@@ -507,6 +507,128 @@ lines held on disk while offline, no homework text or names. It is the first inv
 For the factory: every app it builds gets this from its first PR, and a PR that adds something that runs without its
 logs wired is not done. The engine and app here owe the same (not yet: a to-do).
 
+## Settings: All apps, then each app; apps override (Sandy, 2026-10-27)
+
+Settings was every app as one long form, stacked. Now it is a page with its own side list: **All apps** first, then
+one entry per app (Sandy picked this over nav sub-items or tabs, so every app stays reachable from Settings whatever
+the current app is).
+
+- **All apps** shows what every app gets: which skills each agent sees (talk and planner: ours and REA; the
+  builder: none), each plugin's skills with their descriptions, REA's 229 tools by rating (121 free, 84 moderate,
+  24 expensive), and the integrations' shared values. It is read from the engine (`GET /settings`, from
+  `skills.ts` and `integrations.ts`), not a static list; `app/src/providers.ts` is gone.
+- **An app** is grouped: Repo, Agents (with the skills in its own `.claude/skills/`), Landing, Storybook,
+  Integrations. One Save.
+- **Apps override, field by field** (Sandy: "PostHog may get overridden on a specific project"). An integration's
+  values are set under All apps (`workspace.settings.integrations`, a new column) and each app may override any
+  field (`app.setup.integrations`); an empty field inherits, shown in italics, an override is marked. Keys and
+  tokens are never stored: a field names the `.env` variable that holds one.
+- Plugins per agent are shown, not switched: switching them would need stored state and nothing asks for it yet. (Superseded the same day: plugins are switched now; next entry.)
+
+## Plugins: installed, switched, filed by what we do (Sandy, 2026-10-27)
+
+"REA is a plugin, so it needs a section and a way to add it, delete it, enable it, disable it."
+
+- **Three words, three sections.** An **integration** is someone else's system we connect to (PostHog, Datadog,
+  later Linear), whether by values or through an MCP server. A **plugin** is a self-contained thing we install that
+  gives the agents new abilities: skills, tools (MCP servers), or both. A **skill** is instructions an agent picks
+  by its description; it arrives in a plugin or in an app's repo, so it is filed, never installed on its own. MCP
+  is the wire, not the category: REA's tools run on this machine and reach no one.
+- **A Self Evident plugin is a Claude Code plugin.** No SDK of our own: Anthropic's plugin format is the spec, and
+  ours documents only what we add (which agents get it; tools rated from their MCP hints, unknown asks).
+- **Installed by Claude Code's own installer**, the SDK's bundled binary, into the factory's config dir
+  (`PLUGINS_HOME`, default `~/.self-evident/claude`), never the operator's `~/.claude`. Add is a marketplace
+  (owner/repo, git URL or path) and a name; remove uninstalls. What is installed is the installer's record. No
+  `-y`: a plugin whose install runs a command is refused. `engine/plugin/` is built in: it switches off, never
+  uninstalls.
+- **Switched under All apps, overridden per app** (Sandy's pick): each plugin on or off, and which agents get it
+  (talk, planner; the builder none). An app switches a plugin for itself (`app.setup.plugins`).
+- **Skills filed by job**, the catalogue's categories (`engine/src/catalogue.ts`, from `research/skills.md`). One
+  skill holds a job: agents choose by description, so two for one job compete; filing one where another is on
+  switches the other off. Settings shows every job with what covers it: a plugin's skill, the engine itself
+  ("built in"), or nothing yet.
+- **REA's install is half broken upstream.** Its marketplace installs the npm package, which has neither the plugin
+  manifest nor its dependencies: the skill arrives, the 229 tools don't (morluto/rea#5062). Until that ships, the
+  engine starts REA's server from its own `rea-agents` while the installed plugin declares none; the shim retires
+  itself when it does. Manifest-less, the SDK names the plugin after its folder (`unknown`), and the engine names
+  skills by the same rule.
+- Each machine installs REA once (Settings → Add a plugin: `morluto/rea`, `rea`). Checked on a scratch database:
+  install, switch, file, app override, remove, reinstall; a live session got REA's server (229 tools) and exactly
+  its one skill.
+  Next candidates for the same override pattern: the agents' model, budget and turns as All-apps defaults.
+
+## Skills in two layers; REA for reverse engineering (Sandy, 2026-10-27)
+
+Sandy wants the agents able to study a feature someone else has shipped, to move fast on building our own. That
+is REA (`rea-agents`, github.com/morluto/rea): one MCP server over Ghidra/IDA/Hopper, JADX, browser capture,
+Electron/ASAR, .NET and ~25 format readers, with a skill that says when to use it. Its real reach: near-source for
+web, Electron, .NET, Java and Python; one function at a time for native code; nothing on a server.
+
+- **Two layers.** An app repo's `.claude/skills/` is about working on that app (the catalogue's "adopt",
+  `research/skills.md`). `engine/plugin/` is what the factory brings to every app: our own skills (none yet; a
+  folder under `engine/plugin/skills/`) and third-party plugins like REA. Both load through the Agent SDK
+  (`plugins`, `skills`); no skill system of our own.
+- **Who gets it:** the talk agent and the planner. The builder builds what the plan says and gets neither.
+- **Named, not all:** each session's `skills` lists ours, REA's and the app repo's, so Claude Code's bundled skills
+  (schedule, loop, update-config…) stay hidden. Checked against a live session: the model sees exactly those.
+- **Gating, from REA's own catalogue** (each tool's MCP hints, `engine/src/skills.ts`): reads and local work are
+  free; REA's own session edits and anything reaching outside (a browser, a device, an external analyser) are
+  moderate; running or changing the target is expensive and always asks. The planner has no one to ask, so it gets
+  only the free ones. Trade-off taken: REA labels some static readers open-world because they launch an analyser
+  (`analyze_javascript_application`, JADX), so those ask at the default threshold.
+- REA 6.8.0 ships its skill without a plugin manifest; the engine starts `rea mcp` itself. Its next release bundles
+  the server in the plugin, and that line can go. REA asks for Node ≥24.22.1; the operator's machine moved to 24.22.1 for it (mise), and a first real analysis
+  (`analyze-javascript-application` on our own `app/`) completed there.
+
+## Skills: a catalogue by category (Sandy, 2026-10-27)
+
+Gap noticed: we build every agent workflow ourselves while others trade skills by author. To address it without
+moving the foundation, skills are sorted into categories (interview, spec and slice, build discipline,
+demonstration and evidence, review, and so on), each with what we already have. Each new skill is judged against
+that: what it does, its category or a new one, where it keeps state, who can start it, and whether it beats what
+we have. Verdicts: **adopt** (stateless, into one of the two layers above: the app repo's `.claude/skills/` or
+`engine/plugin/`), **borrow** (port the idea into the engine), **comparable**, or **skip**. The
+engine never hands state to a skill. Catalogue and log: `research/skills.md`.
+## Rebuilt in Linear's shape (Sandy, 2026-10-27: "rebuilding from scratch can be easier")
+
+Step 1 of "Shaped like Linear", done as a new database rather than a conversion: schema written fresh, migration
+history restarted, the old `ideafactory` database kept untouched and copied over by a one-off script
+(`engine/src/db/copy-legacy.ts`: ids kept, so branches, PRs, links and summaries still point at the same things).
+- **One table of issues.** Tasks, phases, to-dos, checklist lines and backlog items are all issues: `kind` code or
+  todo; a sub-issue has a parent. Numbered once per app with the app's key: HG-1…HG-193, CS-1…, AP-1… (the copy
+  numbers them in the order they were made). Issues can live in no project, be moved into one (at the end), and be
+  ordered among their siblings.
+- **Linear's states** (Triage, Backlog, Todo, In progress, In review, Done, Canceled, Duplicate) with their types. A
+  code issue follows its sub-issues (any started: In progress; all landed: In review); its PR merging makes it Done.
+  Planned but not started stays Todo.
+- **The backlog is issues in a project's Backlog.** Take one on (Todo at the end), make it a to-do, mark it a
+  duplicate of the issue that covers it, or cancel it with a reason. The project still lands only when none is left.
+- **What is ours stays beside the plan**, keyed by issue id: `build` (the engine's status, attempts, worktree for a
+  code sub-issue; the sub-issue's state follows it), file claims, runs, steps, questions, decisions, PRs. Phase
+  dependencies are `blocks` relations.
+- **Goals can be stated:** initiatives (with their projects) and cycles (dates, with their issues). The Summary reads
+  them first and says whether its goals are stated or inferred. No pages for them yet: ask the agent.
+- **Names everywhere:** routes (`/issues…`, `/backlog/:id/take|duplicate|drop`), events (`issue.*`, `build.*`), MCP
+  tools (`plan_issue`, `create_issue`, `set_issue_state`, `reorder_issues`, `initiatives`, `cycles`…), the UI (Plan →
+  Projects, Issues, To-dos; an issue page lists its sub-issues; a draft's issues reorder with ← →). Stacked PR
+  branches are `project/<id>--hg-12`, so Linear's GitHub integration can link them.
+- Not done yet: the plan-store boundary (step 2) and Linear itself (step 3); goals pages; creation through the
+  conversation (the dock).
+
+## Shaped like Linear (Sandy, 2026-10-27)
+
+From the team conversation: on a big shared repo the plan lives in a tracker, probably Linear. Sandy: "we build ours
+to match Linear and then we can slip it in. We can connect it or we can manage it ourselves." The mapping is in
+SHAPE.md under Decided. Linear's agent model fits the engine closely: an agent delegated an issue gets an agent
+session (our run), reports activities (thoughts, tool calls, questions, responses, errors), and shows a plan as a
+checklist (our steps). Next, in order:
+1. Rename to Linear's names and shapes in our own store (schema, engine, UI, MCP tools), statuses under Linear's
+   categories. Initiatives and cycles added, so goals are stated rather than inferred.
+2. A plan-store boundary in the engine: the planner, runner, Summary and tools read and write the plan through it,
+   never the tables directly. Our database is the first implementation.
+3. Linear as the second, per app: `@linear/sdk`, webhooks in, the agent session API for builds. Our own data
+   (file claims, cost, evidence, decisions) is kept by Linear id.
+
 ## Summary page, first section: what we're focused on (Sandy, 2026-10-27)
 
 A page the agent writes from everything the engine knows (nav: 📰 Summary, above My Stuff). The first section is the

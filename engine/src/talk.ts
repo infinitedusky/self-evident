@@ -17,15 +17,16 @@ import { newId } from './ids.js'
 import { rank, riskOf, type Risk } from './risk.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { engineTools } from './tools.js'
-import { PlanError, projectGraph } from './projects.js'
+import { skillOptions } from './skills.js'
+import { issueDetail, PlanError, projectGraph } from './projects.js'
 
-const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch']
+const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']
 const ASK_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash']
 const PERMISSION_TIMEOUT_MS = 10 * 60_000
 
 const talkPrompt = (cwd: string, branch: string | null, base: string) => `You are Self Evident's agent (Self Evident: software that proves itself — observe, learn, ideate, mockup, build), talking with the person who runs it, in its own web UI.
-The factory builds software from ideas: idea → project (tasks in order) → task (a title and a brief) → phase (one agent, one worktree, one commit) → step. Read CLAUDE.md, LOG.md and SHAPE.md in this checkout when you need the history; LOG.md's top entries are the latest decisions.
-You have the engine as tools (mcp__engine__*): see what needs attention, keep ideas, make projects, keep each project's backlog (everything it has to cover; when the person mentions something a project should not forget, add it), keep the app's to-dos (work outside the code: accounts, approvals, people, checks; when the person mentions one, make it with a checklist you draft, and check lines off as they get done), run the planner on a task, answer its questions, start or cancel projects, read the event log. Use them rather than describing what the person should click.
+The factory builds software from ideas, shaped like Linear: initiative (a goal) → project (issues in order) → issue (a title and a brief; code, or a to-do: work outside the code) → sub-issue (under code: one agent, one worktree, one commit; under a to-do: a checklist line). Issues are named by the app's key and a number, like HG-12; use those names with the person. Read CLAUDE.md, LOG.md and SHAPE.md in this checkout when you need the history; LOG.md's top entries are the latest decisions.
+You have the engine as tools (mcp__engine__*): see what needs attention, keep ideas, make projects, keep each project's backlog (everything it has to cover; when the person mentions something a project should not forget, add it), keep the app's to-dos (work outside the code: accounts, approvals, people, checks; when the person mentions one, make it with a checklist you draft, and check lines off as they get done), run the planner on an issue, answer its questions, start or cancel projects, read the event log. Use them rather than describing what the person should click.
 You can read, search and edit files and run commands here, as in any Claude Code session. The engine rates every action's risk (free, cheap, moderate, expensive); up to the person's threshold it runs without asking and is logged, above it a card asks them. Expensive things (main, force, deletes, merges, publishing, starting a project) always ask. Work on a branch in a worktree, never in a checkout that is on main; say what each action is for.
 You work in your own worktree, ${cwd}, on branch ${branch ?? '(none)'} cut from ${base}: edit and commit there; push and open a pull request when the work is ready (both ask).
 How this person works: PRs only, main is production; short answers that lead with the answer; questions are questions, not instructions to change things; give a recommendation, not a survey; write decisions into LOG.md or SHAPE.md the moment they are made; one git worktree per branch, never the main checkout.`
@@ -65,7 +66,7 @@ const summariseInput = (name: string, input: any) => {
 function engineServer(appId: string, sessionId?: string) {
   return createSdkMcpServer({
     name: 'engine', version: '0.3.0',
-    instructions: 'The Self Evident engine, scoped to this conversation\'s app. Projects are tasks in order; tasks become phases through the planner; phases run as agents in worktrees and land into the project\'s branch and PR. To-dos are the work around the code.',
+    instructions: 'The Self Evident engine, scoped to this conversation\'s app, shaped like Linear. Initiatives are goals; projects are issues in order; a code issue becomes sub-issues through the planner; each sub-issue is built by an agent in a worktree and lands into the project\'s branch and PR. To-dos are issues for the work around the code, with checklists. Issues are named like HG-12.',
     tools: engineTools({ appId, sessionId, actor: 'agent', waitForPlanner: true }).map((t) => tool(t.name, t.description, t.shape, (a) => t.handler(a))),
   })
 }
@@ -92,11 +93,11 @@ async function record(sessionId: string, author: string, kind: string, body: str
   return row
 }
 
-export interface SubjectRef { projectId?: string; ideaId?: string; path?: string }
+export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; path?: string }
 
 /** What a conversation is about, from where it started: a project's title, an idea's title, or nothing yet. */
 async function subjectFrom(ref?: SubjectRef): Promise<{ subject: string | null; subjectRef: SubjectRef | null }> {
-  if (ref?.projectId) { const [p] = await db.select().from(project).where(eq(project.id, ref.projectId)); if (p) return { subject: p.title, subjectRef: { projectId: p.id } } }
+  if (ref?.projectId) { const [p] = await db.select().from(project).where(eq(project.id, ref.projectId)); if (p) return { subject: p.name, subjectRef: { projectId: p.id } } }
   if (ref?.ideaId) { const [i] = await db.select().from(idea).where(eq(idea.id, ref.ideaId)); if (i) return { subject: i.title, subjectRef: { ideaId: i.id } } }
   return { subject: null, subjectRef: ref?.path ? { path: ref.path } : null }
 }
@@ -155,6 +156,7 @@ async function open(sessionId: string): Promise<Live> {
   const setup = (a?.setup ?? {}) as { model?: string }
   const input = inputQueue()
   const entry: Live = { q: null as unknown as Query, push: input.push, close: input.close, pending: new Map(), rated: new Map(), outages: 0, always: new Set(), busy: false, autoApprove: (s.autoApprove as Risk) ?? 'cheap', cwd: s.cwd! }
+  const skills = await skillOptions('talk', s.cwd!, s.appId)
   const q = query({
     prompt: input.it,
     options: {
@@ -163,7 +165,8 @@ async function open(sessionId: string): Promise<Live> {
       model: setup.model,
       settingSources: ['project'],
       systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main') },
-      mcpServers: { engine: engineServer(s.appId, s.id) },
+      ...skills,
+      mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...ASK_TOOLS],
       allowedTools: READ_TOOLS, // everything else is rated by the hook (the hook sees every call; allowedTools would not)
       permissionMode: 'default',
@@ -240,7 +243,7 @@ async function handle(sessionId: string, entry: Live, m: SDKMessage) {
   }
 }
 
-export interface TalkContext { path: string; label?: string; projectId?: string; appId?: string; ideaId?: string }
+export interface TalkContext { path: string; label?: string; projectId?: string; issueId?: string; appId?: string; ideaId?: string }
 
 /** Where the person is, as one line the agent can act on. The transcript keeps the plain text; only the agent sees this. */
 async function describeContext(c?: TalkContext): Promise<string> {
@@ -248,7 +251,11 @@ async function describeContext(c?: TalkContext): Promise<string> {
   const bits = [`the page ${c.path}`]
   if (c.projectId) {
     const g = await projectGraph(c.projectId).catch(() => null)
-    if (g) bits.push(`project ${c.projectId} "${g.project.title}" (${g.project.status}; ${g.tasks.length} task(s), ${g.phases.length} phase(s), ${g.questions.filter((q) => q.status === 'open').length} open question(s))`)
+    if (g) bits.push(`project ${c.projectId} "${g.project.name}" (${g.project.status}; ${g.issues.length} issue(s), ${g.subIssues.length} sub-issue(s), ${g.backlog.filter((i) => i.state === 'backlog').length} in the backlog, ${g.questions.filter((q) => q.status === 'open').length} open question(s))`)
+  }
+  if (c.issueId) {
+    const i = await issueDetail(c.issueId).catch(() => null)
+    if (i) bits.push(`issue ${i.identifier} (${c.issueId}) "${i.title}" (${i.kind}, ${i.state}; ${i.subIssues.length} sub-issue(s))`)
   }
   if (c.appId) bits.push(`app ${c.appId}`)
   if (c.ideaId) bits.push(`idea ${c.ideaId}`)

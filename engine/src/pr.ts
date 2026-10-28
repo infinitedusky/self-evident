@@ -1,6 +1,6 @@
 /**
  * One PR per project: the integration branch against the app's default branch, opened at the first landing and
- * updated as more tasks land. The PR carries the support for the change: each task, its summary, its cost.
+ * updated as more issues land. The PR carries the support for the change: each sub-issue, its summary, its cost.
  */
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -30,24 +30,24 @@ export async function ensureProjectPr(i: PrInput): Promise<{ number: number; url
   return { number, url, created: true }
 }
 
-export interface LandedTask { number: number; title: string; summary?: string | null; costUsd?: number | null; sha?: string | null }
+export interface Landed { identifier: string; title: string; summary?: string | null; costUsd?: number | null; sha?: string | null }
 
-export function prBody(project: { title: string; spec?: string | null; id: string }, tasks: LandedTask[], pending: { number: number; title: string }[], backlog: { text: string; state: string; reason: string | null }[] = []): string {
+export function prBody(project: { name: string; content?: string | null; id: string }, landed: Landed[], pending: { identifier: string; title: string }[], backlog: { title: string; state: string; reason: string | null }[] = []): string {
   const lines = [
-    `Built by Self Evident from project \`${project.id}\`: ${project.title}.`,
-    project.spec ? `\n${project.spec}` : '',
+    `Built by Self Evident from project \`${project.id}\`: ${project.name}.`,
+    project.content ? `\n${project.content}` : '',
     '',
-    '## Tasks landed',
-    ...tasks.map((t) => [`### #${t.number} ${t.title}` + (t.sha ? ` (\`${t.sha.slice(0, 7)}\`)` : ''),
+    '## Landed',
+    ...landed.map((t) => [`### ${t.identifier} ${t.title}` + (t.sha ? ` (\`${t.sha.slice(0, 7)}\`)` : ''),
       t.summary?.trim() || '_No summary from the run._',
       t.costUsd != null ? `_Run cost estimate: $${Number(t.costUsd).toFixed(2)}_` : ''].join('\n\n')),
-    pending.length ? `\n## Still to land\n${pending.map((t) => `- #${t.number} ${t.title}`).join('\n')}` : '',
-    backlog.some((b) => b.state === 'open') ? `\n## Backlog still open\n${backlog.filter((b) => b.state === 'open').map((b) => `- ${b.text}`).join('\n')}` : '',
-    backlog.some((b) => b.state === 'dropped') ? `\n## Left out on purpose\n${backlog.filter((b) => b.state === 'dropped').map((b) => `- ${b.text}: ${b.reason}`).join('\n')}` : '',
+    pending.length ? `\n## Still to land\n${pending.map((t) => `- ${t.identifier} ${t.title}`).join('\n')}` : '',
+    backlog.some((b) => b.state === 'backlog') ? `\n## Backlog still open\n${backlog.filter((b) => b.state === 'backlog').map((b) => `- ${b.title}`).join('\n')}` : '',
+    backlog.some((b) => b.state === 'canceled') ? `\n## Left out on purpose\n${backlog.filter((b) => b.state === 'canceled').map((b) => `- ${b.title}: ${b.reason}`).join('\n')}` : '',
     '',
-    'Each task ran in its own worktree, was merged with this branch, tested on the merged commit, and fast-forwarded here, one at a time.',
+    'Each sub-issue was built in its own worktree, was merged with this branch, tested on the merged commit, and fast-forwarded here, one at a time.',
     '',
-    'Rollback project: revert this PR. Off switch, guard metric and schema impact per task come in a later step.',
+    'Rollback project: revert this PR. Off switch, guard metric and schema impact per issue come in a later step.',
     '',
     '🤖 Generated with [Claude Code](https://claude.com/claude-code) via Self Evident',
   ]

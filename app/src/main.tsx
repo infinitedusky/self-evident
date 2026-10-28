@@ -4,7 +4,6 @@ import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router'
 import './tokens.css'
 import './app.css'
 import { findIdea, ideas } from './ideas'
-import { modules } from './providers'
 import { CurrentAppProvider } from './current-app'
 import { Shell } from './components/Shell'
 import { AgentWindow } from './components/TalkDrawer'
@@ -19,7 +18,8 @@ import { Now } from './pages/Now'
 import { Learn } from './pages/Learn'
 import { Validate } from './pages/Validate'
 import { Mockups } from './pages/Mockups'
-import { Tasks } from './pages/Tasks'
+import { Issues } from './pages/Issues'
+import { IssuePage } from './pages/IssuePage'
 import { Observe } from './pages/Observe'
 import { Todos } from './pages/Todos'
 import { Summary } from './pages/Summary'
@@ -48,7 +48,9 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/plan" element={<Navigate to="/projects" replace />} />
             <Route path="/plans" element={<Navigate to="/projects" replace />} />
             <Route path="/plans/:id" element={<OldPlanLink />} />
-            <Route path="/tasks" element={<Tasks />} />
+            <Route path="/issues" element={<Issues />} />
+            <Route path="/issues/:id" element={<IssuePage />} />
+            <Route path="/tasks" element={<Navigate to="/issues" replace />} />
             <Route path="/todos" element={<Todos />} />
             <Route path="/validate" element={<Validate />} />
             <Route path="/mockups" element={<Mockups />} />
@@ -58,7 +60,8 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/graph" element={<AppGraph />} />
             <Route path="/projects/new" element={<NewProject />} />
             <Route path="/projects/:id" element={<ProjectPage />} />
-            <Route path="/settings" element={<Settings modules={modules} />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/settings/apps/:id" element={<Settings />} />
           </Routes>
           </Shell>} />
         </Routes>

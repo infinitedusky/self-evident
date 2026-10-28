@@ -1,6 +1,6 @@
 /**
- * The executor: one Claude Code run on one phase, in its worktree, through the Agent SDK. Every message becomes an
- * event (trimmed: no file contents); the builder's own todo list becomes the phase's steps. The agent never writes
+ * The executor: one Claude Code run on one sub-issue, in its worktree, through the Agent SDK. Every message becomes an
+ * event (trimmed: no file contents); the builder's own todo list becomes the sub-issue's steps. The agent never writes
  * status; it works, commits, and summarises.
  * Development runs on the operator's own Claude Code login; a product deployment sets ANTHROPIC_API_KEY.
  */
@@ -8,8 +8,8 @@ import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import { builderGuard, guardOptions } from './guard.js'
 
 export interface RunInput {
-  phase: { id: string; number: number; title: string; brief: string | null }
-  task: { number: number; title: string; brief: string | null }
+  subIssue: { id: string; identifier: string; title: string; brief: string | null }
+  issue: { identifier: string; title: string; brief: string | null }
   worktreePath: string
   branch: string
   files: string[]
@@ -37,23 +37,23 @@ export type Execute = (i: RunInput) => Promise<RunOutput>
 const clip = (s: unknown, n = 400) => { const t = typeof s === 'string' ? s : JSON.stringify(s); return t && t.length > n ? t.slice(0, n) + '…' : t }
 
 function prompt(i: RunInput): string {
-  const files = i.files.length ? i.files.map((f) => `  - ${f}`).join('\n') : '  (none declared: keep the change as small as the phase allows)'
+  const files = i.files.length ? i.files.map((f) => `  - ${f}`).join('\n') : '  (none declared: keep the change as small as the sub-issue allows)'
   return [
-    `You are building phase #${i.phase.number}: ${i.phase.title}`,
-    `It is part of task #${i.task.number}: ${i.task.title}`,
+    `You are building ${i.subIssue.identifier}: ${i.subIssue.title}`,
+    `It is a sub-issue of ${i.issue.identifier}: ${i.issue.title}`,
     '',
-    i.phase.brief ?? '',
-    i.task.brief ? `\nThe task's brief, for context:\n${i.task.brief}` : '',
+    i.subIssue.brief ?? '',
+    i.issue.brief ? `\nThe issue's brief, for context:\n${i.issue.brief}` : '',
     '',
     'How to work:',
     `- Work only inside this directory. It is a git worktree on branch ${i.branch}. Do not change branches, do not push, do not open pull requests.`,
     '- These paths are yours to change:', files,
-    '  Touch other files only if the phase cannot be done without it, and say so in your summary.',
-    '- Keep your todo list current as you work; it is shown live to the people watching this phase.',
+    '  Touch other files only if the sub-issue cannot be done without it, and say so in your summary.',
+    '- Keep your todo list current as you work; it is shown live to the people watching this sub-issue.',
     i.testCmd ? `- Run the tests with: ${i.testCmd}\n  They must pass before you finish. Add or adjust tests for what you change.` : '- There is no test command configured; verify your change by running it.',
     '- Commit your work with a clear message when it is done (git add -A && git commit). Leave nothing uncommitted.',
     '- Finish with a short summary for the reviewer: what changed, why, how you verified it, and anything you were unsure of.',
-    '- If you noticed something this phase should not do but someone should (a bug nearby, a follow-up, a missing test elsewhere), end the summary with a line `Later:` and one `- ` line for each. They go on the project\'s backlog so nothing is forgotten. Leave it out if there is nothing.',
+    '- If you noticed something this sub-issue should not do but someone should (a bug nearby, a follow-up, a missing test elsewhere), end the summary with a line `Later:` and one `- ` line for each. They go on the project\'s backlog so nothing is forgotten. Leave it out if there is nothing.',
     i.previousFailure ? `\nYour previous attempt did not land. The reason:\n${i.previousFailure}\nFix that first.` : '',
     i.resumeSessionId ? '\nThe engine restarted while you were working; your earlier conversation is resumed. Check the worktree state (git status, git log) before continuing.' : '',
   ].join('\n')

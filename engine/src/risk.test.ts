@@ -54,6 +54,17 @@ describe('riskOf', () => {
     expect(r('Bash', { command: 'pnpm test 2>&1 | tail -20' })).toBe('cheap')
     expect(r('Bash', { command: 'pnpm test > out.txt' })).toBe('moderate')
   })
+  it('loading a skill is free; REA is rated by the hints in its own catalogue', () => {
+    expect(r('Skill', { skill: 'unknown:reverse-engineer-anything' })).toBe('free')
+    expect(r('mcp__rea__procedure_pseudo_code', {})).toBe('free')
+    expect(r('mcp__rea__trace_application_feature', {})).toBe('free')
+    expect(r('mcp__rea__analyze_javascript_application', {})).toBe('moderate') // REA marks it open-world: it launches its own analyser
+    expect(r('mcp__rea__set_comment', {})).toBe('moderate')
+    expect(r('mcp__rea__inspect_web_page', {})).toBe('moderate')
+    expect(r('mcp__rea__capture_browser_scenario', {})).toBe('expensive')
+    expect(r('mcp__rea__instrument_with_frida', {})).toBe('expensive')
+    expect(r('mcp__rea__not_in_the_catalogue', {})).toBe('expensive')
+  })
   it('unknown commands and tools do not pass silently', () => {
     expect(r('Bash', { command: 'mystery --do-things' })).toBe('moderate')
     expect(r('Task', {})).toBe('expensive')

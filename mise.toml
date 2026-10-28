@@ -1,0 +1,2 @@
+[tools]
+node = "24.22.1" # REA (rea-agents) requires >=24.22.1

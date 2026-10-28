@@ -18,7 +18,7 @@ const ago = (iso: string) => {
 function RefLink({ id, r }: { id: string; r: FocusRef }) {
   const style = { fontSize: 12 }
   if (r.kind === 'pr' || r.kind === 'teammate_pr') return r.url ? <a className="ref" style={style} href={r.url} target="_blank" rel="noreferrer">{r.label}</a> : <span className="ref" style={style}>{r.label}</span>
-  const to = r.kind === 'todo' ? `/todos#${id}` : r.kind === 'idea' ? '/ideas' : r.projectId ? `/projects/${r.projectId}` : null
+  const to = r.kind === 'todo' ? `/todos#${id}` : r.kind === 'issue' || r.kind === 'task' ? `/issues/${id}` : r.kind === 'idea' ? '/ideas' : r.kind === 'project' ? `/projects/${id}` : r.projectId ? `/projects/${r.projectId}` : null
   return to ? <Link className="ref" style={style} to={to}>{r.label}</Link> : <span className="ref" style={style}>{r.label}</span>
 }
 
@@ -52,7 +52,7 @@ export function Summary() {
     es.addEventListener('summary.written', () => void refresh())
     es.addEventListener('summary.failed', (ev) => { setError(String(JSON.parse((ev as MessageEvent).data).payload?.error ?? 'writing failed')); void refresh() })
     const moved = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 1000) } // only to learn it went stale
-    for (const t of ['project.landed', 'task.planned', 'todo.created', 'todo.done', 'pr.merged', 'question.asked']) es.addEventListener(t, moved)
+    for (const t of ['project.landed', 'issue.planned', 'issue.created', 'issue.state', 'pr.merged', 'question.asked', 'initiative.created', 'cycle.created']) es.addEventListener(t, moved)
     return () => { closed = true; es.close(); window.clearTimeout(timer.current) }
   }, [app?.id])
 
@@ -65,7 +65,7 @@ export function Summary() {
         <div>
           <h1>📰 Summary<span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span></h1>
           <p className="muted" style={{ margin: '4px 0 0', maxWidth: 760 }}>
-            Written by the agent from what Self Evident knows: projects, tasks, to-dos, pull requests, the last week.
+            Written by the agent from what Self Evident knows: goals, projects, issues, to-dos, pull requests, the last week.
             {f ? <> Written {ago(f.createdAt)}{f.trigger === 'schedule' ? ' on schedule' : ''}.</> : null}
             {f && data?.stale && !data.writing ? <> Things have moved since.</> : null} It rewrites itself daily when something has moved.
           </p>
@@ -85,7 +85,7 @@ export function Summary() {
             <div className="summary-people">
               {f.body.people.map((p) => <div key={p.who} className="summary-person"><h3>{p.who}</h3><Lines lines={p.doing} links={f.body.links} /></div>)}
             </div>
-            <h3 style={{ marginTop: 18 }}>Where we're headed <span className="faint" style={{ fontWeight: 400, fontSize: 13 }}>· inferred from the work; nobody has stated these yet</span></h3>
+            <h3 style={{ marginTop: 18 }}>Where we're headed <span className="faint" style={{ fontWeight: 400, fontSize: 13 }}>· {f.body.stated ? 'from the goals you stated, and the work' : 'inferred from the work; ask the agent to state goals (initiatives) and this week (a cycle)'}</span></h3>
             <div className="summary-goals">
               <div><h4>This week</h4><Lines lines={f.body.goals.near} links={f.body.links} /></div>
               <div><h4>Next few weeks</h4><Lines lines={f.body.goals.mid} links={f.body.links} /></div>

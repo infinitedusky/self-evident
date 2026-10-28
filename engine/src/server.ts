@@ -11,23 +11,29 @@ import { streamSSE } from 'hono/streaming'
 import { existsSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { db, pool } from './db/client.js'
-import { app as appTable, PHASE_STATUSES, repo as repoTable, workspace, type PhaseStatus } from './db/schema.js'
+import { DATABASE_URL, db, pool } from './db/client.js'
+import { ensureDatabase } from './db/ensure.js'
+import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, workspace, type BuildStatus, type IssueState } from './db/schema.js'
 import { EventBus, eventsSince } from './events.js'
-import { newId } from './ids.js'
+import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { answerPermission, closeTalks, endTalk, interruptTalk, listTalks, renameTalk, say, setAutoApprove, startTalk, talkTranscript, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
 import { lastSync, startSync, syncApp } from './github.js'
 import { addChecklist, draftChecklist, completeTodo, createTodo, dropTodo, getTodo, itemToTodo, listTodos, removeChecklistItem, reopenTodo, setChecklistItem, updateTodo } from './todos.js'
-import { addIdea, addItems, coverItem, dropItem, itemToTask, listBacklog, reopenItem } from './backlog.js'
+import { addIdea, addItems, dropItem, listBacklog, markDuplicate, promote, reopenItem } from './backlog.js'
+import { createCycle, createInitiative, listCycles, listInitiatives, updateInitiative } from './goals.js'
+import { changeState, createIssue, listIssues, reorder, updateIssue } from './issues.js'
 import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
 import { startStorybook, stopStorybooks, storybookStatus } from './storybook.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
-import { listTasks, addPhases, addTask, appGraph, clearPhases, createProject, listProjects, PlanError, projectGraph, setPhaseStatus, tick } from './projects.js'
+import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { runner } from './runner.js'
+import { cleanValues, effectiveIntegrations, INTEGRATIONS, type Values } from './integrations.js'
+import { CATALOGUE } from './catalogue.js'
+import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role } from './skills.js'
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
 
@@ -41,34 +47,40 @@ export function buildApp(bus: EventBus) {
 
   api.get('/', (c) => c.json({
     engine: 'Self Evident',
-    model: 'idea → project (tasks in order) → task (title + brief) → phase (one agent, one worktree, one commit) → step (the builder\'s todo list)',
+    model: 'Shaped like Linear: initiative (a goal) → project (issues in order, one branch, one PR) → issue (code, or a to-do; HG-12) → sub-issue (under code: one agent, one worktree, one commit, its build; under a to-do: a checklist line) → step (the builder\'s todo list). Cycles hold the issues of a stretch of time.',
     routes: {
       'GET /health': 'database reachable?',
-      'POST /workspaces': '{name}', 'POST /apps': '{workspaceId, name, defaultBranch?, setup?}', 'POST /repos': '{appId, fullName, localPath?, baseBranch?}',
+      'POST /workspaces': '{name}', 'POST /apps': '{workspaceId, name, key?, defaultBranch?, setup?}', 'POST /repos': '{appId, fullName, localPath?, baseBranch?}',
       'GET /apps': 'all apps, each with its repos', 'PATCH /apps/:id': '{name?, defaultBranch?, setup?}', 'PATCH /repos/:id': '{fullName?, localPath?, baseBranch?}', 'GET /workspaces': 'all workspaces',
-      'GET /apps/:id/graph': 'the top-level graph: every phase of every project in the app', 'GET /now': 'the front door: running, needs you, recent',
-      'POST /projects': '{appId, title, spec?, tasks: [{title, brief?, phases?: [{key, title, brief?, dependsOn?, files?}]}]}',
-      'GET /projects': 'all projects with counts', 'GET /projects/:id/graph': 'tasks in order, phases with edges, claims, held reasons, last run, steps, the PR',
-      'POST /tasks/:id/phases': '[{key, title, brief?, dependsOn?, files?}] — add phases to a task by hand',
-      'POST /tasks/:id/plan?wait=1': 'the planner: the task\'s brief → phases, decisions, questions (one read-only agent run); 202 at once, or wait',
+      'GET /apps/:id/graph': 'the top-level graph: every sub-issue of every project in the app', 'GET /now': 'the front door: running, needs you, recent',
+      'POST /projects': '{appId, name, content?, description?, ideaId?, issues: [{title, description?, brief?, subIssues?: [{key, title, brief?, dependsOn?, files?}]}]}',
+      'GET /projects?app=': 'the app\'s projects with counts', 'GET /projects/:id/graph': 'issues in order, sub-issues with builds, edges, claims, held reasons, last run, steps, the PR, backlog, to-dos',
+      'POST /projects/:id/issues': '{title, brief?, description?} — an issue at the end of the project',
+      'GET /issues?app=&kind=&project=&top=1&open=1': 'issues, filtered (project=none: in no project)', 'GET /issues?app=&view=code': 'the Issues page: top-level code issues with builds and planning',
+      'POST /issues': '{appId, title, kind?, description?, brief?, projectId?, parentId?, state?, priority?, cycleId?}', 'GET /issues/:id': 'one issue with its sub-issues as a list',
+      'PATCH /issues/:id': '{title?, description?, brief?, priority?, estimate?, cycleId?, projectId?, sortOrder?}', 'POST /issues/:id/state': '{state, reason?}', 'POST /issues/reorder': '{ids} — siblings, in this order',
+      'POST /issues/:id/sub-issues': '[{key, title, brief?, dependsOn?, files?}] — by hand', 'DELETE /issues/:id/sub-issues': 'a draft issue back to its brief',
+      'POST /issues/:id/plan?wait=1': 'the planner: the issue\'s brief → sub-issues, decisions, questions (one read-only agent run); 202 at once, or wait',
+      'POST /issues/:id/retry': '{fresh?} — a failed or cancelled build, three more attempts', 'POST /issues/:id/build': '{status} — by hand, for drafts',
       'POST /questions/:id/answer': '{answer}',
-      'GET /projects/:id/backlog': 'everything the project has to cover', 'POST /projects/:id/backlog': '{text, body?} | {items: [{text, body?}]} | {ideaId}',
-      'POST /backlog/:id/task': '{title?, brief?} — the item becomes a new task at the end', 'POST /backlog/:id/cover': '{taskId, reason?}', 'POST /backlog/:id/drop': '{reason}', 'POST /backlog/:id/reopen': '',
+      'GET /projects/:id/backlog': 'what the project has to cover', 'POST /projects/:id/backlog': '{text, body?} | {items: [{text, body?}]} | {ideaId}',
+      'POST /backlog/:id/take': '{title?, brief?} — becomes Todo at the end', 'POST /backlog/:id/duplicate': '{of, reason?}', 'POST /backlog/:id/drop': '{reason}', 'POST /backlog/:id/reopen': '', 'POST /backlog/:id/todo': '{title?, checklist?} — work outside the code',
       'GET /todos?app=': 'the app\'s to-dos with their checklists', 'POST /todos': '{appId, title, notes?, owner?, projectId?, checklist?: [text | {text, waitingOn?}]}',
       'PATCH /todos/:id': '{title?, notes?, owner?, projectId?}', 'POST /todos/:id/checklist': '{items}', 'PATCH /checklist/:id': '{done?, waitingOn?, text?}', 'DELETE /checklist/:id': '',
-      'POST /todos/:id/draft': 'the agent drafts the checklist, or what is missing from it', 'POST /todos/:id/done': '', 'POST /todos/:id/drop': '{reason}', 'POST /todos/:id/reopen': '', 'POST /backlog/:id/todo': '{title?, checklist?} — the item is work outside the code',
-      'POST /projects/:id/tasks': '{title, brief?, description?} — a task at the end of the project',
+      'POST /todos/:id/draft': 'the agent drafts the checklist, or what is missing from it', 'POST /todos/:id/done': '', 'POST /todos/:id/drop': '{reason}', 'POST /todos/:id/reopen': '',
+      'GET /initiatives?app=': 'goals, with their projects', 'POST /initiatives': '{appId, name, description?, targetDate?, projectIds?}', 'PATCH /initiatives/:id': '{name?, description?, status?, targetDate?, addProjects?, removeProjects?}',
+      'GET /cycles?app=': 'stretches of time with their issues', 'POST /cycles': '{appId, startsAt, endsAt, name?, description?, issueIds?}',
       'POST /projects/:id/start': 'run it: worktrees, agent runs, landing, PR', 'POST /projects/:id/tick?room=N': 'one dispatch pass for a draft (no launching)',
-      'POST /phases/:id/status': '{status} — by hand, for drafts',
       'GET /apps/:id/summary': 'the summary page: the newest focus section (what everyone is on, goals near, mid, long), whether one is being written, whether it is stale',
       'POST /apps/:id/summary': 'write the focus section now (202); summary.written or summary.failed says when',
       'POST /apps/:id/sync': 'read GitHub now: our PRs (merged, review, checks), others\' PRs, main into open project branches (also every 2 minutes)',
       'POST /mcp/:appId': 'the engine as an MCP server for Claude Code, scoped to one app (pnpm se connect prints the command)',
-      'GET /events?since=SEQ&app=&project=&task=&phase=': 'SSE: replay from SEQ, then live',
+      'GET /events?since=SEQ&app=&project=&issue=': 'SSE: replay from SEQ, then live',
     },
     cli: 'pnpm if --help  (engine/README.md)',
   }))
 
+  const settle = <T>(v: T) => { void runner.dispatch(); return v } // a change to the plan can free work: one dispatch pass after it
   api.get('/health', async (c) => { await db.execute('select 1'); return c.json({ ok: true }) })
   api.get('/now', async (c) => { const a = c.req.query('app'); return a ? c.json({ ...(await now(a)), hold: runner.hold }) : c.json({ error: 'app is required: one app at a time' }, 400) }) // the front door: running, needs you, recent
 
@@ -85,8 +97,80 @@ export function buildApp(bus: EventBus) {
     const [apps, repos] = await Promise.all([db.select().from(appTable), db.select().from(repoTable)])
     return c.json(apps.map((a) => ({ ...a, repos: repos.filter((r) => r.appId === a.id) })))
   })
+  // Settings: the workspace's integrations, plugins and the jobs their skills cover; an app's own view is the merge,
+  // plus its repo's skills.
+  api.get('/settings', async (c) => {
+    const [w] = await db.select().from(workspace).limit(1)
+    const f = (w?.settings ?? {}) as FactorySettings & { integrations?: Values }
+    return c.json({ workspace: w ?? null, integrations: INTEGRATIONS, values: f.integrations ?? {}, plugins: describePlugins(f), catalogue: CATALOGUE })
+  })
+  // Plugins: installed by Claude Code's installer into the factory's own config dir (skills.ts); the switches and the
+  // filing are workspace settings.
+  const factory = async () => {
+    const [w] = await db.select().from(workspace).limit(1)
+    if (!w) throw new PlanError('no workspace')
+    return { w, f: (w.settings ?? {}) as FactorySettings }
+  }
+  const saveFactory = (id: string, settings: object) => db.update(workspace).set({ settings }).where(eq(workspace.id, id))
+  api.post('/plugins', async (c) => {
+    const body = await c.req.json<{ marketplace?: string; name?: string }>()
+    try { return c.json({ id: await installPlugin(body.marketplace ?? '', body.name ?? '') }, 201) } catch (err) { return planError(c, err) }
+  })
+  api.delete('/plugins/:id', async (c) => {
+    try {
+      const id = c.req.param('id')
+      await removePlugin(id)
+      const { w, f } = await factory()
+      await saveFactory(w.id, forgetPlugin(f, id))
+      return c.json({ ok: true })
+    } catch (err) { return planError(c, err) }
+  })
+  api.patch('/plugins/:id', async (c) => {
+    const body = await c.req.json<{ on?: boolean; roles?: Role[] }>()
+    try {
+      const id = c.req.param('id')
+      if (!installed().some((p) => p.id === id)) throw new PlanError(`no plugin ${id}`)
+      const { w, f } = await factory()
+      const roles = body.roles?.filter((r) => ROLES.includes(r))
+      const plugins = { ...(f.plugins ?? {}), [id]: { ...(f.plugins?.[id] ?? {}), ...(body.on !== undefined ? { on: body.on } : {}), ...(roles ? { roles } : {}) } }
+      await saveFactory(w.id, { ...f, plugins })
+      return c.json({ ok: true })
+    } catch (err) { return planError(c, err) }
+  })
+  api.patch('/skills/:key{.+}', async (c) => {
+    const body = await c.req.json<{ category?: string | null; on?: boolean }>()
+    try {
+      const { w, f } = await factory()
+      const change = { ...('category' in body ? { category: body.category ?? null } : {}), ...(body.on !== undefined ? { on: body.on } : {}) }
+      await saveFactory(w.id, fileSkill(f, c.req.param('key'), change, installed()))
+      return c.json({ ok: true })
+    } catch (err) { return planError(c, err) }
+  })
+  api.patch('/workspaces/:id', async (c) => {
+    const body = await c.req.json<{ name?: string; integrations?: Values }>()
+    const [w] = await db.select().from(workspace).where(eq(workspace.id, c.req.param('id')))
+    if (!w) return c.json({ error: 'no such workspace' }, 404)
+    const settings = { ...(w.settings as object), ...(body.integrations ? { integrations: cleanValues(body.integrations) } : {}) }
+    const [row] = await db.update(workspace).set({ ...(body.name?.trim() ? { name: body.name.trim() } : {}), settings }).where(eq(workspace.id, w.id)).returning()
+    return c.json(row)
+  })
+  api.get('/apps/:id/settings', async (c) => {
+    const [a] = await db.select().from(appTable).where(eq(appTable.id, c.req.param('id')))
+    if (!a) return c.json({ error: 'no such app' }, 404)
+    const [[w], [r]] = await Promise.all([db.select().from(workspace).where(eq(workspace.id, a.workspaceId)), db.select().from(repoTable).where(eq(repoTable.appId, a.id))])
+    const f = (w?.settings ?? {}) as FactorySettings & { integrations?: Values }
+    const setup = a.setup as { integrations?: Values; plugins?: AppPlugins }
+    const plugins = installed().map((p) => ({ id: p.id, name: p.name, factoryOn: pluginOn(p.id, f), own: setup.plugins?.[p.id]?.on ?? null, on: pluginOn(p.id, f, setup.plugins) }))
+    return c.json({ integrations: effectiveIntegrations(f.integrations, setup.integrations), plugins, skills: r?.localPath ? appSkills(r.localPath) : [] })
+  })
   api.patch('/apps/:id', async (c) => {
     const body = await c.req.json<{ name?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
+    if (body.setup && 'integrations' in body.setup) body.setup.integrations = cleanValues(body.setup.integrations)
+    if (body.setup && 'plugins' in body.setup) { // an app's own switch per plugin; null inherits
+      const known = new Set(installed().map((p) => p.id))
+      body.setup.plugins = Object.fromEntries(Object.entries((body.setup.plugins ?? {}) as Record<string, { on?: unknown } | null>)
+        .filter(([id, v]) => known.has(id) && typeof v?.on === 'boolean').map(([id, v]) => [id, { on: v!.on }]))
+    }
     const [row] = await db.update(appTable).set({ ...(body.name ? { name: body.name } : {}), ...(body.defaultBranch ? { defaultBranch: body.defaultBranch } : {}), ...(body.setup ? { setup: body.setup } : {}) })
       .where(eq(appTable.id, c.req.param('id'))).returning()
     return row ? c.json(row) : c.json({ error: 'no such app' }, 404)
@@ -98,8 +182,11 @@ export function buildApp(bus: EventBus) {
     return row ? c.json(row) : c.json({ error: 'no such repo' }, 404)
   })
   api.post('/apps', async (c) => {
-    const body = await c.req.json<{ workspaceId: string; name: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
-    const [row] = await db.insert(appTable).values({ id: newId('app'), workspaceId: body.workspaceId, name: body.name, defaultBranch: body.defaultBranch ?? 'main', setup: body.setup ?? {} }).returning()
+    const body = await c.req.json<{ workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
+    const taken = (await db.select({ key: appTable.key }).from(appTable).where(eq(appTable.workspaceId, body.workspaceId))).map((r) => r.key)
+    const key = body.key?.trim().toUpperCase() || appKey(body.name, taken)
+    if (taken.includes(key)) return c.json({ error: `the key ${key} is taken in this workspace` }, 400)
+    const [row] = await db.insert(appTable).values({ id: newId('app'), workspaceId: body.workspaceId, name: body.name, key, defaultBranch: body.defaultBranch ?? 'main', setup: body.setup ?? {} }).returning()
     return c.json(row, 201)
   })
   api.get('/apps/:id/storybook', async (c) => { try { return c.json(await storybookStatus(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
@@ -152,7 +239,26 @@ export function buildApp(bus: EventBus) {
     try { return c.json(await projectFromIdea(c.req.param('id'), body.tasks), 201) } catch (err) { return planError(c, err) }
   })
 
-  api.get('/tasks', async (c) => { const a = c.req.query('app'); return a ? c.json(await listTasks(a)) : c.json({ error: 'app is required: one app at a time' }, 400) })
+  // Issues: the one unit of work, as Linear has it. Code or a to-do; in a project or not; ordered among their siblings.
+  api.get('/issues', async (c) => {
+    const a = c.req.query('app')
+    if (!a) return c.json({ error: 'app is required: one app at a time' }, 400)
+    if (c.req.query('view') === 'code') return c.json(await listCodeIssues(a))
+    const project = c.req.query('project')
+    return c.json(await listIssues(a, { kind: c.req.query('kind') as 'code' | 'todo' | undefined, projectId: project === 'none' ? null : project, topLevel: c.req.query('top') === '1', open: c.req.query('open') === '1' }))
+  })
+  api.post('/issues', async (c) => {
+    const { appId, ...body } = await c.req.json()
+    try { return c.json(settle(await createIssue(appId, { ...body, delegate: body.kind === 'todo' || body.parentId ? null : 'planner' }, 'user')), 201) } catch (err) { return planError(c, err) }
+  })
+  api.post('/issues/reorder', async (c) => { const { ids } = await c.req.json<{ ids: string[] }>(); try { return c.json(await reorder(ids ?? [], 'user')) } catch (err) { return planError(c, err) } })
+  api.get('/issues/:id', async (c) => { try { return c.json(await issueDetail(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
+  api.patch('/issues/:id', async (c) => { try { return c.json(settle(await updateIssue(c.req.param('id'), await c.req.json(), 'user'))) } catch (err) { return planError(c, err) } })
+  api.post('/issues/:id/state', async (c) => {
+    const { state, reason } = await c.req.json<{ state: IssueState; reason?: string }>()
+    if (!ISSUE_STATES.includes(state)) return c.json({ error: `state must be one of ${ISSUE_STATES.join(', ')}` }, 400)
+    try { return c.json(settle(await changeState(c.req.param('id'), state, { actor: 'user', reason }))) } catch (err) { return planError(c, err) }
+  })
   api.get('/projects', async (c) => { const a = c.req.query('app'); return a ? c.json(await listProjects({ all: c.req.query('all') === '1', appId: a })) : c.json({ error: 'app is required: one app at a time' }, 400) })
   api.post('/projects', async (c) => {
     try { return c.json(await createProject(await c.req.json()), 201) } catch (err) { return planError(c, err) }
@@ -169,13 +275,13 @@ export function buildApp(bus: EventBus) {
     try { return c.json(await tick(c.req.param('id'), room)) } catch (err) { return planError(c, err, 404) }
   })
 
-  api.post('/tasks/:id/phases', async (c) => {
-    try { return c.json(await addPhases(c.req.param('id'), await c.req.json(), 'user'), 201) } catch (err) { return planError(c, err) }
+  api.post('/issues/:id/sub-issues', async (c) => {
+    try { return c.json(await addSubIssues(c.req.param('id'), await c.req.json(), 'user'), 201) } catch (err) { return planError(c, err) }
   })
-  api.delete('/tasks/:id/phases', async (c) => { // a draft task back to its brief, so it can be planned again
-    try { return c.json(await clearPhases(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) }
+  api.delete('/issues/:id/sub-issues', async (c) => { // a draft issue back to its brief, so it can be planned again
+    try { return c.json(await clearSubIssues(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) }
   })
-  api.post('/projects/:id/describe', async (c) => { // plain descriptions for tasks and phases that have none
+  api.post('/projects/:id/describe', async (c) => { // plain descriptions for issues and sub-issues that have none
     try { return c.json(await describeProject(c.req.param('id'))) } catch (err) { return planError(c, err) }
   })
   api.post('/projects/:id/cancel', async (c) => {
@@ -183,19 +289,18 @@ export function buildApp(bus: EventBus) {
   })
 
   // The planner takes minutes: by default the request returns at once and the outcome arrives on the event stream
-  // (task.planned or task.plan_failed, then the graph has the phases); ?wait=1 holds the request until it is done.
-  api.post('/tasks/:id/plan', async (c) => {
+  // (issue.planned or issue.plan_failed, then the graph has the sub-issues); ?wait=1 holds the request until it is done.
+  api.post('/issues/:id/plan', async (c) => {
     let ctx
     try { ctx = await preparePlanning(c.req.param('id'), { actor: 'user' }) } catch (err) { return planError(c, err) }
-    const onPlanned = () => void runner.dispatch() // phases planned into a running project start right away
+    const onPlanned = () => void runner.dispatch() // sub-issues planned into a running project start right away
     if (c.req.query('wait') === '1') { const out = await finishPlanning(ctx, { onPlanned }); return c.json(out, out.status === 'completed' ? 200 : 500) }
     void finishPlanning(ctx, { onPlanned })
     return c.json({ runId: ctx.runId }, 202)
   })
 
-  // The backlog: what the project has to cover. Resolving an item can let a waiting project land, or add a task to
+  // The backlog: what the project has to cover. Resolving one can let a waiting project land, or add an issue to
   // plan, so each change is followed by a dispatch pass.
-  const settle = <T>(v: T) => { void runner.dispatch(); return v }
   api.get('/projects/:id/backlog', async (c) => c.json(await listBacklog(c.req.param('id'))))
   api.post('/projects/:id/backlog', async (c) => {
     const body = await c.req.json<{ text?: string; body?: string; items?: { text: string; body?: string }[]; ideaId?: string }>()
@@ -204,16 +309,16 @@ export function buildApp(bus: EventBus) {
       return c.json(await addItems(c.req.param('id'), body.items ?? [{ text: body.text ?? '', body: body.body }], 'user'), 201)
     } catch (err) { return planError(c, err) }
   })
-  api.post('/projects/:id/tasks', async (c) => {
-    try { return c.json(settle(await addTask(c.req.param('id'), await c.req.json(), 'user')), 201) } catch (err) { return planError(c, err) }
+  api.post('/projects/:id/issues', async (c) => {
+    try { return c.json(settle(await addIssue(c.req.param('id'), await c.req.json(), 'user')), 201) } catch (err) { return planError(c, err) }
   })
-  api.post('/backlog/:id/task', async (c) => {
-    const body = await c.req.json<{ title?: string; brief?: string; description?: string }>().catch(() => ({}))
-    try { return c.json(settle(await itemToTask(c.req.param('id'), body, 'user')), 201) } catch (err) { return planError(c, err) }
+  api.post('/backlog/:id/take', async (c) => {
+    const body = await c.req.json<{ title?: string; brief?: string }>().catch(() => ({}))
+    try { return c.json(settle(await promote(c.req.param('id'), body, 'user'))) } catch (err) { return planError(c, err) }
   })
-  api.post('/backlog/:id/cover', async (c) => {
-    const { taskId, reason } = await c.req.json<{ taskId: string; reason?: string }>()
-    try { return c.json(settle(await coverItem(c.req.param('id'), taskId, reason, 'user'))) } catch (err) { return planError(c, err) }
+  api.post('/backlog/:id/duplicate', async (c) => {
+    const { of, reason } = await c.req.json<{ of: string; reason?: string }>()
+    try { return c.json(settle(await markDuplicate(c.req.param('id'), of, reason, 'user'))) } catch (err) { return planError(c, err) }
   })
   api.post('/backlog/:id/drop', async (c) => {
     const { reason } = await c.req.json<{ reason: string }>()
@@ -225,8 +330,8 @@ export function buildApp(bus: EventBus) {
   api.get('/todos/:id', async (c) => { try { return c.json(await getTodo(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   api.patch('/todos/:id', async (c) => { try { return c.json(await updateTodo(c.req.param('id'), await c.req.json(), 'user')) } catch (err) { return planError(c, err) } })
   api.post('/todos/:id/checklist', async (c) => { const { items } = await c.req.json<{ items: (string | { text: string; waitingOn?: string })[] }>(); try { return c.json(await addChecklist(c.req.param('id'), items ?? [], 'user')) } catch (err) { return planError(c, err) } })
-  api.patch('/checklist/:id', async (c) => { try { return c.json(await setChecklistItem(Number(c.req.param('id')), await c.req.json(), 'user')) } catch (err) { return planError(c, err) } })
-  api.delete('/checklist/:id', async (c) => { try { return c.json(await removeChecklistItem(Number(c.req.param('id')), 'user')) } catch (err) { return planError(c, err) } })
+  api.patch('/checklist/:id', async (c) => { try { return c.json(await setChecklistItem(c.req.param('id'), await c.req.json(), 'user')) } catch (err) { return planError(c, err) } })
+  api.delete('/checklist/:id', async (c) => { try { return c.json(await removeChecklistItem(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
   api.post('/todos/:id/draft', async (c) => { try { return c.json(await draftChecklist(c.req.param('id'))) } catch (err) { return planError(c, err) } }) // the agent drafts the checklist (a minute)
   api.post('/todos/:id/done', async (c) => { try { return c.json(await completeTodo(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
   api.post('/todos/:id/drop', async (c) => { const { reason } = await c.req.json<{ reason: string }>(); try { return c.json(await dropTodo(c.req.param('id'), reason, 'user')) } catch (err) { return planError(c, err) } })
@@ -236,6 +341,13 @@ export function buildApp(bus: EventBus) {
     try { return c.json(settle(await itemToTodo(c.req.param('id'), body, 'user')), 201) } catch (err) { return planError(c, err) }
   })
   api.post('/backlog/:id/reopen', async (c) => { try { return c.json(await reopenItem(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
+
+  // Goals, stated: initiatives (long term, served by projects) and cycles (a stretch of time with its issues).
+  api.get('/initiatives', async (c) => { const a = c.req.query('app'); return a ? c.json(await listInitiatives(a)) : c.json({ error: 'app is required: one app at a time' }, 400) })
+  api.post('/initiatives', async (c) => { try { return c.json(await createInitiative(await c.req.json(), 'user'), 201) } catch (err) { return planError(c, err) } })
+  api.patch('/initiatives/:id', async (c) => { try { return c.json(await updateInitiative(c.req.param('id'), await c.req.json(), 'user')) } catch (err) { return planError(c, err) } })
+  api.get('/cycles', async (c) => { const a = c.req.query('app'); return a ? c.json(await listCycles(a)) : c.json({ error: 'app is required: one app at a time' }, 400) })
+  api.post('/cycles', async (c) => { try { return c.json(await createCycle(await c.req.json(), 'user'), 201) } catch (err) { return planError(c, err) } })
 
   api.post('/questions/:id/answer', async (c) => {
     const { answer } = await c.req.json<{ answer: string }>()
@@ -255,14 +367,14 @@ export function buildApp(bus: EventBus) {
   api.get('/apps/:id/sync', (c) => c.json(lastSync.get(c.req.param('id')) ?? null))
   api.get('/engine', (c) => c.json({ hold: runner.hold })) // is the engine waiting for the model?
   api.post('/engine/release', async (c) => c.json(await runner.releaseHold())) // try the model now
-  api.post('/phases/:id/retry', async (c) => { // a failed or cancelled phase gets three more attempts; {fresh: true} starts over from the project's branch
+  api.post('/issues/:id/retry', async (c) => { // a failed or cancelled build gets three more attempts; {fresh: true} starts over from the project's branch
     const body = await c.req.json<{ fresh?: boolean }>().catch(() => ({} as { fresh?: boolean }))
-    try { return c.json(await runner.retryPhase(c.req.param('id'), { fresh: !!body.fresh })) } catch (err) { return planError(c, err) }
+    try { return c.json(await runner.retry(c.req.param('id'), { fresh: !!body.fresh })) } catch (err) { return planError(c, err) }
   })
-  api.post('/phases/:id/status', async (c) => {
-    const { status } = await c.req.json<{ status: PhaseStatus }>()
-    if (!PHASE_STATUSES.includes(status)) return c.json({ error: `status must be one of ${PHASE_STATUSES.join(', ')}` }, 400)
-    try { return c.json(await setPhaseStatus(c.req.param('id'), status)) } catch (err) { return planError(c, err, 404) }
+  api.post('/issues/:id/build', async (c) => {
+    const { status } = await c.req.json<{ status: BuildStatus }>()
+    if (!BUILD_STATUSES.includes(status)) return c.json({ error: `status must be one of ${BUILD_STATUSES.join(', ')}` }, 400)
+    try { return c.json(await setBuildStatus(c.req.param('id'), status)) } catch (err) { return planError(c, err, 404) }
   })
 
   // Claude Code (VS Code or terminal) drives the engine through MCP: the same tools as the conversations here.
@@ -271,7 +383,7 @@ export function buildApp(bus: EventBus) {
   // The live feed: replay from ?since=<seq>, then stream as events are committed.
   api.get('/events', (c) => {
     const since = Number(c.req.query('since') ?? 0)
-    const filter = { workspaceId: c.req.query('workspace'), appId: c.req.query('app'), projectId: c.req.query('project'), taskId: c.req.query('task'), phaseId: c.req.query('phase') }
+    const filter = { workspaceId: c.req.query('workspace'), appId: c.req.query('app'), projectId: c.req.query('project'), issueId: c.req.query('issue') }
     return streamSSE(c, async (stream) => {
       let last = since
       let sending: Promise<void> = Promise.resolve()
@@ -308,13 +420,14 @@ export function buildApp(bus: EventBus) {
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()!)) {
+  await ensureDatabase(DATABASE_URL)
   await migrate(db, { migrationsFolder: fileURLToPath(new URL('../drizzle', import.meta.url)) }) // idempotent; `pnpm dev` just works
   const bus = new EventBus()
   await bus.start()
   const recovered = await runner.recover()
   const stranded = await recoverPlanning()
   if (stranded) console.log(`[engine] ${stranded} planner run(s) interrupted by the restart; project those tasks again`)
-  if (recovered.projects || recovered.phases || recovered.reaped) console.log('recovered:', JSON.stringify(recovered))
+  if (recovered.projects || recovered.builds || recovered.reaped) console.log('recovered:', JSON.stringify(recovered))
   const port = Number(process.env.PORT ?? 4000)
   serve({ fetch: buildApp(bus).fetch, port }, (info) => console.log(`engine listening on http://localhost:${info.port}  (API under /api; UI at / when built)`))
   const stopSync = process.env.GITHUB_SYNC === '0' ? () => undefined : startSync(Number(process.env.GITHUB_SYNC_MINUTES ?? 2)) // GitHub: reviews, checks, merges, main moving
