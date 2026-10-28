@@ -114,7 +114,8 @@ committed event as it happens, via Postgres `LISTEN/NOTIFY`. Several clients can
 | `src/github.ts` | The sync: our PRs (merged issues become Done), teammates' PRs, main into open project branches. |
 | `src/runner.ts` | Start a project, dispatch ready builds under the cap across projects, launch, land, retry, keep the PR current, clean up, recover. |
 | `src/skills.ts` | Plugins and skills: Claude Code plugins installed by the SDK's own `claude plugin install` into `PLUGINS_HOME` (default `~/.self-evident/claude`, never `~/.claude`), plus `engine/plugin/` built in; each switched under All apps and per app, given to the talk agent and the planner as set, its skills filed by job; REA's MCP server supplied while its package leaves it out; REA's tools rated from its own catalogue. The app repo's `.claude/skills/` is the other layer. |
-| `src/catalogue.ts` | The jobs a skill can cover (`research/skills.md`'s categories), grouped by where they sit in the loop, with what the engine itself does there. |
+| `src/added-skills.ts` | Skills added as files (a link, an upload, pasted text): read and checked from their frontmatter, held in the `skill` table, written out as the `added` plugin under `SKILLS_HOME` (default `~/.self-evident/skills`) for sessions to load. |
+| `src/catalogue.ts` | The jobs a skill can cover (`research/skills.md`'s categories), grouped by where they sit in the loop, with what the engine itself does there and each job's candidates (their SKILL.md links). The jobs are also the tags. |
 | `src/integrations.ts` | The integrations (PostHog, Datadog): their fields, set under All apps (`workspace.settings`) and overridden per app field by field (`app.setup.integrations`). Never keys: a field names the `.env` variable. |
 | `src/summary.ts` | The Summary page's focus section, written by a model from the facts, stated goals first. |
 | `src/db/copy-legacy.ts` | One-off: the database from before the Linear shape into this one. |
