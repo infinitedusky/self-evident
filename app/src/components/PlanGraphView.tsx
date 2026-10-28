@@ -130,7 +130,9 @@ export interface PlanGraphViewProps {
   tall?: boolean
 }
 
-export function PlanGraphView({ subIssues: phases, files = [], onSelect, selectedId, labels, tall, storageKey }: PlanGraphViewProps) {
+const NO_FILES: GraphFile[] = [] // one array, not a new one each render: the layout effect keys on it
+
+export function PlanGraphView({ subIssues: phases, files = NO_FILES, onSelect, selectedId, labels, tall, storageKey }: PlanGraphViewProps) {
   // A shared file is drawn only where it is what keeps sub-issues from building side by side: between claimants that no
   // path of arrows already orders. Where an arrow already connects them, the file is part of that arrow's why.
   const ancestors = useMemo(() => {

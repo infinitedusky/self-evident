@@ -78,6 +78,7 @@ label.inline { display: inline-flex; gap: 6px; align-items: center; font: 14px v
 .ticker { list-style: none; margin: 0; padding: 0; max-height: 420px; overflow: auto; font-size: 13px; }
 .ticker li { display: grid; grid-template-columns: 64px 28px 110px 1fr; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); }
 .ticker li:first-child { border-top: 0; }
+.ticker.recent li { grid-template-columns: 92px 56px minmax(120px, 160px) 1fr; } /* My Stuff: a date, a project link and longer event types */
 .empty.bad { border-color: var(--bad); color: var(--bad); }
 a.badge { text-decoration: none; }
 
