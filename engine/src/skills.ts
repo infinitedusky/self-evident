@@ -6,8 +6,10 @@
  * A plugin here is a Claude Code plugin, installed by Claude Code's own installer (the SDK's bundled binary) into the
  * factory's config dir, never the operator's ~/.claude; what is installed is the installer's own record. Self
  * Evident's own plugin (`engine/plugin/`) is built in: it switches off but does not uninstall. Settings keep the rest:
- * each plugin on or off and which agents get it (an app may switch one for itself), and each skill filed under the
- * job it covers (catalogue.ts). The builder gets no plugins: it builds what the plan says.
+ * each plugin on or off and which agents get it (an app may switch one for itself); each skill's tags, the jobs it
+ * could do (catalogue.ts); and for each job, the one skill selected to do it. A plugin's skill is live only while it
+ * is selected for a job: installing a plugin adds skills to choose from, not to the agents. The builder gets no
+ * plugins: it builds what the plan says.
  */
 import type { McpServerConfig, SdkPluginConfig } from '@anthropic-ai/claude-agent-sdk'
 import { execFile } from 'node:child_process'
@@ -19,7 +21,7 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { eq } from 'drizzle-orm'
 import { parse } from 'yaml'
-import { CATEGORY_KEYS } from './catalogue.js'
+import { CATALOGUE, CATEGORY_KEYS } from './catalogue.js'
 import { db } from './db/client.js'
 import { app, workspace } from './db/schema.js'
 import { PlanError } from './issues.js'
@@ -29,8 +31,8 @@ export type Role = 'talk' | 'planner'
 export const ROLES: Role[] = ['talk', 'planner']
 
 export interface PluginSetting { on?: boolean; roles?: Role[] }
-export interface SkillSetting { category?: string | null; on?: boolean }
-export interface FactorySettings { plugins?: Record<string, PluginSetting>; skills?: Record<string, SkillSetting> }
+export interface SkillSetting { tags?: string[] }
+export interface FactorySettings { plugins?: Record<string, PluginSetting>; skills?: Record<string, SkillSetting>; jobs?: Record<string, string | null> }
 export type AppPlugins = Record<string, { on: boolean }> // an app's own switch, per plugin; absent inherits
 
 /** The factory's Claude Code config dir: the installer's marketplaces, cache and record of what is installed. */
@@ -38,8 +40,11 @@ export const PLUGINS_HOME = process.env.PLUGINS_HOME ?? join(homedir(), '.self-e
 const OWN_PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 const REA_ROOT = dirname(createRequire(import.meta.url).resolve('rea-agents/package.json'))
 
-/** Skills a known plugin brings, filed until someone files them otherwise. */
-const DEFAULT_CATEGORY: Record<string, string> = { 'rea@rea/reverse-engineer-anything': 'study-a-shipped-product' }
+/** Jobs done until someone selects otherwise: REA, the reason plugins exist here, studies shipped products. */
+const DEFAULT_JOBS: Record<string, string> = { 'study-a-shipped-product': 'rea@rea/reverse-engineer-anything' }
+/** A skill's tags until someone tags it: the jobs the catalogue saw it as a candidate for. */
+const DEFAULT_TAGS = new Map<string, string[]>()
+for (const c of CATALOGUE.flatMap((g) => g.categories)) for (const k of c.candidates ?? []) if (k.key) DEFAULT_TAGS.set(k.key, [...(DEFAULT_TAGS.get(k.key) ?? []), c.key])
 
 /**
  * MCP servers the factory supplies for a plugin whose package leaves them out. REA's npm package (what its
@@ -54,7 +59,7 @@ const SHIMS: Record<string, { mcpServers: Record<string, McpServerConfig>; note:
   },
 }
 
-export interface SkillInfo { key: string; name: string; description: string }
+export interface SkillInfo { key: string; name: string; description: string; personOnly: boolean }
 export interface Installed {
   id: string; name: string; sdkName: string; path: string; version: string | null; description: string
   source: string | null; builtIn: boolean; skills: SkillInfo[]; mcpServers: string[]; shim: string | null
@@ -63,14 +68,23 @@ export interface Installed {
 const readJson = (p: string) => { try { return JSON.parse(readFileSync(p, 'utf8')) } catch { return null } }
 const skillDirs = (dir: string) => { try { return readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name) } catch { return [] } }
 
-/** Each skill under a directory, described from its SKILL.md frontmatter; `prefix` makes the key. */
-function readSkills(dir: string, prefix: string | null): SkillInfo[] {
-  return skillDirs(dir).map((d) => {
-    let meta: { description?: string } = {}
-    try { meta = parse(readFileSync(join(dir, d, 'SKILL.md'), 'utf8').split(/^---\s*$/m)[1] ?? '') ?? {} } catch { /* no SKILL.md, or no frontmatter */ }
-    return { key: prefix ? `${prefix}/${d}` : d, name: d, description: meta.description ?? '' }
+/**
+ * Each skill folder, described from its SKILL.md frontmatter; `prefix` makes the key. `personOnly` is a skill only a
+ * person can start (`/name`): an agent can't pick it, so selecting it does nothing for the agents.
+ */
+function readSkillFolders(folders: string[], prefix: string | null): SkillInfo[] {
+  return folders.map((f) => {
+    let meta: { description?: string; 'disable-model-invocation'?: boolean } = {}
+    try { meta = parse(readFileSync(join(f, 'SKILL.md'), 'utf8').split(/^---\s*$/m)[1] ?? '') ?? {} } catch { /* no SKILL.md, or no frontmatter */ }
+    const d = basename(f)
+    return { key: prefix ? `${prefix}/${d}` : d, name: d, description: meta.description ?? '', personOnly: meta['disable-model-invocation'] === true }
   })
 }
+const readSkills = (dir: string, prefix: string | null) => readSkillFolders(skillDirs(dir).map((d) => join(dir, d)), prefix)
+/** A plugin's skills: the manifest's `skills`, a folder of them or a list of skill folders, else `skills/`. */
+const pluginSkills = (path: string, declared: unknown, id: string) => Array.isArray(declared)
+  ? readSkillFolders(declared.filter((x): x is string => typeof x === 'string').map((x) => join(path, x)), id)
+  : readSkills(join(path, typeof declared === 'string' ? declared : 'skills'), id)
 
 /** A plugin folder as the SDK will load it: named by its manifest, else by the folder (that is the SDK's rule). */
 function describe(id: string, path: string, extra: { builtIn: boolean; version?: string | null; source?: string | null; description?: string }): Installed {
@@ -83,7 +97,7 @@ function describe(id: string, path: string, extra: { builtIn: boolean; version?:
     version: manifest.version ?? pkg.version ?? (extra.version && extra.version !== 'unknown' ? extra.version : null),
     description: manifest.description ?? extra.description ?? pkg.description ?? '',
     source: extra.source ?? null, builtIn: extra.builtIn,
-    skills: readSkills(join(path, typeof manifest.skills === 'string' ? manifest.skills : 'skills'), id),
+    skills: pluginSkills(path, manifest.skills, id),
     mcpServers: shim ? Object.keys(shim.mcpServers) : own, shim: shim?.note ?? null,
   }
 }
@@ -108,29 +122,34 @@ export function installed(): Installed[] {
 /** On unless switched off: the app's own switch first, then the factory's. */
 export const pluginOn = (id: string, f: FactorySettings, a: AppPlugins = {}) => a[id]?.on ?? f.plugins?.[id]?.on ?? true
 export const pluginRoles = (id: string, f: FactorySettings) => f.plugins?.[id]?.roles ?? ROLES
-export const skillCategory = (key: string, f: FactorySettings) => f.skills?.[key] && 'category' in f.skills[key] ? f.skills[key].category ?? null : DEFAULT_CATEGORY[key] ?? null
-export const skillOn = (key: string, f: FactorySettings) => f.skills?.[key]?.on ?? true
+export const skillTags = (key: string, f: FactorySettings) => f.skills?.[key]?.tags ?? DEFAULT_TAGS.get(key) ?? []
+/** The skill selected for a job, or none; a job never set keeps its default. */
+export const jobSkill = (job: string, f: FactorySettings) => (f.jobs && job in f.jobs ? f.jobs[job] : DEFAULT_JOBS[job] ?? null)
+/** The skills selected for some job: the only plugin skills the agents see. */
+export const selectedSkills = (f: FactorySettings) => new Set([...CATEGORY_KEYS].map((j) => jobSkill(j, f)).filter((k): k is string => !!k))
 
-/** What a role gets in one app: the plugins switched on for it, and the skills switched on in them. */
+/** What a role gets in one app: the plugins switched on for it, and their skills selected for a job. */
 export function resolvePlugins(list: Installed[], f: FactorySettings, a: AppPlugins, role: Role) {
   const plugins = list.filter((p) => pluginOn(p.id, f, a) && pluginRoles(p.id, f).includes(role))
-  return { plugins, skills: plugins.flatMap((p) => p.skills.filter((s) => skillOn(s.key, f)).map((s) => `${p.sdkName}:${s.name}`)) }
+  const selected = selectedSkills(f)
+  return { plugins, skills: plugins.flatMap((p) => p.skills.filter((s) => selected.has(s.key)).map((s) => `${p.sdkName}:${s.name}`)) }
 }
 
-/**
- * File a skill, or switch it. One skill holds a category: switching one on there switches the others in it off,
- * since two skills for one job compete on their descriptions. The skills to file are the installed ones.
- */
-export function fileSkill(f: FactorySettings, key: string, change: SkillSetting, list: Installed[]): FactorySettings {
-  if (change.category != null && !CATEGORY_KEYS.has(change.category)) throw new PlanError(`no category ${change.category}`)
-  const all = list.flatMap((p) => p.skills.map((s) => s.key))
-  if (!all.includes(key)) throw new PlanError(`no skill ${key}`)
-  const skills = { ...(f.skills ?? {}), [key]: { ...(f.skills?.[key] ?? {}), ...change } }
-  const category = skillCategory(key, { skills })
-  if (category && skillOn(key, { skills })) {
-    for (const other of all) if (other !== key && skillCategory(other, { ...f, skills }) === category) skills[other] = { ...(skills[other] ?? {}), on: false }
-  }
-  return { ...f, skills }
+const installedSkill = (key: string, list: Installed[]) => { if (!list.some((p) => p.skills.some((s) => s.key === key))) throw new PlanError(`no skill ${key}`) }
+
+/** Tag a skill with the jobs it could do. */
+export function tagSkill(f: FactorySettings, key: string, tags: string[], list: Installed[]): FactorySettings {
+  installedSkill(key, list)
+  const bad = tags.find((t) => !CATEGORY_KEYS.has(t))
+  if (bad) throw new PlanError(`no job ${bad}`)
+  return { ...f, skills: { ...(f.skills ?? {}), [key]: { ...(f.skills?.[key] ?? {}), tags: [...new Set(tags)] } } }
+}
+
+/** Select the one installed skill that does a job, or none. */
+export function selectSkill(f: FactorySettings, job: string, key: string | null, list: Installed[]): FactorySettings {
+  if (!CATEGORY_KEYS.has(job)) throw new PlanError(`no job ${job}`)
+  if (key) installedSkill(key, list)
+  return { ...f, jobs: { ...(f.jobs ?? {}), [job]: key } }
 }
 
 async function settingsFor(appId: string) {
@@ -157,15 +176,19 @@ export async function skillOptions(role: Role, cwd: string, appId: string): Prom
 /** The app layer: the skills in an app repo's own `.claude/skills/`. */
 export const appSkills = (repoPath: string) => readSkills(join(repoPath, '.claude', 'skills'), null)
 
-/** The factory's plugins for Settings: each with its switches, its skills filed, and REA's tools by rating. */
+/** The factory's plugins for Settings: each with its switches, its skills tagged and selected, and REA's tools by rating. */
 export function describePlugins(f: FactorySettings) {
+  const jobsOf = (key: string) => [...CATEGORY_KEYS].filter((j) => jobSkill(j, f) === key)
   return installed().map((p) => ({
     id: p.id, name: p.name, version: p.version, description: p.description, source: p.source, builtIn: p.builtIn,
     on: pluginOn(p.id, f), roles: pluginRoles(p.id, f), mcpServers: p.mcpServers, note: p.shim,
-    skills: p.skills.map((s) => ({ ...s, category: skillCategory(s.key, f), on: skillOn(s.key, f) })),
+    skills: p.skills.map((s) => ({ ...s, tags: skillTags(s.key, f), jobs: jobsOf(s.key) })),
     tools: p.id === 'rea@rea' && p.shim ? reaTools() : null,
   }))
 }
+
+/** The jobs for Settings: the catalogue, each with the skill selected for it. */
+export const describeJobs = (f: FactorySettings) => CATALOGUE.map((g) => ({ ...g, categories: g.categories.map((c) => ({ ...c, skill: jobSkill(c.key, f) })) }))
 
 // The installer: the SDK's own Claude Code binary, pointed at the factory's config dir.
 const execFileP = promisify(execFile)
@@ -195,10 +218,11 @@ export async function removePlugin(id: string) {
   if (r.outcome !== 'ok') throw new PlanError(r.message ?? `could not uninstall ${id}`)
 }
 
-/** Forget what was set for a plugin that is gone: its switches and its skills' filing. */
+/** Forget what was set for a plugin that is gone: its switches, its skills' tags, and the jobs they did. */
 export function forgetPlugin(f: FactorySettings, id: string): FactorySettings {
   const { [id]: _, ...plugins } = f.plugins ?? {}
-  return { ...f, plugins, skills: Object.fromEntries(Object.entries(f.skills ?? {}).filter(([k]) => !k.startsWith(`${id}/`))) }
+  const mine = (k: string | null) => !!k?.startsWith(`${id}/`)
+  return { ...f, plugins, skills: Object.fromEntries(Object.entries(f.skills ?? {}).filter(([k]) => !mine(k))), jobs: Object.fromEntries(Object.entries(f.jobs ?? {}).filter(([, k]) => !mine(k))) }
 }
 
 /**
