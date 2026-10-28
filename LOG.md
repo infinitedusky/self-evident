@@ -524,6 +524,7 @@ the current app is).
   field (`app.setup.integrations`); an empty field inherits, shown in italics, an override is marked. Keys and
   tokens are never stored: a field names the `.env` variable that holds one.
 - Plugins per agent are shown, not switched: switching them would need stored state and nothing asks for it yet. (Superseded the same day: plugins are switched now; next entry.)
+- Next candidates for the same override pattern: the agents' model, budget and turns as All-apps defaults.
 
 ## Plugins: installed, switched, filed by what we do (Sandy, 2026-10-27)
 
@@ -555,7 +556,6 @@ the current app is).
 - Each machine installs REA once (Settings → Add a plugin: `morluto/rea`, `rea`). Checked on a scratch database:
   install, switch, file, app override, remove, reinstall; a live session got REA's server (229 tools) and exactly
   its one skill.
-  Next candidates for the same override pattern: the agents' model, budget and turns as All-apps defaults.
 
 ## Skills in two layers; REA for reverse engineering (Sandy, 2026-10-27)
 
