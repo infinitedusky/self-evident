@@ -543,6 +543,26 @@ the current app is).
   its one skill.
   Next candidates for the same override pattern: the agents' model, budget and turns as All-apps defaults.
 
+## Skills: a list with tags, and one selected per job (Sandy, 2026-10-27)
+
+Sandy, looking for the skills we meant to try: "what we need is a list of skills with tags, and then the different
+things we do, and a way to select one of the installed skills for it." This replaces filing each skill under one job.
+
+- **Jobs are the tags.** A skill's tags are the jobs it could do; it starts with the ones the catalogue saw it as a
+  candidate for (`engine/src/catalogue.ts` now carries each job's candidates), and can be retagged.
+- **Each job selects one installed skill**, tagged ones listed first, or none ("built in" where the engine does
+  it). A plugin skill reaches the agents only while selected for a job: installing a plugin adds skills to choose
+  from, not to the agents (Sandy's "off until filed"). REA is selected for "Study a shipped product" by default.
+- **Candidates under each job**, marked when installed, with an install button for the ones whose plugin we know
+  how to install (Pocock, Superpowers, Anthropic's example skills, REA).
+- **Person-only skills are marked.** Of Pocock's 27, 16 start only when a person types `/name` (wayfinder, to-spec,
+  to-tickets, handoff, teach, retro, grill-me…): selecting one does nothing for the agents. Agent-usable: tdd,
+  diagnosing-bugs, code-review, pr, grilling, domain-modeling, research, prototype, codebase-design, wizard,
+  writing-for-agents.
+- Caught on the way: the app's typecheck (`tsc -p .` on `app/`) checked nothing (`files: []`, references only), so
+  #58 shipped an app page that crashed when the repo had its own skills (Avoca). The real check is
+  `tsc -p tsconfig.app.json`; `pnpm build` runs it.
+
 ## Skills in two layers; REA for reverse engineering (Sandy, 2026-10-27)
 
 Sandy wants the agents able to study a feature someone else has shipped, to move fast on building our own. That
