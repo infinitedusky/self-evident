@@ -32,7 +32,8 @@ import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { runner } from './runner.js'
 import { cleanValues, effectiveIntegrations, INTEGRATIONS, type Values } from './integrations.js'
-import { appSkills, describeSkills } from './skills.js'
+import { CATALOGUE } from './catalogue.js'
+import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role } from './skills.js'
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
 
@@ -96,10 +97,54 @@ export function buildApp(bus: EventBus) {
     const [apps, repos] = await Promise.all([db.select().from(appTable), db.select().from(repoTable)])
     return c.json(apps.map((a) => ({ ...a, repos: repos.filter((r) => r.appId === a.id) })))
   })
-  // Settings: the workspace's integrations and the factory's skills; an app's own view is the merge, plus its repo's skills.
+  // Settings: the workspace's integrations, plugins and the jobs their skills cover; an app's own view is the merge,
+  // plus its repo's skills.
   api.get('/settings', async (c) => {
     const [w] = await db.select().from(workspace).limit(1)
-    return c.json({ workspace: w ?? null, integrations: INTEGRATIONS, values: ((w?.settings ?? {}) as { integrations?: Values }).integrations ?? {}, skills: describeSkills() })
+    const f = (w?.settings ?? {}) as FactorySettings & { integrations?: Values }
+    return c.json({ workspace: w ?? null, integrations: INTEGRATIONS, values: f.integrations ?? {}, plugins: describePlugins(f), catalogue: CATALOGUE })
+  })
+  // Plugins: installed by Claude Code's installer into the factory's own config dir (skills.ts); the switches and the
+  // filing are workspace settings.
+  const factory = async () => {
+    const [w] = await db.select().from(workspace).limit(1)
+    if (!w) throw new PlanError('no workspace')
+    return { w, f: (w.settings ?? {}) as FactorySettings }
+  }
+  const saveFactory = (id: string, settings: object) => db.update(workspace).set({ settings }).where(eq(workspace.id, id))
+  api.post('/plugins', async (c) => {
+    const body = await c.req.json<{ marketplace?: string; name?: string }>()
+    try { return c.json({ id: await installPlugin(body.marketplace ?? '', body.name ?? '') }, 201) } catch (err) { return planError(c, err) }
+  })
+  api.delete('/plugins/:id', async (c) => {
+    try {
+      const id = c.req.param('id')
+      await removePlugin(id)
+      const { w, f } = await factory()
+      await saveFactory(w.id, forgetPlugin(f, id))
+      return c.json({ ok: true })
+    } catch (err) { return planError(c, err) }
+  })
+  api.patch('/plugins/:id', async (c) => {
+    const body = await c.req.json<{ on?: boolean; roles?: Role[] }>()
+    try {
+      const id = c.req.param('id')
+      if (!installed().some((p) => p.id === id)) throw new PlanError(`no plugin ${id}`)
+      const { w, f } = await factory()
+      const roles = body.roles?.filter((r) => ROLES.includes(r))
+      const plugins = { ...(f.plugins ?? {}), [id]: { ...(f.plugins?.[id] ?? {}), ...(body.on !== undefined ? { on: body.on } : {}), ...(roles ? { roles } : {}) } }
+      await saveFactory(w.id, { ...f, plugins })
+      return c.json({ ok: true })
+    } catch (err) { return planError(c, err) }
+  })
+  api.patch('/skills/:key{.+}', async (c) => {
+    const body = await c.req.json<{ category?: string | null; on?: boolean }>()
+    try {
+      const { w, f } = await factory()
+      const change = { ...('category' in body ? { category: body.category ?? null } : {}), ...(body.on !== undefined ? { on: body.on } : {}) }
+      await saveFactory(w.id, fileSkill(f, c.req.param('key'), change, installed()))
+      return c.json({ ok: true })
+    } catch (err) { return planError(c, err) }
   })
   api.patch('/workspaces/:id', async (c) => {
     const body = await c.req.json<{ name?: string; integrations?: Values }>()
@@ -113,12 +158,19 @@ export function buildApp(bus: EventBus) {
     const [a] = await db.select().from(appTable).where(eq(appTable.id, c.req.param('id')))
     if (!a) return c.json({ error: 'no such app' }, 404)
     const [[w], [r]] = await Promise.all([db.select().from(workspace).where(eq(workspace.id, a.workspaceId)), db.select().from(repoTable).where(eq(repoTable.appId, a.id))])
-    const shared = ((w?.settings ?? {}) as { integrations?: Values }).integrations
-    return c.json({ integrations: effectiveIntegrations(shared, (a.setup as { integrations?: Values }).integrations), skills: r?.localPath ? appSkills(r.localPath) : [] })
+    const f = (w?.settings ?? {}) as FactorySettings & { integrations?: Values }
+    const setup = a.setup as { integrations?: Values; plugins?: AppPlugins }
+    const plugins = installed().map((p) => ({ id: p.id, name: p.name, factoryOn: pluginOn(p.id, f), own: setup.plugins?.[p.id]?.on ?? null, on: pluginOn(p.id, f, setup.plugins) }))
+    return c.json({ integrations: effectiveIntegrations(f.integrations, setup.integrations), plugins, skills: r?.localPath ? appSkills(r.localPath) : [] })
   })
   api.patch('/apps/:id', async (c) => {
     const body = await c.req.json<{ name?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
     if (body.setup && 'integrations' in body.setup) body.setup.integrations = cleanValues(body.setup.integrations)
+    if (body.setup && 'plugins' in body.setup) { // an app's own switch per plugin; null inherits
+      const known = new Set(installed().map((p) => p.id))
+      body.setup.plugins = Object.fromEntries(Object.entries((body.setup.plugins ?? {}) as Record<string, { on?: unknown } | null>)
+        .filter(([id, v]) => known.has(id) && typeof v?.on === 'boolean').map(([id, v]) => [id, { on: v!.on }]))
+    }
     const [row] = await db.update(appTable).set({ ...(body.name ? { name: body.name } : {}), ...(body.defaultBranch ? { defaultBranch: body.defaultBranch } : {}), ...(body.setup ? { setup: body.setup } : {}) })
       .where(eq(appTable.id, c.req.param('id'))).returning()
     return row ? c.json(row) : c.json({ error: 'no such app' }, 404)
