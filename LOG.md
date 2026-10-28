@@ -493,6 +493,20 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Everything is observed (Sandy, 2026-10-27: "part of our DNA")
+
+"When we build things we use telemetry." Anything we build that runs (a server, an app on a family's computer, a
+background service, a script) sends its logs to one central place, each line with a level, and errors alert right
+away. Nobody fetches a log file to find out what happened; if a test needs a log sent over, that's a bug in the
+build. It came up testing Homework Gate's Windows and Mac lock: both apps only wrote local files.
+
+How, for Homework Gate (PRs #72 Windows, #73 server, #74 Mac): standard OpenTelemetry into PostHog Logs, with
+PostHog log alerts on error and fatal. One `service.name` per program, an install id per computer, the environment,
+lines held on disk while offline, no homework text or names. It is the first invariant in Homework Gate's CLAUDE.md.
+
+For the factory: every app it builds gets this from its first PR, and a PR that adds something that runs without its
+logs wired is not done. The engine and app here owe the same (not yet: a to-do).
+
 ## Settings: All apps, then each app; apps override (Sandy, 2026-10-27)
 
 Settings was every app as one long form, stacked. Now it is a page with its own side list: **All apps** first, then
@@ -510,6 +524,7 @@ the current app is).
   field (`app.setup.integrations`); an empty field inherits, shown in italics, an override is marked. Keys and
   tokens are never stored: a field names the `.env` variable that holds one.
 - Plugins per agent are shown, not switched: switching them would need stored state and nothing asks for it yet. (Superseded the same day: plugins are switched now; next entry.)
+- Next candidates for the same override pattern: the agents' model, budget and turns as All-apps defaults.
 
 ## Plugins: installed, switched, filed by what we do (Sandy, 2026-10-27)
 
@@ -541,7 +556,6 @@ the current app is).
 - Each machine installs REA once (Settings → Add a plugin: `morluto/rea`, `rea`). Checked on a scratch database:
   install, switch, file, app override, remove, reinstall; a live session got REA's server (229 tools) and exactly
   its one skill.
-  Next candidates for the same override pattern: the agents' model, budget and turns as All-apps defaults.
 
 ## Skills in two layers; REA for reverse engineering (Sandy, 2026-10-27)
 
