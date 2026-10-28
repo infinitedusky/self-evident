@@ -55,7 +55,7 @@ describe('riskOf', () => {
     expect(r('Bash', { command: 'pnpm test > out.txt' })).toBe('moderate')
   })
   it('loading a skill is free; REA is rated by the hints in its own catalogue', () => {
-    expect(r('Skill', { skill: 'rea-agents:reverse-engineer-anything' })).toBe('free')
+    expect(r('Skill', { skill: 'unknown:reverse-engineer-anything' })).toBe('free')
     expect(r('mcp__rea__procedure_pseudo_code', {})).toBe('free')
     expect(r('mcp__rea__trace_application_feature', {})).toBe('free')
     expect(r('mcp__rea__analyze_javascript_application', {})).toBe('moderate') // REA marks it open-world: it launches its own analyser

@@ -156,7 +156,7 @@ async function open(sessionId: string): Promise<Live> {
   const setup = (a?.setup ?? {}) as { model?: string }
   const input = inputQueue()
   const entry: Live = { q: null as unknown as Query, push: input.push, close: input.close, pending: new Map(), rated: new Map(), outages: 0, always: new Set(), busy: false, autoApprove: (s.autoApprove as Risk) ?? 'cheap', cwd: s.cwd! }
-  const skills = skillOptions('talk', s.cwd!)
+  const skills = await skillOptions('talk', s.cwd!, s.appId)
   const q = query({
     prompt: input.it,
     options: {

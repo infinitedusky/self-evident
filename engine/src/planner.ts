@@ -21,6 +21,7 @@ import { addSubIssues, PlanError, projectGraph, type NewSubIssue } from './proje
 
 export interface ProposeInput {
   repoPath: string
+  appId?: string // its plugins, as switched for it; none without
   issue: { identifier: string; title: string; brief: string | null }
   project: { name: string; content: string | null }
   earlier: { identifier: string; title: string; subIssues: { identifier: string; title: string }[] }[] // issues before this one in the project
@@ -118,6 +119,7 @@ export const proposeWithAgent: Propose = async (i) => {
   let out: ProposeOutput = { status: 'failed', error: 'no result message' }
   let structured: unknown
   try {
+    const skills = i.appId ? await skillOptions('planner', i.repoPath, i.appId) : {}
     for await (const m of query({
       prompt: prompt(i),
       options: {
@@ -131,7 +133,7 @@ export const proposeWithAgent: Propose = async (i) => {
         allowedTools: READ_TOOLS, // auto-approved; the guard decides Bash (see guard.ts)
         permissionMode: 'default',
         outputFormat: { type: 'json_schema', schema: PROPOSAL_SCHEMA },
-        ...skillOptions('planner', i.repoPath),
+        ...skills,
         ...guardOptions(readerGuard(READ_TOOLS, reaReads)),
       },
     })) {
@@ -214,7 +216,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
   return {
     runId, issueId, projectId: t.projectId, appId: a.id, attempt, base,
     input: {
-      repoPath: r.localPath, issue: { identifier: name, title: t.title, brief: t.brief }, project: { name: g.project.name, content: g.project.content }, earlier,
+      repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, project: { name: g.project.name, content: g.project.content }, earlier,
       testCmd: setup.test_cmd, model: setup.model, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }

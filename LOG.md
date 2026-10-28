@@ -509,7 +509,38 @@ the current app is).
   values are set under All apps (`workspace.settings.integrations`, a new column) and each app may override any
   field (`app.setup.integrations`); an empty field inherits, shown in italics, an override is marked. Keys and
   tokens are never stored: a field names the `.env` variable that holds one.
-- Plugins per agent are shown, not switched: switching them would need stored state and nothing asks for it yet.
+- Plugins per agent are shown, not switched: switching them would need stored state and nothing asks for it yet. (Superseded the same day: plugins are switched now; next entry.)
+
+## Plugins: installed, switched, filed by what we do (Sandy, 2026-10-27)
+
+"REA is a plugin, so it needs a section and a way to add it, delete it, enable it, disable it."
+
+- **Three words, three sections.** An **integration** is someone else's system we connect to (PostHog, Datadog,
+  later Linear), whether by values or through an MCP server. A **plugin** is a self-contained thing we install that
+  gives the agents new abilities: skills, tools (MCP servers), or both. A **skill** is instructions an agent picks
+  by its description; it arrives in a plugin or in an app's repo, so it is filed, never installed on its own. MCP
+  is the wire, not the category: REA's tools run on this machine and reach no one.
+- **A Self Evident plugin is a Claude Code plugin.** No SDK of our own: Anthropic's plugin format is the spec, and
+  ours documents only what we add (which agents get it; tools rated from their MCP hints, unknown asks).
+- **Installed by Claude Code's own installer**, the SDK's bundled binary, into the factory's config dir
+  (`PLUGINS_HOME`, default `~/.self-evident/claude`), never the operator's `~/.claude`. Add is a marketplace
+  (owner/repo, git URL or path) and a name; remove uninstalls. What is installed is the installer's record. No
+  `-y`: a plugin whose install runs a command is refused. `engine/plugin/` is built in: it switches off, never
+  uninstalls.
+- **Switched under All apps, overridden per app** (Sandy's pick): each plugin on or off, and which agents get it
+  (talk, planner; the builder none). An app switches a plugin for itself (`app.setup.plugins`).
+- **Skills filed by job**, the catalogue's categories (`engine/src/catalogue.ts`, from `research/skills.md`). One
+  skill holds a job: agents choose by description, so two for one job compete; filing one where another is on
+  switches the other off. Settings shows every job with what covers it: a plugin's skill, the engine itself
+  ("built in"), or nothing yet.
+- **REA's install is half broken upstream.** Its marketplace installs the npm package, which has neither the plugin
+  manifest nor its dependencies: the skill arrives, the 229 tools don't (morluto/rea#5062). Until that ships, the
+  engine starts REA's server from its own `rea-agents` while the installed plugin declares none; the shim retires
+  itself when it does. Manifest-less, the SDK names the plugin after its folder (`unknown`), and the engine names
+  skills by the same rule.
+- Each machine installs REA once (Settings → Add a plugin: `morluto/rea`, `rea`). Checked on a scratch database:
+  install, switch, file, app override, remove, reinstall; a live session got REA's server (229 tools) and exactly
+  its one skill.
   Next candidates for the same override pattern: the agents' model, budget and turns as All-apps defaults.
 
 ## Skills in two layers; REA for reverse engineering (Sandy, 2026-10-27)

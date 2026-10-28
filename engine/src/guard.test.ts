@@ -16,7 +16,7 @@ describe('readerGuard', () => {
   })
   it('admits the extra reads it is given, and nothing else from that server', () => {
     const p = readerGuard(['Read', 'Skill'], (t) => t.startsWith('mcp__rea__') && reaRisk(t.slice(10)).risk === 'free')
-    expect(p('Skill', { skill: 'rea-agents:reverse-engineer-anything' })).toEqual({ allow: true })
+    expect(p('Skill', { skill: 'unknown:reverse-engineer-anything' })).toEqual({ allow: true })
     expect(p('mcp__rea__procedure_pseudo_code', {})).toEqual({ allow: true })
     expect(p('mcp__rea__capture_browser_scenario', {}).allow).toBe(false)
     expect(p('mcp__rea__inspect_web_page', {}).allow).toBe(false)
