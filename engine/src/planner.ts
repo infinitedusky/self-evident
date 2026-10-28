@@ -26,6 +26,7 @@ export interface ProposeInput {
   project: { name: string; content: string | null }
   earlier: { identifier: string; title: string; subIssues: { identifier: string; title: string }[] }[] // issues before this one in the project
   testCmd?: string
+  storybook?: boolean // the app keeps a Storybook: stories lead its UI
   model?: string
   maxTurns?: number
   maxBudgetUsd?: number
@@ -100,6 +101,7 @@ function prompt(i: ProposeInput): string {
     '- checks: behavioural checks a non-engineer could read aloud, with the command and the expected result where there is one.',
     '- done_when: one sentence.',
     i.testCmd ? `- The tests run with: ${i.testCmd}` : '- There is no test command configured; say in each sub-issue how it is verified.',
+    i.storybook ? '- Stories lead the UI: this app keeps a Storybook. In a sub-issue that adds or changes a screen, the first step writes the stories (each new or changed page, component and state, with labelled sample data) and the steps after it build the screen to match. A check says the stories render.' : '',
     '',
     'Decisions and questions:',
     '- A choice you can settle from the brief and the code: settle it, and record it as a decision with the alternatives you rejected and the reason. Never settle such a choice silently.',
@@ -178,7 +180,7 @@ export function validateProposal(p: Proposal) {
   }
 }
 
-interface AppSetup { test_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number }
+interface AppSetup { test_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number; storybook_url?: string; storybook_cmd?: string }
 
 export interface PlanningContext {
   runId: string; issueId: string; projectId: string; appId: string; attempt: number
@@ -217,7 +219,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
     runId, issueId, projectId: t.projectId, appId: a.id, attempt, base,
     input: {
       repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, project: { name: g.project.name, content: g.project.content }, earlier,
-      testCmd: setup.test_cmd, model: setup.model, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
+      testCmd: setup.test_cmd, storybook: !!(setup.storybook_url || setup.storybook_cmd), model: setup.model, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }
 }

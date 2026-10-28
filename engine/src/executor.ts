@@ -14,6 +14,7 @@ export interface RunInput {
   branch: string
   files: string[]
   testCmd?: string
+  storybook?: boolean // the app keeps a Storybook: stories lead its UI
   previousFailure?: string
   model?: string
   maxTurns?: number
@@ -49,6 +50,7 @@ function prompt(i: RunInput): string {
     `- Work only inside this directory. It is a git worktree on branch ${i.branch}. Do not change branches, do not push, do not open pull requests.`,
     '- These paths are yours to change:', files,
     '  Touch other files only if the sub-issue cannot be done without it, and say so in your summary.',
+    i.storybook ? '- Stories lead the UI: this app keeps a Storybook. Every new or changed page, component and state gets its story first, with made-up sample data labelled as such, and the screen is built to match it. A screen without a story is not done.' : '',
     '- Keep your todo list current as you work; it is shown live to the people watching this sub-issue.',
     i.testCmd ? `- Run the tests with: ${i.testCmd}\n  They must pass before you finish. Add or adjust tests for what you change.` : '- There is no test command configured; verify your change by running it.',
     '- Commit your work with a clear message when it is done (git add -A && git commit). Leave nothing uncommitted.',
