@@ -1,12 +1,12 @@
 /**
- * Settings, in two levels with a side list: All apps (what every app gets: the plugins, the jobs their skills cover,
- * the integrations' shared values) and one page per app (its repo, its agents, its plugins, how it lands, its
+ * Settings, in two levels with a side list: All apps (what every app gets: the plugins, what we do and the skill doing
+ * each job, every installed skill with its tags, the integrations' shared values) and one page per app (its repo, its agents, its plugins, how it lands, its
  * Storybook, and its own integration values; each inherits All apps until the app overrides it).
  */
 import { useEffect, useState } from 'react'
 import { NavLink, useParams } from 'react-router'
 import { Badge } from '../components/Badge'
-import { engine, type AgentRole, type App, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type FactorySettings, type Integration, type IntegrationValues, type PluginInfo, type Repo } from '../engine'
+import { engine, type AgentRole, type App, type AppSettings as AppSettingsData, type AppSetup, type FactorySettings, type Integration, type IntegrationValues, type Job, type JobGroup, type PluginInfo, type PluginSkill, type Repo } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
@@ -65,14 +65,20 @@ function FactoryPage() {
       <section className="panel" data-component="Plugins">
         <h2>Plugins</h2>
         <p className="muted settings-lead">What the factory installs to give its agents more to work with: skills, tools, or both. Each is a Claude Code plugin, installed for Self Evident only (not your own Claude Code). The builder gets none; it builds what the plan says.</p>
-        {s.plugins.map((p) => <PluginBlock key={p.id} p={p} catalogue={s.catalogue} act={act} />)}
+        {s.plugins.map((p) => <PluginBlock key={p.id} p={p} act={act} />)}
         <AddPlugin onAdded={load} />
       </section>
 
-      <section className="panel" data-component="SkillsByJob">
-        <h2>Skills by what we do</h2>
-        <p className="muted settings-lead">One skill per job: agents pick a skill by its description, so two for the same job compete. Filing a skill under a job that already has one replaces it. Skills in an app's own repo are on that app's page.</p>
-        <Jobs plugins={s.plugins} catalogue={s.catalogue} />
+      <section className="panel" data-component="Jobs">
+        <h2>What we do</h2>
+        <p className="muted settings-lead">Each job, and the one installed skill selected to do it. Agents pick a skill by its description, so two for one job would compete. A plugin's skills reach the agents only once selected here. Skills in an app's own repo are on that app's page.</p>
+        <Jobs s={s} act={act} reload={load} />
+      </section>
+
+      <section className="panel" data-component="Skills">
+        <h2>Skills</h2>
+        <p className="muted settings-lead">Every installed skill. Tags are the jobs it could do; a job's list shows its tagged skills first.</p>
+        <Skills s={s} act={act} />
       </section>
 
       <section className="panel">
@@ -91,8 +97,10 @@ function FactoryPage() {
   )
 }
 
-/** One plugin: its switch, its agents, its skills filed by job, and what its tools could cost. */
-function PluginBlock({ p, catalogue, act }: { p: PluginInfo; catalogue: CategoryGroup[]; act: (f: () => Promise<unknown>) => () => Promise<void> }) {
+/** One plugin: its switch, its agents, how many of its skills do a job, and what its tools could cost. */
+type Act = (f: () => Promise<unknown>) => () => Promise<void>
+
+function PluginBlock({ p, act }: { p: PluginInfo; act: Act }) {
   const roles = (r: AgentRole) => (p.roles.includes(r) ? p.roles.filter((x) => x !== r) : [...p.roles, r])
   const remove = act(async () => { if (window.confirm(`Uninstall ${p.name}? Its settings go with it.`)) await engine.removePlugin(p.id) })
   return (
@@ -115,24 +123,10 @@ function PluginBlock({ p, catalogue, act }: { p: PluginInfo; catalogue: Category
           ))}
         </div>
       </div>
-      <div className="plugin-row top"><span className="label-text">Skills</span>
-        {p.skills.length ? (
-          <ul className="list plugin-skills">
-            {p.skills.map((k) => (
-              <li key={k.key} className={k.on ? '' : 'off'}>
-                <div className="plugin-skill-head">
-                  <span className="mono">{k.name}</span>
-                  <select value={k.category ?? ''} onChange={(e) => void act(() => engine.fileSkill(k.key, { category: e.target.value || null, on: true }))()}>
-                    <option value="">Not filed</option>
-                    {catalogue.map((g) => <optgroup key={g.name} label={g.name}>{g.categories.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}</optgroup>)}
-                  </select>
-                  <button className={`switch small ${k.on ? 'on' : ''}`} aria-pressed={k.on} onClick={act(() => engine.fileSkill(k.key, { on: !k.on }))}>{k.on ? 'On' : 'Off'}</button>
-                </div>
-                {k.description && <div className="muted settings-desc">{k.description}</div>}
-              </li>
-            ))}
-          </ul>
-        ) : <span className="faint">None yet{p.builtIn ? <>: a skill is a folder under <span className="mono">engine/plugin/skills/</span></> : ''}.</span>}
+      <div className="plugin-row"><span className="label-text">Skills</span>
+        {p.skills.length
+          ? <span>{p.skills.length} <span className="faint">· {p.skills.filter((k) => k.jobs.length).length} doing a job</span></span>
+          : <span className="faint">None yet{p.builtIn ? <>: a skill is a folder under <span className="mono">engine/plugin/skills/</span></> : ''}.</span>}
       </div>
       {p.tools && (
         <div className="plugin-row top"><span className="label-text">Tools</span>
@@ -177,27 +171,55 @@ function AddPlugin({ onAdded }: { onAdded: () => Promise<unknown> }) {
   )
 }
 
-/** The catalogue's jobs, each with what covers it: a plugin's skill, the engine itself, or nothing yet. */
-function Jobs({ plugins, catalogue }: { plugins: PluginInfo[]; catalogue: CategoryGroup[] }) {
-  const filed = plugins.flatMap((p) => p.skills.filter((k) => k.category).map((k) => ({ ...k, plugin: p })))
+const allSkills = (s: FactorySettings) => s.plugins.flatMap((p) => p.skills.map((k) => ({ ...k, plugin: p })))
+const jobNames = (groups: JobGroup[]) => new Map(groups.flatMap((g) => g.categories.map((c) => [c.key, c.name] as const)))
+
+/** The jobs, each with a select of installed skills (tagged ones first), what the engine does there, and candidates. */
+function Jobs({ s, act, reload }: { s: FactorySettings; act: Act; reload: () => Promise<unknown> }) {
+  const skills = allSkills(s)
+  const [installing, setInstalling] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const install = async (pluginId: string) => {
+    const src = s.sources[pluginId]
+    setInstalling(pluginId); setError(null)
+    try { await engine.installPlugin(src.marketplace, src.name); await reload() } catch (e) { setError(err(e)) } finally { setInstalling(null) }
+  }
+  const installed = new Set(skills.map((k) => k.key))
+  const option = (k: (typeof skills)[number]) => <option key={k.key} value={k.key}>{k.name} · {k.plugin.name}{k.personOnly ? ' (person only)' : ''}</option>
   return (
     <>
-      {catalogue.map((g) => (
+      {error && <div className="empty bad">{error}</div>}
+      {s.jobs.map((g) => (
         <div className="settings-group" key={g.name}>
           <h3 className="settings-h3">{g.name}</h3>
           <dl className="fields jobs">
-            {g.categories.map((c) => {
-              const here = filed.filter((k) => k.category === c.key)
+            {g.categories.map((c: Job) => {
+              const tagged = skills.filter((k) => k.tags.includes(c.key))
+              const rest = skills.filter((k) => !k.tags.includes(c.key))
+              const chosen = skills.find((k) => k.key === c.skill)
+              const toInstall = [...new Set((c.candidates ?? []).filter((x) => x.key && !installed.has(x.key)).map((x) => x.key!.split('/')[0]))]
+                .filter((id) => s.sources[id] && !s.plugins.some((p) => p.id === id))
               return (
                 <div key={c.key} style={{ display: 'contents' }}>
                   <dt>{c.name}<div className="faint settings-desc">{c.for}</div></dt>
                   <dd>
-                    {here.map((k) => {
-                      const live = k.on && k.plugin.on
-                      return <div key={k.key} className={live ? '' : 'off'}><span className="mono">{k.name}</span> <Badge tone={live ? 'accent' : undefined}>{k.plugin.name}</Badge>{!live && <span className="faint"> · off</span>}</div>
-                    })}
-                    {c.builtIn && <div className={here.some((k) => k.on && k.plugin.on) ? 'faint' : ''}>{c.builtIn} <span className="faint">· built in</span></div>}
-                    {!here.length && !c.builtIn && <span className="faint">—</span>}
+                    <div className="job-pick">
+                      <select value={c.skill ?? ''} onChange={(e) => void act(() => engine.selectSkill(c.key, e.target.value || null))()}>
+                        <option value="">{c.builtIn ? 'Built in (no skill)' : 'No skill'}</option>
+                        {tagged.length > 0 && <optgroup label="Tagged for this">{tagged.map(option)}</optgroup>}
+                        {rest.length > 0 && <optgroup label="Other installed skills">{rest.map(option)}</optgroup>}
+                      </select>
+                      {chosen && !chosen.plugin.on && <span className="faint">its plugin is off</span>}
+                      {chosen?.personOnly && <span className="faint">a person starts it with /{chosen.name}; agents can't</span>}
+                    </div>
+                    {c.builtIn && <div className={`settings-desc ${chosen ? 'faint' : ''}`}>{c.builtIn} <span className="faint">· built in</span></div>}
+                    {c.candidates?.length ? (
+                      <div className="faint settings-desc">Candidates: {c.candidates.map((x, i) => (
+                        <span key={x.name + x.by}>{i > 0 && ', '}<span className="mono">{x.name}</span> ({x.by}){x.key && installed.has(x.key) ? ' ✓' : ''}</span>
+                      ))}
+                        {toInstall.map((id) => <button key={id} className="btn quiet tiny" disabled={!!installing} onClick={() => void install(id)}>{installing === id ? 'Installing…' : `Install ${s.sources[id].name}`}</button>)}
+                      </div>
+                    ) : null}
                   </dd>
                 </div>
               )
@@ -206,6 +228,54 @@ function Jobs({ plugins, catalogue }: { plugins: PluginInfo[]; catalogue: Catego
         </div>
       ))}
     </>
+  )
+}
+
+/** Every installed skill: what it says it does, the job it is doing, and its tags (edited only once asked for). */
+function Skills({ s, act }: { s: FactorySettings; act: Act }) {
+  const skills = allSkills(s)
+  const names = jobNames(s.jobs)
+  if (!skills.length) return <div className="empty">No skills installed yet. Add a plugin above, or install a candidate from a job.</div>
+  return (
+    <ul className="list skill-list">
+      {skills.map((k) => <SkillRow key={k.key} k={k} names={names} groups={s.jobs} act={act} />)}
+    </ul>
+  )
+}
+
+function SkillRow({ k, names, groups, act }: { k: PluginSkill & { plugin: PluginInfo }; names: Map<string, string>; groups: JobGroup[]; act: Act }) {
+  const [editing, setEditing] = useState(false)
+  const toggle = (tag: string) => act(() => engine.tagSkill(k.key, k.tags.includes(tag) ? k.tags.filter((t) => t !== tag) : [...k.tags, tag]))
+  return (
+    <li className={k.jobs.length ? '' : 'off'}>
+      <div className="plugin-skill-head">
+        <span className="mono">{k.name}</span> <Badge>{k.plugin.name}</Badge>
+        {k.personOnly && <Badge tone="warn">person only</Badge>}
+        {k.jobs.length ? <span>doing: {k.jobs.map((j) => names.get(j)).join(', ')}</span> : <span className="faint">not selected for a job</span>}
+      </div>
+      {k.description && <div className="muted settings-desc skill-desc">{k.description}</div>}
+      <div className="skill-tags">
+        {k.tags.map((t) => <span key={t} className="tag">{names.get(t) ?? t}</span>)}
+        <button className="btn quiet tiny" onClick={() => setEditing(!editing)}>{editing ? 'Done' : k.tags.length ? 'Edit tags' : 'Add tags'}</button>
+      </div>
+      {editing && (
+        <div className="tag-editor">
+          {groups.map((g) => (
+            <div key={g.name}><span className="label-text">{g.name}</span>
+              {g.categories.map((c) => <button key={c.key} className={`switch small ${k.tags.includes(c.key) ? 'on' : ''}`} aria-pressed={k.tags.includes(c.key)} onClick={toggle(c.key)}>{c.name}</button>)}
+            </div>
+          ))}
+        </div>
+      )}
+    </li>
+  )
+}
+
+function SkillList({ skills }: { skills: { name: string; description: string }[] }) {
+  return (
+    <ul className="list">
+      {skills.map((k) => <li key={k.name}><span className="mono">{k.name}</span>{k.description && <div className="muted settings-desc">{k.description}</div>}</li>)}
+    </ul>
   )
 }
 

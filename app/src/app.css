@@ -289,8 +289,20 @@ button.badge { border: 0; cursor: pointer; }
 .plugin-skill-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .plugin-skill-head select, .settings .fields select { font: 13px var(--sans); padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); max-width: 100%; }
 .plugin.off > :not(.plugin-head), .plugin-skills li.off, .jobs dd .off { opacity: .55; }
-.fields.jobs { grid-template-columns: minmax(180px, 260px) 1fr; }
+.fields.jobs { grid-template-columns: minmax(180px, 260px) minmax(0, 1fr); }
 .jobs dt { text-transform: none; letter-spacing: 0; font: 600 13px/1.5 var(--sans); color: var(--ink); }
 .jobs dd { margin-bottom: 8px; }
 .jobs dt .settings-desc { font-weight: 400; }
-@media (max-width: 760px) { .fields.jobs { grid-template-columns: 1fr; gap: 2px; } .plugin-head { flex-direction: column; } .plugin-row { grid-template-columns: 1fr; gap: 4px; } }
+@media (max-width: 760px) { .settings { grid-template-columns: minmax(0, 1fr); } .fields.jobs { grid-template-columns: minmax(0, 1fr); gap: 2px; } .plugin-head { flex-direction: column; } .plugin-row { grid-template-columns: 1fr; gap: 4px; } }
+/* What we do and Skills: a select per job; each skill with its tags */
+.job-pick { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.job-pick select { min-width: 0; width: min(100%, 420px); font: 13px var(--sans); padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); max-width: 100%; }
+.btn.tiny { padding: 1px 8px; font-size: 12px; margin-left: 6px; }
+.skill-list li.off { opacity: .7; }
+.skill-desc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.skill-tags { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+.tag { font: 12px var(--sans); padding: 1px 8px; border-radius: 999px; background: var(--accent-wash); color: var(--accent); }
+.tag-editor { display: grid; gap: 6px; margin-top: 8px; padding: 10px; border: 1px dashed var(--line); border-radius: 8px; }
+.tag-editor > div { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.tag-editor .label-text { width: 140px; }
+@media (max-width: 760px) { .tag-editor .label-text { width: 100%; } }

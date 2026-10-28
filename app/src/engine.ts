@@ -66,20 +66,21 @@ export interface App { id: string; workspaceId?: string; name: string; key: stri
 export interface Workspace { id: string; name: string; settings?: { integrations?: IntegrationValues } }
 
 // Settings: integrations set for the workspace and overridden per app field by field; plugins switched for the
-// workspace and per app; each plugin skill filed under the job it covers (the catalogue).
+// workspace and per app; each plugin skill tagged with the jobs it could do, and one selected per job.
 export type IntegrationValues = Record<string, Record<string, string>>
 export interface Integration { key: string; name: string; role: string; does: string; fields: { key: string; label: string; placeholder?: string }[] }
 export type AgentRole = 'talk' | 'planner'
-export interface SkillInfo { key: string; name: string; description: string }
-export interface PluginSkill extends SkillInfo { category: string | null; on: boolean }
+export interface SkillInfo { key: string; name: string; description: string; personOnly: boolean }
+export interface PluginSkill extends SkillInfo { tags: string[]; jobs: string[] }
 export type Ratings = Record<'free' | 'moderate' | 'expensive', number>
 export interface PluginInfo {
   id: string; name: string; version: string | null; description: string; source: string | null; builtIn: boolean
   on: boolean; roles: AgentRole[]; mcpServers: string[]; note: string | null; skills: PluginSkill[]; tools: { count: number; ratings: Ratings } | null
 }
-export interface Category { key: string; name: string; for: string; builtIn?: string }
-export interface CategoryGroup { name: string; categories: Category[] }
-export interface FactorySettings { workspace: Workspace | null; integrations: Integration[]; values: IntegrationValues; plugins: PluginInfo[]; catalogue: CategoryGroup[] }
+export interface Candidate { name: string; by: string; key?: string }
+export interface Job { key: string; name: string; for: string; builtIn?: string; candidates?: Candidate[]; skill: string | null }
+export interface JobGroup { name: string; categories: Job[] }
+export interface FactorySettings { workspace: Workspace | null; integrations: Integration[]; values: IntegrationValues; plugins: PluginInfo[]; jobs: JobGroup[]; sources: Record<string, { marketplace: string; name: string }> }
 export interface AppPlugin { id: string; name: string; factoryOn: boolean; own: boolean | null; on: boolean }
 export interface AppSettings { integrations: Record<string, Record<string, { value: string | null; from: 'app' | 'workspace' | null }>>; plugins: AppPlugin[]; skills: SkillInfo[] }
 export interface Event { seq: number; ts: string; type: string; actor: string; issueId: string | null; projectId: string | null; payload: Record<string, unknown> }
@@ -153,7 +154,8 @@ export const engine = {
   installPlugin: (marketplace: string, name: string) => call<{ id: string }>('POST', '/plugins', { marketplace, name }),
   removePlugin: (id: string) => call<{ ok: true }>('DELETE', `/plugins/${encodeURIComponent(id)}`),
   updatePlugin: (id: string, body: { on?: boolean; roles?: AgentRole[] }) => call<{ ok: true }>('PATCH', `/plugins/${encodeURIComponent(id)}`, body),
-  fileSkill: (key: string, body: { category?: string | null; on?: boolean }) => call<{ ok: true }>('PATCH', `/skills/${key.split('/').map(encodeURIComponent).join('/')}`, body),
+  tagSkill: (key: string, tags: string[]) => call<{ ok: true }>('PATCH', `/skills/${key.split('/').map(encodeURIComponent).join('/')}`, { tags }),
+  selectSkill: (job: string, skill: string | null) => call<{ ok: true }>('PUT', `/jobs/${encodeURIComponent(job)}`, { skill }),
   createWorkspace: (name: string) => call<Workspace>('POST', '/workspaces', { name }),
   createApp: (body: { workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: AppSetup }) => call<App>('POST', '/apps', body),
   updateApp: (id: string, body: { name?: string; defaultBranch?: string; setup?: AppSetup }) => call<App>('PATCH', `/apps/${id}`, body),
