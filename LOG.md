@@ -543,6 +543,26 @@ the current app is).
   its one skill.
   Next candidates for the same override pattern: the agents' model, budget and turns as All-apps defaults.
 
+## Skills are files; plugins are for tools (Sandy, 2026-10-27)
+
+Sandy, after trying Pocock's plugin (27 skills in one go, read wrong by the live version): "I don't really like this
+plugin thing. We should add skills. They are files. You can give a URL to the file, or upload it, or paste the text."
+
+- **A skill is added as one file**, a SKILL.md with `name` and `description` in its frontmatter: from a link (a
+  GitHub file or folder link becomes its raw SKILL.md), an uploaded file, or pasted text. Refused clearly: no
+  frontmatter, no description, a bad name, a name already added, a link to a web page.
+- **Held in Postgres, live at once** (Sandy's pick). The `skill` table keeps the text and where it came from, so a
+  link can be refreshed; the engine writes them out as a plugin folder named `added` (`SKILLS_HOME`, default
+  `~/.self-evident/skills`) that sessions load. This bends SHAPE's "git holds authored inputs (skills)": a skill is
+  something we try before we keep, and trying should not take a PR. A skill worth keeping can still move into
+  `engine/plugin/skills/` or an app's repo by PR.
+- **Tags and jobs unchanged**: an added skill is tagged and selected like any other, and reaches the agents only
+  when selected for a job. Each job's candidates now carry their SKILL.md link, so "Add" fetches that one file.
+- **Plugins stay, for tools** (Sandy's pick): a plugin is what brings tools the agents call, like REA's 229. Their
+  skills join the list. Our own `engine/plugin/` and `added` are built in and not shown as plugins.
+- Limit taken: one file per skill. A skill that leans on files beside it (some of Superpowers' do) arrives without
+  them; it would have to be pasted whole or come as a plugin.
+
 ## Skills: a list with tags, and one selected per job (Sandy, 2026-10-27)
 
 Sandy, looking for the skills we meant to try: "what we need is a list of skills with tags, and then the different
