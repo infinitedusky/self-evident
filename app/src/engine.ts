@@ -77,10 +77,12 @@ export interface PluginInfo {
   id: string; name: string; version: string | null; description: string; source: string | null; builtIn: boolean
   on: boolean; roles: AgentRole[]; mcpServers: string[]; note: string | null; skills: PluginSkill[]; tools: { count: number; ratings: Ratings } | null
 }
-export interface Candidate { name: string; by: string; key?: string }
+export interface Candidate { name: string; by: string; key?: string; url?: string }
+export type SkillSource = 'url' | 'upload' | 'paste'
+export interface AddedSkill { key: string; name: string; source: SkillSource; sourceUrl: string | null; changedAt: string }
 export interface Job { key: string; name: string; for: string; builtIn?: string; candidates?: Candidate[]; skill: string | null }
 export interface JobGroup { name: string; categories: Job[] }
-export interface FactorySettings { workspace: Workspace | null; integrations: Integration[]; values: IntegrationValues; plugins: PluginInfo[]; jobs: JobGroup[]; sources: Record<string, { marketplace: string; name: string }> }
+export interface FactorySettings { workspace: Workspace | null; integrations: Integration[]; values: IntegrationValues; plugins: PluginInfo[]; jobs: JobGroup[]; sources: Record<string, { marketplace: string; name: string }>; added: AddedSkill[] }
 export interface AppPlugin { id: string; name: string; factoryOn: boolean; own: boolean | null; on: boolean }
 export interface AppSettings { integrations: Record<string, Record<string, { value: string | null; from: 'app' | 'workspace' | null }>>; plugins: AppPlugin[]; skills: SkillInfo[] }
 export interface Event { seq: number; ts: string; type: string; actor: string; issueId: string | null; projectId: string | null; payload: Record<string, unknown> }
@@ -155,6 +157,11 @@ export const engine = {
   removePlugin: (id: string) => call<{ ok: true }>('DELETE', `/plugins/${encodeURIComponent(id)}`),
   updatePlugin: (id: string, body: { on?: boolean; roles?: AgentRole[] }) => call<{ ok: true }>('PATCH', `/plugins/${encodeURIComponent(id)}`, body),
   tagSkill: (key: string, tags: string[]) => call<{ ok: true }>('PATCH', `/skills/${key.split('/').map(encodeURIComponent).join('/')}`, { tags }),
+  addSkill: (body: { url?: string; content?: string; name?: string; source: SkillSource }) => call<{ key: string }>('POST', '/skills', body),
+  addedSkill: (name: string) => call<{ content: string }>('GET', `/skills/added/${encodeURIComponent(name)}`),
+  editSkill: (name: string, content: string) => call<{ ok: true }>('PUT', `/skills/added/${encodeURIComponent(name)}`, { content }),
+  refreshSkill: (name: string) => call<{ ok: true }>('POST', `/skills/added/${encodeURIComponent(name)}/refresh`),
+  removeSkill: (name: string) => call<{ ok: true }>('DELETE', `/skills/added/${encodeURIComponent(name)}`),
   selectSkill: (job: string, skill: string | null) => call<{ ok: true }>('PUT', `/jobs/${encodeURIComponent(job)}`, { skill }),
   createWorkspace: (name: string) => call<Workspace>('POST', '/workspaces', { name }),
   createApp: (body: { workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: AppSetup }) => call<App>('POST', '/apps', body),

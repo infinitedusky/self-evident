@@ -1,12 +1,12 @@
 /**
- * Settings, in two levels with a side list: All apps (what every app gets: the plugins, what we do and the skill doing
- * each job, every installed skill with its tags, the integrations' shared values) and one page per app (its repo, its agents, its plugins, how it lands, its
+ * Settings, in two levels with a side list: All apps (what every app gets: the skills, added as files and tagged with
+ * the jobs they could do; what we do, and the skill doing each job; plugins, for tools; the integrations' shared values) and one page per app (its repo, its agents, its plugins, how it lands, its
  * Storybook, and its own integration values; each inherits All apps until the app overrides it).
  */
 import { useEffect, useState } from 'react'
 import { NavLink, useParams } from 'react-router'
 import { Badge } from '../components/Badge'
-import { engine, type AgentRole, type App, type AppSettings as AppSettingsData, type AppSetup, type FactorySettings, type Integration, type IntegrationValues, type Job, type JobGroup, type PluginInfo, type PluginSkill, type Repo } from '../engine'
+import { engine, type AgentRole, type App, type AppSettings as AppSettingsData, type AddedSkill, type AppSetup, type FactorySettings, type Integration, type IntegrationValues, type Candidate, type Job, type JobGroup, type PluginInfo, type PluginSkill, type Repo } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
@@ -62,23 +62,24 @@ function FactoryPage() {
   const act = (f: () => Promise<unknown>) => async () => { setError(null); try { await f(); await load() } catch (e) { setError(err(e)) } }
   return (
     <>
-      <section className="panel" data-component="Plugins">
-        <h2>Plugins</h2>
-        <p className="muted settings-lead">What the factory installs to give its agents more to work with: skills, tools, or both. Each is a Claude Code plugin, installed for Self Evident only (not your own Claude Code). The builder gets none; it builds what the plan says.</p>
-        {s.plugins.map((p) => <PluginBlock key={p.id} p={p} act={act} />)}
-        <AddPlugin onAdded={load} />
+      <section className="panel" data-component="Skills">
+        <h2>Skills</h2>
+        <p className="muted settings-lead">A skill is one file: instructions an agent picks up when its description matches the work. Add one from a link, a file, or by pasting it. Tags are the jobs it could do. Skills in an app's own repo are on that app's page.</p>
+        <AddSkill onAdded={load} />
+        <Skills s={s} act={act} />
       </section>
 
       <section className="panel" data-component="Jobs">
         <h2>What we do</h2>
-        <p className="muted settings-lead">Each job, and the one installed skill selected to do it. Agents pick a skill by its description, so two for one job would compete. A plugin's skills reach the agents only once selected here. Skills in an app's own repo are on that app's page.</p>
+        <p className="muted settings-lead">Each job, and the one skill selected to do it. Agents pick a skill by its description, so two for one job would compete. A skill reaches the agents only once it is selected here.</p>
         <Jobs s={s} act={act} reload={load} />
       </section>
 
-      <section className="panel" data-component="Skills">
-        <h2>Skills</h2>
-        <p className="muted settings-lead">Every installed skill. Tags are the jobs it could do; a job's list shows its tagged skills first.</p>
-        <Skills s={s} act={act} />
+      <section className="panel" data-component="Plugins">
+        <h2>Plugins</h2>
+        <p className="muted settings-lead">For tools: a plugin brings tools the agents can call, like REA's. It's a Claude Code plugin, installed for Self Evident only (not your own Claude Code). Its skills join the list above. The builder gets none; it builds what the plan says.</p>
+        {s.plugins.filter((p) => !p.builtIn).map((p) => <PluginBlock key={p.id} p={p} act={act} />)}
+        <AddPlugin onAdded={load} />
       </section>
 
       <section className="panel">
@@ -177,12 +178,16 @@ const jobNames = (groups: JobGroup[]) => new Map(groups.flatMap((g) => g.categor
 /** The jobs, each with a select of installed skills (tagged ones first), what the engine does there, and candidates. */
 function Jobs({ s, act, reload }: { s: FactorySettings; act: Act; reload: () => Promise<unknown> }) {
   const skills = allSkills(s)
-  const [installing, setInstalling] = useState<string | null>(null)
+  const [adding, setAdding] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const install = async (pluginId: string) => {
-    const src = s.sources[pluginId]
-    setInstalling(pluginId); setError(null)
-    try { await engine.installPlugin(src.marketplace, src.name); await reload() } catch (e) { setError(err(e)) } finally { setInstalling(null) }
+  const get = async (x: Candidate) => {
+    const plugin = x.key && s.sources[x.key.split('/')[0]]
+    setAdding(x.key ?? x.name); setError(null)
+    try {
+      if (x.url) await engine.addSkill({ url: x.url, source: 'url' })
+      else if (plugin) await engine.installPlugin(plugin.marketplace, plugin.name)
+      await reload()
+    } catch (e) { setError(err(e)) } finally { setAdding(null) }
   }
   const installed = new Set(skills.map((k) => k.key))
   const option = (k: (typeof skills)[number]) => <option key={k.key} value={k.key}>{k.name} · {k.plugin.name}{k.personOnly ? ' (person only)' : ''}</option>
@@ -197,8 +202,6 @@ function Jobs({ s, act, reload }: { s: FactorySettings; act: Act; reload: () => 
               const tagged = skills.filter((k) => k.tags.includes(c.key))
               const rest = skills.filter((k) => !k.tags.includes(c.key))
               const chosen = skills.find((k) => k.key === c.skill)
-              const toInstall = [...new Set((c.candidates ?? []).filter((x) => x.key && !installed.has(x.key)).map((x) => x.key!.split('/')[0]))]
-                .filter((id) => s.sources[id] && !s.plugins.some((p) => p.id === id))
               return (
                 <div key={c.key} style={{ display: 'contents' }}>
                   <dt>{c.name}<div className="faint settings-desc">{c.for}</div></dt>
@@ -215,9 +218,9 @@ function Jobs({ s, act, reload }: { s: FactorySettings; act: Act; reload: () => 
                     {c.builtIn && <div className={`settings-desc ${chosen ? 'faint' : ''}`}>{c.builtIn} <span className="faint">· built in</span></div>}
                     {c.candidates?.length ? (
                       <div className="faint settings-desc">Candidates: {c.candidates.map((x, i) => (
-                        <span key={x.name + x.by}>{i > 0 && ', '}<span className="mono">{x.name}</span> ({x.by}){x.key && installed.has(x.key) ? ' ✓' : ''}</span>
+                        <span key={x.name + x.by}>{i > 0 && ', '}<span className="mono">{x.name}</span> ({x.by}){x.key && installed.has(x.key) ? ' ✓'
+                          : (x.url || (x.key && s.sources[x.key.split('/')[0]])) ? <button className="btn quiet tiny" disabled={!!adding} onClick={() => void get(x)}>{adding === (x.key ?? x.name) ? 'Adding…' : 'Add'}</button> : null}</span>
                       ))}
-                        {toInstall.map((id) => <button key={id} className="btn quiet tiny" disabled={!!installing} onClick={() => void install(id)}>{installing === id ? 'Installing…' : `Install ${s.sources[id].name}`}</button>)}
                       </div>
                     ) : null}
                   </dd>
@@ -231,25 +234,71 @@ function Jobs({ s, act, reload }: { s: FactorySettings; act: Act; reload: () => 
   )
 }
 
+/** Adding a skill is a form only once asked for: a link, a file, or pasted text. */
+function AddSkill({ onAdded }: { onAdded: () => Promise<unknown> }) {
+  const [how, setHow] = useState<'url' | 'upload' | 'paste' | null>(null)
+  const [url, setUrl] = useState('')
+  const [content, setContent] = useState('')
+  const [file, setFile] = useState('')
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const reset = () => { setHow(null); setUrl(''); setContent(''); setFile(''); setName(''); setError(null) }
+  const ready = how === 'url' ? !!url.trim() : !!content.trim()
+  const add = async () => {
+    setBusy(true); setError(null)
+    try { await engine.addSkill({ source: how!, ...(how === 'url' ? { url } : { content }), name: name.trim() || undefined }); reset(); await onAdded() } catch (e) { setError(err(e)) } finally { setBusy(false) }
+  }
+  const pick = (f?: File) => { if (!f) return; setFile(f.name); if (!name) setName(f.name.replace(/\.md$/i, '').toLowerCase() === 'skill' ? '' : f.name.replace(/\.md$/i, '').toLowerCase()); void f.text().then(setContent) }
+  if (!how) return (
+    <div className="add-skill-row">
+      <span className="label-text">Add a skill</span>
+      <button className="btn quiet tiny" onClick={() => setHow('url')}>From a link</button>
+      <button className="btn quiet tiny" onClick={() => setHow('upload')}>Upload a file</button>
+      <button className="btn quiet tiny" onClick={() => setHow('paste')}>Paste it</button>
+    </div>
+  )
+  return (
+    <div className="settings-group add-skill">
+      <h3 className="settings-h3">{how === 'url' ? 'Add a skill from a link' : how === 'upload' ? 'Upload a skill' : 'Paste a skill'}</h3>
+      <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>One SKILL.md: frontmatter with a <span className="mono">name</span> and a <span className="mono">description</span>, then the instructions.{how === 'url' && ' A GitHub link to the file or its folder works.'}</p>
+      {how === 'url' && <label className="label-text">Link<input className="mono wide-input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://github.com/owner/repo/blob/main/skills/name/SKILL.md" /></label>}
+      {how === 'upload' && <label className="label-text">File<input type="file" accept=".md,text/markdown,text/plain" onChange={(e) => pick(e.target.files?.[0])} /></label>}
+      {how === 'upload' && file && <div className="faint settings-desc">{file}: {content.length.toLocaleString()} characters</div>}
+      {how === 'paste' && <textarea className="mono wide-input" rows={12} value={content} onChange={(e) => setContent(e.target.value)} placeholder={'---\nname: my-skill\ndescription: When to use it.\n---\n\nThe instructions.'} />}
+      {how !== 'url' && <label className="label-text">Name, if the file doesn't give one<input className="mono" value={name} onChange={(e) => setName(e.target.value)} placeholder="lowercase-with-dashes" /></label>}
+      <div className="settings-save">
+        <button className="btn" disabled={busy || !ready} onClick={() => void add()}>{busy ? 'Adding…' : 'Add'}</button>
+        <button className="btn quiet" disabled={busy} onClick={reset}>Cancel</button>
+        {error && <span className="bad">{error}</span>}
+      </div>
+    </div>
+  )
+}
+
 /** Every installed skill: what it says it does, the job it is doing, and its tags (edited only once asked for). */
 function Skills({ s, act }: { s: FactorySettings; act: Act }) {
   const skills = allSkills(s)
   const names = jobNames(s.jobs)
-  if (!skills.length) return <div className="empty">No skills installed yet. Add a plugin above, or install a candidate from a job.</div>
+  if (!skills.length) return <div className="empty">No skills yet. Add one above, or add a candidate from a job below.</div>
   return (
     <ul className="list skill-list">
-      {skills.map((k) => <SkillRow key={k.key} k={k} names={names} groups={s.jobs} act={act} />)}
+      {skills.map((k) => <SkillRow key={k.key} k={k} added={s.added.find((a) => a.key === k.key)} names={names} groups={s.jobs} act={act} />)}
     </ul>
   )
 }
 
-function SkillRow({ k, names, groups, act }: { k: PluginSkill & { plugin: PluginInfo }; names: Map<string, string>; groups: JobGroup[]; act: Act }) {
+function SkillRow({ k, added, names, groups, act }: { k: PluginSkill & { plugin: PluginInfo }; added?: AddedSkill; names: Map<string, string>; groups: JobGroup[]; act: Act }) {
   const [editing, setEditing] = useState(false)
+  const [text, setText] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const open = async () => { setError(null); try { setText(text === null ? (await engine.addedSkill(k.name)).content : null) } catch (e) { setError(err(e)) } }
+  const save = async () => { setError(null); try { await engine.editSkill(k.name, text ?? ''); setText(null); await act(async () => undefined)() } catch (e) { setError(err(e)) } }
   const toggle = (tag: string) => act(() => engine.tagSkill(k.key, k.tags.includes(tag) ? k.tags.filter((t) => t !== tag) : [...k.tags, tag]))
   return (
     <li className={k.jobs.length ? '' : 'off'}>
       <div className="plugin-skill-head">
-        <span className="mono">{k.name}</span> <Badge>{k.plugin.name}</Badge>
+        <span className="mono">{k.name}</span> {!added && <Badge>{k.plugin.name}</Badge>}
         {k.personOnly && <Badge tone="warn">person only</Badge>}
         {k.jobs.length ? <span>doing: {k.jobs.map((j) => names.get(j)).join(', ')}</span> : <span className="faint">not selected for a job</span>}
       </div>
@@ -257,7 +306,20 @@ function SkillRow({ k, names, groups, act }: { k: PluginSkill & { plugin: Plugin
       <div className="skill-tags">
         {k.tags.map((t) => <span key={t} className="tag">{names.get(t) ?? t}</span>)}
         <button className="btn quiet tiny" onClick={() => setEditing(!editing)}>{editing ? 'Done' : k.tags.length ? 'Edit tags' : 'Add tags'}</button>
+        {added && <>
+          <span className="faint skill-source">{added.sourceUrl ? <>from <a href={added.sourceUrl} target="_blank" rel="noreferrer">{added.sourceUrl.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)}</a></> : added.source === 'upload' ? 'uploaded' : 'pasted'}</span>
+          <button className="btn quiet tiny" onClick={() => void open()}>{text === null ? 'Text' : 'Close'}</button>
+          {added.sourceUrl && <button className="btn quiet tiny" onClick={act(() => engine.refreshSkill(k.name))}>Refresh</button>}
+          <button className="btn quiet tiny" onClick={act(async () => { if (window.confirm(`Remove ${k.name}? Its tags and job go with it.`)) await engine.removeSkill(k.name) })}>Remove</button>
+        </>}
       </div>
+      {error && <div className="bad settings-desc">{error}</div>}
+      {text !== null && (
+        <div className="skill-text">
+          <textarea className="mono" value={text} onChange={(e) => setText(e.target.value)} rows={14} />
+          <div className="settings-save"><button className="btn" onClick={() => void save()}>Save</button><button className="btn quiet" onClick={() => setText(null)}>Cancel</button></div>
+        </div>
+      )}
       {editing && (
         <div className="tag-editor">
           {groups.map((g) => (

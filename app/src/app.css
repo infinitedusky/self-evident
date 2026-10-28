@@ -306,3 +306,12 @@ button.badge { border: 0; cursor: pointer; }
 .tag-editor > div { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 .tag-editor .label-text { width: 140px; }
 @media (max-width: 760px) { .tag-editor .label-text { width: 100%; } }
+/* Adding a skill: a link, a file, or pasted text; an added skill's text opens in place */
+.add-skill-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.add-skill-row .label-text { margin-right: 6px; }
+.add-skill { margin-bottom: 14px; }
+.add-skill label { margin-top: 8px; }
+.wide-input, .skill-text textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 13px; text-transform: none; letter-spacing: 0; }
+.add-skill label input:not([type=file]) { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); text-transform: none; letter-spacing: 0; }
+.skill-source { font-size: 12px; margin-left: 6px; overflow-wrap: anywhere; }
+.skill-text { margin-top: 8px; }
