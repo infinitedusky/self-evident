@@ -98,6 +98,7 @@ a.badge { text-decoration: none; }
 .task-chip { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px 6px 10px; font-size: 14px; }
 .task-chip::before { counter-increment: task; content: counter(task); font: 600 12px var(--mono); color: var(--accent); }
 .steps { list-style: none; margin: 4px 0 0; padding: 0; }
+.planned-steps { margin: 4px 0 0; padding-left: 22px; } .planned-steps li { padding: 3px 0; }
 .steps li { padding: 2px 0; } .steps li.completed { color: var(--ink-faint); } .steps li.in_progress { font-weight: 600; }
 .task-block { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; background: var(--surface); }
 .task-block-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }

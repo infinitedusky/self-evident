@@ -55,6 +55,7 @@ export interface IssueDetail extends Issue {
   build: { status: BuildStatus; attempt: number; heldReason: string | null } | null; questions: Question[]; decisions: Decision[]
   relations: { issueId: string; relatedIssueId: string; type: 'blocks' | 'related' | 'duplicate' }[]
   subIssues: (Issue & { build: { status: BuildStatus; attempt: number; heldReason: string | null } | null })[]
+  steps: { id: number; text: string; status: 'pending' | 'in_progress' | 'completed' }[]; stepsAttempt: number | null
 }
 export interface Initiative { id: string; name: string; description: string | null; status: 'planned' | 'active' | 'completed'; targetDate: string | null; projects: { id: string; name: string; status: string }[] }
 export interface Cycle { id: string; number: number; name: string | null; description: string | null; startsAt: string; endsAt: string; current: boolean; issues: { id: string; identifier: string; title: string; state: IssueState; kind: string }[] }

@@ -5,6 +5,8 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Badge, type Tone } from '../components/Badge'
 import { Brief } from '../components/Brief'
 import { STATUS_TONE } from '../components/PlanGraphView'
@@ -66,6 +68,8 @@ export function IssuePage() {
       {i.build?.heldReason && i.build.status !== 'done' && <div className="empty" style={{ marginBottom: 16 }}>{i.build.heldReason}</div>}
       <section className="panel"><Brief description={i.description} brief={i.brief} open={!i.description} /></section>
 
+      {i.parentId && code && <Steps i={i} />}
+
       {(planned || !i.parentId) && (
         <section className="panel">
           <h2>{code ? 'Sub-issues' : 'Checklist'} {planned && <Badge>{i.subIssues.filter((s) => s.state === 'done').length}/{i.subIssues.length}</Badge>}</h2>
@@ -98,5 +102,50 @@ export function IssuePage() {
         </section>
       )}
     </>
+  )
+}
+
+/** The steps in a sub-issue's brief, as the planner wrote them: "### Steps", numbered, each with its technical note under it. */
+function plannedSteps(brief: string | null): { text: string; technical: string }[] {
+  const section = brief?.split(/^### Steps\s*$/m)[1]?.split(/^(?:### |\*\*Done when)/m)[0] ?? ''
+  const steps: { text: string; technical: string }[] = []
+  for (const line of section.split('\n')) {
+    const item = line.match(/^\d+\.\s+(.*)/)
+    if (item) steps.push({ text: item[1], technical: '' })
+    else if (steps.length && /^\s+-\s+/.test(line)) steps[steps.length - 1].technical = line.replace(/^\s+-\s+/, '')
+  }
+  return steps
+}
+
+/** A sub-issue's steps: the planner's, until the builder starts and keeps its own list; then the builder's, live, with the plan folded under it. */
+function Steps({ i }: { i: IssueDetail }) {
+  const plan = plannedSteps(i.brief)
+  const built = i.steps ?? []
+  const [technical, setTechnical] = useState(false)
+  const md = (text: string) => <Markdown remarkPlugins={[remarkGfm]} components={{ p: ({ children }) => <>{children}</> }}>{text}</Markdown>
+  const planList = (
+    <>
+      <ol className="planned-steps">
+        {plan.map((s, n) => <li key={n}>{md(s.text)}{technical && s.technical && <div className="faint md" style={{ fontSize: 13 }}>{md(s.technical)}</div>}</li>)}
+      </ol>
+      {plan.some((s) => s.technical) && <button className="btn quiet" style={{ marginTop: 6 }} onClick={() => setTechnical(!technical)}>{technical ? 'Hide' : 'Show'} the technical notes</button>}
+    </>
+  )
+  return (
+    <section className="panel">
+      <h2>Steps {built.length > 0 && <Badge>{built.filter((s) => s.status === 'completed').length}/{built.length}</Badge>}</h2>
+      {built.length > 0 ? (
+        <>
+          <p className="faint" style={{ margin: '0 0 6px', fontSize: 13 }}>The builder's list, attempt {i.stepsAttempt}.</p>
+          <ul className="steps">{built.map((s) => <li key={s.id} className={s.status}><span className="mono">{s.status === 'completed' ? '✓' : s.status === 'in_progress' ? '●' : '○'}</span> {s.text}</li>)}</ul>
+          {plan.length > 0 && <details style={{ marginTop: 10 }}><summary className="faint">As planned</summary>{planList}</details>}
+        </>
+      ) : plan.length > 0 ? (
+        <>
+          <p className="faint" style={{ margin: '0 0 6px', fontSize: 13 }}>As planned. The builder keeps its own list once it starts.</p>
+          {planList}
+        </>
+      ) : <p className="faint" style={{ margin: 0 }}>No steps yet: the builder writes its list when it starts.</p>}
+    </section>
   )
 }
