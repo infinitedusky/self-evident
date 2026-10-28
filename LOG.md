@@ -493,6 +493,21 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Stories lead the UI, and every screen has them (Sandy, 2026-10-28: "full coverage, and make sure it leads building")
+
+- **Every page and component in `app/` has stories**, beside it as `<Name>.stories.tsx`. The real pages render
+  against a fake engine (MSW through `msw-storybook-addon`, as SHAPE.md chose): `app/src/stories/sample.ts` is one
+  made-up app, Sample Shop, typed against the engine's own types; `mock-engine.ts` answers every GET the UI makes,
+  says ok to writes and keeps the event stream open and silent. A story changes what the engine says with
+  `beforeEach: withEngine({...})`. The data is invented and says so: the repository is public.
+- **The gate:** `pnpm --filter app test` fails when a page or component has no stories file (`src/stories.test.ts`),
+  and the storybook project renders every story in a browser, so a screen that crashes fails too.
+- **Stories lead:** for us, a new screen or state starts as a story and is built to match. For the factory, any app
+  with Storybook set (`storybook_url` or `storybook_cmd`) tells the planner to make the stories the first step of a
+  sub-issue that changes a screen, and tells the builder a screen without a story is not done.
+- Found on the way: Settings used a `SkillList` that 9a3c141 had removed, so an app whose repo has its own skills
+  crashed its settings page. Restored.
+
 ## Settings: All apps, then each app; apps override (Sandy, 2026-10-27)
 
 Settings was every app as one long form, stacked. Now it is a page with its own side list: **All apps** first, then
