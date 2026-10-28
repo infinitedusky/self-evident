@@ -3,23 +3,23 @@
  * sit in the loop. The jobs are also the tags: a skill tagged with a job could do it, and one installed skill is
  * selected to do it, since two skills for one job compete on their descriptions. `builtIn` is what the engine itself
  * does there, when it does; replacing that is a decision (the catalogue's "borrow"), not a selection. `candidates`
- * are the skills the catalogue saw for the job; `key` (`<plugin id>/<skill>`) is set when the plugin is installable.
+ * are the skills the catalogue saw for the job: `url` is its SKILL.md when it is public, to add as a file, and `key`
+ * is what it is called once added (`added/<name>`, or a plugin's `<plugin id>/<skill>`).
  */
 
-export interface Candidate { name: string; by: string; key?: string }
+export interface Candidate { name: string; by: string; key?: string; url?: string }
 export interface Category { key: string; name: string; for: string; builtIn?: string; candidates?: Candidate[] }
 export interface Group { name: string; categories: Category[] }
 
-/** Where each candidate's plugin installs from: a Claude Code marketplace and the plugin's name in it. */
+/** Where a candidate that comes as a plugin (for its tools) installs from: a marketplace and the plugin's name. */
 export const SOURCES: Record<string, { marketplace: string; name: string }> = {
   'rea@rea': { marketplace: 'morluto/rea', name: 'rea' },
-  'mattpocock-skills@mattpocock': { marketplace: 'mattpocock/skills', name: 'mattpocock-skills' },
-  'superpowers@superpowers-marketplace': { marketplace: 'obra/superpowers-marketplace', name: 'superpowers' },
-  'example-skills@anthropic-agent-skills': { marketplace: 'anthropics/skills', name: 'example-skills' },
 }
-const pocock = (skill: string): Candidate => ({ name: skill, by: 'Pocock', key: `mattpocock-skills@mattpocock/${skill}` })
-const sp = (skill: string): Candidate => ({ name: skill, by: 'Superpowers', key: `superpowers@superpowers-marketplace/${skill}` })
-const anthropic = (skill: string): Candidate => ({ name: skill, by: 'Anthropic', key: `example-skills@anthropic-agent-skills/${skill}` })
+const file = (name: string, by: string, url: string): Candidate => ({ name, by, url, key: `added/${name}` })
+const POCOCK_PRODUCTIVITY = new Set(['grilling', 'grill-me', 'handoff', 'teach', 'wait-what', 'writing-for-agents'])
+const pocock = (skill: string) => file(skill, 'Pocock', `https://github.com/mattpocock/skills/blob/main/skills/${POCOCK_PRODUCTIVITY.has(skill) ? 'productivity' : 'engineering'}/${skill}/SKILL.md`)
+const sp = (skill: string) => file(skill, 'Superpowers', `https://github.com/obra/superpowers/blob/main/skills/${skill}/SKILL.md`)
+const anthropic = (skill: string) => file(skill, 'Anthropic', `https://github.com/anthropics/skills/blob/main/skills/${skill}/SKILL.md`)
 const other = (name: string, by: string): Candidate => ({ name, by })
 
 export const CATALOGUE: Group[] = [
@@ -58,7 +58,7 @@ export const CATALOGUE: Group[] = [
     { key: 'learning-from-sessions', name: 'Learning from sessions', for: 'Turn what happened into lessons', candidates: [pocock('retro'), other('self-improve', 'OMC')] },
   ] },
   { name: 'Environment', categories: [
-    { key: 'dev-setup', name: 'Dev setup', for: 'Get the app running for an agent', builtIn: 'Modules, each with a manifest', candidates: [other('setup-pre-commit', 'Pocock')] },
+    { key: 'dev-setup', name: 'Dev setup', for: 'Get the app running for an agent', builtIn: 'Modules, each with a manifest', candidates: [file('setup-pre-commit', 'Pocock', 'https://github.com/mattpocock/skills/blob/main/skills/misc/setup-pre-commit/SKILL.md')] },
     { key: 'observability', name: 'Observability', for: 'See what the app and agents did', builtIn: 'PostHog' },
   ] },
   { name: 'Communicate', categories: [

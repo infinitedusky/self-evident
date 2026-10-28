@@ -50,7 +50,7 @@ describe('jobs and tags', () => {
     expect(() => tagSkill({}, 'rea@rea/reverse-engineer-anything', ['nope'], list)).toThrow('no job')
   })
   it('tags default to the jobs the catalogue saw a skill for, and are replaced when set', () => {
-    expect(skillTags('mattpocock-skills@mattpocock/retro', {})).toEqual(['project-memory', 'learning-from-sessions'])
+    expect(skillTags('added/retro', {})).toEqual(['project-memory', 'learning-from-sessions'])
     expect(skillTags('superpowers@sp/brainstorming', {})).toEqual([])
     expect(skillTags('superpowers@sp/brainstorming', tagSkill({}, 'superpowers@sp/brainstorming', ['interview', 'interview'], list))).toEqual(['interview'])
   })

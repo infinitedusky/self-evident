@@ -33,7 +33,8 @@ import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueD
 import { runner } from './runner.js'
 import { cleanValues, effectiveIntegrations, INTEGRATIONS, type Values } from './integrations.js'
 import { SOURCES } from './catalogue.js'
-import { appSkills, describeJobs, describePlugins, selectSkill, tagSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role } from './skills.js'
+import { addSkill, editSkill, listAdded, refreshSkill, removeSkill, writeAdded, type Source } from './added-skills.js'
+import { appSkills, describeJobs, describePlugins, forgetSkill, selectSkill, tagSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role } from './skills.js'
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
 
@@ -102,7 +103,8 @@ export function buildApp(bus: EventBus) {
   api.get('/settings', async (c) => {
     const [w] = await db.select().from(workspace).limit(1)
     const f = (w?.settings ?? {}) as FactorySettings & { integrations?: Values }
-    return c.json({ workspace: w ?? null, integrations: INTEGRATIONS, values: f.integrations ?? {}, plugins: describePlugins(f), jobs: describeJobs(f), sources: SOURCES })
+    const added = w ? (await listAdded(w.id)).map(({ name, source, sourceUrl, updatedAt, createdAt }) => ({ key: `added/${name}`, name, source, sourceUrl, changedAt: updatedAt ?? createdAt })) : []
+    return c.json({ workspace: w ?? null, integrations: INTEGRATIONS, values: f.integrations ?? {}, plugins: describePlugins(f), jobs: describeJobs(f), sources: SOURCES, added })
   })
   // Plugins: installed by Claude Code's installer into the factory's own config dir (skills.ts); the switches and the
   // filing are workspace settings.
@@ -142,6 +144,40 @@ export function buildApp(bus: EventBus) {
     try {
       const { w, f } = await factory()
       await saveFactory(w.id, tagSkill(f, c.req.param('key'), body.tags ?? [], installed()))
+      return c.json({ ok: true })
+    } catch (err) { return planError(c, err) }
+  })
+  // Skills added as files: from a URL, or text uploaded or pasted (added-skills.ts).
+  api.post('/skills', async (c) => {
+    const body = await c.req.json<{ url?: string; content?: string; name?: string; source?: Source }>()
+    try {
+      const { w } = await factory()
+      const source = body.source === 'upload' || body.source === 'paste' ? body.source : 'url'
+      const row = await addSkill(w.id, { url: body.url, content: body.content, name: body.name, source })
+      return c.json({ key: `added/${row.name}` }, 201)
+    } catch (err) { return planError(c, err) }
+  })
+  api.get('/skills/added/:name', async (c) => {
+    try {
+      const { w } = await factory()
+      const row = (await listAdded(w.id)).find((r) => r.name === c.req.param('name'))
+      return row ? c.json(row) : c.json({ error: 'no such skill' }, 404)
+    } catch (err) { return planError(c, err) }
+  })
+  api.put('/skills/added/:name', async (c) => {
+    const body = await c.req.json<{ content?: string }>()
+    try { const { w } = await factory(); await editSkill(w.id, c.req.param('name'), body.content ?? ''); return c.json({ ok: true }) } catch (err) { return planError(c, err) }
+  })
+  api.post('/skills/added/:name/refresh', async (c) => {
+    try { const { w } = await factory(); await refreshSkill(w.id, c.req.param('name')); return c.json({ ok: true }) } catch (err) { return planError(c, err) }
+  })
+  api.delete('/skills/added/:name', async (c) => {
+    try {
+      const { w } = await factory()
+      const name = c.req.param('name')
+      await removeSkill(w.id, name)
+      const [fresh] = await db.select().from(workspace).where(eq(workspace.id, w.id))
+      await saveFactory(w.id, forgetSkill((fresh.settings ?? {}) as FactorySettings, `added/${name}`))
       return c.json({ ok: true })
     } catch (err) { return planError(c, err) }
   })
@@ -429,6 +465,7 @@ export function buildApp(bus: EventBus) {
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()!)) {
   await ensureDatabase(DATABASE_URL)
   await migrate(db, { migrationsFolder: fileURLToPath(new URL('../drizzle', import.meta.url)) }) // idempotent; `pnpm dev` just works
+  await writeAdded() // the added skills, written out for the agents (added-skills.ts)
   const bus = new EventBus()
   await bus.start()
   const recovered = await runner.recover()

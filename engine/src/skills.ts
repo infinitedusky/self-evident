@@ -37,6 +37,8 @@ export type AppPlugins = Record<string, { on: boolean }> // an app's own switch,
 
 /** The factory's Claude Code config dir: the installer's marketplaces, cache and record of what is installed. */
 export const PLUGINS_HOME = process.env.PLUGINS_HOME ?? join(homedir(), '.self-evident', 'claude')
+/** Skills added as files (added-skills.ts), written out here as a plugin named `added`. */
+export const ADDED_HOME = process.env.SKILLS_HOME ?? join(homedir(), '.self-evident', 'skills')
 const OWN_PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 const REA_ROOT = dirname(createRequire(import.meta.url).resolve('rea-agents/package.json'))
 
@@ -102,9 +104,10 @@ function describe(id: string, path: string, extra: { builtIn: boolean; version?:
   }
 }
 
-/** What is installed: Self Evident's own plugin, then what the installer's record lists. */
+/** What is installed: Self Evident's own plugin, the skills added as files, then what the installer's record lists. */
 export function installed(): Installed[] {
   const out = [describe('self-evident', OWN_PLUGIN, { builtIn: true, description: "Self Evident's own skills" })]
+  if (existsSync(join(ADDED_HOME, '.claude-plugin', 'plugin.json'))) out.push(describe('added', ADDED_HOME, { builtIn: true, description: 'Skills added as files' }))
   const record = readJson(join(PLUGINS_HOME, 'plugins', 'installed_plugins.json'))?.plugins ?? {}
   const markets = readJson(join(PLUGINS_HOME, 'plugins', 'known_marketplaces.json')) ?? {}
   for (const [id, entries] of Object.entries(record as Record<string, { installPath: string; version?: string }[]>)) {
@@ -213,7 +216,7 @@ export async function installPlugin(marketplace: string, name: string) {
 }
 
 export async function removePlugin(id: string) {
-  if (id === 'self-evident') throw new PlanError("Self Evident's own plugin is built in; switch it off instead")
+  if (id === 'self-evident' || id === 'added') throw new PlanError(`${id} is built in; switch it off instead`)
   const r = await plugin(['uninstall', id])
   if (r.outcome !== 'ok') throw new PlanError(r.message ?? `could not uninstall ${id}`)
 }
@@ -223,6 +226,12 @@ export function forgetPlugin(f: FactorySettings, id: string): FactorySettings {
   const { [id]: _, ...plugins } = f.plugins ?? {}
   const mine = (k: string | null) => !!k?.startsWith(`${id}/`)
   return { ...f, plugins, skills: Object.fromEntries(Object.entries(f.skills ?? {}).filter(([k]) => !mine(k))), jobs: Object.fromEntries(Object.entries(f.jobs ?? {}).filter(([, k]) => !mine(k))) }
+}
+
+/** Forget a removed skill: its tags, and any job it did. */
+export function forgetSkill(f: FactorySettings, key: string): FactorySettings {
+  const { [key]: _, ...skills } = f.skills ?? {}
+  return { ...f, skills, jobs: Object.fromEntries(Object.entries(f.jobs ?? {}).filter(([, k]) => k !== key)) }
 }
 
 /**

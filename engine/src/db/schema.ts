@@ -75,6 +75,15 @@ export const workspace = pgTable('workspace', {
   createdAt: createdAt(),
 })
 
+// A skill added as a file (by URL, upload or paste), for every app's agents (skills.ts). Held here so trying one is
+// immediate; the engine writes them out as a plugin folder the agents load. `source_url` lets a URL skill refresh.
+export const skill = pgTable('skill', {
+  id: id(), workspaceId: text('workspace_id').notNull().references(() => workspace.id),
+  name: text('name').notNull(), description: text('description').notNull(), content: text('content').notNull(),
+  source: text('source').notNull(), sourceUrl: text('source_url'), // url | upload | paste
+  createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [uniqueIndex('skill_workspace_name').on(t.workspaceId, t.name)])
+
 export const user = pgTable('user', { // [LS]
   id: id(), workspaceId: text('workspace_id').notNull().references(() => workspace.id),
   name: text('name'), email: text('email'), githubLogin: text('github_login'),
