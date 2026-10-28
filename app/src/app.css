@@ -273,3 +273,23 @@ button.badge { border: 0; cursor: pointer; }
 @media (max-width: 760px) { .settings { grid-template-columns: 1fr; } .settings-side { position: static; } }
 .settings .form-grid input::placeholder { color: var(--ink-faint); font-style: italic; opacity: 1; }
 .settings-group .settings-group { border-top: 1px dashed var(--line); }
+/* Plugins: one block each, a switch for on/off and for each agent; skills filed by job */
+.switch { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink-soft); font: 500 13px var(--sans); cursor: pointer; }
+.switch.on { background: var(--accent-wash); border-color: var(--accent); color: var(--accent); }
+.switch.small { padding: 2px 10px; font-size: 12px; }
+.switch:disabled { opacity: .5; cursor: default; }
+.plugin-head { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; }
+.plugin-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.plugin-actions .btn { padding: 4px 12px; font-size: 13px; }
+.plugin-row { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 10px; align-items: center; margin-top: 10px; }
+.plugin-row.top { align-items: start; }
+.plugin-switches { display: flex; gap: 6px; flex-wrap: wrap; }
+.plugin-skills { margin: 0; }
+.plugin-skill-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.plugin-skill-head select, .settings .fields select { font: 13px var(--sans); padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); max-width: 100%; }
+.plugin.off > :not(.plugin-head), .plugin-skills li.off, .jobs dd .off { opacity: .55; }
+.fields.jobs { grid-template-columns: minmax(180px, 260px) 1fr; }
+.jobs dt { text-transform: none; letter-spacing: 0; font: 600 13px/1.5 var(--sans); color: var(--ink); }
+.jobs dd { margin-bottom: 8px; }
+.jobs dt .settings-desc { font-weight: 400; }
+@media (max-width: 760px) { .fields.jobs { grid-template-columns: 1fr; gap: 2px; } .plugin-head { flex-direction: column; } .plugin-row { grid-template-columns: 1fr; gap: 4px; } }
