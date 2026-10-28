@@ -1,0 +1,69 @@
+/**
+ * The engine, faked for stories with MSW: every GET the UI makes answers from the sample data, writes answer ok, and
+ * the event stream stays open and silent. A story changes what the engine says with `beforeEach: withEngine({ now: quietNow })`.
+ */
+import { http, HttpResponse, delay, type RequestHandler } from 'msw'
+import type { StoryContext } from '@storybook/react-vite'
+import * as s from './sample'
+
+export interface MockData {
+  apps: typeof s.apps; now: typeof s.now; projects: typeof s.projects; graphs: Record<string, typeof s.graph>; issueRows: typeof s.issueRows
+  issueDetails: typeof s.issueDetails; todos: typeof s.todos; ideas: typeof s.ideaRows; initiatives: typeof s.initiatives; cycles: typeof s.cycles
+  summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript
+  storybook: { url: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[] }
+}
+
+export const sampleData: MockData = {
+  apps: s.apps, now: s.now, projects: s.projects, graphs: { proj_checkout: s.graph, proj_draft: s.draftGraph }, issueRows: s.issueRows, issueDetails: s.issueDetails,
+  todos: s.todos, ideas: s.ideaRows, initiatives: s.initiatives, cycles: s.cycles, summary: s.summary, settings: s.factorySettings, appSettings: s.appSettings,
+  talks: [s.talkSession], transcript: s.transcript,
+  storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [] },
+}
+
+/** An event stream that opens and says nothing: pages subscribe without errors and never refetch. */
+const silentStream = () => new HttpResponse(new ReadableStream({ start() {} }), { headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' } })
+
+export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: number | 'infinite' } = {}) {
+  const d = { ...sampleData, ...overrides }
+  const reply = async <T,>(body: T) => { if (opts.latency) await delay(opts.latency); return HttpResponse.json(body as object) }
+  const missing = (what: string) => HttpResponse.text(`no ${what}`, { status: 404 })
+  const appGraph = () => {
+    const gs = Object.values(d.graphs)
+    return { app: d.apps[d.apps.length - 1], projects: gs.map((g) => ({ id: g.project.id, name: g.project.name, status: g.project.status, pr: g.pr })), issues: gs.flatMap((g) => g.issues), subIssues: gs.flatMap((g) => g.subIssues), conflicts: gs.flatMap((g) => g.conflicts), files: gs.flatMap((g) => g.files ?? []) }
+  }
+  return [
+    http.get('/api/events', () => silentStream()),
+    http.get('/api/apps', () => reply(d.apps)),
+    http.get('/api/workspaces', () => reply([s.workspace])),
+    http.get('/api/settings', () => reply(d.settings)),
+    http.get('/api/apps/:id/settings', () => reply(d.appSettings)),
+    http.get('/api/apps/:id/storybook', () => reply(d.storybook)),
+    http.get('/api/apps/:id/summary', () => reply(d.summary)),
+    http.get('/api/apps/:id/graph', () => reply(appGraph())),
+    http.get('/api/now', () => reply(d.now)),
+    http.get('/api/ideas', () => reply(d.ideas)),
+    http.get('/api/projects', () => reply(d.projects)),
+    http.get('/api/projects/:id/graph', ({ params }) => { const g = d.graphs[params.id as string]; return g ? reply(g) : missing('project') }),
+    http.get('/api/issues', ({ request }) => {
+      const q = new URL(request.url).searchParams
+      if (q.get('view') === 'code') return reply(d.issueRows)
+      const all = Object.values(d.issueDetails)
+      return reply(all.filter((i) => (!q.get('kind') || i.kind === q.get('kind')) && (!q.get('project') || i.projectId === q.get('project')) && (!q.get('top') || !i.parentId)))
+    }),
+    http.get('/api/issues/:id', ({ params }) => { const i = d.issueDetails[params.id as string]; return i ? reply(i) : missing('issue') }),
+    http.get('/api/todos', () => reply(d.todos)),
+    http.get('/api/initiatives', () => reply(d.initiatives)),
+    http.get('/api/cycles', () => reply(d.cycles)),
+    http.get('/api/talks', () => reply(d.talks)),
+    http.get('/api/talks/:id', () => reply(d.transcript)),
+    // Writes do nothing and say ok, so clicking around a story never shows an error.
+    http.all('/api/*', () => HttpResponse.json({ ok: true })),
+  ]
+}
+
+/** The engine is down: every call fails the way a dead proxy does. */
+export const engineDown = [http.all('/api/*', () => HttpResponse.text('engine unreachable', { status: 502 }))]
+
+/** A story's engine: its handlers in front of the sample engine's. */
+export const withEngine = (overrides: Partial<MockData> | RequestHandler[] = {}, opts: { latency?: number | 'infinite' } = {}) =>
+  ({ msw }: StoryContext) => { msw.use(...(Array.isArray(overrides) ? overrides : mockEngine(overrides, opts))) }

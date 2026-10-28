@@ -15,8 +15,23 @@ references.
 
 ```bash
 pnpm install
-pnpm dev          # http://localhost:5173
+pnpm dev          # http://localhost:5180
 pnpm storybook    # http://localhost:6007 — components and page states
 ```
 
 React 19 + TypeScript + Vite, React Router, Storybook (react-vite). Tokens by hand in one CSS file; no generator.
+
+## Stories lead
+
+Every page and component has stories beside it (`Now.tsx` → `Now.stories.tsx`), and a new screen or state starts there.
+Pages render for real against a fake engine: MSW answers `/api` from `src/stories/sample.ts` (Sample Shop, made up and
+labelled so: the repository is public). In a story:
+
+```tsx
+export const Quiet: Story = { beforeEach: withEngine({ now: quietNow }) }                 // the engine says something else
+export const Loading: Story = { beforeEach: withEngine({}, { latency: 'infinite' }) }     // it never answers
+export const EngineDown: Story = { beforeEach: withEngine(engineDown) }                   // it is down
+export const OneIssue: Story = { parameters: { route: { path: '/issues/:id', url: '/issues/iss_sample5' } } } // a page that reads the URL
+```
+
+`pnpm test` checks that every page and component has a stories file and renders every story in a browser.
