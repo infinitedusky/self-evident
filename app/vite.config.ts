@@ -19,6 +19,10 @@ export default defineConfig({
   },
   test: {
     projects: [{
+      // Plain checks over the source, in Node: every page and component has its stories.
+      extends: true,
+      test: { name: 'unit', environment: 'node', include: ['src/**/*.test.ts'] }
+    }, {
       extends: true,
       plugins: [
       // The plugin will run tests for the stories defined in your Storybook config

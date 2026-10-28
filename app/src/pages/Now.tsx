@@ -151,7 +151,7 @@ function RunningCard({ r }: { r: RunningProject }) {
 function Recent({ events }: { events: Event[] }) {
   if (!events.length) return <p className="muted" style={{ margin: 0 }}>Nothing yet.</p>
   return (
-    <ul className="ticker">
+    <ul className="ticker recent">
       {[...events].reverse().slice(0, 20).map((e) => (
         <li key={e.seq}>
           <span className="mono faint">{e.ts.slice(5, 16).replace('T', ' ')}</span>

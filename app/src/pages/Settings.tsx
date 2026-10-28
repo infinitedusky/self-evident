@@ -148,6 +148,15 @@ function PluginBlock({ p, catalogue, act }: { p: PluginInfo; catalogue: Category
   )
 }
 
+/** Skills in the app's own repo: a name and what it is for. */
+function SkillList({ skills }: { skills: { name: string; description: string }[] }) {
+  return (
+    <ul className="list">
+      {skills.map((k) => <li key={k.name}><span className="mono">{k.name}</span>{k.description && <div className="muted settings-desc">{k.description}</div>}</li>)}
+    </ul>
+  )
+}
+
 /** Adding is a form only once asked for: a marketplace and a plugin name, installed by Claude Code's installer. */
 function AddPlugin({ onAdded }: { onAdded: () => Promise<unknown> }) {
   const [open, setOpen] = useState(false)
