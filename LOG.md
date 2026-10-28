@@ -566,6 +566,15 @@ web, Electron, .NET, Java and Python; one function at a time for native code; no
   the server in the plugin, and that line can go. REA asks for Node ≥24.22.1; the operator's machine moved to 24.22.1 for it (mise), and a first real analysis
   (`analyze-javascript-application` on our own `app/`) completed there.
 
+## Skills: a catalogue by category (Sandy, 2026-10-27)
+
+Gap noticed: we build every agent workflow ourselves while others trade skills by author. To address it without
+moving the foundation, skills are sorted into categories (interview, spec and slice, build discipline,
+demonstration and evidence, review, and so on), each with what we already have. Each new skill is judged against
+that: what it does, its category or a new one, where it keeps state, who can start it, and whether it beats what
+we have. Verdicts: **adopt** (stateless, into one of the two layers above: the app repo's `.claude/skills/` or
+`engine/plugin/`), **borrow** (port the idea into the engine), **comparable**, or **skip**. The
+engine never hands state to a skill. Catalogue and log: `research/skills.md`.
 ## Rebuilt in Linear's shape (Sandy, 2026-10-27: "rebuilding from scratch can be easier")
 
 Step 1 of "Shaped like Linear", done as a new database rather than a conversion: schema written fresh, migration
