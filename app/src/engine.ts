@@ -1,5 +1,7 @@
 /** The engine's API, as the UI sees it. In development Vite proxies /api → the engine; the UI never touches the database. */
 import { useEffect, useRef, useState } from 'react'
+import type { On, Resolved, Row, StepKey, StepState, Workflow, WorkflowStep } from '@self-evident/engine/steps'
+import type { Plan } from './pages/PlanHome'
 
 export const API = '/api'
 
@@ -16,6 +18,7 @@ export interface Issue {
   title: string; description: string | null; brief: string | null; state: IssueState; priority: number; estimate: string | null; sortOrder: number
   assignee: string | null; delegate: 'builder' | 'planner' | 'agent' | null; waitingOn: string | null; source: 'person' | 'agent' | 'idea' | 'planner' | 'builder'; reason: string | null
   createdBy: string | null; createdAt: string; startedAt: string | null; completedAt: string | null; canceledAt: string | null
+  briefApprovedBy?: string | null; briefApprovedAt?: string | null; workflowId?: string | null
 }
 /** A code sub-issue on the graph, with its build: the engine's status, attempts, why it waits. */
 export interface GraphSubIssue extends Issue {
@@ -59,6 +62,11 @@ export interface IssueDetail extends Issue {
 }
 export interface Initiative { id: string; name: string; description: string | null; status: 'planned' | 'active' | 'completed'; targetDate: string | null; projects: { id: string; name: string; status: string }[] }
 export interface Cycle { id: string; number: number; name: string | null; description: string | null; startsAt: string; endsAt: string; current: boolean; issues: { id: string; identifier: string; title: string; state: IssueState; kind: string }[] }
+/** Steps on an idea, a task (an issue) or a project; the rules are the engine's own module (LOG.md, 2026-10-29). */
+export type StepSubject = { kind: 'ideas' | 'issues' | 'projects'; id: string }
+export interface StepsView { on: On; resolved: Resolved; states: StepState[]; rows: Row[]; blocking: StepKey[]; fromIdea: { id: string; number: number; title: string } | null }
+export interface StepWork { id: string; key: StepKey; status: 'none' | 'started' | 'done'; detail: string | null; body: string | null; refs: string[]; updatedBy: string | null; updatedAt: string | null }
+export interface WorkflowRow extends Workflow { appDefault: boolean; projects: number; tasks: number }
 export interface IdeaRow { id: string; appId: string; number: number; title: string; body: string | null; lane: string }
 export interface AppSetup { integrations?: IntegrationValues; plugins?: Record<string, { on: boolean }>; pr_mode?: 'project' | 'issue'; storybook_url?: string; storybook_cmd?: string; test_cmd?: string; prototype_cmd?: string; prototype_db?: { url: string; env?: string; schema_cmd?: string }; model?: string; max_budget_usd?: number; max_turns?: number }
 export interface Repo { id: string; appId: string; fullName: string; localPath: string | null; baseBranch: string | null }
@@ -158,6 +166,16 @@ export const engine = {
   ideas: (appId?: string) => call<IdeaRow[]>('GET', `/ideas${appId ? `?app=${appId}` : ''}`),
   createIdea: (body: { appId: string; title: string; body?: string }) => call<IdeaRow>('POST', '/ideas', body),
   planIdea: (id: string) => call<{ project: { id: string } }>('POST', `/ideas/${id}/project`, {}),
+  convertIdea: (id: string, body: { as: 'task' | 'project'; title?: string; projectId?: string; why?: string }) => call<{ as: 'task' | 'project'; issueId?: string; projectId?: string }>('POST', `/ideas/${id}/convert`, body),
+  ask: (body: { appId: string; subjectRef?: SubjectRef; text: string }) => call<TalkSession>('POST', '/talks/ask', body),
+  plan: (appId: string) => call<Plan>('GET', `/plan?app=${appId}`),
+  steps: (s: StepSubject) => call<StepsView>('GET', `/${s.kind}/${s.id}/steps`),
+  step: (s: StepSubject, key: StepKey) => call<StepWork | null>('GET', `/${s.kind}/${s.id}/steps/${key}`),
+  setStep: (s: StepSubject, key: StepKey, body: { status?: 'started' | 'done'; detail?: string | null; body?: string | null; refs?: string[] }) => call<StepWork>('PUT', `/${s.kind}/${s.id}/steps/${key}`, body),
+  approveBrief: (issueId: string, approve = true) => call<Issue>('POST', `/issues/${issueId}/brief/approve`, { approve }),
+  workflows: (appId: string) => call<WorkflowRow[]>('GET', `/workflows?app=${appId}`),
+  saveWorkflow: (body: { id?: string; appId: string; name: string; steps: WorkflowStep[]; ordered: boolean }) => call<Workflow>(body.id ? 'PUT' : 'POST', body.id ? `/workflows/${body.id}` : '/workflows', body),
+  useWorkflow: (target: { kind: 'apps' | 'projects' | 'issues'; id: string }, workflowId: string | null) => call<{ ok: true }>('POST', `/${target.kind}/${target.id}/workflow`, { workflowId }),
   apps: () => call<App[]>('GET', '/apps'),
   workspaces: () => call<Workspace[]>('GET', '/workspaces'),
   settings: () => call<FactorySettings>('GET', '/settings'),
@@ -225,7 +243,7 @@ export const EVENT_TYPES = [
   'project.created', 'project.started', 'project.landed', 'project.cleaned', 'project.cancelled', 'project.paused', 'project.resumed', 'project.described',
   'issue.created', 'issue.updated', 'issue.state', 'issue.reordered', 'issue.cleared', 'issue.planning', 'issue.planned', 'issue.plan_failed', 'issue.plan_waiting',
   'question.asked', 'question.answered', 'initiative.created', 'initiative.updated', 'cycle.created',
-  'talk.message', 'talk.permission', 'talk.result', 'idea.created', 'engine.hold', 'engine.resumed',
+  'talk.message', 'talk.permission', 'talk.result', 'idea.created', 'idea.converted', 'step.updated', 'brief.approved', 'brief.unapproved', 'workflow.saved', 'workflow.used', 'engine.hold', 'engine.resumed',
   'pr.merged', 'pr.closed', 'pr.retargeted', 'pr.review', 'pr.checks', 'review.requested', 'project.caught_up', 'project.behind_main',
   'backlog.error', 'project.backlog_open',
   'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted',

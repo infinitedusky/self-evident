@@ -28,7 +28,7 @@ export const tabKey = (t: Tab) => t.kind === 'page' ? t.path.split('?')[0] : t.k
 const PAGES: [RegExp, string][] = [
   [/^\/$/, 'My Stuff'], [/^\/summary/, 'Summary'], [/^\/observe/, 'Observe'], [/^\/learn/, 'Learn'],
   [/^\/ideas\/?$/, 'Ideas'], [/^\/ideas\//, 'Idea'], [/^\/projects\/new/, 'New project'], [/^\/projects\/?$/, 'Projects'], [/^\/projects\//, 'Project'],
-  [/^\/issues\/?$/, 'Issues'], [/^\/issues\//, 'Issue'], [/^\/todos/, 'To-dos'], [/^\/mockups/, 'Mockups'],
+  [/^\/plan\/workflows/, 'Workflows'], [/^\/plan\/?$/, 'Plan'], [/^\/issues\/?$/, 'Issues'], [/^\/issues\//, 'Issue'], [/^\/todos/, 'To-dos'], [/^\/mockups/, 'Mockups'],
   [/^\/build/, 'Build'], [/^\/graph/, 'Graph'], [/^\/settings/, 'Settings'],
 ]
 
@@ -39,7 +39,7 @@ export function tabTitle(t: Tab): string {
   if (t.kind === 'build') return 'Build log'
   const path = t.path.split('?')[0]
   const idea = path.match(/^\/ideas\/([^/]+)/)?.[1]
-  if (idea) return findIdea(idea)?.title ?? 'Idea'
+  if (idea) return idea.startsWith('idea_') ? 'Idea' : findIdea(idea)?.title ?? 'Idea'
   return PAGES.find(([re]) => re.test(path))?.[1] ?? path
 }
 

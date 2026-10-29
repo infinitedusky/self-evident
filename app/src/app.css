@@ -444,7 +444,8 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 
 /* Steps on an idea, task or project; workflows; Plan's page */
 .steps-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.step-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.brief-approval { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 14px; }
 .step-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface); display: flex; flex-direction: column; }
 .step-card.done { border-color: var(--ok, var(--line)); }
 .step-card.blocked { opacity: .6; }
@@ -464,3 +465,6 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .mark.started { filter: grayscale(.4); opacity: .7; }
 .mark.done { filter: none; opacity: 1; }
 .wf-add { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.new-task { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .new-task input { flex: 1; min-width: 240px; }
+.workflow-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 12px; align-items: start; }
+.workflow-list .panel { margin-bottom: 0; }

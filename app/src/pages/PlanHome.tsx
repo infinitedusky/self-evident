@@ -4,18 +4,21 @@
  * Each task shows its steps as small marks and whether its brief is approved. After Linear's project list, where a
  * project row opens onto its issues.
  */
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { Badge } from '../components/Badge'
-import { STEPS, type StepState, type Workflow } from '@self-evident/engine/steps'
+import { STEPS, type StepKey, type StepState, type Workflow } from '@self-evident/engine/steps'
 
-export interface PlanTask { id: string; identifier: string; title: string; state: string; steps: StepState[]; workflow?: string }
-export interface PlanProject { id: string; name: string; status: string; workflow?: string; steps: StepState[]; tasks: PlanTask[] }
+export interface PlanTask { id: string; identifier: string; title: string; state: string; steps: StepState[]; keys?: StepKey[]; workflow?: string } // keys: the steps its workflow shows
+export interface PlanProject { id: string; name: string; status: string; workflow?: string; steps: StepState[]; keys?: StepKey[]; tasks: PlanTask[] }
 export interface Plan { projects: PlanProject[]; loose: PlanTask[]; todosOpen: number; workflows: Workflow[]; appWorkflow?: string }
 
-function Marks({ steps }: { steps: StepState[] }) {
+/** One mark per step its workflow shows (without one, the default steps), dim until started. */
+function Marks({ steps, keys }: { steps: StepState[]; keys?: StepKey[] }) {
+  const shown = keys ? STEPS.filter((s) => keys.includes(s.key)) : STEPS.filter((s) => s.place !== 'after')
   return (
     <span className="step-marks" aria-label="Steps">
-      {STEPS.map((s) => {
+      {shown.map((s) => {
         const st = steps.find((x) => x.key === s.key)
         return <span key={s.key} className={`mark ${st?.status ?? 'none'}`} title={`${s.label}: ${st ? st.detail ?? st.status : 'not started'}`}>{s.icon}</span>
       })}
@@ -35,14 +38,21 @@ function Task({ t }: { t: PlanTask }) {
     <li className="plan-task">
       <span className="mono faint">{t.identifier}</span>
       <Link to={`/issues/${t.id}`}>{t.title}</Link>
-      <Marks steps={t.steps} />
+      <Marks steps={t.steps} keys={t.keys} />
       <Brief steps={t.steps} />
       <span className="faint" style={{ fontSize: 12 }}>{t.state.replace('_', ' ')}</span>
     </li>
   )
 }
 
-export function PlanHome({ plan, app }: { plan: Plan; app?: string }) {
+/** `onNewTask` makes a task from a title; it may refuse (a workflow that starts tasks as ideas), and says why. */
+export function PlanHome({ plan, app, onNewTask }: { plan: Plan; app?: string; onNewTask?: (title: string) => Promise<void> }) {
+  const [adding, setAdding] = useState<string | null>(null)
+  const [why, setWhy] = useState<string | null>(null)
+  const add = async () => {
+    if (!adding?.trim() || !onNewTask) return
+    try { await onNewTask(adding.trim()); setAdding(null); setWhy(null) } catch (e: any) { setWhy(String(e.message ?? e)) }
+  }
   const tasks = plan.projects.reduce((n, p) => n + p.tasks.length, 0) + plan.loose.length
   const cards = [
     { label: 'Projects', n: plan.projects.length, to: '/projects', hint: 'Tasks in order, built as one PR' },
@@ -58,10 +68,19 @@ export function PlanHome({ plan, app }: { plan: Plan; app?: string }) {
           <p className="muted" style={{ margin: '4px 0 0' }}>What we've decided to build. A task is built from an approved brief; research, mockups and a prototype can be done on it, or on its project, at any time.</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Link to="/issues/new" className="btn quiet">New task</Link>
+          {onNewTask && <button className="btn quiet" onClick={() => setAdding(adding === null ? '' : null)}>New task</button>}
           <Link to="/projects/new" className="btn">New project</Link>
         </div>
       </div>
+
+      {adding !== null && (
+        <section className="panel new-task">
+          <input autoFocus value={adding} onChange={(e) => setAdding(e.target.value)} placeholder="What will be built? One line; the brief comes after." onKeyDown={(e) => { if (e.key === 'Enter') void add(); if (e.key === 'Escape') setAdding(null) }} />
+          <button className="btn small" disabled={!adding.trim()} onClick={add}>Make the task</button>
+          <button className="btn quiet small" onClick={() => setAdding(null)}>Cancel</button>
+          {why && <div className="empty bad" style={{ flexBasis: '100%' }}>{why}</div>}
+        </section>
+      )}
 
       <div className="home-cards">
         {cards.map((c) => (
@@ -78,7 +97,7 @@ export function PlanHome({ plan, app }: { plan: Plan; app?: string }) {
           <div className="card-head">
             <Link to={`/projects/${p.id}`} className="card-title" style={{ textDecoration: 'none' }}>{p.name}</Link>
             <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              {p.steps.length > 0 && <Marks steps={p.steps} />}
+              {p.steps.length > 0 && <Marks steps={p.steps} keys={p.keys} />}
               {p.workflow && <Badge>{p.workflow}</Badge>}
               <Badge tone={p.status === 'running' ? 'accent' : 'neutral'} dot={p.status === 'running'}>{p.status}</Badge>
             </span>

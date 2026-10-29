@@ -4,9 +4,10 @@
  * so a change to the API that the stories no longer match fails the type check.
  */
 import type { StepState, Workflow } from '@self-evident/engine/steps'
+import type { Plan } from '../pages/PlanHome'
 import type {
   App, AppSettings, BacklogIssue, Cycle, Decision, Event, FactorySettings, Graph, GraphIssue, GraphSubIssue, IdeaRow, Initiative, Issue,
-  IssueDetail, IssueRow, Now, ProjectSummary, Prototype, Question, Run, Step, SummaryState, TalkMessage, TalkSession, Todo, Transcript, Workspace,
+  IssueDetail, IssueRow, Now, StepsView, StepWork, WorkflowRow, ProjectSummary, Prototype, Question, Run, Step, SummaryState, TalkMessage, TalkSession, Todo, Transcript, Workspace,
 } from '../engine'
 
 export const T0 = '2026-10-27T09:00:00.000Z'
@@ -273,3 +274,30 @@ export const taskSteps: StepState[] = [
   { key: 'prototype', status: 'started', detail: 'running, scenario "busy store"' },
   { key: 'brief', status: 'done', detail: 'draft, 4 sections' },
 ]
+
+// Plan's page (made up): one project with three tasks at different points, and a stand-alone fix.
+export const plan: Plan = {
+  projects: [{
+    id: 'proj_checkout', name: 'One-page checkout (sample)', status: 'running', workflow: 'UI change (sample)',
+    steps: [{ key: 'research', status: 'done' }, { key: 'prototype', status: 'done', detail: 'the whole flow, made-up orders' }],
+    tasks: [
+      { id: 'iss_sample1', identifier: 'SS-1', title: 'Address and payment on one page', state: 'in_progress', steps: taskSteps.map((s) => (s.key === 'brief' ? { ...s, approved: { by: 'Sam (sample)', at: '2026-10-28' } } : s)) },
+      { id: 'iss_sample2', identifier: 'SS-2', title: 'Remember the last card used', state: 'todo', steps: taskSteps },
+      { id: 'iss_sample3', identifier: 'SS-3', title: 'Order summary beside the form', state: 'todo', steps: [{ key: 'mockup', status: 'started', detail: '2 variants' }] },
+    ],
+  }],
+  loose: [{ id: 'iss_sample9', identifier: 'SS-9', title: 'Typo in the receipt email', state: 'todo', workflow: 'Quick fix (sample)', steps: [{ key: 'brief', status: 'done', detail: 'two lines' }] }],
+  todosOpen: 3, workflows: [uiWorkflow, quickWorkflow], appWorkflow: 'UI change (sample)',
+}
+
+
+// The engine's view of steps (made up): a task under its project's workflow, an idea, and a project.
+export const taskStepsView: StepsView = {
+  on: 'task', resolved: { workflow: uiWorkflow, from: 'project' }, fromIdea: { id: 'idea_sample1', number: 4, title: 'Sample: checkout in one go' },
+  states: [{ key: 'idea', status: 'done', detail: '#4 Sample: checkout in one go' }, ...taskSteps], rows: [], blocking: ['brief', 'risk'],
+}
+export const ideaStepsView: StepsView = { on: 'idea', resolved: { workflow: null, from: null }, fromIdea: null, states: ideaSteps, rows: [], blocking: [] }
+export const projectStepsView: StepsView = { on: 'project', resolved: { workflow: null, from: null }, fromIdea: null, states: [{ key: 'prototype', status: 'done', detail: 'the whole flow, made-up orders' }], rows: [], blocking: [] }
+export const researchWork: StepWork = { id: 'step_sample1', key: 'research', status: 'done', detail: '3 comps, one case against', refs: [], updatedBy: 'agent', updatedAt: T0,
+  body: '### Who does it best (sample)\n- Shop A: one page, address autocompleted.\n- Shop B: wallet buttons first.\n\n### The case against\nOne page is long on a phone.' }
+export const workflowRows: WorkflowRow[] = [{ ...uiWorkflow, appDefault: true, projects: 1, tasks: 0 }, { ...quickWorkflow, appDefault: false, projects: 0, tasks: 1 }]

@@ -1,7 +1,8 @@
 /**
  * One issue: what it says, where it sits, and its sub-issues as a list, not a graph (Sandy, 2026-10-27: "see a single
  * task and look at all of its phases, not in a graph but just in a list"). Under code, each sub-issue with its build;
- * under a to-do, its checklist. Live on the app's events.
+ * under a to-do, its checklist. A task (a top-level code issue) also has its brief's approval and its steps (LOG.md,
+ * 2026-10-29). Live on the app's events.
  */
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
@@ -9,6 +10,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Badge, type Tone } from '../components/Badge'
 import { Brief } from '../components/Brief'
+import { StepsPanel } from '../components/StepsPanel'
 import { STATUS_TONE } from '../components/PlanGraphView'
 import { API, engine, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState } from '../engine'
 
@@ -20,6 +22,7 @@ export function IssuePage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const timer = useRef<number | undefined>(undefined)
+  const briefRef = useRef<HTMLElement>(null)
   useEffect(() => {
     if (!id) return
     let closed = false
@@ -39,6 +42,7 @@ export function IssuePage() {
   if (error && !i) return <div className="empty">{error}</div>
   if (!i) return <p className="muted">Loading…</p>
   const code = i.kind === 'code'
+  const task = code && !i.parentId // a task: it has a brief to approve and steps
   const planned = i.subIssues.length > 0
   return (
     <>
@@ -59,14 +63,29 @@ export function IssuePage() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {error && <Badge tone="warn" dot>{error}</Badge>}
-          {code && !i.parentId && !planned && i.project && i.state === 'todo' && <button className="btn" disabled={busy} onClick={() => act(() => engine.planIssue(i.id))}>Plan</button>}
+          {code && !i.parentId && !planned && i.project && i.state === 'todo' && <button className="btn" disabled={busy || !i.briefApprovedBy} title={i.briefApprovedBy ? undefined : 'Approve the brief first'} onClick={() => act(() => engine.planIssue(i.id))}>Plan</button>}
           {i.build && ['failed', 'cancelled'].includes(i.build.status) && <button className="btn" disabled={busy} onClick={() => act(() => engine.retry(i.id))}>Retry</button>}
         </div>
       </div>
 
       {i.reason && <div className="empty" style={{ marginBottom: 16 }}>{STATE_LABEL[i.state]}: {i.reason}</div>}
       {i.build?.heldReason && i.build.status !== 'done' && <div className="empty" style={{ marginBottom: 16 }}>{i.build.heldReason}</div>}
-      <section className="panel"><Brief description={i.description} brief={i.brief} open={!i.description} /></section>
+      <section className="panel" ref={briefRef}>
+        <Brief description={i.description} brief={i.brief} open={!i.description} />
+        {task && (
+          <div className="brief-approval">
+            {!i.brief?.trim()
+              ? <span className="faint">No brief yet. A task is built from an approved brief: ask the agent to write it.</span>
+              : i.briefApprovedBy
+                ? <><Badge tone="ok">brief approved</Badge><span className="faint">by {i.briefApprovedBy}{i.briefApprovedAt ? `, ${new Date(i.briefApprovedAt).toLocaleDateString()}` : ''}</span>
+                  <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.approveBrief(i.id, false))}>Withdraw</button></>
+                : <><Badge tone="warn">waiting for your approval</Badge><span className="faint">Planning and building wait for it.</span>
+                  <button className="btn small" disabled={busy} onClick={() => act(() => engine.approveBrief(i.id))}>Approve the brief</button></>}
+          </div>
+        )}
+      </section>
+
+      {task && <StepsPanel subject={{ kind: 'issues', id: i.id }} appId={i.appId} name={i.title} onBrief={() => briefRef.current?.scrollIntoView({ behavior: 'smooth' })} />}
 
       {i.parentId && code && <Steps i={i} />}
 

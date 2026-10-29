@@ -28,9 +28,9 @@ export function Board({ ideas }: { ideas: Idea[] }) {
     setBusy('add')
     try { await engine.createIdea({ appId, title, body: body.trim() || undefined }); setTitle(''); setBody(''); await reload() } catch (e: any) { setError(String(e.message ?? e)) } finally { setBusy(null) }
   }
-  const makePlan = async (id: string) => {
+  const convert = async (id: string, as: 'task' | 'project') => {
     setBusy(id)
-    try { const { project } = await engine.planIdea(id); nav(`/projects/${project.id}`) } catch (e: any) { setError(String(e.message ?? e)); setBusy(null) }
+    try { const out = await engine.convertIdea(id, { as }); nav(out.issueId ? `/issues/${out.issueId}` : `/projects/${out.projectId}`) } catch (e: any) { setError(String(e.message ?? e)); setBusy(null) }
   }
   const projectOf = (i: IdeaRow) => projects.find((p) => p.ideaId === i.id)
   const notes = ideas.filter((i) => i.app === app?.name) // the files are labelled with the app they are about
@@ -42,7 +42,7 @@ export function Board({ ideas }: { ideas: Idea[] }) {
       <div className="page-head">
         <div>
           <h1>💡 Ideate{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
-          <p className="muted" style={{ margin: '4px 0 0' }}>Type it, it's kept. When its time comes, it becomes one issue, or a project of several.</p>
+          <p className="muted" style={{ margin: '4px 0 0' }}>Type it, it's kept. Research it, draft it, mock it up or prototype it without committing; when it's something we'll build, it becomes a task or a project.</p>
         </div>
         <span className="mono faint">{inbox.length} in the inbox</span>
       </div>
@@ -50,7 +50,7 @@ export function Board({ ideas }: { ideas: Idea[] }) {
       <section className="panel">
         <div className="form-grid">
           <label style={{ gridColumn: '1 / -1' }}>Idea<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="One line: what should be true?" onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) void add() }} /></label>
-          <label style={{ gridColumn: '1 / -1' }}>Why, and anything already decided (optional)<textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder="This becomes the issue's brief when the idea is planned." /></label>
+          <label style={{ gridColumn: '1 / -1' }}>Why, and anything already decided (optional)<textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder="Kept with the idea; the agent reads it when it's converted." /></label>
           <div className="faint" style={{ alignSelf: 'end', fontSize: 13 }}>For {app?.name ?? '…'} (pick another app in the nav)</div>
           <div style={{ alignSelf: 'end' }}><button className="btn" disabled={!title.trim() || !appId || busy === 'add'} onClick={add}>Keep it</button></div>
         </div>
@@ -64,11 +64,12 @@ export function Board({ ideas }: { ideas: Idea[] }) {
             {inbox.map((i) => (
               <li key={i.id}>
                 <span className="mono faint">#{i.number}</span>
-                <div><strong>{i.title}</strong>{i.body && <div className="muted" style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{i.body}</div>}
+                <div><Link to={`/ideas/${i.id}`} style={{ fontWeight: 600, textDecoration: 'none' }}>{i.title}</Link>{i.body && <div className="muted" style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{i.body}</div>}
                   <div className="faint" style={{ fontSize: 12 }}>{apps.find((a) => a.id === i.appId)?.name}</div></div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn small" disabled={busy === i.id} onClick={() => makePlan(i.id)} title="A project of one issue: this title, this brief">Make it an issue</button>
-                  <Link className="btn quiet small" to={`/projects/new?idea=${i.id}`} title="A project of several issues, in order">Break it down</Link>
+                  <Link className="btn quiet small" to={`/ideas/${i.id}`} title="Research, a rough draft, mockups, a prototype: nothing committed">Work on it</Link>
+                  <button className="btn quiet small" disabled={busy === i.id} onClick={() => convert(i.id, 'task')} title="One thing to build; its brief waits for your approval">As a task</button>
+                  <button className="btn quiet small" disabled={busy === i.id} onClick={() => convert(i.id, 'project')} title="Several things in order">As a project</button>
                 </div>
               </li>
             ))}

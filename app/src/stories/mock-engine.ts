@@ -5,6 +5,7 @@
 import { http, HttpResponse, delay, type RequestHandler } from 'msw'
 import type { StoryContext } from '@storybook/react-vite'
 import * as s from './sample'
+import { rows } from '@self-evident/engine/steps'
 
 export interface MockData {
   apps: typeof s.apps; now: typeof s.now; projects: typeof s.projects; graphs: Record<string, typeof s.graph>; issueRows: typeof s.issueRows
@@ -12,6 +13,7 @@ export interface MockData {
   summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript
   storybook: { url: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[] }
   prototypes: typeof s.prototypes
+  plan: typeof s.plan; workflows: typeof s.workflowRows; steps: Record<string, typeof s.taskStepsView>; stepWork: typeof s.researchWork | null
 }
 
 export const sampleData: MockData = {
@@ -20,6 +22,7 @@ export const sampleData: MockData = {
   talks: [s.talkSession], transcript: s.transcript,
   storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [] },
   prototypes: s.prototypes,
+  plan: s.plan, workflows: s.workflowRows, steps: { ideas: s.ideaStepsView, issues: s.taskStepsView, projects: s.projectStepsView }, stepWork: s.researchWork,
 }
 
 /** An event stream that opens and says nothing: pages subscribe without errors and never refetch. */
@@ -56,6 +59,10 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     }),
     http.get('/api/issues/:id', ({ params }) => { const i = d.issueDetails[params.id as string]; return i ? reply(i) : missing('issue') }),
     http.get('/api/todos', () => reply(d.todos)),
+    http.get('/api/plan', () => reply(d.plan)),
+    http.get('/api/workflows', () => reply(d.workflows)),
+    http.get('/api/:kind/:id/steps', ({ params }) => { const v = d.steps[params.kind as string]; return v ? reply({ ...v, rows: rows(v.on, v.states, v.resolved.workflow) }) : missing('steps') }),
+    http.get('/api/:kind/:id/steps/:key', () => reply(d.stepWork)),
     http.get('/api/initiatives', () => reply(d.initiatives)),
     http.get('/api/cycles', () => reply(d.cycles)),
     http.get('/api/talks', () => reply(d.talks)),
