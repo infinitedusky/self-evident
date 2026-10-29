@@ -493,6 +493,18 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## The workspace, after Replit's (Sandy, 2026-10-28: "the left column agent and then tabs and split screen on the right, just like an IDE")
+
+Self Evident is now one workspace, not pages under a nav.
+- **The loop is an icon rail** on the far left, like VS Code's activity bar. Hovering an icon shows its name and the pages under it; clicking opens that page as a tab. The app picker sits at the top of the agent's column, like Replit's project switcher.
+- **The agent is the left column.** It is resizable, ⌘J folds it, and it can still pop out into its own window. The floating drawer is gone.
+- **Everything else is a tab on the right, in [Dockview](https://dockview.dev).** You split by dragging a tab to an edge, and each group is a card, after Replit's panes. A tab keeps its own history; ⌘-click opens a link in a new tab. Each app's layout is kept in the browser, and the address bar follows the tab in front.
+- **What opens as a tab:** every page, Preview (the app's dev server, with address bar, reload, device widths and a way out to a browser tab; its address is a new setting), Storybook, and a sub-issue's **build log**, which is live: steps, then one line per action, with output folded under it.
+- **The agent knows what is open:** every message carries the open tabs and which one is in front. It **opens tabs itself** with a new `open_tab` tool, which arrives as a `ui.open` event. The event stream takes `since=now` for readers that want only what comes next.
+- **From the comps:** in the agent's feed, runs of tool calls fold into one "N actions" row with icons, and a finished turn reads "Worked for X". The agent's replies render as Markdown, in plain text, not bubbles.
+
+Dockview is pinned at 8.5.1, core included: the newest release was a day old. Starting a dev server for Preview is not built; Preview shows the address it is given.
+
 ## Stories lead the UI, and every screen has them (Sandy, 2026-10-28: "full coverage, and make sure it leads building")
 
 - **Every page and component in `app/` has stories**, beside it as `<Name>.stories.tsx`. The real pages render
