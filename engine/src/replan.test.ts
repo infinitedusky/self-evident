@@ -7,6 +7,7 @@ import { newId } from './ids.js'
 import { getIssue } from './issues.js'
 import { planIssue, type Propose } from './planner.js'
 import { clearSubIssues, createProject, PlanError, projectGraph } from './projects.js'
+import { approveBriefs } from './test-briefs.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -34,6 +35,7 @@ describe.skipIf(!reachable)('clearSubIssues', () => {
       notes: '',
     } })
     const { project: p, issues: tasks } = await createProject({ appId, name: 'replan', issues: [{ title: 'T', brief: 'b' }] })
+    await approveBriefs(appId)
     await planIssue(tasks[0].id, { propose })
     expect((await projectGraph(p.id))!.subIssues).toHaveLength(2)
     expect(await clearSubIssues(tasks[0].id)).toEqual({ cleared: 2 })
@@ -42,6 +44,7 @@ describe.skipIf(!reachable)('clearSubIssues', () => {
     expect(g.subIssues).toHaveLength(0); expect(g.decisions).toHaveLength(0); expect(g.questions).toHaveLength(0)
     expect(await db.select().from(decision).where(eq(decision.issueId, tasks[0].id))).toHaveLength(0)
     expect(await db.select().from(question).where(eq(question.issueId, tasks[0].id))).toHaveLength(0)
+    await approveBriefs(appId)
     const again = await planIssue(tasks[0].id, { propose }) // plannable again
     expect(again.status).toBe('completed')
   })

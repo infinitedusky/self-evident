@@ -326,6 +326,8 @@ export class Runner {
   /** Plan a running project's next issue, once: not if it is already planning, waiting for the model, or its last planning failed (a person plans it again). */
   private async planNext(projectId: string, issueId: string) {
     if (this.planningIssues.has(issueId)) return
+    const [t] = await db.select({ approved: issue.briefApprovedBy }).from(issue).where(eq(issue.id, issueId))
+    if (!t?.approved) return // the brief waits for a person's approval; planning starts on the next pass after it
     const [last] = await db.select().from(event).where(and(eq(event.issueId, issueId), inArray(event.type, PLANNING))).orderBy(desc(event.seq)).limit(1)
     const restarted = last?.type === 'issue.plan_failed' && String((last.payload as any)?.error ?? '').includes('engine restarted') // a restart is not a failure: plan it again
     if (last && ['issue.planning', 'issue.plan_waiting', 'issue.plan_failed'].includes(last.type) && !restarted) return

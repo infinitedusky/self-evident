@@ -86,6 +86,7 @@ export const app = pgTable('app', { // [LS] "stack"; Linear's team
   name: text('name').notNull(), key: text('key').notNull(), // key: the issue prefix, HG in HG-12
   defaultBranch: text('default_branch').notNull().default('main'),
   setup: jsonb('setup').notNull().default({}), // setup_cmd, test_cmd, services[], env_ref, sandbox_size
+  workflowId: text('workflow_id').references((): AnyPgColumn => workflow.id), // the default for its projects and tasks
   createdAt: createdAt(),
 }, (t) => [uniqueIndex('app_workspace_key').on(t.workspaceId, t.key)])
 
@@ -151,6 +152,7 @@ export const project = pgTable('project', { // issues in order (an InDusk master
   integrationBranch: text('integration_branch'), // [ID] the project's branch; issues land here, only it reaches trunk
   lead: text('lead'), priority: integer('priority').notNull().default(0), startDate: date('start_date'), targetDate: date('target_date'),
   sortOrder: integer('sort_order').notNull().default(0), createdAt: createdAt(), updatedAt: at('updated_at'),
+  workflowId: text('workflow_id').references((): AnyPgColumn => workflow.id), // its tasks' unless they have their own
 }, (t) => [uniqueIndex('project_id_app').on(t.id, t.appId), index('project_app').on(t.appId),
   inList('project_status', t.status, PROJECT_STATUSES), check('project_priority', sql`${t.priority} between 0 and 4`),
   foreignKey({ name: 'project_idea_app_fk', columns: [t.ideaId, t.appId], foreignColumns: [idea.id, idea.appId] })])
@@ -168,6 +170,8 @@ export const issue = pgTable('issue', {
   title: text('title').notNull(),
   description: text('description'), // for a person: what will be different, plain words; no file names or code
   brief: text('brief'), // for the builder: its instructions, Markdown
+  briefApprovedBy: text('brief_approved_by'), briefApprovedAt: at('brief_approved_at'), // a task completes only once its brief is approved
+  workflowId: text('workflow_id').references((): AnyPgColumn => workflow.id), // its own, over its project's and the app's
   state: text('state').notNull().default('todo'),
   priority: integer('priority').notNull().default(0), // Linear's: 0 none, 1 urgent, 2 high, 3 medium, 4 low
   estimate: text('estimate'), // S, M, L, XL
@@ -336,9 +340,31 @@ export const verification = pgTable('verification', { // [LS] Feature/Entry shot
 export const PROTOTYPE_STATUSES = ['running', 'stopped', 'discarded'] as const
 export const prototype = pgTable('prototype', {
   id: id(), appId: appId(), projectId: text('project_id').references(() => project.id),
+  ideaId: text('idea_id').references(() => idea.id), issueId: text('issue_id').references(() => issue.id), // what it's a step of
   title: text('title').notNull(), brief: text('brief'), // what to build and what it should teach us
   sessionId: text('session_id'), // the conversation that builds it, working in its worktree
   scenario: text('scenario'), // the made-up data its database was last built from (.prototype/scenarios/<name>)
   branch: text('branch').notNull(), path: text('path').notNull(), port: integer('port'),
   status: text('status').notNull().default('stopped'), createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [index('prototype_app').on(t.appId), inList('prototype_status', t.status, PROTOTYPE_STATUSES)])
+
+// Workflows and steps (LOG.md, 2026-10-29). A workflow's steps are [{key, on, required}] in its order, under the fixed
+// rules in steps.ts. A step's work on an idea, a task or a project is one row per step: its status, a line about it,
+// and what it produced (research notes, an ADR, a rough draft; mockups as story ids). The brief of a task is the
+// issue's own brief; its prototype is the prototype table.
+export const workflow = pgTable('workflow', {
+  id: id(), appId: appId(), name: text('name').notNull(),
+  steps: jsonb('steps').notNull().default([]), ordered: boolean('ordered').notNull().default(false),
+  createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [index('workflow_app').on(t.appId)])
+
+export const STEP_STATUSES = ['none', 'started', 'done'] as const
+export const stepWork = pgTable('step_work', {
+  id: id(), appId: appId(),
+  ideaId: text('idea_id').references(() => idea.id), issueId: text('issue_id').references(() => issue.id), projectId: text('project_id').references(() => project.id),
+  key: text('key').notNull(), status: text('status').notNull().default('started'),
+  detail: text('detail'), body: text('body'), refs: jsonb('refs').notNull().default([]), // refs: story ids for mockups
+  updatedBy: text('updated_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [index('step_work_app').on(t.appId), inList('step_work_status', t.status, STEP_STATUSES),
+  uniqueIndex('step_work_idea_key').on(t.ideaId, t.key), uniqueIndex('step_work_issue_key').on(t.issueId, t.key), uniqueIndex('step_work_project_key').on(t.projectId, t.key),
+  check('step_work_one_subject', sql`num_nonnulls(${t.ideaId}, ${t.issueId}, ${t.projectId}) = 1`)])

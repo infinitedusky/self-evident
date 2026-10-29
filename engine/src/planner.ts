@@ -196,6 +196,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
   if (!t) throw new PlanError(`no issue ${issueId}`)
   if (t.kind !== 'code' || t.parentId) throw new PlanError('only a top-level code issue is planned')
   if (!t.projectId) throw new PlanError(`${t.title}: add it to a project before planning it`)
+  if (!t.briefApprovedBy) throw new PlanError(`${t.title}: ${t.brief?.trim() ? 'approve its brief' : 'write and approve its brief'} before planning it`)
   const g = (await projectGraph(t.projectId))!
   const mine = g.subIssues.filter((x) => x.parentId === issueId)
   const name = identifier(g.app.key, t.number)

@@ -142,6 +142,7 @@ export async function updateIssue(issueId: string, input: Partial<Pick<NewIssue,
       const v = input[k]
       ;(set as any)[k] = typeof v === 'string' ? (v.trim() || (k === 'title' ? v : null)) : v
     }
+    if (set.brief !== undefined && set.brief !== i.brief && i.briefApprovedBy) { set.briefApprovedBy = null; set.briefApprovedAt = null } // a changed brief is approved again
     if (input.projectId !== undefined && input.projectId !== i.projectId && input.sortOrder === undefined) set.sortOrder = await nextSort(tx, { projectId: input.projectId, appId: i.appId })
     if (!Object.keys(set).length) return i
     const [row] = await tx.update(issue).set({ ...set, updatedAt: new Date() }).where(eq(issue.id, issueId)).returning()

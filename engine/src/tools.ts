@@ -7,13 +7,15 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from './db/client.js'
-import { app, initiative, ISSUE_STATES, issue, prototype, question } from './db/schema.js'
+import { app, idea as ideaTable, initiative, ISSUE_STATES, issue, prototype, question } from './db/schema.js'
 import { appendEvent, eventsSince } from './events.js'
 import { addIdea, addItems, dropItem, markDuplicate, promote } from './backlog.js'
 import { createCycle, createInitiative, listCycles, listInitiatives, updateInitiative } from './goals.js'
 import { createIdea, listIdeas } from './ideas.js'
 import { changeState, createIssue, listIssues, reorder, updateIssue } from './issues.js'
 import { now } from './now.js'
+import { convertIdea, guardComplete, guardDirect, listWorkflows, setStep, stepsOf, type Subject } from './work.js'
+import { STEPS } from './steps.js'
 import { answerQuestion, finishPlanning, preparePlanning } from './planner.js'
 import { createProject, issueDetail, listProjects, PlanError, projectGraph } from './projects.js'
 import { runner } from './runner.js'
@@ -27,7 +29,7 @@ export interface EngineTool { name: string; description: string; shape: z.ZodRaw
 export interface ToolScope { appId: string; sessionId?: string; actor?: string; waitForPlanner?: boolean }
 
 /** Tools that only read: safe to run without asking. */
-export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'issue', 'issues', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype'])
+export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'issue', 'issues', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'workflows'])
 
 export function engineTools(opts: ToolScope): EngineTool[] {
   const { appId, sessionId } = opts
@@ -40,6 +42,13 @@ export function engineTools(opts: ToolScope): EngineTool[] {
   const ownProject = async (projectId: string) => { const g = await projectGraph(projectId); if (!g || g.project.appId !== appId) throw foreign(); return g }
   const ownIssue = async (issueId: string) => { const [t] = await db.select().from(issue).where(eq(issue.id, issueId)); if (!t || t.appId !== appId) throw foreign(); return t }
   const ownQuestion = async (questionId: string) => { const [q] = await db.select().from(question).where(eq(question.id, questionId)); if (!q || q.appId !== appId) throw foreign(); return q }
+  const ownIdea = async (id: string) => { const [i] = await db.select().from(ideaTable).where(eq(ideaTable.id, id)); if (!i || i.appId !== appId) throw foreign(); return i }
+  const own = async (a: { ideaId?: string; issueId?: string; projectId?: string }): Promise<Subject> => {
+    if ([a.ideaId, a.issueId, a.projectId].filter(Boolean).length !== 1) throw new PlanError('give one of ideaId, issueId or projectId')
+    if (a.ideaId) { await ownIdea(a.ideaId); return { ideaId: a.ideaId } }
+    if (a.issueId) { await ownIssue(a.issueId); return { issueId: a.issueId } }
+    await ownProject(a.projectId!); return { projectId: a.projectId! }
+  }
   const ownPrototype = async (id: string) => { const [p] = await db.select().from(prototype).where(eq(prototype.id, id)); if (!p || p.appId !== appId) throw foreign(); return p }
   const ownInitiative = async (id: string) => { const [i] = await db.select().from(initiative).where(eq(initiative.id, id)); if (!i || (i.appId && i.appId !== appId)) throw foreign(); return i }
   const line = z.object({ text: z.string(), waitingOn: z.string().optional() })
@@ -62,14 +71,14 @@ export function engineTools(opts: ToolScope): EngineTool[] {
       def('create_issue', 'Create an issue in this app. kind code (built by agents; default) or todo (work outside the code; prefer create_todo for a checklist). With projectId it goes at the end of that project (state backlog to put it in the backlog instead); without, it waits in no project until added to one. parentId makes it a sub-issue.', {
         title: z.string(), kind: z.enum(['code', 'todo']).optional(), description: z.string().optional().describe(described), brief: z.string().optional(),
         projectId: z.string().optional(), parentId: z.string().optional(), state: z.enum(['todo', 'backlog', 'triage']).optional(), priority: z.number().int().min(0).max(4).optional().describe('0 none, 1 urgent, 2 high, 3 medium, 4 low'), cycleId: z.string().optional(),
-      }, async (a) => tryIt(async () => { if (a.projectId) await ownProject(a.projectId); if (a.parentId) await ownIssue(a.parentId); return createIssue(appId, { ...a, source: 'agent', sourceRef: sessionId ? { sessionId } : null, delegate: a.kind === 'todo' || a.parentId ? null : 'planner' }, actor) })),
+      }, async (a) => tryIt(async () => { if (a.projectId) await ownProject(a.projectId); if (a.parentId) await ownIssue(a.parentId); if (a.kind !== 'todo' && !a.parentId) await guardDirect(db, appId, a.projectId); return createIssue(appId, { ...a, source: 'agent', sourceRef: sessionId ? { sessionId } : null, delegate: a.kind === 'todo' || a.parentId ? null : 'planner' }, actor) })),
       def('update_issue', 'Change an issue of this app: title, description, brief, priority, estimate, cycle; or move it into a project (projectId; it goes at the end).', {
         issueId: z.string(), title: z.string().optional(), description: z.string().optional(), brief: z.string().optional(), priority: z.number().int().min(0).max(4).optional(),
         estimate: z.enum(['S', 'M', 'L', 'XL']).optional(), cycleId: z.string().optional(), projectId: z.string().optional(),
       }, async (a) => tryIt(async () => { await ownIssue(a.issueId); if (a.projectId) await ownProject(a.projectId); const { issueId, ...rest } = a; return updateIssue(issueId, rest, actor) })),
       def('set_issue_state', `Move an issue of this app to a state (${ISSUE_STATES.join(', ')}). Canceling needs the reason. A code issue's state otherwise follows its sub-issues; use this for what the engine cannot see.`, {
         issueId: z.string(), state: z.enum(ISSUE_STATES), reason: z.string().optional(),
-      }, async (a) => tryIt(async () => { await ownIssue(a.issueId); const out = await changeState(a.issueId, a.state, { actor, reason: a.reason }); void runner.dispatch(); return out })),
+      }, async (a) => tryIt(async () => { await ownIssue(a.issueId); if (a.state === 'done') await guardComplete(db, a.issueId); const out = await changeState(a.issueId, a.state, { actor, reason: a.reason }); void runner.dispatch(); return out })),
       def('reorder_issues', 'Put issues in this order: a project\'s top-level issues (the order they are built in), or one parent\'s sub-issues.', { ids: z.array(z.string()) },
         async (a) => tryIt(async () => { for (const id of a.ids) await ownIssue(id); return reorder(a.ids, actor) })),
       def('backlog_add', 'Add to a project\'s backlog: things the project must not forget (one line each, optional detail), or an idea of this app (ideaId). Use it whenever the person mentions something the project should cover.', {
@@ -134,8 +143,16 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         async () => tryIt(() => listPrototypes(appId))),
       def('prototype', 'One prototype: status, address, whether it answers, and the last lines of its server\'s output.', { prototypeId: z.string() },
         async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return prototypeStatus(a.prototypeId) })),
-      def('start_prototype', 'Start a prototype in this app: the actual thing built fast to demo and learn from, never merged. Makes a branch and worktree of its own, starts its server, and opens it beside the person with a conversation of its own that builds it. That conversation starts from the brief alone, so write it from everything said here: what to build, what we want to learn from it, the mockups (story ids) it should follow, what to fake. projectId ties it to the project it is for.', { title: z.string(), brief: z.string().describe('Markdown: what to build, what it should teach us, mockups to follow, what to fake'), projectId: z.string().optional() },
-        async (a) => tryIt(async () => { if (a.projectId) await ownProject(a.projectId); return startPrototype({ appId, title: a.title, brief: a.brief, projectId: a.projectId, actor }) })),
+      def('start_prototype', 'Start a prototype in this app: the actual thing built fast to demo and learn from, never merged. Makes a branch and worktree of its own, starts its server, and opens it beside the person with a conversation of its own that builds it. That conversation starts from the brief alone, so write it from everything said here: what to build, what we want to learn from it, the mockups (story ids) it should follow, what to fake. It is a step of one thing: give the ideaId, issueId (a task) or projectId it is for.', { title: z.string(), brief: z.string().describe('Markdown: what to build, what it should teach us, mockups to follow, what to fake'), ideaId: z.string().optional(), issueId: z.string().optional(), projectId: z.string().optional() },
+        async (a) => tryIt(async () => { if (a.projectId) await ownProject(a.projectId); if (a.issueId) await ownIssue(a.issueId); if (a.ideaId) await ownIdea(a.ideaId); return startPrototype({ appId, title: a.title, brief: a.brief, projectId: a.projectId, ideaId: a.ideaId, issueId: a.issueId, actor }) })),
+      def('steps', 'The steps on one idea, task (an issue) or project: the workflow in force and where it came from, what each step has so far, the order, and (for a task) what still stops it being completed. Steps: ' + STEPS.map((s) => `${s.key} (${s.label})`).join(', ') + '. A task\'s brief is the issue\'s brief and only a person approves it; "idea" is filled by converting an idea.', { ideaId: z.string().optional(), issueId: z.string().optional(), projectId: z.string().optional() },
+        async (a) => tryIt(async () => stepsOf(await own(a)))),
+      def('set_step', 'Record work on a step of an idea, a task or a project: research notes, an idea\'s rough draft of a brief (key brief, on an idea only), an ADR, the blast radius, a brief audit, or mockups (refs: story ids). body is Markdown; detail is one short line for the step\'s card; status started or done.', { ideaId: z.string().optional(), issueId: z.string().optional(), projectId: z.string().optional(), key: z.enum(STEPS.map((s) => s.key) as [string, ...string[]]), status: z.enum(['started', 'done']).optional(), detail: z.string().optional(), body: z.string().optional(), refs: z.array(z.string()).optional() },
+        async (a) => tryIt(async () => setStep(await own(a), a.key, { status: a.status, detail: a.detail, body: a.body, refs: a.refs }, actor))),
+      def('convert_idea', 'Turn an idea into a task or a project, taking its steps with it (research, mockups, prototypes; its rough draft becomes the task\'s brief, waiting for approval). Decide which from everything the idea has, even if it is one sentence: a task when it is one thing to build, a project when it is several in order. Say why. projectId puts a task into an existing project.', { ideaId: z.string(), as: z.enum(['task', 'project']), why: z.string(), title: z.string().optional(), projectId: z.string().optional() },
+        async (a) => tryIt(async () => { await ownIdea(a.ideaId); if (a.projectId) await ownProject(a.projectId); return convertIdea(a.ideaId, a.as, { title: a.title, projectId: a.projectId, why: a.why }, actor) })),
+      def('workflows', 'This app\'s workflows: which steps each requires, which are on, the order and whether it is enforced, and how many projects and tasks use it.', {},
+        async () => tryIt(async () => listWorkflows(appId))),
       def('run_prototype', 'Start a stopped prototype\'s server again, on a fresh port; restart=true stops it first (after a change that needs a restart).', { prototypeId: z.string(), restart: z.boolean().optional() },
         async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return runPrototype(a.prototypeId, actor, { restart: a.restart }) })),
       def('stop_prototype', 'Stop a prototype\'s server; its worktree stays.', { prototypeId: z.string() },

@@ -15,6 +15,7 @@ import { newId } from './ids.js'
 import { createIdea } from './ideas.js'
 import { planIssue, type Propose } from './planner.js'
 import { createProject, PlanError, projectGraph } from './projects.js'
+import { approveBriefs } from './test-briefs.js'
 
 describe('laterFrom', () => {
   it('reads the bullets under a Later: line, and nothing else', () => {
@@ -86,6 +87,7 @@ describe.skipIf(!reachable)('backlog', () => {
       decisions: [], questions: [], notes: '',
       later: [{ text: 'The cart page has no empty state', why: 'seen while reading cart.tsx' }],
     } })
+    await approveBriefs(appId)
     await planIssue(issues[0].id, { propose })
     expect((await listBacklog(p.id)).filter((b) => b.state === 'backlog').map((b) => [b.title, b.description, b.source, (b.sourceRef as any)?.issueId])).toEqual([['The cart page has no empty state', 'seen while reading cart.tsx', 'planner', issues[0].id]])
   })
