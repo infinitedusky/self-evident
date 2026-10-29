@@ -22,7 +22,7 @@ export function Steps({ on, states, resolved, fromIdea, onStart }: { on: On; sta
           {wf ? <>Workflow <b>{wf.name}</b> · {FROM[resolved.from!]}{wf.ordered ? ' · in order' : ''}</> : 'No workflow: any step, any order; only the brief is required.'}
         </span>
       </div>
-      <div className="steps">
+      <div className="step-cards">
         {list.map((r) => {
           const s = r.state
           const blocked = !!r.waitingOn

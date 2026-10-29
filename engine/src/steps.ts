@@ -117,7 +117,7 @@ export function rows(on: On, states: StepState[], workflow: Workflow | null): Ro
   const stateOf = (key: StepKey): StepState => states.find((s) => s.key === key) ?? { key, status: 'none' }
   return list.map((s, i) => {
     const before = workflow?.ordered ? list.slice(0, i).find((b) => b.required && !finished(stateOf(b.key), on)) : undefined
-    return { key: s.key, required: s.required, position: workflow?.ordered ? i + 1 : null, waitingOn: before?.key ?? null, state: stateOf(s.key) }
+    return { key: s.key, required: s.required && on !== 'idea', position: workflow?.ordered ? i + 1 : null, waitingOn: before?.key ?? null, state: stateOf(s.key) }
   })
 }
 

@@ -15,6 +15,7 @@ import { planIssue, questionCost, subIssueBrief, validateProposal, type Proposal
 import { addItems } from './backlog.js'
 import { createIssue, getIssue } from './issues.js'
 import { createProject, PlanError, projectGraph } from './projects.js'
+import { approveBriefs } from './test-briefs.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -62,6 +63,7 @@ describe.skipIf(!reachable)('planner', () => {
       { title: 'Groundwork', subIssues: [{ key: 'g', title: 'G', files: ['README.md'] }] },
       { title: 'Settings and the gate', brief: 'Parents set when the gate is open.' },
     ] })
+    await approveBriefs(appId)
     const out = await planIssue(tasks[1].id, { propose: fake(proposal) })
     expect(out.status).toBe('completed')
     expect((await getIssue(db, tasks[1].id)).state).toBe('todo') // planned, not started: Todo until a sub-issue is built (Linear's way)
@@ -103,6 +105,7 @@ describe.skipIf(!reachable)('planner', () => {
 
   it('a failed proposal is a failed run: no sub-issues, an issue.plan_failed event, and the issue can be planned again', async () => {
     const { project: p, issues: tasks } = await createProject({ appId, name: 'failing', issues: [{ title: 'T', brief: 'b' }] })
+    await approveBriefs(appId)
     const out = await planIssue(tasks[0].id, { propose: fake(new Error('error_max_turns')) })
     expect(out).toMatchObject({ status: 'failed', error: 'error_max_turns', subIssues: [] })
     expect((await projectGraph(p.id))!.subIssues).toHaveLength(0)
@@ -110,6 +113,7 @@ describe.skipIf(!reachable)('planner', () => {
     expect(r).toMatchObject({ status: 'failed', error: 'error_max_turns' })
     const types = (await db.select().from(event).where(eq(event.issueId, tasks[0].id)).orderBy(asc(event.seq))).map((e) => e.type)
     expect(types.at(-1)).toBe('issue.plan_failed')
+    await approveBriefs(appId)
     const again = await planIssue(tasks[0].id, { propose: fake(proposal) })
     expect(again.status).toBe('completed')
     expect((await db.select().from(run).where(eq(run.id, again.runId)))[0].attempt).toBe(2)
@@ -117,10 +121,13 @@ describe.skipIf(!reachable)('planner', () => {
 
   it('refuses an issue that already has sub-issues, one in the backlog or in no project, and a proposal that does not hold together', async () => {
     const { project: p, issues: tasks } = await createProject({ appId, name: 'twice', issues: [{ title: 'T', subIssues: [{ key: 'x', title: 'X' }] }] })
+    await approveBriefs(appId)
     await expect(planIssue(tasks[0].id, { propose: fake(proposal) })).rejects.toThrow(PlanError)
     const [inBacklog] = await addItems(p.id, [{ text: 'later' }])
+    await approveBriefs(appId)
     await expect(planIssue(inBacklog.id, { propose: fake(proposal) })).rejects.toThrow(/backlog/)
     const loose = await createIssue(appId, { title: 'in no project' })
+    await approveBriefs(appId)
     await expect(planIssue(loose.id, { propose: fake(proposal) })).rejects.toThrow(/add it to a project/)
     const bad = (patch: Partial<Proposal>) => () => validateProposal({ ...proposal, ...patch })
     expect(bad({ phases: [] })).toThrow('no sub-issues')
@@ -134,6 +141,7 @@ describe.skipIf(!reachable)('planner', () => {
     const { project: p, issues: tasks } = await createProject({ appId, name: 'outage while planning', issues: [{ title: 'T', brief: 'b' }] })
     let calls = 0
     const propose: Propose = async () => (++calls === 1 ? { status: 'failed', error: 'API Error: 529 overloaded_error', costUsd: 0.01 } : { status: 'completed', proposal, costUsd: 0.1 })
+    await approveBriefs(appId)
     const out = await planIssue(tasks[0].id, { propose, retryAfterMs: () => 50 })
     expect(out.status).toBe('waiting')
     expect((await db.select().from(run).where(eq(run.id, out.runId)))[0].status).toBe('interrupted')

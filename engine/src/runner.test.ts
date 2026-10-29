@@ -17,6 +17,7 @@ import { createProject, projectGraph } from './projects.js'
 import { Runner } from './runner.js'
 import { addItems, dropItem, promote } from './backlog.js'
 import type { Propose } from './planner.js'
+import { approveBriefs } from './test-briefs.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -69,6 +70,7 @@ describe.skipIf(!reachable)('runner', () => {
       try { return await commits('f')(i) } finally { live-- }
     }
     const runner = new Runner({ execute, sessionsMax: 2 })
+    await approveBriefs(appId)
     await runner.startProject(p.id)
     await until(cleaned(p.id))
     expect(maxLive).toBe(2)
@@ -94,6 +96,7 @@ describe.skipIf(!reachable)('runner', () => {
       if (i.subIssue.title === 'C') firstDoneWhenCStarted = (await projectGraph(p.id))!.subIssues.filter((x) => x.title !== 'C').every((x) => x.status === 'done')
       return commits('o')(i)
     }, sessionsMax: 4 })
+    await approveBriefs(appId)
     await runner.startProject(p.id)
     await until(cleaned(p.id))
     expect(order.indexOf('C')).toBe(2)
@@ -112,6 +115,7 @@ describe.skipIf(!reachable)('runner', () => {
       try { return await commits('x')(i) } finally { live.delete(i.subIssue.title) }
     }
     const runner = new Runner({ execute, sessionsMax: 4 })
+    await approveBriefs(appId)
     await runner.startProject(A.project.id); await runner.startProject(B.project.id)
     await until(async () => (await cleaned(A.project.id)()) && (await cleaned(B.project.id)()))
     expect(maxLive).toBeGreaterThanOrEqual(2)
@@ -124,6 +128,7 @@ describe.skipIf(!reachable)('runner', () => {
     const { project: p, subIssues: phases } = await createProject({ appId, name: 'retries', issues: [one('T', [{ key: 'x', title: 'X', files: ['x.txt'] }])] })
     const reasons: (string | undefined)[] = []
     const runner = new Runner({ execute: async (i) => { reasons.push(i.previousFailure); return { status: 'failed', error: 'boom' } }, sessionsMax: 2 })
+    await approveBriefs(appId)
     await runner.startProject(p.id)
     await until(async () => (await projectGraph(p.id))!.subIssues[0].status === 'failed')
     expect((await projectGraph(p.id))!.subIssues[0].attempt).toBe(3)
@@ -138,6 +143,7 @@ describe.skipIf(!reachable)('runner', () => {
     let fail = true
     const told: (string | undefined)[] = []
     const runner = new Runner({ execute: async (i) => { told.push(i.previousFailure); return fail ? { status: 'failed', error: 'flaky' } : commits('r')(i) }, sessionsMax: 2 })
+    await approveBriefs(appId)
     await runner.startProject(p.id)
     await until(async () => (await projectGraph(p.id))!.subIssues[0].status === 'failed')
     fail = false
@@ -153,6 +159,7 @@ describe.skipIf(!reachable)('runner', () => {
     const { project: p, subIssues: phases } = await createProject({ appId, name: 'outage', issues: [one('T', [{ key: 'o', title: 'O', files: ['o.txt'] }])] })
     let calls = 0
     const runner = new Runner({ execute: async (i) => (++calls === 1 ? { status: 'failed', error: 'API Error: 529 overloaded_error' } : commits('o')(i)), sessionsMax: 2 })
+    await approveBriefs(appId)
     await runner.startProject(p.id)
     await until(async () => !!runner.hold)
     const held = (await projectGraph(p.id))!.subIssues[0]
@@ -174,6 +181,7 @@ describe.skipIf(!reachable)('runner', () => {
       if (first) { first = false; await new Promise<void>((r) => i.abort?.signal.addEventListener('abort', () => r())); return { status: 'failed', error: 'aborted', agentSessionId: 'sess-pause' } }
       return commits('q')(i)
     }, sessionsMax: 2 })
+    await approveBriefs(appId)
     await runner.startProject(p.id)
     await until(async () => (await projectGraph(p.id))!.subIssues[0].status === 'running')
     await db.update(run).set({ agentSessionId: 'sess-pause' }).where(eq(run.issueId, phases[0].id))
@@ -200,6 +208,7 @@ describe.skipIf(!reachable)('runner', () => {
         decisions: [], questions: [], notes: '' } }
     }
     const runner = new Runner({ execute: commits('tbt'), sessionsMax: 2, propose })
+    await approveBriefs(appId)
     await runner.startProject(p.id)
     await until(cleaned(p.id))
     const g = (await projectGraph(p.id))!
@@ -213,6 +222,7 @@ describe.skipIf(!reachable)('runner', () => {
     const { project: p } = await createProject({ appId, name: 'backlog gate', issues: [one('T', [{ key: 'b', title: 'B', files: ['b.txt'] }])] })
     const [kept] = await addItems(p.id, [{ text: 'Refunds' }])
     const runner = new Runner({ execute: async (i) => ({ ...(await commits('bg')(i)), summary: 'did B\n\nLater:\n- The header link 404s' }), sessionsMax: 2 })
+    await approveBriefs(appId)
     await runner.startProject(p.id)
     const waiting = async () => (await db.select().from(event).where(eq(event.projectId, p.id))).some((e) => e.type === 'project.backlog_open')
     await until(waiting)
@@ -220,7 +230,8 @@ describe.skipIf(!reachable)('runner', () => {
     expect(g.project.status).toBe('running')
     expect(g.backlog.map((b) => [b.title, b.source, b.state])).toEqual([['Refunds', 'person', 'backlog'], ['The header link 404s', 'builder', 'backlog']])
     await dropItem(kept.id, 'not in this project')
-    await promote(g.backlog[1].id) // taken on: planned and built before the project lands
+    await promote(g.backlog[1].id) // taken on: planned and built before the project lands, once its brief is approved
+    await approveBriefs(appId)
     const propose: Propose = async () => ({ status: 'completed', costUsd: 0, proposal: {
       phases: [{ key: 'h', title: 'H', description: 'h', summary: 'h', depends_on: [], files: ['h.txt'], steps: [], checks: [], done_when: '' }], decisions: [], questions: [], notes: '' } })
     const again = new Runner({ execute: commits('bg2'), sessionsMax: 2, propose })
@@ -238,6 +249,7 @@ describe.skipIf(!reachable)('runner', () => {
     await db.insert(repo).values({ id: newId('repo'), appId: stackApp, fullName: '', localPath: repoPath })
     const { project: p, issues: tasks } = await createProject({ appId: stackApp, name: 'stacked', issues: [one('One', [{ key: 'x', title: 'X', files: ['x.txt'] }]), one('Two', [{ key: 'y', title: 'Y', files: ['y.txt'] }])] })
     const runner = new Runner({ execute: commits('st'), sessionsMax: 2 })
+    await approveBriefs(appId)
     await runner.startProject(p.id)
     await until(cleaned(p.id))
     const [b1, b2] = tasks.map((t) => `${p.integrationBranch}--${stackApp.slice(-6).toLowerCase()}-${t.number}`)
@@ -256,6 +268,7 @@ describe.skipIf(!reachable)('runner', () => {
       await i.onEvent('run.steps', { steps: [{ text: 'read the code', status: 'completed' }, { text: 'write it', status: 'completed' }, { text: 'test it', status: 'in_progress' }] })
       return commits('s')(i)
     }, sessionsMax: 2 })
+    await approveBriefs(appId)
     await runner.startProject(p.id)
     await until(cleaned(p.id))
     const rows = await db.select().from(step).where(eq(step.issueId, phases[0].id))

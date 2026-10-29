@@ -19,6 +19,7 @@ describe('steps', () => {
     const task = rows('task', [], null)
     expect(task.map((r) => r.key)).toEqual(['idea', 'research', 'mockup', 'prototype', 'brief'])
     expect(task.every((r) => r.required === (r.key === 'brief') && r.position === null && !r.waitingOn)).toBe(true)
+    expect(rows('idea', [], null).some((r) => r.required)).toBe(false) // an idea commits to nothing: its rough draft is optional
   })
 
   it('leaves out switched-off steps and makes later steps wait on required ones in an enforced order', () => {

@@ -1,12 +1,14 @@
 /**
  * One project, live: its issues in order (plan one with a click; a draft's can be reordered), the graph of their
  * sub-issues, the planner's questions and decisions, the selected sub-issue's detail and steps, the event ticker, the PR.
+ * Its own steps (research, mockups, a prototype; no brief) sit at the top.
  */
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { Badge, type Tone } from '../components/Badge'
 import { PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
 import { Brief } from '../components/Brief'
+import { StepsPanel } from '../components/StepsPanel'
 import { engine, STATE_LABEL, useLiveProject, type BacklogIssue, type Graph, type IdeaRow, type Decision, type Event, type GraphSubIssue, type GraphIssue, type Question } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { TodoCard } from './Todos'
@@ -70,6 +72,8 @@ export function ProjectPage() {
           )}
         </div>
       </div>
+
+      <StepsPanel subject={{ kind: 'projects', id: graph.project.id }} appId={graph.app.id} name={graph.project.name} />
 
       <BacklogPanel graph={graph} busy={busy} act={act} />
 

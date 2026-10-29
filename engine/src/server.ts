@@ -17,7 +17,8 @@ import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, works
 import { EventBus, eventsSince, latestSeq } from './events.js'
 import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
-import { answerPermission, closeTalks, endTalk, interruptTalk, listTalks, renameTalk, say, setAutoApprove, startTalk, talkTranscript, type SubjectRef, type TalkContext } from './talk.js'
+import { approveBrief, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject } from './work.js'
+import { answerPermission, closeTalks, endTalk, interruptTalk, listTalks, renameTalk, say, setAutoApprove, showTalk, startTalk, talkTranscript, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
 import { lastSync, startSync, syncApp } from './github.js'
@@ -64,6 +65,11 @@ export function buildApp(bus: EventBus) {
       'POST /issues/:id/plan?wait=1': 'the planner: the issue\'s brief → sub-issues, decisions, questions (one read-only agent run); 202 at once, or wait',
       'POST /issues/:id/retry': '{fresh?} — a failed or cancelled build, three more attempts', 'POST /issues/:id/build': '{status} — by hand, for drafts',
       'POST /questions/:id/answer': '{answer}',
+      'GET /plan?app=': 'Plan\'s page: open projects with their tasks and steps, tasks in no project, open to-dos, workflows',
+      'GET /{ideas|issues|projects}/:id/steps': 'the workflow in force, each step\'s state, the order, what blocks completing', 'PUT /{ideas|issues|projects}/:id/steps/:key': '{status?, detail?, body?, refs?}',
+      'POST /issues/:id/brief/approve': '{approve?} — a person approves the brief; a task completes only once it is', 'POST /ideas/:id/convert': '{as: task|project, title?, projectId?, why?}',
+      'GET /workflows?app=': 'the app\'s workflows', 'POST /workflows': '{appId, name, steps: [{key, on, required}], ordered?}', 'PUT /workflows/:id': 'the same',
+      'POST /talks/ask': '{appId, subjectRef?, text} — a new conversation, said to and brought to the front', 'POST /{apps|projects|issues}/:id/workflow': '{workflowId | null} — attach one, or inherit again',
       'GET /projects/:id/backlog': 'what the project has to cover', 'POST /projects/:id/backlog': '{text, body?} | {items: [{text, body?}]} | {ideaId}',
       'POST /backlog/:id/take': '{title?, brief?} — becomes Todo at the end', 'POST /backlog/:id/duplicate': '{of, reason?}', 'POST /backlog/:id/drop': '{reason}', 'POST /backlog/:id/reopen': '', 'POST /backlog/:id/todo': '{title?, checklist?} — work outside the code',
       'GET /todos?app=': 'the app\'s to-dos with their checklists', 'POST /todos': '{appId, title, notes?, owner?, projectId?, checklist?: [text | {text, waitingOn?}]}',
@@ -223,6 +229,11 @@ export function buildApp(bus: EventBus) {
     if (!body.appId) return c.json({ error: 'appId is required: a conversation belongs to an app' }, 400)
     try { return c.json(await startTalk({ appId: body.appId, subjectRef: body.subjectRef, actor: 'user' }), 201) } catch (err) { return planError(c, err) }
   })
+  api.post('/talks/ask', async (c) => { // a page hands the agent a job (a step to do, an idea to convert): a new conversation, brought to the front
+    const body = await c.req.json<{ appId?: string; subjectRef?: SubjectRef; text?: string }>()
+    if (!body.appId || !body.text?.trim()) return c.json({ error: 'appId and text are required' }, 400)
+    try { const t = await startTalk({ appId: body.appId, subjectRef: body.subjectRef, actor: 'user' }); await say(t.id, body.text); await showTalk(t.id, body.appId); return c.json(t, 201) } catch (err) { return planError(c, err) }
+  })
   api.post('/talks/:id/rename', async (c) => {
     const { subject } = await c.req.json<{ subject: string }>()
     try { return c.json(await renameTalk(c.req.param('id'), subject)) } catch (err) { return planError(c, err, 404) }
@@ -253,6 +264,35 @@ export function buildApp(bus: EventBus) {
     try { return c.json(await projectFromIdea(c.req.param('id'), body.tasks), 201) } catch (err) { return planError(c, err) }
   })
 
+  // Steps and workflows (LOG.md, 2026-10-29): what's been done on an idea, a task or a project, and the rules for it.
+  const subject = (kind: string, id: string): Subject => (kind === 'ideas' ? { ideaId: id } : kind === 'issues' ? { issueId: id } : { projectId: id })
+  for (const kind of ['ideas', 'issues', 'projects']) {
+    api.get(`/${kind}/:id/steps`, async (c) => { try { return c.json(await stepsOf(subject(kind, c.req.param('id')))) } catch (err) { return planError(c, err, 404) } })
+    api.get(`/${kind}/:id/steps/:key`, async (c) => c.json(await getStep(subject(kind, c.req.param('id')), c.req.param('key') as never)))
+    api.put(`/${kind}/:id/steps/:key`, async (c) => {
+      try { return c.json(await setStep(subject(kind, c.req.param('id')), c.req.param('key') as never, await c.req.json(), 'user')) } catch (err) { return planError(c, err) }
+    })
+  }
+  api.post('/issues/:id/brief/approve', async (c) => {
+    const { approve = true } = await c.req.json<{ approve?: boolean }>().catch(() => ({ approve: true }))
+    try { return c.json(settle(await approveBrief(c.req.param('id'), 'user', approve))) } catch (err) { return planError(c, err) }
+  })
+  api.post('/ideas/:id/convert', async (c) => {
+    const body = await c.req.json<{ as: 'task' | 'project'; title?: string; projectId?: string; why?: string }>()
+    if (body.as !== 'task' && body.as !== 'project') return c.json({ error: 'as must be task or project' }, 400)
+    try { return c.json(await convertIdea(c.req.param('id'), body.as, body, 'user'), 201) } catch (err) { return planError(c, err) }
+  })
+  api.get('/workflows', async (c) => { const a = c.req.query('app'); if (!a) return c.json({ error: 'app is required: one app at a time' }, 400); try { return c.json(await listWorkflows(a)) } catch (err) { return planError(c, err, 404) } })
+  api.post('/workflows', async (c) => { try { return c.json(await saveWorkflow(await c.req.json(), 'user'), 201) } catch (err) { return planError(c, err) } })
+  api.put('/workflows/:id', async (c) => { try { return c.json(await saveWorkflow({ ...(await c.req.json()), id: c.req.param('id') }, 'user')) } catch (err) { return planError(c, err) } })
+  for (const [kind, key] of [['apps', 'appId'], ['projects', 'projectId'], ['issues', 'issueId']] as const) {
+    api.post(`/${kind}/:id/workflow`, async (c) => {
+      const { workflowId } = await c.req.json<{ workflowId: string | null }>()
+      try { return c.json(await useWorkflow({ [key]: c.req.param('id') } as never, workflowId ?? null, 'user')) } catch (err) { return planError(c, err) }
+    })
+  }
+  api.get('/plan', async (c) => { const a = c.req.query('app'); if (!a) return c.json({ error: 'app is required: one app at a time' }, 400); try { return c.json(await planView(a)) } catch (err) { return planError(c, err, 404) } })
+
   // Issues: the one unit of work, as Linear has it. Code or a to-do; in a project or not; ordered among their siblings.
   api.get('/issues', async (c) => {
     const a = c.req.query('app')
@@ -263,7 +303,10 @@ export function buildApp(bus: EventBus) {
   })
   api.post('/issues', async (c) => {
     const { appId, ...body } = await c.req.json()
-    try { return c.json(settle(await createIssue(appId, { ...body, delegate: body.kind === 'todo' || body.parentId ? null : 'planner' }, 'user')), 201) } catch (err) { return planError(c, err) }
+    try {
+      if (body.kind !== 'todo' && !body.parentId) await guardDirect(db, appId, body.projectId)
+      return c.json(settle(await createIssue(appId, { ...body, delegate: body.kind === 'todo' || body.parentId ? null : 'planner' }, 'user')), 201)
+    } catch (err) { return planError(c, err) }
   })
   api.post('/issues/reorder', async (c) => { const { ids } = await c.req.json<{ ids: string[] }>(); try { return c.json(await reorder(ids ?? [], 'user')) } catch (err) { return planError(c, err) } })
   api.get('/issues/:id', async (c) => { try { return c.json(await issueDetail(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
@@ -271,7 +314,10 @@ export function buildApp(bus: EventBus) {
   api.post('/issues/:id/state', async (c) => {
     const { state, reason } = await c.req.json<{ state: IssueState; reason?: string }>()
     if (!ISSUE_STATES.includes(state)) return c.json({ error: `state must be one of ${ISSUE_STATES.join(', ')}` }, 400)
-    try { return c.json(settle(await changeState(c.req.param('id'), state, { actor: 'user', reason }))) } catch (err) { return planError(c, err) }
+    try {
+      if (state === 'done') await guardComplete(db, c.req.param('id'))
+      return c.json(settle(await changeState(c.req.param('id'), state, { actor: 'user', reason })))
+    } catch (err) { return planError(c, err) }
   })
   api.get('/projects', async (c) => { const a = c.req.query('app'); return a ? c.json(await listProjects({ all: c.req.query('all') === '1', appId: a })) : c.json({ error: 'app is required: one app at a time' }, 400) })
   api.post('/projects', async (c) => {
