@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useParams } from 'react-router'
 import { Badge } from '../components/Badge'
+import { WorkflowSettings } from '../components/WorkflowSettings'
 import { engine, type AgentRole, type App, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type FactorySettings, type Integration, type IntegrationValues, type PluginInfo, type Repo } from '../engine'
 import { useCurrentApp } from '../current-app'
 
@@ -272,6 +273,7 @@ function AppPage({ app, onSaved }: { app: App; onSaved: () => Promise<unknown> }
   const shared = factory?.values ?? {}
 
   return (
+    <>
     <section className="panel" data-component="AppSettings">
       <div className="task-block-head"><h2 style={{ margin: 0 }}>{app.name}</h2><span className="mono faint">{app.key} · {app.id}</span></div>
 
@@ -362,6 +364,8 @@ function AppPage({ app, onSaved }: { app: App; onSaved: () => Promise<unknown> }
 
       <SaveRow dirty={dirty} busy={busy} error={error} onSave={save} />
     </section>
+    <WorkflowSettings appId={app.id} />
+    </>
   )
 }
 
