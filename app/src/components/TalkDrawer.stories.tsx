@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { AgentWindow, TalkDrawer } from './TalkDrawer'
 import { engineDown, withEngine } from '../stories/mock-engine'
-import { prototypeTalk, prototypeTranscript, talkSession, transcript } from '../stories/sample'
+import { otherApp, prototypeTalk, prototypeTranscript, talkSession, transcript } from '../stories/sample'
 
 // The agent's column in the workspace. Which conversation is picked lives in localStorage, so each story sets it
 // first and puts it back after.
@@ -28,6 +28,9 @@ export const AsksPermission: Story = { beforeEach: [stored(open), withEngine({ t
 /** Open with no conversation yet: press + to start one. */
 /** A prototype's conversation: it starts from the brief, works in the prototype's worktree, and links to it. */
 export const BuildingAPrototype: Story = { beforeEach: [stored({ 'if.talk.session': prototypeTalk.id }), withEngine({ talks: [prototypeTalk, talkSession], transcript: prototypeTranscript })] }
+/** Another app's conversation isn't a tab here: conversations belong to the app in the nav. */
+export const OtherAppsHidden: Story = { beforeEach: [stored(open), withEngine({ talks: [talkSession, { ...second, appId: otherApp.id, subject: 'Sample: about the blog' }] })],
+  play: async ({ canvas }) => { await canvas.findByRole('button', { name: /Why is SS-6 waiting/ }); if (canvas.queryByText('Sample: about the blog')) throw new Error('another app\'s conversation shows') } }
 export const NoConversation: Story = { beforeEach: [stored({}), withEngine({ talks: [] })] }
 /** Popped out into its own window: the column says so and offers to bring it back. */
 export const PoppedOut: Story = { beforeEach: stored({ 'if.talk.popped': '1' }) }

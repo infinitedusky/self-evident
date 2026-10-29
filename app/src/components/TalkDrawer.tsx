@@ -84,9 +84,13 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
     setPopped(true); remember(POPPED_KEY, '1')
   }
   const backIn = () => { channel()?.postMessage({ type: 'closed' } satisfies Msg); window.close() }
-  const current = sessions.find((s) => s.id === sessionId) ?? null
-  const pick = (id: string | null) => { setSessionId(id); remember(SESSION_KEY, id) }
-  const reload = () => engine.talks(true).then((all) => { setSessions(all); return all }).catch((e) => { setProblem(String(e.message ?? e)); return [] as TalkSession[] })
+  // Conversations belong to an app: only the app in the nav's are tabs here, and each app remembers its own.
+  const mine = (all: TalkSession[]) => all.filter((s) => s.appId === app?.id)
+  const shown = mine(sessions)
+  const current = shown.find((s) => s.id === sessionId) ?? null
+  const key = app ? `${SESSION_KEY}.${app.id}` : SESSION_KEY
+  const pick = (id: string | null) => { setSessionId(id); remember(key, id) }
+  const reload = () => engine.talks(true).then((all) => { setSessions(all); return mine(all) }).catch((e) => { setProblem(String(e.message ?? e)); return [] as TalkSession[] })
 
   useEffect(() => { // the engine asks to show a conversation here: a prototype's, as it starts or when asked for
     if (!app) return
@@ -97,9 +101,11 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
     }) as EventListener)
     return () => es.close()
   }, [app?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { // the remembered conversation if still open, else the latest, else none (start one on demand)
-    void reload().then((all) => { if (!all.some((s) => s.id === sessionId)) pick(all[0]?.id ?? null) })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { // this app's remembered conversation if still open, else its latest, else none (start one on demand)
+    if (!app) return
+    const want = recall(key) ?? recall(SESSION_KEY) // the one remembered before conversations were kept per app, if it's this app's
+    void reload().then((all) => pick(all.some((s) => s.id === want) ? want : all[0]?.id ?? null))
+  }, [app?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = async () => {
     if (!app) { setProblem('Pick an app in the nav, or add one in Settings. A conversation belongs to an app.'); return }
@@ -130,11 +136,11 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
     </aside>
   )
   const appName = (s: TalkSession) => apps.find((a) => a.id === s.appId)?.name ?? ''
-  const label = (s: TalkSession) => s.subject ?? `New · ${appName(s)}`
+  const label = (s: TalkSession) => s.subject ?? "New conversation"
   return (
     <aside className={standalone ? 'talk-drawer standalone' : 'talk-drawer'} data-component="TalkDrawer">
       <div className="talk-tabs">
-        {sessions.map((s) => (
+        {shown.map((s) => (
           <button key={s.id} className={`talk-tab ${s.id === sessionId ? 'active' : ''}`} onClick={() => pick(s.id)} title={`${label(s)} · ${appName(s)}${s.branch ? ` · ${s.branch}` : ''}`}>
             {s.busy && <span className="dot" />}{label(s)}
           </button>
