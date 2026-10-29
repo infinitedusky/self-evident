@@ -463,3 +463,4 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .mark { font-size: 13px; filter: grayscale(1); opacity: .3; }
 .mark.started { filter: grayscale(.4); opacity: .7; }
 .mark.done { filter: none; opacity: 1; }
+.wf-add { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; }

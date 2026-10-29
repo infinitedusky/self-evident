@@ -6,7 +6,7 @@
  */
 import { Link } from 'react-router'
 import { Badge } from '../components/Badge'
-import { STEPS, type StepState, type Workflow } from '../steps'
+import { STEPS, type StepState, type Workflow } from '@self-evident/engine/steps'
 
 export interface PlanTask { id: string; identifier: string; title: string; state: string; steps: StepState[]; workflow?: string }
 export interface PlanProject { id: string; name: string; status: string; workflow?: string; steps: StepState[]; tasks: PlanTask[] }

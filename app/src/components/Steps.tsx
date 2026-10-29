@@ -5,7 +5,7 @@
  * project's documents and milestones on the project itself.
  */
 import { Badge } from './Badge'
-import { label, rows, step, type On, type Resolved, type StepState } from '../steps'
+import { label, rows, step, type On, type Resolved, type StepState } from '@self-evident/engine/steps'
 
 const FROM = { task: 'this task\'s own', project: 'from its project', app: 'the app\'s' }
 
