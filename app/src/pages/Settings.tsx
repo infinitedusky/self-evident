@@ -326,8 +326,8 @@ function AppPage({ app, onSaved }: { app: App; onSaved: () => Promise<unknown> }
         </select></label>
       </Group>
 
-      <Group title="Preview" lead="Where this app runs while you work on it: its dev server, shown in the Preview tab.">
-        <label style={{ gridColumn: '1 / -1' }}>Address<input className="mono" value={setup.preview_url ?? ''} onChange={(e) => set({ preview_url: e.target.value })} placeholder="http://localhost:3000" /></label>
+      <Group title="Prototype" lead="How a prototype's server starts: run in the prototype's own worktree, serving on $PORT. The agent works it out the first time and asks you to confirm.">
+        <label style={{ gridColumn: '1 / -1' }}>Command<input className="mono" value={setup.prototype_cmd ?? ''} onChange={(e) => set({ prototype_cmd: e.target.value })} placeholder="pnpm install && pnpm dev --port $PORT" /></label>
       </Group>
 
       <Group title="Storybook" lead="Where this app's stories run.">

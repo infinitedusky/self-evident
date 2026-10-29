@@ -1,7 +1,7 @@
 /**
  * The whole app, laid out like an IDE, after Replit's workspace: the loop as an icon rail on the far left, the
  * agent in the column beside it, and everything else as tabs on the right, which split by dragging a tab to an
- * edge (Dockview). Pages, the app running (Preview), its Storybook and a build's live log all open here. The agent
+ * edge (Dockview). Pages, prototypes, its Storybook and a build's live log all open here. The agent
  * is told which tabs are open and can open them itself (its open_tab tool arrives as a ui.open event). The layout
  * is kept per app in this browser; the tab in front is the address bar's page, so a link or a reload lands on it.
  */
@@ -15,7 +15,7 @@ import { AppPicker } from './AppPicker'
 import { BuildLog } from './BuildLog'
 import { Mockups } from '../pages/Mockups'
 import { PagePane } from './PagePane'
-import { PreviewPane } from './PreviewPane'
+import { PrototypePane } from './PrototypePane'
 import { Rail } from './Rail'
 import { contextFor, TalkDrawer } from './TalkDrawer'
 
@@ -29,7 +29,7 @@ const recall = (k: string) => { try { return localStorage.getItem(k) } catch { r
 const MENU: { label: string; tab: Tab }[] = [
   { label: 'My Stuff', tab: { kind: 'page', path: '/' } }, { label: 'Projects', tab: { kind: 'page', path: '/projects' } },
   { label: 'Issues', tab: { kind: 'page', path: '/issues' } }, { label: 'To-dos', tab: { kind: 'page', path: '/todos' } },
-  { label: 'Ideas', tab: { kind: 'page', path: '/ideas' } }, { label: 'Preview', tab: { kind: 'preview' } },
+  { label: 'Ideas', tab: { kind: 'page', path: '/ideas' } }, { label: 'Prototypes', tab: { kind: 'prototype' } },
   { label: 'Storybook', tab: { kind: 'storybook' } }, { label: 'Settings', tab: { kind: 'page', path: '/settings' } },
 ]
 
@@ -37,6 +37,7 @@ const MENU: { label: string; tab: Tab }[] = [
 async function nameFor(tab: Tab): Promise<string | null> {
   const clip = (s: string) => (s.length > 36 ? `${s.slice(0, 35)}…` : s)
   if (tab.kind === 'build') return engine.issue(tab.issueId).then((i) => `Build · ${i.identifier}`).catch(() => null)
+  if (tab.kind === 'prototype' && tab.id) return engine.prototype(tab.id).then((x) => clip(x.title)).catch(() => null)
   if (tab.kind !== 'page') return null
   const project = tab.path.match(/^\/projects\/((?:plan|proj)_[A-Za-z0-9_-]+)/)?.[1]
   if (project) return engine.graph(project).then((g) => clip(g.project.name)).catch(() => null)
@@ -59,9 +60,10 @@ function TabBody({ params, api }: IDockviewPanelProps<{ tab: Tab }>) {
   }
   switch (t.kind) {
     case 'page': return <PagePane path={t.path} onNavigate={(path) => went({ kind: 'page', path })} />
-    case 'preview': return <PreviewPane path={t.path} onNavigate={(path) => went({ kind: 'preview', path })} />
+    case 'prototype': return <PrototypePane id={t.id} path={t.path} onNavigate={(path) => went({ kind: 'prototype', id: t.id, path })} />
     case 'storybook': return <PagePane path="/mockups"><Mockups story={t.story} /></PagePane>
     case 'build': return <BuildLog issueId={t.issueId} />
+    default: return <PrototypePane /> // a tab saved before Preview became Prototypes
   }
 }
 

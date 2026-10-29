@@ -11,5 +11,5 @@ type Story = StoryObj<typeof meta>
 export const OnMyStuff: Story = {}
 /** Deep in Plan: an issue in front lights Plan. */
 export const OnAnIssue: Story = { args: { here: '/issues/iss_sample5' } }
-export const OnPreview: Story = { args: { here: 'preview' } }
+export const OnAPrototype: Story = { args: { here: 'prototype:proto_sample1' } }
 export const AgentFolded: Story = { args: { agentOpen: false } }

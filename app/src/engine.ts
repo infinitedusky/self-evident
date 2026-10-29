@@ -60,7 +60,7 @@ export interface IssueDetail extends Issue {
 export interface Initiative { id: string; name: string; description: string | null; status: 'planned' | 'active' | 'completed'; targetDate: string | null; projects: { id: string; name: string; status: string }[] }
 export interface Cycle { id: string; number: number; name: string | null; description: string | null; startsAt: string; endsAt: string; current: boolean; issues: { id: string; identifier: string; title: string; state: IssueState; kind: string }[] }
 export interface IdeaRow { id: string; appId: string; number: number; title: string; body: string | null; lane: string }
-export interface AppSetup { integrations?: IntegrationValues; plugins?: Record<string, { on: boolean }>; pr_mode?: 'project' | 'issue'; storybook_url?: string; storybook_cmd?: string; test_cmd?: string; preview_url?: string; preview_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number }
+export interface AppSetup { integrations?: IntegrationValues; plugins?: Record<string, { on: boolean }>; pr_mode?: 'project' | 'issue'; storybook_url?: string; storybook_cmd?: string; test_cmd?: string; prototype_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number }
 export interface Repo { id: string; appId: string; fullName: string; localPath: string | null; baseBranch: string | null }
 export interface App { id: string; workspaceId?: string; name: string; key: string; defaultBranch: string; setup?: AppSetup; repos?: Repo[] }
 export interface Workspace { id: string; name: string; settings?: { integrations?: IntegrationValues } }
@@ -82,6 +82,10 @@ export interface CategoryGroup { name: string; categories: Category[] }
 export interface FactorySettings { workspace: Workspace | null; integrations: Integration[]; values: IntegrationValues; plugins: PluginInfo[]; catalogue: CategoryGroup[] }
 export interface AppPlugin { id: string; name: string; factoryOn: boolean; own: boolean | null; on: boolean }
 export interface AppSettings { integrations: Record<string, Record<string, { value: string | null; from: 'app' | 'workspace' | null }>>; plugins: AppPlugin[]; skills: SkillInfo[] }
+export interface Prototype {
+  id: string; appId: string; projectId: string | null; title: string; branch: string; path: string; port: number | null
+  status: 'running' | 'stopped' | 'discarded'; url: string | null; createdAt: string; up?: boolean; log?: string[]
+}
 export interface Event { seq: number; ts: string; type: string; actor: string; issueId: string | null; projectId: string | null; payload: Record<string, unknown> }
 export interface NewSubIssue { key: string; title: string; description?: string; brief?: string; dependsOn?: string[]; files?: string[] }
 export interface NewProjectIssue { title: string; description?: string; brief?: string; subIssues?: NewSubIssue[] }
@@ -141,6 +145,10 @@ export const engine = {
   endTalk: (id: string) => call<{ ended: boolean; branchKept: string | null }>('POST', `/talks/${id}/end`),
   storybook: (appId: string) => call<{ url: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[] }>('GET', `/apps/${appId}/storybook`),
   startStorybook: (appId: string) => call<unknown>('POST', `/apps/${appId}/storybook/start`),
+  prototypes: (appId: string) => call<Prototype[]>('GET', `/apps/${appId}/prototypes`),
+  prototype: (id: string) => call<Prototype>('GET', `/prototypes/${id}`),
+  runPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/start`),
+  stopPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/stop`),
   now: (appId?: string) => call<Now>('GET', `/now${appId ? `?app=${appId}` : ''}`),
   ideas: (appId?: string) => call<IdeaRow[]>('GET', `/ideas${appId ? `?app=${appId}` : ''}`),
   createIdea: (body: { appId: string; title: string; body?: string }) => call<IdeaRow>('POST', '/ideas', body),

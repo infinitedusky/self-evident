@@ -428,3 +428,11 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .md-chat code { font: 12.5px var(--mono); background: var(--idle-wash); padding: 1px 4px; border-radius: 4px; }
 .md-chat pre { background: var(--idle-wash); padding: 8px 10px; border-radius: 8px; overflow: auto; }
 .md-chat pre code { background: none; padding: 0; }
+
+/* Prototypes: the list, and a server's last lines while it starts */
+.proto-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; }
+.proto-row { width: 100%; display: flex; gap: 10px; align-items: center; padding: 9px 10px; border: 0; border-radius: 8px; background: none; text-align: left; font: inherit; color: var(--ink); cursor: pointer; }
+.proto-row:hover { background: var(--accent-wash); }
+.proto-row .proto-title { flex: 1; min-width: 0; font-weight: 600; }
+.proto-row .mono { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+.proto-log { max-width: min(560px, 100%); max-height: 220px; overflow: auto; text-align: left; font-size: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--ground); color: var(--ink-soft); white-space: pre-wrap; }
