@@ -576,8 +576,25 @@ Preview, the way it was built, was the wrong idea: a frame around an address. Th
     and the tab showed the change by itself.
 - **Sharing: Cloudflare quick tunnels** (Sandy, 2026-10-29). `cloudflared`, no account: a random trycloudflare.com
   link per prototype while it runs.
-- **Not yet:** the throwaway database from JSON scenarios, stand-ins for outside services, sharing, and the analysis
-  into the plan.
+- **Its data (same day).** An app's `prototype_db` names three things: its development Postgres server, the variable
+  it reads (default `DATABASE_URL`), and its schema command.
+  - Each prototype gets a database of its own on that server, `proto_<slug>`. It is made by the schema command, run
+    in the prototype's worktree, so the prototype's own schema changes count. It is then filled from a scenario:
+    `.prototype/scenarios/<name>/<table>.json`, each file an array of rows, committed with the prototype.
+  - Rows load with `jsonb_populate_recordset`. Foreign keys are off while loading, so files can come in any order,
+    and serial columns are moved past the loaded rows.
+  - Reset builds the database again from a scenario (or empty) and restarts the server. Save writes the current
+    rows out as a new scenario, leaving out migration bookkeeping. Discard drops the database.
+  - The server and the conversation both get the variable pointing at the prototype's database.
+  - Agent tools: `prototype_data` (reset or save) and `set_prototype_database`. The prototype prompt tells the agent
+    to write a scenario for each situation worth showing.
+  - The tab shows "Made-up data" with the scenario, rebuild, and "save as".
+  - Homework Gate fits: its server reads `DATABASE_URL`, and its schema comes from its own SQL migrations.
+  - Tested against a real Postgres: schema from a command, a child table loaded before its parent, save, reset to
+    each scenario and to empty, the variable reaching the server, drop on discard.
+  - Found and fixed: `tsc -p .` in `app/` checks nothing (the root tsconfig only references others). Use
+    `pnpm --filter app typecheck`, new. Two unused imports from #65 had broken `pnpm build`.
+- **Not yet:** stand-ins for outside services, sharing, and the analysis into the plan.
 
 ## The workspace, after Replit's (Sandy, 2026-10-28: "the left column agent and then tabs and split screen on the right, just like an IDE")
 

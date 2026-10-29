@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Workspace } from './Workspace'
 import { engineDown, eventStream, withEngine } from '../stories/mock-engine'
-import { apps, buildEvents, prototypes, sampleApp, talkSession } from '../stories/sample'
+import { buildEvents, prototypes, talkSession } from '../stories/sample'
 
 // The whole app: the rail, the agent's column, tabs that split. What it keeps between visits (the layout, whether
 // the agent's column is open, the conversation) lives in localStorage, so each story starts clean.

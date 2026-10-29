@@ -29,6 +29,13 @@
       "when": 1793291263268,
       "tag": "0003_prototype_talk",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793291795899,
+      "tag": "0004_prototype_scenario",
+      "breakpoints": true
     }
   ]
 }

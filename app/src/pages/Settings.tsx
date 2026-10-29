@@ -326,8 +326,11 @@ function AppPage({ app, onSaved }: { app: App; onSaved: () => Promise<unknown> }
         </select></label>
       </Group>
 
-      <Group title="Prototype" lead="How a prototype's server starts: run in the prototype's own worktree, serving on $PORT. The agent works it out the first time and asks you to confirm.">
+      <Group title="Prototype" lead="How a prototype's server starts: run in the prototype's own worktree, serving on $PORT. With a database server, each prototype gets a throwaway database of its own there, made by the schema command and filled with made-up data. The agent works these out the first time and asks you to confirm.">
         <label style={{ gridColumn: '1 / -1' }}>Command<input className="mono" value={setup.prototype_cmd ?? ''} onChange={(e) => set({ prototype_cmd: e.target.value })} placeholder="pnpm install && pnpm dev --port $PORT" /></label>
+        <label>Database server<input className="mono" value={setup.prototype_db?.url ?? ''} onChange={(e) => set({ prototype_db: { ...setup.prototype_db, url: e.target.value } })} placeholder="postgres://app:app@localhost:5432/app" /></label>
+        <label>Its variable<input className="mono" value={setup.prototype_db?.env ?? ''} onChange={(e) => set({ prototype_db: { url: '', ...setup.prototype_db, env: e.target.value } })} placeholder="DATABASE_URL" /></label>
+        <label style={{ gridColumn: '1 / -1' }}>Schema command<input className="mono" value={setup.prototype_db?.schema_cmd ?? ''} onChange={(e) => set({ prototype_db: { url: '', ...setup.prototype_db, schema_cmd: e.target.value } })} placeholder="makes the schema in the database its variable names, like: alembic upgrade head" /></label>
       </Group>
 
       <Group title="Storybook" lead="Where this app's stories run.">

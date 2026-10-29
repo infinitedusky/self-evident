@@ -18,7 +18,7 @@ import { answerQuestion, finishPlanning, preparePlanning } from './planner.js'
 import { createProject, issueDetail, listProjects, PlanError, projectGraph } from './projects.js'
 import { runner } from './runner.js'
 import { listStories } from './storybook.js'
-import { discardPrototype, listPrototypes, prototypeStatus, runPrototype, setPrototypeCommand, startPrototype, stopPrototype } from './prototype.js'
+import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, setPrototypeCommand, setPrototypeDatabase, startPrototype, stopPrototype } from './prototype.js'
 import { syncApp } from './github.js'
 import { addChecklist, completeTodo, createTodo, dropTodo, itemToTodo, listTodos, setChecklistItem, updateTodo } from './todos.js'
 
@@ -142,6 +142,14 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return stopPrototype(a.prototypeId, actor) })),
       def('discard_prototype', 'Done with a prototype: its server stopped, its worktree and branch removed. Only when the person says so.', { prototypeId: z.string() },
         async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return discardPrototype(a.prototypeId, actor) })),
+      def('prototype_data', 'A prototype\'s made-up data, in its own throwaway database. reset builds the database again from a scenario (.prototype/scenarios/<name>/<table>.json; none: empty tables) and restarts its server; save writes the data as it is now into a scenario of that name (commit it).', { prototypeId: z.string(), action: z.enum(['reset', 'save']), scenario: z.string().optional().describe('reset: which scenario; save: its name, like teacher-three-overdue') },
+        async (a) => tryIt(async () => {
+          await ownPrototype(a.prototypeId)
+          if (a.action === 'save') { if (!a.scenario) throw new PlanError('save needs a scenario name'); return savePrototypeData(a.prototypeId, a.scenario, actor) }
+          return resetPrototypeData(a.prototypeId, a.scenario ?? null, actor)
+        })),
+      def('set_prototype_database', 'Where this app\'s prototypes get their throwaway databases: url, the app\'s development Postgres (any database on that server; each prototype gets its own beside it); env, the variable the app reads (default DATABASE_URL); schema_cmd, a shell command run in the prototype\'s worktree that makes the schema in the database that variable names (the app\'s migrations, or its ORM\'s create/push). Work these out from the app and confirm them with the person first.', { url: z.string(), env: z.string().optional(), schema_cmd: z.string().optional() },
+        async (a) => tryIt(() => setPrototypeDatabase(appId, a))),
       def('set_prototype_command', 'How this app\'s prototype server starts: a shell command run in the prototype\'s worktree that installs what it needs and serves on $PORT (like "pnpm install && pnpm dev --port $PORT"). Work it out from the app (package.json scripts, Procfile, README) and confirm it with the person first.', { command: z.string() },
         async (a) => tryIt(() => setPrototypeCommand(appId, a.command))),
       def('events', 'This app\'s event log, newest last. Filter by project or issue; since is a sequence number.', { projectId: z.string().optional(), issueId: z.string().optional(), since: z.number().optional(), limit: z.number().optional() },

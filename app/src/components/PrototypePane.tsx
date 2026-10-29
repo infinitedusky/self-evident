@@ -70,7 +70,7 @@ function OnePrototype({ id, path, onNavigate }: { id: string; path: string; onNa
   const talk = () => void engine.prototypeTalk(id).catch((e) => setError(String(e.message ?? e)))
 
   if (!p) return <div className="tab-page" data-component="PrototypePane">{error ? <div className="empty bad">{error}</div> : <p className="muted">Loading…</p>}</div>
-  if (p.status === 'running' && p.up && p.url) return <Frame p={p} path={path} onNavigate={onNavigate} onStop={act(engine.stopPrototype)} onRestart={act(engine.restartPrototype)} onTalk={talk} />
+  if (p.status === 'running' && p.up && p.url) return <Frame p={p} path={path} onNavigate={onNavigate} onStop={act(engine.stopPrototype)} onRestart={act(engine.restartPrototype)} onTalk={talk} data={<Data p={p} onDone={refresh} />} />
   return (
     <div className="preview-empty" data-component="PrototypePane">
       <h3>{p.title}</h3>
@@ -85,7 +85,7 @@ function OnePrototype({ id, path, onNavigate }: { id: string; path: string; onNa
   )
 }
 
-function Frame({ p, path, onNavigate, onStop, onRestart, onTalk }: { p: Prototype; path: string; onNavigate?: (path: string) => void; onStop: () => void; onRestart: () => void; onTalk: () => void }) {
+function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Prototype; path: string; onNavigate?: (path: string) => void; onStop: () => void; onRestart: () => void; onTalk: () => void; data: React.ReactNode }) {
   const base = p.url!.replace(/\/$/, '')
   const [at, setAt] = useState(path)
   const [typed, setTyped] = useState(path)
@@ -104,6 +104,7 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk }: { p: Prototyp
         <div className="seg" role="group" aria-label="Device">
           {DEVICES.map((d) => <button key={d.id} className={device === d.id ? 'on' : ''} onClick={() => setDevice(d.id)} title={d.width ? `${d.width}px wide` : 'Full width'}>{d.label}</button>)}
         </div>
+        {data}
         <a className="icon-btn" href={base + at} target="_blank" rel="noreferrer" title="Open in a browser tab" aria-label="Open in a browser tab">↗</a>
         <button className="icon-btn" onClick={onTalk} title="Its conversation, in the agent's column" aria-label="Talk about it">💬</button>
         <button className="icon-btn" onClick={onRestart} title="Restart its server" aria-label="Restart its server">⟲</button>
@@ -112,6 +113,35 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk }: { p: Prototyp
       <div className="preview-stage">
         <iframe key={`${at}#${reloads}#${p.updatedAt ?? ''}`} /* a restart reloads it */ src={base + at} title={p.title} style={width ? { width, maxWidth: '100%' } : undefined} />
       </div>
+    </div>
+  )
+}
+
+/**
+ * Its made-up data: which scenario its throwaway database was built from, a way to build it again from another (or
+ * the same, to undo what was done in it), and to keep the data as it is now as a new scenario.
+ */
+function Data({ p, onDone }: { p: Prototype; onDone: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null)
+  const [naming, setNaming] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+  if (!p.database) return null
+  const run = (label: string, fn: () => Promise<unknown>) => { setBusy(label); setProblem(null); fn().then(onDone).catch((e) => setProblem(String(e.message ?? e))).finally(() => setBusy(null)) }
+  const reset = (scenario: string | null) => run('Rebuilding…', () => engine.resetPrototypeData(p.id, scenario))
+  const save = (name: string) => { setNaming(false); if (name.trim()) run('Saving…', () => engine.savePrototypeData(p.id, name.trim())) }
+  return (
+    <div className="proto-data" title={problem ?? `Its own database, ${p.database}, with made-up data`}>
+      <span className="faint">Made-up data</span>
+      {naming
+        ? <input autoFocus className="mono" placeholder="name, like empty-cart" aria-label="Scenario name" onBlur={(e) => save(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') save((e.target as HTMLInputElement).value); if (e.key === 'Escape') setNaming(false) }} />
+        : <select value={p.scenario ?? ''} disabled={!!busy} onChange={(e) => reset(e.target.value || null)} aria-label="Scenario">
+            {(p.scenarios ?? []).map((s) => <option key={s} value={s}>{s}</option>)}
+            <option value="">empty</option>
+          </select>}
+      <button className="icon-btn" disabled={!!busy} onClick={() => reset(p.scenario)} title="Build it again from this scenario" aria-label="Reset the data">↺</button>
+      <button className="icon-btn" disabled={!!busy} onClick={() => setNaming(true)} title="Keep the data as it is now, as a scenario" aria-label="Save the data">⤓</button>
+      {busy && <span className="faint">{busy}</span>}
+      {problem && <span className="bad" role="alert">!</span>}
     </div>
   )
 }

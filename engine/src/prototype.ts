@@ -16,6 +16,7 @@ import { appendEvent } from './events.js'
 import { addWorktree, git, removeWorktree } from './git.js'
 import { newId } from './ids.js'
 import { PlanError } from './projects.js'
+import { databaseExists, databaseName, databaseUrl, dropDatabase, listScenarios, rebuild, save, type PrototypeDb } from './prototype-data.js'
 import { endTalk, say, showTalk, startPrototypeTalk } from './talk.js'
 
 const running = new Map<string, { proc: ChildProcess; log: string[] }>()
@@ -25,8 +26,16 @@ async function setupOf(appId: string) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError(`no app ${appId}`)
   const [r] = await db.select().from(repo).where(eq(repo.appId, appId))
-  const s = (a.setup ?? {}) as { prototype_cmd?: string }
-  return { a, repoPath: r?.localPath ?? null, cmd: s.prototype_cmd?.trim() || null }
+  const s = (a.setup ?? {}) as { prototype_cmd?: string; prototype_db?: PrototypeDb }
+  return { a, repoPath: r?.localPath ?? null, cmd: s.prototype_cmd?.trim() || null, dbCfg: s.prototype_db?.url ? s.prototype_db : null }
+}
+
+const slugOf = (p: typeof prototype.$inferSelect) => p.branch.slice('prototype/'.length)
+
+/** What the prototype's server and its conversation are given: the app's database variable, at its own database. */
+export async function prototypeEnv(p: typeof prototype.$inferSelect): Promise<Record<string, string>> {
+  const { dbCfg } = await setupOf(p.appId)
+  return dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slugOf(p)) } : {}
 }
 
 async function rowOf(id: string) {
@@ -56,7 +65,9 @@ export async function prototypeStatus(id: string) {
   const p = await rowOf(id)
   const on = alive(id)
   const url = p.port ? `http://localhost:${p.port}` : null
-  return { ...p, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up: on && url ? await answers(url) : false, log: running.get(id)?.log.slice(-40) ?? [] }
+  const { dbCfg } = await setupOf(p.appId)
+  const data = dbCfg ? { database: databaseName(slugOf(p)), scenarios: await listScenarios(p.path).catch(() => []) } : { database: null, scenarios: [] }
+  return { ...p, ...data, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up: on && url ? await answers(url) : false, log: running.get(id)?.log.slice(-40) ?? [] }
 }
 
 export async function listPrototypes(appId: string) {
@@ -70,11 +81,16 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
   if (p.status === 'discarded') throw new PlanError('that prototype was discarded')
   if (opts.restart) await kill(id)
   else if (alive(id)) return prototypeStatus(id)
-  const { a, cmd } = await setupOf(p.appId)
+  const { a, cmd, dbCfg } = await setupOf(p.appId)
   if (!cmd) throw new PlanError(`${a.name} has no prototype command yet: set it in Settings, or work it out from the app and set it with set_prototype_command`)
+  if (dbCfg && !(await databaseExists(dbCfg, slugOf(p)))) { // first start: its database, from the scenario it had, else "default" if there is one
+    const scenario = p.scenario ?? ((await listScenarios(p.path)).includes('default') ? 'default' : null)
+    await rebuild(dbCfg, slugOf(p), p.path, scenario)
+    await db.update(prototype).set({ scenario }).where(eq(prototype.id, id))
+  }
   const port = await freePort(p.port ?? 0)
   // Its own process group, so stopping it also stops what the command started (a package manager's dev server).
-  const proc = spawn('sh', ['-c', cmd], { cwd: p.path, env: { ...process.env, PORT: String(port), BROWSER: 'none', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+  const proc = spawn('sh', ['-c', cmd], { cwd: p.path, env: { ...process.env, ...(await prototypeEnv(p)), PORT: String(port), BROWSER: 'none', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   const log: string[] = []
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
@@ -144,11 +160,49 @@ export async function discardPrototype(id: string, actor = 'person') {
   const p = await rowOf(id)
   await kill(id)
   if (p.sessionId) await endTalk(p.sessionId)
-  const { repoPath } = await setupOf(p.appId)
+  const { repoPath, dbCfg } = await setupOf(p.appId)
+  if (dbCfg) await dropDatabase(dbCfg, slugOf(p)).catch(() => {})
   if (repoPath) { await removeWorktree(repoPath, p.path); await git(repoPath, ['branch', '-D', p.branch], { allowFail: true }) }
   await db.update(prototype).set({ status: 'discarded', updatedAt: new Date() }).where(eq(prototype.id, id))
   await emit(p, 'prototype.discarded', actor)
   return prototypeStatus(id)
+}
+
+/**
+ * Its database built again from a scenario (none: empty tables, as the schema makes them). Its server is stopped for
+ * it and started again after, so the app reconnects to the new database.
+ */
+export async function resetPrototypeData(id: string, scenario: string | null, actor = 'person') {
+  const p = await rowOf(id)
+  const { a, dbCfg } = await setupOf(p.appId)
+  if (!dbCfg) throw new PlanError(`${a.name}'s prototypes have no database set: work out the app's development database and schema command and set them with set_prototype_database`)
+  const wasRunning = alive(id)
+  await kill(id)
+  const { loaded } = await rebuild(dbCfg, slugOf(p), p.path, scenario)
+  await db.update(prototype).set({ scenario, updatedAt: new Date() }).where(eq(prototype.id, id))
+  await emit(p, 'prototype.data_reset', actor, { scenario, loaded })
+  if (wasRunning) await runPrototype(id, actor)
+  return { scenario, loaded, status: await prototypeStatus(id) }
+}
+
+/** The data as it is now, kept as a scenario in the prototype's worktree (commit it with the prototype). */
+export async function savePrototypeData(id: string, name: string, actor = 'person') {
+  const p = await rowOf(id)
+  const { a, dbCfg } = await setupOf(p.appId)
+  if (!dbCfg) throw new PlanError(`${a.name}'s prototypes have no database set`)
+  const saved = await save(dbCfg, slugOf(p), p.path, name)
+  await db.update(prototype).set({ scenario: name, updatedAt: new Date() }).where(eq(prototype.id, id))
+  await emit(p, 'prototype.data_saved', actor, { scenario: name, saved: saved.saved })
+  return saved
+}
+
+/** Where this app's prototypes get their databases: its development database server, the variable it reads, its schema command. */
+export async function setPrototypeDatabase(appId: string, cfg: PrototypeDb) {
+  const { a } = await setupOf(appId)
+  new URL(cfg.url) // a URL, or it throws
+  const clean: PrototypeDb = { url: cfg.url.trim(), env: cfg.env?.trim() || 'DATABASE_URL', ...(cfg.schema_cmd?.trim() ? { schema_cmd: cfg.schema_cmd.trim() } : {}) }
+  await db.update(app).set({ setup: { ...(a.setup as object), prototype_db: clean } }).where(eq(app.id, appId))
+  return { prototype_db: clean }
 }
 
 /** How this app's prototype server starts: a shell command run in the prototype's worktree, serving on $PORT. */

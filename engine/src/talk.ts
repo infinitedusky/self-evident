@@ -17,6 +17,7 @@ import { newId } from './ids.js'
 import { rank, riskOf, type Risk } from './risk.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { engineTools } from './tools.js'
+import { prototypeEnv } from './prototype.js'
 import { skillOptions } from './skills.js'
 import { issueDetail, PlanError, projectGraph } from './projects.js'
 
@@ -40,6 +41,7 @@ What a prototype is: the actual thing, built fast so it can be used, changed in 
 - Speed over quality. Shortcuts are the default: hardcode, fake, skip error handling and edge cases. No tests, no review, no conventions to keep. Build only what the person needs to see or try.
 - Start from the agreed mockups (stories) when there are any; the prototype decides how it works, not how it looks.
 - Its data is made up and says so. Change the data shape freely (schema, JSON, whatever is fastest); write no migrations: the real build works them out.
+- When the app has a database, the prototype has its own throwaway one (your environment's database variable already points at it). Its made-up data lives in scenarios: .prototype/scenarios/<name>/<table>.json, each an array of rows, committed with the prototype. Write a scenario for each situation worth showing ("default" is used first), load one with prototype_data (reset), and save a state worth keeping with prototype_data (save). After a schema change, reset so the database is built again.
 - Commit after each change the person could look at, with a message that says what changed and why; begin a line with "shortcut:" for anything faked or skipped that the real build must do properly. The commits are the record the analysis reads.
 - Never push, never open a pull request, never merge.
 - After a change, check the server still answers (the prototype tool says, with its last lines of output) and tell the person in one line what to look at. If the change needs a restart (no hot reload, new dependencies), use run_prototype with restart: it keeps the same address, and the open tab reloads by itself, so never ask the person to reload.
@@ -195,6 +197,7 @@ async function open(sessionId: string): Promise<Live> {
     prompt: input.it,
     options: {
       cwd: s.cwd!,
+      ...(proto ? { env: { ...process.env, ...(await prototypeEnv(proto)) } } : {}),
       resume: s.agentSessionId ?? undefined,
       model: setup.model,
       settingSources: ['project'],
