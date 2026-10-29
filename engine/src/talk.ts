@@ -9,7 +9,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, idea, project, repo, session, sessionMessage, workspace } from './db/schema.js'
+import { app, idea, project, prototype, repo, session, sessionMessage, workspace } from './db/schema.js'
 import { addWorktree, git, removeWorktree } from './git.js'
 import { withLock } from './landing.js'
 import { appendEvent } from './events.js'
@@ -24,12 +24,26 @@ const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebS
 const ASK_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash']
 const PERMISSION_TIMEOUT_MS = 10 * 60_000
 
-const talkPrompt = (cwd: string, branch: string | null, base: string) => `You are Self Evident's agent (Self Evident: software that proves itself — observe, learn, ideate, mockup, build), talking with the person who runs it, in its own web UI.
+const talkPrompt = (cwd: string, branch: string | null, base: string, where?: string) => `You are Self Evident's agent (Self Evident: software that proves itself — observe, learn, ideate, mockup, build), talking with the person who runs it, in its own web UI.
 The factory builds software from ideas, shaped like Linear: initiative (a goal) → project (issues in order) → issue (a title and a brief; code, or a to-do: work outside the code) → sub-issue (under code: one agent, one worktree, one commit; under a to-do: a checklist line). Issues are named by the app's key and a number, like HG-12; use those names with the person. Read CLAUDE.md, LOG.md and SHAPE.md in this checkout when you need the history; LOG.md's top entries are the latest decisions.
 You have the engine as tools (mcp__engine__*): see what needs attention, keep ideas, make projects, keep each project's backlog (everything it has to cover; when the person mentions something a project should not forget, add it), keep the app's to-dos (work outside the code: accounts, approvals, people, checks; when the person mentions one, make it with a checklist you draft, and check lines off as they get done), run the planner on an issue, answer its questions, start or cancel projects, read the event log. Use them rather than describing what the person should click.
 You can read, search and edit files and run commands here, as in any Claude Code session. The engine rates every action's risk (free, cheap, moderate, expensive); up to the person's threshold it runs without asking and is logged, above it a card asks them. Expensive things (main, force, deletes, merges, publishing, starting a project) always ask. Work on a branch in a worktree, never in a checkout that is on main; say what each action is for.
-You work in your own worktree, ${cwd}, on branch ${branch ?? '(none)'} cut from ${base}: edit and commit there; push and open a pull request when the work is ready (both ask).
+${where ?? `You work in your own worktree, ${cwd}, on branch ${branch ?? '(none)'} cut from ${base}: edit and commit there; push and open a pull request when the work is ready (both ask).`}
 How this person works: PRs only, main is production; short answers that lead with the answer; questions are questions, not instructions to change things; give a recommendation, not a survey; write decisions into LOG.md or SHAPE.md the moment they are made; one git worktree per branch, never the main checkout.`
+
+/**
+ * A prototype's conversation: the actual thing built fast, to demo and learn from, then analysed into the plan and built
+ * again from scratch. Speed and change come first; quality lives in the real build.
+ */
+const prototypePrompt = (p: typeof prototype.$inferSelect) => `This conversation builds the prototype "${p.title}" (${p.id}), in its own worktree ${p.path} on branch ${p.branch}. The person sees it running in the Prototype tab beside you${p.port ? ` (http://localhost:${p.port})` : ''}; its server is the engine's, started with the app's prototype command on $PORT.
+What a prototype is: the actual thing, built fast so it can be used, changed in moments and shown to people. It is never merged: when it is ready, everything about it (the diff, its data's final shape, the conversation, people's feedback, what changed between iterations and why) is analysed into the plan, and the real build starts from main, from scratch. So:
+- Speed over quality. Shortcuts are the default: hardcode, fake, skip error handling and edge cases. No tests, no review, no conventions to keep. Build only what the person needs to see or try.
+- Start from the agreed mockups (stories) when there are any; the prototype decides how it works, not how it looks.
+- Its data is made up and says so. Change the data shape freely (schema, JSON, whatever is fastest); write no migrations: the real build works them out.
+- Commit after each change the person could look at, with a message that says what changed and why; begin a line with "shortcut:" for anything faked or skipped that the real build must do properly. The commits are the record the analysis reads.
+- Never push, never open a pull request, never merge.
+- After a change, check the server still answers (the prototype tool says, with its last lines of output) and tell the person in one line what to look at. If the change needs a restart (no hot reload, new dependencies), use run_prototype with restart: it keeps the same address, and the open tab reloads by itself, so never ask the person to reload.
+Your first message is the brief: build a first version straight away, then ask what to change.`
 
 interface Pending { resolve: (v: { allow: boolean; always?: boolean }) => void; tool: string }
 type Rated = { risk: Risk; why: string }
@@ -93,7 +107,7 @@ async function record(sessionId: string, author: string, kind: string, body: str
   return row
 }
 
-export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; path?: string }
+export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string }
 
 /** What a conversation is about, from where it started: a project's title, an idea's title, or nothing yet. */
 async function subjectFrom(ref?: SubjectRef): Promise<{ subject: string | null; subjectRef: SubjectRef | null }> {
@@ -122,6 +136,25 @@ export async function startTalk(input: { appId: string; subjectRef?: SubjectRef;
     id, appId: a.id, kind: 'talk', cwd: worktreePath, branch, worktreePath, subject, subjectRef, createdBy: input.actor ?? 'user', lastActiveAt: new Date(),
   }).returning()
   return row
+}
+
+/**
+ * A prototype's conversation: it works in the prototype's own worktree (not one of its own), so ending it leaves the
+ * prototype alone. It acts up to moderate without asking (a prototype is for speed); expensive still asks.
+ */
+export async function startPrototypeTalk(p: typeof prototype.$inferSelect, actor = 'user') {
+  const [row] = await db.insert(session).values({
+    id: newId('session'), appId: p.appId, kind: 'talk', cwd: p.path, branch: p.branch, worktreePath: null,
+    subject: `Prototype: ${p.title}`, subjectRef: { prototypeId: p.id, ...(p.projectId ? { projectId: p.projectId } : {}) },
+    createdBy: actor, lastActiveAt: new Date(), autoApprove: 'moderate',
+  }).returning()
+  return row
+}
+
+/** Ask every open Self Evident to show this conversation in the agent's column. */
+export async function showTalk(sessionId: string, appId: string) {
+  const workspaceId = await workspaceFor(appId)
+  await db.transaction((tx) => appendEvent(tx, { workspaceId, appId, sessionId, actor: 'engine', type: 'ui.talk', payload: { sessionId } }))
 }
 
 export async function renameTalk(sessionId: string, subject: string) {
@@ -157,6 +190,7 @@ async function open(sessionId: string): Promise<Live> {
   const input = inputQueue()
   const entry: Live = { q: null as unknown as Query, push: input.push, close: input.close, pending: new Map(), rated: new Map(), outages: 0, always: new Set(), busy: false, autoApprove: (s.autoApprove as Risk) ?? 'cheap', cwd: s.cwd! }
   const skills = await skillOptions('talk', s.cwd!, s.appId)
+  const [proto] = await db.select().from(prototype).where(eq(prototype.sessionId, sessionId))
   const q = query({
     prompt: input.it,
     options: {
@@ -164,7 +198,7 @@ async function open(sessionId: string): Promise<Live> {
       resume: s.agentSessionId ?? undefined,
       model: setup.model,
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main') },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : undefined) },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...ASK_TOOLS],
@@ -263,7 +297,7 @@ async function describeContext(c?: TalkContext): Promise<string> {
   return `(The person is looking at ${bits.join(', ')}. "This" means that unless they say otherwise; use the engine tools for details.${tabs})\n\n`
 }
 
-export async function say(sessionId: string, text: string, context?: TalkContext) {
+export async function say(sessionId: string, text: string, context?: TalkContext, as?: { author: string; kind: string }) {
   if (!text.trim()) throw new PlanError('say something')
   const [s] = await db.select().from(session).where(eq(session.id, sessionId))
   if (s && !s.subject) { // pinned by first contact: the project or idea in view, else the first thing said
@@ -272,7 +306,7 @@ export async function say(sessionId: string, text: string, context?: TalkContext
     await db.update(session).set({ subject: from.subject ?? said, subjectRef: from.subjectRef ?? s.subjectRef }).where(eq(session.id, sessionId))
   }
   const l = await open(sessionId)
-  const row = await record(sessionId, 'user', 'text', text.trim(), context ? { context } : undefined)
+  const row = await record(sessionId, as?.author ?? 'user', as?.kind ?? 'text', text.trim(), context ? { context } : undefined)
   l.busy = true
   l.lastPrompt = (await describeContext(context)) + text.trim()
   l.push({ type: 'user', message: { role: 'user', content: l.lastPrompt }, parent_tool_use_id: null })

@@ -5,10 +5,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, repo, workspace } from './db/schema.js'
+import { and, eq } from 'drizzle-orm'
+import { app, event, repo, session, workspace } from './db/schema.js'
 import { branchExists, commitAll, git } from './git.js'
 import { newId } from './ids.js'
-import { discardPrototype, listPrototypes, prototypeStatus, runPrototype, setPrototypeCommand, startPrototype, stopPrototype, stopPrototypes } from './prototype.js'
+import { discardPrototype, listPrototypes, prototypeStatus, runPrototype, setPrototypeCommand, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -52,7 +53,21 @@ describe.skipIf(!reachable)('prototypes', () => {
     expect(again.status).toBe('running')
     expect(await until(async () => (await prototypeStatus(p.id)).up)).toBe(true)
 
+    const port = (await prototypeStatus(p.id)).port
+    const restarted = await runPrototype(p.id, 'person', { restart: true })
+    expect(restarted.port).toBe(port) // the same address, so an open tab still finds it
+    expect(await until(async () => (await prototypeStatus(p.id)).up)).toBe(true)
+
+    // Its conversation works in its worktree, acts up to moderate, and is shown with the prototype beside it.
+    const [s] = await db.select().from(session).where(eq(session.id, p.sessionId))
+    expect(s).toMatchObject({ cwd: p.path, branch: p.branch, worktreePath: null, autoApprove: 'moderate', subject: 'Prototype: One-tap checkout!', subjectRef: { prototypeId: p.id } })
+    expect((await talkFor(p.id)).id).toBe(p.sessionId)
+    const shown = await db.select().from(event).where(and(eq(event.appId, appId)))
+    expect(shown.map((e) => e.type)).toEqual(expect.arrayContaining(['ui.talk', 'ui.open', 'prototype.created', 'prototype.started']))
+    expect(shown.find((e) => e.type === 'ui.open')?.payload).toMatchObject({ tab: { kind: 'prototype', id: p.id }, split: 'right' })
+
     await discardPrototype(p.id)
+    expect((await db.select().from(session).where(eq(session.id, p.sessionId)))[0].status).toBe('ended')
     expect(existsSync(p.path)).toBe(false)
     expect(await branchExists(repoPath, p.branch)).toBe(false)
     expect(await listPrototypes(appId)).toEqual([])

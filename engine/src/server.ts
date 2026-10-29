@@ -28,7 +28,7 @@ import { changeState, createIssue, listIssues, reorder, updateIssue } from './is
 import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
 import { startStorybook, stopStorybooks, storybookStatus } from './storybook.js'
-import { discardPrototype, listPrototypes, prototypeStatus, runPrototype, startPrototype, stopPrototype, stopPrototypes } from './prototype.js'
+import { discardPrototype, listPrototypes, prototypeStatus, runPrototype, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { runner } from './runner.js'
@@ -194,12 +194,13 @@ export function buildApp(bus: EventBus) {
   api.post('/apps/:id/storybook/start', async (c) => { try { return c.json(await startStorybook(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/prototypes', async (c) => c.json(await listPrototypes(c.req.param('id'))))
   api.post('/apps/:id/prototypes', async (c) => {
-    const body = await c.req.json<{ title?: string; projectId?: string }>()
+    const body = await c.req.json<{ title?: string; brief?: string; projectId?: string }>()
     if (!body.title?.trim()) return c.json({ error: 'a prototype needs a title' }, 400)
-    try { return c.json(await startPrototype({ appId: c.req.param('id'), title: body.title.trim(), projectId: body.projectId }), 201) } catch (err) { return planError(c, err) }
+    try { return c.json(await startPrototype({ appId: c.req.param('id'), title: body.title.trim(), brief: body.brief, projectId: body.projectId }), 201) } catch (err) { return planError(c, err) }
   })
   api.get('/prototypes/:id', async (c) => { try { return c.json(await prototypeStatus(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
-  api.post('/prototypes/:id/start', async (c) => { try { return c.json(await runPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  api.post('/prototypes/:id/start', async (c) => { try { return c.json(await runPrototype(c.req.param('id'), 'person', { restart: c.req.query('restart') === '1' })) } catch (err) { return planError(c, err) } })
+  api.post('/prototypes/:id/talk', async (c) => { try { return c.json(await talkFor(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/stop', async (c) => { try { return c.json(await stopPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/discard', async (c) => { try { return c.json(await discardPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/graph', async (c) => {
