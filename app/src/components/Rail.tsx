@@ -1,22 +1,19 @@
 /**
  * The loop as a thin strip of icons on the far left, like VS Code's activity bar: each opens its page as a tab
- * (or brings it to the front). Hovering one shows its name and the pages under it. Plan holds an idea's way to
- * something real, in order: mockups, then a prototype, then the project. Below the rule: Summary and My Stuff.
+ * (or brings it to the front). Hovering one shows its name. The rail holds only the stages of work, with nothing under
+ * them: projects, tasks and the steps live inside their stage (LOG.md, 2026-10-29). Below the rule: Summary and My Stuff.
  * Settings sits at the bottom; the app picker is atop the agent.
  */
 import type { Tab } from '../workspace'
 
-interface Item { icon: string; label: string; tab: Tab; also?: RegExp; sub?: { label: string; tab: Tab }[] }
+interface Item { icon: string; label: string; tab: Tab; also?: RegExp }
 const page = (path: string): Tab => ({ kind: 'page', path })
 const LOOP: Item[] = [
   { icon: '🔭', label: 'Observe', tab: page('/observe') },
   { icon: '🧠', label: 'Learn', tab: page('/learn') },
   { icon: '💡', label: 'Ideate', tab: page('/ideas'), also: /^\/ideas/ },
-  { icon: '📋', label: 'Plan', tab: page('/projects'), also: /^\/(projects|issues|todos|mockups)|^(storybook|prototype)/, sub: [
-    { label: 'Mockups', tab: { kind: 'storybook' } }, { label: 'Prototypes', tab: { kind: 'prototype' } },
-    { label: 'Projects', tab: page('/projects') }, { label: 'Issues', tab: page('/issues') }, { label: 'To-dos', tab: page('/todos') },
-  ] },
-  { icon: '🔨', label: 'Build', tab: page('/build'), also: /^\/(build|graph)|^build:/, sub: [{ label: 'Graph', tab: page('/graph') }] },
+  { icon: '📋', label: 'Plan', tab: page('/projects'), also: /^\/(plan|projects|issues|todos|mockups)|^(storybook|prototype)/ },
+  { icon: '🔨', label: 'Build', tab: page('/build'), also: /^\/(build|graph)|^build:/ },
 ]
 const OUTSIDE: Item[] = [
   { icon: '📰', label: 'Summary', tab: page('/summary') },
@@ -31,7 +28,6 @@ export function Rail({ here, onOpen, agentOpen, onToggleAgent }: { here: string 
       <button className={`rail-btn ${active(i) ? 'active' : ''}`} onClick={() => onOpen(i.tab)} aria-label={i.label}><span aria-hidden="true">{i.icon}</span></button>
       <div className="rail-fly" role="menu">
         <button className="rail-fly-head" onClick={() => onOpen(i.tab)}>{i.label}</button>
-        {i.sub?.map((s) => <button key={s.label} onClick={() => onOpen(s.tab)}>{s.label}</button>)}
       </div>
     </div>
   )
