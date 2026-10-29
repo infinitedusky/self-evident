@@ -83,8 +83,8 @@ export interface FactorySettings { workspace: Workspace | null; integrations: In
 export interface AppPlugin { id: string; name: string; factoryOn: boolean; own: boolean | null; on: boolean }
 export interface AppSettings { integrations: Record<string, Record<string, { value: string | null; from: 'app' | 'workspace' | null }>>; plugins: AppPlugin[]; skills: SkillInfo[] }
 export interface Prototype {
-  id: string; appId: string; projectId: string | null; title: string; branch: string; path: string; port: number | null
-  status: 'running' | 'stopped' | 'discarded'; url: string | null; createdAt: string; up?: boolean; log?: string[]
+  id: string; appId: string; projectId: string | null; title: string; brief: string | null; sessionId: string | null; branch: string; path: string; port: number | null
+  status: 'running' | 'stopped' | 'discarded'; url: string | null; createdAt: string; updatedAt?: string | null; up?: boolean; log?: string[]
 }
 export interface Event { seq: number; ts: string; type: string; actor: string; issueId: string | null; projectId: string | null; payload: Record<string, unknown> }
 export interface NewSubIssue { key: string; title: string; description?: string; brief?: string; dependsOn?: string[]; files?: string[] }
@@ -127,9 +127,9 @@ export interface Now { hold?: Hold | null; running: RunningProject[]; needsYou: 
 
 // Talk: a conversation with the factory's agent. Messages are rows; talk.* events say when to refetch.
 export type Risk = 'free' | 'cheap' | 'moderate' | 'expensive'
-export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; path?: string }
+export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string }
 export interface TalkSession { id: string; appId: string | null; cwd: string | null; branch: string | null; worktreePath: string | null; subject: string | null; subjectRef: SubjectRef | null; title: string | null; status: string; createdAt: string; lastActiveAt: string | null; live: boolean; busy: boolean; messages?: number; autoApprove: Exclude<Risk, 'expensive'> }
-export interface TalkMessage { id: number; sessionId: string; author: 'user' | 'agent' | 'tool' | 'engine'; kind: 'text' | 'tool_call' | 'tool_result' | 'permission' | 'auto' | 'result' | 'error'; body: string; payload: Record<string, any> | null; sentAt: string | null }
+export interface TalkMessage { id: number; sessionId: string; author: 'user' | 'agent' | 'tool' | 'engine'; kind: 'text' | 'brief' | 'tool_call' | 'tool_result' | 'permission' | 'auto' | 'result' | 'error'; body: string; payload: Record<string, any> | null; sentAt: string | null }
 export interface Transcript { session: TalkSession; messages: TalkMessage[]; pending: string[] }
 export interface TalkContext { path: string; label?: string; projectId?: string; issueId?: string; appId?: string; ideaId?: string; tabs?: { title: string; path: string; focused?: boolean }[] } // where the person is, sent with each message
 
@@ -149,6 +149,8 @@ export const engine = {
   prototype: (id: string) => call<Prototype>('GET', `/prototypes/${id}`),
   runPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/start`),
   stopPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/stop`),
+  restartPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/start?restart=1`),
+  prototypeTalk: (id: string) => call<{ id: string }>('POST', `/prototypes/${id}/talk`),
   now: (appId?: string) => call<Now>('GET', `/now${appId ? `?app=${appId}` : ''}`),
   ideas: (appId?: string) => call<IdeaRow[]>('GET', `/ideas${appId ? `?app=${appId}` : ''}`),
   createIdea: (body: { appId: string; title: string; body?: string }) => call<IdeaRow>('POST', '/ideas', body),

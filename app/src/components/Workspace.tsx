@@ -98,7 +98,7 @@ function AgentColumn() {
   return (
     <div className="agent-col">
       <AppPicker />
-      <TalkDrawer context={context} onOpen={(path) => ws?.open({ kind: 'page', path })} />
+      <TalkDrawer context={context} onOpen={(tab) => ws?.open(tab)} />
     </div>
   )
 }

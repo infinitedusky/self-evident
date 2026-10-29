@@ -336,6 +336,8 @@ export const verification = pgTable('verification', { // [LS] Feature/Entry shot
 export const PROTOTYPE_STATUSES = ['running', 'stopped', 'discarded'] as const
 export const prototype = pgTable('prototype', {
   id: id(), appId: appId(), projectId: text('project_id').references(() => project.id),
-  title: text('title').notNull(), branch: text('branch').notNull(), path: text('path').notNull(), port: integer('port'),
+  title: text('title').notNull(), brief: text('brief'), // what to build and what it should teach us
+  sessionId: text('session_id'), // the conversation that builds it, working in its worktree
+  branch: text('branch').notNull(), path: text('path').notNull(), port: integer('port'),
   status: text('status').notNull().default('stopped'), createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [index('prototype_app').on(t.appId), inList('prototype_status', t.status, PROTOTYPE_STATUSES)])

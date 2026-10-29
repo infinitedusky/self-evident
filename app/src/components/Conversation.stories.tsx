@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Conversation, Message } from './Conversation'
 import { engineDown, withEngine } from '../stories/mock-engine'
-import { talkSession, transcript } from '../stories/sample'
+import { prototypeTranscript, talkSession, transcript } from '../stories/sample'
 import type { TalkMessage, Transcript } from '../engine'
 
 // One conversation with the agent, from the sample engine's transcript; messages here are made up.
@@ -30,6 +30,8 @@ export const Ended: Story = { beforeEach: withEngine({ transcript: t({ status: '
 export const Empty: Story = { beforeEach: withEngine({ transcript: t({ messages: [] }) }) }
 export const Compact: Story = { args: { compact: true, context: { path: '/projects/proj_checkout', label: 'this project', projectId: 'proj_checkout' } }, beforeEach: withEngine({ transcript: t() }) }
 export const Failed: Story = { beforeEach: withEngine({ transcript: t({ messages: [...working.slice(0, 1), msg(8, 'engine', 'error', 'Sample: the agent stopped: rate limited, retrying in a minute.', { waiting: true })] }) }) }
+/** A prototype's conversation opens with its brief. */
+export const PrototypeBrief: Story = { beforeEach: withEngine({ transcript: prototypeTranscript }) }
 export const Loading: Story = { beforeEach: withEngine({}, { latency: 'infinite' }) }
 export const EngineDown: Story = { beforeEach: withEngine(engineDown) }
 /** One message on its own: an answered permission card. */
