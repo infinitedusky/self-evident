@@ -105,14 +105,16 @@ is working.
    idea can't be tested well ("you have 40 users; here's the best we can do").
 3. **Decide on evidence.** On the look-by date the findings say yes, no or
    not yet. Most ideas die quietly here.
-4. **Plan the task** (2026-10-29). A yes becomes a task: a name and a
-   description. Its steps (research, brief, mockup, prototype) happen in any
-   order, and any can be skipped. They can also be done on the idea, which is
-   an ephemeral task, before anything is committed. Making a mockup or prototype creates the
-   brief, which takes in whatever steps were done. The prototype is the
-   agent's quick, working attempt and a key artifact for the build. A
-   workflow can require steps or an order, the way Jira's do. The project is
-   the chunks, and why they were cut that way.
+4. **Ideas, tasks, projects** (2026-10-29). An idea is exploration, even a
+   single sentence. Research, mockups, a prototype and a rough draft of a
+   brief can all be done on it without committing. Converting it, the agent
+   uses whatever exists to decide whether it becomes a task or a project. A
+   task can also be made directly. A task means "we're going to build this":
+   it has a brief, and it can't be completed until the brief is approved. A
+   project holds tasks; it has no brief of its own. Research, mockups and
+   prototypes can be done on any of the three, at any time; workflows can
+   require steps or an order, the way Jira's do. The prototype is the agent's
+   quick, working attempt and a key artifact for the build.
 5. **Factory.** Every chunk that isn't waiting on another is built at once,
    each as a PR. Only a blocked chunk costs anything.
 6. **Demonstrate.** Each PR comes with a demonstration: the real app running

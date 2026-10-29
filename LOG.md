@@ -493,6 +493,25 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Ideas, tasks and projects: what's possible on each, not a fixed path (Sandy, 2026-10-29: "you can't complete a task until … the brief has been approved")
+
+This corrects the two entries below. The aim is composability: say where things are possible and what is required,
+not strict definitions or a path you must walk through.
+- **An idea is exploration.** It can be a single sentence. Research, mockups, a prototype and a rough draft of a
+  brief can be done on it, all without committing to anything. An idea has no real brief: there isn't yet the
+  rigor for one, so it would have no purpose.
+- **Converting an idea** makes a task or a project. The agent reads whatever the idea has (even if it's only one
+  sentence) and proposes which.
+- **A task can also be made directly,** when you know it will be one. Being a task means "we're actually going to
+  build this".
+- **A task has a brief,** and it can't be completed until the brief is approved. Until there is a brief, the later
+  steps of building it can't really happen. Research, mockups and prototypes can be done on it at any time, before or
+  after the brief.
+- **A project holds tasks** and has no brief of its own. It can still have mockups or a prototype.
+- **Making a mockup or a prototype doesn't create a brief.** That line in the entry below is withdrawn. The brief is
+  a deliberate step on a task.
+- **Workflows** can still require steps or an order (unchanged).
+
 ## The rail is the stages of work; everything else is inside them (Sandy, 2026-10-29: "you don't go to projects from the left nav. You go to plan")
 
 - **The rail holds only the stages:** Observe, Learn, Ideate, Plan, Build. They are the categories of work on the way
@@ -511,9 +530,8 @@ This replaces the fixed order in the next entry (mockup, then prototype, then pr
   already has a title, a description for people and a brief for the builder.
 - **Its steps:** research, brief, mockup, prototype. They happen in any order, and any can be skipped. You work with
   the agent on the task and say "do this, do that".
-- **The brief is where the steps live.** Making a mockup or a prototype creates the brief if there isn't one yet,
-  so you can start with a prototype if you want. When they exist, the brief takes in the research, the mockups and
-  the prototype.
+- **The brief is where the steps come together** for the build. (Corrected in the next entry up: making a mockup or a
+  prototype does not create a brief.)
 - **The prototype is the agent's quick attempt at the task, actually coded and working.** It skips the planning
   process. It still uses sense about security and the rest, but doesn't go through the full process. It becomes a
   key artifact in the real development, which starts from the brief.
