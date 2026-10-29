@@ -512,6 +512,20 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
   Without one, every step is optional and the order is free.
 - **It inherits:** a task uses its own workflow, or else its project's, or else the app's. The page says where it
   came from ("from the project").
+- **Built** (PRs #72, then this one):
+  - **Workflows:** stored per app; attached to the app (its default), a project or a task; inherited downward. The
+    rules are one module, `engine/src/steps.ts`, which the app imports too.
+  - **A task's brief** needs a person's approval. A changed brief needs approving again. Planning waits for the
+    approval, and so does completing the task, along with its other required steps. Briefs written before this
+    count as approved, so nothing under way got stuck.
+  - **Enforced order:** a step, and the brief's approval, wait for the required steps before them.
+  - **Converting an idea** into a task or a project takes its research, mockups and prototypes with it. Its rough
+    draft becomes the brief, waiting for approval. "Ask the agent to convert it" lets the agent decide which.
+  - **A workflow that starts tasks as ideas** refuses a task made directly.
+  - **Pages:** Plan (`/plan`), which the rail opens; Workflows (`/plan/workflows`); the steps on the idea, task and
+    project pages; Start hands a step to the agent in a new conversation.
+  - **Not yet:** mockups are attached by story id, by the agent; there's no picker. The checks (ADR, blast radius,
+    brief audit) are notes the agent writes; nothing runs them by itself.
 - **The first stories** are the rail without sub-menus, the Plan page, the steps on an idea, task and project, and
   the workflow view and editor. Made-up data; built once Sandy has looked at them.
 
