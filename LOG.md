@@ -503,6 +503,8 @@ Self Evident is now one workspace, not pages under a nav.
 - **The agent knows what is open:** every message carries the open tabs and which one is in front. It **opens tabs itself** with a new `open_tab` tool, which arrives as a `ui.open` event. The event stream takes `since=now` for readers that want only what comes next.
 - **From the comps:** in the agent's feed, runs of tool calls fold into one "N actions" row with icons, and a finished turn reads "Worked for X". The agent's replies render as Markdown, in plain text, not bubbles.
 
+- **Storybook opens at a story** (Sandy, the same day: "are we not able to open storybook to a specific story?"). The Storybook tab carries a story id. The agent finds ids with a `stories` tool, which reads the app's running Storybook's own `index.json`, and opens one with `open_tab` (storybook, story). If a Storybook tab is already open, the new story replaces the one in it rather than opening a second tab.
+
 Dockview is pinned at 8.5.1, core included: the newest release was a day old. Starting a dev server for Preview is not built; Preview shows the address it is given.
 
 ## Stories lead the UI, and every screen has them (Sandy, 2026-10-28: "full coverage, and make sure it leads building")

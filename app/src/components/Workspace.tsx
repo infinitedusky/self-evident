@@ -13,6 +13,7 @@ import { useCurrentApp } from '../current-app'
 import { tabContext, tabKey, tabTitle, useWorkspace, WorkspaceContext, type OpenTab, type Split, type Tab, type WorkspaceApi } from '../workspace'
 import { AppPicker } from './AppPicker'
 import { BuildLog } from './BuildLog'
+import { Mockups } from '../pages/Mockups'
 import { PagePane } from './PagePane'
 import { PreviewPane } from './PreviewPane'
 import { Rail } from './Rail'
@@ -59,7 +60,7 @@ function TabBody({ params, api }: IDockviewPanelProps<{ tab: Tab }>) {
   switch (t.kind) {
     case 'page': return <PagePane path={t.path} onNavigate={(path) => went({ kind: 'page', path })} />
     case 'preview': return <PreviewPane path={t.path} onNavigate={(path) => went({ kind: 'preview', path })} />
-    case 'storybook': return <PagePane path="/mockups" />
+    case 'storybook': return <PagePane path="/mockups"><Mockups story={t.story} /></PagePane>
     case 'build': return <BuildLog issueId={t.issueId} />
   }
 }
@@ -142,7 +143,10 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
     const api = dock.current
     if (!api) return
     const there = api.panels.find((p) => tabKey((p.params as { tab: Tab }).tab) === tabKey(tab))
-    if (there) { there.api.setActive(); return }
+    if (there) { // one Storybook tab: asked for another story, it goes there
+      if (tab.kind === 'storybook' && tab.story && tab.story !== ((there.params as { tab: Tab }).tab as { story?: string }).story) { there.api.updateParameters({ tab }); sync() }
+      there.api.setActive(); return
+    }
     const id = `t_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
     const front = api.activePanel
     const position = where.groupId ? { referenceGroup: where.groupId } : where.split && front ? { referencePanel: front, direction: where.split } : undefined

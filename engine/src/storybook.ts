@@ -41,4 +41,22 @@ export async function startStorybook(appId: string) {
   return storybookStatus(appId)
 }
 
+/**
+ * The app's stories, from its running Storybook's own index: each one's id (what opens it), the component or page
+ * it belongs to, and its name. `match` keeps those whose id, title or name contains it (any case).
+ */
+export async function listStories(appId: string, match?: string) {
+  const { a, url } = await setupOf(appId)
+  if (!url) throw new PlanError(`${a.name} has no Storybook set; add its URL in Settings`)
+  const res = await fetch(`${url.replace(/\/$/, '')}/index.json`, { signal: AbortSignal.timeout(4000) }).catch(() => null)
+  if (!res?.ok) throw new PlanError(`${a.name}'s Storybook is not answering at ${url}; opening the storybook tab offers to start it`)
+  const index = (await res.json()) as { entries?: Record<string, { id: string; type?: string; title: string; name: string }> }
+  const q = match?.toLowerCase()
+  return Object.values(index.entries ?? {})
+    .filter((e) => (e.type ?? 'story') === 'story')
+    .map((e) => ({ id: e.id, title: e.title, name: e.name }))
+    .filter((e) => !q || `${e.id} ${e.title} ${e.name}`.toLowerCase().includes(q))
+    .slice(0, 200)
+}
+
 export function stopStorybooks() { for (const [, m] of running) m.proc.kill('SIGTERM'); running.clear() }
