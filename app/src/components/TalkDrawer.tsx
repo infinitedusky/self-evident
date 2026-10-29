@@ -28,7 +28,6 @@ export function contextFor(pathname: string, search: string): TalkContext {
   if (issue) return { path: pathname, issueId: issue[1], label: 'this issue' }
   if (pathname.startsWith('/issues')) return { path: pathname, label: 'the issue list' }
   if (pathname.startsWith('/todos')) return { path: pathname, label: 'the to-dos (work outside the code)' }
-  if (pathname.startsWith('/validate')) return { path: pathname, label: 'Validate' }
   if (pathname.startsWith('/mockups')) return { path: pathname, label: 'the mockups (Storybook)' }
   if (pathname.startsWith('/ideas')) return { path: pathname, label: 'Ideate (the inbox)' }
   if (pathname.startsWith('/learn')) return { path: pathname, label: 'Learn' }

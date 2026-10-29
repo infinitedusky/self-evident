@@ -493,6 +493,34 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Plan is mockup, then prototype, then project; research is part of Ideate (Sandy, 2026-10-29: "prototype should be under plan … but it needs to come after mockup")
+
+The process is meant to be one thread per idea, not separate stages.
+- **The rail** is now 🔭 Observe · 🧠 Learn · 💡 Ideate · 📋 Plan · 🔨 Build. Validate is gone as a stage.
+- **Plan is how an idea becomes something real,** in order:
+  1. **Mockup: decide how it looks.** Stories with made-up data, with variants side by side when there's a choice.
+     The chosen stories record what was agreed.
+  2. **Prototype: decide how it works.** It is built from the chosen mockups, so it is about behaviour, data and
+     flow. It is what you use yourself and show people.
+  3. **Project: the analysis.** It takes in the mockups, the prototype and the feedback, and gives the plan, the
+     migrations and the checks. Build then does it properly, from scratch.
+  Not every idea needs all three. A visual tweak can go from mockup to project, a backend change can skip the
+  mockup, and a one-line fix goes straight to a project. The agent proposes which steps an idea needs; the person
+  can override it.
+- **Plan's pages,** in that order: Mockups, Prototypes, Projects, then Issues and To-dos. A Storybook or prototype
+  tab in front lights Plan.
+- **Validate's other half,** holding the build to what was agreed, is checks while building, so it belongs to Build.
+  The old Validate page is removed (it hardcoded Homework Gate's links) and `/validate` goes to Mockups.
+- **Research belongs in Ideate** (Sandy: "I think research should be a part of ideate maybe"). It sits between an
+  idea arriving and it being worth a mockup, and answers four things:
+  - who does this best (cited comps, which the mockup starts from);
+  - what already exists to use instead of building;
+  - what our own numbers say (Learn feeding in);
+  - the strongest case against it.
+  An idea reaches Plan with its research attached. Not built yet.
+- **Next, the whole thread on the idea's page:** idea, research, mockups, prototype, project, what landed. You see
+  where each idea is and what it waits on.
+
 ## The prototype: built fast to be thrown away, then built again from scratch (Sandy, 2026-10-29: "we don't need a perfect build, we want the thing that allows us to build better, when we build")
 
 Preview, the way it was built, was the wrong idea: a frame around an address. The stage it stands for is the
