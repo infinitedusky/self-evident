@@ -519,6 +519,13 @@ across the top and its sections down the side:
   - after the brief come checks that a workflow adds or removes: an ADR, the blast radius (risk analysis), a brief
     audit, and the like.
   The rules live in one module, `engine/src/steps.ts`, which the app imports too.
+- **When the rules start everything as an idea, nothing is made directly** (Sandy, same day: "we should remove the add
+  buttons and only have create from idea"). With "starts as an idea" required in the app's default, the following
+  happens:
+  - Plan, Projects and My Stuff swap New task and New project for **From an idea**.
+  - The New project page sends you to capture the idea.
+  - The engine refuses a task or project made without an idea, through the API and the agent's tools alike.
+  - To-dos aren't affected.
 - **Attaching one is optional.** A workflow can be attached to the app, a project or a task, or to none of them.
   Without one, every step is optional and the order is free.
 - **It inherits:** a task uses its own workflow, or else its project's, or else the app's. The page says where it
