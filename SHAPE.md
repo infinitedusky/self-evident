@@ -105,13 +105,13 @@ is working.
    idea can't be tested well ("you have 40 users; here's the best we can do").
 3. **Decide on evidence.** On the look-by date the findings say yes, no or
    not yet. Most ideas die quietly here.
-4. **Propose: mockup, then prototype, then project** (2026-10-29). For a yes,
-   decide how it looks on mockups (stories, variants), then how it works on a
-   prototype built fast in its own worktree. Then analyse both, and the
-   feedback on them, into the project: the chunks and why they were cut that
-   way, what success looks like and how it's measured. An idea takes only the
-   steps it needs. Research (comps, what exists already, our numbers, the case
-   against) is done in Ideate, before any of this.
+4. **Plan the task** (2026-10-29). A yes becomes a task: a name and a
+   description. Its steps (research, brief, mockup, prototype) happen in any
+   order, and any can be skipped; making a mockup or prototype creates the
+   brief, which takes in whatever steps were done. The prototype is the
+   agent's quick, working attempt and a key artifact for the build. A
+   workflow can require steps or an order, the way Jira's do. The project is
+   the chunks, and why they were cut that way.
 5. **Factory.** Every chunk that isn't waiting on another is built at once,
    each as a PR. Only a blocked chunk costs anything.
 6. **Demonstrate.** Each PR comes with a demonstration: the real app running
@@ -185,7 +185,8 @@ Details and sources in `research/`.
 ## Decided
 
 - **The loop's stages** (Sandy, 2026-10-29): Observe · Learn · Ideate (ideas and their research) · Plan
-  (mockup → prototype → project) · Build (including the checks a build is held to).
+  (tasks: research, brief, mockup, prototype, in any order unless a workflow sets one) · Build (including the
+  checks a build is held to).
 - **A prototype before the plan, then a build from scratch** (Sandy, 2026-10-29). Planning starts by building the
   actual thing quickly in its own worktree: shortcuts by default, made to demo and to change in moments, and able to
   do any kind of work, schema included. It runs on the app's real database engine, rebuilt from labelled JSON
