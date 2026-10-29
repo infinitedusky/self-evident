@@ -493,6 +493,17 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Settings: which settings across the top, sections down the side (Sandy, 2026-10-29: "maybe that should be a top nav, and then the left nav is the different sections")
+
+Settings was one long form per app. Now it's laid out like VS Code's Settings, which has User and Workspace tabs
+across the top and its sections down the side:
+- **The top bar** chooses which settings: All apps, then each app, then "+ App". An app inherits All apps until it
+  overrides it.
+- **The side lists that scope's sections,** one shown at a time, each at its own address with its own Save.
+  - All apps (`/settings/<section>`): Plugins, Skills by job, Integrations.
+  - An app (`/settings/apps/<id>/<section>`): Repo, Agents, Plugins, Landing, Prototype, Storybook, Integrations,
+    Workflow rules.
+
 ## Workflows: the steps listed once, shaped per workflow, inherited downward (Sandy, 2026-10-29: "you don't need to attach a workflow to a project or task but you can. And it inherits")
 
 - **The steps are one list:** research, brief, mockup, prototype. They're the same everywhere.
