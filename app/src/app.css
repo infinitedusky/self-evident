@@ -241,6 +241,11 @@ button.badge { border: 0; cursor: pointer; }
 .settings-side .link { display: block; padding: 7px 10px; border-radius: 8px; text-decoration: none; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .settings-side .link.active { background: var(--accent-wash); color: var(--ink); font-weight: 600; }
 .settings-side-label { margin: 14px 10px 4px; }
+.settings-scope { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--line); margin: -6px 0 18px; }
+.settings-scope .scope { padding: 8px 12px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--ink-soft); text-decoration: none; font: 14px var(--sans); cursor: pointer; }
+.settings-scope .scope.active { border-bottom-color: var(--accent); color: var(--ink); font-weight: 600; }
+.settings-scope .scope.add { color: var(--ink-faint); }
+.settings-scope .settings-add { margin: 0 0 4px 6px; }
 .settings-add { display: flex; gap: 6px; margin-top: 8px; }
 .settings-add input { min-width: 0; flex: 1; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 13px var(--sans); }
 .settings-add .btn { padding: 6px 10px; font-size: 13px; }

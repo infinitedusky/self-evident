@@ -4,12 +4,15 @@ import { engineDown, withEngine } from '../stories/mock-engine'
 import { appSettings, apps, factorySettings, sampleApp } from '../stories/sample'
 import type { PluginInfo } from '../engine'
 
-// Settings in two levels: All apps (/settings) and one page per app (/settings/apps/:id).
+// Settings: which settings across the top (All apps, each app), that scope's sections down the side.
 const meta = { title: 'Pages/Settings', component: Settings, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><Settings /></div> } satisfies Meta<typeof Settings>
 export default meta
 type Story = StoryObj<typeof meta>
 const all = { route: { path: '/settings', url: '/settings' } }
-const appPage = (id = sampleApp.id) => ({ route: { path: '/settings/apps/:id', url: `/settings/apps/${id}` } })
+const allAt = (section: string) => ({ route: { path: '/settings/:section', url: `/settings/${section}` } })
+const appPage = (id = sampleApp.id, section?: string) => (section
+  ? { route: { path: '/settings/apps/:id/:section', url: `/settings/apps/${id}/${section}` } }
+  : { route: { path: '/settings/apps/:id', url: `/settings/apps/${id}` } })
 
 const toolsPlugin: PluginInfo = {
   id: 'sample-tools@sample', name: 'sample-tools', version: '0.3.1', description: 'A made-up plugin with an MCP server and rated tools.', source: 'example/sample-marketplace', builtIn: false,
@@ -37,3 +40,9 @@ export const AppBare: Story = { parameters: appPage('app_sample2'), beforeEach: 
 export const NoSuchApp: Story = { parameters: appPage('app_missing') }
 export const Loading: Story = { parameters: all, beforeEach: withEngine({}, { latency: 'infinite' }) }
 export const EngineDown: Story = { parameters: all, beforeEach: withEngine(engineDown) }
+/** All apps, the integrations' shared values. */
+export const AllAppsIntegrations: Story = { parameters: allAt('integrations') }
+/** An app's prototype settings: how its server starts and where its throwaway databases go. */
+export const AppPrototype: Story = { parameters: appPage(sampleApp.id, 'prototype') }
+/** An app's workflow rules: configuration, not something that runs. */
+export const AppWorkflowRules: Story = { parameters: appPage(sampleApp.id, 'workflows') }

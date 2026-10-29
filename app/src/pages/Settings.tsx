@@ -1,7 +1,8 @@
 /**
- * Settings, in two levels with a side list: All apps (what every app gets: the plugins, the jobs their skills cover,
- * the integrations' shared values) and one page per app (its repo, its agents, its plugins, how it lands, its
- * Storybook, and its own integration values; each inherits All apps until the app overrides it).
+ * Settings, after VS Code's: which settings across the top (All apps, then each app; an app inherits All apps until it
+ * overrides), and that scope's sections down the side, one at a time, each with its own address and its own Save.
+ * All apps: plugins, the jobs their skills cover, the integrations' shared values. An app: its repo, agents, plugins,
+ * landing, prototype, Storybook, integration values, and its workflow rules.
  */
 import { useEffect, useState } from 'react'
 import { NavLink, useParams } from 'react-router'
@@ -13,39 +14,54 @@ import { useCurrentApp } from '../current-app'
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
 const err = (e: any) => String(e?.message ?? e)
 
+export const FACTORY_SECTIONS = [
+  { key: 'plugins', label: 'Plugins' }, { key: 'skills', label: 'Skills by job' }, { key: 'integrations', label: 'Integrations' },
+] as const
+export const APP_SECTIONS = [
+  { key: 'repo', label: 'Repo' }, { key: 'agents', label: 'Agents' }, { key: 'plugins', label: 'Plugins' }, { key: 'landing', label: 'Landing' },
+  { key: 'prototype', label: 'Prototype' }, { key: 'storybook', label: 'Storybook' }, { key: 'integrations', label: 'Integrations' }, { key: 'workflows', label: 'Workflow rules' },
+] as const
+
 export function Settings() {
-  const { id } = useParams()
+  const { id, section } = useParams()
   const { apps, reload: reloadNav } = useCurrentApp()
-  const [adding, setAdding] = useState('')
+  const [adding, setAdding] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const app = id ? apps.find((a) => a.id === id) : undefined
+  const sections = id ? APP_SECTIONS : FACTORY_SECTIONS
+  const here = sections.find((x) => x.key === section)?.key ?? sections[0].key
+  const base = id ? `/settings/apps/${id}` : '/settings'
 
   const addApp = async () => {
-    const name = adding.trim()
+    const name = adding?.trim()
     if (!name) return
     try {
       const ws = (await engine.workspaces())[0] ?? (await engine.createWorkspace('My workspace'))
       await engine.createApp({ workspaceId: ws.id, name })
-      setAdding(''); await reloadNav()
+      setAdding(null); await reloadNav()
     } catch (e) { setError(err(e)) }
   }
 
   return (
     <>
       <div className="page-head"><h1>Settings</h1></div>
+      <nav className="settings-scope" aria-label="Which settings">
+        <NavLink to="/settings" className={() => `scope ${!id ? 'active' : ''}`}>All apps</NavLink>
+        {apps.map((a) => <NavLink key={a.id} to={`/settings/apps/${a.id}`} className={() => `scope ${id === a.id ? 'active' : ''}`}>{a.name}</NavLink>)}
+        {adding === null
+          ? <button className="scope add" onClick={() => setAdding('')} title="Add an app">+ App</button>
+          : <span className="settings-add">
+              <input autoFocus value={adding} onChange={(e) => setAdding(e.target.value)} placeholder="New app" onKeyDown={(e) => { if (e.key === 'Enter') void addApp(); if (e.key === 'Escape') setAdding(null) }} />
+              <button className="btn quiet" disabled={!adding.trim()} onClick={addApp}>Add</button>
+            </span>}
+      </nav>
       <div className="settings" data-component="Settings">
-        <aside className="settings-side">
-          <NavLink to="/settings" end className={({ isActive }) => `link ${isActive ? 'active' : ''}`}>All apps</NavLink>
-          <div className="settings-side-label mono faint">APPS</div>
-          {apps.map((a) => <NavLink key={a.id} to={`/settings/apps/${a.id}`} className={({ isActive }) => `link ${isActive ? 'active' : ''}`}>{a.name}</NavLink>)}
-          <div className="settings-add">
-            <input value={adding} onChange={(e) => setAdding(e.target.value)} placeholder="New app" onKeyDown={(e) => { if (e.key === 'Enter') void addApp() }} />
-            <button className="btn quiet" disabled={!adding.trim()} onClick={addApp}>Add</button>
-          </div>
+        <aside className="settings-side" aria-label="Sections">
+          {sections.map((x) => <NavLink key={x.key} to={`${base}/${x.key}`} className={() => `link ${here === x.key ? 'active' : ''}`}>{x.label}</NavLink>)}
         </aside>
         <div>
           {error && <div className="empty bad">{error}</div>}
-          {!id ? <FactoryPage /> : app ? <AppPage key={app.id} app={app} onSaved={reloadNav} /> : <p className="muted">No such app.</p>}
+          {!id ? <FactoryPage section={here} /> : app ? <AppPage key={app.id} app={app} section={here} onSaved={reloadNav} /> : <p className="muted">No such app.</p>}
         </div>
       </div>
     </>
@@ -53,7 +69,7 @@ export function Settings() {
 }
 
 /** What every app gets. */
-function FactoryPage() {
+function FactoryPage({ section }: { section: string }) {
   const [s, setS] = useState<FactorySettings | null>(null)
   const [error, setError] = useState<string | null>(null)
   const load = () => engine.settings().then(setS).catch((e) => setError(err(e)))
@@ -63,20 +79,20 @@ function FactoryPage() {
   const act = (f: () => Promise<unknown>) => async () => { setError(null); try { await f(); await load() } catch (e) { setError(err(e)) } }
   return (
     <>
-      <section className="panel" data-component="Plugins">
+      {section === 'plugins' && <section className="panel" data-component="Plugins">
         <h2>Plugins</h2>
         <p className="muted settings-lead">What the factory installs to give its agents more to work with: skills, tools, or both. Each is a Claude Code plugin, installed for Self Evident only (not your own Claude Code). The builder gets none; it builds what the plan says.</p>
         {s.plugins.map((p) => <PluginBlock key={p.id} p={p} catalogue={s.catalogue} act={act} />)}
         <AddPlugin onAdded={load} />
-      </section>
+      </section>}
 
-      <section className="panel" data-component="SkillsByJob">
+      {section === 'skills' && <section className="panel" data-component="SkillsByJob">
         <h2>Skills by what we do</h2>
         <p className="muted settings-lead">One skill per job: agents pick a skill by its description, so two for the same job compete. Filing a skill under a job that already has one replaces it. Skills in an app's own repo are on that app's page.</p>
         <Jobs plugins={s.plugins} catalogue={s.catalogue} />
-      </section>
+      </section>}
 
-      <section className="panel">
+      {section === 'integrations' && <section className="panel">
         <h2>Integrations</h2>
         <p className="muted settings-lead">Shared values for every app. An app can override any field on its own page. Keys stay in each program's <span className="mono">.env</span>; here, only the variable's name.</p>
         {s.workspace
@@ -87,7 +103,7 @@ function FactoryPage() {
           <dt>GitHub</dt><dd className="muted">Set per app: its repo, where PRs live.</dd>
           <dt>Storybook</dt><dd className="muted">Set per app: where its stories run.</dd>
         </dl>
-      </section>
+      </section>}
     </>
   )
 }
@@ -244,7 +260,7 @@ function IntegrationsForm({ integrations, values, onSave }: { integrations: Inte
 }
 
 /** One app: grouped, one Save for the lot. Integration fields show the inherited value until overridden. */
-function AppPage({ app, onSaved }: { app: App; onSaved: () => Promise<unknown> }) {
+function AppPage({ app, section, onSaved }: { app: App; section: string; onSaved: () => Promise<unknown> }) {
   const [name, setName] = useState(app.name)
   const [branch, setBranch] = useState(app.defaultBranch)
   const [setup, setSetup] = useState<AppSetup>(app.setup ?? {})
@@ -272,18 +288,17 @@ function AppPage({ app, onSaved }: { app: App; onSaved: () => Promise<unknown> }
   const own = setup.integrations ?? {}
   const shared = factory?.values ?? {}
 
-  return (
-    <>
-    <section className="panel" data-component="AppSettings">
-      <div className="task-block-head"><h2 style={{ margin: 0 }}>{app.name}</h2><span className="mono faint">{app.key} · {app.id}</span></div>
-
+  if (section === 'workflows') return <WorkflowSettings appId={app.id} />
+  const groups: Record<string, React.ReactNode> = {
+    repo: <>
       <Group title="Repo" lead="The code and the checkout on this machine the agents work from.">
         <label>Name<input value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label>Default branch<input className="mono" value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" /></label>
         <label>GitHub repo<input className="mono" value={repo.fullName ?? ''} onChange={(e) => setRepo({ ...repo, fullName: e.target.value })} placeholder="owner/name (for the PR)" /></label>
         <label>Local checkout<input className="mono" value={repo.localPath ?? ''} onChange={(e) => setRepo({ ...repo, localPath: e.target.value })} placeholder="/absolute/path/to/the/repo, on its default branch" /></label>
       </Group>
-
+    </>,
+    agents: <>
       <Group title="Agents" lead="What a planner or builder run on this app gets.">
         <label>Model<input className="mono" value={setup.model ?? ''} onChange={(e) => set({ model: e.target.value })} placeholder="default: the agent's own" /></label>
         <label>Budget per run (USD)<input type="number" min={0} step={1} value={setup.max_budget_usd ?? ''} onChange={(e) => set({ max_budget_usd: num(e.target.value) })} placeholder="no cap" /></label>
@@ -293,7 +308,8 @@ function AppPage({ app, onSaved }: { app: App; onSaved: () => Promise<unknown> }
           {info?.skills.length ? <SkillList skills={info.skills} /> : <div className="faint settings-desc">None in <span className="mono">.claude/skills/</span>{repo.localPath ? '' : ' (no local checkout set)'}. Plugins' skills apply too: see Plugins below and <NavLink to="/settings">All apps</NavLink>.</div>}
         </div>
       </Group>
-
+    </>,
+    plugins: <>
       <div className="settings-group">
         <h3 className="settings-h3">Plugins</h3>
         <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>Each follows All apps unless this app switches it for itself.</p>
@@ -319,7 +335,8 @@ function AppPage({ app, onSaved }: { app: App; onSaved: () => Promise<unknown> }
           })}
         </dl>
       </div>
-
+    </>,
+    landing: <>
       <Group title="Landing" lead="How finished work reaches the default branch.">
         <label style={{ gridColumn: '1 / -1' }}>Test command<input className="mono" value={setup.test_cmd ?? ''} onChange={(e) => set({ test_cmd: e.target.value })} placeholder="runs in the worktree on the merged commit; must exit 0 to land" /></label>
         <label style={{ gridColumn: '1 / -1' }}>Pull requests<select value={setup.pr_mode ?? 'project'} onChange={(e) => set({ pr_mode: e.target.value as 'project' | 'issue' })}>
@@ -327,19 +344,22 @@ function AppPage({ app, onSaved }: { app: App; onSaved: () => Promise<unknown> }
           <option value="issue">One per issue, stacked: small PRs for a team; each merges on its own</option>
         </select></label>
       </Group>
-
+    </>,
+    prototype: <>
       <Group title="Prototype" lead="How a prototype's server starts: run in the prototype's own worktree, serving on $PORT. With a database server, each prototype gets a throwaway database of its own there, made by the schema command and filled with made-up data. The agent works these out the first time and asks you to confirm.">
         <label style={{ gridColumn: '1 / -1' }}>Command<input className="mono" value={setup.prototype_cmd ?? ''} onChange={(e) => set({ prototype_cmd: e.target.value })} placeholder="pnpm install && pnpm dev --port $PORT" /></label>
         <label>Database server<input className="mono" value={setup.prototype_db?.url ?? ''} onChange={(e) => set({ prototype_db: { ...setup.prototype_db, url: e.target.value } })} placeholder="postgres://app:app@localhost:5432/app" /></label>
         <label>Its variable<input className="mono" value={setup.prototype_db?.env ?? ''} onChange={(e) => set({ prototype_db: { url: '', ...setup.prototype_db, env: e.target.value } })} placeholder="DATABASE_URL" /></label>
         <label style={{ gridColumn: '1 / -1' }}>Schema command<input className="mono" value={setup.prototype_db?.schema_cmd ?? ''} onChange={(e) => set({ prototype_db: { url: '', ...setup.prototype_db, schema_cmd: e.target.value } })} placeholder="makes the schema in the database its variable names, like: alembic upgrade head" /></label>
       </Group>
-
+    </>,
+    storybook: <>
       <Group title="Storybook" lead="Where this app's stories run.">
         <label>URL<input className="mono" value={setup.storybook_url ?? ''} onChange={(e) => set({ storybook_url: e.target.value })} placeholder="http://localhost:6006" /></label>
         <label>Command<input className="mono" value={setup.storybook_cmd ?? ''} onChange={(e) => set({ storybook_cmd: e.target.value })} placeholder="cd web && pnpm storybook --no-open" /></label>
       </Group>
-
+    </>,
+    integrations: <>
       <div className="settings-group">
       <h3 className="settings-h3">Integrations</h3>
       <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>An empty field uses the value set under All apps, shown in italics. Type to override it for this app only.</p>
@@ -361,11 +381,13 @@ function AppPage({ app, onSaved }: { app: App; onSaved: () => Promise<unknown> }
         </div>
       ))}
       </div>
-
+    </>,
+  }
+  return (
+    <section className="panel" data-component="AppSettings">
+      {groups[section]}
       <SaveRow dirty={dirty} busy={busy} error={error} onSave={save} />
     </section>
-    <WorkflowSettings appId={app.id} />
-    </>
   )
 }
 

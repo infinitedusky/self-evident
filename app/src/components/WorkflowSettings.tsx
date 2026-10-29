@@ -3,8 +3,7 @@
  * a task goes through before it's built, which are required, and whether their order is enforced. The app's default
  * applies to every project and task that doesn't have its own (LOG.md, 2026-10-29).
  */
-import { useEffect, useRef, useState } from 'react'
-import { useLocation } from 'react-router'
+import { useEffect, useState } from 'react'
 import { DEFAULT_STEPS } from '@self-evident/engine/steps'
 import { WorkflowCard } from './WorkflowCard'
 import { engine, type WorkflowRow } from '../engine'
@@ -17,11 +16,8 @@ export function WorkflowSettings({ appId }: { appId: string }) {
   useEffect(() => { setList(null); void reload() }, [appId]) // eslint-disable-line react-hooks/exhaustive-deps
   const act = async (fn: () => Promise<unknown>) => { try { await fn(); setError(null); await reload() } catch (e: any) { setError(String(e.message ?? e)) } }
   const byDefault = list?.find((w) => w.appDefault)
-  const here = useRef<HTMLElement>(null)
-  const { hash } = useLocation()
-  useEffect(() => { if (hash === '#workflows' && list) here.current?.scrollIntoView({ behavior: 'smooth' }) }, [hash, list !== null]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <section className="panel" id="workflows" ref={here} data-component="WorkflowSettings">
+    <section className="panel" data-component="WorkflowSettings">
       <div className="task-block-head">
         <h2 style={{ margin: 0 }}>Workflow rules</h2>
         <button className="btn quiet small" onClick={() => setName(name === null ? '' : null)}>New set of rules</button>
