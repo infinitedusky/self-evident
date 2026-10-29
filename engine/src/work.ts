@@ -154,6 +154,7 @@ export async function setStep(s: Subject, key: StepKey, input: { status?: 'start
   if (key === 'brief' && on === 'task') throw new PlanError('a task\'s brief is written on the task itself')
   return db.transaction(async (tx) => {
     const a = await subjectApp(tx, s)
+    if (input.status !== 'none') await guardOrder(tx, s, key)
     const [old] = await tx.select().from(stepWork).where(and(subjectCol(s), eq(stepWork.key, key)))
     const values = {
       status: input.status ?? old?.status ?? 'started', detail: input.detail !== undefined ? input.detail : old?.detail ?? null,
@@ -172,12 +173,20 @@ export async function getStep(s: Subject, key: StepKey) {
   return row ?? null
 }
 
+/** Throws when an enforced order says this step waits for a required one before it. */
+async function guardOrder(tx: Tx | typeof db, s: Subject, key: StepKey) {
+  if ('ideaId' in s) return // an idea has no workflow
+  const waits = (await stepsOf(s, tx)).rows.find((r) => r.key === key)?.waitingOn
+  if (waits) throw new PlanError(`${step(key).label} waits for ${step(waits).label} first: the workflow's order is enforced`)
+}
+
 /** A person approves a task's brief; a change to the brief afterwards asks for approval again (see updateIssue). */
 export async function approveBrief(issueId: string, by: string, approve = true) {
   return db.transaction(async (tx) => {
     const i = await getIssue(tx, issueId)
     if (i.parentId || i.kind !== 'code') throw new PlanError('only a task (a top-level code issue) has a brief to approve')
     if (approve && !i.brief?.trim()) throw new PlanError('write the brief before approving it')
+    if (approve) await guardOrder(tx, { issueId }, 'brief')
     const [row] = await tx.update(issue).set({ briefApprovedBy: approve ? by : null, briefApprovedAt: approve ? new Date() : null, updatedAt: new Date() }).where(eq(issue.id, issueId)).returning()
     const a = await appOf(tx, i.appId)
     await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: i.projectId, issueId, actor: by, type: approve ? 'brief.approved' : 'brief.unapproved', payload: { title: i.title } })
@@ -255,17 +264,17 @@ export async function planView(appId: string) {
   const tops = await db.select().from(issue).where(and(eq(issue.appId, appId), isNull(issue.parentId))).orderBy(issue.sortOrder, issue.number)
   const wfs = await db.select().from(workflow).where(eq(workflow.appId, appId))
   const name = (id: string | null) => wfs.find((w) => w.id === id)?.name
-  const task = async (i: typeof tops[number]) => ({
-    id: i.id, identifier: `${a.key}-${i.number}`, title: i.title, state: i.state, workflow: name(i.workflowId),
-    steps: (await stepsOf({ issueId: i.id })).states,
-  })
+  const task = async (i: typeof tops[number]) => {
+    const v = await stepsOf({ issueId: i.id })
+    return { id: i.id, identifier: `${a.key}-${i.number}`, title: i.title, state: i.state, workflow: name(i.workflowId), steps: v.states, keys: v.rows.map((r) => r.key) }
+  }
   const code = tops.filter((i) => i.kind === 'code' && OPEN_STATES.includes(i.state))
   return {
-    projects: await Promise.all(projects.map(async (p) => ({
-      id: p.id, name: p.name, status: p.status, workflow: name(p.workflowId),
-      steps: (await stepsOf({ projectId: p.id })).states.filter((s) => s.key !== 'idea'),
-      tasks: await Promise.all(code.filter((i) => i.projectId === p.id).map(task)),
-    }))),
+    projects: await Promise.all(projects.map(async (p) => {
+      const v = await stepsOf({ projectId: p.id })
+      return { id: p.id, name: p.name, status: p.status, workflow: name(p.workflowId), steps: v.states.filter((s) => s.key !== 'idea'), keys: v.rows.map((r) => r.key).filter((k) => k !== 'idea'),
+        tasks: await Promise.all(code.filter((i) => i.projectId === p.id).map(task)) }
+    })),
     loose: await Promise.all(code.filter((i) => !i.projectId).map(task)),
     todosOpen: tops.filter((i) => i.kind === 'todo' && OPEN_STATES.includes(i.state)).length,
     workflows: wfs.map(asWorkflow), appWorkflow: name(a.workflowId),

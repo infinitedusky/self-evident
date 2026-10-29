@@ -74,6 +74,17 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     expect((await stepsOf({ issueId: t.id })).blocking).toEqual(['brief'])
   })
 
+  it('in an enforced order, a step and the brief\'s approval wait for the required steps before them', async () => {
+    const wf = await saveWorkflow({ appId, name: 'Mockup first', ordered: true, steps: [{ key: 'idea', on: true, required: false }, { key: 'mockup', on: true, required: true }, { key: 'brief', on: true, required: true }, { key: 'adr', on: true, required: false }] })
+    const t = await createIssue(appId, { title: 'Ordered', kind: 'code', brief: 'Build it.' })
+    await useWorkflow({ issueId: t.id }, wf.id)
+    await expect(approveBrief(t.id, 'sam')).rejects.toThrow(/Brief waits for Mockups first/)
+    await expect(setStep({ issueId: t.id }, 'adr', { status: 'started' })).rejects.toThrow(/ADR waits for Mockups first/)
+    await setStep({ issueId: t.id }, 'mockup', { status: 'done', refs: ['pages-x--y'] })
+    await approveBrief(t.id, 'sam')
+    await expect(setStep({ issueId: t.id }, 'adr', { status: 'done' })).resolves.toMatchObject({ key: 'adr' })
+  })
+
   it('refuses a task made directly when its workflow starts tasks as ideas', async () => {
     const wf = await saveWorkflow({ appId, name: 'Ideas first', steps: [{ key: 'idea', on: true, required: true }, { key: 'brief', on: true, required: true }] })
     const { project: p } = await createProject({ appId, name: 'Ideas first', issues: [{ title: 'x' }] })
