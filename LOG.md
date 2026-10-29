@@ -319,6 +319,251 @@ iCloud Private Relay's `mask.apple-dns.net`.
   the lock model itself — took Sandy three rounds (overrides → two locks →
   unlock periods) to land; the agent's first model was wrong.
 
+### Notes from the evening of 2026-10-20, swept from the shared checkout (Sandy to judge)
+
+These eight sections were another session's uncommitted LOG edits that a `git add LOG.md` in the shared
+checkout swept into a different branch. They are restored here unchanged, in their own PR, so Sandy can
+keep, trim or drop them; some may be superseded by later decisions (e.g. YC vs. open source).
+
+### Research correction: Lightsprint seeds previews by default (Sandy, 2026-10-20)
+
+Sandy found it in Lightsprint's onboarding (step 4 of 8): "What data should
+your preview use?" — **Sample data (Recommended)**, "realistic placeholder
+users, accounts and records", versus "My real data" via env vars, switchable
+in Settings. Not in their docs; our research read the docs and said "no
+generated seed data in previews". Corrected in `research/lightsprint.md`,
+both `comps-*.md` and SHAPE.md.
+- What it changes: a seeded preview is table stakes, not our edge. Our edge
+  narrows to what's still unfound — the demo saying which data is fake, the
+  demo tied to a hypothesis and baseline, and telemetry judging the result
+  after merge. Confirms the build order: telemetry loop first.
+- Borrow the pattern: sample data by default, real data opt-in.
+- Open: how they make it (likely the setup agent writes a seed script per
+  stack), whether it's deterministic or scoped to the change, whether the
+  preview labels it. The free tier would tell us — hand it one Homework Gate
+  change (still the cheap test proposed in the comps).
+- Factory lesson for research: open the product, not just its docs.
+- **PostHog in Lightsprint** (Sandy noticed; docs checked): a Composio
+  connector agents can query when asked ("what's the funnel conversion…",
+  "is the feature used"). Not an automation trigger, nothing after merge.
+  Data is a tool there, not the input or the judge — our positioning holds.
+  Risk: their Triage action makes a PostHog trigger a sprint away (closes
+  signal → task; not baseline → verdict). Sandy to check in the app whether
+  PostHog shows up as a trigger. Details: `research/lightsprint.md`.
+
+### Build Homework Gate with Lightsprint, to learn it (Sandy, 2026-10-20)
+
+Sandy is connecting Lightsprint to the homework-gate repo and will build with
+it: "understand their product as best as I possibly can and see if there's
+actually a gap." Two principles from Sandy: (1) know the closest competitor by
+using it, not reading it; (2) "just because they're doing the same thing
+we're doing, you can position your company slightly differently and win."
+
+How this fits "act as the factory by hand": Lightsprint *is* the by-hand
+factory for the middle (describe → build → preview → QA → PR). The ends stay
+by hand — baseline and hypothesis before, labelled fake data in the demo,
+telemetry verdict after — because they don't do them. Per task, log three
+things: what Lightsprint did, what we had to do ourselves, what it couldn't
+do. The third column is the spec.
+
+Questions it should answer (checked in the product, since the docs undersell
+it):
+1. **Sample data** on a Python/FastAPI/SQLite/Jinja stack: how it's made,
+   whether it's the same across tasks, whether anything in the preview or PR
+   says it's fake.
+2. **The model in the preview.** Their sandbox can't use Sandy's Claude
+   subscription (`HG_CLAUDE_CODE=1` is local `claude -p`). The preview runs
+   on `HG_FAKE_LLM=1` (canned) or an API key in their env vars. Watch whether
+   the QA "Verification" comment says the tutor's replies were canned — the
+   exact "what's fake and why" problem, on a real PR.
+3. **PostHog**: is it an Automations trigger? Can Triage take a PostHog
+   event? Can a plan or task carry a success metric at all?
+4. **After merge**: anything at all?
+5. **Plan mode pushback**: does it ever say "don't build this" or "measure
+   first"?
+6. **Setup agent** on a non-JS stack: how much by hand, how many PRs.
+7. **Stacked / parallel tasks** from one base — the failure we hit with
+   PR #4.
+
+Cautions:
+- **Claude subscription in Lightsprint — corrected 2026-10-20.** The earlier
+  "don't connect it" was too strong. Anthropic's own docs: `claude
+  setup-token` mints a one-year `CLAUDE_CODE_OAUTH_TOKEN` "for CI pipelines,
+  scripts, or other environments where interactive browser login isn't
+  available", on Pro/Max/Team/Enterprise, and the GitHub Action runs Claude
+  Code on it on GitHub's runners ("runs use your Claude subscription instead
+  of API billing"). So Claude Code headless on someone else's machine on a
+  subscription is sanctioned. What was cut off in Feb 2026 is third-party
+  harnesses using subscription OAuth as their own credential. **The
+  discriminator is what Lightsprint's "connect Claude" asks for:** paste a
+  `claude setup-token` → they run the real `claude` binary in the sandbox,
+  same shape as the GitHub Action, fine; a "sign in with Claude" OAuth
+  redirect → app-level OAuth, the restricted shape, don't. Their docs don't
+  say which ("where available"). Two costs either way: Lightsprint tasks
+  draw from the same Max weekly caps as local Claude Code, and the token is
+  readable by anything on the stack like any env var.
+- Their env vars are readable by every agent on the stack — staging keys
+  only; the NextDNS key and any Anthropic key with real spend stay out.
+- Free tier is 5 tasks/plans a week; spend them on the questions above.
+  **Connecting the Claude subscription doesn't lift it** (Sandy, 2026-10-20):
+  the 5/week is a plan cap on tasks, separate from who pays for the model.
+  Their billing docs even say a free seat ignores the personal subscription
+  ("runs count against the workspace's credits and weekly limit"), which
+  contradicts the pricing page. Pro ($40/seat) removes the cap; with the
+  subscription connected, the 10M credits then cover only sandboxes and
+  previews. Sandy connected it; which flow (pasted setup-token vs OAuth
+  redirect) still to note.
+
+### Funding path: apply to YC with Homework Gate (Sandy, 2026-10-20)
+
+Sandy's lean: apply with Homework Gate, pivot (to the factory) if it doesn't
+hold. Context: "an idea is not enough to get funded" now, and building
+exposes you to a better-funded copy — the way out is users who depend on it
+plus the evidence (the cohort table), which the factory produces per idea.
+- YC funds founders over ideas and routinely funds competitors of its own
+  portfolio (TechCrunch 2024: a dozen-plus AI code editors across batches),
+  so Lightsprint being YC S26 does not block the pivot.
+- **Winter 2027 deadline: November 2, 2026, 8pm PT** (ycombinator.com/apply,
+  confirmed) — 13 days out. Decisions by Dec 11; interviews by video Nov–Dec;
+  late applications still read. Batch Jan–Mar 2027 in San Francisco. Spring
+  2027 deadline projected ~Feb 2027 (unconfirmed).
+- Proposed, not decided: apply W27 with what exists (cheap; a read on the
+  reaction), and set lines for S27 the way the method says — e.g. 5–10
+  families using it on 3+ nights a week for 4 weeks, at least one paying.
+  Hit the lines → the application is Homework Gate, the factory is "how we
+  build". Miss them → the application is the factory, Homework Gate its
+  first product and proof. One thesis per application, the other as the
+  alternative idea, never both as the pitch.
+
+### DECIDED: go hard on Homework Gate (Sandy, 2026-10-20)
+
+"We need to go hard on Homework Gate. I am going to get usage as quickly as
+possible. I also need to start talking to as many VCs and other people in
+the edtech space that I can." Supersedes the "Next" sections above.
+
+- **Homework Gate is the company for now.** The idea factory is how it gets
+  built: Lightsprint for the middle, the loop by hand at the ends (baseline,
+  hypothesis, PostHog verdict), every step still logged here. The factory's
+  own UI (`app/`, branch `ui-minimal`) waits.
+- **Usage first.** Families using it on real phones, by hand (PG: recruit
+  them one at a time, set each one up yourself). Activation = a first night
+  completed: homework turned in, quiz passed, phone unlocked. The one weekly
+  metric: nights completed per family. PostHog goes in now — it's the
+  evidence for YC and for every investor conversation.
+- **Conversations, Mom Test rules:** commitments, not compliments. A VC
+  conversation counts if it ends in an intro, a follow-up or a term; a
+  parent conversation counts if it ends in a setup call booked. Log each
+  one (who, what they committed to) — that ledger is the investor update.
+- **YC W27, deadline Nov 2** (above). Apply with what exists; reapply with
+  the numbers.
+
+### Lightsprint connected; first observation (2026-10-20, 21:50Z)
+
+homework-gate PR #10, branch `ls/3-get-the-preview-env-working-wp1Z`, "Fix
+unstyled pages in the stack preview (root-relative static URLs)" — the
+setup agent's PR to make the preview load on the FastAPI/Jinja stack,
+exactly the docs' "opens pull requests when repository changes are needed".
+Question 6 (setup agent on a non-JS stack): one PR so far, a static-URL
+fix. **Sandy deleted the task in Lightsprint's UI** — PR #10 is closed; the
+`ls/3-…` branch is still on origin (deleting a task closes the PR, leaves
+the branch). Preview setup gets redone after the Next.js move, since the
+stack becomes two services (Next + FastAPI). Also open: PR #9 (`posthog`
+branch) — PostHog telemetry on the night's counts, timings and outcomes.
+
+### Idea raised, not decided: open-source the factory (Sandy, 2026-10-20)
+
+Sandy, mid-build: "we make idea-factory open source", "we don't try to
+make money", "a VS Code extension with some upgrades that are cheap if you
+want pro", "we open source it and try to get contributors."
+- Reading: open core (free core, cheap pro) — PostHog's and GrowthBook's
+  shape, and YC-compatible (PostHog is YC). It is the natural form of
+  "an extension of PostHog": the thing PostHog users install, and what
+  PostHog would buy. Lightsprint is closed, so this is a real difference.
+- Counterargument: contributors follow users, not licences. OSS is a
+  distribution channel only once there is a working loop on a real app to
+  show (Show HN, PostHog's community). The order doesn't change: Homework
+  Gate usage first; the factory opens with Homework Gate as its proof.
+- VS Code extension: a surface, not the product. The loop (telemetry in,
+  PRs out, verdicts) lives in a local daemon — InDusk's MCP server + admin
+  shape — and an extension is one front end on it, alongside the web UI.
+  Cline-style marketplace distribution is cheap and real; decide the
+  surface when the daemon exists.
+- Cheap to do now: product code in its own repo from the first commit,
+  with an MIT or Apache licence, no secrets; this design repo (LOG, SHAPE,
+  the brother's details) stays private and never gets opened as-is.
+- Sandy: "it is a passion project worst case." That's the floor, and it's
+  a fine one; the method's kill rules still apply to the ceiling.
+
+### DECIDED: Homework Gate UI moves to React (Sandy, 2026-10-20)
+
+Sandy: "I don't like the idea of building that part on Python." The Jinja
+UI was the agent's default, never asked — same failure as the colours
+earlier today. **Correction, Sandy:** "the distraction and the problem is
+that you built this as you built it without asking." Rule recorded in
+SHAPE (stack is foundational: ask) and in memory.
+- Backend stays Python: FastAPI, SQLite, assistant/tutor/guard/quiz/grading.
+  Jinja routes become JSON endpoints.
+- Front end: **Next.js** (Sandy's pick over Vite; agent had recommended
+  Vite), TypeScript, Tailwind v4 (tokens in `@theme`), React Storybook +
+  MSW for the labelled fake states (port the 19 states from PR #3, not the
+  server-mode plumbing), PostHog JS SDK.
+- Parity with the five pages first, then the shark gate and the quiz UX.
+- **Built with Claude Code locally** (Sandy's pick), not Lightsprint.
+  **Lightsprint parked until funded** (Sandy, 2026-10-20: "we build here,
+  we can use this when we are funded") — the free tier's 5 tasks/week
+  isn't lifted by the subscription, and Pro is $40/seat on top. The seven
+  questions stay open; the Billing page still shows what the setup task
+  cost, worth one look.
+
+### Done by hand: Homework Gate UI on Next.js — homework-gate PR #11 (2026-10-20)
+
+Branch `next-ui` off `main` (not stacked on #9). `web/`: Next.js 16 (Cache
+Components), five pages as views with data in as props, 19 page states as
+React Storybook stories from `stories/sample.ts`, a vitest run that renders
+them all headless, browser PostHog as page views by role. `poc/`: the night's
+state machine and actions moved to `hg/night.py`; `hg/api.py` serves them as
+JSON under `/api`; `app.py` keeps the Jinja pages on the same functions, so
+`main` (his phone's server) keeps working. 23 pytest, tsc, lint, `next build`,
+19/19 stories, and an end-to-end smoke through the proxy all pass.
+- **The API test caught a real leak.** Returning SQLite rows as JSON sent the
+  answer key (and quiz answers) to the student; the Jinja templates had only
+  ever *displayed* safe fields. Fixed with `public_state` at the API boundary
+  and an assertion that scans the JSON. Factory lesson: a serializer shows
+  everything a template hid — any HTML→API move needs a leak test, and the
+  invariant ("the answer key never reaches the student") must be a test, not
+  a sentence.
+- **Hazard: a live server shares the dev machine.** Port 8000 was Sandy's
+  other session's server (the one his phone uses). My first smoke test hit it
+  by accident, and my cleanup `pkill` pattern was broad enough to have killed
+  it — it survived only because its command line differed. Rule from now:
+  tests use their own ports, processes are killed by PID only, and the
+  factory must know which processes on a machine are production.
+- **Next 16 changed under me.** `create-next-app` now enables Cache
+  Components; anything reading request data (`cookies()`, `usePathname()`,
+  uncached fetch) must sit behind `<Suspense>` or the build fails. The
+  framework ships its docs in `node_modules/next/dist/docs` and says to read
+  them first; reading them before writing saved a rewrite. Storybook's
+  `next/navigation` mock needs `parameters.nextjs.appDirectory: true`.
+- Tedious (→ automate): the scaffold and addon trimming; porting templates
+  1:1 to components; porting tokens; porting the 19 sample states; the CI
+  job; the smoke-test script; the README/CLAUDE.md updates.
+- Judgement: keep Python as the backend and share one set of actions between
+  both UIs rather than duplicate; keep the Jinja pages until the React app
+  has done real nights; keep the provisional look (tokens make the
+  field-notebook re-skin cheap, and the look is Sandy's call); where the
+  Suspense boundaries go.
+- Not in #11: the 10 field-notebook mockups (still Jinja, in the server-mode
+  Storybook until the look is chosen); re-placing #9's telemetry calls into
+  `night.py` after it merges; pointing the tunnel at :3000 (two processes
+  now); removing Jinja, `stories.py` and `storybook/` (follow-up PR).
+- Next: Sandy reviews #11; merge #9, then the telemetry re-placement; then
+  the shark gate and the quiz UX on the React app.
+
+
+(Also an amendment to Decision 5: *(Amended 2026-10-20:
+   Lightsprint plays the middle — see "Build Homework Gate with Lightsprint"
+   below; the ends stay by hand.)*)
+
 ### Idea raised: apps as posts (Sandy, 2026-10-22)
 
 **Reframed (Sandy, later that day): "maybe a better framing is interactive posts."** Content with behaviour,
