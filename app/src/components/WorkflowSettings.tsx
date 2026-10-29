@@ -38,8 +38,8 @@ export function WorkflowSettings({ appId }: { appId: string }) {
       {list === null ? <p className="muted">Loading…</p> : (
         <>
           <label className="settings-group" style={{ display: 'block' }}>The app's default{' '}
-            <select value={byDefault?.id ?? ''} onChange={(e) => act(() => engine.useWorkflow({ kind: 'apps', id: appId }, e.target.value || null))}>
-              <option value="">None: any step, any order; only the brief is required</option>
+            <select value={byDefault?.id ?? ''} onChange={(e) => act(() => engine.useWorkflow({ kind: 'apps', id: appId }, e.target.value))}>
+              {!byDefault && <option value="" disabled>Choose one</option>}
               {list.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
           </label>

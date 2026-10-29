@@ -17,7 +17,7 @@ import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, works
 import { EventBus, eventsSince, latestSeq } from './events.js'
 import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
-import { approveBrief, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject } from './work.js'
+import { approveBrief, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
 import { answerPermission, closeTalks, endTalk, interruptTalk, listTalks, renameTalk, say, setAutoApprove, showTalk, startTalk, talkTranscript, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
@@ -193,7 +193,10 @@ export function buildApp(bus: EventBus) {
     const taken = (await db.select({ key: appTable.key }).from(appTable).where(eq(appTable.workspaceId, body.workspaceId))).map((r) => r.key)
     const key = body.key?.trim().toUpperCase() || appKey(body.name, taken)
     if (taken.includes(key)) return c.json({ error: `the key ${key} is taken in this workspace` }, 400)
-    const [row] = await db.insert(appTable).values({ id: newId('app'), workspaceId: body.workspaceId, name: body.name, key, defaultBranch: body.defaultBranch ?? 'main', setup: body.setup ?? {} }).returning()
+    const row = await db.transaction(async (tx) => { // with its default workflow: an app always has one
+      const [made] = await tx.insert(appTable).values({ id: newId('app'), workspaceId: body.workspaceId, name: body.name, key, defaultBranch: body.defaultBranch ?? 'main', setup: body.setup ?? {} }).returning()
+      return { ...made, workflowId: await createDefaultWorkflow(tx, made.id) }
+    })
     return c.json(row, 201)
   })
   api.get('/apps/:id/storybook', async (c) => { try { return c.json(await storybookStatus(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })

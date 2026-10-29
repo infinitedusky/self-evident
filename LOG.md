@@ -1507,3 +1507,13 @@ file run together and only true overlaps re-run.
 - **Found on the way: one event stream per address.** Each view used to open its own stream. Over HTTP/1.1 Chrome
   allows six connections per host, so a workspace with a second task tab open ran out, and the next page hung on
   Loading (likely the spinning seen earlier). Views now share one connection per address (`openEvents`).
+
+## A task always has a workflow (Sandy, 2026-10-29: "it's either the default … or it's one of them. But it can't be nothing")
+
+- **Every app has a default workflow.** A new app gets one called "Default": the idea, research, mockups, the
+  prototype and the brief, in any order, with only the brief required. The app's default can be changed but never
+  cleared, and the "None" option is gone from Settings and the new-task picker.
+- **A task follows its own workflow, or else its project's, or else the app's default.** Its nav names it, e.g.
+  "Workflow: Default, the app's default".
+- **Existing apps (migration 0006):** an app with workflows but no default took its oldest one (Homework Gate:
+  "Main"); an app with none got "Default".

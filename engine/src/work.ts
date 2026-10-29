@@ -12,7 +12,7 @@ import { app, idea, issue, project, prototype, stepWork, workflow } from './db/s
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { getIssue, insertIssues, PlanError } from './issues.js'
-import { blocking, CAN, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
+import { blocking, CAN, DEFAULT_NAME, DEFAULT_STEPS, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
 
 export type Subject = { ideaId: string } | { issueId: string } | { projectId: string }
 const onOf = (s: Subject): On => ('ideaId' in s ? 'idea' : 'issueId' in s ? 'task' : 'project')
@@ -62,7 +62,18 @@ export async function saveWorkflow(input: { id?: string; appId: string; name: st
   })
 }
 
-/** Attach a workflow to the app (its default), a project or a task; null takes it off, so it inherits again. */
+/** Makes an app's default workflow, "Default", with the app: an app always has one. */
+export async function createDefaultWorkflow(tx: Tx, appId: string) {
+  const id = newId('workflow')
+  await tx.insert(workflow).values({ id, appId, name: DEFAULT_NAME, steps: DEFAULT_STEPS, ordered: false })
+  await tx.update(app).set({ workflowId: id }).where(eq(app.id, appId))
+  return id
+}
+
+/**
+ * Attach a workflow to the app (its default), a project or a task; null takes it off a project or task, so it
+ * inherits again. The app's default can be changed but never taken off.
+ */
 export async function useWorkflow(target: { appId: string } | { projectId: string } | { issueId: string }, workflowId: string | null, actor = 'user') {
   return db.transaction(async (tx) => {
     const appId = 'appId' in target ? target.appId
@@ -70,6 +81,7 @@ export async function useWorkflow(target: { appId: string } | { projectId: strin
       : (await tx.select().from(issue).where(eq(issue.id, target.issueId)))[0]?.appId
     if (!appId) throw new PlanError('no such app, project or task')
     const a = await appOf(tx, appId)
+    if ('appId' in target && !workflowId) throw new PlanError('an app always has a default workflow: choose another one instead')
     if (workflowId) {
       const [w] = await tx.select().from(workflow).where(eq(workflow.id, workflowId))
       if (!w || w.appId !== a.id) throw new PlanError(`no workflow ${workflowId} in this app`)

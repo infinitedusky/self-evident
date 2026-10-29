@@ -5,7 +5,7 @@ import { approvedTaskStepsView, quickWorkflow, taskStepsView } from '../stories/
 
 // A task's nav, from made-up step states under the sample workflows.
 const meta = { title: 'Components/TaskNav', component: TaskNav,
-  args: { base: '/tasks/iss_sample20', here: 'overview', rows: rows('task', taskStepsView.states, taskStepsView.resolved.workflow), build: { done: 0, total: 0, waitingOn: 'the brief\'s approval' } },
+  args: { base: '/tasks/iss_sample20', here: 'overview', rows: rows('task', taskStepsView.states, taskStepsView.resolved.workflow), workflow: { name: 'UI change (sample)', from: ', from its project' }, build: { done: 0, total: 0, waitingOn: 'the brief\'s approval' } },
   render: (a) => <div style={{ width: 240 }}><TaskNav {...a} /></div> } satisfies Meta<typeof TaskNav>
 export default meta
 type Story = StoryObj<typeof meta>

@@ -487,6 +487,7 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .task-nav-mark.ok { color: var(--ok); }
 .task-nav-req { color: var(--warn); font-weight: 700; }
 .task-nav-after { display: block; margin-left: 22px; font-size: 12px; }
+.task-nav-workflow { margin: -2px 10px 6px; font-size: 12px; }
 .task-nav-label { margin: 14px 10px 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .task-main > .panel:first-child { margin-top: 0; }
 .step-status { margin: 0 0 10px; }
