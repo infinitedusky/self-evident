@@ -2,13 +2,16 @@
  * The steps you can do to an idea, a task or a project, and the workflows that shape them (LOG.md, 2026-10-29,
  * "Workflows"). The steps are one list; a workflow switches each on or off, makes it required or optional, and can
  * enforce its order, after Jira's workflows, kept to these few settings. A task uses its own workflow, or else its
- * project's, or else the app's; with none, every step is optional and the order is free.
+ * project's, or else the app's; with none, every step but the brief is optional and the order is free.
+ * Fixed in every workflow (LOG.md): the brief is always required; "starts as an idea" comes first, optional or
+ * required; research comes before the brief; only mockups and the prototype can go before or after it.
  */
 
-export type StepKey = 'research' | 'brief' | 'mockup' | 'prototype'
+export type StepKey = 'idea' | 'research' | 'brief' | 'mockup' | 'prototype'
 export type On = 'idea' | 'task' | 'project'
 
 export const STEPS: { key: StepKey; label: string; icon: string; what: string }[] = [
+  { key: 'idea', label: 'Starts as an idea', icon: '💡', what: 'Explored as an idea first, then converted.' },
   { key: 'research', label: 'Research', icon: '🔎', what: 'Who does this best, what exists already, our numbers, the case against.' },
   { key: 'brief', label: 'Brief', icon: '📝', what: 'What to build, for the builder. A task completes only once it is approved.' },
   { key: 'mockup', label: 'Mockups', icon: '🎨', what: 'How it looks: stories with made-up data, variants side by side.' },
@@ -19,12 +22,27 @@ export const step = (key: StepKey) => STEPS.find((s) => s.key === key)!
 /** Where each step can be done. An idea has a rough draft, not a brief; a project holds tasks and has no brief. */
 export const CAN: Record<On, StepKey[]> = {
   idea: ['research', 'brief', 'mockup', 'prototype'],
-  task: ['research', 'brief', 'mockup', 'prototype'],
-  project: ['research', 'mockup', 'prototype'],
+  task: ['idea', 'research', 'brief', 'mockup', 'prototype'],
+  project: ['idea', 'research', 'mockup', 'prototype'],
 }
 export const label = (key: StepKey, on: On) => (key === 'brief' && on === 'idea' ? 'Rough draft' : step(key).label)
 
 export interface WorkflowStep { key: StepKey; on: boolean; required: boolean }
+
+/** What a workflow may not change: the brief is on and required, the idea is first, research is before the brief. */
+export const FIXED = { brief: 'Always required', idea: 'Always first', research: 'Before the brief' }
+export const canTurnOff = (key: StepKey) => key !== 'brief'
+export const canMakeOptional = (key: StepKey) => key !== 'brief'
+
+/** Whether steps in this order keep the fixed rules. */
+export function validOrder(steps: { key: StepKey }[]): boolean {
+  const at = (k: StepKey) => steps.findIndex((s) => s.key === k)
+  if (at('idea') > 0) return false
+  return at('research') < 0 || at('brief') < 0 || at('research') < at('brief')
+}
+
+/** A workflow with the fixed rules applied: the brief switched on and required. */
+export const normalize = (w: Workflow): Workflow => ({ ...w, steps: w.steps.map((s) => (s.key === 'brief' ? { ...s, on: true, required: true } : s)) })
 export interface Workflow { id: string; name: string; steps: WorkflowStep[]; ordered: boolean } // steps in its order
 
 /** What a step on one thing has so far. */
@@ -55,8 +73,8 @@ export interface Row { key: StepKey; required: boolean; position: number | null;
 export function rows(on: On, states: StepState[], workflow: Workflow | null): Row[] {
   const can = CAN[on]
   const list: WorkflowStep[] = workflow
-    ? workflow.steps.filter((s) => s.on && can.includes(s.key))
-    : can.map((key) => ({ key, on: true, required: false }))
+    ? normalize(workflow).steps.filter((s) => s.on && can.includes(s.key))
+    : can.map((key) => ({ key, on: true, required: key === 'brief' && on === 'task' }))
   const stateOf = (key: StepKey) => states.find((s) => s.key === key) ?? { key, status: 'none' as const }
   const finished = (s: StepState) => s.status === 'done' && (s.key !== 'brief' || on !== 'task' || !!s.approved)
   return list.map((s, i) => {

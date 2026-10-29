@@ -252,13 +252,13 @@ export const prototypes: Prototype[] = [
   { id: 'proto_sample2', appId: sampleApp.id, projectId: null, title: 'Sample: gift cards', brief: null, sessionId: null, scenario: null, branch: 'prototype/sample-gift-cards-c3d4', path: '/code/sample-shop-worktrees/prototype--sample-gift-cards-c3d4', port: 51240, status: 'stopped', url: 'http://localhost:51240', createdAt: '2026-10-28T16:00:00Z' },
 ]
 
-// Workflows and steps (made up). "UI change" requires a mockup and an approved brief, in order; "Quick fix" has the brief only.
+// Workflows and steps (made up). "UI change" requires starting as an idea, a mockup and the brief, in order; "Quick fix" has the brief only.
 export const uiWorkflow: Workflow = { id: 'wf_sample_ui', name: 'UI change (sample)', ordered: true, steps: [
-  { key: 'research', on: true, required: false }, { key: 'mockup', on: true, required: true },
+  { key: 'idea', on: true, required: true }, { key: 'research', on: true, required: false }, { key: 'mockup', on: true, required: true },
   { key: 'prototype', on: true, required: false }, { key: 'brief', on: true, required: true },
 ] }
 export const quickWorkflow: Workflow = { id: 'wf_sample_quick', name: 'Quick fix (sample)', ordered: false, steps: [
-  { key: 'brief', on: true, required: true }, { key: 'research', on: false, required: false },
+  { key: 'idea', on: false, required: false }, { key: 'research', on: false, required: false }, { key: 'brief', on: true, required: true },
   { key: 'mockup', on: false, required: false }, { key: 'prototype', on: false, required: false },
 ] }
 export const ideaSteps: StepState[] = [

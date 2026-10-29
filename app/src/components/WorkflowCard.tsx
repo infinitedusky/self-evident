@@ -1,17 +1,20 @@
 /**
  * One workflow: the steps it uses, which are required, and whether their order is enforced. It reads as a short list;
  * Edit turns it into switches and arrows (no form until asked). The settings are a small subset of Jira's workflows:
- * no statuses or transitions of their own, only which steps, how strictly, in what order.
+ * no statuses or transitions of their own, only which steps, how strictly, in what order. The fixed rules (the brief
+ * always required, the idea first, research before the brief) are shown, and the arrows can't break them.
  */
 import { useState } from 'react'
 import { Badge } from './Badge'
-import { step, type Workflow, type WorkflowStep } from '../steps'
+import { FIXED, canTurnOff, normalize, step, validOrder, type Workflow, type WorkflowStep } from '../steps'
 
 export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, onSave }: { workflow: Workflow; usedBy?: string; editing?: boolean; onSave?: (w: Workflow) => void }) {
   const [editing, setEditing] = useState(startEditing)
-  const [w, setW] = useState(workflow)
+  const [w, setW] = useState(() => normalize(workflow))
   const set = (i: number, patch: Partial<WorkflowStep>) => setW({ ...w, steps: w.steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) })
-  const move = (i: number, by: number) => { const steps = [...w.steps]; const [s] = steps.splice(i, 1); steps.splice(i + by, 0, s); setW({ ...w, steps }) }
+  const moved = (i: number, by: number) => { const steps = [...w.steps]; const [s] = steps.splice(i, 1); steps.splice(i + by, 0, s); return steps }
+  const canMove = (i: number, by: number) => i + by >= 0 && i + by < w.steps.length && validOrder(moved(i, by))
+  const move = (i: number, by: number) => setW({ ...w, steps: moved(i, by) })
   const on = w.steps.filter((s) => s.on)
   return (
     <div className="panel workflow" data-component="WorkflowCard">
@@ -36,19 +39,23 @@ export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, 
             {w.steps.map((s, i) => (
               <li key={s.key} className="wf-edit-row">
                 <span className="wf-arrows">
-                  <button className="btn quiet small" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${step(s.key).label} up`}>↑</button>
-                  <button className="btn quiet small" disabled={i === w.steps.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${step(s.key).label} down`}>↓</button>
+                  <button className="btn quiet small" disabled={!canMove(i, -1)} onClick={() => move(i, -1)} aria-label={`Move ${step(s.key).label} up`}>↑</button>
+                  <button className="btn quiet small" disabled={!canMove(i, 1)} onClick={() => move(i, 1)} aria-label={`Move ${step(s.key).label} down`}>↓</button>
                 </span>
-                <span className={s.on ? '' : 'faint'}>{step(s.key).icon} {step(s.key).label}</span>
-                <label><input type="checkbox" checked={s.on} onChange={(e) => set(i, { on: e.target.checked, required: e.target.checked && s.required })} /> On</label>
-                <label className={s.on ? '' : 'faint'}><input type="checkbox" disabled={!s.on} checked={s.required} onChange={(e) => set(i, { required: e.target.checked })} /> Required</label>
+                <span className={s.on ? '' : 'faint'}>{step(s.key).icon} {step(s.key).label}{s.key in FIXED && s.key !== 'brief' && <span className="faint" style={{ fontSize: 12 }}> · {FIXED[s.key as keyof typeof FIXED].toLowerCase()}</span>}</span>
+                {canTurnOff(s.key)
+                  ? <label><input type="checkbox" checked={s.on} onChange={(e) => set(i, { on: e.target.checked, required: e.target.checked && s.required })} /> On</label>
+                  : <span />}
+                {canTurnOff(s.key)
+                  ? <label className={s.on ? '' : 'faint'}><input type="checkbox" disabled={!s.on} checked={s.required} onChange={(e) => set(i, { required: e.target.checked })} /> Required</label>
+                  : <Badge tone="warn">always required</Badge>}
               </li>
             ))}
           </ul>
           <label style={{ display: 'block', margin: '10px 0' }}><input type="checkbox" checked={w.ordered} onChange={(e) => setW({ ...w, ordered: e.target.checked })} /> Enforce this order</label>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn small" onClick={() => { onSave?.(w); setEditing(false) }}>Save</button>
-            <button className="btn quiet small" onClick={() => { setW(workflow); setEditing(false) }}>Cancel</button>
+            <button className="btn quiet small" onClick={() => { setW(normalize(workflow)); setEditing(false) }}>Cancel</button>
           </div>
         </>
       )}
