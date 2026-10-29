@@ -512,6 +512,9 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
   Without one, every step is optional and the order is free.
 - **It inherits:** a task uses its own workflow, or else its project's, or else the app's. The page says where it
   came from ("from the project").
+- **Workflows are configuration, so they live in Settings** (Sandy, same day: "it needs to be clear that this is about
+  configuring how workflows work… there shouldn't be metrics"). They're named "Workflow rules" in each app's settings.
+  Nothing runs them. Plan links to them as "Configure the rules", without counts. `/plan/workflows` now redirects there.
 - **Built** (PRs #72, then this one):
   - **Workflows:** stored per app; attached to the app (its default), a project or a task; inherited downward. The
     rules are one module, `engine/src/steps.ts`, which the app imports too.
