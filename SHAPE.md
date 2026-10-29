@@ -180,6 +180,12 @@ Details and sources in `research/`.
 
 ## Decided
 
+- **A prototype before the plan, then a build from scratch** (Sandy, 2026-10-29). Planning starts by building the
+  actual thing quickly in its own worktree: shortcuts by default, made to demo and to change in moments, and able to
+  do any kind of work, schema included. It runs on the app's real database engine, rebuilt from labelled JSON
+  scenarios, with off-the-shelf stand-ins for outside services. When it's ready, everything about it is analysed
+  into the plan, the migrations and the checks. Then the real build starts from main and is written properly; none
+  of the prototype's code is kept. Details: LOG.md, "The prototype".
 - **Built on PostHog** (Sandy, 2026-10-20). An app made with the idea factory
   is PostHog-native from its first line: every feature ships with its events,
   its feature flag, its experiment where one fits, session replay and error
