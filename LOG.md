@@ -1489,3 +1489,21 @@ claimants, the holder pointing at it, it pointing at the ones waiting, undecided
 file run together and only true overlaps re-run.
 - Lesson from writing the schedule plan by hand: don't put `api.py` in three phases of one task; one phase per
   file-heavy module, or split the module. The engine's rule was right; the plan's granularity was mine.
+
+## A task's own nav (Sandy, 2026-10-29: "the task show the steps where it is in its workflow … a home for the task … you can't go to them until you've done the ones that are required")
+
+- **A task is laid out like Settings:** its own nav down the left, after Linear's issue sidebar.
+  - **Overview** first: what it's for, what still stops it completing, the next step, and the workflow in force.
+  - **Its steps**, in the workflow's order, each marked ✓ finished, ◐ started, or ○ not started. A dot marks a
+    required step that isn't finished.
+  - **The build:** sub-tasks, and Plan.
+- **Each section has its own address** (`/tasks/:id/:section`) and its own page. A step's page says what the step is
+  for, shows what it has so far, and gives the way on: start it with the agent, ask the agent to carry on, mark it
+  done, or open what it made. The brief's page holds the brief and its approval.
+- **Locked:** with an enforced order, a step after an unfinished required one is greyed out ("after the brief's
+  approval"), and so is the build until the brief is approved. Opened by its address, a locked page says what comes
+  first and links there, so it's never a dead end.
+- **Sub-tasks and to-dos** keep the single page.
+- **Found on the way: one event stream per address.** Each view used to open its own stream. Over HTTP/1.1 Chrome
+  allows six connections per host, so a workspace with a second task tab open ran out, and the next page hung on
+  Loading (likely the spinning seen earlier). Views now share one connection per address (`openEvents`).
