@@ -493,6 +493,27 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## A task does its steps in any order; workflows can enforce one (Sandy, 2026-10-29: "you can do it whatever order you want … but you could create workflows that would enforce a specific order, the way Jira works")
+
+This replaces the fixed order in the next entry (mockup, then prototype, then project).
+- **A task is a named thing with a description.** That's all it needs to start. In the schema it is an issue, which
+  already has a title, a description for people and a brief for the builder.
+- **Its steps:** research, brief, mockup, prototype. They happen in any order, and any can be skipped. You work with
+  the agent on the task and say "do this, do that".
+- **The brief is where the steps live.** Making a mockup or a prototype creates the brief if there isn't one yet,
+  so you can start with a prototype if you want. When they exist, the brief takes in the research, the mockups and
+  the prototype.
+- **The prototype is the agent's quick attempt at the task, actually coded and working.** It skips the planning
+  process. It still uses sense about security and the rest, but doesn't go through the full process. It becomes a
+  key artifact in the real development, which starts from the brief.
+- **Workflows are optional and enforce an order.** Like Jira's workflows: a workflow can require steps, or an order,
+  for the tasks it covers. Without one, every step is optional and the order is free. Where a workflow is attached
+  (app, project or kind of task) is still open.
+- **The nav:** everything stays under Plan, but Plan doesn't list the steps. Mockups and prototypes are reached from
+  their task. Plan's pages become Projects, Issues and To-dos.
+- **In code, not built yet:** the prototype points at its task (an issue) instead of a project; mockups get attached
+  to tasks (today they are only Storybook stories); workflows are new.
+
 ## Plan is mockup, then prototype, then project; research is part of Ideate (Sandy, 2026-10-29: "prototype should be under plan … but it needs to come after mockup")
 
 The process is meant to be one thread per idea, not separate stages.
