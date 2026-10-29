@@ -107,7 +107,8 @@ is working.
    not yet. Most ideas die quietly here.
 4. **Plan the task** (2026-10-29). A yes becomes a task: a name and a
    description. Its steps (research, brief, mockup, prototype) happen in any
-   order, and any can be skipped; making a mockup or prototype creates the
+   order, and any can be skipped. They can also be done on the idea, which is
+   an ephemeral task, before anything is committed. Making a mockup or prototype creates the
    brief, which takes in whatever steps were done. The prototype is the
    agent's quick, working attempt and a key artifact for the build. A
    workflow can require steps or an order, the way Jira's do. The project is
@@ -186,7 +187,7 @@ Details and sources in `research/`.
 
 - **The loop's stages** (Sandy, 2026-10-29): Observe · Learn · Ideate (ideas and their research) · Plan
   (tasks: research, brief, mockup, prototype, in any order unless a workflow sets one) · Build (including the
-  checks a build is held to).
+  checks a build is held to). The rail lists only these stages; projects, tasks and the steps are inside them.
 - **A prototype before the plan, then a build from scratch** (Sandy, 2026-10-29). Planning starts by building the
   actual thing quickly in its own worktree: shortcuts by default, made to demo and to change in moments, and able to
   do any kind of work, schema included. It runs on the app's real database engine, rebuilt from labelled JSON
