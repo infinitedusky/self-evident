@@ -6,34 +6,48 @@
 import { useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { label, type StepKey } from '@self-evident/engine/steps'
+import { label, type On, type StepKey } from '@self-evident/engine/steps'
 import { Steps } from './Steps'
-import { API, engine, type StepSubject, type StepsView, type StepWork } from '../engine'
+import { openEvents, API, engine, type StepSubject, type StepsView, type StepWork } from '../engine'
 import { useWorkspace } from '../workspace'
 
 const LIVE = ['step.updated', 'brief.approved', 'brief.unapproved', 'workflow.used', 'workflow.saved', 'idea.converted', 'issue.updated', 'prototype.created', 'prototype.started', 'prototype.stopped', 'prototype.discarded']
 const WHAT = { ideas: 'the idea', issues: 'the task', projects: 'the project' }
 
-export function StepsPanel({ subject, appId, name, onBrief }: { subject: StepSubject; appId: string; name: string; onBrief?: () => void }) {
-  const ws = useWorkspace()
+/** The engine's steps view of one thing, kept live on the app's events. */
+export function useSteps(subject: StepSubject, appId: string) {
   const [v, setV] = useState<StepsView | null>(null)
-  const [open, setOpen] = useState<StepWork | null>(null)
   const [error, setError] = useState<string | null>(null)
   const timer = useRef<number | undefined>(undefined)
   useEffect(() => {
     let closed = false
-    const refresh = () => engine.steps(subject).then((x) => { if (!closed) setV(x) }).catch((e) => setError(String(e.message ?? e)))
+    const refresh = () => engine.steps(subject).then((x) => { if (!closed) { setV(x); setError(null) } }).catch((e) => setError(String(e.message ?? e)))
     void refresh()
-    const es = new EventSource(`${API}/events?since=-1&app=${appId}`)
+    const es = openEvents(`${API}/events?since=-1&app=${appId}`)
     const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 250) }
     for (const t of LIVE) es.addEventListener(t, bump)
     return () => { closed = true; es.close(); window.clearTimeout(timer.current) }
   }, [subject.kind, subject.id, appId]) // eslint-disable-line react-hooks/exhaustive-deps
+  return { v, error }
+}
 
+/** Hands a step to the agent, in a conversation of its own about this thing. */
+export function askStep(subject: StepSubject, appId: string, name: string, key: StepKey, on: On) {
   const ref = subject.kind === 'ideas' ? { ideaId: subject.id } : subject.kind === 'issues' ? { issueId: subject.id } : { projectId: subject.id }
-  const ask = (key: StepKey) => engine.ask({ appId, subjectRef: ref, text: key === 'prototype'
+  return engine.ask({ appId, subjectRef: ref, text: key === 'prototype'
     ? `Start a prototype for ${WHAT[subject.kind]} "${name}" (${subject.id}), as a step of it.`
-    : `Do the ${label(key, v!.on)} step for ${WHAT[subject.kind]} "${name}" (${subject.id}), and record it with set_step.` }).catch((e) => setError(String(e.message ?? e)))
+    : key === 'brief' && subject.kind === 'issues'
+    ? `Write the brief for ${WHAT[subject.kind]} "${name}" (${subject.id}) with update_task, from its steps so far.`
+    : `Do the ${label(key, on)} step for ${WHAT[subject.kind]} "${name}" (${subject.id}), and record it with set_step.` })
+}
+
+export function StepsPanel({ subject, appId, name, onBrief }: { subject: StepSubject; appId: string; name: string; onBrief?: () => void }) {
+  const ws = useWorkspace()
+  const { v, error: loadError } = useSteps(subject, appId)
+  const [open, setOpen] = useState<StepWork | null>(null)
+  const [actError, setError] = useState<string | null>(null)
+  const error = actError ?? loadError
+  const ask = (key: StepKey) => askStep(subject, appId, name, key, v!.on).catch((e) => setError(String(e.message ?? e)))
 
   const onStart = async (key: string) => {
     const k = key as StepKey

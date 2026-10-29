@@ -8,7 +8,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { DockviewReact, Orientation, SplitviewReact, type DockviewApi, type DockviewTheme, type IDockviewHeaderActionsProps, type IDockviewPanel, type IDockviewPanelProps, type SplitviewApi } from 'dockview-react'
 import 'dockview-react/dist/styles/dockview.css'
-import { API, engine } from '../engine'
+import { openEvents, API, engine } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { tabContext, tabKey, tabTitle, useWorkspace, WorkspaceContext, type OpenTab, type Split, type Tab, type WorkspaceApi } from '../workspace'
 import { AppPicker } from './AppPicker'
@@ -183,7 +183,7 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
 
   useEffect(() => { // the agent opens tabs
     if (!app) return
-    const es = new EventSource(`${API}/events?since=now&app=${app.id}`)
+    const es = openEvents(`${API}/events?since=now&app=${app.id}`)
     es.addEventListener('ui.open', ((ev: MessageEvent) => {
       const p = (JSON.parse(ev.data) as { payload?: { tab?: Tab; split?: Split | null } }).payload
       if (p?.tab) add(p.tab, { split: p.split ?? undefined })

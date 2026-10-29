@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge } from '../components/Badge'
-import { API, engine, type FocusLine, type FocusRef, type SummaryState } from '../engine'
+import { openEvents, API, engine, type FocusLine, type FocusRef, type SummaryState } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const ago = (iso: string) => {
@@ -47,7 +47,7 @@ export function Summary() {
     let closed = false
     const refresh = () => engine.summary(app.id).then((d) => { if (!closed) { setData(d); setError(null) } }).catch((e) => setError(String(e.message ?? e)))
     void refresh()
-    const es = new EventSource(`${API}/events?since=-1&app=${app.id}`)
+    const es = openEvents(`${API}/events?since=-1&app=${app.id}`)
     es.addEventListener('summary.writing', () => void refresh())
     es.addEventListener('summary.written', () => void refresh())
     es.addEventListener('summary.failed', (ev) => { setError(String(JSON.parse((ev as MessageEvent).data).payload?.error ?? 'writing failed')); void refresh() })

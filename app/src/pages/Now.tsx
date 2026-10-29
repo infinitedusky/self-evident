@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge, type Tone } from '../components/Badge'
-import { API, engine, EVENT_TYPES, useIdeaFirst, type Attention, type Event, type Now as NowData, type RunningProject } from '../engine'
+import { openEvents, API, engine, EVENT_TYPES, useIdeaFirst, type Attention, type Event, type Now as NowData, type RunningProject } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { describeEvent } from '../describe-event'
 
@@ -25,7 +25,7 @@ export function Now() {
     let closed = false
     const refresh = () => engine.now(app.id).then((d) => { if (!closed) { setData(d); setError(null) } }).catch((e) => setError(String(e.message ?? e)))
     void refresh()
-    const es = new EventSource(`${API}/events?since=-1&app=${app.id}`)
+    const es = openEvents(`${API}/events?since=-1&app=${app.id}`)
     const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 250) }
     for (const type of EVENT_TYPES) if (!type.startsWith('run.tool') && type !== 'run.message') es.addEventListener(type, bump)
     es.onerror = () => setError('event stream disconnected; retrying')

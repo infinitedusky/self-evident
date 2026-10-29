@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Badge } from './Badge'
-import { API, engine, type Prototype } from '../engine'
+import { openEvents, API, engine, type Prototype } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { useWorkspace } from '../workspace'
 
@@ -58,7 +58,7 @@ function OnePrototype({ id, path, onNavigate }: { id: string; path: string; onNa
   const appId = p?.appId
   useEffect(() => {
     if (!appId) return
-    const es = new EventSource(`${API}/events?since=now&app=${appId}`)
+    const es = openEvents(`${API}/events?since=now&app=${appId}`)
     const onEvent = (ev: MessageEvent) => { if ((JSON.parse(ev.data) as { payload?: { prototypeId?: string } }).payload?.prototypeId === id) void refresh() }
     for (const type of ['prototype.started', 'prototype.stopped', 'prototype.discarded']) es.addEventListener(type, onEvent as EventListener)
     return () => es.close()

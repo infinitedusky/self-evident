@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { Badge } from './Badge'
-import { API, engine, type Event, type IssueDetail } from '../engine'
+import { openEvents, API, engine, type Event, type IssueDetail } from '../engine'
 import { describeEvent } from '../describe-event'
 import { useWorkspace } from '../workspace'
 
@@ -23,7 +23,7 @@ export function BuildLog({ issueId }: { issueId: string }) {
     let closed = false
     const refresh = () => engine.issue(issueId).then((i) => { if (!closed) setIssue(i) }).catch((e) => setError(String(e.message ?? e)))
     void refresh()
-    const es = new EventSource(`${API}/events?issue=${issueId}`)
+    const es = openEvents(`${API}/events?issue=${issueId}`)
     const onAny = (ev: MessageEvent) => {
       const e = JSON.parse(ev.data) as Event
       if (SHOWN.has(e.type)) setEvents((prev) => [...prev.slice(-499), e])

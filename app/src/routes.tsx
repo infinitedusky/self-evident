@@ -53,6 +53,7 @@ export function PageRoutes() {
       <Route path="/plans/:id" element={<OldPlanLink />} />
       <Route path="/tasks" element={<Issues />} />
       <Route path="/tasks/:id" element={<IssuePage />} />
+      <Route path="/tasks/:id/:section" element={<IssuePage />} />
       <Route path="/issues" element={<Navigate to="/tasks" replace />} />
       <Route path="/issues/:id" element={<OldIssueLink />} />
       <Route path="/todos" element={<Todos />} />
