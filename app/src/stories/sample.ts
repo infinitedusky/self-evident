@@ -3,6 +3,7 @@
  * names say so; nothing here comes from a real app (the repository is public). Typed against the engine's own types,
  * so a change to the API that the stories no longer match fails the type check.
  */
+import type { StepState, Workflow } from '@self-evident/engine/steps'
 import type {
   App, AppSettings, BacklogIssue, Cycle, Decision, Event, FactorySettings, Graph, GraphIssue, GraphSubIssue, IdeaRow, Initiative, Issue,
   IssueDetail, IssueRow, Now, ProjectSummary, Prototype, Question, Run, Step, SummaryState, TalkMessage, TalkSession, Todo, Transcript, Workspace,
@@ -249,4 +250,26 @@ export const prototypeTranscript: Transcript = {
 export const prototypes: Prototype[] = [
   { id: 'proto_sample1', appId: sampleApp.id, projectId: 'proj_checkout', title: 'Sample: one-tap checkout', brief: 'Sample brief.', sessionId: 'talk_sample_proto', scenario: 'default', database: 'proto_sample_one_tap_checkout_a1b2', scenarios: ['default', 'returning-customer', 'empty-cart'], branch: 'prototype/sample-one-tap-checkout-a1b2', path: '/code/sample-shop-worktrees/prototype--sample-one-tap-checkout-a1b2', port: 51234, status: 'running', url: 'http://localhost:51234', createdAt: '2026-10-29T10:00:00Z' },
   { id: 'proto_sample2', appId: sampleApp.id, projectId: null, title: 'Sample: gift cards', brief: null, sessionId: null, scenario: null, branch: 'prototype/sample-gift-cards-c3d4', path: '/code/sample-shop-worktrees/prototype--sample-gift-cards-c3d4', port: 51240, status: 'stopped', url: 'http://localhost:51240', createdAt: '2026-10-28T16:00:00Z' },
+]
+
+// Workflows and steps (made up). "UI change" requires starting as an idea, a mockup and the brief, in order, then a
+// blast-radius check; "Quick fix" has only the brief, with research and the steps either side of it switched off.
+export const uiWorkflow: Workflow = { id: 'wf_sample_ui', name: 'UI change (sample)', ordered: true, steps: [
+  { key: 'idea', on: true, required: true }, { key: 'research', on: true, required: false },
+  { key: 'mockup', on: true, required: true }, { key: 'prototype', on: true, required: false },
+  { key: 'brief', on: true, required: true }, { key: 'risk', on: true, required: true },
+] }
+export const quickWorkflow: Workflow = { id: 'wf_sample_quick', name: 'Quick fix (sample)', ordered: false, steps: [
+  { key: 'idea', on: true, required: false }, { key: 'research', on: false, required: false },
+  { key: 'mockup', on: false, required: false }, { key: 'prototype', on: false, required: false }, { key: 'brief', on: true, required: true },
+] }
+export const ideaSteps: StepState[] = [
+  { key: 'research', status: 'done', detail: '3 comps, one case against' },
+  { key: 'mockup', status: 'started', detail: '2 variants' },
+]
+export const taskSteps: StepState[] = [
+  { key: 'research', status: 'done', detail: 'carried over from the idea' },
+  { key: 'mockup', status: 'done', detail: 'variant B chosen' },
+  { key: 'prototype', status: 'started', detail: 'running, scenario "busy store"' },
+  { key: 'brief', status: 'done', detail: 'draft, 4 sections' },
 ]

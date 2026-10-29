@@ -441,3 +441,26 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .proto-data { display: flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
 .proto-data select, .proto-data input { font-size: 12px; padding: 3px 6px; margin: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--ground); color: var(--ink); max-width: 150px; }
 @media (max-width: 1000px) { .proto-data > .faint:first-child { display: none; } }
+
+/* Steps on an idea, task or project; workflows; Plan's page */
+.steps-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.step-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface); display: flex; flex-direction: column; }
+.step-card.done { border-color: var(--ok, var(--line)); }
+.step-card.blocked { opacity: .6; }
+.step-foot { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: auto; font-size: 13px; }
+.wf-steps { margin: 4px 0 8px; padding-left: 22px; display: grid; gap: 4px; }
+.wf-steps.free { list-style: disc; }
+.wf-edit-row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 12px; align-items: center; }
+.wf-arrows { display: flex; gap: 4px; }
+.home-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.home-card { display: flex; flex-direction: column; gap: 2px; color: var(--ink); }
+.page-head .btn { white-space: nowrap; }
+.home-card:hover { border-color: var(--accent); }
+.home-n { font: 600 26px var(--display, var(--sans)); }
+.plan-task { display: grid; grid-template-columns: 52px 1fr auto auto 80px; gap: 12px; align-items: center; }
+.step-marks { display: inline-flex; gap: 2px; }
+.mark { font-size: 13px; filter: grayscale(1); opacity: .3; }
+.mark.started { filter: grayscale(.4); opacity: .7; }
+.mark.done { filter: none; opacity: 1; }
+.wf-add { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
