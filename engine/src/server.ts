@@ -33,7 +33,7 @@ import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, 
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { runner } from './runner.js'
-import { cleanValues, effectiveIntegrations, INTEGRATIONS, type Values } from './integrations.js'
+import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, statuses, type Values } from './integrations.js'
 import { CATALOGUE } from './catalogue.js'
 import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role } from './skills.js'
 
@@ -109,7 +109,7 @@ export function buildApp(bus: EventBus) {
   api.get('/settings', async (c) => {
     const [w] = await db.select().from(workspace).limit(1)
     const f = (w?.settings ?? {}) as FactorySettings & { integrations?: Values }
-    return c.json({ workspace: w ?? null, integrations: INTEGRATIONS, values: f.integrations ?? {}, plugins: describePlugins(f), catalogue: CATALOGUE })
+    return c.json({ workspace: w ?? null, integrations: INTEGRATIONS, values: f.integrations ?? {}, status: statuses(f.integrations ?? {}), plugins: describePlugins(f), catalogue: CATALOGUE })
   })
   // Plugins: installed by Claude Code's installer into the factory's own config dir (skills.ts); the switches and the
   // filing are workspace settings.
@@ -168,7 +168,26 @@ export function buildApp(bus: EventBus) {
     const f = (w?.settings ?? {}) as FactorySettings & { integrations?: Values }
     const setup = a.setup as { integrations?: Values; plugins?: AppPlugins }
     const plugins = installed().map((p) => ({ id: p.id, name: p.name, factoryOn: pluginOn(p.id, f), own: setup.plugins?.[p.id]?.on ?? null, on: pluginOn(p.id, f, setup.plugins) }))
-    return c.json({ integrations: effectiveIntegrations(f.integrations, setup.integrations), plugins, skills: r?.localPath ? appSkills(r.localPath) : [] })
+    const integrations = effectiveIntegrations(f.integrations, setup.integrations)
+    return c.json({ integrations, status: statuses(integrations), plugins, skills: r?.localPath ? appSkills(r.localPath) : [] })
+  })
+  // Tries an integration's saved connection: the workspace's values, or an app's with its overrides.
+  api.post('/integrations/:key/check', async (c) => {
+    const body = await c.req.json<{ appId?: string }>().catch(() => ({} as { appId?: string }))
+    const [w] = await db.select().from(workspace).limit(1)
+    const shared = ((w?.settings ?? {}) as { integrations?: Values }).integrations ?? {}
+    let own: Values = {}
+    if (body.appId) {
+      const [a] = await db.select().from(appTable).where(eq(appTable.id, body.appId))
+      if (!a) return c.json({ error: 'no such app' }, 404)
+      own = (a.setup as { integrations?: Values }).integrations ?? {}
+    }
+    const key = c.req.param('key')
+    const values = Object.fromEntries(Object.entries(effectiveIntegrations(shared, own)[key] ?? {}).map(([k, v]) => [k, v.value]))
+    try { return c.json(await checkIntegration(key, values)) } catch (err) {
+      if (err instanceof IntegrationError) return c.json({ error: err.message }, 400)
+      throw err
+    }
   })
   api.patch('/apps/:id', async (c) => {
     const body = await c.req.json<{ name?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
