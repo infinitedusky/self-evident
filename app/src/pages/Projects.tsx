@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge, type Tone } from '../components/Badge'
-import { engine, type ProjectSummary } from '../engine'
+import { engine, useIdeaFirst, type ProjectSummary } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const TONE: Record<string, Tone> = { running: 'accent', landed: 'ok', stopped: 'warn', drafting: 'neutral' }
@@ -19,6 +19,7 @@ const FILTERS: { key: string; label: string; match: (s: string) => boolean }[] =
 
 export function Projects({ mode }: { mode: 'project' | 'build' }) {
   const { app } = useCurrentApp()
+  const ideaFirst = useIdeaFirst(app?.id)
   const [projects, setPlans] = useState<ProjectSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => { setPlans(null); if (app) engine.projects(app.id).then(setPlans).catch((e) => setError(String(e.message ?? e))) }, [app?.id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -36,7 +37,7 @@ export function Projects({ mode }: { mode: 'project' | 'build' }) {
               : 'Each sub-issue is built by one agent in one worktree; what lands becomes the project\'s PR. The Graph shows every sub-issue of every project and what each one waits on.'}
           </p>
         </div>
-        {mode === 'project' ? <Link to="/projects/new" className="btn">New project</Link> : <Link to="/graph" className="btn quiet">Graph</Link>}
+        {mode === 'project' ? (ideaFirst ? <Link to="/ideas" className="btn" title={`The workflow "${ideaFirst}" starts everything as an idea`}>From an idea</Link> : <Link to="/projects/new" className="btn">New project</Link>) : <Link to="/graph" className="btn quiet">Graph</Link>}
       </div>
       {mode === 'project' && projects && (
         <div className="filters">

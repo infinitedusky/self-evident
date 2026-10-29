@@ -22,3 +22,5 @@ export const NewTaskRefused: Story = {
     await canvas.findByText(/starts every task as an idea/)
   },
 }
+/** The app's workflow makes everything start as an idea: no New task or New project, only From an idea. */
+export const IdeasFirst: Story = { args: { plan: { ...plan, ideaFirst: 'UI change (sample)' } } }
