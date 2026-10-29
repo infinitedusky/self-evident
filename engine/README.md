@@ -1,18 +1,22 @@
 # Self Evident engine
 
 The core is shaped like Linear (since 2026-10-27), so a connected Linear workspace can hold the plan later:
-**initiative → project → issue → sub-issue → step.** An initiative is a goal, served by projects. A project is issues
-in order, one branch and one PR (or one PR per issue, stacked). An issue is the one unit of work, named by the app's
-key and a number (HG-12): **code**, planned into sub-issues and built, or a **to-do**, work outside the code with its
-checklist as sub-issues. A code sub-issue is the atomic unit the engine builds: one agent, one worktree, one commit,
-declaring its files and what it depends on (blocks relations); its **build** holds the engine's status, attempts and
-worktree. The planner writes sub-issues from an issue's brief (a person may write them too). Steps are the builder's
-own todo list while it builds, captured live. A **cycle** is a stretch of time with the issues meant for it.
+**initiative → project → task → sub-task → step.** What Linear calls an issue we call a **task** (and a sub-issue a
+sub-task): people and the agent see tasks; connecting Linear maps tasks to Linear issues and sub-tasks to sub-issues.
+The code, the tables, the ids (`iss_…`) and the API routes (`/api/issues`) keep Linear's word.
 
-The engine builds every sub-issue whose dependencies are done, in parallel across all running projects; issue order
-is an implicit dependency; sub-issues that share a file take turns. Issue states are Linear's (Backlog, Todo, In
-progress, In review, Done, Canceled, Duplicate); a code issue's state follows its sub-issues, and its PR merging makes
-it Done. An issue in a project's Backlog is something the project must cover before it lands.
+An initiative is a goal, served by projects. A project is tasks in order, one branch and one PR (or one PR per task,
+stacked). A task is the one unit of work, named by the app's key and a number (HG-12): **code**, planned into
+sub-tasks and built, or a **to-do**, work outside the code with its checklist as sub-tasks. A code sub-task is the
+atomic unit the engine builds: one agent, one worktree, one commit, declaring its files and what it depends on (blocks
+relations); its **build** holds the engine's status, attempts and worktree. The planner writes sub-tasks from a
+task's brief (a person may write them too). Steps are the builder's own todo list while it builds, captured live. A
+**cycle** is a stretch of time with the tasks meant for it.
+
+The engine builds every sub-task whose dependencies are done, in parallel across all running projects; task order is
+an implicit dependency; sub-tasks that share a file take turns. Task states are Linear's (Backlog, Todo, In progress,
+In review, Done, Canceled, Duplicate); a code task's state follows its sub-tasks, and its PR merging makes it Done. A
+task in a project's Backlog is something the project must cover before it lands.
 
 Founding rule (SHAPE.md): **git holds code, Postgres holds state, this server is the single writer.** The CLI, the
 UI and Claude Code over MCP are clients; agents report events, they never write status.

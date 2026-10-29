@@ -34,7 +34,7 @@ describe.skipIf(!reachable)('mcp', () => {
 
     const list = await (await handleMcp(appId, rpc(2, 'tools/list'), 4000)).json()
     const tools = list.result.tools as { name: string; annotations?: { readOnlyHint?: boolean } }[]
-    expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(['now', 'todos', 'create_todo', 'check_item', 'plan_issue', 'start_project']))
+    expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(['now', 'todos', 'create_todo', 'check_item', 'plan_task', 'start_project']))
     expect(tools.find((t) => t.name === 'now')?.annotations?.readOnlyHint).toBe(true)
     expect(tools.find((t) => t.name === 'start_project')?.annotations?.readOnlyHint).toBe(false)
 

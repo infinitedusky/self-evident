@@ -23,9 +23,9 @@ export async function describeProject(projectId: string, opts: { model?: string 
   const items = rows.map((t) => ({ id: t.id, title: t.title, brief: t.brief ?? '' }))
   if (!items.length) return { described: 0 }
   const prompt = [
-    `These are issues and sub-issues of the project "${p.name}" for the app ${a.name}${p.content ? ` (why: ${p.content})` : ''}. Each has a title and a brief written for the engineer who builds it.`,
+    `These are tasks and sub-tasks of the project "${p.name}" for the app ${a.name}${p.content ? ` (why: ${p.content})` : ''}. Each has a title and a brief written for the engineer who builds it.`,
     'For each, write a description for the person who asked for it, who may never read the code: one to three short sentences saying what will be different for the people using the app, and why it matters.',
-    'No file names, functions, tables, columns, routes, libraries or environment variables. Plain words that read aloud. Do not start with "This issue" or "This sub-issue".',
+    'No file names, functions, tables, columns, routes, libraries or environment variables. Plain words that read aloud. Do not start with "This task" or "This sub-task".',
     'Return every id given, each with its description.',
     '',
     JSON.stringify(items.map((i) => ({ id: i.id, title: i.title, brief: i.brief.slice(0, 4000) })), null, 1),

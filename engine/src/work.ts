@@ -184,7 +184,7 @@ async function guardOrder(tx: Tx | typeof db, s: Subject, key: StepKey) {
 export async function approveBrief(issueId: string, by: string, approve = true) {
   return db.transaction(async (tx) => {
     const i = await getIssue(tx, issueId)
-    if (i.parentId || i.kind !== 'code') throw new PlanError('only a task (a top-level code issue) has a brief to approve')
+    if (i.parentId || i.kind !== 'code') throw new PlanError('only a top-level code task has a brief to approve')
     if (approve && !i.brief?.trim()) throw new PlanError('write the brief before approving it')
     if (approve) await guardOrder(tx, { issueId }, 'brief')
     const [row] = await tx.update(issue).set({ briefApprovedBy: approve ? by : null, briefApprovedAt: approve ? new Date() : null, updatedAt: new Date() }).where(eq(issue.id, issueId)).returning()

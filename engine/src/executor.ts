@@ -38,24 +38,24 @@ export type Execute = (i: RunInput) => Promise<RunOutput>
 const clip = (s: unknown, n = 400) => { const t = typeof s === 'string' ? s : JSON.stringify(s); return t && t.length > n ? t.slice(0, n) + '…' : t }
 
 function prompt(i: RunInput): string {
-  const files = i.files.length ? i.files.map((f) => `  - ${f}`).join('\n') : '  (none declared: keep the change as small as the sub-issue allows)'
+  const files = i.files.length ? i.files.map((f) => `  - ${f}`).join('\n') : '  (none declared: keep the change as small as the sub-task allows)'
   return [
     `You are building ${i.subIssue.identifier}: ${i.subIssue.title}`,
-    `It is a sub-issue of ${i.issue.identifier}: ${i.issue.title}`,
+    `It is a sub-task of ${i.issue.identifier}: ${i.issue.title}`,
     '',
     i.subIssue.brief ?? '',
-    i.issue.brief ? `\nThe issue's brief, for context:\n${i.issue.brief}` : '',
+    i.issue.brief ? `\nThe task's brief, for context:\n${i.issue.brief}` : '',
     '',
     'How to work:',
     `- Work only inside this directory. It is a git worktree on branch ${i.branch}. Do not change branches, do not push, do not open pull requests.`,
     '- These paths are yours to change:', files,
-    '  Touch other files only if the sub-issue cannot be done without it, and say so in your summary.',
+    '  Touch other files only if the sub-task cannot be done without it, and say so in your summary.',
     i.storybook ? '- Stories lead the UI: this app keeps a Storybook. Every new or changed page, component and state gets its story first, with made-up sample data labelled as such, and the screen is built to match it. A screen without a story is not done.' : '',
-    '- Keep your todo list current as you work; it is shown live to the people watching this sub-issue.',
+    '- Keep your todo list current as you work; it is shown live to the people watching this sub-task.',
     i.testCmd ? `- Run the tests with: ${i.testCmd}\n  They must pass before you finish. Add or adjust tests for what you change.` : '- There is no test command configured; verify your change by running it.',
     '- Commit your work with a clear message when it is done (git add -A && git commit). Leave nothing uncommitted.',
     '- Finish with a short summary for the reviewer: what changed, why, how you verified it, and anything you were unsure of.',
-    '- If you noticed something this sub-issue should not do but someone should (a bug nearby, a follow-up, a missing test elsewhere), end the summary with a line `Later:` and one `- ` line for each. They go on the project\'s backlog so nothing is forgotten. Leave it out if there is nothing.',
+    '- If you noticed something this sub-task should not do but someone should (a bug nearby, a follow-up, a missing test elsewhere), end the summary with a line `Later:` and one `- ` line for each. They go on the project\'s backlog so nothing is forgotten. Leave it out if there is nothing.',
     i.previousFailure ? `\nYour previous attempt did not land. The reason:\n${i.previousFailure}\nFix that first.` : '',
     i.resumeSessionId ? '\nThe engine restarted while you were working; your earlier conversation is resumed. Check the worktree state (git status, git log) before continuing.' : '',
   ].join('\n')

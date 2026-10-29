@@ -26,7 +26,7 @@ async function openProject(tx: Tx | typeof db, projectId: string) {
 async function backlogIssue(tx: Tx, issueId: string) {
   const i = await getIssue(tx, issueId)
   if (!i.projectId || i.parentId) throw new PlanError('that is not in a project\'s backlog')
-  if (!['backlog', 'triage'].includes(i.state)) throw new PlanError(`that issue is ${i.state}, not in the backlog`)
+  if (!['backlog', 'triage'].includes(i.state)) throw new PlanError(`that task is ${i.state}, not in the backlog`)
   await openProject(tx, i.projectId)
   return i
 }
@@ -83,7 +83,7 @@ export async function markDuplicate(issueId: string, ofIssueId: string, reason?:
   return db.transaction(async (tx) => {
     const i = await backlogIssue(tx, issueId)
     const of = await getIssue(tx, ofIssueId)
-    if (of.projectId !== i.projectId || of.parentId) throw new PlanError('the issue that covers it must be in the same project')
+    if (of.projectId !== i.projectId || of.parentId) throw new PlanError('the task that covers it must be in the same project')
     await relate(tx, i.appId, ofIssueId, issueId, 'duplicate')
     const [a] = await tx.select().from(app).where(eq(app.id, i.appId))
     return setState(tx, i, 'duplicate', { actor, reason: reason?.trim() || `covered by ${identifier(a.key, of.number)} ${of.title}` })
@@ -101,7 +101,7 @@ export async function reopenItem(issueId: string, actor = 'user') {
   return db.transaction(async (tx) => {
     const i = await getIssue(tx, issueId)
     if (i.state === 'backlog') return i
-    if (!['duplicate', 'canceled'].includes(i.state) || i.startedAt) throw new PlanError('only a backlog issue that was dropped or covered goes back')
+    if (!['duplicate', 'canceled'].includes(i.state) || i.startedAt) throw new PlanError('only a backlog item that was dropped or covered goes back')
     if (i.state === 'duplicate') {
       await tx.delete(issueRelation).where(and(eq(issueRelation.relatedIssueId, issueId), eq(issueRelation.type, 'duplicate')))
       const [a] = await tx.select().from(app).where(eq(app.id, i.appId))

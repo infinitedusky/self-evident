@@ -186,7 +186,7 @@ export async function reopenTodo(todoId: string, actor = 'user') {
 export async function itemToTodo(issueId: string, input: { title?: string; checklist?: NewChecklistItem[]; owner?: TodoOwner } = {}, actor = 'user') {
   await db.transaction(async (tx) => {
     const i = await getIssue(tx, issueId)
-    if (i.state !== 'backlog' || !i.projectId) throw new PlanError(`that issue is ${i.state}, not in a project's backlog`)
+    if (i.state !== 'backlog' || !i.projectId) throw new PlanError(`that task is ${i.state}, not in a project's backlog`)
     const [p] = await tx.select().from(project).where(eq(project.id, i.projectId))
     if (['landed', 'stopped', 'superseded'].includes(p.status)) throw new PlanError(`project is ${p.status}; its backlog is closed`)
     await tx.update(issue).set({ kind: 'todo', title: input.title?.trim() || i.title, delegate: input.owner === 'agent' ? 'agent' : null, updatedAt: new Date() }).where(eq(issue.id, issueId))

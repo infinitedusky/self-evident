@@ -45,9 +45,9 @@ export function prBody(project: { name: string; content?: string | null; id: str
     backlog.some((b) => b.state === 'backlog') ? `\n## Backlog still open\n${backlog.filter((b) => b.state === 'backlog').map((b) => `- ${b.title}`).join('\n')}` : '',
     backlog.some((b) => b.state === 'canceled') ? `\n## Left out on purpose\n${backlog.filter((b) => b.state === 'canceled').map((b) => `- ${b.title}: ${b.reason}`).join('\n')}` : '',
     '',
-    'Each sub-issue was built in its own worktree, was merged with this branch, tested on the merged commit, and fast-forwarded here, one at a time.',
+    'Each sub-task was built in its own worktree, was merged with this branch, tested on the merged commit, and fast-forwarded here, one at a time.',
     '',
-    'Rollback project: revert this PR. Off switch, guard metric and schema impact per issue come in a later step.',
+    'Rollback project: revert this PR. Off switch, guard metric and schema impact per task come in a later step.',
     '',
     '🤖 Generated with [Claude Code](https://claude.com/claude-code) via Self Evident',
   ]
