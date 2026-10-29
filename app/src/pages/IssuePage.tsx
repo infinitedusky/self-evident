@@ -19,6 +19,9 @@ import { label, type StepKey } from '@self-evident/engine/steps'
 import { STATUS_TONE } from '../components/PlanGraphView'
 import { openEvents, type Events, API, engine, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState } from '../engine'
 
+/** Where a task's workflow comes from, after its name. */
+const FROM = { task: ', its own', project: ', from its project', app: ', the app\'s default' }
+
 export const STATE_TONE: Record<IssueState, Tone> = { triage: 'neutral', backlog: 'neutral', todo: 'neutral', in_progress: 'accent', in_review: 'accent', done: 'ok', canceled: 'neutral', duplicate: 'neutral' }
 
 export function IssuePage() {
@@ -102,7 +105,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   const wf = v.resolved.workflow
   return (
     <div className="task-layout">
-      <TaskNav base={base} here={here} rows={rows} build={{ done, total: i.subIssues.length, waitingOn: buildWaits }} />
+      <TaskNav base={base} here={here} rows={rows} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: i.subIssues.length, waitingOn: buildWaits }} />
       <div className="task-main">
         {here === 'overview' && (
           <>
@@ -116,7 +119,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
               </p>
               {next && <p style={{ margin: '0 0 8px' }}>Next: <Link to={`${base}/${next.key}`}>{label(next.key, 'task')}</Link>{next.required ? '' : ' (optional)'}.</p>}
               <p className="faint" style={{ margin: 0, fontSize: 13 }}>
-                {wf ? <>Workflow <b>{wf.name}</b>{v.resolved.from === 'project' ? ', from its project' : v.resolved.from === 'app' ? ', the app\'s' : ''}{wf.ordered ? ', in order' : ''}. </> : 'No workflow: any step, any order; only the brief is required. '}
+                {wf && <>Workflow <b>{wf.name}</b>{FROM[v.resolved.from!]}{wf.ordered ? ', in order' : ''}. </>}
                 <Link to={`/settings/apps/${i.appId}/workflows`}>Configure the rules</Link>
               </p>
             </section>

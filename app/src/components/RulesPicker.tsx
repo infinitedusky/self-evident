@@ -24,7 +24,7 @@ export function RulesPicker({ workflows, defaultId, value, onChange }: { workflo
   return (
     <label className="rules-picker" data-component="RulesPicker">Workflow rules
       <select value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="" disabled={needsIdea(def)}>{def ? `The app's default: ${def.name}` : 'None: any step, any order; only the brief is required'}{needsIdea(def) ? ' (starts as an idea)' : ''}</option>
+        <option value="" disabled={needsIdea(def)}>{`The app's default${def ? `: ${def.name}` : ''}`}{needsIdea(def) ? ' (starts as an idea)' : ''}</option>
         {workflows.filter((w) => w.id !== defaultId).map((w) => <option key={w.id} value={w.id} disabled={needsIdea(w)}>{w.name}{needsIdea(w) ? ' (starts as an idea)' : ''}</option>)}
       </select>
     </label>

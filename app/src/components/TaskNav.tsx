@@ -17,8 +17,10 @@ export function after(r: Row, rows: Row[], on: On) {
 /** ✓ finished, ◐ started (or a brief waiting for approval), ○ not started. */
 export const mark = (r: Row, on: On) => (finished(r.state, on) ? '✓' : r.state.status === 'none' ? '○' : '◐')
 
-export function TaskNav({ base, here, on = 'task', rows, build }: {
+export function TaskNav({ base, here, on = 'task', rows, workflow, build }: {
   base: string; here: string; on?: On; rows: Row[]
+  /** The workflow in force and where it comes from (", the app's default"); its steps are the list. */
+  workflow?: { name: string; from: string } | null
   /** The build: how many sub-tasks are done, and what it waits on, if anything. */
   build: { done: number; total: number; waitingOn: string | null }
 }) {
@@ -30,6 +32,7 @@ export function TaskNav({ base, here, on = 'task', rows, build }: {
     <nav className="task-nav" aria-label="This task" data-component="TaskNav">
       {item('overview', base, <span className="task-nav-row"><span className="task-nav-mark">⌂</span>Overview</span>, null)}
       <div className="task-nav-label faint">Steps</div>
+      {workflow && <div className="task-nav-workflow faint" title={`The workflow this task follows${workflow.from}`}>Workflow: <b>{workflow.name}</b>{workflow.from}</div>}
       {rows.map((r) => item(r.key, `${base}/${r.key}`,
         <span className="task-nav-row">
           <span className={`task-nav-mark ${finished(r.state, on) ? 'ok' : ''}`}>{mark(r, on)}</span>

@@ -7,7 +7,7 @@
 import { Badge } from './Badge'
 import { label, rows, step, type On, type Resolved, type StepState } from '@self-evident/engine/steps'
 
-const FROM = { task: 'this task\'s own', project: 'from its project', app: 'the app\'s' }
+const FROM = { task: 'this task\'s own', project: 'from its project', app: 'the app\'s default' }
 
 /** `fromIdea` is the idea a task or project was converted from, if any; it fills the "starts as an idea" step. */
 export function Steps({ on, states, resolved, fromIdea, onStart }: { on: On; states: StepState[]; resolved: Resolved; fromIdea?: string | null; onStart?: (key: string) => void }) {
@@ -19,7 +19,7 @@ export function Steps({ on, states, resolved, fromIdea, onStart }: { on: On; sta
       <div className="steps-head">
         <h2>Steps</h2>
         <span className="faint" style={{ fontSize: 13 }}>
-          {wf ? <>Workflow <b>{wf.name}</b> · {FROM[resolved.from!]}{wf.ordered ? ' · in order' : ''}</> : 'No workflow: any step, any order; only the brief is required.'}
+          {wf && <>Workflow <b>{wf.name}</b> · {FROM[resolved.from!]}{wf.ordered ? ' · in order' : ''}</>}
         </span>
       </div>
       <div className="step-cards">
