@@ -8,6 +8,7 @@ import { Link } from 'react-router'
 import { Badge, type Tone } from '../components/Badge'
 import { API, engine, EVENT_TYPES, type Attention, type Event, type Now as NowData, type RunningProject } from '../engine'
 import { useCurrentApp } from '../current-app'
+import { describeEvent } from '../describe-event'
 
 const COST_TONE: Record<string, Tone> = { cheap: 'neutral', moderate: 'warn', expensive: 'bad' }
 
@@ -157,29 +158,10 @@ function Recent({ events }: { events: Event[] }) {
           <span className="mono faint">{e.ts.slice(5, 16).replace('T', ' ')}</span>
           <span className="mono">{e.projectId ? <Link to={`/projects/${e.projectId}`}>project</Link> : ''}</span>
           <span className="mono">{e.type}</span>
-          <span className="muted">{describe(e)}</span>
+          <span className="muted">{describeEvent(e)}</span>
         </li>
       ))}
     </ul>
   )
 }
 
-function describe(e: Event): string {
-  const p = e.payload as any
-  switch (e.type) {
-    case 'project.created': return `${p.name ?? p.title} · ${p.issues ?? p.tasks} issue(s)`
-    case 'issue.created': return `${p.identifier ?? `#${p.number}`} ${p.title}`
-    case 'issue.state': return `${p.identifier ?? ''} ${p.title ?? ''}: ${p.from} → ${p.to}${p.reason ? ` (${p.reason})` : ''}`
-    case 'build.status': return `${p.identifier ?? ''} ${p.from} → ${p.to}`
-    case 'build.held': return p.reason
-    case 'issue.planning': return `planning ${p.identifier ?? `#${p.number}`}`
-    case 'issue.planned': return `${(p.subIssues ?? p.phases ?? []).length} sub-issues · ${p.decisions} decisions · ${p.questions} questions`
-    case 'issue.plan_failed': return String(p.error).slice(0, 120)
-    case 'question.asked': return `[${p.cost}] ${p.text}`
-    case 'question.answered': return String(p.answer)
-    case 'run.result': return `${p.subtype} · $${Number(p.costUsd ?? 0).toFixed(2)}`
-    case 'land.landed': return `landed ${String(p.sha).slice(0, 7)}`
-    case 'pr.opened': case 'pr.updated': return `#${p.number}`
-    default: return Object.keys(p).length ? JSON.stringify(p).slice(0, 100) : ''
-  }
-}

@@ -148,6 +148,22 @@ export const events: Event[] = [
   { seq: 2, ts: at(31), type: 'run.started', actor: 'engine', issueId: 'iss_sample5', projectId: 'proj_checkout', payload: { identifier: 'SS-5' } },
   { seq: 3, ts: at(33), type: 'question.asked', actor: 'planner', issueId: 'iss_sample2', projectId: 'proj_checkout', payload: { text: questions[0].text, cost: 'moderate' } },
 ]
+/** A build as it happens: SS-5's builder at work, for the build log. */
+const b = (seq: number, minutes: number, type: string, payload: Record<string, unknown>): Event => ({ seq, ts: at(minutes), type, actor: 'agent:run_sample', issueId: 'iss_sample5', projectId: 'proj_checkout', payload })
+export const buildEvents: Event[] = [
+  b(101, 31, 'build.status', { identifier: 'SS-5', from: 'ready', to: 'running' }),
+  b(102, 31, 'run.started', { model: 'claude-opus-5-5' }),
+  b(103, 32, 'run.message', { text: 'Reading the checkout form first, then the card error handling. (Sample.)' }),
+  b(104, 32, 'run.tool_call', { tool: 'Read', input: { file: 'web/checkout/form.tsx' } }),
+  b(105, 32, 'run.tool_result', { ok: true, preview: 'export function CheckoutForm() { … } // sample' }),
+  b(106, 33, 'run.tool_call', { tool: 'Grep', input: { pattern: 'card_declined' } }),
+  b(107, 33, 'run.tool_result', { ok: true, preview: 'web/checkout/submit.ts:41' }),
+  b(108, 35, 'run.tool_call', { tool: 'Edit', input: { file: 'web/checkout/submit.ts' } }),
+  b(109, 36, 'run.tool_call', { tool: 'Bash', input: { command: 'pnpm test web/checkout' } }),
+  b(110, 37, 'run.tool_result', { ok: false, preview: '1 failing: shows the decline reason (sample)' }),
+  b(111, 38, 'run.message', { text: 'One test fails: the message is shown above the form, not in place. Fixing that. (Sample.)' }),
+]
+
 const where = { projectId: 'proj_checkout', projectName: 'One-page checkout (sample)', appName: sampleApp.name }
 export const now: Now = {
   hold: null,

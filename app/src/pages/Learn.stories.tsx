@@ -1,10 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Shell } from '../components/Shell'
 import { Learn } from './Learn'
 import { withEngine } from '../stories/mock-engine'
 
 // Where learnings will land; nothing reads telemetry back yet.
-const meta = { title: 'Pages/Learn', component: Learn, parameters: { layout: 'fullscreen' }, render: () => <Shell><Learn /></Shell> } satisfies Meta<typeof Learn>
+const meta = { title: 'Pages/Learn', component: Learn, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><Learn /></div> } satisfies Meta<typeof Learn>
 export default meta
 type Story = StoryObj<typeof meta>
 

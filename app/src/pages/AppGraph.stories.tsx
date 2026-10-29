@@ -1,11 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Shell } from '../components/Shell'
 import { AppGraph } from './AppGraph'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
 import { graph } from '../stories/sample'
 
 // Every sub-issue of every project in the sample app, on one canvas.
-const meta = { title: 'Pages/AppGraph', component: AppGraph, parameters: { layout: 'fullscreen', route: { path: '/graph', url: '/graph' } }, render: () => <Shell><AppGraph /></Shell> } satisfies Meta<typeof AppGraph>
+const meta = { title: 'Pages/AppGraph', component: AppGraph, parameters: { layout: 'fullscreen', route: { path: '/graph', url: '/graph' } }, render: () => <div className="tab-page"><AppGraph /></div> } satisfies Meta<typeof AppGraph>
 export default meta
 type Story = StoryObj<typeof meta>
 

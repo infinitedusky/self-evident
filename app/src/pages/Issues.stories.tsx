@@ -1,12 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Shell } from '../components/Shell'
 import { Issues } from './Issues'
 import { engineDown, withEngine } from '../stories/mock-engine'
 import { issueRows } from '../stories/sample'
 import type { IssueRow } from '../engine'
 
 // Every code issue of the app at /issues: the ones in no project first, then by project.
-const meta = { title: 'Pages/Issues', component: Issues, parameters: { layout: 'fullscreen' }, render: () => <Shell><Issues /></Shell> } satisfies Meta<typeof Issues>
+const meta = { title: 'Pages/Issues', component: Issues, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><Issues /></div> } satisfies Meta<typeof Issues>
 export default meta
 type Story = StoryObj<typeof meta>
 

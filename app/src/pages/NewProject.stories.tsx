@@ -1,10 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Shell } from '../components/Shell'
 import { NewProject } from './NewProject'
 import { withEngine } from '../stories/mock-engine'
 
 // The composer at /projects/new: a project as issues in order, each with sub-issues written by hand if wanted.
-const meta = { title: 'Pages/NewProject', component: NewProject, parameters: { layout: 'fullscreen', route: { path: '/projects/new', url: '/projects/new' } }, render: () => <Shell><NewProject /></Shell> } satisfies Meta<typeof NewProject>
+const meta = { title: 'Pages/NewProject', component: NewProject, parameters: { layout: 'fullscreen', route: { path: '/projects/new', url: '/projects/new' } }, render: () => <div className="tab-page"><NewProject /></div> } satisfies Meta<typeof NewProject>
 export default meta
 type Story = StoryObj<typeof meta>
 

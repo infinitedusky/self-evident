@@ -326,6 +326,10 @@ function AppPage({ app, onSaved }: { app: App; onSaved: () => Promise<unknown> }
         </select></label>
       </Group>
 
+      <Group title="Preview" lead="Where this app runs while you work on it: its dev server, shown in the Preview tab.">
+        <label style={{ gridColumn: '1 / -1' }}>Address<input className="mono" value={setup.preview_url ?? ''} onChange={(e) => set({ preview_url: e.target.value })} placeholder="http://localhost:3000" /></label>
+      </Group>
+
       <Group title="Storybook" lead="Where this app's stories run.">
         <label>URL<input className="mono" value={setup.storybook_url ?? ''} onChange={(e) => set({ storybook_url: e.target.value })} placeholder="http://localhost:6006" /></label>
         <label>Command<input className="mono" value={setup.storybook_cmd ?? ''} onChange={(e) => set({ storybook_cmd: e.target.value })} placeholder="cd web && pnpm storybook --no-open" /></label>

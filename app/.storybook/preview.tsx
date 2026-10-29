@@ -10,7 +10,7 @@ import '../src/app.css'
 // The engine is faked with MSW: stories render the real pages, which fetch /api as they do in the app. A story
 // changes what the engine says with `beforeEach: withEngine({...})`; its handlers go in front of these.
 
-/** Where a story stands: a page that reads the URL says `parameters: { route: { path: '/issues/:id', url: '/issues/iss_sample5' } }`. */
+/** Where a story stands (`router: false` for a story that brings its own): a page that reads the URL says `parameters: { route: { path: '/issues/:id', url: '/issues/iss_sample5' } }`. */
 export interface RouteParam { path: string; url: string }
 
 const preview: Preview = {
@@ -31,6 +31,8 @@ const preview: Preview = {
       else root.dataset.theme = globals.theme
       try { localStorage.setItem('if.app', sampleApp.id) } catch { /* the sample app is picked anyway, as the newest */ }
       const route = parameters.route as RouteParam | undefined
+      // The workspace and a tab bring their own routers (a tab keeps its own history); they say `router: false`.
+      if (parameters.router === false) return <CurrentAppProvider><Story /></CurrentAppProvider>
       return (
         <MemoryRouter initialEntries={[route?.url ?? '/']}>
           <CurrentAppProvider>

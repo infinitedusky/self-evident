@@ -1,12 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Shell } from '../components/Shell'
 import { TodoCard, Todos } from './Todos'
 import { engineDown, withEngine } from '../stories/mock-engine'
 import { projects, todos } from '../stories/sample'
 import type { Todo } from '../engine'
 
 // The app's to-dos at /todos: the work around the code, each with a checklist.
-const meta = { title: 'Pages/Todos', component: Todos, parameters: { layout: 'fullscreen', route: { path: '/todos', url: '/todos' } }, render: () => <Shell><Todos /></Shell> } satisfies Meta<typeof Todos>
+const meta = { title: 'Pages/Todos', component: Todos, parameters: { layout: 'fullscreen', route: { path: '/todos', url: '/todos' } }, render: () => <div className="tab-page"><Todos /></div> } satisfies Meta<typeof Todos>
 export default meta
 type Story = StoryObj<typeof meta>
 

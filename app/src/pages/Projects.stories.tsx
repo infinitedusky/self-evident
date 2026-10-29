@@ -1,12 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Shell } from '../components/Shell'
 import { Projects } from './Projects'
 import { engineDown, withEngine } from '../stories/mock-engine'
 import { projects } from '../stories/sample'
 import type { ProjectSummary } from '../engine'
 
 // The project list at /projects (mode "project": every stage, filtered) and /build (mode "build": what runs and what landed).
-const meta = { title: 'Pages/Projects', component: Projects, parameters: { layout: 'fullscreen' }, args: { mode: 'project' }, render: (args) => <Shell><Projects {...args} /></Shell> } satisfies Meta<typeof Projects>
+const meta = { title: 'Pages/Projects', component: Projects, parameters: { layout: 'fullscreen' }, args: { mode: 'project' }, render: (args) => <div className="tab-page"><Projects {...args} /></div> } satisfies Meta<typeof Projects>
 export default meta
 type Story = StoryObj<typeof meta>
 

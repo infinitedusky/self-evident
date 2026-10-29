@@ -1,11 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Shell } from '../components/Shell'
 import { IssuePage } from './IssuePage'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
 import { issueDetails } from '../stories/sample'
 
 // One issue at /issues/:id, from the sample engine. Each story stands on a different issue.
-const meta = { title: 'Pages/IssuePage', component: IssuePage, parameters: { layout: 'fullscreen' }, render: () => <Shell><IssuePage /></Shell> } satisfies Meta<typeof IssuePage>
+const meta = { title: 'Pages/IssuePage', component: IssuePage, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><IssuePage /></div> } satisfies Meta<typeof IssuePage>
 export default meta
 type Story = StoryObj<typeof meta>
 const at = (id: string) => ({ route: { path: '/issues/:id', url: `/issues/${id}` } })

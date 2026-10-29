@@ -1,10 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Shell } from '../components/Shell'
 import { Mockups } from './Mockups'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
 
 // The app's Storybook inside Self Evident, in each state the engine reports for it.
-const meta = { title: 'Pages/Mockups', component: Mockups, parameters: { layout: 'fullscreen' }, render: () => <Shell><Mockups /></Shell> } satisfies Meta<typeof Mockups>
+const meta = { title: 'Pages/Mockups', component: Mockups, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><Mockups /></div> } satisfies Meta<typeof Mockups>
 export default meta
 type Story = StoryObj<typeof meta>
 const sb = sampleData.storybook
