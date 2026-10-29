@@ -493,6 +493,37 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## The prototype: built fast to be thrown away, then built again from scratch (Sandy, 2026-10-29: "we don't need a perfect build, we want the thing that allows us to build better, when we build")
+
+Preview, the way it was built, was the wrong idea: a frame around an address. The stage it stands for is the
+**prototype**. It carries out the 2026-10-21 thesis (decide fast on something real) as the first part of planning.
+- **What it is:** the actual thing, built quickly in a worktree of its own so it works: something to use, iterate on
+  and show people. Speed and change come first, and it only has to be good enough to demo and learn from. Shortcuts
+  are the default: hardcoding, fakes, no error handling, edge cases skipped. It has no tests, no review and no
+  conventions, and a change asked for shows in the tab in moments.
+- **It can do any kind of work,** not just screens: schema changes, endpoints, jobs, config, dependencies.
+- **Its data:** the app keeps its real database engine, and the data is fake. Scenarios are JSON files, labelled as
+  made up. A throwaway database is built from the app's schema and filled from the JSON (Postgres:
+  `CREATE DATABASE … TEMPLATE …`, then `jsonb_populate_recordset`). The app runs against it unchanged, through its
+  database URL, so an app whose server talks to its database directly (Homework Gate's FastAPI) works too. The shape
+  changes freely: edit the JSON or the schema and rebuild. No migration files are written while prototyping. Reset
+  goes back to the scenario, and saving exports the state back to JSON for sharing.
+- **Outside services get off-the-shelf stand-ins:** Stripe test mode for payments, Mailpit for email, and a
+  "be this user" switcher for sign-in.
+- **Setup for each app, once:** the start command, the port and the environment variable holding the database URL.
+  The agent works these out from the app and asks for confirmation. There is nothing to switch on in the factory
+  itself.
+- **The rebuild from scratch is the feature.** When the prototype is ready, everything about it is analysed: the
+  diff, the final data shape, the scenarios, the stories, the conversation, people's feedback, and what changed
+  between iterations and why. That analysis gives the plan, the migrations and the checks. The real build starts
+  from main and is written properly; none of the prototype's code is carried over. It is evidence, not a starting
+  point, so there is no sunk cost.
+- **Rejected:** json-server or MSW standing in for the backend. They are fast, but useless for an app whose server
+  owns its database. They stay useful only for apps with no backend at all.
+
+Not built yet. Next: rename the Preview tab to Prototype, then "start a prototype for this idea" as far as a running
+server in its own worktree showing in the tab.
+
 ## The workspace, after Replit's (Sandy, 2026-10-28: "the left column agent and then tabs and split screen on the right, just like an IDE")
 
 Self Evident is now one workspace, not pages under a nav.
