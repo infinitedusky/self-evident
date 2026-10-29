@@ -76,40 +76,40 @@ export const PROPOSAL_SCHEMA = obj({
 function prompt(i: ProposeInput): string {
   const earlier = i.earlier.length
     ? i.earlier.map((t) => `  - ${t.identifier} ${t.title}${t.subIssues.length ? `: ${t.subIssues.map((p) => `${p.identifier} ${p.title}`).join('; ')}` : ' (not planned yet)'}`).join('\n')
-    : '  (none: this is the first issue)'
+    : '  (none: this is the first task)'
   return [
     `You are planning ${i.issue.identifier}: ${i.issue.title}`,
     `It is part of the project "${i.project.name}".`,
     '',
-    i.issue.brief ?? '(The issue has no brief beyond its title.)',
+    i.issue.brief ?? '(The task has no brief beyond its title.)',
     i.project.content ? `\nWhy the project exists:\n${i.project.content}` : '',
     '',
-    'Issues earlier in the project (their sub-issues land before yours start; you need not depend on them explicitly):',
+    'Tasks earlier in the project (their sub-tasks land before yours start; you need not depend on them explicitly):',
     earlier,
     '',
-    'Read the repository until you understand where this change lives: the files, the tests, the conventions, what already exists. You have read-only tools; you change nothing. Then cut the issue into sub-issues.',
+    'Read the repository until you understand where this change lives: the files, the tests, the conventions, what already exists. You have read-only tools; you change nothing. Then cut the task into sub-tasks.',
     '',
-    'Sub-issues (returned in `phases`):',
-    '- One sub-issue is one agent in one git worktree making one commit. Each lands on its own, so each must leave the tests passing by itself. Sub-issues of this issue that share no files are built at the same time.',
-    '- Cut by what each produces and consumes: granular enough to track, not so granular they are busywork. Most issues are one to six sub-issues; a small issue is one.',
-    '- files: the paths (files or directories, relative to the repository root) the sub-issue will change. Two that share a path never build at once. Declare honestly: one with no files declared claims the whole app.',
-    '- depends_on: keys of sub-issues in this issue whose result this one needs. Prefer fewer; a shared file already serializes two.',
+    'Sub-tasks (returned in `phases`):',
+    '- One sub-task is one agent in one git worktree making one commit. Each lands on its own, so each must leave the tests passing by itself. Sub-tasks of this task that share no files are built at the same time.',
+    '- Cut by what each produces and consumes: granular enough to track, not so granular they are busywork. Most tasks are one to six sub-tasks; a small task is one.',
+    '- files: the paths (files or directories, relative to the repository root) the sub-task will change. Two that share a path never build at once. Declare honestly: one with no files declared claims the whole app.',
+    '- depends_on: keys of sub-tasks in this task whose result this one needs. Prefer fewer; a shared file already serializes two.',
     '- title: what will be true when it lands, in plain words ("Parents sign in with Clerk"), not the code change.',
     '- description: one to three short sentences for the person who asked for this, who may never read the code: what will be different for the people using the app, and why it matters. No file names, functions, columns, routes or environment variables. Write it so it reads aloud.',
     '- summary: for the builder, in short paragraphs (a blank line between them, at most four sentences each): what the phase does in this codebase and why. File names and code go in backticks.',
     '- steps: the work in order, one action each, each with a technical note (the file, the function, the approach) so the builder does not rediscover it. Keep each step to one sentence; put detail in the note.',
     '- checks: behavioural checks a non-engineer could read aloud, with the command and the expected result where there is one.',
     '- done_when: one sentence.',
-    i.testCmd ? `- The tests run with: ${i.testCmd}` : '- There is no test command configured; say in each sub-issue how it is verified.',
-    i.storybook ? '- Stories lead the UI: this app keeps a Storybook. In a sub-issue that adds or changes a screen, the first step writes the stories (each new or changed page, component and state, with labelled sample data) and the steps after it build the screen to match. A check says the stories render.' : '',
+    i.testCmd ? `- The tests run with: ${i.testCmd}` : '- There is no test command configured; say in each sub-task how it is verified.',
+    i.storybook ? '- Stories lead the UI: this app keeps a Storybook. In a sub-task that adds or changes a screen, the first step writes the stories (each new or changed page, component and state, with labelled sample data) and the steps after it build the screen to match. A check says the stories render.' : '',
     '',
     'Decisions and questions:',
     '- A choice you can settle from the brief and the code: settle it, and record it as a decision with the alternatives you rejected and the reason. Never settle such a choice silently.',
     '- A choice the brief does not settle, where the person might reasonably want it either way: ask it as a question. Give at least two options, say which you recommend and why, and for each option say what it changes (brief, promise, look, gate) when it changes what was agreed. Rate the cost of getting it wrong: cheap (easy to undo), moderate, expensive. Plan the phases as if your recommendation were chosen.',
     '- notes: what you assumed, and anything in the brief you could not place in the code.',
-    '- later: things you noticed that this issue should not do but the project should not forget (a bug nearby, a follow-up the brief implies, something an earlier issue left undone). One plain line each, and why. They join the project\'s backlog, where a person takes them on or drops them. Empty if none.',
+    '- later: things you noticed that this task should not do but the project should not forget (a bug nearby, a follow-up the brief implies, something an earlier task left undone). One plain line each, and why. They join the project\'s backlog, where a person takes them on or drops them. Empty if none.',
     '',
-    'Before you answer, review your own plan once: does it build what the brief asks and nothing it does not? What else would have to change for it to hold? What would the sub-issues do that the brief never asked for? Fix what you find, then answer.',
+    'Before you answer, review your own plan once: does it build what the brief asks and nothing it does not? What else would have to change for it to hold? What would the sub-tasks do that the brief never asked for? Fix what you find, then answer.',
   ].join('\n')
 }
 
@@ -157,7 +157,7 @@ export function questionCost(q: Proposal['questions'][number]): Cost {
   return q.options.some((o) => (o.changes ?? []).length > 0) ? 'expensive' : q.cost
 }
 
-/** The sub-issue's brief, as Markdown: the summary, then steps (each with its technical note under it), checks and done-when. */
+/** The sub-task's brief, as Markdown: the summary, then steps (each with its technical note under it), checks and done-when. */
 export function subIssueBrief(p: Proposal['phases'][number]): string {
   const steps = p.steps.map((s, n) => `${n + 1}. ${s.text}${s.technical ? `\n   - ${s.technical}` : ''}`).join('\n')
   const checks = p.checks.map((c) => `- ${c.statement}${c.command ? ` — \`${c.command}\`${c.expected ? ` → ${c.expected}` : ''}` : ''}`).join('\n')
@@ -166,14 +166,14 @@ export function subIssueBrief(p: Proposal['phases'][number]): string {
 
 /** Shape problems the schema cannot catch. Throws PlanError. */
 export function validateProposal(p: Proposal) {
-  if (!Array.isArray(p?.phases) || !p.phases.length) throw new PlanError('the proposal has no sub-issues')
+  if (!Array.isArray(p?.phases) || !p.phases.length) throw new PlanError('the proposal has no sub-tasks')
   const keys = new Set<string>()
   for (const x of p.phases) {
-    if (!x.key?.trim() || !x.title?.trim()) throw new PlanError('every sub-issue needs a key and a title')
-    if (keys.has(x.key)) throw new PlanError(`sub-issue key ${x.key} is used twice`)
+    if (!x.key?.trim() || !x.title?.trim()) throw new PlanError('every sub-task needs a key and a title')
+    if (keys.has(x.key)) throw new PlanError(`sub-task key ${x.key} is used twice`)
     keys.add(x.key)
   }
-  for (const x of p.phases) for (const d of x.depends_on ?? []) if (!keys.has(d)) throw new PlanError(`sub-issue ${x.key} depends on unknown sub-issue ${d}`)
+  for (const x of p.phases) for (const d of x.depends_on ?? []) if (!keys.has(d)) throw new PlanError(`sub-task ${x.key} depends on unknown sub-task ${d}`)
   for (const q of p.questions ?? []) {
     if ((q.options?.length ?? 0) < 2) throw new PlanError(`question "${q.question}" needs at least two options`)
     if (!q.options.some((o) => o.label === q.recommended)) throw new PlanError(`question "${q.question}" recommends an option it does not offer`)
@@ -190,18 +190,18 @@ export interface PlanningContext {
 
 const emit = (e: NewEvent) => db.transaction((tx) => appendEvent(tx, e))
 
-/** Checks the issue can be planned, records the run, announces it. Throws PlanError before anything is written. */
+/** Checks the task can be planned, records the run, announces it. Throws PlanError before anything is written. */
 export async function preparePlanning(issueId: string, opts: { actor?: string } = {}): Promise<PlanningContext> {
   const [t] = await db.select().from(issue).where(eq(issue.id, issueId))
-  if (!t) throw new PlanError(`no issue ${issueId}`)
-  if (t.kind !== 'code' || t.parentId) throw new PlanError('only a top-level code issue is planned')
+  if (!t) throw new PlanError(`no task ${issueId}`)
+  if (t.kind !== 'code' || t.parentId) throw new PlanError('only a top-level code task is planned')
   if (!t.projectId) throw new PlanError(`${t.title}: add it to a project before planning it`)
   if (!t.briefApprovedBy) throw new PlanError(`${t.title}: ${t.brief?.trim() ? 'approve its brief' : 'write and approve its brief'} before planning it`)
   const g = (await projectGraph(t.projectId))!
   const mine = g.subIssues.filter((x) => x.parentId === issueId)
   const name = identifier(g.app.key, t.number)
-  if (mine.length) throw new PlanError(`${name} already has ${mine.length} sub-issue${mine.length > 1 ? 's' : ''}; it is planned`)
-  if (['landed', 'stopped', 'superseded'].includes(g.project.status)) throw new PlanError(`project is ${g.project.status}; it takes no more planning`) // drafts, and running or paused projects planning their next issue
+  if (mine.length) throw new PlanError(`${name} already has ${mine.length} sub-task${mine.length > 1 ? 's' : ''}; it is planned`)
+  if (['landed', 'stopped', 'superseded'].includes(g.project.status)) throw new PlanError(`project is ${g.project.status}; it takes no more planning`) // drafts, and running or paused projects planning their next task
   if (['backlog', 'triage', 'canceled', 'duplicate', 'done'].includes(t.state)) throw new PlanError(`${name} is ${t.state}; take it on first`)
   const [a] = await db.select().from(app).where(eq(app.id, t.appId))
   const [r] = await db.select().from(repo).where(eq(repo.appId, t.appId))
@@ -284,7 +284,7 @@ export async function finishPlanning(ctx: PlanningContext, opts: { propose?: Pro
       const later = await addItems(ctx.projectId, (proposal.later ?? []).map((l) => ({ text: l.text, body: l.why || undefined, source: 'planner' as const, sourceRef: { issueId: ctx.issueId, runId: ctx.runId } })), 'planner', tx)
       await tx.update(run).set({
         status: 'completed', endedAt: new Date(), costUsd: out.costUsd?.toString() ?? null, agentSessionId: out.agentSessionId ?? null,
-        summary: [proposal.notes?.trim(), `${subs.length} sub-issue(s), ${decisions.length} decision(s), ${questions.length} question(s)`].filter(Boolean).join('\n\n'),
+        summary: [proposal.notes?.trim(), `${subs.length} sub-task(s), ${decisions.length} decision(s), ${questions.length} question(s)`].filter(Boolean).join('\n\n'),
       }).where(eq(run.id, ctx.runId))
       await appendEvent(tx, { ...ctx.base, type: 'issue.planned', payload: {
         attempt: ctx.attempt, subIssues: subs.map((p) => ({ id: p.id, number: p.number, title: p.title })),

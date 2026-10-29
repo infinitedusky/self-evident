@@ -49,8 +49,8 @@ export function IssuePage() {
       <div className="page-head">
         <div>
           <div className="faint" style={{ fontSize: 13, marginBottom: 4 }}>
-            {i.project ? <Link to={`/projects/${i.project.id}`}>{i.project.name}</Link> : <Link to="/issues">In no project</Link>}
-            {i.parent && <> · sub-issue of <Link to={`/issues/${i.parent.id}`}>{i.parent.identifier} {i.parent.title}</Link></>}
+            {i.project ? <Link to={`/projects/${i.project.id}`}>{i.project.name}</Link> : <Link to="/tasks">In no project</Link>}
+            {i.parent && <> · sub-task of <Link to={`/tasks/${i.parent.id}`}>{i.parent.identifier} {i.parent.title}</Link></>}
           </div>
           <h1><span className="mono faint" style={{ fontWeight: 400 }}>{i.identifier}</span> {i.title}</h1>
           <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
@@ -91,15 +91,15 @@ export function IssuePage() {
 
       {(planned || !i.parentId) && (
         <section className="panel">
-          <h2>{code ? 'Sub-issues' : 'Checklist'} {planned && <Badge>{i.subIssues.filter((s) => s.state === 'done').length}/{i.subIssues.length}</Badge>}</h2>
-          {!planned && <p className="faint" style={{ margin: 0 }}>{code ? 'Not planned yet: the planner reads the code and the brief, and cuts it into sub-issues, one agent each.' : 'No lines yet.'}</p>}
+          <h2>{code ? 'Sub-tasks' : 'Checklist'} {planned && <Badge>{i.subIssues.filter((s) => s.state === 'done').length}/{i.subIssues.length}</Badge>}</h2>
+          {!planned && <p className="faint" style={{ margin: 0 }}>{code ? 'Not planned yet: the planner reads the code and the brief, and cuts it into sub-tasks, one agent each.' : 'No lines yet.'}</p>}
           {planned && (
             <ol className="list sub-issues">
               {i.subIssues.map((s) => (
                 <li key={s.id} className={`sub-issue ${s.state}`}>
                   <span className="mono faint">{s.identifier}</span>
                   <div>
-                    <Link to={`/issues/${s.id}`} style={{ textDecoration: 'none' }}>{s.title}</Link>
+                    <Link to={`/tasks/${s.id}`} style={{ textDecoration: 'none' }}>{s.title}</Link>
                     {s.description && <div className="muted" style={{ fontSize: 14 }}>{s.description}</div>}
                     {s.build?.heldReason && s.build.status !== 'done' && <div className="faint" style={{ fontSize: 13 }}>{s.build.heldReason}</div>}
                     {s.waitingOn && s.state !== 'done' && <div className="faint" style={{ fontSize: 13 }}>waiting on {s.waitingOn}</div>}

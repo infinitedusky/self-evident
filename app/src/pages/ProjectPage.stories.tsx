@@ -37,24 +37,24 @@ const stopped: Graph = {
 const paused: Graph = { ...graph, project: { ...graph.project, id: 'proj_paused', status: 'paused' }, subIssues: subIssues.map((x) => (x.status === 'running' ? { ...x, status: 'queued', heldReason: 'the project is paused' } : x)) }
 const bare: Graph = { ...graph, project: { ...graph.project, id: 'proj_bare' }, backlog: [], todos: [], questions: [], decisions: [] }
 
-/** Running, mid-run: one sub-issue landed, one building, two waiting; an open question, a decision, a to-do and a backlog with a duplicate. */
+/** Running, mid-run: one sub-task landed, one building, two waiting; an open question, a decision, a to-do and a backlog with a duplicate. */
 export const Running: Story = { parameters: at('proj_checkout') }
-/** The same, with a sub-issue clicked on the graph: its brief, files, dependencies, steps and last run. */
-export const SubIssueSelected: Story = {
+/** The same, with a sub-task clicked on the graph: its brief, files, dependencies, steps and last run. */
+export const SubTaskSelected: Story = {
   parameters: at('proj_checkout'),
   play: async ({ canvasElement }) => { await userEvent.click(await within(canvasElement).findByText('A declined card is shown in place', {}, { timeout: 5000 })) },
 }
-/** A draft nobody has planned yet: Plan on the issue, an empty graph. */
+/** A draft nobody has planned yet: Plan on the task, an empty graph. */
 export const DraftUnplanned: Story = { parameters: at('proj_draft'), beforeEach: withGraph(drafting) }
-/** A draft whose issues are planned: reorder arrows, Plan again, and Run this project. */
+/** A draft whose tasks are planned: reorder arrows, Plan again, and Run this project. */
 export const DraftPlanned: Story = { parameters: at('proj_draftplanned'), beforeEach: withGraph(draftPlanned) }
-/** Paused: Resume, and the sub-issue that was building waits. */
+/** Paused: Resume, and the sub-task that was building waits. */
 export const Paused: Story = { parameters: at('proj_paused'), beforeEach: withGraph(paused) }
-/** Every sub-issue has landed but the backlog still has open items: the project waits on them. */
+/** Every sub-task has landed but the backlog still has open items: the project waits on them. */
 export const WorkLandedBacklogOpen: Story = { parameters: at('proj_worklanded'), beforeEach: withGraph(workLanded) }
 /** Landed: all done, the PR merged, the question answered; the backlog is closed (covered and dropped). */
 export const Landed: Story = { parameters: at('proj_landed'), beforeEach: withGraph(landed) }
-/** Stopped after a sub-issue failed three times; the rest cancelled. */
+/** Stopped after a sub-task failed three times; the rest cancelled. */
 export const StoppedWithAFailure: Story = { parameters: at('proj_stopped'), beforeEach: withGraph(stopped) }
 /** Nothing in the backlog, no to-dos, no questions or decisions: the bare project. */
 export const NoBacklogNoQuestions: Story = { parameters: at('proj_bare'), beforeEach: withGraph(bare) }

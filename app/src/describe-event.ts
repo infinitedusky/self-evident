@@ -10,13 +10,13 @@ const toolLine = (p: any) => {
 export function describeEvent(e: Event): string {
   const p = e.payload as any
   switch (e.type) {
-    case 'project.created': return `${p.name ?? p.title} · ${p.issues ?? p.tasks} issue(s)`
+    case 'project.created': return `${p.name ?? p.title} · ${p.issues ?? p.tasks} task(s)`
     case 'issue.created': return `${p.identifier ?? `#${p.number}`} ${p.title}`
     case 'issue.state': return `${p.identifier ?? ''} ${p.title ?? ''}: ${p.from} → ${p.to}${p.reason ? ` (${p.reason})` : ''}`
     case 'build.status': return `${p.identifier ?? ''} ${p.from} → ${p.to}`
     case 'build.held': return p.reason
     case 'issue.planning': return `planning ${p.identifier ?? `#${p.number}`}`
-    case 'issue.planned': return `${(p.subIssues ?? p.phases ?? []).length} sub-issues · ${p.decisions} decisions · ${p.questions} questions`
+    case 'issue.planned': return `${(p.subIssues ?? p.phases ?? []).length} sub-tasks · ${p.decisions} decisions · ${p.questions} questions`
     case 'issue.plan_failed': return String(p.error).slice(0, 120)
     case 'question.asked': return `[${p.cost}] ${p.text}`
     case 'question.answered': return String(p.answer)

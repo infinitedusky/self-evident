@@ -42,7 +42,7 @@ export async function insertIssues(tx: Tx, appId: string, rows: NewIssue[], acto
   const now = new Date()
   const values = rows.map((r) => {
     const title = r.title?.trim().replace(/\s+/g, ' ')
-    if (!title) throw new PlanError('an issue needs a title')
+    if (!title) throw new PlanError('a task needs a title')
     const state = r.state ?? 'todo'
     return {
       id: r.id ?? newId('issue'), appId, number: ++n, kind: r.kind ?? 'code', parentId: r.parentId ?? null, projectId: r.projectId ?? null,
@@ -79,20 +79,20 @@ export async function nextSort(tx: Tx | typeof db, where: { projectId?: string |
 async function openProjectIn(tx: Tx, projectId: string, appId: string) {
   const [p] = await tx.select().from(project).where(eq(project.id, projectId))
   if (!p || p.appId !== appId) throw new PlanError('that project is not in this app')
-  if (CLOSED_PROJECTS.includes(p.status)) throw new PlanError(`project is ${p.status}; it takes no new issues`)
+  if (CLOSED_PROJECTS.includes(p.status)) throw new PlanError(`project is ${p.status}; it takes no new tasks`)
   return p
 }
 
 async function parentIn(tx: Tx, parentId: string, appId: string) {
   const [p] = await tx.select().from(issue).where(eq(issue.id, parentId))
-  if (!p || p.appId !== appId) throw new PlanError('that parent issue is not in this app')
-  if (p.parentId) throw new PlanError('sub-issues go one level deep')
+  if (!p || p.appId !== appId) throw new PlanError('that parent task is not in this app')
+  if (p.parentId) throw new PlanError('sub-tasks go one level deep')
   return p
 }
 
 export async function getIssue(tx: Tx | typeof db, issueId: string) {
   const [i] = await tx.select().from(issue).where(eq(issue.id, issueId))
-  if (!i) throw new PlanError(`no issue ${issueId}`)
+  if (!i) throw new PlanError(`no task ${issueId}`)
   return i
 }
 
@@ -132,9 +132,9 @@ export async function changeState(issueId: string, to: IssueState, opts: { actor
 export async function updateIssue(issueId: string, input: Partial<Pick<NewIssue, 'title' | 'description' | 'brief' | 'priority' | 'estimate' | 'assignee' | 'delegate' | 'waitingOn' | 'cycleId' | 'projectId' | 'sortOrder' | 'kind'>>, actor = 'user') {
   return db.transaction(async (tx) => {
     const i = await getIssue(tx, issueId)
-    if (input.title !== undefined && !input.title.trim()) throw new PlanError('an issue needs a title')
+    if (input.title !== undefined && !input.title.trim()) throw new PlanError('a task needs a title')
     if (input.projectId && input.projectId !== i.projectId) {
-      if (i.parentId) throw new PlanError('a sub-issue goes where its parent goes')
+      if (i.parentId) throw new PlanError('a sub-task goes where its parent goes')
       await openProjectIn(tx, input.projectId, i.appId)
     }
     const set: Partial<Issue> = {}
@@ -159,7 +159,7 @@ export async function reorder(ids: string[], actor = 'user') {
   return db.transaction(async (tx) => {
     if (!ids.length) return []
     const rows = await tx.select().from(issue).where(inArray(issue.id, ids))
-    if (rows.length !== ids.length) throw new PlanError('some of those issues do not exist')
+    if (rows.length !== ids.length) throw new PlanError('some of those tasks do not exist')
     const scope = (r: Issue) => `${r.appId}:${r.projectId}:${r.parentId}`
     if (new Set(rows.map(scope)).size > 1) throw new PlanError('only siblings can be ordered together: one project, or one parent')
     for (const [n, id] of ids.entries()) await tx.update(issue).set({ sortOrder: n, updatedAt: new Date() }).where(eq(issue.id, id))
@@ -170,7 +170,7 @@ export async function reorder(ids: string[], actor = 'user') {
 }
 
 export async function relate(tx: Tx, appId: string, issueId: string, relatedIssueId: string, type: 'blocks' | 'related' | 'duplicate') {
-  if (issueId === relatedIssueId) throw new PlanError('an issue cannot relate to itself')
+  if (issueId === relatedIssueId) throw new PlanError('a task cannot relate to itself')
   await tx.insert(issueRelation).values({ appId, issueId, relatedIssueId, type }).onConflictDoNothing()
 }
 

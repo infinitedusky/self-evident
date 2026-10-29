@@ -3,12 +3,12 @@ import { AppGraph } from './AppGraph'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
 import { graph } from '../stories/sample'
 
-// Every sub-issue of every project in the sample app, on one canvas.
+// Every sub-task of every project in the sample app, on one canvas.
 const meta = { title: 'Pages/AppGraph', component: AppGraph, parameters: { layout: 'fullscreen', route: { path: '/graph', url: '/graph' } }, render: () => <div className="tab-page"><AppGraph /></div> } satisfies Meta<typeof AppGraph>
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** Mid-run, with two sub-issues taking turns on a shared file. */
+/** Mid-run, with two sub-tasks taking turns on a shared file. */
 export const MidRun: Story = {}
 /** Only the running project, without the shared file. */
 export const NoConflicts: Story = { beforeEach: withEngine({ graphs: { proj_checkout: { ...graph, conflicts: [], files: [] } } }) }

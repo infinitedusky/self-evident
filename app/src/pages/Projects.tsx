@@ -33,8 +33,8 @@ export function Projects({ mode }: { mode: 'project' | 'build' }) {
           <h1>{mode === 'project' ? '📋 Projects' : '🔨 Build'}{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
           <p className="muted" style={{ margin: '4px 0 0' }}>
             {mode === 'project'
-              ? 'A project is issues in order, each a title and a brief. The planner turns an issue into sub-issues and asks what it cannot settle. When every issue is planned and nothing is open, it is ready to build.'
-              : 'Each sub-issue is built by one agent in one worktree; what lands becomes the project\'s PR. The Graph shows every sub-issue of every project and what each one waits on.'}
+              ? 'A project is tasks in order, each a title and a brief. The planner turns a task into sub-tasks and asks what it cannot settle. When every task is planned and nothing is open, it is ready to build.'
+              : 'Each sub-task is built by one agent in one worktree; what lands becomes the project\'s PR. The Graph shows every sub-task of every project and what each one waits on.'}
           </p>
         </div>
         {mode === 'project' ? (ideaFirst ? <Link to="/ideas" className="btn" title={`The workflow "${ideaFirst}" starts everything as an idea`}>From an idea</Link> : <Link to="/projects/new" className="btn">New project</Link>) : <Link to="/graph" className="btn quiet">Graph</Link>}
@@ -46,7 +46,7 @@ export function Projects({ mode }: { mode: 'project' | 'build' }) {
       )}
       {error && <div className="empty">The engine isn't reachable: {error}. Start it with <code>pnpm dev</code> at the repo root.</div>}
       {!app && <div className="empty">No app yet. Add one in Settings.</div>}
-      {shown && !shown.length && <div className="empty">{mode === 'project' ? (filter === 'open' ? 'No open projects. Keep an idea and make it an issue, or start a project.' : 'No projects here.') : 'Nothing running or landed yet. Projects run once their first issue is planned.'}</div>}
+      {shown && !shown.length && <div className="empty">{mode === 'project' ? (filter === 'open' ? 'No open projects. Keep an idea and make it a task, or start a project.' : 'No projects here.') : 'Nothing running or landed yet. Projects run once their first task is planned.'}</div>}
       {shown && shown.length > 0 && (
         <ul className="list panel" style={{ padding: '4px 18px' }}>
           {shown.map((p) => {
@@ -55,7 +55,7 @@ export function Projects({ mode }: { mode: 'project' | 'build' }) {
               <li key={p.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center' }}>
                 <div>
                   <Link to={`/projects/${p.id}`} style={{ fontWeight: 600, textDecoration: 'none' }}>{p.name}</Link>
-                  <div className="faint" style={{ fontSize: 13 }}>{p.issueCount} issue{p.issueCount === 1 ? '' : 's'} · {total} sub-issue{total === 1 ? '' : 's'}{p.backlogOpen ? ` · ${p.backlogOpen} in the backlog` : ''}
+                  <div className="faint" style={{ fontSize: 13 }}>{p.issueCount} task{p.issueCount === 1 ? '' : 's'} · {total} sub-task{total === 1 ? '' : 's'}{p.backlogOpen ? ` · ${p.backlogOpen} in the backlog` : ''}
                     {p.builds.done ? ` · ${p.builds.done} done` : ''}{p.builds.failed ? ` · ${p.builds.failed} failed` : ''} · <span className="mono">{p.id}</span></div>
                 </div>
                 <Badge tone={TONE[p.status] ?? 'neutral'} dot={p.status === 'running'}>{p.status}</Badge>

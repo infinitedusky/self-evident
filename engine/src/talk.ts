@@ -26,8 +26,8 @@ const ASK_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash']
 const PERMISSION_TIMEOUT_MS = 10 * 60_000
 
 const talkPrompt = (cwd: string, branch: string | null, base: string, where?: string) => `You are Self Evident's agent (Self Evident: software that proves itself — observe, learn, ideate, mockup, build), talking with the person who runs it, in its own web UI.
-The factory builds software from ideas, shaped like Linear: initiative (a goal) → project (issues in order) → issue (a title and a brief; code, or a to-do: work outside the code) → sub-issue (under code: one agent, one worktree, one commit; under a to-do: a checklist line). Issues are named by the app's key and a number, like HG-12; use those names with the person. Read CLAUDE.md, LOG.md and SHAPE.md in this checkout when you need the history; LOG.md's top entries are the latest decisions.
-You have the engine as tools (mcp__engine__*): see what needs attention, keep ideas, make projects, keep each project's backlog (everything it has to cover; when the person mentions something a project should not forget, add it), keep the app's to-dos (work outside the code: accounts, approvals, people, checks; when the person mentions one, make it with a checklist you draft, and check lines off as they get done), run the planner on an issue, answer its questions, start or cancel projects, read the event log. Use them rather than describing what the person should click.
+The factory builds software from ideas, shaped like Linear: initiative (a goal) → project (tasks in order) → task (a title and a brief; code, or a to-do: work outside the code) → sub-task (under code: one agent, one worktree, one commit; under a to-do: a checklist line). We say task where Linear says issue (and sub-task for sub-issue); say task to the person, though tool fields and ids still say issue (issueId is a task's id). Tasks are named by the app's key and a number, like HG-12; use those names with the person. Read CLAUDE.md, LOG.md and SHAPE.md in this checkout when you need the history; LOG.md's top entries are the latest decisions.
+You have the engine as tools (mcp__engine__*): see what needs attention, keep ideas, make projects, keep each project's backlog (everything it has to cover; when the person mentions something a project should not forget, add it), keep the app's to-dos (work outside the code: accounts, approvals, people, checks; when the person mentions one, make it with a checklist you draft, and check lines off as they get done), run the planner on a task, answer its questions, start or cancel projects, read the event log. Use them rather than describing what the person should click.
 You can read, search and edit files and run commands here, as in any Claude Code session. The engine rates every action's risk (free, cheap, moderate, expensive); up to the person's threshold it runs without asking and is logged, above it a card asks them. Expensive things (main, force, deletes, merges, publishing, starting a project) always ask. Work on a branch in a worktree, never in a checkout that is on main; say what each action is for.
 ${where ?? `You work in your own worktree, ${cwd}, on branch ${branch ?? '(none)'} cut from ${base}: edit and commit there; push and open a pull request when the work is ready (both ask).`}
 How this person works: PRs only, main is production; short answers that lead with the answer; questions are questions, not instructions to change things; give a recommendation, not a survey; write decisions into LOG.md or SHAPE.md the moment they are made; one git worktree per branch, never the main checkout.`
@@ -82,7 +82,7 @@ const summariseInput = (name: string, input: any) => {
 function engineServer(appId: string, sessionId?: string) {
   return createSdkMcpServer({
     name: 'engine', version: '0.3.0',
-    instructions: 'The Self Evident engine, scoped to this conversation\'s app, shaped like Linear. Initiatives are goals; projects are issues in order; a code issue becomes sub-issues through the planner; each sub-issue is built by an agent in a worktree and lands into the project\'s branch and PR. To-dos are issues for the work around the code, with checklists. Issues are named like HG-12.',
+    instructions: 'The Self Evident engine, scoped to this conversation\'s app, shaped like Linear. Initiatives are goals; projects are tasks in order; a code task becomes sub-tasks through the planner; each sub-task is built by an agent in a worktree and lands into the project\'s branch and PR. To-dos are tasks for the work around the code, with checklists. Tasks are named like HG-12 (Linear calls them issues; tool fields and ids still say issue).',
     tools: engineTools({ appId, sessionId, actor: 'agent', waitForPlanner: true }).map((t) => tool(t.name, t.description, t.shape, (a) => t.handler(a))),
   })
 }
@@ -288,11 +288,11 @@ async function describeContext(c?: TalkContext): Promise<string> {
   const bits = [`the page ${c.path}`]
   if (c.projectId) {
     const g = await projectGraph(c.projectId).catch(() => null)
-    if (g) bits.push(`project ${c.projectId} "${g.project.name}" (${g.project.status}; ${g.issues.length} issue(s), ${g.subIssues.length} sub-issue(s), ${g.backlog.filter((i) => i.state === 'backlog').length} in the backlog, ${g.questions.filter((q) => q.status === 'open').length} open question(s))`)
+    if (g) bits.push(`project ${c.projectId} "${g.project.name}" (${g.project.status}; ${g.issues.length} task(s), ${g.subIssues.length} sub-task(s), ${g.backlog.filter((i) => i.state === 'backlog').length} in the backlog, ${g.questions.filter((q) => q.status === 'open').length} open question(s))`)
   }
   if (c.issueId) {
     const i = await issueDetail(c.issueId).catch(() => null)
-    if (i) bits.push(`issue ${i.identifier} (${c.issueId}) "${i.title}" (${i.kind}, ${i.state}; ${i.subIssues.length} sub-issue(s))`)
+    if (i) bits.push(`task ${i.identifier} (${c.issueId}) "${i.title}" (${i.kind}, ${i.state}; ${i.subIssues.length} sub-task(s))`)
   }
   if (c.appId) bits.push(`app ${c.appId}`)
   if (c.ideaId) bits.push(`idea ${c.ideaId}`)

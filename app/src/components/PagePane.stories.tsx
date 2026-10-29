@@ -8,6 +8,6 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const MyStuff: Story = { args: { path: '/' }, beforeEach: withEngine() }
-export const AnIssue: Story = { args: { path: '/issues/iss_sample5' } }
+export const ATask: Story = { args: { path: '/tasks/iss_sample5' } }
 /** A path no page has. */
 export const NoSuchPage: Story = { args: { path: '/nowhere' } }

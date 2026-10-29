@@ -52,7 +52,7 @@ export class Runner {
     const { p, a, r } = ctx
     if (!r) throw new PlanError(`app ${a.name} has no repo with a local path`)
     const g = (await projectGraph(projectId))!
-    if (!g.subIssues.length) throw new PlanError('this project has nothing planned yet; plan its issues first')
+    if (!g.subIssues.length) throw new PlanError('this project has nothing planned yet; plan its tasks first')
     // From main as it is on GitHub when there is a remote (a teammate may have merged since the local main was pulled).
     const fetched = (await git(r.localPath!, ['fetch', '-q', 'origin', a.defaultBranch], { allowFail: true })).code === 0
     const sha = await ensureBranch(r.localPath!, p.integrationBranch!, fetched ? `origin/${a.defaultBranch}` : a.defaultBranch)
@@ -405,7 +405,7 @@ export class Runner {
     const stack = t ? stackBase(a.defaultBranch, t, issues, prs) : { base: a.defaultBranch, on: null }
     const k = t ? issues.findIndex((q) => q.id === t.id) + 1 : 0
     const title = t ? `${t.identifier} ${t.title} (${p.name}, ${k} of ${issues.length})` : p.name
-    const intro = t ? { ...p, name: `${p.name}, issue ${k} of ${issues.length}: ${t.identifier} ${t.title}`, content: [t.description, stack.on ? `Stacked on #${stack.on}: review and merge that one first; this PR then retargets to ${a.defaultBranch}.` : null].filter(Boolean).join('\n\n') || p.content } : p
+    const intro = t ? { ...p, name: `${p.name}, task ${k} of ${issues.length}: ${t.identifier} ${t.title}`, content: [t.description, stack.on ? `Stacked on #${stack.on}: review and merge that one first; this PR then retargets to ${a.defaultBranch}.` : null].filter(Boolean).join('\n\n') || p.content } : p
     const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog)
     const result = await ensureProjectPr({ repoPath: r.localPath!, fullName: r.fullName, integrationBranch: head, base: stack.base, title, body })
     const existing = prs.find((q) => (issueId ? q.issueId === issueId : !q.issueId))

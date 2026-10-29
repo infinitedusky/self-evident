@@ -38,7 +38,7 @@ function Task({ t }: { t: PlanTask }) {
   return (
     <li className="plan-task">
       <span className="mono faint">{t.identifier}</span>
-      <Link to={`/issues/${t.id}`}>{t.title}</Link>
+      <Link to={`/tasks/${t.id}`}>{t.title}</Link>
       <Marks steps={t.steps} keys={t.keys} />
       <Brief steps={t.steps} />
       <span className="faint" style={{ fontSize: 12 }}>{t.state.replace('_', ' ')}</span>
@@ -59,7 +59,7 @@ export function PlanHome({ plan, app, appId, onNewTask }: { plan: Plan; app?: st
   const tasks = plan.projects.reduce((n, p) => n + p.tasks.length, 0) + plan.loose.length
   const cards = [
     { label: 'Projects', n: plan.projects.length, to: '/projects', hint: 'Tasks in order, built as one PR' },
-    { label: 'Tasks', n: tasks, to: '/issues', hint: 'Things we\'re going to build' },
+    { label: 'Tasks', n: tasks, to: '/tasks', hint: 'Things we\'re going to build' },
     { label: 'To-dos', n: plan.todosOpen, to: '/todos', hint: 'Things a person does' },
   ]
   return (

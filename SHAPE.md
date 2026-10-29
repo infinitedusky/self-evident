@@ -187,6 +187,8 @@ Details and sources in `research/`.
 
 ## Decided
 
+- **Task, not issue** (Sandy, 2026-10-29): we say task and sub-task; connecting Linear maps them to its issues and
+  sub-issues. Code and the database keep "issue".
 - **The loop's stages** (Sandy, 2026-10-29): Observe · Learn · Ideate (ideas and their research) · Plan
   (tasks: research, brief, mockup, prototype, in any order unless a workflow sets one) · Build (including the
   checks a build is held to). The rail lists only these stages; projects, tasks and the steps are inside them.

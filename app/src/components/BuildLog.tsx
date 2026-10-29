@@ -1,5 +1,5 @@
 /**
- * A sub-issue's build as it happens, in a tab: the builder's steps, then everything it did, one line each
+ * A sub-task's build as it happens, in a tab: the builder's steps, then everything it did, one line each
  * (what it said, the commands it ran, the files it read and changed), live. After Replit's action feed:
  * a tool's output stays folded under its line.
  */
@@ -44,7 +44,7 @@ export function BuildLog({ issueId }: { issueId: string }) {
         <span className="mono faint">{issue.identifier}</span>
         <strong>{issue.title}</strong>
         {issue.build && <Badge tone={issue.build.status === 'running' ? 'accent' : issue.build.status === 'failed' ? 'bad' : issue.build.status === 'done' ? 'ok' : 'neutral'} dot={issue.build.status === 'running'}>{issue.build.status}{issue.build.attempt > 1 ? ` · attempt ${issue.build.attempt}` : ''}</Badge>}
-        {ws && <button className="btn quiet small" onClick={() => ws.open({ kind: 'page', path: `/issues/${issue.id}` })}>Open the issue</button>}
+        {ws && <button className="btn quiet small" onClick={() => ws.open({ kind: 'page', path: `/tasks/${issue.id}` })}>Open the task</button>}
       </header>
       {issue.build?.heldReason && <p className="faint" style={{ margin: '0 0 8px' }}>Held: {issue.build.heldReason}</p>}
       {issue.steps.length > 0 && (

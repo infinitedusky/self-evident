@@ -14,8 +14,8 @@ export const CATALOGUE: Group[] = [
   ] },
   { name: 'Plan', categories: [
     { key: 'interview', name: 'Interview', for: 'Draw out the decisions before anything is built', builtIn: "The planner's open questions, a cost on each" },
-    { key: 'spec-and-slice', name: 'Spec and slice', for: 'Turn decisions into issues', builtIn: 'The planner: sub-issues with brief, files and done-when' },
-    { key: 'multi-session-planning', name: 'Multi-session planning', for: 'Plans too big for one session', builtIn: 'Initiatives, projects, issues and sub-issues' },
+    { key: 'spec-and-slice', name: 'Spec and slice', for: 'Turn decisions into tasks', builtIn: 'The planner: sub-tasks with brief, files and done-when' },
+    { key: 'multi-session-planning', name: 'Multi-session planning', for: 'Plans too big for one session', builtIn: 'Initiatives, projects, tasks and sub-tasks' },
     { key: 'plan-review', name: 'Plan review', for: 'Challenge a plan before building' },
     { key: 'domain-language', name: 'Domain language', for: 'Keep names and hard decisions consistent' },
   ] },

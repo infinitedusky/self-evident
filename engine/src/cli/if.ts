@@ -18,7 +18,7 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
   return JSON.parse(text) as T
 }
 
-const program = new Command('se').description('Self Evident engine, shaped like Linear: initiative → project (issues in order) → issue → sub-issue → step')
+const program = new Command('se').description('Self Evident engine, shaped like Linear: initiative → project (tasks in order) → task → sub-task → step')
 
 program.command('migrate').description('apply database migrations').action(async () => { await import('../db/migrate.js') })
 
@@ -58,7 +58,7 @@ program.command('connect').argument('[dir]', 'a checkout of the app\'s repo (a w
     console.log('Local scope: only you, only in this repo; nothing is written into the repo. Then ask Claude Code "what needs me?"')
   })
 
-const project = program.command('project').description('projects are issues in order; a code issue is built in sub-issues')
+const project = program.command('project').description('projects are tasks in order; a code task is built in sub-tasks')
 
 project.command('create').requiredOption('-a, --app <id>').requiredOption('-n, --name <name>').option('-c, --content <text>', 'why: the idea behind it')
   .requiredOption('-f, --issues <file>', 'JSON: [{title, brief?, subIssues?: [{key, title, brief?, dependsOn?, files?}]}]')
@@ -67,8 +67,8 @@ project.command('create').requiredOption('-a, --app <id>').requiredOption('-n, -
     const out = await api<{ project: { id: string }; issues: { id: string; number: number; title: string }[]; subIssues: { id: string; number: number; title: string; parentId: string }[] }>('POST', '/projects', { appId: o.app, name: o.name, content: o.content, issues })
     console.log(`project ${out.project.id}`)
     for (const t of out.issues) {
-      console.log(`  issue ${t.id}  #${t.number}  ${t.title}`)
-      for (const x of out.subIssues.filter((q) => q.parentId === t.id)) console.log(`    sub-issue ${x.id}  #${x.number}  ${x.title}`)
+      console.log(`  task ${t.id}  #${t.number}  ${t.title}`)
+      for (const x of out.subIssues.filter((q) => q.parentId === t.id)) console.log(`    sub-task ${x.id}  #${x.number}  ${x.title}`)
     }
   })
 
@@ -80,7 +80,7 @@ project.command('graph').argument('<projectId>').action(async (projectId: string
     for (const x of g.subIssues.filter((q) => q.parentId === t.id)) {
       const name = (d: string) => g.subIssues.find((q) => q.id === d)?.identifier ?? d
       const deps = x.dependsOn.length ? `  ← ${x.dependsOn.map(name).join(', ')}` : ''
-      const after = x.orderedAfter?.length ? `  ⇐ ${x.orderedAfter.map(name).join(', ')} (issue order)` : ''
+      const after = x.orderedAfter?.length ? `  ⇐ ${x.orderedAfter.map(name).join(', ')} (task order)` : ''
       const held = x.heldReason ? `  [held: ${x.heldReason}]` : ''
       console.log(`    ${x.status.padEnd(15)} ${x.id}  ${x.identifier} ${x.title}${deps}${after}${held}`)
       for (const s of x.steps ?? []) console.log(`      ${s.status === 'completed' ? '✓' : s.status === 'in_progress' ? '●' : '○'} ${s.text}`)
@@ -98,21 +98,21 @@ project.command('tick').argument('<projectId>').option('-r, --room <n>', 'free s
     console.log(JSON.stringify(await api('POST', `/projects/${projectId}/tick${o.room ? `?room=${o.room}` : ''}`), null, 2))
   })
 
-const issue = program.command('issue').description('issues are authored; the planner (or you) adds a code issue\'s sub-issues')
+const issue = program.command('issue').description('tasks (Linear calls them issues) are authored; the planner (or you) adds a code task\'s sub-tasks')
 issue.command('sub-issues').argument('<issueId>').requiredOption('-f, --file <file>', 'JSON: [{key, title, brief?, dependsOn?, files?}]')
-  .description('add sub-issues to a code issue').action(async (issueId: string, o: { file: string }) => {
+  .description('add sub-tasks to a code task').action(async (issueId: string, o: { file: string }) => {
     const rows = await api<any[]>('POST', `/issues/${issueId}/sub-issues`, JSON.parse(await readFile(o.file, 'utf8')))
-    for (const x of rows) console.log(`  sub-issue ${x.id}  #${x.number}  ${x.title}`)
+    for (const x of rows) console.log(`  sub-task ${x.id}  #${x.number}  ${x.title}`)
   })
-issue.command('plan').argument('<issueId>').description("the planner: the issue's brief → sub-issues, decisions and questions (one read-only agent run; minutes)")
+issue.command('plan').argument('<issueId>').description("the planner: the task's brief → sub-tasks, decisions and questions (one read-only agent run; minutes)")
   .action(async (issueId: string) => {
     const out = await api<any>('POST', `/issues/${issueId}/plan?wait=1`)
-    for (const x of out.subIssues) console.log(`  sub-issue ${x.id}  #${x.number}  ${x.title}`)
+    for (const x of out.subIssues) console.log(`  sub-task ${x.id}  #${x.number}  ${x.title}`)
     for (const d of out.decisions) console.log(`  decided  ${d.question} → ${d.options[0]?.text}  (${d.rationale})`)
     for (const q of out.questions) console.log(`  question ${q.id} [${q.cost}]  ${q.text}  (recommends ${q.options.find((o: any) => o.recommended)?.label})`)
     console.log(`  run ${out.runId}  $${Number(out.costUsd ?? 0).toFixed(2)} est.`)
   })
-issue.command('build').argument('<issueId>').argument('<status>').description('set a sub-issue\'s build status by hand, for drafts')
+issue.command('build').argument('<issueId>').argument('<status>').description('set a sub-task\'s build status by hand, for drafts')
   .action(async (issueId: string, status: string) => { console.log(JSON.stringify(await api('POST', `/issues/${issueId}/build`, { status }))) })
 program.command('question').command('answer').argument('<questionId>').argument('<answer>')
   .action(async (questionId: string, answer: string) => { console.log(JSON.stringify(await api('POST', `/questions/${questionId}/answer`, { answer }))) })

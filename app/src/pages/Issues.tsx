@@ -37,11 +37,11 @@ export function Issues() {
   return (
     <>
       <div className="page-head"><div>
-        <h1>📋 Issues{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
-        <p className="muted" style={{ margin: '4px 0 0', maxWidth: 760 }}>Every issue of code work: what it will change, and where it stands. One in no project waits until you add it to one; a project builds its issues in order, each planned into sub-issues when its turn comes.</p>
+        <h1>📋 Tasks{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
+        <p className="muted" style={{ margin: '4px 0 0', maxWidth: 760 }}>Every task of code work: what it will change, and where it stands. One in no project waits until you add it to one; a project builds its tasks in order, each planned into sub-tasks when its turn comes.</p>
       </div></div>
       {error && <div className="empty bad">{error}</div>}
-      {rows && !rows.length && <div className="empty">No issues yet. Ask in the conversation, start a project, or make an idea an issue.</div>}
+      {rows && !rows.length && <div className="empty">No tasks yet. Ask in the conversation, start a project, or make an idea a task.</div>}
       {loose.length > 0 && (
         <section className="panel">
           <h2>In no project <Badge>{loose.length}</Badge></h2>
@@ -49,7 +49,7 @@ export function Issues() {
             {loose.map((t) => (
               <li key={t.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center' }}>
                 <div>
-                  <Link to={`/issues/${t.id}`} style={{ fontWeight: 600, textDecoration: 'none' }}><span className="mono faint">{t.identifier}</span> {t.title}</Link>
+                  <Link to={`/tasks/${t.id}`} style={{ fontWeight: 600, textDecoration: 'none' }}><span className="mono faint">{t.identifier}</span> {t.title}</Link>
                   {t.description && <div className="muted" style={{ fontSize: 14, margin: '2px 0' }}>{t.description}</div>}
                 </div>
                 {targets.length > 0 && (
@@ -68,7 +68,7 @@ export function Issues() {
           {placed.map((t) => { const s = standing(t); const unplanned = !Object.values(t.builds).reduce((a, b) => a + b, 0); return (
             <li key={t.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center' }}>
               <div>
-                <Link to={`/issues/${t.id}`} style={{ fontWeight: 600, textDecoration: 'none' }}><span className="mono faint">{t.identifier}</span> {t.title}</Link>
+                <Link to={`/tasks/${t.id}`} style={{ fontWeight: 600, textDecoration: 'none' }}><span className="mono faint">{t.identifier}</span> {t.title}</Link>
                 {t.description && <div className="muted" style={{ fontSize: 14, margin: '2px 0' }}>{t.description}</div>}
                 <div className="faint" style={{ fontSize: 13 }}>in <Link to={`/projects/${t.project!.id}`}>{t.project!.name}</Link> · {t.project!.status}</div>
               </div>

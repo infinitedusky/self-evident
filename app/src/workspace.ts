@@ -28,11 +28,11 @@ export const tabKey = (t: Tab) => t.kind === 'page' ? t.path.split('?')[0] : t.k
 const PAGES: [RegExp, string][] = [
   [/^\/$/, 'My Stuff'], [/^\/summary/, 'Summary'], [/^\/observe/, 'Observe'], [/^\/learn/, 'Learn'],
   [/^\/ideas\/?$/, 'Ideas'], [/^\/ideas\//, 'Idea'], [/^\/projects\/new/, 'New project'], [/^\/projects\/?$/, 'Projects'], [/^\/projects\//, 'Project'],
-  [/^\/plan\/?$/, 'Plan'], [/^\/issues\/?$/, 'Issues'], [/^\/issues\//, 'Issue'], [/^\/todos/, 'To-dos'], [/^\/mockups/, 'Mockups'],
+  [/^\/plan\/?$/, 'Plan'], [/^\/tasks\/?$/, 'Tasks'], [/^\/tasks\//, 'Task'], [/^\/todos/, 'To-dos'], [/^\/mockups/, 'Mockups'],
   [/^\/build/, 'Build'], [/^\/graph/, 'Graph'], [/^\/settings/, 'Settings'],
 ]
 
-/** A name to show at once; the workspace swaps in a better one (the project's, the issue's) when it has it. */
+/** A name to show at once; the workspace swaps in a better one (the project's, the task's) when it has it. */
 export function tabTitle(t: Tab): string {
   if (t.kind === 'prototype') return t.id ? 'Prototype' : 'Prototypes'
   if (t.kind === 'storybook') return 'Storybook'
@@ -48,7 +48,7 @@ export function tabContext(focused: OpenTab | null, tabs: OpenTab[], contextFor:
   const t = focused?.tab
   const here: TalkContext = !t ? { path: '/', label: 'an empty workspace' }
     : t.kind === 'page' ? contextFor(t.path.split('?')[0], t.path.includes('?') ? t.path.slice(t.path.indexOf('?')) : '')
-    : t.kind === 'build' ? { path: `build:${t.issueId}`, issueId: t.issueId, label: 'the build log of this sub-issue' }
+    : t.kind === 'build' ? { path: `build:${t.issueId}`, issueId: t.issueId, label: 'the build log of this sub-task' }
     : t.kind === 'prototype' ? (t.id ? { path: `prototype:${t.id}`, label: `the prototype "${focused!.title}" (${t.id})` } : { path: 'prototypes', label: 'this app\'s prototypes' })
     : { path: t.story ? `storybook:${t.story}` : 'storybook', label: t.story ? `the story ${t.story} in the app's Storybook` : 'the app\'s Storybook' }
   return { ...here, tabs: tabs.map((x) => ({ title: x.title, path: x.key, ...(x.focused ? { focused: true } : {}) })) }

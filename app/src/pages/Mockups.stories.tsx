@@ -15,7 +15,7 @@ export const Starting: Story = { beforeEach: withEngine({ storybook: { ...sb, st
 /** Running: framed in the page. The sample URL points nowhere, so the frame is blank here. */
 export const Running: Story = { beforeEach: withEngine({ storybook: { ...sb, up: true, startedHere: true } }) }
 /** Opened at one story (the agent's open_tab, or a link): the frame goes straight to it. */
-export const AtAStory: Story = { args: { story: 'pages-issuepage--sub-issue-building' }, beforeEach: withEngine({ storybook: { ...sb, up: true, startedHere: true } }) }
+export const AtAStory: Story = { args: { story: 'pages-taskpage--sub-task-building' }, beforeEach: withEngine({ storybook: { ...sb, up: true, startedHere: true } }) }
 /** A URL but no command to start it. */
 export const NotStartable: Story = { beforeEach: withEngine({ storybook: { ...sb, startable: false } }) }
 /** The app has no Storybook set. */

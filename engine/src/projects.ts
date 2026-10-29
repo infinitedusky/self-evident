@@ -26,8 +26,8 @@ const FINISHED: BuildStatus[] = ['done', 'failed', 'cancelled']
 /** Sub-issues to insert, with their builds, blocks relations and file claims. Dependencies may name keys or existing sub-issue ids. */
 async function insertSubIssues(tx: Tx, appId: string, projectId: string, parentId: string, subs: NewSubIssue[], known: Map<string, string>, startSort: number, actor: string) {
   const keys = new Set(subs.map((s) => s.key))
-  if (keys.size !== subs.length) throw new PlanError('sub-issue keys must be unique')
-  for (const s of subs) for (const d of s.dependsOn ?? []) if (!keys.has(d) && !known.has(d)) throw new PlanError(`sub-issue ${s.key} depends on unknown sub-issue ${d}`)
+  if (keys.size !== subs.length) throw new PlanError('sub-task keys must be unique')
+  for (const s of subs) for (const d of s.dependsOn ?? []) if (!keys.has(d) && !known.has(d)) throw new PlanError(`sub-task ${s.key} depends on unknown sub-task ${d}`)
   const idByKey = new Map(subs.map((s) => [s.key, newId('issue')]))
   const rows = await insertIssues(tx, appId, subs.map((s, i) => ({
     id: idByKey.get(s.key)!, kind: 'code' as const, parentId, projectId, title: s.title, description: s.description, brief: s.brief,
@@ -44,14 +44,14 @@ async function insertSubIssues(tx: Tx, appId: string, projectId: string, parentI
 
 export async function createProject(input: NewProject, actor = 'engine') {
   if (!input.name?.trim()) throw new PlanError('a project needs a name')
-  if (!input.issues?.length) throw new PlanError('a project needs at least one issue')
+  if (!input.issues?.length) throw new PlanError('a project needs at least one task')
   const all = input.issues.flatMap((t, ti) => (t.subIssues ?? []).map((s) => ({ ...s, issueIndex: ti })))
   const keys = new Map(all.map((s) => [s.key, s]))
-  if (keys.size !== all.length) throw new PlanError('sub-issue keys must be unique within the project')
+  if (keys.size !== all.length) throw new PlanError('sub-task keys must be unique within the project')
   for (const s of all) for (const d of s.dependsOn ?? []) {
     const dep = keys.get(d)
-    if (!dep) throw new PlanError(`sub-issue ${s.key} depends on unknown sub-issue ${d}`)
-    if (dep.issueIndex > s.issueIndex) throw new PlanError(`sub-issue ${s.key} (issue ${s.issueIndex + 1}) depends on ${d} in a later issue; issues run in order`)
+    if (!dep) throw new PlanError(`sub-task ${s.key} depends on unknown sub-task ${d}`)
+    if (dep.issueIndex > s.issueIndex) throw new PlanError(`sub-task ${s.key} (task ${s.issueIndex + 1}) depends on ${d} in a later task; tasks run in order`)
   }
   const cycle = findCycle(all.map((s) => ({ id: s.key, status: 'queued', dependsOn: s.dependsOn ?? [], files: [] })))
   if (cycle) throw new PlanError(`dependency cycle: ${cycle.join(' → ')}`)
@@ -85,8 +85,8 @@ export async function createProject(input: NewProject, actor = 'engine') {
 export async function addSubIssues(issueId: string, subs: NewSubIssue[], actor = 'engine', outer?: Tx) {
   const work = async (tx: Tx) => {
     const t = await getIssue(tx, issueId)
-    if (t.parentId) throw new PlanError('sub-issues go one level deep')
-    if (t.kind !== 'code') throw new PlanError('only a code issue is built in sub-issues; a to-do has a checklist')
+    if (t.parentId) throw new PlanError('sub-tasks go one level deep')
+    if (t.kind !== 'code') throw new PlanError('only a code task is built in sub-tasks; a to-do has a checklist')
     if (!t.projectId) throw new PlanError(`${t.title}: add it to a project before planning it`)
     const known = new Map((await tx.select({ id: issue.id }).from(issue).where(and(eq(issue.projectId, t.projectId), sql`${issue.parentId} is not null`))).map((e) => [e.id, e.id]))
     const [{ maxSort }] = await tx.select({ maxSort: sql<number>`coalesce(max(${issue.sortOrder}), -1)` }).from(issue).where(and(eq(issue.projectId, t.projectId), sql`${issue.parentId} is not null`))
@@ -100,11 +100,11 @@ export async function addSubIssues(issueId: string, subs: NewSubIssue[], actor =
  * the issues before it have landed, like any other; a project that has landed, stopped or been superseded takes none.
  */
 export async function addIssue(projectId: string, input: { title: string; description?: string; brief?: string; ideaId?: string; state?: 'todo' | 'backlog'; source?: Source; sourceRef?: Record<string, unknown> }, actor = 'user', outer?: Tx) {
-  if (!input.title?.trim()) throw new PlanError('an issue needs a title')
+  if (!input.title?.trim()) throw new PlanError('a task needs a title')
   const work = async (tx: Tx) => {
     const [p] = await tx.select().from(project).where(eq(project.id, projectId))
     if (!p) throw new PlanError(`no project ${projectId}`)
-    if (['landed', 'stopped', 'superseded'].includes(p.status)) throw new PlanError(`project is ${p.status}; it takes no new issues`)
+    if (['landed', 'stopped', 'superseded'].includes(p.status)) throw new PlanError(`project is ${p.status}; it takes no new tasks`)
     const [row] = await insertIssues(tx, p.appId, [{
       kind: 'code', projectId, ideaId: input.ideaId ?? null, title: input.title, description: input.description, brief: input.brief, state: input.state ?? 'todo',
       sortOrder: await nextSort(tx, { projectId }), delegate: input.state === 'backlog' ? null : 'planner', source: input.source, sourceRef: input.sourceRef,
@@ -297,7 +297,7 @@ export async function tickAll(room: number, opts: { projectId?: string } = {}) {
       if (!o) return `${verb} ${other}`
       const t = parents.find((q) => q.id === o.parentId)
       const name = identifier(key(o), o.number)
-      const where = o.projectId !== me.projectId ? ' (another project)' : o.parentId !== me.parentId ? ` (${t ? identifier(key(t), t.number) : 'an issue'}, earlier in the project)` : ''
+      const where = o.projectId !== me.projectId ? ' (another project)' : o.parentId !== me.parentId ? ` (${t ? identifier(key(t), t.number) : 'a task'}, earlier in the project)` : ''
       const path = file?.replace(/^app_[A-Za-z0-9]+\/?/, '') // claims are namespaced by app; the person wants the path
       if (path) return `waiting on ${name} (${path})${where}`
       if (file !== undefined || verb === 'shares files with') return `waiting on ${name} (the whole app)${where}`
@@ -332,13 +332,13 @@ export async function setBuildStatus(issueId: string, to: BuildStatus, actor = '
 export async function clearSubIssues(issueId: string, actor = 'user') {
   return db.transaction(async (tx) => {
     const t = await getIssue(tx, issueId)
-    if (!t.projectId) throw new PlanError('that issue is in no project')
+    if (!t.projectId) throw new PlanError('that task is in no project')
     const [p] = await tx.select().from(project).where(eq(project.id, t.projectId))
-    if (!['drafting', 'proposed', 'approved'].includes(p.status)) throw new PlanError(`project is ${p.status}; only a draft's sub-issues can be cleared`)
+    if (!['drafting', 'proposed', 'approved'].includes(p.status)) throw new PlanError(`project is ${p.status}; only a draft's sub-tasks can be cleared`)
     const ids = (await tx.select({ id: issue.id }).from(issue).where(eq(issue.parentId, issueId))).map((x) => x.id)
     if (ids.length) {
       const dependents = await tx.select().from(issueRelation).where(and(inArray(issueRelation.issueId, ids), notInArray(issueRelation.relatedIssueId, ids), eq(issueRelation.type, 'blocks')))
-      if (dependents.length) throw new PlanError(`${dependents.length} sub-issue(s) of other issues depend on this one's; clear those first`)
+      if (dependents.length) throw new PlanError(`${dependents.length} sub-task(s) of other tasks depend on this one's; clear those first`)
       await tx.delete(issueRelation).where(inArray(issueRelation.relatedIssueId, ids))
       await tx.delete(issueRelation).where(inArray(issueRelation.issueId, ids))
       await tx.delete(fileClaim).where(inArray(fileClaim.issueId, ids))

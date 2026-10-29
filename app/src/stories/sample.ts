@@ -22,7 +22,7 @@ export const sampleApp: App = {
 export const otherApp: App = { id: 'app_sample2', workspaceId: workspace.id, name: 'Sample Blog', key: 'SB', defaultBranch: 'main', setup: {}, repos: [] }
 export const apps = [otherApp, sampleApp] // the newest last: the app the UI picks when none is chosen
 
-/** An issue with every field filled; pass what differs. */
+/** A task (an issue row) with every field filled; pass what differs. */
 export function issue(number: number, title: string, extra: Partial<Issue> = {}): Issue {
   return {
     id: `iss_sample${number}`, appId: sampleApp.id, identifier: `SS-${number}`, number, kind: 'code', parentId: null, projectId: 'proj_checkout', cycleId: null, ideaId: null,

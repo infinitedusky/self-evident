@@ -225,7 +225,7 @@ function FitOnChange({ topology }: { topology: string }) {
 
 /** Why one sub-issue waits on another, in words. */
 function whyEdge(from: GraphSubIssue, to: GraphSubIssue, shared: string[]): string[] {
-  const out = [to.dependsOn.includes(from.id) ? `${to.identifier} builds on ${from.identifier}` : `${to.identifier} starts after ${from.identifier}: its issue comes later in the project`]
+  const out = [to.dependsOn.includes(from.id) ? `${to.identifier} builds on ${from.identifier}` : `${to.identifier} starts after ${from.identifier}: its task comes later in the project`]
   if (shared.length) out.push(`both touch ${shared.slice(0, 3).join(', ')}${shared.length > 3 ? ` +${shared.length - 3}` : ''}`)
   return out
 }

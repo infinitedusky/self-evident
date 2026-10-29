@@ -45,11 +45,11 @@ describe.skipIf(!reachable)('projects in Postgres', () => {
 
   it('refuses cycles, unknown dependencies, a dependency on a later issue, and a project of nothing', async () => {
     await expect(createProject({ appId, name: 'bad', issues: [{ title: 'T', subIssues: [{ key: 'a', title: 'A', dependsOn: ['b'] }, { key: 'b', title: 'B', dependsOn: ['a'] }] }] })).rejects.toThrow(PlanError)
-    await expect(createProject({ appId, name: 'bad', issues: [{ title: 'T', subIssues: [{ key: 'a', title: 'A', dependsOn: ['ghost'] }] }] })).rejects.toThrow(/unknown sub-issue ghost/)
+    await expect(createProject({ appId, name: 'bad', issues: [{ title: 'T', subIssues: [{ key: 'a', title: 'A', dependsOn: ['ghost'] }] }] })).rejects.toThrow(/unknown sub-task ghost/)
     await expect(createProject({ appId, name: 'bad', issues: [
       { title: 'T1', subIssues: [{ key: 'a', title: 'A', dependsOn: ['b'] }] }, { title: 'T2', subIssues: [{ key: 'b', title: 'B' }] },
-    ] })).rejects.toThrow(/later issue/)
-    await expect(createProject({ appId, name: 'bad', issues: [] })).rejects.toThrow(/at least one issue/)
+    ] })).rejects.toThrow(/later task/)
+    await expect(createProject({ appId, name: 'bad', issues: [] })).rejects.toThrow(/at least one task/)
   })
 
   it('a dispatch pass starts what it can, holds the rest with reasons, treats issue order as a dependency, and rolls states up', async () => {
@@ -86,7 +86,7 @@ describe.skipIf(!reachable)('projects in Postgres', () => {
     const g = (await projectGraph(p.id))!
     expect(g.subIssues.map((x) => x.dependsOn.length)).toEqual([0, 1, 1])
     expect(g.subIssues[1]).toMatchObject({ createdBy: 'planner', delegate: 'builder', source: 'planner' })
-    await expect(addSubIssues(issues[0].id, [{ key: 'd', title: 'D', dependsOn: ['nope'] }])).rejects.toThrow(/unknown sub-issue nope/)
+    await expect(addSubIssues(issues[0].id, [{ key: 'd', title: 'D', dependsOn: ['nope'] }])).rejects.toThrow(/unknown sub-task nope/)
     await expect(addSubIssues(added[0].id, [{ key: 'e', title: 'E' }])).rejects.toThrow(/one level/)
   })
 

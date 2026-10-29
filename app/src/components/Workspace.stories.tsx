@@ -17,14 +17,14 @@ type Story = StoryObj<typeof meta>
 
 /** First visit: My Stuff, the agent beside it. */
 export const FirstVisit: Story = { beforeEach: [forget(), withEngine()] }
-/** A project with a sub-issue's build log split beside it, and the issue behind it in the same group. */
+/** A project with a sub-task's build log split beside it, and the task behind it in the same group. */
 export const ProjectBesideItsBuild: Story = {
-  args: { address: false, initial: [{ tab: { kind: 'page', path: '/issues/iss_sample5' } }, { tab: { kind: 'page', path: '/projects/proj_checkout' } }, { tab: { kind: 'build', issueId: 'iss_sample5' }, split: 'right' }] },
+  args: { address: false, initial: [{ tab: { kind: 'page', path: '/tasks/iss_sample5' } }, { tab: { kind: 'page', path: '/projects/proj_checkout' } }, { tab: { kind: 'build', issueId: 'iss_sample5' }, split: 'right' }] },
   beforeEach: [forget(), withEngine([eventStream(buildEvents)])],
 }
 /** A prototype running, under the page being worked on. (The sample "running prototype" is a story.) */
 export const WithAPrototype: Story = {
-  args: { address: false, initial: [{ tab: { kind: 'page', path: '/issues' } }, { tab: { kind: 'prototype', id: prototypes[0].id, path: '/iframe.html?id=pages-now--quiet&viewMode=story' }, split: 'below' }] },
+  args: { address: false, initial: [{ tab: { kind: 'page', path: '/tasks' } }, { tab: { kind: 'prototype', id: prototypes[0].id, path: '/iframe.html?id=pages-now--quiet&viewMode=story' }, split: 'below' }] },
   beforeEach: [forget(), withEngine({ prototypes: [{ ...prototypes[0], url: window.location.origin }] })],
 }
 /** The agent's column folded away (⌘J, or the S. at the top of the rail). */

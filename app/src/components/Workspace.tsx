@@ -28,12 +28,12 @@ const recall = (k: string) => { try { return localStorage.getItem(k) } catch { r
 /** The page and the + menu: what a tab can open. */
 const MENU: { label: string; tab: Tab }[] = [
   { label: 'My Stuff', tab: { kind: 'page', path: '/' } }, { label: 'Projects', tab: { kind: 'page', path: '/projects' } },
-  { label: 'Issues', tab: { kind: 'page', path: '/issues' } }, { label: 'To-dos', tab: { kind: 'page', path: '/todos' } },
+  { label: 'Tasks', tab: { kind: 'page', path: '/tasks' } }, { label: 'To-dos', tab: { kind: 'page', path: '/todos' } },
   { label: 'Ideas', tab: { kind: 'page', path: '/ideas' } }, { label: 'Prototypes', tab: { kind: 'prototype' } },
   { label: 'Storybook', tab: { kind: 'storybook' } }, { label: 'Settings', tab: { kind: 'page', path: '/settings' } },
 ]
 
-/** A better name than the path gives, once the engine says: the project's, the issue's. */
+/** A better name than the path gives, once the engine says: the project's, the task's. */
 async function nameFor(tab: Tab): Promise<string | null> {
   const clip = (s: string) => (s.length > 36 ? `${s.slice(0, 35)}…` : s)
   if (tab.kind === 'build') return engine.issue(tab.issueId).then((i) => `Build · ${i.identifier}`).catch(() => null)
@@ -41,7 +41,7 @@ async function nameFor(tab: Tab): Promise<string | null> {
   if (tab.kind !== 'page') return null
   const project = tab.path.match(/^\/projects\/((?:plan|proj)_[A-Za-z0-9_-]+)/)?.[1]
   if (project) return engine.graph(project).then((g) => clip(g.project.name)).catch(() => null)
-  const issue = tab.path.match(/^\/issues\/([A-Za-z0-9_]+)/)?.[1]
+  const issue = tab.path.match(/^\/tasks\/([A-Za-z0-9_]+)/)?.[1]
   if (issue) return engine.issue(issue).then((i) => clip(`${i.identifier} ${i.title}`)).catch(() => null)
   return null
 }

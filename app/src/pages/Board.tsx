@@ -30,7 +30,7 @@ export function Board({ ideas }: { ideas: Idea[] }) {
   }
   const convert = async (id: string, as: 'task' | 'project') => {
     setBusy(id)
-    try { const out = await engine.convertIdea(id, { as }); nav(out.issueId ? `/issues/${out.issueId}` : `/projects/${out.projectId}`) } catch (e: any) { setError(String(e.message ?? e)); setBusy(null) }
+    try { const out = await engine.convertIdea(id, { as }); nav(out.issueId ? `/tasks/${out.issueId}` : `/projects/${out.projectId}`) } catch (e: any) { setError(String(e.message ?? e)); setBusy(null) }
   }
   const projectOf = (i: IdeaRow) => projects.find((p) => p.ideaId === i.id)
   const notes = ideas.filter((i) => i.app === app?.name) // the files are labelled with the app they are about

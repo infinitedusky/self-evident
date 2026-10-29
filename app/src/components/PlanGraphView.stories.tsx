@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { PlanGraphView } from './PlanGraphView'
 import type { GraphSubIssue } from '../engine'
 
-// Sample sub-issues, made up: the hardening project's shape, in the states worth seeing.
+// Sample sub-tasks, made up: the hardening project's shape, in the states worth seeing.
 const ph = (number: number, title: string, status: GraphSubIssue['status'], extra: Partial<GraphSubIssue> = {}): GraphSubIssue => ({
   id: `ph_sample${number}`, appId: 'app_sample', identifier: `HG-${number}`, number, kind: 'code', title, description: null, brief: null, status, state: status === 'done' ? 'done' : status === 'queued' ? 'todo' : 'in_progress',
   attempt: status === 'queued' ? 0 : 1, maxAttempts: 3, projectId: 'plan_sample', parentId: number <= 4 ? 'task_a' : 'task_b', cycleId: null, ideaId: null,
@@ -38,7 +38,7 @@ export const TakingTurns: Story = { args: {
     files: x.number === 2 ? ['.github/workflows/ci.yml'] : ['poc/hg/db.py'], heldReason: x.number === 3 ? 'waiting on HG-1 (poc/hg/db.py)' : null })),
   files: [{ path: 'poc/hg/db.py', subIssues: ['ph_sample1', 'ph_sample3'], heldBy: 'ph_sample1' }],
 } }
-// Three sub-issues want api.py and nobody has it yet: the file hangs between them, undecided.
+// Three sub-tasks want api.py and nobody has it yet: the file hangs between them, undecided.
 export const SharedFileUndecided: Story = { args: {
   subIssues: [
     ph(1, 'Tables and functions for the schedule', 'done', { files: ['poc/hg/schedule.py', 'poc/hg/db.py'], lastRun: run('completed', '0.30') }),
