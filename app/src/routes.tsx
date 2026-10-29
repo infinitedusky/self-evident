@@ -10,7 +10,6 @@ import { NewProject } from './pages/NewProject'
 import { AppGraph } from './pages/AppGraph'
 import { Now } from './pages/Now'
 import { Learn } from './pages/Learn'
-import { Validate } from './pages/Validate'
 import { Mockups } from './pages/Mockups'
 import { Issues } from './pages/Issues'
 import { IssuePage } from './pages/IssuePage'
@@ -41,7 +40,7 @@ export function PageRoutes() {
       <Route path="/issues/:id" element={<IssuePage />} />
       <Route path="/tasks" element={<Navigate to="/issues" replace />} />
       <Route path="/todos" element={<Todos />} />
-      <Route path="/validate" element={<Validate />} />
+      <Route path="/validate" element={<Navigate to="/mockups" replace />} />
       <Route path="/mockups" element={<Mockups />} />
       <Route path="/build" element={<Projects mode="build" />} />
       <Route path="/ideas" element={<Board ideas={ideas} />} />

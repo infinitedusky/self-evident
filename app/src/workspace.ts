@@ -28,7 +28,7 @@ export const tabKey = (t: Tab) => t.kind === 'page' ? t.path.split('?')[0] : t.k
 const PAGES: [RegExp, string][] = [
   [/^\/$/, 'My Stuff'], [/^\/summary/, 'Summary'], [/^\/observe/, 'Observe'], [/^\/learn/, 'Learn'],
   [/^\/ideas\/?$/, 'Ideas'], [/^\/ideas\//, 'Idea'], [/^\/projects\/new/, 'New project'], [/^\/projects\/?$/, 'Projects'], [/^\/projects\//, 'Project'],
-  [/^\/issues\/?$/, 'Issues'], [/^\/issues\//, 'Issue'], [/^\/todos/, 'To-dos'], [/^\/validate/, 'Validate'], [/^\/mockups/, 'Mockups'],
+  [/^\/issues\/?$/, 'Issues'], [/^\/issues\//, 'Issue'], [/^\/todos/, 'To-dos'], [/^\/mockups/, 'Mockups'],
   [/^\/build/, 'Build'], [/^\/graph/, 'Graph'], [/^\/settings/, 'Settings'],
 ]
 
