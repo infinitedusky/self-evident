@@ -18,7 +18,7 @@ import { EventBus, eventsSince, latestSeq } from './events.js'
 import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { approveBrief, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject } from './work.js'
-import { answerPermission, closeTalks, endTalk, interruptTalk, listTalks, renameTalk, say, setAutoApprove, startTalk, talkTranscript, type SubjectRef, type TalkContext } from './talk.js'
+import { answerPermission, closeTalks, endTalk, interruptTalk, listTalks, renameTalk, say, setAutoApprove, showTalk, startTalk, talkTranscript, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
 import { lastSync, startSync, syncApp } from './github.js'
@@ -69,7 +69,7 @@ export function buildApp(bus: EventBus) {
       'GET /{ideas|issues|projects}/:id/steps': 'the workflow in force, each step\'s state, the order, what blocks completing', 'PUT /{ideas|issues|projects}/:id/steps/:key': '{status?, detail?, body?, refs?}',
       'POST /issues/:id/brief/approve': '{approve?} — a person approves the brief; a task completes only once it is', 'POST /ideas/:id/convert': '{as: task|project, title?, projectId?, why?}',
       'GET /workflows?app=': 'the app\'s workflows', 'POST /workflows': '{appId, name, steps: [{key, on, required}], ordered?}', 'PUT /workflows/:id': 'the same',
-      'POST /{apps|projects|issues}/:id/workflow': '{workflowId | null} — attach one, or inherit again',
+      'POST /talks/ask': '{appId, subjectRef?, text} — a new conversation, said to and brought to the front', 'POST /{apps|projects|issues}/:id/workflow': '{workflowId | null} — attach one, or inherit again',
       'GET /projects/:id/backlog': 'what the project has to cover', 'POST /projects/:id/backlog': '{text, body?} | {items: [{text, body?}]} | {ideaId}',
       'POST /backlog/:id/take': '{title?, brief?} — becomes Todo at the end', 'POST /backlog/:id/duplicate': '{of, reason?}', 'POST /backlog/:id/drop': '{reason}', 'POST /backlog/:id/reopen': '', 'POST /backlog/:id/todo': '{title?, checklist?} — work outside the code',
       'GET /todos?app=': 'the app\'s to-dos with their checklists', 'POST /todos': '{appId, title, notes?, owner?, projectId?, checklist?: [text | {text, waitingOn?}]}',
@@ -228,6 +228,11 @@ export function buildApp(bus: EventBus) {
     const body = await c.req.json<{ appId?: string; subjectRef?: SubjectRef }>().catch(() => ({} as { appId?: string; subjectRef?: SubjectRef }))
     if (!body.appId) return c.json({ error: 'appId is required: a conversation belongs to an app' }, 400)
     try { return c.json(await startTalk({ appId: body.appId, subjectRef: body.subjectRef, actor: 'user' }), 201) } catch (err) { return planError(c, err) }
+  })
+  api.post('/talks/ask', async (c) => { // a page hands the agent a job (a step to do, an idea to convert): a new conversation, brought to the front
+    const body = await c.req.json<{ appId?: string; subjectRef?: SubjectRef; text?: string }>()
+    if (!body.appId || !body.text?.trim()) return c.json({ error: 'appId and text are required' }, 400)
+    try { const t = await startTalk({ appId: body.appId, subjectRef: body.subjectRef, actor: 'user' }); await say(t.id, body.text); await showTalk(t.id, body.appId); return c.json(t, 201) } catch (err) { return planError(c, err) }
   })
   api.post('/talks/:id/rename', async (c) => {
     const { subject } = await c.req.json<{ subject: string }>()
