@@ -85,16 +85,19 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     await expect(setStep({ issueId: t.id }, 'adr', { status: 'done' })).resolves.toMatchObject({ key: 'adr' })
   })
 
-  it('refuses a task made directly when its workflow starts tasks as ideas', async () => {
-    const wf = await saveWorkflow({ appId, name: 'Ideas first', steps: [{ key: 'idea', on: true, required: true }, { key: 'brief', on: true, required: true }] })
+  it('lets a task be made directly under rules that don\'t need an idea; refuses only when every choice does', async () => {
+    const first = await saveWorkflow({ appId, name: 'Ideas first', steps: [{ key: 'idea', on: true, required: true }, { key: 'brief', on: true, required: true }] })
+    const quick = await saveWorkflow({ appId, name: 'Quick', steps: [{ key: 'idea', on: true, required: false }, { key: 'brief', on: true, required: true }] })
     const { project: p } = await createProject({ appId, name: 'Ideas first', issues: [{ title: 'x' }] })
-    await useWorkflow({ projectId: p.id }, wf.id)
-    await expect(guardDirect(db, appId, p.id)).rejects.toThrow(/starts everything as an idea/)
-    await expect(guardDirect(db, appId, null)).resolves.toBeUndefined()
-    expect(await ideaFirst(db, appId, p.id)).toBe('Ideas first')
-    await useWorkflow({ appId }, wf.id)
-    expect((await planView(appId)).ideaFirst).toBe('Ideas first')
+    await useWorkflow({ projectId: p.id }, first.id)
+    await expect(guardDirect(db, appId, p.id)).rejects.toThrow(/starts everything as an idea: choose other rules/)
+    await expect(guardDirect(db, appId, p.id, quick.id)).resolves.toBeUndefined() // chosen rules win over the project's
+    await expect(guardDirect(db, appId, null, 'wf_nope')).rejects.toThrow(/no workflow wf_nope/)
+    await useWorkflow({ appId }, first.id)
     await expect(guardDirect(db, appId)).rejects.toThrow(/starts everything as an idea/)
+    expect(await ideaFirst(db, appId)).toBeNull() // "Quick" (and others) are still a choice
+    const t = await createIssue(appId, { title: 'Chosen rules', kind: 'code', workflowId: quick.id })
+    expect((await stepsOf({ issueId: t.id })).resolved).toMatchObject({ workflow: { id: quick.id }, from: 'task' })
     await useWorkflow({ appId }, null)
   })
 

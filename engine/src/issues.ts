@@ -19,6 +19,7 @@ export interface NewIssue {
   ideaId?: string | null; cycleId?: string | null; state?: IssueState; priority?: number; estimate?: string | null; sortOrder?: number
   assignee?: string | null; delegate?: 'builder' | 'planner' | 'agent' | null; waitingOn?: string | null
   source?: Source; sourceRef?: Record<string, unknown> | null; id?: string
+  workflowId?: string | null // its own workflow rules, chosen when it's made; else it inherits
 }
 
 export const identifier = (key: string, number: number) => `${key}-${number}`
@@ -47,7 +48,7 @@ export async function insertIssues(tx: Tx, appId: string, rows: NewIssue[], acto
       id: r.id ?? newId('issue'), appId, number: ++n, kind: r.kind ?? 'code', parentId: r.parentId ?? null, projectId: r.projectId ?? null,
       cycleId: r.cycleId ?? null, ideaId: r.ideaId ?? null, title: title.slice(0, 500), description: r.description?.trim() || null, brief: r.brief?.trim() || null,
       state, priority: r.priority ?? 0, estimate: r.estimate ?? null, sortOrder: r.sortOrder ?? 0, assignee: r.assignee ?? null, delegate: r.delegate ?? null,
-      waitingOn: r.waitingOn?.trim() || null, source: r.source ?? 'person', sourceRef: r.sourceRef ?? null, createdBy: actor,
+      waitingOn: r.waitingOn?.trim() || null, source: r.source ?? 'person', sourceRef: r.sourceRef ?? null, createdBy: actor, workflowId: r.workflowId ?? null,
       startedAt: STATE_TYPE[state] === 'started' ? now : null, completedAt: state === 'done' ? now : null,
     }
   })

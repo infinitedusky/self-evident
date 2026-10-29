@@ -17,7 +17,7 @@ export { PlanError } from './issues.js'
 
 export interface NewSubIssue { key: string; title: string; description?: string; brief?: string; dependsOn?: string[]; files?: string[]; priority?: number }
 export interface NewProjectIssue { title: string; description?: string; brief?: string; subIssues?: NewSubIssue[] }
-export interface NewProject { appId: string; name: string; content?: string; description?: string; ideaId?: string; issues: NewProjectIssue[] }
+export interface NewProject { appId: string; name: string; content?: string; description?: string; ideaId?: string; workflowId?: string | null; issues: NewProjectIssue[] }
 
 const BACKLOG = ['triage', 'backlog']
 const ACTIVE: BuildStatus[] = ['running', 'awaiting_answer', 'merging', 'testing']
@@ -62,7 +62,7 @@ export async function createProject(input: NewProject, actor = 'engine') {
     const projectId = newId('project')
     const [p] = await tx.insert(project).values({
       id: projectId, appId: a.id, ideaId: input.ideaId ?? null, name: input.name.trim(), description: input.description?.trim() || null,
-      content: input.content?.trim() || null, integrationBranch: `project/${projectId}`,
+      content: input.content?.trim() || null, integrationBranch: `project/${projectId}`, workflowId: input.workflowId ?? null,
     }).returning()
     if (input.ideaId) await tx.update(idea).set({ lane: 'build' }).where(eq(idea.id, input.ideaId)) // the idea has left the inbox
     await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId, actor, type: 'project.created', payload: { name: p.name, issues: input.issues.length, subIssues: all.length } })

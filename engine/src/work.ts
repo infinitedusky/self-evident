@@ -202,19 +202,32 @@ export async function guardComplete(tx: Tx | typeof db, issueId: string) {
   if (v.blocking.length) throw new PlanError(`it can't be completed yet: ${v.blocking.map((k) => (k === 'brief' ? 'the brief isn\'t approved' : `${step(k).label} isn't done`)).join('; ')}`)
 }
 
-/** The workflow that makes tasks start as ideas, if the one in force does: a task's project's, else the app's. */
-export async function ideaFirst(tx: Tx | typeof db, appId: string, projectId?: string | null): Promise<string | null> {
+/** The workflow rules a thing made now would follow: the one chosen, else its project's, else the app's. */
+async function rulesFor(tx: Tx | typeof db, appId: string, projectId?: string | null, workflowId?: string | null) {
   const a = await appOf(tx, appId)
   const p = projectId ? (await tx.select().from(project).where(eq(project.id, projectId)))[0] : null
-  const id = p?.workflowId ?? a.workflowId
-  const w = id ? asWorkflow((await tx.select().from(workflow).where(eq(workflow.id, id)))[0]) : null
-  return w?.steps.find((s) => s.key === 'idea')?.required ? w.name : null
+  const id = workflowId ?? p?.workflowId ?? a.workflowId
+  const [w] = id ? await tx.select().from(workflow).where(eq(workflow.id, id)) : []
+  if (workflowId && (!w || w.appId !== a.id)) throw new PlanError(`no workflow ${workflowId} in this app`)
+  return asWorkflow(w)
+}
+const needsIdea = (w: Workflow | null) => !!w?.steps.find((s) => s.key === 'idea')?.required
+
+/**
+ * When nothing can be made directly: every choice of rules starts it as an idea. A choice is any of the app's
+ * workflows, or none (it inherits the app's default). Returns the default's name then, else null.
+ */
+export async function ideaFirst(tx: Tx | typeof db, appId: string): Promise<string | null> {
+  const def = await rulesFor(tx, appId)
+  if (!needsIdea(def)) return null
+  const all = (await tx.select().from(workflow).where(eq(workflow.appId, appId))).map(asWorkflow)
+  return all.some((w) => !needsIdea(w)) ? null : def!.name
 }
 
-/** Throws when a workflow in force wants tasks and projects to start as ideas: capture the idea, then convert it. */
-export async function guardDirect(tx: Tx | typeof db, appId: string, projectId?: string | null) {
-  const name = await ideaFirst(tx, appId, projectId)
-  if (name) throw new PlanError(`the workflow "${name}" starts everything as an idea: capture the idea, then convert it`)
+/** Throws when the rules a task or project would follow start it as an idea: choose other rules, or convert an idea. */
+export async function guardDirect(tx: Tx | typeof db, appId: string, projectId?: string | null, workflowId?: string | null) {
+  const w = await rulesFor(tx, appId, projectId, workflowId)
+  if (needsIdea(w)) throw new PlanError(`the workflow "${w!.name}" starts everything as an idea: choose other rules, or capture the idea and convert it`)
 }
 
 // ── Converting an idea ───────────────────────────────────────────────────────
