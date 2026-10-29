@@ -41,6 +41,12 @@ export async function eventsSince(since: number, filter: EventFilter = {}, limit
   return db.select().from(event).where(and(...where)).orderBy(asc(event.seq)).limit(limit)
 }
 
+/** The newest sequence number: where a reader that wants only what comes next starts. */
+export async function latestSeq() {
+  const [row] = await db.select({ seq: sql<number>`coalesce(max(${event.seq}), 0)::bigint` }).from(event)
+  return Number(row?.seq ?? 0)
+}
+
 /** One LISTEN connection per process; emits 'event' with the new seq. */
 export class EventBus extends EventEmitter {
   private client: pg.Client | null = null

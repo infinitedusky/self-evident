@@ -2,7 +2,7 @@
 import { and, eq, isNull } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, issue, workspace } from './db/schema.js'
+import { app, event, issue, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { handleMcp } from './mcp.js'
 import { createTodo } from './todos.js'
@@ -41,6 +41,15 @@ describe.skipIf(!reachable)('mcp', () => {
     expect(JSON.parse(call.result.content[0].text).map((t: { title: string }) => t.title)).toEqual(['Call the supplier'])
     const made = await (await handleMcp(appId, rpc(4, 'tools/call', { name: 'create_todo', arguments: { title: 'From the editor' } }), 4000)).json()
     expect(JSON.parse(made.result.content[0].text)).toMatchObject({ title: 'From the editor', createdBy: 'agent:claude-code' })
+  })
+
+  it('opens a tab in the workspace as an event the UI acts on, and refuses a page without a path', async () => {
+    const ok = await (await handleMcp(appId, rpc(5, 'tools/call', { name: 'open_tab', arguments: { path: '/todos', split: 'right' } }), 4000)).json()
+    expect(ok.result.isError).toBeFalsy()
+    const [e] = await db.select().from(event).where(and(eq(event.appId, appId), eq(event.type, 'ui.open')))
+    expect(e.payload).toMatchObject({ tab: { kind: 'page', path: '/todos' }, split: 'right' })
+    const bad = await (await handleMcp(appId, rpc(6, 'tools/call', { name: 'open_tab', arguments: { path: 'todos' } }), 4000)).json()
+    expect(bad.result.isError).toBe(true)
   })
 
   it('refuses a request whose Host is not localhost, and an app that does not exist', async () => {

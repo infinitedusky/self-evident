@@ -7,8 +7,8 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from './db/client.js'
-import { initiative, ISSUE_STATES, issue, question } from './db/schema.js'
-import { eventsSince } from './events.js'
+import { app, initiative, ISSUE_STATES, issue, question } from './db/schema.js'
+import { appendEvent, eventsSince } from './events.js'
 import { addIdea, addItems, dropItem, markDuplicate, promote } from './backlog.js'
 import { createCycle, createInitiative, listCycles, listInitiatives, updateInitiative } from './goals.js'
 import { createIdea, listIdeas } from './ideas.js'
@@ -25,7 +25,7 @@ export interface EngineTool { name: string; description: string; shape: z.ZodRaw
 export interface ToolScope { appId: string; sessionId?: string; actor?: string; waitForPlanner?: boolean }
 
 /** Tools that only read: safe to run without asking. */
-export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'issue', 'issues', 'ideas', 'events', 'todos', 'initiatives', 'cycles'])
+export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'issue', 'issues', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab'])
 
 export function engineTools(opts: ToolScope): EngineTool[] {
   const { appId, sessionId } = opts
@@ -112,6 +112,18 @@ export function engineTools(opts: ToolScope): EngineTool[] {
       def('pause_project', 'Pause a running project of this app: nothing new starts, running agents stop and keep their place.', { projectId: z.string() }, async (a) => tryIt(async () => { await ownProject(a.projectId); return runner.pauseProject(a.projectId, actor) })),
       def('resume_project', 'Resume a paused project of this app.', { projectId: z.string() }, async (a) => tryIt(async () => { await ownProject(a.projectId); return runner.resumeProject(a.projectId, actor) })),
       def('cancel_project', 'Stop a project of this app: agents aborted, unlanded sub-issues cancelled, landed work kept.', { projectId: z.string() }, async (a) => tryIt(async () => { await ownProject(a.projectId); return runner.cancelProject(a.projectId) })),
+      def('open_tab', 'Open a tab in the person\'s workspace, beside the conversation: a page by its path (/projects/<id>, /issues/<id>, /ideas, /todos, /settings, ...), the running app (preview), its Storybook (storybook), or a sub-issue\'s live build log (build, with issueId). An open tab is focused, not opened twice. split puts it beside (right) or under (below) the tab in front. Use it to show what you are talking about.', {
+        kind: z.enum(['page', 'preview', 'storybook', 'build']).optional().describe('default page'), path: z.string().optional().describe('for a page'), issueId: z.string().optional().describe('for a build log'),
+        split: z.enum(['right', 'below']).optional(),
+      }, async (a) => tryIt(async () => {
+        const kind = a.kind ?? 'page'
+        if (kind === 'page' && !a.path?.startsWith('/')) throw new PlanError('a page needs a path starting with /')
+        if (kind === 'build') { if (!a.issueId) throw new PlanError('a build log needs issueId'); await ownIssue(a.issueId) }
+        const [x] = await db.select({ workspaceId: app.workspaceId }).from(app).where(eq(app.id, appId))
+        const tab = { kind, ...(kind === 'page' ? { path: a.path } : {}), ...(kind === 'build' ? { issueId: a.issueId } : {}) }
+        await db.transaction((tx) => appendEvent(tx, { workspaceId: x?.workspaceId ?? 'ws_none', appId, sessionId: sessionId ?? null, actor, type: 'ui.open', payload: { sessionId, tab, split: a.split ?? null } }))
+        return { opened: tab, note: 'shown in the person\'s workspace if Self Evident is open' }
+      })),
       def('events', 'This app\'s event log, newest last. Filter by project or issue; since is a sequence number.', { projectId: z.string().optional(), issueId: z.string().optional(), since: z.number().optional(), limit: z.number().optional() },
         async (a) => tryIt(async () => (await eventsSince(a.since ?? 0, { appId, projectId: a.projectId, issueId: a.issueId })).slice(-(a.limit ?? 50)))),
   ]
