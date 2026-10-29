@@ -192,7 +192,7 @@ export const engine = {
   updateRepo: (id: string, body: { fullName?: string; localPath?: string | null; baseBranch?: string | null }) => call<Repo>('PATCH', `/repos/${id}`, body),
   projects: (appId?: string) => call<ProjectSummary[]>('GET', `/projects${appId ? `?app=${appId}` : ''}`),
   graph: (id: string) => call<Graph>('GET', `/projects/${id}/graph`),
-  createProject: (body: { appId: string; name: string; content?: string; description?: string; ideaId?: string; issues: NewProjectIssue[] }) => call<{ project: { id: string } }>('POST', '/projects', body),
+  createProject: (body: { appId: string; name: string; content?: string; description?: string; ideaId?: string; workflowId?: string; issues: NewProjectIssue[] }) => call<{ project: { id: string } }>('POST', '/projects', body),
   cancelProject: (projectId: string) => call<{ cancelled: number; landed: number }>('POST', `/projects/${projectId}/cancel`),
   start: (id: string) => call<unknown>('POST', `/projects/${id}/start`),
   tick: (id: string) => call<unknown>('POST', `/projects/${id}/tick`),
@@ -201,7 +201,7 @@ export const engine = {
   codeIssues: (appId: string) => call<IssueRow[]>('GET', `/issues?app=${appId}&view=code`),
   issues: (appId: string, f: { kind?: 'code' | 'todo'; project?: string; top?: boolean; open?: boolean } = {}) => call<Issue[]>('GET', `/issues?app=${appId}${f.kind ? `&kind=${f.kind}` : ''}${f.project ? `&project=${f.project}` : ''}${f.top ? '&top=1' : ''}${f.open ? '&open=1' : ''}`),
   issue: (id: string) => call<IssueDetail>('GET', `/issues/${id}`),
-  createIssue: (body: { appId: string; title: string; kind?: 'code' | 'todo'; brief?: string; description?: string; projectId?: string; parentId?: string; state?: 'todo' | 'backlog' }) => call<Issue>('POST', '/issues', body),
+  createIssue: (body: { appId: string; title: string; kind?: 'code' | 'todo'; brief?: string; description?: string; projectId?: string; parentId?: string; state?: 'todo' | 'backlog'; workflowId?: string }) => call<Issue>('POST', '/issues', body),
   updateIssue: (id: string, body: { title?: string; description?: string | null; brief?: string | null; priority?: number; projectId?: string | null; cycleId?: string | null }) => call<Issue>('PATCH', `/issues/${id}`, body),
   setState: (id: string, state: IssueState, reason?: string) => call<Issue>('POST', `/issues/${id}/state`, { state, reason }),
   reorder: (ids: string[]) => call<string[]>('POST', '/issues/reorder', { ids }),
@@ -252,14 +252,19 @@ export const EVENT_TYPES = [
 ]
 
 /** A project's graph, refreshed whenever the engine logs an event for it; plus the recent events themselves. */
-/** The name of the app's default workflow when it makes everything start as an idea: then nothing is made directly. */
+/** The app's workflow rules, with its default, for choosing a new task's or project's. */
+export function useWorkflows(appId: string | undefined) {
+  const [list, setList] = useState<WorkflowRow[]>([])
+  useEffect(() => { setList([]); if (appId) engine.workflows(appId).then(setList).catch(() => {}) }, [appId])
+  return { workflows: list, defaultId: list.find((w) => w.appDefault)?.id ?? null }
+}
+
+/** The default's name when every choice of rules starts things as an idea: then nothing is made directly. */
 export function useIdeaFirst(appId: string | undefined) {
-  const [name, setName] = useState<string | null>(null)
-  useEffect(() => {
-    setName(null)
-    if (appId) engine.workflows(appId).then((ws) => { const d = ws.find((w) => w.appDefault); setName(d?.steps.find((x) => x.key === 'idea')?.required ? d.name : null) }).catch(() => {})
-  }, [appId])
-  return name
+  const { workflows, defaultId } = useWorkflows(appId)
+  const needs = (w?: WorkflowRow) => !!w?.steps.find((x) => x.key === 'idea')?.required
+  const def = workflows.find((w) => w.id === defaultId)
+  return needs(def) && workflows.every((w) => needs(w)) ? def!.name : null
 }
 
 export function useLiveProject(projectId: string | undefined) {

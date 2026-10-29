@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { Badge } from '../components/Badge'
+import { RulesPicker } from '../components/RulesPicker'
 import { STEPS, type StepKey, type StepState, type Workflow } from '@self-evident/engine/steps'
 
 export interface PlanTask { id: string; identifier: string; title: string; state: string; steps: StepState[]; keys?: StepKey[]; workflow?: string } // keys: the steps its workflow shows
@@ -45,13 +46,15 @@ function Task({ t }: { t: PlanTask }) {
   )
 }
 
-/** `onNewTask` makes a task from a title; it may refuse (a workflow that starts tasks as ideas), and says why. */
-export function PlanHome({ plan, app, appId, onNewTask }: { plan: Plan; app?: string; appId?: string; onNewTask?: (title: string) => Promise<void> }) {
+/** `onNewTask` makes a task from a title under the rules chosen ('' = the app's default); it may refuse, and says why. */
+export function PlanHome({ plan, app, appId, onNewTask }: { plan: Plan; app?: string; appId?: string; onNewTask?: (title: string, workflowId: string | null) => Promise<void> }) {
   const [adding, setAdding] = useState<string | null>(null)
+  const [rules, setRules] = useState('')
+  const defaultId = plan.workflows.find((w) => w.name === plan.appWorkflow)?.id ?? null
   const [why, setWhy] = useState<string | null>(null)
   const add = async () => {
     if (!adding?.trim() || !onNewTask) return
-    try { await onNewTask(adding.trim()); setAdding(null); setWhy(null) } catch (e: any) { setWhy(String(e.message ?? e)) }
+    try { await onNewTask(adding.trim(), rules || null); setAdding(null); setWhy(null) } catch (e: any) { setWhy(String(e.message ?? e)) }
   }
   const tasks = plan.projects.reduce((n, p) => n + p.tasks.length, 0) + plan.loose.length
   const cards = [
@@ -65,7 +68,7 @@ export function PlanHome({ plan, app, appId, onNewTask }: { plan: Plan; app?: st
         <div>
           <h1>📋 Plan{app && <span className="muted" style={{ fontWeight: 400 }}> · {app}</span>}</h1>
           <p className="muted" style={{ margin: '4px 0 0' }}>What we've decided to build. A task is built from an approved brief; research, mockups and a prototype can be done on it, or on its project, at any time.</p>
-          <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }}>Workflow rules: {plan.appWorkflow ? <>tasks follow <b>{plan.appWorkflow}</b> unless they have their own</> : 'none set; only the brief is required'}{plan.ideaFirst ? '. Everything starts as an idea and is converted' : ''}. <Link to={appId ? `/settings/apps/${appId}/workflows` : '/settings'}>Configure the rules</Link></p>
+          <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }}>Workflow rules: {plan.appWorkflow ? <>tasks follow <b>{plan.appWorkflow}</b> unless they have their own</> : 'none set; only the brief is required'}{plan.ideaFirst ? '. Every set of rules starts things as an idea, so everything is converted from one' : ''}. <Link to={appId ? `/settings/apps/${appId}/workflows` : '/settings'}>Configure the rules</Link></p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {plan.ideaFirst
@@ -80,6 +83,7 @@ export function PlanHome({ plan, app, appId, onNewTask }: { plan: Plan; app?: st
       {adding !== null && (
         <section className="panel new-task">
           <input autoFocus value={adding} onChange={(e) => setAdding(e.target.value)} placeholder="What will be built? One line; the brief comes after." onKeyDown={(e) => { if (e.key === 'Enter') void add(); if (e.key === 'Escape') setAdding(null) }} />
+          <RulesPicker workflows={plan.workflows} defaultId={defaultId} value={rules} onChange={setRules} />
           <button className="btn small" disabled={!adding.trim()} onClick={add}>Make the task</button>
           <button className="btn quiet small" onClick={() => setAdding(null)}>Cancel</button>
           {why && <div className="empty bad" style={{ flexBasis: '100%' }}>{why}</div>}
