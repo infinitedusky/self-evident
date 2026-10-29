@@ -4,7 +4,8 @@
  */
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { engine, useIdeaFirst } from '../engine'
+import { engine, useIdeaFirst, useWorkflows } from '../engine'
+import { RulesPicker } from '../components/RulesPicker'
 import { useCurrentApp } from '../current-app'
 
 interface PhaseRow { key: string; title: string; description: string; brief: string; dependsOn: string[]; files: string }
@@ -24,7 +25,9 @@ export function NewProject() {
   const [busy, setBusy] = useState(false)
   const [params] = useSearchParams()
   const ideaId = params.get('idea') // "Break it down" from the inbox: the idea becomes the project's title and why, and the first task
-  const ideaFirst = useIdeaFirst(appId || app?.id) // a workflow that starts everything as an idea: no project made here directly
+  const ideaFirst = useIdeaFirst(appId || app?.id) // every choice of rules starts it as an idea: no project made here directly
+  const { workflows, defaultId } = useWorkflows(appId || app?.id)
+  const [rules, setRules] = useState('')
   useEffect(() => {
     if (ideaId && app) engine.ideas(app.id).then((all) => {
       const i = all.find((x) => x.id === ideaId)
@@ -50,7 +53,7 @@ export function NewProject() {
         })),
       }))
       if (!body.length) throw new Error('add at least one issue with a title')
-      const { project } = await engine.createProject({ appId, name: title.trim(), content: spec.trim() || undefined, ideaId: ideaId ?? undefined, issues: body })
+      const { project } = await engine.createProject({ appId, name: title.trim(), content: spec.trim() || undefined, ideaId: ideaId ?? undefined, workflowId: rules || undefined, issues: body })
       nav(`/projects/${project.id}`)
     } catch (e: any) { setError(String(e.message ?? e)) } finally { setBusy(false) }
   }
@@ -59,7 +62,7 @@ export function NewProject() {
     <>
       <p className="mono"><Link to="/projects">← Projects</Link></p>
       <div className="page-head"><h1>New project</h1></div>
-      <div className="empty">This app's workflow, "{ideaFirst}", starts everything as an idea. <Link to="/ideas">Capture the idea</Link>, then convert it into a project.</div>
+      <div className="empty">Every set of workflow rules in this app starts things as an idea (the default is "{ideaFirst}"). <Link to="/ideas">Capture the idea</Link>, then convert it into a project.</div>
     </>
   )
 
@@ -71,6 +74,7 @@ export function NewProject() {
         <div className="form-grid">
           <label>App<select value={appId} onChange={(e) => setAppId(e.target.value)}>{apps.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
           <label>Name<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What this project changes, in a line" /></label>
+          {!ideaId && <RulesPicker workflows={workflows} defaultId={defaultId} value={rules} onChange={setRules} />}
           <label style={{ gridColumn: '1 / -1' }}>Why (optional)<textarea value={spec} onChange={(e) => setSpec(e.target.value)} rows={2} placeholder="The idea or hypothesis behind it; goes in the PR" /></label>
         </div>
       </section>

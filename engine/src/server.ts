@@ -59,7 +59,7 @@ export function buildApp(bus: EventBus) {
       'GET /projects?app=': 'the app\'s projects with counts', 'GET /projects/:id/graph': 'issues in order, sub-issues with builds, edges, claims, held reasons, last run, steps, the PR, backlog, to-dos',
       'POST /projects/:id/issues': '{title, brief?, description?} — an issue at the end of the project',
       'GET /issues?app=&kind=&project=&top=1&open=1': 'issues, filtered (project=none: in no project)', 'GET /issues?app=&view=code': 'the Issues page: top-level code issues with builds and planning',
-      'POST /issues': '{appId, title, kind?, description?, brief?, projectId?, parentId?, state?, priority?, cycleId?}', 'GET /issues/:id': 'one issue with its sub-issues as a list',
+      'POST /issues': '{appId, title, kind?, description?, brief?, projectId?, parentId?, state?, priority?, cycleId?, workflowId?}', 'GET /issues/:id': 'one issue with its sub-issues as a list',
       'PATCH /issues/:id': '{title?, description?, brief?, priority?, estimate?, cycleId?, projectId?, sortOrder?}', 'POST /issues/:id/state': '{state, reason?}', 'POST /issues/reorder': '{ids} — siblings, in this order',
       'POST /issues/:id/sub-issues': '[{key, title, brief?, dependsOn?, files?}] — by hand', 'DELETE /issues/:id/sub-issues': 'a draft issue back to its brief',
       'POST /issues/:id/plan?wait=1': 'the planner: the issue\'s brief → sub-issues, decisions, questions (one read-only agent run); 202 at once, or wait',
@@ -304,7 +304,7 @@ export function buildApp(bus: EventBus) {
   api.post('/issues', async (c) => {
     const { appId, ...body } = await c.req.json()
     try {
-      if (body.kind !== 'todo' && !body.parentId) await guardDirect(db, appId, body.projectId)
+      if (body.kind !== 'todo' && !body.parentId) await guardDirect(db, appId, body.projectId, body.workflowId)
       return c.json(settle(await createIssue(appId, { ...body, delegate: body.kind === 'todo' || body.parentId ? null : 'planner' }, 'user')), 201)
     } catch (err) { return planError(c, err) }
   })
@@ -321,7 +321,7 @@ export function buildApp(bus: EventBus) {
   })
   api.get('/projects', async (c) => { const a = c.req.query('app'); return a ? c.json(await listProjects({ all: c.req.query('all') === '1', appId: a })) : c.json({ error: 'app is required: one app at a time' }, 400) })
   api.post('/projects', async (c) => {
-    try { const body = await c.req.json(); if (!body.ideaId) await guardDirect(db, body.appId); return c.json(await createProject(body), 201) } catch (err) { return planError(c, err) }
+    try { const body = await c.req.json(); if (!body.ideaId) await guardDirect(db, body.appId, null, body.workflowId); return c.json(await createProject(body), 201) } catch (err) { return planError(c, err) }
   })
   api.get('/projects/:id/graph', async (c) => {
     const g = await projectGraph(c.req.param('id'))

@@ -473,3 +473,4 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .new-task { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .new-task input { flex: 1; min-width: 240px; }
 .workflow-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 12px; align-items: start; }
 .workflow-list .panel { margin-bottom: 0; }
+.rules-picker { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--ink-soft); } .rules-picker select { font: 13px var(--sans); padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
