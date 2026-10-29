@@ -243,7 +243,7 @@ async function handle(sessionId: string, entry: Live, m: SDKMessage) {
   }
 }
 
-export interface TalkContext { path: string; label?: string; projectId?: string; issueId?: string; appId?: string; ideaId?: string }
+export interface TalkContext { path: string; label?: string; projectId?: string; issueId?: string; appId?: string; ideaId?: string; tabs?: { title: string; path: string; focused?: boolean }[] }
 
 /** Where the person is, as one line the agent can act on. The transcript keeps the plain text; only the agent sees this. */
 async function describeContext(c?: TalkContext): Promise<string> {
@@ -259,7 +259,8 @@ async function describeContext(c?: TalkContext): Promise<string> {
   }
   if (c.appId) bits.push(`app ${c.appId}`)
   if (c.ideaId) bits.push(`idea ${c.ideaId}`)
-  return `(The person is looking at ${bits.join(', ')}. "This" means that unless they say otherwise; use the engine tools for details.)\n\n`
+  const tabs = c.tabs?.length ? ` Open in their workspace: ${c.tabs.map((t) => `${t.title} (${t.path})${t.focused ? ' in front' : ''}`).join('; ')}. open_tab shows them more.` : ''
+  return `(The person is looking at ${bits.join(', ')}. "This" means that unless they say otherwise; use the engine tools for details.${tabs})\n\n`
 }
 
 export async function say(sessionId: string, text: string, context?: TalkContext) {

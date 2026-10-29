@@ -1,11 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Shell } from '../components/Shell'
 import { Now } from './Now'
 import { engineDown, withEngine } from '../stories/mock-engine'
 import { now, quietNow, T0 } from '../stories/sample'
 
 // My Stuff, from the sample engine: what needs you, what's running, what just happened.
-const meta = { title: 'Pages/Now', component: Now, parameters: { layout: 'fullscreen' }, render: () => <Shell><Now /></Shell> } satisfies Meta<typeof Now>
+const meta = { title: 'Pages/Now', component: Now, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><Now /></div> } satisfies Meta<typeof Now>
 export default meta
 type Story = StoryObj<typeof meta>
 const where = { projectId: 'proj_checkout', projectName: 'One-page checkout (sample)', appName: 'Sample Shop' }

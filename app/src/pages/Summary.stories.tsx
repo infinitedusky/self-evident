@@ -1,11 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Shell } from '../components/Shell'
 import { Summary } from './Summary'
 import { engineDown, withEngine } from '../stories/mock-engine'
 import { summary } from '../stories/sample'
 
 // The summary page, written by the agent: who is on what, and goals near, mid and long.
-const meta = { title: 'Pages/Summary', component: Summary, parameters: { layout: 'fullscreen' }, render: () => <Shell><Summary /></Shell> } satisfies Meta<typeof Summary>
+const meta = { title: 'Pages/Summary', component: Summary, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><Summary /></div> } satisfies Meta<typeof Summary>
 export default meta
 type Story = StoryObj<typeof meta>
 

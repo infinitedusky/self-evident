@@ -61,6 +61,11 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
   ]
 }
 
+/** The live feed with these events in it, then quiet: for a page that shows what happened (a build's log). */
+export const eventStream = (events: { seq: number; type: string }[]) => http.get('/api/events', () => new HttpResponse(new ReadableStream({
+  start(c) { const enc = new TextEncoder(); for (const e of events) c.enqueue(enc.encode(`id: ${e.seq}\nevent: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`)) },
+}), { headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' } }))
+
 /** The engine is down: every call fails the way a dead proxy does. */
 export const engineDown = [http.all('/api/*', () => HttpResponse.text('engine unreachable', { status: 502 }))]
 

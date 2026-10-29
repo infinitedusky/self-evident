@@ -1,13 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { userEvent, within } from 'storybook/test'
-import { Shell } from '../components/Shell'
 import { ProjectPage } from './ProjectPage'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
 import { draftGraph, graph, run, subIssues, todos } from '../stories/sample'
 import type { Graph, GraphSubIssue } from '../engine'
 
 // One project at /projects/:id, live from the sample engine. Each story stands on a project in a different state.
-const meta = { title: 'Pages/ProjectPage', component: ProjectPage, parameters: { layout: 'fullscreen' }, render: () => <Shell><ProjectPage /></Shell> } satisfies Meta<typeof ProjectPage>
+const meta = { title: 'Pages/ProjectPage', component: ProjectPage, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><ProjectPage /></div> } satisfies Meta<typeof ProjectPage>
 export default meta
 type Story = StoryObj<typeof meta>
 const at = (id: string) => ({ route: { path: '/projects/:id', url: `/projects/${id}` } })

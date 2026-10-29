@@ -1,12 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Shell } from '../components/Shell'
 import { Settings } from './Settings'
 import { engineDown, withEngine } from '../stories/mock-engine'
 import { appSettings, apps, factorySettings, sampleApp } from '../stories/sample'
 import type { PluginInfo } from '../engine'
 
 // Settings in two levels: All apps (/settings) and one page per app (/settings/apps/:id).
-const meta = { title: 'Pages/Settings', component: Settings, parameters: { layout: 'fullscreen' }, render: () => <Shell><Settings /></Shell> } satisfies Meta<typeof Settings>
+const meta = { title: 'Pages/Settings', component: Settings, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><Settings /></div> } satisfies Meta<typeof Settings>
 export default meta
 type Story = StoryObj<typeof meta>
 const all = { route: { path: '/settings', url: '/settings' } }

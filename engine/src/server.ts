@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 import { DATABASE_URL, db, pool } from './db/client.js'
 import { ensureDatabase } from './db/ensure.js'
 import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, workspace, type BuildStatus, type IssueState } from './db/schema.js'
-import { EventBus, eventsSince } from './events.js'
+import { EventBus, eventsSince, latestSeq } from './events.js'
 import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { answerPermission, closeTalks, endTalk, interruptTalk, listTalks, renameTalk, say, setAutoApprove, startTalk, talkTranscript, type SubjectRef, type TalkContext } from './talk.js'
@@ -381,8 +381,8 @@ export function buildApp(bus: EventBus) {
   api.all('/mcp/:appId', (c) => handleMcp(c.req.param('appId'), c.req.raw, Number(process.env.PORT ?? 4000)))
 
   // The live feed: replay from ?since=<seq>, then stream as events are committed.
-  api.get('/events', (c) => {
-    const since = Number(c.req.query('since') ?? 0)
+  api.get('/events', async (c) => {
+    const since = c.req.query('since') === 'now' ? await latestSeq() : Number(c.req.query('since') ?? 0) // now: only what happens from here on
     const filter = { workspaceId: c.req.query('workspace'), appId: c.req.query('app'), projectId: c.req.query('project'), issueId: c.req.query('issue') }
     return streamSSE(c, async (stream) => {
       let last = since

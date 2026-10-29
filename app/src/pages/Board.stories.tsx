@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Shell } from '../components/Shell'
 import { Board } from './Board'
 import { ideas } from '../ideas'
 import { sampleIdea } from '../fixtures'
@@ -7,7 +6,7 @@ import { engineDown, withEngine } from '../stories/mock-engine'
 import { ideaRows, sampleApp } from '../stories/sample'
 
 // Ideate: the inbox from the sample engine, then the design-note idea files for the current app (Sample Shop).
-const meta = { title: 'Pages/Board', component: Board, parameters: { layout: 'fullscreen' }, args: { ideas }, render: (a) => <Shell><Board {...a} /></Shell> } satisfies Meta<typeof Board>
+const meta = { title: 'Pages/Board', component: Board, parameters: { layout: 'fullscreen' }, args: { ideas }, render: (a) => <div className="tab-page"><Board {...a} /></div> } satisfies Meta<typeof Board>
 export default meta
 type Story = StoryObj<typeof meta>
 const inbox = [
