@@ -19,7 +19,7 @@ import { Rail } from './Rail'
 import { contextFor, TalkDrawer } from './TalkDrawer'
 
 const THEME: DockviewTheme = { name: 'self-evident', className: 'dockview-theme-se', gap: 8 } // each group a card, after Replit's panes
-const AGENT_KEY = 'se.agent.open', AGENT_WIDTH_KEY = 'se.agent.width', AGENT_WIDTH = 210
+const AGENT_KEY = 'se.agent.open', AGENT_WIDTH_KEY = 'se.agent.px', AGENT_WIDTH = 345
 const layoutKey = (appId: string) => `se.layout.${appId}`
 const remember = (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* fine */ } }
 const recall = (k: string) => { try { return localStorage.getItem(k) } catch { return null } }
