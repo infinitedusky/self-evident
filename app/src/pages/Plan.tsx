@@ -27,5 +27,5 @@ export function Plan() {
   if (!app) return <div className="empty">No app yet. Add one in Settings.</div>
   if (error && !plan) return <div className="empty">The engine isn't reachable: {error}. Start it with <code>pnpm dev</code> at the repo root.</div>
   if (!plan) return <p className="muted">Loading…</p>
-  return <PlanHome plan={plan} app={app.name} onNewTask={async (title) => { const t = await engine.createIssue({ appId: app.id, title, kind: 'code' }); nav(`/issues/${t.id}`) }} />
+  return <PlanHome plan={plan} app={app.name} appId={app.id} onNewTask={async (title) => { const t = await engine.createIssue({ appId: app.id, title, kind: 'code' }); nav(`/issues/${t.id}`) }} />
 }

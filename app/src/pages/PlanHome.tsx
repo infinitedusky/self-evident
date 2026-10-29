@@ -46,7 +46,7 @@ function Task({ t }: { t: PlanTask }) {
 }
 
 /** `onNewTask` makes a task from a title; it may refuse (a workflow that starts tasks as ideas), and says why. */
-export function PlanHome({ plan, app, onNewTask }: { plan: Plan; app?: string; onNewTask?: (title: string) => Promise<void> }) {
+export function PlanHome({ plan, app, appId, onNewTask }: { plan: Plan; app?: string; appId?: string; onNewTask?: (title: string) => Promise<void> }) {
   const [adding, setAdding] = useState<string | null>(null)
   const [why, setWhy] = useState<string | null>(null)
   const add = async () => {
@@ -58,7 +58,6 @@ export function PlanHome({ plan, app, onNewTask }: { plan: Plan; app?: string; o
     { label: 'Projects', n: plan.projects.length, to: '/projects', hint: 'Tasks in order, built as one PR' },
     { label: 'Tasks', n: tasks, to: '/issues', hint: 'Things we\'re going to build' },
     { label: 'To-dos', n: plan.todosOpen, to: '/todos', hint: 'Things a person does' },
-    { label: 'Workflows', n: plan.workflows.length, to: '/plan/workflows', hint: plan.appWorkflow ? `The app uses ${plan.appWorkflow}` : 'None on the app' },
   ]
   return (
     <>
@@ -66,6 +65,7 @@ export function PlanHome({ plan, app, onNewTask }: { plan: Plan; app?: string; o
         <div>
           <h1>📋 Plan{app && <span className="muted" style={{ fontWeight: 400 }}> · {app}</span>}</h1>
           <p className="muted" style={{ margin: '4px 0 0' }}>What we've decided to build. A task is built from an approved brief; research, mockups and a prototype can be done on it, or on its project, at any time.</p>
+          <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }}>Workflow rules: {plan.appWorkflow ? <>tasks follow <b>{plan.appWorkflow}</b> unless they have their own</> : 'none set; only the brief is required'}. <Link to={appId ? `/settings/apps/${appId}#workflows` : '/settings'}>Configure the rules</Link></p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {onNewTask && <button className="btn quiet" onClick={() => setAdding(adding === null ? '' : null)}>New task</button>}

@@ -1,11 +1,11 @@
 /** Every page by its path. Each tab in the workspace renders these inside its own router, so a tab navigates on its own. */
 import { Navigate, Route, Routes, useParams } from 'react-router'
 import { findIdea, ideas } from './ideas'
+import { useCurrentApp } from './current-app'
 import { Board } from './pages/Board'
 import { IdeaPage } from './pages/IdeaPage'
 import { IdeaDetail } from './pages/IdeaDetail'
 import { Plan } from './pages/Plan'
-import { Workflows } from './pages/Workflows'
 import { Settings } from './pages/Settings'
 import { Projects } from './pages/Projects'
 import { ProjectPage } from './pages/ProjectPage'
@@ -22,6 +22,12 @@ import { Summary } from './pages/Summary'
 
 /** Links from before projects were called projects. */
 function OldPlanLink() { return <Navigate to={`/projects/${useParams().id}`} replace /> }
+
+/** Workflow rules moved into the app's settings. */
+function WorkflowsMoved() {
+  const { app } = useCurrentApp()
+  return <Navigate to={app ? `/settings/apps/${app.id}#workflows` : '/settings'} replace />
+}
 
 /** An idea in the inbox (the engine's, by id) or one of the design-phase idea files (by slug). */
 function IdeaRoute() {
@@ -40,7 +46,7 @@ export function PageRoutes() {
       <Route path="/learn" element={<Learn />} />
       <Route path="/projects" element={<Projects mode="project" />} />
       <Route path="/plan" element={<Plan />} />
-      <Route path="/plan/workflows" element={<Workflows />} />
+      <Route path="/plan/workflows" element={<WorkflowsMoved />} />
       <Route path="/plans" element={<Navigate to="/projects" replace />} />
       <Route path="/plans/:id" element={<OldPlanLink />} />
       <Route path="/issues" element={<Issues />} />
