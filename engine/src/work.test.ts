@@ -13,7 +13,7 @@ import { newId } from './ids.js'
 import { createIssue, updateIssue } from './issues.js'
 import { preparePlanning } from './planner.js'
 import { createProject } from './projects.js'
-import { approveBrief, convertIdea, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow } from './work.js'
+import { approveBrief, convertIdea, guardComplete, guardDirect, ideaFirst, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow } from './work.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -89,8 +89,13 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     const wf = await saveWorkflow({ appId, name: 'Ideas first', steps: [{ key: 'idea', on: true, required: true }, { key: 'brief', on: true, required: true }] })
     const { project: p } = await createProject({ appId, name: 'Ideas first', issues: [{ title: 'x' }] })
     await useWorkflow({ projectId: p.id }, wf.id)
-    await expect(guardDirect(db, appId, p.id)).rejects.toThrow(/starts every task as an idea/)
+    await expect(guardDirect(db, appId, p.id)).rejects.toThrow(/starts everything as an idea/)
     await expect(guardDirect(db, appId, null)).resolves.toBeUndefined()
+    expect(await ideaFirst(db, appId, p.id)).toBe('Ideas first')
+    await useWorkflow({ appId }, wf.id)
+    expect((await planView(appId)).ideaFirst).toBe('Ideas first')
+    await expect(guardDirect(db, appId)).rejects.toThrow(/starts everything as an idea/)
+    await useWorkflow({ appId }, null)
   })
 
   it('converts an idea into a task, taking its research, mockups, rough draft and prototype with it', async () => {

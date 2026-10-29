@@ -11,7 +11,7 @@ import { STEPS, type StepKey, type StepState, type Workflow } from '@self-eviden
 
 export interface PlanTask { id: string; identifier: string; title: string; state: string; steps: StepState[]; keys?: StepKey[]; workflow?: string } // keys: the steps its workflow shows
 export interface PlanProject { id: string; name: string; status: string; workflow?: string; steps: StepState[]; keys?: StepKey[]; tasks: PlanTask[] }
-export interface Plan { projects: PlanProject[]; loose: PlanTask[]; todosOpen: number; workflows: Workflow[]; appWorkflow?: string }
+export interface Plan { projects: PlanProject[]; loose: PlanTask[]; todosOpen: number; workflows: Workflow[]; appWorkflow?: string; ideaFirst?: string | null } // ideaFirst: the workflow that makes everything start as an idea
 
 /** One mark per step its workflow shows (without one, the default steps), dim until started. */
 function Marks({ steps, keys }: { steps: StepState[]; keys?: StepKey[] }) {
@@ -65,11 +65,15 @@ export function PlanHome({ plan, app, appId, onNewTask }: { plan: Plan; app?: st
         <div>
           <h1>📋 Plan{app && <span className="muted" style={{ fontWeight: 400 }}> · {app}</span>}</h1>
           <p className="muted" style={{ margin: '4px 0 0' }}>What we've decided to build. A task is built from an approved brief; research, mockups and a prototype can be done on it, or on its project, at any time.</p>
-          <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }}>Workflow rules: {plan.appWorkflow ? <>tasks follow <b>{plan.appWorkflow}</b> unless they have their own</> : 'none set; only the brief is required'}. <Link to={appId ? `/settings/apps/${appId}/workflows` : '/settings'}>Configure the rules</Link></p>
+          <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }}>Workflow rules: {plan.appWorkflow ? <>tasks follow <b>{plan.appWorkflow}</b> unless they have their own</> : 'none set; only the brief is required'}{plan.ideaFirst ? '. Everything starts as an idea and is converted' : ''}. <Link to={appId ? `/settings/apps/${appId}/workflows` : '/settings'}>Configure the rules</Link></p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {onNewTask && <button className="btn quiet" onClick={() => setAdding(adding === null ? '' : null)}>New task</button>}
-          <Link to="/projects/new" className="btn">New project</Link>
+          {plan.ideaFirst
+            ? <Link to="/ideas" className="btn" title={`The workflow "${plan.ideaFirst}" starts everything as an idea`}>From an idea</Link>
+            : <>
+              {onNewTask && <button className="btn quiet" onClick={() => setAdding(adding === null ? '' : null)}>New task</button>}
+              <Link to="/projects/new" className="btn">New project</Link>
+            </>}
         </div>
       </div>
 

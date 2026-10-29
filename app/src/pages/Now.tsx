@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge, type Tone } from '../components/Badge'
-import { API, engine, EVENT_TYPES, type Attention, type Event, type Now as NowData, type RunningProject } from '../engine'
+import { API, engine, EVENT_TYPES, useIdeaFirst, type Attention, type Event, type Now as NowData, type RunningProject } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { describeEvent } from '../describe-event'
 
@@ -14,6 +14,7 @@ const COST_TONE: Record<string, Tone> = { cheap: 'neutral', moderate: 'warn', ex
 
 export function Now() {
   const { app } = useCurrentApp()
+  const ideaFirst = useIdeaFirst(app?.id)
   const [data, setData] = useState<NowData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -45,7 +46,7 @@ export function Now() {
         <div style={{ display: 'flex', gap: 8 }}>
           {error && <Badge tone="warn" dot>{error}</Badge>}
           <button className="btn quiet" disabled={busy === 'sync'} onClick={() => act('sync', () => engine.syncGithub(app.id))} title="Read GitHub now: reviews, checks, merges, main moving (also every two minutes)">{busy === 'sync' ? 'Syncing…' : 'Sync with GitHub'}</button>
-          <Link to="/projects/new" className="btn">New project</Link>
+          {ideaFirst ? <Link to="/ideas" className="btn" title={`The workflow "${ideaFirst}" starts everything as an idea`}>From an idea</Link> : <Link to="/projects/new" className="btn">New project</Link>}
         </div>
       </div>
 

@@ -252,6 +252,16 @@ export const EVENT_TYPES = [
 ]
 
 /** A project's graph, refreshed whenever the engine logs an event for it; plus the recent events themselves. */
+/** The name of the app's default workflow when it makes everything start as an idea: then nothing is made directly. */
+export function useIdeaFirst(appId: string | undefined) {
+  const [name, setName] = useState<string | null>(null)
+  useEffect(() => {
+    setName(null)
+    if (appId) engine.workflows(appId).then((ws) => { const d = ws.find((w) => w.appDefault); setName(d?.steps.find((x) => x.key === 'idea')?.required ? d.name : null) }).catch(() => {})
+  }, [appId])
+  return name
+}
+
 export function useLiveProject(projectId: string | undefined) {
   const [graph, setGraph] = useState<Graph | null>(null)
   const [events, setEvents] = useState<Event[]>([])

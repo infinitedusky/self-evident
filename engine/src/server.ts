@@ -321,7 +321,7 @@ export function buildApp(bus: EventBus) {
   })
   api.get('/projects', async (c) => { const a = c.req.query('app'); return a ? c.json(await listProjects({ all: c.req.query('all') === '1', appId: a })) : c.json({ error: 'app is required: one app at a time' }, 400) })
   api.post('/projects', async (c) => {
-    try { return c.json(await createProject(await c.req.json()), 201) } catch (err) { return planError(c, err) }
+    try { const body = await c.req.json(); if (!body.ideaId) await guardDirect(db, body.appId); return c.json(await createProject(body), 201) } catch (err) { return planError(c, err) }
   })
   api.get('/projects/:id/graph', async (c) => {
     const g = await projectGraph(c.req.param('id'))

@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { engine } from '../engine'
+import { engine, useIdeaFirst } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 interface PhaseRow { key: string; title: string; description: string; brief: string; dependsOn: string[]; files: string }
@@ -24,6 +24,7 @@ export function NewProject() {
   const [busy, setBusy] = useState(false)
   const [params] = useSearchParams()
   const ideaId = params.get('idea') // "Break it down" from the inbox: the idea becomes the project's title and why, and the first task
+  const ideaFirst = useIdeaFirst(appId || app?.id) // a workflow that starts everything as an idea: no project made here directly
   useEffect(() => {
     if (ideaId && app) engine.ideas(app.id).then((all) => {
       const i = all.find((x) => x.id === ideaId)
@@ -53,6 +54,14 @@ export function NewProject() {
       nav(`/projects/${project.id}`)
     } catch (e: any) { setError(String(e.message ?? e)) } finally { setBusy(false) }
   }
+
+  if (ideaFirst && !ideaId) return (
+    <>
+      <p className="mono"><Link to="/projects">← Projects</Link></p>
+      <div className="page-head"><h1>New project</h1></div>
+      <div className="empty">This app's workflow, "{ideaFirst}", starts everything as an idea. <Link to="/ideas">Capture the idea</Link>, then convert it into a project.</div>
+    </>
+  )
 
   return (
     <>
