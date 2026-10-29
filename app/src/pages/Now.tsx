@@ -90,16 +90,16 @@ function AttentionRow({ a, busy, act }: { a: Attention; busy: string | null; act
   const where = 'projectId' in a && a.projectId && 'projectName' in a ? <span className="faint">{a.appName} · <Link to={`/projects/${a.projectId}`}>{a.projectName}</Link></span> : <span className="faint">{a.appName}</span>
   switch (a.kind) {
     case 'failed_build': return (
-      <li><Badge tone="bad">failed</Badge><div><strong><Link to={`/issues/${a.issueId}`}>{a.identifier}</Link> {a.title}</strong> {where}{a.error && <div className="muted" style={{ fontSize: 13 }}>{a.error.slice(0, 200)}</div>}</div>
+      <li><Badge tone="bad">failed</Badge><div><strong><Link to={`/tasks/${a.issueId}`}>{a.identifier}</Link> {a.title}</strong> {where}{a.error && <div className="muted" style={{ fontSize: 13 }}>{a.error.slice(0, 200)}</div>}</div>
         <span style={{ display: 'flex', gap: 6 }}><button className="btn small" disabled={busy === a.issueId} onClick={() => act(a.issueId, () => engine.retry(a.issueId))}>Retry</button><Link className="btn quiet small" to={`/projects/${a.projectId}`}>Look</Link></span></li>)
     case 'question': return (
       <li><Badge tone={COST_TONE[a.cost ?? ''] ?? 'neutral'}>question</Badge><div><strong>{a.text}</strong> {where}{a.issueIdentifier && <span className="faint"> · {a.issueIdentifier}</span>}</div>
         <Link className="btn quiet small" to={`/projects/${a.projectId}`}>Answer</Link></li>)
     case 'run_project': return (
-      <li><Badge tone="ok">ready</Badge><div><strong>{a.projectName}</strong> <span className="faint">{a.appName} · {a.subIssues} sub-issue{a.subIssues === 1 ? '' : 's'} planned, nothing open</span></div>
+      <li><Badge tone="ok">ready</Badge><div><strong>{a.projectName}</strong> <span className="faint">{a.appName} · {a.subIssues} sub-task{a.subIssues === 1 ? '' : 's'} planned, nothing open</span></div>
         <button className="btn small" disabled={busy === a.projectId} onClick={() => act(a.projectId, () => engine.start(a.projectId))}>Run it</button></li>)
     case 'plan_issue': return (
-      <li><Badge>draft</Badge><div><strong><Link to={`/issues/${a.issueId}`}>{a.identifier}</Link> {a.issueTitle}</strong> {where} <span className="faint">· not planned yet</span></div>
+      <li><Badge>draft</Badge><div><strong><Link to={`/tasks/${a.issueId}`}>{a.identifier}</Link> {a.issueTitle}</strong> {where} <span className="faint">· not planned yet</span></div>
         <button className="btn small" disabled={busy === a.issueId} onClick={() => act(a.issueId, () => engine.planIssue(a.issueId))}>Plan it</button></li>)
     case 'todo': return (
       <li><Badge tone={a.next ? (a.owner === 'agent' ? 'accent' : 'warn') : 'neutral'}>{a.next ? (a.owner === 'agent' ? 'agent to-do' : 'to-do') : 'waiting'}</Badge>
@@ -107,7 +107,7 @@ function AttentionRow({ a, busy, act }: { a: Attention; busy: string | null; act
           {a.next ? <div className="muted" style={{ fontSize: 13 }}>Next: {a.next}</div> : a.waitingOn.length ? <div className="muted" style={{ fontSize: 13 }}>Waiting on {a.waitingOn.join(', ')}</div> : !a.total ? <div className="muted" style={{ fontSize: 13 }}>No checklist yet</div> : null}</div>
         <Link className="btn quiet small" to={`/todos#${a.todoId}`}>Open</Link></li>)
     case 'backlog': return (
-      <li><Badge tone="warn">backlog</Badge><div><strong>{a.projectName}</strong> <span className="faint">{a.appName} · the work has landed; {a.open} issue{a.open === 1 ? '' : 's'} still in the backlog: {a.items.join('; ')}</span></div>
+      <li><Badge tone="warn">backlog</Badge><div><strong>{a.projectName}</strong> <span className="faint">{a.appName} · the work has landed; {a.open} task{a.open === 1 ? '' : 's'} still in the backlog: {a.items.join('; ')}</span></div>
         <Link className="btn quiet small" to={`/projects/${a.projectId}`}>Settle them</Link></li>)
     case 'merge_pr': return (
       <li><Badge tone={a.review === 'CHANGES_REQUESTED' || a.checks === 'failing' ? 'bad' : a.review === 'APPROVED' && a.checks !== 'pending' ? 'ok' : 'neutral'}>landed</Badge>
@@ -142,7 +142,7 @@ function RunningCard({ r }: { r: RunningProject }) {
       </div>
       <div className="card-title"><Link to={`/projects/${r.projectId}`}>{r.projectName}</Link></div>
       {r.live.map((x) => (
-        <div key={x.id} style={{ marginTop: 6 }}><Link className="mono faint" to={`/issues/${x.id}`}>{x.identifier}</Link> {x.title} <Badge tone="accent" dot>{x.status}</Badge>
+        <div key={x.id} style={{ marginTop: 6 }}><Link className="mono faint" to={`/tasks/${x.id}`}>{x.identifier}</Link> {x.title} <Badge tone="accent" dot>{x.status}</Badge>
           {x.step && <div className="muted" style={{ fontSize: 13 }}>→ {x.step}</div>}</div>
       ))}
       {r.held.length > 0 && <div className="faint" style={{ marginTop: 6, fontSize: 13 }}>Waiting: {r.held.map((h) => `${h.identifier} (${h.reason})`).join('; ')}</div>}

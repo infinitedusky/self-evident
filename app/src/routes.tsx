@@ -22,6 +22,8 @@ import { Summary } from './pages/Summary'
 
 /** Links from before projects were called projects. */
 function OldPlanLink() { return <Navigate to={`/projects/${useParams().id}`} replace /> }
+/** Tasks lived at /issues (Linear's word) before they were called tasks; old links still land. */
+function OldIssueLink() { return <Navigate to={`/tasks/${useParams().id}`} replace /> }
 
 /** Workflow rules moved into the app's settings. */
 function WorkflowsMoved() {
@@ -49,9 +51,10 @@ export function PageRoutes() {
       <Route path="/plan/workflows" element={<WorkflowsMoved />} />
       <Route path="/plans" element={<Navigate to="/projects" replace />} />
       <Route path="/plans/:id" element={<OldPlanLink />} />
-      <Route path="/issues" element={<Issues />} />
-      <Route path="/issues/:id" element={<IssuePage />} />
-      <Route path="/tasks" element={<Navigate to="/issues" replace />} />
+      <Route path="/tasks" element={<Issues />} />
+      <Route path="/tasks/:id" element={<IssuePage />} />
+      <Route path="/issues" element={<Navigate to="/tasks" replace />} />
+      <Route path="/issues/:id" element={<OldIssueLink />} />
       <Route path="/todos" element={<Todos />} />
       <Route path="/validate" element={<Navigate to="/mockups" replace />} />
       <Route path="/mockups" element={<Mockups />} />

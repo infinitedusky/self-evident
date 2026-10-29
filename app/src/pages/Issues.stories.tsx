@@ -4,8 +4,8 @@ import { engineDown, withEngine } from '../stories/mock-engine'
 import { issueRows } from '../stories/sample'
 import type { IssueRow } from '../engine'
 
-// Every code issue of the app at /issues: the ones in no project first, then by project.
-const meta = { title: 'Pages/Issues', component: Issues, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><Issues /></div> } satisfies Meta<typeof Issues>
+// Every code task of the app at /tasks: the ones in no project first, then by project.
+const meta = { title: 'Pages/Tasks', component: Issues, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><Issues /></div> } satisfies Meta<typeof Issues>
 export default meta
 type Story = StoryObj<typeof meta>
 
@@ -22,13 +22,13 @@ const standings: IssueRow[] = [
   { ...placed, id: 'iss_sample26', identifier: 'SS-26', number: 26, title: 'Old banner removed (sample)', state: 'done', builds: { done: 1 }, planning: null, description: null },
 ]
 
-/** The sample app: one issue in no project (with "Add to a project…"), two in the checkout project. */
+/** The sample app: one task in no project (with "Add to a project…"), two in the checkout project. */
 export const Typical: Story = {}
-/** Every standing an issue can show: not planned, planning, waiting for the model, planning failed, a failed build, in review, done. */
+/** Every standing a task can show: not planned, planning, waiting for the model, planning failed, a failed build, in review, done. */
 export const EveryStanding: Story = { beforeEach: withEngine({ issueRows: standings }) }
-/** Only issues in no project, and no open project to send them to. */
+/** Only tasks in no project, and no open project to send them to. */
 export const NothingToAddTo: Story = { beforeEach: withEngine({ issueRows: [issueRows[2]], projects: [] }) }
-/** No issues yet. */
+/** No tasks yet. */
 export const Empty: Story = { beforeEach: withEngine({ issueRows: [] }) }
 /** Waiting on the engine. */
 export const Loading: Story = { beforeEach: withEngine({}, { latency: 'infinite' }) }

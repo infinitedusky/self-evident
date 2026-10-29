@@ -56,7 +56,7 @@ export function AppGraph() {
       <div className="page-head">
         <div>
           <h1>Graph{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
-          <p className="muted" style={{ margin: '4px 0 0' }}>Every sub-issue being built, across projects. An arrow is a wait: the sub-issue at its head starts after the one at its tail lands. Ones that touch the same file take turns; that shows on the node when it happens.</p>
+          <p className="muted" style={{ margin: '4px 0 0' }}>Every sub-task being built, across projects. An arrow is a wait: the sub-task at its head starts after the one at its tail lands. Ones that touch the same file take turns; that shows on the node when it happens.</p>
         </div>
       </div>
       {error && !data && <div className="empty">The engine isn't reachable: {error}</div>}
@@ -73,10 +73,10 @@ export function AppGraph() {
             : <div className="empty">Nothing planned in {data.app.name} yet.</div>}
           {selected && (
             <section className="panel">
-              <h2><Link to={`/issues/${selected.id}`}>{selected.identifier}</Link> {selected.title} <Badge>{projectOf(selected)?.name}</Badge></h2>
+              <h2><Link to={`/tasks/${selected.id}`}>{selected.identifier}</Link> {selected.title} <Badge>{projectOf(selected)?.name}</Badge></h2>
               <dl className="fields">
                 <dt>Build</dt><dd>{selected.status}{selected.heldReason ? ` — ${selected.heldReason}` : ''}</dd>
-                <dt>Issue</dt><dd>{issueOf(selected) ? <Link to={`/issues/${issueOf(selected)!.id}`}>{issueOf(selected)!.identifier} {issueOf(selected)!.title}</Link> : '—'}</dd>
+                <dt>Task</dt><dd>{issueOf(selected) ? <Link to={`/tasks/${issueOf(selected)!.id}`}>{issueOf(selected)!.identifier} {issueOf(selected)!.title}</Link> : '—'}</dd>
                 <dt>Files</dt><dd>{selected.files.length ? <span className="mono">{selected.files.join(', ')}</span> : <span className="faint">None declared: claims the whole app.</span>}</dd>
                 <dt>Shares files with</dt><dd>{data.conflicts.filter((c) => c.includes(selected.id)).map((c) => c.find((x) => x !== selected.id)).map((id) => data.subIssues.find((p) => p.id === id)).filter(Boolean).map((p) => `${p!.identifier} ${p!.title} (${projectOf(p!)?.name})`).join('; ') || <span className="faint">Nothing open.</span>}</dd>
                 <dt>Project</dt><dd><Link to={`/projects/${selected.projectId}`}>{projectOf(selected)?.name}</Link></dd>

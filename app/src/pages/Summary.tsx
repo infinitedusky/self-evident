@@ -18,7 +18,7 @@ const ago = (iso: string) => {
 function RefLink({ id, r }: { id: string; r: FocusRef }) {
   const style = { fontSize: 12 }
   if (r.kind === 'pr' || r.kind === 'teammate_pr') return r.url ? <a className="ref" style={style} href={r.url} target="_blank" rel="noreferrer">{r.label}</a> : <span className="ref" style={style}>{r.label}</span>
-  const to = r.kind === 'todo' ? `/todos#${id}` : r.kind === 'issue' || r.kind === 'task' ? `/issues/${id}` : r.kind === 'idea' ? '/ideas' : r.kind === 'project' ? `/projects/${id}` : r.projectId ? `/projects/${r.projectId}` : null
+  const to = r.kind === 'todo' ? `/todos#${id}` : r.kind === 'issue' || r.kind === 'task' ? `/tasks/${id}` : r.kind === 'idea' ? '/ideas' : r.kind === 'project' ? `/projects/${id}` : r.projectId ? `/projects/${r.projectId}` : null
   return to ? <Link className="ref" style={style} to={to}>{r.label}</Link> : <span className="ref" style={style}>{r.label}</span>
 }
 
@@ -65,7 +65,7 @@ export function Summary() {
         <div>
           <h1>📰 Summary<span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span></h1>
           <p className="muted" style={{ margin: '4px 0 0', maxWidth: 760 }}>
-            Written by the agent from what Self Evident knows: goals, projects, issues, to-dos, pull requests, the last week.
+            Written by the agent from what Self Evident knows: goals, projects, tasks, to-dos, pull requests, the last week.
             {f ? <> Written {ago(f.createdAt)}{f.trigger === 'schedule' ? ' on schedule' : ''}.</> : null}
             {f && data?.stale && !data.writing ? <> Things have moved since.</> : null} It rewrites itself daily when something has moved.
           </p>

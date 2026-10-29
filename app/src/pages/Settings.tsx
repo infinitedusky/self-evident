@@ -102,6 +102,7 @@ function FactoryPage({ section }: { section: string }) {
           <dt>Claude Code</dt><dd className="muted">The agents. Development runs on the operator's login; the product on an API key.</dd>
           <dt>GitHub</dt><dd className="muted">Set per app: its repo, where PRs live.</dd>
           <dt>Storybook</dt><dd className="muted">Set per app: where its stories run.</dd>
+          <dt>Linear</dt><dd className="muted">Not connected yet. Connecting Linear maps tasks to Linear issues, and sub-tasks to sub-issues.</dd>
         </dl>
       </section>}
     </>
@@ -340,8 +341,8 @@ function AppPage({ app, section, onSaved }: { app: App; section: string; onSaved
       <Group title="Landing" lead="How finished work reaches the default branch.">
         <label style={{ gridColumn: '1 / -1' }}>Test command<input className="mono" value={setup.test_cmd ?? ''} onChange={(e) => set({ test_cmd: e.target.value })} placeholder="runs in the worktree on the merged commit; must exit 0 to land" /></label>
         <label style={{ gridColumn: '1 / -1' }}>Pull requests<select value={setup.pr_mode ?? 'project'} onChange={(e) => set({ pr_mode: e.target.value as 'project' | 'issue' })}>
-          <option value="project">One per project: every issue lands on the project's branch</option>
-          <option value="issue">One per issue, stacked: small PRs for a team; each merges on its own</option>
+          <option value="project">One per project: every task lands on the project's branch</option>
+          <option value="issue">One per task, stacked: small PRs for a team; each merges on its own</option>
         </select></label>
       </Group>
     </>,

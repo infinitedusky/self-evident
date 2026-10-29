@@ -19,7 +19,7 @@ export function IdeaDetail({ id }: { id: string }) {
   useEffect(() => { if (app) engine.ideas(app.id).then((all) => setIdea(all.find((i) => i.id === id) ?? null)).catch((e) => setError(String(e.message ?? e))) }, [id, app?.id])
   const convert = async (as: 'task' | 'project') => {
     setBusy(true)
-    try { const out = await engine.convertIdea(id, { as }); nav(out.issueId ? `/issues/${out.issueId}` : `/projects/${out.projectId}`) } catch (e: any) { setError(String(e.message ?? e)); setBusy(false) }
+    try { const out = await engine.convertIdea(id, { as }); nav(out.issueId ? `/tasks/${out.issueId}` : `/projects/${out.projectId}`) } catch (e: any) { setError(String(e.message ?? e)); setBusy(false) }
   }
   const ask = async () => {
     if (!idea) return

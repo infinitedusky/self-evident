@@ -60,7 +60,7 @@ export function ProjectPage() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {draft && (
-            <button className="btn quiet" disabled={busy} onClick={() => { if (window.confirm('Discard this draft? Its issues, sub-issues, questions and decisions go with it.')) void act(async () => { await engine.cancelProject(graph.project.id); nav('/projects') }) }}>Discard draft</button>
+            <button className="btn quiet" disabled={busy} onClick={() => { if (window.confirm('Discard this draft? Its tasks, sub-tasks, questions and decisions go with it.')) void act(async () => { await engine.cancelProject(graph.project.id); nav('/projects') }) }}>Discard draft</button>
           )}
           {graph.project.status === 'running' && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.pause(graph.project.id))} title="Nothing new starts; running agents stop and resume where they were">Pause</button>}
           {graph.project.status === 'paused' && <button className="btn" disabled={busy} onClick={() => act(() => engine.resume(graph.project.id))}>Resume</button>}
@@ -89,7 +89,7 @@ export function ProjectPage() {
         {graph.issues.map((t, n) => (
           <IssueChip key={t.id} issue={t} subIssues={graph.subIssues.filter((p) => p.parentId === t.id)} planning={planning(t.id)} waiting={waitingForModel(t.id)}
             onPlan={!['landed', 'stopped', 'superseded'].includes(graph.project.status) && !planning(t.id) && t.state === 'todo' ? () => act(() => engine.planIssue(t.id)) : undefined}
-            onReplan={draft && !planning(t.id) ? () => { if (window.confirm('Remove this issue\'s sub-issues, decisions and questions and plan it again?')) void act(async () => { await engine.clearSubIssues(t.id); await engine.planIssue(t.id) }) } : undefined}
+            onReplan={draft && !planning(t.id) ? () => { if (window.confirm('Remove this task\'s sub-tasks, decisions and questions and plan it again?')) void act(async () => { await engine.clearSubIssues(t.id); await engine.planIssue(t.id) }) } : undefined}
             onEarlier={draft && n > 0 ? () => move(n, n - 1) : undefined} onLater={draft && n < graph.issues.length - 1 ? () => move(n, n + 1) : undefined}
             busy={busy} />
         ))}
@@ -97,7 +97,7 @@ export function ProjectPage() {
 
       {graph.subIssues.length
         ? <PlanGraphView subIssues={graph.subIssues} files={graph.files} storageKey={graph.project.id} labels={Object.fromEntries(graph.subIssues.map((p) => [p.id, short(issueOf(p)?.title ?? '')]))} selectedId={selectedId} onSelect={(p) => setSelectedId(p.id)} />
-        : <div className="empty">Nothing planned yet. <strong>Plan</strong> an issue above: the planner reads the repo and the issue's brief and proposes sub-issues, decisions and questions. Or write them by hand with <code>pnpm se issue sub-issues</code>.</div>}
+        : <div className="empty">Nothing planned yet. <strong>Plan</strong> a task above: the planner reads the repo and the task's brief and proposes sub-tasks, decisions and questions. Or write them by hand with <code>pnpm se issue sub-issues</code>.</div>}
 
       {(graph.questions.length > 0 || graph.decisions.length > 0) && (
         <div className="project-lower">
@@ -117,7 +117,7 @@ export function ProjectPage() {
       <div className="project-lower">
         <section className="panel">
           {selected ? <SubIssueDetail phase={selected} issue={issueOf(selected)} planStatus={graph.project.status} busy={busy} act={act} />
-            : <p className="muted" style={{ margin: 0 }}>Click a sub-issue to see its brief, files, dependencies, steps and last run.</p>}
+            : <p className="muted" style={{ margin: 0 }}>Click a sub-task to see its brief, files, dependencies, steps and last run.</p>}
         </section>
         <section className="panel">
           <h2>Events</h2>
@@ -148,19 +148,19 @@ function BacklogPanel({ graph, busy, act }: { graph: Graph; busy: boolean; act: 
   const addable = ideas.filter((i) => i.lane === 'inbox' && !inBacklog.has(i.id))
   const workDone = graph.subIssues.length > 0 && graph.subIssues.every((p) => p.status === 'done') && graph.issues.every((t) => t.subIssueIds.length)
   const add = () => { const t = text.trim(); if (!t) return; void act(async () => { await engine.addBacklog(graph.project.id, t); setText('') }) }
-  const issueLabel = (id: string | null) => { const t = graph.issues.find((x) => x.id === id); return t ? `${t.identifier} ${t.title}` : 'an issue' }
+  const issueLabel = (id: string | null) => { const t = graph.issues.find((x) => x.id === id); return t ? `${t.identifier} ${t.title}` : 'a task' }
   return (
     <section className="panel backlog" data-component="BacklogPanel">
       <h2>Backlog {open.length > 0 && <Badge tone={workDone && graph.project.status === 'running' ? 'warn' : 'neutral'}>{open.length} open</Badge>}
         {workDone && open.length > 0 && graph.project.status === 'running' && <span className="faint" style={{ fontSize: 13, fontWeight: 400 }}> · the work has landed; the project lands when these are taken on or dropped</span>}</h2>
-      {!items.length && <p className="muted" style={{ margin: '0 0 10px' }}>Everything this project has to cover. Add what you don't want to forget; the planner and builders add what they notice. Each is taken on, covered by an issue the project has, or dropped with a reason, and the project lands only when nothing is left here.</p>}
+      {!items.length && <p className="muted" style={{ margin: '0 0 10px' }}>Everything this project has to cover. Add what you don't want to forget; the planner and builders add what they notice. Each is taken on, covered by a task the project has, or dropped with a reason, and the project lands only when nothing is left here.</p>}
       {open.length > 0 && <ul className="backlog-items">{open.map((i) => (
         <li key={i.id}>
           <div><span className="mono faint">{i.identifier}</span> <span>{i.title}</span> <Badge>{SOURCE_LABEL[i.source]}</Badge>{i.description && <div className="faint" style={{ fontSize: 13 }}>{i.description}</div>}</div>
           {!closed && <span className="backlog-actions">
             <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.takeOn(i.id))} title="It joins the work, at the end of the project">Take on</button>
             <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.itemToTodo(i.id))} title="Work outside the code: a to-do of the app, with a checklist">To-do</button>
-            {graph.issues.length > 0 && <select className="small" disabled={busy} value="" onChange={(e) => { const id = e.target.value; if (id) void act(() => engine.markDuplicate(i.id, id)) }} title="An issue the project already has does this: this one is a duplicate of it">
+            {graph.issues.length > 0 && <select className="small" disabled={busy} value="" onChange={(e) => { const id = e.target.value; if (id) void act(() => engine.markDuplicate(i.id, id)) }} title="A task the project already has does this: this one is a duplicate of it">
               <option value="">Covered by…</option>
               {graph.issues.map((t) => <option key={t.id} value={t.id}>{t.identifier} {t.title}</option>)}
             </select>}
@@ -198,11 +198,11 @@ function IssueChip({ issue: task, subIssues: phases, planning, waiting, onPlan, 
   const tone: Tone = phases.length && done === phases.length ? 'ok' : live ? 'accent' : 'neutral'
   return (
     <li className="task-chip" data-component="IssueChip" title={task.description ?? task.brief?.slice(0, 300) ?? undefined}>
-      <span className="mono faint"><Link to={`/issues/${task.id}`}>{task.identifier}</Link>{['done', 'in_review', 'canceled'].includes(task.state) ? ` · ${STATE_LABEL[task.state]}` : ''}</span>
+      <span className="mono faint"><Link to={`/tasks/${task.id}`}>{task.identifier}</Link>{['done', 'in_review', 'canceled'].includes(task.state) ? ` · ${STATE_LABEL[task.state]}` : ''}</span>
       <strong>{task.title}</strong>
       {(onEarlier || onLater) && <span className="chip-order"><button className="linkish" disabled={busy || !onEarlier} onClick={onEarlier} title="Earlier">←</button><button className="linkish" disabled={busy || !onLater} onClick={onLater} title="Later">→</button></span>}
       {planning ? <Badge tone={waiting ? 'warn' : 'accent'} dot>{waiting ? 'waiting for the model' : 'planning…'}</Badge>
-        : phases.length ? <><Badge tone={tone} dot={live}>{done}/{phases.length} sub-issues</Badge>{onReplan && <button className="btn quiet small" disabled={busy} onClick={onReplan} title="Remove the sub-issues and plan this issue again">Plan again</button>}</>
+        : phases.length ? <><Badge tone={tone} dot={live}>{done}/{phases.length} sub-tasks</Badge>{onReplan && <button className="btn quiet small" disabled={busy} onClick={onReplan} title="Remove the sub-tasks and plan this task again">Plan again</button>}</>
         : onPlan ? <button className="btn quiet small" disabled={busy} onClick={onPlan}>Plan</button> : <Badge>not planned</Badge>}
     </li>
   )
@@ -232,7 +232,7 @@ function QuestionCard({ q, issue, busy, act }: { q: Question; issue?: GraphIssue
           {rec && q.reason && <div className="faint" style={{ marginTop: 6, fontSize: 13 }}>Why {rec.label}: {q.reason}</div>}
           {q.options.some((o) => o.description) && <ul className="faint" style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 13 }}>{q.options.filter((o) => o.description).map((o) => <li key={o.label}><strong>{o.label}</strong>: {o.description}</li>)}</ul>}
         </>
-      ) : <div style={{ marginTop: 6 }}>Answer: <strong>{q.answer}</strong>{rec && q.answer !== rec.label ? <span className="faint"> (the planner recommended {rec.label}; the sub-issues assume it)</span> : null}</div>}
+      ) : <div style={{ marginTop: 6 }}>Answer: <strong>{q.answer}</strong>{rec && q.answer !== rec.label ? <span className="faint"> (the planner recommended {rec.label}; the sub-tasks assume it)</span> : null}</div>}
     </div>
   )
 }
@@ -259,14 +259,14 @@ function SubIssueDetail({ phase, issue: task, planStatus, busy, act }: { phase: 
   const steps = phase.steps ?? []
   return (
     <>
-      <h2><Link to={`/issues/${phase.id}`}>{phase.identifier}</Link> {phase.title} <Badge tone={STATUS_TONE[phase.status]}>{phase.status.replace('_', ' ')}</Badge></h2>
+      <h2><Link to={`/tasks/${phase.id}`}>{phase.identifier}</Link> {phase.title} <Badge tone={STATUS_TONE[phase.status]}>{phase.status.replace('_', ' ')}</Badge></h2>
       <dl className="fields">
-        <dt>Issue</dt><dd>{task ? <><Link to={`/issues/${task.id}`}>{task.identifier}</Link> {task.title}{task.description && <div className="faint" style={{ fontSize: 13 }}>{task.description}</div>}</> : '—'}</dd>
+        <dt>Task</dt><dd>{task ? <><Link to={`/tasks/${task.id}`}>{task.identifier}</Link> {task.title}{task.description && <div className="faint" style={{ fontSize: 13 }}>{task.description}</div>}</> : '—'}</dd>
         <dt>What</dt><dd><Brief description={phase.description} brief={phase.brief} /></dd>
         <dt>Files</dt><dd>{phase.files.length ? <span className="mono">{phase.files.join(', ')}</span> : <span className="faint">None declared: claims the whole app.</span>}</dd>
         <dt>Depends on</dt><dd>
-          {phase.dependsOn.length ? `${phase.dependsOn.length} sub-issue${phase.dependsOn.length > 1 ? 's' : ''}` : <span className="faint">Nothing explicit.</span>}
-          {phase.orderedAfter?.length ? <span className="faint"> Issue order: after {phase.orderedAfter.length} sub-issue{phase.orderedAfter.length > 1 ? 's' : ''} of the issue before.</span> : null}
+          {phase.dependsOn.length ? `${phase.dependsOn.length} sub-task${phase.dependsOn.length > 1 ? 's' : ''}` : <span className="faint">Nothing explicit.</span>}
+          {phase.orderedAfter?.length ? <span className="faint"> Task order: after {phase.orderedAfter.length} sub-task{phase.orderedAfter.length > 1 ? 's' : ''} of the task before.</span> : null}
         </dd>
         <dt>Held</dt><dd>{phase.heldReason ?? <span className="faint">Not held.</span>}</dd>
         <dt>Branch</dt><dd>{phase.branch ? <span className="mono">{phase.branch}</span> : <span className="faint">Not started.</span>}</dd>
@@ -282,7 +282,7 @@ function SubIssueDetail({ phase, issue: task, planStatus, busy, act }: { phase: 
         <div className="retry-row">
           <button className="btn" disabled={busy} onClick={() => act(() => engine.retry(phase.id))} title="Three more attempts in the same worktree; the builder is told why the last one failed">Retry</button>
           <button className="btn quiet" disabled={busy} onClick={() => { if (window.confirm(`Start ${phase.identifier} over from the project's branch? What the last attempt left in its worktree is thrown away.`)) void act(() => engine.retry(phase.id, true)) }}>Retry from scratch</button>
-          {planStatus === 'stopped' && <span className="faint" style={{ fontSize: 13 }}>The project is stopped; retrying resumes it, with its other cancelled sub-issues.</span>}
+          {planStatus === 'stopped' && <span className="faint" style={{ fontSize: 13 }}>The project is stopped; retrying resumes it, with its other cancelled sub-tasks.</span>}
         </div>
       )}
       {manual && (
@@ -324,7 +324,7 @@ function summarise(e: Event): string {
     case 'issue.state': return `${p.identifier ?? ''} ${p.from} → ${p.to}${p.reason ? ` (${p.reason})` : ''}`
     case 'issue.created': return `${p.identifier ?? ''} ${p.title}`
     case 'issue.planning': return `the planner is reading the repo (attempt ${p.attempt})`
-    case 'issue.planned': return `${(p.subIssues ?? p.phases ?? []).length} sub-issues · ${p.decisions} decisions · ${p.questions} questions${p.costUsd != null ? ` · $${Number(p.costUsd).toFixed(2)} est.` : ''}`
+    case 'issue.planned': return `${(p.subIssues ?? p.phases ?? []).length} sub-tasks · ${p.decisions} decisions · ${p.questions} questions${p.costUsd != null ? ` · $${Number(p.costUsd).toFixed(2)} est.` : ''}`
     case 'issue.plan_failed': return String(p.error).slice(0, 160)
     case 'question.asked': return `[${p.cost}] ${p.text}`
     case 'question.answered': return String(p.answer)

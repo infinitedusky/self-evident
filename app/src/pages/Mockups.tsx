@@ -9,7 +9,7 @@ import { engine } from '../engine'
 
 type Status = Awaited<ReturnType<typeof engine.storybook>>
 
-/** `story`: open at this story (its id, like pages-issuepage--sub-issue-building) instead of Storybook's front page. */
+/** `story`: open at this story (its id, like pages-taskpage--sub-task-building) instead of Storybook's front page. */
 export function Mockups({ story }: { story?: string }) {
   const { app } = useCurrentApp()
   const [s, setS] = useState<Status | null>(null)
