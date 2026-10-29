@@ -493,6 +493,11 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Conversations belong to an app (Sandy, 2026-10-29: "we need to make sure that we separate conversations between apps")
+
+The agent's tabs show only the conversations of the app picked in the nav. Switching apps switches the tabs, and
+each app remembers which of its conversations was open.
+
 ## Task, not issue (Sandy, 2026-10-29: "standardize our use of task instead of issue … if you integrate Linear it will map tasks to issues")
 
 - **Everything people and the agent see says task and sub-task:** pages, tab titles, the address (`/tasks`;
