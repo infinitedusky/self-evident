@@ -13,7 +13,7 @@ import { newId } from './ids.js'
 import { createIssue, updateIssue } from './issues.js'
 import { preparePlanning } from './planner.js'
 import { createProject } from './projects.js'
-import { approveBrief, convertIdea, guardComplete, guardDirect, ideaFirst, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow } from './work.js'
+import { approveBrief, convertIdea, createDefaultWorkflow, guardComplete, guardDirect, ideaFirst, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow } from './work.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -31,6 +31,17 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     await pool.end()
   })
 
+  it('makes an app with its default workflow, "Default", only the brief required', async () => {
+    const other = newId('app')
+    await db.transaction(async (tx) => {
+      await tx.insert(app).values({ id: other, workspaceId: wsId, name: 'with a default', key: other.slice(-6).toUpperCase() })
+      await createDefaultWorkflow(tx, other)
+    })
+    const [w] = await listWorkflows(other)
+    expect(w).toMatchObject({ name: 'Default', appDefault: true, ordered: false })
+    expect(w.steps.filter((s) => s.required).map((s) => s.key)).toEqual(['brief'])
+  })
+
   it('keeps a workflow to the fixed rules and refuses an order that breaks them', async () => {
     await expect(saveWorkflow({ appId, name: 'bad', steps: [{ key: 'brief', on: true, required: true }, { key: 'research', on: true, required: false }] })).rejects.toThrow(/order breaks the rules/)
     await expect(saveWorkflow({ appId, name: 'odd', steps: [{ key: 'deploy' as never, on: true, required: true }] })).rejects.toThrow(/no step "deploy"/)
@@ -45,7 +56,7 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     const taskWf = await saveWorkflow({ appId, name: 'Task', steps: [{ key: 'idea', on: true, required: false }, { key: 'brief', on: true, required: true }] })
     const { project: p, issues: [t] } = await createProject({ appId, name: 'Inherits', issues: [{ title: 'one' }] })
 
-    expect((await stepsOf({ issueId: t.id })).resolved).toEqual({ workflow: null, from: null })
+    expect((await stepsOf({ issueId: t.id })).resolved).toMatchObject({ workflow: { name: 'Default' }, from: 'app' }) // never none
     await useWorkflow({ appId }, appWf.id)
     expect((await stepsOf({ issueId: t.id })).resolved).toMatchObject({ workflow: { id: appWf.id }, from: 'app' })
     await useWorkflow({ projectId: p.id }, projWf.id)
@@ -56,7 +67,8 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     await useWorkflow({ issueId: t.id }, null)
     expect((await stepsOf({ issueId: t.id })).resolved.from).toBe('project')
     expect((await listWorkflows(appId)).find((w) => w.id === appWf.id)).toMatchObject({ appDefault: true })
-    await useWorkflow({ appId }, null)
+    await expect(useWorkflow({ appId }, null)).rejects.toThrow(/always has a default/)
+    await db.update(app).set({ workflowId: null }).where(eq(app.id, appId)) // leave the app as the other tests expect
   })
 
   it('completes a task only with its brief approved and its required steps done; a changed brief is approved again', async () => {
@@ -98,7 +110,8 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     expect(await ideaFirst(db, appId)).toBeNull() // "Quick" (and others) are still a choice
     const t = await createIssue(appId, { title: 'Chosen rules', kind: 'code', workflowId: quick.id })
     expect((await stepsOf({ issueId: t.id })).resolved).toMatchObject({ workflow: { id: quick.id }, from: 'task' })
-    await useWorkflow({ appId }, null)
+    await expect(useWorkflow({ appId }, null)).rejects.toThrow(/always has a default/)
+    await db.update(app).set({ workflowId: null }).where(eq(app.id, appId)) // leave the app as the other tests expect
   })
 
   it('converts an idea into a task, taking its research, mockups, rough draft and prototype with it', async () => {

@@ -65,6 +65,13 @@ export function validOrder(steps: { key: StepKey }[]): boolean {
 export const DEFAULT_STEPS: WorkflowStep[] = ['idea', 'research', 'mockup', 'prototype', 'brief'].map((key) => ({ key: key as StepKey, on: true, required: key === 'brief' }))
 
 /**
+ * The workflow every app starts with, made with the app (Sandy, 2026-10-29: a task's workflow "can't be nothing").
+ * An app always has a default; this stands in only for one made before that, until it's migrated.
+ */
+export const DEFAULT_NAME = 'Default'
+export const DEFAULT_WORKFLOW: Workflow = { id: 'default', name: DEFAULT_NAME, steps: DEFAULT_STEPS, ordered: false }
+
+/**
  * A workflow with the fixed rules applied: the idea and the brief listed and on, the brief required, any missing
  * fixed step put back in its place, and an order that breaks the rules put back in the default order.
  */
@@ -92,14 +99,14 @@ export interface StepState {
 }
 
 export type Source = 'task' | 'project' | 'app'
+/** On a task or project, always a workflow; on an idea, none (an idea has no workflow). */
 export interface Resolved { workflow: Workflow | null; from: Source | null }
 
-/** The workflow in force: the task's own, or else its project's, or else the app's. */
+/** The workflow in force: the task's own, or else its project's, or else the app's default; never none. */
 export function resolve(own?: Workflow | null, project?: Workflow | null, app?: Workflow | null): Resolved {
   if (own) return { workflow: own, from: 'task' }
   if (project) return { workflow: project, from: 'project' }
-  if (app) return { workflow: app, from: 'app' }
-  return { workflow: null, from: null }
+  return { workflow: app ?? DEFAULT_WORKFLOW, from: 'app' }
 }
 
 export interface Row { key: StepKey; required: boolean; position: number | null; waitingOn: StepKey | null; state: StepState }

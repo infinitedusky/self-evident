@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addCheck, blocking, normalize, removeCheck, resolve, rows, validOrder, type Workflow, type WorkflowStep } from './steps.js'
+import { DEFAULT_WORKFLOW, addCheck, blocking, normalize, removeCheck, resolve, rows, validOrder, type Workflow, type WorkflowStep } from './steps.js'
 
 const w = (steps: WorkflowStep[], ordered = true): Workflow => ({ id: 'wf', name: 'wf', ordered, steps })
 const s = (key: WorkflowStep['key'], required = false, on = true): WorkflowStep => ({ key, on, required })
@@ -11,7 +11,7 @@ describe('steps', () => {
     expect(resolve(own, proj, app)).toMatchObject({ workflow: { id: 'own' }, from: 'task' })
     expect(resolve(null, proj, app)).toMatchObject({ workflow: { id: 'proj' }, from: 'project' })
     expect(resolve(null, null, app)).toMatchObject({ workflow: { id: 'app' }, from: 'app' })
-    expect(resolve()).toEqual({ workflow: null, from: null })
+    expect(resolve()).toEqual({ workflow: DEFAULT_WORKFLOW, from: 'app' })
   })
 
   it('with no workflow, shows the default steps unordered, only the brief required', () => {
