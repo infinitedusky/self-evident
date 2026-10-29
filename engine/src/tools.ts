@@ -7,7 +7,7 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from './db/client.js'
-import { app, initiative, ISSUE_STATES, issue, question } from './db/schema.js'
+import { app, initiative, ISSUE_STATES, issue, prototype, question } from './db/schema.js'
 import { appendEvent, eventsSince } from './events.js'
 import { addIdea, addItems, dropItem, markDuplicate, promote } from './backlog.js'
 import { createCycle, createInitiative, listCycles, listInitiatives, updateInitiative } from './goals.js'
@@ -18,6 +18,7 @@ import { answerQuestion, finishPlanning, preparePlanning } from './planner.js'
 import { createProject, issueDetail, listProjects, PlanError, projectGraph } from './projects.js'
 import { runner } from './runner.js'
 import { listStories } from './storybook.js'
+import { discardPrototype, listPrototypes, prototypeStatus, runPrototype, setPrototypeCommand, startPrototype, stopPrototype } from './prototype.js'
 import { syncApp } from './github.js'
 import { addChecklist, completeTodo, createTodo, dropTodo, itemToTodo, listTodos, setChecklistItem, updateTodo } from './todos.js'
 
@@ -26,7 +27,7 @@ export interface EngineTool { name: string; description: string; shape: z.ZodRaw
 export interface ToolScope { appId: string; sessionId?: string; actor?: string; waitForPlanner?: boolean }
 
 /** Tools that only read: safe to run without asking. */
-export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'issue', 'issues', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories'])
+export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'issue', 'issues', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype'])
 
 export function engineTools(opts: ToolScope): EngineTool[] {
   const { appId, sessionId } = opts
@@ -39,6 +40,7 @@ export function engineTools(opts: ToolScope): EngineTool[] {
   const ownProject = async (projectId: string) => { const g = await projectGraph(projectId); if (!g || g.project.appId !== appId) throw foreign(); return g }
   const ownIssue = async (issueId: string) => { const [t] = await db.select().from(issue).where(eq(issue.id, issueId)); if (!t || t.appId !== appId) throw foreign(); return t }
   const ownQuestion = async (questionId: string) => { const [q] = await db.select().from(question).where(eq(question.id, questionId)); if (!q || q.appId !== appId) throw foreign(); return q }
+  const ownPrototype = async (id: string) => { const [p] = await db.select().from(prototype).where(eq(prototype.id, id)); if (!p || p.appId !== appId) throw foreign(); return p }
   const ownInitiative = async (id: string) => { const [i] = await db.select().from(initiative).where(eq(initiative.id, id)); if (!i || (i.appId && i.appId !== appId)) throw foreign(); return i }
   const line = z.object({ text: z.string(), waitingOn: z.string().optional() })
   const subIssue = z.object({ key: z.string(), title: z.string(), description: z.string().optional(), brief: z.string().optional(), dependsOn: z.array(z.string()).optional(), files: z.array(z.string()).optional() })
@@ -113,20 +115,35 @@ export function engineTools(opts: ToolScope): EngineTool[] {
       def('pause_project', 'Pause a running project of this app: nothing new starts, running agents stop and keep their place.', { projectId: z.string() }, async (a) => tryIt(async () => { await ownProject(a.projectId); return runner.pauseProject(a.projectId, actor) })),
       def('resume_project', 'Resume a paused project of this app.', { projectId: z.string() }, async (a) => tryIt(async () => { await ownProject(a.projectId); return runner.resumeProject(a.projectId, actor) })),
       def('cancel_project', 'Stop a project of this app: agents aborted, unlanded sub-issues cancelled, landed work kept.', { projectId: z.string() }, async (a) => tryIt(async () => { await ownProject(a.projectId); return runner.cancelProject(a.projectId) })),
-      def('open_tab', 'Open a tab in the person\'s workspace, beside the conversation: a page by its path (/projects/<id>, /issues/<id>, /ideas, /todos, /settings, ...), the running app (preview), its Storybook (storybook), or a story in it (storybook, with story: its id from the stories tool), a sub-issue\'s live build log (build, with issueId). An open tab is focused, not opened twice. split puts it beside (right) or under (below) the tab in front. Use it to show what you are talking about.', {
-        kind: z.enum(['page', 'preview', 'storybook', 'build']).optional().describe('default page'), path: z.string().optional().describe('for a page'), issueId: z.string().optional().describe('for a build log'), story: z.string().optional().describe('for storybook: a story id, like pages-issuepage--sub-issue-building'),
+      def('open_tab', 'Open a tab in the person\'s workspace, beside the conversation: a page by its path (/projects/<id>, /issues/<id>, /ideas, /todos, /settings, ...), its Storybook (storybook), or a story in it (storybook, with story: its id from the stories tool), a sub-issue\'s live build log (build, with issueId), a prototype (prototype, with prototypeId; without one, the list of them). An open tab is focused, not opened twice. split puts it beside (right) or under (below) the tab in front. Use it to show what you are talking about.', {
+        kind: z.enum(['page', 'prototype', 'storybook', 'build']).optional().describe('default page'), path: z.string().optional().describe('for a page'), issueId: z.string().optional().describe('for a build log'), prototypeId: z.string().optional().describe('for a prototype'), story: z.string().optional().describe('for storybook: a story id, like pages-issuepage--sub-issue-building'),
         split: z.enum(['right', 'below']).optional(),
       }, async (a) => tryIt(async () => {
         const kind = a.kind ?? 'page'
         if (kind === 'page' && !a.path?.startsWith('/')) throw new PlanError('a page needs a path starting with /')
         if (kind === 'build') { if (!a.issueId) throw new PlanError('a build log needs issueId'); await ownIssue(a.issueId) }
+        if (kind === 'prototype' && a.prototypeId) await ownPrototype(a.prototypeId)
         const [x] = await db.select({ workspaceId: app.workspaceId }).from(app).where(eq(app.id, appId))
-        const tab = { kind, ...(kind === 'page' ? { path: a.path } : {}), ...(kind === 'build' ? { issueId: a.issueId } : {}), ...(kind === 'storybook' && a.story ? { story: a.story } : {}) }
+        const tab = { kind, ...(kind === 'page' ? { path: a.path } : {}), ...(kind === 'build' ? { issueId: a.issueId } : {}), ...(kind === 'storybook' && a.story ? { story: a.story } : {}), ...(kind === 'prototype' && a.prototypeId ? { prototypeId: a.prototypeId } : {}) }
         await db.transaction((tx) => appendEvent(tx, { workspaceId: x?.workspaceId ?? 'ws_none', appId, sessionId: sessionId ?? null, actor, type: 'ui.open', payload: { sessionId, tab, split: a.split ?? null } }))
         return { opened: tab, note: 'shown in the person\'s workspace if Self Evident is open' }
       })),
       def('stories', 'This app\'s Storybook stories, from its running Storybook: id (open one with open_tab kind storybook), title (the page or component) and name (the state). match narrows by id, title or name.', { match: z.string().optional() },
         async (a) => tryIt(() => listStories(appId, a.match))),
+      def('prototypes', 'This app\'s prototypes: the actual thing built fast in a worktree of its own to demo and learn from, then analysed into the plan and built again from scratch. Each with its branch, worktree path, status and address.', {},
+        async () => tryIt(() => listPrototypes(appId))),
+      def('prototype', 'One prototype: status, address, whether it answers, and the last lines of its server\'s output.', { prototypeId: z.string() },
+        async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return prototypeStatus(a.prototypeId) })),
+      def('start_prototype', 'Start a prototype in this app: a branch and worktree of its own off the default branch, and its server on a free port, then open it with open_tab (prototype). Build in its worktree fast: shortcuts are the default, it only has to demo; its data is made up. projectId ties it to the project it is for.', { title: z.string(), projectId: z.string().optional() },
+        async (a) => tryIt(async () => { if (a.projectId) await ownProject(a.projectId); return startPrototype({ appId, title: a.title, projectId: a.projectId, actor }) })),
+      def('run_prototype', 'Start a stopped prototype\'s server again, on a fresh port.', { prototypeId: z.string() },
+        async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return runPrototype(a.prototypeId, actor) })),
+      def('stop_prototype', 'Stop a prototype\'s server; its worktree stays.', { prototypeId: z.string() },
+        async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return stopPrototype(a.prototypeId, actor) })),
+      def('discard_prototype', 'Done with a prototype: its server stopped, its worktree and branch removed. Only when the person says so.', { prototypeId: z.string() },
+        async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return discardPrototype(a.prototypeId, actor) })),
+      def('set_prototype_command', 'How this app\'s prototype server starts: a shell command run in the prototype\'s worktree that installs what it needs and serves on $PORT (like "pnpm install && pnpm dev --port $PORT"). Work it out from the app (package.json scripts, Procfile, README) and confirm it with the person first.', { command: z.string() },
+        async (a) => tryIt(() => setPrototypeCommand(appId, a.command))),
       def('events', 'This app\'s event log, newest last. Filter by project or issue; since is a sequence number.', { projectId: z.string().optional(), issueId: z.string().optional(), since: z.number().optional(), limit: z.number().optional() },
         async (a) => tryIt(async () => (await eventsSince(a.since ?? 0, { appId, projectId: a.projectId, issueId: a.issueId })).slice(-(a.limit ?? 50)))),
   ]

@@ -330,3 +330,12 @@ export const verification = pgTable('verification', { // [LS] Feature/Entry shot
   inList('verification_kind', t.kind, ['screenshot', 'video', 'flow_diff', 'expectation', 'story', 'numbers']),
   check('verification_label', sql`${t.label} is null or ${t.label} in ('feature', 'entry_point', 'before', 'after', 'failing_now_passing', 'data_effect')`),
   foreignKey({ name: 'verification_issue_app_fk', columns: [t.issueId, t.appId], foreignColumns: [issue.id, issue.appId] })])
+
+// The actual thing, built fast in a worktree of its own to demo and learn from, then analysed into the plan and built
+// again from scratch; none of its code is kept. Its server is the engine's to start and stop; the row outlives it.
+export const PROTOTYPE_STATUSES = ['running', 'stopped', 'discarded'] as const
+export const prototype = pgTable('prototype', {
+  id: id(), appId: appId(), projectId: text('project_id').references(() => project.id),
+  title: text('title').notNull(), branch: text('branch').notNull(), path: text('path').notNull(), port: integer('port'),
+  status: text('status').notNull().default('stopped'), createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [index('prototype_app').on(t.appId), inList('prototype_status', t.status, PROTOTYPE_STATUSES)])

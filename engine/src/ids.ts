@@ -6,7 +6,7 @@ const nano = customAlphabet(alphabet, 12)
 
 export const PREFIXES = {
   workspace: 'ws', user: 'usr', app: 'app', repo: 'repo', provider: 'prov', idea: 'idea', project: 'proj',
-  decision: 'dec', question: 'q', task: 'task', phase: 'ph', session: 'sess', run: 'run', pr: 'pr', verification: 'ver', backlog: 'bl', todo: 'todo', issue: 'iss', initiative: 'init', cycle: 'cyc',
+  decision: 'dec', question: 'q', task: 'task', phase: 'ph', session: 'sess', run: 'run', pr: 'pr', verification: 'ver', backlog: 'bl', todo: 'todo', issue: 'iss', initiative: 'init', cycle: 'cyc', prototype: 'proto',
 } as const
 
 export type Kind = keyof typeof PREFIXES
