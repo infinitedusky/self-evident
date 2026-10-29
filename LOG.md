@@ -498,12 +498,16 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - **The steps are one list:** research, brief, mockup, prototype. They're the same everywhere.
 - **A workflow shapes them.** For each step it can switch it on or off and make it required or optional, and it can
   set an order and enforce it. This is borrowed from Jira's workflows, kept to these few settings.
-- **Fixed in every workflow** (Sandy, same day: "the one constant is that a brief is always required"):
-  - the brief is always on and always required;
-  - "starts as an idea" comes first, and a workflow makes it optional or required;
-  - research, when it's on, comes before the brief;
-  - only mockups and the prototype can go before or after the brief.
-  Everything else (which steps are on, which are required, their order) is the workflow's to set.
+- **Fixed in every workflow** (Sandy, same day: "the one constant is that a brief is always required"; then "starts
+  as an idea … should be always there, but you just choose required or not"):
+  - "starts as an idea" is always there and always first; a workflow makes it required or not. It can't be switched
+    off, because any idea can always be converted into a task;
+  - research comes next: on or off, required or not;
+  - the brief is always there and always required;
+  - mockups and the prototype can go before or after the brief, on or off, required or not;
+  - after the brief come checks that a workflow adds or removes: an ADR, the blast radius (risk analysis), a brief
+    audit, and the like.
+  The rules live in one module, `engine/src/steps.ts`, which the app imports too.
 - **Attaching one is optional.** A workflow can be attached to the app, a project or a task, or to none of them.
   Without one, every step is optional and the order is free.
 - **It inherits:** a task uses its own workflow, or else its project's, or else the app's. The page says where it
