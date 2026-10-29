@@ -1,7 +1,7 @@
 /**
  * The loop as a thin strip of icons on the far left, like VS Code's activity bar: each opens its page as a tab
  * (or brings it to the front). Hovering one shows its name and the pages under it. Below the rule: Summary,
- * My Stuff, the app running (Preview), its Storybook. Settings sits at the bottom; the app picker is atop the agent.
+ * My Stuff, its prototypes, its Storybook. Settings sits at the bottom; the app picker is atop the agent.
  */
 import type { Tab } from '../workspace'
 
@@ -18,13 +18,13 @@ const LOOP: Item[] = [
 const OUTSIDE: Item[] = [
   { icon: '📰', label: 'Summary', tab: page('/summary') },
   { icon: '📌', label: 'My Stuff', tab: page('/'), also: /^\/$/ },
-  { icon: '🖥️', label: 'Preview', tab: { kind: 'preview' } },
+  { icon: '🛠️', label: 'Prototypes', tab: { kind: 'prototype' } },
   { icon: '📚', label: 'Storybook', tab: { kind: 'storybook' } },
 ]
 
 /** `here` is the key of the tab in front (tabKey), which lights its icon. */
 export function Rail({ here, onOpen, agentOpen, onToggleAgent }: { here: string | null; onOpen: (tab: Tab) => void; agentOpen?: boolean; onToggleAgent?: () => void }) {
-  const active = (i: Item) => here !== null && (i.tab.kind === 'page' ? (i.also ?? new RegExp(`^${i.tab.path}`)).test(here) : here === i.tab.kind)
+  const active = (i: Item) => here !== null && (i.tab.kind === 'page' ? (i.also ?? new RegExp(`^${i.tab.path}`)).test(here) : here === i.tab.kind || here.startsWith(`${i.tab.kind}:`))
   const button = (i: Item) => (
     <div className="rail-item" key={i.label}>
       <button className={`rail-btn ${active(i) ? 'active' : ''}`} onClick={() => onOpen(i.tab)} aria-label={i.label}><span aria-hidden="true">{i.icon}</span></button>

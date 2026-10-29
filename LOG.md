@@ -521,8 +521,19 @@ Preview, the way it was built, was the wrong idea: a frame around an address. Th
 - **Rejected:** json-server or MSW standing in for the backend. They are fast, but useless for an app whose server
   owns its database. They stay useful only for apps with no backend at all.
 
-Not built yet. Next: rename the Preview tab to Prototype, then "start a prototype for this idea" as far as a running
-server in its own worktree showing in the tab.
+- **First slice built (same day):** a `prototype` row per prototype. Starting one makes branch `prototype/<slug>` and
+  a worktree beside the builders' (`<repo>-worktrees/prototype--<slug>`). The engine runs the app's `prototype_cmd`
+  there, in its own process group, on a free port passed as `PORT`. Stop, start again (on a fresh port) and discard
+  (worktree and branch removed, the row kept). After an engine restart a prototype reads as stopped. The agent has
+  `start_prototype`, `prototypes`, `prototype`, `run_prototype`, `stop_prototype`, `discard_prototype` and
+  `set_prototype_command` (worked out from the app, confirmed with the person), and `open_tab` opens a prototype.
+  The Preview tab and its address setting are gone. The rail's Prototypes lists them; a prototype's tab is named
+  after it and shows its server in the old preview frame, or "Starting…" with its last lines, or "Stopped" with a
+  way to start it. Tried end to end on a throwaway repo in a browser. `open_tab` and `stories` had been rated
+  "moderate" by the gate, so the agent asked before opening a tab; they are free now.
+- **Not yet:** the agent building in the prototype's worktree from the conversation (talk sessions have their own
+  worktree), the throwaway database from JSON scenarios, stand-ins for outside services, sharing a link, and the
+  analysis into the plan.
 
 ## The workspace, after Replit's (Sandy, 2026-10-28: "the left column agent and then tabs and split screen on the right, just like an IDE")
 

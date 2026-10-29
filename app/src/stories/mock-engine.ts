@@ -11,6 +11,7 @@ export interface MockData {
   issueDetails: typeof s.issueDetails; todos: typeof s.todos; ideas: typeof s.ideaRows; initiatives: typeof s.initiatives; cycles: typeof s.cycles
   summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript
   storybook: { url: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[] }
+  prototypes: typeof s.prototypes
 }
 
 export const sampleData: MockData = {
@@ -18,6 +19,7 @@ export const sampleData: MockData = {
   todos: s.todos, ideas: s.ideaRows, initiatives: s.initiatives, cycles: s.cycles, summary: s.summary, settings: s.factorySettings, appSettings: s.appSettings,
   talks: [s.talkSession], transcript: s.transcript,
   storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [] },
+  prototypes: s.prototypes,
 }
 
 /** An event stream that opens and says nothing: pages subscribe without errors and never refetch. */
@@ -38,6 +40,8 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/settings', () => reply(d.settings)),
     http.get('/api/apps/:id/settings', () => reply(d.appSettings)),
     http.get('/api/apps/:id/storybook', () => reply(d.storybook)),
+    http.get('/api/apps/:id/prototypes', () => reply(d.prototypes)),
+    http.get('/api/prototypes/:id', ({ params }) => { const p = d.prototypes.find((x) => x.id === params.id); return p ? reply({ log: [], ...p, up: p.up ?? p.status === 'running' }) : missing('prototype') }),
     http.get('/api/apps/:id/summary', () => reply(d.summary)),
     http.get('/api/apps/:id/graph', () => reply(appGraph())),
     http.get('/api/now', () => reply(d.now)),

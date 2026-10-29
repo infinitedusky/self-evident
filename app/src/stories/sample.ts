@@ -5,7 +5,7 @@
  */
 import type {
   App, AppSettings, BacklogIssue, Cycle, Decision, Event, FactorySettings, Graph, GraphIssue, GraphSubIssue, IdeaRow, Initiative, Issue,
-  IssueDetail, IssueRow, Now, ProjectSummary, Question, Run, Step, SummaryState, TalkMessage, TalkSession, Todo, Transcript, Workspace,
+  IssueDetail, IssueRow, Now, ProjectSummary, Prototype, Question, Run, Step, SummaryState, TalkMessage, TalkSession, Todo, Transcript, Workspace,
 } from '../engine'
 
 export const T0 = '2026-10-27T09:00:00.000Z'
@@ -14,7 +14,7 @@ const at = (minutes: number) => new Date(Date.parse(T0) + minutes * 60_000).toIS
 export const workspace: Workspace = { id: 'ws_sample', name: 'Sample workspace' }
 export const sampleApp: App = {
   id: 'app_sample', workspaceId: workspace.id, name: 'Sample Shop', key: 'SS', defaultBranch: 'main',
-  setup: { pr_mode: 'project', test_cmd: 'pnpm test', storybook_url: 'http://localhost:6007', storybook_cmd: 'pnpm storybook --no-open' },
+  setup: { pr_mode: 'project', test_cmd: 'pnpm test', storybook_url: 'http://localhost:6007', storybook_cmd: 'pnpm storybook --no-open', prototype_cmd: 'pnpm install && pnpm dev --port $PORT' },
   repos: [{ id: 'repo_sample', appId: 'app_sample', fullName: 'example/sample-shop', localPath: '/code/sample-shop', baseBranch: 'main' }],
 }
 export const otherApp: App = { id: 'app_sample2', workspaceId: workspace.id, name: 'Sample Blog', key: 'SB', defaultBranch: 'main', setup: {}, repos: [] }
@@ -233,3 +233,9 @@ export const transcript: Transcript = {
     msg(3, 'agent', 'text', 'SS-6 and SS-5 both change `web/checkout/submit.ts`, so they take turns. SS-5 is building now; SS-6 starts when it lands.'),
   ],
 }
+
+/** Prototypes, made up: one running, one stopped. The running one's address is filled in by the story. */
+export const prototypes: Prototype[] = [
+  { id: 'proto_sample1', appId: sampleApp.id, projectId: 'proj_checkout', title: 'Sample: one-tap checkout', branch: 'prototype/sample-one-tap-checkout-a1b2', path: '/code/sample-shop-worktrees/prototype--sample-one-tap-checkout-a1b2', port: 51234, status: 'running', url: 'http://localhost:51234', createdAt: '2026-10-29T10:00:00Z' },
+  { id: 'proto_sample2', appId: sampleApp.id, projectId: null, title: 'Sample: gift cards', branch: 'prototype/sample-gift-cards-c3d4', path: '/code/sample-shop-worktrees/prototype--sample-gift-cards-c3d4', port: 51240, status: 'stopped', url: 'http://localhost:51240', createdAt: '2026-10-28T16:00:00Z' },
+]

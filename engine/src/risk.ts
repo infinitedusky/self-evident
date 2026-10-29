@@ -19,7 +19,7 @@ export interface RiskContext { cwd: string; branch?: string | null } // branch: 
 
 const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']) // Skill loads instructions; what they lead to is rated on its own
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
-const ENGINE_FREE = new Set(['now', 'projects', 'project_graph', 'issue', 'issues', 'ideas', 'events', 'todos', 'initiatives', 'cycles'])
+const ENGINE_FREE = new Set(['now', 'projects', 'project_graph', 'issue', 'issues', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype'])
 const ENGINE: Record<string, [Risk, string]> = {
   create_idea: ['cheap', 'keeps an idea; easy to drop'],
   create_project: ['cheap', 'a draft project; nothing runs'],
@@ -46,6 +46,11 @@ const ENGINE: Record<string, [Risk, string]> = {
   update_initiative: ['cheap', 'edits a goal; easy to change back'],
   create_cycle: ['cheap', 'a stretch of time with its issues; easy to change'],
   sync_github: ['cheap', 'reads GitHub; merges main into open project branches, conflicts only reported'],
+  start_prototype: ['cheap', 'a worktree and a dev server for a prototype; discard undoes it'],
+  run_prototype: ['cheap', "starts a prototype's dev server again; stop undoes it"],
+  stop_prototype: ['cheap', "stops a prototype's dev server; run starts it again"],
+  discard_prototype: ['moderate', "removes a prototype's worktree and branch; what it changed is gone"],
+  set_prototype_command: ['moderate', 'changes how this app\'s prototypes start'],
   start_project: ['expensive', 'runs agents, spends money, opens a pull request'],
 }
 

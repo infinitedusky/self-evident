@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Workspace } from './Workspace'
 import { engineDown, eventStream, withEngine } from '../stories/mock-engine'
-import { apps, buildEvents, sampleApp, talkSession } from '../stories/sample'
+import { apps, buildEvents, prototypes, sampleApp, talkSession } from '../stories/sample'
 
 // The whole app: the rail, the agent's column, tabs that split. What it keeps between visits (the layout, whether
 // the agent's column is open, the conversation) lives in localStorage, so each story starts clean.
@@ -22,10 +22,10 @@ export const ProjectBesideItsBuild: Story = {
   args: { address: false, initial: [{ tab: { kind: 'page', path: '/issues/iss_sample5' } }, { tab: { kind: 'page', path: '/projects/proj_checkout' } }, { tab: { kind: 'build', issueId: 'iss_sample5' }, split: 'right' }] },
   beforeEach: [forget(), withEngine([eventStream(buildEvents)])],
 }
-/** The app running in Preview, under the page being worked on. (The sample "running app" is a story.) */
-export const WithPreview: Story = {
-  args: { address: false, initial: [{ tab: { kind: 'page', path: '/issues' } }, { tab: { kind: 'preview', path: '/iframe.html?id=pages-now--quiet&viewMode=story' }, split: 'below' }] },
-  beforeEach: [forget(), withEngine({ apps: apps.map((a) => a.id === sampleApp.id ? { ...a, setup: { ...a.setup, preview_url: window.location.origin } } : a) })],
+/** A prototype running, under the page being worked on. (The sample "running prototype" is a story.) */
+export const WithAPrototype: Story = {
+  args: { address: false, initial: [{ tab: { kind: 'page', path: '/issues' } }, { tab: { kind: 'prototype', id: prototypes[0].id, path: '/iframe.html?id=pages-now--quiet&viewMode=story' }, split: 'below' }] },
+  beforeEach: [forget(), withEngine({ prototypes: [{ ...prototypes[0], url: window.location.origin }] })],
 }
 /** The agent's column folded away (⌘J, or the S. at the top of the rail). */
 export const AgentFolded: Story = { beforeEach: [forget({ 'se.agent.open': '0' }), withEngine()] }
