@@ -559,9 +559,25 @@ Preview, the way it was built, was the wrong idea: a frame around an address. Th
   after it and shows its server in the old preview frame, or "Starting…" with its last lines, or "Stopped" with a
   way to start it. Tried end to end on a throwaway repo in a browser. `open_tab` and `stories` had been rated
   "moderate" by the gate, so the agent asked before opening a tab; they are free now.
-- **Not yet:** the agent building in the prototype's worktree from the conversation (talk sessions have their own
-  worktree), the throwaway database from JSON scenarios, stand-ins for outside services, sharing a link, and the
-  analysis into the plan.
+- **The agent builds it (same day).** Each prototype has its own conversation, which works in the prototype's
+  worktree (not one of its own, so ending it leaves the prototype alone). It acts up to moderate without asking,
+  since a prototype is for speed; expensive actions still ask. `start_prototype` takes a brief, written by the agent
+  that starts it from everything said so far. The new conversation begins with that brief (shown as a card) and
+  builds a first version at once. The engine then switches the agent's column to that conversation (a `ui.talk`
+  event) and opens the prototype beside it.
+  - The prototype rules are in its system prompt: speed over quality; shortcuts by default; made-up data; no
+    migrations; never push, open a PR or merge.
+  - The agent commits after each change with what and why, and marks faked work with `shortcut:` lines. Those
+    commits are the record the analysis reads.
+  - A restart keeps the same port, and the open tab follows its server's events and reloads.
+  - 💬 on a prototype brings its conversation to the agent's column.
+  - Tried live on a throwaway repo. From the brief alone, the agent built a product list with a cart count, committed
+    it with two `shortcut:` lines, restarted and checked it answered. A follow-up typed in the UI changed it again,
+    and the tab showed the change by itself.
+- **Sharing: Cloudflare quick tunnels** (Sandy, 2026-10-29). `cloudflared`, no account: a random trycloudflare.com
+  link per prototype while it runs.
+- **Not yet:** the throwaway database from JSON scenarios, stand-ins for outside services, sharing, and the analysis
+  into the plan.
 
 ## The workspace, after Replit's (Sandy, 2026-10-28: "the left column agent and then tabs and split screen on the right, just like an IDE")
 
