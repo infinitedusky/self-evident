@@ -493,6 +493,16 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Task, not issue (Sandy, 2026-10-29: "standardize our use of task instead of issue … if you integrate Linear it will map tasks to issues")
+
+- **Everything people and the agent see says task and sub-task:** pages, tab titles, the address (`/tasks`;
+  `/issues` redirects there), the agent's tools (`create_task`, `plan_task`, `set_task_state`, …), its prompts, and
+  the errors you see.
+- **Connecting Linear maps tasks to Linear issues** and sub-tasks to sub-issues. Settings → Integrations says so.
+- **Underneath it stays "issue":** the database, types, API paths, event names, tool parameter names like `issueId`,
+  and the CLI's commands. The agent is told that those fields still say issue. Renaming them would be a large
+  migration with nothing to see for it.
+
 ## Settings: which settings across the top, sections down the side (Sandy, 2026-10-29: "maybe that should be a top nav, and then the left nav is the different sections")
 
 Settings was one long form per app. Now it's laid out like VS Code's Settings, which has User and Workspace tabs
