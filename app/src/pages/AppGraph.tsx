@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { Badge, type Tone } from '../components/Badge'
 import { PlanGraphView } from '../components/PlanGraphView'
-import { API, EVENT_TYPES, type App, type GraphFile, type GraphIssue, type GraphSubIssue } from '../engine'
+import { openEvents, API, EVENT_TYPES, type App, type GraphFile, type GraphIssue, type GraphSubIssue } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 interface AppGraphData {
@@ -41,7 +41,7 @@ export function AppGraph() {
     let closed = false
     const refresh = () => fetchAppGraph(appId).then((g) => { if (!closed) setData(g) }).catch((e) => setError(String(e.message ?? e)))
     void refresh()
-    const es = new EventSource(`${API}/events?app=${appId}&since=-1`)
+    const es = openEvents(`${API}/events?app=${appId}&since=-1`)
     const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 200) }
     for (const type of EVENT_TYPES) if (!type.startsWith('run.tool') && type !== 'run.message') es.addEventListener(type, bump)
     es.onerror = () => setError('event stream disconnected; retrying'); es.onopen = () => setError(null)

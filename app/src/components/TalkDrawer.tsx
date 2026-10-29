@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Conversation } from './Conversation'
-import { API, engine, type TalkContext, type TalkSession } from '../engine'
+import { openEvents, API, engine, type TalkContext, type TalkSession } from '../engine'
 import type { Tab } from '../workspace'
 import { useCurrentApp } from '../current-app'
 
@@ -94,7 +94,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
 
   useEffect(() => { // the engine asks to show a conversation here: a prototype's, as it starts or when asked for
     if (!app) return
-    const es = new EventSource(`${API}/events?since=now&app=${app.id}`)
+    const es = openEvents(`${API}/events?since=now&app=${app.id}`)
     es.addEventListener('ui.talk', ((ev: MessageEvent) => {
       const id = (JSON.parse(ev.data) as { payload?: { sessionId?: string } }).payload?.sessionId
       if (id) void reload().then(() => pick(id))

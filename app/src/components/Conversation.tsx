@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Badge } from './Badge'
-import { API, engine, type Risk, type TalkContext, type TalkMessage, type Transcript } from '../engine'
+import { openEvents, API, engine, type Risk, type TalkContext, type TalkMessage, type Transcript } from '../engine'
 
 const RISK_TONE: Record<Risk, 'neutral' | 'ok' | 'warn' | 'bad'> = { free: 'neutral', cheap: 'ok', moderate: 'warn', expensive: 'bad' }
 
@@ -22,7 +22,7 @@ export function Conversation({ sessionId, context, compact, onChanged }: { sessi
     let closed = false
     const refresh = () => engine.transcript(sessionId).then((x) => { if (!closed) { setT(x); setError(null); onChanged?.() } }).catch((e) => setError(String(e.message ?? e)))
     void refresh()
-    const es = new EventSource(`${API}/events?since=-1`)
+    const es = openEvents(`${API}/events?since=-1`)
     const onTalk = (ev: MessageEvent) => {
       const e = JSON.parse(ev.data) as { payload: { sessionId?: string } }
       if (e.payload?.sessionId !== sessionId) return

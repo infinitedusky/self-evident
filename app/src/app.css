@@ -474,3 +474,23 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .workflow-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 12px; align-items: start; }
 .workflow-list .panel { margin-bottom: 0; }
 .rules-picker { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--ink-soft); } .rules-picker select { font: 13px var(--sans); padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+
+/* A task's own nav and its sections, laid out like Settings (TaskNav, StepSection). */
+.task-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: start; }
+.task-nav { position: sticky; top: 20px; display: grid; gap: 2px; }
+.task-nav .link { display: block; padding: 7px 10px; border-radius: 8px; text-decoration: none; color: var(--ink-soft); }
+.task-nav .link.active { background: var(--accent-wash); color: var(--ink); font-weight: 600; }
+.task-nav .link.locked { color: var(--ink-faint); cursor: not-allowed; }
+.task-nav-row { display: flex; align-items: center; gap: 8px; }
+.task-nav-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-nav-mark { width: 14px; text-align: center; font-family: var(--mono); color: var(--ink-faint); }
+.task-nav-mark.ok { color: var(--ok); }
+.task-nav-req { color: var(--warn); font-weight: 700; }
+.task-nav-after { display: block; margin-left: 22px; font-size: 12px; }
+.task-nav-label { margin: 14px 10px 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.task-main > .panel:first-child { margin-top: 0; }
+.step-status { margin: 0 0 10px; }
+.step-body { margin: 10px 0; }
+.step-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+.step-protos li { display: flex; gap: 8px; align-items: center; }
+@media (max-width: 760px) { .task-layout { grid-template-columns: 1fr; } .task-nav { position: static; } }

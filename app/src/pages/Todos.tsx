@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { Badge } from '../components/Badge'
-import { API, engine, type ProjectSummary, type Todo } from '../engine'
+import { openEvents, API, engine, type ProjectSummary, type Todo } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const errText = (e: any) => { const m = String(e?.message ?? e); try { return JSON.parse(m).error ?? m } catch { return m } }
@@ -28,7 +28,7 @@ export function Todos() {
     const refresh = () => engine.todos(app.id).then((r) => { if (!closed) setRows(r) }).catch((e) => setError(errText(e)))
     void refresh()
     engine.projects(app.id).then(setProjects).catch(() => setProjects([]))
-    const es = new EventSource(`${API}/events?since=-1&app=${app.id}`)
+    const es = openEvents(`${API}/events?since=-1&app=${app.id}`)
     const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 150) }
     for (const t of ['todo.created', 'todo.updated', 'todo.checked', 'todo.done', 'todo.dropped', 'todo.reopened']) es.addEventListener(t, bump)
     return () => { closed = true; es.close(); window.clearTimeout(timer.current) }

@@ -5,6 +5,36 @@ import type { Plan } from './pages/PlanHome'
 
 export const API = '/api'
 
+/** What a view holds of the event stream: its own listeners on a shared connection. */
+export interface Events { addEventListener(type: string, fn: EventListener): void; onerror: EventListener | null; onopen: EventListener | null; close(): void }
+const streams = new Map<string, { es: EventSource; n: number }>()
+/**
+ * The engine's events at one address, one connection per address however many views listen: Chrome allows six
+ * connections per host over HTTP/1.1, and a workspace of tabs, each opening its own streams, ran out, leaving the next
+ * page stuck on Loading. Each view adds its own listeners and takes them off on close; the last to close ends it.
+ */
+export function openEvents(url: string): Events {
+  let s = streams.get(url)
+  if (!s) { s = { es: new EventSource(url), n: 0 }; streams.set(url, s) }
+  const shared = s
+  shared.n++
+  const mine: [string, EventListener][] = []
+  const add = (type: string, fn: EventListener) => { mine.push([type, fn]); shared.es.addEventListener(type, fn) }
+  let closed = false
+  return {
+    addEventListener: add,
+    set onerror(fn: EventListener | null) { if (fn) add('error', fn) },
+    set onopen(fn: EventListener | null) { if (fn) add('open', fn) },
+    get onerror() { return null }, get onopen() { return null },
+    close() {
+      if (closed) return
+      closed = true
+      for (const [type, fn] of mine) shared.es.removeEventListener(type, fn)
+      if (--shared.n === 0) { shared.es.close(); streams.delete(url) }
+    },
+  }
+}
+
 // Shaped like Linear: initiative (a goal) → project (issues in order) → issue (code or a to-do; HG-12) → sub-issue
 // (under code: one agent, one worktree, one commit, and its build; under a to-do: a checklist line) → step.
 export type BuildStatus = 'queued' | 'ready' | 'running' | 'awaiting_answer' | 'merging' | 'testing' | 'done' | 'failed' | 'cancelled'
@@ -91,7 +121,7 @@ export interface FactorySettings { workspace: Workspace | null; integrations: In
 export interface AppPlugin { id: string; name: string; factoryOn: boolean; own: boolean | null; on: boolean }
 export interface AppSettings { integrations: Record<string, Record<string, { value: string | null; from: 'app' | 'workspace' | null }>>; plugins: AppPlugin[]; skills: SkillInfo[] }
 export interface Prototype {
-  id: string; appId: string; projectId: string | null; title: string; brief: string | null; sessionId: string | null; branch: string; path: string; port: number | null
+  id: string; appId: string; projectId: string | null; ideaId?: string | null; issueId?: string | null; title: string; brief: string | null; sessionId: string | null; branch: string; path: string; port: number | null
   status: 'running' | 'stopped' | 'discarded'; url: string | null; createdAt: string; updatedAt?: string | null
   scenario: string | null; database?: string | null; scenarios?: string[]; up?: boolean; log?: string[]
 }
@@ -277,7 +307,7 @@ export function useLiveProject(projectId: string | undefined) {
     let closed = false
     const refresh = () => engine.graph(projectId).then((g) => { if (!closed) setGraph(g) }).catch((e) => setError(String(e.message ?? e)))
     void refresh()
-    const es = new EventSource(`${API}/events?project=${projectId}`)
+    const es = openEvents(`${API}/events?project=${projectId}`)
     const onAny = (ev: MessageEvent) => {
       const e = JSON.parse(ev.data) as Event
       setEvents((prev) => [...prev.slice(-199), e])

@@ -1,16 +1,32 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { IssuePage } from './IssuePage'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
-import { issueDetails } from '../stories/sample'
+import { approvedTaskStepsView, issueDetails } from '../stories/sample'
 
-// One task at /tasks/:id, from the sample engine. Each story stands on a different task.
+// One task at /tasks/:id, from the sample engine. Each story stands on a different task. A task has its own nav down
+// the left: overview, its steps in the workflow's order ("UI change (sample)", in order), then the build.
 const meta = { title: 'Pages/TaskPage', component: IssuePage, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><IssuePage /></div> } satisfies Meta<typeof IssuePage>
 export default meta
 type Story = StoryObj<typeof meta>
-const at = (id: string) => ({ route: { path: '/tasks/:id', url: `/tasks/${id}` } })
+const at = (id: string, section?: string) => ({ route: { path: section ? '/tasks/:id/:section' : '/tasks/:id', url: `/tasks/${id}${section ? `/${section}` : ''}` } })
+const approved = withEngine({ steps: { ...sampleData.steps, issues: approvedTaskStepsView }, issueDetails: { ...sampleData.issueDetails,
+  iss_sample20: { ...issueDetails.iss_sample20, briefApprovedBy: 'Sam (sample)', briefApprovedAt: '2026-10-28T10:00:00Z' },
+  iss_sample1: { ...issueDetails.iss_sample1, briefApprovedBy: 'Sam (sample)', briefApprovedAt: '2026-10-28T10:00:00Z' } } })
 
-/** A top-level code task, planned: its sub-tasks as a list, and what the planner decided. */
-export const Planned: Story = { parameters: at('iss_sample1') }
+/** A task's home: what it's for, what stops it completing, the next step. The blast radius waits on the brief's approval, and so does the build. */
+export const Overview: Story = { parameters: at('iss_sample20') }
+/** A step's page: research, done, with its notes. */
+export const ResearchStep: Story = { parameters: at('iss_sample20', 'research') }
+/** The prototype's page: started, with the agent. */
+export const PrototypeStep: Story = { parameters: at('iss_sample20', 'prototype') }
+/** The brief's page: written, waiting for approval. */
+export const BriefStep: Story = { parameters: at('iss_sample20', 'brief') }
+/** A step the workflow puts after one not finished: greyed in the nav, and its page says where to go first. */
+export const LockedStep: Story = { parameters: at('iss_sample20', 'risk') }
+/** The brief approved: the blast radius and the build open; the build has a Plan button. */
+export const BuildReady: Story = { parameters: at('iss_sample20', 'build'), beforeEach: approved }
+/** A task planned: its sub-tasks, and what the planner decided. */
+export const Planned: Story = { parameters: at('iss_sample1', 'build'), beforeEach: approved }
 /** A sub-task being built: the builder's own steps, live, with the plan folded under them. */
 export const SubTaskBuilding: Story = { parameters: at('iss_sample5') }
 /** A sub-task not built yet: the planner's steps, from its brief. */

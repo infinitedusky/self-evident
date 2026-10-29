@@ -136,6 +136,7 @@ export const issueDetails: Record<string, IssueDetail> = {
   iss_sample5: detailOf(subIssues[1], { parent: { id: 'iss_sample1', identifier: 'SS-1', title: 'Checkout on one page' }, build: { status: 'running', attempt: 1, heldReason: null }, steps, stepsAttempt: 1 }),
   iss_sample6: detailOf(subIssues[2], { parent: { id: 'iss_sample2', identifier: 'SS-2', title: 'Totals and analytics' }, brief: plannedBrief, build: { status: 'queued', attempt: 0, heldReason: 'waiting on SS-5 (web/checkout/submit.ts)' } }),
   iss_sample16: detailOf(issue(16, 'Search results load too slowly', { projectId: null, description: 'Reported twice this week.' }), { project: null }),
+  iss_sample20: detailOf(issue(20, 'Address and payment on one page (sample)', { description: 'Fewer steps between the cart and a paid order.', brief: '### What (sample)\nAddress and payment on one page.\n\n### Done when\n- A paid order takes one page.' })),
 }
 
 export const ideaRows: IdeaRow[] = [
@@ -298,6 +299,8 @@ export const taskStepsView: StepsView = {
 }
 export const ideaStepsView: StepsView = { on: 'idea', resolved: { workflow: null, from: null }, fromIdea: null, states: ideaSteps, rows: [], blocking: [] }
 export const projectStepsView: StepsView = { on: 'project', resolved: { workflow: null, from: null }, fromIdea: null, states: [{ key: 'prototype', status: 'done', detail: 'the whole flow, made-up orders' }], rows: [], blocking: [] }
+/** The same task with its brief approved: the blast radius opens, and so does the build. */
+export const approvedTaskStepsView: StepsView = { ...taskStepsView, states: taskStepsView.states.map((x) => (x.key === 'brief' ? { ...x, detail: undefined, approved: { by: 'Sam (sample)', at: '2026-10-28' } } : x)), blocking: ['risk'] }
 export const researchWork: StepWork = { id: 'step_sample1', key: 'research', status: 'done', detail: '3 comps, one case against', refs: [], updatedBy: 'agent', updatedAt: T0,
   body: '### Who does it best (sample)\n- Shop A: one page, address autocompleted.\n- Shop B: wallet buttons first.\n\n### The case against\nOne page is long on a phone.' }
 export const workflowRows: WorkflowRow[] = [{ ...uiWorkflow, appDefault: true, projects: 1, tasks: 0 }, { ...quickWorkflow, appDefault: false, projects: 0, tasks: 1 }]
