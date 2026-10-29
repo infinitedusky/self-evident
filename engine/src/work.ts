@@ -202,13 +202,19 @@ export async function guardComplete(tx: Tx | typeof db, issueId: string) {
   if (v.blocking.length) throw new PlanError(`it can't be completed yet: ${v.blocking.map((k) => (k === 'brief' ? 'the brief isn\'t approved' : `${step(k).label} isn't done`)).join('; ')}`)
 }
 
-/** Throws when a workflow in force wants tasks to start as ideas: make an idea and convert it instead. */
-export async function guardDirect(tx: Tx | typeof db, appId: string, projectId?: string | null) {
+/** The workflow that makes tasks start as ideas, if the one in force does: a task's project's, else the app's. */
+export async function ideaFirst(tx: Tx | typeof db, appId: string, projectId?: string | null): Promise<string | null> {
   const a = await appOf(tx, appId)
   const p = projectId ? (await tx.select().from(project).where(eq(project.id, projectId)))[0] : null
   const id = p?.workflowId ?? a.workflowId
   const w = id ? asWorkflow((await tx.select().from(workflow).where(eq(workflow.id, id)))[0]) : null
-  if (w?.steps.find((s) => s.key === 'idea')?.required) throw new PlanError(`the workflow "${w.name}" starts every task as an idea: capture the idea, then convert it`)
+  return w?.steps.find((s) => s.key === 'idea')?.required ? w.name : null
+}
+
+/** Throws when a workflow in force wants tasks and projects to start as ideas: capture the idea, then convert it. */
+export async function guardDirect(tx: Tx | typeof db, appId: string, projectId?: string | null) {
+  const name = await ideaFirst(tx, appId, projectId)
+  if (name) throw new PlanError(`the workflow "${name}" starts everything as an idea: capture the idea, then convert it`)
 }
 
 // ── Converting an idea ───────────────────────────────────────────────────────
@@ -278,5 +284,6 @@ export async function planView(appId: string) {
     loose: await Promise.all(code.filter((i) => !i.projectId).map(task)),
     todosOpen: tops.filter((i) => i.kind === 'todo' && OPEN_STATES.includes(i.state)).length,
     workflows: wfs.map(asWorkflow), appWorkflow: name(a.workflowId),
+    ideaFirst: await ideaFirst(db, appId), // tasks and projects are made only by converting an idea
   }
 }

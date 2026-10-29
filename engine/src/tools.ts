@@ -67,7 +67,7 @@ export function engineTools(opts: ToolScope): EngineTool[] {
       def('create_project', 'Create a project in this app: issues in order, each a title and a brief. Sub-issues come from the planner (plan_issue) or can be given.', {
         name: z.string(), content: z.string().optional().describe('why it exists and what it must do, Markdown'), description: z.string().optional().describe('one line'), ideaId: z.string().optional(),
         issues: z.array(z.object({ title: z.string(), description: z.string().optional().describe(described), brief: z.string().optional().describe('the builder\'s instructions, Markdown, short paragraphs'), subIssues: z.array(subIssue).optional() })),
-      }, async (a) => tryIt(() => createProject({ ...a, appId }, actor))),
+      }, async (a) => tryIt(async () => { if (!a.ideaId) await guardDirect(db, appId); return createProject({ ...a, appId }, actor) })),
       def('create_issue', 'Create an issue in this app. kind code (built by agents; default) or todo (work outside the code; prefer create_todo for a checklist). With projectId it goes at the end of that project (state backlog to put it in the backlog instead); without, it waits in no project until added to one. parentId makes it a sub-issue.', {
         title: z.string(), kind: z.enum(['code', 'todo']).optional(), description: z.string().optional().describe(described), brief: z.string().optional(),
         projectId: z.string().optional(), parentId: z.string().optional(), state: z.enum(['todo', 'backlog', 'triage']).optional(), priority: z.number().int().min(0).max(4).optional().describe('0 none, 1 urgent, 2 high, 3 medium, 4 low'), cycleId: z.string().optional(),
