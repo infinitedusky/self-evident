@@ -3,7 +3,7 @@ import { Mockups } from './Mockups'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
 
 // The app's Storybook inside Self Evident, in each state the engine reports for it.
-const meta = { title: 'Pages/Mockups', component: Mockups, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><Mockups /></div> } satisfies Meta<typeof Mockups>
+const meta = { title: 'Pages/Mockups', component: Mockups, parameters: { layout: 'fullscreen' }, render: (a) => <div className="tab-page"><Mockups {...a} /></div> } satisfies Meta<typeof Mockups>
 export default meta
 type Story = StoryObj<typeof meta>
 const sb = sampleData.storybook
@@ -14,6 +14,8 @@ export const NotRunning: Story = {}
 export const Starting: Story = { beforeEach: withEngine({ storybook: { ...sb, startedHere: true, log: ['> storybook dev -p 6007 --no-open', 'Starting… (sample log)'] } }) }
 /** Running: framed in the page. The sample URL points nowhere, so the frame is blank here. */
 export const Running: Story = { beforeEach: withEngine({ storybook: { ...sb, up: true, startedHere: true } }) }
+/** Opened at one story (the agent's open_tab, or a link): the frame goes straight to it. */
+export const AtAStory: Story = { args: { story: 'pages-issuepage--sub-issue-building' }, beforeEach: withEngine({ storybook: { ...sb, up: true, startedHere: true } }) }
 /** A URL but no command to start it. */
 export const NotStartable: Story = { beforeEach: withEngine({ storybook: { ...sb, startable: false } }) }
 /** The app has no Storybook set. */

@@ -9,7 +9,8 @@ import { engine } from '../engine'
 
 type Status = Awaited<ReturnType<typeof engine.storybook>>
 
-export function Mockups() {
+/** `story`: open at this story (its id, like pages-issuepage--sub-issue-building) instead of Storybook's front page. */
+export function Mockups({ story }: { story?: string }) {
   const { app } = useCurrentApp()
   const [s, setS] = useState<Status | null>(null)
   const [starting, setStarting] = useState(false)
@@ -23,6 +24,7 @@ export function Mockups() {
     const t = window.setInterval(poll, 2000) // until it answers: Storybook takes a few seconds to come up
     return () => { gone = true; window.clearInterval(t) }
   }, [app?.id])
+  const at = s?.url ? (story ? `${s.url.replace(/\/$/, '')}/?path=/story/${encodeURIComponent(story)}` : s.url) : null
   const start = async () => { if (!app) return; setStarting(true); try { await engine.startStorybook(app.id) } catch (e: any) { setError(String(e.message ?? e)) } finally { setStarting(false) } }
 
   return (
@@ -32,7 +34,7 @@ export function Mockups() {
           <h1>✏️ Mockups{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
           <p className="muted" style={{ margin: '4px 0 0' }}>Every page in every state, from the app's own Storybook.</p>
         </div>
-        {s?.up && s.url && <a className="btn quiet" href={s.url} target="_blank" rel="noreferrer">Open Storybook on its own ↗</a>}
+        {s?.up && at && <a className="btn quiet" href={at} target="_blank" rel="noreferrer">Open Storybook on its own ↗</a>}
       </div>
       {error && <div className="empty bad">{error}</div>}
       {!app && <div className="empty">Pick an app in the nav.</div>}
@@ -46,7 +48,7 @@ export function Mockups() {
           </> : <>Storybook isn't answering at <code>{s.url}</code>, and there's no command to start it. Add one in <Link to="/settings">Settings</Link>.</>}
         </div>
       )}
-      {s?.up && s.url && <iframe className="sb-frame" src={s.url} title={`${app?.name} Storybook`} />}
+      {s?.up && at && <iframe className="sb-frame" src={at} title={`${app?.name} Storybook`} />}
     </div>
   )
 }

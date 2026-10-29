@@ -7,8 +7,8 @@ import { createContext, useContext } from 'react'
 import { findIdea } from './ideas'
 import type { TalkContext } from './engine'
 
-/** A page by its path, the app running (preview), its Storybook, or a sub-issue's build as it happens. */
-export type Tab = { kind: 'page'; path: string } | { kind: 'preview'; path?: string } | { kind: 'storybook' } | { kind: 'build'; issueId: string }
+/** A page by its path, the app running (preview), its Storybook (at a story, by id), or a sub-issue's build as it happens. */
+export type Tab = { kind: 'page'; path: string } | { kind: 'preview'; path?: string } | { kind: 'storybook'; story?: string } | { kind: 'build'; issueId: string }
 export type Split = 'right' | 'below'
 export interface OpenTab { id: string; title: string; key: string; tab: Tab; focused: boolean }
 
@@ -50,6 +50,6 @@ export function tabContext(focused: OpenTab | null, tabs: OpenTab[], contextFor:
     : t.kind === 'page' ? contextFor(t.path.split('?')[0], t.path.includes('?') ? t.path.slice(t.path.indexOf('?')) : '')
     : t.kind === 'build' ? { path: `build:${t.issueId}`, issueId: t.issueId, label: 'the build log of this sub-issue' }
     : t.kind === 'preview' ? { path: 'preview', label: 'the app running (preview)' }
-    : { path: 'storybook', label: 'the app\'s Storybook' }
+    : { path: t.story ? `storybook:${t.story}` : 'storybook', label: t.story ? `the story ${t.story} in the app's Storybook` : 'the app\'s Storybook' }
   return { ...here, tabs: tabs.map((x) => ({ title: x.title, path: x.key, ...(x.focused ? { focused: true } : {}) })) }
 }
