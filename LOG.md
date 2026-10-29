@@ -493,6 +493,18 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## Workflows: the steps listed once, shaped per workflow, inherited downward (Sandy, 2026-10-29: "you don't need to attach a workflow to a project or task but you can. And it inherits")
+
+- **The steps are one list:** research, brief, mockup, prototype. They're the same everywhere.
+- **A workflow shapes them.** For each step it can switch it on or off and make it required or optional, and it can
+  set an order and enforce it. This is borrowed from Jira's workflows, kept to these few settings.
+- **Attaching one is optional.** A workflow can be attached to the app, a project or a task, or to none of them.
+  Without one, every step is optional and the order is free.
+- **It inherits:** a task uses its own workflow, or else its project's, or else the app's. The page says where it
+  came from ("from the project").
+- **The first stories** are the rail without sub-menus, the Plan page, the steps on an idea, task and project, and
+  the workflow view and editor. Made-up data; built once Sandy has looked at them.
+
 ## Ideas, tasks and projects: what's possible on each, not a fixed path (Sandy, 2026-10-29: "you can't complete a task until … the brief has been approved")
 
 This corrects the two entries below. The aim is composability: say where things are possible and what is required,
