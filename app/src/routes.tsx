@@ -26,7 +26,7 @@ function OldPlanLink() { return <Navigate to={`/projects/${useParams().id}`} rep
 /** Workflow rules moved into the app's settings. */
 function WorkflowsMoved() {
   const { app } = useCurrentApp()
-  return <Navigate to={app ? `/settings/apps/${app.id}#workflows` : '/settings'} replace />
+  return <Navigate to={app ? `/settings/apps/${app.id}/workflows` : '/settings'} replace />
 }
 
 /** An idea in the inbox (the engine's, by id) or one of the design-phase idea files (by slug). */
@@ -62,7 +62,9 @@ export function PageRoutes() {
       <Route path="/projects/new" element={<NewProject />} />
       <Route path="/projects/:id" element={<ProjectPage />} />
       <Route path="/settings" element={<Settings />} />
+      <Route path="/settings/:section" element={<Settings />} />
       <Route path="/settings/apps/:id" element={<Settings />} />
+      <Route path="/settings/apps/:id/:section" element={<Settings />} />
       <Route path="*" element={<p className="muted">No such page.</p>} />
     </Routes>
   )

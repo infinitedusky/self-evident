@@ -65,7 +65,7 @@ export function PlanHome({ plan, app, appId, onNewTask }: { plan: Plan; app?: st
         <div>
           <h1>📋 Plan{app && <span className="muted" style={{ fontWeight: 400 }}> · {app}</span>}</h1>
           <p className="muted" style={{ margin: '4px 0 0' }}>What we've decided to build. A task is built from an approved brief; research, mockups and a prototype can be done on it, or on its project, at any time.</p>
-          <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }}>Workflow rules: {plan.appWorkflow ? <>tasks follow <b>{plan.appWorkflow}</b> unless they have their own</> : 'none set; only the brief is required'}. <Link to={appId ? `/settings/apps/${appId}#workflows` : '/settings'}>Configure the rules</Link></p>
+          <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }}>Workflow rules: {plan.appWorkflow ? <>tasks follow <b>{plan.appWorkflow}</b> unless they have their own</> : 'none set; only the brief is required'}. <Link to={appId ? `/settings/apps/${appId}/workflows` : '/settings'}>Configure the rules</Link></p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {onNewTask && <button className="btn quiet" onClick={() => setAdding(adding === null ? '' : null)}>New task</button>}
