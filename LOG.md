@@ -1294,3 +1294,64 @@ claimants, the holder pointing at it, it pointing at the ones waiting, undecided
 file run together and only true overlaps re-run.
 - Lesson from writing the schedule plan by hand: don't put `api.py` in three phases of one task; one phase per
   file-heavy module, or split the module. The engine's rule was right; the plan's granularity was mine.
+
+## Gate: access is the reward, proof is the price (Sandy, 2026-10-22, evening)
+
+Sandy's thesis, stated after a day of building the schedule, the companion and the deck: Homework Gate is one
+instance of a general thing, **a reward-gating service**: access to something you want is the reward, and a
+verified proof is the price. The same engine, later, on yourself: lock a vendor on your bank card until Whoop
+says you hit the week's goal. **The future product is called Gate**; Homework Gate is the first gate.
+
+Three parts, none of them "homework": **proofs** (things that can be verified rather than claimed: a quiz passed
+on tonight's assignment, a Whoop score, steps, a shipped PR, a savings transfer), **locks** (things worth wanting
+back: apps and sites, a merchant or category on a card, a smart plug), and **the rule** (who sets it, for whom:
+a parent for a kid, yourself for yourself, a team for its members; trust points are the ledger that lets a rule
+loosen). Why homework first: a buyer who isn't the one being gated, a proof that is genuinely hard
+(understanding, not minutes), and a reason the gated person accepts it (confidence). Self-commitment apps
+(Beeminder, StickK, Forfeit, Opal, Freedom) have fines or timers as the lock and no real proof; that is the part
+to own.
+
+**Why now (Sandy):** AI gives us proof at a level that was never possible before. Today it can read the real
+assignment and tell whether it was understood; the day it can tell whether you're lying is coming, and heart rate
+and the rest are already measurable. A lot of this gets creepy, and it is inevitable. The stance that follows:
+Gate takes only proofs the gated person agreed to and can see (the student sees what is measured; counts, never
+content, leave the house; his download is his). Being the gate people trust with that is the position; the
+creepy version will exist, and it won't be the one a parent chooses.
+
+**Who may gate whom (Sandy's abuse cases, 2026-10-22):** the creepy versions are an adult controlling another
+adult (a husband locks an account until he sees a video of his wife working out) and surveillance of a child
+dressed up as rules (a nanny cam that locks things automatically). Sandy: the real issue is consent; a couple
+can keep each other honest, you can give another adult control of certain things. And consent is what a
+coercive partner extracts, so the product's job is to make consent cheap to withdraw and impossible to force
+through the product. Protection is in the product: (1) **an adult's gate is self-owned**: only you create it,
+choose the proof, and name who may see it or release it; nobody can lock you but you (a guardian over a minor
+is the one exception, the one the law makes). Whatever you grant you can take back alone, instantly and quietly,
+with no approval and no confrontation staged by the app; grants are specific (see this proof, release this lock,
+for this long), never "control of my account". A couple keeping each other honest is two self-owned gates with
+each other as witness and releaser. (2) A proof is something the gated person does, never something done to them:
+no cameras, video, location or continuous monitoring; a lock changes only on a proof he produced or a rule set
+in advance that he can read. (3) The gated person always sees the rule, the proof, who set it, and the ledger.
+(4) Locks only on things the gated person connected themselves (his phone through Screen Time's consent, a card
+the account holder owns); Gate never holds another adult's credentials. (5) An adult can leave at any time and
+everything unlocks; a minor's gate never blocks calls, family contacts or school, and ends at 18 or becomes a
+self-gate. Sandy, on all of it: you don't get around coercion, it exists in any of these situations; the product
+doesn't add much to what's already problematic in the world, and it may be evidence in a crime, which would be
+good. So the claim stays narrow: Gate is never the instrument, and the ledger (who set which rule, what was
+granted and revoked, when) belongs to the gated person, exportable, the receipt if one is ever needed.
+
+Build consequence, cheap now: the server stops knowing that "quiz passed" means "open NextDNS". The night emits
+proof events, a policy says what they unlock, locks are drivers. One phase in `locks.py`/`gate.py`.
+
+Also decided today: **parents have accounts; the child never signs up.** A parent creates the household and the
+kids (name + a short code); a kid signs in on the household's link with his code. Every night row gets a
+`child_id` (one parent, several kids). The parent's identity comes from a provider (Clerk recommended: Next.js
+sign-in pieces, passkeys and Apple sign-in, an iOS SDK for the parent app later, a Python SDK so the server
+verifies the session); the child's session stays ours, a signed cookie like the parent PIN. Hosted for many
+families on an API key; the subscription is for Sandy's own household on Sandy's machine.
+
+Competition check done the same evening (store and launch-site searches by mechanism, not category): generic-quiz
+unlocks for small children (BrainTokens, Applatch, Learn It 2 Earn It, TimeSchool, EarnIt, Screenwise), chore
+proof with parent approval (Earn Time, Screeni), ChoreLocks (photo + AI check + Screen Time, for chores),
+StudyLock (generic quiz, adults), tutors with no gate (Khanmigo, homeworkAI). None unlocks on the real
+assignment, understood. For YC this matters in one way: name ChoreLocks and StudyLock and say the difference in
+a sentence; what moves the decision is families on it before the deadline.
