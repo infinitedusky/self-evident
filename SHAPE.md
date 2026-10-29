@@ -385,6 +385,22 @@ Details and sources in `research/`.
   the old one copied over); the engine's execution of a sub-issue is its
   `build`, kept beside the issue.
 
+- **Integrations: free, official, ours** (Sandy, 2026-10-29: "I want to give this away. I don't want to be
+  incurring a bunch of fees for it"). No paid middleman like Composio (Lightsprint's connector catalog), and no
+  workflow engine like n8n underneath: each integration talks to the service's official API or SDK
+  (`@linear/sdk`, Confluence's REST API), and keys stay in the engine's environment, named but never stored. We
+  revisit a hosted connector service only if the list of integrations grows past what we can keep up.
+- **The shape of an integration** (Sandy, 2026-10-29):
+  - **Integration:** what it is and does, its fields (site, team, space; set for all apps and overridden per app),
+    the variable holding its key, and a check that says whether it's connected.
+  - **Actions:** what it can do for a workflow, e.g. Confluence "publish a page", Linear "create an issue",
+    "comment", "move the issue". Each takes content from an earlier step and gives back a link and an id, and
+    running it again updates the same record rather than making a second.
+  - **Integration steps:** a workflow can put an action between its steps ("after the ADR, publish it to
+    Confluence"). It shows in the task's nav like any step, unlocks when the steps before it are done, asks before
+    it sends anything out, and keeps the link it made. This is also the first way into Linear: the full connection
+    (Linear as the plan store, above) comes later and builds on the same connection.
+
 ## Open questions
 
 - **A strategy section in Ideate** (Sandy, 2026-10-26): a longer-term bet,
