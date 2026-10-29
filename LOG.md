@@ -493,6 +493,17 @@ From Sandy trying the app live on `samples/fake-01-characteristics-of-life`:
 - Policy question noticed: the tutor confirms correct answers ("Yes, D is
   right"). Seems fine; belongs in the directives.
 
+## The rail is the stages of work; everything else is inside them (Sandy, 2026-10-29: "you don't go to projects from the left nav. You go to plan")
+
+- **The rail holds only the stages:** Observe, Learn, Ideate, Plan, Build. They are the categories of work on the way
+  to deploying something, so they have no sub-items: no Projects, Mockups or Prototypes under them.
+- **Each stage opens on its own page,** and what you work on is there. Plan has projects and tasks; a task has its
+  brief and its steps.
+- **Steps are things you do to an idea or a task,** not places: research, brief, mockup, prototype. Listing them in
+  the rail would make the process look fixed, when it is meant to be composable.
+- **An idea is an ephemeral task or project.** Research, mockups and a prototype can be done on the idea, without
+  committing to anything. When it's brought into Plan, they come with it into the task's brief.
+
 ## A task does its steps in any order; workflows can enforce one (Sandy, 2026-10-29: "you can do it whatever order you want … but you could create workflows that would enforce a specific order, the way Jira works")
 
 This replaces the fixed order in the next entry (mockup, then prototype, then project).
