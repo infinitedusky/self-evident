@@ -35,6 +35,18 @@ export const Phone: Story = {
     await expect(canvasElement.querySelector('iframe')?.style.width).toBe('390px')
   },
 }
+/** Its made-up data: built from a scenario; pick another, rebuild it, or save it as it is now. */
+export const ItsData: Story = {
+  args: { id: running.id, path: at }, beforeEach: withEngine({ prototypes: [running] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('combobox', { name: 'Scenario' })).toHaveValue('default')
+    await userEvent.click(c.getByRole('button', { name: 'Save the data' }))
+    await expect(c.getByRole('textbox', { name: 'Scenario name' })).toBeInTheDocument()
+  },
+}
+/** An app with no database set: no data control. */
+export const NoDatabase: Story = { args: { id: running.id, path: at }, beforeEach: withEngine({ prototypes: [{ ...running, database: null, scenarios: [] }] }) }
 /** Its server is starting: the last lines it printed. */
 export const Starting: Story = {
   args: { id: running.id },
