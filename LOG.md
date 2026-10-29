@@ -1272,6 +1272,8 @@ Salvage map with paths: `research/salvage-from-indusk.md`.
 ## How Sandy works
 
 - PRs exclusively: `main` is production, never commit to it directly.
+- One git worktree per branch (`idea-factory-worktrees/<branch>`); the main checkout stays on `main` and
+  nobody works in it. Two sessions sharing a checkout collided on 2026-10-20.
 - Short answers; lead with the answer. State, next step and who takes it.
 - Questions are questions, not instructions to change things.
 - Lead with the strongest counterargument; give a recommendation, not a survey.
