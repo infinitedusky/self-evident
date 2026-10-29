@@ -49,7 +49,7 @@ export function tabContext(focused: OpenTab | null, tabs: OpenTab[], contextFor:
   const here: TalkContext = !t ? { path: '/', label: 'an empty workspace' }
     : t.kind === 'page' ? contextFor(t.path.split('?')[0], t.path.includes('?') ? t.path.slice(t.path.indexOf('?')) : '')
     : t.kind === 'build' ? { path: `build:${t.issueId}`, issueId: t.issueId, label: 'the build log of this sub-issue' }
-    : t.kind === 'prototype' ? (t.id ? { path: `prototype:${t.id}`, label: `the prototype ${t.id}, running` } : { path: 'prototypes', label: 'this app\'s prototypes' })
+    : t.kind === 'prototype' ? (t.id ? { path: `prototype:${t.id}`, label: `the prototype "${focused!.title}" (${t.id})` } : { path: 'prototypes', label: 'this app\'s prototypes' })
     : { path: t.story ? `storybook:${t.story}` : 'storybook', label: t.story ? `the story ${t.story} in the app's Storybook` : 'the app\'s Storybook' }
   return { ...here, tabs: tabs.map((x) => ({ title: x.title, path: x.key, ...(x.focused ? { focused: true } : {}) })) }
 }

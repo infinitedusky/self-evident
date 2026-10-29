@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { AgentWindow, TalkDrawer } from './TalkDrawer'
 import { engineDown, withEngine } from '../stories/mock-engine'
-import { talkSession, transcript } from '../stories/sample'
+import { prototypeTalk, prototypeTranscript, talkSession, transcript } from '../stories/sample'
 
 // The agent's column in the workspace. Which conversation is picked lives in localStorage, so each story sets it
 // first and puts it back after.
@@ -26,6 +26,8 @@ export const TwoConversations: Story = { beforeEach: [stored(open), withEngine({
 export const AsksPermission: Story = { beforeEach: [stored(open), withEngine({ transcript: { ...transcript, pending: ['req_sample'], session: { ...talkSession, busy: true },
   messages: [...transcript.messages, { id: 9, sessionId: talkSession.id, author: 'agent', kind: 'permission', body: '', payload: { requestId: 'req_sample', tool: 'Bash', risk: 'expensive', why: 'runs the test suite', input: { command: 'pnpm test' } }, sentAt: null }] } })] }
 /** Open with no conversation yet: press + to start one. */
+/** A prototype's conversation: it starts from the brief, works in the prototype's worktree, and links to it. */
+export const BuildingAPrototype: Story = { beforeEach: [stored({ 'if.talk.session': prototypeTalk.id }), withEngine({ talks: [prototypeTalk, talkSession], transcript: prototypeTranscript })] }
 export const NoConversation: Story = { beforeEach: [stored({}), withEngine({ talks: [] })] }
 /** Popped out into its own window: the column says so and offers to bring it back. */
 export const PoppedOut: Story = { beforeEach: stored({ 'if.talk.popped': '1' }) }

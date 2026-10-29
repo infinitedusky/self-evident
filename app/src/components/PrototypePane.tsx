@@ -2,11 +2,12 @@
  * A prototype, in a tab: the actual thing, built fast in a worktree of its own to use, change in moments and show
  * people, then analysed into the plan and built again from scratch. With an id, its server in a frame with an
  * address bar, reload, device widths and a way out to a browser tab (after Replit's preview pane); without, the
- * app's prototypes. The agent starts them (start_prototype); the engine runs their servers.
+ * app's prototypes. The agent starts them (start_prototype); the engine runs their servers; each has a conversation
+ * of its own that builds it, which 💬 brings to the agent's column.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Badge } from './Badge'
-import { engine, type Prototype } from '../engine'
+import { API, engine, type Prototype } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { useWorkspace } from '../workspace'
 
@@ -53,25 +54,38 @@ function OnePrototype({ id, path, onNavigate }: { id: string; path: string; onNa
   const [error, setError] = useState<string | null>(null)
   const refresh = useCallback(() => engine.prototype(id).then((x) => { setP(x); setError(null) }).catch((e) => setError(String(e.message ?? e))), [id])
   useEffect(() => { void refresh() }, [refresh])
+  // Started, stopped or restarted by anyone (the agent, after a change): show it as it is now.
+  const appId = p?.appId
+  useEffect(() => {
+    if (!appId) return
+    const es = new EventSource(`${API}/events?since=now&app=${appId}`)
+    const onEvent = (ev: MessageEvent) => { if ((JSON.parse(ev.data) as { payload?: { prototypeId?: string } }).payload?.prototypeId === id) void refresh() }
+    for (const type of ['prototype.started', 'prototype.stopped', 'prototype.discarded']) es.addEventListener(type, onEvent as EventListener)
+    return () => es.close()
+  }, [appId, id, refresh])
   // While its server comes up, ask again every second or so.
   const waiting = p?.status === 'running' && !p.up
   useEffect(() => { if (!waiting) return; const t = window.setInterval(() => void refresh(), 1200); return () => window.clearInterval(t) }, [waiting, refresh])
   const act = (fn: (id: string) => Promise<unknown>) => () => fn(id).then(refresh).catch((e) => setError(String(e.message ?? e)))
+  const talk = () => void engine.prototypeTalk(id).catch((e) => setError(String(e.message ?? e)))
 
   if (!p) return <div className="tab-page" data-component="PrototypePane">{error ? <div className="empty bad">{error}</div> : <p className="muted">Loading…</p>}</div>
-  if (p.status === 'running' && p.up && p.url) return <Frame p={p} path={path} onNavigate={onNavigate} onStop={act(engine.stopPrototype)} />
+  if (p.status === 'running' && p.up && p.url) return <Frame p={p} path={path} onNavigate={onNavigate} onStop={act(engine.stopPrototype)} onRestart={act(engine.restartPrototype)} onTalk={talk} />
   return (
     <div className="preview-empty" data-component="PrototypePane">
       <h3>{p.title}</h3>
       <p className="muted">{p.status === 'discarded' ? 'Discarded.' : p.status === 'running' ? 'Starting its server…' : 'Stopped.'} <span className="mono faint">{p.branch}</span></p>
-      {p.status === 'stopped' && <button className="btn" onClick={act(engine.runPrototype)}>Start it</button>}
+      <div style={{ display: 'flex', gap: 6 }}>
+        {p.status === 'stopped' && <button className="btn" onClick={act(engine.runPrototype)}>Start it</button>}
+        {p.status !== 'discarded' && <button className="btn quiet" onClick={talk}>Talk about it</button>}
+      </div>
       {error && <p className="bad">{error}</p>}
       {!!p.log?.length && <pre className="proto-log mono">{p.log.slice(-12).join('\n')}</pre>}
     </div>
   )
 }
 
-function Frame({ p, path, onNavigate, onStop }: { p: Prototype; path: string; onNavigate?: (path: string) => void; onStop: () => void }) {
+function Frame({ p, path, onNavigate, onStop, onRestart, onTalk }: { p: Prototype; path: string; onNavigate?: (path: string) => void; onStop: () => void; onRestart: () => void; onTalk: () => void }) {
   const base = p.url!.replace(/\/$/, '')
   const [at, setAt] = useState(path)
   const [typed, setTyped] = useState(path)
@@ -91,10 +105,12 @@ function Frame({ p, path, onNavigate, onStop }: { p: Prototype; path: string; on
           {DEVICES.map((d) => <button key={d.id} className={device === d.id ? 'on' : ''} onClick={() => setDevice(d.id)} title={d.width ? `${d.width}px wide` : 'Full width'}>{d.label}</button>)}
         </div>
         <a className="icon-btn" href={base + at} target="_blank" rel="noreferrer" title="Open in a browser tab" aria-label="Open in a browser tab">↗</a>
+        <button className="icon-btn" onClick={onTalk} title="Its conversation, in the agent's column" aria-label="Talk about it">💬</button>
+        <button className="icon-btn" onClick={onRestart} title="Restart its server" aria-label="Restart its server">⟲</button>
         <button className="icon-btn" onClick={onStop} title="Stop its server" aria-label="Stop its server">■</button>
       </div>
       <div className="preview-stage">
-        <iframe key={`${at}#${reloads}`} src={base + at} title={p.title} style={width ? { width, maxWidth: '100%' } : undefined} />
+        <iframe key={`${at}#${reloads}#${p.updatedAt ?? ''}`} /* a restart reloads it */ src={base + at} title={p.title} style={width ? { width, maxWidth: '100%' } : undefined} />
       </div>
     </div>
   )

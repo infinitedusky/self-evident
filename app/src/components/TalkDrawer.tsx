@@ -7,12 +7,13 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Conversation } from './Conversation'
-import { engine, type TalkContext, type TalkSession } from '../engine'
+import { API, engine, type TalkContext, type TalkSession } from '../engine'
+import type { Tab } from '../workspace'
 import { useCurrentApp } from '../current-app'
 
 const SESSION_KEY = 'if.talk.session', POPPED_KEY = 'if.talk.popped'
 // The main window and a popped-out agent window talk over this channel: where the person is, which app, closed.
-type Msg = { type: 'context'; context: TalkContext; appId?: string } | { type: 'hello' } | { type: 'closed' } | { type: 'ping' } | { type: 'open'; path: string }
+type Msg = { type: 'context'; context: TalkContext; appId?: string } | { type: 'hello' } | { type: 'closed' } | { type: 'ping' } | { type: 'open'; tab: Tab }
 const channel = () => (typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('self-evident-agent'))
 let popup: Window | null = null
 
@@ -43,8 +44,8 @@ const recall = (k: string) => { try { return localStorage.getItem(k) } catch { r
 /** The agent in its own browser window: the same panel, filling the window, told by the main window where the person is. */
 export function AgentWindow() { return <TalkDrawer standalone /> }
 
-/** `context` is where the person is (the workspace says); `onOpen` opens a page as a tab. `standalone`: its own window. */
-export function TalkDrawer({ standalone = false, context: given, onOpen }: { standalone?: boolean; context?: TalkContext; onOpen?: (path: string) => void }) {
+/** `context` is where the person is (the workspace says); `onOpen` opens a tab. `standalone`: its own window. */
+export function TalkDrawer({ standalone = false, context: given, onOpen }: { standalone?: boolean; context?: TalkContext; onOpen?: (tab: Tab) => void }) {
   const { app, apps, setAppId } = useCurrentApp()
   const [popped, setPopped] = useState(() => !standalone && recall(POPPED_KEY) === '1')
   const [remote, setRemote] = useState<TalkContext | null>(null) // standalone: the main window's page
@@ -74,7 +75,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
     send()
     // Is the agent window really there? If nothing answers, the drawer comes back: a failed or closed pop-out never strands it.
     if (recall(POPPED_KEY) === '1') { alive.current = false; ch.postMessage({ type: 'ping' } satisfies Msg); window.setTimeout(() => { if (!alive.current) { setPopped(false); remember(POPPED_KEY, '0') } }, 800) }
-    ch.onmessage = (e: MessageEvent<Msg>) => { if (e.data.type === 'open') onOpen?.(e.data.path); if (e.data.type === 'hello') { alive.current = true; send(); setPopped(true); remember(POPPED_KEY, '1') } if (e.data.type === 'closed') { setPopped(false); remember(POPPED_KEY, '0') } }
+    ch.onmessage = (e: MessageEvent<Msg>) => { if (e.data.type === 'open') onOpen?.(e.data.tab); if (e.data.type === 'hello') { alive.current = true; send(); setPopped(true); remember(POPPED_KEY, '1') } if (e.data.type === 'closed') { setPopped(false); remember(POPPED_KEY, '0') } }
     return () => ch.close()
   }, [standalone, local.path, local.projectId, tabsSeen, app?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const popOut = () => {
@@ -87,6 +88,15 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
   const pick = (id: string | null) => { setSessionId(id); remember(SESSION_KEY, id) }
   const reload = () => engine.talks(true).then((all) => { setSessions(all); return all }).catch((e) => { setProblem(String(e.message ?? e)); return [] as TalkSession[] })
 
+  useEffect(() => { // the engine asks to show a conversation here: a prototype's, as it starts or when asked for
+    if (!app) return
+    const es = new EventSource(`${API}/events?since=now&app=${app.id}`)
+    es.addEventListener('ui.talk', ((ev: MessageEvent) => {
+      const id = (JSON.parse(ev.data) as { payload?: { sessionId?: string } }).payload?.sessionId
+      if (id) void reload().then(() => pick(id))
+    }) as EventListener)
+    return () => es.close()
+  }, [app?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { // the remembered conversation if still open, else the latest, else none (start one on demand)
     void reload().then((all) => { if (!all.some((s) => s.id === sessionId)) pick(all[0]?.id ?? null) })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -109,7 +119,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
   const rename = async (subject: string) => { if (current && subject.trim()) { await engine.renameTalk(current.id, subject); await reload() } setRenaming(false) }
 
   const bringBack = () => { setPopped(false); remember(POPPED_KEY, '0') }
-  const openPage = (path: string) => { if (standalone) channel()?.postMessage({ type: 'open', path } satisfies Msg); else onOpen?.(path) }
+  const openTab = (tab: Tab) => { if (standalone) channel()?.postMessage({ type: 'open', tab } satisfies Msg); else onOpen?.(tab) }
   if (popped) return (
     <aside className="talk-drawer popped" data-component="TalkDrawer">
       <p className="muted">The agent is in its own window.</p>
@@ -145,7 +155,8 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
           </div>
           <div className="faint" style={{ fontSize: 12, padding: '0 12px 6px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <span>{appName(current)}{current.branch ? ` · ${current.branch}` : ''}</span>
-            {current.subjectRef?.projectId && <button className="link-btn" onClick={() => openPage(`/projects/${current.subjectRef!.projectId}`)}>open its project</button>}
+            {current.subjectRef?.projectId && <button className="link-btn" onClick={() => openTab({ kind: 'page', path: `/projects/${current.subjectRef!.projectId}` })}>open its project</button>}
+            {current.subjectRef?.prototypeId && <button className="link-btn" onClick={() => openTab({ kind: 'prototype', id: current.subjectRef!.prototypeId })}>open the prototype</button>}
             <span>· looking at {context.label}</span>
           </div>
           {problem && <div className="faint" style={{ fontSize: 12, padding: '0 12px 6px', color: 'var(--warn)' }}>{problem}</div>}

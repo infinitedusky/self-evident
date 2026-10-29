@@ -234,8 +234,19 @@ export const transcript: Transcript = {
   ],
 }
 
+/** A prototype's conversation, made up: it works in the prototype's worktree and starts from a brief. */
+export const prototypeTalk: TalkSession = { ...talkSession, id: 'talk_sample_proto', cwd: '/code/sample-shop-worktrees/prototype--sample-one-tap-checkout-a1b2', branch: 'prototype/sample-one-tap-checkout-a1b2', subject: 'Prototype: Sample: one-tap checkout', subjectRef: { prototypeId: 'proto_sample1', projectId: 'proj_checkout' }, autoApprove: 'moderate' }
+export const prototypeTranscript: Transcript = {
+  session: prototypeTalk, pending: [],
+  messages: [
+    { id: 1, sessionId: prototypeTalk.id, author: 'engine', kind: 'brief', body: '**Sample brief.** A checkout that takes one tap for a returning customer.\n\n- Follow the mockup `pages-checkout--one-tap`.\n- Fake the saved card; no real payments.\n- We want to learn whether people trust paying without a confirm step.', payload: null, sentAt: at(40) },
+    { id: 2, sessionId: prototypeTalk.id, author: 'agent', kind: 'text', body: 'First version is up: the cart has a **Pay now** button for a returning customer, with a made-up saved card. Try it in the Prototype tab. What should change?', payload: null, sentAt: at(43) },
+    { id: 3, sessionId: prototypeTalk.id, author: 'engine', kind: 'result', body: 'done', payload: { costUsd: 0.31, turns: 14, durationMs: 160000 }, sentAt: at(43) },
+  ],
+}
+
 /** Prototypes, made up: one running, one stopped. The running one's address is filled in by the story. */
 export const prototypes: Prototype[] = [
-  { id: 'proto_sample1', appId: sampleApp.id, projectId: 'proj_checkout', title: 'Sample: one-tap checkout', branch: 'prototype/sample-one-tap-checkout-a1b2', path: '/code/sample-shop-worktrees/prototype--sample-one-tap-checkout-a1b2', port: 51234, status: 'running', url: 'http://localhost:51234', createdAt: '2026-10-29T10:00:00Z' },
-  { id: 'proto_sample2', appId: sampleApp.id, projectId: null, title: 'Sample: gift cards', branch: 'prototype/sample-gift-cards-c3d4', path: '/code/sample-shop-worktrees/prototype--sample-gift-cards-c3d4', port: 51240, status: 'stopped', url: 'http://localhost:51240', createdAt: '2026-10-28T16:00:00Z' },
+  { id: 'proto_sample1', appId: sampleApp.id, projectId: 'proj_checkout', title: 'Sample: one-tap checkout', brief: 'Sample brief.', sessionId: 'talk_sample_proto', branch: 'prototype/sample-one-tap-checkout-a1b2', path: '/code/sample-shop-worktrees/prototype--sample-one-tap-checkout-a1b2', port: 51234, status: 'running', url: 'http://localhost:51234', createdAt: '2026-10-29T10:00:00Z' },
+  { id: 'proto_sample2', appId: sampleApp.id, projectId: null, title: 'Sample: gift cards', brief: null, sessionId: null, branch: 'prototype/sample-gift-cards-c3d4', path: '/code/sample-shop-worktrees/prototype--sample-gift-cards-c3d4', port: 51240, status: 'stopped', url: 'http://localhost:51240', createdAt: '2026-10-28T16:00:00Z' },
 ]

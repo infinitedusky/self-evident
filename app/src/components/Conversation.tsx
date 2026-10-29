@@ -122,6 +122,7 @@ export function Message({ m, pending, sessionId }: { m: TalkMessage; pending: bo
       </div>
     )
     case 'result': return <div className="msg engine faint worked" title={`${p.turns ?? '?'} turns${p.costUsd != null ? ` · $${Number(p.costUsd).toFixed(2)}` : ''}`}>{m.body === 'done' && p.durationMs ? `Worked for ${took(Number(p.durationMs))}` : m.body}{p.costUsd != null ? ` · $${Number(p.costUsd).toFixed(2)}` : ''}</div>
+    case 'brief': return <div className="msg brief"><div className="faint brief-label">Brief</div><div className="msg-body md-chat"><Markdown remarkPlugins={[remarkGfm]}>{m.body}</Markdown></div></div>
     case 'error': return <div className={`msg engine ${p.waiting ? 'faint' : 'bad'}`}>{m.body}</div>
     default: return null
   }

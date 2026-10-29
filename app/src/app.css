@@ -436,3 +436,5 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .proto-row .proto-title { flex: 1; min-width: 0; font-weight: 600; }
 .proto-row .mono { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
 .proto-log { max-width: min(560px, 100%); max-height: 220px; overflow: auto; text-align: left; font-size: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--ground); color: var(--ink-soft); white-space: pre-wrap; }
+.msg.brief { align-self: stretch; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--ground); }
+.msg.brief .brief-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }
