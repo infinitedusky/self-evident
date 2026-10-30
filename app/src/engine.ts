@@ -106,7 +106,14 @@ export interface Workspace { id: string; name: string; settings?: { integrations
 // Settings: integrations set for the workspace and overridden per app field by field; plugins switched for the
 // workspace and per app; each plugin skill filed under the job it covers (the catalogue).
 export type IntegrationValues = Record<string, Record<string, string>>
-export interface Integration { key: string; name: string; role: string; does: string; fields: { key: string; label: string; placeholder?: string }[] }
+export interface Integration {
+  key: string; name: string; role: string; does: string
+  fields: { key: string; label: string; placeholder?: string; required?: boolean; secret?: boolean }[]
+  calls: boolean; actions: { key: string; name: string; does: string }[]; docs?: string
+}
+/** Where an integration stands: nothing set, missing fields, its key not in the engine's environment, or ready. */
+export interface IntegrationStatus { state: 'off' | 'incomplete' | 'no-key' | 'ready'; missing: string[]; keyVar: string | null }
+export type EffectiveValues = Record<string, Record<string, { value: string | null; from: 'app' | 'workspace' | null }>>
 export type AgentRole = 'talk' | 'planner'
 export interface SkillInfo { key: string; name: string; description: string }
 export interface PluginSkill extends SkillInfo { category: string | null; on: boolean }
@@ -117,9 +124,9 @@ export interface PluginInfo {
 }
 export interface Category { key: string; name: string; for: string; builtIn?: string }
 export interface CategoryGroup { name: string; categories: Category[] }
-export interface FactorySettings { workspace: Workspace | null; integrations: Integration[]; values: IntegrationValues; plugins: PluginInfo[]; catalogue: CategoryGroup[] }
+export interface FactorySettings { workspace: Workspace | null; integrations: Integration[]; values: IntegrationValues; status: Record<string, IntegrationStatus>; plugins: PluginInfo[]; catalogue: CategoryGroup[] }
 export interface AppPlugin { id: string; name: string; factoryOn: boolean; own: boolean | null; on: boolean }
-export interface AppSettings { integrations: Record<string, Record<string, { value: string | null; from: 'app' | 'workspace' | null }>>; plugins: AppPlugin[]; skills: SkillInfo[] }
+export interface AppSettings { integrations: EffectiveValues; status: Record<string, IntegrationStatus>; plugins: AppPlugin[]; skills: SkillInfo[] }
 export interface Prototype {
   id: string; appId: string; projectId: string | null; ideaId?: string | null; issueId?: string | null; title: string; brief: string | null; sessionId: string | null; branch: string; path: string; port: number | null
   status: 'running' | 'stopped' | 'discarded'; url: string | null; createdAt: string; updatedAt?: string | null
@@ -211,6 +218,7 @@ export const engine = {
   settings: () => call<FactorySettings>('GET', '/settings'),
   updateWorkspace: (id: string, body: { name?: string; integrations?: IntegrationValues }) => call<Workspace>('PATCH', `/workspaces/${id}`, body),
   appSettings: (id: string) => call<AppSettings>('GET', `/apps/${id}/settings`),
+  checkIntegration: (key: string, appId?: string) => call<{ ok: boolean; detail: string }>('POST', `/integrations/${key}/check`, { appId }),
   installPlugin: (marketplace: string, name: string) => call<{ id: string }>('POST', '/plugins', { marketplace, name }),
   removePlugin: (id: string) => call<{ ok: true }>('DELETE', `/plugins/${encodeURIComponent(id)}`),
   updatePlugin: (id: string, body: { on?: boolean; roles?: AgentRole[] }) => call<{ ok: true }>('PATCH', `/plugins/${encodeURIComponent(id)}`, body),

@@ -1,14 +1,15 @@
 /**
  * Settings, after VS Code's: which settings across the top (All apps, then each app; an app inherits All apps until it
  * overrides), and that scope's sections down the side, one at a time, each with its own address and its own Save.
- * All apps: plugins, the jobs their skills cover, the integrations' shared values. An app: its repo, agents, plugins,
+ * All apps: plugins, the jobs their skills cover, the integrations (a list, then a page each). An app: its repo, agents, plugins,
  * landing, prototype, Storybook, integration values, and its workflow rules.
  */
 import { useEffect, useState } from 'react'
 import { NavLink, useParams } from 'react-router'
 import { Badge } from '../components/Badge'
+import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
-import { engine, type AgentRole, type App, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type FactorySettings, type Integration, type IntegrationValues, type PluginInfo, type Repo } from '../engine'
+import { engine, type AgentRole, type App, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type PluginInfo, type Repo } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
@@ -23,7 +24,7 @@ export const APP_SECTIONS = [
 ] as const
 
 export function Settings() {
-  const { id, section } = useParams()
+  const { id, section, item } = useParams()
   const { apps, reload: reloadNav } = useCurrentApp()
   const [adding, setAdding] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -61,7 +62,7 @@ export function Settings() {
         </aside>
         <div>
           {error && <div className="empty bad">{error}</div>}
-          {!id ? <FactoryPage section={here} /> : app ? <AppPage key={app.id} app={app} section={here} onSaved={reloadNav} /> : <p className="muted">No such app.</p>}
+          {!id ? <FactoryPage section={here} item={item} /> : app ? <AppPage key={app.id} app={app} section={here} item={item} onSaved={reloadNav} /> : <p className="muted">No such app.</p>}
         </div>
       </div>
     </>
@@ -69,7 +70,7 @@ export function Settings() {
 }
 
 /** What every app gets. */
-function FactoryPage({ section }: { section: string }) {
+function FactoryPage({ section, item }: { section: string; item?: string }) {
   const [s, setS] = useState<FactorySettings | null>(null)
   const [error, setError] = useState<string | null>(null)
   const load = () => engine.settings().then(setS).catch((e) => setError(err(e)))
@@ -92,19 +93,10 @@ function FactoryPage({ section }: { section: string }) {
         <Jobs plugins={s.plugins} catalogue={s.catalogue} />
       </section>}
 
-      {section === 'integrations' && <section className="panel">
-        <h2>Integrations</h2>
-        <p className="muted settings-lead">Shared values for every app. An app can override any field on its own page. Keys stay in each program's <span className="mono">.env</span>; here, only the variable's name.</p>
-        {s.workspace
-          ? <IntegrationsForm integrations={s.integrations} values={s.values} onSave={async (v) => { await engine.updateWorkspace(s.workspace!.id, { integrations: v }); await load() }} />
-          : <div className="empty">Add an app first; it creates the workspace.</div>}
-        <dl className="fields" style={{ marginTop: 16 }}>
-          <dt>Claude Code</dt><dd className="muted">The agents. Development runs on the operator's login; the product on an API key.</dd>
-          <dt>GitHub</dt><dd className="muted">Set per app: its repo, where PRs live.</dd>
-          <dt>Storybook</dt><dd className="muted">Set per app: where its stories run.</dd>
-          <dt>Linear</dt><dd className="muted">Not connected yet. Connecting Linear maps tasks to Linear issues, and sub-tasks to sub-issues.</dd>
-        </dl>
-      </section>}
+      {section === 'integrations' && (s.workspace
+        ? <Integrations base="/settings/integrations" item={item} integrations={s.integrations} values={asEffective(s)} status={s.status} scope="workspace"
+            onSave={async (v) => { await engine.updateWorkspace(s.workspace!.id, { integrations: v }); await load() }} />
+        : <section className="panel"><h2>Integrations</h2><div className="empty">Add an app first; it creates the workspace.</div></section>)}
     </>
   )
 }
@@ -236,32 +228,16 @@ function Jobs({ plugins, catalogue }: { plugins: PluginInfo[]; catalogue: Catego
   )
 }
 
-/** The workspace's values: one block per integration, saved together. */
-function IntegrationsForm({ integrations, values, onSave }: { integrations: Integration[]; values: IntegrationValues; onSave: (v: IntegrationValues) => Promise<void> }) {
-  const [v, setV] = useState<IntegrationValues>(values)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const dirty = JSON.stringify(v) !== JSON.stringify(values)
-  const save = async () => { setBusy(true); setError(null); try { await onSave(v) } catch (e) { setError(err(e)) } finally { setBusy(false) } }
-  return (
-    <>
-      {integrations.map((i) => (
-        <div className="settings-group" key={i.key}>
-          <div className="settings-group-head"><strong>{i.name}</strong> <span className="faint">· {i.role}: {i.does}</span></div>
-          <div className="form-grid">
-            {i.fields.map((f) => (
-              <label key={f.key}>{f.label}<input className="mono" value={v[i.key]?.[f.key] ?? ''} placeholder={f.placeholder} onChange={(e) => setV({ ...v, [i.key]: { ...v[i.key], [f.key]: e.target.value } })} /></label>
-            ))}
-          </div>
-        </div>
-      ))}
-      <SaveRow dirty={dirty} busy={busy} error={error} onSave={save} />
-    </>
-  )
+/** The workspace's own values, in the shape an app's are shown in. */
+function asEffective(s: FactorySettings): EffectiveValues {
+  return Object.fromEntries(s.integrations.map((i) => [i.key, Object.fromEntries(i.fields.map((f) => {
+    const v = s.values[i.key]?.[f.key]?.trim()
+    return [f.key, { value: v || null, from: v ? 'workspace' as const : null }]
+  }))]))
 }
 
 /** One app: grouped, one Save for the lot. Integration fields show the inherited value until overridden. */
-function AppPage({ app, section, onSaved }: { app: App; section: string; onSaved: () => Promise<unknown> }) {
+function AppPage({ app, section, item, onSaved }: { app: App; section: string; item?: string; onSaved: () => Promise<unknown> }) {
   const [name, setName] = useState(app.name)
   const [branch, setBranch] = useState(app.defaultBranch)
   const [setup, setSetup] = useState<AppSetup>(app.setup ?? {})
@@ -286,10 +262,11 @@ function AppPage({ app, section, onSaved }: { app: App; section: string; onSaved
       await onSaved(); await load()
     } catch (e) { setError(err(e)) } finally { setBusy(false) }
   }
-  const own = setup.integrations ?? {}
-  const shared = factory?.values ?? {}
-
   if (section === 'workflows') return <WorkflowSettings appId={app.id} />
+  if (section === 'integrations') return info && factory
+    ? <Integrations base={`/settings/apps/${app.id}/integrations`} item={item} integrations={factory.integrations} values={info.integrations} status={info.status} scope="app" appId={app.id}
+        onSave={async (v) => { await engine.updateApp(app.id, { setup: { ...(app.setup ?? {}), integrations: v } }); await onSaved(); await load() }} />
+    : error ? <div className="empty bad">{error}</div> : <p className="muted">Loading…</p>
   const groups: Record<string, React.ReactNode> = {
     repo: <>
       <Group title="Repo" lead="The code and the checkout on this machine the agents work from.">
@@ -359,29 +336,6 @@ function AppPage({ app, section, onSaved }: { app: App; section: string; onSaved
         <label>URL<input className="mono" value={setup.storybook_url ?? ''} onChange={(e) => set({ storybook_url: e.target.value })} placeholder="http://localhost:6006" /></label>
         <label>Command<input className="mono" value={setup.storybook_cmd ?? ''} onChange={(e) => set({ storybook_cmd: e.target.value })} placeholder="cd web && pnpm storybook --no-open" /></label>
       </Group>
-    </>,
-    integrations: <>
-      <div className="settings-group">
-      <h3 className="settings-h3">Integrations</h3>
-      <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>An empty field uses the value set under All apps, shown in italics. Type to override it for this app only.</p>
-      {(factory?.integrations ?? []).map((i) => (
-        <div className="settings-group" key={i.key}>
-          <div className="settings-group-head"><strong>{i.name}</strong> <span className="faint">· {i.role}</span></div>
-          <div className="form-grid">
-            {i.fields.map((f) => {
-              const mine = own[i.key]?.[f.key] ?? ''
-              const inherited = shared[i.key]?.[f.key]
-              return (
-                <label key={f.key}>{f.label} {mine.trim() ? <Badge tone="accent">override</Badge> : inherited ? <span className="faint">· inherited</span> : null}
-                  <input className="mono" value={mine} placeholder={inherited ?? f.placeholder}
-                    onChange={(e) => set({ integrations: { ...own, [i.key]: { ...own[i.key], [f.key]: e.target.value } } })} />
-                </label>
-              )
-            })}
-          </div>
-        </div>
-      ))}
-      </div>
     </>,
   }
   return (
