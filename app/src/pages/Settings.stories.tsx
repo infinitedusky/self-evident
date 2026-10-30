@@ -40,8 +40,14 @@ export const AppBare: Story = { parameters: appPage('app_sample2'), beforeEach: 
 export const NoSuchApp: Story = { parameters: appPage('app_missing') }
 export const Loading: Story = { parameters: all, beforeEach: withEngine({}, { latency: 'infinite' }) }
 export const EngineDown: Story = { parameters: all, beforeEach: withEngine(engineDown) }
-/** All apps, the integrations' shared values. */
+/** All apps: every integration and where it stands. */
 export const AllAppsIntegrations: Story = { parameters: allAt('integrations') }
+/** One integration's page under All apps. */
+export const AllAppsLinear: Story = { parameters: { route: { path: '/settings/:section/:item', url: '/settings/integrations/linear' } } }
+/** An app's integrations: its overrides and what it inherits. */
+export const AppIntegrations: Story = { parameters: appPage(sampleApp.id, 'integrations') }
+/** One integration's page for an app. */
+export const AppLinear: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/linear` } } }
 /** An app's prototype settings: how its server starts and where its throwaway databases go. */
 export const AppPrototype: Story = { parameters: appPage(sampleApp.id, 'prototype') }
 /** An app's workflow rules: configuration, not something that runs. */

@@ -1517,3 +1517,16 @@ file run together and only true overlaps re-run.
   "Workflow: Default, the app's default".
 - **Existing apps (migration 0006):** an app with workflows but no default took its oldest one (Homework Gate:
   "Main"); an app with none got "Default".
+
+## Integrations: their own settings, a shape, and steps (Sandy, 2026-10-29: "we create like integration steps essentially within the workflow")
+
+- **Asked:** could a step like the ADR publish an RFC to Confluence? Rather than hooks hidden behind a step, an
+  **integration step** goes in the workflow between other steps, so it shows in the task's nav, can block, can fail
+  visibly, and can be run again. Linear can work the same way (create the issue after the brief, comment the ADR,
+  move it as the build goes), a lighter way in than Linear as the plan store.
+- **No fees** (Sandy: "I want to give this away"): official APIs and SDKs, keys in the engine's environment, no
+  Composio. Lightsprint doesn't run on n8n: it publishes an n8n node so n8n users can call it, which we might do one
+  day for the same reason.
+- **Order:** (1) Settings → Integrations: a list and a page for each (what it does, its values, its key, a check of
+  the connection, the actions it offers), with Linear and Confluence added; (2) integration steps in workflows and a
+  runner; (3) the actions themselves, Confluence's publish first.

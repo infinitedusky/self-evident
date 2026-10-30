@@ -67,8 +67,10 @@ export function PageRoutes() {
       <Route path="/projects/:id" element={<ProjectPage />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/settings/:section" element={<Settings />} />
+      <Route path="/settings/:section/:item" element={<Settings />} />
       <Route path="/settings/apps/:id" element={<Settings />} />
       <Route path="/settings/apps/:id/:section" element={<Settings />} />
+      <Route path="/settings/apps/:id/:section/:item" element={<Settings />} />
       <Route path="*" element={<p className="muted">No such page.</p>} />
     </Routes>
   )

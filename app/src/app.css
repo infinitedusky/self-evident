@@ -262,6 +262,19 @@ button.badge { border: 0; cursor: pointer; }
 @media (max-width: 760px) { .settings { grid-template-columns: 1fr; } .settings-side { position: static; } }
 .settings .form-grid input::placeholder { color: var(--ink-faint); font-style: italic; opacity: 1; }
 .settings-group .settings-group { border-top: 1px dashed var(--line); }
+.integrations-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.integration-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); text-decoration: none; }
+.integration-row:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); background: var(--accent-wash); }
+.integration-row .badge { flex-shrink: 0; }
+.integration-does { display: block; }
+.integration-back { display: inline-block; margin-bottom: 10px; text-decoration: none; font-size: 13px; }
+.integration-head { display: flex; align-items: center; gap: 10px; }
+.integration-head h2 { margin: 0; }
+.integration-section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.integration-section-head .settings-h3 { margin: 0; }
+.integration-check { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 13px; }
+.ok-text { color: var(--ok); }
+.warn-text { color: var(--warn); }
 /* Plugins: one block each, a switch for on/off and for each agent; skills filed by job */
 .switch { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink-soft); font: 500 13px var(--sans); cursor: pointer; }
 .switch.on { background: var(--accent-wash); border-color: var(--accent); color: var(--accent); }

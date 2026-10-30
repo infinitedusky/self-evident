@@ -13,6 +13,7 @@ export interface MockData {
   summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript
   storybook: { url: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[] }
   prototypes: typeof s.prototypes
+  check: { ok: boolean; detail: string }
   plan: typeof s.plan; workflows: typeof s.workflowRows; steps: Record<string, typeof s.taskStepsView>; stepWork: typeof s.researchWork | null
 }
 
@@ -22,6 +23,7 @@ export const sampleData: MockData = {
   talks: [s.talkSession], transcript: s.transcript,
   storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [] },
   prototypes: s.prototypes,
+  check: { ok: true, detail: 'Signed in as Sample Owner; team SHOP (Sample Shop) found.' },
   plan: s.plan, workflows: s.workflowRows, steps: { ideas: s.ideaStepsView, issues: s.taskStepsView, projects: s.projectStepsView }, stepWork: s.researchWork,
 }
 
@@ -42,6 +44,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/workspaces', () => reply([s.workspace])),
     http.get('/api/settings', () => reply(d.settings)),
     http.get('/api/apps/:id/settings', () => reply(d.appSettings)),
+    http.post('/api/integrations/:key/check', () => reply(d.check)),
     http.get('/api/apps/:id/storybook', () => reply(d.storybook)),
     http.get('/api/apps/:id/prototypes', () => reply(d.prototypes)),
     http.get('/api/prototypes/:id', ({ params }) => { const p = d.prototypes.find((x) => x.id === params.id); return p ? reply({ log: [], ...p, up: p.up ?? p.status === 'running' }) : missing('prototype') }),

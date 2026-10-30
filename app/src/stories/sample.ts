@@ -203,13 +203,45 @@ export const summary: SummaryState = {
   },
 }
 
+/** Integrations, made up: PostHog for telemetry, Linear connected for the shop, Confluence set but its key missing. */
+export const sampleIntegrations: FactorySettings['integrations'] = [
+  {
+    key: 'posthog', name: 'PostHog', role: 'Telemetry', does: 'Events, errors and experiments.', calls: false, actions: [],
+    fields: [{ key: 'host', label: 'Host', placeholder: 'https://us.posthog.com' }, { key: 'project_id', label: 'Project id' }, { key: 'key_env', label: 'Key variable', placeholder: 'POSTHOG_API_KEY', secret: true }],
+  },
+  {
+    key: 'linear', name: 'Linear', role: 'Planning', does: 'Tasks as Linear issues: made from an approved brief, commented on, moved as the build goes.', calls: true, docs: 'https://linear.app/settings/account/security',
+    fields: [{ key: 'team', label: 'Team key', placeholder: 'HG', required: true }, { key: 'key_env', label: 'Key variable', placeholder: 'LINEAR_API_KEY', required: true, secret: true }],
+    actions: [
+      { key: 'issue.create', name: 'Create an issue', does: 'A Linear issue from the task and a step’s content, linked back; run again, it updates that issue.' },
+      { key: 'issue.comment', name: 'Comment', does: 'A step’s content as a comment on the task’s issue.' },
+      { key: 'issue.move', name: 'Move the issue', does: 'The task’s issue to a state, like In progress or Done.' },
+    ],
+  },
+  {
+    key: 'confluence', name: 'Confluence', role: 'Docs', does: 'Pages from steps: an ADR published as an RFC, a brief as a spec.', calls: true, docs: 'https://id.atlassian.com/manage-profile/security/api-tokens',
+    fields: [
+      { key: 'site', label: 'Site', placeholder: 'https://yourteam.atlassian.net', required: true }, { key: 'email', label: 'Account email', required: true },
+      { key: 'space', label: 'Space key', placeholder: 'ENG', required: true }, { key: 'parent', label: 'Parent page id' },
+      { key: 'key_env', label: 'Key variable', placeholder: 'CONFLUENCE_API_TOKEN', required: true, secret: true },
+    ],
+    actions: [{ key: 'page.publish', name: 'Publish a page', does: 'A step’s content as a page in the space, from Markdown; run again, it updates that page.' }],
+  },
+]
+
 export const factorySettings: FactorySettings = {
   workspace,
-  integrations: [
-    { key: 'github', name: 'GitHub', role: 'Code', does: 'Pull requests, reviews and checks.', fields: [{ key: 'token', label: 'Token', placeholder: 'ghp_…' }] },
-    { key: 'posthog', name: 'PostHog', role: 'Telemetry', does: 'Events, errors and experiments.', fields: [{ key: 'project_key', label: 'Project key' }, { key: 'host', label: 'Host', placeholder: 'https://us.posthog.com' }] },
-  ],
-  values: { posthog: { host: 'https://us.posthog.com' } },
+  integrations: sampleIntegrations,
+  values: {
+    posthog: { host: 'https://us.posthog.com' },
+    linear: { team: 'SHOP', key_env: 'LINEAR_API_KEY' },
+    confluence: { site: 'https://sample-shop.atlassian.net', email: 'owner@example.com', space: 'ENG', key_env: 'CONFLUENCE_API_TOKEN' },
+  },
+  status: {
+    posthog: { state: 'ready', missing: [], keyVar: null },
+    linear: { state: 'ready', missing: [], keyVar: 'LINEAR_API_KEY' },
+    confluence: { state: 'no-key', missing: [], keyVar: 'CONFLUENCE_API_TOKEN' },
+  },
   plugins: [{
     id: 'sample-plugin@sample', name: 'sample-plugin', version: '1.0.0', description: 'A made-up plugin with two skills.', source: 'sample', builtIn: false,
     on: true, roles: ['talk', 'planner'], mcpServers: [], note: null, tools: null,
@@ -218,7 +250,12 @@ export const factorySettings: FactorySettings = {
   catalogue: [{ name: 'Build', categories: [{ key: 'testing', name: 'Testing', for: 'Writing and running tests' }, { key: 'review', name: 'Review', for: 'Reading a change before it lands' }] }],
 }
 export const appSettings: AppSettings = {
-  integrations: { github: { token: { value: null, from: null } }, posthog: { project_key: { value: 'phc_sample', from: 'app' }, host: { value: 'https://us.posthog.com', from: 'workspace' } } },
+  integrations: {
+    posthog: { host: { value: 'https://us.posthog.com', from: 'workspace' }, project_id: { value: '12345', from: 'app' }, key_env: { value: null, from: null } },
+    linear: { team: { value: 'GIFT', from: 'app' }, key_env: { value: 'LINEAR_API_KEY', from: 'workspace' } },
+    confluence: { site: { value: null, from: null }, email: { value: null, from: null }, space: { value: null, from: null }, parent: { value: null, from: null }, key_env: { value: null, from: null } },
+  },
+  status: { posthog: { state: 'ready', missing: [], keyVar: null }, linear: { state: 'ready', missing: [], keyVar: 'LINEAR_API_KEY' }, confluence: { state: 'off', missing: ['Site', 'Account email', 'Space key', 'Key variable'], keyVar: null } },
   plugins: [{ id: 'sample-plugin@sample', name: 'sample-plugin', factoryOn: true, own: null, on: true }],
   skills: [{ key: 'checkout-rules', name: 'checkout-rules', description: 'How this shop prices and taxes an order.' }],
 }
