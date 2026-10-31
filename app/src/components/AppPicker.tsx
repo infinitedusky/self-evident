@@ -1,5 +1,5 @@
 /**
- * Which app you are in, as a strip beside the rail with a square for every app, after Slack's workspace bar: switching
+ * Which app you are in, as a strip outside the rail (far left) with a square for every app, after Slack's workspace bar: switching
  * apps switches everything (the tabs, the conversations, where the agent works), so each app is one click away and
  * never inside the agent's column. The square shows the app's key; its name shows on hover. + adds one in Settings.
  */

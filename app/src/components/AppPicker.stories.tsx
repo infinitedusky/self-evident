@@ -3,7 +3,7 @@ import { userEvent, within } from 'storybook/test'
 import { AppPicker } from './AppPicker'
 import { withEngine } from '../stories/mock-engine'
 
-// The apps, a square each, in a strip beside the rail. The sample engine has two made-up apps.
+// The apps, a square each, in a strip outside the rail. The sample engine has two made-up apps.
 const meta = { title: 'Components/AppPicker', component: AppPicker, parameters: { router: false }, args: { onOpen: () => {} },
   render: (a) => <div style={{ height: 240, display: 'flex' }}><AppPicker {...a} /></div> } satisfies Meta<typeof AppPicker>
 export default meta
