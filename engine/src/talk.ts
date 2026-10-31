@@ -471,7 +471,7 @@ export async function adoptTalk(input: { appId: string; cwd: string; agentSessio
   if (!id) throw new PlanError(`no Claude Code session in ${input.cwd}`)
   const file = sessionFile(input.cwd, id)
   if (!existsSync(file)) throw new PlanError(`no session ${id} in ${input.cwd}`)
-  const [had] = await db.select().from(session).where(and(eq(session.agentSessionId, id), eq(session.status, 'open')))
+  const [had] = await db.select().from(session).where(and(eq(session.agentSessionId, id), eq(session.appId, a.id), eq(session.cwd, input.cwd), eq(session.status, 'open')))
   if (had) { await showTalk(had.id, had.appId); return had }
   const turns = readTurns(file, null)
   const keep = 200 // a long session's last turns; the agent still has all of it
