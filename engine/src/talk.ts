@@ -21,7 +21,7 @@ import { prototypeEnv } from './prototype.js'
 import { skillOptions } from './skills.js'
 import { issueDetail, PlanError, projectGraph } from './projects.js'
 import { existsSync, statSync } from 'node:fs'
-import { lastUuid, latestSession, readTurns, sessionFile, sessionTitle } from './terminal.js'
+import { lastUuid, latestSession, readTurns, sessionFile, sessionLabel, sessionsIn, sessionTitle } from './terminal.js'
 
 const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']
 const ASK_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash']
@@ -457,6 +457,36 @@ async function takeBack(sessionId: string) {
   watching.get(sessionId)?.(); watching.delete(sessionId)
   await db.update(session).set({ terminalSince: null }).where(eq(session.id, sessionId))
   await record(sessionId, 'engine', 'handoff', 'Back in Self Evident. Close the terminal session so the two don\'t talk over each other.', { to: 'ui' })
+}
+
+export interface ClaudeSession { id: string; cwd: string; branch: string | null; title: string | null; at: string; talkId: string | null }
+
+/**
+ * The Claude Code sessions someone ran on this app, in a terminal or an editor, newest first: those in its checkout
+ * and in its other worktrees, but not the engine's own (under `<repo>-worktrees`: builds, prototypes, conversations
+ * started here). `talkId` marks one already brought in. Read from the files' ends only, so a list stays quick.
+ */
+export async function listClaudeSessions(appId: string, limit = 20): Promise<ClaudeSession[]> {
+  const repos = await db.select().from(repo).where(eq(repo.appId, appId))
+  const folders = new Map<string, string | null>() // path → branch
+  for (const r of repos) {
+    if (!r.localPath || !existsSync(r.localPath)) continue
+    const ours = `${r.localPath}-worktrees/`
+    const out = await execFileP('git', ['worktree', 'list', '--porcelain'], { cwd: r.localPath }).then((x) => x.stdout).catch(() => '')
+    let path: string | null = null
+    for (const line of out.split('\n')) {
+      if (line.startsWith('worktree ')) { path = line.slice(9); if (!path.startsWith(ours)) folders.set(path, null) }
+      else if (line.startsWith('branch ') && path && folders.has(path)) folders.set(path, line.slice(7).replace(/^refs\/heads\//, ''))
+    }
+    if (!folders.size) folders.set(r.localPath, null)
+  }
+  const found = [...folders].flatMap(([cwd, branch]) => sessionsIn(cwd).map((f) => ({ ...f, cwd, branch })))
+    .sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, limit)
+  const here = found.length ? await db.select().from(session).where(and(eq(session.appId, appId), eq(session.status, 'open'), sql`${session.agentSessionId} in (${sql.join(found.map((f) => sql`${f.id}`), sql`, `)})`)) : []
+  return found.map((f) => ({
+    id: f.id, cwd: f.cwd, branch: f.branch, title: sessionLabel(f.file, f.bytes), at: f.at.toISOString(),
+    talkId: here.find((s) => s.agentSessionId === f.id && s.cwd === f.cwd)?.id ?? null,
+  }))
 }
 
 /**

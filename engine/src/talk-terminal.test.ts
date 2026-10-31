@@ -3,15 +3,16 @@
  * a UI conversation handed to the terminal gets the command to continue it; while it's there, what's said is copied
  * in as it happens. Claude Code's session store is a temporary folder here (CLAUDE_CONFIG_DIR).
  */
-import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, session, sessionMessage, workspace } from './db/schema.js'
+import { app, repo, session, sessionMessage, workspace } from './db/schema.js'
 import { newId } from './ids.js'
-import { adoptTalk, closeTalks, handOff, talkTranscript } from './talk.js'
+import { adoptTalk, closeTalks, handOff, listClaudeSessions, talkTranscript } from './talk.js'
 import { sessionDir } from './terminal.js'
 
 let reachable = true
@@ -39,7 +40,7 @@ describe.skipIf(!reachable)('one conversation, in the terminal and the UI', () =
   afterAll(async () => { closeTalks(); delete process.env.CLAUDE_CONFIG_DIR; await pool.end() })
 
   it('brings in a session started in the terminal, with what was said, once', async () => {
-    writeFileSync(file(cc1), line('u1', 'user', 'From the terminal: what needs me?') + line('a1', 'assistant', 'Three things.') + JSON.stringify({ type: 'ai-title', title: 'What needs me' }) + '\n')
+    writeFileSync(file(cc1), line('u1', 'user', 'From the terminal: what needs me?') + line('a1', 'assistant', 'Three things.') + JSON.stringify({ type: 'ai-title', aiTitle: 'What needs me' }) + '\n')
     const s = await adoptTalk({ appId, cwd })
     expect(s).toMatchObject({ agentSessionId: cc1, subject: 'What needs me', worktreePath: null })
     expect(await said(s.id)).toEqual([expect.stringMatching(/^Brought in from the terminal/), 'From the terminal: what needs me?', 'Three things.'])
@@ -73,5 +74,21 @@ describe.skipIf(!reachable)('one conversation, in the terminal and the UI', () =
     const id = newId('session')
     await db.insert(session).values({ id, appId, kind: 'talk', cwd, lastActiveAt: new Date() })
     await expect(handOff(id)).rejects.toThrow(/say something here first/)
+  })
+
+  it('lists the sessions run in the app\'s checkout and its worktrees, not the engine\'s own, marking one brought in', async () => {
+    const checkout = realpathSync(mkdtempSync(join(tmpdir(), 'se-repo-')))
+    const git = (...a: string[]) => execFileSync('git', a, { cwd: checkout, stdio: 'pipe' })
+    git('init', '-q', '-b', 'main'); git('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'first')
+    const mine = `${checkout}-wt-side`, engines = `${checkout}-worktrees/talk-x`
+    git('worktree', 'add', '-q', '-b', 'side', mine); git('worktree', 'add', '-q', '-b', 'talk-x', engines)
+    await db.insert(repo).values({ id: newId('repo'), appId, fullName: 'sample/fake', localPath: checkout })
+    const put = (dir: string, id: string, said: string) => { mkdirSync(sessionDir(dir), { recursive: true }); writeFileSync(join(sessionDir(dir), `${id}.jsonl`), line('u1', 'user', said)) }
+    put(checkout, `${run}-main`, 'In the checkout'); put(mine, `${run}-side`, 'In my worktree'); put(engines, `${run}-ours`, 'The engine\'s own')
+    const brought = await adoptTalk({ appId, cwd: mine, agentSessionId: `${run}-side` })
+    const list = await listClaudeSessions(appId)
+    expect(list.map((x) => x.title).sort()).toEqual(['In my worktree', 'In the checkout'])
+    expect(list.find((x) => x.id === `${run}-side`)).toMatchObject({ cwd: mine, branch: 'side', talkId: brought.id })
+    expect(list.find((x) => x.id === `${run}-main`)).toMatchObject({ branch: 'main', talkId: null })
   })
 })
