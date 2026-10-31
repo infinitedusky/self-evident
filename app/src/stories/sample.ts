@@ -7,7 +7,7 @@ import type { StepState, Workflow } from '@self-evident/engine/steps'
 import type { Plan } from '../pages/PlanHome'
 import type {
   App, AppSettings, BacklogIssue, Cycle, Decision, Event, FactorySettings, Graph, GraphIssue, GraphSubIssue, IdeaRow, Initiative, Issue,
-  IssueDetail, IssueRow, Now, StepsView, StepWork, WorkflowRow, ProjectSummary, Prototype, Question, Run, Step, SummaryState, TalkMessage, TalkSession, Todo, Transcript, Workspace,
+  IssueDetail, IssueRow, Now, StepsView, StepWork, WorkflowRow, ProjectSummary, Prototype, Question, Run, Step, SummaryState, TalkMessage, TalkSession, ClaudeSession, Todo, Transcript, Workspace,
 } from '../engine'
 
 export const T0 = '2026-10-27T09:00:00.000Z'
@@ -259,6 +259,13 @@ export const appSettings: AppSettings = {
   plugins: [{ id: 'sample-plugin@sample', name: 'sample-plugin', factoryOn: true, own: null, on: true }],
   skills: [{ key: 'checkout-rules', name: 'checkout-rules', description: 'How this shop prices and taxes an order.' }],
 }
+
+/** Claude Code sessions run on Sample Shop in a terminal or an editor (made up): one already brought in. */
+export const claudeSessions: ClaudeSession[] = [
+  { id: '00000000-sample-a', cwd: '/code/sample-shop', branch: 'main', title: 'Why the cart total rounds wrong (sample)', at: new Date(Date.now() - 4 * 60_000).toISOString(), talkId: null },
+  { id: '00000000-sample-b', cwd: '/code/sample-shop-wt/saved-cards', branch: 'saved-cards', title: 'Saved cards on the pay step (sample)', at: new Date(Date.now() - 3 * 3600_000).toISOString(), talkId: 'talk_sample' },
+  { id: '00000000-sample-c', cwd: '/code/sample-shop', branch: 'main', title: null, at: new Date(Date.now() - 3 * 86400_000).toISOString(), talkId: null },
+]
 
 export const talkSession: TalkSession = {
   id: 'talk_sample', appId: sampleApp.id, cwd: '/code/sample-shop', branch: 'talk/sample', worktreePath: null, subject: 'Why is SS-6 waiting?', subjectRef: { projectId: 'proj_checkout' },

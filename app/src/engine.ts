@@ -177,6 +177,8 @@ export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: str
 export interface TalkSession { id: string; appId: string | null; cwd: string | null; branch: string | null; worktreePath: string | null; subject: string | null; subjectRef: SubjectRef | null; title: string | null; status: string; createdAt: string; lastActiveAt: string | null; live: boolean; busy: boolean; messages?: number; autoApprove: Exclude<Risk, 'expensive'>
   terminalSince?: string | null } // handed to the terminal: what's said there is copied in until a message here takes it back
 export interface TalkMessage { id: number; sessionId: string; author: 'user' | 'agent' | 'tool' | 'engine'; kind: 'text' | 'brief' | 'tool_call' | 'tool_result' | 'permission' | 'auto' | 'result' | 'error' | 'handoff'; body: string; payload: Record<string, any> | null; sentAt: string | null }
+/** A Claude Code session run on an app in a terminal or an editor; `talkId` when it's already a conversation here. */
+export interface ClaudeSession { id: string; cwd: string; branch: string | null; title: string | null; at: string; talkId: string | null }
 export interface Transcript { session: TalkSession; messages: TalkMessage[]; pending: string[] }
 export interface TalkContext { path: string; label?: string; projectId?: string; issueId?: string; appId?: string; ideaId?: string; tabs?: { title: string; path: string; focused?: boolean }[] } // where the person is, sent with each message
 
@@ -191,6 +193,8 @@ export const engine = {
   setAuto: (id: string, level: 'free' | 'cheap' | 'moderate') => call<TalkSession>('POST', `/talks/${id}/auto`, { level }),
   endTalk: (id: string) => call<{ ended: boolean; branchKept: string | null }>('POST', `/talks/${id}/end`),
   handOff: (id: string) => call<{ command: string }>('POST', `/talks/${id}/handoff`),
+  claudeSessions: (appId: string) => call<ClaudeSession[]>('GET', `/apps/${appId}/claude-sessions`),
+  adopt: (body: { appId: string; cwd: string; agentSessionId: string }) => call<TalkSession>('POST', '/talks/adopt', body),
   storybook: (appId: string) => call<{ url: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[] }>('GET', `/apps/${appId}/storybook`),
   startStorybook: (appId: string) => call<unknown>('POST', `/apps/${appId}/storybook/start`),
   prototypes: (appId: string) => call<Prototype[]>('GET', `/apps/${appId}/prototypes`),

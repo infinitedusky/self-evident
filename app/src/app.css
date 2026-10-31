@@ -168,6 +168,13 @@ select, input { color-scheme: light dark; }
 .talk-tab { flex: 0 0 auto; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px var(--sans); padding: 5px 9px; border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; background: none; color: var(--ink-soft); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .talk-tab.active { background: var(--surface); border-color: var(--line); color: var(--ink); font-weight: 600; }
 .talk-tab.new { color: var(--ink-faint); font-size: 14px; padding: 4px 8px; }
+.claude-sessions { padding: 12px; overflow-y: auto; }
+.claude-sessions-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+.claude-sessions ul { list-style: none; margin: 0; padding: 0; }
+.claude-sessions li button { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; padding: 8px 6px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: 13px var(--sans); cursor: pointer; }
+.claude-sessions li button:hover { background: var(--accent-wash); }
+.claude-session-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.claude-session-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .talk-tab .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); }
 .talk-drawer-head input { flex: 1; margin: 0; font-size: 13px; }
 .talk-drawer-head strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
