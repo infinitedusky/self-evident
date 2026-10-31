@@ -55,6 +55,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
   const [problem, setProblem] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const [renaming, setRenaming] = useState(false)
+  const [command, setCommand] = useState<string | null>(null) // the command that continues it in a terminal, once asked for
   const local = useMemo(() => ({ ...(given ?? { path: '/', label: 'My Stuff' }), appId: app?.id }), [given, app?.id])
   const tabsSeen = JSON.stringify(local.tabs ?? [])
   const context: TalkContext = standalone ? remote ?? { path: '/', label: 'the main window' } : local
@@ -89,7 +90,11 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
   const shown = mine(sessions)
   const current = shown.find((s) => s.id === sessionId) ?? null
   const key = app ? `${SESSION_KEY}.${app.id}` : SESSION_KEY
-  const pick = (id: string | null) => { setSessionId(id); remember(key, id) }
+  const pick = (id: string | null) => { setSessionId(id); setCommand(null); remember(key, id) }
+  const toTerminal = async (s: TalkSession) => {
+    setProblem(null)
+    try { setCommand((await engine.handOff(s.id)).command); await reload() } catch (e) { setProblem(String((e as Error).message ?? e)) }
+  }
   const reload = () => engine.talks(true).then((all) => { setSessions(all); return mine(all) }).catch((e) => { setProblem(String(e.message ?? e)); return [] as TalkSession[] })
 
   useEffect(() => { // the engine asks to show a conversation here: a prototype's, as it starts or when asked for
@@ -98,6 +103,10 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
     es.addEventListener('ui.talk', ((ev: MessageEvent) => {
       const id = (JSON.parse(ev.data) as { payload?: { sessionId?: string } }).payload?.sessionId
       if (id) void reload().then(() => pick(id))
+    }) as EventListener)
+    es.addEventListener('talk.message', ((ev: MessageEvent) => { // handed to the terminal or back: the note follows
+      const p = (JSON.parse(ev.data) as { payload?: { kind?: string; to?: string } }).payload
+      if (p?.kind === 'handoff') { if (p.to === 'ui') setCommand(null); void reload() }
     }) as EventListener)
     return () => es.close()
   }, [app?.id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -157,8 +166,10 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
               ? <input autoFocus defaultValue={current.subject ?? ''} onBlur={(e) => rename(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') rename((e.target as HTMLInputElement).value); if (e.key === 'Escape') setRenaming(false) }} />
               : <strong style={{ flex: 1, cursor: 'text' }} onClick={() => setRenaming(true)} title="Rename">{label(current)}</strong>}
             <AutoSelect sessionId={current.id} />
+            <button className="btn quiet small" onClick={() => void toTerminal(current)} title="Continue this conversation in a terminal: the same agent, the same history">Terminal</button>
             <button className="btn quiet small" onClick={() => end(current)} title="End this conversation">End</button>
           </div>
+          {(current.terminalSince || command) && <TerminalNote command={command} onShow={() => void toTerminal(current)} />}
           <div className="faint" style={{ fontSize: 12, padding: '0 12px 6px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <span>{appName(current)}{current.branch ? ` · ${current.branch}` : ''}</span>
             {current.subjectRef?.projectId && <button className="link-btn" onClick={() => openTab({ kind: 'page', path: `/projects/${current.subjectRef!.projectId}` })}>open its project</button>}
@@ -175,6 +186,23 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
         </div>
       )}
     </aside>
+  )
+}
+
+/**
+ * The conversation is in a terminal: what's said there shows here, and a message here brings it back. The command
+ * continues it there, with the engine's tools for this app.
+ */
+function TerminalNote({ command, onShow }: { command: string | null; onShow: () => void }) {
+  const [copied, setCopied] = useState(false)
+  const copy = () => { void navigator.clipboard?.writeText(command ?? '').then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1500) }) }
+  return (
+    <div className="terminal-note" data-component="TerminalNote">
+      <div><strong>In the terminal.</strong> <span className="muted">What's said there shows here. Send a message here to bring it back.</span></div>
+      {command
+        ? <div className="terminal-cmd"><code className="mono">{command}</code><button className="btn quiet small" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button></div>
+        : <button className="link-btn" onClick={onShow}>Show the command</button>}
+    </div>
   )
 }
 

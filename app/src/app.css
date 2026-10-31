@@ -510,3 +510,10 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .step-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
 .step-protos li { display: flex; gap: 8px; align-items: center; }
 @media (max-width: 760px) { .task-layout { grid-template-columns: 1fr; } .task-nav { position: static; } }
+
+/* One conversation in the terminal and the UI */
+.terminal-note { margin: 0 12px 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--idle-wash); font-size: 13px; display: grid; gap: 6px; }
+.terminal-cmd { display: flex; gap: 6px; align-items: flex-start; }
+.terminal-cmd code { flex: 1; min-width: 0; font-size: 11px; line-height: 1.5; word-break: break-all; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; max-height: 5.5em; overflow: auto; }
+.msg.handoff { text-align: center; font-size: 12px; }
+.msg-via { display: block; font-size: 11px; color: var(--ink-faint); margin-bottom: 2px; }

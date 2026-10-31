@@ -36,3 +36,10 @@ export const Loading: Story = { beforeEach: withEngine({}, { latency: 'infinite'
 export const EngineDown: Story = { beforeEach: withEngine(engineDown) }
 /** One message on its own: an answered permission card. */
 export const AnsweredPermission: StoryObj<typeof Message> = { render: () => <Message m={asking} pending={false} sessionId={talkSession.id} /> }
+/** Handed to the terminal and back: what was said there, copied in and marked. */
+export const InTheTerminal: Story = { beforeEach: withEngine({ transcript: t({ messages: [...working,
+  msg(8, 'engine', 'handoff', 'Continued in the terminal. What\'s said there shows here; send a message here to bring it back.', { to: 'terminal' }),
+  msg(9, 'user', 'text', 'Sample: let SS-6 go first instead', { via: 'terminal' }),
+  msg(10, 'agent', 'text', 'Swapped: SS-6 builds next, then SS-5.', { via: 'terminal' }),
+  msg(11, 'engine', 'handoff', 'Back in Self Evident. Close the terminal session so the two don\'t talk over each other.', { to: 'ui' }),
+] }) }) }

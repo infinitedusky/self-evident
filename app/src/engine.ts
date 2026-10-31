@@ -174,8 +174,9 @@ export interface Now { hold?: Hold | null; running: RunningProject[]; needsYou: 
 // Talk: a conversation with the factory's agent. Messages are rows; talk.* events say when to refetch.
 export type Risk = 'free' | 'cheap' | 'moderate' | 'expensive'
 export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string }
-export interface TalkSession { id: string; appId: string | null; cwd: string | null; branch: string | null; worktreePath: string | null; subject: string | null; subjectRef: SubjectRef | null; title: string | null; status: string; createdAt: string; lastActiveAt: string | null; live: boolean; busy: boolean; messages?: number; autoApprove: Exclude<Risk, 'expensive'> }
-export interface TalkMessage { id: number; sessionId: string; author: 'user' | 'agent' | 'tool' | 'engine'; kind: 'text' | 'brief' | 'tool_call' | 'tool_result' | 'permission' | 'auto' | 'result' | 'error'; body: string; payload: Record<string, any> | null; sentAt: string | null }
+export interface TalkSession { id: string; appId: string | null; cwd: string | null; branch: string | null; worktreePath: string | null; subject: string | null; subjectRef: SubjectRef | null; title: string | null; status: string; createdAt: string; lastActiveAt: string | null; live: boolean; busy: boolean; messages?: number; autoApprove: Exclude<Risk, 'expensive'>
+  terminalSince?: string | null } // handed to the terminal: what's said there is copied in until a message here takes it back
+export interface TalkMessage { id: number; sessionId: string; author: 'user' | 'agent' | 'tool' | 'engine'; kind: 'text' | 'brief' | 'tool_call' | 'tool_result' | 'permission' | 'auto' | 'result' | 'error' | 'handoff'; body: string; payload: Record<string, any> | null; sentAt: string | null }
 export interface Transcript { session: TalkSession; messages: TalkMessage[]; pending: string[] }
 export interface TalkContext { path: string; label?: string; projectId?: string; issueId?: string; appId?: string; ideaId?: string; tabs?: { title: string; path: string; focused?: boolean }[] } // where the person is, sent with each message
 
@@ -189,6 +190,7 @@ export const engine = {
   interrupt: (id: string) => call<unknown>('POST', `/talks/${id}/interrupt`),
   setAuto: (id: string, level: 'free' | 'cheap' | 'moderate') => call<TalkSession>('POST', `/talks/${id}/auto`, { level }),
   endTalk: (id: string) => call<{ ended: boolean; branchKept: string | null }>('POST', `/talks/${id}/end`),
+  handOff: (id: string) => call<{ command: string }>('POST', `/talks/${id}/handoff`),
   storybook: (appId: string) => call<{ url: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[] }>('GET', `/apps/${appId}/storybook`),
   startStorybook: (appId: string) => call<unknown>('POST', `/apps/${appId}/storybook/start`),
   prototypes: (appId: string) => call<Prototype[]>('GET', `/apps/${appId}/prototypes`),
