@@ -1560,3 +1560,24 @@ file run together and only true overlaps re-run.
 - **Apps get their own strip** (Sandy: "a vertical tenant nav bar to the right of the main one. that is how slack
   does it"): a square per app beside the rail, the app's key on it and its name on hover, + to add one. The
   picker that sat atop the agent's column is gone: switching apps switches everything, not just the agent.
+
+## One conversation, in the terminal and the UI (Sandy, 2026-10-31: "share sessions with selfevident so I can talk to the same agent here and in the UI")
+
+- **Why it's possible:** the UI's agent is a Claude Code session (the Agent SDK), kept where Claude Code keeps every
+  session (`~/.claude/projects/<folder>/<id>.jsonl`). `claude --resume <id>` in that folder continues the same
+  session in the same file (checked: same id, same file). So the file is the conversation.
+- **UI → terminal:** "Terminal" in the conversation's header hands it over. The engine lets go of it and gives the
+  command: `cd <its worktree> && claude --resume <id> --mcp-config …`, which brings the engine's tools for the app.
+  Refused while the agent is mid-turn, so the two never write at once.
+- **Terminal → UI:** `pnpm se talk share` in the folder (or the `share_session` tool, for a Claude Code session
+  connected with `se connect`) brings a session started there into the agent column, with its last 200 turns.
+  Its folder is the person's own, so ending it in the UI never removes it.
+- **While it's in the terminal,** the engine follows the file (every two seconds, read only when it grew) and copies
+  in what's said there, marked "in the terminal". Which process wrote a line can't be told from the file (its
+  markers depend on how each process was started), so copying happens only while the conversation is handed over,
+  from the line it was handed over at. A message sent in the UI takes it back: the rest is copied, the note says
+  so, and the engine resumes the session.
+- **Not the same in both places:** the terminal session has the engine's tools but Claude Code's own permission
+  prompts, not the UI's risk ratings, and not the UI's system prompt.
+- Checked end to end with real Claude Code: brought in, a terminal turn showing up in seconds, taken back by a UI
+  message, handed off again, and the terminal remembering what was said in the UI.
