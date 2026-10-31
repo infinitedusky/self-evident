@@ -23,6 +23,9 @@ export const Open: Story = { beforeEach: [stored(open), withEngine()] }
 /** In a terminal: what's said there shows here; the command continues it there, with the engine's tools. */
 export const InTheTerminal: Story = { beforeEach: [stored(open), withEngine({ talks: [{ ...talkSession, terminalSince: '2026-10-31T10:00:00.000Z' }] })],
   play: async ({ canvasElement }) => { for (let i = 0; i < 40; i++) { const b = [...canvasElement.querySelectorAll('button')].find((x) => x.textContent === 'Show the command'); if (b) { b.click(); return } await new Promise((r) => setTimeout(r, 50)) } } }
+/** ⌨ lists the Claude Code sessions run on the app in a terminal or VS Code, to bring one in. */
+export const FromClaudeCode: Story = { beforeEach: [stored(open), withEngine()],
+  play: async ({ canvasElement }) => { for (let i = 0; i < 40; i++) { const b = canvasElement.querySelector<HTMLButtonElement>('button[aria-label="From Claude Code"]'); if (b) { b.click(); return } await new Promise((r) => setTimeout(r, 50)) } } }
 /** Two conversations as tabs, one busy. */
 export const TwoConversations: Story = { beforeEach: [stored(open), withEngine({ talks: [talkSession, second] })] }
 /** A permission request waiting in the open conversation. */

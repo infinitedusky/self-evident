@@ -6,6 +6,7 @@
  * popped-out window.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ClaudeSessions } from './ClaudeSessions'
 import { Conversation } from './Conversation'
 import { openEvents, API, engine, type TalkContext, type TalkSession } from '../engine'
 import type { Tab } from '../workspace'
@@ -56,6 +57,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
   const [starting, setStarting] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [command, setCommand] = useState<string | null>(null) // the command that continues it in a terminal, once asked for
+  const [picking, setPicking] = useState(false) // the list of Claude Code sessions to bring in
   const local = useMemo(() => ({ ...(given ?? { path: '/', label: 'My Stuff' }), appId: app?.id }), [given, app?.id])
   const tabsSeen = JSON.stringify(local.tabs ?? [])
   const context: TalkContext = standalone ? remote ?? { path: '/', label: 'the main window' } : local
@@ -90,7 +92,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
   const shown = mine(sessions)
   const current = shown.find((s) => s.id === sessionId) ?? null
   const key = app ? `${SESSION_KEY}.${app.id}` : SESSION_KEY
-  const pick = (id: string | null) => { setSessionId(id); setCommand(null); remember(key, id) }
+  const pick = (id: string | null) => { setSessionId(id); setCommand(null); setPicking(false); remember(key, id) }
   const toTerminal = async (s: TalkSession) => {
     setProblem(null)
     try { setCommand((await engine.handOff(s.id)).command); await reload() } catch (e) { setProblem(String((e as Error).message ?? e)) }
@@ -155,11 +157,14 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
           </button>
         ))}
         <button className="talk-tab new" disabled={starting} onClick={start} title={app ? `New conversation about ${app.name}${context.projectId ? ', pinned to this project' : ''}` : 'Pick an app first'}>+</button>
+        {app && <button className={`talk-tab new ${picking ? 'active' : ''}`} onClick={() => setPicking((p) => !p)} title="Bring in a Claude Code session from a terminal or VS Code" aria-label="From Claude Code">⌨</button>}
         {standalone
           ? <button className="talk-tab close" onClick={backIn} title="Put the agent back in the page">↙</button>
           : <button className="talk-tab pop" onClick={popOut} title="Open the agent in its own window">↗</button>}
       </div>
-      {current ? (
+      {picking && app ? (
+        <ClaudeSessions appId={app.id} appName={app.name} onClose={() => setPicking(false)} onPicked={(id) => { void reload().then(() => pick(id)) }} />
+      ) : current ? (
         <>
           <div className="talk-drawer-head">
             {renaming
@@ -181,7 +186,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
         </>
       ) : (
         <div style={{ padding: 16 }}>
-          <p className="muted" style={{ marginTop: 0 }}>No conversation open. Press <strong>+</strong> to start one about {app?.name ?? 'an app'}{context.projectId ? ', pinned to this project' : ''}. It gets its own worktree and branch; you can have several at once and switch with the tabs.</p>
+          <p className="muted" style={{ marginTop: 0 }}>No conversation open. Press <strong>+</strong> to start one about {app?.name ?? 'an app'}{context.projectId ? ', pinned to this project' : ''}. It gets its own worktree and branch; you can have several at once and switch with the tabs. Or press <strong>⌨</strong> to carry on one from a terminal or VS Code.</p>
           {problem && <div className="empty bad">{problem}</div>}
         </div>
       )}

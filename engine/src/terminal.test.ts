@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { lastUuid, readTurns, sessionDir, sessionTitle } from './terminal.js'
+import { lastUuid, readTurns, sessionDir, sessionLabel, sessionTitle } from './terminal.js'
 
 const file = (entries: object[]) => {
   const f = join(mkdtempSync(join(tmpdir(), 'se-terminal-')), 's.jsonl')
@@ -14,7 +14,7 @@ const T = '2026-10-31T10:00:00.000Z'
 const sample = file([
   { type: 'user', uuid: 'u1', timestamp: T, message: { role: 'user', content: 'In the UI: what needs me?' } },
   { type: 'assistant', uuid: 'a1', timestamp: T, message: { role: 'assistant', content: [{ type: 'text', text: 'Three things.' }] } },
-  { type: 'ai-title', title: 'What needs me' },
+  { type: 'ai-title', aiTitle: 'What needs me' },
   { type: 'user', uuid: 'u2', timestamp: T, message: { role: 'user', content: 'From the terminal: start the first' } },
   { type: 'user', uuid: 'm1', timestamp: T, isMeta: true, message: { role: 'user', content: 'caveat' } },
   { type: 'user', uuid: 'r1', timestamp: T, message: { role: 'user', content: [{ type: 'text', text: '<system-reminder>ignore</system-reminder>' }] } },
@@ -48,5 +48,23 @@ describe('the file', () => {
   })
   it('lives where Claude Code keeps a folder\'s sessions', () => {
     expect(sessionDir('/Users/x/code/my_app')).toMatch(/\/projects\/-Users-x-code-my-app$/)
+  })
+})
+
+describe('sessionLabel', () => {
+  it('is the newest title Claude Code gave the session', () => {
+    expect(sessionLabel(sample)).toBe('What needs me')
+  })
+  it('prefers the title the person gave it', () => {
+    expect(sessionLabel(file([{ type: 'custom-title', customTitle: 'Mine' }, { type: 'ai-title', aiTitle: 'Claude\'s, newer' }]))).toBe('Mine')
+  })
+  it('falls back to the first thing the person said, past reminders, editor wrappers and meta lines', () => {
+    const untitled = file([
+      { type: 'user', uuid: 'm', timestamp: T, isMeta: true, message: { role: 'user', content: 'caveat' } },
+      { type: 'user', uuid: 'r', timestamp: T, message: { role: 'user', content: '<system-reminder>x</system-reminder>' } },
+      { type: 'user', uuid: 'b', timestamp: T, message: { role: 'user', content: [{ type: 'text', text: '<browser_instruction>use the browser</browser_instruction>' }] } },
+      { type: 'user', uuid: 'u', timestamp: T, message: { role: 'user', content: [{ type: 'text', text: 'Fix the  app\nswitcher' }] } },
+    ])
+    expect(sessionLabel(untitled)).toBe('Fix the app switcher')
   })
 })
