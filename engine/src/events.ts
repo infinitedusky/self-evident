@@ -32,7 +32,10 @@ export async function appendEvent(tx: Tx, e: NewEvent): Promise<number> {
 
 export interface EventFilter { workspaceId?: string; appId?: string; projectId?: string; issueId?: string }
 
-export async function eventsSince(since: number, filter: EventFilter = {}, limit = 500) {
+/** How many events one read returns; a reader wanting more reads again from the last. */
+export const PAGE = 500
+
+export async function eventsSince(since: number, filter: EventFilter = {}, limit = PAGE) {
   const where = [gt(event.seq, since)]
   if (filter.workspaceId) where.push(eq(event.workspaceId, filter.workspaceId))
   if (filter.appId) where.push(eq(event.appId, filter.appId))
