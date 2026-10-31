@@ -1,5 +1,5 @@
 /**
- * The whole app, laid out like an IDE, after Replit's workspace: the loop as an icon rail on the far left, the
+ * The whole app, laid out like an IDE, after Replit's workspace: the apps as a strip on the far left (it hides), the loop as an icon rail, the
  * agent in the column beside it, and everything else as tabs on the right, which split by dragging a tab to an
  * edge (Dockview). Pages, prototypes, its Storybook and a build's live log all open here. The agent
  * is told which tabs are open and can open them itself (its open_tab tool arrives as a ui.open event). The layout
@@ -21,6 +21,7 @@ import { contextFor, TalkDrawer } from './TalkDrawer'
 
 const THEME: DockviewTheme = { name: 'self-evident', className: 'dockview-theme-se', gap: 8 } // each group a card, after Replit's panes
 const AGENT_KEY = 'se.agent.open', AGENT_WIDTH_KEY = 'se.agent.px', AGENT_WIDTH = 345
+const APPS_KEY = 'se.apps.open' // the apps strip, shown or hidden from the rail's chevron
 const layoutKey = (appId: string) => `se.layout.${appId}`
 const remember = (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* fine */ } }
 const recall = (k: string) => { try { return localStorage.getItem(k) } catch { return null } }
@@ -130,6 +131,7 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
   const [dockGen, setDockGen] = useState(0) // a new Dockview (first mount, or mounted again) restores the tabs
   const [tabs, setTabs] = useState<OpenTab[]>([])
   const [agentOpen, setAgentOpen] = useState(() => recall(AGENT_KEY) !== '0')
+  const [appsOpen, setAppsOpen] = useState(() => recall(APPS_KEY) !== '0')
   const appId = useRef<string | null>(null)
   const restoring = useRef(false)
   const firstPath = useRef<string | null>(address ? window.location.pathname + window.location.search : null)
@@ -211,6 +213,7 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
   }, [app?.id, add])
 
   const toggleAgent = useCallback(() => setAgentOpen((o) => { remember(AGENT_KEY, o ? '0' : '1'); return !o }), [])
+  const toggleApps = useCallback(() => setAppsOpen((o) => { remember(APPS_KEY, o ? '0' : '1'); return !o }), [])
   useEffect(() => { split.current?.getPanel('agent')?.api.setVisible(agentOpen) }, [agentOpen])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') { e.preventDefault(); toggleAgent() } }
@@ -223,9 +226,9 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
   return (
     <WorkspaceContext.Provider value={value}>
       <Changed.Provider value={sync}>
-        <div className="workspace" data-component="Workspace">
-          <Rail here={focused?.key ?? null} onOpen={(tab) => add(tab)} agentOpen={agentOpen} onToggleAgent={toggleAgent} />
-          <AppPicker onOpen={(tab) => add(tab)} />
+        <div className={`workspace ${appsOpen ? '' : 'no-apps'}`} data-component="Workspace">
+          {appsOpen && <AppPicker onOpen={(tab) => add(tab)} />}
+          <Rail here={focused?.key ?? null} onOpen={(tab) => add(tab)} agentOpen={agentOpen} onToggleAgent={toggleAgent} appsOpen={appsOpen} onToggleApps={toggleApps} />
           <SplitviewReact className="ws-split" orientation={Orientation.HORIZONTAL} proportionalLayout={false}
             components={{ agent: AgentColumn, tabs: Tabs }}
             onReady={(e) => {

@@ -2,7 +2,8 @@
  * The loop as a thin strip of icons on the far left, like VS Code's activity bar: each opens its page as a tab
  * (or brings it to the front). Hovering one shows its name. The rail holds only the stages of work, with nothing under
  * them: projects, tasks and the steps live inside their stage (LOG.md, 2026-10-29). Below the rule: Summary and My Stuff.
- * Settings sits at the bottom. The apps have their own strip beside it (AppPicker).
+ * Settings sits at the bottom. The apps have their own strip outside it, on the far left as in Slack (AppPicker); the
+ * tiny chevron at the top shows or hides that strip.
  */
 import type { Tab } from '../workspace'
 
@@ -21,7 +22,7 @@ const OUTSIDE: Item[] = [
 ]
 
 /** `here` is the key of the tab in front (tabKey), which lights its icon. */
-export function Rail({ here, onOpen, agentOpen, onToggleAgent }: { here: string | null; onOpen: (tab: Tab) => void; agentOpen?: boolean; onToggleAgent?: () => void }) {
+export function Rail({ here, onOpen, agentOpen, onToggleAgent, appsOpen, onToggleApps }: { here: string | null; onOpen: (tab: Tab) => void; agentOpen?: boolean; onToggleAgent?: () => void; appsOpen?: boolean; onToggleApps?: () => void }) {
   const active = (i: Item) => here !== null && (i.also ?? new RegExp(`^${i.tab.kind === 'page' ? i.tab.path : i.tab.kind}`)).test(here)
   const button = (i: Item) => (
     <div className="rail-item" key={i.label}>
@@ -33,6 +34,7 @@ export function Rail({ here, onOpen, agentOpen, onToggleAgent }: { here: string 
   )
   return (
     <nav className="rail" data-component="Rail" aria-label="Self Evident">
+      {onToggleApps && <button className="rail-apps-toggle" onClick={onToggleApps} title={`${appsOpen ? 'Hide' : 'Show'} the apps`} aria-label={`${appsOpen ? 'Hide' : 'Show'} the apps`} aria-expanded={!!appsOpen}>{appsOpen ? '‹' : '›'}</button>}
       <button className={`rail-brand ${agentOpen ? 'on' : ''}`} onClick={onToggleAgent} title={`${agentOpen ? 'Hide' : 'Show'} the agent (⌘J)`} aria-label="Toggle the agent">S<i>.</i></button>
       {LOOP.map(button)}
       <div className="rail-rule" />
