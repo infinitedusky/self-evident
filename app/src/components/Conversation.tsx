@@ -22,7 +22,7 @@ export function Conversation({ sessionId, context, compact, onChanged }: { sessi
     let closed = false
     const refresh = () => engine.transcript(sessionId).then((x) => { if (!closed) { setT(x); setError(null); onChanged?.() } }).catch((e) => setError(String(e.message ?? e)))
     void refresh()
-    const es = openEvents(`${API}/events?since=-1`)
+    const es = openEvents(`${API}/events?since=now`)
     const onTalk = (ev: MessageEvent) => {
       const e = JSON.parse(ev.data) as { payload: { sessionId?: string } }
       if (e.payload?.sessionId !== sessionId) return

@@ -41,7 +41,7 @@ export function AppGraph() {
     let closed = false
     const refresh = () => fetchAppGraph(appId).then((g) => { if (!closed) setData(g) }).catch((e) => setError(String(e.message ?? e)))
     void refresh()
-    const es = openEvents(`${API}/events?app=${appId}&since=-1`)
+    const es = openEvents(`${API}/events?app=${appId}&since=now`)
     const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 200) }
     for (const type of EVENT_TYPES) if (!type.startsWith('run.tool') && type !== 'run.message') es.addEventListener(type, bump)
     es.onerror = () => setError('event stream disconnected; retrying'); es.onopen = () => setError(null)
