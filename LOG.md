@@ -1581,3 +1581,17 @@ file run together and only true overlaps re-run.
   prompts, not the UI's risk ratings, and not the UI's system prompt.
 - Checked end to end with real Claude Code: brought in, a terminal turn showing up in seconds, taken back by a UI
   message, handed off again, and the terminal remembering what was said in the UI.
+
+## Picking a Claude Code session from the UI (Sandy, 2026-10-31: "can the ui list the conversations here and let us select?")
+
+- **⌨ in the agent column** lists the Claude Code sessions run on the app in a terminal or VS Code, newest first, the way
+  Claude Code's own `/resume` does: title, when, branch. Picking one brings it in (the same as `se talk share`); one
+  already here is marked and just opens. No command needed.
+- **Which sessions:** the app's checkout and its other worktrees (`git worktree list`), not the engine's own under
+  `<repo>-worktrees` (builds, prototypes, conversations started here). The 20 newest.
+- **Titles:** Claude Code writes `custom-title` (`customTitle`, a name the person gave it) and `ai-title` (`aiTitle`).
+  The person's wins. We had been reading a `title` field that isn't there, so brought-in conversations had no name.
+  Read from the file's last 512 KB only (a long session runs to 150 MB); with no title, the first thing the person said.
+- **Also fixed on the way:** the live feed sent one page of a long replay and then one page per new event, so a
+  screen starting from the top of the log never reached live events (#87). The command is `pnpm engine se talk share`,
+  not `pnpm se …` (no root script).
