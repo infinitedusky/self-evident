@@ -18,7 +18,7 @@ import { EventBus, eventsSince, latestSeq } from './events.js'
 import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { approveBrief, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
-import { answerPermission, closeTalks, endTalk, interruptTalk, listTalks, renameTalk, say, setAutoApprove, showTalk, startTalk, talkTranscript, type SubjectRef, type TalkContext } from './talk.js'
+import { adoptTalk, answerPermission, closeTalks, endTalk, handOff, interruptTalk, listTalks, renameTalk, say, setAutoApprove, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
 import { lastSync, startSync, syncApp } from './github.js'
@@ -275,6 +275,13 @@ export function buildApp(bus: EventBus) {
     try { return c.json(await setAutoApprove(c.req.param('id'), level)) } catch (err) { return planError(c, err) }
   })
   api.post('/talks/:id/end', async (c) => c.json(await endTalk(c.req.param('id'))))
+  // The same conversation in a terminal: hand it there (the command to run), or bring one started there in.
+  api.post('/talks/:id/handoff', async (c) => { try { return c.json(await handOff(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  api.post('/talks/adopt', async (c) => {
+    const body = await c.req.json<{ appId?: string; cwd?: string; agentSessionId?: string }>()
+    if (!body.appId || !body.cwd) return c.json({ error: 'appId and cwd are required' }, 400)
+    try { return c.json(await adoptTalk({ appId: body.appId, cwd: body.cwd, agentSessionId: body.agentSessionId }), 201) } catch (err) { return planError(c, err) }
+  })
 
   // The inbox: capture an idea in a moment; make it a project when its time comes.
   api.get('/ideas', async (c) => { const a = c.req.query('app'); return a ? c.json(await listIdeas(a)) : c.json({ error: 'app is required: one app at a time' }, 400) })
@@ -512,6 +519,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   if (recovered.projects || recovered.builds || recovered.reaped) console.log('recovered:', JSON.stringify(recovered))
   const port = Number(process.env.PORT ?? 4000)
   serve({ fetch: buildApp(bus).fetch, port }, (info) => console.log(`engine listening on http://localhost:${info.port}  (API under /api; UI at / when built)`))
+  void watchTerminals().catch(() => {}) // conversations still in a terminal: keep copying what's said there
   const stopSync = process.env.GITHUB_SYNC === '0' ? () => undefined : startSync(Number(process.env.GITHUB_SYNC_MINUTES ?? 2)) // GitHub: reviews, checks, merges, main moving
   const stopSummaries = process.env.SUMMARY === '0' ? () => undefined : startSummaries(Number(process.env.SUMMARY_HOURS ?? 24)) // the summary page, rewritten when a day old and something moved
   const shutdown = async () => { stopSync(); stopSummaries(); stopStorybooks(); stopPrototypes(); closeTalks(); await runner.shutdown(); await bus.stop(); await pool.end(); process.exit(0) }

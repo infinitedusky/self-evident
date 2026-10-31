@@ -20,6 +20,8 @@ import { engineTools } from './tools.js'
 import { prototypeEnv } from './prototype.js'
 import { skillOptions } from './skills.js'
 import { issueDetail, PlanError, projectGraph } from './projects.js'
+import { existsSync, statSync } from 'node:fs'
+import { lastUuid, latestSession, readTurns, sessionFile, sessionTitle } from './terminal.js'
 
 const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']
 const ASK_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash']
@@ -95,11 +97,11 @@ async function workspaceFor(appId: string) {
 }
 
 /** One transcript row, and the event that tells every open page about it. */
-async function record(sessionId: string, author: string, kind: string, body: string, payload?: Record<string, unknown>) {
+async function record(sessionId: string, author: string, kind: string, body: string, payload?: Record<string, unknown>, at?: Date) {
   const [s] = await db.select().from(session).where(eq(session.id, sessionId))
   if (!s) throw new PlanError(`no session ${sessionId}`)
   const workspaceId = await workspaceFor(s.appId)
-  const [row] = await db.insert(sessionMessage).values({ appId: s.appId, sessionId, author, kind, body, payload: payload ?? null, status: 'sent', sentAt: new Date() }).returning()
+  const [row] = await db.insert(sessionMessage).values({ appId: s.appId, sessionId, author, kind, body, payload: payload ?? null, status: 'sent', sentAt: at ?? new Date(), ...(at ? { queuedAt: at } : {}) }).returning()
   await db.update(session).set({ lastActiveAt: new Date() }).where(eq(session.id, sessionId))
   await db.transaction((tx) => appendEvent(tx, {
     workspaceId, appId: s.appId, sessionId, actor: author === 'user' ? 'user' : `agent:${sessionId}`,
@@ -187,6 +189,7 @@ async function open(sessionId: string): Promise<Live> {
   const [s] = await db.select().from(session).where(eq(session.id, sessionId))
   if (!s) throw new PlanError(`no session ${sessionId}`)
   if (s.status === 'ended') throw new PlanError('this conversation has ended')
+  if (s.terminalSince) await takeBack(sessionId)
   const [a] = s.appId ? await db.select().from(app).where(eq(app.id, s.appId)) : []
   const setup = (a?.setup ?? {}) as { model?: string }
   const input = inputQueue()
@@ -380,4 +383,108 @@ export async function endTalk(sessionId: string) {
 }
 
 /** On shutdown: close the live conversations; they resume from their SDK session ids on the next message. */
-export function closeTalks() { for (const [, l] of live) l.close(); live.clear() }
+export function closeTalks() { for (const [, l] of live) l.close(); live.clear(); for (const [, stop] of watching) stop(); watching.clear() }
+
+// ---- The same conversation in the terminal (terminal.ts) ----
+
+const watching = new Map<string, () => void>()
+const ENGINE_PORT = Number(process.env.PORT ?? 4000)
+
+/** Copies into the transcript what was said in the terminal since the last line copied, marked as from there. */
+async function importTerminal(sessionId: string): Promise<number> {
+  const [s] = await db.select().from(session).where(eq(session.id, sessionId))
+  if (!s?.agentSessionId || !s.cwd) return 0
+  const turns = readTurns(sessionFile(s.cwd, s.agentSessionId), s.importedThrough)
+  for (const t of turns) {
+    const payload = { ...(t.kind === 'tool_call' ? { ...t.payload, input: summariseInput(t.body, t.payload?.input) } : t.payload ?? {}), via: 'terminal' }
+    await record(sessionId, t.author, t.kind, t.body, payload, new Date(t.at))
+  }
+  if (turns.length) await db.update(session).set({ importedThrough: turns[turns.length - 1].uuid }).where(eq(session.id, sessionId))
+  return turns.length
+}
+
+/** While it's in the terminal, the transcript follows the file: checked every two seconds, read only when it grew. */
+function watchTerminal(sessionId: string, file: string) {
+  if (watching.has(sessionId)) return
+  let size = -1
+  let busy = false
+  const timer = setInterval(() => {
+    if (busy || !existsSync(file)) return
+    const now = statSync(file).size
+    if (now === size) return
+    size = now; busy = true
+    void importTerminal(sessionId).catch(() => {}).finally(() => { busy = false })
+  }, 2000)
+  watching.set(sessionId, () => clearInterval(timer))
+}
+
+/** On start: follow every conversation still in the terminal. */
+export async function watchTerminals() {
+  const rows = await db.select().from(session).where(and(eq(session.kind, 'talk'), eq(session.status, 'open'), sql`${session.terminalSince} is not null`))
+  for (const s of rows) if (s.cwd && s.agentSessionId) watchTerminal(s.id, sessionFile(s.cwd, s.agentSessionId))
+}
+
+/** The command that continues this conversation in a terminal, with the engine's tools for its app. */
+export function terminalCommand(s: { cwd: string | null; agentSessionId: string | null; appId: string }) {
+  const mcp = JSON.stringify({ mcpServers: { 'self-evident': { type: 'http', url: `http://localhost:${ENGINE_PORT}/api/mcp/${s.appId}` } } })
+  return `cd ${JSON.stringify(s.cwd)} && claude --resume ${s.agentSessionId} --mcp-config '${mcp}'`
+}
+
+/**
+ * Hand the conversation to the terminal: the engine lets go of it, and from this line on copies in what's said there.
+ * Sending a message here takes it back. Refused while the agent is mid-turn, so the two never write at once.
+ */
+export async function handOff(sessionId: string) {
+  const [s] = await db.select().from(session).where(eq(session.id, sessionId))
+  if (!s) throw new PlanError(`no session ${sessionId}`)
+  if (s.status === 'ended') throw new PlanError('this conversation has ended')
+  if (!s.agentSessionId || !s.cwd) throw new PlanError('nothing to continue yet: say something here first')
+  const l = live.get(sessionId)
+  if (l?.busy) throw new PlanError('the agent is still working: wait for it to finish, or stop it, first')
+  if (l) { l.close(); await l.q.interrupt().catch(() => {}); live.delete(sessionId) }
+  const file = sessionFile(s.cwd, s.agentSessionId)
+  if (!s.terminalSince) {
+    await db.update(session).set({ terminalSince: new Date(), importedThrough: lastUuid(file) }).where(eq(session.id, sessionId))
+    await record(sessionId, 'engine', 'handoff', 'Continued in the terminal. What\'s said there shows here; send a message here to bring it back.', { to: 'terminal' })
+  }
+  watchTerminal(sessionId, file)
+  return { command: terminalCommand(s) }
+}
+
+/** Back from the terminal: copy in the rest, stop following the file, and note it. */
+async function takeBack(sessionId: string) {
+  await importTerminal(sessionId)
+  watching.get(sessionId)?.(); watching.delete(sessionId)
+  await db.update(session).set({ terminalSince: null }).where(eq(session.id, sessionId))
+  await record(sessionId, 'engine', 'handoff', 'Back in Self Evident. Close the terminal session so the two don\'t talk over each other.', { to: 'ui' })
+}
+
+/**
+ * A conversation started in the terminal (or an editor), brought into Self Evident: a session for it, its recent
+ * turns copied in, and the file followed. Its folder is the person's own, not a worktree of ours, so ending it here
+ * never removes it. Bringing the same session twice gives the one already here.
+ */
+export async function adoptTalk(input: { appId: string; cwd: string; agentSessionId?: string; actor?: string }) {
+  const [a] = await db.select().from(app).where(eq(app.id, input.appId))
+  if (!a) throw new PlanError(`no app ${input.appId}`)
+  const id = input.agentSessionId ?? latestSession(input.cwd)
+  if (!id) throw new PlanError(`no Claude Code session in ${input.cwd}`)
+  const file = sessionFile(input.cwd, id)
+  if (!existsSync(file)) throw new PlanError(`no session ${id} in ${input.cwd}`)
+  const [had] = await db.select().from(session).where(and(eq(session.agentSessionId, id), eq(session.appId, a.id), eq(session.cwd, input.cwd), eq(session.status, 'open')))
+  if (had) { await showTalk(had.id, had.appId); return had }
+  const turns = readTurns(file, null)
+  const keep = 200 // a long session's last turns; the agent still has all of it
+  const from = turns.length > keep ? turns[turns.length - keep - 1].uuid : null
+  const [row] = await db.insert(session).values({
+    id: newId('session'), appId: a.id, kind: 'talk', cwd: input.cwd, branch: await branchOf(input.cwd), worktreePath: null,
+    subject: sessionTitle(file), agentSessionId: id, createdBy: input.actor ?? 'terminal', lastActiveAt: new Date(),
+    terminalSince: new Date(), importedThrough: from,
+  }).returning()
+  if (from) await record(row.id, 'engine', 'handoff', `Brought in from the terminal; its last ${keep} of ${turns.length} turns are shown. The agent remembers all of it.`, { to: 'terminal' })
+  else await record(row.id, 'engine', 'handoff', 'Brought in from the terminal. What\'s said there shows here; send a message here to continue in Self Evident.', { to: 'terminal' })
+  await importTerminal(row.id)
+  watchTerminal(row.id, file)
+  await showTalk(row.id, a.id)
+  return row
+}

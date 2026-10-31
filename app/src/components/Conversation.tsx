@@ -104,7 +104,7 @@ const took = (ms: number) => ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))
 export function Message({ m, pending, sessionId }: { m: TalkMessage; pending: boolean; sessionId: string }) {
   const p = m.payload ?? {}
   switch (m.kind) {
-    case 'text': return <div className={`msg ${m.author}`}>{m.author === 'agent' ? <div className="msg-body md-chat"><Markdown remarkPlugins={[remarkGfm]}>{m.body}</Markdown></div> : <div className="msg-body">{m.body}</div>}</div>
+    case 'text': return <div className={`msg ${m.author}${p.via === 'terminal' ? ' via-terminal' : ''}`}>{p.via === 'terminal' && m.author === 'user' && <span className="msg-via">in the terminal</span>}{m.author === 'agent' ? <div className="msg-body md-chat"><Markdown remarkPlugins={[remarkGfm]}>{m.body}</Markdown></div> : <div className="msg-body">{m.body}</div>}</div>
     case 'tool_call': return <div className="msg tool mono">{p.tool === 'Bash' ? `$ ${p.input?.command ?? ''}` : `${String(p.tool).replace('mcp__engine__', 'engine · ')} ${p.input?.file ?? p.input?.pattern ?? ''}`}</div>
     case 'tool_result': return <details className="msg tool-result"><summary className="mono faint">{p.ok === false ? 'error' : 'result'}</summary><pre>{m.body}</pre></details>
     case 'auto': return <div className="msg tool mono faint" title={p.why}>auto · <Badge tone={RISK_TONE[p.risk as Risk] ?? 'neutral'}>{p.risk}</Badge> · {p.tool === 'Bash' ? `$ ${p.input?.command ?? ''}` : `${String(p.tool).replace('mcp__engine__', 'engine · ')} ${p.input?.file ?? ''}`}</div>
@@ -124,6 +124,7 @@ export function Message({ m, pending, sessionId }: { m: TalkMessage; pending: bo
     case 'result': return <div className="msg engine faint worked" title={`${p.turns ?? '?'} turns${p.costUsd != null ? ` · $${Number(p.costUsd).toFixed(2)}` : ''}`}>{m.body === 'done' && p.durationMs ? `Worked for ${took(Number(p.durationMs))}` : m.body}{p.costUsd != null ? ` · $${Number(p.costUsd).toFixed(2)}` : ''}</div>
     case 'brief': return <div className="msg brief"><div className="faint brief-label">Brief</div><div className="msg-body md-chat"><Markdown remarkPlugins={[remarkGfm]}>{m.body}</Markdown></div></div>
     case 'error': return <div className={`msg engine ${p.waiting ? 'faint' : 'bad'}`}>{m.body}</div>
+    case 'handoff': return <div className="msg engine faint handoff"><span aria-hidden="true">{p.to === 'terminal' ? '⌨' : '↩'}</span> {m.body}</div>
     default: return null
   }
 }

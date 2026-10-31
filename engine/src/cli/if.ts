@@ -58,6 +58,29 @@ program.command('connect').argument('[dir]', 'a checkout of the app\'s repo (a w
     console.log('Local scope: only you, only in this repo; nothing is written into the repo. Then ask Claude Code "what needs me?"')
   })
 
+/** The app whose repo holds this folder (a worktree resolves to its main checkout). */
+async function appFor(from: string) {
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: from, encoding: 'utf8' }).trim()
+  const top = git('rev-parse', '--show-toplevel')
+  const main = dirname(resolve(top, git('rev-parse', '--git-common-dir')))
+  const apps = await api<{ id: string; name: string; repos: { localPath: string | null }[] }[]>('GET', '/apps')
+  return apps.find((x) => x.repos.some((r) => r.localPath && [top, main].includes(resolve(r.localPath))))
+}
+
+const talk = program.command('talk').description('the same conversation in the terminal and in the UI')
+talk.command('share').argument('[dir]', 'the folder the Claude Code session runs in', '.').option('-s, --session <id>', 'its session id (default: the one last written there)')
+  .option('-a, --app <id>', 'the app (default: the one whose repo holds the folder)')
+  .description('bring a Claude Code session started in a terminal or an editor into the UI\'s agent column')
+  .action(async (dir: string, opts: { session?: string; app?: string }) => {
+    const cwd = resolve(process.env.INIT_CWD ?? process.cwd(), dir)
+    const appId = opts.app ?? (await appFor(cwd))?.id
+    if (!appId) { console.error(`No app has ${cwd} in its repo; pass --app <id>.`); process.exitCode = 1; return }
+    const s = await api<{ id: string; subject: string | null }>('POST', '/talks/adopt', { appId, cwd, agentSessionId: opts.session })
+    console.log(`In Self Evident now: ${s.subject ?? s.id}. What's said in either place shows in the other; whoever speaks next has it.`)
+  })
+talk.command('resume').argument('<sessionId>', 'the conversation (sess_…), from the UI').description('print the command that continues a UI conversation in this terminal')
+  .action(async (id: string) => { const r = await api<{ command: string }>('POST', `/talks/${id}/handoff`); console.log(r.command) })
+
 const project = program.command('project').description('projects are tasks in order; a code task is built in sub-tasks')
 
 project.command('create').requiredOption('-a, --app <id>').requiredOption('-n, --name <name>').option('-c, --content <text>', 'why: the idea behind it')

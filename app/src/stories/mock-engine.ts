@@ -45,6 +45,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/settings', () => reply(d.settings)),
     http.get('/api/apps/:id/settings', () => reply(d.appSettings)),
     http.post('/api/integrations/:key/check', () => reply(d.check)),
+    http.post('/api/talks/:id/handoff', () => reply({ command: `cd "/Users/sample/code/sample-shop-worktrees/talk-sample" && claude --resume 00000000-sample --mcp-config '{"mcpServers":{"self-evident":{"type":"http","url":"http://localhost:4000/api/mcp/app_sample"}}}'` })),
     http.get('/api/apps/:id/storybook', () => reply(d.storybook)),
     http.get('/api/apps/:id/prototypes', () => reply(d.prototypes)),
     http.get('/api/prototypes/:id', ({ params }) => { const p = d.prototypes.find((x) => x.id === params.id); return p ? reply({ log: [], ...p, up: p.up ?? p.status === 'running' }) : missing('prototype') }),
