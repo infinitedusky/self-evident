@@ -50,6 +50,13 @@
       "when": 1793311438478,
       "tag": "0006_always_a_workflow",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793473052117,
+      "tag": "0007_terminal_handoff",
+      "breakpoints": true
     }
   ]
 }
