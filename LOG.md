@@ -1530,3 +1530,21 @@ file run together and only true overlaps re-run.
 - **Order:** (1) Settings → Integrations: a list and a page for each (what it does, its values, its key, a check of
   the connection, the actions it offers), with Linear and Confluence added; (2) integration steps in workflows and a
   runner; (3) the actions themselves, Confluence's publish first.
+
+## PostHog finds, Self Evident builds: the plan (Sandy, 2026-10-31)
+
+- **Why:** Sandy wants the benefits now without building the harness first. PostHog's self-driving loop is "exactly
+  the right thing", but it runs its own copy of Claude Code (in its cloud, or PostHog Desktop on its credits), not
+  ours. Its inbox is open over MCP and the API, so Self Evident can sit on top of it: PostHog finds and fixes small
+  things; we take the bigger ones through our steps. Detail in SHAPE.md.
+- **For a new project today:** Claude Code with Superpowers (brainstorm → plan → build), Conductor for parallel
+  worktrees, and PostHog with its scouts on. Self Evident keeps going alongside and takes over as its steps beat that.
+- **The project** (Self Evident, `proj_ZSHO1EEJS91N`), tasks in order, each waiting on the one before:
+  SE-1 documents pass a reader test · SE-2 find what PostHog's inbox gives us · SE-3 PostHog as an integration the
+  engine calls · SE-4 agents can query PostHog · SE-5 reports in Observe · SE-6 take a report · SE-7 PostHog's PR as
+  a task's build · SE-8 resolve the report when our work lands · SE-9 show what changed after it shipped · SE-10 docs
+  for the PostHog connection.
+- **Docs, and skills for them:** the catalogue had no Documentation job; added to research/skills.md. Anthropic's
+  `doc-coauthoring` is the best found: we borrow its reader test (SE-1); the rest is interactive with its own file.
+  PostHog's official `signals` skill is adopted for the agents with its MCP server (SE-4). The Diátaxis skills on
+  the marketplaces are unvetted copies: skipped for now.

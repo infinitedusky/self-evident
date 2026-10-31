@@ -401,6 +401,15 @@ Details and sources in `research/`.
     it sends anything out, and keeps the link it made. This is also the first way into Linear: the full connection
     (Linear as the plan store, above) comes later and builds on the same connection.
 
+- **PostHog finds, Self Evident builds** (Sandy, 2026-10-31: "Can we more tightly integrate what PostHog is doing
+  into Self Evident?"). PostHog's self-driving loop (scouts → reports → PRs → a check after ship) is the closest
+  mature version of our Observe, Learn and Check. Its inbox can be read and changed from outside its app (MCP tools
+  and the API behind them), so we use it instead of rebuilding it: its reports arrive in Observe; one becomes an
+  idea, a task, or is left to PostHog; taking it claims it there; a PR PostHog already opened can be the task's
+  build; when our work lands the report is resolved; the task shows what PostHog measured after. What we add is
+  the middle: research, briefs, mockups, prototypes, approval and the parallel build, on our own Claude Code.
+  The project and its tasks, in order, are in Self Evident (SE-1 to SE-10).
+
 ## Open questions
 
 - **A strategy section in Ideate** (Sandy, 2026-10-26): a longer-term bet,

@@ -99,7 +99,7 @@ built-in, or a career-workbench InDusk skill (those run in that repo, not here).
 | Category | What it's for | What we have | Candidates seen |
 |---|---|---|---|
 | **Dev setup** | Get the app running for an agent | Engine modules, each with a manifest (SHAPE) | Cloaked Desktop dev-setup skill (INT-140) [private]; Nate's Shopify setup [private]; Pocock `setup-pre-commit` |
-| **Observability** | See what the app and agents did | PostHog (always observed); workbench `local-telemetry` | none yet |
+| **Observability** | See what the app and agents did | PostHog (always observed); workbench `local-telemetry` | PostHog [`signals`](https://github.com/PostHog/skills/tree/main/skills/omnibus/signals) and the rest of [PostHog/skills](https://github.com/PostHog/skills) (official, MIT) |
 
 ### Communicate
 
@@ -109,6 +109,7 @@ built-in, or a career-workbench InDusk skill (those run in that repo, not here).
 | **Teaching** | Explain in pieces and check understanding | workbench `guided-build` | Pocock `teach`; Janac's piecemeal explainer [private] |
 | **Diagrams and visuals** | Show the plan or system | none | Tallis `/excalli-diagram` [private]; Daniel's Hub artifact |
 | **UI design** | Taste for interfaces | none | Anthropic `frontend-design` |
+| **Documentation** (new, 2026-10-31) | Documents a reader can act on: briefs, ADRs, specs, READMEs, kept true | none (SE-1 builds a reader test) | Anthropic [`doc-coauthoring`](https://github.com/anthropics/skills/blob/main/skills/doc-coauthoring/SKILL.md); Diátaxis skills on [mcpmarket](https://mcpmarket.com/tools/skills/di-taxis-documentation-framework-1) (unvetted, many copies) |
 
 ### Meta
 
@@ -132,6 +133,9 @@ Orchestrators (Conductor, T3 Code, herdr, Paseo, Orca, firstmate, smithers, Warp
 | 2026-10-27 | [`create-structure-outline`](https://github.com/humanlayer/humanlayer/tree/main/apps/riptide-rpi-claude-plugin) (HumanLayer, Dex Horthy) | Spec and slice | `.humanlayer/tasks/` | model | **Borrow**: "Do not structure a phase N such that Phase N+1 must be completed before Phase N can be verified" as a planner check. |
 | 2026-10-27 | Pocock `tdd`, Superpowers `test-driven-development` | Build discipline | none | model | **Adopt** one into Homework Gate's `.claude/skills/`; try both by hand first. |
 | 2026-10-27 | Anthropic [`webapp-testing`](https://github.com/anthropics/skills) | Demonstration and evidence | none | model | **Adopt** candidate for driving the app; it isn't the demonstration itself. |
+| 2026-10-31 | Anthropic [`doc-coauthoring`](https://github.com/anthropics/skills/blob/main/skills/doc-coauthoring/SKILL.md) | Documentation (new) | an artifact or a markdown file in the working directory | model | **Borrow** the reader test: predict the reader's questions, have a fresh subagent that sees only the document answer them, and fix what it gets wrong. The rest (context gathering, 5–20 options per section) is interactive and keeps its own file, so not installable into the engine's loop. Built as SE-1. |
+| 2026-10-31 | PostHog [`signals`](https://github.com/PostHog/skills/tree/main/skills/omnibus/signals) (PostHog, official) | Observability | none | model | **Adopt, factory-wide**, with PostHog's MCP server, for the talk agent and the planner (SE-4): HogQL over raw signal data, semantic search, dedup. Read its SKILL.md before installing; one listing's install path disagrees with the repo path. |
+| 2026-10-31 | Diátaxis documentation skills (various, mcpmarket) | Documentation | varies | model | **Skip for now**: many near-identical copies, no maintainer or activity we could check. Diátaxis itself (tutorial, how-to, reference, explanation) is worth borrowing as a check on user docs once there are any. |
 
 ## Tracker skills on our store (since the rebuild in Linear's shape, 2026-10-27)
 
