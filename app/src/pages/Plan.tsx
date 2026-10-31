@@ -19,7 +19,7 @@ export function Plan() {
     setPlan(null)
     const refresh = () => engine.plan(app.id).then((p) => { if (!closed) { setPlan(p); setError(null) } }).catch((e) => setError(String(e.message ?? e)))
     void refresh()
-    const es = openEvents(`${API}/events?since=-1&app=${app.id}`)
+    const es = openEvents(`${API}/events?since=now&app=${app.id}`)
     const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 250) }
     for (const t of LIVE) es.addEventListener(t, bump)
     return () => { closed = true; es.close(); window.clearTimeout(timer.current) }

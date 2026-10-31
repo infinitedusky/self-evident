@@ -23,7 +23,7 @@ export function useSteps(subject: StepSubject, appId: string) {
     let closed = false
     const refresh = () => engine.steps(subject).then((x) => { if (!closed) { setV(x); setError(null) } }).catch((e) => setError(String(e.message ?? e)))
     void refresh()
-    const es = openEvents(`${API}/events?since=-1&app=${appId}`)
+    const es = openEvents(`${API}/events?since=now&app=${appId}`)
     const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 250) }
     for (const t of LIVE) es.addEventListener(t, bump)
     return () => { closed = true; es.close(); window.clearTimeout(timer.current) }

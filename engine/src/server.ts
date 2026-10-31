@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 import { DATABASE_URL, db, pool } from './db/client.js'
 import { ensureDatabase } from './db/ensure.js'
 import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, workspace, type BuildStatus, type IssueState } from './db/schema.js'
-import { EventBus, eventsSince, latestSeq } from './events.js'
+import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
 import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { approveBrief, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
@@ -477,9 +477,13 @@ export function buildApp(bus: EventBus) {
       let last = since
       let sending: Promise<void> = Promise.resolve()
       const send = () => (sending = sending.then(async () => {
-        for (const row of await eventsSince(last, filter)) {
-          await stream.writeSSE({ id: String(row.seq), event: row.type, data: JSON.stringify(row) })
-          last = row.seq
+        for (;;) { // a page at a time until caught up, so a long replay never leaves the live events behind it
+          const rows = await eventsSince(last, filter)
+          for (const row of rows) {
+            await stream.writeSSE({ id: String(row.seq), event: row.type, data: JSON.stringify(row) })
+            last = row.seq
+          }
+          if (rows.length < PAGE) break
         }
       }))
       bus.on('event', send)

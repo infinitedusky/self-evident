@@ -38,7 +38,7 @@ export function IssuePage() {
     let es: Events | null = null
     engine.issue(id).then((d) => {
       if (closed) return
-      es = openEvents(`${API}/events?since=-1&app=${d.appId}`)
+      es = openEvents(`${API}/events?since=now&app=${d.appId}`)
       const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 250) }
       for (const t of EVENT_TYPES) if (!t.startsWith('run.') && !t.startsWith('talk.')) es.addEventListener(t, bump)
     }).catch(() => {})

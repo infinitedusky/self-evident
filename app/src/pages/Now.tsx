@@ -25,7 +25,7 @@ export function Now() {
     let closed = false
     const refresh = () => engine.now(app.id).then((d) => { if (!closed) { setData(d); setError(null) } }).catch((e) => setError(String(e.message ?? e)))
     void refresh()
-    const es = openEvents(`${API}/events?since=-1&app=${app.id}`)
+    const es = openEvents(`${API}/events?since=now&app=${app.id}`)
     const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 250) }
     for (const type of EVENT_TYPES) if (!type.startsWith('run.tool') && type !== 'run.message') es.addEventListener(type, bump)
     es.onerror = () => setError('event stream disconnected; retrying')
