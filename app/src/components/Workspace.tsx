@@ -10,12 +10,12 @@ import { DockviewReact, Orientation, SplitviewReact, type DockviewApi, type Dock
 import 'dockview-react/dist/styles/dockview.css'
 import { openEvents, API, engine } from '../engine'
 import { useCurrentApp } from '../current-app'
-import { tabContext, tabKey, tabTitle, useWorkspace, WorkspaceContext, type OpenTab, type Split, type Tab, type WorkspaceApi } from '../workspace'
-import { AppPicker } from './AppPicker'
+import { pendingOpen, tabContext, tabKey, tabTitle, useWorkspace, WorkspaceContext, type OpenTab, type Split, type Tab, type WorkspaceApi } from '../workspace'
 import { BuildLog } from './BuildLog'
 import { Mockups } from '../pages/Mockups'
 import { PagePane } from './PagePane'
 import { PrototypePane } from './PrototypePane'
+import { AppPicker } from './AppPicker'
 import { Rail } from './Rail'
 import { contextFor, TalkDrawer } from './TalkDrawer'
 
@@ -43,6 +43,16 @@ async function nameFor(tab: Tab): Promise<string | null> {
   if (project) return engine.graph(project).then((g) => clip(g.project.name)).catch(() => null)
   const issue = tab.path.match(/^\/tasks\/([A-Za-z0-9_]+)/)?.[1]
   if (issue) return engine.issue(issue).then((i) => clip(`${i.identifier} ${i.title}`)).catch(() => null)
+  return null
+}
+
+/** A project's or a task's page: it belongs to one app. */
+const ownedPath = (path: string) => path.match(/^\/projects\/((?:plan|proj)_[A-Za-z0-9_-]+)/)?.[1] ? 'project' : path.match(/^\/tasks\/(iss_[A-Za-z0-9_]+)/) ? 'task' : null
+async function ownerOf(path: string): Promise<string | null> {
+  const project = path.match(/^\/projects\/((?:plan|proj)_[A-Za-z0-9_-]+)/)?.[1]
+  if (project) return engine.graph(project).then((g) => g.app.id).catch(() => null)
+  const issue = path.match(/^\/tasks\/(iss_[A-Za-z0-9_]+)/)?.[1]
+  if (issue) return engine.issue(issue).then((i) => i.appId).catch(() => null)
   return null
 }
 
@@ -97,7 +107,6 @@ function AgentColumn() {
   const context = useMemo(() => tabContext(ws?.focused ?? null, ws?.tabs ?? [], contextFor), [ws?.focused, ws?.tabs])
   return (
     <div className="agent-col">
-      <AppPicker />
       <TalkDrawer context={context} onOpen={(tab) => ws?.open(tab)} />
     </div>
   )
@@ -115,7 +124,7 @@ function Tabs({ params }: { params: { onReady: (api: DockviewApi) => void } }) {
  * address bar's page and keep the address on the tab in front (off where the page is not the app's, like a story).
  */
 export function Workspace({ initial = [], address = true }: { initial?: { tab: Tab; split?: Split }[]; address?: boolean }) {
-  const { app, apps, loaded } = useCurrentApp()
+  const { app, apps, loaded, setAppId } = useCurrentApp()
   const dock = useRef<DockviewApi | null>(null)
   const split = useRef<SplitviewApi | null>(null)
   const [dockGen, setDockGen] = useState(0) // a new Dockview (first mount, or mounted again) restores the tabs
@@ -125,6 +134,15 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
   const restoring = useRef(false)
   const firstPath = useRef<string | null>(address ? window.location.pathname + window.location.search : null)
   const follow = useRef(address)
+  // The address you arrived by may be another app's project or task: switch to that app first, then open it there.
+  const [arriving, setArriving] = useState(() => !!firstPath.current && !!ownedPath(firstPath.current))
+  useEffect(() => {
+    if (!arriving || !loaded) return
+    void ownerOf(firstPath.current!).then((owner) => {
+      if (owner && owner !== app?.id && apps.some((a) => a.id === owner)) { pendingOpen.tab = { kind: 'page', path: firstPath.current! }; firstPath.current = null; setAppId(owner) }
+      setArriving(false)
+    })
+  }, [arriving, loaded]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const sync = useCallback(() => {
     const api = dock.current
@@ -165,7 +183,7 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
 
   useEffect(() => { // the app's tabs: kept from last time in this browser, then the page in the address bar
     const api = dock.current
-    if (!api || !loaded || (!app && apps.length)) return // wait for the app to be picked
+    if (!api || !loaded || arriving || (!app && apps.length)) return // wait for the app to be picked
     restoring.current = true
     api.clear()
     appId.current = app?.id ?? null
@@ -177,9 +195,10 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
     firstPath.current = null
     if (!saved) for (const x of initial) add(x.tab, { split: x.split })
     if (first && first !== '/') add({ kind: 'page', path: first })
+    if (pendingOpen.tab) { add(pendingOpen.tab); pendingOpen.tab = null }
     if (!api.panels.length) add({ kind: 'page', path: '/' })
     sync()
-  }, [dockGen, loaded, app?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dockGen, loaded, arriving, app?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { // the agent opens tabs
     if (!app) return
@@ -206,6 +225,7 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
       <Changed.Provider value={sync}>
         <div className="workspace" data-component="Workspace">
           <Rail here={focused?.key ?? null} onOpen={(tab) => add(tab)} agentOpen={agentOpen} onToggleAgent={toggleAgent} />
+          <AppPicker onOpen={(tab) => add(tab)} />
           <SplitviewReact className="ws-split" orientation={Orientation.HORIZONTAL} proportionalLayout={false}
             components={{ agent: AgentColumn, tabs: Tabs }}
             onReady={(e) => {

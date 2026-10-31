@@ -3,7 +3,7 @@
  * sub-issues, the planner's questions and decisions, the selected sub-issue's detail and steps, the event ticker, the PR.
  * Its own steps (research, mockups, a prototype; no brief) sit at the top.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { Badge, type Tone } from '../components/Badge'
 import { PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
@@ -11,6 +11,7 @@ import { Brief } from '../components/Brief'
 import { StepsPanel } from '../components/StepsPanel'
 import { engine, STATE_LABEL, useLiveProject, type BacklogIssue, type Graph, type IdeaRow, type Decision, type Event, type GraphSubIssue, type GraphIssue, type Question } from '../engine'
 import { useCurrentApp } from '../current-app'
+import { pendingOpen } from '../workspace'
 import { TodoCard } from './Todos'
 
 const PROJECT_TONE: Record<string, Tone> = { paused: 'warn', drafting: 'neutral', proposed: 'neutral', approved: 'neutral', running: 'accent', landed: 'ok', stopped: 'warn', superseded: 'neutral' }
@@ -22,17 +23,17 @@ export function ProjectPage() {
   const nav = useNavigate()
   const { graph, events, error } = useLiveProject(id)
   const { app, setAppId } = useCurrentApp()
-  const synced = useRef(false) // one app at a time: the app follows the project you open; switching apps leaves this project
-  useEffect(() => {
-    if (!graph || !app) return
-    if (app.id === graph.app.id) { synced.current = true; return }
-    if (!synced.current) setAppId(graph.app.id)
-    else nav('/projects')
-  }, [graph?.app.id, app?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const [selectedId, setSelectedId] = useState<string>()
   const [busy, setBusy] = useState(false)
   if (error && !graph) return <p className="muted">{error}</p>
   if (!graph) return <p className="muted">Loading…</p>
+  // A project belongs to its app. Saved among another app's tabs, it says so rather than switching the app itself.
+  if (app && graph.app.id !== app.id) return (
+    <div className="empty" data-component="OtherAppProject">
+      <p><strong>{graph.project.name}</strong> is in {graph.app.name}, and you're in {app.name}.</p>
+      <button className="btn" onClick={() => { pendingOpen.tab = { kind: 'page', path: `/projects/${graph.project.id}` }; setAppId(graph.app.id) }}>Open it in {graph.app.name}</button>
+    </div>
+  )
   const selected = graph.subIssues.find((p) => p.id === selectedId) ?? null
   const issueOf = (p: GraphSubIssue) => graph.issues.find((t) => t.id === p.parentId)
   const draft = ['drafting', 'proposed', 'approved'].includes(graph.project.status)

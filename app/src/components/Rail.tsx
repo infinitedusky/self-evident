@@ -2,7 +2,7 @@
  * The loop as a thin strip of icons on the far left, like VS Code's activity bar: each opens its page as a tab
  * (or brings it to the front). Hovering one shows its name. The rail holds only the stages of work, with nothing under
  * them: projects, tasks and the steps live inside their stage (LOG.md, 2026-10-29). Below the rule: Summary and My Stuff.
- * Settings sits at the bottom; the app picker is atop the agent.
+ * Settings sits at the bottom. The apps have their own strip beside it (AppPicker).
  */
 import type { Tab } from '../workspace'
 

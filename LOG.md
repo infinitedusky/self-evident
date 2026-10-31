@@ -1548,3 +1548,15 @@ file run together and only true overlaps re-run.
   `doc-coauthoring` is the best found: we borrow its reader test (SE-1); the rest is interactive with its own file.
   PostHog's official `signals` skill is adopted for the agents with its MCP server (SE-4). The Diátaxis skills on
   the marketplaces are unvetted copies: skipped for now.
+
+## Switching apps: a strip of its own, and no snapping back (Sandy, 2026-10-31: "changing takes it back to self evident again and again … we are switching tenants, not just agents")
+
+- **The bug:** each app keeps its own tabs. A Self Evident project page had been saved among another app's tabs, and
+  a project page used to switch the app to its own when it opened. Switching to that app restored the tab, the
+  tab switched back to Self Evident, and so on.
+- **Fixed:** only the address you arrive by can change the app. A project or task link of another app switches to
+  that app first and opens there. A project page saved among another app's tabs says which app it belongs to, with
+  "Open it in …", and no longer switches the app itself.
+- **Apps get their own strip** (Sandy: "a vertical tenant nav bar to the right of the main one. that is how slack
+  does it"): a square per app beside the rail, the app's key on it and its name on hover, + to add one. The
+  picker that sat atop the agent's column is gone: switching apps switches everything, not just the agent.

@@ -60,6 +60,8 @@ export const StoppedWithAFailure: Story = { parameters: at('proj_stopped'), befo
 export const NoBacklogNoQuestions: Story = { parameters: at('proj_bare'), beforeEach: withGraph(bare) }
 /** No such project. */
 export const NotFound: Story = { parameters: at('proj_missing') }
+/** Saved among another app's tabs: it names its app and opens there, rather than switching the app itself. */
+export const InAnotherApp: Story = { parameters: at('proj_checkout'), beforeEach: withGraph({ ...graph, app: { ...graph.app, id: 'app_elsewhere', name: 'Sample Blog' } }) }
 /** Waiting on the engine. */
 export const Loading: Story = { parameters: at('proj_checkout'), beforeEach: withEngine({}, { latency: 'infinite' }) }
 /** The engine is down. */

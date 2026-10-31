@@ -19,6 +19,12 @@ export interface WorkspaceApi {
   focused: OpenTab | null
 }
 
+/**
+ * A page to open once the app switches: set before `setAppId`, taken by the workspace when it loads the new app's
+ * tabs. How a page of another app ("Open it in Homework Gate") or the address you arrived by gets to its own app.
+ */
+export const pendingOpen: { tab: Tab | null } = { tab: null }
+
 export const WorkspaceContext = createContext<WorkspaceApi | null>(null)
 export const useWorkspace = () => useContext(WorkspaceContext)
 
