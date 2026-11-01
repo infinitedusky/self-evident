@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ClaudeSessions } from './ClaudeSessions'
 import { Conversation } from './Conversation'
 import { openEvents, API, engine, type TalkContext, type TalkSession } from '../engine'
-import type { Tab } from '../workspace'
+import { talkColor, useWorkspace, type Tab } from '../workspace'
 import { useCurrentApp } from '../current-app'
 
 const SESSION_KEY = 'if.talk.session', POPPED_KEY = 'if.talk.popped'
@@ -136,6 +136,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
   const rename = async (subject: string) => { if (current && subject.trim()) { await engine.renameTalk(current.id, subject); await reload() } setRenaming(false) }
 
   const bringBack = () => { setPopped(false); remember(POPPED_KEY, '0') }
+  const ws = useWorkspace() // in the workspace: the switch for the tab that follows what the agent changes
   const openTab = (tab: Tab) => { if (standalone) channel()?.postMessage({ type: 'open', tab } satisfies Msg); else onOpen?.(tab) }
   if (popped) return (
     <aside className="talk-drawer popped" data-component="TalkDrawer">
@@ -153,7 +154,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
       <div className="talk-tabs">
         {shown.map((s) => (
           <button key={s.id} className={`talk-tab ${s.id === sessionId ? 'active' : ''}`} onClick={() => pick(s.id)} title={`${label(s)} · ${appName(s)}${s.branch ? ` · ${s.branch}` : ''}`}>
-            {s.busy && <span className="dot" />}{label(s)}
+            <span className={`dot ${s.busy ? 'busy' : ''}`} style={{ background: talkColor(s.id) }} />{label(s)}
           </button>
         ))}
         <button className="talk-tab new" disabled={starting} onClick={start} title={app ? `New conversation about ${app.name}${context.projectId ? ', pinned to this project' : ''}` : 'Pick an app first'}>+</button>
@@ -180,6 +181,8 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
             {current.subjectRef?.projectId && <button className="link-btn" onClick={() => openTab({ kind: 'page', path: `/projects/${current.subjectRef!.projectId}` })}>open its project</button>}
             {current.subjectRef?.prototypeId && <button className="link-btn" onClick={() => openTab({ kind: 'prototype', id: current.subjectRef!.prototypeId })}>open the prototype</button>}
             <span>· looking at {context.label}</span>
+            {ws?.setFollowing && <button className={`link-btn follow-switch ${ws.following ? 'on' : ''}`} style={{ ['--talk' as string]: talkColor(current.id) }} onClick={() => ws.setFollowing!(!ws.following)}
+              title={ws.following ? 'What the agent changes shows in a tab beside. Press to stop.' : 'Show what the agent changes in a tab beside'}>{ws.following ? 'following its changes' : 'follow its changes'}</button>}
           </div>
           {problem && <div className="faint" style={{ fontSize: 12, padding: '0 12px 6px', color: 'var(--warn)' }}>{problem}</div>}
           <Conversation sessionId={current.id} context={context} compact />
