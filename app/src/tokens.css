@@ -5,6 +5,7 @@
   --accent: #c2620b; --accent-wash: #fbeee0;
   --ok: #1f7a4d; --ok-wash: #e3f3ea; --warn: #9a6a00; --warn-wash: #fbf1d6;
   --bad: #b3261e; --bad-wash: #fbe5e3; --idle: #8a94a3; --idle-wash: #eceff3;
+  --talk-1: #2f6fdb; --talk-2: #7b4fd6; --talk-3: #0f8a8a; --talk-4: #c43c7a; --talk-5: #5b8a1f; --talk-6: #b38600; /* a conversation's colour, after Live Share's cursors */
   --display: 'Bricolage Grotesque', 'Avenir Next', system-ui, sans-serif;
   --sans: 'IBM Plex Sans', 'Helvetica Neue', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
@@ -17,6 +18,7 @@
     --accent: #f0913a; --accent-wash: #3a2614;
     --ok: #5cc98f; --ok-wash: #143225; --warn: #e7b84a; --warn-wash: #352a10;
     --bad: #f07a71; --bad-wash: #3a1917; --idle: #8792a3; --idle-wash: #232a35;
+    --talk-1: #6aa0ff; --talk-2: #a88bf5; --talk-3: #4cc6c6; --talk-4: #f07ab0; --talk-5: #9cca5a; --talk-6: #e8c14a;
   }
 }
 :root[data-theme="dark"] {
@@ -25,4 +27,5 @@
   --accent: #f0913a; --accent-wash: #3a2614;
   --ok: #5cc98f; --ok-wash: #143225; --warn: #e7b84a; --warn-wash: #352a10;
   --bad: #f07a71; --bad-wash: #3a1917; --idle: #8792a3; --idle-wash: #232a35;
+  --talk-1: #6aa0ff; --talk-2: #a88bf5; --talk-3: #4cc6c6; --talk-4: #f07ab0; --talk-5: #9cca5a; --talk-6: #e8c14a;
 }

@@ -17,6 +17,26 @@ export interface WorkspaceApi {
   open: (tab: Tab, opts?: { split?: Split }) => void
   tabs: OpenTab[]
   focused: OpenTab | null
+  /** Whether a tab follows what the agent changes (follow.ts in the engine), and the switch for it. */
+  following?: boolean
+  setFollowing?: (on: boolean) => void
+}
+
+/** A conversation's colour, the same wherever it shows (its tab, the tab following it); the accent when there's none. */
+export function talkColor(sessionId: string | null | undefined): string {
+  if (!sessionId) return 'var(--accent)'
+  let h = 0
+  for (const c of sessionId) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return `var(--talk-${(h % 6) + 1})`
+}
+
+/** Where a burst of the agent's changes lands: on the project when they're several of its pages, else on the last. */
+export function landing(burst: { path: string; projectId?: string | null }[]): string | null {
+  if (!burst.length) return null
+  const paths = new Set(burst.map((b) => b.path))
+  const project = burst[0].projectId
+  if (paths.size > 1 && project && burst.every((b) => b.projectId === project)) return `/projects/${project}`
+  return burst[burst.length - 1].path
 }
 
 /**

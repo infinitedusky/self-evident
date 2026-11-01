@@ -2,15 +2,17 @@
  * The whole app, laid out like an IDE, after Replit's workspace: the apps as a strip on the far left (it hides), the loop as an icon rail, the
  * agent in the column beside it, and everything else as tabs on the right, which split by dragging a tab to an
  * edge (Dockview). Pages, prototypes, its Storybook and a build's live log all open here. The agent
- * is told which tabs are open and can open them itself (its open_tab tool arrives as a ui.open event). The layout
+ * is told which tabs are open and can open them itself (its open_tab tool arrives as a ui.open event). What it changes
+ * shows in one following tab, after following someone in Figma or Live Share: a ui.follow event moves it, and a dot in
+ * the conversation's colour marks it. The layout
  * is kept per app in this browser; the tab in front is the address bar's page, so a link or a reload lands on it.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { DockviewReact, Orientation, SplitviewReact, type DockviewApi, type DockviewTheme, type IDockviewHeaderActionsProps, type IDockviewPanel, type IDockviewPanelProps, type SplitviewApi } from 'dockview-react'
+import { DockviewDefaultTab, DockviewReact, Orientation, SplitviewReact, type DockviewApi, type DockviewTheme, type IDockviewHeaderActionsProps, type IDockviewPanel, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type SplitviewApi } from 'dockview-react'
 import 'dockview-react/dist/styles/dockview.css'
 import { openEvents, API, engine } from '../engine'
 import { useCurrentApp } from '../current-app'
-import { pendingOpen, tabContext, tabKey, tabTitle, useWorkspace, WorkspaceContext, type OpenTab, type Split, type Tab, type WorkspaceApi } from '../workspace'
+import { landing, pendingOpen, tabContext, tabKey, tabTitle, talkColor, useWorkspace, WorkspaceContext, type OpenTab, type Split, type Tab, type WorkspaceApi } from '../workspace'
 import { BuildLog } from './BuildLog'
 import { Mockups } from '../pages/Mockups'
 import { PagePane } from './PagePane'
@@ -22,6 +24,8 @@ import { contextFor, TalkDrawer } from './TalkDrawer'
 const THEME: DockviewTheme = { name: 'self-evident', className: 'dockview-theme-se', gap: 8 } // each group a card, after Replit's panes
 const AGENT_KEY = 'se.agent.open', AGENT_WIDTH_KEY = 'se.agent.px', AGENT_WIDTH = 345
 const APPS_KEY = 'se.apps.open' // the apps strip, shown or hidden from the rail's chevron
+const FOLLOW_KEY = 'se.follow' // whether a tab follows what the agent changes
+const SETTLE = 700 // ms: a burst of changes lands once, when it settles
 const layoutKey = (appId: string) => `se.layout.${appId}`
 const remember = (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* fine */ } }
 const recall = (k: string) => { try { return localStorage.getItem(k) } catch { return null } }
@@ -60,22 +64,44 @@ async function ownerOf(path: string): Promise<string | null> {
 // Panels tell the workspace they changed (navigated, renamed), which Dockview has no event for.
 const Changed = createContext<() => void>(() => {})
 
-function TabBody({ params, api }: IDockviewPanelProps<{ tab: Tab }>) {
+/** The tab following a conversation: which one, and a count that flashes the page each time it lands. */
+type Follow = { sessionId: string | null; landed: number }
+type Params = { tab: Tab; follow?: Follow }
+
+/** The following tab's name, after a dot in its conversation's colour that pulses. */
+function FollowTab(props: IDockviewPanelHeaderProps<Params>) {
+  const [follow, setFollow] = useState(props.params.follow)
+  useEffect(() => { const d = props.api.onDidParametersChange((p) => setFollow((p as Params).follow)); return () => d.dispose() }, [props.api])
+  return <DockviewDefaultTab {...props} {...(follow ? { 'data-follow': '', title: 'Following the agent: what it changes shows here', style: { ['--talk' as string]: talkColor(follow.sessionId) } } : {})} />
+}
+
+function TabBody({ params, api }: IDockviewPanelProps<Params>) {
   const changed = useContext(Changed)
   const t = params.tab
+  const pane = useRef<HTMLDivElement>(null)
+  const landed = params.follow?.landed
+  useEffect(() => { // each landing, a ring in the conversation's colour
+    const el = pane.current
+    if (!el || !landed) return
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash')
+  }, [landed])
   const went = (tab: Tab) => {
-    api.updateParameters({ tab })
+    api.updateParameters({ tab, follow: params.follow })
     api.setTitle(tabTitle(tab))
     void nameFor(tab).then((n) => { if (n) { api.setTitle(n); changed() } })
     changed()
   }
-  switch (t.kind) {
-    case 'page': return <PagePane path={t.path} onNavigate={(path) => went({ kind: 'page', path })} />
-    case 'prototype': return <PrototypePane id={t.id} path={t.path} onNavigate={(path) => went({ kind: 'prototype', id: t.id, path })} />
-    case 'storybook': return <PagePane path="/mockups"><Mockups story={t.story} /></PagePane>
-    case 'build': return <BuildLog issueId={t.issueId} />
-    default: return <PrototypePane /> // a tab saved before Preview became Prototypes
-  }
+  const body = (() => {
+    switch (t.kind) {
+      case 'page': return <PagePane path={t.path} onNavigate={(path) => went({ kind: 'page', path })} />
+      case 'prototype': return <PrototypePane id={t.id} path={t.path} onNavigate={(path) => went({ kind: 'prototype', id: t.id, path })} />
+      case 'storybook': return <PagePane path="/mockups"><Mockups story={t.story} /></PagePane>
+      case 'build': return <BuildLog issueId={t.issueId} />
+      default: return <PrototypePane /> // a tab saved before Preview became Prototypes
+    }
+  })()
+  if (!params.follow) return body
+  return <div ref={pane} className="follow-pane" style={{ ['--talk' as string]: talkColor(params.follow.sessionId) }}>{body}</div>
 }
 
 function GroupActions({ group }: IDockviewHeaderActionsProps) {
@@ -115,7 +141,7 @@ function AgentColumn() {
 
 function Tabs({ params }: { params: { onReady: (api: DockviewApi) => void } }) {
   return (
-    <DockviewReact className="ws-dock" theme={THEME} components={{ tab: TabBody }} rightHeaderActionsComponent={GroupActions}
+    <DockviewReact className="ws-dock" theme={THEME} components={{ tab: TabBody }} tabComponents={{ follow: FollowTab }} rightHeaderActionsComponent={GroupActions}
       watermarkComponent={Nothing} onReady={(e) => params.onReady(e.api)} />
   )
 }
@@ -132,6 +158,10 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
   const [tabs, setTabs] = useState<OpenTab[]>([])
   const [agentOpen, setAgentOpen] = useState(() => recall(AGENT_KEY) !== '0')
   const [appsOpen, setAppsOpen] = useState(() => recall(APPS_KEY) !== '0')
+  const [following, setFollowingState] = useState(() => recall(FOLLOW_KEY) !== '0')
+  const followingRef = useRef(following)
+  const burst = useRef<{ sessionId: string | null; path: string; projectId?: string | null }[]>([])
+  const settle = useRef<ReturnType<typeof setTimeout> | null>(null)
   const appId = useRef<string | null>(null)
   const restoring = useRef(false)
   const firstPath = useRef<string | null>(address ? window.location.pathname + window.location.search : null)
@@ -176,6 +206,25 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
     void nameFor(tab).then((n) => { if (n) { panel.api.setTitle(n); sync() } })
   }, [sync])
 
+  /** The agent changed things: the following tab goes where they show (opened beside the tab in front the first time). */
+  const land = useCallback(() => {
+    const api = dock.current
+    const changes = burst.current
+    burst.current = []
+    const path = landing(changes)
+    if (!api || !path) return
+    const tab: Tab = { kind: 'page', path }
+    const sessionId = changes[changes.length - 1].sessionId
+    const there = api.panels.find((p) => (p.params as Params).follow)
+    const landed = ((there?.params as Params | undefined)?.follow?.landed ?? 0) + 1
+    const params: Params = { tab, follow: { sessionId, landed } }
+    const panel = there ?? api.addPanel({ id: `t_${Date.now().toString(36)}f`, component: 'tab', tabComponent: 'follow', title: tabTitle(tab), params, ...(api.activePanel ? { position: { referencePanel: api.activePanel, direction: 'right' as const } } : {}) })
+    if (there) { there.api.updateParameters(params); there.api.setTitle(tabTitle(tab)) }
+    panel.api.setActive()
+    void nameFor(tab).then((n) => { if (n) { panel.api.setTitle(n); sync() } })
+    sync()
+  }, [sync])
+
   const onDock = useCallback((api: DockviewApi) => {
     dock.current = api
     api.onDidLayoutChange(sync)
@@ -209,11 +258,22 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
       const p = (JSON.parse(ev.data) as { payload?: { tab?: Tab; split?: Split | null } }).payload
       if (p?.tab) add(p.tab, { split: p.split ?? undefined })
     }) as EventListener)
-    return () => es.close()
-  }, [app?.id, add])
+    es.addEventListener('ui.follow', ((ev: MessageEvent) => {
+      const p = (JSON.parse(ev.data) as { payload?: { sessionId?: string | null; tab?: Tab; projectId?: string | null } }).payload
+      if (!followingRef.current || p?.tab?.kind !== 'page') return
+      burst.current.push({ sessionId: p.sessionId ?? null, path: p.tab.path, projectId: p.projectId })
+      if (settle.current) clearTimeout(settle.current)
+      settle.current = setTimeout(land, SETTLE)
+    }) as EventListener)
+    return () => { es.close(); if (settle.current) clearTimeout(settle.current) }
+  }, [app?.id, add, land])
 
   const toggleAgent = useCallback(() => setAgentOpen((o) => { remember(AGENT_KEY, o ? '0' : '1'); return !o }), [])
   const toggleApps = useCallback(() => setAppsOpen((o) => { remember(APPS_KEY, o ? '0' : '1'); return !o }), [])
+  const setFollowing = useCallback((on: boolean) => { // off: the following tab stays, as an ordinary tab
+    remember(FOLLOW_KEY, on ? '1' : '0'); followingRef.current = on; setFollowingState(on)
+    if (!on) { burst.current = []; const there = dock.current?.panels.find((p) => (p.params as Params).follow); if (there) there.api.updateParameters({ tab: (there.params as Params).tab, follow: undefined }) }
+  }, [])
   useEffect(() => { split.current?.getPanel('agent')?.api.setVisible(agentOpen) }, [agentOpen])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') { e.preventDefault(); toggleAgent() } }
@@ -222,7 +282,7 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
   }, [toggleAgent])
 
   const focused = tabs.find((t) => t.focused) ?? null
-  const value = useMemo(() => ({ open: (tab: Tab, opts?: { split?: Split }) => add(tab, opts), openIn: (tab: Tab, groupId: string) => add(tab, { groupId }), tabs, focused }), [add, tabs, focused])
+  const value = useMemo(() => ({ open: (tab: Tab, opts?: { split?: Split }) => add(tab, opts), openIn: (tab: Tab, groupId: string) => add(tab, { groupId }), tabs, focused, following, setFollowing }), [add, tabs, focused, following, setFollowing])
   return (
     <WorkspaceContext.Provider value={value}>
       <Changed.Provider value={sync}>
