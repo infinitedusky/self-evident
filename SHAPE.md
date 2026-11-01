@@ -434,15 +434,10 @@ Direction, not yet built. The work has two halves with a hinge between them.
 
 ### The agent shows where it is
 
-At the top of each conversation, a strip in the conversation's colour that always answers three questions (story
-first: `Components/AgentStrip`):
-
-1. **Where:** what the conversation is about, as a path (app › idea › prototype 2). After Linear's breadcrumbs.
-2. **Which step:** the explore → build terrain as a row, the current step lit (idea · mockups · prototype · brief
-   · build). After GitHub Actions' job steps.
-3. **Doing now:** one live line from the agent's latest tool call ("editing `app/sign-off/Page.tsx`", "running
-   the tests", "waiting on you: may I commit?"); idle, what it finished. After Cursor's and Claude Code's
-   "Reading… / Editing…".
+At the top of each conversation, its **name and nothing else**, after a dot in its colour (pulsing while it works,
+amber while it waits on you). A fork adds a fork icon whose popup says where it came from and what it's focusing on. Story
+first: `Components/AgentStrip`. (Sandy, 2026-11-01, on a first version with a path, a row of steps and a live line:
+"still too info dense. It should have a name and that is it.")
 
 ### Asking while it works forks
 
@@ -452,7 +447,7 @@ first: `Components/AgentStrip`):
 - A message sent to a busy conversation doesn't queue or interrupt: a **new conversation opens beside it**,
   carrying the history so far (the Agent SDK forks a session: resume with `forkSession`), says in one line what it
   will focus on, and starts. The first keeps going.
-- The fork has its own colour, and its strip names where it came from ("forked from *Parent sign-off*").
+- The fork has its own colour, and a fork icon by its name whose popup says where it came from.
 - Proposed: an answer to the busy agent's own ask (a permission, a question it put) still goes to it, not a fork;
   so does **Stop**.
 - Open: where the fork works. Proposed: its own worktree, branched from the first conversation's branch as it is
