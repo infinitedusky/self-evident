@@ -1606,3 +1606,20 @@ file run together and only true overlaps re-run.
 - **The level you pick sticks:** changing it in any conversation makes it where the next one starts (kept on the
   workspace, `talkAutoApprove`).
 - **"Always" for a tool is kept** with the conversation (`session.always_allow`), so an engine restart doesn't ask again.
+
+## Following the agent (Sandy, 2026-11-01: "the mcp crud calls bring up the page they just created or added to or edited … it would have a pulsing dot that matches the color of the conversation tab")
+
+- When a tool changes something (creates or edits an idea, project, task, to-do, backlog item, initiative, cycle or
+  step), the engine writes a **`ui.follow`** event with the page it shows on (`engine/src/follow.ts`). Reads send
+  nothing; a failed call sends nothing.
+- **One following tab**, after following someone in Figma or Live Share: it opens beside the tab in front the first
+  time, then moves. It doesn't open a tab per change. A **burst lands once**, 700 ms after it settles: several
+  pages of one project land on the project, otherwise the last.
+- **Each conversation has a colour** (one of six, from its id): a dot on its tab, pulsing while it works. The
+  following tab has **the same dot, pulsing**, and the page gets a brief ring in that colour each time it lands.
+- **The switch** is in the agent's column ("following its changes"), kept per browser. Off: the following tab stays
+  as an ordinary tab and nothing moves.
+- **Claude Code over MCP:** the terminal command now names its conversation (`/api/mcp/<app>?session=<id>`). Without
+  it, the engine uses the app's only conversation that is carried on in a terminal; otherwise the dot is the accent
+  colour.
+- **Not yet:** highlighting the item inside a page (the task row in a project). For now the whole page gets the ring.
