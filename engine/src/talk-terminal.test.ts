@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
 import { app, repo, session, sessionMessage, workspace } from './db/schema.js'
 import { newId } from './ids.js'
-import { adoptTalk, closeTalks, handOff, listClaudeSessions, talkTranscript } from './talk.js'
+import { adoptTalk, closeTalks, handOff, listClaudeSessions, setAutoApprove, talkTranscript } from './talk.js'
 import { sessionDir } from './terminal.js'
 
 let reachable = true
@@ -90,5 +90,14 @@ describe.skipIf(!reachable)('one conversation, in the terminal and the UI', () =
     expect(list.map((x) => x.title).sort()).toEqual(['In my worktree', 'In the checkout'])
     expect(list.find((x) => x.id === `${run}-side`)).toMatchObject({ cwd: mine, branch: 'side', talkId: brought.id })
     expect(list.find((x) => x.id === `${run}-main`)).toMatchObject({ branch: 'main', talkId: null })
+  })
+
+  it('starts a conversation acting up to moderate, then where the person last set it', async () => {
+    writeFileSync(file(`${run}-a1`), line('u1', 'user', 'first'))
+    const first = await adoptTalk({ appId, cwd, agentSessionId: `${run}-a1` })
+    expect(first.autoApprove).toBe('moderate')
+    await setAutoApprove(first.id, 'cheap')
+    writeFileSync(file(`${run}-a2`), line('u1', 'user', 'second'))
+    expect((await adoptTalk({ appId, cwd, agentSessionId: `${run}-a2` })).autoApprove).toBe('cheap')
   })
 })
