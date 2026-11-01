@@ -23,6 +23,7 @@ import { runner } from './runner.js'
 import { listStories } from './storybook.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, setPrototypeCommand, setPrototypeDatabase, startPrototype, stopPrototype } from './prototype.js'
 import { syncApp } from './github.js'
+import { FOLLOWED, follow } from './follow.js'
 import { addChecklist, completeTodo, createTodo, dropTodo, itemToTodo, listTodos, setChecklistItem, updateTodo } from './todos.js'
 
 export type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean }
@@ -55,7 +56,7 @@ export function engineTools(opts: ToolScope): EngineTool[] {
   const line = z.object({ text: z.string(), waitingOn: z.string().optional() })
   const subIssue = z.object({ key: z.string(), title: z.string(), description: z.string().optional(), brief: z.string().optional(), dependsOn: z.array(z.string()).optional(), files: z.array(z.string()).optional() })
   const described = 'one to three plain sentences for a person: what will be different; no file names or code'
-  return [
+  const tools = [
       def('now', 'What is running, what needs a person, what just happened, in this app.', {}, async () => tryIt(() => now(appId))),
       def('projects', 'This app\'s projects with counts (superseded hidden unless all=true).', { all: z.boolean().optional() }, async (a) => tryIt(() => listProjects({ all: a.all, appId }))),
       def('project_graph', 'A project in full: its backlog (open, a duplicate of what covers it, or canceled with why), tasks in order, their sub-tasks with builds, dependencies, files, held reasons, steps and last run; the planner\'s decisions and questions; the to-dos it waits on.', { projectId: z.string() }, async (a) => tryIt(() => ownProject(a.projectId))),
@@ -174,4 +175,7 @@ export function engineTools(opts: ToolScope): EngineTool[] {
       def('events', 'This app\'s event log, newest last. Filter by project or task (issueId: the task\'s id); since is a sequence number.', { projectId: z.string().optional(), issueId: z.string().optional(), since: z.number().optional(), limit: z.number().optional() },
         async (a) => tryIt(async () => (await eventsSince(a.since ?? 0, { appId, projectId: a.projectId, issueId: a.issueId })).slice(-(a.limit ?? 50)))),
   ]
+  // A change the person can see: the workspace's following tab goes to its page (follow.ts).
+  const parse = (r: ToolResult) => { try { return JSON.parse(r.content[0]?.text ?? '') } catch { return null } }
+  return tools.map((t) => (FOLLOWED.has(t.name) ? { ...t, handler: async (a: any) => { const r = await t.handler(a); if (!r.isError) await follow(appId, sessionId ?? null, t.name, a ?? {}, parse(r)); return r } } : t))
 }

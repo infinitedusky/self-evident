@@ -10,6 +10,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { eq } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app } from './db/schema.js'
+import { mcpSession } from './follow.js'
 import { engineTools, READ_ONLY_TOOLS } from './tools.js'
 
 const DESTRUCTIVE = new Set(['cancel_project', 'backlog_drop', 'finish_todo'])
@@ -27,7 +28,8 @@ export async function handleMcp(appId: string, req: Request, port: number): Prom
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) return Response.json({ error: `no app ${appId}` }, { status: 404 })
   const server = new McpServer({ name: 'self-evident', version: '0.3.0' }, { instructions: instructions(a.name) })
-  for (const t of engineTools({ appId, actor: 'agent:claude-code', waitForPlanner: false })) {
+  const sessionId = await mcpSession(appId, new URL(req.url).searchParams.get('session'))
+  for (const t of engineTools({ appId, sessionId: sessionId ?? undefined, actor: 'agent:claude-code', waitForPlanner: false })) {
     server.registerTool(t.name, {
       description: t.description, inputSchema: t.shape,
       annotations: { readOnlyHint: READ_ONLY_TOOLS.has(t.name), destructiveHint: DESTRUCTIVE.has(t.name), openWorldHint: false },

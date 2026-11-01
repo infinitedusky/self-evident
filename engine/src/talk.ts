@@ -442,8 +442,8 @@ export async function watchTerminals() {
 }
 
 /** The command that continues this conversation in a terminal, with the engine's tools for its app. */
-export function terminalCommand(s: { cwd: string | null; agentSessionId: string | null; appId: string }) {
-  const mcp = JSON.stringify({ mcpServers: { 'self-evident': { type: 'http', url: `http://localhost:${ENGINE_PORT}/api/mcp/${s.appId}` } } })
+export function terminalCommand(s: { id: string; cwd: string | null; agentSessionId: string | null; appId: string }) {
+  const mcp = JSON.stringify({ mcpServers: { 'self-evident': { type: 'http', url: `http://localhost:${ENGINE_PORT}/api/mcp/${s.appId}?session=${s.id}` } } })
   return `cd ${JSON.stringify(s.cwd)} && claude --resume ${s.agentSessionId} --mcp-config '${mcp}'`
 }
 
