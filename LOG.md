@@ -1623,3 +1623,18 @@ file run together and only true overlaps re-run.
   it, the engine uses the app's only conversation that is carried on in a terminal; otherwise the dot is the accent
   colour.
 - **Not yet:** highlighting the item inside a page (the task row in a project). For now the whole page gets the ring.
+
+## Explore fast, build rigorous (Sandy, 2026-11-01: "when I use VS Code, I can just move really quickly … then I try and use our process and it feels super clunky")
+
+- Direction written into SHAPE.md ("Explore fast, build rigorous"): explore (ideas, mockups, prototypes) is fast
+  and loose, with the running thing beside the conversation; "this one" on a prototype writes the brief (and in
+  some workflows approves it); the build after that is automated and as rigorous as the workflow says.
+- The agent shows where it is: a strip at the top of the conversation (path, explore → build steps, what it's
+  doing now). Story first: `Components/AgentStrip`, five states with made-up data; not wired yet.
+- Asking a busy conversation something forks it: a new conversation opens beside it with the history, says what
+  it will focus on, and starts. Proposed: answers to its own asks, and Stop, still go to it; the fork works in its
+  own worktree from the first one's branch.
+- Open: what happens to the prototype's code (rebuilt from scratch today). Proposed: early, it's the starting
+  point; later, a reference.
+- Not doing: running tasks of a project at once with phases as the graph (Sandy: "I am worried that we are adding
+  too much complexity that won't help"). Tasks stay in order; phases within a task already run in parallel.
