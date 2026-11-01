@@ -410,6 +410,61 @@ Details and sources in `research/`.
   the middle: research, briefs, mockups, prototypes, approval and the parallel build, on our own Claude Code.
   The project and its tasks, in order, are in Self Evident (SE-1 to SE-10).
 
+## Explore fast, build rigorous (Sandy, 2026-11-01)
+
+> "When I use VS Code, I can just move really quickly … I just set things to dangerously skip permissions and just
+> build. … Then I try and use our process and it feels super clunky. And it also feels way too information dense."
+> "I should be able to move just as fast but with more information and more feedback, faster feedback within Self
+> Evident than I should be able to in VS Code. But I should also be able to pass it through a super rigorous
+> workflow depending on what I'm doing, who I'm doing it for."
+
+Direction, not yet built. The work has two halves with a hinge between them.
+
+- **Explore: fast and fun.** Ideas, mockups and prototypes. A conversation and the running thing beside it: no
+  approvals, no planner, no projects. The agent works in a throwaway worktree, so it can be trusted widely (asks
+  only before losing work). Self Evident beats VS Code here on feedback, not process: the prototype is live
+  beside the conversation, you change it by talking, and you compare versions side by side.
+- **The hinge: "this one."** You look at the prototype and pick it. The agent writes the brief from everything
+  gathered: the conversation, the mockups, the prototype. In some workflows **accepting the prototype approves
+  the brief**, so the hinge is one click.
+- **Build: automated and rigorous.** Brief → planner → phases → PR, with little of the person in the loop. How
+  rigorous depends on the workflow (who it's for, what stage the app is at; see "Modes" in the open questions).
+- **Calm screens.** Each screen answers one question. In explore, the default screen is the conversation and the
+  thing being made; the rest waits until asked for.
+
+### The agent shows where it is
+
+At the top of each conversation, a strip in the conversation's colour that always answers three questions (story
+first: `Components/AgentStrip`):
+
+1. **Where:** what the conversation is about, as a path (app › idea › prototype 2). After Linear's breadcrumbs.
+2. **Which step:** the explore → build terrain as a row, the current step lit (idea · mockups · prototype · brief
+   · build). After GitHub Actions' job steps.
+3. **Doing now:** one live line from the agent's latest tool call ("editing `app/sign-off/Page.tsx`", "running
+   the tests", "waiting on you: may I commit?"); idle, what it finished. After Cursor's and Claude Code's
+   "Reading… / Editing…".
+
+### Asking while it works forks
+
+> "If you ask it something when it's not done with what it's doing, it should fork … immediately fork and open up
+> a new chat right next to it and say where that's going to focus on, and then start working there."
+
+- A message sent to a busy conversation doesn't queue or interrupt: a **new conversation opens beside it**,
+  carrying the history so far (the Agent SDK forks a session: resume with `forkSession`), says in one line what it
+  will focus on, and starts. The first keeps going.
+- The fork has its own colour, and its strip names where it came from ("forked from *Parent sign-off*").
+- Proposed: an answer to the busy agent's own ask (a permission, a question it put) still goes to it, not a fork;
+  so does **Stop**.
+- Open: where the fork works. Proposed: its own worktree, branched from the first conversation's branch as it is
+  now, so the two never edit the same files under each other.
+
+### Open
+
+- **What happens to the prototype's code.** Today a prototype is thrown away and built again from scratch from
+  what it taught. Right for a team and production; clunky alone and early, when you'd throw away code you just
+  liked. Proposed: the stage decides. Early, the accepted prototype is the starting point and the build tidies it
+  and adds tests; later, it's a reference and the build starts clean.
+
 ## Open questions
 
 - **A strategy section in Ideate** (Sandy, 2026-10-26): a longer-term bet,
@@ -425,6 +480,8 @@ Details and sources in `research/`.
   hypotheses and baselines required. Proposed: the mode is per app, wedge by
   default. Open: whether one project can opt into the strict mode inside a
   wedge app.
+  Sharpened 2026-11-01 into explore vs. build ("Explore fast, build
+  rigorous" above): the modes differ mostly in how rigorous the build is.
 
 - Comps: who already does each part (`research/comps-*.md`).
 - The best route from idea to funding, and what evidence each idea should
