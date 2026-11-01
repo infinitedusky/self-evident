@@ -213,8 +213,8 @@ function TerminalNote({ command, onShow }: { command: string | null; onShow: () 
 
 /** How much the agent may do without asking in this conversation. Expensive always asks. */
 function AutoSelect({ sessionId }: { sessionId: string }) {
-  const [level, setLevel] = useState<'free' | 'cheap' | 'moderate'>('cheap')
-  useEffect(() => { engine.transcript(sessionId).then((t) => setLevel(t.session.autoApprove ?? 'cheap')).catch(() => {}) }, [sessionId])
+  const [level, setLevel] = useState<'free' | 'cheap' | 'moderate'>('moderate')
+  useEffect(() => { engine.transcript(sessionId).then((t) => setLevel(t.session.autoApprove ?? 'moderate')).catch(() => {}) }, [sessionId])
   return (
     <select className="auto-select" value={level} title="What it may do without asking; expensive always asks"
       onChange={(e) => { const v = e.target.value as 'free' | 'cheap' | 'moderate'; setLevel(v); void engine.setAuto(sessionId, v) }}>

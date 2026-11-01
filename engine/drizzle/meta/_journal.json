@@ -57,6 +57,13 @@
       "when": 1793473052117,
       "tag": "0007_terminal_handoff",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793499784812,
+      "tag": "0008_always_allow",
+      "breakpoints": true
     }
   ]
 }

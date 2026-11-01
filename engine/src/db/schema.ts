@@ -242,6 +242,7 @@ export const session = pgTable('session', { // a conversation with an agent: a t
   cwd: text('cwd'), branch: text('branch'), worktreePath: text('worktree_path'), // where the agent works: its own worktree of the app's repo, on its own branch
   title: text('title'), subject: text('subject'), subjectRef: jsonb('subject_ref'), // what the conversation is about, pinned on first contact: {projectId} | {issueId} | {ideaId} | {path}
   agentSessionId: text('agent_session_id'), // the SDK session, for --resume after a restart
+  alwaysAllow: jsonb('always_allow').$type<string[]>().notNull().default([]), // tools the person said Always to, in this conversation
   terminalSince: at('terminal_since'), // handed to the terminal (claude --resume): what's said there is copied in until the UI takes it back
   importedThrough: text('imported_through'), // the session file's last line already in the transcript
   status: text('status').notNull().default('open'), createdBy: text('created_by'), createdAt: createdAt(),

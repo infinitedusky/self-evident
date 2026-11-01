@@ -1595,3 +1595,14 @@ file run together and only true overlaps re-run.
 - **Also fixed on the way:** the live feed sent one page of a long replay and then one page per new event, so a
   screen starting from the top of the log never reached live events (#87). The command is `pnpm engine se talk share`,
   not `pnpm se …` (no root script).
+
+## The agent asks less (Sandy, 2026-10-31: "I keep having to say yes to different MCP commands, bash, etc.")
+
+- Every recent ask was **moderate** (commits in its own branch, the engine's own actions like converting an idea,
+  commands the engine doesn't recognise) in conversations set to **cheap**, the default for ordinary and brought-in
+  conversations. Prototypes already started at moderate.
+- **Now:** a new conversation starts at **up to moderate**: it works in its own worktree and branch, so moderate is
+  contained. **Expensive still always asks** (pushing main, deleting, spending).
+- **The level you pick sticks:** changing it in any conversation makes it where the next one starts (kept on the
+  workspace, `talkAutoApprove`).
+- **"Always" for a tool is kept** with the conversation (`session.always_allow`), so an engine restart doesn't ask again.

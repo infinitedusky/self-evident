@@ -89,6 +89,17 @@ function engineServer(appId: string, sessionId?: string) {
   })
 }
 
+/**
+ * Where a new conversation's auto-approve starts: the level last picked in any conversation (kept on the workspace), or
+ * up to moderate. A conversation works in its own worktree and branch, so moderate (commits there, the engine's own
+ * actions) is contained; expensive (pushing main, deleting, spending) always asks.
+ */
+async function defaultAutoApprove(appId: string): Promise<Risk> {
+  const [w] = await db.select().from(workspace).where(eq(workspace.id, await workspaceFor(appId)))
+  const picked = (w?.settings as { talkAutoApprove?: Risk } | undefined)?.talkAutoApprove
+  return picked && ['free', 'cheap', 'moderate'].includes(picked) ? picked : 'moderate'
+}
+
 async function workspaceFor(appId: string) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (a) return a.workspaceId
@@ -138,6 +149,7 @@ export async function startTalk(input: { appId: string; subjectRef?: SubjectRef;
   const { subject, subjectRef } = await subjectFrom(input.subjectRef)
   const [row] = await db.insert(session).values({
     id, appId: a.id, kind: 'talk', cwd: worktreePath, branch, worktreePath, subject, subjectRef, createdBy: input.actor ?? 'user', lastActiveAt: new Date(),
+    autoApprove: await defaultAutoApprove(a.id),
   }).returning()
   return row
 }
@@ -193,7 +205,7 @@ async function open(sessionId: string): Promise<Live> {
   const [a] = s.appId ? await db.select().from(app).where(eq(app.id, s.appId)) : []
   const setup = (a?.setup ?? {}) as { model?: string }
   const input = inputQueue()
-  const entry: Live = { q: null as unknown as Query, push: input.push, close: input.close, pending: new Map(), rated: new Map(), outages: 0, always: new Set(), busy: false, autoApprove: (s.autoApprove as Risk) ?? 'cheap', cwd: s.cwd! }
+  const entry: Live = { q: null as unknown as Query, push: input.push, close: input.close, pending: new Map(), rated: new Map(), outages: 0, always: new Set(s.alwaysAllow ?? []), busy: false, autoApprove: (s.autoApprove as Risk) ?? 'moderate', cwd: s.cwd! }
   const skills = await skillOptions('talk', s.cwd!, s.appId)
   const [proto] = await db.select().from(prototype).where(eq(prototype.sessionId, sessionId))
   const q = query({
@@ -234,7 +246,7 @@ async function open(sessionId: string): Promise<Live> {
           entry.pending.set(requestId, { resolve: resolveP, tool: toolName })
           setTimeout(() => { if (entry.pending.delete(requestId)) resolveP({ allow: false }) }, PERMISSION_TIMEOUT_MS)
         })
-        if (answer.always) entry.always.add(toolName)
+        if (answer.always) { entry.always.add(toolName); await db.update(session).set({ alwaysAllow: [...entry.always] }).where(eq(session.id, sessionId)) } // kept, so a restart doesn't ask again
         await record(sessionId, 'user', 'text', answer.allow ? `Allowed ${toolName}${answer.always ? ' for this conversation' : ''}.` : `Denied ${toolName}.`, { requestId, decision: answer.allow ? 'allow' : 'deny' })
         return answer.allow ? { behavior: 'allow', updatedInput: toolInput } : { behavior: 'deny', message: 'The person said no. Ask what they would prefer.' }
       },
@@ -340,13 +352,18 @@ async function waitAndResend(sessionId: string, entry: Live, error: string) {
   }, minutes * 60_000)
 }
 
-/** The person's threshold for this conversation: the agent acts without asking up to it. Expensive always asks. */
+/** The person's threshold for this conversation, and the next ones: the agent acts without asking up to it. Expensive always asks. */
 export async function setAutoApprove(sessionId: string, level: Risk) {
   if (!['free', 'cheap', 'moderate'].includes(level)) throw new PlanError('auto-approve is free, cheap or moderate; expensive always asks')
   const [row] = await db.update(session).set({ autoApprove: level }).where(eq(session.id, sessionId)).returning()
   if (!row) throw new PlanError(`no session ${sessionId}`)
   const l = live.get(sessionId)
   if (l) l.autoApprove = level
+  if (row.appId) { // and where the next conversation starts
+    const wsId = await workspaceFor(row.appId)
+    const [w] = await db.select().from(workspace).where(eq(workspace.id, wsId))
+    if (w) await db.update(workspace).set({ settings: { ...(w.settings as object), talkAutoApprove: level } }).where(eq(workspace.id, wsId))
+  }
   await record(sessionId, 'user', 'text', level === 'free' ? 'Auto-approve off: ask for everything.' : `Auto-approve up to ${level}.`, { autoApprove: level })
   return row
 }
@@ -508,7 +525,7 @@ export async function adoptTalk(input: { appId: string; cwd: string; agentSessio
   const from = turns.length > keep ? turns[turns.length - keep - 1].uuid : null
   const [row] = await db.insert(session).values({
     id: newId('session'), appId: a.id, kind: 'talk', cwd: input.cwd, branch: await branchOf(input.cwd), worktreePath: null,
-    subject: sessionTitle(file), agentSessionId: id, createdBy: input.actor ?? 'terminal', lastActiveAt: new Date(),
+    subject: sessionTitle(file), agentSessionId: id, createdBy: input.actor ?? 'terminal', lastActiveAt: new Date(), autoApprove: await defaultAutoApprove(a.id),
     terminalSince: new Date(), importedThrough: from,
   }).returning()
   if (from) await record(row.id, 'engine', 'handoff', `Brought in from the terminal; its last ${keep} of ${turns.length} turns are shown. The agent remembers all of it.`, { to: 'terminal' })

@@ -1,0 +1,1 @@
+ALTER TABLE "session" ADD COLUMN "always_allow" jsonb DEFAULT '[]'::jsonb NOT NULL;
