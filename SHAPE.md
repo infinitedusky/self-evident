@@ -434,10 +434,11 @@ Direction, not yet built. The work has two halves with a hinge between them.
 
 ### The agent shows where it is
 
-At the top of each conversation, its **name and nothing else**, after a dot in its colour (pulsing while it works,
-amber while it waits on you). A fork adds a fork icon whose popup says where it came from and what it's focusing on. Story
+At the top of each conversation, its **name and the stage it's at now** (one pill: Mockups, Prototype 2, Brief,
+Build), after a dot in its colour (pulsing while it works, amber while it waits on you). Nothing else. A fork adds a fork icon whose popup says where it came from and what it's focusing on. Story
 first: `Components/AgentStrip`. (Sandy, 2026-11-01, on a first version with a path, a row of steps and a live line:
-"still too info dense. It should have a name and that is it.")
+"still too info dense. It should have a name and that is it"; then: "it is missing the stage or focus of the
+conversation at this moment, that is the key info.")
 
 ### Asking while it works forks
 
