@@ -544,7 +544,8 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .agent-strip.working .dot { animation: talk-pulse 1.6s ease-in-out infinite; }
 .agent-strip.waiting .dot { background: var(--warn); }
 .agent-strip.idle .dot { background: transparent; border: 1.5px solid var(--talk); }
-.agent-strip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.agent-strip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; min-width: 0; }
+.agent-strip-stage { flex: none; margin-left: auto; padding: 2px 8px; border-radius: 999px; background: var(--talk); color: var(--surface); font-size: 11px; font-weight: 600; white-space: nowrap; }
 .agent-strip-fork { position: relative; flex: none; }
 .agent-strip-fork .icon-btn { display: inline-flex; color: var(--talk); padding: 3px; }
 .agent-strip-pop { display: none; position: absolute; top: calc(100% + 6px); right: 0; width: 240px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink-soft); font-size: 12px; line-height: 1.45; box-shadow: 0 4px 16px rgb(0 0 0 / .12); z-index: 5; }

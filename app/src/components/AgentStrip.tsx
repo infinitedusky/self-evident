@@ -1,13 +1,17 @@
 /**
  * The conversation's name at the top of it, after a dot in its colour (pulsing while it works, amber while it waits
- * on you), and nothing else (Sandy, 2026-11-01: "it should have a name and that is it"). A fork adds a fork icon whose popup
- * says where it came from and what it's on. Story first; not wired to the engine yet.
+ * on you), and the stage it's at now as one pill (Mockups, Prototype 2, Brief, Build): nothing else (Sandy,
+ * 2026-11-01: "it should have a name and that is it"; then "the stage or focus of the conversation at this moment,
+ * that is the key info"). A fork adds a fork icon whose popup says where it came from and what it's on. Story first;
+ * not wired to the engine yet.
  */
 
 export interface AgentStripProps {
   /** The conversation's colour (talkColor). */
   color: string
   name: string
+  /** The stage or focus right now, a word or two: Idea, Mockups, Prototype 2, Brief, Build. */
+  stage: string
   state: 'working' | 'waiting' | 'idle'
   /** A fork: the conversation it came from, and what it's focusing on. */
   fork?: { from: string; focus: string }
@@ -15,11 +19,12 @@ export interface AgentStripProps {
 
 const STATE = { working: 'working', waiting: 'waiting on you', idle: 'idle' }
 
-export function AgentStrip({ color, name, state, fork }: AgentStripProps) {
+export function AgentStrip({ color, name, stage, state, fork }: AgentStripProps) {
   return (
     <div className={`agent-strip ${state}`} style={{ ['--talk' as string]: color }} data-component="AgentStrip">
       <span className="dot" role="img" aria-label={STATE[state]} title={STATE[state]} />
       <strong className="agent-strip-name" title={name}>{name}</strong>
+      <span className="agent-strip-stage" title="The stage it's at now">{stage}</span>
       {fork && (
         <span className="agent-strip-fork">
           <button className="icon-btn" aria-label="Forked: where from" aria-describedby="fork-info">
