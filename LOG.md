@@ -1638,3 +1638,36 @@ file run together and only true overlaps re-run.
   point; later, a reference.
 - Not doing: running tasks of a project at once with phases as the graph (Sandy: "I am worried that we are adding
   too much complexity that won't help"). Tasks stay in order; phases within a task already run in parallel.
+
+## Tickets first (Sandy, 2026-11-04: "a ticket is the unit of work that everything starts with … for us, by the time we get a ticket, it's complete")
+
+After reading Roger Gonzalez's tkt and rogs-skills (`research/comps-tkt.md`). Three decisions, the last two asked
+and answered the same day:
+
+- **One noun.** Ideas fold into tasks. A ticket is born in Triage with a title and a soft body (Problem, Soft
+  scope, Acceptance criteria, Dependencies), is reviewed and edited on itself, and approving its brief is the hinge.
+  Written into SHAPE.md (the loop's step 4, and Decided).
+- **The review half runs Roger's skills.** review-pr in a fresh session, verify-pr's evidence and finish-ticket's
+  merge gates, run from our executor on our project PRs, with the engine writing `docs/agents/*.md` into each app's
+  repo from its settings. Our planner, scheduler and builder stay.
+- **The plan is tickets.** Project "Tickets first" in the Self Evident app, its tickets in Triage, blockers first,
+  each a tracer bullet in Roger's ticket shape. Sandy reviews and edits them there; that is the review loop we are
+  building, done by hand first.
+
+The phases, as the tickets' order:
+
+1. **The ticket is the unit:** born with a title; comments on a ticket; relations between tickets; search before
+   creating; the review loop (the agent proposes criteria, splits and edges as a preview you accept); ideas fold in.
+2. **Modes:** manual, auto, auto-plan, yolo per ticket; a feature table per app with hard stops.
+3. **The review half:** status lines as the contract between agents and the engine (Roger's lines verbatim, pinned
+   by fixtures); `docs/agents/` written by the engine; Self Evident as a tracker for the rogs skills (add search,
+   comment, relate, attach over MCP); a PR body with a human verification procedure; independent review at the exact
+   head; verification with evidence; merge only on the person's word, one at a time, confirmations carrying over
+   clean merges.
+4. **Small things from tkt:** `se doctor`, drop, stats (time waiting on you), a hold during a GitHub incident, wait.
+
+Not taken: tkt itself as the runner (herdr, worktrunk, one machine), and anything that would replace the
+scheduler or the prototype before the plan.
+
+Next: Sandy reviews the tickets in the UI; the first to build is "A ticket is born with a title", which changes no
+schema.

@@ -105,16 +105,18 @@ is working.
    idea can't be tested well ("you have 40 users; here's the best we can do").
 3. **Decide on evidence.** On the look-by date the findings say yes, no or
    not yet. Most ideas die quietly here.
-4. **Ideas, tasks, projects** (2026-10-29). An idea is exploration, even a
-   single sentence. Research, mockups, a prototype and a rough draft of a
-   brief can all be done on it without committing. Converting it, the agent
-   uses whatever exists to decide whether it becomes a task or a project. A
-   task can also be made directly. A task means "we're going to build this":
-   it has a brief, and it can't be completed until the brief is approved. A
-   project holds tasks; it has no brief of its own. Research, mockups and
-   prototypes can be done on any of the three, at any time; workflows can
-   require steps or an order, the way Jira's do. The prototype is the agent's
-   quick, working attempt and a key artifact for the build.
+4. **The ticket** (2026-11-04; replaces "Ideas, tasks, projects" of
+   2026-10-29). One noun from the first sentence to the merge: a ticket, which
+   we call a task. It is born fuzzy, in Triage, with a title and whatever is
+   known: why, a soft scope, acceptance criteria, what it waits on. Then it is
+   reviewed and edited on itself for as long as that takes: research, mockups,
+   a prototype, and the agent's proposals to sharpen its criteria, split it
+   into thinner tickets or relate it to others, each accepted or not. Approving
+   its brief is the hinge: from there it is work, planned and built. A project
+   holds tickets in order and has no brief of its own. Nothing is converted;
+   the record you started with is the record that ships. Workflows can still
+   require steps or an order, the way Jira's do. (Roger Gonzalez's tkt and
+   rogs-skills showed this shape; `research/comps-tkt.md`.)
 5. **Factory.** Every chunk that isn't waiting on another is built at once,
    each as a PR. Only a blocked chunk costs anything.
 6. **Demonstrate.** Each PR comes with a demonstration: the real app running
@@ -189,6 +191,15 @@ Details and sources in `research/`.
 
 - **Task, not issue** (Sandy, 2026-10-29): we say task and sub-task; connecting Linear maps them to its issues and
   sub-issues. Code and the database keep "issue".
+- **One noun: the ticket, from fuzzy to merged** (Sandy, 2026-11-04, after watching Roger Gonzalez use tkt: "a
+  ticket is the unit of work that everything starts with … it gets reviewed and approved, and then eventually it
+  gets worked on. Whereas for us … by the time we get a ticket, it's complete."). Ideas fold into tasks: a task
+  starts in Triage with a title, is reviewed and refined on itself, and approving its brief is the hinge. The idea
+  table's hypothesis, baseline, measures and evidence stay as the ticket's own sections. Replaces "an idea is
+  exploration; a task means we're going to build this" (2026-10-29). Also decided then: the rigorous build half
+  (independent review, verification with evidence, merge gates at the exact head) runs Roger's MIT lifecycle
+  skills from our executor rather than stages of our own; and the plan for all of it is tickets in Self Evident,
+  project "Tickets first" (LOG.md, "Tickets first").
 - **The loop's stages** (Sandy, 2026-10-29): Observe · Learn · Ideate (ideas and their research) · Plan
   (tasks: research, brief, mockup, prototype, in any order unless a workflow sets one) · Build (including the
   checks a build is held to). The rail lists only these stages; projects, tasks and the steps are inside them.
@@ -365,7 +376,7 @@ Details and sources in `research/`.
   | App | Team (its own statuses, cycles, triage) |
   | Goals (inferred on the Summary) | Initiative |
   | Near-term goals | Cycle |
-  | Idea in the inbox | Triage issue; its hypothesis and evidence stay ours |
+  | Ticket in Triage (until 2026-11-04: an idea in the inbox) | Triage issue; its hypothesis and evidence stay ours |
   | Project | Project (milestones, documents, updates) |
   | Task | Issue: one branch, one PR, linked by Linear's GitHub integration |
   | Phase | Sub-issue, delegated to the builder agent |
