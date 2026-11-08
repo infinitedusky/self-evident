@@ -38,6 +38,9 @@ const MENU: { label: string; tab: Tab }[] = [
   { label: 'Storybook', tab: { kind: 'storybook' } }, { label: 'Settings', tab: { kind: 'page', path: '/settings' } },
 ]
 
+/** A task's page, by its id (/tasks/iss_…) or its identifier (/tasks/SE-12): the engine knows both. */
+const TASK_PATH = /^\/tasks\/(iss_[A-Za-z0-9]+|[A-Za-z][A-Za-z0-9]*-[1-9][0-9]*)(?:[/?#]|$)/
+
 /** A better name than the path gives, once the engine says: the project's, the task's. */
 async function nameFor(tab: Tab): Promise<string | null> {
   const clip = (s: string) => (s.length > 36 ? `${s.slice(0, 35)}…` : s)
@@ -46,17 +49,17 @@ async function nameFor(tab: Tab): Promise<string | null> {
   if (tab.kind !== 'page') return null
   const project = tab.path.match(/^\/projects\/((?:plan|proj)_[A-Za-z0-9_-]+)/)?.[1]
   if (project) return engine.graph(project).then((g) => clip(g.project.name)).catch(() => null)
-  const issue = tab.path.match(/^\/tasks\/([A-Za-z0-9_]+)/)?.[1]
+  const issue = tab.path.match(TASK_PATH)?.[1]
   if (issue) return engine.issue(issue).then((i) => clip(`${i.identifier} ${i.title}`)).catch(() => null)
   return null
 }
 
 /** A project's or a task's page: it belongs to one app. */
-const ownedPath = (path: string) => path.match(/^\/projects\/((?:plan|proj)_[A-Za-z0-9_-]+)/)?.[1] ? 'project' : path.match(/^\/tasks\/(iss_[A-Za-z0-9_]+)/) ? 'task' : null
+const ownedPath = (path: string) => path.match(/^\/projects\/((?:plan|proj)_[A-Za-z0-9_-]+)/)?.[1] ? 'project' : path.match(TASK_PATH) ? 'task' : null
 async function ownerOf(path: string): Promise<string | null> {
   const project = path.match(/^\/projects\/((?:plan|proj)_[A-Za-z0-9_-]+)/)?.[1]
   if (project) return engine.graph(project).then((g) => g.app.id).catch(() => null)
-  const issue = path.match(/^\/tasks\/(iss_[A-Za-z0-9_]+)/)?.[1]
+  const issue = path.match(TASK_PATH)?.[1]
   if (issue) return engine.issue(issue).then((i) => i.appId).catch(() => null)
   return null
 }
