@@ -200,6 +200,16 @@ Details and sources in `research/`.
   (independent review, verification with evidence, merge gates at the exact head) runs Roger's MIT lifecycle
   skills from our executor rather than stages of our own; and the plan for all of it is tickets in Self Evident,
   project "Tickets first" (LOG.md, "Tickets first").
+- **tkt is the runner; Self Evident is the tracker and the window** (Sandy, 2026-11-07, after the spike: one
+  ticket from `new` to merged in 19 minutes on this Mac, every stage a rogs skill; LOG.md, "tkt is the runner").
+  Self Evident is where a ticket is born, reviewed and watched; once its brief is approved, tkt builds it: a
+  worktree, a herdr tab, start-ticket → work-ticket → review-pr in a fresh session → the person's verification →
+  finish-ticket, on whichever harness and model the preset says (Claude Code, or OpenCode for DeepSeek, GPT and the
+  rest). The skills read and write the ticket through our API: comments one per heading (the plan, the handoff,
+  the review, the completion), search, lookup by identifier, state. tkt is a hard dependency we do not babysit:
+  when it fails, we show its own error and say run `tkt doctor`. The graph (scheduler, sub-tasks, file claims)
+  stays in the code, parked: it is for an unattended loop we are not running. Replaces "runs Roger's MIT lifecycle
+  skills from our executor" above.
 - **The loop's stages** (Sandy, 2026-10-29): Observe · Learn · Ideate (ideas and their research) · Plan
   (tasks: research, brief, mockup, prototype, in any order unless a workflow sets one) · Build (including the
   checks a build is held to). The rail lists only these stages; projects, tasks and the steps are inside them.

@@ -1671,3 +1671,53 @@ scheduler or the prototype before the plan.
 
 Next: Sandy reviews the tickets in the UI; the first to build is "A ticket is born with a title", which changes no
 schema.
+
+## tkt is the runner (Sandy, 2026-11-07: "I really want to be able to use self evident to create and complete tickets … a good amount of the graph execution concept is not all that helpful")
+
+Saturday night, a new engagement on Monday. Sandy's reading: the graph (scheduler over sub-tasks, file claims) is
+for a fully autonomous loop we are not trying to run; what matters is creating a ticket in Self Evident and
+completing it. Roger's point that tkt exists as a runner so he can mix DeepSeek, GPT and Claude (OpenCode is the
+second harness; presets pair a harness and a model; a reviewer from another vendor reviews each plan) settled the
+runner question: we cannot match that on the Agent SDK, which is Claude only, without rebuilding tkt.
+
+**The spike, same night.** Go 1.27 → tkt v0.21.0 built from GitLab (its releases sit behind a Cloudflare challenge),
+worktrunk 0.81, herdr 0.9.5, gh 2.103, the rogs skills installed globally. A throwaway repo (`~/code/sandbox/tkt-scratch`,
+`infinitedusky/tkt-scratch`, private) with `docs/agents/` composed from his seeds, local-markdown tickets, every
+feature off, watch autostart off. Ticket SCR-1 "Add slugify to the string helpers" went `new` → merged in 19
+minutes: start-ticket asked one real question (accents), planned, `AWAITING_APPROVAL`; approved; work-ticket
+committed, created the repo, pushed, opened PR #1, `READY_FOR_REVIEW`; review-pr in a fresh session posted a review
+brief with edge-case probes, `READY_FOR_HUMAN`; the six human verification steps passed; finish-ticket merged
+pinned to the reviewed head and moved the ticket to done; `tkt done` removed the worktree. The ticket file ended
+with three comments: Approved implementation plan, Implementation handoff, Completion.
+
+**What we learned.** tkt checks two environment variables (`HERDR_ENV`, `HERDR_WORKSPACE_ID`) and reaches herdr
+over its socket, so the engine can drive it from outside a pane: resume, approve, review, merge and done all ran
+from here. Three of four stumbles were "which tab am I in" (the agent's tab is for its dialogs only; commands go in
+your own), which is the argument for Self Evident being the window. Questions mid-plan are the one thing still in
+the tab; herdr alerts on them. No review bot and no CI worked with `bot_wait = "0s"` and the "no CI configured"
+line.
+
+**Decided.**
+- tkt is the runner for the build half; Self Evident is where a ticket is born, reviewed and watched (SHAPE.md,
+  Decided). The graph stays in the code, parked.
+- "Tracker" is Roger's word for where tickets live. Tomorrow they live in Self Evident's database instead of a
+  folder of markdown files, and the skills read and write them through our API. Comments are the one real
+  prerequisite (the skills write the plan, the handoff, the review and the completion as comments, one per heading,
+  and there is no gap rule for "no comments at all"); search is the duplicate check; lookup by identifier and a
+  state filter round it out.
+- tkt is a hard dependency we do not babysit. No settings screen, no registry of presets, no plugin bookkeeping
+  for the skills: when tkt fails, show its own error (its errors carry a hint and a `--json` form) and say run
+  `tkt doctor`.
+- The plan shrinks: SE-18, 19, 21, 22, 23 and 24 are what tkt and the skills already do, to drop; SE-17 is
+  surfacing tkt's modes; SE-20 is the centre, "Self Evident is the tracker for tkt", its brief approved tonight.
+
+**Built tonight** (branch `tracker-for-tkt`): the `issue_comment` table (one per issue and heading; the same
+heading again replaces), `GET`/`POST /api/issues/:id/comments`, the `comment_task` tool, the `issue.commented`
+event; `GET /api/issues/:id` by identifier (`SE-12`) as well as id, and `PATCH` and `/state` the same; `?q=` over
+title, description and brief, open and closed; `?state=a,b`; the ticket page's "On the ticket" panel, story first
+(Pages/TaskPage › Commented); and `docs/tracker-self-evident.md`, the tracker guide in Roger's format, plain HTTP
+against the engine so it works from any harness without MCP wiring per worktree.
+
+Next: point tkt-scratch's `docs/agents/issue-tracker.md` at Self Evident and run a ticket through; then the client
+repo on Monday morning: add it as an app, `/setup-rogs` with Self Evident as the tracker, first tickets. Then
+the buttons: start, approve, review, merge from the ticket page, calling tkt.
