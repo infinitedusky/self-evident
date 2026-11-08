@@ -25,7 +25,7 @@ import { lastSync, startSync, syncApp } from './github.js'
 import { addChecklist, draftChecklist, completeTodo, createTodo, dropTodo, getTodo, itemToTodo, listTodos, removeChecklistItem, reopenTodo, setChecklistItem, updateTodo } from './todos.js'
 import { addIdea, addItems, dropItem, listBacklog, markDuplicate, promote, reopenItem } from './backlog.js'
 import { createCycle, createInitiative, listCycles, listInitiatives, updateInitiative } from './goals.js'
-import { changeState, createIssue, listIssues, reorder, updateIssue } from './issues.js'
+import { changeState, commentOnIssue, createIssue, listComments, listIssues, reorder, resolveIssue, updateIssue } from './issues.js'
 import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
 import { startStorybook, stopStorybooks, storybookStatus } from './storybook.js'
@@ -329,7 +329,9 @@ export function buildApp(bus: EventBus) {
     if (!a) return c.json({ error: 'app is required: one app at a time' }, 400)
     if (c.req.query('view') === 'code') return c.json(await listCodeIssues(a))
     const project = c.req.query('project')
-    return c.json(await listIssues(a, { kind: c.req.query('kind') as 'code' | 'todo' | undefined, projectId: project === 'none' ? null : project, topLevel: c.req.query('top') === '1', open: c.req.query('open') === '1' }))
+    const states = c.req.query('state')?.split(',').map((s) => s.trim()).filter(Boolean) as IssueState[] | undefined
+    if (states?.some((s) => !ISSUE_STATES.includes(s))) return c.json({ error: `state must be among ${ISSUE_STATES.join(', ')}` }, 400)
+    return c.json(await listIssues(a, { kind: c.req.query('kind') as 'code' | 'todo' | undefined, projectId: project === 'none' ? null : project, topLevel: c.req.query('top') === '1', open: c.req.query('open') === '1', states, q: c.req.query('q') }))
   })
   api.post('/issues', async (c) => {
     const { appId, ...body } = await c.req.json()
@@ -339,15 +341,25 @@ export function buildApp(bus: EventBus) {
     } catch (err) { return planError(c, err) }
   })
   api.post('/issues/reorder', async (c) => { const { ids } = await c.req.json<{ ids: string[] }>(); try { return c.json(await reorder(ids ?? [], 'user')) } catch (err) { return planError(c, err) } })
-  api.get('/issues/:id', async (c) => { try { return c.json(await issueDetail(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
-  api.patch('/issues/:id', async (c) => { try { return c.json(settle(await updateIssue(c.req.param('id'), await c.req.json(), 'user'))) } catch (err) { return planError(c, err) } })
+  // One issue, by its id or its identifier (SE-12): the identifier is what a ticket is called everywhere outside.
+  api.get('/issues/:id', async (c) => { try { return c.json(await issueDetail((await resolveIssue(db, c.req.param('id'))).id)) } catch (err) { return planError(c, err, 404) } })
+  api.patch('/issues/:id', async (c) => { try { return c.json(settle(await updateIssue((await resolveIssue(db, c.req.param('id'))).id, await c.req.json(), 'user'))) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/state', async (c) => {
     const { state, reason } = await c.req.json<{ state: IssueState; reason?: string }>()
     if (!ISSUE_STATES.includes(state)) return c.json({ error: `state must be one of ${ISSUE_STATES.join(', ')}` }, 400)
     try {
-      if (state === 'done') await guardComplete(db, c.req.param('id'))
-      return c.json(settle(await changeState(c.req.param('id'), state, { actor: 'user', reason })))
+      const { id } = await resolveIssue(db, c.req.param('id'))
+      if (state === 'done') await guardComplete(db, id)
+      return c.json(settle(await changeState(id, state, { actor: 'user', reason })))
     } catch (err) { return planError(c, err) }
+  })
+  // Comments: what is written on a ticket as it moves (the plan, the handoff, the review, the completion), one per
+  // heading; the same heading again replaces it. author names who wrote it (a skill, an agent, a person); else user.
+  api.get('/issues/:id/comments', async (c) => { try { return c.json(await listComments(db, (await resolveIssue(db, c.req.param('id'))).id)) } catch (err) { return planError(c, err, 404) } })
+  api.post('/issues/:id/comments', async (c) => {
+    const body = await c.req.json<{ heading?: string; body: string; author?: string }>()
+    const author = typeof body.author === 'string' && body.author.trim() ? body.author.trim().slice(0, 60) : 'user'
+    try { return c.json(await commentOnIssue((await resolveIssue(db, c.req.param('id'))).id, { heading: body.heading, body: body.body }, author), 201) } catch (err) { return planError(c, err) }
   })
   api.get('/projects', async (c) => { const a = c.req.query('app'); return a ? c.json(await listProjects({ all: c.req.query('all') === '1', appId: a })) : c.json({ error: 'app is required: one app at a time' }, 400) })
   api.post('/projects', async (c) => {

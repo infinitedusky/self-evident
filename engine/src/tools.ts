@@ -13,7 +13,7 @@ import { appendEvent, eventsSince } from './events.js'
 import { addIdea, addItems, dropItem, markDuplicate, promote } from './backlog.js'
 import { createCycle, createInitiative, listCycles, listInitiatives, updateInitiative } from './goals.js'
 import { createIdea, listIdeas } from './ideas.js'
-import { changeState, createIssue, listIssues, reorder, updateIssue } from './issues.js'
+import { changeState, commentOnIssue, createIssue, listIssues, reorder, updateIssue } from './issues.js'
 import { now } from './now.js'
 import { convertIdea, guardComplete, guardDirect, listWorkflows, setStep, stepsOf, type Subject } from './work.js'
 import { STEPS } from './steps.js'
@@ -81,6 +81,9 @@ export function engineTools(opts: ToolScope): EngineTool[] {
       def('set_task_state', `Move a task of this app (issueId: the task's id) to a state (${ISSUE_STATES.join(', ')}). Canceling needs the reason. A code task's state otherwise follows its sub-tasks; use this for what the engine cannot see.`, {
         issueId: z.string(), state: z.enum(ISSUE_STATES), reason: z.string().optional(),
       }, async (a) => tryIt(async () => { await ownIssue(a.issueId); if (a.state === 'done') await guardComplete(db, a.issueId); const out = await changeState(a.issueId, a.state, { actor, reason: a.reason }); void runner.dispatch(); return out })),
+      def('comment_task', 'Comment on a task of this app (issueId: the task\'s id), Markdown. The heading is the comment\'s first line (## Implementation plan, ## Review, ## Completion); the same heading again replaces that comment, so a task carries one current plan, one handoff, one review, not their drafts.', {
+        issueId: z.string(), body: z.string(), heading: z.string().optional().describe('else the body\'s first line'),
+      }, async (a) => tryIt(async () => { await ownIssue(a.issueId); return commentOnIssue(a.issueId, { heading: a.heading, body: a.body }, actor) })),
       def('reorder_tasks', 'Put tasks in this order (their ids): a project\'s top-level tasks (the order they are built in), or one parent\'s sub-tasks.', { ids: z.array(z.string()) },
         async (a) => tryIt(async () => { for (const id of a.ids) await ownIssue(id); return reorder(a.ids, actor) })),
       def('backlog_add', 'Add to a project\'s backlog: things the project must not forget (one line each, optional detail), or an idea of this app (ideaId). Use it whenever the person mentions something the project should cover.', {

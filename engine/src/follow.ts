@@ -10,7 +10,7 @@ import { appendEvent } from './events.js'
 
 export interface Followed { path: string; projectId?: string | null }
 
-const TASK = new Set(['update_task', 'set_task_state', 'plan_task'])
+const TASK = new Set(['update_task', 'set_task_state', 'plan_task', 'comment_task'])
 const BACKLOG = new Set(['backlog_take', 'backlog_duplicate', 'backlog_drop', 'backlog_todo'])
 const PROJECT = new Set(['backlog_add', 'start_project', 'pause_project', 'resume_project', 'cancel_project'])
 const TODO = new Set(['create_todo', 'update_todo', 'check_item', 'finish_todo'])

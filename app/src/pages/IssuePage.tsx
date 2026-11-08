@@ -81,6 +81,7 @@ export function IssuePage() {
           <section className="panel"><Brief description={i.description} brief={i.brief} open={!i.description} /></section>
           {code && <Steps i={i} />}
           <SubTasks i={i} />
+          <Comments i={i} />
           <Planner i={i} />
         </>
       )}
@@ -123,6 +124,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
                 <Link to={`/settings/apps/${i.appId}/workflows`}>Configure the rules</Link>
               </p>
             </section>
+            <Comments i={i} />
             <Planner i={i} />
           </>
         )}
@@ -198,6 +200,32 @@ function SubTasks({ i, plan }: { i: IssueDetail; plan?: React.ReactNode }) {
           ))}
         </ol>
       )}
+    </section>
+  )
+}
+
+/**
+ * What was written on the ticket as it moved: the plan, the handoff, the review's verdict, the completion, by whoever
+ * worked it (a skill in tkt, our agent, a person). One per heading, the latest write of each, oldest first. A body
+ * that starts with its own heading shows it once.
+ */
+function Comments({ i }: { i: IssueDetail }) {
+  if (!i.comments?.length) return null
+  const bodyOf = (c: IssueDetail['comments'][number]) => {
+    const [first, ...rest] = c.body.split('\n')
+    return first.replace(/^#+\s*/, '').trim() === c.heading ? rest.join('\n').trim() : c.body
+  }
+  return (
+    <section className="panel">
+      <h2>On the ticket <Badge>{i.comments.length}</Badge></h2>
+      <ol className="list comments">
+        {i.comments.map((c) => (
+          <li key={c.id} className="comment">
+            <div className="comment-head"><b>{c.heading}</b><span className="faint"> · {c.author}, {new Date(c.updatedAt).toLocaleString()}</span></div>
+            <div className="md comment-body"><Markdown remarkPlugins={[remarkGfm]}>{bodyOf(c)}</Markdown></div>
+          </li>
+        ))}
+      </ol>
     </section>
   )
 }

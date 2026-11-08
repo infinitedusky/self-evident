@@ -33,6 +33,8 @@ export const SubTaskBuilding: Story = { parameters: at('iss_sample5') }
 export const SubTaskAsPlanned: Story = { parameters: at('iss_sample6') }
 /** A task in no project yet. */
 export const InNoProject: Story = { parameters: at('iss_sample16') }
+/** A ticket tkt built, done: what the skills wrote on it as it moved (the plan, the handoff, the completion), one per heading. */
+export const Commented: Story = { parameters: at('iss_sample22') }
 /** A failed build, with Retry. */
 export const BuildFailed: Story = { parameters: at('iss_sample5'), beforeEach: withEngine({ issueDetails: { ...sampleData.issueDetails,
   iss_sample5: { ...issueDetails.iss_sample5, build: { status: 'failed', attempt: 3, heldReason: 'landing failed at test: tests failed (exit 1)' } } } }) }

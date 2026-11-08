@@ -35,6 +35,12 @@ a.card:hover { border-color: var(--accent); }
 .list { list-style: none; margin: 0; padding: 0; }
 .list li { padding: 9px 0; border-top: 1px solid var(--line); }
 .list li:first-child { border-top: 0; }
+/* Comments on a ticket: a heading line, then the body as it was written */
+.comments .comment { padding: 12px 0; }
+.comments .comment-head { font-size: 14px; margin-bottom: 4px; }
+.comments .comment-body { font-size: 14px; }
+.comments .comment-body > :first-child { margin-top: 0; }
+.comments .comment-body > :last-child { margin-bottom: 0; }
 .empty { border: 1px dashed var(--line); border-radius: var(--radius); padding: 14px; color: var(--ink-faint); }
 
 .providers { display: grid; gap: 12px; }
