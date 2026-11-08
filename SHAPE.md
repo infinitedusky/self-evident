@@ -210,6 +210,17 @@ Details and sources in `research/`.
   when it fails, we show its own error and say run `tkt doctor`. The graph (scheduler, sub-tasks, file claims)
   stays in the code, parked: it is for an unattended loop we are not running. Replaces "runs Roger's MIT lifecycle
   skills from our executor" above.
+- **tkt is switched on per app, as an integration** (Sandy, 2026-11-08: "there are two things that we're talking
+  about at the same time … we don't need to configure tkt to make sure it works if we use it … that is very
+  different than saying for any specific project we can choose to use tkt or not, and for that we do need an
+  integration"). Two decisions, kept apart. Not babysitting: Self Evident never installs, configures or repairs
+  tkt; its check repeats tkt's own words and says get tkt working, and the fixing happens in the terminal.
+  Choosing: under an app's Integrations, tkt is a runner switched on or off (an integration, not a plugin: plugins
+  here are Claude Code plugins for the factory's own agents). On, tkt builds the app's tickets and Self Evident
+  hands none to its own planner; the ticket page says "run by tkt"; tkt's lifecycle (start, approve, review,
+  merge) is listed where Linear's actions are, to become buttons on the ticket page. Self Evident's one piece of
+  the handshake is the tracker guide, the repo's `docs/agents/issue-tracker.md` filled with the app's id, key and
+  URLs, on the app's tkt page and at `GET /api/apps/:id/tracker-guide`.
 - **The loop's stages** (Sandy, 2026-10-29): Observe · Learn · Ideate (ideas and their research) · Plan
   (tasks: research, brief, mockup, prototype, in any order unless a workflow sets one) · Build (including the
   checks a build is held to). The rail lists only these stages; projects, tasks and the steps are inside them.
