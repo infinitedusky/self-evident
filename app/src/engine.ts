@@ -83,7 +83,10 @@ export interface Graph {
 export interface GraphFile { path: string; subIssues: string[]; heldBy: string | null }
 export interface ProjectSummary { id: string; name: string; status: string; createdAt: string; ideaId?: string | null; app: { id: string; name: string } | null; issueCount: number; backlogOpen?: number; builds: Record<string, number> }
 export interface IssueRow { id: string; identifier: string; number: number; title: string; description: string | null; state: IssueState; sortOrder: number; priority: number; project: { id: string; name: string; status: string } | null; builds: Record<string, number>; planning: string | null }
+/** What was written on a ticket as it moved: one comment per heading (the plan, the handoff, the review), the latest write of each. */
+export interface IssueComment { id: string; issueId: string; heading: string; body: string; author: string; createdAt: string; updatedAt: string }
 export interface IssueDetail extends Issue {
+  comments: IssueComment[]
   project: { id: string; name: string; status: string } | null; parent: { id: string; identifier: string; title: string } | null
   build: { status: BuildStatus; attempt: number; heldReason: string | null } | null; questions: Question[]; decisions: Decision[]
   relations: { issueId: string; relatedIssueId: string; type: 'blocks' | 'related' | 'duplicate' }[]
@@ -285,7 +288,7 @@ export const engine = {
 
 export const EVENT_TYPES = [
   'project.created', 'project.started', 'project.landed', 'project.cleaned', 'project.cancelled', 'project.paused', 'project.resumed', 'project.described',
-  'issue.created', 'issue.updated', 'issue.state', 'issue.reordered', 'issue.cleared', 'issue.planning', 'issue.planned', 'issue.plan_failed', 'issue.plan_waiting',
+  'issue.created', 'issue.updated', 'issue.state', 'issue.reordered', 'issue.cleared', 'issue.planning', 'issue.planned', 'issue.plan_failed', 'issue.plan_waiting', 'issue.commented',
   'question.asked', 'question.answered', 'initiative.created', 'initiative.updated', 'cycle.created',
   'talk.message', 'talk.permission', 'talk.result', 'idea.created', 'idea.converted', 'step.updated', 'brief.approved', 'brief.unapproved', 'workflow.saved', 'workflow.used', 'engine.hold', 'engine.resumed',
   'pr.merged', 'pr.closed', 'pr.retargeted', 'pr.review', 'pr.checks', 'review.requested', 'project.caught_up', 'project.behind_main',

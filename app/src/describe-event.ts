@@ -13,6 +13,7 @@ export function describeEvent(e: Event): string {
     case 'project.created': return `${p.name ?? p.title} · ${p.issues ?? p.tasks} task(s)`
     case 'issue.created': return `${p.identifier ?? `#${p.number}`} ${p.title}`
     case 'issue.state': return `${p.identifier ?? ''} ${p.title ?? ''}: ${p.from} → ${p.to}${p.reason ? ` (${p.reason})` : ''}`
+    case 'issue.commented': return `${p.identifier ?? ''} ${p.title ?? ''}: ${p.replaced ? 'updated' : 'commented'} "${p.heading ?? ''}"`
     case 'build.status': return `${p.identifier ?? ''} ${p.from} → ${p.to}`
     case 'build.held': return p.reason
     case 'issue.planning': return `planning ${p.identifier ?? `#${p.number}`}`

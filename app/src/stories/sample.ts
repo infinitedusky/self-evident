@@ -129,13 +129,23 @@ export const issueRows: IssueRow[] = [
 function pick(i: Issue) { return { id: i.id, identifier: i.identifier, number: i.number, title: i.title, description: i.description, state: i.state, sortOrder: i.sortOrder, priority: i.priority } }
 
 const detailOf = (i: Issue, extra: Partial<IssueDetail> = {}): IssueDetail => ({
-  ...i, project: { id: 'proj_checkout', name: 'One-page checkout (sample)', status: 'running' }, parent: null, build: null, questions: [], decisions: [], relations: [], subIssues: [], steps: [], stepsAttempt: null, ...extra,
+  ...i, project: { id: 'proj_checkout', name: 'One-page checkout (sample)', status: 'running' }, parent: null, build: null, questions: [], decisions: [], relations: [], subIssues: [], steps: [], stepsAttempt: null, comments: [], ...extra,
 })
+/** Comments as the tkt skills write them on a ticket they built (sample): one per heading, the latest of each. */
+const commentsOnTicket = [
+  { id: 'cmt_sample1', issueId: 'iss_sample22', heading: 'Approved implementation plan', author: 'start-ticket', createdAt: '2026-11-07T23:36:00Z', updatedAt: '2026-11-07T23:40:00Z',
+    body: '## Approved implementation plan\n\nOne pure `slugify` in `src/strings.js`, beside `capitalize`, with its tests. Strip accents (NFKD, drop marks), lower-case, each run of other characters becomes one hyphen, trim the ends. No new dependency.\n\n**Decisions:** accents are stripped (asked 2026-11-07). **Risk:** low: a new function, nothing changes.' },
+  { id: 'cmt_sample2', issueId: 'iss_sample22', heading: 'Implementation handoff', author: 'work-ticket', createdAt: '2026-11-07T23:52:00Z', updatedAt: '2026-11-07T23:52:00Z',
+    body: '## Implementation handoff\n\nPull request #1 at head `5f984b9` (sample). `npm test`: 5 pass, 0 fail. No CI configured.\n\nStatus: READY_FOR_REVIEW' },
+  { id: 'cmt_sample3', issueId: 'iss_sample22', heading: 'Completion', author: 'finish-ticket', createdAt: '2026-11-08T00:05:00Z', updatedAt: '2026-11-08T00:05:00Z',
+    body: '## Completion\n\nMerged as `a462204` (sample), pinned to the reviewed head. Human verification steps 1 to 6 passed. Ticket moved to done.\n\nStatus: DONE' },
+]
 export const issueDetails: Record<string, IssueDetail> = {
   iss_sample1: detailOf(issues[0], { decisions, subIssues: subIssues.slice(0, 2).map((s) => ({ ...s, build: { status: s.status, attempt: s.attempt, heldReason: s.heldReason } })) }),
   iss_sample5: detailOf(subIssues[1], { parent: { id: 'iss_sample1', identifier: 'SS-1', title: 'Checkout on one page' }, build: { status: 'running', attempt: 1, heldReason: null }, steps, stepsAttempt: 1 }),
   iss_sample6: detailOf(subIssues[2], { parent: { id: 'iss_sample2', identifier: 'SS-2', title: 'Totals and analytics' }, brief: plannedBrief, build: { status: 'queued', attempt: 0, heldReason: 'waiting on SS-5 (web/checkout/submit.ts)' } }),
   iss_sample16: detailOf(issue(16, 'Search results load too slowly', { projectId: null, description: 'Reported twice this week.' }), { project: null }),
+  iss_sample22: detailOf(issue(22, 'Add slugify to the string helpers (sample)', { projectId: null, state: 'done', description: 'Page titles need URL slugs and every caller writes its own loop.', briefApprovedBy: 'Sam (sample)', briefApprovedAt: '2026-11-07T23:30:00Z', completedAt: '2026-11-08T00:05:00Z' }), { project: null, comments: commentsOnTicket }),
   iss_sample20: detailOf(issue(20, 'Address and payment on one page (sample)', { description: 'Fewer steps between the cart and a paid order.', brief: '### What (sample)\nAddress and payment on one page.\n\n### Done when\n- A paid order takes one page.' })),
 }
 
