@@ -34,6 +34,7 @@ import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { runner } from './runner.js'
 import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, statuses, type Values } from './integrations.js'
+import { contextFor, delegateFor, trackerGuide } from './tkt.js'
 import { CATALOGUE } from './catalogue.js'
 import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role } from './skills.js'
 
@@ -184,10 +185,17 @@ export function buildApp(bus: EventBus) {
     }
     const key = c.req.param('key')
     const values = Object.fromEntries(Object.entries(effectiveIntegrations(shared, own)[key] ?? {}).map(([k, v]) => [k, v.value]))
-    try { return c.json(await checkIntegration(key, values)) } catch (err) {
+    const ctx = key === 'tkt' && body.appId ? await contextFor(body.appId) : null
+    try { return c.json(await checkIntegration(key, values, process.env, fetch, ctx ? { ctx } : undefined)) } catch (err) {
       if (err instanceof IntegrationError) return c.json({ error: err.message }, 400)
       throw err
     }
+  })
+  // The repo's docs/agents/issue-tracker.md for this app, filled in: what tkt's skills read to find the app here.
+  api.get('/apps/:id/tracker-guide', async (c) => {
+    const ctx = await contextFor(c.req.param('id'))
+    if (!ctx) return c.json({ error: 'no such app' }, 404)
+    return c.text(await trackerGuide(ctx), 200, { 'content-type': 'text/markdown; charset=utf-8' })
   })
   api.patch('/apps/:id', async (c) => {
     const body = await c.req.json<{ name?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
@@ -337,7 +345,7 @@ export function buildApp(bus: EventBus) {
     const { appId, ...body } = await c.req.json()
     try {
       if (body.kind !== 'todo' && !body.parentId) await guardDirect(db, appId, body.projectId, body.workflowId)
-      return c.json(settle(await createIssue(appId, { ...body, delegate: body.kind === 'todo' || body.parentId ? null : 'planner' }, 'user')), 201)
+      return c.json(settle(await createIssue(appId, { ...body, delegate: body.kind === 'todo' || body.parentId ? null : await delegateFor(appId) }, 'user')), 201)
     } catch (err) { return planError(c, err) }
   })
   api.post('/issues/reorder', async (c) => { const { ids } = await c.req.json<{ ids: string[] }>(); try { return c.json(await reorder(ids ?? [], 'user')) } catch (err) { return planError(c, err) } })
