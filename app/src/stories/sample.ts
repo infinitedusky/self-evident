@@ -129,7 +129,7 @@ export const issueRows: IssueRow[] = [
 function pick(i: Issue) { return { id: i.id, identifier: i.identifier, number: i.number, title: i.title, description: i.description, state: i.state, sortOrder: i.sortOrder, priority: i.priority } }
 
 const detailOf = (i: Issue, extra: Partial<IssueDetail> = {}): IssueDetail => ({
-  ...i, project: { id: 'proj_checkout', name: 'One-page checkout (sample)', status: 'running' }, parent: null, build: null, questions: [], decisions: [], relations: [], subIssues: [], steps: [], stepsAttempt: null, comments: [], ...extra,
+  ...i, project: { id: 'proj_checkout', name: 'One-page checkout (sample)', status: 'running' }, parent: null, build: null, questions: [], decisions: [], relations: [], subIssues: [], steps: [], stepsAttempt: null, comments: [], runner: null, ...extra,
 })
 /** Comments as the tkt skills write them on a ticket they built (sample): one per heading, the latest of each. */
 const commentsOnTicket = [
@@ -145,7 +145,7 @@ export const issueDetails: Record<string, IssueDetail> = {
   iss_sample5: detailOf(subIssues[1], { parent: { id: 'iss_sample1', identifier: 'SS-1', title: 'Checkout on one page' }, build: { status: 'running', attempt: 1, heldReason: null }, steps, stepsAttempt: 1 }),
   iss_sample6: detailOf(subIssues[2], { parent: { id: 'iss_sample2', identifier: 'SS-2', title: 'Totals and analytics' }, brief: plannedBrief, build: { status: 'queued', attempt: 0, heldReason: 'waiting on SS-5 (web/checkout/submit.ts)' } }),
   iss_sample16: detailOf(issue(16, 'Search results load too slowly', { projectId: null, description: 'Reported twice this week.' }), { project: null }),
-  iss_sample22: detailOf(issue(22, 'Add slugify to the string helpers (sample)', { projectId: null, state: 'done', description: 'Page titles need URL slugs and every caller writes its own loop.', briefApprovedBy: 'Sam (sample)', briefApprovedAt: '2026-11-07T23:30:00Z', completedAt: '2026-11-08T00:05:00Z' }), { project: null, comments: commentsOnTicket }),
+  iss_sample22: detailOf(issue(22, 'Add slugify to the string helpers (sample)', { projectId: null, state: 'done', description: 'Page titles need URL slugs and every caller writes its own loop.', briefApprovedBy: 'Sam (sample)', briefApprovedAt: '2026-11-07T23:30:00Z', completedAt: '2026-11-08T00:05:00Z' }), { project: null, comments: commentsOnTicket, runner: 'tkt' }),
   iss_sample20: detailOf(issue(20, 'Address and payment on one page (sample)', { description: 'Fewer steps between the cart and a paid order.', brief: '### What (sample)\nAddress and payment on one page.\n\n### Done when\n- A paid order takes one page.' })),
 }
 
@@ -213,8 +213,18 @@ export const summary: SummaryState = {
   },
 }
 
-/** Integrations, made up: PostHog for telemetry, Linear connected for the shop, Confluence set but its key missing. */
+/** Integrations, made up: tkt runs the shop's tickets, PostHog for telemetry, Linear connected, Confluence set but its key missing. */
 export const sampleIntegrations: FactorySettings['integrations'] = [
+  {
+    key: 'tkt', name: 'tkt', role: 'Runner', does: 'Builds this app’s tickets from their approved briefs: a worktree, a herdr tab, the lifecycle skills on the harness and model its preset says; the plan, the handoff, the review and the completion written back on the ticket.',
+    fields: [{ key: 'on', label: 'Runs this app’s tasks', kind: 'switch', required: true }], calls: true, perApp: true, docs: 'https://gitlab.com/rogs/tkt',
+    actions: [
+      { key: 'start', name: 'Start', does: '`tkt start <ticket>`: a worktree and a tab; start-ticket reads the ticket here, moves it to in progress and plans from the brief.' },
+      { key: 'approve', name: 'Approve the plan', does: '`tkt approve <ticket>`: work-ticket builds, commits, opens the pull request and hands off on the ticket.' },
+      { key: 'review', name: 'Review', does: '`tkt run <ticket> review`: review-pr in a fresh session, its verdict on the pull request.' },
+      { key: 'merge', name: 'Merge and finish', does: '`tkt merge <ticket> --passed`, then `tkt done`: finish-ticket merges and moves the ticket to done.' },
+    ],
+  },
   {
     key: 'posthog', name: 'PostHog', role: 'Telemetry', does: 'Events, errors and experiments.', calls: false, actions: [],
     fields: [{ key: 'host', label: 'Host', placeholder: 'https://us.posthog.com' }, { key: 'project_id', label: 'Project id' }, { key: 'key_env', label: 'Key variable', placeholder: 'POSTHOG_API_KEY', secret: true }],
@@ -248,6 +258,7 @@ export const factorySettings: FactorySettings = {
     confluence: { site: 'https://sample-shop.atlassian.net', email: 'owner@example.com', space: 'ENG', key_env: 'CONFLUENCE_API_TOKEN' },
   },
   status: {
+    tkt: { state: 'off', missing: [], keyVar: null },
     posthog: { state: 'ready', missing: [], keyVar: null },
     linear: { state: 'ready', missing: [], keyVar: 'LINEAR_API_KEY' },
     confluence: { state: 'no-key', missing: [], keyVar: 'CONFLUENCE_API_TOKEN' },
@@ -261,14 +272,36 @@ export const factorySettings: FactorySettings = {
 }
 export const appSettings: AppSettings = {
   integrations: {
+    tkt: { on: { value: 'true', from: 'app' } },
     posthog: { host: { value: 'https://us.posthog.com', from: 'workspace' }, project_id: { value: '12345', from: 'app' }, key_env: { value: null, from: null } },
     linear: { team: { value: 'GIFT', from: 'app' }, key_env: { value: 'LINEAR_API_KEY', from: 'workspace' } },
     confluence: { site: { value: null, from: null }, email: { value: null, from: null }, space: { value: null, from: null }, parent: { value: null, from: null }, key_env: { value: null, from: null } },
   },
-  status: { posthog: { state: 'ready', missing: [], keyVar: null }, linear: { state: 'ready', missing: [], keyVar: 'LINEAR_API_KEY' }, confluence: { state: 'off', missing: ['Site', 'Account email', 'Space key', 'Key variable'], keyVar: null } },
+  status: { tkt: { state: 'ready', missing: [], keyVar: null }, posthog: { state: 'ready', missing: [], keyVar: null }, linear: { state: 'ready', missing: [], keyVar: 'LINEAR_API_KEY' }, confluence: { state: 'off', missing: ['Site', 'Account email', 'Space key', 'Key variable'], keyVar: null } },
   plugins: [{ id: 'sample-plugin@sample', name: 'sample-plugin', factoryOn: true, own: null, on: true }],
   skills: [{ key: 'checkout-rules', name: 'checkout-rules', description: 'How this shop prices and taxes an order.' }],
 }
+/** The repo's docs/agents/issue-tracker.md for the shop, as the engine fills it (sample: shortened). */
+export const trackerGuideSample = `<!-- rogs-skills config v1: issue-tracker -->
+# Issue tracker
+
+Where this project's tickets live and how the lifecycle skills read and change them. Written from Self Evident's settings for the app Sample Shop (SS).
+
+## Tracker
+
+- Kind: Self Evident
+- Connection: the engine's HTTP API at \`http://localhost:4000/api\`, with \`curl\`. The UI is at \`http://localhost:5180\`. No token.
+- Scope: the app \`Sample Shop\`, id \`app_sample\`, key \`SS\`.
+- Ticket ids: \`SS-<number>\`, matched by \`^SS-[1-9][0-9]*$\`.
+
+## Operations
+
+### resolve
+
+\`curl -sf <engine>/issues/<ticket id>\` (sample: the rest of the operations follow)
+
+Capability: Supported
+`
 
 /** Claude Code sessions run on Sample Shop in a terminal or an editor (made up): one already brought in. */
 export const claudeSessions: ClaudeSession[] = [

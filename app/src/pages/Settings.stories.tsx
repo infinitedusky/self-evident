@@ -36,7 +36,7 @@ export const AppWithRepoSkills: Story = {
   }),
 }
 /** An app with nothing set: no repo, no skills, every value inherited. */
-export const AppBare: Story = { parameters: appPage('app_sample2'), beforeEach: withEngine({ appSettings: { integrations: {}, plugins: [], skills: [] } }) }
+export const AppBare: Story = { parameters: appPage('app_sample2'), beforeEach: withEngine({ appSettings: { integrations: {}, status: {}, plugins: [], skills: [] } }) }
 export const NoSuchApp: Story = { parameters: appPage('app_missing') }
 export const Loading: Story = { parameters: all, beforeEach: withEngine({}, { latency: 'infinite' }) }
 export const EngineDown: Story = { parameters: all, beforeEach: withEngine(engineDown) }
@@ -48,6 +48,14 @@ export const AllAppsLinear: Story = { parameters: { route: { path: '/settings/:s
 export const AppIntegrations: Story = { parameters: appPage(sampleApp.id, 'integrations') }
 /** One integration's page for an app. */
 export const AppLinear: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/linear` } } }
+/** tkt for an app, on and working: the check ran by itself, and the tracker guide to copy into the repo. */
+export const AppTkt: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/tkt` } }, beforeEach: withEngine({ check: { ok: true, detail: 'tkt v0.21.0; doctor passes in /code/sample-shop; the tracker guide points at SS here.' } }) }
+/** tkt on but broken: tkt doctor's own line, then "get tkt working"; Self Evident does nothing else about it. */
+export const AppTktBroken: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/tkt` } }, beforeEach: withEngine({ check: { ok: false, detail: 'tkt doctor: fail  herdr  herdr is not installed. Get tkt working: https://gitlab.com/rogs/tkt' } }) }
+/** tkt off for an app: its tasks go to Self Evident's own planner; nothing is checked. */
+export const AppTktOff: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/tkt` } }, beforeEach: withEngine({ appSettings: { ...appSettings, integrations: { ...appSettings.integrations, tkt: { on: { value: null, from: null } } }, status: { ...appSettings.status, tkt: { state: 'off', missing: [], keyVar: null } } } }) }
+/** tkt under All apps: switched on per app, so this page only says what it does. */
+export const AllAppsTkt: Story = { parameters: { route: { path: '/settings/:section/:item', url: '/settings/integrations/tkt' } } }
 /** An app's prototype settings: how its server starts and where its throwaway databases go. */
 export const AppPrototype: Story = { parameters: appPage(sampleApp.id, 'prototype') }
 /** An app's workflow rules: configuration, not something that runs. */

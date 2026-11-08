@@ -3,16 +3,24 @@
  * a page per integration. The page reads first (what it does, its values, where its key lives, a check of the
  * connection, what a workflow step can do with it) and turns into a form only on Edit. All apps sets the values; an
  * app overrides any field and inherits the rest. Keys are never typed here, only the name of the variable holding one.
+ *
+ * A per-app integration (tkt, the runner) has a switch instead of values: on for an app, it runs that app's tasks.
+ * Its check runs by itself when the page opens, says in the tool's own words what is wrong, and leaves fixing it
+ * outside Self Evident; the tracker guide is the one thing Self Evident hands over, the file the skills read to
+ * find the app here.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge, type Tone } from './Badge'
 import { engine, type EffectiveValues, type Integration, type IntegrationStatus, type IntegrationValues } from '../engine'
 
 const err = (e: any) => String(e?.message ?? e)
+/** Backticks in a sentence as code. */
+const inline = (s: string) => s.split('`').map((part, n) => (n % 2 ? <span key={n} className="mono">{part}</span> : part))
 
 /** What a status says, in a word or two, and its tone. */
 export function standing(i: Integration, s: IntegrationStatus | undefined): { label: string; tone: Tone } {
+  if (i.perApp) return s?.state === 'ready' ? { label: 'On', tone: 'ok' } : { label: 'Off', tone: 'neutral' }
   switch (s?.state) {
     case 'ready': return { label: i.calls ? 'Connected' : 'Set', tone: 'ok' }
     case 'no-key': return { label: 'Key missing', tone: 'warn' }
@@ -37,11 +45,11 @@ export function Integrations({ base, item, integrations, values, status, scope, 
     <section className="panel" data-component="Integrations">
       <h2>Integrations</h2>
       <p className="muted settings-lead">{scope === 'app'
-        ? 'What this app connects to. Each uses the values set under All apps unless this app overrides them.'
-        : 'What Self Evident connects to, through each service\'s own API. Set once here; an app can override any value.'}</p>
+        ? 'What this app connects to, and who runs its tasks. Each uses the values set under All apps unless this app overrides them.'
+        : 'What Self Evident connects to, through each service\'s own API. Set once here; an app can override any value. A runner is switched on per app.'}</p>
       <ul className="integrations-list">
         {integrations.map((i) => {
-          const st = standing(i, status[i.key])
+          const st = i.perApp && scope === 'workspace' ? { label: 'Per app', tone: 'neutral' as Tone } : standing(i, status[i.key])
           return (
             <li key={i.key}>
               <Link to={`${base}/${i.key}`} className="integration-row">
@@ -74,10 +82,37 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
   const st = standing(i, status)
   const keyField = i.fields.find((f) => f.secret)
   const keyVar = keyField ? values[keyField.key]?.value : null
+  const perAppHere = !!i.perApp && scope === 'app'
+  const on = status?.state === 'ready'
   const runCheck = async () => {
     setCheck('busy')
     try { setCheck(await engine.checkIntegration(i.key, appId)) } catch (e) { setCheck({ ok: false, detail: err(e) }) }
   }
+  // A runner's check runs by itself: the page says whether it works without being asked.
+  useEffect(() => { if (perAppHere && on) void runCheck() }, [i.key, perAppHere, on, appId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const actions = (
+    <div className="settings-group">
+      <h3 className="settings-h3">{i.role === 'Runner' ? 'On a ticket' : 'In a workflow'}</h3>
+      {i.actions.length
+        ? <>
+            <p className="faint settings-desc" style={{ margin: '0 0 6px' }}>{i.role === 'Runner'
+              ? <>What {i.name} does with a ticket whose brief is approved, each a command in a herdr tab today; the same as buttons on the ticket page comes next.</>
+              : <>What an integration step can do with {i.name}, placed between a workflow's steps. Each asks before it sends anything out, and running it again updates what it made.</>}</p>
+            <ul className="list">{i.actions.map((a) => <li key={a.key}><strong>{a.name}</strong><div className="muted settings-desc">{inline(a.does)}</div></li>)}</ul>
+            {i.role !== 'Runner' && <p className="faint settings-desc">Integration steps arrive in workflow rules next.</p>}
+          </>
+        : <p className="faint settings-desc">Nothing: {i.name} is read by each app{i.role === 'Telemetry' ? ' to report what happens' : ''}, not used as a step.</p>}
+    </div>
+  )
+  if (i.perApp && scope === 'workspace') return ( // nothing to set for all apps: each app switches it on
+    <section className="panel" data-component="Integration">
+      <Back base={base} />
+      <div className="integration-head"><h2>{i.name}</h2><Badge>Per app</Badge></div>
+      <p className="muted settings-lead">{i.does}</p>
+      <p className="settings-desc">Switched on under an app's Integrations: one app can be run by {i.name} while another is run by Self Evident's own agents. Installed and kept working outside Self Evident{i.docs && <>: <a href={i.docs} target="_blank" rel="noreferrer">about {i.name} ↗</a></>}.</p>
+      {actions}
+    </section>
+  )
   return (
     <section className="panel" data-component="Integration">
       <Back base={base} />
@@ -90,53 +125,74 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
       {editing
         ? <EditForm i={i} values={values} scope={scope} all={all} onCancel={() => setEditing(false)} onSave={async (v) => { await onSave(v); setEditing(false); setCheck(null) }} />
         : <div className="settings-group">
-            <div className="integration-section-head"><h3 className="settings-h3">Values</h3><button className="btn quiet" onClick={() => setEditing(true)}>Edit</button></div>
+            <div className="integration-section-head"><h3 className="settings-h3">{i.perApp ? 'For this app' : 'Values'}</h3><button className="btn quiet" onClick={() => setEditing(true)}>Edit</button></div>
             <dl className="fields">
               {i.fields.filter((f) => !f.secret).map((f) => (
                 <div key={f.key} style={{ display: 'contents' }}>
                   <dt>{f.label}</dt>
-                  <dd>{values[f.key]?.value ? <span className="mono">{values[f.key]!.value}</span> : <span className="faint">{f.required ? 'Not set' : '—'}</span>}
-                    {scope === 'app' && values[f.key]?.from && <span className="faint"> · {values[f.key]!.from === 'app' ? 'this app' : 'from All apps'}</span>}</dd>
+                  <dd>{f.kind === 'switch'
+                    ? <><Badge tone={on ? 'ok' : 'neutral'} dot={on}>{on ? 'On' : 'Off'}</Badge><span className="faint"> · {on ? `${i.name} builds this app's tickets; Self Evident hands none to its own planner.` : 'this app\'s tasks go to Self Evident\'s own planner and builder.'}</span></>
+                    : <>{values[f.key]?.value ? <span className="mono">{values[f.key]!.value}</span> : <span className="faint">{f.required ? 'Not set' : '—'}</span>}
+                      {scope === 'app' && values[f.key]?.from && <span className="faint"> · {values[f.key]!.from === 'app' ? 'this app' : 'from All apps'}</span>}</>}</dd>
                 </div>
               ))}
             </dl>
           </div>}
 
-      {keyField && !editing && (
+      {!editing && (keyField || i.calls) && (
         <div className="settings-group">
-          <h3 className="settings-h3">Key</h3>
-          <p className="settings-desc">
-            {keyVar
-              ? <>Kept in <span className="mono">{keyVar}</span>{i.calls ? <> in the engine's environment{status?.state === 'no-key' ? <span className="warn-text">, where it isn't set yet. Add it and restart the engine.</span> : '.'}</> : <> in each app's <span className="mono">.env</span>.</>}</>
-              : <>No variable named yet. Edit to name the one that will hold the key; the key itself never goes in Settings.</>}
-            {i.docs && <> <a href={i.docs} target="_blank" rel="noreferrer">Make a key ↗</a></>}
-          </p>
+          <h3 className="settings-h3">{keyField ? 'Key' : 'The check'}</h3>
+          {keyField && (
+            <p className="settings-desc">
+              {keyVar
+                ? <>Kept in <span className="mono">{keyVar}</span>{i.calls ? <> in the engine's environment{status?.state === 'no-key' ? <span className="warn-text">, where it isn't set yet. Add it and restart the engine.</span> : '.'}</> : <> in each app's <span className="mono">.env</span>.</>}</>
+                : <>No variable named yet. Edit to name the one that will hold the key; the key itself never goes in Settings.</>}
+              {i.docs && <> <a href={i.docs} target="_blank" rel="noreferrer">Make a key ↗</a></>}
+            </p>
+          )}
+          {!keyField && i.perApp && (
+            <p className="settings-desc">
+              {on ? <>Whether {i.name} can run this app's tickets from here: the runner on the engine's PATH, a local checkout with the tracker guide pointing at this app, and its own doctor passing there. </> : <>Nothing to check while it is off. </>}
+              Installed and kept working outside Self Evident{i.docs && <>: <a href={i.docs} target="_blank" rel="noreferrer">about {i.name} ↗</a></>}.
+            </p>
+          )}
           {i.calls && (
             <div className="integration-check">
-              <button className="btn quiet" disabled={check === 'busy' || status?.state === 'off'} onClick={runCheck}>{check === 'busy' ? 'Checking…' : 'Check the connection'}</button>
+              <button className="btn quiet" disabled={check === 'busy' || status?.state === 'off'} onClick={runCheck}>{check === 'busy' ? 'Checking…' : i.perApp ? 'Check again' : 'Check the connection'}</button>
               {check && check !== 'busy' && <span className={check.ok ? 'ok-text' : 'bad'}>{check.ok ? '✓ ' : ''}{check.detail}</span>}
             </div>
           )}
         </div>
       )}
 
-      {!editing && (
-        <div className="settings-group">
-          <h3 className="settings-h3">In a workflow</h3>
-          {i.actions.length
-            ? <>
-                <p className="faint settings-desc" style={{ margin: '0 0 6px' }}>What an integration step can do with {i.name}, placed between a workflow's steps. Each asks before it sends anything out, and running it again updates what it made.</p>
-                <ul className="list">{i.actions.map((a) => <li key={a.key}><strong>{a.name}</strong><div className="muted settings-desc">{a.does}</div></li>)}</ul>
-                <p className="faint settings-desc">Integration steps arrive in workflow rules next.</p>
-              </>
-            : <p className="faint settings-desc">Nothing: {i.name} is read by each app{i.role === 'Telemetry' ? ' to report what happens' : ''}, not used as a step.</p>}
-        </div>
-      )}
+      {!editing && i.key === 'tkt' && scope === 'app' && appId && <TrackerGuide appId={appId} name={i.name} />}
+
+      {!editing && actions}
     </section>
   )
 }
 
-/** The form, only once asked for. An app's empty field shows the inherited value and keeps it. */
+/** The repo's docs/agents/issue-tracker.md for this app, filled in by the engine: Self Evident's half of the handshake with tkt's skills. */
+function TrackerGuide({ appId, name }: { appId: string; name: string }) {
+  const [text, setText] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  useEffect(() => { let gone = false; engine.trackerGuide(appId).then((t) => { if (!gone) setText(t) }).catch((e) => { if (!gone) setError(err(e)) }); return () => { gone = true } }, [appId])
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text!); setCopied(true); window.setTimeout(() => setCopied(false), 1500) } catch (e) { setError(err(e)) }
+  }
+  return (
+    <div className="settings-group" data-component="TrackerGuide">
+      <div className="integration-section-head"><h3 className="settings-h3">The tracker guide</h3>{text && <button className="btn quiet" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>}</div>
+      <p className="faint settings-desc" style={{ margin: '0 0 6px' }}>
+        How {name}'s skills find this app here. Copy it into <span className="mono">docs/agents/issue-tracker.md</span> in the repo; <span className="mono">/setup-rogs</span> writes the rest (the forge, the workflow, the domain). Everything about {name} itself stays outside Self Evident.
+      </p>
+      {error ? <div className="bad">{error}</div> : text ? <details><summary className="faint">Show the file</summary><pre className="guide">{text}</pre></details> : <p className="muted" style={{ margin: 0 }}>Loading…</p>}
+    </div>
+  )
+}
+
+/** The form, only once asked for. An app's empty field shows the inherited value and keeps it. A switch is on or off. */
 function EditForm({ i, values, scope, all, onCancel, onSave }: { i: Integration; values: EffectiveValues[string]; scope: 'workspace' | 'app'; all: EffectiveValues; onCancel: () => void; onSave: (v: IntegrationValues) => Promise<void> }) {
   const own = (v: EffectiveValues[string] = {}) => Object.fromEntries(Object.entries(v).filter(([, x]) => x.value && (scope === 'workspace' || x.from === 'app')).map(([k, x]) => [k, x.value!]))
   const [v, setV] = useState<Record<string, string>>(own(values))
@@ -151,13 +207,18 @@ function EditForm({ i, values, scope, all, onCancel, onSave }: { i: Integration;
   return (
     <div className="settings-group">
       <h3 className="settings-h3">Edit {i.name}</h3>
-      {scope === 'app' && <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>An empty field uses All apps' value, shown in italics.</p>}
+      {scope === 'app' && !i.perApp && <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>An empty field uses All apps' value, shown in italics.</p>}
       <div className="form-grid">
         {i.fields.map((f) => {
           const inherited = scope === 'app' && values[f.key]?.from === 'workspace' ? values[f.key]!.value : null
           return (
-            <label key={f.key}>{f.label}{f.required && <span className="faint"> · required</span>}
-              <input className="mono" value={v[f.key] ?? ''} placeholder={inherited ?? f.placeholder} onChange={(e) => setV({ ...v, [f.key]: e.target.value })} />
+            <label key={f.key}>{f.label}{f.required && f.kind !== 'switch' && <span className="faint"> · required</span>}
+              {f.kind === 'switch'
+                ? <select value={v[f.key] === 'true' ? 'true' : 'false'} onChange={(e) => setV({ ...v, [f.key]: e.target.value })}>
+                    <option value="true">On: {i.name} runs this app's tasks</option>
+                    <option value="false">Off: Self Evident's own agents do</option>
+                  </select>
+                : <input className="mono" value={v[f.key] ?? ''} placeholder={inherited ?? f.placeholder} onChange={(e) => setV({ ...v, [f.key]: e.target.value })} />}
             </label>
           )
         })}

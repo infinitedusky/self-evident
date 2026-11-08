@@ -296,8 +296,11 @@ button.badge { border: 0; cursor: pointer; }
 .integration-section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .integration-section-head .settings-h3 { margin: 0; }
 .integration-check { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 13px; }
+.integration-check span { white-space: pre-wrap; } /* a tool's own output keeps its columns */
+.integration-check .bad { color: var(--bad); }
 .ok-text { color: var(--ok); }
 .warn-text { color: var(--warn); }
+pre.guide { margin: 8px 0 0; padding: 12px; max-height: 360px; overflow: auto; font: 12px/1.5 var(--mono); white-space: pre-wrap; background: color-mix(in srgb, var(--line) 25%, var(--surface)); border: 1px solid var(--line); border-radius: 8px; }
 /* Plugins: one block each, a switch for on/off and for each agent; skills filed by job */
 .switch { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink-soft); font: 500 13px var(--sans); cursor: pointer; }
 .switch.on { background: var(--accent-wash); border-color: var(--accent); color: var(--accent); }
