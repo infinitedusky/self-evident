@@ -64,6 +64,13 @@
       "when": 1793499784812,
       "tag": "0008_always_allow",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794099050607,
+      "tag": "0009_issue_comment",
+      "breakpoints": true
     }
   ]
 }

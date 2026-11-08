@@ -203,6 +203,16 @@ export const issueRelation = pgTable('issue_relation', { // issue → related: i
   foreignKey({ name: 'issue_relation_issue_app_fk', columns: [t.issueId, t.appId], foreignColumns: [issue.id, issue.appId] }),
   foreignKey({ name: 'issue_relation_related_app_fk', columns: [t.relatedIssueId, t.appId], foreignColumns: [issue.id, issue.appId] })])
 
+// A comment on an issue, as a tracker has them: the plan, the handoff, the review, the completion, each under a heading
+// (its first line) that a later write of the same heading replaces, so a ticket carries one current plan, not six.
+export const issueComment = pgTable('issue_comment', {
+  id: id(), appId: appId(), issueId: text('issue_id').notNull().references(() => issue.id),
+  heading: text('heading').notNull(), body: text('body').notNull(),
+  author: text('author').notNull(), // user | agent | agent:<harness> | the skill's name
+  createdAt: createdAt(), updatedAt: at('updated_at').notNull().defaultNow(),
+}, (t) => [uniqueIndex('issue_comment_heading').on(t.issueId, t.heading), index('issue_comment_issue').on(t.issueId),
+  foreignKey({ name: 'issue_comment_issue_app_fk', columns: [t.issueId, t.appId], foreignColumns: [issue.id, issue.appId] })])
+
 // Ours: the engine building a code sub-issue. [ID] one agent, one worktree, one commit; attempts and retries.
 export const build = pgTable('build', {
   issueId: text('issue_id').primaryKey().references(() => issue.id), appId: appId(),

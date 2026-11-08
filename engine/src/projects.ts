@@ -10,7 +10,7 @@ import { db, type Tx } from './db/client.js'
 import { app, build, BUILD_STATE, decision, event, fileClaim, idea, issue, issueRelation, project, pr, question, run, step, type BuildStatus } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
-import { getIssue, identifier, insertIssues, nextSort, PlanError, rollUp, setState, type Issue, type Source } from './issues.js'
+import { getIssue, identifier, insertIssues, listComments, nextSort, PlanError, rollUp, setState, type Issue, type Source } from './issues.js'
 import { claimsOverlap, findCycle, pickTasksToStart, type SchedTask } from './scheduler.js'
 
 export { PlanError } from './issues.js'
@@ -419,8 +419,9 @@ export async function issueDetail(issueId: string) {
   const [b] = await db.select().from(build).where(eq(build.issueId, issueId))
   const [last] = await db.select().from(run).where(eq(run.issueId, issueId)).orderBy(desc(run.attempt)).limit(1)
   const steps = last ? await db.select().from(step).where(and(eq(step.issueId, issueId), eq(step.runId, last.id))).orderBy(asc(step.position)) : []
+  const comments = await listComments(db, issueId)
   return {
-    ...i, identifier: identifier(a.key, i.number), project: p ? { id: p.id, name: p.name, status: p.status } : null,
+    ...i, identifier: identifier(a.key, i.number), project: p ? { id: p.id, name: p.name, status: p.status } : null, comments,
     parent: parent ? { id: parent.id, identifier: identifier(a.key, parent.number), title: parent.title } : null,
     build: b ?? null, questions, decisions, relations: rels, steps, stepsAttempt: last?.attempt ?? null, // the builder's list, from its latest run
     subIssues: subs.map((s) => ({ ...s, identifier: identifier(a.key, s.number), build: builds.find((x) => x.issueId === s.id) ?? null })),

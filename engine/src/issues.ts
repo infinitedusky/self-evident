@@ -6,7 +6,7 @@
  */
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { db, type Tx } from './db/client.js'
-import { app, build, CLOSED_STATES, issue, issueRelation, project, STATE_TYPE, type IssueKind, type IssueState } from './db/schema.js'
+import { app, build, CLOSED_STATES, issue, issueComment, issueRelation, project, STATE_TYPE, type IssueKind, type IssueState } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 
@@ -188,8 +188,12 @@ export async function rollUp(tx: Tx, parentId: string, actor = 'engine') {
   return to === p.state ? p : setState(tx, p, to, { actor })
 }
 
-/** The issues of an app, newest first within each place, with their identifiers. Filters: kind, project, state, top level. */
-export async function listIssues(appId: string, f: { kind?: IssueKind; projectId?: string | null; topLevel?: boolean; open?: boolean } = {}) {
+/**
+ * The issues of an app, newest first within each place, with their identifiers. Filters: kind, project, top level,
+ * open, states, and q (a text search over title, description and brief, open and closed alike: what a tracker's
+ * search is for, finding the ticket that already covers something before making another).
+ */
+export async function listIssues(appId: string, f: { kind?: IssueKind; projectId?: string | null; topLevel?: boolean; open?: boolean; states?: IssueState[]; q?: string } = {}) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError(`no app ${appId}`)
   const where = [eq(issue.appId, appId)]
@@ -198,6 +202,52 @@ export async function listIssues(appId: string, f: { kind?: IssueKind; projectId
   if (f.projectId === null) where.push(isNull(issue.projectId))
   if (f.topLevel) where.push(isNull(issue.parentId))
   if (f.open) where.push(sql`${issue.state} not in ('done', 'canceled', 'duplicate')`)
+  if (f.states?.length) where.push(inArray(issue.state, f.states))
+  const q = f.q?.trim()
+  if (q) {
+    const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+    where.push(sql`(${issue.title} ilike ${like} or coalesce(${issue.description}, '') ilike ${like} or coalesce(${issue.brief}, '') ilike ${like})`)
+  }
   const rows = await db.select().from(issue).where(and(...where)).orderBy(asc(issue.sortOrder), asc(issue.number))
   return rows.map((r) => ({ ...r, identifier: identifier(a.key, r.number) }))
+}
+
+/** An issue by its id, or by its identifier (HG-12), whose key names the app. */
+export async function resolveIssue(tx: Tx | typeof db, ref: string) {
+  const m = /^([A-Za-z][A-Za-z0-9]*)-(\d+)$/.exec(ref.trim())
+  if (!m) return getIssue(tx, ref)
+  const rows = await tx.select({ i: issue }).from(issue).innerJoin(app, eq(issue.appId, app.id)).where(and(eq(app.key, m[1].toUpperCase()), eq(issue.number, Number(m[2]))))
+  if (rows.length > 1) throw new PlanError(`${ref} names a task in more than one workspace; use its id`)
+  if (!rows.length) throw new PlanError(`no task ${ref}`)
+  return rows[0].i
+}
+
+// ── Comments ─────────────────────────────────────────────────────────────────
+// What gets written on a ticket as it moves, by people and by the agents working it: the plan, the handoff, the
+// review's verdict, the completion. Each sits under a heading, its first line; writing the same heading again
+// replaces that comment, so a ticket carries one current plan, not the history of its drafts (the event log has that).
+
+export type IssueComment = typeof issueComment.$inferSelect
+
+/** The comments on an issue, oldest first. */
+export async function listComments(tx: Tx | typeof db, issueId: string) {
+  return tx.select().from(issueComment).where(eq(issueComment.issueId, issueId)).orderBy(asc(issueComment.createdAt))
+}
+
+/** Comment on an issue. The heading is given, or the body's first line without its `#` marks. */
+export async function commentOnIssue(issueId: string, input: { heading?: string | null; body: string }, actor = 'user') {
+  return db.transaction(async (tx) => {
+    const i = await getIssue(tx, issueId)
+    const body = input.body?.trim()
+    if (!body) throw new PlanError('a comment needs a body')
+    const heading = (input.heading?.trim() || body.split('\n')[0]).replace(/^#+\s*/, '').trim().slice(0, 200)
+    if (!heading) throw new PlanError('a comment needs a heading: its first line')
+    const [existing] = await tx.select().from(issueComment).where(and(eq(issueComment.issueId, issueId), eq(issueComment.heading, heading)))
+    const [row] = existing
+      ? await tx.update(issueComment).set({ body, author: actor, updatedAt: new Date() }).where(eq(issueComment.id, existing.id)).returning()
+      : await tx.insert(issueComment).values({ id: newId('comment'), appId: i.appId, issueId, heading, body, author: actor }).returning()
+    const base = await baseOf(tx, i)
+    await appendEvent(tx, { ...base, actor, type: 'issue.commented', payload: { identifier: identifier(base.key, i.number), number: i.number, title: i.title, heading, replaced: !!existing, commentId: row.id } })
+    return row
+  })
 }
