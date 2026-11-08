@@ -11,9 +11,13 @@
  * Every integration is the service's official API or SDK, with no paid middleman (Sandy, 2026-10-29).
  */
 import { LinearClient } from '@linear/sdk'
+import { checkTkt, type TktContext } from './tkt.js'
 
-/** `secret` marks the field naming the key's variable; `required` ones must be set before it counts as connected. */
-export interface Field { key: string; label: string; placeholder?: string; required?: boolean; secret?: boolean }
+/**
+ * `secret` marks the field naming the key's variable; `required` ones must be set before it counts as connected.
+ * A `switch` holds "true" or "false" instead of a value: on or off.
+ */
+export interface Field { key: string; label: string; placeholder?: string; required?: boolean; secret?: boolean; kind?: 'switch' }
 /** What a workflow step can do with it: content from an earlier step in, a link and an id back. */
 export interface Action { key: string; name: string; does: string }
 export interface Integration {
@@ -21,9 +25,23 @@ export interface Integration {
   calls: boolean // the engine calls it, so its key must be in the engine's environment
   actions: Action[]
   docs?: string // where to make a key
+  perApp?: boolean // switched on under each app, nothing to set for all apps: a tool that runs an app's work, not a service
 }
 
 export const INTEGRATIONS: Integration[] = [
+  {
+    // tkt (gitlab.com/rogs/tkt), the runner: on for an app, it builds the app's tickets and Self Evident hands none to
+    // its own planner. Nothing of tkt's is configured here (SHAPE.md, "tkt is the runner"); the check says what is wrong.
+    key: 'tkt', name: 'tkt', role: 'Runner', does: 'Builds this app\'s tickets from their approved briefs: a worktree, a herdr tab, the lifecycle skills on the harness and model its preset says; the plan, the handoff, the review and the completion written back on the ticket',
+    fields: [{ key: 'on', label: 'Runs this app\'s tasks', kind: 'switch', required: true }],
+    calls: true, perApp: true, docs: 'https://gitlab.com/rogs/tkt',
+    actions: [
+      { key: 'start', name: 'Start', does: '`tkt start <ticket>`: a worktree and a tab; start-ticket reads the ticket here, moves it to in progress and plans from the brief.' },
+      { key: 'approve', name: 'Approve the plan', does: '`tkt approve <ticket>`: work-ticket builds, commits, opens the pull request and hands off on the ticket.' },
+      { key: 'review', name: 'Review', does: '`tkt run <ticket> review`: review-pr in a fresh session, its verdict on the pull request; verify-pr runs the human verification steps.' },
+      { key: 'merge', name: 'Merge and finish', does: '`tkt merge <ticket> --passed`, then `tkt done`: finish-ticket merges and moves the ticket to done.' },
+    ],
+  },
   {
     key: 'posthog', name: 'PostHog', role: 'Telemetry', does: 'What users do, and every log line: events, flags, experiments, LLM calls, logs over OTLP',
     fields: [
@@ -103,6 +121,8 @@ export interface Status { state: 'off' | 'incomplete' | 'no-key' | 'ready'; miss
 export function integrationStatus(i: Integration, values: Record<string, string | null | undefined>, env: Record<string, string | undefined> = process.env): Status {
   const val = (k: string) => values[k]?.trim() || null
   const keyVar = val(i.fields.find((f) => f.secret)?.key ?? '')
+  const switched = i.fields.find((f) => f.kind === 'switch')
+  if (switched) return { state: val(switched.key) === 'true' ? 'ready' : 'off', missing: [], keyVar } // on or off; nothing to fill in
   const missing = i.fields.filter((f) => f.required && !val(f.key)).map((f) => f.label)
   if (!i.fields.some((f) => val(f.key))) return { state: 'off', missing, keyVar }
   if (missing.length) return { state: 'incomplete', missing, keyVar }
@@ -118,12 +138,20 @@ export function statuses(values: Values | Record<string, Record<string, Effectiv
 
 export class IntegrationError extends Error {}
 
-/** Tries the connection: signs in with the key and finds the team or space. Says what it found, or what went wrong. */
-export async function checkIntegration(key: string, values: Record<string, string | null | undefined>, env: Record<string, string | undefined> = process.env, fetcher: typeof fetch = fetch): Promise<{ ok: boolean; detail: string }> {
+/**
+ * Tries the connection: signs in with the key and finds the team or space, or, for tkt, looks for the runner and the
+ * tracker guide in the app's checkout. Says what it found, or what went wrong.
+ */
+export async function checkIntegration(key: string, values: Record<string, string | null | undefined>, env: Record<string, string | undefined> = process.env, fetcher: typeof fetch = fetch, tkt?: { ctx: TktContext; deps?: Parameters<typeof checkTkt>[1] }): Promise<{ ok: boolean; detail: string }> {
   const i = INTEGRATIONS.find((x) => x.key === key)
   if (!i) throw new IntegrationError(`no integration ${key}`)
   if (!i.calls) throw new IntegrationError(`${i.name} is read by each app, not the engine, so there is nothing to check here`)
   const st = integrationStatus(i, values, env)
+  if (key === 'tkt') {
+    if (!tkt) throw new IntegrationError('tkt is switched on per app: check it from an app\'s Integrations')
+    if (st.state === 'off') return { ok: false, detail: 'tkt is off for this app: its tasks go to Self Evident\'s own planner.' }
+    return checkTkt(tkt.ctx, tkt.deps)
+  }
   if (st.state === 'off' || st.state === 'incomplete') return { ok: false, detail: `Missing: ${st.missing.join(', ')}.` }
   if (st.state === 'no-key') return { ok: false, detail: `${st.keyVar} isn't set in the engine's environment. Add it there and restart the engine.` }
   const token = env[st.keyVar!]!

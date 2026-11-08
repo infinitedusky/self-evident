@@ -63,6 +63,7 @@ export function IssuePage() {
             <Badge tone={STATE_TONE[i.state]} dot={i.state === 'in_progress'}>{STATE_LABEL[i.state]}</Badge>
             <Badge>{code ? 'code' : 'to-do'}</Badge>
             {i.delegate && <Badge>with the {i.delegate}</Badge>}
+            {i.runner === 'tkt' && <Badge tone="accent">run by tkt</Badge>}
             {i.build && <Badge tone={STATUS_TONE[i.build.status]}>build: {i.build.status.replace('_', ' ')}{i.build.attempt ? ` · attempt ${i.build.attempt}` : ''}</Badge>}
             {i.waitingOn && <Badge tone="warn">waiting on {i.waitingOn}</Badge>}
           </div>

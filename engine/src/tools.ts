@@ -19,6 +19,7 @@ import { convertIdea, guardComplete, guardDirect, listWorkflows, setStep, stepsO
 import { STEPS } from './steps.js'
 import { answerQuestion, finishPlanning, preparePlanning } from './planner.js'
 import { createProject, issueDetail, listProjects, PlanError, projectGraph } from './projects.js'
+import { delegateFor } from './tkt.js'
 import { runner } from './runner.js'
 import { listStories } from './storybook.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, setPrototypeCommand, setPrototypeDatabase, startPrototype, stopPrototype } from './prototype.js'
@@ -73,7 +74,7 @@ export function engineTools(opts: ToolScope): EngineTool[] {
       def('create_task', 'Create a task in this app. kind code (built by agents; default) or todo (work outside the code; prefer create_todo for a checklist). With projectId it goes at the end of that project (state backlog to put it in the backlog instead); without, it waits in no project until added to one. parentId (the parent task\'s id) makes it a sub-task.', {
         title: z.string(), kind: z.enum(['code', 'todo']).optional(), description: z.string().optional().describe(described), brief: z.string().optional(),
         projectId: z.string().optional(), parentId: z.string().optional(), state: z.enum(['todo', 'backlog', 'triage']).optional(), priority: z.number().int().min(0).max(4).optional().describe('0 none, 1 urgent, 2 high, 3 medium, 4 low'), cycleId: z.string().optional(), workflowId: z.string().optional().describe('its own workflow rules (see workflows); without, it follows its project\'s or the app\'s'),
-      }, async (a) => tryIt(async () => { if (a.projectId) await ownProject(a.projectId); if (a.parentId) await ownIssue(a.parentId); if (a.kind !== 'todo' && !a.parentId) await guardDirect(db, appId, a.projectId, a.workflowId); return createIssue(appId, { ...a, source: 'agent', sourceRef: sessionId ? { sessionId } : null, delegate: a.kind === 'todo' || a.parentId ? null : 'planner' }, actor) })),
+      }, async (a) => tryIt(async () => { if (a.projectId) await ownProject(a.projectId); if (a.parentId) await ownIssue(a.parentId); if (a.kind !== 'todo' && !a.parentId) await guardDirect(db, appId, a.projectId, a.workflowId); return createIssue(appId, { ...a, source: 'agent', sourceRef: sessionId ? { sessionId } : null, delegate: a.kind === 'todo' || a.parentId ? null : await delegateFor(appId) }, actor) })),
       def('update_task', 'Change a task of this app (issueId: the task\'s id): title, description, brief, priority, estimate, cycle; or move it into a project (projectId; it goes at the end).', {
         issueId: z.string(), title: z.string().optional(), description: z.string().optional(), brief: z.string().optional(), priority: z.number().int().min(0).max(4).optional(),
         estimate: z.enum(['S', 'M', 'L', 'XL']).optional(), cycleId: z.string().optional(), projectId: z.string().optional(),

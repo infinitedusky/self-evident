@@ -87,6 +87,7 @@ export interface IssueRow { id: string; identifier: string; number: number; titl
 export interface IssueComment { id: string; issueId: string; heading: string; body: string; author: string; createdAt: string; updatedAt: string }
 export interface IssueDetail extends Issue {
   comments: IssueComment[]
+  runner: 'tkt' | null // who builds it once the brief is approved: tkt, or Self Evident's own agents
   project: { id: string; name: string; status: string } | null; parent: { id: string; identifier: string; title: string } | null
   build: { status: BuildStatus; attempt: number; heldReason: string | null } | null; questions: Question[]; decisions: Decision[]
   relations: { issueId: string; relatedIssueId: string; type: 'blocks' | 'related' | 'duplicate' }[]
@@ -111,8 +112,9 @@ export interface Workspace { id: string; name: string; settings?: { integrations
 export type IntegrationValues = Record<string, Record<string, string>>
 export interface Integration {
   key: string; name: string; role: string; does: string
-  fields: { key: string; label: string; placeholder?: string; required?: boolean; secret?: boolean }[]
+  fields: { key: string; label: string; placeholder?: string; required?: boolean; secret?: boolean; kind?: 'switch' }[] // a switch holds "true" or "false"
   calls: boolean; actions: { key: string; name: string; does: string }[]; docs?: string
+  perApp?: boolean // switched on under each app (a runner like tkt), nothing to set for all apps
 }
 /** Where an integration stands: nothing set, missing fields, its key not in the engine's environment, or ready. */
 export interface IntegrationStatus { state: 'off' | 'incomplete' | 'no-key' | 'ready'; missing: string[]; keyVar: string | null }
@@ -228,6 +230,12 @@ export const engine = {
   updateWorkspace: (id: string, body: { name?: string; integrations?: IntegrationValues }) => call<Workspace>('PATCH', `/workspaces/${id}`, body),
   appSettings: (id: string) => call<AppSettings>('GET', `/apps/${id}/settings`),
   checkIntegration: (key: string, appId?: string) => call<{ ok: boolean; detail: string }>('POST', `/integrations/${key}/check`, { appId }),
+  trackerGuide: async (appId: string) => { // the repo's docs/agents/issue-tracker.md for this app, filled in (Markdown, not JSON)
+    const res = await fetch(`${API}/apps/${appId}/tracker-guide`)
+    const text = await res.text()
+    if (!res.ok) throw new Error(text || `${res.status}`)
+    return text
+  },
   installPlugin: (marketplace: string, name: string) => call<{ id: string }>('POST', '/plugins', { marketplace, name }),
   removePlugin: (id: string) => call<{ ok: true }>('DELETE', `/plugins/${encodeURIComponent(id)}`),
   updatePlugin: (id: string, body: { on?: boolean; roles?: AgentRole[] }) => call<{ ok: true }>('PATCH', `/plugins/${encodeURIComponent(id)}`, body),

@@ -3,7 +3,9 @@
 A tracker guide in the format of the rogs-skills `setup-rogs` guides (`tracker-linear.md`, `tracker-local.md`, …), so
 `/setup-rogs` can write a repository's `docs/agents/issue-tracker.md` from it, or a person can, by filling the
 `{{FILL: …}}` values. Self Evident is where tickets are born, reviewed and watched; tkt and the lifecycle skills
-build them and write back here (SHAPE.md, "tkt is the runner; Self Evident is the tracker and the window").
+build them and write back here (SHAPE.md, "tkt is the runner; Self Evident is the tracker and the window"). The
+engine fills it for an app itself (`engine/src/tkt.ts`, `trackerGuide`): an app's page under Integrations › tkt
+shows the finished `docs/agents/issue-tracker.md` to copy, and `GET /api/apps/:id/tracker-guide` serves it.
 
 ## Setup notes
 

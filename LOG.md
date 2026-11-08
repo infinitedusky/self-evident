@@ -1721,3 +1721,31 @@ against the engine so it works from any harness without MCP wiring per worktree.
 Next: point tkt-scratch's `docs/agents/issue-tracker.md` at Self Evident and run a ticket through; then the client
 repo on Monday morning: add it as an app, `/setup-rogs` with Self Evident as the tracker, first tickets. Then
 the buttons: start, approve, review, merge from the ticket page, calling tkt.
+
+## tkt per app (Sandy, 2026-11-08: "there are two things that we're talking about at the same time")
+
+Sandy went to the tkt scratch app's settings looking for tkt and found nothing, which was last night's decision
+(no settings screen, no plugin bookkeeping) doing exactly what it said. Sandy then separated two things I had
+collapsed. One: Self Evident does not configure tkt to make sure it works; when it is used and broken, a sensible
+error, and the fixing happens outside. Two: for any specific app we choose whether to use tkt or not, and a choice
+has to be recorded somewhere, "a plugin or something, an integration". Settled in conversation: an integration, not
+a plugin (plugins here are Claude Code plugins for the factory's own agents; the integration shape of 2026-10-29
+already has per-app values, no secrets and a check), role Runner, and the one new thing in the model a switch
+instead of values.
+
+**Built** (branch `tkt-integration`). Engine: `tkt` in `INTEGRATIONS` with a `switch` field (`on` = "true") and
+`perApp` (nothing to set for all apps); `integrationStatus` reads a switch as on or off, never incomplete;
+`engine/src/tkt.ts` with `checkTkt` (tkt on the engine's PATH, a local checkout, `docs/agents/issue-tracker.md`
+in it naming Self Evident and this app's id and key, `tkt doctor` passing there; the first thing wrong is the
+answer, tkt's own `fail` lines verbatim, then "Get tkt working: gitlab.com/rogs/tkt") and `trackerGuide` (the repo
+file composed from `docs/tracker-self-evident.md`'s Tracker, Operations, States and priority sections inside the
+rogs-skills frame, filled with the engine URL, the UI URL (`UI_URL`, default :5180), the app's name, id and key),
+served at `GET /api/apps/:id/tracker-guide`; a new top-level code task in a tkt app gets `delegate: null`
+(`delegateFor`), from `POST /issues` and from the agent's `create_task`, so no more "with the planner" on a ticket
+tkt builds; `issueDetail` says `runner: 'tkt'`. UI: the integration page with the switch (Edit → On or Off), the
+check running by itself when the page opens, "The tracker guide" with Copy, "On a ticket" listing start, approve,
+review, merge; the All apps page says per app; the ticket page's "run by tkt" badge. Stories first: Pages/Settings ›
+AppTkt, AppTktBroken, AppTktOff, AllAppsTkt. Tests: `engine/src/tkt.test.ts`.
+
+Left out on purpose: a workspace-level default for tkt (nobody asked), the buttons (after the rehearsal), and
+anything that reads or writes tkt's own configuration.

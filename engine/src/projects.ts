@@ -11,6 +11,7 @@ import { app, build, BUILD_STATE, decision, event, fileClaim, idea, issue, issue
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { getIssue, identifier, insertIssues, listComments, nextSort, PlanError, rollUp, setState, type Issue, type Source } from './issues.js'
+import { tktOn } from './tkt.js'
 import { claimsOverlap, findCycle, pickTasksToStart, type SchedTask } from './scheduler.js'
 
 export { PlanError } from './issues.js'
@@ -422,6 +423,7 @@ export async function issueDetail(issueId: string) {
   const comments = await listComments(db, issueId)
   return {
     ...i, identifier: identifier(a.key, i.number), project: p ? { id: p.id, name: p.name, status: p.status } : null, comments,
+    runner: tktOn(a.setup) ? 'tkt' as const : null, // who builds it once the brief is approved: tkt, or Self Evident's own agents
     parent: parent ? { id: parent.id, identifier: identifier(a.key, parent.number), title: parent.title } : null,
     build: b ?? null, questions, decisions, relations: rels, steps, stepsAttempt: last?.attempt ?? null, // the builder's list, from its latest run
     subIssues: subs.map((s) => ({ ...s, identifier: identifier(a.key, s.number), build: builds.find((x) => x.issueId === s.id) ?? null })),
