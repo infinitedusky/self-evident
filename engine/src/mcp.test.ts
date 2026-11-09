@@ -62,7 +62,7 @@ describe.skipIf(!reachable)('mcp', () => {
     } }
     const sb = createServer((req, res) => { res.setHeader('content-type', 'application/json'); res.end(req.url === '/index.json' ? JSON.stringify(index) : '{}') })
     await new Promise<void>((r) => sb.listen(0, '127.0.0.1', r))
-    await db.update(app).set({ setup: { storybook_url: `http://127.0.0.1:${(sb.address() as AddressInfo).port}/` } }).where(eq(app.id, appId))
+    await db.update(app).set({ setup: { integrations: { storybook: { url: `http://127.0.0.1:${(sb.address() as AddressInfo).port}/` } } } }).where(eq(app.id, appId))
     try {
       const all = await (await handleMcp(appId, rpc(7, 'tools/call', { name: 'stories', arguments: {} }), 4000)).json()
       expect(JSON.parse(all.result.content[0].text).map((e: { id: string }) => e.id)).toEqual(['pages-cart--empty', 'components-badge--ok'])
@@ -75,7 +75,7 @@ describe.skipIf(!reachable)('mcp', () => {
   })
 
   it('says so when the Storybook is not answering', async () => {
-    await db.update(app).set({ setup: { storybook_url: 'http://127.0.0.1:9/' } }).where(eq(app.id, appId))
+    await db.update(app).set({ setup: { integrations: { storybook: { url: 'http://127.0.0.1:9/' } } } }).where(eq(app.id, appId))
     const r = await (await handleMcp(appId, rpc(10, 'tools/call', { name: 'stories', arguments: {} }), 4000)).json()
     expect(r.result.isError).toBe(true)
     expect(r.result.content[0].text).toContain('not answering')

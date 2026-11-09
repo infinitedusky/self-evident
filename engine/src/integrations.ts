@@ -11,21 +11,26 @@
  * Every integration is the service's official API or SDK, with no paid middleman (Sandy, 2026-10-29).
  */
 import { LinearClient } from '@linear/sdk'
-import { checkTkt, type TktContext } from './tkt.js'
+import { checkStorybook, setupMapAsk, type Check, type StorybookContext } from './storybook.js'
+import { checkTkt, urls, type TktContext } from './tkt.js'
 
 /**
  * `secret` marks the field naming the key's variable; `required` ones must be set before it counts as connected.
  * A `switch` holds "true" or "false" instead of a value: on or off.
  */
 export interface Field { key: string; label: string; placeholder?: string; required?: boolean; secret?: boolean; kind?: 'switch' }
-/** What a workflow step can do with it: content from an earlier step in, a link and an id back. */
-export interface Action { key: string; name: string; does: string }
+/**
+ * What can be done with it. A workflow step's action takes content from an earlier step and gives a link and an id
+ * back. One with a `kind` is a button on the integration's page: `start` runs the tool, `link` opens what the check
+ * found, `ask` hands the agent a job (`ask` is the text) in a conversation in the app's repo.
+ */
+export interface Action { key: string; name: string; does: string; kind?: 'start' | 'link' | 'ask'; ask?: string }
 export interface Integration {
   key: string; name: string; role: string; does: string; fields: Field[]
   calls: boolean // the engine calls it, so its key must be in the engine's environment
   actions: Action[]
   docs?: string // where to make a key
-  perApp?: boolean // switched on under each app, nothing to set for all apps: a tool that runs an app's work, not a service
+  perApp?: boolean // set under each app, nothing to set for all apps: a tool that runs an app's work or shows its screens, not a service
 }
 
 export const INTEGRATIONS: Integration[] = [
@@ -40,6 +45,21 @@ export const INTEGRATIONS: Integration[] = [
       { key: 'approve', name: 'Approve the plan', does: '`tkt approve <ticket>`: work-ticket builds, commits, opens the pull request and hands off on the ticket.' },
       { key: 'review', name: 'Review', does: '`tkt run <ticket> review`: review-pr in a fresh session, its verdict on the pull request; verify-pr runs the human verification steps.' },
       { key: 'merge', name: 'Merge and finish', does: '`tkt merge <ticket> --passed`, then `tkt done`: finish-ticket merges and moves the ticket to done.' },
+    ],
+  },
+  {
+    // Storybook, per app (SHAPE.md: the home of the design system, stories and mockups). Its command and URL were
+    // plain app setup until 2026-11-09; the check reads the repo for the screen-map standard (storybook.ts).
+    key: 'storybook', name: 'Storybook', role: 'Screens', does: 'This app\'s screens as stories, refined from a quick mockup: Mockups shows them inside Self Evident, the agent opens one to show what it means, and the screen map draws the app as the user walks it',
+    fields: [
+      { key: 'cmd', label: 'Command', placeholder: 'pnpm storybook --no-open (run in the checkout)', required: true },
+      { key: 'url', label: 'URL', placeholder: 'http://localhost:6006', required: true },
+    ],
+    calls: true, perApp: true, docs: 'https://github.com/zigbang/storybook-addon-story-flow',
+    actions: [
+      { key: 'start', name: 'Start', does: 'Starts Storybook from the checkout with the command and keeps it running; Mockups shows it.', kind: 'start' },
+      { key: 'map', name: 'Open the map', does: 'The screen map: every page as the user sees it, and the taps between them. Here once the check finds a map and Storybook is up.', kind: 'link' },
+      { key: 'setup', name: 'Set up the screen map', does: 'Hands the agent the job in a conversation in the repo: the add-on, its stylesheet, the flow files kept out of the story tests, a first map. It asks before each file.', kind: 'ask', ask: setupMapAsk(urls().engineUrl) },
     ],
   },
   {
@@ -138,19 +158,28 @@ export function statuses(values: Values | Record<string, Record<string, Effectiv
 
 export class IntegrationError extends Error {}
 
+/** What a per-app check needs from the app: tkt's context, or Storybook's; `deps` only in tests. */
+export interface Local { tkt?: { ctx: TktContext; deps?: Parameters<typeof checkTkt>[1] }; storybook?: { ctx: StorybookContext; deps?: Parameters<typeof checkStorybook>[1] } }
+
 /**
- * Tries the connection: signs in with the key and finds the team or space, or, for tkt, looks for the runner and the
- * tracker guide in the app's checkout. Says what it found, or what went wrong.
+ * Tries the connection: signs in with the key and finds the team or space; for tkt, looks for the runner and the
+ * tracker guide in the app's checkout; for Storybook, reads the repo for the screen-map standard. Says what it
+ * found, or what went wrong, and for Storybook the link to the map when there is one to open.
  */
-export async function checkIntegration(key: string, values: Record<string, string | null | undefined>, env: Record<string, string | undefined> = process.env, fetcher: typeof fetch = fetch, tkt?: { ctx: TktContext; deps?: Parameters<typeof checkTkt>[1] }): Promise<{ ok: boolean; detail: string }> {
+export async function checkIntegration(key: string, values: Record<string, string | null | undefined>, env: Record<string, string | undefined> = process.env, fetcher: typeof fetch = fetch, local?: Local): Promise<Check> {
   const i = INTEGRATIONS.find((x) => x.key === key)
   if (!i) throw new IntegrationError(`no integration ${key}`)
   if (!i.calls) throw new IntegrationError(`${i.name} is read by each app, not the engine, so there is nothing to check here`)
   const st = integrationStatus(i, values, env)
   if (key === 'tkt') {
-    if (!tkt) throw new IntegrationError('tkt is switched on per app: check it from an app\'s Integrations')
+    if (!local?.tkt) throw new IntegrationError('tkt is switched on per app: check it from an app\'s Integrations')
     if (st.state === 'off') return { ok: false, detail: 'tkt is off for this app: its tasks go to Self Evident\'s own planner.' }
-    return checkTkt(tkt.ctx, tkt.deps)
+    return checkTkt(local.tkt.ctx, local.tkt.deps)
+  }
+  if (key === 'storybook') {
+    if (!local?.storybook) throw new IntegrationError('Storybook is set per app: check it from an app\'s Integrations')
+    if (st.state !== 'ready') return { ok: false, detail: `Missing: ${st.missing.join(', ')}.` }
+    return checkStorybook(local.storybook.ctx, local.storybook.deps)
   }
   if (st.state === 'off' || st.state === 'incomplete') return { ok: false, detail: `Missing: ${st.missing.join(', ')}.` }
   if (st.state === 'no-key') return { ok: false, detail: `${st.keyVar} isn't set in the engine's environment. Add it there and restart the engine.` }

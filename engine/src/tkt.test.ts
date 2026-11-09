@@ -71,8 +71,8 @@ describe('the check', () => {
   })
   it('is reached through checkIntegration with the app\'s context, and refused without one', async () => {
     const deps = { run: fakeTkt(), read: files({ [`/code/scratch/${GUIDE_PATH}`]: goodGuide }) }
-    expect((await checkIntegration('tkt', { on: 'true' }, {}, fetch, { ctx, deps })).ok).toBe(true)
-    expect((await checkIntegration('tkt', { on: 'false' }, {}, fetch, { ctx, deps })).detail).toMatch(/off for this app/)
+    expect((await checkIntegration('tkt', { on: 'true' }, {}, fetch, { tkt: { ctx, deps } })).ok).toBe(true)
+    expect((await checkIntegration('tkt', { on: 'false' }, {}, fetch, { tkt: { ctx, deps } })).detail).toMatch(/off for this app/)
     await expect(checkIntegration('tkt', { on: 'true' })).rejects.toThrow(/per app/)
   })
 })
