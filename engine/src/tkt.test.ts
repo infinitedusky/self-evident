@@ -126,13 +126,13 @@ describe('set up what\'s missing', () => {
   })
 
   it("hands tkt doctor's findings to the agent with their hints, leaving the pane warning out", async () => {
-    const doctor = 'ok    git    git version 2.50\nfail  herdr            herdr is not installed\n                       hint: brew install herdr\nwarn  pi               this tkt has no bundled pi\n                       hint: install a release build of tkt (install.sh)\nwarn  herdr_env        not inside a herdr pane\n                       hint: open a herdr pane and run tkt there\n'
+    const doctor = 'ok    git    git version 2.50\nfail  herdr            herdr is not installed\n                       hint: brew install herdr\nwarn  pi               this tkt has no bundled pi\n                       hint: install a release build of tkt (install.sh)\nwarn  herdr_env        not inside a herdr pane\n                       hint: open a herdr pane and run tkt there\nskip  services         tkt watch runs when a command starts it\n                       hint: tkt watch --install runs it as a service\nok    gh               gh version 2.92.0\n'
     const fs = fakeFs({ [guidePath]: goodGuide })
     const r = await setupTkt(ctx, { run: fakeTkt(doctor), ...fs })
     expect(r.did).toEqual([]); expect(r.done).toBe(false)
-    expect(r.ask).toContain('fail herdr: herdr is not installed (hint: brew install herdr)')
-    expect(r.ask).toContain('warn pi: this tkt has no bundled pi (hint: install a release build of tkt (install.sh))')
-    expect(r.ask).not.toContain('herdr_env'); expect(r.ask).toContain('today:')
+    expect(r.ask).toContain('    fail herdr: herdr is not installed (hint: brew install herdr)\n')
+    expect(r.ask).toContain('    warn pi: this tkt has no bundled pi (hint: install a release build of tkt (install.sh))\n') // the pane's and the service's hints stay with their own lines, which are left out
+    expect(r.ask).not.toContain('herdr_env'); expect(r.ask).not.toContain('tkt watch'); expect(r.ask).toContain('today:')
     expect(r.ask).toContain(`${ctx.engineUrl}/apps/app_x1/tracker-guide`)
   })
 
