@@ -34,7 +34,7 @@ import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, 
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { runner } from './runner.js'
-import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, statuses, type Local, type Values } from './integrations.js'
+import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, setupIntegration, statuses, type Local, type Values } from './integrations.js'
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
 import { CATALOGUE } from './catalogue.js'
 import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role } from './skills.js'
@@ -174,28 +174,49 @@ export function buildApp(bus: EventBus) {
     return c.json({ integrations, status: statuses(integrations), plugins, skills: r?.localPath ? appSkills(r.localPath) : [] })
   })
   // Tries an integration's saved connection: the workspace's values, or an app's with its overrides.
-  api.post('/integrations/:key/check', async (c) => {
-    const body = await c.req.json<{ appId?: string }>().catch(() => ({} as { appId?: string }))
+  // An integration's effective values for an app (or the workspace's), and what its per-app check needs from the app.
+  const integrationFor = async (key: string, appId?: string): Promise<{ values: Record<string, string | null>; local?: Local } | null> => {
     const [w] = await db.select().from(workspace).limit(1)
     const shared = ((w?.settings ?? {}) as { integrations?: Values }).integrations ?? {}
     let own: Values = {}
-    if (body.appId) {
-      const [a] = await db.select().from(appTable).where(eq(appTable.id, body.appId))
-      if (!a) return c.json({ error: 'no such app' }, 404)
+    let a: typeof appTable.$inferSelect | undefined
+    if (appId) {
+      ;[a] = await db.select().from(appTable).where(eq(appTable.id, appId))
+      if (!a) return null
       own = (a.setup as { integrations?: Values }).integrations ?? {}
     }
-    const key = c.req.param('key')
     const values = Object.fromEntries(Object.entries(effectiveIntegrations(shared, own)[key] ?? {}).map(([k, v]) => [k, v.value]))
     let local: Local | undefined
-    if (key === 'tkt' && body.appId) { const ctx = await contextFor(body.appId); if (ctx) local = { tkt: { ctx } } }
-    if (key === 'storybook' && body.appId) {
-      const [a] = await db.select().from(appTable).where(eq(appTable.id, body.appId))
-      const [r] = await db.select().from(repoTable).where(eq(repoTable.appId, body.appId))
-      if (a) local = { storybook: { ctx: { app: { id: a.id, name: a.name }, repoPath: r?.localPath ?? null, url: values.url ?? null, cmd: values.cmd ?? null } } }
+    if (key === 'tkt' && appId) { const ctx = await contextFor(appId); if (ctx) local = { tkt: { ctx } } }
+    if (key === 'storybook' && a) {
+      const [r] = await db.select().from(repoTable).where(eq(repoTable.appId, a.id))
+      local = { storybook: { ctx: { app: { id: a.id, name: a.name }, repoPath: r?.localPath ?? null, url: values.url ?? null, cmd: values.cmd ?? null } } }
     }
-    try { return c.json(await checkIntegration(key, values, process.env, fetch, local)) } catch (err) {
+    return { values, local }
+  }
+  api.post('/integrations/:key/check', async (c) => {
+    const body = await c.req.json<{ appId?: string }>().catch(() => ({} as { appId?: string }))
+    const found = await integrationFor(c.req.param('key'), body.appId)
+    if (!found) return c.json({ error: 'no such app' }, 404)
+    try { return c.json(await checkIntegration(c.req.param('key'), found.values, process.env, fetch, found.local)) } catch (err) {
       if (err instanceof IntegrationError) return c.json({ error: err.message }, 400)
       throw err
+    }
+  })
+  // "Set up what's missing": the engine does its part, then hands the rest to the agent in a conversation in the repo.
+  api.post('/integrations/:key/setup', async (c) => {
+    const body = await c.req.json<{ appId?: string }>().catch(() => ({} as { appId?: string }))
+    if (!body.appId) return c.json({ error: 'appId is required: an integration is set up for an app' }, 400)
+    const found = await integrationFor(c.req.param('key'), body.appId)
+    if (!found) return c.json({ error: 'no such app' }, 404)
+    try {
+      const r = await setupIntegration(c.req.param('key'), found.values, process.env, found.local)
+      let talkId: string | null = null
+      if (r.ask) { const t = await startTalk({ appId: body.appId, actor: 'user' }); await say(t.id, r.ask); await showTalk(t.id, body.appId); talkId = t.id }
+      return c.json({ ...r, talkId })
+    } catch (err) {
+      if (err instanceof IntegrationError) return c.json({ error: err.message }, 400)
+      return planError(c, err)
     }
   })
   // The repo's docs/agents/issue-tracker.md for this app, filled in: what tkt's skills read to find the app here.

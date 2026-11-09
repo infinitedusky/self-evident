@@ -3,8 +3,8 @@
  * what is wrong and nothing else, and the tracker guide comes out filled for the app.
  */
 import { describe, expect, it } from 'vitest'
-import { checkIntegration, integrationStatus, INTEGRATIONS, statuses } from './integrations.js'
-import { checkTkt, defaultDelegate, GUIDE_PATH, section, tktOn, trackerGuide, type Run, type TktContext } from './tkt.js'
+import { checkIntegration, integrationStatus, INTEGRATIONS, setupIntegration, statuses } from './integrations.js'
+import { checkTkt, defaultDelegate, GUIDE_PATH, section, setupTkt, tktOn, trackerGuide, type Run, type TktContext } from './tkt.js'
 
 const tkt = INTEGRATIONS.find((i) => i.key === 'tkt')!
 const ctx: TktContext = { app: { id: 'app_x1', key: 'SCR', name: 'tkt scratch' }, repoPath: '/code/scratch', engineUrl: 'http://localhost:4000/api', uiUrl: 'http://localhost:5180' }
@@ -95,5 +95,57 @@ describe('the tracker guide', () => {
     expect(section('# T\n\n## A\n\none\n\n## B\n\ntwo\n', 'A')).toBe('one')
     expect(section('## A\none\n## B\ntwo', 'B')).toBe('two')
     expect(section('## A\none', 'C')).toBe('')
+  })
+})
+
+describe('set up what\'s missing', () => {
+  /** A checkout's files, readable and writable, so what setup writes the check then sees. */
+  const fakeFs = (map: Record<string, string>) => {
+    const w: Record<string, string> = { ...map }
+    return { w, read: async (p: string) => { if (p in w) return w[p]; throw Object.assign(new Error(`ENOENT ${p}`), { code: 'ENOENT' }) }, write: async (p: string, t: string) => { w[p] = t } }
+  }
+  const guidePath = `/code/scratch/${GUIDE_PATH}`
+
+  it('writes the tracker guide when that is what is wrong, checks again, and is done', async () => {
+    const fs = fakeFs({})
+    const r = await setupTkt(ctx, { run: fakeTkt(), ...fs })
+    expect(r.done).toBe(true); expect(r.ask).toBeNull()
+    expect(r.did).toEqual([`Wrote ${GUIDE_PATH} in the checkout, pointing at SCR here; not committed, so look at it and commit it.`])
+    expect(r.detail).toMatch(/doctor passes in \/code\/scratch/)
+    expect(fs.w[guidePath]).toContain('Kind: Self Evident'); expect(fs.w[guidePath]).toContain('app_x1')
+  })
+
+  it('replaces a guide pointing elsewhere, and hands tkt itself to the agent when it is missing', async () => {
+    const fs = fakeFs({ [guidePath]: '# Issue tracker\n\n## Tracker\n\n- Kind: Linear\n' })
+    const r = await setupTkt(ctx, { run: async () => { throw enoent() }, ...fs })
+    expect(r.done).toBe(false)
+    expect(r.did[0]).toMatch(/^Wrote docs\/agents\/issue-tracker\.md in the checkout \(it pointed at another tracker\)/)
+    expect(r.ask).toContain("says: tkt isn't on the engine's PATH")
+    expect(r.ask).toContain('install.sh'); expect(r.ask).toContain('each following its own hint.')
+    expect(fs.w[guidePath]).toContain('Kind: Self Evident')
+  })
+
+  it("hands tkt doctor's findings to the agent with their hints, leaving the pane warning out", async () => {
+    const doctor = 'ok    git    git version 2.50\nfail  herdr            herdr is not installed\n                       hint: brew install herdr\nwarn  pi               this tkt has no bundled pi\n                       hint: install a release build of tkt (install.sh)\nwarn  herdr_env        not inside a herdr pane\n                       hint: open a herdr pane and run tkt there\n'
+    const fs = fakeFs({ [guidePath]: goodGuide })
+    const r = await setupTkt(ctx, { run: fakeTkt(doctor), ...fs })
+    expect(r.did).toEqual([]); expect(r.done).toBe(false)
+    expect(r.ask).toContain('fail herdr: herdr is not installed (hint: brew install herdr)')
+    expect(r.ask).toContain('warn pi: this tkt has no bundled pi (hint: install a release build of tkt (install.sh))')
+    expect(r.ask).not.toContain('herdr_env'); expect(r.ask).toContain('today:')
+    expect(r.ask).toContain(`${ctx.engineUrl}/apps/app_x1/tracker-guide`)
+  })
+
+  it('stops at a missing checkout: nothing to write, nothing for the agent', async () => {
+    const r = await setupTkt({ ...ctx, repoPath: null }, { run: fakeTkt(), read: files({}), write: async () => { throw new Error('must not write') } })
+    expect(r).toMatchObject({ done: false, did: [], ask: null }); expect(r.detail).toMatch(/Settings › Repo/)
+  })
+
+  it('is reached through the integration, which refuses it off or without an app', async () => {
+    const fs = fakeFs({ [guidePath]: goodGuide })
+    expect((await setupIntegration('tkt', { on: 'false' }, {}, { tkt: { ctx, deps: { run: fakeTkt(), ...fs } } })).detail).toMatch(/off for this app/)
+    expect((await setupIntegration('tkt', { on: 'true' }, {}, { tkt: { ctx, deps: { run: fakeTkt(), ...fs } } })).done).toBe(true)
+    await expect(setupIntegration('tkt', { on: 'true' })).rejects.toThrow(/per app/)
+    await expect(setupIntegration('linear', { team: 'X', key_env: 'K' }, { K: 'k' })).rejects.toThrow(/nothing to set up/)
   })
 })

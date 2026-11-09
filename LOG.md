@@ -1835,3 +1835,17 @@ scenarios (the loop; an idea becomes a project; a project and its tasks; setting
 The nodes are the tab pages as the Workspace shows them; the frame around them (rail, agent) is
 `Components/Workspace`. No trigger selectors yet: they want `data-testid`s on the pages, a pass of its own.
 A paragraph in `app/README.md` says where the map is and how to add a screen.
+
+## Set up what's missing (Sandy, 2026-11-09: "can we add a step with tkt where it auto configures anything missing?")
+
+**Built** (branch `tkt-setup`). Engine: `setupTkt` (`engine/src/tkt.ts`) writes `docs/agents/issue-tracker.md` into
+the checkout when it is missing or points at another tracker or app (uncommitted, said so), checks again, and if
+tkt itself, herdr, worktrunk, the skills or anything `tkt doctor` flags is still missing, composes the agent's job:
+the check's line, `tkt doctor`'s fail and warn lines with their own hints (`doctorFindings`; the pane warning left
+out), where tkt comes from (its install.sh), where the other agent docs come from (/setup-rogs), and "confirm each
+install and file change with me". `setupIntegration` dispatches (`integrations.ts`): tkt as above; Storybook hands
+over the check's line plus the screen-map standard; off or incomplete values, or no checkout, wait on the person.
+`POST /integrations/:key/setup` runs it and, when there is a job, starts the conversation (`startTalk`, `say`,
+`showTalk`) and answers with what was done. UI: one button under a failed check, "Set up what's missing" (tkt) or
+"Set up the screen map" (Storybook), with a note of what happened; the action no longer sits in the lists below.
+Tests: `tkt.test.ts`, "set up what's missing".
