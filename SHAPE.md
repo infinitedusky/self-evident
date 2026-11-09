@@ -450,6 +450,14 @@ Details and sources in `research/`.
   what it can't fix (no such folder, a detached HEAD, git refusing) is a sentence on the page, never a 500. The
   same when the checkout is set later on the Repo page, and a conversation checks the checkout before it starts.
 
+- **Storybook is an integration, per app** (Sandy, 2026-11-09: "it should be a storybook integration and we should
+  ensure that we have story flow add on"). Its command and URL moved from the app's Settings to Integrations ›
+  Storybook (role Screens). Its check reads the repo for the standard: Storybook 10, the screen map add-on
+  (@zigbang/storybook-addon-story-flow) wired with a flow glob, its stylesheet imported, the flow files kept out of
+  the story tests, a map; then whether it answers. First thing wrong is the answer. Its actions are buttons: Start,
+  Open the map, Set up the screen map (the agent, in a conversation in the repo, asks before each file). The
+  Prototype settings (the command and throwaway database for running the app itself) stay the app's own.
+
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
 > "When I use VS Code, I can just move really quickly … I just set things to dangerously skip permissions and just
@@ -471,6 +479,11 @@ Direction, not yet built. The work has two halves with a hinge between them.
   rigorous depends on the workflow (who it's for, what stage the app is at; see "Modes" in the open questions).
 - **Calm screens.** Each screen answers one question. In explore, the default screen is the conversation and the
   thing being made; the rest waits until asked for.
+
+**The sequence** (Sandy, 2026-11-09): first a quick mockup, the thing written rapidly in HTML or whatever (its name
+is open; "sketch" is a candidate); once that is right it goes into Storybook as stories and is refined there, so
+Storybook is the step after the mockup, not the mockup; then the build runs in a prototype environment; then the
+plan, an audit of the prototype for issues, a blast-radius risk assessment; then the build.
 
 ### The agent shows where it is
 
