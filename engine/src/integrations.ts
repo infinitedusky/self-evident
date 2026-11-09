@@ -12,7 +12,7 @@
  */
 import { LinearClient } from '@linear/sdk'
 import { checkStorybook, setupMapAsk, type Check, type StorybookContext } from './storybook.js'
-import { checkTkt, urls, type TktContext } from './tkt.js'
+import { checkTkt, setupTkt, urls, type TktContext } from './tkt.js'
 
 /**
  * `secret` marks the field naming the key's variable; `required` ones must be set before it counts as connected.
@@ -45,6 +45,7 @@ export const INTEGRATIONS: Integration[] = [
       { key: 'approve', name: 'Approve the plan', does: '`tkt approve <ticket>`: work-ticket builds, commits, opens the pull request and hands off on the ticket.' },
       { key: 'review', name: 'Review', does: '`tkt run <ticket> review`: review-pr in a fresh session, its verdict on the pull request; verify-pr runs the human verification steps.' },
       { key: 'merge', name: 'Merge and finish', does: '`tkt merge <ticket> --passed`, then `tkt done`: finish-ticket merges and moves the ticket to done.' },
+      { key: 'setup', name: 'Set up what\'s missing', does: 'Writes the tracker guide into the checkout when that is what is wrong; for the rest (tkt itself, herdr, worktrunk, the skills, whatever tkt doctor flags) hands the agent the job in tkt\'s own words, hints and all. It asks before installing anything.', kind: 'ask' },
     ],
   },
   {
@@ -206,4 +207,32 @@ export async function checkIntegration(key: string, values: Record<string, strin
     return { ok: false, detail: String((e as Error)?.message ?? e) }
   }
   throw new IntegrationError(`no check for ${i.name} yet`)
+}
+
+export interface SetupResult { done: boolean; did: string[]; ask: string | null; detail: string }
+
+/**
+ * "Set up what's missing": what the engine can do itself, done; what is left, as the job for the agent (`ask`), with the
+ * check's words first; or nothing to hand over, when the person has to set something (the checkout, the values) first.
+ */
+export async function setupIntegration(key: string, values: Record<string, string | null | undefined>, env: Record<string, string | undefined> = process.env, local?: Local): Promise<SetupResult> {
+  const i = INTEGRATIONS.find((x) => x.key === key)
+  if (!i) throw new IntegrationError(`no integration ${key}`)
+  const action = i.actions.find((a) => a.kind === 'ask')
+  if (!action) throw new IntegrationError(`nothing to set up for ${i.name}`)
+  const st = integrationStatus(i, values, env)
+  if (key === 'tkt') {
+    if (!local?.tkt) throw new IntegrationError('tkt is switched on per app: set it up from an app\'s Integrations')
+    if (st.state === 'off') return { done: false, did: [], ask: null, detail: 'tkt is off for this app: switch it on first.' }
+    return setupTkt(local.tkt.ctx, local.tkt.deps)
+  }
+  if (key === 'storybook') {
+    if (!local?.storybook) throw new IntegrationError('Storybook is set per app: set it up from an app\'s Integrations')
+    if (st.state !== 'ready') return { done: false, did: [], ask: null, detail: `Missing: ${st.missing.join(', ')}. Set them with Edit first.` }
+    const check = await checkStorybook(local.storybook.ctx, local.storybook.deps)
+    if (check.ok) return { done: true, did: [], ask: null, detail: check.detail }
+    if (/^No local checkout/.test(check.detail)) return { done: false, did: [], ask: null, detail: `${check.detail} Set it under Settings › Repo first.` }
+    return { done: false, did: [], ask: `Self Evident's Storybook check for ${local.storybook.ctx.app.name} says: ${check.detail}\n\n${action.ask}`, detail: check.detail }
+  }
+  throw new IntegrationError(`nothing to set up for ${i.name}`)
 }

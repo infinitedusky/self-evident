@@ -9,7 +9,8 @@
  * the skills read to find this app here, filled from docs/tracker-self-evident.md with the app's id, key and URLs.
  */
 import { execFile } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { eq } from 'drizzle-orm'
@@ -166,4 +167,71 @@ export async function trackerGuide(ctx: TktContext, read: ReadText = readText): 
     '- Splitting work: the defaults in create-ticket.',
     '',
   ].join('\n')
+}
+
+// Set up what's missing (Sandy, 2026-11-09: "can we add a step with tkt where it auto configures anything missing?").
+// The tracker guide is ours and gets written; the rest is tkt's, handed to the agent in tkt's own words, hints and all.
+
+export interface Setup { done: boolean; did: string[]; ask: string | null; detail: string }
+export type Write = (path: string, text: string) => Promise<void>
+const writeText: Write = async (p, text) => { await mkdir(dirname(p), { recursive: true }); await writeFile(p, text) }
+
+/** Whether the guide in the checkout points at this app here; null when it does. */
+async function guideProblem(ctx: TktContext, read: ReadText): Promise<string | null> {
+  if (!ctx.repoPath) return null
+  let guide: string
+  try { guide = await read(`${ctx.repoPath.replace(/\/$/, '')}/${GUIDE_PATH}`) } catch { return 'missing' }
+  if (!/Kind:\s*Self Evident/.test(guide)) return 'another tracker'
+  if (!guide.includes(ctx.app.id) || !new RegExp(`\\b${ctx.app.key}-`).test(guide)) return 'another app'
+  return null
+}
+
+/** `tkt doctor`'s fail and warn lines with their hints, one string each; the pane warning is left out (not a setup matter). */
+export async function doctorFindings(exec: Run, repoPath: string): Promise<string[]> {
+  let out: string[]
+  try { const r = await exec('tkt', ['doctor'], repoPath); out = `${r.stdout}\n${r.stderr}`.split('\n') } catch (e) { out = lines(e) }
+  const found: string[] = []
+  for (const ln of out) {
+    const m = /^(fail|warn|error)\s+(\S+)\s+(.*)$/.exec(ln.trimEnd())
+    if (m) { if (m[2] !== 'herdr_env') found.push(`${m[1]} ${m[2]}: ${m[3].trim()}`); continue }
+    const hint = /^\s+hint:\s*(.*)$/.exec(ln)
+    if (hint && found.length && !/^warn herdr_env/.test(found[found.length - 1] ?? '')) found[found.length - 1] += ` (hint: ${hint[1].trim()})`
+  }
+  return found
+}
+
+/** The job for the agent: the check's words, tkt doctor's findings with their hints, and where each piece comes from. */
+export function setupAsk(ctx: TktContext, detail: string, findings: string[]): string {
+  const where = ctx.repoPath ?? 'the app\'s checkout'
+  return [
+    `Self Evident's tkt check for ${ctx.app.name} (${ctx.app.key}) says: ${detail}`,
+    `Set up what is missing so tkt runs this app's tickets from ${where}. Confirm each install and each file change with me before doing it.`,
+    `- tkt itself, when it is missing: a release build through its install.sh (https://gitlab.com/rogs/tkt), on the engine's PATH (~/.local/bin here), so \`tkt --version\` answers.`,
+    `- Then \`tkt doctor\` in the checkout, and every line it flags, each following its own hint${findings.length ? ', today:' : '.'}`,
+    ...findings.map((f) => `    ${f}`),
+    `- The tracker guide, ${GUIDE_PATH}, is Self Evident's and is written already (${ctx.engineUrl}/apps/${ctx.app.id}/tracker-guide gives it again); the other agent docs (the forge, the workflow, the domain) come from /setup-rogs in the repo, with Self Evident as the tracker.`,
+    `Finish when \`tkt doctor\` passes there, and say what you installed.`,
+  ].join('\n')
+}
+
+/**
+ * Does what Self Evident can do itself (the tracker guide, written into the checkout, uncommitted), then checks again;
+ * what is left is tkt's own and goes to the agent as `ask`, unless nothing can start before the person sets the checkout.
+ */
+export async function setupTkt(ctx: TktContext, deps: { run?: Run; read?: ReadText; write?: Write } = {}): Promise<Setup> {
+  const exec = deps.run ?? run
+  const read = deps.read ?? readText
+  const write = deps.write ?? writeText
+  const did: string[] = []
+  const problem = await guideProblem(ctx, read)
+  if (problem && ctx.repoPath) {
+    await write(`${ctx.repoPath.replace(/\/$/, '')}/${GUIDE_PATH}`, await trackerGuide(ctx)) // the guide's source is ours, read for real
+    did.push(`Wrote ${GUIDE_PATH} in the checkout${problem === 'missing' ? '' : ` (it pointed at ${problem})`}, pointing at ${ctx.app.key} here; not committed, so look at it and commit it.`)
+  }
+  const check = await checkTkt(ctx, deps)
+  if (check.ok) return { done: true, did, ask: null, detail: check.detail }
+  if (!ctx.repoPath) return { done: false, did, ask: null, detail: `${check.detail} Set it under Settings › Repo; nothing can be set up before that.` }
+  const tktThere = !/isn't on the engine's PATH|--version failed/.test(check.detail)
+  const findings = tktThere ? await doctorFindings(exec, ctx.repoPath) : []
+  return { done: false, did, ask: setupAsk(ctx, check.detail, findings), detail: check.detail }
 }
