@@ -233,6 +233,8 @@ export const engine = {
   updateWorkspace: (id: string, body: { name?: string; integrations?: IntegrationValues }) => call<Workspace>('PATCH', `/workspaces/${id}`, body),
   appSettings: (id: string) => call<AppSettings>('GET', `/apps/${id}/settings`),
   checkIntegration: (key: string, appId?: string) => call<{ ok: boolean; detail: string; links?: { label: string; href: string }[] }>('POST', `/integrations/${key}/check`, { appId }),
+  // Set up what's missing: what the engine did itself (did), whether the rest went to the agent (ask), or what waits on the person (detail).
+  setupIntegration: (key: string, appId: string) => call<{ done: boolean; did: string[]; ask: string | null; detail: string; talkId: string | null }>('POST', `/integrations/${key}/setup`, { appId }),
   trackerGuide: async (appId: string) => { // the repo's docs/agents/issue-tracker.md for this app, filled in (Markdown, not JSON)
     const res = await fetch(`${API}/apps/${appId}/tracker-guide`)
     const text = await res.text()

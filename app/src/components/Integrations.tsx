@@ -97,10 +97,16 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
     setActed('busy')
     try {
       if (a.kind === 'start') { await engine.startStorybook(appId); setActed('Starting; the check runs again in a moment.'); window.setTimeout(() => void runCheck(), 4000) }
-      else if (a.kind === 'ask' && a.ask) { await engine.ask({ appId, text: a.ask }); setActed('Handed to the agent: its conversation is open beside this.') }
+      else if (a.kind === 'ask') { // the engine does its part, then hands the rest to the agent
+        const r = await engine.setupIntegration(i.key, appId)
+        setActed([...r.did, r.done ? `All set: ${r.detail}` : r.ask ? 'The rest is with the agent: its conversation is open beside this.' : r.detail].join(' '))
+        if (r.done || r.did.length) void runCheck()
+      }
     } catch (e) { setActed(err(e)) }
   }
   const linkOf = (a: Integration['actions'][number]) => (check && check !== 'busy' ? check.links?.find((l) => l.label === a.name) : undefined)
+  const setup = i.actions.find((a) => a.kind === 'ask') // one button under the check, when it fails
+  const shown = buttons ? i.actions.filter((a) => a.kind !== 'ask') : i.actions
   const actions = (
     <div className="settings-group">
       <h3 className="settings-h3">{i.role === 'Runner' ? 'On a ticket' : buttons || i.actions.some((a) => a.kind) ? 'From here' : 'In a workflow'}</h3>
@@ -110,11 +116,11 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
               ? <>What {i.name} does with a ticket whose brief is approved, each a command in a herdr tab today; the same as buttons on the ticket page comes next.</>
               : i.actions.some((a) => a.kind) ? <>What can be done with {i.name} for {scope === 'app' ? 'this app' : 'an app'}{scope === 'app' ? '' : ', from its own Integrations page'}.</>
               : <>What an integration step can do with {i.name}, placed between a workflow's steps. Each asks before it sends anything out, and running it again updates what it made.</>}</p>
-            <ul className="list">{i.actions.map((a) => {
+            <ul className="list">{shown.map((a) => {
               const link = linkOf(a)
               return (
                 <li key={a.key}>
-                  {buttons && (a.kind === 'start' || a.kind === 'ask')
+                  {buttons && a.kind === 'start'
                     ? <button className="btn quiet" disabled={acted === 'busy' || !on} onClick={() => act(a)}>{a.name}</button>
                     : buttons && a.kind === 'link'
                       ? link ? <a className="btn quiet" href={link.href} target="_blank" rel="noreferrer">{a.name} ↗</a> : <strong className="faint">{a.name}</strong>
@@ -123,7 +129,6 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
                 </li>
               )
             })}</ul>
-            {buttons && acted && acted !== 'busy' && <p className="settings-desc" data-component="ActionNote">{acted}</p>}
             {i.role !== 'Runner' && !i.actions.some((a) => a.kind) && <p className="faint settings-desc">Integration steps arrive in workflow rules next.</p>}
           </>
         : <p className="faint settings-desc">Nothing: {i.name} is read by each app{i.role === 'Telemetry' ? ' to report what happens' : ''}, not used as a step.</p>}
@@ -191,6 +196,13 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
               {check && check !== 'busy' && <span className={check.ok ? 'ok-text' : 'bad'}>{check.ok ? '✓ ' : ''}{check.detail}</span>}
             </div>
           )}
+          {perAppHere && setup && check && check !== 'busy' && !check.ok && (
+            <div className="integration-setup" data-component="SetUp">
+              <button className="btn" disabled={acted === 'busy'} onClick={() => act(setup)}>{acted === 'busy' ? 'Setting up…' : setup.name}</button>
+              <span className="muted settings-desc">{inline(setup.does)}</span>
+            </div>
+          )}
+          {buttons && acted && acted !== 'busy' && <p className="settings-desc" data-component="ActionNote">{acted}</p>}
         </div>
       )}
 
