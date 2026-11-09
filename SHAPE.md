@@ -452,7 +452,7 @@ Details and sources in `research/`.
 
 - **Storybook is an integration, per app** (Sandy, 2026-11-09: "it should be a storybook integration and we should
   ensure that we have story flow add on"). Its command and URL moved from the app's Settings to Integrations ›
-  Storybook (role Screens). Its check reads the repo for the standard: Storybook 10, the screen map add-on
+  Storybook (role Mockups). Its check reads the repo for the standard: Storybook 10, the screen map add-on
   (@zigbang/storybook-addon-story-flow) wired with a flow glob, its stylesheet imported, the flow files kept out of
   the story tests, a map; then whether it answers. First thing wrong is the answer. Its actions are buttons: Start,
   Open the map, Set up the screen map (the agent, in a conversation in the repo, asks before each file). The
@@ -480,10 +480,12 @@ Direction, not yet built. The work has two halves with a hinge between them.
 - **Calm screens.** Each screen answers one question. In explore, the default screen is the conversation and the
   thing being made; the rest waits until asked for.
 
-**The sequence** (Sandy, 2026-11-09): first a quick mockup, the thing written rapidly in HTML or whatever (its name
-is open; "sketch" is a candidate); once that is right it goes into Storybook as stories and is refined there, so
-Storybook is the step after the mockup, not the mockup; then the build runs in a prototype environment; then the
-plan, an audit of the prototype for issues, a blast-radius risk assessment; then the build.
+**Three steps, each with its tool as an integration** (Sandy, 2026-11-09): **sketches**, the first mockups, written
+rapidly in HTML or whatever; **mockups**, the real ones, which are Storybook; **prototypes**, an actual working
+branch built at hyperspeed with no concern for safety, something you could merge in form but never would. The tool
+for each step is an integration whose role is the step (Storybook: Mockups; the prototype environment: Prototypes;
+the sketch tool: open). After the prototype: the plan, an audit of the prototype for issues, a blast-radius risk
+assessment, then the build.
 
 ### The agent shows where it is
 
