@@ -50,7 +50,7 @@ export const INTEGRATIONS: Integration[] = [
   {
     // Storybook, per app (SHAPE.md: the home of the design system, stories and mockups). Its command and URL were
     // plain app setup until 2026-11-09; the check reads the repo for the screen-map standard (storybook.ts).
-    key: 'storybook', name: 'Storybook', role: 'Screens', does: 'This app\'s screens as stories, refined from a quick mockup: Mockups shows them inside Self Evident, the agent opens one to show what it means, and the screen map draws the app as the user walks it',
+    key: 'storybook', name: 'Storybook', role: 'Mockups', does: 'This app\'s mockups, as stories: the real ones, after the sketches; Mockups shows them inside Self Evident, the agent opens one to show what it means, and the screen map draws the app as the user walks it',
     fields: [
       { key: 'cmd', label: 'Command', placeholder: 'pnpm storybook --no-open (run in the checkout)', required: true },
       { key: 'url', label: 'URL', placeholder: 'http://localhost:6006', required: true },
