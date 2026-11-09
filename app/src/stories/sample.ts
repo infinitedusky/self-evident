@@ -235,7 +235,7 @@ export const sampleIntegrations: FactorySettings['integrations'] = [
     ],
   },
   {
-    key: 'storybook', name: 'Storybook', role: 'Screens', does: 'This app’s screens as stories, refined from a quick mockup: Mockups shows them inside Self Evident, the agent opens one to show what it means, and the screen map draws the app as the user walks it.',
+    key: 'storybook', name: 'Storybook', role: 'Mockups', does: 'This app’s mockups, as stories: the real ones, after the sketches; Mockups shows them inside Self Evident, the agent opens one to show what it means, and the screen map draws the app as the user walks it.',
     fields: [{ key: 'cmd', label: 'Command', placeholder: 'pnpm storybook --no-open (run in the checkout)', required: true }, { key: 'url', label: 'URL', placeholder: 'http://localhost:6006', required: true }],
     calls: true, perApp: true, docs: 'https://github.com/zigbang/storybook-addon-story-flow',
     actions: [
