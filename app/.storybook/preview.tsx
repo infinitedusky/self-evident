@@ -6,6 +6,7 @@ import { mockEngine } from '../src/stories/mock-engine'
 import { sampleApp } from '../src/stories/sample'
 import '../src/tokens.css'
 import '../src/app.css'
+import './story-flow.css' // the screen map: titles stay in their strip when zoomed out, a line under each
 
 // The engine is faked with MSW: stories render the real pages, which fetch /api as they do in the app. A story
 // changes what the engine says with `beforeEach: withEngine({...})`; its handlers go in front of these.

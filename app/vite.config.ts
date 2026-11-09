@@ -34,6 +34,7 @@ export default defineConfig({
       })],
       test: {
         name: 'storybook',
+        exclude: ['**/*.flow.json'], // the screen map's files are the add-on's, not tests
         browser: {
           enabled: true,
           headless: true,

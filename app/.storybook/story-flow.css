@@ -1,0 +1,16 @@
+/* The UX map (@zigbang/storybook-addon-story-flow). Our standard for every project's Storybook.
+   1. Zoomed out past 70%, the add-on blows each screen's title bar up to twice its size and floats it over the top
+      of the screen it names (fixed in the add-on: LEGIBLE_ZOOM 0.7, MAX_HEADER_SCALE 2; no setting). The bar keeps
+      its own strip above the screen at every zoom instead.
+   2. A clear line between the title and the screen: the node's own border, 2px in its coverage colour (blue for an
+      existing screen), inherited from the node box the bar sits in. */
+.storyflow-header-floats {
+  transform: none !important;
+  width: 100% !important;
+  box-shadow: none !important;
+}
+.storyflow-node-drag {
+  border-bottom-style: solid !important;
+  border-bottom-width: 2px !important;
+  border-bottom-color: inherit !important;
+}
