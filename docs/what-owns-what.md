@@ -22,14 +22,17 @@ flowchart LR
   subgraph out[Outside]
     gh[(GitHub<br/>branches, PRs, checks)]
     tel[(PostHog, Datadog<br/>what the apps report)]
-    lin[(Linear, Confluence<br/>declared; the mirror is not built)]
+    lin[(Linear<br/>the client's issues, if it has them)]
+    conf[(Confluence<br/>declared; publishing a page is not built)]
   end
   you -->|writes tickets, approves briefs, watches| ui
   ui --> engine --> db
   engine -->|plans, builds, lands| agents --> wts
   agents -->|push, PR| gh
   engine -.->|sync: reviews, checks, merges| gh
-  engine -.-> lin
+  engine -->|Linear integration, built: the connection check<br/>signs in with the key, finds the team| lin
+  engine -.->|Linear integration, not built: create an issue,<br/>comment, move, as a mirror of a ticket| lin
+  engine -.->|Confluence integration: check built, publish not| conf
 
   classDef you fill:#fde68a,stroke:#b45309,color:#1f2937
   classDef se fill:#fbeee0,stroke:#c2620b,color:#1f2937
@@ -38,12 +41,12 @@ flowchart LR
   class you you
   class ui,engine,db,wts se
   class agents skill
-  class gh,tel,lin ext
+  class gh,tel,lin,conf ext
 ```
 
 Everything is Self Evident's: the tickets, the approval, the planner and builder, the worktrees, the build rows
-and steps, the window. GitHub holds the code. Linear and Confluence are declared integrations with a connection
-check; their actions (create an issue, comment, move) are not built.
+and steps, the window. GitHub holds the code. The Linear integration is half there: its connection check is built (the solid
+arrow), the mirror actions, create an issue, comment, move, are not (dotted). Confluence is the same.
 
 ## 2. tkt on its own, tkt web included (Roger's setup)
 
@@ -60,7 +63,9 @@ flowchart LR
     cfg[docs/agents/*.md<br/>tracker, forge, workflow, domain]
   end
   subgraph remote[Remote]
-    tracker[(Tracker<br/>Linear through its MCP, GitHub Issues,<br/>Kaneo, or markdown files)]
+    mcp[Linear's hosted MCP server<br/>mcp.linear.app, signed in from the harness]
+    lin[(Linear<br/>the tracker, in Roger's setup)]
+    other[(Other trackers the skills know<br/>GitHub Issues, Kaneo, markdown files)]
     forge[(Forge<br/>GitHub, GitLab or Gitea: branches, PRs)]
   end
   you -->|tkt start, approve, run review, merge| tkt
@@ -70,10 +75,12 @@ flowchart LR
   tkt -->|worktree| wt
   tkt -->|ticket id pattern only| cfg
   agent -->|reads| cfg
-  agent -->|create, load, comment, move| tracker
+  agent -->|Linear tools: create, load, comment, move| mcp --> lin
+  agent -.->|or, when the tracker file names one instead| other
   agent -->|push, PR, review, merge| forge
   tkt -.->|gh: PR, checks| forge
-  chat -.->|reads tickets through the agent's tracker tools| tracker
+  chat -.->|reads tickets through the agent's tracker tools| mcp
+  forge -.->|Linear's own GitHub integration:<br/>a PR attaches to the issue named in its branch| lin
 
   classDef you fill:#fde68a,stroke:#b45309,color:#1f2937
   classDef tkt fill:#bfdbfe,stroke:#1d4ed8,color:#1f2937
@@ -82,13 +89,15 @@ flowchart LR
   class you you
   class chat,tkt,state,herdr,wt,cfg tkt
   class agent skill
-  class tracker,forge ext
+  class mcp,lin,other,forge ext
 ```
 
 tkt owns the run: the worktree, the tab, the session, the stage, and the board that shows them. It never writes
 the tracker. The skills do, following `docs/agents/issue-tracker.md`, and the tracker is wherever that file points:
 for Roger, Linear through Linear's hosted MCP server. tkt web is a window onto tkt's state plus the tracker, driven
-by the same slash commands you could type.
+by the same slash commands you could type. Linear is reached two ways, neither through tkt: the skills call Linear's
+hosted MCP server from the harness, and Linear's own GitHub integration attaches a pull request to the issue whose
+id is in the branch name.
 
 ## 3. Self Evident with tkt switched on (ours)
 
@@ -110,7 +119,7 @@ flowchart LR
     cfg[docs/agents/issue-tracker.md<br/>the tracker guide Self Evident fills]
   end
   gh[(GitHub<br/>branches, PRs)]
-  lin[(Linear<br/>a mirror from Self Evident, if the client<br/>needs one; not built)]
+  lin[(Linear<br/>the client's issues, if it has them)]
   you -->|writes tickets, approves briefs, watches| ui --> engine --> db
   you -->|tkt start, approve, run review, merge| tkt
   tkt --> state
@@ -119,8 +128,9 @@ flowchart LR
   agent -->|reads| cfg
   agent -->|HTTP: load, search, comment, move| engine
   agent -->|push, PR, review, merge| gh
-  engine -.->|create, comment, move| lin
-  engine -.->|the check: PATH, checkout, guide, doctor| tkt
+  engine -->|Linear integration, built: the connection check| lin
+  engine -.->|Linear integration, not built: a mirror of each ticket,<br/>create, comment, move as the skills comment and move ours| lin
+  engine -.->|tkt integration, built: the check<br/>PATH, checkout, guide, doctor| tkt
 
   classDef you fill:#fde68a,stroke:#b45309,color:#1f2937
   classDef se fill:#fbeee0,stroke:#c2620b,color:#1f2937
@@ -137,8 +147,9 @@ flowchart LR
 Self Evident is the tracker: tickets, briefs, approvals and the skills' comments live in its database, and the
 skills reach them over plain HTTP through the guide Self Evident fills. tkt still owns the run, as in picture 2,
 and nothing of it is copied into Self Evident. The two touch at exactly two points: the guide in the repo, and the
-check on the app's tkt page. Linear, if the client needs it, is reached from Self Evident as a mirror of our tickets
-(the actions the Linear integration declares), never from tkt, which does not know Linear exists. tkt web would
+check on the app's tkt page. The only path to Linear is Self Evident's Linear integration: the connection check
+today, the mirror of each ticket (create, comment, move) once built. No arrow runs from tkt or the skills to Linear:
+the tracker file names Self Evident, and the skills use only the connection it names. tkt web would
 still work here, reading our tickets the way the skills do; we are not using it.
 
 ## What owns what
@@ -151,4 +162,4 @@ still work here, reading our tickets the way the skills do; we are not using it.
 | The run: worktree, tab, session, stage | the engine's build rows, runs and steps | tkt, in `.git/tkt/state` | tkt, in `.git/tkt/state` |
 | Code and PRs | GitHub | the forge: GitHub, GitLab or Gitea | GitHub |
 | The window | Self Evident's UI | tkt web, the terminal, the plan viewer | Self Evident's ticket page; tkt web optional |
-| Linear | a declared integration, mirror not built | can be the tracker itself | reached only from Self Evident, as a mirror, not built |
+| Linear, and what talks to it | Self Evident's Linear integration: the check is built, the mirror (create, comment, move) is not | Linear is the tracker: the skills reach it through its hosted MCP server, and Linear's GitHub integration attaches PRs by branch name; tkt never talks to it | only Self Evident's Linear integration, as a mirror of our tickets; the skills and tkt have no path to it |
