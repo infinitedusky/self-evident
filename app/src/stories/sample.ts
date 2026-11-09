@@ -232,6 +232,7 @@ export const sampleIntegrations: FactorySettings['integrations'] = [
       { key: 'approve', name: 'Approve the plan', does: '`tkt approve <ticket>`: work-ticket builds, commits, opens the pull request and hands off on the ticket.' },
       { key: 'review', name: 'Review', does: '`tkt run <ticket> review`: review-pr in a fresh session, its verdict on the pull request.' },
       { key: 'merge', name: 'Merge and finish', does: '`tkt merge <ticket> --passed`, then `tkt done`: finish-ticket merges and moves the ticket to done.' },
+      { key: 'setup', name: 'Set up what’s missing', does: 'Writes the tracker guide into the checkout when that is what is wrong; for the rest (tkt itself, herdr, worktrunk, the skills, whatever tkt doctor flags) hands the agent the job in tkt’s own words, hints and all. It asks before installing anything.', kind: 'ask' },
     ],
   },
   {
