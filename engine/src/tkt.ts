@@ -191,11 +191,16 @@ export async function doctorFindings(exec: Run, repoPath: string): Promise<strin
   let out: string[]
   try { const r = await exec('tkt', ['doctor'], repoPath); out = `${r.stdout}\n${r.stderr}`.split('\n') } catch (e) { out = lines(e) }
   const found: string[] = []
+  let kept = false // whether the line a hint belongs to was kept: a hint under an ok, skip or pane line is not ours
   for (const ln of out) {
-    const m = /^(fail|warn|error)\s+(\S+)\s+(.*)$/.exec(ln.trimEnd())
-    if (m) { if (m[2] !== 'herdr_env') found.push(`${m[1]} ${m[2]}: ${m[3].trim()}`); continue }
+    const m = /^(ok|skip|fail|warn|error)\s+(\S+)\s+(.*)$/.exec(ln.trimEnd())
+    if (m) {
+      kept = m[1] !== 'ok' && m[1] !== 'skip' && m[2] !== 'herdr_env'
+      if (kept) found.push(`${m[1]} ${m[2]}: ${m[3].trim()}`)
+      continue
+    }
     const hint = /^\s+hint:\s*(.*)$/.exec(ln)
-    if (hint && found.length && !/^warn herdr_env/.test(found[found.length - 1] ?? '')) found[found.length - 1] += ` (hint: ${hint[1].trim()})`
+    if (hint && kept && found.length) found[found.length - 1] += ` (hint: ${hint[1].trim()})`
   }
   return found
 }
