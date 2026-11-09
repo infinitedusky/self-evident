@@ -1749,3 +1749,11 @@ AppTkt, AppTktBroken, AppTktOff, AllAppsTkt. Tests: `engine/src/tkt.test.ts`.
 
 Left out on purpose: a workspace-level default for tkt (nobody asked), the buttons (after the rehearsal), and
 anything that reads or writes tkt's own configuration.
+
+Later the same day Sandy showed Roger's talk: tkt has a whole surface of its own (`tkt web`, the board with
+needs-you cards and a chat; the plan viewer from present-plan), so where the tickets live had to be drawn, not
+assumed. `docs/what-owns-what.md`: Self Evident alone, tkt alone with its board, and the two together. The fixed
+point: tickets live in the tracker, never in tkt, which keeps only the run (preset, session, tab, stage) in the
+repo's `.git/tkt/state`; for Roger the tracker is Linear through its MCP, for us it is Self Evident. Linear, if a
+client needs it, is a mirror from Self Evident (the Linear integration's declared, unbuilt actions), never tkt's
+business.
