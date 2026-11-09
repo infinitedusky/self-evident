@@ -1757,3 +1757,16 @@ point: tickets live in the tracker, never in tkt, which keeps only the run (pres
 repo's `.git/tkt/state`; for Roger the tracker is Linear through its MCP, for us it is Self Evident. Linear, if a
 client needs it, is a mirror from Self Evident (the Linear integration's declared, unbuilt actions), never tkt's
 business.
+
+## Reachable at a name (Sandy, 2026-11-09: "I need a way to get to the idea factory at any time I want")
+
+Not a DNS entry: Sandy's Mac already answers every `.dawn` name with 127.0.0.1 (dnsmasq) and runs Caddy at login
+with a trusted local CA, one site file per project. What was missing was uptime: the engine and the UI died with
+the Claude session that started them. Now **https://idea.dawn** is Self Evident on that Mac: a Caddy site file
+proxies to the UI dev server, which proxies `/api` to the engine; a launchd agent (`com.thedusky.self-evident`)
+runs `pnpm dev` from the main checkout at login and restarts it if it dies, so a merge and pull is still the deploy
+(`tsx watch` and Vite reload themselves). Vite refuses unknown hosts, so the repo change is one line: `UI_URL`,
+the variable the engine already writes into the tracker guide's links, also names the host Vite answers to.
+Dev mode under launchd rather than `pnpm build` + `pnpm start`: the habit stays; production mode when there is a
+reason (a second machine). The name works on this Mac only; a phone would need Tailscale or a Cloudflare Tunnel
+with Access in front, since Self Evident has no sign-in. Not asked for.

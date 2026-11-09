@@ -16,6 +16,8 @@ export default defineConfig({
     fs: { allow: ['..'] },
     // The engine serves its API under /api (and the built UI at / in production); the UI never talks to the database.
     proxy: { '/api': { target: process.env.ENGINE_URL ?? 'http://localhost:4000', changeOrigin: true } },
+    // A proxy in front may give the UI a name (UI_URL, the same variable the engine writes into its links); Vite answers to that host too.
+    allowedHosts: process.env.UI_URL ? [new URL(process.env.UI_URL).hostname] : [],
   },
   test: {
     projects: [{
