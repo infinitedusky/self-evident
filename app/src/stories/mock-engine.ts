@@ -14,7 +14,7 @@ export interface MockData {
   storybook: { url: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[] }
   prototypes: typeof s.prototypes
   claudeSessions: typeof s.claudeSessions
-  check: { ok: boolean; detail: string }
+  check: { ok: boolean; detail: string; links?: { label: string; href: string }[] }
   trackerGuide: string
   githubRepos: typeof s.githubRepos; repoNote: string | null
   plan: typeof s.plan; workflows: typeof s.workflowRows; steps: Record<string, typeof s.taskStepsView>; stepWork: typeof s.researchWork | null

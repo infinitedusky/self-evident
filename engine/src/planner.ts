@@ -18,6 +18,7 @@ import { newId } from './ids.js'
 import { addItems } from './backlog.js'
 import { identifier } from './issues.js'
 import { addSubIssues, PlanError, projectGraph, type NewSubIssue } from './projects.js'
+import { hasStorybook } from './storybook.js'
 
 export interface ProposeInput {
   repoPath: string
@@ -180,7 +181,7 @@ export function validateProposal(p: Proposal) {
   }
 }
 
-interface AppSetup { test_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number; storybook_url?: string; storybook_cmd?: string }
+interface AppSetup { test_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number }
 
 export interface PlanningContext {
   runId: string; issueId: string; projectId: string; appId: string; attempt: number
@@ -220,7 +221,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
     runId, issueId, projectId: t.projectId, appId: a.id, attempt, base,
     input: {
       repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, project: { name: g.project.name, content: g.project.content }, earlier,
-      testCmd: setup.test_cmd, storybook: !!(setup.storybook_url || setup.storybook_cmd), model: setup.model, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
+      testCmd: setup.test_cmd, storybook: hasStorybook(setup), model: setup.model, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }
 }

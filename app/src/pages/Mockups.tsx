@@ -38,14 +38,14 @@ export function Mockups({ story }: { story?: string }) {
       </div>
       {error && <div className="empty bad">{error}</div>}
       {!app && <div className="empty">Pick an app in the nav.</div>}
-      {s && !s.configured && <div className="empty">{app?.name} has no Storybook set. Add its URL and the command that starts it in <Link to="/settings">Settings</Link>.</div>}
+      {s && !s.configured && <div className="empty">{app?.name} has no Storybook set. Add the command that starts it and its URL under <Link to={`/settings/apps/${app?.id}/integrations/storybook`}>Integrations › Storybook</Link>.</div>}
       {s?.configured && !s.up && (
         <div className="empty">
           {s.startable ? <>
             <p style={{ marginTop: 0 }}>Storybook isn't running. {s.startedHere ? 'Starting it…' : ''}</p>
             {!s.startedHere && <button className="btn" disabled={starting} onClick={start}>Start Storybook</button>}
             {s.log.length > 0 && <pre className="sb-log">{s.log.slice(-8).join('\n')}</pre>}
-          </> : <>Storybook isn't answering at <code>{s.url}</code>, and there's no command to start it. Add one in <Link to="/settings">Settings</Link>.</>}
+          </> : <>Storybook isn't answering at <code>{s.url}</code>, and there's no command to start it. Add one under <Link to={`/settings/apps/${app?.id}/integrations/storybook`}>Integrations › Storybook</Link>.</>}
         </div>
       )}
       {s?.up && at && <iframe className="sb-frame" src={at} title={`${app?.name} Storybook`} />}

@@ -300,6 +300,7 @@ button.badge { border: 0; cursor: pointer; }
 .integration-check { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 13px; }
 .integration-check span { white-space: pre-wrap; } /* a tool's own output keeps its columns */
 .integration-check .bad { color: var(--bad); }
+.list li .btn.quiet { margin-bottom: 2px; }
 .ok-text { color: var(--ok); }
 .warn-text { color: var(--warn); }
 pre.guide { margin: 8px 0 0; padding: 12px; max-height: 360px; overflow: auto; font: 12px/1.5 var(--mono); white-space: pre-wrap; background: color-mix(in srgb, var(--line) 25%, var(--surface)); border: 1px solid var(--line); border-radius: 8px; }

@@ -29,12 +29,12 @@ import { createCycle, createInitiative, listCycles, listInitiatives, updateIniti
 import { changeState, commentOnIssue, createIssue, listComments, listIssues, reorder, resolveIssue, updateIssue } from './issues.js'
 import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
-import { startStorybook, stopStorybooks, storybookStatus } from './storybook.js'
+import { migrateStorybookSetup, startStorybook, stopStorybooks, storybookStatus, STORY_FLOW_CSS } from './storybook.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { runner } from './runner.js'
-import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, statuses, type Values } from './integrations.js'
+import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, statuses, type Local, type Values } from './integrations.js'
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
 import { CATALOGUE } from './catalogue.js'
 import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role } from './skills.js'
@@ -186,8 +186,14 @@ export function buildApp(bus: EventBus) {
     }
     const key = c.req.param('key')
     const values = Object.fromEntries(Object.entries(effectiveIntegrations(shared, own)[key] ?? {}).map(([k, v]) => [k, v.value]))
-    const ctx = key === 'tkt' && body.appId ? await contextFor(body.appId) : null
-    try { return c.json(await checkIntegration(key, values, process.env, fetch, ctx ? { ctx } : undefined)) } catch (err) {
+    let local: Local | undefined
+    if (key === 'tkt' && body.appId) { const ctx = await contextFor(body.appId); if (ctx) local = { tkt: { ctx } } }
+    if (key === 'storybook' && body.appId) {
+      const [a] = await db.select().from(appTable).where(eq(appTable.id, body.appId))
+      const [r] = await db.select().from(repoTable).where(eq(repoTable.appId, body.appId))
+      if (a) local = { storybook: { ctx: { app: { id: a.id, name: a.name }, repoPath: r?.localPath ?? null, url: values.url ?? null, cmd: values.cmd ?? null } } }
+    }
+    try { return c.json(await checkIntegration(key, values, process.env, fetch, local)) } catch (err) {
       if (err instanceof IntegrationError) return c.json({ error: err.message }, 400)
       throw err
     }
@@ -250,6 +256,7 @@ export function buildApp(bus: EventBus) {
   })
   api.get('/apps/:id/storybook', async (c) => { try { return c.json(await storybookStatus(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/storybook/start', async (c) => { try { return c.json(await startStorybook(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  api.get('/storybook/story-flow.css', (c) => c.text(STORY_FLOW_CSS, 200, { 'content-type': 'text/css; charset=utf-8' })) // step 4 of "Set up the screen map"
   api.get('/apps/:id/prototypes', async (c) => c.json(await listPrototypes(c.req.param('id'))))
   api.post('/apps/:id/prototypes', async (c) => {
     const body = await c.req.json<{ title?: string; brief?: string; projectId?: string }>()
@@ -564,6 +571,8 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const bus = new EventBus()
   await bus.start()
   const recovered = await runner.recover()
+  const moved = await migrateStorybookSetup() // the Storybook command and URL, under the integration since 2026-11-09
+  if (moved) console.log(`storybook setup moved under the integration for ${moved} app(s)`)
   const stranded = await recoverPlanning()
   if (stranded) console.log(`[engine] ${stranded} planner run(s) interrupted by the restart; project those tasks again`)
   if (recovered.projects || recovered.builds || recovered.reaped) console.log('recovered:', JSON.stringify(recovered))

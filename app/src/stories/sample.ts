@@ -16,7 +16,7 @@ const at = (minutes: number) => new Date(Date.parse(T0) + minutes * 60_000).toIS
 export const workspace: Workspace = { id: 'ws_sample', name: 'Sample workspace' }
 export const sampleApp: App = {
   id: 'app_sample', workspaceId: workspace.id, name: 'Sample Shop', key: 'SS', defaultBranch: 'main',
-  setup: { pr_mode: 'project', test_cmd: 'pnpm test', storybook_url: 'http://localhost:6007', storybook_cmd: 'pnpm storybook --no-open', prototype_cmd: 'pnpm install && pnpm dev --port $PORT' },
+  setup: { pr_mode: 'project', test_cmd: 'pnpm test', prototype_cmd: 'pnpm install && pnpm dev --port $PORT' },
   repos: [{ id: 'repo_sample', appId: 'app_sample', fullName: 'example/sample-shop', localPath: '/code/sample-shop', baseBranch: 'main' }],
 }
 export const otherApp: App = { id: 'app_sample2', workspaceId: workspace.id, name: 'Sample Blog', key: 'SB', defaultBranch: 'main', setup: {}, repos: [] }
@@ -235,6 +235,16 @@ export const sampleIntegrations: FactorySettings['integrations'] = [
     ],
   },
   {
+    key: 'storybook', name: 'Storybook', role: 'Mockups', does: 'This app’s mockups, as stories: the real ones, after the sketches; Mockups shows them inside Self Evident, the agent opens one to show what it means, and the screen map draws the app as the user walks it.',
+    fields: [{ key: 'cmd', label: 'Command', placeholder: 'pnpm storybook --no-open (run in the checkout)', required: true }, { key: 'url', label: 'URL', placeholder: 'http://localhost:6006', required: true }],
+    calls: true, perApp: true, docs: 'https://github.com/zigbang/storybook-addon-story-flow',
+    actions: [
+      { key: 'start', name: 'Start', does: 'Starts Storybook from the checkout with the command and keeps it running; Mockups shows it.', kind: 'start' },
+      { key: 'map', name: 'Open the map', does: 'The screen map: every page as the user sees it, and the taps between them. Here once the check finds a map and Storybook is up.', kind: 'link' },
+      { key: 'setup', name: 'Set up the screen map', does: 'Hands the agent the job in a conversation in the repo: the add-on, its stylesheet, the flow files kept out of the story tests, a first map. It asks before each file.', kind: 'ask', ask: 'Set up the screen map in this repo’s Storybook (sample: the steps of the standard).' },
+    ],
+  },
+  {
     key: 'posthog', name: 'PostHog', role: 'Telemetry', does: 'Events, errors and experiments.', calls: false, actions: [],
     fields: [{ key: 'host', label: 'Host', placeholder: 'https://us.posthog.com' }, { key: 'project_id', label: 'Project id' }, { key: 'key_env', label: 'Key variable', placeholder: 'POSTHOG_API_KEY', secret: true }],
   },
@@ -268,6 +278,7 @@ export const factorySettings: FactorySettings = {
   },
   status: {
     tkt: { state: 'off', missing: [], keyVar: null },
+    storybook: { state: 'off', missing: ['Command', 'URL'], keyVar: null },
     posthog: { state: 'ready', missing: [], keyVar: null },
     linear: { state: 'ready', missing: [], keyVar: 'LINEAR_API_KEY' },
     confluence: { state: 'no-key', missing: [], keyVar: 'CONFLUENCE_API_TOKEN' },
@@ -282,14 +293,17 @@ export const factorySettings: FactorySettings = {
 export const appSettings: AppSettings = {
   integrations: {
     tkt: { on: { value: 'true', from: 'app' } },
+    storybook: { cmd: { value: 'pnpm storybook --no-open', from: 'app' }, url: { value: 'http://localhost:6007', from: 'app' } },
     posthog: { host: { value: 'https://us.posthog.com', from: 'workspace' }, project_id: { value: '12345', from: 'app' }, key_env: { value: null, from: null } },
     linear: { team: { value: 'GIFT', from: 'app' }, key_env: { value: 'LINEAR_API_KEY', from: 'workspace' } },
     confluence: { site: { value: null, from: null }, email: { value: null, from: null }, space: { value: null, from: null }, parent: { value: null, from: null }, key_env: { value: null, from: null } },
   },
-  status: { tkt: { state: 'ready', missing: [], keyVar: null }, posthog: { state: 'ready', missing: [], keyVar: null }, linear: { state: 'ready', missing: [], keyVar: 'LINEAR_API_KEY' }, confluence: { state: 'off', missing: ['Site', 'Account email', 'Space key', 'Key variable'], keyVar: null } },
+  status: { tkt: { state: 'ready', missing: [], keyVar: null }, storybook: { state: 'ready', missing: [], keyVar: null }, posthog: { state: 'ready', missing: [], keyVar: null }, linear: { state: 'ready', missing: [], keyVar: 'LINEAR_API_KEY' }, confluence: { state: 'off', missing: ['Site', 'Account email', 'Space key', 'Key variable'], keyVar: null } },
   plugins: [{ id: 'sample-plugin@sample', name: 'sample-plugin', factoryOn: true, own: null, on: true }],
   skills: [{ key: 'checkout-rules', name: 'checkout-rules', description: 'How this shop prices and taxes an order.' }],
 }
+/** What the Storybook check says for the shop when all is well (sample). */
+export const storybookCheck = { ok: true, detail: 'Storybook 10.6.3 in web with the screen map: 2 flow files; answering at http://localhost:6007.', links: [{ label: 'Open the map', href: 'http://localhost:6007/?path=/docs/shop-map--docs' }] }
 /** The repo's docs/agents/issue-tracker.md for the shop, as the engine fills it (sample: shortened). */
 export const trackerGuideSample = `<!-- rogs-skills config v1: issue-tracker -->
 # Issue tracker

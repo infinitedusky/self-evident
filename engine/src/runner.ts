@@ -11,6 +11,7 @@ import { appendEvent, type NewEvent } from './events.js'
 import { addItems, laterFrom } from './backlog.js'
 import { runTask, type Execute } from './executor.js'
 import { addWorktree, branchExists, ensureBranch, git, headSha, removeWorktree } from './git.js'
+import { hasStorybook } from './storybook.js'
 import { issueBranch, issueStart, landingBranch, prMode, stackBase } from './branches.js'
 import { newId } from './ids.js'
 import { identifier, setState } from './issues.js'
@@ -23,7 +24,7 @@ import { holdMinutes, isOutage } from './outage.js'
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
 
-interface AppSetup { test_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number; storybook_url?: string; storybook_cmd?: string }
+interface AppSetup { test_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number }
 
 const PLANNING = ['issue.planning', 'issue.plan_waiting', 'issue.planned', 'issue.plan_failed']
 
@@ -148,7 +149,7 @@ export class Runner {
 
     const result = await this.execute({
       subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief },
-      worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: !!(setup.storybook_url || setup.storybook_cmd), previousFailure, model: setup.model, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
+      worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: hasStorybook(setup), previousFailure, model: setup.model, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
       resumeSessionId: interrupted?.agentSessionId ?? undefined, abort: this.active.get(subId),
       onEvent: async (type, payload) => {
         if (type === 'run.steps') await this.saveSteps(a.id, subId, runId, (payload.steps as { text: string; status: string }[]) ?? [])

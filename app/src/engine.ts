@@ -102,7 +102,7 @@ export interface StepsView { on: On; resolved: Resolved; states: StepState[]; ro
 export interface StepWork { id: string; key: StepKey; status: 'none' | 'started' | 'done'; detail: string | null; body: string | null; refs: string[]; updatedBy: string | null; updatedAt: string | null }
 export interface WorkflowRow extends Workflow { appDefault: boolean; projects: number; tasks: number }
 export interface IdeaRow { id: string; appId: string; number: number; title: string; body: string | null; lane: string }
-export interface AppSetup { integrations?: IntegrationValues; plugins?: Record<string, { on: boolean }>; pr_mode?: 'project' | 'issue'; storybook_url?: string; storybook_cmd?: string; test_cmd?: string; prototype_cmd?: string; prototype_db?: { url: string; env?: string; schema_cmd?: string }; model?: string; max_budget_usd?: number; max_turns?: number }
+export interface AppSetup { integrations?: IntegrationValues; plugins?: Record<string, { on: boolean }>; pr_mode?: 'project' | 'issue'; test_cmd?: string; prototype_cmd?: string; prototype_db?: { url: string; env?: string; schema_cmd?: string }; model?: string; max_budget_usd?: number; max_turns?: number }
 export interface Repo { id: string; appId: string; fullName: string; localPath: string | null; baseBranch: string | null }
 /** One of the person's repositories on GitHub, as gh lists them; `problem` is why there is no list (gh missing, signed out). */
 export interface GitHubRepo { fullName: string; defaultBranch: string; private: boolean }
@@ -116,7 +116,7 @@ export type IntegrationValues = Record<string, Record<string, string>>
 export interface Integration {
   key: string; name: string; role: string; does: string
   fields: { key: string; label: string; placeholder?: string; required?: boolean; secret?: boolean; kind?: 'switch' }[] // a switch holds "true" or "false"
-  calls: boolean; actions: { key: string; name: string; does: string }[]; docs?: string
+  calls: boolean; actions: { key: string; name: string; does: string; kind?: 'start' | 'link' | 'ask'; ask?: string }[]; docs?: string // an action with a kind is a button on the page: start the tool, open what the check found, hand the agent a job
   perApp?: boolean // switched on under each app (a runner like tkt), nothing to set for all apps
 }
 /** Where an integration stands: nothing set, missing fields, its key not in the engine's environment, or ready. */
@@ -232,7 +232,7 @@ export const engine = {
   settings: () => call<FactorySettings>('GET', '/settings'),
   updateWorkspace: (id: string, body: { name?: string; integrations?: IntegrationValues }) => call<Workspace>('PATCH', `/workspaces/${id}`, body),
   appSettings: (id: string) => call<AppSettings>('GET', `/apps/${id}/settings`),
-  checkIntegration: (key: string, appId?: string) => call<{ ok: boolean; detail: string }>('POST', `/integrations/${key}/check`, { appId }),
+  checkIntegration: (key: string, appId?: string) => call<{ ok: boolean; detail: string; links?: { label: string; href: string }[] }>('POST', `/integrations/${key}/check`, { appId }),
   trackerGuide: async (appId: string) => { // the repo's docs/agents/issue-tracker.md for this app, filled in (Markdown, not JSON)
     const res = await fetch(`${API}/apps/${appId}/tracker-guide`)
     const text = await res.text()

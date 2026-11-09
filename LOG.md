@@ -1796,3 +1796,30 @@ shows the note after Save. Stories: Pages/Settings › NewApp, NewAppNoGh, AppRe
 Left out on purpose: cloning a GitHub repo that has no local checkout (where to put it is a question for the person;
 the Repo page still says "no local checkout set"), and any remote: a folder made a repository has no origin until
 someone gives it one, and the engine's fetch is allowed to fail.
+
+## Storybook is an integration (Sandy, 2026-11-09: "I think it should be a storybook integration and we should ensure that we have story flow add on")
+
+Asked how the prototype settings should be set, the answer was: Storybook as an integration, with the screen map
+(story-flow) checked. The Prototype group (the command and throwaway database for running the app itself) is how
+this app runs, not a tool to connect to, so it stays the app's own.
+
+**Built** (branch `storybook-integration`). Engine: `storybook` in `INTEGRATIONS`, per app, role Screens, fields
+command and URL; they lived under `setup.storybook_cmd` and `setup.storybook_url` until now and move under the
+integration when the engine starts (`migrateStorybookSetup`; `storybookSetup` reads both until then). `checkStorybook`
+(`engine/src/storybook.ts`) reads the repo, first thing wrong is the answer: a Storybook anywhere in the repo
+(`.storybook/main.*`, found through git so node_modules stays out), Storybook 10, the add-on installed, in main's
+addons with a flowGlob, `.storybook/story-flow.css` there and imported in preview, the flow files excluded from the
+vitest project when addon-vitest is present, at least one `*.flow.json`; then whether it answers at the URL, and the
+map's docs link (from the first flow file's title) when it does. Actions now carry a `kind`: `start` (the engine
+starts Storybook), `link` (what the check found), `ask` (`setupMapAsk`, the standard step by step, handed to the
+agent through `/talks/ask`; it confirms each file). `GET /storybook/story-flow.css` serves the stylesheet for step 4.
+`checkIntegration` takes `local: { tkt | storybook }` and returns `links`. UI: the Settings › Storybook group is
+gone; Integrations › Storybook has the values, the check running by itself, and the actions as buttons under "From
+here"; Mockups points there when nothing is set. Stories: Pages/Settings › AppStorybook, AppStorybookNoMap,
+AppStorybookNotSet, AllAppsStorybook. Tests: `storybook.test.ts` against throwaway repos, and the move in the DB.
+
+The same day Sandy gave the sequence from idea to build (SHAPE, "Explore fast, build rigorous": a quick mockup,
+then Storybook, then the prototype environment, the plan, the audit, the blast-radius assessment, the build), so the
+integration's role is Screens, not Mockups: Storybook is the step after the mockup. The quick thing's name is open.
+
+Next: our own Storybook brought up to the standard, the first repo the check should pass, with a map of our screens.

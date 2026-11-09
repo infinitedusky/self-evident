@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Settings } from './Settings'
 import { engineDown, withEngine } from '../stories/mock-engine'
-import { appSettings, apps, factorySettings, repoNote, sampleApp } from '../stories/sample'
+import { appSettings, apps, factorySettings, repoNote, sampleApp, storybookCheck } from '../stories/sample'
 import type { PluginInfo } from '../engine'
 
 // Settings: which settings across the top (All apps, each app), that scope's sections down the side.
@@ -61,6 +61,11 @@ export const AppTktBroken: Story = { parameters: { route: { path: '/settings/app
 export const AppTktOff: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/tkt` } }, beforeEach: withEngine({ appSettings: { ...appSettings, integrations: { ...appSettings.integrations, tkt: { on: { value: null, from: null } } }, status: { ...appSettings.status, tkt: { state: 'off', missing: [], keyVar: null } } } }) }
 /** tkt under All apps: switched on per app, so this page only says what it does. */
 export const AllAppsTkt: Story = { parameters: { route: { path: '/settings/:section/:item', url: '/settings/integrations/tkt' } } }
+// Storybook as an integration, per app (Sandy, 2026-11-09): its command and URL, the check reading the repo for the screen-map standard, the actions as buttons.
+export const AppStorybook: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/storybook` } }, beforeEach: withEngine({ check: storybookCheck }) }
+export const AppStorybookNoMap: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/storybook` } }, beforeEach: withEngine({ check: { ok: false, detail: "Storybook is there (web), the screen map isn't: @zigbang/storybook-addon-story-flow isn't installed. Set up the screen map (the action below hands the agent the job)." } }) }
+export const AppStorybookNotSet: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/storybook` } }, beforeEach: withEngine({ appSettings: { ...appSettings, integrations: { ...appSettings.integrations, storybook: { cmd: { value: null, from: null }, url: { value: null, from: null } } }, status: { ...appSettings.status, storybook: { state: 'off', missing: ['Command', 'URL'], keyVar: null } } } }) }
+export const AllAppsStorybook: Story = { parameters: { route: { path: '/settings/:section/:item', url: '/settings/integrations/storybook' } } }
 /** An app's prototype settings: how its server starts and where its throwaway databases go. */
 export const AppPrototype: Story = { parameters: appPage(sampleApp.id, 'prototype') }
 /** An app's workflow rules: configuration, not something that runs. */
