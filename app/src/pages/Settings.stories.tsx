@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Settings } from './Settings'
 import { engineDown, withEngine } from '../stories/mock-engine'
-import { appSettings, apps, factorySettings, sampleApp } from '../stories/sample'
+import { appSettings, apps, factorySettings, repoNote, sampleApp } from '../stories/sample'
 import type { PluginInfo } from '../engine'
 
 // Settings: which settings across the top (All apps, each app), that scope's sections down the side.
@@ -38,6 +38,11 @@ export const AppWithRepoSkills: Story = {
 /** An app with nothing set: no repo, no skills, every value inherited. */
 export const AppBare: Story = { parameters: appPage('app_sample2'), beforeEach: withEngine({ appSettings: { integrations: {}, status: {}, plugins: [], skills: [] } }) }
 export const NoSuchApp: Story = { parameters: appPage('app_missing') }
+// New app, with its code: a GitHub repo picked from gh's list or typed, a folder on this machine, or both (Sandy, 2026-11-09).
+export const NewApp: Story = { parameters: { route: { path: '/settings/new', url: '/settings/new' } } }
+export const NewAppNoGh: Story = { parameters: { route: { path: '/settings/new', url: '/settings/new' } }, beforeEach: withEngine({ githubRepos: { repos: [], problem: 'To get started with GitHub CLI, please run:  gh auth login; type owner/name.' } }) }
+// Straight after New app made the folder a repository: the Repo page says what the engine did.
+export const AppRepoSetUp: Story = { parameters: { route: { path: '/settings/apps/:id', url: '/settings/apps/app_sample2', state: { note: repoNote } } } }
 export const Loading: Story = { parameters: all, beforeEach: withEngine({}, { latency: 'infinite' }) }
 export const EngineDown: Story = { parameters: all, beforeEach: withEngine(engineDown) }
 /** All apps: every integration and where it stands. */

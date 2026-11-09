@@ -216,3 +216,20 @@ export function startSync(minutes = 2, api: GitHubApi = ghCli) {
   const timer = setInterval(() => void pass(), minutes * 60_000)
   return () => { clearTimeout(first); clearInterval(timer) }
 }
+
+export interface GitHubRepo { fullName: string; defaultBranch: string; private: boolean }
+/**
+ * The person's repositories on GitHub, for picking one when an app is made: through `gh`, signed in as they are.
+ * Without gh, or signed out, the list is empty and `problem` says why in gh's own words; typing owner/name still works.
+ */
+export async function myRepos(run: typeof execFileP = execFileP): Promise<{ repos: GitHubRepo[]; problem: string | null }> {
+  try {
+    const { stdout } = await run('gh', ['repo', 'list', '--limit', '200', '--json', 'nameWithOwner,defaultBranchRef,isPrivate'], { maxBuffer: 16 * 1024 * 1024 })
+    const rows = JSON.parse(stdout) as { nameWithOwner: string; defaultBranchRef?: { name?: string } | null; isPrivate: boolean }[]
+    return { repos: rows.map((r) => ({ fullName: r.nameWithOwner, defaultBranch: r.defaultBranchRef?.name ?? 'main', private: r.isPrivate })), problem: null }
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') return { repos: [], problem: "gh (GitHub's CLI) isn't on the engine's PATH, so there is no list to pick from; type owner/name." }
+    const said = String(err?.stderr ?? err?.message ?? '').trim().split('\n').find((l) => l.trim()) ?? 'gh failed'
+    return { repos: [], problem: `${said.trim().replace(/\.$/, '')}; type owner/name.` }
+  }
+}

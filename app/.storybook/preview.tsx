@@ -11,7 +11,7 @@ import '../src/app.css'
 // changes what the engine says with `beforeEach: withEngine({...})`; its handlers go in front of these.
 
 /** Where a story stands (`router: false` for a story that brings its own): a page that reads the URL says `parameters: { route: { path: '/issues/:id', url: '/issues/iss_sample5' } }`. */
-export interface RouteParam { path: string; url: string }
+export interface RouteParam { path: string; url: string; state?: unknown } // `state`: what a page carried here with navigate(), like New app's note
 
 const preview: Preview = {
   parameters: {
@@ -34,7 +34,7 @@ const preview: Preview = {
       // The workspace and a tab bring their own routers (a tab keeps its own history); they say `router: false`.
       if (parameters.router === false) return <CurrentAppProvider><Story /></CurrentAppProvider>
       return (
-        <MemoryRouter initialEntries={[route?.url ?? '/']}>
+        <MemoryRouter initialEntries={[route?.state !== undefined ? { pathname: route.url, state: route.state } : route?.url ?? '/']}>
           <CurrentAppProvider>
             {route ? <Routes><Route path={route.path} element={<Story />} /></Routes> : <Story />}
           </CurrentAppProvider>

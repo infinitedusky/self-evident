@@ -1770,3 +1770,29 @@ the variable the engine already writes into the tracker guide's links, also name
 Dev mode under launchd rather than `pnpm build` + `pnpm start`: the habit stays; production mode when there is a
 reason (a second machine). The name works on this Mac only; a phone would need Tailscale or a Cloudflare Tunnel
 with Access in front, since Self Evident has no sign-in. Not asked for.
+
+## The code comes with the app (Sandy, 2026-11-09: "it should have you select the repo or point to the local location when you create a new project. If the location is not a repo, create one")
+
+Sandy's first run at https://idea.dawn: a new app, its local checkout set to a fresh Vite scaffold, and the
+conversation answered "internal server error". A conversation works in a worktree of the app's checkout, and the
+folder had no `.git`: `git worktree list` failed, the engine treated it as unexpected, the page got a 500 where a
+sentence belonged. Fixed by hand for Ragdoll Golf (`git init -b main`, one commit), then made the rule.
+
+**Built** (branch `code-at-creation`). Engine: `engine/src/checkout.ts`, `prepareCheckout(path, defaultBranch,
+appName)`: a folder becomes a git repository on the default branch; a repository with no commits gets its first (the
+files as found, `node_modules` kept out when nothing says what to ignore yet; an empty folder starts with an empty
+commit); a repository already on another branch gives the app that branch; a relative path, a missing folder, a file
+or a detached HEAD is a sentence (a `PlanError`, so a 400 the page shows), as is anything git itself refuses. It runs
+when a checkout is set: `POST /apps` now takes `repo: { fullName, localPath }`, prepared before the app exists so a
+refusal leaves nothing half-made; `POST /repos` and `PATCH /repos/:id` the same; each answers with a `note` saying
+what was done. `GET /github/repos` lists the person's repositories through `gh` (name, default branch, private) or
+says in gh's words why there is no list. `startTalk` checks the checkout first (`checkoutProblem`) and answers in a
+sentence. UI: "+ App" is a page of its own, `/settings/new`: name, GitHub repo (a datalist from gh's list, or typed),
+local checkout; Add needs a name and one of the two; it lands on the new app's Repo page with the engine's note
+("Set up · Made it a git repository on main, committed the 12 files as found"). The Repo page shares the fields and
+shows the note after Save. Stories: Pages/Settings › NewApp, NewAppNoGh, AppRepoSetUp. Tests:
+`engine/src/checkout.test.ts` against throwaway folders; `myRepos` in `github.test.ts`.
+
+Left out on purpose: cloning a GitHub repo that has no local checkout (where to put it is a question for the person;
+the Repo page still says "no local checkout set"), and any remote: a folder made a repository has no origin until
+someone gives it one, and the engine's fetch is allowed to fail.

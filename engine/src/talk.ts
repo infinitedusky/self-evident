@@ -11,6 +11,7 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, idea, project, prototype, repo, session, sessionMessage, workspace } from './db/schema.js'
 import { addWorktree, git, removeWorktree } from './git.js'
+import { checkoutProblem } from './checkout.js'
 import { withLock } from './landing.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
@@ -137,6 +138,8 @@ export async function startTalk(input: { appId: string; subjectRef?: SubjectRef;
   if (!a) throw new PlanError(`no app ${input.appId}`)
   const [r] = await db.select().from(repo).where(eq(repo.appId, input.appId))
   if (!r?.localPath) throw new PlanError(`${a.name} has no local checkout yet; add its repo in Settings`)
+  const problem = await checkoutProblem(r.localPath)
+  if (problem) throw new PlanError(`${problem} Save it under Settings › Repo and Self Evident sets it up.`)
   const id = newId('session')
   const short = id.slice(-6).toLowerCase()
   const branch = `talk/${short}`

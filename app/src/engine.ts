@@ -104,6 +104,9 @@ export interface WorkflowRow extends Workflow { appDefault: boolean; projects: n
 export interface IdeaRow { id: string; appId: string; number: number; title: string; body: string | null; lane: string }
 export interface AppSetup { integrations?: IntegrationValues; plugins?: Record<string, { on: boolean }>; pr_mode?: 'project' | 'issue'; storybook_url?: string; storybook_cmd?: string; test_cmd?: string; prototype_cmd?: string; prototype_db?: { url: string; env?: string; schema_cmd?: string }; model?: string; max_budget_usd?: number; max_turns?: number }
 export interface Repo { id: string; appId: string; fullName: string; localPath: string | null; baseBranch: string | null }
+/** One of the person's repositories on GitHub, as gh lists them; `problem` is why there is no list (gh missing, signed out). */
+export interface GitHubRepo { fullName: string; defaultBranch: string; private: boolean }
+export interface GitHubRepos { repos: GitHubRepo[]; problem: string | null }
 export interface App { id: string; workspaceId?: string; name: string; key: string; defaultBranch: string; setup?: AppSetup; repos?: Repo[] }
 export interface Workspace { id: string; name: string; settings?: { integrations?: IntegrationValues } }
 
@@ -241,10 +244,12 @@ export const engine = {
   updatePlugin: (id: string, body: { on?: boolean; roles?: AgentRole[] }) => call<{ ok: true }>('PATCH', `/plugins/${encodeURIComponent(id)}`, body),
   fileSkill: (key: string, body: { category?: string | null; on?: boolean }) => call<{ ok: true }>('PATCH', `/skills/${key.split('/').map(encodeURIComponent).join('/')}`, body),
   createWorkspace: (name: string) => call<Workspace>('POST', '/workspaces', { name }),
-  createApp: (body: { workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: AppSetup }) => call<App>('POST', '/apps', body),
+  // The code may come with the app; a local checkout is made ready as it is set, and `note` says what the engine did.
+  createApp: (body: { workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: AppSetup; repo?: { fullName?: string; localPath?: string } }) => call<App & { note: string | null }>('POST', '/apps', body),
+  githubRepos: () => call<GitHubRepos>('GET', '/github/repos'),
   updateApp: (id: string, body: { name?: string; defaultBranch?: string; setup?: AppSetup }) => call<App>('PATCH', `/apps/${id}`, body),
-  createRepo: (body: { appId: string; fullName: string; localPath?: string; baseBranch?: string }) => call<Repo>('POST', '/repos', body),
-  updateRepo: (id: string, body: { fullName?: string; localPath?: string | null; baseBranch?: string | null }) => call<Repo>('PATCH', `/repos/${id}`, body),
+  createRepo: (body: { appId: string; fullName: string; localPath?: string; baseBranch?: string }) => call<Repo & { note: string | null }>('POST', '/repos', body),
+  updateRepo: (id: string, body: { fullName?: string; localPath?: string | null; baseBranch?: string | null }) => call<Repo & { note: string | null }>('PATCH', `/repos/${id}`, body),
   projects: (appId?: string) => call<ProjectSummary[]>('GET', `/projects${appId ? `?app=${appId}` : ''}`),
   graph: (id: string) => call<Graph>('GET', `/projects/${id}/graph`),
   createProject: (body: { appId: string; name: string; content?: string; description?: string; ideaId?: string; workflowId?: string; issues: NewProjectIssue[] }) => call<{ project: { id: string } }>('POST', '/projects', body),

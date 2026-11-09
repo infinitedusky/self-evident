@@ -12,7 +12,7 @@ import { db, pool } from './db/client.js'
 import { app, event, fileClaim, outsidePr, pr, project, repo, workspace } from './db/schema.js'
 import { getIssue } from './issues.js'
 import { commitAll, git } from './git.js'
-import { catchUpApp, checksOf, syncPrs, type GhPr, type GitHubApi } from './github.js'
+import { catchUpApp, checksOf, syncPrs, type GhPr, type GitHubApi, myRepos } from './github.js'
 import { newId } from './ids.js'
 import { now } from './now.js'
 import { createProject, setBuildStatus } from './projects.js'
@@ -128,5 +128,18 @@ describe.skipIf(!reachable)('github sync', () => {
     expect((await git(local, ['rev-parse', p.integrationBranch!])).stdout).toBe(before)
     expect((await now(appId)).needsYou.find((n) => n.kind === 'behind_main')).toMatchObject({ projectId: p.id, files: 'README.md' })
     expect((await db.select().from(event).where(and(eq(event.projectId, p.id), eq(event.type, 'project.behind_main')))).length).toBe(1)
+  })
+})
+
+describe('myRepos', () => {
+  const run = (out: { stdout?: string; err?: Partial<Error & { code: string; stderr: string }> }) => (async () => { if (out.err) throw Object.assign(new Error(out.err.message ?? 'x'), out.err); return { stdout: out.stdout ?? '', stderr: '' } }) as any
+  it('lists what gh knows, with each repo’s default branch', async () => {
+    const r = await myRepos(run({ stdout: JSON.stringify([{ nameWithOwner: 'example/sample-shop', defaultBranchRef: { name: 'main' }, isPrivate: false }, { nameWithOwner: 'example/old', defaultBranchRef: null, isPrivate: true }]) }))
+    expect(r).toEqual({ repos: [{ fullName: 'example/sample-shop', defaultBranch: 'main', private: false }, { fullName: 'example/old', defaultBranch: 'main', private: true }], problem: null })
+  })
+  it('says why there is no list: gh missing, or signed out, in gh’s words', async () => {
+    expect(await myRepos(run({ err: { code: 'ENOENT' } }))).toEqual({ repos: [], problem: "gh (GitHub's CLI) isn't on the engine's PATH, so there is no list to pick from; type owner/name." })
+    expect((await myRepos(run({ err: { stderr: 'To get started with GitHub CLI, please run:  gh auth login\nAlternatively, populate the GH_TOKEN environment variable.\n' } }))).problem)
+      .toBe('To get started with GitHub CLI, please run:  gh auth login; type owner/name.')
   })
 })

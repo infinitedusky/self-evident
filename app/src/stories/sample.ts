@@ -7,7 +7,7 @@ import type { StepState, Workflow } from '@self-evident/engine/steps'
 import type { Plan } from '../pages/PlanHome'
 import type {
   App, AppSettings, BacklogIssue, Cycle, Decision, Event, FactorySettings, Graph, GraphIssue, GraphSubIssue, IdeaRow, Initiative, Issue,
-  IssueDetail, IssueRow, Now, StepsView, StepWork, WorkflowRow, ProjectSummary, Prototype, Question, Run, Step, SummaryState, TalkMessage, TalkSession, ClaudeSession, Todo, Transcript, Workspace,
+  IssueDetail, IssueRow, Now, StepsView, StepWork, WorkflowRow, ProjectSummary, Prototype, Question, Run, Step, SummaryState, TalkMessage, TalkSession, ClaudeSession, Todo, Transcript, Workspace, GitHubRepos,
 } from '../engine'
 
 export const T0 = '2026-10-27T09:00:00.000Z'
@@ -21,6 +21,15 @@ export const sampleApp: App = {
 }
 export const otherApp: App = { id: 'app_sample2', workspaceId: workspace.id, name: 'Sample Blog', key: 'SB', defaultBranch: 'main', setup: {}, repos: [] }
 export const apps = [otherApp, sampleApp] // the newest last: the app the UI picks when none is chosen
+
+/** What gh would list for the sample person, for picking a repo when an app is made: made up. */
+export const githubRepos: GitHubRepos = { repos: [
+  { fullName: 'example/sample-shop', defaultBranch: 'main', private: false },
+  { fullName: 'example/sample-blog', defaultBranch: 'main', private: true },
+  { fullName: 'example/old-site', defaultBranch: 'master', private: true },
+], problem: null }
+/** What the engine says after a folder is set as a checkout (sample). */
+export const repoNote = 'Made it a git repository on main, committed the 12 files as found, wrote a .gitignore for node_modules.'
 
 /** A task (an issue row) with every field filled; pass what differs. */
 export function issue(number: number, title: string, extra: Partial<Issue> = {}): Issue {

@@ -442,6 +442,14 @@ Details and sources in `research/`.
   the middle: research, briefs, mockups, prototypes, approval and the parallel build, on our own Claude Code.
   The project and its tasks, in order, are in Self Evident (SE-1 to SE-10).
 
+- **The code comes with the app** (Sandy, 2026-11-09: "it should have you select the repo or point to the local
+  location when you create a new project. If the location is not a repo, create one"). A new app asks where its
+  code is: a GitHub repo of yours (picked from gh's list, or typed), the folder on this machine, or both. A folder
+  that isn't a git repository becomes one on the app's default branch, with the files as found committed; a
+  repository already on another branch gives the app that branch. The engine says what it did in a sentence, and
+  what it can't fix (no such folder, a detached HEAD, git refusing) is a sentence on the page, never a 500. The
+  same when the checkout is set later on the Repo page, and a conversation checks the checkout before it starts.
+
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
 > "When I use VS Code, I can just move really quickly … I just set things to dangerously skip permissions and just
