@@ -5,11 +5,11 @@
  * landing, prototype, Storybook, integration values, and its workflow rules.
  */
 import { useEffect, useState } from 'react'
-import { NavLink, useParams } from 'react-router'
+import { NavLink, useLocation, useMatch, useNavigate, useParams } from 'react-router'
 import { Badge } from '../components/Badge'
 import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
-import { engine, type AgentRole, type App, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type PluginInfo, type Repo } from '../engine'
+import { engine, type AgentRole, type App, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type GitHubRepos, type PluginInfo, type Repo } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
@@ -26,45 +26,87 @@ export const APP_SECTIONS = [
 export function Settings() {
   const { id, section, item } = useParams()
   const { apps, reload: reloadNav } = useCurrentApp()
-  const [adding, setAdding] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const making = !!useMatch('/settings/new') // the New app step has its own address
   const app = id ? apps.find((a) => a.id === id) : undefined
   const sections = id ? APP_SECTIONS : FACTORY_SECTIONS
   const here = sections.find((x) => x.key === section)?.key ?? sections[0].key
   const base = id ? `/settings/apps/${id}` : '/settings'
 
-  const addApp = async () => {
-    const name = adding?.trim()
-    if (!name) return
-    try {
-      const ws = (await engine.workspaces())[0] ?? (await engine.createWorkspace('My workspace'))
-      await engine.createApp({ workspaceId: ws.id, name })
-      setAdding(null); await reloadNav()
-    } catch (e) { setError(err(e)) }
-  }
-
   return (
     <>
       <div className="page-head"><h1>Settings</h1></div>
       <nav className="settings-scope" aria-label="Which settings">
-        <NavLink to="/settings" className={() => `scope ${!id ? 'active' : ''}`}>All apps</NavLink>
+        <NavLink to="/settings" className={() => `scope ${!id && !making ? 'active' : ''}`}>All apps</NavLink>
         {apps.map((a) => <NavLink key={a.id} to={`/settings/apps/${a.id}`} className={() => `scope ${id === a.id ? 'active' : ''}`}>{a.name}</NavLink>)}
-        {adding === null
-          ? <button className="scope add" onClick={() => setAdding('')} title="Add an app">+ App</button>
-          : <span className="settings-add">
-              <input autoFocus value={adding} onChange={(e) => setAdding(e.target.value)} placeholder="New app" onKeyDown={(e) => { if (e.key === 'Enter') void addApp(); if (e.key === 'Escape') setAdding(null) }} />
-              <button className="btn quiet" disabled={!adding.trim()} onClick={addApp}>Add</button>
-            </span>}
+        <NavLink to="/settings/new" className={() => `scope add ${making ? 'active' : ''}`} title="Add an app">+ App</NavLink>
       </nav>
       <div className="settings" data-component="Settings">
         <aside className="settings-side" aria-label="Sections">
-          {sections.map((x) => <NavLink key={x.key} to={`${base}/${x.key}`} className={() => `link ${here === x.key ? 'active' : ''}`}>{x.label}</NavLink>)}
+          {making
+            ? <span className="link active">New app</span>
+            : sections.map((x) => <NavLink key={x.key} to={`${base}/${x.key}`} className={() => `link ${here === x.key ? 'active' : ''}`}>{x.label}</NavLink>)}
         </aside>
         <div>
-          {error && <div className="empty bad">{error}</div>}
-          {!id ? <FactoryPage section={here} item={item} /> : app ? <AppPage key={app.id} app={app} section={here} item={item} onSaved={reloadNav} /> : <p className="muted">No such app.</p>}
+          {making ? <NewApp onMade={reloadNav} /> : !id ? <FactoryPage section={here} item={item} /> : app ? <AppPage key={app.id} app={app} section={here} item={item} onSaved={reloadNav} /> : <p className="muted">No such app.</p>}
         </div>
       </div>
+    </>
+  )
+}
+
+/**
+ * A new app, with its code (Sandy, 2026-11-09): a GitHub repo of yours, picked from gh's list or typed, the folder on
+ * this machine, or both. The engine makes a folder that isn't a repository one, and says so on the app's Repo page.
+ */
+function NewApp({ onMade }: { onMade: () => Promise<unknown> }) {
+  const navigate = useNavigate()
+  const [name, setName] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [localPath, setLocalPath] = useState('')
+  const [gh, setGh] = useState<GitHubRepos | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => { engine.githubRepos().then(setGh).catch((e) => setGh({ repos: [], problem: err(e) })) }, [])
+  const picked = gh?.repos.find((r) => r.fullName === fullName.trim())
+  const ready = !!name.trim() && !!(fullName.trim() || localPath.trim())
+  const add = async () => {
+    setBusy(true); setError(null)
+    try {
+      const ws = (await engine.workspaces())[0] ?? (await engine.createWorkspace('My workspace'))
+      const made = await engine.createApp({ workspaceId: ws.id, name: name.trim(), defaultBranch: picked?.defaultBranch, repo: { fullName: fullName.trim(), localPath: localPath.trim() } })
+      await onMade()
+      navigate(`/settings/apps/${made.id}`, { state: { note: made.note } })
+    } catch (e) { setError(err(e)); setBusy(false) }
+  }
+  return (
+    <section className="panel" data-component="NewApp">
+      <Group title="New app" lead="Its name, and where its code is: a GitHub repo of yours, the folder on this machine, or both. A folder that isn't a git repository yet becomes one on the default branch, with the files as found committed.">
+        <label>Name<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ragdoll Golf" onKeyDown={(e) => { if (e.key === 'Enter' && ready && !busy) void add() }} /></label>
+        <label>Default branch<input className="mono" value={picked?.defaultBranch ?? 'main'} readOnly title="Follows the GitHub repo picked, or the folder's own branch" /></label>
+        <RepoFields fullName={fullName} localPath={localPath} gh={gh} onChange={(p) => { if (p.fullName !== undefined) setFullName(p.fullName); if (p.localPath !== undefined) setLocalPath(p.localPath) }} />
+      </Group>
+      <div className="settings-save">
+        <button className="btn" disabled={!ready || busy} onClick={add}>Add</button>
+        {!ready && <span className="faint">A name, and a GitHub repo or a folder.</span>}
+        {error && <span className="bad">{error}</span>}
+      </div>
+    </section>
+  )
+}
+
+/** The two places code lives, shared by New app and an app's Repo page: GitHub (a pick from gh's list, or typed) and the folder here. */
+function RepoFields({ fullName, localPath, gh, onChange }: { fullName: string; localPath: string; gh: GitHubRepos | null; onChange: (patch: { fullName?: string; localPath?: string }) => void }) {
+  return (
+    <>
+      <label>GitHub repo
+        <input className="mono" list="github-repos" value={fullName} onChange={(e) => onChange({ fullName: e.target.value })} placeholder="owner/name (for the PR)" />
+        <datalist id="github-repos">{(gh?.repos ?? []).map((r) => <option key={r.fullName} value={r.fullName}>{r.private ? 'private' : 'public'} · {r.defaultBranch}</option>)}</datalist>
+        <span className="faint settings-desc">{gh === null ? 'Looking up your GitHub repos…' : gh.problem ?? `${gh.repos.length} of yours to pick from, or type one.`}</span>
+      </label>
+      <label>Local checkout
+        <input className="mono" value={localPath} onChange={(e) => onChange({ localPath: e.target.value })} placeholder="/absolute/path/to/the/folder on this machine" />
+        <span className="faint settings-desc">Where the agents work from. Not a git repository yet? It becomes one.</span>
+      </label>
     </>
   )
 }
@@ -244,10 +286,15 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   const [repo, setRepo] = useState<Partial<Repo>>(app.repos?.[0] ?? { fullName: '', localPath: '' })
   const [info, setInfo] = useState<AppSettingsData | null>(null)
   const [factory, setFactory] = useState<FactorySettings | null>(null)
+  const [gh, setGh] = useState<GitHubRepos | null>(null)
+  const arrived = useLocation().state as { note?: string | null } | null // what New app's engine call said, carried here
+  const [note, setNote] = useState<string | null>(arrived?.note ?? null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const load = () => Promise.all([engine.appSettings(app.id).then(setInfo), engine.settings().then(setFactory)]).catch((e) => setError(err(e)))
   useEffect(() => { void load() }, [app.id])
+  useEffect(() => { if (section === 'repo' && gh === null) engine.githubRepos().then(setGh).catch((e) => setGh({ repos: [], problem: err(e) })) }, [section])
+  useEffect(() => { setBranch(app.defaultBranch) }, [app.defaultBranch]) // the engine may have made the checkout's branch the default
 
   const dirty = name !== app.name || branch !== app.defaultBranch || JSON.stringify(setup) !== JSON.stringify(app.setup ?? {})
     || repo.fullName !== (app.repos?.[0]?.fullName ?? '') || (repo.localPath ?? '') !== (app.repos?.[0]?.localPath ?? '')
@@ -257,8 +304,9 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
     setBusy(true); setError(null)
     try {
       await engine.updateApp(app.id, { name: name.trim(), defaultBranch: branch.trim() || 'main', setup: clean(setup) })
-      if (repo.id) await engine.updateRepo(repo.id, { fullName: repo.fullName ?? '', localPath: repo.localPath?.trim() || null })
-      else if (repo.fullName?.trim() || repo.localPath?.trim()) await engine.createRepo({ appId: app.id, fullName: repo.fullName?.trim() ?? '', localPath: repo.localPath?.trim() || undefined })
+      const saved = repo.id ? await engine.updateRepo(repo.id, { fullName: repo.fullName ?? '', localPath: repo.localPath?.trim() || null })
+        : repo.fullName?.trim() || repo.localPath?.trim() ? await engine.createRepo({ appId: app.id, fullName: repo.fullName?.trim() ?? '', localPath: repo.localPath?.trim() || undefined }) : null
+      if (saved) { const { note: said, ...row } = saved; setRepo(row); setNote(said) }
       await onSaved(); await load()
     } catch (e) { setError(err(e)) } finally { setBusy(false) }
   }
@@ -272,9 +320,9 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
       <Group title="Repo" lead="The code and the checkout on this machine the agents work from.">
         <label>Name<input value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label>Default branch<input className="mono" value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" /></label>
-        <label>GitHub repo<input className="mono" value={repo.fullName ?? ''} onChange={(e) => setRepo({ ...repo, fullName: e.target.value })} placeholder="owner/name (for the PR)" /></label>
-        <label>Local checkout<input className="mono" value={repo.localPath ?? ''} onChange={(e) => setRepo({ ...repo, localPath: e.target.value })} placeholder="/absolute/path/to/the/repo, on its default branch" /></label>
+        <RepoFields fullName={repo.fullName ?? ''} localPath={repo.localPath ?? ''} gh={gh} onChange={(p) => setRepo({ ...repo, ...p })} />
       </Group>
+      {note && <p className="settings-note" data-component="CheckoutNote"><Badge tone="ok">Set up</Badge><span>{note}</span></p>}
     </>,
     agents: <>
       <Group title="Agents" lead="What a planner or builder run on this app gets.">

@@ -16,6 +16,7 @@ export interface MockData {
   claudeSessions: typeof s.claudeSessions
   check: { ok: boolean; detail: string }
   trackerGuide: string
+  githubRepos: typeof s.githubRepos; repoNote: string | null
   plan: typeof s.plan; workflows: typeof s.workflowRows; steps: Record<string, typeof s.taskStepsView>; stepWork: typeof s.researchWork | null
 }
 
@@ -28,6 +29,7 @@ export const sampleData: MockData = {
   claudeSessions: s.claudeSessions,
   check: { ok: true, detail: 'Signed in as Sample Owner; team SHOP (Sample Shop) found.' },
   trackerGuide: s.trackerGuideSample,
+  githubRepos: s.githubRepos, repoNote: s.repoNote,
   plan: s.plan, workflows: s.workflowRows, steps: { ideas: s.ideaStepsView, issues: s.taskStepsView, projects: s.projectStepsView }, stepWork: s.researchWork,
 }
 
@@ -49,6 +51,10 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/settings', () => reply(d.settings)),
     http.get('/api/apps/:id/settings', () => reply(d.appSettings)),
     http.post('/api/integrations/:key/check', () => reply(d.check)),
+    http.get('/api/github/repos', () => reply(d.githubRepos)),
+    http.post('/api/apps', async ({ request }) => { const b = await request.json() as { name: string }; return reply({ ...s.otherApp, id: 'app_new', name: b.name, key: 'NEW', note: d.repoNote }) }),
+    http.post('/api/repos', () => reply({ ...s.sampleApp.repos![0], note: d.repoNote })),
+    http.patch('/api/repos/:id', () => reply({ ...s.sampleApp.repos![0], note: d.repoNote })),
     http.get('/api/apps/:id/tracker-guide', () => HttpResponse.text(d.trackerGuide, { headers: { 'content-type': 'text/markdown; charset=utf-8' } })),
     http.get('/api/apps/:id/claude-sessions', () => reply(d.claudeSessions)),
     http.post('/api/talks/adopt', () => reply(d.talks[0])),
