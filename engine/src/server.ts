@@ -21,7 +21,8 @@ import { approveBrief, convertIdea, getStep, guardComplete, guardDirect, listWor
 import { adoptTalk, answerPermission, closeTalks, endTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, say, setAutoApprove, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
-import { lastSync, startSync, syncApp } from './github.js'
+import { lastSync, myRepos, startSync, syncApp } from './github.js'
+import { prepareCheckout } from './checkout.js'
 import { addChecklist, draftChecklist, completeTodo, createTodo, dropTodo, getTodo, itemToTodo, listTodos, removeChecklistItem, reopenTodo, setChecklistItem, updateTodo } from './todos.js'
 import { addIdea, addItems, dropItem, listBacklog, markDuplicate, promote, reopenItem } from './backlog.js'
 import { createCycle, createInitiative, listCycles, listInitiatives, updateInitiative } from './goals.js'
@@ -209,20 +210,41 @@ export function buildApp(bus: EventBus) {
       .where(eq(appTable.id, c.req.param('id'))).returning()
     return row ? c.json(row) : c.json({ error: 'no such app' }, 404)
   })
+  // A local checkout is made ready as it is set (a folder becomes a repository; the branch follows); the row comes back with a `note` saying what was done.
+  const readyCheckout = async (appId: string, localPath: string) => {
+    const [a] = await db.select().from(appTable).where(eq(appTable.id, appId))
+    if (!a) throw new PlanError('no such app')
+    const p = await prepareCheckout(localPath, a.defaultBranch, a.name)
+    if (p.branch !== a.defaultBranch) await db.update(appTable).set({ defaultBranch: p.branch }).where(eq(appTable.id, appId))
+    return p.note
+  }
   api.patch('/repos/:id', async (c) => {
     const body = await c.req.json<{ fullName?: string; localPath?: string | null; baseBranch?: string | null }>()
-    const [row] = await db.update(repoTable).set({ ...(body.fullName !== undefined ? { fullName: body.fullName } : {}), ...(body.localPath !== undefined ? { localPath: body.localPath } : {}), ...(body.baseBranch !== undefined ? { baseBranch: body.baseBranch } : {}) })
-      .where(eq(repoTable.id, c.req.param('id'))).returning()
-    return row ? c.json(row) : c.json({ error: 'no such repo' }, 404)
+    const [was] = await db.select().from(repoTable).where(eq(repoTable.id, c.req.param('id')))
+    if (!was) return c.json({ error: 'no such repo' }, 404)
+    const localPath = body.localPath?.trim() || null
+    let note: string | null = null
+    try { if (localPath) note = await readyCheckout(was.appId, localPath) } catch (err) { return planError(c, err) }
+    const [row] = await db.update(repoTable).set({ ...(body.fullName !== undefined ? { fullName: body.fullName } : {}), ...(body.localPath !== undefined ? { localPath } : {}), ...(body.baseBranch !== undefined ? { baseBranch: body.baseBranch } : {}) })
+      .where(eq(repoTable.id, was.id)).returning()
+    return c.json({ ...row, note })
   })
+  api.get('/github/repos', async (c) => c.json(await myRepos()))
   api.post('/apps', async (c) => {
-    const body = await c.req.json<{ workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
+    const body = await c.req.json<{ workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: Record<string, unknown>; repo?: { fullName?: string; localPath?: string } }>()
     const taken = (await db.select({ key: appTable.key }).from(appTable).where(eq(appTable.workspaceId, body.workspaceId))).map((r) => r.key)
     const key = body.key?.trim().toUpperCase() || appKey(body.name, taken)
     if (taken.includes(key)) return c.json({ error: `the key ${key} is taken in this workspace` }, 400)
+    // The code, when it is given at creation: the checkout is made ready before the app exists, so a refusal leaves nothing half-made.
+    const fullName = body.repo?.fullName?.trim() ?? ''
+    const localPath = body.repo?.localPath?.trim() || null
+    let branch = body.defaultBranch?.trim() || 'main'
+    let note: string | null = null
+    if (localPath) { try { const p = await prepareCheckout(localPath, branch, body.name); branch = p.branch; note = p.note } catch (err) { return planError(c, err) } }
     const row = await db.transaction(async (tx) => { // with its default workflow: an app always has one
-      const [made] = await tx.insert(appTable).values({ id: newId('app'), workspaceId: body.workspaceId, name: body.name, key, defaultBranch: body.defaultBranch ?? 'main', setup: body.setup ?? {} }).returning()
-      return { ...made, workflowId: await createDefaultWorkflow(tx, made.id) }
+      const [made] = await tx.insert(appTable).values({ id: newId('app'), workspaceId: body.workspaceId, name: body.name, key, defaultBranch: branch, setup: body.setup ?? {} }).returning()
+      const repos = fullName || localPath ? await tx.insert(repoTable).values({ id: newId('repo'), appId: made.id, fullName, localPath }).returning() : []
+      return { ...made, repos, workflowId: await createDefaultWorkflow(tx, made.id), note }
     })
     return c.json(row, 201)
   })
@@ -248,8 +270,11 @@ export function buildApp(bus: EventBus) {
 
   api.post('/repos', async (c) => {
     const body = await c.req.json<{ appId: string; fullName: string; localPath?: string; baseBranch?: string }>()
-    const [row] = await db.insert(repoTable).values({ id: newId('repo'), appId: body.appId, fullName: body.fullName, localPath: body.localPath ?? null, baseBranch: body.baseBranch ?? null }).returning()
-    return c.json(row, 201)
+    const localPath = body.localPath?.trim() || null
+    let note: string | null = null
+    try { if (localPath) note = await readyCheckout(body.appId, localPath) } catch (err) { return planError(c, err) }
+    const [row] = await db.insert(repoTable).values({ id: newId('repo'), appId: body.appId, fullName: body.fullName, localPath, baseBranch: body.baseBranch ?? null }).returning()
+    return c.json({ ...row, note }, 201)
   })
 
   // Talk: an interactive agent session, the conversation as rows and events, permissions answered from the UI.
