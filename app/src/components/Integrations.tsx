@@ -20,7 +20,7 @@ const inline = (s: string) => s.split('`').map((part, n) => (n % 2 ? <span key={
 
 /** What a status says, in a word or two, and its tone. */
 export function standing(i: Integration, s: IntegrationStatus | undefined): { label: string; tone: Tone } {
-  if (i.perApp) return s?.state === 'ready' ? { label: 'On', tone: 'ok' } : { label: 'Off', tone: 'neutral' }
+  if (i.fields.some((f) => f.kind === 'switch')) return s?.state === 'ready' ? { label: 'On', tone: 'ok' } : { label: 'Off', tone: 'neutral' }
   switch (s?.state) {
     case 'ready': return { label: i.calls ? 'Connected' : 'Set', tone: 'ok' }
     case 'no-key': return { label: 'Key missing', tone: 'warn' }
@@ -63,7 +63,6 @@ export function Integrations({ base, item, integrations, values, status, scope, 
       <dl className="fields" style={{ marginTop: 18 }}>
         <dt>Claude Code</dt><dd className="muted">The agents. Development runs on the operator's login; the product on an API key.</dd>
         <dt>GitHub</dt><dd className="muted">Set per app under Repo: its repo, where PRs live.</dd>
-        <dt>Storybook</dt><dd className="muted">Set per app: where its stories run.</dd>
       </dl>
     </section>
   )
@@ -78,38 +77,66 @@ function Back({ base }: { base: string }) {
 
 function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integration; base: string; values: EffectiveValues[string]; status?: IntegrationStatus; scope: 'workspace' | 'app'; appId?: string; all: EffectiveValues; onSave: Props['onSave'] }) {
   const [editing, setEditing] = useState(false)
-  const [check, setCheck] = useState<{ ok: boolean; detail: string } | 'busy' | null>(null)
+  const [check, setCheck] = useState<{ ok: boolean; detail: string; links?: { label: string; href: string }[] } | 'busy' | null>(null)
+  const [acted, setActed] = useState<string | null>(null)
   const st = standing(i, status)
   const keyField = i.fields.find((f) => f.secret)
   const keyVar = keyField ? values[keyField.key]?.value : null
+  const switched = i.fields.some((f) => f.kind === 'switch')
   const perAppHere = !!i.perApp && scope === 'app'
   const on = status?.state === 'ready'
+  const buttons = perAppHere && i.actions.some((a) => a.kind) // actions that do something from here, for this app
   const runCheck = async () => {
     setCheck('busy')
     try { setCheck(await engine.checkIntegration(i.key, appId)) } catch (e) { setCheck({ ok: false, detail: err(e) }) }
   }
-  // A runner's check runs by itself: the page says whether it works without being asked.
+  // A per-app check runs by itself: the page says whether it works without being asked.
   useEffect(() => { if (perAppHere && on) void runCheck() }, [i.key, perAppHere, on, appId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const act = async (a: Integration['actions'][number]) => {
+    if (!appId) return
+    setActed('busy')
+    try {
+      if (a.kind === 'start') { await engine.startStorybook(appId); setActed('Starting; the check runs again in a moment.'); window.setTimeout(() => void runCheck(), 4000) }
+      else if (a.kind === 'ask' && a.ask) { await engine.ask({ appId, text: a.ask }); setActed('Handed to the agent: its conversation is open beside this.') }
+    } catch (e) { setActed(err(e)) }
+  }
+  const linkOf = (a: Integration['actions'][number]) => (check && check !== 'busy' ? check.links?.find((l) => l.label === a.name) : undefined)
   const actions = (
     <div className="settings-group">
-      <h3 className="settings-h3">{i.role === 'Runner' ? 'On a ticket' : 'In a workflow'}</h3>
+      <h3 className="settings-h3">{i.role === 'Runner' ? 'On a ticket' : buttons || i.actions.some((a) => a.kind) ? 'From here' : 'In a workflow'}</h3>
       {i.actions.length
         ? <>
             <p className="faint settings-desc" style={{ margin: '0 0 6px' }}>{i.role === 'Runner'
               ? <>What {i.name} does with a ticket whose brief is approved, each a command in a herdr tab today; the same as buttons on the ticket page comes next.</>
+              : i.actions.some((a) => a.kind) ? <>What can be done with {i.name} for {scope === 'app' ? 'this app' : 'an app'}{scope === 'app' ? '' : ', from its own Integrations page'}.</>
               : <>What an integration step can do with {i.name}, placed between a workflow's steps. Each asks before it sends anything out, and running it again updates what it made.</>}</p>
-            <ul className="list">{i.actions.map((a) => <li key={a.key}><strong>{a.name}</strong><div className="muted settings-desc">{inline(a.does)}</div></li>)}</ul>
-            {i.role !== 'Runner' && <p className="faint settings-desc">Integration steps arrive in workflow rules next.</p>}
+            <ul className="list">{i.actions.map((a) => {
+              const link = linkOf(a)
+              return (
+                <li key={a.key}>
+                  {buttons && (a.kind === 'start' || a.kind === 'ask')
+                    ? <button className="btn quiet" disabled={acted === 'busy' || !on} onClick={() => act(a)}>{a.name}</button>
+                    : buttons && a.kind === 'link'
+                      ? link ? <a className="btn quiet" href={link.href} target="_blank" rel="noreferrer">{a.name} ↗</a> : <strong className="faint">{a.name}</strong>
+                      : <strong>{a.name}</strong>}
+                  <div className="muted settings-desc">{inline(a.does)}</div>
+                </li>
+              )
+            })}</ul>
+            {buttons && acted && acted !== 'busy' && <p className="settings-desc" data-component="ActionNote">{acted}</p>}
+            {i.role !== 'Runner' && !i.actions.some((a) => a.kind) && <p className="faint settings-desc">Integration steps arrive in workflow rules next.</p>}
           </>
         : <p className="faint settings-desc">Nothing: {i.name} is read by each app{i.role === 'Telemetry' ? ' to report what happens' : ''}, not used as a step.</p>}
     </div>
   )
-  if (i.perApp && scope === 'workspace') return ( // nothing to set for all apps: each app switches it on
+  if (i.perApp && scope === 'workspace') return ( // nothing to set for all apps: each app switches it on, or sets its own values
     <section className="panel" data-component="Integration">
       <Back base={base} />
       <div className="integration-head"><h2>{i.name}</h2><Badge>Per app</Badge></div>
       <p className="muted settings-lead">{i.does}</p>
-      <p className="settings-desc">Switched on under an app's Integrations: one app can be run by {i.name} while another is run by Self Evident's own agents. Installed and kept working outside Self Evident{i.docs && <>: <a href={i.docs} target="_blank" rel="noreferrer">about {i.name} ↗</a></>}.</p>
+      <p className="settings-desc">{switched
+        ? <>Switched on under an app's Integrations: one app can be run by {i.name} while another is run by Self Evident's own agents.</>
+        : <>Set under each app's Integrations: {i.fields.map((f) => f.label.toLowerCase()).join(' and ')}. The check reads the app's repo.</>} Installed and kept working outside Self Evident{i.docs && <>: <a href={i.docs} target="_blank" rel="noreferrer">{i.key === 'storybook' ? 'the screen map add-on' : `about ${i.name}`} ↗</a></>}.</p>
       {actions}
     </section>
   )
@@ -133,7 +160,7 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
                   <dd>{f.kind === 'switch'
                     ? <><Badge tone={on ? 'ok' : 'neutral'} dot={on}>{on ? 'On' : 'Off'}</Badge><span className="faint"> · {on ? `${i.name} builds this app's tickets; Self Evident hands none to its own planner.` : 'this app\'s tasks go to Self Evident\'s own planner and builder.'}</span></>
                     : <>{values[f.key]?.value ? <span className="mono">{values[f.key]!.value}</span> : <span className="faint">{f.required ? 'Not set' : '—'}</span>}
-                      {scope === 'app' && values[f.key]?.from && <span className="faint"> · {values[f.key]!.from === 'app' ? 'this app' : 'from All apps'}</span>}</>}</dd>
+                      {scope === 'app' && !i.perApp && values[f.key]?.from && <span className="faint"> · {values[f.key]!.from === 'app' ? 'this app' : 'from All apps'}</span>}</>}</dd>
                 </div>
               ))}
             </dl>
@@ -152,8 +179,10 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
           )}
           {!keyField && i.perApp && (
             <p className="settings-desc">
-              {on ? <>Whether {i.name} can run this app's tickets from here: the runner on the engine's PATH, a local checkout with the tracker guide pointing at this app, and its own doctor passing there. </> : <>Nothing to check while it is off. </>}
-              Installed and kept working outside Self Evident{i.docs && <>: <a href={i.docs} target="_blank" rel="noreferrer">about {i.name} ↗</a></>}.
+              {switched
+                ? on ? <>Whether {i.name} can run this app's tickets from here: the runner on the engine's PATH, a local checkout with the tracker guide pointing at this app, and its own doctor passing there. </> : <>Nothing to check while it is off. </>
+                : on ? <>Whether this app's Storybook meets the standard: Storybook 10 in the checkout, the screen map add-on installed and wired, its stylesheet imported, the flow files kept out of the story tests, and a map; then whether it is answering at the URL. </> : <>Nothing to check until the command and URL are set. </>}
+              Installed and kept working outside Self Evident{i.docs && <>: <a href={i.docs} target="_blank" rel="noreferrer">{i.key === 'storybook' ? 'the screen map add-on' : `about ${i.name}`} ↗</a></>}.
             </p>
           )}
           {i.calls && (
