@@ -1823,3 +1823,15 @@ then Storybook, then the prototype environment, the plan, the audit, the blast-r
 integration's role is Screens, not Mockups: Storybook is the step after the mockup. The quick thing's name is open.
 
 Next: our own Storybook brought up to the standard, the first repo the check should pass, with a map of our screens.
+
+## Our own Storybook meets the standard (2026-11-09)
+
+The first repo the new check should pass is this one, and it didn't: no screen map. Built (branch `storybook-map`):
+`@zigbang/storybook-addon-story-flow` in the app, wired in `.storybook/main.ts` with the glob under `src/stories/`,
+`.storybook/story-flow.css` imported after the app's CSS, the flow files excluded from the storybook vitest project,
+and the map itself, `src/stories/flows/self-evident.flow.json`: **Self Evident/Map**, 19 screens as nodes (every
+page route, each with its page's stories as states and its address as a tag), 25 edges saying what you tap, four
+scenarios (the loop; an idea becomes a project; a project and its tasks; setting up an app), all marked existing.
+The nodes are the tab pages as the Workspace shows them; the frame around them (rail, agent) is
+`Components/Workspace`. No trigger selectors yet: they want `data-testid`s on the pages, a pass of its own.
+A paragraph in `app/README.md` says where the map is and how to add a screen.
