@@ -458,6 +458,14 @@ Details and sources in `research/`.
   Open the map, Set up the screen map (the agent, in a conversation in the repo, asks before each file). The
   Prototype settings (the command and throwaway database for running the app itself) stay the app's own.
 
+- **Set up what's missing** (Sandy, 2026-11-09: "can we add a step with tkt where it auto configures anything
+  missing?"). A per-app integration whose check fails gets one button under the check. The engine does what is its
+  own (tkt: the tracker guide, written into the checkout, uncommitted), checks again, and hands the rest to the agent
+  in a conversation in the repo, in the tool's own words: tkt's check line and `tkt doctor`'s fail and warn lines
+  with their hints; Storybook's check line and the screen-map standard. The agent confirms each install and each
+  file change. This amends "tkt is the runner": Self Evident still configures nothing of tkt's by hand, but it asks
+  the agent to, and says what it did.
+
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
 > "When I use VS Code, I can just move really quickly … I just set things to dangerously skip permissions and just
