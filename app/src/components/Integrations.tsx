@@ -185,7 +185,7 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
           {!keyField && i.perApp && (
             <p className="settings-desc">
               {!on ? <>Nothing to check while it is off. </>
-                : i.key === 'tkt' ? <>Whether {i.name} can run this app's tickets from here: the runner on the engine's PATH, a local checkout with the tracker guide pointing at this app, and its own doctor passing there. </>
+                : i.key === 'tkt' ? <>Whether {i.name} can run this app's tickets from here: the runner on the engine's PATH, a Linear team under Integrations › Linear, a local checkout with the tracker guide pointing at that team, and its own doctor passing there. </>
                 : <>Whether this app's Storybook meets the standard: Storybook 10 in the checkout, the screen map add-on installed and wired, its stylesheet imported, the flow files kept out of the story tests, and a map; then whether it is answering at the URL. </>}
               Installed and kept working outside Self Evident{i.docs && <>: <a href={i.docs} target="_blank" rel="noreferrer">{i.key === 'storybook' ? 'the screen map add-on' : `about ${i.name}`} ↗</a></>}.
             </p>
@@ -213,7 +213,7 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
   )
 }
 
-/** The repo's docs/agents/issue-tracker.md for this app, filled in by the engine: Self Evident's half of the handshake with tkt's skills. */
+/** The repo's docs/agents/issue-tracker.md for this app, filled in by the engine for the app's Linear team: where tkt's skills read and change its tickets. */
 function TrackerGuide({ appId, name }: { appId: string; name: string }) {
   const [text, setText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -226,7 +226,7 @@ function TrackerGuide({ appId, name }: { appId: string; name: string }) {
     <div className="settings-group" data-component="TrackerGuide">
       <div className="integration-section-head"><h3 className="settings-h3">The tracker guide</h3>{text && <button className="btn quiet" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>}</div>
       <p className="faint settings-desc" style={{ margin: '0 0 6px' }}>
-        How {name}'s skills find this app here. Set up what's missing writes it into the repo as <span className="mono">docs/agents/issue-tracker.md</span>, with the rest of the lifecycle configuration (the forge, the workflow, the domain docs, the pull request template, the block in CLAUDE.md); this is the copy to paste when you would rather do it by hand. Everything about {name} itself stays outside Self Evident.
+        How {name}'s skills find this app's tickets in Linear. Set up what's missing writes it into the repo as <span className="mono">docs/agents/issue-tracker.md</span>, with the rest of the lifecycle configuration (the forge, the workflow, the domain docs, the pull request template, the block in CLAUDE.md); this is the copy to paste when you would rather do it by hand. Everything about {name} itself stays outside Self Evident.
       </p>
       {error ? <div className="bad">{error}</div> : text ? <details><summary className="faint">Show the file</summary><pre className="guide">{text}</pre></details> : <p className="muted" style={{ margin: 0 }}>Loading…</p>}
     </div>
