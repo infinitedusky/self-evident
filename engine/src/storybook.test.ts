@@ -8,7 +8,7 @@ import { db, pool } from './db/client.js'
 import { app, workspace } from './db/schema.js'
 import { git } from './git.js'
 import { newId } from './ids.js'
-import { ADDON, checkStorybook, hasStorybook, mapDocsId, migrateStorybookSetup, storybookSetup } from './storybook.js'
+import { ADDON, checkStorybook, hasStorybook, mapDocsId, migrateStorybookSetup, storybookDefaults, storybookSetup, storybookValues } from './storybook.js'
 
 async function repoWith(files: Record<string, string>) {
   const dir = await mkdtemp(join(tmpdir(), 'se-sb-'))
@@ -74,10 +74,21 @@ describe('checkStorybook', () => {
 })
 
 describe('storybookSetup', () => {
-  it('reads the integration, and the keys the values lived under before', () => {
-    expect(storybookSetup({ integrations: { storybook: { url: 'http://localhost:6007', cmd: 'pnpm storybook' } } })).toEqual({ url: 'http://localhost:6007', cmd: 'pnpm storybook' })
-    expect(storybookSetup({ storybook_url: 'http://localhost:6006', storybook_cmd: 'cd web && pnpm storybook' })).toEqual({ url: 'http://localhost:6006', cmd: 'cd web && pnpm storybook' })
-    expect(storybookSetup({})).toEqual({ url: null, cmd: null }); expect(hasStorybook({})).toBe(false); expect(hasStorybook({ storybook_cmd: 'x' })).toBe(true)
+  it('reads the switch, the integration, and the keys the values lived under before', () => {
+    expect(storybookSetup({ integrations: { storybook: { on: 'true', url: 'http://localhost:6007', cmd: 'pnpm storybook' } } })).toEqual({ on: true, url: 'http://localhost:6007', cmd: 'pnpm storybook' })
+    expect(storybookSetup({ integrations: { storybook: { url: 'http://localhost:6007' } } })).toEqual({ on: true, url: 'http://localhost:6007', cmd: null }) // before the switch, a value meant on
+    expect(storybookSetup({ integrations: { storybook: { on: 'false', url: 'http://localhost:6007' } } }).on).toBe(false)
+    expect(storybookSetup({ storybook_url: 'http://localhost:6006', storybook_cmd: 'cd web && pnpm storybook' })).toEqual({ on: true, url: 'http://localhost:6006', cmd: 'cd web && pnpm storybook' })
+    expect(storybookSetup({})).toEqual({ on: false, url: null, cmd: null }); expect(hasStorybook({})).toBe(false); expect(hasStorybook({ storybook_cmd: 'x' })).toBe(true); expect(hasStorybook({ integrations: { storybook: { on: 'true' } } })).toBe(true)
+  })
+  it('defaults the command and URL from the repo: the storybook script, the package manager, the port', async () => {
+    const root = await repoWith({ 'package.json': JSON.stringify({ scripts: { storybook: 'storybook dev -p 6007' } }), 'pnpm-lock.yaml': '' })
+    expect(await storybookDefaults(root)).toEqual({ cmd: 'pnpm storybook --no-open', url: 'http://localhost:6007' })
+    const sub = await repoWith({ 'package.json': JSON.stringify({ name: 'root' }), 'web/package.json': JSON.stringify({ scripts: { storybook: 'storybook dev' } }), 'package-lock.json': '' })
+    expect(await storybookDefaults(sub)).toEqual({ cmd: 'cd web && npm run storybook -- --no-open', url: 'http://localhost:6006' })
+    expect(await storybookDefaults(await repoWith({ 'package.json': JSON.stringify({ scripts: { dev: 'vite' } }) }))).toBeNull()
+    expect(await storybookValues({ integrations: { storybook: { on: 'true', url: 'http://localhost:9000' } } }, root)).toEqual({ on: true, url: 'http://localhost:9000', cmd: 'pnpm storybook --no-open' }) // the app's own value wins
+    expect(await storybookValues({ integrations: { storybook: { on: 'false' } } }, root)).toEqual({ on: false, url: null, cmd: null }) // off: nothing read
   })
   it('turns a map title into its docs id', () => { expect(mapDocsId('Pages/Map')).toBe('pages-map--docs'); expect(mapDocsId('Parent App/Map')).toBe('parent-app-map--docs') })
 })
@@ -92,7 +103,7 @@ describe.skipIf(!reachable)('migrateStorybookSetup', () => {
     await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'Old', key: appId.slice(-6).toUpperCase(), setup: { storybook_url: 'http://localhost:6006', storybook_cmd: 'cd web && pnpm storybook --no-open', test_cmd: 'pnpm test', integrations: { linear: { team: 'OLD' } } } })
     expect(await migrateStorybookSetup()).toBeGreaterThanOrEqual(1)
     const [a] = await db.select().from(app).where(eq(app.id, appId))
-    expect(a.setup).toEqual({ test_cmd: 'pnpm test', integrations: { linear: { team: 'OLD' }, storybook: { url: 'http://localhost:6006', cmd: 'cd web && pnpm storybook --no-open' } } })
+    expect(a.setup).toEqual({ test_cmd: 'pnpm test', integrations: { linear: { team: 'OLD' }, storybook: { on: 'true', url: 'http://localhost:6006', cmd: 'cd web && pnpm storybook --no-open' } } }) // on, since having values meant on
     expect(await migrateStorybookSetup()).toBe(0) // nothing left to move
   })
 })

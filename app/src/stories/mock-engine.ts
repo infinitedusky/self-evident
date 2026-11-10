@@ -29,7 +29,7 @@ export const sampleData: MockData = {
   prototypes: s.prototypes,
   claudeSessions: s.claudeSessions,
   check: { ok: true, detail: 'Signed in as Sample Owner; team SHOP (Sample Shop) found.' },
-  setup: { done: false, did: ['Wrote docs/agents/issue-tracker.md in the checkout, pointing at SS here; not committed, so look at it and commit it.'], ask: 'Self Evident\'s tkt check for Sample Shop (SS) says: tkt doctor: fail herdr herdr is not installed. (sample)', detail: 'tkt doctor: fail  herdr  herdr is not installed. Get tkt working: https://gitlab.com/rogs/tkt', talkId: 'sess_sample_setup' },
+  setup: { done: false, did: ['Wrote docs/agents/issue-tracker.md, pointing at SS here.', 'Wrote docs/agents/forge.md, docs/agents/workflow.md, docs/agents/domain.md, docs/agents/pull-request.md and the Ticket lifecycle block in CLAUDE.md, from the app, the repo and the house profile.', 'Committed to main and pushed (abc1234).'], ask: 'Self Evident\'s tkt check for Sample Shop (SS) says: tkt doctor: fail herdr herdr is not installed. (sample)', detail: 'tkt doctor: fail  herdr  herdr is not installed. Get tkt working: https://gitlab.com/rogs/tkt', talkId: 'sess_sample_setup' },
   trackerGuide: s.trackerGuideSample,
   githubRepos: s.githubRepos, repoNote: s.repoNote,
   plan: s.plan, workflows: s.workflowRows, steps: { ideas: s.ideaStepsView, issues: s.taskStepsView, projects: s.projectStepsView }, stepWork: s.researchWork,

@@ -4,9 +4,11 @@
  * app's tickets from their approved briefs and its skills write back here; Self Evident hands nothing to its own
  * planner. Off, the app's tasks are tracked, or run by Self Evident's agents as before.
  *
- * Self Evident never installs, configures or repairs tkt (SHAPE.md, "tkt is the runner"). Two things are its own
- * business: the check, which says in tkt's words what is wrong and nothing else; and the tracker guide, the file
- * the skills read to find this app here, filled from docs/tracker-self-evident.md with the app's id, key and URLs.
+ * Self Evident never installs or repairs tkt itself (SHAPE.md, "tkt is the runner"), but it writes, in one press,
+ * everything tkt and the lifecycle skills read from the repo: the tracker guide (here, from
+ * docs/tracker-self-evident.md, with the app's id, key and URLs), the rest of the lifecycle configuration
+ * (lifecycle.ts), and tkt's hooks through tkt's own installer; committed to the base branch. The check says in tkt's
+ * words what is wrong and nothing else; what the set-up cannot compute goes to the agent.
  */
 import { execFile } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -17,6 +19,9 @@ import { eq } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, repo } from './db/schema.js'
 import type { Values } from './integrations.js'
+import { FILL, houseConfig, OWNED, repoFacts, section, writeHouse } from './lifecycle.js'
+
+export { section }
 
 const execFileP = promisify(execFile)
 
@@ -32,7 +37,7 @@ export async function delegateFor(appId: string): Promise<'planner' | null> {
   return defaultDelegate(a?.setup)
 }
 
-export interface TktApp { id: string; key: string; name: string }
+export interface TktApp { id: string; key: string; name: string; defaultBranch?: string }
 export interface TktContext { app: TktApp; repoPath: string | null; engineUrl: string; uiUrl: string }
 /** Where the skills reach us: the engine's API, and the UI the ticket links point at (UI_URL; Vite's port in development). */
 export const urls = () => ({ engineUrl: `http://localhost:${Number(process.env.PORT ?? 4000)}/api`, uiUrl: process.env.UI_URL ?? 'http://localhost:5180' })
@@ -41,7 +46,7 @@ export async function contextFor(appId: string): Promise<TktContext | null> {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) return null
   const [r] = await db.select().from(repo).where(eq(repo.appId, appId))
-  return { app: { id: a.id, key: a.key, name: a.name }, repoPath: r?.localPath ?? null, ...urls() }
+  return { app: { id: a.id, key: a.key, name: a.name, defaultBranch: a.defaultBranch ?? undefined }, repoPath: r?.localPath ?? null, ...urls() }
 }
 /** Runs a command; stubbed in tests. Rejects as execFile does, with `code` ENOENT when the program is not there. */
 export type Run = (file: string, args: string[], cwd?: string) => Promise<{ stdout: string; stderr: string }>
@@ -87,18 +92,6 @@ export async function checkTkt(ctx: TktContext, deps: { run?: Run; read?: ReadTe
     return { ok: false, detail: `tkt doctor: ${(bad.length ? bad : lines(e).slice(-2)).join(' · ') || 'failed with no output'}. ${GET_TKT_WORKING}` }
   }
   return { ok: true, detail: `tkt ${version}; doctor passes in ${ctx.repoPath}; the tracker guide points at ${ctx.app.key} here.` }
-}
-
-const FILL = /\{\{FILL: ([^}]*)\}\}/g
-/** The body under `## <heading>` in a guide, up to the next `## `, without the heading line. */
-export function section(text: string, heading: string): string {
-  const out: string[] = []
-  let on = false
-  for (const ln of text.split('\n')) {
-    if (ln.startsWith('## ')) { if (on) break; on = ln === `## ${heading}`; continue }
-    if (on) out.push(ln)
-  }
-  return out.join('\n').trim()
 }
 
 const guideSource = fileURLToPath(new URL('../../docs/tracker-self-evident.md', import.meta.url))
@@ -169,11 +162,14 @@ export async function trackerGuide(ctx: TktContext, read: ReadText = readText): 
   ].join('\n')
 }
 
-// Set up what's missing (Sandy, 2026-11-09: "can we add a step with tkt where it auto configures anything missing?").
-// The tracker guide is ours and gets written; the rest is tkt's, handed to the agent in tkt's own words, hints and all.
+// Set up what's missing (Sandy, 2026-11-09: "can we add a step with tkt where it auto configures anything missing?"; then,
+// when the first version sent a yes/no list back: "we need a way to do it fast and consistent"). Self Evident writes the
+// whole lifecycle configuration itself (lifecycle.ts), installs tkt's hooks with tkt's own installer, commits to the base
+// branch and checks again, in one press. The agent gets only what cannot be computed: tkt itself, what doctor still flags.
 
 export interface Setup { done: boolean; did: string[]; ask: string | null; detail: string }
 export type Write = (path: string, text: string) => Promise<void>
+export interface Deps { run?: Run; read?: ReadText; write?: Write }
 const writeText: Write = async (p, text) => { await mkdir(dirname(p), { recursive: true }); await writeFile(p, text) }
 
 /** Whether the guide in the checkout points at this app here; null when it does. */
@@ -186,16 +182,19 @@ async function guideProblem(ctx: TktContext, read: ReadText): Promise<string | n
   return null
 }
 
-/** `tkt doctor`'s fail and warn lines with their hints, one string each; the pane warning is left out (not a setup matter). */
+/**
+ * `tkt doctor`'s fail and warn lines with their hints, one string each. Left out: the pane warning (not a set-up
+ * matter) and the pi one (pi runs tkt's own chat, which Self Evident stands in for).
+ */
 export async function doctorFindings(exec: Run, repoPath: string): Promise<string[]> {
   let out: string[]
   try { const r = await exec('tkt', ['doctor'], repoPath); out = `${r.stdout}\n${r.stderr}`.split('\n') } catch (e) { out = lines(e) }
   const found: string[] = []
-  let kept = false // whether the line a hint belongs to was kept: a hint under an ok, skip or pane line is not ours
+  let kept = false // whether the line a hint belongs to was kept: a hint under an ok, skip, pane or pi line is not ours
   for (const ln of out) {
     const m = /^(ok|skip|fail|warn|error)\s+(\S+)\s+(.*)$/.exec(ln.trimEnd())
     if (m) {
-      kept = m[1] !== 'ok' && m[1] !== 'skip' && m[2] !== 'herdr_env'
+      kept = m[1] !== 'ok' && m[1] !== 'skip' && m[2] !== 'herdr_env' && m[2] !== 'pi'
       if (kept) found.push(`${m[1]} ${m[2]}: ${m[3].trim()}`)
       continue
     }
@@ -205,38 +204,77 @@ export async function doctorFindings(exec: Run, repoPath: string): Promise<strin
   return found
 }
 
-/** The job for the agent: the check's words, tkt doctor's findings with their hints, and where each piece comes from. */
+/** The job for the agent: the check's words, what Self Evident already did, tkt doctor's findings with their hints. */
 export function setupAsk(ctx: TktContext, detail: string, findings: string[]): string {
   const where = ctx.repoPath ?? 'the app\'s checkout'
   return [
     `Self Evident's tkt check for ${ctx.app.name} (${ctx.app.key}) says: ${detail}`,
-    `Set up what is missing so tkt runs this app's tickets from ${where}. Confirm each install and each file change with me before doing it.`,
+    `Set up what is missing so tkt runs this app's tickets from ${where}. Self Evident has written the agent docs already (docs/agents/, the Ticket lifecycle block) and asked tkt to install its hooks; what is left is tkt's own. Confirm an install on this machine with me before doing it.`,
     `- tkt itself, when it is missing: a release build through its install.sh (https://gitlab.com/rogs/tkt), on the engine's PATH (~/.local/bin here), so \`tkt --version\` answers.`,
     `- Then \`tkt doctor\` in the checkout, and every line it flags, each following its own hint${findings.length ? ', today:' : '.'}`,
     ...findings.map((f) => `    ${f}`),
-    `- The tracker guide, ${GUIDE_PATH}, is Self Evident's and is written already (${ctx.engineUrl}/apps/${ctx.app.id}/tracker-guide gives it again); the other agent docs (the forge, the workflow, the domain) come from /setup-rogs in the repo, with Self Evident as the tracker.`,
     `Finish when \`tkt doctor\` passes there, and say what you installed.`,
   ].join('\n')
 }
 
+const list = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`)
+
+/** Commits the configuration on the base branch and pushes it, since tkt reads it from there; one sentence on what happened. */
+async function commitConfig(exec: Run, ctx: TktContext, remote: string, base: string, paths: string[]): Promise<string> {
+  const g = (args: string[]) => exec('git', args, ctx.repoPath!)
+  const branch = (await g(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
+  const changed = (await g(['status', '--porcelain', '--', ...paths])).stdout.trim()
+  if (!changed) return branch === base ? `Nothing new to commit: ${base} has this configuration already.` : `Nothing new to commit on ${branch}.`
+  if (branch !== base) return `Written in the checkout, which is on ${branch}, not ${base}: tkt reads the configuration from ${base}, so it needs to land there (a commit on ${branch} and a merge, or a commit on ${base}).`
+  await g(['add', '--', ...paths])
+  await g(['commit', '-q', '-m', `Set up the ticket lifecycle for ${ctx.app.name} (${ctx.app.key})`, '-m', 'Written by Self Evident from the app\'s settings and the repository, so tkt and the lifecycle skills find the app there. Set up what\'s missing under Integrations › tkt writes it again.'])
+  const sha = (await g(['rev-parse', '--short', 'HEAD'])).stdout.trim()
+  try { await g(['push', remote, base]) } catch (e) { return `Committed ${sha} on ${base}; the push to ${remote} was refused: ${lines(e).slice(-1)[0] ?? 'no output'}. Push it for worktrees cut from ${remote} to have it.` }
+  return `Committed to ${base} and pushed (${sha}).`
+}
+
 /**
- * Does what Self Evident can do itself (the tracker guide, written into the checkout, uncommitted), then checks again;
- * what is left is tkt's own and goes to the agent as `ask`, unless nothing can start before the person sets the checkout.
+ * One press: the tracker guide, the rest of the lifecycle configuration (from the app, the repo and the house profile),
+ * tkt's hooks when doctor misses them, a commit on the base branch, pushed; then the check again. What is still wrong
+ * is tkt's own and goes to the agent as `ask`, unless nothing can start before the person sets the checkout.
  */
-export async function setupTkt(ctx: TktContext, deps: { run?: Run; read?: ReadText; write?: Write } = {}): Promise<Setup> {
+export async function setupTkt(ctx: TktContext, deps: Deps = {}): Promise<Setup> {
   const exec = deps.run ?? run
   const read = deps.read ?? readText
   const write = deps.write ?? writeText
   const did: string[] = []
-  const problem = await guideProblem(ctx, read)
-  if (problem && ctx.repoPath) {
-    await write(`${ctx.repoPath.replace(/\/$/, '')}/${GUIDE_PATH}`, await trackerGuide(ctx)) // the guide's source is ours, read for real
-    did.push(`Wrote ${GUIDE_PATH} in the checkout${problem === 'missing' ? '' : ` (it pointed at ${problem})`}, pointing at ${ctx.app.key} here; not committed, so look at it and commit it.`)
+  if (!ctx.repoPath) {
+    const check = await checkTkt(ctx, deps)
+    return { done: false, did, ask: null, detail: `${check.detail} Set it under Settings › Repo; nothing can be set up before that.` }
   }
+  const root = ctx.repoPath.replace(/\/$/, '')
+  const paths = [GUIDE_PATH]
+  const problem = await guideProblem(ctx, read)
+  if (problem) {
+    await write(`${root}/${GUIDE_PATH}`, await trackerGuide(ctx)) // the guide's seed is ours, read for real
+    did.push(`Wrote ${GUIDE_PATH}${problem === 'missing' ? '' : ` (it pointed at ${problem})`}, pointing at ${ctx.app.key} here.`)
+  }
+  const facts = await repoFacts(ctx.repoPath, ctx.app.defaultBranch, { run: exec, read })
+  const house = await houseConfig(ctx, facts) // the seeds are ours, read for real
+  const written = await writeHouse(ctx.repoPath, ctx.app.name, house, { read, write })
+  paths.push(...written.paths)
+  const changed = [...written.wrote, ...(written.blockChanged ? [`the Ticket lifecycle block in ${house.blockFile}`] : [])]
+  if (changed.length) did.push(`Wrote ${list(changed)}, from the app, the repo and the house profile.`)
+  did.push(...written.kept.map((k) => `Left ${k} alone: it isn't Self Evident's (no "${OWNED}" line).`))
+  did.push(...house.skipped.map((s) => `Skipped ${s}.`))
+  const tktThere = await exec('tkt', ['--version']).then(() => true, () => false)
+  if (tktThere) {
+    const before = await doctorFindings(exec, ctx.repoPath)
+    if (before.some((f) => f.startsWith('warn claude_hooks:'))) {
+      try { await exec('tkt', ['hook', 'claude', '--install', '--shared'], ctx.repoPath); paths.push('.claude/settings.json'); did.push('Installed tkt\'s Claude Code hooks in .claude/settings.json (the shared file, so they are committed and Self Evident\'s agents get them).') } catch (e) { did.push(`tkt hook claude --install --shared failed: ${lines(e).slice(-1)[0] ?? 'no output'}.`) }
+    }
+    if (before.some((f) => f.startsWith('warn opencode_plugin:'))) {
+      try { await exec('tkt', ['hook', 'tmp', '--install'], ctx.repoPath); did.push('Installed tkt\'s OpenCode plugin (tkt\'s own file under ~/.config/opencode).') } catch (e) { did.push(`tkt hook tmp --install failed: ${lines(e).slice(-1)[0] ?? 'no output'}.`) }
+    }
+  }
+  did.push(await commitConfig(exec, ctx, facts.remote?.name ?? 'origin', facts.base, paths))
   const check = await checkTkt(ctx, deps)
   if (check.ok) return { done: true, did, ask: null, detail: check.detail }
-  if (!ctx.repoPath) return { done: false, did, ask: null, detail: `${check.detail} Set it under Settings › Repo; nothing can be set up before that.` }
-  const tktThere = !/isn't on the engine's PATH|--version failed/.test(check.detail)
   const findings = tktThere ? await doctorFindings(exec, ctx.repoPath) : []
   return { done: false, did, ask: setupAsk(ctx, check.detail, findings), detail: check.detail }
 }
