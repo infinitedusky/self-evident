@@ -1,7 +1,7 @@
 /**
  * Linear as the home of an app's tickets (Sandy, 2026-11-10: "I want to setup linear integration with both", then
- * "Linear is the home"). With tkt's "Tickets live in Linear" switch on, tkt's skills read and change the tickets in
- * Linear through its hosted MCP server, and Self Evident makes the issue from an approved brief as before. Here: what
+ * "Linear is the home", and "TKT is never using Self Evident"). tkt's skills read and change an app's tickets in Linear
+ * through its hosted MCP server, never in Self Evident; Self Evident makes the issue from an approved brief. Here: what
  * the tracker guide needs to know about the team, read with the key Integrations › Linear already names, and the guide's
  * States section worked out from the team's own states.
  */
@@ -56,12 +56,12 @@ const fetchLinear: FetchLinear = async (apiKey, teamKey) => {
 export async function linearFor(values: { team?: string | null; key_env?: string | null }, env: Record<string, string | undefined> = process.env, fetch: FetchLinear = fetchLinear): Promise<LinearFacts> {
   const team = values.team?.trim().toUpperCase()
   const keyVar = values.key_env?.trim()
-  if (!team || !keyVar) return { trackerProblem: 'Tickets are set to live in Linear, but Linear isn\'t set for this app: give it the team key and the key variable under Integrations › Linear.' }
+  if (!team || !keyVar) return { trackerProblem: 'tkt reads this app\'s tickets from Linear, and no Linear team is set for it: give it the team key and the key variable under Integrations › Linear.' }
   const key = env[keyVar]
-  if (!key) return { trackerProblem: `Tickets are set to live in Linear, but ${keyVar} isn't set in the engine's environment. Add it there and restart the engine.` }
+  if (!key) return { trackerProblem: `tkt reads this app's tickets from Linear, but ${keyVar} isn't set in the engine's environment. Add it there and restart the engine.` }
   try {
     const found = await fetch(key, team)
-    if (!found) return { trackerProblem: `Tickets are set to live in Linear, but the key ${keyVar} sees no team with key ${team}.` }
+    if (!found) return { trackerProblem: `tkt reads this app's tickets from Linear, but the key ${keyVar} sees no team with key ${team}.` }
     return { linear: { server: LINEAR_SERVER, ...found } }
   } catch (e) {
     return { trackerProblem: `Linear refused the lookup of team ${team}: ${(e as Error).message.split('\n')[0]}` }
@@ -100,9 +100,10 @@ export function stateRoles(states: LinearState[]): { rows: [string, string][]; t
 }
 
 /** What the words about a ticket need from tkt's context. */
-interface Tracked { app: { key: string; name: string }; uiUrl: string; linear?: LinearHome }
-/** The letters before a ticket's number: the Linear team's key when the tickets live there, else the app's. */
-export const ticketKey = (ctx: Tracked) => ctx.linear?.team.key ?? ctx.app.key
-export const ticketUrl = (ctx: Tracked, id: string) => (ctx.linear ? `https://linear.app/${ctx.linear.slug}/issue/${id}` : `${ctx.uiUrl}/tasks/${id}`)
+interface Tracked { linear?: LinearHome }
+const team = (ctx: Tracked) => { if (!ctx.linear) throw new Error('no Linear team: tkt reads its tickets from Linear'); return ctx.linear }
+/** The letters before a ticket's number: the Linear team's key. */
+export const ticketKey = (ctx: Tracked) => team(ctx).team.key
+export const ticketUrl = (ctx: Tracked, id: string) => `https://linear.app/${team(ctx).slug}/issue/${id}`
 /** The tracker and project in a few words, for the Ticket lifecycle block. */
-export const trackerWords = (ctx: Tracked) => (ctx.linear ? `Linear, the team ${ctx.linear.team.name} (${ctx.linear.team.key})` : `Self Evident, the app ${ctx.app.name} (${ctx.app.key})`)
+export const trackerWords = (ctx: Tracked) => `Linear, the team ${team(ctx).team.name} (${team(ctx).team.key})`
