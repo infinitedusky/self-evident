@@ -226,7 +226,10 @@ export const summary: SummaryState = {
 export const sampleIntegrations: FactorySettings['integrations'] = [
   {
     key: 'tkt', name: 'tkt', role: 'Runner', does: 'Builds this app’s tickets from their approved briefs: a worktree, a herdr tab, the lifecycle skills on the harness and model its preset says; the plan, the handoff, the review and the completion written back on the ticket.',
-    fields: [{ key: 'on', label: 'Runs this app’s tasks', kind: 'switch', required: true, states: { on: 'tkt builds this app’s tickets; Self Evident hands none to its own planner', off: 'this app’s tasks go to Self Evident’s own planner and builder' } }], calls: true, perApp: true, docs: 'https://gitlab.com/rogs/tkt',
+    fields: [
+      { key: 'on', label: 'Runs this app’s tasks', kind: 'switch', required: true, states: { on: 'tkt builds this app’s tickets; Self Evident hands none to its own planner', off: 'this app’s tasks go to Self Evident’s own planner and builder' } },
+      { key: 'linear', label: 'Tickets live in Linear', kind: 'switch', states: { on: 'tkt reads and updates this app’s tickets in Linear, in the team under Integrations › Linear; Self Evident makes the issue from an approved brief', off: 'tkt reads this app’s tickets from Self Evident' } },
+    ], calls: true, perApp: true, docs: 'https://gitlab.com/rogs/tkt',
     actions: [
       { key: 'start', name: 'Start', does: '`tkt start <ticket>`: a worktree and a tab; start-ticket reads the ticket here, moves it to in progress and plans from the brief.' },
       { key: 'approve', name: 'Approve the plan', does: '`tkt approve <ticket>`: work-ticket builds, commits, opens the pull request and hands off on the ticket.' },
@@ -297,7 +300,7 @@ export const factorySettings: FactorySettings = {
 }
 export const appSettings: AppSettings = {
   integrations: {
-    tkt: { on: { value: 'true', from: 'app' } },
+    tkt: { on: { value: 'true', from: 'app' }, linear: { value: 'true', from: 'app' } },
     storybook: { on: { value: 'true', from: 'app' }, cmd: { value: 'pnpm storybook --no-open', from: 'app' }, url: { value: 'http://localhost:6007', from: 'app' } },
     posthog: { host: { value: 'https://us.posthog.com', from: 'workspace' }, project_id: { value: '12345', from: 'app' }, key_env: { value: null, from: null } },
     linear: { team: { value: 'GIFT', from: 'app' }, key_env: { value: 'LINEAR_API_KEY', from: 'workspace' } },
