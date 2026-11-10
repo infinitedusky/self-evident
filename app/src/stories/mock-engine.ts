@@ -11,7 +11,8 @@ export interface MockData {
   apps: typeof s.apps; now: typeof s.now; projects: typeof s.projects; graphs: Record<string, typeof s.graph>; issueRows: typeof s.issueRows
   issueDetails: typeof s.issueDetails; todos: typeof s.todos; ideas: typeof s.ideaRows; initiatives: typeof s.initiatives; cycles: typeof s.cycles
   summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript
-  storybook: { url: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[] }
+  storybook: { url: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
+  sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[] }
   prototypes: typeof s.prototypes
   claudeSessions: typeof s.claudeSessions
   check: { ok: boolean; detail: string; links?: { label: string; href: string }[] }
@@ -25,7 +26,8 @@ export const sampleData: MockData = {
   apps: s.apps, now: s.now, projects: s.projects, graphs: { proj_checkout: s.graph, proj_draft: s.draftGraph }, issueRows: s.issueRows, issueDetails: s.issueDetails,
   todos: s.todos, ideas: s.ideaRows, initiatives: s.initiatives, cycles: s.cycles, summary: s.summary, settings: s.factorySettings, appSettings: s.appSettings,
   talks: [s.talkSession], transcript: s.transcript,
-  storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [] },
+  storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [], branch: 'talk/sample', main: false },
+  sketches: { scope: 'sess_sample', branch: 'talk/sample', main: false, dir: 'sketches', sketches: [{ file: 'home.html', changedAt: 1794250000000 }, { file: 'checkout.html', changedAt: 1794240000000 }] },
   prototypes: s.prototypes,
   claudeSessions: s.claudeSessions,
   check: { ok: true, detail: 'Signed in as Sample Owner; team SHOP (Sample Shop) found.' },
@@ -63,6 +65,8 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/talks/adopt', () => reply(d.talks[0])),
     http.post('/api/talks/:id/handoff', () => reply({ command: `cd "/Users/sample/code/sample-shop-worktrees/talk-sample" && claude --resume 00000000-sample --mcp-config '{"mcpServers":{"self-evident":{"type":"http","url":"http://localhost:4000/api/mcp/app_sample"}}}'` })),
     http.get('/api/apps/:id/storybook', () => reply(d.storybook)),
+    http.get('/api/sketches/:scope', () => reply(d.sketches)),
+    http.get('/api/sketches/:scope/file/*', ({ request }) => HttpResponse.html(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font:16px system-ui;margin:0;padding:24px;background:#fbfaf7;color:#222"><p style="font:12px ui-monospace,monospace;color:#888;margin:0 0 16px">sample sketch · ${new URL(request.url).pathname.split('/file/')[1]} · made-up data</p><h1 style="font-size:22px;margin:0 0 12px">Sample Shop</h1><div style="border:1px solid #ddd;border-radius:12px;padding:16px;background:#fff">A plain HTML screen, written fast, to react to.</div><button style="margin-top:16px;padding:10px 16px;border-radius:10px;border:0;background:#222;color:#fff">Continue</button></body>`)),
     http.get('/api/apps/:id/prototypes', () => reply(d.prototypes)),
     http.get('/api/prototypes/:id', ({ params }) => { const p = d.prototypes.find((x) => x.id === params.id); return p ? reply({ log: [], ...p, up: p.up ?? p.status === 'running' }) : missing('prototype') }),
     http.get('/api/apps/:id/summary', () => reply(d.summary)),

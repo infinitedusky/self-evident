@@ -3,12 +3,16 @@
  * (components/Workspace.tsx) holds the open ones; anything inside it reaches them with useWorkspace(). Outside it
  * (a story, the popped-out agent) there is none, and links stay plain links.
  */
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useSyncExternalStore } from 'react'
 import { findIdea } from './ideas'
 import type { TalkContext } from './engine'
 
-/** A page by its path, a prototype (by id; without one, the app's prototypes), its Storybook (at a story, by id), or a sub-issue's build as it happens. */
-export type Tab = { kind: 'page'; path: string } | { kind: 'prototype'; id?: string; path?: string } | { kind: 'storybook'; story?: string } | { kind: 'build'; issueId: string }
+/**
+ * A page by its path, a prototype (by id; without one, the app's prototypes), its Storybook (at a story, by id), a
+ * sketch (by its file under sketches/), or a sub-issue's build as it happens. Storybook and a sketch show a
+ * conversation's worktree: `session` when the agent opened the tab, else the conversation in front.
+ */
+export type Tab = { kind: 'page'; path: string } | { kind: 'prototype'; id?: string; path?: string } | { kind: 'storybook'; story?: string; session?: string } | { kind: 'sketch'; file?: string; session?: string } | { kind: 'build'; issueId: string }
 export type Split = 'right' | 'below'
 export interface OpenTab { id: string; title: string; key: string; tab: Tab; focused: boolean }
 
@@ -29,6 +33,19 @@ export function talkColor(sessionId: string | null | undefined): string {
   for (const c of sessionId) h = (h * 31 + c.charCodeAt(0)) >>> 0
   return `var(--talk-${(h % 6) + 1})`
 }
+
+/**
+ * The conversation in front, for the tabs that show its worktree (Mockups, Sketches): the agent's column says which,
+ * the tabs read it. Outside the workspace (a story) there is none.
+ */
+let talkInFront: string | null = null
+const talkSubs = new Set<() => void>()
+export const currentTalk = {
+  get: () => talkInFront,
+  set: (id: string | null) => { if (id !== talkInFront) { talkInFront = id; talkSubs.forEach((f) => f()) } },
+  subscribe: (f: () => void) => { talkSubs.add(f); return () => { talkSubs.delete(f) } },
+}
+export const useCurrentTalk = () => useSyncExternalStore(currentTalk.subscribe, currentTalk.get)
 
 /** Where a burst of the agent's changes lands: on the project when they're several of its pages, else on the last. */
 export function landing(burst: { path: string; projectId?: string | null }[]): string | null {
@@ -62,6 +79,7 @@ const PAGES: [RegExp, string][] = [
 export function tabTitle(t: Tab): string {
   if (t.kind === 'prototype') return t.id ? 'Prototype' : 'Prototypes'
   if (t.kind === 'storybook') return 'Storybook'
+  if (t.kind === 'sketch') return 'Sketches'
   if (t.kind === 'build') return 'Build log'
   const path = t.path.split('?')[0]
   const idea = path.match(/^\/ideas\/([^/]+)/)?.[1]
@@ -76,6 +94,7 @@ export function tabContext(focused: OpenTab | null, tabs: OpenTab[], contextFor:
     : t.kind === 'page' ? contextFor(t.path.split('?')[0], t.path.includes('?') ? t.path.slice(t.path.indexOf('?')) : '')
     : t.kind === 'build' ? { path: `build:${t.issueId}`, issueId: t.issueId, label: 'the build log of this sub-task' }
     : t.kind === 'prototype' ? (t.id ? { path: `prototype:${t.id}`, label: `the prototype "${focused!.title}" (${t.id})` } : { path: 'prototypes', label: 'this app\'s prototypes' })
+    : t.kind === 'sketch' ? { path: t.file ? `sketch:${t.file}` : 'sketches', label: t.file ? `the sketch sketches/${t.file}` : 'this conversation\'s sketches' }
     : { path: t.story ? `storybook:${t.story}` : 'storybook', label: t.story ? `the story ${t.story} in the app's Storybook` : 'the app\'s Storybook' }
   return { ...here, tabs: tabs.map((x) => ({ title: x.title, path: x.key, ...(x.focused ? { focused: true } : {}) })) }
 }

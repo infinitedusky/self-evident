@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ClaudeSessions } from './ClaudeSessions'
 import { Conversation } from './Conversation'
 import { openEvents, API, engine, type TalkContext, type TalkSession } from '../engine'
-import { talkColor, useWorkspace, type Tab } from '../workspace'
+import { currentTalk, talkColor, useWorkspace, type Tab } from '../workspace'
 import { useCurrentApp } from '../current-app'
 
 const SESSION_KEY = 'if.talk.session', POPPED_KEY = 'if.talk.popped'
@@ -91,6 +91,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
   const mine = (all: TalkSession[]) => all.filter((s) => s.appId === app?.id)
   const shown = mine(sessions)
   const current = shown.find((s) => s.id === sessionId) ?? null
+  useEffect(() => { currentTalk.set(current?.id ?? null) }, [current?.id]) // Mockups and Sketches show this conversation's worktree
   const key = app ? `${SESSION_KEY}.${app.id}` : SESSION_KEY
   const pick = (id: string | null) => { setSessionId(id); setCommand(null); setPicking(false); remember(key, id) }
   const toTerminal = async (s: TalkSession) => {

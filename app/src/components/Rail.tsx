@@ -13,7 +13,7 @@ const LOOP: Item[] = [
   { icon: '🔭', label: 'Observe', tab: page('/observe') },
   { icon: '🧠', label: 'Learn', tab: page('/learn') },
   { icon: '💡', label: 'Ideate', tab: page('/ideas'), also: /^\/ideas/ },
-  { icon: '📋', label: 'Plan', tab: page('/plan'), also: /^\/(plan|projects|tasks|todos|mockups)|^(storybook|prototype)/ },
+  { icon: '📋', label: 'Plan', tab: page('/plan'), also: /^\/(plan|projects|tasks|todos|mockups)|^(storybook|sketch|prototype)/ },
   { icon: '🔨', label: 'Build', tab: page('/build'), also: /^\/(build|graph)|^build:/ },
 ]
 const OUTSIDE: Item[] = [
