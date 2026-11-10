@@ -38,7 +38,11 @@ export const INTEGRATIONS: Integration[] = [
     // tkt (gitlab.com/rogs/tkt), the runner: on for an app, it builds the app's tickets and Self Evident hands none to
     // its own planner. Nothing of tkt's is configured here (SHAPE.md, "tkt is the runner"); the check says what is wrong.
     key: 'tkt', name: 'tkt', role: 'Runner', does: 'Builds this app\'s tickets from their approved briefs: a worktree, a herdr tab, the lifecycle skills on the harness and model its preset says; the plan, the handoff, the review and the completion written back on the ticket',
-    fields: [{ key: 'on', label: 'Runs this app\'s tasks', kind: 'switch', required: true, states: { on: 'tkt builds this app\'s tickets; Self Evident hands none to its own planner', off: 'this app\'s tasks go to Self Evident\'s own planner and builder' } }],
+    fields: [
+      { key: 'on', label: 'Runs this app\'s tasks', kind: 'switch', required: true, states: { on: 'tkt builds this app\'s tickets; Self Evident hands none to its own planner', off: 'this app\'s tasks go to Self Evident\'s own planner and builder' } },
+      // Where tkt reads the tickets (Sandy, 2026-11-10: "Linear is the home"). The team and the key are Linear's own, under Integrations › Linear.
+      { key: 'linear', label: 'Tickets live in Linear', kind: 'switch', states: { on: 'tkt reads and updates this app\'s tickets in Linear, in the team under Integrations › Linear; Self Evident makes the issue from an approved brief', off: 'tkt reads this app\'s tickets from Self Evident' } },
+    ],
     calls: true, perApp: true, docs: 'https://gitlab.com/rogs/tkt',
     actions: [
       { key: 'start', name: 'Start', does: '`tkt start <ticket>`: a worktree and a tab; start-ticket reads the ticket here, moves it to in progress and plans from the brief.' },

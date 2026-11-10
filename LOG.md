@@ -1973,3 +1973,24 @@ Fix (branch `storybook-frame`): the local proxy gives each Storybook a name, `ht
 it as localhost and drops that header (`~/.indusk/proxy/sites/idea.caddyfile`); the engine's status carries `frame`
 (`frameUrl`, from `STORYBOOK_FRAME=https://sb-{port}.idea.dawn` in the agent's environment) and Mockups frames that.
 
+## Linear as the home (Sandy, 2026-11-10: "I've kind of lost the plot here … I'm thinking about trying to set up tkt's UI and have it connected to the same setup as Self Evident")
+
+Sandy's read of the last rounds: nothing done wrong, but the work had become one request after another with nothing to
+measure it against. The measure: run tkt's own flow (its chat and board, `tkt web`) beside Self Evident on one repo,
+as two developers would, and see what each is for. One clone is enough: tkt gives each ticket a worktree, Self Evident
+gives each conversation one, and they meet in pull requests. The repo is Ragdoll Golf, not Self Evident's own (tkt's
+agents run without permission prompts, and Self Evident's main checkout is the running app).
+
+- tkt's page is up for Ragdoll Golf: a herdr workspace `ragdoll-golf`, `tkt agent` in a tab, `tkt web` in the browser.
+  herdr is its own open tool, not Roger's; tkt depends on it as it does on worktrunk and `gh`.
+- Sandy then asked for Linear on both, and chose Linear as where a ticket lives (the other choice was Self Evident as
+  the home with Linear a mirror). Built: the "Tickets live in Linear" switch on tkt (SHAPE.md, "An app's tickets can
+  live in Linear"); `engine/src/linear-home.ts`; the skills' Linear guide as a seed, `docs/lifecycle/tracker-linear.md`.
+- On this Mac, outside the repo: the MCP server `linear` (https://mcp.linear.app/mcp) added to Claude Code for the
+  user. Sandy's to do: sign in to it, create a Linear API key and put it in the engine's environment as
+  `LINEAR_API_KEY`, and name the team.
+- The comparison's question, to answer in this log once two tickets of similar size have gone through, one in each
+  system: at each step, what Sandy had to do, what Sandy could see, and where Sandy waited.
+
+Next: Sandy's three Linear steps; then Integrations › Linear for Ragdoll Golf (team, key variable), the switch, and one
+press of Set up what's missing; then the first ticket through each system.

@@ -163,7 +163,7 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
                 <div key={f.key} style={{ display: 'contents' }}>
                   <dt>{f.label}</dt>
                   <dd>{f.kind === 'switch'
-                    ? <><Badge tone={on ? 'ok' : 'neutral'} dot={on}>{on ? 'On' : 'Off'}</Badge><span className="faint"> · {on ? f.states?.on ?? 'on' : f.states?.off ?? 'off'}.</span></>
+                    ? ((fOn) => <><Badge tone={fOn ? 'ok' : 'neutral'} dot={fOn}>{fOn ? 'On' : 'Off'}</Badge><span className="faint"> · {fOn ? f.states?.on ?? 'on' : f.states?.off ?? 'off'}.</span></>)(f === i.fields.find((x) => x.kind === 'switch') ? on : values[f.key]?.value === 'true') // the first switch is the integration's own; a later one is a choice within it
                     : <>{values[f.key]?.value ? <span className="mono">{values[f.key]!.value}</span> : <span className="faint">{f.required ? 'Not set' : f.placeholder?.startsWith('default:') ? f.placeholder : '—'}</span>}
                       {scope === 'app' && !i.perApp && values[f.key]?.from && <span className="faint"> · {values[f.key]!.from === 'app' ? 'this app' : 'from All apps'}</span>}</>}</dd>
                 </div>
