@@ -41,7 +41,7 @@ export const INTEGRATIONS: Integration[] = [
     fields: [
       { key: 'on', label: 'Runs this app\'s tasks', kind: 'switch', required: true, states: { on: 'tkt builds this app\'s tickets; Self Evident hands none to its own planner', off: 'this app\'s tasks go to Self Evident\'s own planner and builder' } },
       // Where tkt reads the tickets (Sandy, 2026-11-10: "Linear is the home"). The team and the key are Linear's own, under Integrations › Linear.
-      { key: 'linear', label: 'Tickets live in Linear', kind: 'switch', states: { on: 'tkt reads and updates this app\'s tickets in Linear, in the team under Integrations › Linear; Self Evident makes the issue from an approved brief', off: 'tkt reads this app\'s tickets from Self Evident' } },
+      { key: 'linear', label: 'Tickets live in Linear', kind: 'switch', states: { on: 'tkt runs on its own for this app: it reads and updates the tickets in Linear, in the team under Integrations › Linear, and never asks Self Evident', off: 'tkt reads this app\'s tickets from Self Evident' } },
     ],
     calls: true, perApp: true, docs: 'https://gitlab.com/rogs/tkt',
     actions: [
