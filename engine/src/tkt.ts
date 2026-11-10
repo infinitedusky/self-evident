@@ -1,13 +1,13 @@
 /**
  * tkt, Roger Gonzalez's runner, as an integration switched on per app (Sandy, 2026-11-08: "for any specific project
  * we can choose to use tkt or not … for that we do need a plugin or something, an integration"). On, tkt builds the
- * app's tickets from their approved briefs and its skills write back on the Linear issue; Self Evident hands nothing to its own
+ * app's tickets from their approved briefs and its skills write back here; Self Evident hands nothing to its own
  * planner. Off, the app's tasks are tracked, or run by Self Evident's agents as before.
  *
  * Self Evident never installs or repairs tkt itself (SHAPE.md, "tkt is the runner"), but it writes, in one press,
  * everything tkt and the lifecycle skills read from the repo: the tracker guide (here, from
- * docs/lifecycle/tracker-linear.md with the app's Linear team, linear-home.ts: tkt reads its tickets from Linear and
- * never from Self Evident, Sandy, 2026-11-10), the rest of the lifecycle configuration
+ * docs/tracker-self-evident.md, with the app's id, key and URLs; or, when the app's tickets live in Linear, from
+ * docs/lifecycle/tracker-linear.md with the team, linear-home.ts), the rest of the lifecycle configuration
  * (lifecycle.ts), and tkt's hooks through tkt's own installer; committed to the base branch. The check says in tkt's
  * words what is wrong and nothing else; what the set-up cannot compute goes to the agent.
  */
@@ -21,7 +21,7 @@ import { db } from './db/client.js'
 import { app, repo } from './db/schema.js'
 import type { Values } from './integrations.js'
 import { FILL, houseConfig, OWNED, repoFacts, section, writeHouse } from './lifecycle.js'
-import { stateRoles, type LinearHome } from './linear-home.js'
+import { stateRoles, ticketKey, type LinearHome } from './linear-home.js'
 
 export { section }
 
@@ -41,16 +41,17 @@ export async function delegateFor(appId: string): Promise<'planner' | null> {
 
 export interface TktApp { id: string; key: string; name: string; defaultBranch?: string }
 /**
- * `linear`: the Linear team the app's tickets live in. `trackerProblem`: why there is none (not set, no key, no such
- * team); nothing is written until there is one.
+ * `linear`: the app's tickets live in Linear (tkt's "Tickets live in Linear" switch), in this team. `trackerProblem`:
+ * the switch is on but Linear cannot be reached as set; nothing is written until it can.
  */
 export interface TktContext { app: TktApp; repoPath: string | null; engineUrl: string; uiUrl: string; linear?: LinearHome; trackerProblem?: string }
-/** tkt never reads its tickets from Self Evident (Sandy, 2026-11-10): without a Linear team there is nothing to point it at. */
-export const NO_LINEAR = 'tkt reads this app\'s tickets from Linear, and no Linear team is set for it: give it the team key and the key variable under Integrations › Linear.'
-/** What is wrong with a guide's Tracker section for this team, or null: `{ kind }` for another tracker, 'team' for another team. */
-function guideMismatch(l: LinearHome, guide: string): { kind: string | null } | 'team' | null {
-  if (!/Kind:\s*Linear/.test(guide)) return { kind: /Kind:\s*(.+)/.exec(guide)?.[1]?.trim() ?? null }
-  return guide.includes(l.team.id) && new RegExp(`\\b${l.team.key}-`).test(guide) ? null : 'team'
+const home = (ctx: TktContext) => (ctx.linear ? 'Linear' : 'Self Evident')
+const where = (ctx: TktContext) => (ctx.linear ? `${ctx.linear.team.key} in Linear` : `${ctx.app.key} here`)
+/** What is wrong with a guide's Tracker section for this app, or null: `{ kind }` for another tracker, 'app' for another app or team. */
+function guideMismatch(ctx: TktContext, guide: string): { kind: string | null } | 'app' | null {
+  if (!new RegExp(`Kind:\\s*${home(ctx)}`).test(guide)) return { kind: /Kind:\s*(.+)/.exec(guide)?.[1]?.trim() ?? null }
+  const id = ctx.linear?.team.id ?? ctx.app.id
+  return guide.includes(id) && new RegExp(`\\b${ticketKey(ctx)}-`).test(guide) ? null : 'app'
 }
 /** Where the skills reach us: the engine's API, and the UI the ticket links point at (UI_URL; Vite's port in development). */
 export const urls = () => ({ engineUrl: `http://localhost:${Number(process.env.PORT ?? 4000)}/api`, uiUrl: process.env.UI_URL ?? 'http://localhost:5180' })
@@ -89,31 +90,74 @@ export async function checkTkt(ctx: TktContext, deps: { run?: Run; read?: ReadTe
     return { ok: false, detail: `tkt --version failed: ${lines(e).slice(-1)[0] ?? 'no output'}. ${GET_TKT_WORKING}` }
   }
   if (!ctx.repoPath) return { ok: false, detail: 'No local checkout under Repo: tkt runs in the repo on this machine.' }
-  const l = ctx.linear
-  if (!l) return { ok: false, detail: ctx.trackerProblem ?? NO_LINEAR }
+  if (ctx.trackerProblem) return { ok: false, detail: ctx.trackerProblem }
   let guide: string
   try { guide = await read(`${ctx.repoPath.replace(/\/$/, '')}/${GUIDE_PATH}`) } catch {
     return { ok: false, detail: `${GUIDE_PATH} isn't in the repo. Copy the tracker guide below into it.` }
   }
-  const wrong = guideMismatch(l, guide)
-  if (wrong === 'team') return { ok: false, detail: `${GUIDE_PATH} names another Linear team, not ${l.team.key} (${l.team.name}). Replace it with the tracker guide below.` }
-  if (wrong) return { ok: false, detail: `${GUIDE_PATH} points at ${wrong.kind ? `another tracker (${wrong.kind})` : 'no tracker'}, not Linear. Replace it with the tracker guide below.` }
+  const wrong = guideMismatch(ctx, guide)
+  if (wrong === 'app') return { ok: false, detail: ctx.linear ? `${GUIDE_PATH} names another Linear team, not ${ctx.linear.team.key} (${ctx.linear.team.name}). Replace it with the tracker guide below.` : `${GUIDE_PATH} names another app, not ${ctx.app.key} (${ctx.app.id}). Replace it with the tracker guide below.` }
+  if (wrong) return { ok: false, detail: `${GUIDE_PATH} points at ${wrong.kind ? `another tracker (${wrong.kind})` : 'no tracker'}, not ${home(ctx)}. Replace it with the tracker guide below.` }
   try { await exec('tkt', ['doctor'], ctx.repoPath) } catch (e) {
     const bad = lines(e).filter((l) => /^(fail|error)\b/i.test(l))
     return { ok: false, detail: `tkt doctor: ${(bad.length ? bad : lines(e).slice(-2)).join(' · ') || 'failed with no output'}. ${GET_TKT_WORKING}` }
   }
-  return { ok: true, detail: `tkt ${version}; doctor passes in ${ctx.repoPath}; the tracker guide points at ${l.team.key} in Linear.` }
+  return { ok: true, detail: `tkt ${version}; doctor passes in ${ctx.repoPath}; the tracker guide points at ${where(ctx)}.` }
+}
+
+const guideSource = fileURLToPath(new URL('../../docs/tracker-self-evident.md', import.meta.url))
+
+/**
+ * The repo's `docs/agents/issue-tracker.md` for this app, ready to paste: the rogs-skills seed's frame (marker, intro,
+ * operating rules, conventions; MIT, gitlab.com/rogs/skills) around our guide's Tracker, Operations, States and
+ * priority sections with the engine, UI, app name, id and key filled in.
+ */
+export async function trackerGuide(ctx: TktContext, read: ReadText = readText): Promise<string> {
+  if (ctx.linear) return linearGuide(ctx, ctx.linear, read)
+  const src = await read(guideSource)
+  const fill = (s: string) => s.replace(FILL, (_, what: string) => {
+    if (/engine URL/.test(what)) return ctx.engineUrl
+    if (/UI URL/.test(what)) return ctx.uiUrl
+    if (/app's name/.test(what)) return ctx.app.name
+    if (/app_/.test(what)) return ctx.app.id
+    if (/key/.test(what)) return ctx.app.key
+    return `{{FILL: ${what}}}`
+  })
+  return [
+    '<!-- rogs-skills config v1: issue-tracker -->',
+    '# Issue tracker',
+    '',
+    `Where this project's tickets live and how the lifecycle skills read and change them. Written from Self Evident's settings for the app ${ctx.app.name} (${ctx.app.key}); the app's page under Integrations › tkt gives a fresh copy.`,
+    '',
+    '## Tracker',
+    '',
+    fill(section(src, 'Tracker')),
+    '',
+    ...OPERATING_RULES,
+    '',
+    '## Operations',
+    '',
+    fill(section(src, 'Operations')),
+    '',
+    '## States',
+    '',
+    section(src, 'States'),
+    '',
+    '## Labels and priority',
+    '',
+    section(src, 'Labels and priority'),
+    '',
+    ...CONVENTIONS,
+  ].join('\n')
 }
 
 const linearSource = fileURLToPath(new URL('../../docs/lifecycle/tracker-linear.md', import.meta.url))
 /**
- * The repo's `docs/agents/issue-tracker.md` for this app, ready to paste: the rogs-skills Linear guide (docs/lifecycle/tracker-linear.md; its Setup
+ * The guide when the tickets live in Linear: the rogs-skills Linear guide (docs/lifecycle/tracker-linear.md; its Setup
  * notes stay behind) with the workspace and team filled in, the States table worked out from the team's own states
  * and its Git automation as Linear reports it.
  */
-export async function trackerGuide(ctx: TktContext, read: ReadText = readText): Promise<string> {
-  const l = ctx.linear
-  if (!l) throw new Error(ctx.trackerProblem ?? NO_LINEAR)
+async function linearGuide(ctx: TktContext, l: LinearHome, read: ReadText): Promise<string> {
   const src = await read(linearSource)
   const tracker = section(src, 'Tracker').replace(FILL, (_, what: string) => {
     if (/MCP server name/.test(what)) return l.server
@@ -213,8 +257,8 @@ async function guideProblem(ctx: TktContext, read: ReadText): Promise<string | n
   if (!ctx.repoPath) return null
   let guide: string
   try { guide = await read(`${ctx.repoPath.replace(/\/$/, '')}/${GUIDE_PATH}`) } catch { return 'missing' }
-  const wrong = ctx.linear ? guideMismatch(ctx.linear, guide) : null
-  return wrong === 'team' ? 'another team' : wrong ? (wrong.kind ?? 'no tracker') : null
+  const wrong = guideMismatch(ctx, guide)
+  return wrong === 'app' ? (ctx.linear ? 'another team' : 'another app') : wrong ? 'another tracker' : null
 }
 
 /**
@@ -286,13 +330,13 @@ export async function setupTkt(ctx: TktContext, deps: Deps = {}): Promise<Setup>
     const check = await checkTkt(ctx, deps)
     return { done: false, did, ask: null, detail: `${check.detail} Set it under Settings › Repo; nothing can be set up before that.` }
   }
-  if (!ctx.linear) return { done: false, did, ask: null, detail: `${ctx.trackerProblem ?? NO_LINEAR} Nothing was written.` }
+  if (ctx.trackerProblem) return { done: false, did, ask: null, detail: `${ctx.trackerProblem} Nothing was written.` }
   const root = ctx.repoPath.replace(/\/$/, '')
   const paths = [GUIDE_PATH]
   const problem = await guideProblem(ctx, read)
   if (problem) {
     await write(`${root}/${GUIDE_PATH}`, await trackerGuide(ctx)) // the guide's seed is ours, read for real
-    did.push(`Wrote ${GUIDE_PATH}${problem === 'missing' ? '' : ` (it pointed at ${problem})`}, pointing at ${ctx.linear.team.key} in Linear. The agents reach Linear through the MCP server \`${ctx.linear.server}\`: sign in to it once in the harness (/mcp in Claude Code).`)
+    did.push(`Wrote ${GUIDE_PATH}${problem === 'missing' ? '' : ` (it pointed at ${problem})`}, pointing at ${where(ctx)}.${ctx.linear ? ` The agents reach Linear through the MCP server \`${ctx.linear.server}\`: sign in to it once in the harness (/mcp in Claude Code).` : ''}`)
   }
   const facts = await repoFacts(ctx.repoPath, ctx.app.defaultBranch, { run: exec, read })
   const house = await houseConfig(ctx, facts) // the seeds are ours, read for real

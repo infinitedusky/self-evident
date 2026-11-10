@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { BEGIN, dropSections, END, FILL, houseConfig, OWNED, pathFilters, repoFacts, writeHouse, type Facts } from './lifecycle.js'
 import type { Run, TktContext } from './tkt.js'
 
-const ctx: TktContext = { app: { id: 'app_x1', key: 'RG', name: 'Ragdoll Golf', defaultBranch: 'main' }, repoPath: '/code/ragdoll-golf', engineUrl: 'http://localhost:4000/api', uiUrl: 'https://idea.dawn', linear: { server: 'linear', workspace: 'Sample Co', slug: 'sample-co', team: { name: 'Ragdoll Golf', key: 'RG', id: 'team-rg' }, states: [{ name: 'Backlog', type: 'backlog' }, { name: 'Todo', type: 'unstarted' }, { name: 'In Progress', type: 'started' }, { name: 'In Review', type: 'started' }, { name: 'Done', type: 'completed' }, { name: 'Canceled', type: 'canceled' }], automation: [] } }
+const ctx: TktContext = { app: { id: 'app_x1', key: 'RG', name: 'Ragdoll Golf', defaultBranch: 'main' }, repoPath: '/code/ragdoll-golf', engineUrl: 'http://localhost:4000/api', uiUrl: 'https://idea.dawn' }
 const root = '/code/ragdoll-golf'
 
 /** A checkout as git, gh and the files see it; `files` are relative paths. */
@@ -79,7 +79,7 @@ describe('the house configuration', () => {
     expect(forge).toContain('- Kind: GitHub\n- Host: github.com\n- Repository: infinitedusky/ragdoll-golf\n- Remote: origin\n')
     expect(forge).toContain('- Base branch: main; re-read with'); expect(forge).toContain('- Merge style: merge; re-read with')
     expect(forge).toContain('### merge\n'); expect(forge).toContain('- Gate checks: none.'); expect(forge).toContain("this repository has no CI; write 'no CI configured'")
-    expect(forge).toContain('- Body format: docs/agents/pull-request.md.'); expect(forge).toContain('`Ticket: [RG-123](https://linear.app/sample-co/issue/RG-123)`')
+    expect(forge).toContain('- Body format: docs/agents/pull-request.md.'); expect(forge).toContain('`Ticket: [RG-123](https://idea.dawn/tasks/RG-123)`')
     expect(forge).toContain(OWNED); expect(forge).toContain('Ragdoll Golf')
     const wf = h.files['workflow.md']
     expect(wf.match(/\| off \|/g)).toHaveLength(11); expect(wf).not.toMatch(/\| on \|/)
@@ -89,7 +89,7 @@ describe('the house configuration', () => {
     expect(h.files['domain.md']).toContain('One context: `GLOSSARY.md` at the repository root.'); expect(h.files['domain.md']).toContain('`docs/adr/`')
     expect(h.files['pull-request.md']).not.toContain('## Screenshots'); expect(h.files['pull-request.md']).not.toContain('## Changelog'); expect(h.files['pull-request.md']).toContain('## Human verification')
     expect(h.block.startsWith(BEGIN)).toBe(true); expect(h.block.trimEnd().endsWith(END)).toBe(true)
-    expect(h.block).toContain('`issue-tracker.md` (Linear, the team Ragdoll Golf (RG)), `forge.md` (GitHub, infinitedusky/ragdoll-golf)'); expect(h.block).toContain('the features that are on: none')
+    expect(h.block).toContain('`issue-tracker.md` (Self Evident, the app Ragdoll Golf (RG)), `forge.md` (GitHub, infinitedusky/ragdoll-golf)'); expect(h.block).toContain('the features that are on: none')
     expect(h.block).not.toContain('/setup-rogs'); expect(h.skipped).toEqual([])
   })
 

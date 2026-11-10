@@ -37,17 +37,19 @@ export const INTEGRATIONS: Integration[] = [
   {
     // tkt (gitlab.com/rogs/tkt), the runner: on for an app, it builds the app's tickets and Self Evident hands none to
     // its own planner. Nothing of tkt's is configured here (SHAPE.md, "tkt is the runner"); the check says what is wrong.
-    key: 'tkt', name: 'tkt', role: 'Runner', does: 'Builds this app\'s tickets from their approved briefs: a worktree, a herdr tab, the lifecycle skills on the harness and model its preset says; the tickets are the app\'s Linear team\'s (Integrations › Linear), and the plan, the handoff, the review and the completion are written on the Linear issue',
+    key: 'tkt', name: 'tkt', role: 'Runner', does: 'Builds this app\'s tickets from their approved briefs: a worktree, a herdr tab, the lifecycle skills on the harness and model its preset says; the plan, the handoff, the review and the completion written back on the ticket',
     fields: [
       { key: 'on', label: 'Runs this app\'s tasks', kind: 'switch', required: true, states: { on: 'tkt builds this app\'s tickets; Self Evident hands none to its own planner', off: 'this app\'s tasks go to Self Evident\'s own planner and builder' } },
+      // Where tkt reads the tickets (Sandy, 2026-11-10: "Linear is the home"). The team and the key are Linear's own, under Integrations › Linear.
+      { key: 'linear', label: 'Tickets live in Linear', kind: 'switch', states: { on: 'tkt reads and updates this app\'s tickets in Linear, in the team under Integrations › Linear; Self Evident makes the issue from an approved brief', off: 'tkt reads this app\'s tickets from Self Evident' } },
     ],
     calls: true, perApp: true, docs: 'https://gitlab.com/rogs/tkt',
     actions: [
-      { key: 'start', name: 'Start', does: '`tkt start <ticket>`: a worktree and a tab; start-ticket reads the ticket in Linear, moves it to in progress and plans from the brief.' },
+      { key: 'start', name: 'Start', does: '`tkt start <ticket>`: a worktree and a tab; start-ticket reads the ticket here, moves it to in progress and plans from the brief.' },
       { key: 'approve', name: 'Approve the plan', does: '`tkt approve <ticket>`: work-ticket builds, commits, opens the pull request and hands off on the ticket.' },
       { key: 'review', name: 'Review', does: '`tkt run <ticket> review`: review-pr in a fresh session, its verdict on the pull request; verify-pr runs the human verification steps.' },
       { key: 'merge', name: 'Merge and finish', does: '`tkt merge <ticket> --passed`, then `tkt done`: finish-ticket merges and moves the ticket to done.' },
-      { key: 'setup', name: 'Set up what\'s missing', does: 'Writes everything tkt and its skills read from the repo (the tracker guide for the app\'s Linear team, the forge, the workflow, the domain docs, the pull request template, the Ticket lifecycle block in CLAUDE.md) from the app, the repo and the house profile; installs tkt\'s hooks with tkt\'s own installer; commits to the base branch and pushes. Only what tkt itself still lacks goes to the agent.', kind: 'ask' },
+      { key: 'setup', name: 'Set up what\'s missing', does: 'Writes everything tkt and its skills read from the repo (the tracker guide, the forge, the workflow, the domain docs, the pull request template, the Ticket lifecycle block in CLAUDE.md) from the app, the repo and the house profile; installs tkt\'s hooks with tkt\'s own installer; commits to the base branch and pushes. Only what tkt itself still lacks goes to the agent.', kind: 'ask' },
     ],
   },
   {
