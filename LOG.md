@@ -1943,3 +1943,25 @@ when read. Tests: `steps.test.ts`.
 
 **Not built yet.** Showing a sketch (the Sketches integration and its tab), the Mockup section of the brief, and
 Storybook following the branch. Until the last one, a story on a conversation's branch shows only after it merges.
+
+## Beside the conversation, from its worktree (Sandy, 2026-11-09: "It has to be right there when we're prompting")
+
+**What Sandy saw.** The Mockups page showed a 502 and never the new story. Two causes, one gap: the engine killed
+every Storybook it had started on each restart, and it restarts on every deploy (three that evening), so the page
+met a restarting engine and a dead Storybook, and kept the error after the engine was back; and Storybook only ever
+ran in the main checkout, while the story (`stories/mockups/SwingLab.mockup.stories.jsx`) was in the conversation's
+worktree. SHAPE.md, "It shows beside the conversation, from the conversation's worktree".
+
+**Built** (branch `beside-the-conversation`). Engine: `storybook.ts` `placeFor(appId, sessionId)`: a conversation
+whose worktree has a Storybook gets that worktree's, at `http://localhost:<portFor(worktree)>` (6100 to 6899, from
+the path, so it is found again after a restart by asking), the command given `-p <port>` and an install first when
+the worktree has no `node_modules`; otherwise the app's. Storybooks are spawned detached with their output in a
+file under the temp folder, and `stopStorybooks` at shutdown only forgets them; `endTalk` stops its worktree's by
+port. `sketches.ts`: `placeOf(scope)` (a conversation's worktree, else the main checkout), `GET /api/sketches/:scope`
+(the HTML files under `sketches/`, newest first) and `GET /api/sketches/:scope/file/*` (inside the folder only, a
+few file kinds, HTML with `Content-Security-Policy: sandbox allow-scripts allow-forms`). The agent's `open_tab`
+takes `sketch` with a file and stamps the conversation on Storybook and sketch tabs; `stories` reads the
+conversation's Storybook. App: a Sketches tab (`pages/Sketches.tsx`: file chips, Phone/Tablet/Full, a frame keyed by
+the file's change time, "Mockups →" as the way on); Mockups takes the conversation in front (`currentTalk` in
+`workspace.ts`, set by the agent's column), says which branch it shows, and clears an error once a poll succeeds.
+Tests: `sketches.test.ts`; stories `Pages/Sketches`.
