@@ -508,6 +508,16 @@ Details and sources in `research/`.
   seeds in `docs/lifecycle/` are its documents' templates. The rest of the integrations move from the code into
   documents next, and the engine becomes their reader; a check the common forms cannot express (a command's exit
   code, a file containing a line, a URL answering) stays a named check the document points at.
+- **An app's tickets can live in Linear** (Sandy, 2026-11-10: "I want to setup linear integration with both", then
+  "Linear is the home"). tkt has a second switch per app, "Tickets live in Linear". Off, tkt's skills read the tickets
+  from Self Evident, as in "tkt is the runner". On, Linear numbers the tickets: Set up what's missing writes the
+  tracker guide for the team Integrations › Linear names (the skills' own Linear guide, its blanks and its States
+  table filled from Linear with the key already named there), and the pull request trailer and the Ticket lifecycle
+  block name the team. tkt's agents reach Linear through its hosted MCP server, named `linear` in the harness, signed
+  in by the person once. Self Evident still makes the Linear issue from an approved brief (the Linear integration's
+  "Create an issue"), so both systems meet in Linear. Why: to run tkt's own flow and Self Evident's side by side on
+  one repo and see what each is for (LOG.md, "Linear as the home"). Not built: Self Evident reading a ticket's state
+  back from Linear, so a ticket tkt moves in Linear does not move here.
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
