@@ -1965,3 +1965,11 @@ conversation's Storybook. App: a Sketches tab (`pages/Sketches.tsx`: file chips,
 the file's change time, "Mockups →" as the way on); Mockups takes the conversation in front (`currentTalk` in
 `workspace.ts`, set by the agent's column), says which branch it shows, and clears an error once a poll succeeds.
 Tests: `sketches.test.ts`; stories `Pages/Sketches`.
+
+**The frame itself was refused.** Looking at the real page after the deploy: the right Storybook, a blank frame. The
+console: "Framing 'http://localhost:6385/' violates … frame-ancestors 'self' http://localhost:* …". Storybook 10 lets
+only localhost frame it, so nothing had shown inside Self Evident since it moved to https://idea.dawn that morning.
+Fix (branch `storybook-frame`): the local proxy gives each Storybook a name, `https://sb-<port>.idea.dawn`, speaks to
+it as localhost and drops that header (`~/.indusk/proxy/sites/idea.caddyfile`); the engine's status carries `frame`
+(`frameUrl`, from `STORYBOOK_FRAME=https://sb-{port}.idea.dawn` in the agent's environment) and Mockups frames that.
+

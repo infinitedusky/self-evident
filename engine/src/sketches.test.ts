@@ -12,7 +12,7 @@ import { app, repo, session, workspace } from './db/schema.js'
 import { git } from './git.js'
 import { newId } from './ids.js'
 import { listSketches, listSketchFiles, placeOf, readSketch } from './sketches.js'
-import { portFor, storybookStatus } from './storybook.js'
+import { frameUrl, portFor, storybookStatus } from './storybook.js'
 
 async function folder(files: Record<string, string>) {
   const dir = await mkdtemp(join(tmpdir(), 'se-sk-'))
@@ -26,6 +26,11 @@ describe('sketch files', () => {
     const dir = await folder({ 'sketches/home.html': '<h1>Home</h1>', 'sketches/flows/checkout.html': '<h1>Pay</h1>', 'sketches/style.css': 'h1{}', 'index.html': 'not a sketch' })
     expect((await listSketchFiles(dir)).map((s) => s.file).sort()).toEqual(['flows/checkout.html', 'home.html'])
     expect(await listSketchFiles(await folder({ 'index.html': 'x' }))).toEqual([])
+  })
+  it('frames a local Storybook at its proxied name when there is one, and leaves the rest alone', () => {
+    expect(frameUrl('http://localhost:6385', 'https://sb-{port}.idea.dawn')).toBe('https://sb-6385.idea.dawn')
+    expect(frameUrl('http://127.0.0.1:6006/?path=/story/x', 'https://sb-{port}.idea.dawn/')).toBe('https://sb-6006.idea.dawn/?path=/story/x')
+    expect(frameUrl('http://localhost:6006', undefined)).toBe('http://localhost:6006'); expect(frameUrl('https://storybook.example.com', 'https://sb-{port}.idea.dawn')).toBe('https://storybook.example.com'); expect(frameUrl(null, 'x')).toBeNull()
   })
   it('gives a worktree a port of its own, the same every time', () => {
     expect(portFor('/a/b')).toBe(portFor('/a/b')); expect(portFor('/a/b')).not.toBe(portFor('/a/c'))
