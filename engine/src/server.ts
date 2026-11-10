@@ -37,6 +37,7 @@ import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueD
 import { runner } from './runner.js'
 import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, setupIntegration, statuses, type Local, type Values } from './integrations.js'
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
+import { linearFor } from './linear-home.js'
 import { CATALOGUE } from './catalogue.js'
 import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role } from './skills.js'
 
@@ -176,6 +177,14 @@ export function buildApp(bus: EventBus) {
   })
   // Tries an integration's saved connection: the workspace's values, or an app's with its overrides.
   // An integration's effective values for an app (or the workspace's), and what its per-app check needs from the app.
+  // tkt's context for an app, with its Linear team when the app's tickets live there (tkt's own switch).
+  const tktContext = async (appId: string, shared: Values, own: Values) => {
+    const ctx = await contextFor(appId)
+    if (!ctx) return null
+    const eff = effectiveIntegrations(shared, own)
+    if (eff.tkt?.linear?.value !== 'true') return ctx
+    return { ...ctx, ...(await linearFor({ team: eff.linear?.team?.value, key_env: eff.linear?.key_env?.value })) }
+  }
   const integrationFor = async (key: string, appId?: string): Promise<{ values: Record<string, string | null>; local?: Local } | null> => {
     const [w] = await db.select().from(workspace).limit(1)
     const shared = ((w?.settings ?? {}) as { integrations?: Values }).integrations ?? {}
@@ -188,7 +197,7 @@ export function buildApp(bus: EventBus) {
     }
     const values = Object.fromEntries(Object.entries(effectiveIntegrations(shared, own)[key] ?? {}).map(([k, v]) => [k, v.value]))
     let local: Local | undefined
-    if (key === 'tkt' && appId) { const ctx = await contextFor(appId); if (ctx) local = { tkt: { ctx } } }
+    if (key === 'tkt' && appId) { const ctx = await tktContext(appId, shared, own); if (ctx) local = { tkt: { ctx } } }
     if (key === 'storybook' && a) {
       const [r] = await db.select().from(repoTable).where(eq(repoTable.appId, a.id))
       const v = await storybookValues({ integrations: { storybook: Object.fromEntries(Object.entries(values).filter(([, x]) => x != null)) } }, r?.localPath ?? null) // the app's values, else the repo's defaults
@@ -223,8 +232,10 @@ export function buildApp(bus: EventBus) {
   })
   // The repo's docs/agents/issue-tracker.md for this app, filled in: what tkt's skills read to find the app here.
   api.get('/apps/:id/tracker-guide', async (c) => {
-    const ctx = await contextFor(c.req.param('id'))
+    const [[w], [a]] = await Promise.all([db.select().from(workspace).limit(1), db.select().from(appTable).where(eq(appTable.id, c.req.param('id')))])
+    const ctx = a ? await tktContext(a.id, ((w?.settings ?? {}) as { integrations?: Values }).integrations ?? {}, (a.setup as { integrations?: Values }).integrations ?? {}) : null
     if (!ctx) return c.json({ error: 'no such app' }, 404)
+    if (ctx.trackerProblem) return c.json({ error: ctx.trackerProblem }, 409)
     return c.text(await trackerGuide(ctx), 200, { 'content-type': 'text/markdown; charset=utf-8' })
   })
   api.patch('/apps/:id', async (c) => {

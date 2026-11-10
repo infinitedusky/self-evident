@@ -13,6 +13,7 @@
 import { readFile } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ticketKey, ticketUrl, trackerWords } from './linear-home.js'
 import type { ReadText, Run, TktContext, Write } from './tkt.js'
 
 export const OWNED = 'Self Evident wrote it'
@@ -204,7 +205,7 @@ const forgeAnswers = (ctx: TktContext, facts: Facts, guide: string): Answer => {
     if (/"not applicable"/.test(what)) return facts.ci.length ? 'not applicable' : "this repository has no CI; write 'no CI configured' wherever CI evidence would go"
     if (/a bot commits generated docs/.test(what)) return 'none'
     if (/"the template at <path> on the base branch"/.test(what)) return facts.prTemplate ? `the template at ${facts.prTemplate} on the base branch` : 'docs/agents/pull-request.md'
-    if (/Ticket: \[ACM-123\]/.test(what)) return `\`Ticket: [${ctx.app.key}-123](${ctx.uiUrl}/tasks/${ctx.app.key}-123)\``
+    if (/Ticket: \[ACM-123\]/.test(what)) return `\`Ticket: [${ticketKey(ctx)}-123](${ticketUrl(ctx, `${ticketKey(ctx)}-123`)})\``
     if (/a login to assign/.test(what)) return 'none'
     if (/what the account the skills run as cannot do/.test(what)) return 'The skills run as the person\'s own gh login, the one that opens the pull requests, so it cannot approve or request changes on them (GitHub refuses a review verdict from the author): the verdicts the skills post are workflow evidence, not branch-protection approvals.'
     if (/the app's name/.test(what)) return ctx.app.name
@@ -256,7 +257,7 @@ const domainAnswers = (ctx: TktContext, facts: Facts): Answer => (what) => {
   return undefined
 }
 const blockAnswers = (ctx: TktContext, facts: Facts): Answer => (what) => {
-  if (/tracker and project in a few words/.test(what)) return `Self Evident, the app ${ctx.app.name} (${ctx.app.key})`
+  if (/tracker and project in a few words/.test(what)) return trackerWords(ctx)
   if (/forge and repository in a few words/.test(what)) return facts.remote ? `GitHub, ${facts.remote.fullName}` : 'no forge yet'
   if (/the features that are on/.test(what)) return 'none'
   return undefined
