@@ -140,7 +140,7 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
       <div className="integration-head"><h2>{i.name}</h2><Badge>Per app</Badge></div>
       <p className="muted settings-lead">{i.does}</p>
       <p className="settings-desc">{switched
-        ? <>Switched on under an app's Integrations: one app can be run by {i.name} while another is run by Self Evident's own agents.</>
+        ? <>Switched on under an app's Integrations.{i.fields.some((f) => f.kind !== 'switch') && <> Its {i.fields.filter((f) => f.kind !== 'switch').map((f) => f.label.toLowerCase()).join(' and ')} have defaults read from the app's repo; set them there only when the defaults are wrong.</>}</>
         : <>Set under each app's Integrations: {i.fields.map((f) => f.label.toLowerCase()).join(' and ')}. The check reads the app's repo.</>} Installed and kept working outside Self Evident{i.docs && <>: <a href={i.docs} target="_blank" rel="noreferrer">{i.key === 'storybook' ? 'the screen map add-on' : `about ${i.name}`} ↗</a></>}.</p>
       {actions}
     </section>
@@ -163,8 +163,8 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
                 <div key={f.key} style={{ display: 'contents' }}>
                   <dt>{f.label}</dt>
                   <dd>{f.kind === 'switch'
-                    ? <><Badge tone={on ? 'ok' : 'neutral'} dot={on}>{on ? 'On' : 'Off'}</Badge><span className="faint"> · {on ? `${i.name} builds this app's tickets; Self Evident hands none to its own planner.` : 'this app\'s tasks go to Self Evident\'s own planner and builder.'}</span></>
-                    : <>{values[f.key]?.value ? <span className="mono">{values[f.key]!.value}</span> : <span className="faint">{f.required ? 'Not set' : '—'}</span>}
+                    ? <><Badge tone={on ? 'ok' : 'neutral'} dot={on}>{on ? 'On' : 'Off'}</Badge><span className="faint"> · {on ? f.states?.on ?? 'on' : f.states?.off ?? 'off'}.</span></>
+                    : <>{values[f.key]?.value ? <span className="mono">{values[f.key]!.value}</span> : <span className="faint">{f.required ? 'Not set' : f.placeholder?.startsWith('default:') ? f.placeholder : '—'}</span>}
                       {scope === 'app' && !i.perApp && values[f.key]?.from && <span className="faint"> · {values[f.key]!.from === 'app' ? 'this app' : 'from All apps'}</span>}</>}</dd>
                 </div>
               ))}
@@ -184,9 +184,9 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
           )}
           {!keyField && i.perApp && (
             <p className="settings-desc">
-              {switched
-                ? on ? <>Whether {i.name} can run this app's tickets from here: the runner on the engine's PATH, a local checkout with the tracker guide pointing at this app, and its own doctor passing there. </> : <>Nothing to check while it is off. </>
-                : on ? <>Whether this app's Storybook meets the standard: Storybook 10 in the checkout, the screen map add-on installed and wired, its stylesheet imported, the flow files kept out of the story tests, and a map; then whether it is answering at the URL. </> : <>Nothing to check until the command and URL are set. </>}
+              {!on ? <>Nothing to check while it is off. </>
+                : i.key === 'tkt' ? <>Whether {i.name} can run this app's tickets from here: the runner on the engine's PATH, a local checkout with the tracker guide pointing at this app, and its own doctor passing there. </>
+                : <>Whether this app's Storybook meets the standard: Storybook 10 in the checkout, the screen map add-on installed and wired, its stylesheet imported, the flow files kept out of the story tests, and a map; then whether it is answering at the URL. </>}
               Installed and kept working outside Self Evident{i.docs && <>: <a href={i.docs} target="_blank" rel="noreferrer">{i.key === 'storybook' ? 'the screen map add-on' : `about ${i.name}`} ↗</a></>}.
             </p>
           )}
@@ -226,7 +226,7 @@ function TrackerGuide({ appId, name }: { appId: string; name: string }) {
     <div className="settings-group" data-component="TrackerGuide">
       <div className="integration-section-head"><h3 className="settings-h3">The tracker guide</h3>{text && <button className="btn quiet" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>}</div>
       <p className="faint settings-desc" style={{ margin: '0 0 6px' }}>
-        How {name}'s skills find this app here. Copy it into <span className="mono">docs/agents/issue-tracker.md</span> in the repo; <span className="mono">/setup-rogs</span> writes the rest (the forge, the workflow, the domain). Everything about {name} itself stays outside Self Evident.
+        How {name}'s skills find this app here. Set up what's missing writes it into the repo as <span className="mono">docs/agents/issue-tracker.md</span>, with the rest of the lifecycle configuration (the forge, the workflow, the domain docs, the pull request template, the block in CLAUDE.md); this is the copy to paste when you would rather do it by hand. Everything about {name} itself stays outside Self Evident.
       </p>
       {error ? <div className="bad">{error}</div> : text ? <details><summary className="faint">Show the file</summary><pre className="guide">{text}</pre></details> : <p className="muted" style={{ margin: 0 }}>Loading…</p>}
     </div>
@@ -256,8 +256,8 @@ function EditForm({ i, values, scope, all, onCancel, onSave }: { i: Integration;
             <label key={f.key}>{f.label}{f.required && f.kind !== 'switch' && <span className="faint"> · required</span>}
               {f.kind === 'switch'
                 ? <select value={v[f.key] === 'true' ? 'true' : 'false'} onChange={(e) => setV({ ...v, [f.key]: e.target.value })}>
-                    <option value="true">On: {i.name} runs this app's tasks</option>
-                    <option value="false">Off: Self Evident's own agents do</option>
+                    <option value="true">On: {f.states?.on ?? `${i.name} is on for this app`}</option>
+                    <option value="false">Off: {f.states?.off ?? `no ${i.name} for this app`}</option>
                   </select>
                 : <input className="mono" value={v[f.key] ?? ''} placeholder={inherited ?? f.placeholder} onChange={(e) => setV({ ...v, [f.key]: e.target.value })} />}
             </label>

@@ -226,18 +226,22 @@ export const summary: SummaryState = {
 export const sampleIntegrations: FactorySettings['integrations'] = [
   {
     key: 'tkt', name: 'tkt', role: 'Runner', does: 'Builds this app’s tickets from their approved briefs: a worktree, a herdr tab, the lifecycle skills on the harness and model its preset says; the plan, the handoff, the review and the completion written back on the ticket.',
-    fields: [{ key: 'on', label: 'Runs this app’s tasks', kind: 'switch', required: true }], calls: true, perApp: true, docs: 'https://gitlab.com/rogs/tkt',
+    fields: [{ key: 'on', label: 'Runs this app’s tasks', kind: 'switch', required: true, states: { on: 'tkt builds this app’s tickets; Self Evident hands none to its own planner', off: 'this app’s tasks go to Self Evident’s own planner and builder' } }], calls: true, perApp: true, docs: 'https://gitlab.com/rogs/tkt',
     actions: [
       { key: 'start', name: 'Start', does: '`tkt start <ticket>`: a worktree and a tab; start-ticket reads the ticket here, moves it to in progress and plans from the brief.' },
       { key: 'approve', name: 'Approve the plan', does: '`tkt approve <ticket>`: work-ticket builds, commits, opens the pull request and hands off on the ticket.' },
       { key: 'review', name: 'Review', does: '`tkt run <ticket> review`: review-pr in a fresh session, its verdict on the pull request.' },
       { key: 'merge', name: 'Merge and finish', does: '`tkt merge <ticket> --passed`, then `tkt done`: finish-ticket merges and moves the ticket to done.' },
-      { key: 'setup', name: 'Set up what’s missing', does: 'Writes the tracker guide into the checkout when that is what is wrong; for the rest (tkt itself, herdr, worktrunk, the skills, whatever tkt doctor flags) hands the agent the job in tkt’s own words, hints and all. It asks before installing anything.', kind: 'ask' },
+      { key: 'setup', name: 'Set up what’s missing', does: 'Writes everything tkt and its skills read from the repo (the tracker guide, the forge, the workflow, the domain docs, the pull request template, the Ticket lifecycle block in CLAUDE.md) from the app, the repo and the house profile; installs tkt’s hooks with tkt’s own installer; commits to the base branch and pushes. Only what tkt itself still lacks goes to the agent.', kind: 'ask' },
     ],
   },
   {
     key: 'storybook', name: 'Storybook', role: 'Mockups', does: 'This app’s mockups, as stories: the real ones, after the sketches; Mockups shows them inside Self Evident, the agent opens one to show what it means, and the screen map draws the app as the user walks it.',
-    fields: [{ key: 'cmd', label: 'Command', placeholder: 'pnpm storybook --no-open (run in the checkout)', required: true }, { key: 'url', label: 'URL', placeholder: 'http://localhost:6006', required: true }],
+    fields: [
+      { key: 'on', label: 'Mockups in Storybook', kind: 'switch', required: true, states: { on: 'this app’s mockups are stories, checked against the standard', off: 'no Storybook for this app' } },
+      { key: 'cmd', label: 'Command', placeholder: 'default: the repo’s storybook script, with --no-open' },
+      { key: 'url', label: 'URL', placeholder: 'default: http://localhost:6006, or the port the script names' },
+    ],
     calls: true, perApp: true, docs: 'https://github.com/zigbang/storybook-addon-story-flow',
     actions: [
       { key: 'start', name: 'Start', does: 'Starts Storybook from the checkout with the command and keeps it running; Mockups shows it.', kind: 'start' },
@@ -279,7 +283,7 @@ export const factorySettings: FactorySettings = {
   },
   status: {
     tkt: { state: 'off', missing: [], keyVar: null },
-    storybook: { state: 'off', missing: ['Command', 'URL'], keyVar: null },
+    storybook: { state: 'off', missing: [], keyVar: null },
     posthog: { state: 'ready', missing: [], keyVar: null },
     linear: { state: 'ready', missing: [], keyVar: 'LINEAR_API_KEY' },
     confluence: { state: 'no-key', missing: [], keyVar: 'CONFLUENCE_API_TOKEN' },
@@ -294,7 +298,7 @@ export const factorySettings: FactorySettings = {
 export const appSettings: AppSettings = {
   integrations: {
     tkt: { on: { value: 'true', from: 'app' } },
-    storybook: { cmd: { value: 'pnpm storybook --no-open', from: 'app' }, url: { value: 'http://localhost:6007', from: 'app' } },
+    storybook: { on: { value: 'true', from: 'app' }, cmd: { value: 'pnpm storybook --no-open', from: 'app' }, url: { value: 'http://localhost:6007', from: 'app' } },
     posthog: { host: { value: 'https://us.posthog.com', from: 'workspace' }, project_id: { value: '12345', from: 'app' }, key_env: { value: null, from: null } },
     linear: { team: { value: 'GIFT', from: 'app' }, key_env: { value: 'LINEAR_API_KEY', from: 'workspace' } },
     confluence: { site: { value: null, from: null }, email: { value: null, from: null }, space: { value: null, from: null }, parent: { value: null, from: null }, key_env: { value: null, from: null } },

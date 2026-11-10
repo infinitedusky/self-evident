@@ -115,7 +115,7 @@ export interface Workspace { id: string; name: string; settings?: { integrations
 export type IntegrationValues = Record<string, Record<string, string>>
 export interface Integration {
   key: string; name: string; role: string; does: string
-  fields: { key: string; label: string; placeholder?: string; required?: boolean; secret?: boolean; kind?: 'switch' }[] // a switch holds "true" or "false"
+  fields: { key: string; label: string; placeholder?: string; required?: boolean; secret?: boolean; kind?: 'switch'; states?: { on: string; off: string } }[] // a switch holds "true" or "false"; states say what each means
   calls: boolean; actions: { key: string; name: string; does: string; kind?: 'start' | 'link' | 'ask'; ask?: string }[]; docs?: string // an action with a kind is a button on the page: start the tool, open what the check found, hand the agent a job
   perApp?: boolean // switched on under each app (a runner like tkt), nothing to set for all apps
 }
