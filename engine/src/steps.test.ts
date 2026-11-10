@@ -3,7 +3,7 @@ import { DEFAULT_WORKFLOW, addCheck, blocking, normalize, removeCheck, resolve, 
 
 const w = (steps: WorkflowStep[], ordered = true): Workflow => ({ id: 'wf', name: 'wf', ordered, steps })
 const s = (key: WorkflowStep['key'], required = false, on = true): WorkflowStep => ({ key, on, required })
-const ui = w([s('idea', true), s('research'), s('mockup', true), s('prototype', false, false), s('brief', true)])
+const ui = w([s('idea', true), s('research'), s('sketch', false, false), s('mockup', true), s('prototype', false, false), s('brief', true)])
 
 describe('steps', () => {
   it('uses the task\'s workflow, else its project\'s, else the app\'s', () => {
@@ -15,9 +15,9 @@ describe('steps', () => {
   })
 
   it('with no workflow, shows the default steps unordered, only the brief required', () => {
-    expect(rows('project', [], null).map((r) => r.key)).toEqual(['idea', 'research', 'mockup', 'prototype'])
+    expect(rows('project', [], null).map((r) => r.key)).toEqual(['idea', 'research', 'sketch', 'mockup', 'prototype'])
     const task = rows('task', [], null)
-    expect(task.map((r) => r.key)).toEqual(['idea', 'research', 'mockup', 'prototype', 'brief'])
+    expect(task.map((r) => r.key)).toEqual(['idea', 'research', 'sketch', 'mockup', 'brief', 'prototype'])
     expect(task.every((r) => r.required === (r.key === 'brief') && r.position === null && !r.waitingOn)).toBe(true)
     expect(rows('idea', [], null).some((r) => r.required)).toBe(false) // an idea commits to nothing: its rough draft is optional
   })
@@ -48,10 +48,19 @@ describe('the fixed rules', () => {
 
   it('always lists the idea and the brief, keeps the brief required, and fixes an order that breaks the rules', () => {
     const bad = normalize(w([s('brief', false, false), s('research'), s('idea', false, false)]))
-    expect(bad.steps.map((x) => x.key)).toEqual(['idea', 'research', 'mockup', 'prototype', 'brief'])
+    expect(bad.steps.map((x) => x.key)).toEqual(['idea', 'research', 'sketch', 'mockup', 'prototype', 'brief'])
     expect(bad.steps.find((x) => x.key === 'brief')).toMatchObject({ on: true, required: true })
     expect(bad.steps.find((x) => x.key === 'idea')).toMatchObject({ on: true })
     expect(bad.steps.find((x) => x.key === 'mockup')).toMatchObject({ on: false })
+    expect(bad.steps.find((x) => x.key === 'sketch')).toMatchObject({ on: true }) // new since the workflow was saved: on
+  })
+
+  it('gives a workflow saved before sketches its sketches, on, right before its mockups, wherever those sit', () => {
+    const old = normalize(w([s('idea'), s('research'), s('brief', true), s('mockup', true), s('prototype')]))
+    expect(old.steps.map((x) => x.key)).toEqual(['idea', 'research', 'brief', 'sketch', 'mockup', 'prototype'])
+    const off = normalize(w([s('idea'), s('sketch', false, false), s('mockup'), s('prototype'), s('brief', true)]))
+    expect(off.steps.find((x) => x.key === 'sketch')).toMatchObject({ on: false }) // switched off by the person: stays off
+    expect(validOrder([s('idea'), s('sketch'), s('mockup'), s('brief'), s('prototype')])).toBe(true)
   })
 
   it('adds a check after the brief and removes it again', () => {

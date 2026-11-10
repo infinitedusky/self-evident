@@ -36,6 +36,8 @@ export function askStep(subject: StepSubject, appId: string, name: string, key: 
   const ref = subject.kind === 'ideas' ? { ideaId: subject.id } : subject.kind === 'issues' ? { issueId: subject.id } : { projectId: subject.id }
   return engine.ask({ appId, subjectRef: ref, text: key === 'prototype'
     ? `Start a prototype for ${WHAT[subject.kind]} "${name}" (${subject.id}), as a step of it.`
+    : key === 'sketch'
+    ? `Sketch ${WHAT[subject.kind]} "${name}" (${subject.id}): the screens as plain HTML files under sketches/, fast, for me to react to; record them with set_step (key sketch).`
     : key === 'brief' && subject.kind === 'issues'
     ? `Write the brief for ${WHAT[subject.kind]} "${name}" (${subject.id}) with update_task, from its steps so far.`
     : `Do the ${label(key, on)} step for ${WHAT[subject.kind]} "${name}" (${subject.id}), and record it with set_step.` })

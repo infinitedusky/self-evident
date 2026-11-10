@@ -1924,3 +1924,22 @@ back. Worth knowing: a `playwright install` from any project prunes builds no pr
 
 **Next.** The remaining integrations (tkt, PostHog, Datadog, Linear, Confluence) move from `integrations.ts` into
 documents and the engine becomes their reader; the Prototype environment as an integration; the Sketches slot.
+
+## Sketches are a workflow step (Sandy, 2026-11-09: "we need to add a workflow step then")
+
+**What Sandy said.** The first mockup in Ragdoll Golf did not show: it was written in a conversation's worktree
+(`talk/3zqs3k`, `stories/mockups/SwingLab.mockup.stories.jsx`) and the engine's Storybook runs in the main checkout.
+Then: "I wanted to do a simple mockup before storybook … about speed, we get how we like it, then we do a story
+properly … Then that mockup is added to the brief", and "Proto comes after brief and is used to figure out the best
+way to build it". SHAPE.md, "Where the brief sits, and what each step is for".
+
+**Built** (branch `sketch-step`). `steps.ts`: a `sketch` step beside `mockup` (either side of the brief, on ideas,
+tasks and projects); the default order is now idea, research, sketches, mockups, the brief, the prototype;
+`normalize` gives a workflow saved before the step its sketches on, right before its mockups, and leaves a
+switched-off one off. The agent's prompt (`talk.ts`) says what a sketch is (one plain HTML file per screen under
+`sketches/`, CSS inside, no build, made-up data that says so) and the order of the three; `set_step` takes sketches
+with the files as refs; the step's Start button asks for exactly that. No migration: stored workflows are normalized
+when read. Tests: `steps.test.ts`.
+
+**Not built yet.** Showing a sketch (the Sketches integration and its tab), the Mockup section of the brief, and
+Storybook following the branch. Until the last one, a story on a conversation's branch shows only after it merges.

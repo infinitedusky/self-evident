@@ -378,8 +378,8 @@ export const uiWorkflow: Workflow = { id: 'wf_sample_ui', name: 'UI change (samp
 ] }
 /** What every app starts with (sample copy of the engine's "Default"). */
 export const defaultWorkflow: Workflow = { id: 'wf_sample_default', name: 'Default', ordered: false, steps: [
-  { key: 'idea', on: true, required: false }, { key: 'research', on: true, required: false }, { key: 'mockup', on: true, required: false },
-  { key: 'prototype', on: true, required: false }, { key: 'brief', on: true, required: true },
+  { key: 'idea', on: true, required: false }, { key: 'research', on: true, required: false }, { key: 'sketch', on: true, required: false }, { key: 'mockup', on: true, required: false },
+  { key: 'brief', on: true, required: true }, { key: 'prototype', on: true, required: false },
 ] }
 export const quickWorkflow: Workflow = { id: 'wf_sample_quick', name: 'Quick fix (sample)', ordered: false, steps: [
   { key: 'idea', on: true, required: false }, { key: 'research', on: false, required: false },
@@ -387,6 +387,7 @@ export const quickWorkflow: Workflow = { id: 'wf_sample_quick', name: 'Quick fix
 ] }
 export const ideaSteps: StepState[] = [
   { key: 'research', status: 'done', detail: '3 comps, one case against' },
+  { key: 'sketch', status: 'done', detail: '2 screens, third round' },
   { key: 'mockup', status: 'started', detail: '2 variants' },
 ]
 export const taskSteps: StepState[] = [

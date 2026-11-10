@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { Badge } from './Badge'
 import { CHECKS, addCheck, canMakeOptional, canRemove, canTurnOff, normalize, removeCheck, step, validOrder, type StepKey, type Workflow, type WorkflowStep } from '@self-evident/engine/steps'
 
-const NOTE: Partial<Record<StepKey, string>> = { idea: 'always first', research: 'before the brief', brief: 'always required', mockup: 'before or after the brief', prototype: 'before or after the brief' }
+const NOTE: Partial<Record<StepKey, string>> = { idea: 'always first', research: 'before the brief', brief: 'always required', sketch: 'before or after the brief', mockup: 'before or after the brief', prototype: 'before or after the brief' }
 
 export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, onSave }: { workflow: Workflow; usedBy?: string; editing?: boolean; onSave?: (w: Workflow) => void }) {
   const [editing, setEditing] = useState(startEditing)
