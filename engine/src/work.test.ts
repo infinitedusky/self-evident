@@ -43,7 +43,7 @@ describe.skipIf(!reachable)('steps and workflows', () => {
   })
 
   it('keeps a workflow to the fixed rules and refuses an order that breaks them', async () => {
-    await expect(saveWorkflow({ appId, name: 'bad', steps: [{ key: 'brief', on: true, required: true }, { key: 'research', on: true, required: false }] })).rejects.toThrow(/order breaks the rules/)
+    await expect(saveWorkflow({ appId, name: 'bad', steps: [{ key: 'idea', on: true, required: false }, { key: 'adr', on: true, required: false }, { key: 'research', on: true, required: false }, { key: 'brief', on: true, required: true }] })).rejects.toThrow(/order breaks the rules/)
     await expect(saveWorkflow({ appId, name: 'odd', steps: [{ key: 'deploy' as never, on: true, required: true }] })).rejects.toThrow(/no step "deploy"/)
     const w = await saveWorkflow({ appId, name: 'Brief off', steps: [{ key: 'idea', on: false, required: false }, { key: 'brief', on: false, required: false }] })
     expect(w.steps.find((s) => s.key === 'brief')).toMatchObject({ on: true, required: true })
@@ -79,22 +79,23 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     await expect(approveBrief(t.id, 'sam')).rejects.toThrow(/write the brief/)
     await updateIssue(t.id, { brief: 'Do the thing.' })
     expect((await stepsOf({ issueId: t.id })).states.find((s) => s.key === 'brief')).toMatchObject({ status: 'done', detail: 'waiting for approval' })
-    await approveBrief(t.id, 'sam')
+    await expect(approveBrief(t.id, 'sam')).rejects.toThrow(/can be approved once this workflow's required steps are done; still to do: Research/) // the brief is the parent: final only once what feeds it is done
     await setStep({ issueId: t.id }, 'research', { status: 'done', body: 'notes' })
+    await approveBrief(t.id, 'sam')
     await expect(guardComplete(db, t.id)).resolves.toBeUndefined()
     await updateIssue(t.id, { brief: 'Do the other thing.' })
     expect((await stepsOf({ issueId: t.id })).blocking).toEqual(['brief'])
   })
 
-  it('in an enforced order, a step and the brief\'s approval wait for the required steps before them', async () => {
+  it('in an enforced order, a step waits for the required steps before it; the brief\'s approval waits for every required step, and nothing waits for the brief', async () => {
     const wf = await saveWorkflow({ appId, name: 'Mockup first', ordered: true, steps: [{ key: 'idea', on: true, required: false }, { key: 'mockup', on: true, required: true }, { key: 'brief', on: true, required: true }, { key: 'adr', on: true, required: false }] })
     const t = await createIssue(appId, { title: 'Ordered', kind: 'code', brief: 'Build it.' })
     await useWorkflow({ issueId: t.id }, wf.id)
-    await expect(approveBrief(t.id, 'sam')).rejects.toThrow(/Brief waits for Mockups first/)
+    await expect(approveBrief(t.id, 'sam')).rejects.toThrow(/still to do: Mockups/)
     await expect(setStep({ issueId: t.id }, 'adr', { status: 'started' })).rejects.toThrow(/ADR waits for Mockups first/)
     await setStep({ issueId: t.id }, 'mockup', { status: 'done', refs: ['pages-x--y'] })
+    await expect(setStep({ issueId: t.id }, 'adr', { status: 'done' })).resolves.toMatchObject({ key: 'adr' }) // a check no longer waits for the brief's approval
     await approveBrief(t.id, 'sam')
-    await expect(setStep({ issueId: t.id }, 'adr', { status: 'done' })).resolves.toMatchObject({ key: 'adr' })
   })
 
   it('lets a task be made directly under rules that don\'t need an idea; refuses only when every choice does', async () => {

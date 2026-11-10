@@ -12,7 +12,7 @@ import { app, idea, issue, project, prototype, stepWork, workflow } from './db/s
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { getIssue, insertIssues, PlanError } from './issues.js'
-import { blocking, CAN, DEFAULT_NAME, DEFAULT_STEPS, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
+import { blocking, owed, CAN, DEFAULT_NAME, DEFAULT_STEPS, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
 
 export type Subject = { ideaId: string } | { issueId: string } | { projectId: string }
 const onOf = (s: Subject): On => ('ideaId' in s ? 'idea' : 'issueId' in s ? 'task' : 'project')
@@ -46,7 +46,7 @@ export async function saveWorkflow(input: { id?: string; appId: string; name: st
   if (!input.name?.trim()) throw new PlanError('a workflow needs a name')
   const unknown = (input.steps ?? []).find((s) => !KEYS.includes(s.key))
   if (unknown) throw new PlanError(`no step "${unknown.key}"; the steps are ${KEYS.join(', ')}`)
-  if (!validOrder(input.steps ?? [])) throw new PlanError('that order breaks the rules: the idea first, research before the brief, the checks after it')
+  if (!validOrder(input.steps ?? [])) throw new PlanError('that order breaks the rules: the idea first, the checks after the other steps')
   const w = normalize({ id: input.id ?? newId('workflow'), name: input.name.trim(), steps: input.steps ?? [], ordered: !!input.ordered })
   return db.transaction(async (tx) => {
     const a = await appOf(tx, input.appId)
@@ -198,7 +198,11 @@ export async function approveBrief(issueId: string, by: string, approve = true) 
     const i = await getIssue(tx, issueId)
     if (i.parentId || i.kind !== 'code') throw new PlanError('only a top-level code task has a brief to approve')
     if (approve && !i.brief?.trim()) throw new PlanError('write the brief before approving it')
-    if (approve) await guardOrder(tx, { issueId }, 'brief')
+    if (approve) { // the brief is the parent: it is final only once the required steps that feed it are
+      const v = await stepsOf({ issueId }, tx)
+      const waits = owed(v.states, v.resolved.workflow)
+      if (waits.length) throw new PlanError(`the brief can be approved once this workflow's required steps are done; still to do: ${waits.map((k) => step(k).label).join(', ')}`)
+    }
     const [row] = await tx.update(issue).set({ briefApprovedBy: approve ? by : null, briefApprovedAt: approve ? new Date() : null, updatedAt: new Date() }).where(eq(issue.id, issueId)).returning()
     const a = await appOf(tx, i.appId)
     await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: i.projectId, issueId, actor: by, type: approve ? 'brief.approved' : 'brief.unapproved', payload: { title: i.title } })

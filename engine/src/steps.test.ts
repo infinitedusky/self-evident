@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_WORKFLOW, addCheck, blocking, normalize, removeCheck, resolve, rows, validOrder, type Workflow, type WorkflowStep } from './steps.js'
+import { DEFAULT_WORKFLOW, addCheck, blocking, normalize, owed, removeCheck, resolve, rows, validOrder, type Workflow, type WorkflowStep } from './steps.js'
 
 const w = (steps: WorkflowStep[], ordered = true): Workflow => ({ id: 'wf', name: 'wf', ordered, steps })
 const s = (key: WorkflowStep['key'], required = false, on = true): WorkflowStep => ({ key, on, required })
@@ -17,20 +17,31 @@ describe('steps', () => {
   it('with no workflow, shows the default steps unordered, only the brief required', () => {
     expect(rows('project', [], null).map((r) => r.key)).toEqual(['idea', 'research', 'sketch', 'mockup', 'prototype'])
     const task = rows('task', [], null)
-    expect(task.map((r) => r.key)).toEqual(['idea', 'research', 'sketch', 'mockup', 'brief', 'prototype'])
+    expect(task.map((r) => r.key)).toEqual(['idea', 'research', 'sketch', 'mockup', 'prototype', 'brief'])
     expect(task.every((r) => r.required === (r.key === 'brief') && r.position === null && !r.waitingOn)).toBe(true)
     expect(rows('idea', [], null).some((r) => r.required)).toBe(false) // an idea commits to nothing: its rough draft is optional
   })
 
   it('leaves out switched-off steps and makes later steps wait on required ones in an enforced order', () => {
     const r = rows('task', [{ key: 'idea', status: 'done' }], ui)
-    expect(r.map((x) => [x.key, x.position, x.waitingOn])).toEqual([['idea', 1, null], ['research', 2, null], ['mockup', 3, null], ['brief', 4, 'mockup']])
-    expect(rows('task', [{ key: 'idea', status: 'done' }, { key: 'mockup', status: 'done' }], ui)[3].waitingOn).toBeNull()
+    const checked = addCheck(ui, 'risk')
+    expect(r.map((x) => [x.key, x.position, x.waitingOn])).toEqual([['idea', 1, null], ['research', 2, null], ['mockup', 3, null], ['brief', null, null]])
+    expect(rows('task', [{ key: 'idea', status: 'done' }], checked).find((x) => x.key === 'risk')).toMatchObject({ position: 4, waitingOn: 'mockup' })
+    expect(rows('task', [{ key: 'idea', status: 'done' }, { key: 'mockup', status: 'done' }], checked).find((x) => x.key === 'risk')?.waitingOn).toBeNull()
+  })
+
+  it('keeps the brief outside the order: open from the start, nothing waits on it, approved once the required steps are done', () => {
+    const checked = w([s('idea'), s('research', false, false), s('prototype'), s('audit', true), s('brief', true)])
+    const draft = rows('task', [{ key: 'brief', status: 'started' }], checked)
+    expect(draft.at(-1)).toMatchObject({ key: 'brief', position: null, waitingOn: null })
+    expect(draft.find((x) => x.key === 'audit')?.waitingOn).toBeNull() // a check never waits on the brief
+    expect(owed([{ key: 'brief', status: 'done' }], checked)).toEqual(['audit'])
+    expect(owed([{ key: 'brief', status: 'done' }, { key: 'audit', status: 'done' }], checked)).toEqual([])
+    expect(owed([], null)).toEqual([])
   })
 
   it('counts a task\'s brief as finished only once approved, and blocks completing until then', () => {
     const after = w([s('idea'), s('research', false, false), s('brief', true), s('audit', true)])
-    expect(rows('task', [{ key: 'brief', status: 'done' }], after).find((r) => r.key === 'audit')?.waitingOn).toBe('brief')
     expect(blocking([{ key: 'brief', status: 'done' }], null)).toEqual(['brief'])
     expect(blocking([{ key: 'brief', status: 'done', approved: { by: 'x', at: 'y' } }], null)).toEqual([])
     expect(blocking([{ key: 'brief', status: 'done', approved: { by: 'x', at: 'y' } }], after)).toEqual(['audit'])
@@ -38,12 +49,12 @@ describe('steps', () => {
 })
 
 describe('the fixed rules', () => {
-  it('keeps the idea first, research before the brief and the checks after it; mockups and the prototype go either side', () => {
+  it('keeps the idea first and the checks after the other steps; where the brief sits means nothing', () => {
     expect(validOrder([s('idea'), s('research'), s('brief'), s('mockup'), s('adr')])).toBe(true)
-    expect(validOrder([s('idea'), s('mockup'), s('prototype'), s('brief'), s('risk'), s('audit')])).toBe(true)
+    expect(validOrder([s('idea'), s('mockup'), s('prototype'), s('risk'), s('audit'), s('brief')])).toBe(true)
+    expect(validOrder([s('idea'), s('brief'), s('research')])).toBe(true)
     expect(validOrder([s('research'), s('idea'), s('brief')])).toBe(false)
-    expect(validOrder([s('idea'), s('brief'), s('research')])).toBe(false)
-    expect(validOrder([s('idea'), s('adr'), s('brief')])).toBe(false)
+    expect(validOrder([s('idea'), s('adr'), s('prototype'), s('brief')])).toBe(false)
   })
 
   it('always lists the idea and the brief, keeps the brief required, and fixes an order that breaks the rules', () => {
@@ -57,15 +68,15 @@ describe('the fixed rules', () => {
 
   it('gives a workflow saved before sketches its sketches, on, right before its mockups, wherever those sit', () => {
     const old = normalize(w([s('idea'), s('research'), s('brief', true), s('mockup', true), s('prototype')]))
-    expect(old.steps.map((x) => x.key)).toEqual(['idea', 'research', 'brief', 'sketch', 'mockup', 'prototype'])
+    expect(old.steps.map((x) => x.key)).toEqual(['idea', 'research', 'sketch', 'mockup', 'prototype', 'brief']) // the brief, wherever it was saved, goes last
     const off = normalize(w([s('idea'), s('sketch', false, false), s('mockup'), s('prototype'), s('brief', true)]))
     expect(off.steps.find((x) => x.key === 'sketch')).toMatchObject({ on: false }) // switched off by the person: stays off
     expect(validOrder([s('idea'), s('sketch'), s('mockup'), s('brief'), s('prototype')])).toBe(true)
   })
 
-  it('adds a check after the brief and removes it again', () => {
+  it('adds a check after the other steps, the brief still last, and removes it again', () => {
     const added = addCheck(ui, 'adr')
-    expect(added.steps.at(-1)?.key).toBe('adr')
+    expect(added.steps.slice(-2).map((x) => x.key)).toEqual(['adr', 'brief'])
     expect(validOrder(added.steps)).toBe(true)
     expect(removeCheck(added, 'adr').steps.some((x) => x.key === 'adr')).toBe(false)
   })
