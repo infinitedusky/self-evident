@@ -29,6 +29,7 @@ import { createCycle, createInitiative, listCycles, listInitiatives, updateIniti
 import { changeState, commentOnIssue, createIssue, listComments, listIssues, reorder, resolveIssue, updateIssue } from './issues.js'
 import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
+import { listSketches, readSketch } from './sketches.js'
 import { migrateStorybookSetup, startStorybook, stopStorybooks, storybookStatus, storybookValues, STORY_FLOW_CSS } from './storybook.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
@@ -276,8 +277,17 @@ export function buildApp(bus: EventBus) {
     })
     return c.json(row, 201)
   })
-  api.get('/apps/:id/storybook', async (c) => { try { return c.json(await storybookStatus(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
-  api.post('/apps/:id/storybook/start', async (c) => { try { return c.json(await startStorybook(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  // ?session=: the conversation the person is in; its worktree's Storybook when it has one, else the app's.
+  api.get('/apps/:id/storybook', async (c) => { try { return c.json(await storybookStatus(c.req.param('id'), c.req.query('session'))) } catch (err) { return planError(c, err, 404) } })
+  api.post('/apps/:id/storybook/start', async (c) => { try { return c.json(await startStorybook(c.req.param('id'), c.req.query('session'))) } catch (err) { return planError(c, err) } })
+  // Sketches: the HTML files under sketches/ in a conversation's worktree (scope: its id) or the app's checkout (scope: the app's id).
+  api.get('/sketches/:scope', async (c) => { try { return c.json(await listSketches(c.req.param('scope'))) } catch (err) { return planError(c, err, 404) } })
+  api.get('/sketches/:scope/file/*', async (c) => {
+    const scope = c.req.param('scope')
+    const file = decodeURIComponent(c.req.path.split(`/sketches/${scope}/file/`)[1] ?? '')
+    const found = await readSketch(scope, file).catch(() => null)
+    return found ? c.body(new Uint8Array(found.body), 200, found.headers) : c.text('No such sketch.', 404)
+  })
   api.get('/storybook/story-flow.css', (c) => c.text(STORY_FLOW_CSS, 200, { 'content-type': 'text/css; charset=utf-8' })) // step 4 of "Set up the screen map"
   api.get('/apps/:id/prototypes', async (c) => c.json(await listPrototypes(c.req.param('id'))))
   api.post('/apps/:id/prototypes', async (c) => {

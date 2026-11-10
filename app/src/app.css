@@ -209,6 +209,7 @@ select, input { color-scheme: light dark; }
 /* Mockups: the app's Storybook, inside */
 .mockups { display: flex; flex-direction: column; height: 100%; }
 .sb-frame { flex: 1; width: 100%; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; min-height: 480px; }
+.sketch-stage { flex: 1; display: flex; justify-content: center; min-height: 0; } .sketch-frame { flex: none; height: 100%; width: 100%; }
 .sb-log { font-size: 11px; max-height: 160px; overflow: auto; background: var(--ground); padding: 8px; border-radius: 8px; text-align: left; }
 .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .filter { font: 500 13px var(--sans); padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); cursor: pointer; }

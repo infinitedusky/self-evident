@@ -546,9 +546,18 @@ the brief carries the agreed mockup; the prototype answers how it should be buil
 right. Sketches are a workflow step of their own (`sketch`, beside `mockup`): plain HTML files under `sketches/` on
 the conversation's branch, one screen each. The default workflow is idea, research, sketches, mockups, the brief,
 the prototype; a workflow saved before the step gets it on, right before its mockups, and its own order is left as
-the person set it. Still to build: the Sketches integration (its document, the tab that shows a sketch from the
-branch's worktree), the Mockup section of the brief with a screenshot, and Storybook following the branch, so a
-story written in a conversation shows there before it merges.
+the person set it.
+
+**It shows beside the conversation, from the conversation's worktree** (Sandy, 2026-11-09: the sketch "can't be
+jumping back and forth to some random screen or having to give us a link somewhere. It has to be right there when
+we're prompting"; and of Storybook: "we need the screens to match the worktree of the plan of the task"). Sketches
+and Mockups are tabs in the workspace that show the worktree of the conversation in front. A sketch is served by
+the engine from `sketches/` in that worktree, framed at phone, tablet or full width, sandboxed, and reloaded when
+its file changes; the agent opens it with `open_tab`, never a link. Storybook is started in that worktree on a port
+of the worktree's own (its dependencies installed first when it has none), so a story written a minute ago is
+there; a branch without a Storybook, or no conversation, gets the app's from the main checkout. A Storybook runs on
+its own, not as the engine's child, so a deploy no longer takes it down; a conversation ending stops its own. Still
+to build: the Mockup section of the brief with a screenshot, and Sketches as an integration document.
 
 ### The agent shows where it is
 

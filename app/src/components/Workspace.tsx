@@ -15,6 +15,7 @@ import { useCurrentApp } from '../current-app'
 import { landing, pendingOpen, tabContext, tabKey, tabTitle, talkColor, useWorkspace, WorkspaceContext, type OpenTab, type Split, type Tab, type WorkspaceApi } from '../workspace'
 import { BuildLog } from './BuildLog'
 import { Mockups } from '../pages/Mockups'
+import { Sketches } from '../pages/Sketches'
 import { PagePane } from './PagePane'
 import { PrototypePane } from './PrototypePane'
 import { AppPicker } from './AppPicker'
@@ -35,7 +36,7 @@ const MENU: { label: string; tab: Tab }[] = [
   { label: 'My Stuff', tab: { kind: 'page', path: '/' } }, { label: 'Projects', tab: { kind: 'page', path: '/projects' } },
   { label: 'Tasks', tab: { kind: 'page', path: '/tasks' } }, { label: 'To-dos', tab: { kind: 'page', path: '/todos' } },
   { label: 'Ideas', tab: { kind: 'page', path: '/ideas' } }, { label: 'Prototypes', tab: { kind: 'prototype' } },
-  { label: 'Storybook', tab: { kind: 'storybook' } }, { label: 'Settings', tab: { kind: 'page', path: '/settings' } },
+  { label: 'Sketches', tab: { kind: 'sketch' } }, { label: 'Storybook', tab: { kind: 'storybook' } }, { label: 'Settings', tab: { kind: 'page', path: '/settings' } },
 ]
 
 /** A task's page, by its id (/tasks/iss_…) or its identifier (/tasks/SE-12): the engine knows both. */
@@ -98,7 +99,8 @@ function TabBody({ params, api }: IDockviewPanelProps<Params>) {
     switch (t.kind) {
       case 'page': return <PagePane path={t.path} onNavigate={(path) => went({ kind: 'page', path })} />
       case 'prototype': return <PrototypePane id={t.id} path={t.path} onNavigate={(path) => went({ kind: 'prototype', id: t.id, path })} />
-      case 'storybook': return <PagePane path="/mockups"><Mockups story={t.story} /></PagePane>
+      case 'storybook': return <PagePane path="/mockups"><Mockups story={t.story} session={t.session} /></PagePane>
+      case 'sketch': return <PagePane path="/mockups"><Sketches file={t.file} session={t.session} /></PagePane>
       case 'build': return <BuildLog issueId={t.issueId} />
       default: return <PrototypePane /> // a tab saved before Preview became Prototypes
     }
@@ -199,7 +201,9 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
     if (!api) return
     const there = api.panels.find((p) => tabKey((p.params as { tab: Tab }).tab) === tabKey(tab))
     if (there) { // one Storybook tab: asked for another story, it goes there
-      if (tab.kind === 'storybook' && tab.story && tab.story !== ((there.params as { tab: Tab }).tab as { story?: string }).story) { there.api.updateParameters({ tab }); sync() }
+      const was = (there.params as { tab: Tab }).tab as { story?: string; file?: string; session?: string }
+      if (tab.kind === 'storybook' && ((tab.story && tab.story !== was.story) || (tab.session && tab.session !== was.session))) { there.api.updateParameters({ tab: { ...was, ...tab } }); sync() }
+      if (tab.kind === 'sketch' && ((tab.file && tab.file !== was.file) || (tab.session && tab.session !== was.session))) { there.api.updateParameters({ tab: { ...was, ...tab } }); sync() } // one Sketches tab too
       there.api.setActive(); return
     }
     const id = `t_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
