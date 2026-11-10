@@ -225,12 +225,13 @@ export const summary: SummaryState = {
 /** Integrations, made up: tkt runs the shop's tickets, PostHog for telemetry, Linear connected, Confluence set but its key missing. */
 export const sampleIntegrations: FactorySettings['integrations'] = [
   {
-    key: 'tkt', name: 'tkt', role: 'Runner', does: 'Builds this app’s tickets from their approved briefs: a worktree, a herdr tab, the lifecycle skills on the harness and model its preset says; the tickets are the app’s Linear team’s (Integrations › Linear), and the plan, the handoff, the review and the completion are written on the Linear issue.',
+    key: 'tkt', name: 'tkt', role: 'Runner', does: 'Builds this app’s tickets from their approved briefs: a worktree, a herdr tab, the lifecycle skills on the harness and model its preset says; the plan, the handoff, the review and the completion written back on the ticket.',
     fields: [
       { key: 'on', label: 'Runs this app’s tasks', kind: 'switch', required: true, states: { on: 'tkt builds this app’s tickets; Self Evident hands none to its own planner', off: 'this app’s tasks go to Self Evident’s own planner and builder' } },
+      { key: 'linear', label: 'Tickets live in Linear', kind: 'switch', states: { on: 'tkt runs on its own for this app: it reads and updates the tickets in Linear, in the team under Integrations › Linear, and never asks Self Evident', off: 'tkt reads this app’s tickets from Self Evident' } },
     ], calls: true, perApp: true, docs: 'https://gitlab.com/rogs/tkt',
     actions: [
-      { key: 'start', name: 'Start', does: '`tkt start <ticket>`: a worktree and a tab; start-ticket reads the ticket in Linear, moves it to in progress and plans from the brief.' },
+      { key: 'start', name: 'Start', does: '`tkt start <ticket>`: a worktree and a tab; start-ticket reads the ticket here, moves it to in progress and plans from the brief.' },
       { key: 'approve', name: 'Approve the plan', does: '`tkt approve <ticket>`: work-ticket builds, commits, opens the pull request and hands off on the ticket.' },
       { key: 'review', name: 'Review', does: '`tkt run <ticket> review`: review-pr in a fresh session, its verdict on the pull request.' },
       { key: 'merge', name: 'Merge and finish', does: '`tkt merge <ticket> --passed`, then `tkt done`: finish-ticket merges and moves the ticket to done.' },
@@ -299,7 +300,7 @@ export const factorySettings: FactorySettings = {
 }
 export const appSettings: AppSettings = {
   integrations: {
-    tkt: { on: { value: 'true', from: 'app' } },
+    tkt: { on: { value: 'true', from: 'app' }, linear: { value: 'true', from: 'app' } },
     storybook: { on: { value: 'true', from: 'app' }, cmd: { value: 'pnpm storybook --no-open', from: 'app' }, url: { value: 'http://localhost:6007', from: 'app' } },
     posthog: { host: { value: 'https://us.posthog.com', from: 'workspace' }, project_id: { value: '12345', from: 'app' }, key_env: { value: null, from: null } },
     linear: { team: { value: 'GIFT', from: 'app' }, key_env: { value: 'LINEAR_API_KEY', from: 'workspace' } },
@@ -315,21 +316,20 @@ export const storybookCheck = { ok: true, detail: 'Storybook 10.6.3 in web with 
 export const trackerGuideSample = `<!-- rogs-skills config v1: issue-tracker -->
 # Issue tracker
 
-Where this project's tickets live and how the lifecycle skills read and change them. Written from Self Evident's settings for the app Sample Shop, whose tickets live in Linear (team SHOP).
+Where this project's tickets live and how the lifecycle skills read and change them. Written from Self Evident's settings for the app Sample Shop (SS).
 
 ## Tracker
 
-- Kind: Linear
-- Connection: the MCP server \`linear\`.
-- Workspace: Sample Co, URL slug \`sample-co\`
-- Team: Shop, key \`SHOP\`, id \`00000000-sample-team\`
-- Ticket ids: \`SHOP-<number>\`, matched by \`^SHOP-[1-9][0-9]*$\`.
+- Kind: Self Evident
+- Connection: the engine's HTTP API at \`http://localhost:4000/api\`, with \`curl\`. The UI is at \`http://localhost:5180\`. No token.
+- Scope: the app \`Sample Shop\`, id \`app_sample\`, key \`SS\`.
+- Ticket ids: \`SS-<number>\`, matched by \`^SS-[1-9][0-9]*$\`.
 
 ## Operations
 
 ### resolve
 
-Call \`get_issue\` with \`id: "<ticket id>"\` (sample: the rest of the operations follow)
+\`curl -sf <engine>/issues/<ticket id>\` (sample: the rest of the operations follow)
 
 Capability: Supported
 `

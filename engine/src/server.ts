@@ -177,11 +177,12 @@ export function buildApp(bus: EventBus) {
   })
   // Tries an integration's saved connection: the workspace's values, or an app's with its overrides.
   // An integration's effective values for an app (or the workspace's), and what its per-app check needs from the app.
-  // tkt's context for an app, with its Linear team: tkt reads its tickets from Linear and nowhere else.
+  // tkt's context for an app, with its Linear team when the app's tickets live there (tkt's own switch).
   const tktContext = async (appId: string, shared: Values, own: Values) => {
     const ctx = await contextFor(appId)
     if (!ctx) return null
     const eff = effectiveIntegrations(shared, own)
+    if (eff.tkt?.linear?.value !== 'true') return ctx
     return { ...ctx, ...(await linearFor({ team: eff.linear?.team?.value, key_env: eff.linear?.key_env?.value })) }
   }
   const integrationFor = async (key: string, appId?: string): Promise<{ values: Record<string, string | null>; local?: Local } | null> => {

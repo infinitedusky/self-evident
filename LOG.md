@@ -1995,14 +1995,15 @@ agents run without permission prompts, and Self Evident's main checkout is the r
 Next: Sandy's three Linear steps; then Integrations › Linear for Ragdoll Golf (team, key variable), the switch, and one
 press of Set up what's missing; then the first ticket through each system.
 
-### tkt never reads from Self Evident (Sandy, 2026-11-10: "the wiring goes away")
+### The tracker wiring, removed and put back (2026-11-10)
 
-I had framed the choice as "tkt reads from Linear or from Self Evident". Sandy's frame is the right one: tkt is a tool
-Self Evident can use, and never the other way round. Three arrangements: tkt alone with Linear; Self Evident with
-Linear, then using tkt; Self Evident using tkt, which uses Linear. What Sandy wants to see is tkt on its own, then Self
-Evident using it. So the switch from this morning is gone and so is `docs/tracker-self-evident.md`: an app with tkt on
-is set up for its Linear team or not at all (SHAPE.md, "tkt reads its tickets from Linear, never from Self Evident").
-Until Ragdoll Golf and tkt scratch have a Linear team and the engine has its key, their check under Integrations › tkt
-fails and says exactly that; the tracker file already in each repo still points at Self Evident and is replaced by the
-next Set up what's missing.
+I misread Sandy twice in one afternoon. "TKT is never using Self Evident" and "the wiring goes away" were about the
+test: Sandy wants to watch tkt with no Self Evident in the loop. I took them as a change to the product and removed
+tkt's reading from Self Evident altogether (PR #113). Sandy: "I wasn't asking you to change the way those two
+interacted with each other. I was just trying to be able to test it without any interaction." #113 is reverted. What
+stands: tkt pulls from Self Evident; Self Evident is to pull from Linear (not built, it only pushes today); the
+"Tickets live in Linear" switch from #112 stays, as the way to run tkt on its own for one app (SHAPE.md, "tkt reads
+from Self Evident; a switch lets it run on its own against Linear").
+
+Lesson for the factory: when a request could mean "for this test" or "for the product", ask which before building.
 

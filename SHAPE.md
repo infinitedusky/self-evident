@@ -200,8 +200,7 @@ Details and sources in `research/`.
   (independent review, verification with evidence, merge gates at the exact head) runs Roger's MIT lifecycle
   skills from our executor rather than stages of our own; and the plan for all of it is tickets in Self Evident,
   project "Tickets first" (LOG.md, "Tickets first").
-- **tkt is the runner; Self Evident is the tracker and the window** (the tracker half was withdrawn on 2026-11-10:
-  see "tkt reads its tickets from Linear, never from Self Evident" below) (Sandy, 2026-11-07, after the spike: one
+- **tkt is the runner; Self Evident is the tracker and the window** (Sandy, 2026-11-07, after the spike: one
   ticket from `new` to merged in 19 minutes on this Mac, every stage a rogs skill; LOG.md, "tkt is the runner").
   Self Evident is where a ticket is born, reviewed and watched; once its brief is approved, tkt builds it: a
   worktree, a herdr tab, start-ticket → work-ticket → review-pr in a fresh session → the person's verification →
@@ -509,19 +508,16 @@ Details and sources in `research/`.
   seeds in `docs/lifecycle/` are its documents' templates. The rest of the integrations move from the code into
   documents next, and the engine becomes their reader; a check the common forms cannot express (a command's exit
   code, a file containing a line, a URL answering) stays a named check the document points at.
-- **tkt reads its tickets from Linear, never from Self Evident** (Sandy, 2026-11-10: "TKT is something that Self
-  Evident can use. TKT is never using Self Evident"; "I don't want TKT to be using Self Evident as a tracker. I want to
-  see it on its own"). Three arrangements exist and no fourth: tkt alone, integrated with Linear; Self Evident
-  integrated with Linear and then using tkt; Self Evident using tkt, which integrates with Linear. In all three the
-  tickets tkt works on are Linear issues. So for an app with tkt on, Set up what's missing writes the tracker guide for
-  the team Integrations › Linear names (the skills' own Linear guide, its blanks and its States table filled from
-  Linear with the key already named there), and the pull request trailer and the Ticket lifecycle block name the team;
-  with no Linear team it writes nothing and says so. tkt's agents reach Linear through its hosted MCP server, named
-  `linear` in the harness, signed in by the person once. Self Evident makes the Linear issue from an approved brief
-  (the Linear integration's "Create an issue"). This replaces the tracker half of "tkt is the runner; Self Evident is
-  the tracker and the window" above: the guide that pointed tkt's skills at our API is gone, and the API the skills
-  used stays only as Self Evident's own. Not built: Self Evident reading a ticket's state and comments back from
-  Linear, so what tkt does on an issue does not show here; that is what makes Self Evident the window again.
+- **tkt reads from Self Evident; a switch lets it run on its own against Linear** (Sandy, 2026-11-10: "we want Self
+  Evident to be pulling from Linear and we want TKT to be pulling from Self Evident. But I want to test TKT on its
+  own"). The arrangement stays as in "tkt is the runner; Self Evident is the tracker and the window": tkt's skills read
+  and write the ticket through our API. Linear, where an app uses it, is Self Evident's to talk to, not tkt's. The one
+  exception is for seeing tkt by itself: tkt has a second switch per app, "Tickets live in Linear". On, Set up what's
+  missing writes the tracker guide for the team Integrations › Linear names (the skills' own Linear guide, its blanks
+  and States table filled from Linear), tkt's agents reach Linear through its hosted MCP server (`linear` in the
+  harness, signed in by the person once), and that app's tkt has nothing to do with Self Evident after the file is
+  written. It is a way to test, not the product's shape. Not built: Self Evident pulling from Linear; today it only
+  pushes (an issue from an approved brief, comments, state moves).
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
