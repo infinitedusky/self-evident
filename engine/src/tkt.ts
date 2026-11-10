@@ -219,18 +219,22 @@ export function setupAsk(ctx: TktContext, detail: string, findings: string[]): s
 
 const list = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`)
 
-/** Commits the configuration on the base branch and pushes it, since tkt reads it from there; one sentence on what happened. */
-async function commitConfig(exec: Run, ctx: TktContext, remote: string, base: string, paths: string[]): Promise<string> {
-  const g = (args: string[]) => exec('git', args, ctx.repoPath!)
+/** Commits on the base branch (the paths, or everything) and pushes, since tkt reads a repo's configuration from there; one sentence on what happened. */
+export async function commitOnBase(exec: Run, cwd: string, o: { remote: string; base: string; paths?: string[]; subject: string; body: string }): Promise<string> {
+  const g = (args: string[]) => exec('git', args, cwd)
   const branch = (await g(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
-  const changed = (await g(['status', '--porcelain', '--', ...paths])).stdout.trim()
-  if (!changed) return branch === base ? `Nothing new to commit: ${base} has this configuration already.` : `Nothing new to commit on ${branch}.`
-  if (branch !== base) return `Written in the checkout, which is on ${branch}, not ${base}: tkt reads the configuration from ${base}, so it needs to land there (a commit on ${branch} and a merge, or a commit on ${base}).`
-  await g(['add', '--', ...paths])
-  await g(['commit', '-q', '-m', `Set up the ticket lifecycle for ${ctx.app.name} (${ctx.app.key})`, '-m', 'Written by Self Evident from the app\'s settings and the repository, so tkt and the lifecycle skills find the app there. Set up what\'s missing under Integrations › tkt writes it again.'])
+  const changed = (await g(['status', '--porcelain', ...(o.paths ? ['--', ...o.paths] : [])])).stdout.trim()
+  if (!changed) return branch === o.base ? `Nothing new to commit: ${o.base} has it already.` : `Nothing new to commit on ${branch}.`
+  if (branch !== o.base) return `Written in the checkout, which is on ${branch}, not ${o.base}: it needs to land on ${o.base} (a commit on ${branch} and a merge, or a commit on ${o.base}).`
+  await g(o.paths ? ['add', '--', ...o.paths] : ['add', '-A'])
+  await g(['commit', '-q', '-m', o.subject, '-m', o.body])
   const sha = (await g(['rev-parse', '--short', 'HEAD'])).stdout.trim()
-  try { await g(['push', remote, base]) } catch (e) { return `Committed ${sha} on ${base}; the push to ${remote} was refused: ${lines(e).slice(-1)[0] ?? 'no output'}. Push it for worktrees cut from ${remote} to have it.` }
-  return `Committed to ${base} and pushed (${sha}).`
+  try { await g(['push', o.remote, o.base]) } catch (e) {
+    const ls = lines(e)
+    const why = (ls.find((l) => /^(fatal|error|remote):/i.test(l)) ?? ls.slice(-1)[0] ?? 'no output').replace(/\.+$/, '')
+    return `Committed ${sha} on ${o.base}; the push to ${o.remote} was refused: ${why}. Push it for worktrees cut from ${o.remote} to have it.`
+  }
+  return `Committed to ${o.base} and pushed (${sha}).`
 }
 
 /**
@@ -272,7 +276,7 @@ export async function setupTkt(ctx: TktContext, deps: Deps = {}): Promise<Setup>
       try { await exec('tkt', ['hook', 'tmp', '--install'], ctx.repoPath); did.push('Installed tkt\'s OpenCode plugin (tkt\'s own file under ~/.config/opencode).') } catch (e) { did.push(`tkt hook tmp --install failed: ${lines(e).slice(-1)[0] ?? 'no output'}.`) }
     }
   }
-  did.push(await commitConfig(exec, ctx, facts.remote?.name ?? 'origin', facts.base, paths))
+  did.push(await commitOnBase(exec, ctx.repoPath, { remote: facts.remote?.name ?? 'origin', base: facts.base, paths, subject: `Set up the ticket lifecycle for ${ctx.app.name} (${ctx.app.key})`, body: 'Written by Self Evident from the app\'s settings and the repository, so tkt and the lifecycle skills find the app there. Set up what\'s missing under Integrations › tkt writes it again.' }))
   const check = await checkTkt(ctx, deps)
   if (check.ok) return { done: true, did, ask: null, detail: check.detail }
   const findings = tktThere ? await doctorFindings(exec, ctx.repoPath) : []

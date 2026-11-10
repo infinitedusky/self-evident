@@ -191,7 +191,7 @@ export function buildApp(bus: EventBus) {
     if (key === 'storybook' && a) {
       const [r] = await db.select().from(repoTable).where(eq(repoTable.appId, a.id))
       const v = await storybookValues({ integrations: { storybook: Object.fromEntries(Object.entries(values).filter(([, x]) => x != null)) } }, r?.localPath ?? null) // the app's values, else the repo's defaults
-      local = { storybook: { ctx: { app: { id: a.id, name: a.name }, repoPath: r?.localPath ?? null, url: v.url, cmd: v.cmd } } }
+      local = { storybook: { ctx: { app: { id: a.id, name: a.name, defaultBranch: a.defaultBranch ?? undefined }, repoPath: r?.localPath ?? null, url: v.url, cmd: v.cmd } } }
     }
     return { values, local }
   }

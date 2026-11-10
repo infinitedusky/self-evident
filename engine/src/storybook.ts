@@ -6,14 +6,18 @@
  * map (@zigbang/storybook-addon-story-flow) wired in, its stylesheet imported, the flow files kept out of the story
  * tests, and a map; then whether it answers. First thing wrong is the answer.
  */
-import { spawn, type ChildProcess } from 'node:child_process'
-import { readFile, stat } from 'node:fs/promises'
-import { dirname, join, relative } from 'node:path'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { dirname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 import { eq, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, repo } from './db/schema.js'
 import { git } from './git.js'
+import { remoteAndBase } from './lifecycle.js'
 import { PlanError } from './projects.js'
+import { commitOnBase, type Run } from './tkt.js'
 
 const running = new Map<string, { proc: ChildProcess; startedAt: Date; log: string[] }>()
 
@@ -39,7 +43,7 @@ export const hasStorybook = (setup: unknown) => storybookSetup(setup).on
  */
 export async function storybookDefaults(repoPath: string): Promise<{ cmd: string; url: string } | null> {
   const pkgs = ['package.json', ...(await tracked(repoPath, '*/package.json')).filter((p) => !p.includes('node_modules/'))]
-  const pm = (await exists(join(repoPath, 'pnpm-lock.yaml'))) ? 'pnpm' : (await exists(join(repoPath, 'yarn.lock'))) ? 'yarn' : (await exists(join(repoPath, 'bun.lockb'))) || (await exists(join(repoPath, 'bun.lock'))) ? 'bun' : 'npm'
+  const pm = await pmOf(repoPath)
   for (const rel of pkgs) {
     let script: string | undefined
     try { script = (JSON.parse(await text(join(repoPath, rel))) as { scripts?: Record<string, string> }).scripts?.storybook } catch { continue }
@@ -127,9 +131,11 @@ export function stopStorybooks() { for (const [, m] of running) m.proc.kill('SIG
 // The check: the standard for every project's Storybook, read from the repo.
 
 export const ADDON = '@zigbang/storybook-addon-story-flow'
-export interface StorybookContext { app: { id: string; name: string }; repoPath: string | null; url: string | null; cmd: string | null }
+export interface StorybookContext { app: { id: string; name: string; defaultBranch?: string }; repoPath: string | null; url: string | null; cmd: string | null }
 export interface Check { ok: boolean; detail: string; links?: { label: string; href: string }[] }
-const SETUP = 'Set up the screen map (the action below hands the agent the job).'
+/** `answers` and `run` only in tests: whether a URL answers, and the command runner the install uses. */
+export interface StorybookDeps { answers?: (url: string) => Promise<boolean>; run?: Run }
+const SETUP = 'Set up Storybook (the button below) does it.'
 
 const exists = (p: string) => stat(p).then(() => true, () => false)
 const text = (p: string) => readFile(p, 'utf8').catch(() => '')
@@ -138,17 +144,24 @@ async function tracked(repoPath: string, pattern: string): Promise<string[]> {
   const r = await git(repoPath, ['ls-files', '--cached', '--others', '--exclude-standard', '--', pattern], { allowFail: true })
   return r.code === 0 ? r.stdout.split('\n').filter(Boolean).sort() : []
 }
+/** Whether the flow files stay out of the story tests: true when no vitest config runs the stories (nothing would import them), or the one that does excludes them. */
+async function flowsExcluded(repoPath: string, prefix: string): Promise<boolean> {
+  const configs = [...(await tracked(repoPath, `${prefix}vite*.config.*`)), ...(await tracked(repoPath, `${prefix}vitest.workspace.*`))]
+  let runs = false
+  for (const f of configs) { const t = await text(join(repoPath, f)); if (/addon-vitest|storybookTest/.test(t)) { runs = true; if (t.includes('flow.json')) return true } }
+  return !runs
+}
 const depsOf = (pkg: string): Record<string, string> => { try { const p = JSON.parse(pkg); return { ...p.dependencies, ...p.devDependencies } } catch { return {} } }
 const major = (range: string) => Number((range.match(/\d+/) ?? [NaN])[0])
 /** Storybook's id for a map's docs page, from the flow file's title: "Parent/Map" → parent-map--docs. */
 export const mapDocsId = (title: string) => `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}--docs`
 
-export async function checkStorybook(ctx: StorybookContext, deps: { answers?: (url: string) => Promise<boolean> } = {}): Promise<Check> {
+export async function checkStorybook(ctx: StorybookContext, deps: StorybookDeps = {}): Promise<Check> {
   const { repoPath, url } = ctx
   if (!repoPath) return { ok: false, detail: 'No local checkout under Repo: the check reads the Storybook config in the repo.' }
   const rel = (p: string) => relative(repoPath, p)
   const mains = await tracked(repoPath, '*.storybook/main.*')
-  if (!mains.length) return { ok: false, detail: `No Storybook in ${repoPath}: no .storybook/main.* anywhere in the repo. Set up Storybook 10 first, then the screen map.` }
+  if (!mains.length) return { ok: false, detail: `No Storybook in ${repoPath}: no .storybook/main.* anywhere in the repo. Set up Storybook (the button below) installs it to the standard.` }
   const main = join(repoPath, mains[0])
   const sbDir = dirname(main)
   const where = relative(repoPath, dirname(sbDir)) || '.'
@@ -164,12 +177,7 @@ export async function checkStorybook(ctx: StorybookContext, deps: { answers?: (u
   if (!(await exists(css))) return { ok: false, detail: `${rel(css)} isn't there: without it, titles float over the screens when the map is zoomed out. ${SETUP}` }
   const preview = (await tracked(repoPath, `${prefix}.storybook/preview.*`))[0]
   if (!preview || !(await text(join(repoPath, preview))).includes('story-flow.css')) return { ok: false, detail: `story-flow.css isn't imported in ${preview ?? `${prefix}.storybook/preview`}: import it after the app's global CSS.` }
-  if (pkg['@storybook/addon-vitest']) {
-    const configs = [...(await tracked(repoPath, `${prefix}vite*.config.*`)), ...(await tracked(repoPath, `${prefix}vitest.workspace.*`))]
-    let excluded = false
-    for (const f of configs) if ((await text(join(repoPath, f))).includes('flow.json')) excluded = true
-    if (!excluded) return { ok: false, detail: `Flow files aren't excluded from the vitest project in ${where}: the story tests would import each *.flow.json as a test. Add test.exclude ['**/*.flow.json'] to the storybook project.` }
-  }
+  if (pkg['@storybook/addon-vitest'] && !(await flowsExcluded(repoPath, prefix))) return { ok: false, detail: `Flow files aren't excluded from the vitest project in ${where}: the story tests would import each *.flow.json as a test. Add test.exclude ['**/*.flow.json'] to the storybook project.` }
   const flows = await tracked(repoPath, '*.flow.json')
   if (!flows.length) return { ok: false, detail: `No map yet: no *.flow.json in ${where}'s stories. ${SETUP}` }
   let title: string | null = null
@@ -181,16 +189,6 @@ export async function checkStorybook(ctx: StorybookContext, deps: { answers?: (u
   return { ok: true, detail, links }
 }
 
-/** The job "Set up the screen map" hands the agent: the standard, step by step; it confirms each file before writing. */
-export const setupMapAsk = (engineUrl: string) => `Set up the screen map in this repo's Storybook. Every project with Storybook gets a map of its screens, drawn by ${ADDON}; this is the standard, step by step. Confirm each file change with me before writing it.
-1. Storybook 10 with a Vite or webpack5 framework (the add-on's peer range is storybook ^10). On an older Storybook, stop and say so.
-2. Add ${ADDON} as a dev dependency, with the project's own package manager.
-3. In .storybook/main.ts, in addons: { name: "${ADDON}", options: { flowGlob: "../stories/**/*.flow.json" } }, the glob relative to .storybook/ and pointing at the stories folder (never the default, which scans the parent tree).
-4. Save ${engineUrl}/storybook/story-flow.css as .storybook/story-flow.css and import it in .storybook/preview after the app's global CSS: it keeps each title in its own strip when zoomed out and draws the outline-coloured line under it.
-5. If stories run with @storybook/addon-vitest, exclude '**/*.flow.json' from that vitest project, or the run imports each JSON as a test.
-6. A first map: stories/flows/<area>.flow.json with "title": "<Area>/Map". Whole screens only: each node's stories draw a page as the user sees it, frame and all, never a card or a form on its own; a screen that isn't ours (a third-party sign-in) is a node with no story, coverage "external" and a noStoryReason. Edge labels say what you tap; tag each node with its address; mark what is already built existing; add scenarios for the main journeys. The contract is in node_modules/${ADDON}/skills/story-flow-author/SKILL.md.
-7. One paragraph in the dev docs: where the map is and how to add a screen.
-Then open ?path=/docs/<area>-map--docs, zoom in and out, and check every node renders its real screen with no title covering it; run the story tests.`
 
 /** The stylesheet the standard adds beside the add-on (served at GET /api/storybook/story-flow.css for step 4). */
 export const STORY_FLOW_CSS = `/* The UX map (@zigbang/storybook-addon-story-flow). Our standard for every project's Storybook.
@@ -210,3 +208,123 @@ export const STORY_FLOW_CSS = `/* The UX map (@zigbang/storybook-addon-story-flo
   border-bottom-color: inherit !important;
 }
 `
+
+// Installing it (docs/integrations/storybook.md, "Installation"; Sandy, 2026-11-09: "Storybook is simple, every project
+// uses it, it should not be hard to add to a repo"): Storybook's own installer, then the standard, each step skipped
+// when already done, so pressing again is safe. What cannot be done from here is `left`, for the agent.
+
+type Pm = 'pnpm' | 'npm' | 'yarn' | 'bun'
+/** The repo's package manager, by its lockfile; npm when there is none. */
+async function pmOf(repoPath: string): Promise<Pm> {
+  return (await exists(join(repoPath, 'pnpm-lock.yaml'))) ? 'pnpm' : (await exists(join(repoPath, 'yarn.lock'))) ? 'yarn' : (await exists(join(repoPath, 'bun.lockb'))) || (await exists(join(repoPath, 'bun.lock'))) ? 'bun' : 'npm'
+}
+const UI_DEPS = ['vite', 'react', 'vue', 'svelte', 'next', 'nuxt', 'lit', 'preact', 'solid-js', '@angular/core', '@sveltejs/kit', 'webpack']
+/** The package the UI lives in: the root when it has a framework or builder dependency, else the first workspace package that has one, else the root. */
+async function uiPackage(repoPath: string): Promise<string> {
+  const hasUi = (deps: Record<string, string>) => UI_DEPS.some((d) => d in deps)
+  if (hasUi(depsOf(await text(join(repoPath, 'package.json'))))) return '.'
+  for (const rel of (await tracked(repoPath, '*/package.json')).filter((p) => !p.includes('node_modules/') && p.split('/').length <= 3)) {
+    if (hasUi(depsOf(await text(join(repoPath, rel))))) return dirname(rel)
+  }
+  return '.'
+}
+const dlx = (pm: Pm, yarn2: boolean, args: string[]): [string, string[]] => pm === 'pnpm' ? ['pnpm', ['dlx', ...args]] : pm === 'bun' ? ['bunx', args] : pm === 'yarn' && yarn2 ? ['yarn', ['dlx', ...args]] : ['npx', ['-y', ...args]]
+const addDev = (pm: Pm, pkg: string): [string, string[]] => pm === 'pnpm' ? ['pnpm', ['add', '-D', pkg]] : pm === 'yarn' ? ['yarn', ['add', '-D', pkg]] : pm === 'bun' ? ['bun', ['add', '-d', pkg]] : ['npm', ['install', '-D', pkg]]
+const lastLine = (e: unknown) => { const x = e as { stdout?: string; stderr?: string; message?: string }; return `${x.stderr ?? ''}\n${x.stdout ?? ''}\n${x.message ?? ''}`.split('\n').map((l) => l.trim()).filter(Boolean).slice(-1)[0] ?? 'no output' }
+const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+/** The stories folder's prefix from main's first `stories` glob (a glob under ../src gives "../src/"), for the flowGlob and the first map. */
+export function storiesPrefix(mainText: string): string {
+  const m = /["'`](\.\.?\/[^"'`*]*)\*/.exec(mainText)
+  return m ? m[1].replace(/\/?$/, '/') : '../src/'
+}
+const execFileP = promisify(execFile)
+const installRun: Run = (file, args, cwd) => execFileP(file, args, { cwd, timeout: 10 * 60_000, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, CI: '1', BROWSER: 'none' } })
+
+export interface Install { did: string[]; left: string[] }
+export async function installStorybook(ctx: StorybookContext, deps: StorybookDeps = {}): Promise<Install> {
+  const repo = ctx.repoPath!
+  const run = deps.run ?? installRun
+  const did: string[] = []
+  const left: string[] = []
+  const status = async () => (await execFileP('git', ['status', '--porcelain'], { cwd: repo })).stdout.split('\n').filter(Boolean) // untrimmed: the first column can be a space
+  const before = new Set(await status()) // the person's own changes, left alone
+  const pm = await pmOf(repo)
+  const yarn2 = await exists(join(repo, '.yarnrc.yml'))
+  let mains = await tracked(repo, '*.storybook/main.*')
+  const where = mains.length ? relative(repo, dirname(dirname(join(repo, mains[0])))) || '.' : await uiPackage(repo)
+  const pkgDir = join(repo, where)
+  const prefix = where === '.' ? '' : `${where}/`
+  if (!mains.length) {
+    const [file, args] = dlx(pm, yarn2, ['storybook@latest', 'init', '--yes', '--no-dev', '--features', 'docs', '--package-manager', pm === 'yarn' ? (yarn2 ? 'yarn2' : 'yarn1') : pm, '--no-agent', '--disable-telemetry'])
+    try { await run(file, args, pkgDir); did.push(`Installed Storybook in ${where} with its own installer, docs only.`) } catch (e) { return { did, left: [`Storybook's installer failed in ${where}: ${lastLine(e)}. Run \`${file} ${args.join(' ')}\` there and see.`] } }
+    mains = await tracked(repo, `${prefix}.storybook/main.*`)
+    if (!mains.length) return { did, left: [`The installer ran in ${where}, but there is no .storybook/main.* there.`] }
+  }
+  const main = mains[0]
+  const sbDir = dirname(join(repo, main))
+  const pkg = { ...depsOf(await text(join(repo, 'package.json'))), ...depsOf(await text(join(pkgDir, 'package.json'))) }
+  if (pkg.storybook && major(pkg.storybook) < 10) return { did, left: [`Storybook ${pkg.storybook} in ${where}: the screen map's add-on needs Storybook 10. Upgrade it (npx storybook@latest upgrade) and press again.`] }
+  if (!pkg[ADDON]) {
+    const [file, args] = addDev(pm, ADDON)
+    try { await run(file, args, pkgDir); did.push(`Added ${ADDON} as a dev dependency in ${where}.`) } catch (e) { left.push(`Adding ${ADDON} in ${where} failed: ${lastLine(e)}.`) }
+  }
+  if (!(await exists(join(sbDir, 'story-flow.css')))) { await writeFile(join(sbDir, 'story-flow.css'), STORY_FLOW_CSS); did.push(`Wrote ${prefix}.storybook/story-flow.css.`) }
+  let mainText = await text(join(repo, main))
+  const stories = storiesPrefix(mainText)
+  if (!mainText.includes('storybook-addon-story-flow')) {
+    const m = /(["']?addons["']?\s*:\s*\[)/.exec(mainText)
+    if (m) {
+      mainText = mainText.replace(m[1], `${m[1]}\n    { name: "${ADDON}", options: { flowGlob: "${stories}**/*.flow.json" } },`)
+      await writeFile(join(repo, main), mainText)
+      did.push(`Wired the add-on into ${main}, flowGlob ${stories}**/*.flow.json.`)
+    } else left.push(`${main} has no addons list: add { name: "${ADDON}", options: { flowGlob: "${stories}**/*.flow.json" } } to it.`)
+  }
+  const preview = (await tracked(repo, `${prefix}.storybook/preview.*`))[0]
+  if (!preview) { await writeFile(join(sbDir, 'preview.ts'), "import './story-flow.css'\n\nexport default {}\n"); did.push(`Wrote ${prefix}.storybook/preview.ts with the stylesheet import.`) }
+  else if (!(await text(join(repo, preview))).includes('story-flow.css')) {
+    const lines = (await text(join(repo, preview))).split('\n')
+    let last = -1
+    lines.forEach((l, i) => { if (/^import\b/.test(l)) last = i })
+    lines.splice(last + 1, 0, "import './story-flow.css'")
+    await writeFile(join(repo, preview), lines.join('\n'))
+    did.push(`Imported story-flow.css in ${preview}.`)
+  }
+  if (pkg['@storybook/addon-vitest'] && !(await flowsExcluded(repo, prefix))) left.push(`Exclude '**/*.flow.json' from the storybook vitest project in ${where} (test.exclude), or the story tests import each flow file as a test.`)
+  let flows = await tracked(repo, '*.flow.json')
+  if (!flows.length) {
+    const base = resolve(sbDir, stories)
+    const dir = (await exists(join(base, 'stories'))) ? join(base, 'stories', 'flows') : join(base, 'flows')
+    const page = (await tracked(repo, '*Page.stories.*')).length > 0
+    const flow = {
+      $schema: 'https://zigbang.github.io/storybook-addon-story-flow/flow.schema.json',
+      epic: ctx.app.name,
+      title: `${ctx.app.name}/Map`,
+      scenarios: [{ id: 'start', label: 'The first screen' }],
+      nodes: page ? [{ id: 'page', data: { label: "Page (the installer's example)", coverage: 'existing', tags: ['/'], scenarios: ['start'], stories: [{ id: 'example-page--logged-out', label: 'Logged out' }, { id: 'example-page--logged-in', label: 'Logged in' }] } }] : [],
+      edges: [],
+    }
+    await mkdir(dir, { recursive: true })
+    const file = join(dir, `${slug(ctx.app.name)}.flow.json`)
+    await writeFile(file, `${JSON.stringify(flow, null, 2)}\n`)
+    did.push(`Wrote a first map, ${relative(repo, file)}${page ? ", with the installer's example page as its first screen" : ', with no screens yet'}.`)
+    flows = [relative(repo, file)]
+  }
+  const readme = (await tracked(repo, 'README.md'))[0] ?? (await tracked(repo, 'readme.md'))[0]
+  if (readme && !/screen map/i.test(await text(join(repo, readme)))) {
+    const start = pm === 'npm' ? 'npm run storybook' : `${pm} storybook`
+    await appendFile(join(repo, readme), `\n## The screen map\n\nStorybook (\`${start}\`${where === '.' ? '' : `, in ${where}`}) draws a map of the screens from \`${dirname(flows[0])}/*.flow.json\`: open the Map page under Docs and zoom out. Add a screen by adding its page story to a node there, whole screens only.\n`)
+    did.push(`Added "The screen map" to ${readme}.`)
+  }
+  if (did.length) { // one commit of what the install touched (new or changed since `before`), the person's own changes left as they were
+    const paths = (await status()).filter((l) => !before.has(l)).map((l) => l.slice(3))
+    const { remote, base } = await remoteAndBase(repo, ctx.app.defaultBranch, run)
+    did.push(await commitOnBase(run, repo, { remote: remote?.name ?? 'origin', base, paths, subject: `Set up Storybook for ${ctx.app.name}`, body: 'Installed by Self Evident to the house standard: Storybook with the screen map add-on, its stylesheet and a first map. Set up Storybook under Integrations › Storybook does it again.' }))
+  }
+  return { did, left }
+}
+
+const installDoc = fileURLToPath(new URL('../../docs/integrations/storybook.md', import.meta.url))
+/** The job for the agent when a step could not be done from here: the integration's own document, to finish without asking. */
+export async function installAsk(): Promise<string> {
+  return `Finish setting up Storybook in this repo to the house standard, without asking: these are the standard, not choices. The integration's document follows; its Installation section is the order of steps, and Self Evident has done the ones it said it did.\n\n${await readFile(installDoc, 'utf8')}`
+}

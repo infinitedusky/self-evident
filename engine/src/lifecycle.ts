@@ -74,6 +74,21 @@ export function pathFilters(yaml: string): string[] {
   return [...new Set(out)]
 }
 
+/** The first remote (origin preferred), parsed, and the base branch: the remote's HEAD, else the app's default branch, else main. */
+export async function remoteAndBase(root: string, fallbackBase: string | undefined, run: Run): Promise<{ remote: Facts['remote']; base: string }> {
+  const tryRun = async (args: string[]) => { try { return (await run('git', args, root)).stdout.trim() } catch { return null } }
+  const remotes = ((await tryRun(['remote'])) ?? '').split('\n').filter(Boolean)
+  const remoteName = remotes.includes('origin') ? 'origin' : remotes[0]
+  let remote: Facts['remote'] = null
+  if (remoteName) {
+    const url = await tryRun(['remote', 'get-url', remoteName])
+    const m = url && /^(?:https?:\/\/|ssh:\/\/)?(?:[^@/]+@)?([^/:]+)[/:](.+?)(?:\.git)?\/?$/.exec(url)
+    if (m) remote = { name: remoteName, host: m[1], fullName: m[2] }
+  }
+  const base = (await tryRun(['symbolic-ref', '--short', `refs/remotes/${remoteName ?? 'origin'}/HEAD`]))?.replace(/^[^/]+\//, '') || fallbackBase || 'main'
+  return { remote, base }
+}
+
 /** Reads the repository: git for the remote and the base, gh for how the forge merges, the files for the rest. Nothing here fails the set-up: what cannot be read falls back to the house default. */
 export async function repoFacts(repoPath: string, fallbackBase: string | undefined, deps: { run: Run; read: ReadText }): Promise<Facts> {
   const root = repoPath.replace(/\/$/, '')
@@ -83,15 +98,9 @@ export async function repoFacts(repoPath: string, fallbackBase: string | undefin
   const has = (p: string) => files.has(p)
   const under = (prefix: string) => [...files].filter((f) => f.startsWith(prefix))
 
-  const remotes = ((await tryRun('git', ['remote'])) ?? '').split('\n').filter(Boolean)
-  const remoteName = remotes.includes('origin') ? 'origin' : remotes[0]
-  let remote: Facts['remote'] = null
-  if (remoteName) {
-    const url = await tryRun('git', ['remote', 'get-url', remoteName])
-    const m = url && /^(?:https?:\/\/|ssh:\/\/)?(?:[^@/]+@)?([^/:]+)[/:](.+?)(?:\.git)?\/?$/.exec(url)
-    if (m) remote = { name: remoteName, host: m[1], fullName: m[2] }
-  }
-  let base = (await tryRun('git', ['symbolic-ref', '--short', `refs/remotes/${remoteName ?? 'origin'}/HEAD`]))?.replace(/^[^/]+\//, '') || fallbackBase || 'main'
+  const rb = await remoteAndBase(root, fallbackBase, deps.run)
+  const remote = rb.remote
+  let base = rb.base
   let mergeStyle: Facts['mergeStyle'] = 'merge'
   const templates = ['.github/PULL_REQUEST_TEMPLATE.md', '.github/pull_request_template.md', 'PULL_REQUEST_TEMPLATE.md', 'pull_request_template.md', 'docs/PULL_REQUEST_TEMPLATE.md', 'docs/pull_request_template.md']
   let prTemplate = templates.find(has) ?? null
