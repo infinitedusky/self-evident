@@ -1849,3 +1849,41 @@ over the check's line plus the screen-map standard; off or incomplete values, or
 `showTalk`) and answers with what was done. UI: one button under a failed check, "Set up what's missing" (tkt) or
 "Set up the screen map" (Storybook), with a note of what happened; the action no longer sits in the lists below.
 Tests: `tkt.test.ts`, "set up what's missing".
+
+## Set-up in one press (Sandy, 2026-11-09: "this is still a really annoying process … we need a way to do it fast and consistent … set it up")
+
+**What happened.** Sandy pressed "Set up what's missing" on Ragdoll Golf's tkt page. The engine wrote nothing (the
+tracker guide was already right) and the agent came back with a five-item yes/no list, two items for Sandy to do by
+hand: type `/setup-rogs` (an interactive skill only a person can start) and download tkt's release build in a
+browser (git.rogs.me sits behind a Cloudflare challenge). Sandy: "this is still a really annoying process", then "we
+need a way to do it fast and consistent", and, on the proposal, "set it up". Then the wider rule: "for all the
+integrations there has to be a default where I can just put the integration and say set up".
+
+**What tkt actually needs** (read in tkt's source, `internal/lifecycle/lifecycle.go`, and the skills' contract,
+`setup-rogs/references/contract.md`): two marked files, `docs/agents/issue-tracker.md` with a backticked ticket-id
+pattern and `docs/agents/forge.md` with Remote and Base branch lines; `workflow.md`'s feature table decides what tkt
+may run unattended. The rest (domain, the pull request template, the CLAUDE.md block) the skills read. Every blank
+in the seeds is a fact Self Evident has or can read, or a house default (SHAPE.md, "The house profile").
+
+**Built** (branch `tkt-house-config`). Engine: `lifecycle.ts`: `repoFacts` (git for the remote and the base, gh for
+the merge style and templates, the files for CI workflows and their path filters, package scripts, pnpm workspaces,
+hook runners, the glossary, where the block goes), `houseConfig` (fills the seeds in `docs/lifecycle/`, MIT from
+gitlab.com/rogs/skills, and throws on a blank left unfilled), `writeHouse` (writes files that are new or carry
+"Self Evident wrote it", leaves the person's alone, replaces the block in place or appends it, starts CLAUDE.md when
+there is none). `setupTkt` (`tkt.ts`) now: the tracker guide, the house configuration, `tkt hook claude --install
+--shared` and `tkt hook tmp --install` when doctor misses them, a commit on the base branch pushed (said plainly
+when the checkout is on another branch or the push is refused), then the check; the agent gets only tkt itself and
+what doctor still flags, the pi warning left out. Proof: the generator filled a throwaway repo and `tkt doctor`
+there answered `ok lifecycle tickets match ^PB-[1-9][0-9]*$; forge GitHub infinitedusky/probe, base origin/main`.
+Storybook: a switch (`on`), the command and URL optional with defaults from the repo (`storybookDefaults`,
+`storybookValues`); the start-up move also switches on apps that had values. Fields gained `states` (what on and off
+mean), so the UI's switch copy is the integration's own. UI: the switch copy from `states`, the default shown where
+a value is unset, the tracker-guide footer no longer sends anyone to `/setup-rogs`. Tests: `lifecycle.test.ts`,
+`tkt.test.ts` ("set up what's missing", with a fake machine: tkt, git, gh), `storybook.test.ts`.
+
+**Also found.** The engine answering on port 4000 was a `pnpm dev` from Saturday evening that outlived its session;
+the launchd agent's own engine crashed on every restart with EADDRINUSE. Same checkout, so current code, but wrong:
+fixed by stopping the stray and kickstarting the agent.
+
+**Next.** Installing Storybook to the standard when the repo has none (the same button, no questions); the Prototype
+environment as an integration; the Sketches slot.

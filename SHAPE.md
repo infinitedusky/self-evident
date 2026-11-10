@@ -452,19 +452,45 @@ Details and sources in `research/`.
 
 - **Storybook is an integration, per app** (Sandy, 2026-11-09: "it should be a storybook integration and we should
   ensure that we have story flow add on"). Its command and URL moved from the app's Settings to Integrations ›
-  Storybook (role Mockups). Its check reads the repo for the standard: Storybook 10, the screen map add-on
+  Storybook (role Mockups); since the same day it is a switch there, the command and URL overriding the repo's
+  defaults. Its check reads the repo for the standard: Storybook 10, the screen map add-on
   (@zigbang/storybook-addon-story-flow) wired with a flow glob, its stylesheet imported, the flow files kept out of
   the story tests, a map; then whether it answers. First thing wrong is the answer. Its actions are buttons: Start,
   Open the map, Set up the screen map (the agent, in a conversation in the repo, asks before each file). The
   Prototype settings (the command and throwaway database for running the app itself) stay the app's own.
 
-- **Set up what's missing** (Sandy, 2026-11-09: "can we add a step with tkt where it auto configures anything
-  missing?"). A per-app integration whose check fails gets one button under the check. The engine does what is its
-  own (tkt: the tracker guide, written into the checkout, uncommitted), checks again, and hands the rest to the agent
-  in a conversation in the repo, in the tool's own words: tkt's check line and `tkt doctor`'s fail and warn lines
-  with their hints; Storybook's check line and the screen-map standard. The agent confirms each install and each
-  file change. This amends "tkt is the runner": Self Evident still configures nothing of tkt's by hand, but it asks
-  the agent to, and says what it did.
+- **Set up what's missing, in one press** (Sandy, 2026-11-09: "can we add a step with tkt where it auto configures
+  anything missing?"; then, when the first version handed a five-item yes/no list back: "this is still a really
+  annoying process … we need a way to do it fast and consistent"). A per-app integration whose check fails gets one
+  button under the check. For tkt the engine writes everything tkt and its skills read from the repo, itself: the
+  tracker guide, `docs/agents/forge.md`, `workflow.md`, `domain.md`, `pull-request.md` and the Ticket lifecycle
+  block in CLAUDE.md, filled from the app, the repo (remote, base branch, merge style through gh, CI workflows,
+  package scripts) and the house profile below; installs tkt's hooks with tkt's own installer (the shared settings
+  file, so Self Evident's agents get them too); commits on the base branch and pushes, since tkt reads the
+  configuration from there; checks again. Only what cannot be computed goes to the agent, in tkt's words (tkt itself
+  missing, whatever `tkt doctor` still flags). The pi warning is not one of them: pi runs tkt's own chat, which
+  Self Evident stands in for. A file is rewritten only while it carries the line "Self Evident wrote it"; take the
+  line out and it is the person's. This amends "tkt is the runner": Self Evident still installs nothing of tkt's by
+  hand, but it writes what tkt reads, and says what it did.
+
+- **Every integration has a default set-up** (Sandy, 2026-11-09: "for all the integrations there has to be a default
+  where I can just put the integration and say set up and it'll just set it up in a default configuration. So for
+  Storybook for instance, like it's asking me to choose a bunch of stuff that is part of setting up the project").
+  Adding an integration to an app is a switch; its values have defaults read from the repo, and the person sets one
+  only when the default is wrong. Storybook's command and URL default to the repo's `storybook` script run with the
+  repo's package manager and `--no-open`, and the port the script names (else 6006). Set up what's missing then does
+  the rest without a question. Still to come: installing Storybook to the standard when the repo has none.
+
+- **The house profile** (2026-11-09). The one default every app's lifecycle configuration gets, apart from its own
+  facts: worktrees at `../<repo>-wt/<ticket id>` beside the checkout; the glossary in `GLOSSARY.md` (or the
+  `CONTEXT.md` the repo already keeps) and ADRs in `docs/adr/`; the block in CLAUDE.md (AGENTS.md when CLAUDE.md
+  only points at it; CLAUDE.md created when neither exists); the verification commands from the package scripts
+  (`lint && typecheck && test`), one focused check per pnpm workspace package with tests; commits that follow recent
+  history; every workflow feature off to begin with (bundles, browser pass, model routing, client notes, plan review,
+  plan presentation, taste pass, changelog, agent verification, autonomous runs, CI review), since Self Evident runs
+  those stages itself; pull requests from `docs/agents/pull-request.md` unless the repo has its own template; the
+  forge GitHub only, for now. Decided by Sandy's "set it up" to the proposal of 2026-11-09; the toggles come to the
+  app's Settings when wanted.
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
