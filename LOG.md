@@ -1994,3 +1994,16 @@ agents run without permission prompts, and Self Evident's main checkout is the r
 
 Next: Sandy's three Linear steps; then Integrations › Linear for Ragdoll Golf (team, key variable), the switch, and one
 press of Set up what's missing; then the first ticket through each system.
+
+### The tracker wiring, removed and put back (2026-11-10)
+
+I misread Sandy twice in one afternoon. "TKT is never using Self Evident" and "the wiring goes away" were about the
+test: Sandy wants to watch tkt with no Self Evident in the loop. I took them as a change to the product and removed
+tkt's reading from Self Evident altogether (PR #113). Sandy: "I wasn't asking you to change the way those two
+interacted with each other. I was just trying to be able to test it without any interaction." #113 is reverted. What
+stands: tkt pulls from Self Evident; Self Evident is to pull from Linear (not built, it only pushes today); the
+"Tickets live in Linear" switch from #112 stays, as the way to run tkt on its own for one app (SHAPE.md, "tkt reads
+from Self Evident; a switch lets it run on its own against Linear").
+
+Lesson for the factory: when a request could mean "for this test" or "for the product", ask which before building.
+
