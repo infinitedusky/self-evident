@@ -1,5 +1,5 @@
 /**
- * Linear as the home of an app's tickets: what is asked of Linear and how its answer becomes the tracker guide tkt's
+ * Linear as the home of an app's tickets, the only one tkt is ever pointed at: what is asked of Linear and how its answer becomes the tracker guide tkt's
  * skills read. Linear itself is a fake here (made-up team "Shop", key SHOP).
  */
 import { describe, expect, it } from 'vitest'
@@ -21,7 +21,7 @@ describe('finding the team', () => {
   })
   it('says in words what is missing, and never guesses', async () => {
     const problem = async (...a: Parameters<typeof linearFor>) => ((await linearFor(...a)) as { trackerProblem: string }).trackerProblem
-    expect(await problem({}, {}, fetchShop)).toMatch(/Linear isn't set for this app/)
+    expect(await problem({}, {}, fetchShop)).toMatch(/no Linear team is set for it/)
     expect(await problem({ team: 'SHOP', key_env: 'LINEAR_API_KEY' }, {}, fetchShop)).toMatch(/LINEAR_API_KEY isn't set in the engine's environment/)
     expect(await problem({ team: 'NOPE', key_env: 'K' }, { K: 'k' }, fetchShop)).toMatch(/sees no team with key NOPE/)
     expect(await problem({ team: 'SHOP', key_env: 'K' }, { K: 'k' }, async () => { throw new Error('Authentication required\nmore') })).toBe('Linear refused the lookup of team SHOP: Authentication required')
@@ -42,14 +42,13 @@ describe('the states', () => {
 })
 
 describe('the words about a ticket', () => {
-  it('use the team\'s key and Linear\'s address when the tickets live there, else the app\'s', () => {
+  it('use the team\'s key and Linear\'s address, and refuse to make any up without a team', () => {
     expect([ticketKey(ctx), ticketUrl(ctx, 'SHOP-12'), trackerWords(ctx)]).toEqual(['SHOP', 'https://linear.app/sample-co/issue/SHOP-12', 'Linear, the team Shop (SHOP)'])
-    const here = { ...ctx, linear: undefined }
-    expect([ticketKey(here), ticketUrl(here, 'SCR-12'), trackerWords(here)]).toEqual(['SCR', 'http://localhost:5180/tasks/SCR-12', 'Self Evident, the app tkt scratch (SCR)'])
+    expect(() => ticketKey({ ...ctx, linear: undefined })).toThrow(/no Linear team/)
   })
 })
 
-describe('the tracker guide, for Linear', () => {
+describe('the tracker guide', () => {
   it('comes out filled for the team, with every section the skills check and no blank left', async () => {
     const g = await trackerGuide(ctx)
     expect(g.split('\n')[0]).toBe('<!-- rogs-skills config v1: issue-tracker -->')
@@ -71,18 +70,18 @@ describe('the tracker guide, for Linear', () => {
   })
 })
 
-describe('the check and the set-up, for Linear', () => {
+describe('the check and the set-up', () => {
   const tkt = async (file: string, args: string[]) => { if (file === 'tkt' && args[0] === '--version') return { stdout: 'tkt version v0.21.2\n', stderr: '' }; if (file === 'tkt' && args[0] === 'doctor') return { stdout: 'ok\n', stderr: '' }; throw new Error(`unexpected ${file} ${args.join(' ')}`) }
   const files = (map: Record<string, string>) => async (p: string) => { if (p in map) return map[p]; throw Object.assign(new Error(`ENOENT ${p}`), { code: 'ENOENT' }) }
   it('passes on a guide that names the team, and names what a guide for Self Evident or another team is', async () => {
     const at = `/code/scratch/${GUIDE_PATH}`
     const good = await trackerGuide(ctx)
     expect(await checkTkt(ctx, { run: tkt, read: files({ [at]: good }) })).toEqual({ ok: true, detail: 'tkt v0.21.2; doctor passes in /code/scratch; the tracker guide points at SHOP in Linear.' })
-    expect((await checkTkt(ctx, { run: tkt, read: files({ [at]: await trackerGuide({ ...ctx, linear: undefined }) }) })).detail).toMatch(/points at another tracker \(Self Evident\), not Linear/)
+    expect((await checkTkt(ctx, { run: tkt, read: files({ [at]: '## Tracker\n\n- Kind: Self Evident\n' }) })).detail).toMatch(/points at another tracker \(Self Evident\), not Linear/)
     expect((await checkTkt(ctx, { run: tkt, read: files({ [at]: good.replace(/team-uuid-1/g, 'team-uuid-2') }) })).detail).toMatch(/names another Linear team, not SHOP \(Shop\)/)
   })
   it('stops, writing nothing, while Linear cannot be reached as set', async () => {
-    const stuck: TktContext = { ...ctx, linear: undefined, trackerProblem: 'Tickets are set to live in Linear, but LINEAR_API_KEY isn\'t set in the engine\'s environment. Add it there and restart the engine.' }
+    const stuck: TktContext = { ...ctx, linear: undefined, trackerProblem: 'tkt reads this app\'s tickets from Linear, but LINEAR_API_KEY isn\'t set in the engine\'s environment. Add it there and restart the engine.' }
     expect((await checkTkt(stuck, { run: tkt, read: files({}) })).detail).toBe(stuck.trackerProblem)
     const wrote: string[] = []
     const r = await setupTkt(stuck, { run: tkt, read: files({}), write: async (p) => { wrote.push(p) } })

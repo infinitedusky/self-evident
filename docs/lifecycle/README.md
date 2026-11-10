@@ -9,11 +9,10 @@ carries it.
 
 `/setup-rogs` fills these by asking. Self Evident fills them itself, for an app, in one press (Set up what's missing
 under Integrations › tkt): every blank is a fact about the app or its repository, or the house default written in
-SHAPE.md ("The house profile"). The code is `engine/src/lifecycle.ts`; the tracker guide (`issue-tracker.md`) has
-its own seed, `docs/tracker-self-evident.md`, filled by `engine/src/tkt.ts`. When an app's tickets live in Linear
-(tkt's "Tickets live in Linear" switch), the guide comes from `tracker-linear.md` instead, the skills' Linear guide
-copied unchanged on 2026-11-10: its Tracker blanks are filled from the team Integrations › Linear names, and its States
-from the team's own states (`engine/src/linear-home.ts`).
+SHAPE.md ("The house profile"). The code is `engine/src/lifecycle.ts`. The tracker guide (`issue-tracker.md`) comes
+from `tracker-linear.md`, the skills' Linear guide copied unchanged on 2026-11-10: tkt reads its tickets from Linear and
+never from Self Evident, so its Tracker blanks are filled from the team Integrations › Linear names and its States from
+the team's own states (`engine/src/linear-home.ts`, `engine/src/tkt.ts`).
 
 When the skills' contract moves to a new version, copy the new assets here, keep the ownership line, and update the
 fills in `lifecycle.ts`; its test fails on any blank left unfilled.
