@@ -2007,3 +2007,27 @@ from Self Evident; a switch lets it run on its own against Linear").
 
 Lesson for the factory: when a request could mean "for this test" or "for the product", ask which before building.
 
+
+### tkt on its own, tried and put down (2026-11-10, evening)
+
+Sandy tried tkt alone on Ragdoll Golf against Linear (team RSA, switch on, set-up pressed: Ragdoll `9e9361b`). The
+real Linear lookup worked first time. No ticket ever ran. What stood in the way, in order:
+
+- tkt's chat (pi) had no model: a second sign-in, in the terminal only, billed per token; the page showed nothing.
+- The chat cannot create tickets; `create-ticket` is a Claude Code skill.
+- The chat reads the ticket key once, at start. It had started under `RG`, so `/start RSA-804` only printed usage.
+- worktrunk named the worktree `ragdoll-golf.RSA-804`; tkt needs the folder to be the ticket id. The entry in
+  `~/.config/worktrunk/config.toml` is keyed by the repository's identifier (`github.com/owner/repo`), not its path.
+  The chat said "Queued" and never reported the failure.
+- Claude Code's trust question for the new folder.
+
+Sandy: "I am starting to wonder if we need this at all … this just seems cumbersome", then "agreed lets just improve
+self evident." The read we agreed on: tkt is the mechanical glue (a worktree, a tab, a prompt per stage, a loop);
+the thinking is in the skills (`start-ticket`, `work-ticket`, `review-pr`, `verify-pr`, `finish-ticket`), which run
+without it. Self Evident already makes worktrees and runs agents. What it lacks is the back half of the loop:
+independent review in a fresh session, verification steps, the merge, each with a stop for a person. That comes from
+the skills, with Self Evident driving. RSA-804's worktree was dropped; nothing was removed from Self Evident.
+
+Not decided: whether the tkt integration leaves the product, and what Ragdoll Golf's tracker file should now say (it
+points at Linear). Gaps set-up had, if tkt stays: the worktrunk entry, restarting a running chat after the tracker
+changes, and `docs/agents/forge.md` keeping the old `RG` ticket link.
