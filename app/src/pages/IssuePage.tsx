@@ -14,8 +14,8 @@ import { Badge, type Tone } from '../components/Badge'
 import { Brief } from '../components/Brief'
 import { askStep, useSteps } from '../components/StepsPanel'
 import { StepSection } from '../components/StepSection'
-import { TaskNav } from '../components/TaskNav'
-import { label, type StepKey } from '@self-evident/engine/steps'
+import { mark, TaskNav } from '../components/TaskNav'
+import { finished, label, step, type Row, type StepKey } from '@self-evident/engine/steps'
 import { STATUS_TONE } from '../components/PlanGraphView'
 import { openEvents, type Events, API, engine, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState } from '../engine'
 
@@ -131,7 +131,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
         )}
         {row && (
           <StepSection subject={subject} appId={i.appId} name={i.title} row={row} base={base} fromIdea={v.fromIdea} waitingState={rows.find((r) => r.key === row.waitingOn)?.state}>
-            {row.key === 'brief' ? <BriefStep i={i} busy={busy} act={act} locked={!!row.waitingOn} /> : undefined}
+            {row.key === 'brief' ? <BriefStep i={i} busy={busy} act={act} feeds={rows.filter((r) => r.key !== 'brief')} base={base} /> : undefined}
           </StepSection>
         )}
         {here === 'build' && (buildWaits
@@ -145,27 +145,53 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   )
 }
 
-/** The brief's page: the brief, and its approval. */
-function BriefStep({ i, busy, act, locked }: { i: IssueDetail; busy: boolean; act: (fn: () => Promise<unknown>) => Promise<void>; locked: boolean }) {
+/**
+ * What the brief stands on: the steps that feed it, each with what it has so far and a way to it. The brief is their
+ * parent (Sandy, 2026-11-10: "the brief would include references to assets that we produce").
+ */
+function StandsOn({ feeds, base }: { feeds: Row[]; base: string }) {
+  if (!feeds.length) return null
+  return (
+    <div className="brief-stands" data-component="BriefStandsOn">
+      <h3>What it stands on</h3>
+      <ul className="list">
+        {feeds.map((r) => (
+          <li key={r.key} className="brief-stands-row">
+            <span className={`task-nav-mark ${finished(r.state, 'task') ? 'ok' : ''}`}>{mark(r, 'task')}</span>
+            <Link to={`${base}/${r.key}`}>{step(r.key).icon} {label(r.key, 'task')}</Link>
+            <span className="faint">{r.state.status === 'none' ? 'not started' : r.state.detail ?? (r.state.status === 'done' ? 'done' : 'started')}</span>
+            {r.required && !finished(r.state, 'task') && <Badge tone="warn">required</Badge>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/** The brief's page: the brief, what it stands on, and its approval, which waits for the required steps. */
+function BriefStep({ i, busy, act, feeds, base }: { i: IssueDetail; busy: boolean; act: (fn: () => Promise<unknown>) => Promise<void>; feeds: Row[]; base: string }) {
   const [asked, setAsked] = useState(false)
+  const owed = feeds.filter((r) => r.required && !finished(r.state, 'task'))
   if (!i.brief?.trim()) return (
     <div>
-      <p className="faint">No brief yet. A task is built from an approved brief.</p>
-      {!locked && <div className="step-actions">
+      <p className="faint">No brief yet. Every step here feeds it, and the task is built from it once it's approved.</p>
+      <div className="step-actions">
         <button className="btn" disabled={busy || asked} onClick={() => act(async () => { await askStep({ kind: 'issues', id: i.id }, i.appId, i.title, 'brief', 'task'); setAsked(true) })}>Write it with the agent</button>
         {asked && <span className="faint">Handed to the agent: it's in the agent panel.</span>}
-      </div>}
+      </div>
+      <StandsOn feeds={feeds} base={base} />
     </div>
   )
   return (
     <>
       <div className="md step-body"><Markdown remarkPlugins={[remarkGfm]}>{i.brief}</Markdown></div>
+      <StandsOn feeds={feeds} base={base} />
       <div className="brief-approval">
         {i.briefApprovedBy
           ? <><Badge tone="ok">brief approved</Badge><span className="faint">by {i.briefApprovedBy}{i.briefApprovedAt ? `, ${new Date(i.briefApprovedAt).toLocaleDateString()}` : ''}</span>
             <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.approveBrief(i.id, false))}>Withdraw</button></>
-          : locked
-          ? <span className="faint">Approval waits for the steps before it.</span>
+          : owed.length
+          ? <span className="faint">It can be approved once {owed.map((r, n) => <span key={r.key}>{n ? ', ' : ''}<Link to={`${base}/${r.key}`}>{label(r.key, 'task')}</Link></span>)} {owed.length === 1 ? 'is' : 'are'} done.</span>
           : <><Badge tone="warn">waiting for your approval</Badge><span className="faint">Planning and building wait for it.</span>
             <button className="btn small" disabled={busy} onClick={() => act(() => engine.approveBrief(i.id))}>Approve the brief</button></>}
       </div>
