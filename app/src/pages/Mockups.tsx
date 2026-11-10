@@ -29,7 +29,8 @@ export function Mockups({ story, session }: { story?: string; session?: string }
     const t = window.setInterval(poll, 2000) // until it answers: Storybook takes a few seconds to come up
     return () => { gone = true; window.clearInterval(t) }
   }, [app?.id, talk])
-  const at = s?.url ? (story ? `${s.url.replace(/\/$/, '')}/?path=/story/${encodeURIComponent(story)}` : s.url) : null
+  const base = s?.frame ?? s?.url // framed at the address the engine gives: Storybook only lets localhost frame it, so under a name it comes through the proxy
+  const at = base ? (story ? `${base.replace(/\/$/, '')}/?path=/story/${encodeURIComponent(story)}` : base) : null
   const start = async () => { if (!app) return; setStarting(true); try { await engine.startStorybook(app.id, talk) } catch (e: any) { setError(String(e.message ?? e)) } finally { setStarting(false) } }
 
   return (
