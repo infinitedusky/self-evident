@@ -12,13 +12,13 @@
  */
 import { LinearClient } from '@linear/sdk'
 import { checkStorybook, setupMapAsk, type Check, type StorybookContext } from './storybook.js'
-import { checkTkt, setupTkt, urls, type TktContext } from './tkt.js'
+import { checkTkt, setupTkt, urls, type Deps as TktDeps, type TktContext } from './tkt.js'
 
 /**
  * `secret` marks the field naming the key's variable; `required` ones must be set before it counts as connected.
  * A `switch` holds "true" or "false" instead of a value: on or off.
  */
-export interface Field { key: string; label: string; placeholder?: string; required?: boolean; secret?: boolean; kind?: 'switch' }
+export interface Field { key: string; label: string; placeholder?: string; required?: boolean; secret?: boolean; kind?: 'switch'; states?: { on: string; off: string } } // states: what on and off mean, for a switch
 /**
  * What can be done with it. A workflow step's action takes content from an earlier step and gives a link and an id
  * back. One with a `kind` is a button on the integration's page: `start` runs the tool, `link` opens what the check
@@ -38,23 +38,24 @@ export const INTEGRATIONS: Integration[] = [
     // tkt (gitlab.com/rogs/tkt), the runner: on for an app, it builds the app's tickets and Self Evident hands none to
     // its own planner. Nothing of tkt's is configured here (SHAPE.md, "tkt is the runner"); the check says what is wrong.
     key: 'tkt', name: 'tkt', role: 'Runner', does: 'Builds this app\'s tickets from their approved briefs: a worktree, a herdr tab, the lifecycle skills on the harness and model its preset says; the plan, the handoff, the review and the completion written back on the ticket',
-    fields: [{ key: 'on', label: 'Runs this app\'s tasks', kind: 'switch', required: true }],
+    fields: [{ key: 'on', label: 'Runs this app\'s tasks', kind: 'switch', required: true, states: { on: 'tkt builds this app\'s tickets; Self Evident hands none to its own planner', off: 'this app\'s tasks go to Self Evident\'s own planner and builder' } }],
     calls: true, perApp: true, docs: 'https://gitlab.com/rogs/tkt',
     actions: [
       { key: 'start', name: 'Start', does: '`tkt start <ticket>`: a worktree and a tab; start-ticket reads the ticket here, moves it to in progress and plans from the brief.' },
       { key: 'approve', name: 'Approve the plan', does: '`tkt approve <ticket>`: work-ticket builds, commits, opens the pull request and hands off on the ticket.' },
       { key: 'review', name: 'Review', does: '`tkt run <ticket> review`: review-pr in a fresh session, its verdict on the pull request; verify-pr runs the human verification steps.' },
       { key: 'merge', name: 'Merge and finish', does: '`tkt merge <ticket> --passed`, then `tkt done`: finish-ticket merges and moves the ticket to done.' },
-      { key: 'setup', name: 'Set up what\'s missing', does: 'Writes the tracker guide into the checkout when that is what is wrong; for the rest (tkt itself, herdr, worktrunk, the skills, whatever tkt doctor flags) hands the agent the job in tkt\'s own words, hints and all. It asks before installing anything.', kind: 'ask' },
+      { key: 'setup', name: 'Set up what\'s missing', does: 'Writes everything tkt and its skills read from the repo (the tracker guide, the forge, the workflow, the domain docs, the pull request template, the Ticket lifecycle block in CLAUDE.md) from the app, the repo and the house profile; installs tkt\'s hooks with tkt\'s own installer; commits to the base branch and pushes. Only what tkt itself still lacks goes to the agent.', kind: 'ask' },
     ],
   },
   {
     // Storybook, per app (SHAPE.md: the home of the design system, stories and mockups). Its command and URL were
     // plain app setup until 2026-11-09; the check reads the repo for the screen-map standard (storybook.ts).
     key: 'storybook', name: 'Storybook', role: 'Mockups', does: 'This app\'s mockups, as stories: the real ones, after the sketches; Mockups shows them inside Self Evident, the agent opens one to show what it means, and the screen map draws the app as the user walks it',
-    fields: [
-      { key: 'cmd', label: 'Command', placeholder: 'pnpm storybook --no-open (run in the checkout)', required: true },
-      { key: 'url', label: 'URL', placeholder: 'http://localhost:6006', required: true },
+    fields: [ // the switch is the integration; the command and URL have defaults read from the repo (storybookDefaults), set here only when those are wrong
+      { key: 'on', label: 'Mockups in Storybook', kind: 'switch', required: true, states: { on: 'this app\'s mockups are stories, checked against the standard', off: 'no Storybook for this app' } },
+      { key: 'cmd', label: 'Command', placeholder: 'default: the repo\'s storybook script, with --no-open' },
+      { key: 'url', label: 'URL', placeholder: 'default: http://localhost:6006, or the port the script names' },
     ],
     calls: true, perApp: true, docs: 'https://github.com/zigbang/storybook-addon-story-flow',
     actions: [
@@ -160,7 +161,7 @@ export function statuses(values: Values | Record<string, Record<string, Effectiv
 export class IntegrationError extends Error {}
 
 /** What a per-app check needs from the app: tkt's context, or Storybook's; `deps` only in tests. */
-export interface Local { tkt?: { ctx: TktContext; deps?: Parameters<typeof checkTkt>[1] }; storybook?: { ctx: StorybookContext; deps?: Parameters<typeof checkStorybook>[1] } }
+export interface Local { tkt?: { ctx: TktContext; deps?: TktDeps }; storybook?: { ctx: StorybookContext; deps?: Parameters<typeof checkStorybook>[1] } }
 
 /**
  * Tries the connection: signs in with the key and finds the team or space; for tkt, looks for the runner and the
@@ -179,7 +180,7 @@ export async function checkIntegration(key: string, values: Record<string, strin
   }
   if (key === 'storybook') {
     if (!local?.storybook) throw new IntegrationError('Storybook is set per app: check it from an app\'s Integrations')
-    if (st.state !== 'ready') return { ok: false, detail: `Missing: ${st.missing.join(', ')}.` }
+    if (st.state === 'off') return { ok: false, detail: 'Storybook is off for this app: switch it on and the check reads the repo.' }
     return checkStorybook(local.storybook.ctx, local.storybook.deps)
   }
   if (st.state === 'off' || st.state === 'incomplete') return { ok: false, detail: `Missing: ${st.missing.join(', ')}.` }
@@ -228,7 +229,7 @@ export async function setupIntegration(key: string, values: Record<string, strin
   }
   if (key === 'storybook') {
     if (!local?.storybook) throw new IntegrationError('Storybook is set per app: set it up from an app\'s Integrations')
-    if (st.state !== 'ready') return { done: false, did: [], ask: null, detail: `Missing: ${st.missing.join(', ')}. Set them with Edit first.` }
+    if (st.state === 'off') return { done: false, did: [], ask: null, detail: 'Storybook is off for this app: switch it on first.' }
     const check = await checkStorybook(local.storybook.ctx, local.storybook.deps)
     if (check.ok) return { done: true, did: [], ask: null, detail: check.detail }
     if (/^No local checkout/.test(check.detail)) return { done: false, did: [], ask: null, detail: `${check.detail} Set it under Settings › Repo first.` }

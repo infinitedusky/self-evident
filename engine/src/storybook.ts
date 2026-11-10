@@ -17,28 +17,67 @@ import { PlanError } from './projects.js'
 
 const running = new Map<string, { proc: ChildProcess; startedAt: Date; log: string[] }>()
 
-export interface StorybookSetup { url: string | null; cmd: string | null }
-/** The integration's values on an app; the keys they lived under before 2026-11-09 are still read until the start-up move. */
+export interface StorybookSetup { on: boolean; url: string | null; cmd: string | null }
+/**
+ * The integration's values on an app: the switch, and the command and URL when the person set them (otherwise the
+ * defaults from the repo, storybookValues). Before the switch (2026-11-09) a command or URL meant on; the keys the
+ * values lived under before the integration are still read until the start-up move.
+ */
 export function storybookSetup(setup: unknown): StorybookSetup {
-  const s = (setup ?? {}) as { integrations?: { storybook?: { url?: string; cmd?: string } }; storybook_url?: string; storybook_cmd?: string }
-  return { url: s.integrations?.storybook?.url?.trim() || s.storybook_url?.trim() || null, cmd: s.integrations?.storybook?.cmd?.trim() || s.storybook_cmd?.trim() || null }
+  const s = (setup ?? {}) as { integrations?: { storybook?: { on?: string; url?: string; cmd?: string } }; storybook_url?: string; storybook_cmd?: string }
+  const url = s.integrations?.storybook?.url?.trim() || s.storybook_url?.trim() || null
+  const cmd = s.integrations?.storybook?.cmd?.trim() || s.storybook_cmd?.trim() || null
+  const sw = s.integrations?.storybook?.on?.trim()
+  return { on: sw === undefined ? !!(url || cmd) : sw === 'true', url, cmd }
 }
-export const hasStorybook = (setup: unknown) => { const s = storybookSetup(setup); return !!(s.url || s.cmd) }
+export const hasStorybook = (setup: unknown) => storybookSetup(setup).on
 
-/** The old keys moved under the integration, once, when the engine starts; values already under it win. Returns how many apps moved. */
+/**
+ * The house defaults, read from the repo (Sandy, 2026-11-09: "for all the integrations there has to be a default where
+ * I can just put the integration and say set up"): the first package with a `storybook` script, the root first, run
+ * with the repo's package manager and --no-open; the URL from the port the script names, else Storybook's 6006.
+ */
+export async function storybookDefaults(repoPath: string): Promise<{ cmd: string; url: string } | null> {
+  const pkgs = ['package.json', ...(await tracked(repoPath, '*/package.json')).filter((p) => !p.includes('node_modules/'))]
+  const pm = (await exists(join(repoPath, 'pnpm-lock.yaml'))) ? 'pnpm' : (await exists(join(repoPath, 'yarn.lock'))) ? 'yarn' : (await exists(join(repoPath, 'bun.lockb'))) || (await exists(join(repoPath, 'bun.lock'))) ? 'bun' : 'npm'
+  for (const rel of pkgs) {
+    let script: string | undefined
+    try { script = (JSON.parse(await text(join(repoPath, rel))) as { scripts?: Record<string, string> }).scripts?.storybook } catch { continue }
+    if (!script) continue
+    const start = pm === 'npm' ? 'npm run storybook -- --no-open' : pm === 'bun' ? 'bun run storybook --no-open' : `${pm} storybook --no-open`
+    const port = /(?:^|\s)(?:-p|--port)(?:\s+|=)(\d+)/.exec(script)?.[1] ?? '6006'
+    const dir = dirname(rel)
+    return { cmd: dir === '.' ? start : `cd ${dir} && ${start}`, url: `http://localhost:${port}` }
+  }
+  return null
+}
+/** The values in force for an app: its own where set, the repo's defaults for the rest; nothing when it is off. */
+export async function storybookValues(setup: unknown, repoPath: string | null): Promise<StorybookSetup> {
+  const s = storybookSetup(setup)
+  if (!s.on || (s.url && s.cmd) || !repoPath) return s
+  const d = await storybookDefaults(repoPath)
+  return { on: s.on, url: s.url ?? d?.url ?? null, cmd: s.cmd ?? d?.cmd ?? null }
+}
+
+/**
+ * Once, when the engine starts: the old keys move under the integration (values already under it win), and an app with
+ * a command or URL but no switch gets the switch on, since having them meant on. Returns how many apps changed.
+ */
 export async function migrateStorybookSetup(): Promise<number> {
-  const r = await db.execute(sql`update app set setup = (setup - 'storybook_url' - 'storybook_cmd')
+  const moved = await db.execute(sql`update app set setup = (setup - 'storybook_url' - 'storybook_cmd')
     || jsonb_build_object('integrations', coalesce(setup->'integrations', '{}'::jsonb)
       || jsonb_build_object('storybook', jsonb_strip_nulls(jsonb_build_object('url', setup->>'storybook_url', 'cmd', setup->>'storybook_cmd')) || coalesce(setup->'integrations'->'storybook', '{}'::jsonb)))
     where setup ? 'storybook_url' or setup ? 'storybook_cmd'`)
-  return r.rowCount ?? 0
+  const switched = await db.execute(sql`update app set setup = jsonb_set(setup, '{integrations,storybook,on}', '"true"'::jsonb)
+    where (setup->'integrations'->'storybook' ? 'cmd' or setup->'integrations'->'storybook' ? 'url') and not (setup->'integrations'->'storybook' ? 'on')`)
+  return (moved.rowCount ?? 0) + (switched.rowCount ?? 0)
 }
 
 async function setupOf(appId: string) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError(`no app ${appId}`)
   const [r] = await db.select().from(repo).where(eq(repo.appId, appId))
-  const { url, cmd } = storybookSetup(a.setup)
+  const { url, cmd } = await storybookValues(a.setup, r?.localPath ?? null)
   return { a, cwd: r?.localPath ?? null, url, cmd }
 }
 
@@ -52,7 +91,8 @@ export async function storybookStatus(appId: string) {
 
 export async function startStorybook(appId: string) {
   const { a, url, cmd, cwd } = await setupOf(appId)
-  if (!url || !cmd || !cwd) throw new PlanError(`${a.name} has no Storybook command or URL; set them under Integrations › Storybook`)
+  if (!cwd) throw new PlanError(`${a.name} has no local checkout: Storybook starts in the repo. Set it under Settings › Repo.`)
+  if (!url || !cmd) throw new PlanError(`${a.name} has no Storybook to start: no \`storybook\` script in the repo, and no command set under Integrations › Storybook.`)
   if (await answers(url)) return storybookStatus(appId)
   const mine = running.get(appId)
   if (mine && mine.proc.exitCode === null) return storybookStatus(appId)

@@ -29,7 +29,7 @@ import { createCycle, createInitiative, listCycles, listInitiatives, updateIniti
 import { changeState, commentOnIssue, createIssue, listComments, listIssues, reorder, resolveIssue, updateIssue } from './issues.js'
 import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
-import { migrateStorybookSetup, startStorybook, stopStorybooks, storybookStatus, STORY_FLOW_CSS } from './storybook.js'
+import { migrateStorybookSetup, startStorybook, stopStorybooks, storybookStatus, storybookValues, STORY_FLOW_CSS } from './storybook.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
@@ -190,7 +190,8 @@ export function buildApp(bus: EventBus) {
     if (key === 'tkt' && appId) { const ctx = await contextFor(appId); if (ctx) local = { tkt: { ctx } } }
     if (key === 'storybook' && a) {
       const [r] = await db.select().from(repoTable).where(eq(repoTable.appId, a.id))
-      local = { storybook: { ctx: { app: { id: a.id, name: a.name }, repoPath: r?.localPath ?? null, url: values.url ?? null, cmd: values.cmd ?? null } } }
+      const v = await storybookValues({ integrations: { storybook: Object.fromEntries(Object.entries(values).filter(([, x]) => x != null)) } }, r?.localPath ?? null) // the app's values, else the repo's defaults
+      local = { storybook: { ctx: { app: { id: a.id, name: a.name }, repoPath: r?.localPath ?? null, url: v.url, cmd: v.cmd } } }
     }
     return { values, local }
   }

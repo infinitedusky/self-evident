@@ -99,41 +99,122 @@ describe('the tracker guide', () => {
 })
 
 describe('set up what\'s missing', () => {
-  /** A checkout's files, readable and writable, so what setup writes the check then sees. */
-  const fakeFs = (map: Record<string, string>) => {
-    const w: Record<string, string> = { ...map }
-    return { w, read: async (p: string) => { if (p in w) return w[p]; throw Object.assign(new Error(`ENOENT ${p}`), { code: 'ENOENT' }) }, write: async (p: string, t: string) => { w[p] = t } }
+  const root = '/code/scratch'
+  const guidePath = `${root}/${GUIDE_PATH}`
+  const rel = (p: string) => (p.startsWith(`${root}/`) ? p.slice(root.length + 1) : p)
+  interface M { files: Record<string, string>; cmds: string[]; dirty: Set<string>; hooks: boolean; plugin: boolean; branch: string; remote: string | null; tkt: boolean }
+  /** A machine: a checkout (files by absolute path), git, gh and a tkt whose doctor answers from the machine's state. */
+  const machine = (o: { files?: Record<string, string>; branch?: string; remote?: string | null; tkt?: boolean; doctor?: (m: M) => string | null; pushFails?: boolean } = {}) => {
+    const m: M = { files: { ...(o.files ?? {}) }, cmds: [], dirty: new Set<string>(), hooks: false, plugin: false, branch: o.branch ?? 'main', remote: o.remote === undefined ? 'https://github.com/infinitedusky/scratch.git' : o.remote, tkt: o.tkt ?? true }
+    const ok = (stdout = '') => ({ stdout, stderr: '' })
+    const run: Run = async (file, args) => {
+      m.cmds.push([file, ...args].join(' '))
+      const a = args.join(' ')
+      if (file === 'tkt') {
+        if (!m.tkt) throw enoent()
+        if (a === '--version') return ok('tkt version v0.21.0\n')
+        if (a === 'doctor') { const bad = o.doctor ? o.doctor(m) : null; if (bad === null) return ok('ok    git    git version 2.50\n'); throw Object.assign(new Error('exit 1'), { code: 1, stdout: bad, stderr: '' }) }
+        if (a === 'hook claude --install --shared') { m.files[`${root}/.claude/settings.json`] = '{"hooks":{}}'; m.dirty.add('.claude/settings.json'); m.hooks = true; return ok() }
+        if (a === 'hook tmp --install') { m.plugin = true; return ok() }
+      }
+      if (file === 'git') {
+        if (a === 'ls-files --cached --others --exclude-standard') return ok(Object.keys(m.files).map(rel).join('\n'))
+        if (a === 'remote') return ok(m.remote ? 'origin' : '')
+        if (a === 'remote get-url origin' && m.remote) return ok(m.remote)
+        if (a.startsWith('symbolic-ref')) return ok('origin/main')
+        if (a === 'rev-parse --abbrev-ref HEAD') return ok(m.branch)
+        if (a.startsWith('status --porcelain -- ')) return ok(args.slice(3).filter((p) => m.dirty.has(p)).map((p) => `?? ${p}`).join('\n'))
+        if (a.startsWith('add -- ')) return ok()
+        if (a.startsWith('commit ')) { m.dirty.clear(); return ok() }
+        if (a === 'rev-parse --short HEAD') return ok('abc1234')
+        if (a === 'push origin main') { if (o.pushFails) throw Object.assign(new Error('exit 1'), { code: 1, stdout: '', stderr: 'remote: protected branch hook declined\n' }); return ok() }
+      }
+      if (file === 'gh') return ok(JSON.stringify({ defaultBranchRef: { name: 'main' }, mergeCommitAllowed: true, squashMergeAllowed: true, pullRequestTemplates: [] }))
+      throw new Error(`unexpected ${file} ${a}`)
+    }
+    const read = async (p: string) => { if (p in m.files) return m.files[p]; throw Object.assign(new Error(`ENOENT ${p}`), { code: 'ENOENT' }) }
+    const write = async (p: string, t: string) => { m.files[p] = t; m.dirty.add(rel(p)) }
+    return { ...m, m, run, read, write }
   }
-  const guidePath = `/code/scratch/${GUIDE_PATH}`
+  /** A doctor that fails until the files are there and warns until the hooks are in. */
+  const doctor = (m: M) => {
+    const bad = [
+      ...(m.files[`${root}/docs/agents/forge.md`] && m.files[guidePath] ? [] : ['fail  lifecycle        /code/scratch/docs/agents has no lifecycle configuration; run /setup-rogs', '                       hint: run /setup-rogs in this project']),
+      ...(m.hooks ? [] : ['warn  claude_hooks     tkt reads Claude Code agents\' status lines only from their transcripts', '                       hint: tkt hook claude --install, or --shared']),
+      ...(m.plugin ? [] : ['warn  opencode_plugin  OpenCode agents share the service\'s TMPDIR', '                       hint: tkt hook tmp --install']),
+      'warn  pi               this tkt has no bundled pi, so tkt agent cannot start', '                       hint: install a release build of tkt (install.sh)',
+    ]
+    return bad.length > 2 ? bad.join('\n') : null // the pi warning alone is no failure
+  }
 
-  it('writes the tracker guide when that is what is wrong, checks again, and is done', async () => {
-    const fs = fakeFs({})
-    const r = await setupTkt(ctx, { run: fakeTkt(), ...fs })
+  it('writes the whole configuration, installs the hooks doctor misses, commits on main and pushes, and is done', async () => {
+    const mc = machine({ files: { [`${root}/package.json`]: JSON.stringify({ scripts: { dev: 'vite', test: 'vitest run' }, devDependencies: { vitest: '1' } }), [`${root}/package-lock.json`]: '' }, doctor })
+    const r = await setupTkt(ctx, mc)
     expect(r.done).toBe(true); expect(r.ask).toBeNull()
-    expect(r.did).toEqual([`Wrote ${GUIDE_PATH} in the checkout, pointing at SCR here; not committed, so look at it and commit it.`])
-    expect(r.detail).toMatch(/doctor passes in \/code\/scratch/)
-    expect(fs.w[guidePath]).toContain('Kind: Self Evident'); expect(fs.w[guidePath]).toContain('app_x1')
+    expect(r.did).toEqual([
+      `Wrote ${GUIDE_PATH}, pointing at SCR here.`,
+      'Wrote docs/agents/forge.md, docs/agents/workflow.md, docs/agents/domain.md, docs/agents/pull-request.md and the Ticket lifecycle block in CLAUDE.md, from the app, the repo and the house profile.',
+      'Installed tkt\'s Claude Code hooks in .claude/settings.json (the shared file, so they are committed and Self Evident\'s agents get them).',
+      'Installed tkt\'s OpenCode plugin (tkt\'s own file under ~/.config/opencode).',
+      'Committed to main and pushed (abc1234).',
+    ])
+    expect(mc.files[guidePath]).toContain('Kind: Self Evident'); expect(mc.files[guidePath]).toContain('app_x1')
+    expect(mc.files[`${root}/docs/agents/forge.md`]).toContain('- Repository: infinitedusky/scratch\n- Remote: origin\n')
+    expect(mc.files[`${root}/docs/agents/workflow.md`]).toContain('| Full check | npm run test |'); expect(mc.files[`${root}/docs/agents/workflow.md`]).toContain('one test: `npx vitest run <file>`')
+    expect(mc.files[`${root}/CLAUDE.md`]).toContain('## Ticket lifecycle'); expect(mc.files[`${root}/CLAUDE.md`]).toContain('`forge.md` (GitHub, infinitedusky/scratch)')
+    for (const t of Object.values(mc.files)) expect(t).not.toContain('{{FILL')
+    const commit = mc.cmds.findIndex((c) => c.startsWith('git commit'))
+    expect(mc.cmds[commit - 1]).toBe(`git add -- ${GUIDE_PATH} docs/agents/forge.md docs/agents/workflow.md docs/agents/domain.md docs/agents/pull-request.md CLAUDE.md .claude/settings.json`)
+    expect(mc.cmds[commit]).toContain('Set up the ticket lifecycle for tkt scratch (SCR)'); expect(mc.cmds).toContain('git push origin main')
+    expect(mc.cmds.filter((c) => c === 'tkt doctor')).toHaveLength(2) // once to see what is missing, once as the check
   })
 
-  it('replaces a guide pointing elsewhere, and hands tkt itself to the agent when it is missing', async () => {
-    const fs = fakeFs({ [guidePath]: '# Issue tracker\n\n## Tracker\n\n- Kind: Linear\n' })
-    const r = await setupTkt(ctx, { run: async () => { throw enoent() }, ...fs })
+  it('does not fight the person: a file without the ownership line stays, an old block is replaced in place, and a checkout off main is not committed', async () => {
+    const mine = '<!-- rogs-skills config v1: workflow -->\n# Workflow\n\nHand-written.\n'
+    const mc = machine({ files: { [guidePath]: goodGuide, [`${root}/docs/agents/workflow.md`]: mine, [`${root}/CLAUDE.md`]: `# Scratch\n\n<!-- rogs-skills:begin config v1 -->\nold\n<!-- rogs-skills:end -->\n` }, branch: 'feature', doctor })
+    const r = await setupTkt(ctx, mc)
+    expect(mc.files[`${root}/docs/agents/workflow.md`]).toBe(mine)
+    expect(mc.files[`${root}/CLAUDE.md`]).toMatch(/^# Scratch\n\n<!-- rogs-skills:begin config v1 -->\n## Ticket lifecycle/); expect(mc.files[`${root}/CLAUDE.md`]).not.toContain('\nold\n')
+    expect(r.did).toContain('Left docs/agents/workflow.md alone: it isn\'t Self Evident\'s (no "Self Evident wrote it" line).')
+    expect(r.did.at(-1)).toMatch(/^Written in the checkout, which is on feature, not main: tkt reads the configuration from main/)
+    expect(mc.cmds.some((c) => c.startsWith('git commit') || c.startsWith('git push'))).toBe(false)
+    expect(r.done).toBe(true) // the files are there, so doctor passes; landing them on main is the one thing left
+  })
+
+  it('says when the push is refused, and when there is nothing new to commit', async () => {
+    const refused = machine({ doctor, pushFails: true })
+    expect((await setupTkt(ctx, refused)).did.at(-1)).toBe('Committed abc1234 on main; the push to origin was refused: remote: protected branch hook declined. Push it for worktrees cut from origin to have it.')
+    const again = machine({ files: { ...refused.m.files }, doctor })
+    again.m.hooks = true; again.m.plugin = true
+    const r = await setupTkt(ctx, again)
+    expect(r.did).toEqual(['Nothing new to commit: main has this configuration already.']); expect(r.done).toBe(true)
+  })
+
+  it('skips the forge without a remote and says so; the rest is still written', async () => {
+    const mc = machine({ remote: null })
+    const r = await setupTkt(ctx, mc)
+    expect(mc.files[`${root}/docs/agents/forge.md`]).toBeUndefined(); expect(mc.files[`${root}/docs/agents/workflow.md`]).toBeDefined()
+    expect(r.did).toContain('Skipped docs/agents/forge.md: the checkout has no git remote, and tkt opens pull requests on a forge; push the repo to GitHub first.')
+  })
+
+  it('hands tkt itself to the agent when it is missing, after writing what it can', async () => {
+    const mc = machine({ tkt: false })
+    const r = await setupTkt(ctx, mc)
     expect(r.done).toBe(false)
-    expect(r.did[0]).toMatch(/^Wrote docs\/agents\/issue-tracker\.md in the checkout \(it pointed at another tracker\)/)
-    expect(r.ask).toContain("says: tkt isn't on the engine's PATH")
-    expect(r.ask).toContain('install.sh'); expect(r.ask).toContain('each following its own hint.')
-    expect(fs.w[guidePath]).toContain('Kind: Self Evident')
+    expect(r.did[0]).toBe(`Wrote ${GUIDE_PATH}, pointing at SCR here.`); expect(r.did[1]).toMatch(/^Wrote docs\/agents\/forge\.md/)
+    expect(r.ask).toContain("says: tkt isn't on the engine's PATH"); expect(r.ask).toContain('install.sh'); expect(r.ask).toContain('each following its own hint.')
+    expect(r.ask).toContain('Self Evident has written the agent docs already')
+    expect(mc.cmds.some((c) => c.startsWith('tkt hook'))).toBe(false)
   })
 
-  it("hands tkt doctor's findings to the agent with their hints, leaving the pane warning out", async () => {
-    const doctor = 'ok    git    git version 2.50\nfail  herdr            herdr is not installed\n                       hint: brew install herdr\nwarn  pi               this tkt has no bundled pi\n                       hint: install a release build of tkt (install.sh)\nwarn  herdr_env        not inside a herdr pane\n                       hint: open a herdr pane and run tkt there\nskip  services         tkt watch runs when a command starts it\n                       hint: tkt watch --install runs it as a service\nok    gh               gh version 2.92.0\n'
-    const fs = fakeFs({ [guidePath]: goodGuide })
-    const r = await setupTkt(ctx, { run: fakeTkt(doctor), ...fs })
-    expect(r.did).toEqual([]); expect(r.done).toBe(false)
+  it("hands tkt doctor's findings to the agent with their hints, leaving the pane and pi warnings out", async () => {
+    const out = 'ok    git    git version 2.50\nfail  herdr            herdr is not installed\n                       hint: brew install herdr\nwarn  pi               this tkt has no bundled pi\n                       hint: install a release build of tkt (install.sh)\nwarn  herdr_env        not in a herdr pane\n                       hint: tkt watch --install\nskip  services         no services\n                       hint: none\n'
+    const mc = machine({ files: { [guidePath]: goodGuide }, doctor: () => out })
+    const r = await setupTkt(ctx, mc)
+    expect(r.done).toBe(false)
     expect(r.ask).toContain('    fail herdr: herdr is not installed (hint: brew install herdr)\n')
-    expect(r.ask).toContain('    warn pi: this tkt has no bundled pi (hint: install a release build of tkt (install.sh))\n') // the pane's and the service's hints stay with their own lines, which are left out
-    expect(r.ask).not.toContain('herdr_env'); expect(r.ask).not.toContain('tkt watch'); expect(r.ask).toContain('today:')
-    expect(r.ask).toContain(`${ctx.engineUrl}/apps/app_x1/tracker-guide`)
+    expect(r.ask).not.toContain('pi:'); expect(r.ask).not.toContain('herdr_env'); expect(r.ask).not.toContain('tkt watch'); expect(r.ask).toContain('today:')
+    expect(r.ask).toContain('Finish when `tkt doctor` passes there')
   })
 
   it('stops at a missing checkout: nothing to write, nothing for the agent', async () => {
@@ -142,9 +223,9 @@ describe('set up what\'s missing', () => {
   })
 
   it('is reached through the integration, which refuses it off or without an app', async () => {
-    const fs = fakeFs({ [guidePath]: goodGuide })
-    expect((await setupIntegration('tkt', { on: 'false' }, {}, { tkt: { ctx, deps: { run: fakeTkt(), ...fs } } })).detail).toMatch(/off for this app/)
-    expect((await setupIntegration('tkt', { on: 'true' }, {}, { tkt: { ctx, deps: { run: fakeTkt(), ...fs } } })).done).toBe(true)
+    const mc = machine({ files: { [guidePath]: goodGuide }, doctor })
+    expect((await setupIntegration('tkt', { on: 'false' }, {}, { tkt: { ctx, deps: mc } })).detail).toMatch(/off for this app/)
+    expect((await setupIntegration('tkt', { on: 'true' }, {}, { tkt: { ctx, deps: mc } })).done).toBe(true)
     await expect(setupIntegration('tkt', { on: 'true' })).rejects.toThrow(/per app/)
     await expect(setupIntegration('linear', { team: 'X', key_env: 'K' }, { K: 'k' })).rejects.toThrow(/nothing to set up/)
   })
