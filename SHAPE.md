@@ -538,6 +538,18 @@ for each step is an integration whose role is the step (Storybook: Mockups; the 
 the sketch tool: open). After the prototype: the plan, an audit of the prototype for issues, a blast-radius risk
 assessment, then the build.
 
+**Where the brief sits, and what each step is for** (Sandy, 2026-11-09: "the simple mockup is about speed, we get
+how we like it, then we do a story properly, we make sure we like it. Then that mockup is added to the brief";
+"Proto comes after brief and is used to figure out the best way to build it"; "we need to add a workflow step
+then"). The order is sketch, mockup, brief, prototype, plan, build. Sketches and mockups answer what it should be;
+the brief carries the agreed mockup; the prototype answers how it should be built; the plan and the build do it
+right. Sketches are a workflow step of their own (`sketch`, beside `mockup`): plain HTML files under `sketches/` on
+the conversation's branch, one screen each. The default workflow is idea, research, sketches, mockups, the brief,
+the prototype; a workflow saved before the step gets it on, right before its mockups, and its own order is left as
+the person set it. Still to build: the Sketches integration (its document, the tab that shows a sketch from the
+branch's worktree), the Mockup section of the brief with a screenshot, and Storybook following the branch, so a
+story written in a conversation shows there before it merges.
+
 ### The agent shows where it is
 
 At the top of each conversation, its **name and the stage it's at now** (one pill: Mockups, Prototype 2, Brief,
