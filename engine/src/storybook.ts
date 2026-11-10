@@ -116,6 +116,17 @@ async function placeFor(appId: string, sessionId?: string | null) {
   return { a: base.a, cwd: s.cwd, url: `http://localhost:${port}`, cmd: `${install}${own} -p ${port}`, branch: s.branch ?? 'its worktree', main: false }
 }
 
+/**
+ * The address a page frames it at. Storybook 10 lets only localhost frame it (its frame-ancestors header), so when
+ * Self Evident is served under a name (UI_URL) a proxy gives each Storybook a name beside it and drops the header:
+ * STORYBOOK_FRAME is that address with {port} in it (https://sb-{port}.idea.dawn). Unset, or for a Storybook that is
+ * not on this machine, it is the Storybook's own address.
+ */
+export function frameUrl(url: string | null, template = process.env.STORYBOOK_FRAME): string | null {
+  const m = url && /^https?:\/\/(?:localhost|127\.0\.0\.1):(\d+)(\/.*)?$/.exec(url)
+  return m && template ? `${template.replace('{port}', m[1]).replace(/\/$/, '')}${m[2] ?? ''}` : url
+}
+
 const answers = (url: string) => fetch(url, { signal: AbortSignal.timeout(1500) }).then((r) => r.ok || r.status < 500).catch(() => false)
 const logFile = (cwd: string) => join(tmpdir(), 'self-evident', `storybook-${portFor(cwd)}.log`)
 const logTail = async (cwd: string | null) => (cwd ? (await text(logFile(cwd))).split('\n').filter((l) => l.trim()).slice(-20).map((l) => l.slice(0, 300)) : [])
@@ -124,7 +135,7 @@ export async function storybookStatus(appId: string, sessionId?: string | null) 
   const { url, cmd, cwd, branch, main } = await placeFor(appId, sessionId)
   const mine = cwd ? running.get(cwd) : undefined
   const up = url ? await answers(url) : false
-  return { url, configured: !!url, startable: !!(cmd && cwd), up, startedHere: !!mine && mine.proc.exitCode === null, log: up ? [] : await logTail(cwd), branch, main }
+  return { url, frame: frameUrl(url), configured: !!url, startable: !!(cmd && cwd), up, startedHere: !!mine && mine.proc.exitCode === null, log: up ? [] : await logTail(cwd), branch, main }
 }
 
 /**
