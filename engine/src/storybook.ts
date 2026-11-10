@@ -7,19 +7,21 @@
  * tests, and a map; then whether it answers. First thing wrong is the answer.
  */
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { closeSync, openSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { eq, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, repo } from './db/schema.js'
+import { app, repo, session } from './db/schema.js'
 import { git } from './git.js'
 import { remoteAndBase } from './lifecycle.js'
 import { PlanError } from './projects.js'
 import { commitOnBase, type Run } from './tkt.js'
 
-const running = new Map<string, { proc: ChildProcess; startedAt: Date; log: string[] }>()
+const running = new Map<string, { proc: ChildProcess; startedAt: Date }>() // by the folder it runs in: the main checkout, or a conversation's worktree
 
 export interface StorybookSetup { on: boolean; url: string | null; cmd: string | null }
 /**
@@ -85,35 +87,82 @@ async function setupOf(appId: string) {
   return { a, cwd: r?.localPath ?? null, url, cmd }
 }
 
-const answers = (url: string) => fetch(url, { signal: AbortSignal.timeout(1500) }).then((r) => r.ok || r.status < 500).catch(() => false)
-
-export async function storybookStatus(appId: string) {
-  const { url, cmd, cwd } = await setupOf(appId)
-  const mine = running.get(appId)
-  return { url, configured: !!url, startable: !!(cmd && cwd), up: url ? await answers(url) : false, startedHere: !!mine && mine.proc.exitCode === null, log: mine?.log.slice(-20) ?? [] }
+/** A worktree's own port, the same every time (so a Storybook started before an engine restart is found again by asking it). */
+export function portFor(cwd: string): number {
+  let h = 0
+  for (const c of cwd) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return 6100 + (h % 800)
 }
 
-export async function startStorybook(appId: string) {
-  const { a, url, cmd, cwd } = await setupOf(appId)
+/**
+ * Which Storybook a conversation looks at (Sandy, 2026-11-09: a first mockup "is not showing … it is coded on a
+ * worktree, but I think that storybook is then showing from main"; "we need the screens to match the worktree of the
+ * plan of the task"). A conversation with a worktree of its own that has a Storybook gets that worktree's, on the
+ * worktree's own port, with the dependencies installed first when the worktree has none; anything else gets the
+ * app's, from the main checkout. `branch` says which, for the page to show.
+ */
+async function placeFor(appId: string, sessionId?: string | null) {
+  const base = await setupOf(appId)
+  const main = { ...base, branch: base.a.defaultBranch ?? 'main', main: true }
+  if (!sessionId) return main
+  const [s] = await db.select().from(session).where(eq(session.id, sessionId))
+  if (!s || s.appId !== appId || !s.cwd || s.cwd === base.cwd || !(await exists(s.cwd))) return main
+  if (!(await tracked(s.cwd, '*.storybook/main.*')).length) return main // its branch was cut before the app had a Storybook
+  const d = await storybookDefaults(s.cwd)
+  const own = storybookSetup(base.a.setup).cmd ?? d?.cmd ?? null
+  if (!own) return main
+  const port = portFor(s.cwd)
+  const install = (await exists(join(s.cwd, 'node_modules'))) ? '' : `${{ pnpm: 'pnpm install --frozen-lockfile', npm: 'npm install', yarn: 'yarn install', bun: 'bun install' }[await pmOf(s.cwd)]} && `
+  return { a: base.a, cwd: s.cwd, url: `http://localhost:${port}`, cmd: `${install}${own} -p ${port}`, branch: s.branch ?? 'its worktree', main: false }
+}
+
+const answers = (url: string) => fetch(url, { signal: AbortSignal.timeout(1500) }).then((r) => r.ok || r.status < 500).catch(() => false)
+const logFile = (cwd: string) => join(tmpdir(), 'self-evident', `storybook-${portFor(cwd)}.log`)
+const logTail = async (cwd: string | null) => (cwd ? (await text(logFile(cwd))).split('\n').filter((l) => l.trim()).slice(-20).map((l) => l.slice(0, 300)) : [])
+
+export async function storybookStatus(appId: string, sessionId?: string | null) {
+  const { url, cmd, cwd, branch, main } = await placeFor(appId, sessionId)
+  const mine = cwd ? running.get(cwd) : undefined
+  const up = url ? await answers(url) : false
+  return { url, configured: !!url, startable: !!(cmd && cwd), up, startedHere: !!mine && mine.proc.exitCode === null, log: up ? [] : await logTail(cwd), branch, main }
+}
+
+/**
+ * Starts it where the conversation works. It runs on its own, not as the engine's child: the engine restarts on every
+ * deploy, and a Storybook that died with it left the Mockups page on an error (Sandy's 502). Its output goes to a file.
+ */
+export async function startStorybook(appId: string, sessionId?: string | null) {
+  const { a, url, cmd, cwd } = await placeFor(appId, sessionId)
   if (!cwd) throw new PlanError(`${a.name} has no local checkout: Storybook starts in the repo. Set it under Settings › Repo.`)
   if (!url || !cmd) throw new PlanError(`${a.name} has no Storybook to start: no \`storybook\` script in the repo, and no command set under Integrations › Storybook.`)
-  if (await answers(url)) return storybookStatus(appId)
-  const mine = running.get(appId)
-  if (mine && mine.proc.exitCode === null) return storybookStatus(appId)
-  const proc = spawn('sh', ['-c', cmd], { cwd, env: { ...process.env, BROWSER: 'none', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: false })
-  const log: string[] = []
-  const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 200) log.splice(0, log.length - 200) }
-  proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
-  running.set(appId, { proc, startedAt: new Date(), log })
-  return storybookStatus(appId)
+  if (await answers(url)) return storybookStatus(appId, sessionId)
+  const mine = running.get(cwd)
+  if (mine && mine.proc.exitCode === null) return storybookStatus(appId, sessionId)
+  await mkdir(dirname(logFile(cwd)), { recursive: true })
+  await writeFile(logFile(cwd), `> ${cmd}\n`)
+  const out = openSync(logFile(cwd), 'a')
+  const proc = spawn('sh', ['-c', cmd], { cwd, env: { ...process.env, BROWSER: 'none', CI: '1' }, stdio: ['ignore', out, out], detached: true })
+  proc.unref()
+  closeSync(out)
+  running.set(cwd, { proc, startedAt: new Date() })
+  return storybookStatus(appId, sessionId)
+}
+
+/** Stops the Storybook of a worktree that is going away (a conversation ending), whoever started it: by its port. */
+export async function stopStorybookAt(cwd: string) {
+  const mine = running.get(cwd)
+  running.delete(cwd)
+  if (mine?.proc.pid && mine.proc.exitCode === null) { try { process.kill(-mine.proc.pid, 'SIGTERM') } catch { /* gone already */ } }
+  const pids = await execFileP('lsof', ['-ti', `tcp:${portFor(cwd)}`, '-sTCP:LISTEN']).then((r) => r.stdout.split('\n').filter(Boolean), () => [] as string[])
+  for (const pid of pids) { try { process.kill(Number(pid), 'SIGTERM') } catch { /* gone already */ } }
 }
 
 /**
  * The app's stories, from its running Storybook's own index: each one's id (what opens it), the component or page
  * it belongs to, and its name. `match` keeps those whose id, title or name contains it (any case).
  */
-export async function listStories(appId: string, match?: string) {
-  const { a, url } = await setupOf(appId)
+export async function listStories(appId: string, match?: string, sessionId?: string | null) {
+  const { a, url } = await placeFor(appId, sessionId)
   if (!url) throw new PlanError(`${a.name} has no Storybook set; add its URL under Integrations › Storybook`)
   const res = await fetch(`${url.replace(/\/$/, '')}/index.json`, { signal: AbortSignal.timeout(4000) }).catch(() => null)
   if (!res?.ok) throw new PlanError(`${a.name}'s Storybook is not answering at ${url}; opening the storybook tab offers to start it`)
@@ -126,7 +175,8 @@ export async function listStories(appId: string, match?: string) {
     .slice(0, 200)
 }
 
-export function stopStorybooks() { for (const [, m] of running) m.proc.kill('SIGTERM'); running.clear() }
+/** Forgets them; they keep running, and are found again by asking their address (tests stop theirs with stopStorybookAt). */
+export function stopStorybooks() { running.clear() }
 
 // The check: the standard for every project's Storybook, read from the repo.
 
