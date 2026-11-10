@@ -577,8 +577,15 @@ the ADR, the blast radius, the brief audit. Each step leaves its asset (a sketch
 branch, a report) and the brief points at it. The prototype now comes before the brief is final. Once the person
 approves the prototype, the ADR, the blast radius and the brief audit run by themselves, each a fresh agent the
 conductor deploys (Decided, "One conductor per worktree"), and their results finalize the brief, which the person
-then approves. An approved brief is what the plan and the build start from. Not built: today `steps.ts` holds the
-brief as a step with others placed before and after it, and the three run only when started by hand.
+then approves. An approved brief is what the plan and the build start from. A task so has two stages, the brief
+and the build; a project is several tasks; the build is phases, decided through the briefing (Sandy, 2026-11-10:
+"a task really has the brief stage and then the build stage … the build is made up of phases that are decided
+through the briefing process"). Built (2026-11-10): the rule and the page. In `steps.ts` the brief is outside the
+order: no step waits on it, the checks come after the other steps instead of after the brief, and the brief can be
+approved only once the workflow's required steps are done. A task's nav is Brief and Build, the steps under the
+brief, and the brief's page lists what it stands on. Not built: the three checks running by themselves once the
+prototype is approved, the brief naming each step's assets by itself, and the phases coming out of the briefing
+(today the planner cuts them after approval, as sub-tasks).
 
 **It shows beside the conversation, from the conversation's worktree** (Sandy, 2026-11-09: the sketch "can't be
 jumping back and forth to some random screen or having to give us a link somewhere. It has to be right there when

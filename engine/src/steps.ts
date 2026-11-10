@@ -4,37 +4,42 @@
  * the later checks are added, and whether its order is enforced, after Jira's workflows, kept to these few settings.
  * A task uses its own workflow, or else its project's, or else the app's.
  *
- * Fixed in every workflow (Sandy, 2026-10-29):
+ * The brief is the parent, not a step in the line (Sandy, 2026-11-10: "the brief sits as a kind of parent document to
+ * all the stuff we do up through blast radius … that workflow is all about getting us to a really solid brief").
+ * A task has two stages, the brief and the build. Every step here feeds the brief and leaves something the brief
+ * points at; the brief is open from the start and approved last, once the required steps are finished.
+ *
+ * Fixed in every workflow:
  * - "starts as an idea" is always there and always first; a workflow makes it required or not;
- * - research comes next: on or off, required or not;
- * - the brief is always there and always required;
- * - sketches, mockups and the prototype can go before or after the brief;
- * - the checks (an ADR, the blast radius, a brief audit, and the like) come after the brief, added or removed.
- * The three ways of looking before building (Sandy, 2026-11-09): a sketch is about speed, plain HTML until the screen
- * is liked; a mockup is the story done properly, and goes into the brief; the prototype comes after the brief, to find
- * the best way to build it. So the default order is idea, research, sketches, mockups, the brief, the prototype.
+ * - research, sketches, mockups and the prototype come next, in the workflow's order, each on or off;
+ * - the checks (an ADR, the blast radius, a brief audit) come after those, added or removed: they read what the
+ *   others produced;
+ * - the brief is always there and always required. It is kept last in the stored list, and its place there means
+ *   nothing: no step waits on it, and it waits on no step to be opened.
+ * The three ways of looking (Sandy, 2026-11-09): a sketch is about speed, plain HTML until the screen is liked; a
+ * mockup is the story done properly; the prototype finds the best way to build it.
  * The app imports this module too (`@self-evident/engine/steps`), so the rules live in one place.
  */
 
 export type StepKey = 'idea' | 'research' | 'brief' | 'sketch' | 'mockup' | 'prototype' | 'adr' | 'risk' | 'audit'
 export type On = 'idea' | 'task' | 'project'
-/** Where a step may sit: first; before the brief; the brief; either side of it; after it (a check, added or removed). */
-export type Place = 'first' | 'before' | 'brief' | 'either' | 'after'
+/** What kind of step it is: the idea, first; research; the brief, the parent of the rest; a way of looking (sketch, mockup, prototype); a check, after those, added or removed. */
+export type Place = 'first' | 'before' | 'brief' | 'either' | 'check'
 
 export interface StepDef { key: StepKey; label: string; icon: string; what: string; place: Place }
 export const STEPS: StepDef[] = [
   { key: 'idea', label: 'Starts as an idea', icon: '💡', what: 'Explored as an idea first, then converted.', place: 'first' },
   { key: 'research', label: 'Research', icon: '🔎', what: 'Who does this best, what exists already, our numbers, the case against.', place: 'before' },
-  { key: 'brief', label: 'Brief', icon: '📝', what: 'What to build, for the builder. A task completes only once it is approved.', place: 'brief' },
+  { key: 'brief', label: 'Brief', icon: '📝', what: 'What to build, for the builder: the parent of every step here. Approved last; the build starts from it.', place: 'brief' },
   { key: 'sketch', label: 'Sketches', icon: '✏️', what: 'The first look, fast: plain HTML screens to react to and change in moments, before a real story.', place: 'either' },
-  { key: 'mockup', label: 'Mockups', icon: '🎨', what: 'How it looks, done properly: stories with made-up data, variants side by side. The agreed one goes into the brief.', place: 'either' },
+  { key: 'mockup', label: 'Mockups', icon: '🎨', what: 'How it looks, done properly: stories with made-up data, variants side by side. The brief points at the agreed one.', place: 'either' },
   { key: 'prototype', label: 'Prototype', icon: '🛠️', what: 'The agent\'s quick working attempt, to use, show people and find the best way to build it.', place: 'either' },
-  { key: 'adr', label: 'ADR', icon: '🏛️', what: 'The architecture decision, written down: the options, the choice, why.', place: 'after' },
-  { key: 'risk', label: 'Blast radius', icon: '💥', what: 'What the change touches, what could break, and how we\'d know.', place: 'after' },
-  { key: 'audit', label: 'Brief audit', icon: '🧐', what: 'The brief read against the code by a second agent: gaps, wrong guesses.', place: 'after' },
+  { key: 'adr', label: 'ADR', icon: '🏛️', what: 'The architecture decision, written down: the options, the choice, why.', place: 'check' },
+  { key: 'risk', label: 'Blast radius', icon: '💥', what: 'What the change touches, what could break, and how we\'d know.', place: 'check' },
+  { key: 'audit', label: 'Brief audit', icon: '🧐', what: 'The brief read against the code by a second agent: gaps, wrong guesses.', place: 'check' },
 ]
 export const step = (key: StepKey) => STEPS.find((s) => s.key === key)!
-export const CHECKS = STEPS.filter((s) => s.place === 'after').map((s) => s.key)
+export const CHECKS = STEPS.filter((s) => s.place === 'check').map((s) => s.key)
 
 /** Where each step can be done. An idea has a rough draft, not a brief, and isn't checked; a project has no brief. */
 export const CAN: Record<On, StepKey[]> = {
@@ -51,22 +56,22 @@ export interface Workflow { id: string; name: string; steps: WorkflowStep[]; ord
 /** What a workflow may switch: research, sketches, mockups and the prototype on or off; the idea and the brief are always on. */
 export const canTurnOff = (key: StepKey) => key === 'research' || step(key).place === 'either'
 export const canMakeOptional = (key: StepKey) => key !== 'brief'
-export const canRemove = (key: StepKey) => step(key).place === 'after'
+export const canRemove = (key: StepKey) => step(key).place === 'check'
 
-/** Whether steps in this order keep the fixed rules. */
+/** Whether steps in this order keep the fixed rules: the idea first, every check after the other steps. Where the brief sits means nothing. */
 export function validOrder(steps: { key: StepKey }[]): boolean {
-  const brief = steps.findIndex((s) => s.key === 'brief')
-  return steps.every((s, i) => {
+  const list = steps.filter((s) => s.key !== 'brief')
+  const firstCheck = list.findIndex((s) => step(s.key).place === 'check')
+  return list.every((s, i) => {
     const place = step(s.key).place
     if (place === 'first') return i === 0
-    if (place === 'before') return brief < 0 || i < brief
-    if (place === 'after') return brief >= 0 && i > brief
+    if (place !== 'check') return firstCheck < 0 || i < firstCheck
     return true
   })
 }
 
-/** The default list, in the order Sandy set on 2026-11-09: the idea, research, sketches, mockups, the brief, then the prototype; no checks; nothing but the brief required. */
-export const DEFAULT_STEPS: WorkflowStep[] = ['idea', 'research', 'sketch', 'mockup', 'brief', 'prototype'].map((key) => ({ key: key as StepKey, on: true, required: key === 'brief' }))
+/** The default list: the idea, research, sketches, mockups, the prototype, and the brief they feed; no checks; nothing but the brief required. */
+export const DEFAULT_STEPS: WorkflowStep[] = ['idea', 'research', 'sketch', 'mockup', 'prototype', 'brief'].map((key) => ({ key: key as StepKey, on: true, required: key === 'brief' }))
 
 /**
  * The workflow every app starts with, made with the app (Sandy, 2026-10-29: a task's workflow "can't be nothing").
@@ -76,9 +81,9 @@ export const DEFAULT_NAME = 'Default'
 export const DEFAULT_WORKFLOW: Workflow = { id: 'default', name: DEFAULT_NAME, steps: DEFAULT_STEPS, ordered: false }
 
 /**
- * A workflow with the fixed rules applied: the idea and the brief listed and on, the brief required, any missing
- * fixed step put back in its place, and an order that breaks the rules put back in the default order. A workflow
- * saved before sketches existed gets them on, right before its mockups: it never switched them off.
+ * A workflow with the fixed rules applied: the idea and the brief listed and on, the brief required and last, any
+ * missing fixed step put back, and an order that breaks the rules put back in the default order. A workflow saved
+ * before sketches existed gets them on, right before its mockups: it never switched them off.
  */
 export function normalize(w: Workflow): Workflow {
   let steps = w.steps.filter((s, i) => STEPS.some((d) => d.key === s.key) && w.steps.findIndex((x) => x.key === s.key) === i)
@@ -91,14 +96,15 @@ export function normalize(w: Workflow): Workflow {
   }
   steps = steps.map((s) => (s.key === 'brief' ? { ...s, on: true, required: true } : s.key === 'idea' ? { ...s, on: true } : canRemove(s.key) ? { ...s, on: true } : s))
   if (!validOrder(steps)) {
-    const rank = (k: StepKey) => ['first', 'before', 'either', 'brief', 'after'].indexOf(step(k).place)
+    const rank = (k: StepKey) => ['first', 'before', 'either', 'check', 'brief'].indexOf(step(k).place)
     steps = [...steps].sort((a, b) => rank(a.key) - rank(b.key))
   }
+  steps = [...steps.filter((s) => s.key !== 'brief'), ...steps.filter((s) => s.key === 'brief')] // the parent, kept last
   return { ...w, steps }
 }
 
-/** Puts a check right after the last step, or takes it out. */
-export const addCheck = (w: Workflow, key: StepKey): Workflow => (w.steps.some((s) => s.key === key) ? w : { ...w, steps: [...w.steps, { key, on: true, required: false }] })
+/** Puts a check after the other steps (the brief stays last), or takes it out. */
+export const addCheck = (w: Workflow, key: StepKey): Workflow => (w.steps.some((s) => s.key === key) ? w : normalize({ ...w, steps: [...w.steps, { key, on: true, required: false }] }))
 export const removeCheck = (w: Workflow, key: StepKey): Workflow => ({ ...w, steps: w.steps.filter((s) => s.key !== key) })
 
 /** What a step on one thing has so far. */
@@ -127,16 +133,23 @@ export const finished = (s: StepState, on: On) => s.status === 'done' && (s.key 
 
 /**
  * The steps to show on one thing, in order: the workflow's, its switched-off steps left out, or the default list.
- * With an enforced order, a step waits on the first required step before it that isn't finished.
+ * The brief comes last and is outside the order: it has no position, waits on nothing and nothing waits on it.
+ * With an enforced order, each other step waits on the first required step before it that isn't finished.
  */
 export function rows(on: On, states: StepState[], workflow: Workflow | null): Row[] {
   const can = CAN[on]
   const list = (workflow ? normalize(workflow).steps : DEFAULT_STEPS).filter((s) => s.on && can.includes(s.key))
   const stateOf = (key: StepKey): StepState => states.find((s) => s.key === key) ?? { key, status: 'none' }
   return list.map((s, i) => {
-    const before = workflow?.ordered ? list.slice(0, i).find((b) => b.required && !finished(stateOf(b.key), on)) : undefined
-    return { key: s.key, required: s.required && on !== 'idea', position: workflow?.ordered ? i + 1 : null, waitingOn: before?.key ?? null, state: stateOf(s.key) }
+    const parent = s.key === 'brief'
+    const before = workflow?.ordered && !parent ? list.slice(0, i).find((b) => b.required && !finished(stateOf(b.key), on)) : undefined
+    return { key: s.key, required: s.required && on !== 'idea', position: workflow?.ordered && !parent ? i + 1 : null, waitingOn: before?.key ?? null, state: stateOf(s.key) }
   })
+}
+
+/** What a task's brief still waits on before it can be approved: the required steps that feed it and aren't finished. */
+export function owed(states: StepState[], workflow: Workflow | null): StepKey[] {
+  return rows('task', states, workflow).filter((r) => r.key !== 'brief' && r.required && !finished(r.state, 'task')).map((r) => r.key)
 }
 
 /** What still stops a task being completed: its required steps that aren't finished, the brief always among them. */

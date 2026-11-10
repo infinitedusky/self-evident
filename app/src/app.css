@@ -535,7 +535,11 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .task-nav-mark { width: 14px; text-align: center; font-family: var(--mono); color: var(--ink-faint); }
 .task-nav-mark.ok { color: var(--ok); }
 .task-nav-req { color: var(--warn); font-weight: 700; }
-.task-nav-after { display: block; margin-left: 22px; font-size: 12px; }
+.task-nav-after { display: block; margin-left: 22px; font-size: 12px; font-weight: 400; color: var(--ink-faint); }
+.task-nav .link.task-nav-feed { padding-left: 26px; } /* the steps that feed the brief sit under it */
+.brief-stands { margin: 18px 0 4px; }
+.brief-stands h3 { margin: 0 0 6px; font-size: 14px; }
+.brief-stands-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 5px 0; }
 .task-nav-workflow { margin: -2px 10px 6px; font-size: 12px; }
 .task-nav-label { margin: 14px 10px 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .task-main > .panel:first-child { margin-top: 0; }

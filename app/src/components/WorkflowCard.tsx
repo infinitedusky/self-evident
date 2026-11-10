@@ -8,14 +8,14 @@ import { useState } from 'react'
 import { Badge } from './Badge'
 import { CHECKS, addCheck, canMakeOptional, canRemove, canTurnOff, normalize, removeCheck, step, validOrder, type StepKey, type Workflow, type WorkflowStep } from '@self-evident/engine/steps'
 
-const NOTE: Partial<Record<StepKey, string>> = { idea: 'always first', research: 'before the brief', brief: 'always required', sketch: 'before or after the brief', mockup: 'before or after the brief', prototype: 'before or after the brief' }
+const NOTE: Partial<Record<StepKey, string>> = { idea: 'always first', brief: 'the parent: every step feeds it, and it is approved last', adr: 'a check, after the other steps', risk: 'a check, after the other steps', audit: 'a check, after the other steps' }
 
 export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, onSave }: { workflow: Workflow; usedBy?: string; editing?: boolean; onSave?: (w: Workflow) => void }) {
   const [editing, setEditing] = useState(startEditing)
   const [w, setW] = useState(() => normalize(workflow))
   const set = (i: number, patch: Partial<WorkflowStep>) => setW({ ...w, steps: w.steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) })
   const moved = (i: number, by: number) => { const steps = [...w.steps]; const [s] = steps.splice(i, 1); steps.splice(i + by, 0, s); return steps }
-  const canMove = (i: number, by: number) => i + by >= 0 && i + by < w.steps.length && validOrder(moved(i, by))
+  const canMove = (i: number, by: number) => i + by >= 0 && i + by < w.steps.length && w.steps[i].key !== 'brief' && w.steps[i + by].key !== 'brief' && validOrder(moved(i, by)) // the brief stays last: it isn't in the order
   const move = (i: number, by: number) => setW({ ...w, steps: moved(i, by) })
   const on = w.steps.filter((s) => s.on)
   const off = w.steps.filter((s) => !s.on)
@@ -33,7 +33,7 @@ export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, 
             {on.map((s) => <li key={s.key}>{step(s.key).icon} {step(s.key).label} {s.required ? <Badge tone="warn">required</Badge> : <span className="faint" style={{ fontSize: 12 }}>optional</span>}</li>)}
           </ol>
           <div className="faint" style={{ fontSize: 13 }}>
-            {w.ordered ? 'In this order: a step waits for the required ones before it.' : 'Any order.'}
+            {w.ordered ? 'In this order: a step waits for the required ones before it. The brief is approved last.' : 'Any order. The brief is approved last.'}
             {off.length > 0 && <> Off: {off.map((s) => step(s.key).label).join(', ')}.</>}
           </div>
         </>
@@ -58,7 +58,7 @@ export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, 
           </ul>
           {addable.length > 0 && (
             <div className="wf-add">
-              <span className="faint" style={{ fontSize: 13 }}>Add a check after the brief:</span>
+              <span className="faint" style={{ fontSize: 13 }}>Add a check, run before the brief is final:</span>
               {addable.map((k) => <button key={k} className="btn quiet small" title={step(k).what} onClick={() => setW(addCheck(w, k))}>{step(k).icon} {step(k).label}</button>)}
             </div>
           )}

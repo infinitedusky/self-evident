@@ -24,7 +24,7 @@ export function WorkflowSettings({ appId }: { appId: string }) {
       </div>
       <p className="faint settings-desc" style={{ margin: '6px 0 12px', maxWidth: 760 }}>
         Rules for the steps a task goes through before it's built: which ones it takes, which are required, and whether their order is enforced. Nothing here runs anything.
-        Some rules are fixed: the brief is always required, starting as an idea comes first, research comes before the brief, and checks come after it.
+        Some rules are fixed: the brief is always required and is the parent of the other steps, approved once the required ones are done; starting as an idea comes first; checks come after the other steps.
         A task follows its own rules if it has some, else its project's, else the app's default.
       </p>
       {name !== null && (

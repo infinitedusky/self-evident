@@ -377,12 +377,12 @@ export const prototypes: Prototype[] = [
 export const uiWorkflow: Workflow = { id: 'wf_sample_ui', name: 'UI change (sample)', ordered: true, steps: [
   { key: 'idea', on: true, required: true }, { key: 'research', on: true, required: false },
   { key: 'mockup', on: true, required: true }, { key: 'prototype', on: true, required: false },
-  { key: 'brief', on: true, required: true }, { key: 'risk', on: true, required: true },
+  { key: 'risk', on: true, required: true }, { key: 'brief', on: true, required: true },
 ] }
 /** What every app starts with (sample copy of the engine's "Default"). */
 export const defaultWorkflow: Workflow = { id: 'wf_sample_default', name: 'Default', ordered: false, steps: [
   { key: 'idea', on: true, required: false }, { key: 'research', on: true, required: false }, { key: 'sketch', on: true, required: false }, { key: 'mockup', on: true, required: false },
-  { key: 'brief', on: true, required: true }, { key: 'prototype', on: true, required: false },
+  { key: 'prototype', on: true, required: false }, { key: 'brief', on: true, required: true },
 ] }
 export const quickWorkflow: Workflow = { id: 'wf_sample_quick', name: 'Quick fix (sample)', ordered: false, steps: [
   { key: 'idea', on: true, required: false }, { key: 'research', on: false, required: false },
@@ -423,8 +423,10 @@ export const taskStepsView: StepsView = {
 }
 export const ideaStepsView: StepsView = { on: 'idea', resolved: { workflow: null, from: null }, fromIdea: null, states: ideaSteps, rows: [], blocking: [] }
 export const projectStepsView: StepsView = { on: 'project', resolved: { workflow: defaultWorkflow, from: 'app' }, fromIdea: null, states: [{ key: 'prototype', status: 'done', detail: 'the whole flow, made-up orders' }], rows: [], blocking: [] }
-/** The same task with its brief approved: the blast radius opens, and so does the build. */
-export const approvedTaskStepsView: StepsView = { ...taskStepsView, states: taskStepsView.states.map((x) => (x.key === 'brief' ? { ...x, detail: undefined, approved: { by: 'Sam (sample)', at: '2026-10-28' } } : x)), blocking: ['risk'] }
+/** The same task with its blast radius done and its brief approved: the build opens. */
+export const approvedTaskStepsView: StepsView = { ...taskStepsView, states: [...taskStepsView.states.map((x) => (x.key === 'brief' ? { ...x, detail: undefined, approved: { by: 'Sam (sample)', at: '2026-10-28' } } : x)), { key: 'risk', status: 'done', detail: '3 files, one migration' }], blocking: [] }
+/** The same task with its mockups still under way: in an enforced order, the blast radius waits on them. */
+export const waitingTaskStepsView: StepsView = { ...taskStepsView, states: taskStepsView.states.map((x) => (x.key === 'mockup' ? { ...x, status: 'started', detail: '2 variants' } : x)), blocking: ['mockup', 'risk', 'brief'] }
 export const researchWork: StepWork = { id: 'step_sample1', key: 'research', status: 'done', detail: '3 comps, one case against', refs: [], updatedBy: 'agent', updatedAt: T0,
   body: '### Who does it best (sample)\n- Shop A: one page, address autocompleted.\n- Shop B: wallet buttons first.\n\n### The case against\nOne page is long on a phone.' }
 export const workflowRows: WorkflowRow[] = [{ ...uiWorkflow, appDefault: true, projects: 1, tasks: 0 }, { ...quickWorkflow, appDefault: false, projects: 0, tasks: 1 }]

@@ -2031,3 +2031,25 @@ the skills, with Self Evident driving. RSA-804's worktree was dropped; nothing w
 Not decided: whether the tkt integration leaves the product, and what Ragdoll Golf's tracker file should now say (it
 points at Linear). Gaps set-up had, if tkt stays: the worktrunk entry, restarting a running chat after the tracker
 changes, and `docs/agents/forge.md` keeping the old `RG` ticket link.
+
+## The brief is the parent (Sandy, 2026-11-10: "it's not like step five … that workflow is all about getting us to a really solid brief")
+
+**What Sandy said.** After putting tkt down: one conductor per worktree, deploying fresh agents where needed
+(SHAPE.md, Decided). Then the workflow: the brief is the parent document of every step up through the blast radius;
+the brief audit, ADR and blast radius run by themselves once the prototype is approved, and that finalizes the brief;
+the brief references the assets produced on the way. A task is the brief stage and the build stage; a project is
+tasks; the build is phases decided through the briefing.
+
+**Built** (branch `brief-is-parent`). `steps.ts`: the brief is outside the order (no position, waits on nothing,
+nothing waits on it), kept last in a stored workflow; a check's place is after the other steps, not after the brief;
+`owed` lists the required steps a brief still waits on, and `approveBrief` refuses until they are done (before, an
+approved brief could come first and a required blast radius after). The default order is idea, research, sketches,
+mockups, the prototype. No migration: stored workflows are normalized when read. The page: the task's nav is two
+groups, Brief (the brief first, the steps that feed it under it) and Build; the brief's page lists "What it stands
+on", each step with what it has and a link, and says what approval waits on. The agent's prompt says the brief is the
+parent and to name each step's assets in it.
+
+**Not built yet.** The automatic run of the three checks as deployed agents after the prototype is approved; an
+"approve the prototype" moment to trigger it; the brief's asset list written by the engine instead of the agent;
+phases decided in the briefing. I assumed the audit runs last, after the ADR and the blast radius, so it reads the
+brief with both attached; Sandy has not confirmed that order.
