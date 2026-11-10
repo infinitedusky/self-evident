@@ -8,12 +8,15 @@
  * - "starts as an idea" is always there and always first; a workflow makes it required or not;
  * - research comes next: on or off, required or not;
  * - the brief is always there and always required;
- * - mockups and the prototype can go before or after the brief;
+ * - sketches, mockups and the prototype can go before or after the brief;
  * - the checks (an ADR, the blast radius, a brief audit, and the like) come after the brief, added or removed.
+ * The three ways of looking before building (Sandy, 2026-11-09): a sketch is about speed, plain HTML until the screen
+ * is liked; a mockup is the story done properly, and goes into the brief; the prototype comes after the brief, to find
+ * the best way to build it. So the default order is idea, research, sketches, mockups, the brief, the prototype.
  * The app imports this module too (`@self-evident/engine/steps`), so the rules live in one place.
  */
 
-export type StepKey = 'idea' | 'research' | 'brief' | 'mockup' | 'prototype' | 'adr' | 'risk' | 'audit'
+export type StepKey = 'idea' | 'research' | 'brief' | 'sketch' | 'mockup' | 'prototype' | 'adr' | 'risk' | 'audit'
 export type On = 'idea' | 'task' | 'project'
 /** Where a step may sit: first; before the brief; the brief; either side of it; after it (a check, added or removed). */
 export type Place = 'first' | 'before' | 'brief' | 'either' | 'after'
@@ -23,8 +26,9 @@ export const STEPS: StepDef[] = [
   { key: 'idea', label: 'Starts as an idea', icon: '💡', what: 'Explored as an idea first, then converted.', place: 'first' },
   { key: 'research', label: 'Research', icon: '🔎', what: 'Who does this best, what exists already, our numbers, the case against.', place: 'before' },
   { key: 'brief', label: 'Brief', icon: '📝', what: 'What to build, for the builder. A task completes only once it is approved.', place: 'brief' },
-  { key: 'mockup', label: 'Mockups', icon: '🎨', what: 'How it looks: stories with made-up data, variants side by side.', place: 'either' },
-  { key: 'prototype', label: 'Prototype', icon: '🛠️', what: 'The agent\'s quick working attempt, to use and show people.', place: 'either' },
+  { key: 'sketch', label: 'Sketches', icon: '✏️', what: 'The first look, fast: plain HTML screens to react to and change in moments, before a real story.', place: 'either' },
+  { key: 'mockup', label: 'Mockups', icon: '🎨', what: 'How it looks, done properly: stories with made-up data, variants side by side. The agreed one goes into the brief.', place: 'either' },
+  { key: 'prototype', label: 'Prototype', icon: '🛠️', what: 'The agent\'s quick working attempt, to use, show people and find the best way to build it.', place: 'either' },
   { key: 'adr', label: 'ADR', icon: '🏛️', what: 'The architecture decision, written down: the options, the choice, why.', place: 'after' },
   { key: 'risk', label: 'Blast radius', icon: '💥', what: 'What the change touches, what could break, and how we\'d know.', place: 'after' },
   { key: 'audit', label: 'Brief audit', icon: '🧐', what: 'The brief read against the code by a second agent: gaps, wrong guesses.', place: 'after' },
@@ -34,9 +38,9 @@ export const CHECKS = STEPS.filter((s) => s.place === 'after').map((s) => s.key)
 
 /** Where each step can be done. An idea has a rough draft, not a brief, and isn't checked; a project has no brief. */
 export const CAN: Record<On, StepKey[]> = {
-  idea: ['research', 'brief', 'mockup', 'prototype'],
+  idea: ['research', 'brief', 'sketch', 'mockup', 'prototype'],
   task: STEPS.map((s) => s.key),
-  project: ['idea', 'research', 'mockup', 'prototype'],
+  project: ['idea', 'research', 'sketch', 'mockup', 'prototype'],
 }
 export const label = (key: StepKey, on: On) => (key === 'brief' && on === 'idea' ? 'Rough draft' : step(key).label)
 
@@ -44,7 +48,7 @@ export const label = (key: StepKey, on: On) => (key === 'brief' && on === 'idea'
 export interface WorkflowStep { key: StepKey; on: boolean; required: boolean }
 export interface Workflow { id: string; name: string; steps: WorkflowStep[]; ordered: boolean } // steps in its order
 
-/** What a workflow may switch: research, mockups and the prototype on or off; the idea and the brief are always on. */
+/** What a workflow may switch: research, sketches, mockups and the prototype on or off; the idea and the brief are always on. */
 export const canTurnOff = (key: StepKey) => key === 'research' || step(key).place === 'either'
 export const canMakeOptional = (key: StepKey) => key !== 'brief'
 export const canRemove = (key: StepKey) => step(key).place === 'after'
@@ -61,8 +65,8 @@ export function validOrder(steps: { key: StepKey }[]): boolean {
   })
 }
 
-/** The default list: the idea, research, the brief, mockups and the prototype; no checks; nothing but the brief required. */
-export const DEFAULT_STEPS: WorkflowStep[] = ['idea', 'research', 'mockup', 'prototype', 'brief'].map((key) => ({ key: key as StepKey, on: true, required: key === 'brief' }))
+/** The default list, in the order Sandy set on 2026-11-09: the idea, research, sketches, mockups, the brief, then the prototype; no checks; nothing but the brief required. */
+export const DEFAULT_STEPS: WorkflowStep[] = ['idea', 'research', 'sketch', 'mockup', 'brief', 'prototype'].map((key) => ({ key: key as StepKey, on: true, required: key === 'brief' }))
 
 /**
  * The workflow every app starts with, made with the app (Sandy, 2026-10-29: a task's workflow "can't be nothing").
@@ -73,11 +77,18 @@ export const DEFAULT_WORKFLOW: Workflow = { id: 'default', name: DEFAULT_NAME, s
 
 /**
  * A workflow with the fixed rules applied: the idea and the brief listed and on, the brief required, any missing
- * fixed step put back in its place, and an order that breaks the rules put back in the default order.
+ * fixed step put back in its place, and an order that breaks the rules put back in the default order. A workflow
+ * saved before sketches existed gets them on, right before its mockups: it never switched them off.
  */
 export function normalize(w: Workflow): Workflow {
   let steps = w.steps.filter((s, i) => STEPS.some((d) => d.key === s.key) && w.steps.findIndex((x) => x.key === s.key) === i)
-  for (const d of DEFAULT_STEPS) if (!steps.some((s) => s.key === d.key)) steps.push({ ...d, on: d.key === 'idea' || d.key === 'brief' })
+  const hadSketch = steps.some((s) => s.key === 'sketch')
+  for (const d of DEFAULT_STEPS) if (!steps.some((s) => s.key === d.key)) steps.push({ ...d, on: d.key === 'idea' || d.key === 'brief' || d.key === 'sketch' })
+  if (!hadSketch && steps.findIndex((s) => s.key === 'mockup') < steps.findIndex((s) => s.key === 'sketch')) { // beside its sibling, wherever that sits
+    const sketch = steps.find((s) => s.key === 'sketch')!
+    steps = steps.filter((s) => s.key !== 'sketch')
+    steps.splice(steps.findIndex((s) => s.key === 'mockup'), 0, sketch)
+  }
   steps = steps.map((s) => (s.key === 'brief' ? { ...s, on: true, required: true } : s.key === 'idea' ? { ...s, on: true } : canRemove(s.key) ? { ...s, on: true } : s))
   if (!validOrder(steps)) {
     const rank = (k: StepKey) => ['first', 'before', 'either', 'brief', 'after'].indexOf(step(k).place)
