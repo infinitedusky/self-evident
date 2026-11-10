@@ -568,6 +568,18 @@ the conversation's branch, one screen each. The default workflow is idea, resear
 the prototype; a workflow saved before the step gets it on, right before its mockups, and its own order is left as
 the person set it.
 
+**The brief is the parent, not a step in the line** (Sandy, 2026-11-10: "the brief sits as a kind of parent document
+to all the stuff we do up through blast radius. So it's not like step five … that workflow is all about getting us
+to a really solid brief. Including the prototype. The brief would include references to assets that we produce
+during that"). This changes the paragraph above: the brief is no longer one stop between mockups and the prototype.
+It opens when the work starts and every step up to the plan feeds it: research, sketches, mockups, the prototype,
+the ADR, the blast radius, the brief audit. Each step leaves its asset (a sketch file, a story, the prototype's
+branch, a report) and the brief points at it. The prototype now comes before the brief is final. Once the person
+approves the prototype, the ADR, the blast radius and the brief audit run by themselves, each a fresh agent the
+conductor deploys (Decided, "One conductor per worktree"), and their results finalize the brief, which the person
+then approves. An approved brief is what the plan and the build start from. Not built: today `steps.ts` holds the
+brief as a step with others placed before and after it, and the three run only when started by hand.
+
 **It shows beside the conversation, from the conversation's worktree** (Sandy, 2026-11-09: the sketch "can't be
 jumping back and forth to some random screen or having to give us a link somewhere. It has to be right there when
 we're prompting"; and of Storybook: "we need the screens to match the worktree of the plan of the task"). Sketches
