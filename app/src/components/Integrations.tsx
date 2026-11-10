@@ -155,7 +155,7 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
       <p className="muted settings-lead">{i.does}</p>
 
       {editing
-        ? <EditForm i={i} values={values} scope={scope} all={all} onCancel={() => setEditing(false)} onSave={async (v) => { await onSave(v); setEditing(false); setCheck(null) }} />
+        ? <EditForm i={i} values={values} scope={scope} all={all} onCancel={() => setEditing(false)} onSave={async (v) => { const turnedOn = perAppHere && switched && !on && v[i.key]?.on === 'true'; await onSave(v); setEditing(false); setCheck(null); if (turnedOn && setup) void act(setup) }} /> // switching on is the set-up (Sandy, 2026-11-09: "add it and it works")
         : <div className="settings-group">
             <div className="integration-section-head"><h3 className="settings-h3">{i.perApp ? 'For this app' : 'Values'}</h3><button className="btn quiet" onClick={() => setEditing(true)}>Edit</button></div>
             <dl className="fields">

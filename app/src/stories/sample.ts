@@ -246,7 +246,7 @@ export const sampleIntegrations: FactorySettings['integrations'] = [
     actions: [
       { key: 'start', name: 'Start', does: 'Starts Storybook from the checkout with the command and keeps it running; Mockups shows it.', kind: 'start' },
       { key: 'map', name: 'Open the map', does: 'The screen map: every page as the user sees it, and the taps between them. Here once the check finds a map and Storybook is up.', kind: 'link' },
-      { key: 'setup', name: 'Set up the screen map', does: 'Hands the agent the job in a conversation in the repo: the add-on, its stylesheet, the flow files kept out of the story tests, a first map. It asks before each file.', kind: 'ask', ask: 'Set up the screen map in this repo’s Storybook (sample: the steps of the standard).' },
+      { key: 'setup', name: 'Set up Storybook', does: 'Installs Storybook to the standard when the repo has none (Storybook’s own installer, docs only), then the screen map: the add-on, its stylesheet, the main and preview entries, a first map, a line in the README; commits on the base branch and pushes. Every step is skipped when already done. Only what cannot be done from here goes to the agent.', kind: 'ask' },
     ],
   },
   {
