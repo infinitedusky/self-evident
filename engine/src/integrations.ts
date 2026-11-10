@@ -11,8 +11,8 @@
  * Every integration is the service's official API or SDK, with no paid middleman (Sandy, 2026-10-29).
  */
 import { LinearClient } from '@linear/sdk'
-import { checkStorybook, setupMapAsk, type Check, type StorybookContext } from './storybook.js'
-import { checkTkt, setupTkt, urls, type Deps as TktDeps, type TktContext } from './tkt.js'
+import { checkStorybook, installAsk, installStorybook, storybookDefaults, type Check, type StorybookContext, type StorybookDeps } from './storybook.js'
+import { checkTkt, setupTkt, type Deps as TktDeps, type TktContext } from './tkt.js'
 
 /**
  * `secret` marks the field naming the key's variable; `required` ones must be set before it counts as connected.
@@ -61,7 +61,7 @@ export const INTEGRATIONS: Integration[] = [
     actions: [
       { key: 'start', name: 'Start', does: 'Starts Storybook from the checkout with the command and keeps it running; Mockups shows it.', kind: 'start' },
       { key: 'map', name: 'Open the map', does: 'The screen map: every page as the user sees it, and the taps between them. Here once the check finds a map and Storybook is up.', kind: 'link' },
-      { key: 'setup', name: 'Set up the screen map', does: 'Hands the agent the job in a conversation in the repo: the add-on, its stylesheet, the flow files kept out of the story tests, a first map. It asks before each file.', kind: 'ask', ask: setupMapAsk(urls().engineUrl) },
+      { key: 'setup', name: 'Set up Storybook', does: 'Installs Storybook to the standard when the repo has none (Storybook\'s own installer, docs only), then the screen map: the add-on, its stylesheet, the main and preview entries, a first map, a line in the README; commits on the base branch and pushes. Every step is skipped when already done. Only what cannot be done from here goes to the agent.', kind: 'ask' },
     ],
   },
   {
@@ -161,7 +161,7 @@ export function statuses(values: Values | Record<string, Record<string, Effectiv
 export class IntegrationError extends Error {}
 
 /** What a per-app check needs from the app: tkt's context, or Storybook's; `deps` only in tests. */
-export interface Local { tkt?: { ctx: TktContext; deps?: TktDeps }; storybook?: { ctx: StorybookContext; deps?: Parameters<typeof checkStorybook>[1] } }
+export interface Local { tkt?: { ctx: TktContext; deps?: TktDeps }; storybook?: { ctx: StorybookContext; deps?: StorybookDeps } }
 
 /**
  * Tries the connection: signs in with the key and finds the team or space; for tkt, looks for the runner and the
@@ -230,10 +230,14 @@ export async function setupIntegration(key: string, values: Record<string, strin
   if (key === 'storybook') {
     if (!local?.storybook) throw new IntegrationError('Storybook is set per app: set it up from an app\'s Integrations')
     if (st.state === 'off') return { done: false, did: [], ask: null, detail: 'Storybook is off for this app: switch it on first.' }
-    const check = await checkStorybook(local.storybook.ctx, local.storybook.deps)
-    if (check.ok) return { done: true, did: [], ask: null, detail: check.detail }
-    if (/^No local checkout/.test(check.detail)) return { done: false, did: [], ask: null, detail: `${check.detail} Set it under Settings › Repo first.` }
-    return { done: false, did: [], ask: `Self Evident's Storybook check for ${local.storybook.ctx.app.name} says: ${check.detail}\n\n${action.ask}`, detail: check.detail }
+    const ctx = local.storybook.ctx
+    if (!ctx.repoPath) return { done: false, did: [], ask: null, detail: 'No local checkout under Repo: Storybook is installed in the repo. Set it under Settings › Repo first.' }
+    const inst = await installStorybook(ctx, local.storybook.deps)
+    const d = await storybookDefaults(ctx.repoPath) // the installer may have just made the script the defaults come from
+    const check = await checkStorybook({ ...ctx, url: ctx.url ?? d?.url ?? null, cmd: ctx.cmd ?? d?.cmd ?? null }, local.storybook.deps)
+    if (check.ok && !inst.left.length) return { done: true, did: inst.did, ask: null, detail: check.detail }
+    const ask = [`Self Evident's Storybook check for ${ctx.app.name} says: ${check.detail}`, ...(inst.left.length ? ['Left from the install:', ...inst.left.map((l) => `- ${l}`)] : []), '', await installAsk()].join('\n')
+    return { done: false, did: inst.did, ask, detail: check.detail }
   }
   throw new IntegrationError(`nothing to set up for ${i.name}`)
 }

@@ -176,7 +176,7 @@ describe('set up what\'s missing', () => {
     expect(mc.files[`${root}/docs/agents/workflow.md`]).toBe(mine)
     expect(mc.files[`${root}/CLAUDE.md`]).toMatch(/^# Scratch\n\n<!-- rogs-skills:begin config v1 -->\n## Ticket lifecycle/); expect(mc.files[`${root}/CLAUDE.md`]).not.toContain('\nold\n')
     expect(r.did).toContain('Left docs/agents/workflow.md alone: it isn\'t Self Evident\'s (no "Self Evident wrote it" line).')
-    expect(r.did.at(-1)).toMatch(/^Written in the checkout, which is on feature, not main: tkt reads the configuration from main/)
+    expect(r.did.at(-1)).toMatch(/^Written in the checkout, which is on feature, not main: it needs to land on main/)
     expect(mc.cmds.some((c) => c.startsWith('git commit') || c.startsWith('git push'))).toBe(false)
     expect(r.done).toBe(true) // the files are there, so doctor passes; landing them on main is the one thing left
   })
@@ -187,7 +187,7 @@ describe('set up what\'s missing', () => {
     const again = machine({ files: { ...refused.m.files }, doctor })
     again.m.hooks = true; again.m.plugin = true
     const r = await setupTkt(ctx, again)
-    expect(r.did).toEqual(['Nothing new to commit: main has this configuration already.']); expect(r.done).toBe(true)
+    expect(r.did).toEqual(['Nothing new to commit: main has it already.']); expect(r.done).toBe(true)
   })
 
   it('skips the forge without a remote and says so; the rest is still written', async () => {

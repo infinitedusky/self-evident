@@ -479,7 +479,12 @@ Details and sources in `research/`.
   Adding an integration to an app is a switch; its values have defaults read from the repo, and the person sets one
   only when the default is wrong. Storybook's command and URL default to the repo's `storybook` script run with the
   repo's package manager and `--no-open`, and the port the script names (else 6006). Set up what's missing then does
-  the rest without a question. Still to come: installing Storybook to the standard when the repo has none.
+  the rest without a question; in a repo without Storybook it installs it to the standard (Sandy, 2026-11-09:
+  "Storybook is simple, every project uses it, it should not be hard to add to a repo"): Storybook's own installer,
+  docs only, in the package the UI lives in; the add-on, the stylesheet, the main and preview entries, a first map
+  with the installer's example page, a README paragraph; one commit on the base branch, pushed. Switching it on is
+  the set-up; the button stays as repair. The agent gets only what the installer could not do (a vitest exclude, a
+  main without an addons list), with the integration's document, and finishes without asking.
 
 - **The house profile** (2026-11-09). The one default every app's lifecycle configuration gets, apart from its own
   facts: worktrees at `../<repo>-wt/<ticket id>` beside the checkout; the glossary in `GLOSSARY.md` (or the
@@ -491,6 +496,18 @@ Details and sources in `research/`.
   those stages itself; pull requests from `docs/agents/pull-request.md` unless the repo has its own template; the
   forge GitHub only, for now. Decided by Sandy's "set it up" to the proposal of 2026-11-09; the toggles come to the
   app's Settings when wanted.
+
+- **An integration is a document** (Sandy, 2026-11-09: "integrations have configuration documents that just have all
+  the stuff we need. And if someone needed to make a special change to it, they would do that. But that configuration
+  file would then just tell the system what to do, how to incorporate it"; "it can have installation instructions").
+  One document per integration says what it is, how it joins an app (a switch, or values with their defaults), what
+  it needs on the machine, what it writes into the repo, how it installs, how to check, what changes in Self Evident
+  when it is on, and what goes to the agent when the document cannot do a thing itself. A special change is an edit
+  of the document (every app) or of the written file in one repo (that app). Storybook's is the first,
+  `docs/integrations/storybook.md`, read by the engine for the agent's job and followed by its installer; the tkt
+  seeds in `docs/lifecycle/` are its documents' templates. The rest of the integrations move from the code into
+  documents next, and the engine becomes their reader; a check the common forms cannot express (a command's exit
+  code, a file containing a line, a URL answering) stays a named check the document points at.
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
