@@ -518,6 +518,16 @@ Details and sources in `research/`.
   harness, signed in by the person once), and that app's tkt has nothing to do with Self Evident after the file is
   written. It is a way to test, not the product's shape. Not built: Self Evident pulling from Linear; today it only
   pushes (an issue from an approved brief, comments, state moves).
+- **One conductor per worktree; it deploys agents where needed** (Sandy, 2026-11-10: "I want there to be an agent
+  per worktree as the conductor and then it will deploy agents where needed … like a fresh agent for blast radius").
+  The conversation's agent is the conductor of its worktree, from the first message to the merge. It keeps whatever
+  the person is part of turn by turn: the conversation, the brief, the sketches, the decisions. Sketching is the
+  conductor's, with a sketch skill, not a special agent: a sketch is only as good as its grasp of what was said, and
+  a handoff loses that. It deploys a fresh agent when the work can be written down and come back as a result:
+  research, the blast radius, turning an agreed sketch into stories, the build, verification. Review is always a
+  fresh agent, because the point is eyes that have not seen the build. What a deployed agent returns shows beside
+  the conversation, and the conductor stays free to talk. This replaces tkt as the driver (LOG.md, "tkt on its own,
+  tried and put down"): the lifecycle skills stay, the conductor runs them. Not built.
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
