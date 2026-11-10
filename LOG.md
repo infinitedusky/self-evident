@@ -1887,3 +1887,40 @@ fixed by stopping the stray and kickstarting the agent.
 
 **Next.** Installing Storybook to the standard when the repo has none (the same button, no questions); the Prototype
 environment as an integration; the Sketches slot.
+
+## Storybook from nothing, and an integration is a document (Sandy, 2026-11-09: "Storybook is fucking simple … it should not be hard to add to a repo")
+
+**What Sandy said.** After the one-press tkt set-up: "I'm just confused why we need to do all this work to add an
+integration. Why can't it just be add it and it works." Then the shape: "integrations have configuration documents
+that just have all the stuff we need … that configuration file would then just tell the system what to do, how to
+incorporate it", and "it can have installation instructions, right?" SHAPE.md, "An integration is a document".
+
+**Built** (branch `storybook-install`). The first document: `docs/integrations/storybook.md` (what it is, the
+standard, the installation in order, what the agent gets). The engine follows it (`storybook.ts`, `installStorybook`):
+Storybook's own installer (`storybook@latest init --yes --no-dev --features docs --package-manager <pm> --no-agent
+--disable-telemetry`, through the repo's package manager's dlx, in the package the UI lives in: an existing
+`.storybook` decides, else the root when it has a framework or builder dependency, else the first workspace package
+that has one); the add-on as a dev dependency; `.storybook/story-flow.css`; the add-on first in main's `addons` with
+a flowGlob read from the first `stories` glob; `import './story-flow.css'` after the last import of preview (or a new
+preview); a first map, `<stories>/flows/<app slug>.flow.json`, with the installer's example page as its first screen
+(`example-page--logged-out`); "The screen map" in the README; one commit on the base branch of only what the install
+touched (status before and after; the person's own changes stay as they were), pushed. Every step is skipped when
+done, so the button is repair. Left for the agent, with the document: a main without an addons list, the vitest
+exclude where a config runs the stories as tests, a Storybook older than 10, an installer that failed. The vitest
+exclude is now required only where a config runs the stories as tests (`flowsExcluded`), in the check too. Switching
+Storybook on in the UI runs the set-up at once (`Integrations.tsx`); the button stays. `commitOnBase` (`tkt.ts`) and
+`remoteAndBase` (`lifecycle.ts`) are shared with the tkt set-up; a refused push now quotes git's own fatal line.
+
+**Proof.** Storybook's real init on a copy of Ragdoll Golf's scaffold showed the shapes (a JS main with a quoted
+`"addons"` list, a preview with no imports, `src/stories/Page.stories.js`). The engine's installer then finished that
+copy in under a second (css, main, preview, map, commit) and the started Storybook's index listed `probe-map--docs`
+and `example-page--logged-out`. A fresh clone with nothing went through the real init in 6 seconds (the scaffold's
+package.json already carried the Storybook dependencies Sandy's agent had added by hand). Tests: `storybook.test.ts`
+"installing it" (a fake installer that leaves behind exactly what the real one did; git real, with a bare origin).
+
+**Side effect found.** Running Storybook's installer on the probes garbage-collected the Playwright browser build the
+app's story tests use (`chromium_headless_shell-1248`); `pnpm --filter app exec playwright install chromium` put it
+back. Worth knowing: a `playwright install` from any project prunes builds no project it knows of references.
+
+**Next.** The remaining integrations (tkt, PostHog, Datadog, Linear, Confluence) move from `integrations.ts` into
+documents and the engine becomes their reader; the Prototype environment as an integration; the Sketches slot.
