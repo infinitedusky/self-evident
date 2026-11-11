@@ -2099,3 +2099,14 @@ too"). The button from #119 sat at the end of the tab row, which scrolls sideway
 it, the +, the terminal and the pop-out buttons were all scrolled off. Now only the conversations scroll; the four
 buttons stay at the right of the row. I had told Sandy the button was there without looking at the live page with
 real conversations open: check the real page, not the story, before saying a control exists.
+
+**Go there with the agent, and no width limit** (Sandy, 2026-11-10, after the first sketch on RG-1: "not crazy about
+the split when the sketch opened up. I think we should go there with the agent instead of creating a new split";
+"the tabs should have no width limit. The center area can get as wide as needed"). A task's own agent calling
+open_tab with a sketch, a story or the prototype now sends the person to that step's page of its task
+(`/tasks/<id>/sketch?file=…`, `/mockup?story=…`, `/prototype`), in the task's own tab, where the viewer shows it
+beside the conversation; it never splits, whatever it asks for. It no longer "follows" its own task into a second
+tab either. The step's page shows the viewer as soon as the task has an agent, at the file or story named. A tab's
+page goes where it is sent from outside (PagePane), which the following tab needed too. The 1200px cap on a tab's
+page is gone; text in a task's middle column keeps a readable line. The app's agent, in the left column, opens and
+splits tabs as before. Tests: `follow.test.ts`.
