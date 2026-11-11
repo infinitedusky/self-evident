@@ -14,6 +14,8 @@ type Story = StoryObj<typeof meta>
 export const InOrder: Story = {}
 /** In an enforced order with the mockups unfinished: the blast radius after them is greyed. */
 export const AStepWaits: Story = { args: { rows: rows('task', waitingTaskStepsView.states, waitingTaskStepsView.resolved.workflow) } }
+/** Folded to icons, to give the step's page the room; the chevron opens it again. */
+export const Folded: Story = { args: { folded: true, here: 'mockup', onToggle: () => {} }, render: (a) => <div style={{ width: 52 }}><TaskNav {...a} /></div> }
 /** On a step's page. */
 export const OnAStep: Story = { args: { here: 'mockup' } }
 /** Every step done and the brief approved: the build is under way. */

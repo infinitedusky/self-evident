@@ -346,6 +346,12 @@ pre.guide { margin: 8px 0 0; padding: 12px; max-height: 360px; overflow: auto; f
 /* The workspace, after Replit's: the loop as an icon rail, the agent's column, tabs that split (Dockview) */
 html, body, #root { height: 100%; }
 .workspace { display: grid; grid-template-columns: 48px 52px 1fr; height: 100vh; overflow: hidden; }
+.ws-main { display: flex; min-width: 0; height: 100%; }
+.ws-main > .ws-split { flex: 1; }
+/* The agent, folded: a strip where its column was, so there is something to press to bring it back. */
+.agent-strip-fold { flex: none; width: 26px; height: 100%; border: 0; border-right: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; font: 500 12px var(--sans); }
+.agent-strip-fold:hover { background: var(--accent-wash); color: var(--ink); }
+.agent-strip-fold span { writing-mode: vertical-rl; }
 .workspace.no-apps { grid-template-columns: 52px 1fr; }
 .ws-split { height: 100%; min-width: 0; }
 .ws-split .dv-split-view-container > .dv-view-container > .dv-view:first-child { border-right: 1px solid var(--line); }
@@ -564,8 +570,15 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .step-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
 .step-protos li { display: flex; gap: 8px; align-items: center; }
 /* A task with its own agent: a third column that stays while the steps change, and folds to a strip. */
-.task-layout.with-agent { grid-template-columns: 220px minmax(0, 1fr) 340px; }
-.task-layout.with-agent.agent-folded { grid-template-columns: 220px minmax(0, 1fr) 40px; }
+.task-layout.with-agent { grid-template-columns: var(--task-nav, 220px) minmax(0, 1fr) var(--task-agent, 340px); }
+.task-layout.agent-folded { --task-agent: 40px; }
+.task-layout.nav-folded { --task-nav: 44px; }
+.task-nav-fold { justify-self: end; width: 26px; height: 22px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink-faint); cursor: pointer; font: 14px var(--sans); line-height: 1; }
+.task-nav.folded { justify-items: center; }
+.task-nav.folded .task-nav-fold { justify-self: center; margin-bottom: 4px; }
+.task-nav.folded .link { width: 36px; padding: 6px 0; text-align: center; }
+.task-nav.folded .link.done { box-shadow: inset 2px 0 0 var(--ok); }
+.task-nav.folded .link.locked { opacity: .45; }
 .task-agent { position: sticky; top: 20px; height: calc(100vh - 160px); min-height: 420px; max-height: 820px; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .task-agent-head { display: flex; align-items: center; gap: 6px; padding-right: 8px; border-bottom: 1px solid var(--line); }
 .task-agent-head .agent-strip { flex: 1; }
@@ -582,8 +595,8 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .task-agent-fold .dot { background: var(--talk); }
 .task-agent-fold-text { writing-mode: vertical-rl; }
 .talk-tab.hide { color: var(--ink-faint); font-size: 14px; padding: 4px 8px; }
-@media (max-width: 1100px) { .task-layout.with-agent, .task-layout.with-agent.agent-folded { grid-template-columns: 220px minmax(0, 1fr); } .task-agent { grid-column: 1 / -1; position: static; height: 520px; } .task-agent.folded { height: auto; } .task-agent-fold { flex-direction: row; width: auto; padding: 8px 12px; } .task-agent-fold-text { writing-mode: horizontal-tb; } }
-@media (max-width: 760px) { .task-layout, .task-layout.with-agent, .task-layout.with-agent.agent-folded { grid-template-columns: 1fr; } .task-nav { position: static; } }
+@media (max-width: 1100px) { .task-layout.with-agent { grid-template-columns: var(--task-nav, 220px) minmax(0, 1fr); } .task-agent { grid-column: 1 / -1; position: static; height: 520px; } .task-agent.folded { height: auto; } .task-agent-fold { flex-direction: row; width: auto; padding: 8px 12px; } .task-agent-fold-text { writing-mode: horizontal-tb; } }
+@media (max-width: 760px) { .task-layout, .task-layout.with-agent { grid-template-columns: 1fr; } .task-nav { position: static; } }
 
 /* One conversation in the terminal and the UI */
 .terminal-note { margin: 0 12px 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--idle-wash); font-size: 13px; display: grid; gap: 6px; }

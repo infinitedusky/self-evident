@@ -96,6 +96,8 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   const subject = { kind: 'issues' as const, id: i.id }
   const { v, error } = useSteps(subject, i.appId)
   const agent = useTaskAgent(i.id, i.appId)
+  const [navOpen, setNavOpen] = useState(() => { try { return localStorage.getItem('se.task-nav.open') !== '0' } catch { return true } })
+  const toggleNav = () => setNavOpen((o) => { try { localStorage.setItem('se.task-nav.open', o ? '0' : '1') } catch { /* fine */ } return !o })
   const base = `/tasks/${i.id}`
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
@@ -108,8 +110,8 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   const next = rows.find((r) => !r.waitingOn && r.state.status !== 'done' && r.key !== 'idea')
   const wf = v.resolved.workflow
   return (
-    <div className={`task-layout with-agent ${agent.open ? '' : 'agent-folded'}`}>
-      <TaskNav base={base} here={here} rows={rows} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: i.subIssues.length, waitingOn: buildWaits }} />
+    <div className={`task-layout with-agent ${agent.open ? '' : 'agent-folded'} ${navOpen ? '' : 'nav-folded'}`}>
+      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} rows={rows} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: i.subIssues.length, waitingOn: buildWaits }} />
       <div className="task-main">
         {here === 'overview' && (
           <>

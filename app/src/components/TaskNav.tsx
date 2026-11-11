@@ -26,12 +26,15 @@ export function briefStands(rows: Row[], on: On) {
 /** ✓ finished, ◐ started (or a brief waiting for approval), ○ not started. */
 export const mark = (r: Row, on: On) => (finished(r.state, on) ? '✓' : r.state.status === 'none' ? '○' : '◐')
 
-export function TaskNav({ base, here, on = 'task', rows, workflow, build }: {
+export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded, onToggle }: {
   base: string; here: string; on?: On; rows: Row[]
   /** The workflow in force and where it comes from (", the app's default"); its steps are the list. */
   workflow?: { name: string; from: string } | null
   /** The build: how many sub-tasks are done, and what it waits on, if anything. */
   build: { done: number; total: number; waitingOn: string | null }
+  /** Folded to a strip of icons, to give the step's page the room (Sandy, 2026-11-10: "make the left nav steps collapsible too"). */
+  folded?: boolean
+  onToggle?: () => void
 }) {
   const item = (key: string, to: string, body: React.ReactNode, waitingOn: string | null, extra = '') =>
     waitingOn
@@ -40,8 +43,26 @@ export function TaskNav({ base, here, on = 'task', rows, workflow, build }: {
   const brief = rows.find((r) => r.key === 'brief')
   const feeds = rows.filter((r) => r.key !== 'brief')
   const stands = briefStands(rows, on)
+  const toggle = onToggle && <button className="task-nav-fold" onClick={onToggle} aria-expanded={!folded} aria-label={folded ? 'Show the steps' : 'Hide the steps'} title={folded ? 'Show the steps' : 'Hide the steps'}>{folded ? '›' : '‹'}</button>
+  if (folded) { // icons only: each still goes to its page, its name and state in the tooltip
+    const icon = (key: string, to: string, glyph: string, name: string, state: string, waitingOn: string | null, done: boolean) =>
+      waitingOn
+        ? <span key={key} className="link locked" title={`${name}: after ${waitingOn}`} aria-disabled="true">{glyph}</span>
+        : <NavLink key={key} to={to} end className={() => `link ${here === key ? 'active' : ''} ${done ? 'done' : ''}`} title={`${name}: ${state}`} aria-label={name}>{glyph}</NavLink>
+    const said = (r: Row) => (finished(r.state, on) ? 'done' : r.state.status === 'none' ? 'not started' : 'started')
+    return (
+      <nav className="task-nav folded" aria-label="This task" data-component="TaskNav">
+        {toggle}
+        {icon('overview', base, '⌂', 'Overview', 'this task', null, false)}
+        {brief && icon('brief', `${base}/brief`, step('brief').icon, 'The brief', stands ?? said(brief), null, finished(brief.state, on))}
+        {feeds.map((r) => icon(r.key, `${base}/${r.key}`, step(r.key).icon, label(r.key, on), said(r), after(r, rows, on), finished(r.state, on)))}
+        {icon('build', `${base}/build`, '🏗️', 'Sub-tasks', build.total ? `${build.done}/${build.total}` : 'not planned', build.waitingOn, !!build.total && build.done === build.total)}
+      </nav>
+    )
+  }
   return (
     <nav className="task-nav" aria-label="This task" data-component="TaskNav">
+      {toggle}
       {item('overview', base, <span className="task-nav-row"><span className="task-nav-mark">⌂</span>Overview</span>, null)}
       <div className="task-nav-label faint">Brief</div>
       {workflow && <div className="task-nav-workflow faint" title={`The workflow this task follows${workflow.from}`}>Workflow: <b>{workflow.name}</b>{workflow.from}</div>}

@@ -301,6 +301,8 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
         <div className={`workspace ${appsOpen ? '' : 'no-apps'}`} data-component="Workspace">
           {appsOpen && <AppPicker onOpen={(tab) => add(tab)} />}
           <Rail here={focused?.key ?? null} onOpen={(tab) => add(tab)} agentOpen={agentOpen} onToggleAgent={toggleAgent} appsOpen={appsOpen} onToggleApps={toggleApps} />
+          <div className="ws-main">
+          {!agentOpen && <button className="agent-strip-fold" onClick={toggleAgent} aria-expanded="false" aria-label="Show the agent" title="Show the agent (⌘J)">›<span>The agent</span></button>}
           <SplitviewReact className="ws-split" orientation={Orientation.HORIZONTAL} proportionalLayout={false}
             components={{ agent: AgentColumn, tabs: Tabs }}
             onReady={(e) => {
@@ -313,6 +315,7 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
               agent.api.onDidDimensionsChange((d) => { if (sized && d.width > 0) remember(AGENT_WIDTH_KEY, String(Math.round(d.width))) })
               if (!agentOpen) agent.api.setVisible(false)
             }} />
+          </div>
         </div>
       </Changed.Provider>
     </WorkspaceContext.Provider>
