@@ -2080,3 +2080,16 @@ out. Tests: `task-talk.test.ts`. Not exercised against a live agent: starting on
 
 **Next, from Sandy:** "we need a way to view sketches, mockups and prototypes. Each should have a way to detach the
 viewer, which makes it a tab in Chrome; it can be reattached."
+
+## The viewer, detachable (Sandy, 2026-11-10: "each should have a way to detach the viewer, which makes it a tab in Chrome")
+
+**Built** (branch `viewer`). `Viewer`: sketches, mockups (Storybook) or one prototype, with Detach, which opens
+`/view?tab=…` in a browser tab; the two sides find each other over a BroadcastChannel keyed by what is shown, so a
+reload on either side keeps them in step; Bring it back (where it left) or Put it back (in the tab) closes the tab
+and shows it in place again. Used in the workspace's Sketches, Storybook and prototype tabs, and on a task's
+Sketches, Mockups and Prototype step pages once the step has something, reading the task's own agent's worktree
+(the first file or story the step recorded opens first). The task's agent is also the conversation "in front"
+while its page is open, so a Sketches or Mockups tab opened by hand shows the task's worktree: after #120 the left
+column no longer named it. Stories: `Components/Viewer`, `Pages/TaskPage › Mockups Step`. Tried by hand: the
+detached page against the live engine, on Ragdoll Golf's (empty) sketches. Not tried: a real detach and return in
+Sandy's Chrome, where the pop-up rule decides whether the tab opens.
