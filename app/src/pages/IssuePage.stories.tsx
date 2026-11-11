@@ -34,6 +34,8 @@ export const Planned: Story = { parameters: at('iss_sample1', 'build'), beforeEa
 export const SubTaskBuilding: Story = { parameters: at('iss_sample5') }
 /** A sub-task not built yet: the planner's steps, from its brief. */
 export const SubTaskAsPlanned: Story = { parameters: at('iss_sample6') }
+/** A prototype started on the task: its agent shows as a second tab in the task's agent column, working. */
+export const PrototypeAgentOut: Story = { parameters: at('iss_sample20', 'prototype'), beforeEach: withEngine({ taskAgents: [{ sessionId: 'talk_sample_proto', kind: 'prototype', what: 'Prototype', title: 'Checkout in one page (sample)', busy: true }] }) }
 /** A task nobody has started an agent on: the column offers one button. */
 export const NoAgentYet: Story = { parameters: at('iss_sample20'), beforeEach: withEngine({ taskTalk: null }) }
 /** A task in no project yet. */

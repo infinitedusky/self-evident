@@ -90,7 +90,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen, onHide 
   }
   const backIn = () => { channel()?.postMessage({ type: 'closed' } satisfies Msg); window.close() }
   // Conversations belong to an app: only the app in the nav's are tabs here, and each app remembers its own.
-  const mine = (all: TalkSession[]) => all.filter((s) => s.appId === app?.id && !s.subjectRef?.issueId) // a task's own agent shows on the task's page, not here
+  const mine = (all: TalkSession[]) => all.filter((s) => s.appId === app?.id && !s.taskId && !s.subjectRef?.issueId) // a task's agents (its own, a prototype's) show on the task's page, not here
   const shown = mine(sessions)
   const current = shown.find((s) => s.id === sessionId) ?? null
   useEffect(() => { currentTalk.set(current?.id ?? null) }, [current?.id]) // Mockups and Sketches show this conversation's worktree
