@@ -7,7 +7,7 @@
 import { createSdkMcpServer, query, tool, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, idea, issue, project, prototype, repo, session, sessionMessage, workspace } from './db/schema.js'
 import { addWorktree, git, removeWorktree } from './git.js'
@@ -170,6 +170,21 @@ export async function taskTalk(issueId: string) {
   return row ? { ...row, live: live.has(row.id), busy: live.get(row.id)?.busy ?? false } : null
 }
 
+/**
+ * The agents a task's conductor has out: today, the conversation of each prototype started on the task (its own
+ * agent, in the prototype's worktree). They are the task's, so they show on its page beside the conductor and not in
+ * the app's column (Sandy, 2026-11-10: "if there is a sub agent we should see some indication").
+ */
+export async function taskAgents(issueId: string) {
+  const protos = await db.select().from(prototype).where(and(eq(prototype.issueId, issueId), inArray(prototype.status, ['running', 'stopped']), isNotNull(prototype.sessionId))).orderBy(prototype.createdAt)
+  if (!protos.length) return []
+  const rows = await db.select().from(session).where(inArray(session.id, protos.map((p) => p.sessionId!)))
+  return protos.flatMap((p) => {
+    const s = rows.find((r) => r.id === p.sessionId)
+    return s && s.status === 'open' ? [{ sessionId: s.id, kind: 'prototype' as const, what: 'Prototype', title: p.title, prototypeId: p.id, busy: live.get(s.id)?.busy ?? false }] : []
+  })
+}
+
 /** The task's agent, started if it has none: one conversation, one worktree, however many times it is asked for. */
 export async function ensureTaskTalk(issueId: string, actor = 'user') {
   return withLock(`task-talk:${issueId}`, async () => {
@@ -184,7 +199,7 @@ export async function ensureTaskTalk(issueId: string, actor = 'user') {
 }
 
 const taskPrompt = (t: { id: string; number: number; title: string }, key: string) => `
-This conversation is the agent of one task, ${key}-${t.number} "${t.title}" (${t.id}), and the only one: you are its conductor from its first sketch to its merge, in this one worktree. Every step of its brief (research, sketches, mockups, the prototype, the checks) and its build is done or directed from here: record each with set_step on this task, and keep its brief current with update_task. Marking a step done says it is ready for the person; they approve it on its page, and only then does it count. The person sees this conversation on the task's page, beside the step they are looking at, and "this" means this task. open_tab with a sketch, a story or the prototype takes them to that step's page of this task, where it shows beside you; it never splits a tab off. Keep to this task: for a new idea, another task or a look at findings, point them to the app's agent in the left column.`
+This conversation is the agent of one task, ${key}-${t.number} "${t.title}" (${t.id}), and the only one: you are its conductor from its first sketch to its merge, in this one worktree. Every step of its brief (research, sketches, mockups, the prototype, the checks) and its build is done or directed from here: record each with set_step on this task, and keep its brief current with update_task. Marking a step done says it is ready for the person; they approve it on its page, and only then does it count. The person sees this conversation on the task's page, beside the step they are looking at, and "this" means this task. open_tab with a sketch, a story or the prototype takes them to that step's page of this task, where it shows beside you; it never splits a tab off. A prototype you start gets an agent of its own, in the prototype's worktree: the person sees it as a second tab at the top of this same column, named Prototype, with a dot that pulses while it works. Tell them to look there, by that name; never say "the conversation beside you". Keep to this task: for a new idea, another task or a look at findings, point them to the app's agent in the left column.`
 
 /**
  * A prototype's conversation: it works in the prototype's own worktree (not one of its own), so ending it leaves the
@@ -211,11 +226,14 @@ export async function renameTalk(sessionId: string, subject: string) {
   return row
 }
 
+/** `taskId` on a conversation that belongs to a task: its own agent, or a prototype's started on it. The app's column leaves those out. */
 export const listTalks = async (opts: { open?: boolean } = {}) => {
   const rows = await db.select().from(session).where(opts.open ? and(eq(session.kind, 'talk'), eq(session.status, 'open')) : eq(session.kind, 'talk')).orderBy(desc(session.lastActiveAt))
   const counts = await db.select({ sessionId: sessionMessage.sessionId, n: sql<number>`count(*)` }).from(sessionMessage).groupBy(sessionMessage.sessionId)
   const n = new Map(counts.map((c) => [c.sessionId, Number(c.n)]))
-  return rows.map((s) => ({ ...s, live: live.has(s.id), busy: live.get(s.id)?.busy ?? false, messages: n.get(s.id) ?? 0 }))
+  const protos = await db.select({ sessionId: prototype.sessionId, issueId: prototype.issueId }).from(prototype).where(isNotNull(prototype.issueId))
+  const ofTask = new Map(protos.filter((p) => p.sessionId).map((p) => [p.sessionId!, p.issueId!]))
+  return rows.map((s) => ({ ...s, live: live.has(s.id), busy: live.get(s.id)?.busy ?? false, messages: n.get(s.id) ?? 0, taskId: (s.subjectRef as SubjectRef | null)?.issueId ?? ofTask.get(s.id) ?? null }))
 }
 
 export async function talkTranscript(sessionId: string) {
