@@ -78,6 +78,13 @@
       "when": 1794367958477,
       "tag": "0010_step_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794416078500,
+      "tag": "0011_close_tab",
+      "breakpoints": true
     }
   ]
 }

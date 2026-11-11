@@ -93,6 +93,8 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/issues/:id/talk', () => reply(d.taskTalk)),
     http.post('/api/issues/:id/talk', () => reply(d.taskTalk ?? s.talkSession)),
     http.get('/api/talks', () => reply(d.talks)),
+    http.post('/api/talks/:id/close', ({ params }) => { d.talks = d.talks.map((t) => (t.id === params.id ? { ...t, closedAt: '2026-11-11T10:00:00.000Z' } : t)); return reply(d.talks.find((t) => t.id === params.id) ?? null) }),
+    http.post('/api/talks/:id/reopen', ({ params }) => { d.talks = d.talks.map((t) => (t.id === params.id ? { ...t, closedAt: null } : t)); return reply(d.talks.find((t) => t.id === params.id) ?? null) }),
     http.get('/api/talks/:id', () => reply(d.transcript)),
     // Writes do nothing and say ok, so clicking around a story never shows an error.
     http.all('/api/*', () => HttpResponse.json({ ok: true })),

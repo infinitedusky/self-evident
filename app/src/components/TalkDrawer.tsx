@@ -6,6 +6,9 @@
  * thing said), works in its own worktree on its own branch, and keeps going while you move around the site.
  * Every message carries where the person is: the tab in front and every tab open. Links open as tabs, even from the
  * popped-out window.
+ * A tab closes with its × (Sandy, 2026-11-11: "the tabs to close with an x and not delete the worktree"), as a tab does
+ * in Chrome or VS Code: the conversation, its worktree and its branch stay, and its agent carries on if it is working.
+ * Closed ones are behind the ▾ after the tabs, to reopen or to end; End is what removes the worktree.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ClaudeSessions } from './ClaudeSessions'
@@ -60,6 +63,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen, onHide 
   const [renaming, setRenaming] = useState(false)
   const [command, setCommand] = useState<string | null>(null) // the command that continues it in a terminal, once asked for
   const [picking, setPicking] = useState(false) // the list of Claude Code sessions to bring in
+  const [reopening, setReopening] = useState(false) // the list of closed conversations
   const local = useMemo(() => ({ ...(given ?? { path: '/', label: 'My Stuff' }), appId: app?.id }), [given, app?.id])
   const tabsSeen = JSON.stringify(local.tabs ?? [])
   const context: TalkContext = standalone ? remote ?? { path: '/', label: 'the main window' } : local
@@ -90,12 +94,14 @@ export function TalkDrawer({ standalone = false, context: given, onOpen, onHide 
   }
   const backIn = () => { channel()?.postMessage({ type: 'closed' } satisfies Msg); window.close() }
   // Conversations belong to an app: only the app in the nav's are tabs here, and each app remembers its own.
-  const mine = (all: TalkSession[]) => all.filter((s) => s.appId === app?.id && !s.taskId && !s.subjectRef?.issueId) // a task's agents (its own, a prototype's) show on the task's page, not here
+  const ofApp = (all: TalkSession[]) => all.filter((s) => s.appId === app?.id && !s.taskId && !s.subjectRef?.issueId) // a task's agents (its own, a prototype's) show on the task's page, not here
+  const mine = (all: TalkSession[]) => ofApp(all).filter((s) => !s.closedAt) // the tabs
   const shown = mine(sessions)
+  const closed = ofApp(sessions).filter((s) => s.closedAt) // tabs closed with ×: still there, behind ▾
   const current = shown.find((s) => s.id === sessionId) ?? null
   useEffect(() => { currentTalk.set(current?.id ?? null) }, [current?.id]) // Mockups and Sketches show this conversation's worktree
   const key = app ? `${SESSION_KEY}.${app.id}` : SESSION_KEY
-  const pick = (id: string | null) => { setSessionId(id); setCommand(null); setPicking(false); remember(key, id) }
+  const pick = (id: string | null) => { setSessionId(id); setCommand(null); setPicking(false); setReopening(false); remember(key, id) }
   const toTerminal = async (s: TalkSession) => {
     setProblem(null)
     try { setCommand((await engine.handOff(s.id)).command); await reload() } catch (e) { setProblem(String((e as Error).message ?? e)) }
@@ -129,6 +135,19 @@ export function TalkDrawer({ standalone = false, context: given, onOpen, onHide 
       await reload(); pick(s.id)
     } catch (e: any) { setProblem(String(e.message ?? e)) } finally { setStarting(false) }
   }
+  /** The tab only: the conversation, its worktree and its branch stay. The tab beside it comes to the front. */
+  const close = async (s: TalkSession) => {
+    setProblem(null)
+    const i = shown.findIndex((x) => x.id === s.id)
+    try { await engine.closeTalk(s.id) } catch (e) { setProblem(String((e as Error).message ?? e)); return }
+    const all = await reload()
+    if (sessionId === s.id) pick((shown[i + 1] ?? shown[i - 1])?.id ?? all[0]?.id ?? null)
+  }
+  /** Shows a conversation as a tab, reopened first if its tab was closed. */
+  const show = async (id: string) => {
+    await engine.reopenTalk(id).catch(() => {}) // already a tab, or the engine says why on the next load
+    await reload(); pick(id)
+  }
   const end = async (s: TalkSession) => {
     if (!window.confirm(`End "${s.subject ?? 'this conversation'}"? Its worktree is removed; its branch stays if it has commits.`)) return
     const r = await engine.endTalk(s.id)
@@ -157,20 +176,26 @@ export function TalkDrawer({ standalone = false, context: given, onOpen, onHide 
       <div className="talk-tabs">
         <div className="talk-tabs-list">{/* the conversations scroll; the buttons after them stay in view however many there are */}
         {shown.map((s) => (
-          <button key={s.id} className={`talk-tab ${s.id === sessionId ? 'active' : ''}`} onClick={() => pick(s.id)} title={`${label(s)} · ${appName(s)}${s.branch ? ` · ${s.branch}` : ''}`}>
-            <span className={`dot ${s.busy ? 'busy' : ''}`} style={{ background: talkColor(s.id) }} />{label(s)}
-          </button>
+          <span key={s.id} className={`talk-tab ${s.id === sessionId && !picking && !reopening ? 'active' : ''}`}>
+            <button className="talk-tab-pick" onClick={() => pick(s.id)} title={`${label(s)} · ${appName(s)}${s.branch ? ` · ${s.branch}` : ''}`}>
+              <span className={`dot ${s.busy ? 'busy' : ''}`} style={{ background: talkColor(s.id) }} />{label(s)}
+            </button>
+            <button className="talk-tab-x" onClick={() => void close(s)} aria-label={`Close ${label(s)}`} title="Close this tab. The conversation, its worktree and its branch stay; ▾ brings it back.">×</button>
+          </span>
         ))}
         </div>
+        {closed.length > 0 && <button className={`talk-tab new ${reopening ? 'active' : ''}`} onClick={() => { setPicking(false); setReopening((r) => !r) }} title={`${closed.length} closed conversation${closed.length === 1 ? '' : 's'}: reopen one, or end it`} aria-label="Closed conversations">▾<span className="talk-tab-count">{closed.length}</span></button>}
         <button className="talk-tab new" disabled={starting} onClick={start} title={app ? `New conversation about ${app.name}${context.projectId ? ', pinned to this project' : ''}` : 'Pick an app first'}>+</button>
-        {app && <button className={`talk-tab new ${picking ? 'active' : ''}`} onClick={() => setPicking((p) => !p)} title="Bring in a Claude Code session from a terminal or VS Code" aria-label="From Claude Code">⌨</button>}
+        {app && <button className={`talk-tab new ${picking ? 'active' : ''}`} onClick={() => { setReopening(false); setPicking((p) => !p) }} title="Bring in a Claude Code session from a terminal or VS Code" aria-label="From Claude Code">⌨</button>}
         {standalone
           ? <button className="talk-tab close" onClick={backIn} title="Put the agent back in the page">↙</button>
           : <button className="talk-tab pop" onClick={popOut} title="Open the agent in its own window">↗</button>}
         {!standalone && onHide && <button className="talk-tab hide" onClick={onHide} title="Hide the agent (⌘J). The S at the top of the rail brings it back." aria-label="Hide the agent">‹</button>}
       </div>
       {picking && app ? (
-        <ClaudeSessions appId={app.id} appName={app.name} onClose={() => setPicking(false)} onPicked={(id) => { void reload().then(() => pick(id)) }} />
+        <ClaudeSessions appId={app.id} appName={app.name} onClose={() => setPicking(false)} onPicked={(id) => void show(id)} />
+      ) : reopening && closed.length ? (
+        <ClosedTalks closed={closed} problem={problem} onReopen={(s) => void show(s.id)} onEnd={(s) => void end(s)} onClose={() => setReopening(false)} />
       ) : current ? (
         <>
           <div className="talk-drawer-head">
@@ -179,7 +204,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen, onHide 
               : <strong style={{ flex: 1, cursor: 'text' }} onClick={() => setRenaming(true)} title="Rename">{label(current)}</strong>}
             <AutoSelect sessionId={current.id} />
             <button className="btn quiet small" onClick={() => void toTerminal(current)} title="Continue this conversation in a terminal: the same agent, the same history">Terminal</button>
-            <button className="btn quiet small" onClick={() => end(current)} title="End this conversation">End</button>
+            <button className="btn quiet small" onClick={() => end(current)} title="End this conversation and remove its worktree. To keep both and only put the tab away, use its ×.">End</button>
           </div>
           {(current.terminalSince || command) && <TerminalNote command={command} onShow={() => void toTerminal(current)} />}
           <div className="faint" style={{ fontSize: 12, padding: '0 12px 6px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -196,10 +221,45 @@ export function TalkDrawer({ standalone = false, context: given, onOpen, onHide 
       ) : (
         <div style={{ padding: 16 }}>
           <p className="muted" style={{ marginTop: 0 }}>No conversation open. Press <strong>+</strong> to start one about {app?.name ?? 'an app'}{context.projectId ? ', pinned to this project' : ''}. It gets its own worktree and branch; you can have several at once and switch with the tabs. Or press <strong>⌨</strong> to carry on one from a terminal or VS Code.</p>
+          {closed.length > 0 && <p className="muted">{closed.length === 1 ? 'One conversation is' : `${closed.length} conversations are`} closed, with {closed.length === 1 ? 'its worktree' : 'their worktrees'} kept. <button className="link-btn" onClick={() => setReopening(true)}>Reopen one</button></p>}
           {problem && <div className="empty bad">{problem}</div>}
         </div>
       )}
     </aside>
+  )
+}
+
+const ago = (iso: string | null) => {
+  if (!iso) return ''
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60_000)
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 48 * 60 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`
+}
+
+/**
+ * The conversations whose tabs were closed, newest first: each still has its worktree and branch. Picking one puts its
+ * tab back, the way Chrome's "recently closed" does; End removes its worktree for good.
+ */
+function ClosedTalks({ closed, problem, onReopen, onEnd, onClose }: { closed: TalkSession[]; problem: string | null; onReopen: (s: TalkSession) => void; onEnd: (s: TalkSession) => void; onClose: () => void }) {
+  return (
+    <div className="claude-sessions closed-talks" data-component="ClosedTalks">
+      <div className="claude-sessions-head">
+        <strong>Closed conversations</strong>
+        <button className="link-btn" onClick={onClose}>back</button>
+      </div>
+      <p className="faint" style={{ margin: '0 0 8px', fontSize: 12 }}>Each still has its worktree and branch. Pick one to put its tab back. End removes its worktree.</p>
+      {problem && <div className="faint" style={{ fontSize: 12, paddingBottom: 6, color: 'var(--warn)' }}>{problem}</div>}
+      <ul>
+        {closed.map((s) => (
+          <li key={s.id}>
+            <button onClick={() => onReopen(s)} title={s.worktreePath ?? s.cwd ?? ''}>
+              <span className="claude-session-title">{s.subject ?? 'New conversation'}</span>
+              <span className="faint claude-session-meta">{[s.busy ? 'working' : ago(s.lastActiveAt), s.branch].filter(Boolean).join(' · ')}</span>
+            </button>
+            <button className="link-btn" onClick={() => onEnd(s)} aria-label={`End ${s.subject ?? 'this conversation'}`}>End</button>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

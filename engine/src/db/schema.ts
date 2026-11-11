@@ -254,6 +254,7 @@ export const session = pgTable('session', { // a conversation with an agent: a t
   agentSessionId: text('agent_session_id'), // the SDK session, for --resume after a restart
   alwaysAllow: jsonb('always_allow').$type<string[]>().notNull().default([]), // tools the person said Always to, in this conversation
   terminalSince: at('terminal_since'), // handed to the terminal (claude --resume): what's said there is copied in until the UI takes it back
+  closedAt: at('closed_at'), // its tab closed in the agent's column: the conversation, its worktree and its branch stay, and it can be reopened
   importedThrough: text('imported_through'), // the session file's last line already in the transcript
   status: text('status').notNull().default('open'), createdBy: text('created_by'), createdAt: createdAt(),
   lastActiveAt: at('last_active_at'),
