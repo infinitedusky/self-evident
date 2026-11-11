@@ -2068,3 +2068,15 @@ rail's S, ⌘J), but nothing on the column said so: it now has a fold button of 
 **Not built yet.** The engine side: a task owning one conversation and one worktree for its life, steps started on
 the task going to that conversation instead of a new one each, and the column on the real task page. Waiting on
 Sandy's reaction to the story before wiring.
+
+**Wired** (branch `task-agent-wired`, after Sandy: "Looks good"). Engine: `taskTalk` finds a task's own conversation
+(the oldest open one pinned to it), `ensureTaskTalk` starts it once, under a lock, for a top-level code task only;
+`POST /talks/ask` with a task says it to that conversation and no longer brings anything to the front of the left
+column; `GET` and `POST /issues/:id/talk`; the conversation's prompt says it is this task's conductor and to send
+anything else to the left column. Conversations were never pinned to a task before (the reference was dropped), so
+no task starts with history; the old step conversations stay in the left column as they were. App: the task page has
+the column, its fold remembered in the browser; a step's Start button opens it; the left column leaves task agents
+out. Tests: `task-talk.test.ts`. Not exercised against a live agent: starting one on a real task is Sandy's to do.
+
+**Next, from Sandy:** "we need a way to view sketches, mockups and prototypes. Each should have a way to detach the
+viewer, which makes it a tab in Chrome; it can be reattached."

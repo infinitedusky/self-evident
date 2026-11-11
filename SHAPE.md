@@ -536,9 +536,12 @@ Details and sources in `research/`.
   change beside it, and folds to a strip. Under its name it lists the fresh agents it has out. The app's agent, the
   full-height column on the left, stays for starting things (an idea, a new task) and for looking at and talking
   about findings; it folds too (a button on it, the rail's S, or ⌘J). Today each step started on a task opens a new
-  conversation in the left column, in a worktree of its own; that goes when this is wired. Built so far: the story
-  (`Components/TaskAgent`, with the whole page in "On the task page") and the fold button on the left agent. Not
-  built: the task owning one conversation and one worktree, and the column on the real page.
+  conversation in the left column, in a worktree of its own; that goes when this is wired. Built (2026-11-10): a
+  task has one conversation, pinned to it (`subjectRef.issueId`), started once and found again (`ensureTaskTalk`); a
+  step started on the task is said to that conversation; the task's page shows it in the column; the left column no
+  longer lists it; the agent is told it is this task's conductor. Not built: the list of agents it has out (the
+  column takes one, nothing fills it), an end to the conversation when the task is done, and the same for projects
+  and ideas, whose steps still open a conversation each in the left column.
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
