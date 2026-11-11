@@ -46,7 +46,7 @@ const recall = (k: string) => { try { return localStorage.getItem(k) } catch { r
 export function AgentWindow() { return <TalkDrawer standalone /> }
 
 /** `context` is where the person is (the workspace says); `onOpen` opens a tab. `standalone`: its own window. */
-export function TalkDrawer({ standalone = false, context: given, onOpen }: { standalone?: boolean; context?: TalkContext; onOpen?: (tab: Tab) => void }) {
+export function TalkDrawer({ standalone = false, context: given, onOpen, onHide }: { standalone?: boolean; context?: TalkContext; onOpen?: (tab: Tab) => void; /** Folds the column away; the rail's S brings it back (⌘J). */ onHide?: () => void }) {
   const { app, apps, setAppId } = useCurrentApp()
   const [popped, setPopped] = useState(() => !standalone && recall(POPPED_KEY) === '1')
   const [remote, setRemote] = useState<TalkContext | null>(null) // standalone: the main window's page
@@ -163,6 +163,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen }: { sta
         {standalone
           ? <button className="talk-tab close" onClick={backIn} title="Put the agent back in the page">↙</button>
           : <button className="talk-tab pop" onClick={popOut} title="Open the agent in its own window">↗</button>}
+        {!standalone && onHide && <button className="talk-tab hide" onClick={onHide} title="Hide the agent (⌘J). The S at the top of the rail brings it back." aria-label="Hide the agent">‹</button>}
       </div>
       {picking && app ? (
         <ClaudeSessions appId={app.id} appName={app.name} onClose={() => setPicking(false)} onPicked={(id) => { void reload().then(() => pick(id)) }} />

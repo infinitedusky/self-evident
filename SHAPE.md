@@ -528,6 +528,17 @@ Details and sources in `research/`.
   fresh agent, because the point is eyes that have not seen the build. What a deployed agent returns shows beside
   the conversation, and the conductor stays free to talk. This replaces tkt as the driver (LOG.md, "tkt on its own,
   tried and put down"): the lifecycle skills stay, the conductor runs them. Not built.
+- **A task's agent lives on the task's page; the left agent is for what is new** (Sandy, 2026-11-10: "an agent chat
+  thing within the task itself, so we know that it's its own thing and that we're not sharing across different tasks
+  … static across the different steps of the brief and the build"; and of the left column: "for creating new, for
+  ideas and new tasks, and looking and discussing findings"). The conductor of a task is one conversation for the
+  life of the task, shown in a column of the task's page that stays put while the steps of the brief and the build
+  change beside it, and folds to a strip. Under its name it lists the fresh agents it has out. The app's agent, the
+  full-height column on the left, stays for starting things (an idea, a new task) and for looking at and talking
+  about findings; it folds too (a button on it, the rail's S, or ⌘J). Today each step started on a task opens a new
+  conversation in the left column, in a worktree of its own; that goes when this is wired. Built so far: the story
+  (`Components/TaskAgent`, with the whole page in "On the task page") and the fold button on the left agent. Not
+  built: the task owning one conversation and one worktree, and the column on the real page.
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 

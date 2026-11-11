@@ -547,7 +547,27 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .step-body { margin: 10px 0; }
 .step-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
 .step-protos li { display: flex; gap: 8px; align-items: center; }
-@media (max-width: 760px) { .task-layout { grid-template-columns: 1fr; } .task-nav { position: static; } }
+/* A task with its own agent: a third column that stays while the steps change, and folds to a strip. */
+.task-layout.with-agent { grid-template-columns: 220px minmax(0, 1fr) 340px; }
+.task-layout.with-agent.agent-folded { grid-template-columns: 220px minmax(0, 1fr) 40px; }
+.task-agent { position: sticky; top: 20px; height: calc(100vh - 160px); min-height: 420px; max-height: 820px; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.task-agent-head { display: flex; align-items: center; gap: 6px; padding-right: 8px; border-bottom: 1px solid var(--line); }
+.task-agent-head .agent-strip { flex: 1; }
+.task-agent-out { margin: 0; padding: 6px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.task-agent-out li { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; flex-wrap: wrap; }
+.task-agent .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--ink-faint); flex: none; align-self: center; }
+.task-agent .dot.working { background: var(--accent); animation: talk-pulse 1.6s ease-in-out infinite; }
+.task-agent .dot.waiting { background: var(--warn); }
+.task-agent > .conversation.compact { padding-top: 10px; }
+.task-agent-empty { padding: 16px; display: grid; gap: 10px; justify-items: start; }
+.task-agent-empty p { margin: 0; }
+.task-agent.folded { height: auto; max-height: none; border: 0; background: none; }
+.task-agent-fold { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 40px; padding: 12px 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink-soft); cursor: pointer; font: 500 12px var(--sans); }
+.task-agent-fold .dot { background: var(--talk); }
+.task-agent-fold-text { writing-mode: vertical-rl; }
+.talk-tab.hide { color: var(--ink-faint); font-size: 14px; padding: 4px 8px; }
+@media (max-width: 1100px) { .task-layout.with-agent, .task-layout.with-agent.agent-folded { grid-template-columns: 220px minmax(0, 1fr); } .task-agent { grid-column: 1 / -1; position: static; height: 520px; } .task-agent.folded { height: auto; } .task-agent-fold { flex-direction: row; width: auto; padding: 8px 12px; } .task-agent-fold-text { writing-mode: horizontal-tb; } }
+@media (max-width: 760px) { .task-layout, .task-layout.with-agent, .task-layout.with-agent.agent-folded { grid-template-columns: 1fr; } .task-nav { position: static; } }
 
 /* One conversation in the terminal and the UI */
 .terminal-note { margin: 0 12px 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--idle-wash); font-size: 13px; display: grid; gap: 6px; }

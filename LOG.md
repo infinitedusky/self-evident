@@ -2053,3 +2053,18 @@ parent and to name each step's assets in it.
 "approve the prototype" moment to trigger it; the brief's asset list written by the engine instead of the agent;
 phases decided in the briefing. I assumed the audit runs last, after the ADR and the blast radius, so it reads the
 brief with both attached; Sandy has not confirmed that order.
+
+## A task's own agent (Sandy, 2026-11-10: "I don't know if that's right or not, but it's feeling like it's right")
+
+**What Sandy said.** The agent's chat should sit inside the task, one per task, staying put across the steps of the
+brief and the build, so it is plain it is the task's own and nothing is shared across tasks. The full-height agent on
+the left stays, for creating (ideas, new tasks) and for looking at and discussing findings, and should fold away.
+
+**Built** (branch `task-agent`), story first. `TaskAgent`: a column with the agent's name and stage (AgentStrip), the
+fresh agents it has out, the conversation, a fold to a thin strip, and a start button when the task has no agent yet.
+Stories with made-up data, one of them the whole task page in three columns. The left agent already folded (the
+rail's S, ⌘J), but nothing on the column said so: it now has a fold button of its own.
+
+**Not built yet.** The engine side: a task owning one conversation and one worktree for its life, steps started on
+the task going to that conversation instead of a new one each, and the column on the real task page. Waiting on
+Sandy's reaction to the story before wiring.
