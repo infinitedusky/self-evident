@@ -31,6 +31,15 @@ pnpm dev        # Postgres 17 (docker compose, localhost:5433) + the engine on :
 pnpm start      # or: the engine alone on http://localhost:4000, serving the built UI (`pnpm build` first)
 ```
 
+Sandy's own set-up keeps the database on Fly and the settings in Doppler, and moves between Macs with two commands
+(LOG.md, "Moving between Macs is two commands"):
+
+```bash
+pnpm leave          # here: stops the engine, commits and pushes each open conversation's worktree, sends the histories
+pnpm arrive         # there: clones and fetches the apps, makes the worktrees, brings the histories in, starts the engine
+pnpm handoff check  # what leaving would send; changes nothing
+```
+
 The database is `selfevident`; the engine creates it if missing and runs migrations when it boots. The API is under
 `/api` (`GET /api` lists the routes); the UI is served at `/`. The database from before the Linear shape,
 `ideafactory`, is kept as it was; `pnpm --dir engine exec tsx src/db/copy-legacy.ts` copied it over (ids kept, issues

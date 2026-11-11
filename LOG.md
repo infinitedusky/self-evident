@@ -2234,3 +2234,40 @@ Built for it: the engine's LISTEN connection is made again when it drops and nud
 idle connection's error instead of dying; the engine waits for the database at start; `db:up` starts the local
 container only when `DATABASE_URL` is the default. The tests still run on the local container
 (`TEST_DATABASE_URL`). Test: `events-bus.test.ts`.
+
+The move was done the same day: the restore's counts matched (21 conversations, 5,753 messages, 307 issues, 11,023
+events, 31 tables), the engine came up on the Fly database, and a deliberate restart of the proxy was survived (the
+log shows the connection lost and back). A request now takes about 0.3 s, the round trip to `iad`.
+
+## Moving between Macs is two commands (Sandy, 2026-11-11: "a command to sync everything, that way I can move back and forth between laptops. We can use doppler for env stuff")
+
+With the database on Fly, what one Mac still holds by itself is the settings, each open conversation's worktree, and
+the conversations' histories (Claude Code keeps a session file per conversation in the home folder; the agent
+resumes from it). Decided, with Sandy:
+
+- **Settings are in Doppler**, project `self-evident`, config `dev`: `DATABASE_URL`, `LINEAR_API_KEY`, `UI_URL`,
+  `STORYBOOK_FRAME`, `STATE_REPO`, `FLY_DB_APP`. A project of its own, because Homework Gate's deploy copies its
+  whole Doppler project onto its Fly apps. The launchd files hold no secrets any more: the engine's runs `doppler
+  run -- pnpm dev`, and `pnpm arrive` writes both files, so nothing is copied between Macs by hand.
+- **A worktree's work travels through the app's own GitHub repository** (Sandy chose this over a private mirror):
+  `leave` commits anything uncommitted as "Handoff: work in progress, from <Mac>" and pushes the branch; `arrive`
+  clones a missing checkout and makes the worktree again from the branch, at the same path. The database stores
+  paths, so both Macs use the same ones, which means the same user name. An app whose GitHub repository Self
+  Evident was not given (Avoca practice) is never pushed or fetched. A main checkout is the person's: reported when
+  it has unpushed work, never committed for them.
+- **Histories travel through a private repository** (`STATE_REPO`, Sandy chose it over Mac-to-Mac copying), kept in
+  `~/.self-evident/state`: each open conversation's session file, and the memory Claude Code keeps beside each
+  app's checkout. Only the conversations' own sessions go, not everything Claude Code has in those folders.
+- **One engine at a time is enforced, not remembered**: the state repository says which Mac holds the engine.
+  `arrive` refuses while another Mac holds it (`--force` for a Mac that is gone); `leave` stops the engine here and
+  lets go; `leave` refuses while an agent is working.
+
+`pnpm leave` here, `pnpm arrive` there; `pnpm handoff check` shows what leaving would send and changes nothing. A new
+Mac needs the tools (mise, pnpm, `gh`, `fly`, `doppler`, Claude Code, each signed in), a clone of this repository at
+the same path, then `pnpm arrive`. `https://idea.dawn` and an app's Storybook inside the page still need Caddy and
+dnsmasq, which this does not set up. Code: `engine/src/handoff.ts`, `engine/src/cli/handoff.ts`; test:
+`handoff.test.ts` (bare repositories stand in for GitHub; the other Mac is this one with its folders deleted).
+
+Found on the way: Ragdoll Golf's prototype branch has Mixamo's X Bot model in its first commit (deleted two commits
+later; the agent's note says it isn't CC0) and the repository is public, so that branch is not pushed until Sandy
+says how (`pnpm leave --except <branch>` leaves it on this Mac).
