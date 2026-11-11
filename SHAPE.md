@@ -230,6 +230,8 @@ Details and sources in `research/`.
   scenarios, with off-the-shelf stand-ins for outside services. When it's ready, everything about it is analysed
   into the plan, the migrations and the checks. Then the real build starts from main and is written properly; none
   of the prototype's code is kept. Details: LOG.md, "The prototype".
+  The prototype's agent runs on Sonnet, for speed (Sandy, 2026-11-10: "the prototype agent should be sonnet and it
+  should build fast"); an app can name another model with `prototype_model` in its set-up.
 - **Built on PostHog** (Sandy, 2026-10-20). An app made with the idea factory
   is PostHog-native from its first line: every feature ships with its events,
   its feature flag, its experiment where one fits, session replay and error

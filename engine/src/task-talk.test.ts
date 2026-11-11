@@ -7,7 +7,7 @@ import { db, pool } from './db/client.js'
 import { app, prototype, session, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createIssue } from './issues.js'
-import { closeTalks, ensureTaskTalk, listTalks, taskAgents, taskTalk } from './talk.js'
+import { closeTalks, ensureTaskTalk, listTalks, modelFor, taskAgents, taskTalk } from './talk.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -50,6 +50,14 @@ describe.skipIf(!reachable)('a task\'s own agent', () => {
     expect(await taskAgents('iss_none')).toEqual([])
     const mine = (await listTalks({ open: true })).filter((s) => [own.id, builder.id, loose.id].includes(s.id))
     expect(Object.fromEntries(mine.map((s) => [s.id, s.taskId]))).toEqual({ [own.id]: t.id, [builder.id]: t.id, [loose.id]: null })
+  })
+
+  it('runs a prototype\'s agent on Sonnet unless the app names another model, and everything else on the app\'s model', () => {
+    expect(modelFor({}, true)).toBe('claude-sonnet-5-5')
+    expect(modelFor({ model: 'claude-opus-5-5' }, true)).toBe('claude-sonnet-5-5')
+    expect(modelFor({ prototype_model: 'claude-haiku-5-5' }, true)).toBe('claude-haiku-5-5')
+    expect(modelFor({ model: 'claude-opus-5-5' }, false)).toBe('claude-opus-5-5')
+    expect(modelFor({}, false)).toBeUndefined()
   })
 
   it('is only for a top-level code task', async () => {

@@ -198,6 +198,14 @@ export async function ensureTaskTalk(issueId: string, actor = 'user') {
   })
 }
 
+/**
+ * The model a conversation runs on. A prototype is for speed, so its agent runs on Sonnet (Sandy, 2026-11-10: "the
+ * prototype agent should be sonnet and it should build fast"); an app can name another with `prototype_model`. Every
+ * other conversation runs on the app's `model`, or the harness's default.
+ */
+export const PROTOTYPE_MODEL = 'claude-sonnet-5-5'
+export const modelFor = (setup: { model?: string; prototype_model?: string }, prototype: boolean) => (prototype ? setup.prototype_model || PROTOTYPE_MODEL : setup.model)
+
 const taskPrompt = (t: { id: string; number: number; title: string }, key: string) => `
 This conversation is the agent of one task, ${key}-${t.number} "${t.title}" (${t.id}), and the only one: you are its conductor from its first sketch to its merge, in this one worktree. Every step of its brief (research, sketches, mockups, the prototype, the checks) and its build is done or directed from here: record each with set_step on this task, and keep its brief current with update_task. Marking a step done says it is ready for the person; they approve it on its page, and only then does it count. The person sees this conversation on the task's page, beside the step they are looking at, and "this" means this task. open_tab with a sketch, a story or the prototype takes them to that step's page of this task, where it shows beside you; it never splits a tab off. A prototype you start gets an agent of its own, in the prototype's worktree: the person sees it as a second tab at the top of this same column, named Prototype, with a dot that pulses while it works. Tell them to look there, by that name; never say "the conversation beside you". Keep to this task: for a new idea, another task or a look at findings, point them to the app's agent in the left column.`
 
@@ -253,7 +261,7 @@ async function open(sessionId: string): Promise<Live> {
   if (s.status === 'ended') throw new PlanError('this conversation has ended')
   if (s.terminalSince) await takeBack(sessionId)
   const [a] = s.appId ? await db.select().from(app).where(eq(app.id, s.appId)) : []
-  const setup = (a?.setup ?? {}) as { model?: string }
+  const setup = (a?.setup ?? {}) as { model?: string; prototype_model?: string }
   const input = inputQueue()
   const entry: Live = { q: null as unknown as Query, push: input.push, close: input.close, pending: new Map(), rated: new Map(), outages: 0, always: new Set(s.alwaysAllow ?? []), busy: false, autoApprove: (s.autoApprove as Risk) ?? 'moderate', cwd: s.cwd! }
   const skills = await skillOptions('talk', s.cwd!, s.appId)
@@ -266,7 +274,7 @@ async function open(sessionId: string): Promise<Live> {
       cwd: s.cwd!,
       ...(proto ? { env: { ...process.env, ...(await prototypeEnv(proto)) } } : {}),
       resume: s.agentSessionId ?? undefined,
-      model: setup.model,
+      model: modelFor(setup, !!proto),
       settingSources: ['project'],
       systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') },
       ...skills,

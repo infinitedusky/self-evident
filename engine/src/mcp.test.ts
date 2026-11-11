@@ -70,7 +70,7 @@ describe.skipIf(!reachable)('mcp', () => {
       expect(JSON.parse(cart.result.content[0].text)).toEqual([{ id: 'pages-cart--empty', title: 'Pages/Cart', name: 'Empty' }])
       await handleMcp(appId, rpc(9, 'tools/call', { name: 'open_tab', arguments: { kind: 'storybook', story: 'pages-cart--empty' } }), 4000)
       const opened = await db.select().from(event).where(and(eq(event.appId, appId), eq(event.type, 'ui.open')))
-      expect(opened.at(-1)?.payload).toMatchObject({ tab: { kind: 'storybook', story: 'pages-cart--empty' } })
+      expect(opened.sort((x, y) => x.seq - y.seq).at(-1)?.payload).toMatchObject({ tab: { kind: 'storybook', story: 'pages-cart--empty' } }) // in the order they happened: the query gives none
     } finally { sb.close() }
   })
 
