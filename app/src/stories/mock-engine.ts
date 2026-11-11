@@ -10,7 +10,7 @@ import { rows } from '@self-evident/engine/steps'
 export interface MockData {
   apps: typeof s.apps; now: typeof s.now; projects: typeof s.projects; graphs: Record<string, typeof s.graph>; issueRows: typeof s.issueRows
   issueDetails: typeof s.issueDetails; todos: typeof s.todos; ideas: typeof s.ideaRows; initiatives: typeof s.initiatives; cycles: typeof s.cycles
-  summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript; /** A task's own agent, or null when it has none. */ taskTalk: typeof s.talkSession | null
+  summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript; /** A task's own agent, or null when it has none. */ taskTalk: typeof s.talkSession | null; /** The agents it has out. */ taskAgents?: { sessionId: string; kind: 'prototype'; what: string; title: string; busy: boolean }[]
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[] }
   prototypes: typeof s.prototypes
@@ -89,6 +89,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/:kind/:id/steps/:key', () => reply(d.stepWork)),
     http.get('/api/initiatives', () => reply(d.initiatives)),
     http.get('/api/cycles', () => reply(d.cycles)),
+    http.get('/api/issues/:id/agents', () => reply(d.taskAgents ?? [])),
     http.get('/api/issues/:id/talk', () => reply(d.taskTalk)),
     http.post('/api/issues/:id/talk', () => reply(d.taskTalk ?? s.talkSession)),
     http.get('/api/talks', () => reply(d.talks)),

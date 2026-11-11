@@ -10,7 +10,7 @@
 import { AgentStrip, type AgentStripProps } from './AgentStrip'
 import { Conversation } from './Conversation'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { openEvents, API, engine, type TalkSession } from '../engine'
+import { openEvents, API, engine, type TalkSession, type TaskAgentOut } from '../engine'
 import { currentTalk, talkColor } from '../workspace'
 
 const OPEN_KEY = 'se.task-agent.open'
@@ -23,6 +23,7 @@ export const TASK_AGENT_ASKED = 'se:task-agent-asked'
  */
 export function useTaskAgent(taskId: string, appId: string) {
   const [session, setSession] = useState<TalkSession | null | undefined>(undefined)
+  const [out, setOut] = useState<TaskAgentOut[]>([])
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0' } catch { return true } })
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -30,11 +31,11 @@ export function useTaskAgent(taskId: string, appId: string) {
   const show = useCallback((on: boolean) => { setOpen(on); try { localStorage.setItem(OPEN_KEY, on ? '1' : '0') } catch { /* fine */ } }, [])
   useEffect(() => {
     let closed = false
-    const refresh = () => engine.taskTalk(taskId).then((s) => { if (!closed) setSession(s) }).catch(() => { if (!closed) setSession(null) })
+    const refresh = () => { void engine.taskAgents(taskId).then((a) => { if (!closed) setOut(Array.isArray(a) ? a : []) }).catch(() => {}); return engine.taskTalk(taskId).then((s) => { if (!closed) setSession(s) }).catch(() => { if (!closed) setSession(null) }) }
     void refresh()
     const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 200) }
     const es = openEvents(`${API}/events?since=now&app=${appId}`)
-    for (const t of ['talk.message', 'talk.permission', 'talk.result']) es.addEventListener(t, bump)
+    for (const t of ['talk.message', 'talk.permission', 'talk.result', 'prototype.created', 'prototype.started', 'prototype.stopped', 'prototype.discarded']) es.addEventListener(t, bump)
     const asked = () => { show(true); bump() }
     window.addEventListener(TASK_AGENT_ASKED, asked)
     return () => { closed = true; es.close(); window.clearTimeout(timer.current); window.removeEventListener(TASK_AGENT_ASKED, asked) }
@@ -44,11 +45,11 @@ export function useTaskAgent(taskId: string, appId: string) {
     setStarting(true); setError(null)
     try { setSession(await engine.startTaskTalk(taskId)) } catch (e: any) { setError(String(e.message ?? e)) } finally { setStarting(false) }
   }
-  return { session, open, toggle: () => show(!open), start, starting, error }
+  return { session, out, open, toggle: () => show(!open), start, starting, error }
 }
 
-/** A fresh agent the conductor sent out, and what it is on. */
-export interface Deployed { what: string; icon?: string; state: 'out' | 'back'; detail?: string }
+/** A fresh agent the conductor sent out, and what it is on; with `sessionId`, its conversation can be read here, as a tab of its own. */
+export interface Deployed { what: string; icon?: string; state: 'out' | 'back'; detail?: string; sessionId?: string; title?: string }
 
 export function TaskAgent({ sessionId, taskId, stage, state = 'idle', deployed = [], open, onToggle, onStart, starting, error }: {
   /** The task's conversation; none until its agent is started. */
@@ -66,6 +67,10 @@ export function TaskAgent({ sessionId, taskId, stage, state = 'idle', deployed =
   error?: string | null
 }) {
   const color = talkColor(sessionId ?? taskId)
+  // Which conversation the column shows: the conductor's, or one of the agents it has out. They are tabs, so an agent at work is never out of sight.
+  const [shown, setShown] = useState<string | null>(null)
+  const tabs = deployed.filter((d) => d.sessionId)
+  const sub = tabs.find((d) => d.sessionId === shown) ?? null
   if (!open) return (
     <aside className="task-agent folded" data-component="TaskAgent" style={{ ['--talk' as string]: color }}>
       <button className="task-agent-fold" onClick={onToggle} aria-expanded="false" aria-label="Show this task's agent" title="Show this task's agent">
@@ -79,9 +84,19 @@ export function TaskAgent({ sessionId, taskId, stage, state = 'idle', deployed =
         <AgentStrip color={color} name="This task's agent" stage={stage} state={state} />
         <button className="btn quiet small" onClick={onToggle} aria-expanded="true" aria-label="Hide this task's agent" title="Hide this task's agent">›</button>
       </div>
-      {deployed.length > 0 && (
+      {tabs.length > 0 && (
+        <div className="task-agent-tabs" role="tablist" aria-label="This task's agents">
+          <button role="tab" aria-selected={!sub} className={!sub ? 'on' : ''} onClick={() => setShown(null)}><span className={`dot ${state}`} />This task's agent</button>
+          {tabs.map((d) => (
+            <button key={d.sessionId} role="tab" aria-selected={sub === d} className={sub === d ? 'on' : ''} onClick={() => setShown(d.sessionId!)} title={`${d.title ?? d.what}: ${d.state === 'out' ? 'working' : 'idle'}`}>
+              <span className={`dot ${d.state === 'out' ? 'working' : ''}`} />{d.icon} {d.what}{d.state === 'out' && <span className="faint"> · working</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {deployed.filter((d) => !d.sessionId).length > 0 && (
         <ul className="list task-agent-out" aria-label="Agents it has out">
-          {deployed.map((d) => (
+          {deployed.filter((d) => !d.sessionId).map((d) => (
             <li key={d.what} className={d.state}>
               <span className={`dot ${d.state === 'out' ? 'working' : ''}`} />
               <span>{d.icon} {d.what}</span>
@@ -90,8 +105,10 @@ export function TaskAgent({ sessionId, taskId, stage, state = 'idle', deployed =
           ))}
         </ul>
       )}
-      {sessionId
-        ? <Conversation sessionId={sessionId} compact context={{ path: `/tasks/${taskId}`, issueId: taskId, label: 'this task' }} />
+      {sub
+        ? <Conversation key={sub.sessionId} sessionId={sub.sessionId!} compact context={{ path: `/tasks/${taskId}`, issueId: taskId, label: `the ${sub.what.toLowerCase()}` }} />
+        : sessionId
+        ? <Conversation key={sessionId} sessionId={sessionId} compact context={{ path: `/tasks/${taskId}`, issueId: taskId, label: 'this task' }} />
         : (
           <div className="task-agent-empty">
             <p className="faint">No agent on this task yet. One agent stays with it from the first sketch to the merge, and sends out others where the work needs fresh eyes.</p>

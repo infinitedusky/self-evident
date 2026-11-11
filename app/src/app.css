@@ -584,6 +584,9 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .task-agent { position: sticky; top: 20px; height: calc(100vh - 160px); min-height: 420px; max-height: 820px; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .task-agent-head { display: flex; align-items: center; gap: 6px; padding-right: 8px; border-bottom: 1px solid var(--line); }
 .task-agent-head .agent-strip { flex: 1; }
+.task-agent-tabs { display: flex; gap: 4px; padding: 6px 8px 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.task-agent-tabs button { flex: none; display: flex; align-items: center; gap: 6px; padding: 5px 9px; border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; background: none; color: var(--ink-soft); font: 500 12px var(--sans); cursor: pointer; }
+.task-agent-tabs button.on { background: var(--ground); border-color: var(--line); color: var(--ink); font-weight: 600; }
 .task-agent-out { margin: 0; padding: 6px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .task-agent-out li { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; flex-wrap: wrap; }
 .task-agent .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--ink-faint); flex: none; align-self: center; }

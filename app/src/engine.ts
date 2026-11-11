@@ -183,7 +183,9 @@ export interface Now { hold?: Hold | null; running: RunningProject[]; needsYou: 
 export type Risk = 'free' | 'cheap' | 'moderate' | 'expensive'
 export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string }
 export interface TalkSession { id: string; appId: string | null; cwd: string | null; branch: string | null; worktreePath: string | null; subject: string | null; subjectRef: SubjectRef | null; title: string | null; status: string; createdAt: string; lastActiveAt: string | null; live: boolean; busy: boolean; messages?: number; autoApprove: Exclude<Risk, 'expensive'>
-  terminalSince?: string | null } // handed to the terminal: what's said there is copied in until a message here takes it back
+  terminalSince?: string | null; /** The task it belongs to: its own agent, or a prototype's started on it. */ taskId?: string | null } // handed to the terminal: what's said there is copied in until a message here takes it back
+/** An agent a task's conductor has out, with its conversation. */
+export interface TaskAgentOut { sessionId: string; kind: 'prototype'; what: string; title: string; prototypeId?: string; busy: boolean }
 export interface TalkMessage { id: number; sessionId: string; author: 'user' | 'agent' | 'tool' | 'engine'; kind: 'text' | 'brief' | 'tool_call' | 'tool_result' | 'permission' | 'auto' | 'result' | 'error' | 'handoff'; body: string; payload: Record<string, any> | null; sentAt: string | null }
 /** A Claude Code session run on an app in a terminal or an editor; `talkId` when it's already a conversation here. */
 export interface ClaudeSession { id: string; cwd: string; branch: string | null; title: string | null; at: string; talkId: string | null }
@@ -196,6 +198,8 @@ export const engine = {
   /** A task's own agent: its one conversation, or null; `startTaskTalk` starts it if the task has none. */
   taskTalk: (issueId: string) => call<TalkSession | null>('GET', `/issues/${issueId}/talk`),
   startTaskTalk: (issueId: string) => call<TalkSession>('POST', `/issues/${issueId}/talk`),
+  /** The agents the task's conductor has out: today, each prototype's own conversation. */
+  taskAgents: (issueId: string) => call<TaskAgentOut[]>('GET', `/issues/${issueId}/agents`),
   renameTalk: (id: string, subject: string) => call<TalkSession>('POST', `/talks/${id}/rename`, { subject }),
   transcript: (id: string) => call<Transcript>('GET', `/talks/${id}`),
   say: (id: string, text: string, context?: TalkContext) => call<{ messageId: number }>('POST', `/talks/${id}/say`, { text, context }),
