@@ -2161,3 +2161,28 @@ agent, or a prototype's), and the app's column leaves those out. The conductor i
 shows and to name the tab, never "the conversation beside you". Stories: `TaskAgent › Prototype Agent Out`,
 `TaskPage › Prototype Agent Out`. Tests: `task-talk.test.ts`. Still to do: the three checks as deployed agents in
 the same list.
+
+## The prototype, read before anything is decided from it (Sandy, 2026-11-11: "it's really a prototype audit, prototype analysis or something like that")
+
+Sandy asked why the task's agent starts the prototype's agent but does not drive it (it was built before the
+conductor rule, as a conversation for the person), what approving the prototype does (it only recorded the
+approval), and whether the brief audit looks at the prototype (nothing told it to). Then: should the prototype come
+after the ADR? Decided, in SHAPE.md: it stays before, and a new check, the **prototype analysis**, sits between
+them, because a prototype built fast mixes findings with shortcuts and the ADR must not lean on a shortcut.
+
+Built (`engine/src/checks.ts`). Approving a task's prototype (`POST /issues/:id/steps/prototype/approve`) starts the
+checks its workflow has, in order: analysis, ADR, blast radius, then the conductor is told to bring the brief up to
+date (a Prototype section: the branch, the analysis, what to keep and change; the ADR's decision; the assets), then
+the brief audit, then the conductor is told the reports are in and tells the person the brief is ready. Each check
+is a fresh agent in a conversation of its own (`subjectRef: {checkOf, check}`), with no editing tools, reading the
+prototype's worktree (the analysis) or the conductor's (the rest), told where the prototype is and which earlier
+reports to read (new tool `get_step`), and recording its report with `set_step`. What comes next is worked out from
+what is stored each time a turn ends on the task (`nextMove`, tested without agents), so an engine restart loses
+nothing. The task's agent column shows each as a tab (`taskAgents` now lists them, with the step's icon); the app's
+column leaves them out. Stories: `TaskAgent › Checks Running`, `TaskPage › Checks Running`.
+
+Not done, and worth knowing: a check runs only when the task's workflow has it, and the default workflow has none,
+so they are added under Settings › Workflows; a check whose agent was cut off (an engine restart mid-turn) waits
+until someone opens its tab and says "carry on"; a prototype approved a second time does not run finished checks
+again; the planner is not yet told to treat the prototype as a map (the brief's Prototype section says it instead).
+None of this has run against a real task yet.
