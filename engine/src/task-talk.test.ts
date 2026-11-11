@@ -7,7 +7,7 @@ import { db, pool } from './db/client.js'
 import { app, session, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createIssue } from './issues.js'
-import { closeTalks, ensureTaskTalk, taskTalk } from './talk.js'
+import { closeTalks, ensureTaskTalk, modelFor, taskTalk } from './talk.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -34,6 +34,14 @@ describe.skipIf(!reachable)('a task\'s own agent', () => {
     await talk({ issueId: t.id }, { createdAt: new Date(Date.now() + 60_000) }) // a stray second never takes over
     expect(await taskTalk(t.id)).toMatchObject({ id: own.id, live: false, busy: false })
     expect(await ensureTaskTalk(t.id)).toMatchObject({ id: own.id }) // asked for again: the same one, nothing started
+  })
+
+  it('runs a prototype\'s agent on Sonnet unless the app names another model, and everything else on the app\'s model', () => {
+    expect(modelFor({}, true)).toBe('claude-sonnet-5-5')
+    expect(modelFor({ model: 'claude-opus-5-5' }, true)).toBe('claude-sonnet-5-5')
+    expect(modelFor({ prototype_model: 'claude-haiku-5-5' }, true)).toBe('claude-haiku-5-5')
+    expect(modelFor({ model: 'claude-opus-5-5' }, false)).toBe('claude-opus-5-5')
+    expect(modelFor({}, false)).toBeUndefined()
   })
 
   it('is only for a top-level code task', async () => {
