@@ -36,6 +36,12 @@ export const SubTaskBuilding: Story = { parameters: at('iss_sample5') }
 export const SubTaskAsPlanned: Story = { parameters: at('iss_sample6') }
 /** A prototype started on the task: its agent shows as a second tab in the task's agent column, working. */
 export const PrototypeAgentOut: Story = { parameters: at('iss_sample20', 'prototype'), beforeEach: withEngine({ taskAgents: [{ sessionId: 'talk_sample_proto', kind: 'prototype', what: 'Prototype', title: 'Checkout in one page (sample)', busy: true }] }) }
+/** The prototype approved, the checks running by themselves: each fresh agent is a tab in the task's column, the one at work pulsing. */
+export const ChecksRunning: Story = { parameters: at('iss_sample20', 'prototype'), beforeEach: withEngine({ taskAgents: [
+  { sessionId: 'talk_sample_proto', kind: 'prototype', what: 'Prototype', icon: '🛠️', title: 'Checkout in one page (sample)', busy: false },
+  { sessionId: 'talk_sample_analysis', kind: 'check', check: 'analysis', what: 'Prototype analysis', icon: '🔬', title: 'Prototype analysis: SS-20 (sample)', busy: false },
+  { sessionId: 'talk_sample_adr', kind: 'check', check: 'adr', what: 'ADR', icon: '🏛️', title: 'ADR: SS-20 (sample)', busy: true },
+] }) }
 /** A task nobody has started an agent on: the column offers one button. */
 export const NoAgentYet: Story = { parameters: at('iss_sample20'), beforeEach: withEngine({ taskTalk: null }) }
 /** A task in no project yet. */

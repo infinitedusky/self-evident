@@ -4,7 +4,7 @@
  * beside it, so it is plain whose agent it is and nothing from another task is in it (Sandy, 2026-11-10: "an agent
  * chat thing within the task itself, so we know that it's its own thing and that we're not sharing across different
  * tasks … static across the different steps of the brief and the build"). Under its name: the agents it has out,
- * each on one piece of work. It folds to a thin strip. After Linear's issue page, which keeps an issue's activity on
+ * each on one piece of work (a prototype's builder; a fresh agent on each check once the prototype is approved). It folds to a thin strip. After Linear's issue page, which keeps an issue's activity on
  * the issue, and Cursor's chat column, which stays while the editor changes.
  */
 import { AgentStrip, type AgentStripProps } from './AgentStrip'
@@ -35,7 +35,7 @@ export function useTaskAgent(taskId: string, appId: string) {
     void refresh()
     const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 200) }
     const es = openEvents(`${API}/events?since=now&app=${appId}`)
-    for (const t of ['talk.message', 'talk.permission', 'talk.result', 'prototype.created', 'prototype.started', 'prototype.stopped', 'prototype.discarded']) es.addEventListener(t, bump)
+    for (const t of ['talk.message', 'talk.permission', 'talk.result', 'prototype.created', 'prototype.started', 'prototype.stopped', 'prototype.discarded', 'step.updated']) es.addEventListener(t, bump)
     const asked = () => { show(true); bump() }
     window.addEventListener(TASK_AGENT_ASKED, asked)
     return () => { closed = true; es.close(); window.clearTimeout(timer.current); window.removeEventListener(TASK_AGENT_ASKED, asked) }

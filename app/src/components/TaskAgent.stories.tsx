@@ -33,6 +33,15 @@ export const AgentsOut: Story = { beforeEach: sketching, args: { stage: 'Brief',
 ] } }
 /** A prototype under way: its own agent is a second tab in the column, its dot pulsing while it works; press it to read that conversation. */
 export const PrototypeAgentOut: Story = { beforeEach: sketching, args: { stage: 'Brief', deployed: [{ what: 'Prototype', icon: '🛠️', title: 'Checkout in one page (sample)', sessionId: 'talk_sample_proto', state: 'out' }] } }
+/**
+ * The prototype is approved: the checks run by themselves, one fresh agent after the other, each a tab. The analysis is
+ * back, the ADR's agent is on it; the blast radius and the audit have not started, so they have no tab yet.
+ */
+export const ChecksRunning: Story = { beforeEach: sketching, args: { stage: 'Brief', deployed: [
+  { what: 'Prototype', icon: '🛠️', title: 'Checkout in one page (sample)', sessionId: 'talk_sample_proto', state: 'back' },
+  { what: 'Prototype analysis', icon: '🔬', title: 'Prototype analysis: SS-20 (sample)', sessionId: 'talk_sample_analysis', state: 'back' },
+  { what: 'ADR', icon: '🏛️', title: 'ADR: SS-20 (sample)', sessionId: 'talk_sample_adr', state: 'out' },
+] } }
 /** Waiting on the person: the dot turns amber. */
 export const WaitingOnYou: Story = { beforeEach: sketching, args: { stage: 'Brief', state: 'waiting' } }
 /** A task nobody has talked to an agent about yet: one button starts its agent. */
