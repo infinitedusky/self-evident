@@ -16,7 +16,7 @@ import { askStep, useSteps } from '../components/StepsPanel'
 import { StepSection } from '../components/StepSection'
 import { mark, TaskNav } from '../components/TaskNav'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
-import { finished, label, step, type Row, type StepKey } from '@self-evident/engine/steps'
+import { finished, label, ready, step, type Row, type StepKey } from '@self-evident/engine/steps'
 import { STATUS_TONE } from '../components/PlanGraphView'
 import { openEvents, type Events, API, engine, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState } from '../engine'
 
@@ -168,6 +168,7 @@ function StandsOn({ feeds, base }: { feeds: Row[]; base: string }) {
             <span className={`task-nav-mark ${finished(r.state, 'task') ? 'ok' : ''}`}>{mark(r, 'task')}</span>
             <Link to={`${base}/${r.key}`}>{step(r.key).icon} {label(r.key, 'task')}</Link>
             <span className="faint">{r.state.status === 'none' ? 'not started' : r.state.detail ?? (r.state.status === 'done' ? 'done' : 'started')}</span>
+            {ready(r.state, 'task') && <Badge tone="warn">ready for you</Badge>}
             {r.required && !finished(r.state, 'task') && <Badge tone="warn">required</Badge>}
           </li>
         ))}

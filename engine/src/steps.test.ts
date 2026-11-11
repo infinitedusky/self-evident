@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_WORKFLOW, addCheck, blocking, normalize, owed, removeCheck, resolve, rows, validOrder, type Workflow, type WorkflowStep } from './steps.js'
+import { DEFAULT_WORKFLOW, addCheck, blocking, finished, needsApproval, normalize, owed, ready, removeCheck, resolve, rows, validOrder, type Workflow, type WorkflowStep } from './steps.js'
 
 const w = (steps: WorkflowStep[], ordered = true): Workflow => ({ id: 'wf', name: 'wf', ordered, steps })
 const s = (key: WorkflowStep['key'], required = false, on = true): WorkflowStep => ({ key, on, required })
@@ -27,7 +27,18 @@ describe('steps', () => {
     const checked = addCheck(ui, 'risk')
     expect(r.map((x) => [x.key, x.position, x.waitingOn])).toEqual([['idea', 1, null], ['research', 2, null], ['mockup', 3, null], ['brief', null, null]])
     expect(rows('task', [{ key: 'idea', status: 'done' }], checked).find((x) => x.key === 'risk')).toMatchObject({ position: 4, waitingOn: 'mockup' })
-    expect(rows('task', [{ key: 'idea', status: 'done' }, { key: 'mockup', status: 'done' }], checked).find((x) => x.key === 'risk')?.waitingOn).toBeNull()
+    expect(rows('task', [{ key: 'idea', status: 'done' }, { key: 'mockup', status: 'done' }], checked).find((x) => x.key === 'risk')?.waitingOn).toBe('mockup') // done by the agent's word: still the person's to approve
+    expect(rows('task', [{ key: 'idea', status: 'done' }, { key: 'mockup', status: 'done', approved: { by: 'sam', at: 'now' } }], checked).find((x) => x.key === 'risk')?.waitingOn).toBeNull()
+  })
+
+  it('finishes a task\'s research, sketches, mockups and prototype only on a person\'s approval; a check is finished when done', () => {
+    const done = { key: 'sketch' as const, status: 'done' as const }
+    expect([needsApproval('sketch', 'task'), needsApproval('prototype', 'task'), needsApproval('brief', 'task'), needsApproval('risk', 'task'), needsApproval('idea', 'task'), needsApproval('sketch', 'idea'), needsApproval('sketch', 'project')]).toEqual([true, true, true, false, false, false, false])
+    expect([finished(done, 'task'), ready(done, 'task')]).toEqual([false, true])
+    expect([finished({ ...done, approved: { by: 'sam', at: 'now' } }, 'task'), ready({ ...done, approved: { by: 'sam', at: 'now' } }, 'task')]).toEqual([true, false])
+    expect(finished(done, 'idea')).toBe(true) // an idea commits to nothing
+    expect(finished({ key: 'risk', status: 'done' }, 'task')).toBe(true) // read and approved with the brief
+    expect(ready({ key: 'sketch', status: 'started' }, 'task')).toBe(false)
   })
 
   it('keeps the brief outside the order: open from the start, nothing waits on it, approved once the required steps are done', () => {

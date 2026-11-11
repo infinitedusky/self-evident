@@ -17,7 +17,7 @@ import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, works
 import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
 import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
-import { approveBrief, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
+import { approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
 import { adoptTalk, answerPermission, closeTalks, endTalk, ensureTaskTalk, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, say, setAutoApprove, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
@@ -70,7 +70,7 @@ export function buildApp(bus: EventBus) {
       'POST /issues/:id/retry': '{fresh?} — a failed or cancelled build, three more attempts', 'POST /issues/:id/build': '{status} — by hand, for drafts',
       'POST /questions/:id/answer': '{answer}',
       'GET /plan?app=': 'Plan\'s page: open projects with their tasks and steps, tasks in no project, open to-dos, workflows',
-      'GET /{ideas|issues|projects}/:id/steps': 'the workflow in force, each step\'s state, the order, what blocks completing', 'PUT /{ideas|issues|projects}/:id/steps/:key': '{status?, detail?, body?, refs?}',
+      'GET /{ideas|issues|projects}/:id/steps': 'the workflow in force, each step\'s state, the order, what blocks completing', 'PUT /{ideas|issues|projects}/:id/steps/:key': '{status?, detail?, body?, refs?}', 'POST /issues/:id/steps/:key/approve': '{approve?} — a person approves a step of a task (research, sketches, mockups, the prototype), or takes it back',
       'POST /issues/:id/brief/approve': '{approve?} — a person approves the brief; a task completes only once it is', 'POST /ideas/:id/convert': '{as: task|project, title?, projectId?, why?}',
       'GET /workflows?app=': 'the app\'s workflows', 'POST /workflows': '{appId, name, steps: [{key, on, required}], ordered?}', 'PUT /workflows/:id': 'the same',
       'GET /apps/:id/claude-sessions': 'the Claude Code sessions run on this app in a terminal or an editor, newest first', 'POST /talks/ask': '{appId, subjectRef?, text} — said to the task\'s own agent when subjectRef names a task (issueId), else to a new conversation brought to the front', 'GET /issues/:id/talk': 'the task\'s own agent: its one conversation, or null', 'POST /issues/:id/talk': 'the same, started if the task has none', 'POST /{apps|projects|issues}/:id/workflow': '{workflowId | null} — attach one, or inherit again',
@@ -392,6 +392,10 @@ export function buildApp(bus: EventBus) {
       try { return c.json(await setStep(subject(kind, c.req.param('id')), c.req.param('key') as never, await c.req.json(), 'user')) } catch (err) { return planError(c, err) }
     })
   }
+  api.post('/issues/:id/steps/:key/approve', async (c) => {
+    const { approve = true } = await c.req.json<{ approve?: boolean }>().catch(() => ({ approve: true }))
+    try { return c.json(await approveStep(c.req.param('id'), c.req.param('key') as never, 'user', approve)) } catch (err) { return planError(c, err) }
+  })
   api.post('/issues/:id/brief/approve', async (c) => {
     const { approve = true } = await c.req.json<{ approve?: boolean }>().catch(() => ({ approve: true }))
     try { return c.json(settle(await approveBrief(c.req.param('id'), 'user', approve))) } catch (err) { return planError(c, err) }

@@ -12,7 +12,7 @@ import { app, idea, issue, project, prototype, stepWork, workflow } from './db/s
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { getIssue, insertIssues, PlanError } from './issues.js'
-import { blocking, owed, CAN, DEFAULT_NAME, DEFAULT_STEPS, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
+import { blocking, needsApproval, owed, CAN, DEFAULT_NAME, DEFAULT_STEPS, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
 
 export type Subject = { ideaId: string } | { issueId: string } | { projectId: string }
 const onOf = (s: Subject): On => ('ideaId' in s ? 'idea' : 'issueId' in s ? 'task' : 'project')
@@ -113,7 +113,7 @@ export async function workflowFor(tx: Tx | typeof db, s: { issueId: string } | {
 /** What each step on one idea, task or project has so far. */
 async function statesOf(tx: Tx | typeof db, s: Subject): Promise<{ states: StepState[]; fromIdea: { id: string; number: number; title: string } | null }> {
   const work = await tx.select().from(stepWork).where(subjectCol(s))
-  const states: StepState[] = work.map((w) => ({ key: w.key as StepKey, status: w.status as StepState['status'], detail: w.detail ?? undefined }))
+  const states: StepState[] = work.map((w) => ({ key: w.key as StepKey, status: w.status as StepState['status'], detail: w.detail ?? undefined, ...(w.approvedBy ? { approved: { by: w.approvedBy, at: (w.approvedAt ?? w.createdAt).toISOString() } } : {}) }))
   const set = (st: StepState) => { const i = states.findIndex((x) => x.key === st.key); if (i >= 0) states[i] = { ...states[i], ...st, status: states[i].status === 'done' ? 'done' : st.status }; else states.push(st) }
   const protos = await tx.select().from(prototype).where(and(
     'ideaId' in s ? eq(prototype.ideaId, s.ideaId) : 'issueId' in s ? eq(prototype.issueId, s.issueId) : eq(prototype.projectId, s.projectId),
@@ -171,11 +171,38 @@ export async function setStep(s: Subject, key: StepKey, input: { status?: 'start
     const values = {
       status: input.status ?? old?.status ?? 'started', detail: input.detail !== undefined ? input.detail : old?.detail ?? null,
       body: input.body !== undefined ? input.body : old?.body ?? null, refs: input.refs ?? (old?.refs as string[] | undefined) ?? [], updatedBy: actor, updatedAt: new Date(),
+      approvedBy: null, approvedAt: null, // the work changed: the person approves it again, as with a brief
     }
     const [row] = old
       ? await tx.update(stepWork).set(values).where(eq(stepWork.id, old.id)).returning()
       : await tx.insert(stepWork).values({ id: newId('stepWork'), appId: a.id, ...('ideaId' in s ? { ideaId: s.ideaId } : 'issueId' in s ? { issueId: s.issueId } : { projectId: s.projectId }), key, ...values }).returning()
     await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, actor, type: 'step.updated', ...('ideaId' in s ? { ideaId: s.ideaId } : 'issueId' in s ? { issueId: s.issueId } : { projectId: s.projectId }), payload: { key, status: row.status } })
+    return row
+  })
+}
+
+/**
+ * A person approves a step of a task, or takes the approval back. Approving finishes it (its status becomes done
+ * whatever the agent had said); the agent changing the step afterwards asks for approval again (setStep).
+ */
+export async function approveStep(issueId: string, key: StepKey, by: string, approve = true) {
+  if (!KEYS.includes(key)) throw new PlanError(`no step "${key}"; the steps are ${KEYS.join(', ')}`)
+  if (key === 'brief') return approveBrief(issueId, by, approve)
+  if (!needsApproval(key, 'task')) throw new PlanError(`${step(key).label} isn't approved on its own: it is read and approved with the brief`)
+  return db.transaction(async (tx) => {
+    const s = { issueId }
+    const i = await getIssue(tx, issueId)
+    if (i.parentId || i.kind !== 'code') throw new PlanError('only a top-level code task has steps to approve')
+    const a = await appOf(tx, i.appId)
+    const state = (await stepsOf(s, tx)).states.find((x) => x.key === key)
+    if (approve && (!state || state.status === 'none')) throw new PlanError(`${step(key).label} hasn't been started: there is nothing to approve yet`)
+    if (approve) await guardOrder(tx, s, key)
+    const [old] = await tx.select().from(stepWork).where(and(subjectCol(s), eq(stepWork.key, key)))
+    const values = approve ? { status: 'done', approvedBy: by, approvedAt: new Date() } : { approvedBy: null, approvedAt: null }
+    const [row] = old
+      ? await tx.update(stepWork).set(values).where(eq(stepWork.id, old.id)).returning()
+      : await tx.insert(stepWork).values({ id: newId('stepWork'), appId: a.id, issueId, key, detail: state?.detail ?? null, updatedBy: by, updatedAt: new Date(), ...values }).returning() // a prototype's step has no row of its own until now
+    await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, actor: by, type: 'step.updated', issueId, payload: { key, status: row.status, approved: approve } })
     return row
   })
 }

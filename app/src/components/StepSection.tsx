@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { finished, label, step, type On, type Row, type StepState } from '@self-evident/engine/steps'
+import { finished, label, needsApproval, ready, step, type On, type Row, type StepState } from '@self-evident/engine/steps'
 import { Badge } from './Badge'
 import { askStep } from './StepsPanel'
 import { engine, type Prototype, type StepSubject, type StepWork } from '../engine'
@@ -46,6 +46,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
     : row.key === 'prototype' && proto && s.status !== 'none' ? { kind: 'prototype', id: proto.id } : null
   const waitsOnApproval = row.waitingOn === 'brief' && on === 'task' && waitingState?.status === 'done'
   const own = row.key !== 'idea' && row.key !== 'brief' // the steps whose work is kept as a step
+  const approves = own && subject.kind === 'issues' && needsApproval(row.key, on) // a person approves it, here
   useEffect(() => {
     setAsked(false)
     if (own && row.key !== 'prototype' && s.status !== 'none') engine.step(subject, row.key).then(setWork).catch((e) => setError(err(e)))
@@ -65,6 +66,8 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
     <section className={`panel step-section ${showView ? 'viewing' : ''}`} data-component="StepSection">
       <div className="card-head">
         <h2 style={{ margin: 0 }}>{step(row.key).icon} {label(row.key, on)}</h2>
+        {approves && s.approved && <Badge tone="ok">approved by {s.approved.by}</Badge>}
+        {approves && ready(s, on) && <Badge tone="warn">ready for you</Badge>}
         {viewed && (
           <div className="seg step-tabs" role="tablist" aria-label="What to show">
             <button role="tab" aria-selected={pane === 'view'} className={pane === 'view' ? 'on' : ''} onClick={() => setPane('view')}>View</button>
@@ -72,6 +75,9 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
           </div>
         )}
         {row.required ? <Badge tone={finished(s, on) ? 'ok' : 'warn'}>required</Badge> : <span className="faint" style={{ fontSize: 13 }}>optional</span>}
+        {/* The check mark is the person's: the agent can only say a step is ready (Sandy, 2026-11-10: "an approve button for each step"). */}
+        {approves && !s.approved && s.status !== 'none' && !row.waitingOn && <button className={ready(s, on) ? 'btn small' : 'btn quiet small'} disabled={busy} onClick={() => act(() => engine.approveStep(subject.id, row.key))} title="Approve this step: it gets its check, and the steps after it can go on">Approve</button>}
+        {approves && s.approved && <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.approveStep(subject.id, row.key, false))} title="Take the approval back">Withdraw</button>}
       </div>
       {showView && viewed && <Viewer tab={viewed} embedded />}
       {!showView && <>
@@ -114,7 +120,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
               {s.status === 'none'
                 ? <button className="btn" disabled={busy || asked} onClick={ask}>{row.key === 'prototype' ? 'Start a prototype with the agent' : 'Start with the agent'}</button>
                 : <button className="btn quiet" disabled={busy || asked} onClick={ask}>Ask the agent to carry on</button>}
-              {own && s.status === 'started' && row.key !== 'prototype' && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'done' }))}>Mark done</button>}
+              {own && !approves && s.status === 'started' && row.key !== 'prototype' && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'done' }))}>Mark done</button>}
               {asked && <span className="faint">{ownAgent ? 'Handed to this task\'s agent, on the right.' : 'Handed to the agent: it\'s in the agent panel.'}</span>}
             </div>
           )}

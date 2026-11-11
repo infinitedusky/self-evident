@@ -394,8 +394,8 @@ export const ideaSteps: StepState[] = [
   { key: 'mockup', status: 'started', detail: '2 variants' },
 ]
 export const taskSteps: StepState[] = [
-  { key: 'research', status: 'done', detail: 'carried over from the idea' },
-  { key: 'mockup', status: 'done', detail: 'variant B chosen' },
+  { key: 'research', status: 'done', detail: 'carried over from the idea', approved: { by: 'Sam (sample)', at: '2026-10-27' } },
+  { key: 'mockup', status: 'done', detail: 'variant B chosen' }, // done by the agent's word: ready for the person to approve
   { key: 'prototype', status: 'started', detail: 'running, scenario "busy store"' },
   { key: 'brief', status: 'done', detail: 'draft, 4 sections' },
 ]
@@ -419,12 +419,12 @@ export const plan: Plan = {
 // The engine's view of steps (made up): a task under its project's workflow, an idea, and a project.
 export const taskStepsView: StepsView = {
   on: 'task', resolved: { workflow: uiWorkflow, from: 'project' }, fromIdea: { id: 'idea_sample1', number: 4, title: 'Sample: checkout in one go' },
-  states: [{ key: 'idea', status: 'done', detail: '#4 Sample: checkout in one go' }, ...taskSteps], rows: [], blocking: ['brief', 'risk'],
+  states: [{ key: 'idea', status: 'done', detail: '#4 Sample: checkout in one go' }, ...taskSteps], rows: [], blocking: ['mockup', 'risk', 'brief'],
 }
 export const ideaStepsView: StepsView = { on: 'idea', resolved: { workflow: null, from: null }, fromIdea: null, states: ideaSteps, rows: [], blocking: [] }
 export const projectStepsView: StepsView = { on: 'project', resolved: { workflow: defaultWorkflow, from: 'app' }, fromIdea: null, states: [{ key: 'prototype', status: 'done', detail: 'the whole flow, made-up orders' }], rows: [], blocking: [] }
 /** The same task with its blast radius done and its brief approved: the build opens. */
-export const approvedTaskStepsView: StepsView = { ...taskStepsView, states: [...taskStepsView.states.map((x) => (x.key === 'brief' ? { ...x, detail: undefined, approved: { by: 'Sam (sample)', at: '2026-10-28' } } : x)), { key: 'risk', status: 'done', detail: '3 files, one migration' }], blocking: [] }
+export const approvedTaskStepsView: StepsView = { ...taskStepsView, states: [...taskStepsView.states.map((x) => (x.key === 'brief' ? { ...x, detail: undefined, approved: { by: 'Sam (sample)', at: '2026-10-28' } } : x)), { key: 'risk', status: 'done', detail: '3 files, one migration' }].map((x) => (x.key === 'mockup' ? { ...x, approved: { by: 'Sam (sample)', at: '2026-10-28' } } : x)), blocking: [] }
 /** The same task with its mockups still under way: in an enforced order, the blast radius waits on them. */
 export const waitingTaskStepsView: StepsView = { ...taskStepsView, states: taskStepsView.states.map((x) => (x.key === 'mockup' ? { ...x, status: 'started', detail: '2 variants' } : x)), blocking: ['mockup', 'risk', 'brief'] }
 export const researchWork: StepWork = { id: 'step_sample1', key: 'research', status: 'done', detail: '3 comps, one case against', refs: [], updatedBy: 'agent', updatedAt: T0,

@@ -7,7 +7,7 @@
  * approved once the required steps are done, and the build waits on that approval.
  */
 import { NavLink } from 'react-router'
-import { finished, label, step, type On, type Row } from '@self-evident/engine/steps'
+import { finished, label, ready, step, type On, type Row } from '@self-evident/engine/steps'
 
 /** What a step waits on, in words. */
 export function after(r: Row, _rows: Row[], on: On) {
@@ -23,7 +23,7 @@ export function briefStands(rows: Row[], on: On) {
   return b.state.status === 'done' && on === 'task' ? 'waiting for your approval' : b.state.status === 'none' ? 'not written yet' : 'a draft'
 }
 
-/** ✓ finished, ◐ started (or a brief waiting for approval), ○ not started. */
+/** ✓ finished (approved, where a person approves it), ◐ started or ready for the person, ○ not started. */
 export const mark = (r: Row, on: On) => (finished(r.state, on) ? '✓' : r.state.status === 'none' ? '○' : '◐')
 
 export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded, onToggle }: {
@@ -49,7 +49,7 @@ export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded
       waitingOn
         ? <span key={key} className="link locked" title={`${name}: after ${waitingOn}`} aria-disabled="true">{glyph}</span>
         : <NavLink key={key} to={to} end className={() => `link ${here === key ? 'active' : ''} ${done ? 'done' : ''}`} title={`${name}: ${state}`} aria-label={name}>{glyph}</NavLink>
-    const said = (r: Row) => (finished(r.state, on) ? 'done' : r.state.status === 'none' ? 'not started' : 'started')
+    const said = (r: Row) => (finished(r.state, on) ? 'done' : ready(r.state, on) ? 'ready for you to approve' : r.state.status === 'none' ? 'not started' : 'started')
     return (
       <nav className="task-nav folded" aria-label="This task" data-component="TaskNav">
         {toggle}
@@ -75,11 +75,14 @@ export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded
           {stands && <span className="task-nav-after">{stands}</span>}
         </>, null, brief.state.status)}
       {feeds.map((r) => item(r.key, `${base}/${r.key}`,
+        <>
         <span className="task-nav-row">
           <span className={`task-nav-mark ${finished(r.state, on) ? 'ok' : ''}`}>{mark(r, on)}</span>
           <span className="task-nav-text">{r.position && <span className="faint mono">{r.position}. </span>}{step(r.key).icon} {label(r.key, on)}</span>
           {r.required && !finished(r.state, on) && <span className="task-nav-req" title="Required">•</span>}
-        </span>, after(r, rows, on), `${r.state.status} task-nav-feed`))}
+        </span>
+        {ready(r.state, on) && <span className="task-nav-after task-nav-ready" title="The agent says it is done: yours to approve">ready for you</span>}
+        </>, after(r, rows, on), `${r.state.status} task-nav-feed`))}
       <div className="task-nav-label faint">Build</div>
       {item('build', `${base}/build`,
         <span className="task-nav-row">

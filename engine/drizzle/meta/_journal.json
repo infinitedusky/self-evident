@@ -71,6 +71,13 @@
       "when": 1794099050607,
       "tag": "0009_issue_comment",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794367958477,
+      "tag": "0010_step_approval",
+      "breakpoints": true
     }
   ]
 }

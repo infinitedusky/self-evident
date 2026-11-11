@@ -13,7 +13,7 @@ import { newId } from './ids.js'
 import { createIssue, updateIssue } from './issues.js'
 import { preparePlanning } from './planner.js'
 import { createProject } from './projects.js'
-import { approveBrief, convertIdea, createDefaultWorkflow, guardComplete, guardDirect, ideaFirst, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow } from './work.js'
+import { approveBrief, convertIdea, createDefaultWorkflow, guardComplete, guardDirect, ideaFirst, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, approveStep } from './work.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -80,7 +80,18 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     await updateIssue(t.id, { brief: 'Do the thing.' })
     expect((await stepsOf({ issueId: t.id })).states.find((s) => s.key === 'brief')).toMatchObject({ status: 'done', detail: 'waiting for approval' })
     await expect(approveBrief(t.id, 'sam')).rejects.toThrow(/can be approved once this workflow's required steps are done; still to do: Research/) // the brief is the parent: final only once what feeds it is done
-    await setStep({ issueId: t.id }, 'research', { status: 'done', body: 'notes' })
+    await setStep({ issueId: t.id }, 'research', { status: 'done', body: 'notes' }, 'agent')
+    await expect(approveBrief(t.id, 'sam')).rejects.toThrow(/still to do: Research/) // the agent says done: ready for the person, not finished
+    await approveStep(t.id, 'research', 'sam')
+    expect((await stepsOf({ issueId: t.id })).states.find((s) => s.key === 'research')).toMatchObject({ status: 'done', approved: { by: 'sam' } })
+    await setStep({ issueId: t.id }, 'research', { body: 'more notes' }, 'agent') // changed after approval: approved again
+    expect((await stepsOf({ issueId: t.id })).states.find((s) => s.key === 'research')?.approved).toBeUndefined()
+    await approveStep(t.id, 'research', 'sam')
+    await approveStep(t.id, 'research', 'sam', false)
+    await expect(approveBrief(t.id, 'sam')).rejects.toThrow(/still to do: Research/) // taken back
+    await approveStep(t.id, 'research', 'sam')
+    await expect(approveStep(t.id, 'sketch', 'sam')).rejects.toThrow(/hasn't been started/)
+    await expect(approveStep(t.id, 'risk', 'sam')).rejects.toThrow(/approved with the brief/)
     await approveBrief(t.id, 'sam')
     await expect(guardComplete(db, t.id)).resolves.toBeUndefined()
     await updateIssue(t.id, { brief: 'Do the other thing.' })
@@ -94,6 +105,8 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     await expect(approveBrief(t.id, 'sam')).rejects.toThrow(/still to do: Mockups/)
     await expect(setStep({ issueId: t.id }, 'adr', { status: 'started' })).rejects.toThrow(/ADR waits for Mockups first/)
     await setStep({ issueId: t.id }, 'mockup', { status: 'done', refs: ['pages-x--y'] })
+    await expect(setStep({ issueId: t.id }, 'adr', { status: 'started' })).rejects.toThrow(/ADR waits for Mockups first/) // done, not yet approved
+    await approveStep(t.id, 'mockup', 'sam')
     await expect(setStep({ issueId: t.id }, 'adr', { status: 'done' })).resolves.toMatchObject({ key: 'adr' }) // a check no longer waits for the brief's approval
     await approveBrief(t.id, 'sam')
   })

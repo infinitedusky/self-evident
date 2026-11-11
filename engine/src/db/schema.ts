@@ -378,6 +378,7 @@ export const stepWork = pgTable('step_work', {
   key: text('key').notNull(), status: text('status').notNull().default('started'),
   detail: text('detail'), body: text('body'), refs: jsonb('refs').notNull().default([]), // refs: story ids for mockups
   updatedBy: text('updated_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
+  approvedBy: text('approved_by'), approvedAt: at('approved_at'), // a person's approval of a step on a task (steps.ts, needsApproval); cleared when the step's work changes
 }, (t) => [index('step_work_app').on(t.appId), inList('step_work_status', t.status, STEP_STATUSES),
   uniqueIndex('step_work_idea_key').on(t.ideaId, t.key), uniqueIndex('step_work_issue_key').on(t.issueId, t.key), uniqueIndex('step_work_project_key').on(t.projectId, t.key),
   check('step_work_one_subject', sql`num_nonnulls(${t.ideaId}, ${t.issueId}, ${t.projectId}) = 1`)])

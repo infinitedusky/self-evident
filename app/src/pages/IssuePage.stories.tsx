@@ -16,9 +16,9 @@ const approved = withEngine({ steps: { ...sampleData.steps, issues: approvedTask
 
 /** A task's home: what it's for, what stops it completing, the next step. The brief waits on the blast radius, and the build on the brief's approval. */
 export const Overview: Story = { parameters: at('iss_sample20') }
-/** A step's page: research, done, with its notes. */
+/** A step's page: research, approved, with its notes and a way to take the approval back. */
 export const ResearchStep: Story = { parameters: at('iss_sample20', 'research') }
-/** The mockups' page: done, with the task's Storybook right on it (here not running), and Detach to give it a browser tab. */
+/** The mockups' page: the agent says it is done, so it is ready for you, with Approve; the task's Storybook right on it (here not running). */
 export const MockupsStep: Story = { parameters: at('iss_sample20', 'mockup') }
 /** The prototype's page: started, with the agent. */
 export const PrototypeStep: Story = { parameters: at('iss_sample20', 'prototype') }

@@ -229,6 +229,8 @@ export const engine = {
   steps: (s: StepSubject) => call<StepsView>('GET', `/${s.kind}/${s.id}/steps`),
   step: (s: StepSubject, key: StepKey) => call<StepWork | null>('GET', `/${s.kind}/${s.id}/steps/${key}`),
   setStep: (s: StepSubject, key: StepKey, body: { status?: 'started' | 'done'; detail?: string | null; body?: string | null; refs?: string[] }) => call<StepWork>('PUT', `/${s.kind}/${s.id}/steps/${key}`, body),
+  /** A person approves a step of a task (research, sketches, mockups, the prototype), or takes it back. */
+  approveStep: (issueId: string, key: StepKey, approve = true) => call<StepWork>('POST', `/issues/${issueId}/steps/${key}/approve`, { approve }),
   approveBrief: (issueId: string, approve = true) => call<Issue>('POST', `/issues/${issueId}/brief/approve`, { approve }),
   workflows: (appId: string) => call<WorkflowRow[]>('GET', `/workflows?app=${appId}`),
   saveWorkflow: (body: { id?: string; appId: string; name: string; steps: WorkflowStep[]; ordered: boolean }) => call<Workflow>(body.id ? 'PUT' : 'POST', body.id ? `/workflows/${body.id}` : '/workflows', body),
