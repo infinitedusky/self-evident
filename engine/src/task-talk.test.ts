@@ -7,7 +7,7 @@ import { db, pool } from './db/client.js'
 import { app, prototype, session, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createIssue } from './issues.js'
-import { closeTalks, ensureTaskTalk, listTalks, modelFor, taskAgents, taskTalk } from './talk.js'
+import { closeTalks, ensureTaskTalk, listTalks, modelFor, startCheckTalk, taskAgents, taskTalk } from './talk.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -50,6 +50,16 @@ describe.skipIf(!reachable)('a task\'s own agent', () => {
     expect(await taskAgents('iss_none')).toEqual([])
     const mine = (await listTalks({ open: true })).filter((s) => [own.id, builder.id, loose.id].includes(s.id))
     expect(Object.fromEntries(mine.map((s) => [s.id, s.taskId]))).toEqual({ [own.id]: t.id, [builder.id]: t.id, [loose.id]: null })
+  })
+
+  it('lists a fresh agent out on a check beside the prototype\'s, by its step, and marks it as the task\'s', async () => {
+    const t = await createIssue(appId, { title: 'Checked', kind: 'code' })
+    const reader = await startCheckTalk({ appId, issueId: t.id, check: 'analysis', cwd: '/tmp/none', branch: 'prototype/x', subject: 'Prototype analysis: Checked' })
+    await talk({ checkOf: t.id, check: 'adr' }, { status: 'ended' }) // ended: not out any more
+    expect(reader).toMatchObject({ worktreePath: null, createdBy: 'engine', subjectRef: { checkOf: t.id, check: 'analysis' } }) // ending it removes no folder
+    expect(await taskAgents(t.id)).toMatchObject([{ sessionId: reader.id, kind: 'check', check: 'analysis', what: 'Prototype analysis', icon: '🔬', busy: false }])
+    expect(await taskTalk(t.id)).toBeNull() // it is not the task's own agent
+    expect((await listTalks({ open: true })).find((s) => s.id === reader.id)?.taskId).toBe(t.id)
   })
 
   it('runs a prototype\'s agent on Sonnet unless the app names another model, and everything else on the app\'s model', () => {

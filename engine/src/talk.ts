@@ -10,6 +10,7 @@ import { promisify } from 'node:util'
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, idea, issue, project, prototype, repo, session, sessionMessage, workspace } from './db/schema.js'
+import { step, type StepKey } from './steps.js'
 import { addWorktree, git, removeWorktree } from './git.js'
 import { checkoutProblem } from './checkout.js'
 import { withLock } from './landing.js'
@@ -27,6 +28,7 @@ import { lastUuid, latestSession, readTurns, sessionFile, sessionLabel, sessions
 
 const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']
 const ASK_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash']
+const CHECK_TOOLS = ['Bash'] // a check reads: no editing tools, and the shell is rated like anyone's
 const PERMISSION_TIMEOUT_MS = 10 * 60_000
 
 const talkPrompt = (cwd: string, branch: string | null, base: string, where?: string) => `You are Self Evident's agent (Self Evident: software that proves itself — observe, learn, ideate, mockup, build), talking with the person who runs it, in its own web UI.
@@ -34,7 +36,7 @@ The factory builds software from ideas, shaped like Linear: initiative (a goal) 
 You have the engine as tools (mcp__engine__*): see what needs attention, keep ideas, make projects, keep each project's backlog (everything it has to cover; when the person mentions something a project should not forget, add it), keep the app's to-dos (work outside the code: accounts, approvals, people, checks; when the person mentions one, make it with a checklist you draft, and check lines off as they get done), run the planner on a task, answer its questions, start or cancel projects, read the event log. Use them rather than describing what the person should click.
 You can read, search and edit files and run commands here, as in any Claude Code session. The engine rates every action's risk (free, cheap, moderate, expensive); up to the person's threshold it runs without asking and is logged, above it a card asks them. Expensive things (main, force, deletes, merges, publishing, starting a project) always ask. Work on a branch in a worktree, never in a checkout that is on main; say what each action is for.
 ${where ?? `You work in your own worktree, ${cwd}, on branch ${branch ?? '(none)'} cut from ${base}: edit and commit there; push and open a pull request when the work is ready (both ask).`}
-The brief is the parent of a task's steps: research, sketches, mockups, the prototype and the checks (an ADR, the blast radius, a brief audit) all exist to make it solid, and it is approved last, once the required ones are done. Keep it up to date as the steps land, and name in it what each produced (the sketch files, the story ids, the prototype's branch, the report), so it points at them. Looking before building has three steps, in this order: sketches, mockups, the prototype. A sketch is about speed: one plain HTML file per screen under sketches/ in your worktree, its CSS inside it, no framework and no build, a whole screen as the user sees it with made-up data that says so; show it with open_tab (kind sketch, file: its name) so it is beside the conversation, where it reloads by itself each time you change the file; never send the person a link or a path to open. Change it the moment they react, and record it with set_step (key sketch, refs: the files). A story you write shows the same way: open_tab kind storybook with its id, which shows your worktree's Storybook. Once they like it, do it properly as a story (the mockup step); the agreed mockup is named in the brief. The prototype finds the best way to build it, and what it taught goes into the brief too.
+The brief is the parent of a task's steps: research, sketches, mockups, the prototype and the checks (the prototype analysis, an ADR, the blast radius, a brief audit) all exist to make it solid, and it is approved last, once the required ones are done. Keep it up to date as the steps land, and name in it what each produced (the sketch files, the story ids, the prototype's branch, the report), so it points at them. Looking before building has three steps, in this order: sketches, mockups, the prototype. A sketch is about speed: one plain HTML file per screen under sketches/ in your worktree, its CSS inside it, no framework and no build, a whole screen as the user sees it with made-up data that says so; show it with open_tab (kind sketch, file: its name) so it is beside the conversation, where it reloads by itself each time you change the file; never send the person a link or a path to open. Change it the moment they react, and record it with set_step (key sketch, refs: the files). A story you write shows the same way: open_tab kind storybook with its id, which shows your worktree's Storybook. Once they like it, do it properly as a story (the mockup step); the agreed mockup is named in the brief. The prototype finds the best way to build it, and what it taught goes into the brief too, in a Prototype section: its branch, what the analysis found, what to keep and what to change. The real build starts from main with the prototype as a map to follow and improve on, never as code to carry over.
 How this person works: PRs only, main is production; short answers that lead with the answer; questions are questions, not instructions to change things; give a recommendation, not a survey; write decisions into LOG.md or SHAPE.md the moment they are made; one git worktree per branch, never the main checkout.`
 
 /**
@@ -125,7 +127,8 @@ async function record(sessionId: string, author: string, kind: string, body: str
   return row
 }
 
-export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string }
+/** `issueId` pins a task's own agent; `checkOf` and `check` mark a fresh agent out on one check of that task (checks.ts). */
+export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string; checkOf?: string; check?: StepKey }
 
 /** What a conversation is about, from where it started: a project's title, an idea's title, or nothing yet. */
 async function subjectFrom(ref?: SubjectRef): Promise<{ subject: string | null; subjectRef: SubjectRef | null }> {
@@ -171,19 +174,44 @@ export async function taskTalk(issueId: string) {
 }
 
 /**
- * The agents a task's conductor has out: today, the conversation of each prototype started on the task (its own
- * agent, in the prototype's worktree). They are the task's, so they show on its page beside the conductor and not in
- * the app's column (Sandy, 2026-11-10: "if there is a sub agent we should see some indication").
+ * The agents a task's conductor has out: the conversation of each prototype started on the task (its own agent, in
+ * the prototype's worktree), and each fresh agent out on a check (checks.ts). They are the task's, so they show on its
+ * page beside the conductor and not in the app's column (Sandy, 2026-11-10: "if there is a sub agent we should see
+ * some indication").
  */
 export async function taskAgents(issueId: string) {
   const protos = await db.select().from(prototype).where(and(eq(prototype.issueId, issueId), inArray(prototype.status, ['running', 'stopped']), isNotNull(prototype.sessionId))).orderBy(prototype.createdAt)
-  if (!protos.length) return []
-  const rows = await db.select().from(session).where(inArray(session.id, protos.map((p) => p.sessionId!)))
-  return protos.flatMap((p) => {
+  const rows = protos.length ? await db.select().from(session).where(inArray(session.id, protos.map((p) => p.sessionId!))) : []
+  const building = protos.flatMap((p) => {
     const s = rows.find((r) => r.id === p.sessionId)
-    return s && s.status === 'open' ? [{ sessionId: s.id, kind: 'prototype' as const, what: 'Prototype', title: p.title, prototypeId: p.id, busy: live.get(s.id)?.busy ?? false }] : []
+    return s && s.status === 'open' ? [{ sessionId: s.id, kind: 'prototype' as const, what: 'Prototype', icon: step('prototype').icon, title: p.title, prototypeId: p.id, busy: live.get(s.id)?.busy ?? false }] : []
   })
+  const checking = (await checkTalks(issueId)).map((s) => {
+    const d = step((s.subjectRef as SubjectRef).check!)
+    return { sessionId: s.id, kind: 'check' as const, what: d.label, icon: d.icon, title: s.subject ?? d.label, check: d.key, busy: live.get(s.id)?.busy ?? false }
+  })
+  return [...building, ...checking]
 }
+
+/** The open conversations of the fresh agents out on a task's checks, oldest first. */
+export const checkTalks = (issueId: string) => db.select().from(session)
+  .where(and(eq(session.kind, 'talk'), eq(session.status, 'open'), sql`${session.subjectRef}->>'checkOf' = ${issueId}`)).orderBy(session.createdAt)
+
+/**
+ * A fresh agent for one check of a task: a conversation of its own that starts from what it is told and nothing
+ * else, in a folder it only reads (the prototype's worktree, or the conductor's), so ending it removes nothing.
+ */
+export async function startCheckTalk(i: { appId: string; issueId: string; check: StepKey; cwd: string; branch: string | null; subject: string }) {
+  const [row] = await db.insert(session).values({
+    id: newId('session'), appId: i.appId, kind: 'talk', cwd: i.cwd, branch: i.branch, worktreePath: null,
+    subject: i.subject, subjectRef: { checkOf: i.issueId, check: i.check }, createdBy: 'engine', lastActiveAt: new Date(), autoApprove: 'cheap',
+  }).returning()
+  return row
+}
+
+const turnEnded: ((sessionId: string) => void)[] = []
+/** Called each time a conversation's agent finishes a turn; what follows from it (the next check) lives elsewhere. */
+export const onTurnEnd = (fn: (sessionId: string) => void) => { turnEnded.push(fn) }
 
 /** The task's agent, started if it has none: one conversation, one worktree, however many times it is asked for. */
 export async function ensureTaskTalk(issueId: string, actor = 'user') {
@@ -207,7 +235,10 @@ export const PROTOTYPE_MODEL = 'claude-sonnet-5-5'
 export const modelFor = (setup: { model?: string; prototype_model?: string }, prototype: boolean) => (prototype ? setup.prototype_model || PROTOTYPE_MODEL : setup.model)
 
 const taskPrompt = (t: { id: string; number: number; title: string }, key: string) => `
-This conversation is the agent of one task, ${key}-${t.number} "${t.title}" (${t.id}), and the only one: you are its conductor from its first sketch to its merge, in this one worktree. Every step of its brief (research, sketches, mockups, the prototype, the checks) and its build is done or directed from here: record each with set_step on this task, and keep its brief current with update_task. Marking a step done says it is ready for the person; they approve it on its page, and only then does it count. The person sees this conversation on the task's page, beside the step they are looking at, and "this" means this task. open_tab with a sketch, a story or the prototype takes them to that step's page of this task, where it shows beside you; it never splits a tab off. A prototype you start gets an agent of its own, in the prototype's worktree: the person sees it as a second tab at the top of this same column, named Prototype, with a dot that pulses while it works. Tell them to look there, by that name; never say "the conversation beside you". Keep to this task: for a new idea, another task or a look at findings, point them to the app's agent in the left column.`
+This conversation is the agent of one task, ${key}-${t.number} "${t.title}" (${t.id}), and the only one: you are its conductor from its first sketch to its merge, in this one worktree. Every step of its brief (research, sketches, mockups, the prototype, the checks) and its build is done or directed from here: record each with set_step on this task, and keep its brief current with update_task. Marking a step done says it is ready for the person; they approve it on its page, and only then does it count. The person sees this conversation on the task's page, beside the step they are looking at, and "this" means this task. open_tab with a sketch, a story or the prototype takes them to that step's page of this task, where it shows beside you; it never splits a tab off. A prototype you start gets an agent of its own, in the prototype's worktree: the person sees it as a second tab at the top of this same column, named Prototype, with a dot that pulses while it works. Tell them to look there, by that name; never say "the conversation beside you". When the person approves the prototype, the engine sends a fresh agent for each check this task's workflow has, one after the other (the prototype analysis, the ADR, the blast radius), each a tab in this same column; you do not write those yourself. The engine then tells you here to bring the brief up to date, and after that the brief audit runs the same way. Keep to this task: for a new idea, another task or a look at findings, point them to the app's agent in the left column.`
+
+/** A fresh agent out on one check: it reads, reports once with set_step, and stops. Its first message says what to read and what to report. */
+const checkPrompt = (key: StepKey, cwd: string) => `You are a fresh agent sent out for one piece of work on one task: its ${step(key).label.toLowerCase()}. You start from the message you are given and nothing else; that is the point, eyes that have not seen the conversation. You work in ${cwd}, which is someone else's folder: read anything, change nothing. You have no editing tools; use the shell only to read (git log, git diff, git show, ls, cat, grep, rg). Never commit, push, install or start anything. Your report is the whole result: record it once with set_step as you are told, then say in two or three lines what you found and stop. If the person writes to you afterwards, answer from what you read.`
 
 /**
  * A prototype's conversation: it works in the prototype's own worktree (not one of its own), so ending it leaves the
@@ -234,14 +265,14 @@ export async function renameTalk(sessionId: string, subject: string) {
   return row
 }
 
-/** `taskId` on a conversation that belongs to a task: its own agent, or a prototype's started on it. The app's column leaves those out. */
+/** `taskId` on a conversation that belongs to a task: its own agent, a prototype's started on it, or a check's. The app's column leaves those out. */
 export const listTalks = async (opts: { open?: boolean } = {}) => {
   const rows = await db.select().from(session).where(opts.open ? and(eq(session.kind, 'talk'), eq(session.status, 'open')) : eq(session.kind, 'talk')).orderBy(desc(session.lastActiveAt))
   const counts = await db.select({ sessionId: sessionMessage.sessionId, n: sql<number>`count(*)` }).from(sessionMessage).groupBy(sessionMessage.sessionId)
   const n = new Map(counts.map((c) => [c.sessionId, Number(c.n)]))
   const protos = await db.select({ sessionId: prototype.sessionId, issueId: prototype.issueId }).from(prototype).where(isNotNull(prototype.issueId))
   const ofTask = new Map(protos.filter((p) => p.sessionId).map((p) => [p.sessionId!, p.issueId!]))
-  return rows.map((s) => ({ ...s, live: live.has(s.id), busy: live.get(s.id)?.busy ?? false, messages: n.get(s.id) ?? 0, taskId: (s.subjectRef as SubjectRef | null)?.issueId ?? ofTask.get(s.id) ?? null }))
+  return rows.map((s) => ({ ...s, live: live.has(s.id), busy: live.get(s.id)?.busy ?? false, messages: n.get(s.id) ?? 0, taskId: (s.subjectRef as SubjectRef | null)?.issueId ?? (s.subjectRef as SubjectRef | null)?.checkOf ?? ofTask.get(s.id) ?? null }))
 }
 
 export async function talkTranscript(sessionId: string) {
@@ -268,6 +299,7 @@ async function open(sessionId: string): Promise<Live> {
   const [proto] = await db.select().from(prototype).where(eq(prototype.sessionId, sessionId))
   const ownTaskId = (s.subjectRef as SubjectRef | null)?.issueId
   const [ownTask] = ownTaskId ? await db.select().from(issue).where(eq(issue.id, ownTaskId)) : []
+  const check = (s.subjectRef as SubjectRef | null)?.check
   const q = query({
     prompt: input.it,
     options: {
@@ -276,10 +308,10 @@ async function open(sessionId: string): Promise<Live> {
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : check ? checkPrompt(check, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
-      tools: [...READ_TOOLS, ...ASK_TOOLS],
+      tools: [...READ_TOOLS, ...(check ? CHECK_TOOLS : ASK_TOOLS)],
       allowedTools: READ_TOOLS, // everything else is rated by the hook (the hook sees every call; allowedTools would not)
       permissionMode: 'default',
       // The gate: rate the call; up to the person's threshold allow it and log it; above, ask (which lands in canUseTool).
@@ -351,6 +383,7 @@ async function handle(sessionId: string, entry: Live, m: SDKMessage) {
       if (a.subtype !== 'success' && isOutage(`${a.subtype} ${a.result ?? ''} ${JSON.stringify(a.errors ?? '')} ${a.terminal_reason ?? ''}`)) return waitAndResend(sessionId, entry, String(a.result ?? a.terminal_reason ?? a.subtype))
       entry.outages = 0
       await record(sessionId, 'engine', 'result', a.subtype === 'success' ? 'done' : `${a.subtype}`, { subtype: a.subtype, costUsd: a.total_cost_usd, turns: a.num_turns, durationMs: a.duration_ms })
+      for (const fn of turnEnded) { try { fn(sessionId) } catch { /* what follows a turn never breaks the turn */ } }
       return
   }
 }
@@ -375,7 +408,7 @@ async function describeContext(c?: TalkContext): Promise<string> {
   return `(The person is looking at ${bits.join(', ')}. "This" means that unless they say otherwise; use the engine tools for details.${tabs})\n\n`
 }
 
-export async function say(sessionId: string, text: string, context?: TalkContext, as?: { author: string; kind: string }) {
+export async function say(sessionId: string, text: string, context?: TalkContext, as?: { author: string; kind: string; payload?: Record<string, unknown> }) {
   if (!text.trim()) throw new PlanError('say something')
   const [s] = await db.select().from(session).where(eq(session.id, sessionId))
   if (s && !s.subject) { // pinned by first contact: the project or idea in view, else the first thing said
@@ -384,7 +417,7 @@ export async function say(sessionId: string, text: string, context?: TalkContext
     await db.update(session).set({ subject: from.subject ?? said, subjectRef: from.subjectRef ?? s.subjectRef }).where(eq(session.id, sessionId))
   }
   const l = await open(sessionId)
-  const row = await record(sessionId, as?.author ?? 'user', as?.kind ?? 'text', text.trim(), context ? { context } : undefined)
+  const row = await record(sessionId, as?.author ?? 'user', as?.kind ?? 'text', text.trim(), context || as?.payload ? { ...(context ? { context } : {}), ...as?.payload } : undefined)
   l.busy = true
   l.lastPrompt = (await describeContext(context)) + text.trim()
   l.push({ type: 'user', message: { role: 'user', content: l.lastPrompt }, parent_tool_use_id: null })

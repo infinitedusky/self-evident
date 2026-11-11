@@ -12,8 +12,9 @@
  * Fixed in every workflow:
  * - "starts as an idea" is always there and always first; a workflow makes it required or not;
  * - research, sketches, mockups and the prototype come next, in the workflow's order, each on or off;
- * - the checks (an ADR, the blast radius, a brief audit) come after those, added or removed: they read what the
- *   others produced;
+ * - the checks (the prototype analysis, an ADR, the blast radius, a brief audit) come after those, added or removed:
+ *   they read what the others produced, and run in that order, each a fresh agent, once the person approves the
+ *   prototype (checks.ts; Sandy, 2026-11-11);
  * - the brief is always there and always required. It is kept last in the stored list, and its place there means
  *   nothing: no step waits on it, and it waits on no step to be opened.
  * The three ways of looking (Sandy, 2026-11-09): a sketch is about speed, plain HTML until the screen is liked; a
@@ -21,7 +22,7 @@
  * The app imports this module too (`@self-evident/engine/steps`), so the rules live in one place.
  */
 
-export type StepKey = 'idea' | 'research' | 'brief' | 'sketch' | 'mockup' | 'prototype' | 'adr' | 'risk' | 'audit'
+export type StepKey = 'idea' | 'research' | 'brief' | 'sketch' | 'mockup' | 'prototype' | 'analysis' | 'adr' | 'risk' | 'audit'
 export type On = 'idea' | 'task' | 'project'
 /** What kind of step it is: the idea, first; research; the brief, the parent of the rest; a way of looking (sketch, mockup, prototype); a check, after those, added or removed. */
 export type Place = 'first' | 'before' | 'brief' | 'either' | 'check'
@@ -34,11 +35,13 @@ export const STEPS: StepDef[] = [
   { key: 'sketch', label: 'Sketches', icon: '✏️', what: 'The first look, fast: plain HTML screens to react to and change in moments, before a real story.', place: 'either' },
   { key: 'mockup', label: 'Mockups', icon: '🎨', what: 'How it looks, done properly: stories with made-up data, variants side by side. The brief points at the agreed one.', place: 'either' },
   { key: 'prototype', label: 'Prototype', icon: '🛠️', what: 'The agent\'s quick working attempt, to use, show people and find the best way to build it.', place: 'either' },
-  { key: 'adr', label: 'ADR', icon: '🏛️', what: 'The architecture decision, written down: the options, the choice, why.', place: 'check' },
+  { key: 'analysis', label: 'Prototype analysis', icon: '🔬', what: 'The prototype read by a fresh agent: how it was built, what was faked, what to keep.', place: 'check' },
+  { key: 'adr', label: 'ADR', icon: '🏛️', what: 'The architecture decision for the real build, from the analysis and the code: the options, the choice, why.', place: 'check' },
   { key: 'risk', label: 'Blast radius', icon: '💥', what: 'What the change touches, what could break, and how we\'d know.', place: 'check' },
-  { key: 'audit', label: 'Brief audit', icon: '🧐', what: 'The brief read against the code by a second agent: gaps, wrong guesses.', place: 'check' },
+  { key: 'audit', label: 'Brief audit', icon: '🧐', what: 'The brief read against the code and the prototype by a fresh agent: gaps, wrong guesses.', place: 'check' },
 ]
 export const step = (key: StepKey) => STEPS.find((s) => s.key === key)!
+/** The checks, in the order they run. */
 export const CHECKS = STEPS.filter((s) => s.place === 'check').map((s) => s.key)
 
 /** Where each step can be done. An idea has a rough draft, not a brief, and isn't checked; a project has no brief. */
@@ -132,7 +135,7 @@ export interface Row { key: StepKey; required: boolean; position: number | null;
  * Whether a person approves this step (Sandy, 2026-11-10: "there should be an approve button for each step … I see the
  * check mark but not sure how that is decided"). On a task: the brief, and the steps the person is part of (research,
  * sketches, mockups, the prototype). The agent can say one is done, which makes it ready for the person; only their
- * approval finishes it. The checks (ADR, blast radius, brief audit) are reports read with the brief, so they are
+ * approval finishes it. The checks (prototype analysis, ADR, blast radius, brief audit) are reports read with the brief, so they are
  * finished when done and stand approved with the brief. An idea's and a project's steps keep done as finished.
  */
 export const needsApproval = (key: StepKey, on: On) => on === 'task' && key !== 'idea' && step(key).place !== 'check'

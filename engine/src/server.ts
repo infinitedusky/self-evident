@@ -17,6 +17,7 @@ import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, works
 import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
 import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
+import { advanceChecks } from './checks.js'
 import { approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
 import { adoptTalk, answerPermission, closeTalks, endTalk, ensureTaskTalk, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, say, setAutoApprove, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
@@ -395,7 +396,11 @@ export function buildApp(bus: EventBus) {
   }
   api.post('/issues/:id/steps/:key/approve', async (c) => {
     const { approve = true } = await c.req.json<{ approve?: boolean }>().catch(() => ({ approve: true }))
-    try { return c.json(await approveStep(c.req.param('id'), c.req.param('key') as never, 'user', approve)) } catch (err) { return planError(c, err) }
+    try {
+      const row = await approveStep(c.req.param('id'), c.req.param('key') as never, 'user', approve)
+      if (approve && c.req.param('key') === 'prototype') void advanceChecks(c.req.param('id')).catch((err) => console.error('checks: could not start', err)) // the checks run by themselves from here
+      return c.json(row)
+    } catch (err) { return planError(c, err) }
   })
   api.post('/issues/:id/brief/approve', async (c) => {
     const { approve = true } = await c.req.json<{ approve?: boolean }>().catch(() => ({ approve: true }))
