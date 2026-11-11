@@ -12,7 +12,7 @@ import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { promisify } from 'node:util'
 import { setupIntegration } from './integrations.js'
-import { ADDON, checkStorybook, hasStorybook, installStorybook, mapDocsId, migrateStorybookSetup, storiesPrefix, storybookDefaults, storybookSetup, storybookValues } from './storybook.js'
+import { ADDON, checkStorybook, hasStorybook, installStorybook, mapDocsId, migrateStorybookSetup, storiesPrefix, storybookDefaults, storybookSetup, storybookValues, resolveStory } from './storybook.js'
 import type { Run } from './tkt.js'
 
 async function repoWith(files: Record<string, string>) {
@@ -223,5 +223,18 @@ describe.skipIf(!reachable)('migrateStorybookSetup', () => {
     const [a] = await db.select().from(app).where(eq(app.id, appId))
     expect(a.setup).toEqual({ test_cmd: 'pnpm test', integrations: { linear: { team: 'OLD' }, storybook: { on: 'true', url: 'http://localhost:6006', cmd: 'cd web && pnpm storybook --no-open' } } }) // on, since having values meant on
     expect(await migrateStorybookSetup()).toBe(0) // nothing left to move
+  })
+})
+
+describe('which story to show', () => {
+  const ids = ['screens-home--default', 'mockups-swinglab--face-on', 'mockups-swinglab--top']
+  it('shows the story asked for when this Storybook has it', () => {
+    expect(resolveStory('mockups-swinglab--top', ids)).toEqual({ asked: 'mockups-swinglab--top', show: 'mockups-swinglab--top', missing: false })
+  })
+  it('shows the first story of the same component when the one asked for is gone, and says it is missing', () => {
+    expect(resolveStory('mockups-swinglab--at-address', ids)).toEqual({ asked: 'mockups-swinglab--at-address', show: 'mockups-swinglab--face-on', missing: true })
+  })
+  it('shows none, so Storybook opens at its front, when the component is gone too', () => {
+    expect(resolveStory('mockups-cart--empty', ids)).toEqual({ asked: 'mockups-cart--empty', show: null, missing: true })
   })
 })

@@ -207,7 +207,8 @@ export const engine = {
   claudeSessions: (appId: string) => call<ClaudeSession[]>('GET', `/apps/${appId}/claude-sessions`),
   adopt: (body: { appId: string; cwd: string; agentSessionId: string }) => call<TalkSession>('POST', '/talks/adopt', body),
   // session: the conversation in front; its worktree's Storybook when it has one (branch says which), else the app's.
-  storybook: (appId: string, session?: string | null) => call<{ url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }>('GET', `/apps/${appId}/storybook${session ? `?session=${session}` : ''}`),
+  // story: one to show; the answer says which this Storybook can show for it (itself, another of the same component, or none).
+  storybook: (appId: string, session?: string | null, story?: string | null) => call<{ url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean; story?: { asked: string; show: string | null; missing: boolean } }>('GET', `/apps/${appId}/storybook?${new URLSearchParams({ ...(session ? { session } : {}), ...(story ? { story } : {}) })}`),
   startStorybook: (appId: string, session?: string | null) => call<unknown>('POST', `/apps/${appId}/storybook/start${session ? `?session=${session}` : ''}`),
   // scope: a conversation's id (its worktree) or an app's (the main checkout).
   sketches: (scope: string) => call<{ scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[] }>('GET', `/sketches/${scope}`),
