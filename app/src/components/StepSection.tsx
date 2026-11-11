@@ -33,6 +33,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   const [protos, setProtos] = useState<Prototype[]>([])
   const [busy, setBusy] = useState(false)
   const [asked, setAsked] = useState(false)
+  const [pane, setPane] = useState<'view' | 'notes'>('view')
   const [error, setError] = useState<string | null>(null)
   const s = row.state
   // What there is to look at, right on the step's page: the task's sketches, its Storybook at the first story named, its prototype.
@@ -56,12 +57,24 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   const ownAgent = subject.kind === 'issues' // a task's steps go to the task's own agent, on its page
   const ask = () => act(async () => { await askStep(subject, appId, name, row.key, on); if (ownAgent) window.dispatchEvent(new Event(TASK_AGENT_ASKED)); setAsked(true) })
 
+  // With something to look at, the step's page is two tabs: the view (the sketch, the story, the prototype), which gets the whole
+  // page so it is never pushed out of sight, and what the step wrote for the brief (Sandy, 2026-11-10: "we make them tabs so you go
+  // back and forth. Then the view can be visible").
+  const showView = !!viewed && pane === 'view'
   return (
-    <section className="panel step-section" data-component="StepSection">
+    <section className={`panel step-section ${showView ? 'viewing' : ''}`} data-component="StepSection">
       <div className="card-head">
         <h2 style={{ margin: 0 }}>{step(row.key).icon} {label(row.key, on)}</h2>
+        {viewed && (
+          <div className="seg step-tabs" role="tablist" aria-label="What to show">
+            <button role="tab" aria-selected={pane === 'view'} className={pane === 'view' ? 'on' : ''} onClick={() => setPane('view')}>View</button>
+            <button role="tab" aria-selected={pane === 'notes'} className={pane === 'notes' ? 'on' : ''} onClick={() => setPane('notes')}>For the brief</button>
+          </div>
+        )}
         {row.required ? <Badge tone={finished(s, on) ? 'ok' : 'warn'}>required</Badge> : <span className="faint" style={{ fontSize: 13 }}>optional</span>}
       </div>
+      {showView && viewed && <Viewer tab={viewed} embedded />}
+      {!showView && <>
       <p className="faint" style={{ margin: '4px 0 14px' }}>{step(row.key).what}</p>
 
       {row.waitingOn && (
@@ -107,8 +120,8 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
           )}
         </>
       )}
+      </>}
       {error && <div className="empty bad" style={{ marginTop: 10 }}>{error}</div>}
-      {viewed && <Viewer tab={viewed} embedded />}
     </section>
   )
 }

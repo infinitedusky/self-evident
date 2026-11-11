@@ -2110,3 +2110,10 @@ tab either. The step's page shows the viewer as soon as the task has an agent, a
 page goes where it is sent from outside (PagePane), which the following tab needed too. The 1200px cap on a tab's
 page is gone; text in a task's middle column keeps a readable line. The app's agent, in the left column, opens and
 splits tabs as before. Tests: `follow.test.ts`.
+
+**A step's page is two tabs** (Sandy, 2026-11-10: the step's summary "keeps pushing the screen down so it is
+hidden … we have the brief content and then an asset. For the sketch that is the view. We make them tabs so you go
+back and forth. Then the view can be visible"). On a task's Sketches, Mockups and Prototype pages, once there is
+something to look at: **View** (the sketch, the story, the prototype; in front, with the height of the tab) and
+**For the brief** (what the step wrote: its status, its notes, its files, its buttons), which is what the brief
+points at. Detach sits on the row of the view's own controls. Looked at on RG-1's real sketches.
