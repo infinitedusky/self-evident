@@ -2123,3 +2123,19 @@ steps collapsible too"). The global agent, folded, leaves a thin strip where it 
 back; the rail's S and ⌘J still do. A task's step nav folds to a strip of icons, each still a link with its name and
 state in the tooltip, the choice remembered in the browser. With both folded and the task's agent folded, the step's
 view has the tab to itself. Story: `Components/TaskNav › Folded`. Looked at on RG-1.
+
+## The check mark is the person's (Sandy, 2026-11-10: "I see the check mark but not sure how that is decided")
+
+**What was so.** A step got its check when its status became done, and the agent could set that with `set_step`;
+only the brief had a person's approval. Sandy proposed an approve button per step; I asked whether the three checks
+get one each or are approved with the brief, recommending the brief; Sandy: "perfect".
+
+**Built** (branch `approve-steps`). `steps.ts`: `needsApproval` (on a task: the brief, research, sketches, mockups,
+the prototype), `finished` now wants the approval there, `ready` is done-and-not-approved. `step_work` gains
+`approved_by` and `approved_at` (migration 0010). `approveStep` (and `POST /issues/:id/steps/:key/approve`): approve
+makes the step done and approved, in the workflow's order; withdraw clears it; `setStep` clears it too, so changed
+work is approved again. The agent's tool and prompt say done means ready for the person. The page: Approve on the
+step's page once it has anything (strong when the agent says it is ready), "approved by" with Withdraw after;
+"ready for you" under the step in the nav and in the brief's "What it stands on". Mark done is gone from a task's
+steps. Steps already marked done on existing tasks now read "ready for you" until Sandy approves them: nothing was
+approved on Sandy's behalf.

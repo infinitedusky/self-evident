@@ -542,6 +542,14 @@ Details and sources in `research/`.
   longer lists it; the agent is told it is this task's conductor. Not built: the list of agents it has out (the
   column takes one, nothing fills it), an end to the conversation when the task is done, and the same for projects
   and ideas, whose steps still open a conversation each in the left column.
+- **The check mark is the person's** (Sandy, 2026-11-10: "there should be an approve button for each step … I see
+  the check mark but not sure how that is decided"). On a task, research, sketches, mockups and the prototype are
+  finished only when a person approves them, with a button on the step's page; the agent marking one done makes it
+  "ready for you", shown in the nav and on the page, and nothing more. Approval can be withdrawn, and a change to an
+  approved step asks for it again, as with the brief. The ADR, the blast radius and the brief audit are reports: they
+  are finished when they are back, and stand approved with the brief that contains them. The brief still waits on
+  every required step. An idea's and a project's steps keep "done" as finished. Not built: approving the prototype
+  setting off the three checks.
 - **Sketches, mockups and prototypes are viewed where the work is, and detach** (Sandy, 2026-11-10: "we need a way
   to view sketches, mockups and prototypes. Each should have a way to detach the viewer, which makes it a tab in
   Chrome; it can be reattached"). One viewer for the three. On a task, the step's page shows it: the task's sketches,
