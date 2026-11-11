@@ -177,6 +177,17 @@ select, input { color-scheme: light dark; }
 .talk-tab { flex: 0 0 auto; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px var(--sans); padding: 5px 9px; border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; background: none; color: var(--ink-soft); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .talk-tab.active { background: var(--surface); border-color: var(--line); color: var(--ink); font-weight: 600; }
 .talk-tab.new { color: var(--ink-faint); font-size: 14px; padding: 4px 8px; }
+/* A tab is its name (press to show it) and its × (press to close it; the conversation and its worktree stay), after Chrome and VS Code: the × shows on the tab in front and on the one under the pointer. */
+.talk-tab-pick { all: unset; display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.talk-tab-x { all: unset; flex: none; width: 16px; height: 16px; border-radius: 4px; text-align: center; line-height: 15px; font-size: 14px; color: var(--ink-faint); cursor: pointer; opacity: 0; }
+.talk-tab.active .talk-tab-x, .talk-tab:hover .talk-tab-x, .talk-tab-x:focus-visible { opacity: 1; }
+.talk-tab-x:hover { background: var(--line); color: var(--ink); }
+.talk-tab-pick:focus-visible, .talk-tab-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (hover: none) { .talk-tab-x { opacity: 1; } }
+.talk-tab-count { font-size: 11px; margin-left: 2px; }
+.closed-talks li { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); }
+.closed-talks li > button:first-child { flex: 1; width: auto; min-width: 0; border-top: 0; }
+.closed-talks li > .link-btn { display: inline; flex: none; width: auto; padding: 4px 6px; border-top: 0; font-size: 12px; color: var(--ink-soft); }
 .claude-sessions { padding: 12px; overflow-y: auto; }
 .claude-sessions-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
 .claude-sessions ul { list-style: none; margin: 0; padding: 0; }
