@@ -7,7 +7,7 @@
  * Every message carries where the person is: the tab in front and every tab open. Links open as tabs, even from the
  * popped-out window.
  * A tab closes with its × (Sandy, 2026-11-11: "the tabs to close with an x and not delete the worktree"), as a tab does
- * in Chrome or VS Code: the conversation, its worktree and its branch stay, and its agent carries on if it is working.
+ * in Chrome or VS Code: the conversation, its worktree and its branch stay, and its agent carries on if it is working. Every tab shows its ×.
  * Closed ones are behind the ▾ after the tabs, to reopen or to end; End is what removes the worktree.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -101,6 +101,8 @@ export function TalkDrawer({ standalone = false, context: given, onOpen, onHide 
   const current = shown.find((s) => s.id === sessionId) ?? null
   useEffect(() => { currentTalk.set(current?.id ?? null) }, [current?.id]) // Mockups and Sketches show this conversation's worktree
   const key = app ? `${SESSION_KEY}.${app.id}` : SESSION_KEY
+  const tabsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { tabsRef.current?.querySelector('.talk-tab.active')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) }, [current?.id, shown.length]) // the tab in front is never scrolled out of sight
   const pick = (id: string | null) => { setSessionId(id); setCommand(null); setPicking(false); setReopening(false); remember(key, id) }
   const toTerminal = async (s: TalkSession) => {
     setProblem(null)
@@ -174,7 +176,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen, onHide 
   return (
     <aside className={standalone ? 'talk-drawer standalone' : 'talk-drawer'} data-component="TalkDrawer">
       <div className="talk-tabs">
-        <div className="talk-tabs-list">{/* the conversations scroll; the buttons after them stay in view however many there are */}
+        <div className="talk-tabs-list" ref={tabsRef}>{/* the conversations scroll; the buttons after them stay in view however many there are */}
         {shown.map((s) => (
           <span key={s.id} className={`talk-tab ${s.id === sessionId && !picking && !reopening ? 'active' : ''}`}>
             <button className="talk-tab-pick" onClick={() => pick(s.id)} title={`${label(s)} · ${appName(s)}${s.branch ? ` · ${s.branch}` : ''}`}>
