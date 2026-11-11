@@ -544,6 +544,12 @@ Details and sources in `research/`.
   longer lists it; the agent is told it is this task's conductor. Not built: the list of agents it has out (the
   column takes one, nothing fills it), an end to the conversation when the task is done, and the same for projects
   and ideas, whose steps still open a conversation each in the left column.
+- **Closing a tab is not ending a conversation** (Sandy, 2026-11-11: "the tabs to close with an x and not delete
+  the worktree"). In the app's agent column each tab has an ×, after Chrome and VS Code: it puts the tab away and
+  changes nothing else. The conversation stays open, its agent carries on if it is working, its worktree and branch
+  stay. Closed conversations are behind a ▾ after the tabs, to reopen or to end. End is the only thing that removes
+  a worktree. A tab the engine brings to the front is reopened. Unchanged and still true: a new conversation gets
+  its own worktree and branch, and the column shows only the conversations of the app in the nav.
 - **The person talks to the conductor alone; it directs the agents it has out** (Sandy, 2026-11-11: "so that we can
   talk with one agent throughout the task lifecycle and it can manage the whole thing"). A task's agent can list
   the agents it has out with what each last said, send one a message, and read its conversation. A message it sends

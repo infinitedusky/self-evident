@@ -2203,3 +2203,18 @@ Also fixed, from #131 before it ever ran: `get_step` was not rated as a read, so
 asking only up to cheap) would have stopped on a permission card when reading an earlier report. It is free now.
 
 Not run against a real task yet.
+
+## The agent's tabs close with an × (Sandy, 2026-11-11: "the tabs to close with an x and not delete the worktree")
+
+The only way to be rid of a tab in the app's agent column was End, which removes the conversation's worktree. Built:
+`session.closed_at` (migration `0011_close_tab`), `POST /talks/:id/close` and `/reopen`, an × on each tab (always on
+the one in front, on hover for the others), and a ▾ after the tabs with the count of closed conversations: its list
+reopens one or ends it. Closing changes nothing but the tab; `showTalk` clears it, so a conversation the engine
+brings to the front comes back. Stories: `TalkDrawer › Closes With An X`, `Closed Conversations`, `Reopened`, `All
+Closed`. Test: `task-talk.test.ts`.
+
+Sandy also asked that a new conversation get a worktree and that only the current app's tabs show. Both were already
+so and are unchanged (`startTalk`; `TalkDrawer`'s filter on the nav's app). Sandy saw "agents from other apps" on
+Ragdoll Golf: by app id all four tabs there were Ragdoll's, but two are named "Self Evident's Storybook check for
+Ragdoll Golf" and "Self Evident's tkt check for Ragdoll Golf", the set-up checks handed to an agent in Ragdoll's
+repo, which read like another app's. Not confirmed with Sandy that these are the ones meant.
