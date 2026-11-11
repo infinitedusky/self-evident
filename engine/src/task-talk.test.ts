@@ -7,7 +7,7 @@ import { db, pool } from './db/client.js'
 import { app, prototype, session, sessionMessage, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createIssue } from './issues.js'
-import { agentsOut, closeTalks, ensureTaskTalk, listTalks, modelFor, readAgent, startCheckTalk, takeReply, taskAgents, taskTalk } from './talk.js'
+import { agentsOut, closeTalk, closeTalks, ensureTaskTalk, listTalks, modelFor, readAgent, reopenTalk, showTalk, startCheckTalk, takeReply, taskAgents, taskTalk } from './talk.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -104,5 +104,19 @@ describe.skipIf(!reachable)('a task\'s own agent', () => {
     const todo = await createIssue(appId, { title: 'Call the bank', kind: 'todo' })
     await expect(ensureTaskTalk(todo.id)).rejects.toThrow(/only a top-level code task/)
     await expect(ensureTaskTalk('iss_nope')).rejects.toThrow(/no task iss_nope/)
+  })
+
+  it('closes a tab without ending the conversation: its worktree and branch stay, and it comes back', async () => {
+    const s = await talk(null, { worktreePath: '/tmp/none-worktrees/talk-x', branch: 'talk/x' })
+    const closed = await closeTalk(s.id)
+    expect(closed).toMatchObject({ status: 'open', worktreePath: '/tmp/none-worktrees/talk-x', branch: 'talk/x' })
+    expect(closed.closedAt).toBeInstanceOf(Date)
+    expect((await listTalks({ open: true })).find((t) => t.id === s.id)?.closedAt).toBeInstanceOf(Date) // still listed, marked closed
+    expect((await reopenTalk(s.id)).closedAt).toBeNull()
+    await closeTalk(s.id)
+    await showTalk(s.id, appId) // the engine brings it to the front: its tab is back
+    expect((await listTalks({ open: true })).find((t) => t.id === s.id)?.closedAt).toBeNull()
+    const ended = await talk(null, { status: 'ended' })
+    await expect(closeTalk(ended.id)).rejects.toThrow(/no open conversation/)
   })
 })

@@ -323,7 +323,24 @@ export async function startPrototypeTalk(p: typeof prototype.$inferSelect, actor
 /** Ask every open Self Evident to show this conversation in the agent's column. */
 export async function showTalk(sessionId: string, appId: string) {
   const workspaceId = await workspaceFor(appId)
+  await db.update(session).set({ closedAt: null }).where(eq(session.id, sessionId)) // shown again, so its tab is back
   await db.transaction((tx) => appendEvent(tx, { workspaceId, appId, sessionId, actor: 'engine', type: 'ui.talk', payload: { sessionId } }))
+}
+
+/**
+ * Closing a conversation's tab (Sandy, 2026-11-11: "the tabs to close with an x and not delete the worktree"): the tab
+ * leaves the agent's column and nothing else changes. The conversation stays open, its agent carries on if it is
+ * working, its worktree and branch stay; reopening puts the tab back. Ending (endTalk) is what removes the worktree.
+ */
+export async function closeTalk(sessionId: string) {
+  const [row] = await db.update(session).set({ closedAt: new Date() }).where(and(eq(session.id, sessionId), eq(session.status, 'open'))).returning()
+  if (!row) throw new PlanError(`no open conversation ${sessionId}`)
+  return row
+}
+export async function reopenTalk(sessionId: string) {
+  const [row] = await db.update(session).set({ closedAt: null }).where(and(eq(session.id, sessionId), eq(session.status, 'open'))).returning()
+  if (!row) throw new PlanError(`no open conversation ${sessionId}`)
+  return row
 }
 
 export async function renameTalk(sessionId: string, subject: string) {

@@ -19,7 +19,7 @@ import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { advanceChecks } from './checks.js'
 import { approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
-import { adoptTalk, answerPermission, closeTalks, endTalk, ensureTaskTalk, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, say, setAutoApprove, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
+import { adoptTalk, answerPermission, closeTalk, closeTalks, endTalk, ensureTaskTalk, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
 import { lastSync, myRepos, startSync, syncApp } from './github.js'
@@ -366,6 +366,9 @@ export function buildApp(bus: EventBus) {
     try { return c.json(await setAutoApprove(c.req.param('id'), level)) } catch (err) { return planError(c, err) }
   })
   api.post('/talks/:id/end', async (c) => c.json(await endTalk(c.req.param('id'))))
+  // The tab only: closing leaves the conversation, its worktree and its branch; reopening puts the tab back.
+  api.post('/talks/:id/close', async (c) => { try { return c.json(await closeTalk(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
+  api.post('/talks/:id/reopen', async (c) => { try { return c.json(await reopenTalk(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   // The same conversation in a terminal: hand it there (the command to run), or bring one started there in.
   api.post('/talks/:id/handoff', async (c) => { try { return c.json(await handOff(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/claude-sessions', async (c) => c.json(await listClaudeSessions(c.req.param('id'))))
