@@ -2149,3 +2149,15 @@ never recorded the new ones. Fixed the first: the Storybook status takes the sto
 Storybook can show (itself, the first of the same component, or none, `resolveStory`); the viewer shows that and
 says so in one line. Not fixed: an engine deploy still cuts a working agent off. Until it doesn't, check
 `/talks?open=1` for a busy conversation before merging an engine change.
+
+**The agents a task has out, in sight** (Sandy, 2026-11-10, after the conductor of RG-1 started a prototype and
+said "its own conversation beside you": "this is confusing as hell, if there is a sub agent we should see some
+indication"; and "the agent is also showing up in the global agent as a tab too"). The prototype's agent was real
+and working, but only as a tab in the app's column, which Sandy had folded; the task's page said nothing. Now
+`taskAgents` lists each prototype conversation started on a task (`GET /issues/:id/agents`), and the task's agent
+column shows them as tabs beside "This task's agent": a dot that pulses while one works, "working" beside its name,
+and its conversation when pressed. `listTalks` marks a conversation with the task it belongs to (`taskId`: its own
+agent, or a prototype's), and the app's column leaves those out. The conductor is told how its prototype's agent
+shows and to name the tab, never "the conversation beside you". Stories: `TaskAgent › Prototype Agent Out`,
+`TaskPage › Prototype Agent Out`. Tests: `task-talk.test.ts`. Still to do: the three checks as deployed agents in
+the same list.
