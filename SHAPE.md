@@ -542,6 +542,12 @@ Details and sources in `research/`.
   longer lists it; the agent is told it is this task's conductor. Not built: the list of agents it has out (the
   column takes one, nothing fills it), an end to the conversation when the task is done, and the same for projects
   and ideas, whose steps still open a conversation each in the left column.
+- **Sketches, mockups and prototypes are viewed where the work is, and detach** (Sandy, 2026-11-10: "we need a way
+  to view sketches, mockups and prototypes. Each should have a way to detach the viewer, which makes it a tab in
+  Chrome; it can be reattached"). One viewer for the three. On a task, the step's page shows it: the task's sketches,
+  its Storybook, its prototype, from the task's own worktree. In the workspace, a Sketches, Storybook or prototype
+  tab is the same viewer. Detach opens it in a browser tab of its own (`/view`), and the place it left says so and
+  brings it back; Put it back in the detached tab does the same. One place at a time.
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
