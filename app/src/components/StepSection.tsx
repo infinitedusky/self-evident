@@ -3,6 +3,7 @@
  * agent, open what it made, mark it done). A step that waits on another says which, with a link there, so a locked
  * step is never a dead end. The brief's page passes its own body as children.
  */
+import { TASK_AGENT_ASKED } from './TaskAgent'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import Markdown from 'react-markdown'
@@ -41,7 +42,8 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   }, [subject.id, row.key, s.status, s.detail]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const act = async (fn: () => Promise<unknown>) => { setBusy(true); setError(null); try { await fn() } catch (e) { setError(err(e)) } finally { setBusy(false) } }
-  const ask = () => act(async () => { await askStep(subject, appId, name, row.key, on); setAsked(true) })
+  const ownAgent = subject.kind === 'issues' // a task's steps go to the task's own agent, on its page
+  const ask = () => act(async () => { await askStep(subject, appId, name, row.key, on); if (ownAgent) window.dispatchEvent(new Event(TASK_AGENT_ASKED)); setAsked(true) })
 
   return (
     <section className="panel step-section" data-component="StepSection">
@@ -89,7 +91,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
                 ? <button className="btn" disabled={busy || asked} onClick={ask}>{row.key === 'prototype' ? 'Start a prototype with the agent' : 'Start with the agent'}</button>
                 : <button className="btn quiet" disabled={busy || asked} onClick={ask}>Ask the agent to carry on</button>}
               {own && s.status === 'started' && row.key !== 'prototype' && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'done' }))}>Mark done</button>}
-              {asked && <span className="faint">Handed to the agent: it's in the agent panel.</span>}
+              {asked && <span className="faint">{ownAgent ? 'Handed to this task\'s agent, on the right.' : 'Handed to the agent: it\'s in the agent panel.'}</span>}
             </div>
           )}
         </>

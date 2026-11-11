@@ -9,7 +9,7 @@ import { taskStepsView, talkSession, transcript } from '../stories/sample'
 import type { TalkMessage } from '../engine'
 
 // A task's own agent, in a column of the task's page. Everything here is made up: the sample engine's transcript,
-// a sample task. Not wired to the engine yet: the page does not show this column until a task has its conversation.
+// a sample task. The real page is Pages/TaskPage.
 const meta = { title: 'Components/TaskAgent', component: TaskAgent, parameters: { layout: 'padded' },
   args: { sessionId: talkSession.id, taskId: 'iss_sample20', stage: 'Sketches', state: 'idle', open: true, onToggle: () => {} },
   render: (a) => <div style={{ width: 340 }}><TaskAgent {...a} /></div> } satisfies Meta<typeof TaskAgent>

@@ -15,6 +15,7 @@ import { Brief } from '../components/Brief'
 import { askStep, useSteps } from '../components/StepsPanel'
 import { StepSection } from '../components/StepSection'
 import { mark, TaskNav } from '../components/TaskNav'
+import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
 import { finished, label, step, type Row, type StepKey } from '@self-evident/engine/steps'
 import { STATUS_TONE } from '../components/PlanGraphView'
 import { openEvents, type Events, API, engine, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState } from '../engine'
@@ -94,6 +95,7 @@ export function IssuePage() {
 function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; busy: boolean; act: (fn: () => Promise<unknown>) => Promise<void> }) {
   const subject = { kind: 'issues' as const, id: i.id }
   const { v, error } = useSteps(subject, i.appId)
+  const agent = useTaskAgent(i.id, i.appId)
   const base = `/tasks/${i.id}`
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
@@ -106,7 +108,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   const next = rows.find((r) => !r.waitingOn && r.state.status !== 'done' && r.key !== 'idea')
   const wf = v.resolved.workflow
   return (
-    <div className="task-layout">
+    <div className={`task-layout with-agent ${agent.open ? '' : 'agent-folded'}`}>
       <TaskNav base={base} here={here} rows={rows} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: i.subIssues.length, waitingOn: buildWaits }} />
       <div className="task-main">
         {here === 'overview' && (
@@ -141,6 +143,10 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
               <Planner i={i} />
             </>)}
       </div>
+      {agent.session !== undefined && (
+        <TaskAgent sessionId={agent.session?.id ?? null} taskId={i.id} stage={here === 'build' ? 'Build' : 'Brief'} state={agent.session?.busy ? 'working' : 'idle'}
+          open={agent.open} onToggle={agent.toggle} onStart={agent.start} starting={agent.starting} error={agent.error} />
+      )}
     </div>
   )
 }
@@ -176,8 +182,8 @@ function BriefStep({ i, busy, act, feeds, base }: { i: IssueDetail; busy: boolea
     <div>
       <p className="faint">No brief yet. Every step here feeds it, and the task is built from it once it's approved.</p>
       <div className="step-actions">
-        <button className="btn" disabled={busy || asked} onClick={() => act(async () => { await askStep({ kind: 'issues', id: i.id }, i.appId, i.title, 'brief', 'task'); setAsked(true) })}>Write it with the agent</button>
-        {asked && <span className="faint">Handed to the agent: it's in the agent panel.</span>}
+        <button className="btn" disabled={busy || asked} onClick={() => act(async () => { await askStep({ kind: 'issues', id: i.id }, i.appId, i.title, 'brief', 'task'); window.dispatchEvent(new Event(TASK_AGENT_ASKED)); setAsked(true) })}>Write it with the agent</button>
+        {asked && <span className="faint">Handed to this task's agent, on the right.</span>}
       </div>
       <StandsOn feeds={feeds} base={base} />
     </div>

@@ -10,7 +10,7 @@ import { rows } from '@self-evident/engine/steps'
 export interface MockData {
   apps: typeof s.apps; now: typeof s.now; projects: typeof s.projects; graphs: Record<string, typeof s.graph>; issueRows: typeof s.issueRows
   issueDetails: typeof s.issueDetails; todos: typeof s.todos; ideas: typeof s.ideaRows; initiatives: typeof s.initiatives; cycles: typeof s.cycles
-  summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript
+  summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript; /** A task's own agent, or null when it has none. */ taskTalk: typeof s.talkSession | null
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[] }
   prototypes: typeof s.prototypes
@@ -25,7 +25,7 @@ export interface MockData {
 export const sampleData: MockData = {
   apps: s.apps, now: s.now, projects: s.projects, graphs: { proj_checkout: s.graph, proj_draft: s.draftGraph }, issueRows: s.issueRows, issueDetails: s.issueDetails,
   todos: s.todos, ideas: s.ideaRows, initiatives: s.initiatives, cycles: s.cycles, summary: s.summary, settings: s.factorySettings, appSettings: s.appSettings,
-  talks: [s.talkSession], transcript: s.transcript,
+  talks: [s.talkSession], transcript: s.transcript, taskTalk: { ...s.talkSession, subject: 'SS-20 Address and payment on one page (sample)', subjectRef: { issueId: 'iss_sample20' } },
   storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [], branch: 'talk/sample', main: false },
   sketches: { scope: 'sess_sample', branch: 'talk/sample', main: false, dir: 'sketches', sketches: [{ file: 'home.html', changedAt: 1794250000000 }, { file: 'checkout.html', changedAt: 1794240000000 }] },
   prototypes: s.prototypes,
@@ -89,6 +89,8 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/:kind/:id/steps/:key', () => reply(d.stepWork)),
     http.get('/api/initiatives', () => reply(d.initiatives)),
     http.get('/api/cycles', () => reply(d.cycles)),
+    http.get('/api/issues/:id/talk', () => reply(d.taskTalk)),
+    http.post('/api/issues/:id/talk', () => reply(d.taskTalk ?? s.talkSession)),
     http.get('/api/talks', () => reply(d.talks)),
     http.get('/api/talks/:id', () => reply(d.transcript)),
     // Writes do nothing and say ok, so clicking around a story never shows an error.

@@ -31,7 +31,7 @@ export function useSteps(subject: StepSubject, appId: string) {
   return { v, error }
 }
 
-/** Hands a step to the agent, in a conversation of its own about this thing. */
+/** Hands a step to the agent: a task's goes to the task's own agent (the engine sees to it); an idea's or a project's gets a conversation of its own. */
 export function askStep(subject: StepSubject, appId: string, name: string, key: StepKey, on: On) {
   const ref = subject.kind === 'ideas' ? { ideaId: subject.id } : subject.kind === 'issues' ? { issueId: subject.id } : { projectId: subject.id }
   return engine.ask({ appId, subjectRef: ref, text: key === 'prototype'

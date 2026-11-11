@@ -1,5 +1,7 @@
 /**
  * The agent: the left column of the workspace, or the same column popped out into its own window.
+ * It is for what is new and for looking: an idea, a new task, findings to talk over (Sandy, 2026-11-10); a task's own
+ * agent lives on the task's page (TaskAgent) and is not listed here.
  * Several conversations at once, as tabs: each is pinned to what it started on (a project, an idea, or the first
  * thing said), works in its own worktree on its own branch, and keeps going while you move around the site.
  * Every message carries where the person is: the tab in front and every tab open. Links open as tabs, even from the
@@ -88,7 +90,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen, onHide 
   }
   const backIn = () => { channel()?.postMessage({ type: 'closed' } satisfies Msg); window.close() }
   // Conversations belong to an app: only the app in the nav's are tabs here, and each app remembers its own.
-  const mine = (all: TalkSession[]) => all.filter((s) => s.appId === app?.id)
+  const mine = (all: TalkSession[]) => all.filter((s) => s.appId === app?.id && !s.subjectRef?.issueId) // a task's own agent shows on the task's page, not here
   const shown = mine(sessions)
   const current = shown.find((s) => s.id === sessionId) ?? null
   useEffect(() => { currentTalk.set(current?.id ?? null) }, [current?.id]) // Mockups and Sketches show this conversation's worktree

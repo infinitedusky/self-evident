@@ -9,7 +9,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, idea, project, prototype, repo, session, sessionMessage, workspace } from './db/schema.js'
+import { app, idea, issue, project, prototype, repo, session, sessionMessage, workspace } from './db/schema.js'
 import { addWorktree, git, removeWorktree } from './git.js'
 import { checkoutProblem } from './checkout.js'
 import { withLock } from './landing.js'
@@ -131,6 +131,7 @@ export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: str
 async function subjectFrom(ref?: SubjectRef): Promise<{ subject: string | null; subjectRef: SubjectRef | null }> {
   if (ref?.projectId) { const [p] = await db.select().from(project).where(eq(project.id, ref.projectId)); if (p) return { subject: p.name, subjectRef: { projectId: p.id } } }
   if (ref?.ideaId) { const [i] = await db.select().from(idea).where(eq(idea.id, ref.ideaId)); if (i) return { subject: i.title, subjectRef: { ideaId: i.id } } }
+  if (ref?.issueId) { const [t] = await db.select().from(issue).where(eq(issue.id, ref.issueId)); const [a] = t ? await db.select().from(app).where(eq(app.id, t.appId)) : []; if (t && a) return { subject: `${a.key}-${t.number} ${t.title}`, subjectRef: { issueId: t.id } } } // a task's own agent (ensureTaskTalk)
   return { subject: null, subjectRef: ref?.path ? { path: ref.path } : null }
 }
 
@@ -158,6 +159,32 @@ export async function startTalk(input: { appId: string; subjectRef?: SubjectRef;
   }).returning()
   return row
 }
+
+/**
+ * A task's own agent: the one open conversation pinned to the task, the conductor of its worktree for the life of the
+ * task (SHAPE.md, "A task's agent lives on the task's page"). The oldest open one, so a stray second never takes over.
+ */
+export async function taskTalk(issueId: string) {
+  const [row] = await db.select().from(session)
+    .where(and(eq(session.kind, 'talk'), eq(session.status, 'open'), sql`${session.subjectRef}->>'issueId' = ${issueId}`)).orderBy(session.createdAt).limit(1)
+  return row ? { ...row, live: live.has(row.id), busy: live.get(row.id)?.busy ?? false } : null
+}
+
+/** The task's agent, started if it has none: one conversation, one worktree, however many times it is asked for. */
+export async function ensureTaskTalk(issueId: string, actor = 'user') {
+  return withLock(`task-talk:${issueId}`, async () => {
+    const there = await taskTalk(issueId)
+    if (there) return there
+    const [t] = await db.select().from(issue).where(eq(issue.id, issueId))
+    if (!t) throw new PlanError(`no task ${issueId}`)
+    if (t.parentId || t.kind !== 'code') throw new PlanError('only a top-level code task has an agent of its own')
+    const row = await startTalk({ appId: t.appId, subjectRef: { issueId }, actor })
+    return { ...row, live: false, busy: false }
+  })
+}
+
+const taskPrompt = (t: { id: string; number: number; title: string }, key: string) => `
+This conversation is the agent of one task, ${key}-${t.number} "${t.title}" (${t.id}), and the only one: you are its conductor from its first sketch to its merge, in this one worktree. Every step of its brief (research, sketches, mockups, the prototype, the checks) and its build is done or directed from here: record each with set_step on this task, and keep its brief current with update_task. The person sees this conversation on the task's page, beside the step they are looking at, and "this" means this task. Keep to this task: for a new idea, another task or a look at findings, point them to the app's agent in the left column.`
 
 /**
  * A prototype's conversation: it works in the prototype's own worktree (not one of its own), so ending it leaves the
@@ -213,6 +240,8 @@ async function open(sessionId: string): Promise<Live> {
   const entry: Live = { q: null as unknown as Query, push: input.push, close: input.close, pending: new Map(), rated: new Map(), outages: 0, always: new Set(s.alwaysAllow ?? []), busy: false, autoApprove: (s.autoApprove as Risk) ?? 'moderate', cwd: s.cwd! }
   const skills = await skillOptions('talk', s.cwd!, s.appId)
   const [proto] = await db.select().from(prototype).where(eq(prototype.sessionId, sessionId))
+  const ownTaskId = (s.subjectRef as SubjectRef | null)?.issueId
+  const [ownTask] = ownTaskId ? await db.select().from(issue).where(eq(issue.id, ownTaskId)) : []
   const q = query({
     prompt: input.it,
     options: {
@@ -221,7 +250,7 @@ async function open(sessionId: string): Promise<Live> {
       resume: s.agentSessionId ?? undefined,
       model: setup.model,
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : undefined) },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...ASK_TOOLS],
