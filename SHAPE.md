@@ -544,6 +544,15 @@ Details and sources in `research/`.
   longer lists it; the agent is told it is this task's conductor. Not built: the list of agents it has out (the
   column takes one, nothing fills it), an end to the conversation when the task is done, and the same for projects
   and ideas, whose steps still open a conversation each in the left column.
+- **The person talks to the conductor alone; it directs the agents it has out** (Sandy, 2026-11-11: "so that we can
+  talk with one agent throughout the task lifecycle and it can manage the whole thing"). A task's agent can list
+  the agents it has out with what each last said, send one a message, and read its conversation. A message it sends
+  returns at once; when that agent's turn ends, what it said comes back to the conductor as a message, so the
+  conductor stays free to talk and nothing is polled. So a change to the prototype is asked of the conductor, which
+  passes it on in full and reports back; the Prototype tab is for watching, though the person can still write there
+  (the conductor reads that conversation to catch up). Built (2026-11-11): `agents_out`, `tell_agent`, `read_agent`.
+  Not built: the conductor sending out a fresh agent of its own choosing (research, a second opinion); the checks
+  are still set off by the engine, not by it.
 - **The prototype is read before anything is decided from it** (Sandy, 2026-11-11: "the prototype's job is to take
   the mockup and implement it however it thinks is best. Then we do an audit of it to see how it did it. It's really
   a prototype audit, prototype analysis … then it's an ADR … knowing that we have a prototype to use as our starting

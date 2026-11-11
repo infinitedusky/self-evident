@@ -2186,3 +2186,20 @@ so they are added under Settings › Workflows; a check whose agent was cut off 
 until someone opens its tab and says "carry on"; a prototype approved a second time does not run finished checks
 again; the planner is not yet told to treat the prototype as a map (the brief's Prototype section says it instead).
 None of this has run against a real task yet.
+
+## The conductor directs its agents (Sandy, 2026-11-11: "talk with one agent throughout the task lifecycle and it can manage the whole thing")
+
+Asked whether the one-agent set-up was in place, the answer was "partly": one conversation per task, but a change to
+the prototype had to be typed into the Prototype tab, and nothing came back to the task's agent. Built: three tools
+for a task's own agent, `agents_out` (who is out, working or idle, what each last said), `tell_agent` (a message to
+one, by its sessionId, `prototype`, or a check's key) and `read_agent` (its recent conversation, tool noise left
+out). `tell_agent` returns at once; the ask is marked on the message (`payload.from`), and when that agent's turn
+ends `takeReply` finds the open ask, marks it answered and the engine says the agent's last words to the conductor
+("Back from the Prototype agent"), which starts the conductor's turn to tell the person. Nothing is held in memory.
+The conductor's prompt now says to pass changes on instead of pointing at the tab. Stories: `Conversation › Directs
+Its Agents`, `Conversation › Asked By The Conductor`. Tests: `task-talk.test.ts`.
+
+Also fixed, from #131 before it ever ran: `get_step` was not rated as a read, so a check's agent (which acts without
+asking only up to cheap) would have stopped on a permission card when reading an earlier report. It is free now.
+
+Not run against a real task yet.
