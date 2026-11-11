@@ -2093,3 +2093,9 @@ while its page is open, so a Sketches or Mockups tab opened by hand shows the ta
 column no longer named it. Stories: `Components/Viewer`, `Pages/TaskPage › Mockups Step`. Tried by hand: the
 detached page against the live engine, on Ragdoll Golf's (empty) sketches. Not tried: a real detach and return in
 Sandy's Chrome, where the pop-up rule decides whether the tab opens.
+
+**The left agent's fold button was out of sight** (Sandy, twice: "the left global agent needs to be collapsible
+too"). The button from #119 sat at the end of the tab row, which scrolls sideways: with two long conversation names
+it, the +, the terminal and the pop-out buttons were all scrolled off. Now only the conversations scroll; the four
+buttons stay at the right of the row. I had told Sandy the button was there without looking at the live page with
+real conversations open: check the real page, not the story, before saying a control exists.

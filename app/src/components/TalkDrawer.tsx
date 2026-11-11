@@ -155,11 +155,13 @@ export function TalkDrawer({ standalone = false, context: given, onOpen, onHide 
   return (
     <aside className={standalone ? 'talk-drawer standalone' : 'talk-drawer'} data-component="TalkDrawer">
       <div className="talk-tabs">
+        <div className="talk-tabs-list">{/* the conversations scroll; the buttons after them stay in view however many there are */}
         {shown.map((s) => (
           <button key={s.id} className={`talk-tab ${s.id === sessionId ? 'active' : ''}`} onClick={() => pick(s.id)} title={`${label(s)} · ${appName(s)}${s.branch ? ` · ${s.branch}` : ''}`}>
             <span className={`dot ${s.busy ? 'busy' : ''}`} style={{ background: talkColor(s.id) }} />{label(s)}
           </button>
         ))}
+        </div>
         <button className="talk-tab new" disabled={starting} onClick={start} title={app ? `New conversation about ${app.name}${context.projectId ? ', pinned to this project' : ''}` : 'Pick an app first'}>+</button>
         {app && <button className={`talk-tab new ${picking ? 'active' : ''}`} onClick={() => setPicking((p) => !p)} title="Bring in a Claude Code session from a terminal or VS Code" aria-label="From Claude Code">⌨</button>}
         {standalone

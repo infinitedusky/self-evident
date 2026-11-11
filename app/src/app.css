@@ -170,7 +170,9 @@ select, input { color-scheme: light dark; }
 
 .auto-select { font-size: 12px; margin: 0; padding: 3px 6px; max-width: 160px; }
 /* Conversations as tabs */
-.talk-tabs { display: flex; gap: 4px; padding: 8px 8px 0; overflow-x: auto; border-bottom: 1px solid var(--line); }
+.talk-tabs { display: flex; gap: 4px; padding: 8px 8px 0; border-bottom: 1px solid var(--line); }
+.talk-tabs-list { display: flex; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; }
+.talk-tabs > .talk-tab { flex: none; }
 .talk-tab { flex: 0 0 auto; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px var(--sans); padding: 5px 9px; border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; background: none; color: var(--ink-soft); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .talk-tab.active { background: var(--surface); border-color: var(--line); color: var(--ink); font-weight: 600; }
 .talk-tab.new { color: var(--ink-faint); font-size: 14px; padding: 4px 8px; }
