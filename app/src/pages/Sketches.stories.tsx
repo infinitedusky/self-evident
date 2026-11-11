@@ -8,7 +8,7 @@ export default meta
 type Story = StoryObj<typeof meta>
 const sk = sampleData.sketches
 
-/** One sketch, from the conversation's branch, at phone width. */
+/** One sketch, from the conversation's branch, at the full width of the pane (the default). */
 export const OneSketch: Story = { beforeEach: withEngine({ sketches: { ...sk, sketches: sk.sketches.slice(0, 1) } }) }
 /** Several: the one changed last shows; the others are a tap away. */
 export const Several: Story = {}

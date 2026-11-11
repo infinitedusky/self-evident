@@ -22,7 +22,7 @@ export function Sketches({ file, session, embedded }: { file?: string; session?:
   const [list, setList] = useState<List | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [picked, setPicked] = useState<string | null>(file ?? null)
-  const [width, setWidth] = useState<(typeof WIDTHS)[number]['key']>('phone')
+  const [width, setWidth] = useState<(typeof WIDTHS)[number]['key']>('full') // the whole pane first (Sandy, 2026-11-10: "make the full the default"); Phone and Tablet narrow it
   useEffect(() => { if (file) setPicked(file) }, [file])
   useEffect(() => {
     setList(null); setError(null)
