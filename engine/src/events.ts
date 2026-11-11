@@ -50,20 +50,55 @@ export async function latestSeq() {
   return Number(row?.seq ?? 0)
 }
 
-/** One LISTEN connection per process; emits 'event' with the new seq. */
+/**
+ * One LISTEN connection per process; emits 'event' with the new seq. The connection can drop (the database is on
+ * another machine, reached through a proxy; LOG.md, 2026-11-11): it is made again every two seconds until it holds,
+ * and one 'event' is emitted on the way back so every open stream catches up on what it missed.
+ */
 export class EventBus extends EventEmitter {
   private client: pg.Client | null = null
+  private stopped = false
+  private retry: NodeJS.Timeout | null = null
 
   async start() {
-    this.client = new pg.Client({ connectionString: DATABASE_URL })
-    await this.client.connect()
-    this.client.on('notification', (n) => this.emit('event', Number(n.payload)))
-    this.client.on('error', (err) => this.emit('error', err))
-    await this.client.query(`listen ${CHANNEL}`)
+    this.stopped = false
+    await this.connect()
+  }
+
+  private async connect() {
+    const client = new pg.Client({ connectionString: DATABASE_URL, keepAlive: true })
+    const lost = (err?: Error) => {
+      if (this.client !== client) return // already replaced
+      this.client = null
+      client.removeAllListeners()
+      client.on('error', () => {}) // a late error on the dead connection must not take the process down
+      void client.end().catch(() => {})
+      if (this.stopped) return
+      console.warn(`[engine] lost the database's event connection${err ? `: ${err.message}` : ''}; connecting again`)
+      this.again()
+    }
+    client.on('error', lost)
+    client.on('end', () => lost())
+    client.on('notification', (n) => this.emit('event', Number(n.payload)))
+    this.client = client
+    await client.connect()
+    await client.query(`listen ${CHANNEL}`)
+  }
+
+  private again() {
+    if (this.retry || this.stopped) return
+    this.retry = setTimeout(() => {
+      this.retry = null
+      this.connect().then(() => { console.log('[engine] the database\'s event connection is back'); this.emit('event', 0) }, () => { this.client = null; this.again() })
+    }, 2000)
   }
 
   async stop() {
-    await this.client?.end()
+    this.stopped = true
+    if (this.retry) clearTimeout(this.retry)
+    this.retry = null
+    const client = this.client
     this.client = null
+    await client?.end().catch(() => {})
   }
 }

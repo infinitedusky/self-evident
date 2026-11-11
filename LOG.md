@@ -2218,3 +2218,19 @@ so and are unchanged (`startTalk`; `TalkDrawer`'s filter on the nav's app). Sand
 Ragdoll Golf: by app id all four tabs there were Ragdoll's, but two are named "Self Evident's Storybook check for
 Ragdoll Golf" and "Self Evident's tkt check for Ragdoll Golf", the set-up checks handed to an agent in Ragdoll's
 repo, which read like another app's. Not confirmed with Sandy that these are the ones meant.
+
+## The database moves to Fly (Sandy, 2026-11-11: "we should deploy the db on fly using the homework app server")
+
+Sandy is moving to a laptop and wants the data off this Mac. Decided: Self Evident's database is its own database
+and its own role (`selfevident`, not a superuser, password set by Sandy) on the Fly Postgres app Homework Gate uses,
+`homework-gate-db` (one `shared-cpu-1x` 1 GB machine in `iad`, Postgres 18, a 1 GB volume, private address only).
+Each Mac reaches it through `fly proxy` on localhost:15432, so the server stays private; `DATABASE_URL` is in the
+launchd plist, nowhere else. Shared, not a machine of its own, because it is 25 MB today and moving it later is one
+dump; split when the volume is half full or Homework Gate has users who would notice an outage. One engine at a
+time: two on one database would both schedule and build.
+
+Built for it: the engine's LISTEN connection is made again when it drops and nudges the open streams to catch up
+(before, a dropped connection ended the process, and nothing starts it again under `tsx watch`); the pool logs an
+idle connection's error instead of dying; the engine waits for the database at start; `db:up` starts the local
+container only when `DATABASE_URL` is the default. The tests still run on the local container
+(`TEST_DATABASE_URL`). Test: `events-bus.test.ts`.

@@ -628,7 +628,12 @@ export function buildApp(bus: EventBus) {
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()!)) {
-  await ensureDatabase(DATABASE_URL)
+  for (let waited = 0; ; waited++) { // the database may be on another machine, behind a proxy that starts after us: wait for it, never exit (nothing would start us again)
+    try { await ensureDatabase(DATABASE_URL); break } catch (err) {
+      if (waited % 15 === 0) console.warn(`[engine] waiting for the database: ${(err as Error).message}`)
+      await new Promise((r) => setTimeout(r, 2000))
+    }
+  }
   await migrate(db, { migrationsFolder: fileURLToPath(new URL('../drizzle', import.meta.url)) }) // idempotent; `pnpm dev` just works
   const bus = new EventBus()
   await bus.start()
