@@ -11,7 +11,7 @@ import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, s
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-const projectsDir = () => join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude'), 'projects')
+export const projectsDir = () => join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude'), 'projects')
 export const sessionDir = (cwd: string) => join(projectsDir(), cwd.replace(/[^A-Za-z0-9]/g, '-'))
 export const sessionFile = (cwd: string, sessionId: string) => join(sessionDir(cwd), `${sessionId}.jsonl`)
 

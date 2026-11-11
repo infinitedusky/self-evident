@@ -588,6 +588,10 @@ Details and sources in `research/`.
   its Storybook, its prototype, from the task's own worktree. In the workspace, a Sketches, Storybook or prototype
   tab is the same viewer. Detach opens it in a browser tab of its own (`/view`), and the place it left says so and
   brings it back; Put it back in the detached tab does the same. One place at a time.
+- **Moving between Macs is two commands** (Sandy, 2026-11-11: "a command to sync everything"): `pnpm leave` on one,
+  `pnpm arrive` on the other. Data is in the database, settings in Doppler, a worktree's work in the app's GitHub
+  repository, histories in a private state repository, which also says which Mac holds the engine: one at a time,
+  enforced. Nothing is copied by hand (LOG.md, "Moving between Macs is two commands").
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
