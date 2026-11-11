@@ -544,6 +544,21 @@ Details and sources in `research/`.
   longer lists it; the agent is told it is this task's conductor. Not built: the list of agents it has out (the
   column takes one, nothing fills it), an end to the conversation when the task is done, and the same for projects
   and ideas, whose steps still open a conversation each in the left column.
+- **The prototype is read before anything is decided from it** (Sandy, 2026-11-11: "the prototype's job is to take
+  the mockup and implement it however it thinks is best. Then we do an audit of it to see how it did it. It's really
+  a prototype audit, prototype analysis … then it's an ADR … knowing that we have a prototype to use as our starting
+  point"). The prototype stays before the ADR: it is the cheap experiment and the ADR is the decision, so an ADR
+  written first is a guess the prototype then only implements. Between them is a step of its own, the **prototype
+  analysis**: a fresh agent reads the prototype's branch and reports how it was built, what was faked, what was
+  hard, what surprised, and what is worth keeping against what was only speed, because a prototype built fast mixes
+  findings with shortcuts and the ADR must not lean on a shortcut. The order after the mockup: prototype (the person
+  approves it), prototype analysis, ADR (from the analysis and main), blast radius (what the real build touches in
+  main, given the ADR), the brief brought up to date with a Prototype section (the branch, the analysis, the ADR,
+  what to keep and what to change), brief audit (the brief read against main and the prototype), and the person
+  approves the brief. Approving the prototype sets the rest off: each check is a fresh agent, read-only, shown as a
+  tab in the task's agent column, run one after the other; the conductor writes the brief between the blast radius
+  and the audit. The real build starts from main, with the prototype as a map to follow and improve on, never as
+  code to carry over. A check runs only when the task's workflow has it. Built (2026-11-11): `checks.ts`.
 - **The check mark is the person's** (Sandy, 2026-11-10: "there should be an approve button for each step … I see
   the check mark but not sure how that is decided"). On a task, research, sketches, mockups and the prototype are
   finished only when a person approves them, with a button on the step's page; the agent marking one done makes it
