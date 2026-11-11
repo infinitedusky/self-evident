@@ -4,10 +4,10 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, prototype, session, workspace } from './db/schema.js'
+import { app, prototype, session, sessionMessage, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createIssue } from './issues.js'
-import { closeTalks, ensureTaskTalk, listTalks, modelFor, startCheckTalk, taskAgents, taskTalk } from './talk.js'
+import { agentsOut, closeTalks, ensureTaskTalk, listTalks, modelFor, readAgent, startCheckTalk, takeReply, taskAgents, taskTalk } from './talk.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -60,6 +60,36 @@ describe.skipIf(!reachable)('a task\'s own agent', () => {
     expect(await taskAgents(t.id)).toMatchObject([{ sessionId: reader.id, kind: 'check', check: 'analysis', what: 'Prototype analysis', icon: '🔬', busy: false }])
     expect(await taskTalk(t.id)).toBeNull() // it is not the task's own agent
     expect((await listTalks({ open: true })).find((s) => s.id === reader.id)?.taskId).toBe(t.id)
+  })
+
+  it('lets the conductor see and read the agents it has out, and takes an agent\'s answer back to it once', async () => {
+    const t = await createIssue(appId, { title: 'Conducted', kind: 'code' })
+    const own = await talk({ issueId: t.id })
+    const builder = await talk({ prototypeId: 'proto_c' })
+    await db.insert(prototype).values({ id: newId('prototype'), appId, issueId: t.id, title: 'Swing (sample)', sessionId: builder.id, branch: 'proto/c', path: '/tmp/none', status: 'running' })
+    const reader = await startCheckTalk({ appId, issueId: t.id, check: 'adr', cwd: '/tmp/none', branch: null, subject: 'ADR: Conducted' })
+    const said = (sessionId: string, author: string, kind: string, body: string, payload?: object) => db.insert(sessionMessage).values({ appId, sessionId, author, kind, body, payload: payload ?? null, status: 'sent', sentAt: new Date() })
+    await said(builder.id, 'user', 'text', 'make the ball bigger (sample)') // the person, directly
+    await said(builder.id, 'agent', 'text', 'Bigger ball is in.')
+    expect(await takeReply(builder.id)).toBeNull() // the conductor asked nothing: nothing goes back
+    await said(builder.id, 'engine', 'brief', 'Slow the swing down (sample).', { from: own.id })
+    await said(builder.id, 'tool', 'tool_call', 'Edit')
+    await said(builder.id, 'agent', 'text', 'Working on it.')
+    await said(builder.id, 'agent', 'text', 'The swing is slower now; look at the downswing.')
+
+    expect(await agentsOut(own.id)).toMatchObject([{ kind: 'prototype', state: 'idle', lastSaid: 'The swing is slower now; look at the downswing.' }, { kind: 'check', check: 'adr', lastSaid: null }])
+    const read = await readAgent(own.id, 'prototype')
+    expect(read.messages.map((m) => m.by)).toEqual(['the person', 'the agent', 'you', 'the agent', 'the agent']) // no tool noise
+    expect((await readAgent(own.id, 'adr')).sessionId).toBe(reader.id)
+    expect((await readAgent(own.id, builder.id, 1)).messages).toHaveLength(1)
+    await expect(readAgent(own.id, 'audit')).rejects.toThrow(/no agent "audit" out on this task; out now: Prototype/)
+    await expect(readAgent(builder.id, 'adr')).rejects.toThrow(/only a task's own agent/)
+    await expect(agentsOut(reader.id)).rejects.toThrow(/only a task's own agent/)
+
+    expect(await takeReply(builder.id)).toEqual({ from: own.id, what: 'Prototype', said: 'The swing is slower now; look at the downswing.' })
+    expect(await takeReply(builder.id)).toBeNull() // once
+    await said(reader.id, 'engine', 'brief', 'Also weigh a queue (sample).', { from: own.id })
+    expect(await takeReply(reader.id)).toEqual({ from: own.id, what: 'ADR', said: null }) // it stopped without a word
   })
 
   it('runs a prototype\'s agent on Sonnet unless the app names another model, and everything else on the app\'s model', () => {

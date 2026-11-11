@@ -19,7 +19,7 @@ export interface RiskContext { cwd: string; branch?: string | null } // branch: 
 
 const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']) // Skill loads instructions; what they lead to is rated on its own
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
-const ENGINE_FREE = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'workflows'])
+const ENGINE_FREE = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent'])
 const ENGINE: Record<string, [Risk, string]> = {
   create_idea: ['cheap', 'keeps an idea; easy to drop'],
   create_project: ['cheap', 'a draft project; nothing runs'],
@@ -46,6 +46,7 @@ const ENGINE: Record<string, [Risk, string]> = {
   update_initiative: ['cheap', 'edits a goal; easy to change back'],
   create_cycle: ['cheap', 'a stretch of time with its tasks; easy to change'],
   sync_github: ['cheap', 'reads GitHub; merges main into open project branches, conflicts only reported'],
+  tell_agent: ['cheap', 'a message to an agent this task has out; it works in its own folder'],
   set_step: ['cheap', 'notes on a step of an idea, task or project; written over again easily'],
   convert_idea: ['moderate', 'turns an idea into a task or a project and moves its steps over'],
   start_prototype: ['cheap', 'a worktree and a dev server for a prototype; discard undoes it'],

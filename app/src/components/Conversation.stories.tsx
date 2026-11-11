@@ -32,6 +32,22 @@ export const Compact: Story = { args: { compact: true, context: { path: '/projec
 export const Failed: Story = { beforeEach: withEngine({ transcript: t({ messages: [...working.slice(0, 1), msg(8, 'engine', 'error', 'Sample: the agent stopped: rate limited, retrying in a minute.', { waiting: true })] }) }) }
 /** A prototype's conversation opens with its brief. */
 export const PrototypeBrief: Story = { beforeEach: withEngine({ transcript: prototypeTranscript }) }
+/**
+ * The conductor directing an agent it has out: the person asks for a change here, the task's agent passes it on, and
+ * the prototype's answer comes back as a card when it finishes. The person never leaves this conversation.
+ */
+export const DirectsItsAgents: Story = { args: { compact: true }, beforeEach: withEngine({ transcript: t({ messages: [
+  msg(1, 'user', 'text', 'Make the pay button bigger in the prototype (sample).'),
+  msg(2, 'agent', 'tool_call', 'tell_agent', { tool: 'mcp__engine__tell_agent', input: { input: 'prototype' } }),
+  msg(3, 'agent', 'text', 'Passed on to the prototype\'s agent. I\'ll tell you when it is in.'),
+  msg(4, 'engine', 'brief', 'The Prototype agent finished what you asked.\n\nThe pay button is full width on phones now (sample); look at the last step of checkout.', { back: 'talk_sample_proto', label: 'Back from the Prototype agent' }),
+  msg(5, 'agent', 'text', 'It is in: the pay button is full width on phones. Look at the last step of checkout in the Prototype view.'),
+] }) }) }
+/** The same exchange seen from the prototype's side: what the task's agent asked is marked as coming from it. */
+export const AskedByTheConductor: Story = { args: { compact: true }, beforeEach: withEngine({ transcript: t({ messages: [
+  msg(1, 'engine', 'brief', 'Make the pay button bigger: full width on phones, as in the agreed mockup (sample).', { from: 'talk_sample', label: 'From this task\'s agent' }),
+  msg(2, 'agent', 'text', 'The pay button is full width on phones now (sample); look at the last step of checkout.'),
+] }) }) }
 export const Loading: Story = { beforeEach: withEngine({}, { latency: 'infinite' }) }
 export const EngineDown: Story = { beforeEach: withEngine(engineDown) }
 /** One message on its own: an answered permission card. */

@@ -23,6 +23,7 @@ import { delegateFor } from './tkt.js'
 import { runner } from './runner.js'
 import { listStories } from './storybook.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, setPrototypeCommand, setPrototypeDatabase, startPrototype, stopPrototype } from './prototype.js'
+import { agentsOut, readAgent, tellAgent } from './talk.js'
 import { syncApp } from './github.js'
 import { FOLLOWED, follow } from './follow.js'
 import { addChecklist, completeTodo, createTodo, dropTodo, itemToTodo, listTodos, setChecklistItem, updateTodo } from './todos.js'
@@ -32,7 +33,7 @@ export interface EngineTool { name: string; description: string; shape: z.ZodRaw
 export interface ToolScope { appId: string; sessionId?: string; actor?: string; waitForPlanner?: boolean }
 
 /** Tools that only read: safe to run without asking. */
-export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows'])
+export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent'])
 
 export function engineTools(opts: ToolScope): EngineTool[] {
   const { appId, sessionId } = opts
@@ -158,6 +159,12 @@ export function engineTools(opts: ToolScope): EngineTool[] {
       })),
       def('stories', 'This app\'s Storybook stories, from the Storybook of this conversation\'s worktree when it has one (so a story you just wrote is there), else the app\'s: id (open one with open_tab kind storybook), title (the page or component) and name (the state). match narrows by id, title or name.', { match: z.string().optional() },
         async (a) => tryIt(() => listStories(appId, a.match, sessionId))),
+      def('agents_out', 'For a task\'s own agent: the agents this task has out (a prototype\'s builder, a fresh agent on each check), each with its sessionId, whether it is working, and the last thing it said.', {},
+        async () => tryIt(() => { if (!sessionId) throw new PlanError('this needs a conversation'); return agentsOut(sessionId) })),
+      def('tell_agent', 'For a task\'s own agent: say something to an agent this task has out, like a change the person wants in the prototype. agent: its sessionId, or prototype, or a check\'s key (analysis, adr, risk, audit). It starts from your message, so write it in full. Returns at once; its answer comes back to you as a message when it finishes.', { agent: z.string(), message: z.string() },
+        async (a) => tryIt(() => { if (!sessionId) throw new PlanError('this needs a conversation'); return tellAgent(sessionId, a.agent, a.message) })),
+      def('read_agent', 'For a task\'s own agent: the recent conversation of an agent this task has out: what was said to it (by you, or by the person directly) and what it said. last: how many messages (default 20).', { agent: z.string(), last: z.number().optional() },
+        async (a) => tryIt(() => { if (!sessionId) throw new PlanError('this needs a conversation'); return readAgent(sessionId, a.agent, a.last) })),
       def('prototypes', 'This app\'s prototypes: the actual thing built fast in a worktree of its own to demo and learn from, then analysed into the plan and built again from scratch. Each with its branch, worktree path, status and address.', {},
         async () => tryIt(() => listPrototypes(appId))),
       def('prototype', 'One prototype: status, address, whether it answers, and the last lines of its server\'s output.', { prototypeId: z.string() },
