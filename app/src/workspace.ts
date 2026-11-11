@@ -24,6 +24,8 @@ export interface WorkspaceApi {
   /** Whether a tab follows what the agent changes (follow.ts in the engine), and the switch for it. */
   following?: boolean
   setFollowing?: (on: boolean) => void
+  /** Folds the app's agent column away (the rail's S, or ⌘J, brings it back). */
+  hideAgent?: () => void
 }
 
 /** A conversation's colour, the same wherever it shows (its tab, the tab following it); the accent when there's none. */

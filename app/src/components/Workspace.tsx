@@ -139,7 +139,7 @@ function AgentColumn() {
   const context = useMemo(() => tabContext(ws?.focused ?? null, ws?.tabs ?? [], contextFor), [ws?.focused, ws?.tabs])
   return (
     <div className="agent-col">
-      <TalkDrawer context={context} onOpen={(tab) => ws?.open(tab)} />
+      <TalkDrawer context={context} onOpen={(tab) => ws?.open(tab)} onHide={ws?.hideAgent} />
     </div>
   )
 }
@@ -289,7 +289,7 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
   }, [toggleAgent])
 
   const focused = tabs.find((t) => t.focused) ?? null
-  const value = useMemo(() => ({ open: (tab: Tab, opts?: { split?: Split }) => add(tab, opts), openIn: (tab: Tab, groupId: string) => add(tab, { groupId }), tabs, focused, following, setFollowing }), [add, tabs, focused, following, setFollowing])
+  const value = useMemo(() => ({ open: (tab: Tab, opts?: { split?: Split }) => add(tab, opts), openIn: (tab: Tab, groupId: string) => add(tab, { groupId }), tabs, focused, following, setFollowing, hideAgent: toggleAgent }), [add, tabs, focused, following, setFollowing, toggleAgent])
   return (
     <WorkspaceContext.Provider value={value}>
       <Changed.Provider value={sync}>
