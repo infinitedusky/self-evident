@@ -11,12 +11,12 @@ import { useWorkspace } from '../workspace'
 export function PagePane({ path, onNavigate, children }: { path: string; onNavigate?: (path: string) => void; children?: React.ReactNode }) {
   return (
     <MemoryRouter initialEntries={[path]}>
-      <Page onNavigate={onNavigate}>{children ?? <PageRoutes />}</Page>
+      <Page path={children ? undefined : path} onNavigate={onNavigate}>{children ?? <PageRoutes />}</Page>
     </MemoryRouter>
   )
 }
 
-function Page({ onNavigate, children }: { onNavigate?: (path: string) => void; children: React.ReactNode }) {
+function Page({ path, onNavigate, children }: { /** Where the tab was sent from outside (the agent took the person there): the page goes. */ path?: string; onNavigate?: (path: string) => void; children: React.ReactNode }) {
   const loc = useLocation()
   const navigate = useNavigate()
   const ws = useWorkspace()
@@ -27,6 +27,7 @@ function Page({ onNavigate, children }: { onNavigate?: (path: string) => void; c
     scroller.current?.scrollTo({ top: 0 })
     onNavigate?.(loc.pathname + loc.search)
   }, [loc.pathname, loc.search]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (path && path !== loc.pathname + loc.search) navigate(path) }, [path]) // eslint-disable-line react-hooks/exhaustive-deps
   const onClick = (e: React.MouseEvent) => {
     const a = (e.target as HTMLElement).closest('a')
     const href = a?.getAttribute('href')

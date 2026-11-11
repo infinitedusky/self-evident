@@ -6,7 +6,7 @@
 import { TASK_AGENT_ASKED } from './TaskAgent'
 import { Viewer, type Viewed } from './Viewer'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { finished, label, step, type On, type Row, type StepState } from '@self-evident/engine/steps'
@@ -37,10 +37,12 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   const s = row.state
   // What there is to look at, right on the step's page: the task's sketches, its Storybook at the first story named, its prototype.
   const proto = protos.find((p) => p.status !== 'discarded')
-  const viewed: Viewed | null = s.status === 'none' ? null
-    : row.key === 'sketch' && session ? { kind: 'sketch', session, file: work?.refs?.[0] }
-    : row.key === 'mockup' && session ? { kind: 'storybook', session, story: work?.refs?.[0] }
-    : row.key === 'prototype' && proto ? { kind: 'prototype', id: proto.id } : null
+  // The agent can send the person here to one file or story (?file=, ?story=): that one shows, else the first the step recorded.
+  const [asked_] = useSearchParams()
+  const viewed: Viewed | null = row.waitingOn ? null
+    : row.key === 'sketch' && session ? { kind: 'sketch', session, file: asked_.get('file') ?? work?.refs?.[0] }
+    : row.key === 'mockup' && session ? { kind: 'storybook', session, story: asked_.get('story') ?? work?.refs?.[0] }
+    : row.key === 'prototype' && proto && s.status !== 'none' ? { kind: 'prototype', id: proto.id } : null
   const waitsOnApproval = row.waitingOn === 'brief' && on === 'task' && waitingState?.status === 'done'
   const own = row.key !== 'idea' && row.key !== 'brief' // the steps whose work is kept as a step
   useEffect(() => {

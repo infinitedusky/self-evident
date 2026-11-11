@@ -7,7 +7,8 @@ h1 { font-size: 26px; } h2 { font-size: 18px; } h3 { font-size: 15px; }
 .mono { font-family: var(--mono); font-size: 12px; }
 
 .tab-page { height: 100%; overflow: auto; padding: 24px 28px 40px; background: var(--ground); }
-.tab-page > * { max-width: 1200px; }
+/* A tab's page is as wide as its tab (Sandy, 2026-11-10: "the tabs should have no width limit"); running text keeps a readable line. */
+.task-main .md { max-width: 100ch; }
 .page-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px; gap: 16px; }
 @media (max-width: 760px) { .tab-page { padding: 16px; } }
 
