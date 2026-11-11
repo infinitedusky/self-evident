@@ -112,7 +112,7 @@ export interface StepState {
   key: StepKey
   status: 'none' | 'started' | 'done'
   detail?: string // "2 stories", "running", "draft"
-  approved?: { by: string; at: string } // a brief only
+  approved?: { by: string; at: string } // on a task: the brief, and each step a person approves (needsApproval)
 }
 
 export type Source = 'task' | 'project' | 'app'
@@ -128,8 +128,18 @@ export function resolve(own?: Workflow | null, project?: Workflow | null, app?: 
 
 export interface Row { key: StepKey; required: boolean; position: number | null; waitingOn: StepKey | null; state: StepState }
 
-/** Done, and for a task's brief, approved too. */
-export const finished = (s: StepState, on: On) => s.status === 'done' && (s.key !== 'brief' || on !== 'task' || !!s.approved)
+/**
+ * Whether a person approves this step (Sandy, 2026-11-10: "there should be an approve button for each step … I see the
+ * check mark but not sure how that is decided"). On a task: the brief, and the steps the person is part of (research,
+ * sketches, mockups, the prototype). The agent can say one is done, which makes it ready for the person; only their
+ * approval finishes it. The checks (ADR, blast radius, brief audit) are reports read with the brief, so they are
+ * finished when done and stand approved with the brief. An idea's and a project's steps keep done as finished.
+ */
+export const needsApproval = (key: StepKey, on: On) => on === 'task' && key !== 'idea' && step(key).place !== 'check'
+/** Finished: done, and approved where a person approves it. */
+export const finished = (s: StepState, on: On) => s.status === 'done' && (!needsApproval(s.key, on) || !!s.approved)
+/** Done by the agent's word and waiting on the person. */
+export const ready = (s: StepState, on: On) => s.status === 'done' && needsApproval(s.key, on) && !s.approved
 
 /**
  * The steps to show on one thing, in order: the workflow's, its switched-off steps left out, or the default list.
