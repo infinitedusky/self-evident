@@ -9,12 +9,47 @@
  */
 import { AgentStrip, type AgentStripProps } from './AgentStrip'
 import { Conversation } from './Conversation'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { openEvents, API, engine, type TalkSession } from '../engine'
 import { talkColor } from '../workspace'
+
+const OPEN_KEY = 'se.task-agent.open'
+/** Said by a page when it hands a step to the task's agent: the column opens and looks for the conversation again. */
+export const TASK_AGENT_ASKED = 'se:task-agent-asked'
+
+/**
+ * The task's own conversation, kept up to date on its app's talk events (so the dot shows it working), with the
+ * column's open or folded state remembered in this browser, and a way to start the agent when the task has none.
+ */
+export function useTaskAgent(taskId: string, appId: string) {
+  const [session, setSession] = useState<TalkSession | null | undefined>(undefined)
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0' } catch { return true } })
+  const [starting, setStarting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const timer = useRef<number | undefined>(undefined)
+  const show = useCallback((on: boolean) => { setOpen(on); try { localStorage.setItem(OPEN_KEY, on ? '1' : '0') } catch { /* fine */ } }, [])
+  useEffect(() => {
+    let closed = false
+    const refresh = () => engine.taskTalk(taskId).then((s) => { if (!closed) setSession(s) }).catch(() => { if (!closed) setSession(null) })
+    void refresh()
+    const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 200) }
+    const es = openEvents(`${API}/events?since=now&app=${appId}`)
+    for (const t of ['talk.message', 'talk.permission', 'talk.result']) es.addEventListener(t, bump)
+    const asked = () => { show(true); bump() }
+    window.addEventListener(TASK_AGENT_ASKED, asked)
+    return () => { closed = true; es.close(); window.clearTimeout(timer.current); window.removeEventListener(TASK_AGENT_ASKED, asked) }
+  }, [taskId, appId, show])
+  const start = async () => {
+    setStarting(true); setError(null)
+    try { setSession(await engine.startTaskTalk(taskId)) } catch (e: any) { setError(String(e.message ?? e)) } finally { setStarting(false) }
+  }
+  return { session, open, toggle: () => show(!open), start, starting, error }
+}
 
 /** A fresh agent the conductor sent out, and what it is on. */
 export interface Deployed { what: string; icon?: string; state: 'out' | 'back'; detail?: string }
 
-export function TaskAgent({ sessionId, taskId, stage, state = 'idle', deployed = [], open, onToggle, onStart, starting }: {
+export function TaskAgent({ sessionId, taskId, stage, state = 'idle', deployed = [], open, onToggle, onStart, starting, error }: {
   /** The task's conversation; none until its agent is started. */
   sessionId: string | null
   taskId: string
@@ -26,6 +61,8 @@ export function TaskAgent({ sessionId, taskId, stage, state = 'idle', deployed =
   onToggle: () => void
   onStart?: () => void
   starting?: boolean
+  /** Why its agent could not be started, in words. */
+  error?: string | null
 }) {
   const color = talkColor(sessionId ?? taskId)
   if (!open) return (
@@ -57,7 +94,8 @@ export function TaskAgent({ sessionId, taskId, stage, state = 'idle', deployed =
         : (
           <div className="task-agent-empty">
             <p className="faint">No agent on this task yet. One agent stays with it from the first sketch to the merge, and sends out others where the work needs fresh eyes.</p>
-            <button className="btn" disabled={starting || !onStart} onClick={onStart}>Start this task's agent</button>
+            <button className="btn" disabled={starting || !onStart} onClick={onStart}>{starting ? 'Starting…' : 'Start this task\'s agent'}</button>
+            {error && <div className="empty bad">{error}</div>}
           </div>
         )}
     </aside>

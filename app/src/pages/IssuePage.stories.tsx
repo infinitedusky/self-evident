@@ -5,7 +5,7 @@ import { approvedTaskStepsView, issueDetails, waitingTaskStepsView } from '../st
 
 // One task at /tasks/:id, from the sample engine. Each story stands on a different task. A task has its own nav down
 // the left: overview, then its two stages: the brief, with the steps that feed it under it ("UI change (sample)", in
-// order), and the build.
+// order), and the build. On the right, the task's own agent, which stays as the step changes.
 const meta = { title: 'Pages/TaskPage', component: IssuePage, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><IssuePage /></div> } satisfies Meta<typeof IssuePage>
 export default meta
 type Story = StoryObj<typeof meta>
@@ -32,6 +32,8 @@ export const Planned: Story = { parameters: at('iss_sample1', 'build'), beforeEa
 export const SubTaskBuilding: Story = { parameters: at('iss_sample5') }
 /** A sub-task not built yet: the planner's steps, from its brief. */
 export const SubTaskAsPlanned: Story = { parameters: at('iss_sample6') }
+/** A task nobody has started an agent on: the column offers one button. */
+export const NoAgentYet: Story = { parameters: at('iss_sample20'), beforeEach: withEngine({ taskTalk: null }) }
 /** A task in no project yet. */
 export const InNoProject: Story = { parameters: at('iss_sample16') }
 /** A ticket tkt built, done: what the skills wrote on it as it moved (the plan, the handoff, the completion), one per heading. */

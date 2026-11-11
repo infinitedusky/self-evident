@@ -193,6 +193,9 @@ export interface TalkContext { path: string; label?: string; projectId?: string;
 export const engine = {
   talks: (open = true) => call<TalkSession[]>('GET', `/talks${open ? '?open=1' : ''}`),
   startTalk: (body: { appId: string; subjectRef?: SubjectRef }) => call<TalkSession>('POST', '/talks', body),
+  /** A task's own agent: its one conversation, or null; `startTaskTalk` starts it if the task has none. */
+  taskTalk: (issueId: string) => call<TalkSession | null>('GET', `/issues/${issueId}/talk`),
+  startTaskTalk: (issueId: string) => call<TalkSession>('POST', `/issues/${issueId}/talk`),
   renameTalk: (id: string, subject: string) => call<TalkSession>('POST', `/talks/${id}/rename`, { subject }),
   transcript: (id: string) => call<Transcript>('GET', `/talks/${id}`),
   say: (id: string, text: string, context?: TalkContext) => call<{ messageId: number }>('POST', `/talks/${id}/say`, { text, context }),
