@@ -24,13 +24,14 @@ export function Mockups({ story, session, embedded }: { story?: string; session?
     setS(null); setError(null)
     if (!app) return
     let gone = false
-    const poll = () => engine.storybook(app.id, talk).then((x) => { if (!gone) { setS(x); setError(null) } }).catch((e) => { if (!gone) setError(String(e.message ?? e)) }) // an engine restarting mid-poll is not the page's last word
+    const poll = () => engine.storybook(app.id, talk, story).then((x) => { if (!gone) { setS(x); setError(null) } }).catch((e) => { if (!gone) setError(String(e.message ?? e)) }) // an engine restarting mid-poll is not the page's last word
     void poll()
     const t = window.setInterval(poll, 2000) // until it answers: Storybook takes a few seconds to come up
     return () => { gone = true; window.clearInterval(t) }
-  }, [app?.id, talk])
+  }, [app?.id, talk, story])
   const base = s?.frame ?? s?.url // framed at the address the engine gives: Storybook only lets localhost frame it, so under a name it comes through the proxy
-  const at = base ? (story ? `${base.replace(/\/$/, '')}/?path=/story/${encodeURIComponent(story)}` : base) : null
+  const shown = s?.story ? s.story.show : story // the story this Storybook has for the one asked: itself, another of its component, or none
+  const at = base ? (shown ? `${base.replace(/\/$/, '')}/?path=/story/${encodeURIComponent(shown)}` : base) : null
   const start = async () => { if (!app) return; setStarting(true); try { await engine.startStorybook(app.id, talk) } catch (e: any) { setError(String(e.message ?? e)) } finally { setStarting(false) } }
 
   return (
@@ -54,6 +55,7 @@ export function Mockups({ story, session, embedded }: { story?: string; session?
           </> : <>Storybook isn't answering at <code>{s.url}</code>, and there's no command to start it. Add one under <Link to={`/settings/apps/${app?.id}/integrations/storybook`}>Integrations › Storybook</Link>.</>}
         </div>
       )}
+      {s?.up && s.story?.missing && <p className="faint" style={{ margin: '0 0 8px', fontSize: 13 }}>This Storybook has no story <code>{s.story.asked}</code>{s.story.show ? <>; showing <code>{s.story.show}</code> from the same component</> : '; showing its front page'}. The step names it from an earlier round: ask the agent to record the stories again.</p>}
       {s?.up && at && <iframe className="sb-frame" src={at} title={`${app?.name} Storybook`} />}
     </div>
   )
