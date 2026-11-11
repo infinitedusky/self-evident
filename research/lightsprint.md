@@ -10,6 +10,10 @@ A product layer on rented parts: **E2B sandboxes** (inferred, high confidence: r
 `/home/user/workspace`, a job ad naming E2B), **Claude Code or Codex** running inside them, **Composio** for
 connectors, and the customer's own GitHub CI. What they own: the setup agent, screenshot verification, live shared
 sessions, plan mode, the review screen. YC Spring 2026, $6.1M seed (645 Ventures, 2026-10-13), six people, SvelteKit.
+Founded 2026, three at YC time (YC page; partner Garry Tan). Founders: Ben Ong (ex-VC, January Capital; venture
+builder at Temasek's studio), Benedict Chan (CTO BitGo, head of eng Chainlink, ex-Microsoft), Heng Hong Lee
+(Facebook Messenger 2013, Director of Eng at Fazz, YC S17). Launch post: "using Lightsprint to build Lightsprint".
+Read: they got into YC on the team, not on a pre-built product — a few months old at most when the batch started.
 
 ## How each part works, and how hard it is to build
 
@@ -29,15 +33,56 @@ sessions, plan mode, the review screen. YC Spring 2026, $6.1M seed (645 Ventures
 ## What it does not do
 
 No baseline, hypothesis or post-merge measurement — merging marks a task "Done". No experiments or feature flags. No
-idea validation (plans are *what* to build, not *whether*). No generated seed data in previews. Closest: a PostHog
-connector so an agent can "check whether the feature they just built is actually being used".
+idea validation (plans are *what* to build, not *whether*). ~~No generated seed data in previews.~~ **Wrong — see
+below.** Closest: a PostHog connector so an agent can "check whether the feature they just built is actually being
+used".
+
+**PostHog, as documented (2026-10-20, `docs/mcp/`, `integrations/`, `automations/`):** a Composio catalog app
+(API-key form, like Sentry), connected workspace-wide by an owner/admin, switched on per stack in the MCP tab. Its
+tools reach task agents, Chat and Plan Mode like any MCP tool ("agents can call every attached MCP tool, including
+write actions"). The only stated use is a read: "What's the funnel conversion on the new signup flow?", and checking
+whether a shipped feature is used. **Not a trigger:** automations fire on a schedule, a GitHub event, a Slack
+mention, a Linear change or a manual run — no PostHog, no errors, no metrics. Nothing runs after merge. So PostHog
+is a tool the agent consults when asked; data is neither the input nor the judge. **Threat:** the "Triage task"
+action already names tasks from incoming events, so a PostHog trigger is a sprint away for them and would close the
+signal → task half of our loop. The other half (baseline and hypothesis per idea, verdict after ship) needs a unit of
+work that outlives the merge; theirs ends there. **Check in the app** (docs undersell it): the Automations trigger
+list, and whether Triage can take a PostHog event.
+
+## Sample data is the default (Sandy, 2026-10-20 — seen in the app, not in the docs)
+
+Onboarding step 4 of 8, "What data should your preview use?": **Sample data (Recommended)** — "Realistic placeholder
+users, accounts and records. Nothing touches your real data" — versus **My real data** — "Add your environment
+variables so the preview connects to your own databases and services". Footer: "You can switch to real data any time
+in Settings." Intro: "We'll build your preview with sample users and records by default, so it works without access
+to your systems."
+
+So the thing our comps called unoccupied — a running preview with realistic data filled in — Lightsprint ships, as
+the default, and the docs (`preview-setup/`, `llms.txt`, the docs index) say nothing about it. Our research read
+the docs and missed the product. **Lesson for research: open the app, not just the docs.**
+
+Unknown (nothing public): how the sample data is made (most likely the setup agent writes a seed script per stack
+and the setup command runs it on every boot — that matches the docs' "seed data" in the setup command); whether it
+is deterministic across tasks; whether it is scoped to the change under review; and **whether the preview or the PR
+says which data is fake** — the screenshot labels the choice at setup, not the data in the demo.
+
+What this leaves us: the preview with sample data is table stakes. What is still not found anywhere: the demo
+labelling its fake data in the review, the demo tied to a hypothesis and a baseline, and telemetry judging the
+result after merge. The "data realism" gap is narrower than we wrote: it is realism *for this change's scenario*,
+stated honestly, not realism in general.
 
 ## Lessons for us
 
-- **Customers' Claude subscriptions are off limits.** Anthropic's 2026 terms restrict consumer subscription logins
-  to Claude Code and claude.ai, likely why Lightsprint defaults to its own credits. Our own development on `claude -p`
-  is fine; the product uses API keys.
+- **Customers' Claude subscriptions: only through Claude Code itself.** Anthropic's Feb 2026 change cut off
+  third-party harnesses using subscription OAuth as their own credential (secondary sources). But `claude setup-token`
+  is documented for "CI pipelines, scripts, or other environments where interactive browser login isn't available"
+  on Pro/Max, and the Claude Code GitHub Action runs on it — so the real `claude` binary running headless on rented
+  infrastructure with a customer's token is sanctioned (corrected 2026-10-20; docs: code.claude.com/docs/en/authentication).
+  For our product: if the factory runs the actual Claude Code binary, a customer's `setup-token` is a legitimate
+  model-access provider; our own harness calling the API needs API keys. Which one Lightsprint does is unknown
+  ("where available"); tell by whether its connect flow asks for a pasted setup-token or an OAuth sign-in.
 - **Borrow:** the setup agent that works by opening PRs; "the preview loads" as the definition of set up;
+  **sample data as the default, real data as an opt-in with env vars, switchable in Settings**;
   Feature / Entry Points screenshots on the PR; `@bot` commands in PR comments; automations with a run-as user,
   budget caps and run limits; honesty about what the agent can read.
 - **Ours alone:** the loop from a telemetry signal → idea with baseline and hypothesis → build → the same telemetry
