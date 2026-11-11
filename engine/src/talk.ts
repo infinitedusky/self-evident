@@ -209,7 +209,74 @@ export async function startCheckTalk(i: { appId: string; issueId: string; check:
   return row
 }
 
-const turnEnded: ((sessionId: string) => void)[] = []
+/**
+ * The conductor directs the agents it has out (Sandy, 2026-11-11: "talk with one agent throughout the task lifecycle
+ * and it can manage the whole thing"). It sends one a message; that agent works in its own conversation, where the
+ * person can watch; when its turn ends, what it said comes back to the conductor as a message, so the conductor is
+ * free to talk meanwhile. The ask is kept on the message itself (`payload.from`, then `answered`), so nothing is held
+ * in memory.
+ */
+async function conducted(fromSessionId: string, agent: string) {
+  const [from] = await db.select().from(session).where(eq(session.id, fromSessionId))
+  const issueId = (from?.subjectRef as SubjectRef | null)?.issueId
+  if (!from || !issueId) throw new PlanError('only a task\'s own agent has agents out')
+  const out = await taskAgents(issueId)
+  const want = agent.trim().toLowerCase()
+  const found = out.filter((a) => a.sessionId === agent || a.kind === want || a.what.toLowerCase() === want || ('check' in a && a.check === want))
+  if (!found.length) throw new PlanError(out.length ? `no agent "${agent}" out on this task; out now: ${out.map((a) => `${a.what} (${a.sessionId})`).join(', ')}` : 'this task has no agents out')
+  if (found.length > 1) throw new PlanError(`more than one agent matches "${agent}": name it by its sessionId (${found.map((a) => a.sessionId).join(', ')})`)
+  return { from, issueId, to: found[0] }
+}
+
+/** What a task's conductor has out, each with the last thing it said. */
+export async function agentsOut(fromSessionId: string) {
+  const [from] = await db.select().from(session).where(eq(session.id, fromSessionId))
+  const issueId = (from?.subjectRef as SubjectRef | null)?.issueId
+  if (!issueId) throw new PlanError('only a task\'s own agent has agents out')
+  return Promise.all((await taskAgents(issueId)).map(async (a) => {
+    const [last] = await db.select({ body: sessionMessage.body, at: sessionMessage.sentAt }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, a.sessionId), eq(sessionMessage.author, 'agent'), eq(sessionMessage.kind, 'text'))).orderBy(desc(sessionMessage.id)).limit(1)
+    return { ...a, state: a.busy ? 'working' : 'idle', lastSaid: last ? clip(last.body, 600) : null, lastSaidAt: last?.at ?? null }
+  }))
+}
+
+/** The conductor says something to an agent it has out. The answer comes back by itself when that agent's turn ends. */
+export async function tellAgent(fromSessionId: string, agent: string, message: string) {
+  const { to } = await conducted(fromSessionId, agent)
+  await say(to.sessionId, message, undefined, { author: 'engine', kind: 'brief', payload: { from: fromSessionId, label: 'From this task\'s agent' } })
+  return { sent: true, to: to.what, sessionId: to.sessionId, next: 'Its answer comes back to you here as a message when it finishes; do not wait or poll. The person can watch it work in its tab.' }
+}
+
+/** The recent conversation of an agent the conductor has out: what was said to it (the person may have, directly) and what it said. */
+export async function readAgent(fromSessionId: string, agent: string, last = 20) {
+  const { to } = await conducted(fromSessionId, agent)
+  const rows = await db.select().from(sessionMessage).where(and(eq(sessionMessage.sessionId, to.sessionId), inArray(sessionMessage.kind, ['text', 'brief']))).orderBy(desc(sessionMessage.id)).limit(Math.min(Math.max(last, 1), 60))
+  return { agent: to.what, sessionId: to.sessionId, state: to.busy ? 'working' : 'idle', messages: rows.reverse().map((m) => ({ by: m.author === 'agent' ? 'the agent' : (m.payload as any)?.from ? 'you' : m.author === 'user' ? 'the person' : 'the engine', at: m.sentAt, text: clip(m.body, 2000) })) }
+}
+
+/**
+ * What goes back to the conductor when a turn ends in a conversation it had asked something of: who asked, and what
+ * the agent said since. Marks the ask answered, so it goes back once. Null when nobody is waiting.
+ */
+export async function takeReply(sessionId: string): Promise<{ from: string; what: string; said: string | null } | null> {
+  const open = and(eq(sessionMessage.sessionId, sessionId), sql`${sessionMessage.payload}->>'from' is not null`, sql`${sessionMessage.payload}->>'answered' is null`)
+  const asks = await db.select().from(sessionMessage).where(open).orderBy(sessionMessage.id)
+  if (!asks.length) return null
+  for (const m of asks) await db.update(sessionMessage).set({ payload: { ...(m.payload as object), answered: true } }).where(eq(sessionMessage.id, m.id)) // one answer covers every open ask
+  const [said] = await db.select({ body: sessionMessage.body }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, sessionId), eq(sessionMessage.author, 'agent'), eq(sessionMessage.kind, 'text'), sql`${sessionMessage.id} > ${asks[0].id}`)).orderBy(desc(sessionMessage.id)).limit(1)
+  const [s] = await db.select().from(session).where(eq(session.id, sessionId))
+  const ref = s?.subjectRef as SubjectRef | null
+  return { from: (asks[asks.length - 1].payload as { from: string }).from, what: ref?.check ? step(ref.check).label : ref?.prototypeId ? 'Prototype' : s?.subject ?? 'An', said: said?.body ?? null }
+}
+
+async function reportBack(sessionId: string) {
+  const r = await takeReply(sessionId)
+  if (!r) return
+  const [home] = await db.select().from(session).where(eq(session.id, r.from))
+  if (!home || home.status !== 'open') return
+  await say(r.from, `The ${r.what} agent finished what you asked.\n\n${r.said ? clip(r.said, 6000) : 'It stopped without saying anything; read_agent shows what happened.'}`, undefined, { author: 'engine', kind: 'brief', payload: { back: sessionId, label: `Back from the ${r.what} agent` } })
+}
+
+const turnEnded: ((sessionId: string) => void)[] = [(id) => { void reportBack(id).catch((err) => console.error('talk: could not report back to the conductor', err)) }]
 /** Called each time a conversation's agent finishes a turn; what follows from it (the next check) lives elsewhere. */
 export const onTurnEnd = (fn: (sessionId: string) => void) => { turnEnded.push(fn) }
 
@@ -235,7 +302,7 @@ export const PROTOTYPE_MODEL = 'claude-sonnet-5-5'
 export const modelFor = (setup: { model?: string; prototype_model?: string }, prototype: boolean) => (prototype ? setup.prototype_model || PROTOTYPE_MODEL : setup.model)
 
 const taskPrompt = (t: { id: string; number: number; title: string }, key: string) => `
-This conversation is the agent of one task, ${key}-${t.number} "${t.title}" (${t.id}), and the only one: you are its conductor from its first sketch to its merge, in this one worktree. Every step of its brief (research, sketches, mockups, the prototype, the checks) and its build is done or directed from here: record each with set_step on this task, and keep its brief current with update_task. Marking a step done says it is ready for the person; they approve it on its page, and only then does it count. The person sees this conversation on the task's page, beside the step they are looking at, and "this" means this task. open_tab with a sketch, a story or the prototype takes them to that step's page of this task, where it shows beside you; it never splits a tab off. A prototype you start gets an agent of its own, in the prototype's worktree: the person sees it as a second tab at the top of this same column, named Prototype, with a dot that pulses while it works. Tell them to look there, by that name; never say "the conversation beside you". When the person approves the prototype, the engine sends a fresh agent for each check this task's workflow has, one after the other (the prototype analysis, the ADR, the blast radius), each a tab in this same column; you do not write those yourself. The engine then tells you here to bring the brief up to date, and after that the brief audit runs the same way. Keep to this task: for a new idea, another task or a look at findings, point them to the app's agent in the left column.`
+This conversation is the agent of one task, ${key}-${t.number} "${t.title}" (${t.id}), and the only one: you are its conductor from its first sketch to its merge, in this one worktree. Every step of its brief (research, sketches, mockups, the prototype, the checks) and its build is done or directed from here: record each with set_step on this task, and keep its brief current with update_task. Marking a step done says it is ready for the person; they approve it on its page, and only then does it count. The person sees this conversation on the task's page, beside the step they are looking at, and "this" means this task. open_tab with a sketch, a story or the prototype takes them to that step's page of this task, where it shows beside you; it never splits a tab off. A prototype you start gets an agent of its own, in the prototype's worktree: the person sees it as a second tab at the top of this same column, named Prototype, with a dot that pulses while it works; name the tab when you point them to it, never "the conversation beside you". You direct the agents you have out, so the person talks to you alone: agents_out lists them with what each last said; tell_agent sends one a message (when the person asks for a change to the prototype, pass it on in full, with what you know from the conversation, instead of sending them to the tab); its answer comes back to you here as a message when it finishes, so say you have passed it on and carry on, never wait or poll; read_agent reads its conversation, since the person may have talked to it directly. When an answer comes back, tell the person in a line or two what changed and what to look at. When the person approves the prototype, the engine sends a fresh agent for each check this task's workflow has, one after the other (the prototype analysis, the ADR, the blast radius), each a tab in this same column; you do not write those yourself. The engine then tells you here to bring the brief up to date, and after that the brief audit runs the same way. Keep to this task: for a new idea, another task or a look at findings, point them to the app's agent in the left column.`
 
 /** A fresh agent out on one check: it reads, reports once with set_step, and stops. Its first message says what to read and what to report. */
 const checkPrompt = (key: StepKey, cwd: string) => `You are a fresh agent sent out for one piece of work on one task: its ${step(key).label.toLowerCase()}. You start from the message you are given and nothing else; that is the point, eyes that have not seen the conversation. You work in ${cwd}, which is someone else's folder: read anything, change nothing. You have no editing tools; use the shell only to read (git log, git diff, git show, ls, cat, grep, rg). Never commit, push, install or start anything. Your report is the whole result: record it once with set_step as you are told, then say in two or three lines what you found and stop. If the person writes to you afterwards, answer from what you read.`
