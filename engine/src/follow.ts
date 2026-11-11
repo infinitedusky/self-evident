@@ -54,6 +54,11 @@ export async function follow(appId: string, sessionId: string | null, tool: stri
   try {
     const page = await pageFor(tool, args, out)
     if (!page) return
+    if (sessionId) { // a task's own agent changing its own task: the person is on that page already, beside the conversation
+      const [s] = await db.select({ ref: session.subjectRef }).from(session).where(eq(session.id, sessionId))
+      const own = (s?.ref as { issueId?: string } | null)?.issueId
+      if (own && page.path.startsWith(`/tasks/${own}`)) return
+    }
     const [a] = await db.select({ workspaceId: app.workspaceId }).from(app).where(eq(app.id, appId))
     await db.transaction((tx) => appendEvent(tx, { workspaceId: a?.workspaceId ?? 'ws_none', appId, sessionId, actor: 'engine', type: 'ui.follow', payload: { sessionId, tool, tab: { kind: 'page', path: page.path }, projectId: page.projectId ?? null } }))
   } catch { /* following is a nicety; the change is made */ }

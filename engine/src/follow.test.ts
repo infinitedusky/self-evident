@@ -59,4 +59,23 @@ describe.skipIf(!reachable)('follow', () => {
     await db.insert(session).values({ id: second, appId, terminalSince: new Date() })
     expect(await mcpSession(appId, null)).toBeNull() // two in terminals: can't tell which
   })
+  it('a task\'s own agent takes the person to the step\'s page of its task, in the task\'s tab, and does not follow its own task', async () => {
+    const t = await call('create_task', { title: 'Has its own agent', kind: 'code' })
+    const own = newId('session')
+    await db.insert(session).values({ id: own, appId, kind: 'talk', subjectRef: { issueId: t.id } })
+    const opened = async () => (await db.select().from(event).where(and(eq(event.appId, appId), eq(event.type, 'ui.open')))).sort((a, b) => a.seq - b.seq).map((e) => e.payload as { tab: { kind: string; path?: string }; split: string | null; issueId?: string }).at(-1)
+    await call('open_tab', { kind: 'sketch', file: 'sketches/home.html', split: 'right' }, own)
+    expect(await opened()).toEqual({ sessionId: own, tab: { kind: 'page', path: `/tasks/${t.id}/sketch?file=home.html` }, split: null, issueId: t.id })
+    await call('open_tab', { kind: 'storybook', story: 'pages-cart--empty' }, own)
+    expect((await opened())?.tab.path).toBe(`/tasks/${t.id}/mockup?story=pages-cart--empty`)
+    await call('open_tab', { path: '/todos', split: 'below' }, own)
+    expect(await opened()).toMatchObject({ tab: { kind: 'page', path: '/todos' }, split: null, issueId: t.id }) // any page: no split from a task's agent
+    await call('open_tab', { kind: 'sketch', file: 'home.html', split: 'right' }) // the app's agent: as before, a tab of its own, split where asked
+    expect(await opened()).toMatchObject({ tab: { kind: 'sketch', file: 'home.html' }, split: 'right' })
+    const before = (await followed()).length
+    await call('update_task', { issueId: t.id, brief: 'Do it.' }, own)
+    expect((await followed()).length).toBe(before) // its own task: the person is there already
+    await call('update_task', { issueId: t.id, brief: 'Do it well.' })
+    expect((await followed()).at(-1)).toMatchObject({ tab: { path: `/tasks/${t.id}` } }) // another conversation changing it still shows
+  })
 })

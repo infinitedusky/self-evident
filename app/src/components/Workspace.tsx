@@ -261,8 +261,14 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
     if (!app) return
     const es = openEvents(`${API}/events?since=now&app=${app.id}`)
     es.addEventListener('ui.open', ((ev: MessageEvent) => {
-      const p = (JSON.parse(ev.data) as { payload?: { tab?: Tab; split?: Split | null } }).payload
-      if (p?.tab) add(p.tab, { split: p.split ?? undefined })
+      const p = (JSON.parse(ev.data) as { payload?: { tab?: Tab; split?: Split | null; issueId?: string } }).payload
+      if (!p?.tab) return
+      // A task's own agent takes the person to a page of its task: the task's tab goes there, and no tab is added or split off.
+      const api = dock.current
+      const home = p.issueId && p.tab.kind === 'page' && p.tab.path.startsWith(`/tasks/${p.issueId}`)
+        ? api?.panels.find((x) => { const t = (x.params as Params).tab; return t.kind === 'page' && t.path.startsWith(`/tasks/${p.issueId}`) }) : undefined
+      if (home) { home.api.updateParameters({ ...(home.params as Params), tab: p.tab }); home.api.setActive(); sync(); return }
+      add(p.tab, { split: p.split ?? undefined })
     }) as EventListener)
     es.addEventListener('ui.follow', ((ev: MessageEvent) => {
       const p = (JSON.parse(ev.data) as { payload?: { sessionId?: string | null; tab?: Tab; projectId?: string | null } }).payload
@@ -272,7 +278,7 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
       settle.current = setTimeout(land, SETTLE)
     }) as EventListener)
     return () => { es.close(); if (settle.current) clearTimeout(settle.current) }
-  }, [app?.id, add, land])
+  }, [app?.id, add, land, sync])
 
   const toggleAgent = useCallback(() => setAgentOpen((o) => { remember(AGENT_KEY, o ? '0' : '1'); return !o }), [])
   const toggleApps = useCallback(() => setAppsOpen((o) => { remember(APPS_KEY, o ? '0' : '1'); return !o }), [])
