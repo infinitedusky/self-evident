@@ -2139,3 +2139,13 @@ step's page once it has anything (strong when the agent says it is ready), "appr
 "ready for you" under the step in the nav and in the brief's "What it stands on". Mark done is gone from a task's
 steps. Steps already marked done on existing tasks now read "ready for you" until Sandy approves them: nothing was
 approved on Sandy's behalf.
+
+**"The mockup for RG-1 is broken"** (Sandy, 2026-11-10). The mockup was fine: the task's agent had written new Swing
+Lab stories (face-on, down the line, top, club head, skeleton, bone selected) and they render in the task's
+Storybook. The viewer was opening `mockups-swinglab--at-address`, a story id the Mockups step recorded in an earlier
+round, in another worktree, and Storybook answers a missing id with an error page. Two causes, both ours: the viewer
+trusted the recorded id, and my deploy of step approval restarted the engine while the agent was mid-mockup, so it
+never recorded the new ones. Fixed the first: the Storybook status takes the story asked for and says which one this
+Storybook can show (itself, the first of the same component, or none, `resolveStory`); the viewer shows that and
+says so in one line. Not fixed: an engine deploy still cuts a working agent off. Until it doesn't, check
+`/talks?open=1` for a busy conversation before merging an engine change.
