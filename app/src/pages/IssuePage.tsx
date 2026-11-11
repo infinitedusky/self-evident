@@ -132,7 +132,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
           </>
         )}
         {row && (
-          <StepSection subject={subject} appId={i.appId} name={i.title} row={row} base={base} fromIdea={v.fromIdea} waitingState={rows.find((r) => r.key === row.waitingOn)?.state}>
+          <StepSection subject={subject} appId={i.appId} name={i.title} row={row} base={base} fromIdea={v.fromIdea} waitingState={rows.find((r) => r.key === row.waitingOn)?.state} session={agent.session?.id}>
             {row.key === 'brief' ? <BriefStep i={i} busy={busy} act={act} feeds={rows.filter((r) => r.key !== 'brief')} base={base} /> : undefined}
           </StepSection>
         )}

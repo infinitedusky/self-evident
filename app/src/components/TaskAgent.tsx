@@ -11,7 +11,7 @@ import { AgentStrip, type AgentStripProps } from './AgentStrip'
 import { Conversation } from './Conversation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { openEvents, API, engine, type TalkSession } from '../engine'
-import { talkColor } from '../workspace'
+import { currentTalk, talkColor } from '../workspace'
 
 const OPEN_KEY = 'se.task-agent.open'
 /** Said by a page when it hands a step to the task's agent: the column opens and looks for the conversation again. */
@@ -39,6 +39,7 @@ export function useTaskAgent(taskId: string, appId: string) {
     window.addEventListener(TASK_AGENT_ASKED, asked)
     return () => { closed = true; es.close(); window.clearTimeout(timer.current); window.removeEventListener(TASK_AGENT_ASKED, asked) }
   }, [taskId, appId, show])
+  useEffect(() => { if (session?.id) currentTalk.set(session.id) }, [session?.id]) // a Sketches or Mockups tab opened from here shows this task's worktree
   const start = async () => {
     setStarting(true); setError(null)
     try { setSession(await engine.startTaskTalk(taskId)) } catch (e: any) { setError(String(e.message ?? e)) } finally { setStarting(false) }

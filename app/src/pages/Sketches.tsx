@@ -14,7 +14,7 @@ type List = Awaited<ReturnType<typeof engine.sketches>>
 const WIDTHS = [{ key: 'phone', label: 'Phone', px: 390 }, { key: 'tablet', label: 'Tablet', px: 820 }, { key: 'full', label: 'Full', px: null }] as const
 
 /** `file`: the sketch to show (else the one changed last); `session`: the conversation whose worktree to read (else the one in front). */
-export function Sketches({ file, session }: { file?: string; session?: string }) {
+export function Sketches({ file, session, embedded }: { file?: string; session?: string; /** Inside a page with its own heading: only the controls. */ embedded?: boolean }) {
   const { app } = useCurrentApp()
   const ws = useWorkspace()
   const talk = useCurrentTalk()
@@ -40,15 +40,15 @@ export function Sketches({ file, session }: { file?: string; session?: string })
   return (
     <div className="mockups sketches" data-component="Sketches">
       <div className="page-head" style={{ marginBottom: 10 }}>
-        <div>
+        {embedded ? <span /> : <div>
           <h1>✏️ Sketches{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
           <p className="muted" style={{ margin: '4px 0 0' }}>
             The first look, fast: plain HTML from <code>sketches/</code>{list?.branch && <> on <code>{list.branch}</code>{list.main ? '' : ', this conversation\'s branch'}</>}. It reloads when the file changes.
           </p>
-        </div>
+        </div>}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {shown && <div className="seg" role="group" aria-label="Width">{WIDTHS.map((w) => <button key={w.key} className={w.key === width ? 'on' : ''} onClick={() => setWidth(w.key)}>{w.label}</button>)}</div>}
-          <button className="btn quiet" onClick={() => ws?.open({ kind: 'storybook', session })}>Mockups →</button>
+          {!embedded && ws && <button className="btn quiet" onClick={() => ws.open({ kind: 'storybook', session })}>Mockups →</button>}
         </div>
       </div>
       {error && <div className="empty bad">{error}</div>}

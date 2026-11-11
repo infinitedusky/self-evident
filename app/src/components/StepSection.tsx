@@ -4,6 +4,7 @@
  * step is never a dead end. The brief's page passes its own body as children.
  */
 import { TASK_AGENT_ASKED } from './TaskAgent'
+import { Viewer, type Viewed } from './Viewer'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import Markdown from 'react-markdown'
@@ -16,13 +17,15 @@ import { useWorkspace } from '../workspace'
 
 const err = (e: any) => String(e?.message ?? e)
 
-export function StepSection({ subject, appId, name, on = 'task', row, base, fromIdea, waitingState, children }: {
+export function StepSection({ subject, appId, name, on = 'task', row, base, fromIdea, waitingState, session, children }: {
   subject: StepSubject; appId: string; name: string; on?: On; row: Row
   /** Where this thing's pages live, for the link to the step it waits on. */
   base: string
   fromIdea?: { id: string; number: number; title: string } | null
   /** The state of the step it waits on, if any. */
   waitingState?: StepState
+  /** The task's own agent, when it has one: its worktree is where the sketches and the stories are. */
+  session?: string | null
   children?: React.ReactNode
 }) {
   const ws = useWorkspace()
@@ -32,6 +35,12 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   const [asked, setAsked] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const s = row.state
+  // What there is to look at, right on the step's page: the task's sketches, its Storybook at the first story named, its prototype.
+  const proto = protos.find((p) => p.status !== 'discarded')
+  const viewed: Viewed | null = s.status === 'none' ? null
+    : row.key === 'sketch' && session ? { kind: 'sketch', session, file: work?.refs?.[0] }
+    : row.key === 'mockup' && session ? { kind: 'storybook', session, story: work?.refs?.[0] }
+    : row.key === 'prototype' && proto ? { kind: 'prototype', id: proto.id } : null
   const waitsOnApproval = row.waitingOn === 'brief' && on === 'task' && waitingState?.status === 'done'
   const own = row.key !== 'idea' && row.key !== 'brief' // the steps whose work is kept as a step
   useEffect(() => {
@@ -97,6 +106,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
         </>
       )}
       {error && <div className="empty bad" style={{ marginTop: 10 }}>{error}</div>}
+      {viewed && <Viewer tab={viewed} embedded />}
     </section>
   )
 }

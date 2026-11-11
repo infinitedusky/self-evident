@@ -14,10 +14,9 @@ import { openEvents, API, engine } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { landing, pendingOpen, tabContext, tabKey, tabTitle, talkColor, useWorkspace, WorkspaceContext, type OpenTab, type Split, type Tab, type WorkspaceApi } from '../workspace'
 import { BuildLog } from './BuildLog'
-import { Mockups } from '../pages/Mockups'
-import { Sketches } from '../pages/Sketches'
 import { PagePane } from './PagePane'
 import { PrototypePane } from './PrototypePane'
+import { Viewer } from './Viewer'
 import { AppPicker } from './AppPicker'
 import { Rail } from './Rail'
 import { contextFor, TalkDrawer } from './TalkDrawer'
@@ -98,9 +97,9 @@ function TabBody({ params, api }: IDockviewPanelProps<Params>) {
   const body = (() => {
     switch (t.kind) {
       case 'page': return <PagePane path={t.path} onNavigate={(path) => went({ kind: 'page', path })} />
-      case 'prototype': return <PrototypePane id={t.id} path={t.path} onNavigate={(path) => went({ kind: 'prototype', id: t.id, path })} />
-      case 'storybook': return <PagePane path="/mockups"><Mockups story={t.story} session={t.session} /></PagePane>
-      case 'sketch': return <PagePane path="/mockups"><Sketches file={t.file} session={t.session} /></PagePane>
+      case 'prototype': return t.id ? <Viewer tab={t} onNavigate={(path) => went({ kind: 'prototype', id: t.id, path })} /> : <PrototypePane id={t.id} path={t.path} onNavigate={(path) => went({ kind: 'prototype', id: t.id, path })} /> // one prototype detaches; the list of them is a page
+      case 'storybook': return <PagePane path="/mockups"><Viewer tab={t} /></PagePane>
+      case 'sketch': return <PagePane path="/mockups"><Viewer tab={t} /></PagePane>
       case 'build': return <BuildLog issueId={t.issueId} />
       default: return <PrototypePane /> // a tab saved before Preview became Prototypes
     }

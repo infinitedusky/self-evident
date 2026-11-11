@@ -13,7 +13,7 @@ import { useCurrentTalk } from '../workspace'
 type Status = Awaited<ReturnType<typeof engine.storybook>>
 
 /** `story`: open at this story (its id, like pages-taskpage--sub-task-building) instead of Storybook's front page; `session`: the conversation whose worktree to show (else the one in front). */
-export function Mockups({ story, session }: { story?: string; session?: string }) {
+export function Mockups({ story, session, embedded }: { story?: string; session?: string; /** Inside a page with its own heading: only the controls. */ embedded?: boolean }) {
   const { app } = useCurrentApp()
   const inFront = useCurrentTalk()
   const talk = session ?? inFront
@@ -36,7 +36,7 @@ export function Mockups({ story, session }: { story?: string; session?: string }
   return (
     <div className="mockups" data-component="Mockups">
       <div className="page-head" style={{ marginBottom: 10 }}>
-        <div>
+        <div hidden={embedded}>
           <h1>✏️ Mockups{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
           <p className="muted" style={{ margin: '4px 0 0' }}>Every page in every state, from {s?.branch ? <>the Storybook on <code>{s.branch}</code>{s.main ? '' : ', this conversation\'s branch'}</> : 'the app\'s own Storybook'}.</p>
         </div>
