@@ -2117,3 +2117,9 @@ back and forth. Then the view can be visible"). On a task's Sketches, Mockups an
 something to look at: **View** (the sketch, the story, the prototype; in front, with the height of the tab) and
 **For the brief** (what the step wrote: its status, its notes, its files, its buttons), which is what the brief
 points at. Detach sits on the row of the view's own controls. Looked at on RG-1's real sketches.
+
+**Everything around the view folds** (Sandy, 2026-11-10: "how do I get the global agent back?"; "make the left nav
+steps collapsible too"). The global agent, folded, leaves a thin strip where it was ("The agent ›") that brings it
+back; the rail's S and ⌘J still do. A task's step nav folds to a strip of icons, each still a link with its name and
+state in the tooltip, the choice remembered in the browser. With both folded and the task's agent folded, the step's
+view has the tab to itself. Story: `Components/TaskNav › Folded`. Looked at on RG-1.
