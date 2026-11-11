@@ -6,6 +6,9 @@
     "build": "pnpm --filter app build",
     "start": "pnpm --filter @self-evident/engine db:up && pnpm --filter @self-evident/engine serve",
     "test": "pnpm -r test",
+    "handoff": "doppler run --project self-evident --config dev -- pnpm --filter @self-evident/engine exec tsx src/cli/handoff.ts",
+    "leave": "pnpm handoff leave",
+    "arrive": "git pull --ff-only && pnpm install --frozen-lockfile && pnpm handoff arrive",
     "engine": "pnpm --filter @self-evident/engine",
     "app": "pnpm --filter app"
   }
