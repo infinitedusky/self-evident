@@ -131,11 +131,29 @@ const answers = (url: string) => fetch(url, { signal: AbortSignal.timeout(1500) 
 const logFile = (cwd: string) => join(tmpdir(), 'self-evident', `storybook-${portFor(cwd)}.log`)
 const logTail = async (cwd: string | null) => (cwd ? (await text(logFile(cwd))).split('\n').filter((l) => l.trim()).slice(-20).map((l) => l.slice(0, 300)) : [])
 
-export async function storybookStatus(appId: string, sessionId?: string | null) {
+/**
+ * Which story to show when one is asked for: itself when this Storybook has it; else the first story of the same
+ * component (a mockup redone under new story names keeps its component); else none, and Storybook opens at its front.
+ * A step can name a story from an earlier round in another worktree, and Storybook answers a missing id with an error
+ * page (Sandy, 2026-11-10: "the mockup for RG-1 is broken").
+ */
+export function resolveStory(asked: string, ids: string[]): { asked: string; show: string | null; missing: boolean } {
+  if (ids.includes(asked)) return { asked, show: asked, missing: false }
+  const component = asked.split('--')[0]
+  return { asked, show: ids.find((id) => id.split('--')[0] === component) ?? null, missing: true }
+}
+
+/** `story`: a story someone wants shown; the answer says which one this Storybook can show for it (resolveStory). */
+export async function storybookStatus(appId: string, sessionId?: string | null, story?: string | null) {
   const { url, cmd, cwd, branch, main } = await placeFor(appId, sessionId)
   const mine = cwd ? running.get(cwd) : undefined
   const up = url ? await answers(url) : false
-  return { url, frame: frameUrl(url), configured: !!url, startable: !!(cmd && cwd), up, startedHere: !!mine && mine.proc.exitCode === null, log: up ? [] : await logTail(cwd), branch, main }
+  let resolved: ReturnType<typeof resolveStory> | undefined
+  if (up && story) {
+    const ids = await listStories(appId, undefined, sessionId).then((l) => l.map((e) => e.id)).catch(() => null)
+    if (ids) resolved = resolveStory(story, ids) // an index that won't answer leaves the story as asked
+  }
+  return { url, frame: frameUrl(url), configured: !!url, startable: !!(cmd && cwd), up, startedHere: !!mine && mine.proc.exitCode === null, log: up ? [] : await logTail(cwd), branch, main, ...(resolved ? { story: resolved } : {}) }
 }
 
 /**

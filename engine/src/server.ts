@@ -289,7 +289,7 @@ export function buildApp(bus: EventBus) {
     return c.json(row, 201)
   })
   // ?session=: the conversation the person is in; its worktree's Storybook when it has one, else the app's.
-  api.get('/apps/:id/storybook', async (c) => { try { return c.json(await storybookStatus(c.req.param('id'), c.req.query('session'))) } catch (err) { return planError(c, err, 404) } })
+  api.get('/apps/:id/storybook', async (c) => { try { return c.json(await storybookStatus(c.req.param('id'), c.req.query('session'), c.req.query('story'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/storybook/start', async (c) => { try { return c.json(await startStorybook(c.req.param('id'), c.req.query('session'))) } catch (err) { return planError(c, err) } })
   // Sketches: the HTML files under sketches/ in a conversation's worktree (scope: its id) or the app's checkout (scope: the app's id).
   api.get('/sketches/:scope', async (c) => { try { return c.json(await listSketches(c.req.param('scope'))) } catch (err) { return planError(c, err, 404) } })
