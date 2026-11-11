@@ -8,7 +8,7 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from './db/client.js'
-import { app, idea as ideaTable, initiative, ISSUE_STATES, issue, prototype, question } from './db/schema.js'
+import { app, idea as ideaTable, initiative, ISSUE_STATES, issue, prototype, question, session } from './db/schema.js'
 import { appendEvent, eventsSince } from './events.js'
 import { addIdea, addItems, dropItem, markDuplicate, promote } from './backlog.js'
 import { createCycle, createInitiative, listCycles, listInitiatives, updateInitiative } from './goals.js'
@@ -41,6 +41,8 @@ export function engineTools(opts: ToolScope): EngineTool[] {
   const text = (v: unknown) => ({ content: [{ type: 'text' as const, text: typeof v === 'string' ? v : JSON.stringify(v, null, 2) }] })
   const tryIt = async (fn: () => Promise<unknown>) => { try { return text(await fn()) } catch (err: any) { return { ...text(`error: ${err?.message ?? err}`), isError: true } } }
   // The wall: this conversation sees and touches only its own app. Anything addressed by id is checked against it.
+  // A task's own agent (talk.ts, ensureTaskTalk): the task this conversation is the conductor of, if any.
+  const ownTask = async (): Promise<string | null> => { if (!sessionId) return null; const [s] = await db.select({ ref: session.subjectRef }).from(session).where(eq(session.id, sessionId)); return (s?.ref as { issueId?: string } | null)?.issueId ?? null }
   const foreign = () => new PlanError('that belongs to another app; this session is scoped to its own app')
   const ownProject = async (projectId: string) => { const g = await projectGraph(projectId); if (!g || g.project.appId !== appId) throw foreign(); return g }
   const ownIssue = async (issueId: string) => { const [t] = await db.select().from(issue).where(eq(issue.id, issueId)); if (!t || t.appId !== appId) throw foreign(); return t }
@@ -140,8 +142,18 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         if (kind === 'build') { if (!a.issueId) throw new PlanError('a build log needs issueId'); await ownIssue(a.issueId) }
         if (kind === 'prototype' && a.prototypeId) await ownPrototype(a.prototypeId)
         const [x] = await db.select({ workspaceId: app.workspaceId }).from(app).where(eq(app.id, appId))
+        // A task's own agent shows a sketch, a story or the prototype on that step's page of its task, where the viewer sits beside the
+        // conversation: the person is taken there, in the task's tab, and no tab is split off (Sandy, 2026-11-10: "we should go there with the agent").
+        const taskId = await ownTask()
+        const STEP_PAGE = { sketch: 'sketch', storybook: 'mockup', prototype: 'prototype' } as const
+        if (taskId && (kind === 'sketch' || kind === 'storybook' || kind === 'prototype')) {
+          const q = kind === 'sketch' && a.file ? `?file=${encodeURIComponent(a.file.replace(/^\/?sketches\//, ''))}` : kind === 'storybook' && a.story ? `?story=${encodeURIComponent(a.story)}` : ''
+          const page = { kind: 'page', path: `/tasks/${taskId}/${STEP_PAGE[kind as keyof typeof STEP_PAGE]}${q}` }
+          await db.transaction((tx) => appendEvent(tx, { workspaceId: x?.workspaceId ?? 'ws_none', appId, sessionId: sessionId ?? null, actor, type: 'ui.open', payload: { sessionId, tab: page, split: null, issueId: taskId } }))
+          return { opened: page, note: 'shown on that step\'s page of this task, beside the conversation' }
+        }
         const tab = { kind, ...(kind === 'page' ? { path: a.path } : {}), ...(kind === 'build' ? { issueId: a.issueId } : {}), ...(kind === 'storybook' && a.story ? { story: a.story } : {}), ...(kind === 'sketch' && a.file ? { file: a.file.replace(/^\/?sketches\//, '') } : {}), ...((kind === 'storybook' || kind === 'sketch') && sessionId ? { session: sessionId } : {}), ...(kind === 'prototype' && a.prototypeId ? { prototypeId: a.prototypeId } : {}) }
-        await db.transaction((tx) => appendEvent(tx, { workspaceId: x?.workspaceId ?? 'ws_none', appId, sessionId: sessionId ?? null, actor, type: 'ui.open', payload: { sessionId, tab, split: a.split ?? null } }))
+        await db.transaction((tx) => appendEvent(tx, { workspaceId: x?.workspaceId ?? 'ws_none', appId, sessionId: sessionId ?? null, actor, type: 'ui.open', payload: { sessionId, tab, split: taskId ? null : a.split ?? null, ...(taskId ? { issueId: taskId } : {}) } }))
         return { opened: tab, note: 'shown in the person\'s workspace if Self Evident is open' }
       })),
       def('stories', 'This app\'s Storybook stories, from the Storybook of this conversation\'s worktree when it has one (so a story you just wrote is there), else the app\'s: id (open one with open_tab kind storybook), title (the page or component) and name (the state). match narrows by id, title or name.', { match: z.string().optional() },
