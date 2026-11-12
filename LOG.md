@@ -2422,3 +2422,9 @@ in (nothing re-reads it until it is brought in again). Code: `engine/src/linear-
 source `linear`), `app/src/components/LinearImport.tsx`. Tests: `linear-import.test.ts`, against a stand-in for
 Linear; stories `Components/LinearImport` and `Pages/Tasks › With Linear` (a made-up team). Not tried: the real
 Linear API, which needs a key in the engine's environment.
+
+**From Linear is beside New task too** (Sandy, the same day: "I don't see the ticket option in the new task").
+The panel was only on the Tasks page, one click from where a task is made. Plan's header now has From Linear next
+to New task, for an app whose Linear team is set; it opens the same panel on the tickets. Tried against the real
+Linear API that day: the team's open tickets were read with a personal key in the engine's environment. Story:
+`Pages/PlanHome › From Linear`.
