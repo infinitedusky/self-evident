@@ -5,6 +5,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { Assets } from '../components/Assets'
 import { Badge, type Tone } from '../components/Badge'
 import { PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
 import { Brief } from '../components/Brief'
@@ -76,6 +77,8 @@ export function ProjectPage() {
       </div>
 
       <StepsPanel subject={{ kind: 'projects', id: graph.project.id }} appId={graph.app.id} name={graph.project.name} />
+
+      <Assets appId={graph.app.id} projectId={graph.project.id} />
 
       <BacklogPanel graph={graph} busy={busy} act={act} />
 

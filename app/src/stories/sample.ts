@@ -6,6 +6,7 @@
 import type { StepState, Workflow } from '@self-evident/engine/steps'
 import type { Plan } from '../pages/PlanHome'
 import type {
+  Asset,
   Folder,
   LinearTicket,
   App, AppSettings, BacklogIssue, Cycle, Decision, Event, FactorySettings, Graph, GraphIssue, GraphSubIssue, IdeaRow, Initiative, Issue,
@@ -35,6 +36,12 @@ export const linearTickets: LinearTicket[] = [
   linearTicket(38, 'Order confirmation email', { task: { id: 'iss_sample20', identifier: 'SS-20' } }),
   linearTicket(44, 'Gift wrap option', { assignee: null, mine: false, project: null, state: { name: 'Backlog', type: 'backlog' }, priority: 0 }),
   linearTicket(45, 'Faster search results', { assignee: 'Made-up Teammate', mine: false, project: 'Search', priority: 3 }),
+]
+/** Made-up assets: two the sample app is worked from (a link and a file on this computer), one that is the checkout project's own. */
+export const assets: Asset[] = [
+  { id: 'asset_sample1', appId: 'app_sample', projectId: null, name: 'Designs (sample)', location: 'https://example.com/design/sample-shop', note: 'every screen, kept by design' },
+  { id: 'asset_sample2', appId: 'app_sample', projectId: null, name: 'Architecture (sample)', location: '/code/sample-shop/docs/architecture.md', note: null },
+  { id: 'asset_sample3', appId: 'app_sample', projectId: 'proj_checkout', name: 'Checkout requirements (sample)', location: 'https://example.com/docs/checkout', note: 'what it must do, and the order to build it in' },
 ]
 /** A made-up folder holding three checkouts, as the folder chooser reports it: the shop's frontend (already the app's), its backend, and one with no remote. */
 export const folder: Folder = { path: '/code', repos: [

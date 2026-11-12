@@ -392,3 +392,12 @@ export const stepWork = pgTable('step_work', {
 }, (t) => [index('step_work_app').on(t.appId), inList('step_work_status', t.status, STEP_STATUSES),
   uniqueIndex('step_work_idea_key').on(t.ideaId, t.key), uniqueIndex('step_work_issue_key').on(t.issueId, t.key), uniqueIndex('step_work_project_key').on(t.projectId, t.key),
   check('step_work_one_subject', sql`num_nonnulls(${t.ideaId}, ${t.issueId}, ${t.projectId}) = 1`)])
+
+// What an app or one of its projects is worked from: the design file, the requirements document, the build order, a
+// diagram. A name, where it is (a link, or a path on this computer), and a line on what it is. A project's assets are
+// the app's plus its own (assets.ts).
+export const asset = pgTable('asset', {
+  id: id(), appId: appId(), projectId: text('project_id').references(() => project.id), // null: the app's
+  name: text('name').notNull(), location: text('location').notNull(), note: text('note'),
+  sortOrder: integer('sort_order').notNull().default(0), createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [index('asset_app').on(t.appId, t.projectId)])

@@ -109,6 +109,8 @@ export interface Repo { id: string; appId: string; fullName: string; localPath: 
 /** One of the person's repositories on GitHub, as gh lists them; `problem` is why there is no list (gh missing, signed out). */
 export interface GitHubRepo { fullName: string; defaultBranch: string; private: boolean }
 export interface GitHubRepos { repos: GitHubRepo[]; problem: string | null }
+/** Something an app or a project is worked from: a name, where it is (a link, or a path on this computer) and a line on what it is. */
+export interface Asset { id: string; appId: string; projectId: string | null; name: string; location: string; note: string | null }
 /** A ticket of the app's Linear team, as the engine lists it for bringing in; `task` is the task it already is here. */
 export interface LinearTicket {
   id: string; identifier: string; title: string; url: string; branchName: string | null; priority: number
@@ -282,6 +284,10 @@ export const engine = {
   /** The open tickets of the app's Linear team (Integrations › Linear). Reads Linear; nothing is written there. */
   linearTickets: (appId: string, scope: LinearScope) => call<{ team: string; tickets: LinearTicket[] }>('GET', `/apps/${appId}/linear/tickets?scope=${scope}`),
   importLinear: (appId: string, identifiers: string[]) => call<LinearImported>('POST', `/apps/${appId}/linear/import`, { identifiers }),
+  /** The app's assets, or with a project that project's own. Every conversation there is told them. */
+  assets: (appId: string, projectId?: string) => call<Asset[]>('GET', `/apps/${appId}/assets${projectId ? `?project=${projectId}` : ''}`),
+  addAsset: (body: { appId: string; projectId?: string; name: string; location: string; note?: string }) => call<Asset>('POST', '/assets', body),
+  removeAsset: (id: string) => call<{ removed: string }>('DELETE', `/assets/${id}`),
   deleteRepo: (id: string) => call<{ removed: string }>('DELETE', `/repos/${id}`),
   /** Opens the folder dialog on the engine's computer (or scans `path`) and says which repositories are there. */
   chooseFolder: (path?: string) => call<Folder>('POST', '/folders/choose', path ? { path } : {}),

@@ -41,6 +41,7 @@ import { runner } from './runner.js'
 import { homeRepo, inOrder } from './workbench.js'
 import { chooseFolder } from './folders.js'
 import { deleteIssue } from './delete-issue.js'
+import { addAsset, listAssets, removeAsset, updateAsset } from './assets.js'
 import { importTickets, linearTickets, type Scope } from './linear-import.js'
 import { outsidePr, pr as prRows } from './db/schema.js'
 import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, setupIntegration, statuses, type Local, type Values } from './integrations.js'
@@ -65,7 +66,7 @@ export function buildApp(bus: EventBus) {
     routes: {
       'GET /health': 'database reachable?',
       'POST /workspaces': '{name}', 'POST /apps': '{workspaceId, name, key?, defaultBranch?, setup?}', 'POST /repos': '{appId, fullName, localPath?, baseBranch?}',
-      'GET /apps': 'all apps, each with its repos', 'PATCH /apps/:id': '{name?, defaultBranch?, setup?}', 'PATCH /repos/:id': '{fullName?, localPath?, baseBranch?}', 'DELETE /repos/:id': 'the repository leaves the app', 'GET /apps/:id/linear/tickets?scope=mine|unassigned|all': 'the Linear team\'s open tickets, each with the task it already is here', 'POST /apps/:id/linear/import': '{identifiers: ["ENG-12"]} → {made, updated, missing}', 'POST /folders/choose': '{path?} → {path, repos: [{name, path, fullName, branch}]}; no path opens the folder dialog', 'GET /workspaces': 'all workspaces',
+      'GET /apps': 'all apps, each with its repos', 'PATCH /apps/:id': '{name?, defaultBranch?, setup?}', 'PATCH /repos/:id': '{fullName?, localPath?, baseBranch?}', 'DELETE /repos/:id': 'the repository leaves the app', 'GET /apps/:id/linear/tickets?scope=mine|unassigned|all': 'the Linear team\'s open tickets, each with the task it already is here', 'POST /apps/:id/linear/import': '{identifiers: ["ENG-12"]} → {made, updated, missing}', 'GET /apps/:id/assets?project=': 'the app\'s assets, or one project\'s own', 'POST /assets': '{appId, projectId?, name, location, note?}', 'PATCH /assets/:id': '{name?, location?, note?}', 'DELETE /assets/:id': 'removes it',  'POST /folders/choose': '{path?} → {path, repos: [{name, path, fullName, branch}]}; no path opens the folder dialog', 'GET /workspaces': 'all workspaces',
       'GET /apps/:id/graph': 'the top-level graph: every sub-task of every project in the app', 'GET /now': 'the front door: running, needs you, recent',
       'POST /projects': '{appId, name, content?, description?, ideaId?, issues: [{title, description?, brief?, subIssues?: [{key, title, brief?, dependsOn?, files?}]}]}',
       'GET /projects?app=': 'the app\'s projects with counts', 'GET /projects/:id/graph': 'tasks in order, sub-tasks with builds, edges, claims, held reasons, last run, steps, the PR, backlog, to-dos',
@@ -358,6 +359,11 @@ export function buildApp(bus: EventBus) {
     const body = await c.req.json<{ identifiers?: string[] }>().catch(() => ({} as { identifiers?: string[] }))
     try { return c.json(await importTickets(c.req.param('id'), body.identifiers ?? []), 201) } catch (err) { return planError(c, err) }
   })
+  // Assets (assets.ts): what an app or a project is worked from. A name, a link or path, a note.
+  api.get('/apps/:id/assets', async (c) => c.json(await listAssets(c.req.param('id'), c.req.query('project') || null)))
+  api.post('/assets', async (c) => { try { return c.json(await addAsset(await c.req.json()), 201) } catch (err) { return planError(c, err) } })
+  api.patch('/assets/:id', async (c) => { try { return c.json(await updateAsset(c.req.param('id'), await c.req.json())) } catch (err) { return planError(c, err, 404) } })
+  api.delete('/assets/:id', async (c) => { try { return c.json(await removeAsset(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   // A folder on this computer and the repositories in it: the one named, or the one picked in the system's folder dialog (folders.ts).
   api.post('/folders/choose', async (c) => {
     const body = await c.req.json<{ path?: string }>().catch(() => ({} as { path?: string }))

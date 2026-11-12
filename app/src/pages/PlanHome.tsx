@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { LinearImport } from '../components/LinearImport'
+import { Assets } from '../components/Assets'
 import { Badge } from '../components/Badge'
 import { RulesPicker } from '../components/RulesPicker'
 import { STEPS, type StepKey, type StepState, type Workflow } from '@self-evident/engine/steps'
@@ -105,6 +106,8 @@ export function PlanHome({ plan, app, appId, onNewTask, linearTeam }: { plan: Pl
           </Link>
         ))}
       </div>
+
+      {appId && <Assets appId={appId} />}
 
       {plan.projects.map((p) => (
         <section key={p.id} className="panel">
