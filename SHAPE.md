@@ -591,7 +591,9 @@ Details and sources in `research/`.
 - **Moving between Macs is two commands** (Sandy, 2026-11-11: "a command to sync everything"): `pnpm leave` on one,
   `pnpm arrive` on the other. Data is in the database, settings in Doppler, a worktree's work in the app's GitHub
   repository, histories in a private state repository, which also says which Mac holds the engine: one at a time,
-  enforced. Nothing is copied by hand (LOG.md, "Moving between Macs is two commands").
+  enforced. Nothing is copied by hand (LOG.md, "Moving between Macs is two commands"). Two computers share a folder
+  layout under a root, not a user name: each registers its name, user and root, and the database stores paths from
+  the root (Sandy, 2026-11-12; LOG.md, "A computer registers its root").
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
