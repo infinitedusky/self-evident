@@ -1,7 +1,7 @@
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--ground); color: var(--ink); font: 15px/1.55 var(--sans); }
+body { margin: 0; background: var(--ground); color: var(--ink); font: 15px/1.6 var(--sans); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
 a { color: inherit; }
-h1, h2, h3 { font-family: var(--display); margin: 0; letter-spacing: -0.01em; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; margin: 0; letter-spacing: -0.012em; }
 h1 { font-size: 26px; } h2 { font-size: 18px; } h3 { font-size: 15px; }
 .muted { color: var(--ink-soft); } .faint { color: var(--ink-faint); }
 .mono { font-family: var(--mono); font-size: 12px; }
@@ -209,23 +209,25 @@ select, input { color-scheme: light dark; }
 .talk-drawer-head strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 /* Briefs: the description reads first; the builder's Markdown folds under it */
-.brief-lead { margin: 0 0 6px; font-size: 15px; line-height: 1.5; color: var(--ink); }
+.brief-lead { margin: 0 0 6px; font-size: 15px; line-height: 1.6; color: var(--ink); }
 .brief-block details summary { cursor: pointer; font-size: 13px; margin: 2px 0 4px; }
 /* Md: text someone wrote, as Markdown, at the size and colour of where it is put. */
 .md-text { overflow-wrap: anywhere; }
 .md-text > :first-child { margin-top: 0; } .md-text > :last-child { margin-bottom: 0; }
-.md-text p { margin: 0 0 .6em; }
-.md-text h1, .md-text h2, .md-text h3, .md-text h4 { font-size: 1em; font-weight: 700; margin: 1em 0 .35em; color: var(--ink); text-transform: none; letter-spacing: 0; }
-.md-text h1, .md-text h2 { font-size: 1.08em; }
-.md-text ol, .md-text ul { margin: 0 0 .6em; padding-left: 1.5em; } .md-text li { margin: .15em 0; } .md-text li > p { margin: 0; }
-.md-text code { font: .9em var(--mono); background: var(--ground); padding: 1px 4px; border-radius: 4px; }
-.md-text pre { background: var(--ground); padding: 8px 10px; border-radius: 8px; overflow: auto; } .md-text pre code { background: none; padding: 0; }
+.md-text { line-height: 1.6; }
+.md-text p { margin: 0 0 .8em; }
+.md-text a { color: var(--link); text-decoration: none; } .md-text a:hover { text-decoration: underline; }
+.md-text h1, .md-text h2, .md-text h3, .md-text h4 { font-size: 1em; font-weight: 600; margin: 1.5em 0 .5em; color: var(--ink); text-transform: none; letter-spacing: -0.012em; line-height: 1.35; }
+.md-text h1 { font-size: 1.4em; } .md-text h2 { font-size: 1.27em; } .md-text h3 { font-size: 1.1em; }
+.md-text ol, .md-text ul { margin: 0 0 .8em; padding-left: 1.6em; } .md-text li { margin: .4em 0; } .md-text li > p { margin: 0; } .md-text li > ul, .md-text li > ol { margin: .3em 0 0; } .md-text strong { font-weight: 600; }
+.md-text code { font: .87em var(--mono); background: var(--ground); border: 1px solid var(--line); padding: 1px 4px; border-radius: 4px; }
+.md-text pre { background: var(--ground); padding: 8px 10px; border-radius: 8px; overflow: auto; } .md-text pre code { background: none; border: 0; padding: 0; }
 .md-text blockquote { margin: 0 0 .6em; padding-left: 10px; border-left: 3px solid var(--line); color: var(--ink-faint); }
 .md-text table { border-collapse: collapse; margin: 0 0 .6em; display: block; overflow-x: auto; } .md-text th, .md-text td { border: 1px solid var(--line); padding: 3px 8px; text-align: left; }
 .md-text hr { border: 0; border-top: 1px solid var(--line); margin: .8em 0; }
 .md-text img { max-width: 100%; }
-.md-clamp { max-height: calc(var(--md-lines, 3) * 1.5em); line-height: 1.5; overflow: hidden; }
-.md-clamp h1, .md-clamp h2, .md-clamp h3, .md-clamp h4 { font-size: 1em; margin: 0; } .md-clamp p, .md-clamp ol, .md-clamp ul, .md-clamp table { margin-bottom: 0; }
+.md-clamp { max-height: calc(var(--md-lines, 3) * 1.5em); line-height: 1.5; overflow: hidden; } .md-clamp a { color: inherit; }
+.md-clamp h1, .md-clamp h2, .md-clamp h3, .md-clamp h4 { font-size: 1em; margin: 0; line-height: 1.5; } .md-clamp li { margin: 0; } .md-clamp p, .md-clamp ol, .md-clamp ul, .md-clamp table { margin-bottom: 0; }
 .md-inline { display: inline; }
 .md { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); max-height: 420px; overflow: auto; padding-right: 6px; }
 .md p { margin: 0 0 8px; } .md h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); margin: 12px 0 6px; }
