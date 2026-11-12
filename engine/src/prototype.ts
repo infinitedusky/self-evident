@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import { and, desc, eq, ne } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, prototype, repo } from './db/schema.js'
+import { homeRepo } from './workbench.js'
 import { appendEvent } from './events.js'
 import { addWorktree, git, removeWorktree } from './git.js'
 import { newId } from './ids.js'
@@ -25,7 +26,7 @@ const alive = (id: string) => { const m = running.get(id); return !!m && m.proc.
 async function setupOf(appId: string) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError(`no app ${appId}`)
-  const [r] = await db.select().from(repo).where(eq(repo.appId, appId))
+  const r = await homeRepo(appId)
   const s = (a.setup ?? {}) as { prototype_cmd?: string; prototype_db?: PrototypeDb }
   return { a, repoPath: r?.localPath ?? null, cmd: s.prototype_cmd?.trim() || null, dbCfg: s.prototype_db?.url ? s.prototype_db : null }
 }

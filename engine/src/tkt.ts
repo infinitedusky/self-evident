@@ -19,6 +19,7 @@ import { promisify } from 'node:util'
 import { eq } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, repo } from './db/schema.js'
+import { homeRepo } from './workbench.js'
 import type { Values } from './integrations.js'
 import { FILL, houseConfig, OWNED, repoFacts, section, writeHouse } from './lifecycle.js'
 import { stateRoles, ticketKey, type LinearHome } from './linear-home.js'
@@ -59,7 +60,7 @@ export const urls = () => ({ engineUrl: `http://localhost:${Number(process.env.P
 export async function contextFor(appId: string): Promise<TktContext | null> {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) return null
-  const [r] = await db.select().from(repo).where(eq(repo.appId, appId))
+  const r = await homeRepo(appId)
   return { app: { id: a.id, key: a.key, name: a.name, defaultBranch: a.defaultBranch ?? undefined }, repoPath: r?.localPath ?? null, ...urls() }
 }
 /** Runs a command; stubbed in tests. Rejects as execFile does, with `code` ENOENT when the program is not there. */

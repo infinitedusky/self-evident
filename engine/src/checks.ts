@@ -14,6 +14,7 @@
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, issue, prototype, repo, session, sessionMessage } from './db/schema.js'
+import { homeRepo } from './workbench.js'
 import { withLock } from './landing.js'
 import { CHECKS, step, type StepKey } from './steps.js'
 import { checkTalks, onTurnEnd, say, startCheckTalk, taskTalk, type SubjectRef } from './talk.js'
@@ -102,7 +103,7 @@ export async function advanceChecks(issueId: string): Promise<ReturnType<typeof 
     })
     if (move.do === 'nothing') return move
     const [a] = await db.select().from(app).where(eq(app.id, t.appId))
-    const [r] = await db.select().from(repo).where(eq(repo.appId, t.appId))
+    const r = await homeRepo(t.appId)
     const done = rows.filter((x) => x.state.status === 'done').map((x) => x.key)
     const facts: CheckFacts = { identifier: `${a.key}-${t.number}`, title: t.title, issueId, base: a.defaultBranch, prototype: p ? { path: p.path, branch: p.branch, title: p.title } : null, before: done }
     if (move.do === 'run') {

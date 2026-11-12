@@ -18,6 +18,7 @@ import { withLock } from './landing.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { referenceHolding, referencePrompt, referencesOf, refusal } from './references.js'
+import { addMates, homeRepo, mateHolding, matePrompt, matesOf, removeMates } from './workbench.js'
 import { EDIT_TOOLS, rank, riskOf, type Risk } from './risk.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { engineTools } from './tools.js'
@@ -144,11 +145,11 @@ async function subjectFrom(ref?: SubjectRef): Promise<{ subject: string | null; 
   return { subject: null, subjectRef: ref?.path ? { path: ref.path } : null }
 }
 
-/** A conversation gets its own worktree of the app's repo, on its own branch, so its edits are cheap and a PR is the natural end. */
+/** A conversation gets its own worktree of each of the app's repos, on its own branch, so its edits are cheap and a PR is the natural end. */
 export async function startTalk(input: { appId: string; subjectRef?: SubjectRef; actor?: string }) {
   const [a] = await db.select().from(app).where(eq(app.id, input.appId))
   if (!a) throw new PlanError(`no app ${input.appId}`)
-  const [r] = await db.select().from(repo).where(eq(repo.appId, input.appId))
+  const r = await homeRepo(input.appId)
   if (!r?.localPath) throw new PlanError(`${a.name} has no local checkout yet; add its repo in Settings`)
   const problem = await checkoutProblem(r.localPath)
   if (problem) throw new PlanError(`${problem} Save it under Settings › Repo and Self Evident sets it up.`)
@@ -161,6 +162,8 @@ export async function startTalk(input: { appId: string; subjectRef?: SubjectRef;
     const base = (await git(r.localPath!, ['rev-parse', '--verify', '--quiet', `origin/${a.defaultBranch}`], { allowFail: true })).code === 0 ? `origin/${a.defaultBranch}` : a.defaultBranch
     await addWorktree(r.localPath!, worktreePath, branch, base)
   })
+  const { left } = await addMates(a.id, worktreePath, branch) // the app's other repositories, on the same branch (workbench.ts)
+  for (const l of left) console.log(`[workbench] ${a.name}: no worktree in ${l}`)
   const { subject, subjectRef } = await subjectFrom(input.subjectRef)
   const [row] = await db.insert(session).values({
     id, appId: a.id, kind: 'talk', cwd: worktreePath, branch, worktreePath, subject, subjectRef, createdBy: input.actor ?? 'user', lastActiveAt: new Date(),
@@ -391,16 +394,17 @@ async function open(sessionId: string): Promise<Live> {
   const [ownTask] = ownTaskId ? await db.select().from(issue).where(eq(issue.id, ownTaskId)) : []
   const check = (s.subjectRef as SubjectRef | null)?.check
   const refs = await referencesOf(s.appId)
+  const mates = await matesOf(s.appId, s.worktreePath)
   const q = query({
     prompt: input.it,
     options: {
       cwd: s.cwd!,
-      ...(refs.length ? { additionalDirectories: refs.map((r) => r.path) } : {}),
+      ...(refs.length || mates.length ? { additionalDirectories: [...mates.map((m) => m.path), ...refs.map((r) => r.path)] } : {}),
       ...(proto ? { env: { ...process.env, ...(await prototypeEnv(proto)) } } : {}),
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : check ? checkPrompt(check, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') + referencePrompt(refs) },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : check ? checkPrompt(check, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') + matePrompt(mates, s.branch) + referencePrompt(refs) },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...(check ? CHECK_TOOLS : ASK_TOOLS)],
@@ -412,8 +416,9 @@ async function open(sessionId: string): Promise<Live> {
         const input = (h.tool_input ?? {}) as Record<string, unknown>
         const ref = EDIT_TOOLS.has(h.tool_name) ? referenceHolding(refs, entry.cwd, input.file_path ?? input.notebook_path) : null
         if (ref) return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: refusal(ref) } } // not asked: a reference is never changed from here
-        const branch = ASK_TOOLS.includes(h.tool_name) ? await branchOf(entry.cwd) : undefined
-        const { risk, why } = riskOf(h.tool_name, input, { cwd: entry.cwd, branch })
+        const at = (EDIT_TOOLS.has(h.tool_name) ? mateHolding(mates, entry.cwd, input.file_path ?? input.notebook_path)?.path : null) ?? entry.cwd // an edit in another of the app's repos is rated by that worktree and its branch
+        const branch = ASK_TOOLS.includes(h.tool_name) ? await branchOf(at) : undefined
+        const { risk, why } = riskOf(h.tool_name, input, { cwd: at, branch })
         const auto = risk === 'free' || entry.always.has(h.tool_name) || (risk !== 'expensive' && rank(risk) <= rank(entry.autoApprove))
         if (auto) {
           if (risk !== 'free') await record(sessionId, 'engine', 'auto', `${h.tool_name} · ${risk}`, { tool: h.tool_name, risk, why, input: summariseInput(h.tool_name, input) })
@@ -568,9 +573,10 @@ export async function endTalk(sessionId: string) {
   if (l) { l.close(); await l.q.interrupt().catch(() => {}); live.delete(sessionId) }
   const [s] = await db.select().from(session).where(eq(session.id, sessionId))
   let branchKept: string | null = null
+  const keptIn: string[] = [] // the repositories whose branch has commits, so was kept
   if (s?.worktreePath && s.appId) {
     const [a] = await db.select().from(app).where(eq(app.id, s.appId))
-    const [r] = await db.select().from(repo).where(eq(repo.appId, s.appId))
+    const r = await homeRepo(s.appId)
     await stopStorybookAt(s.worktreePath) // its own Storybook, if one was started there
     if (r?.localPath) await withLock(`git:${r.localPath}`, async () => {
       await removeWorktree(r.localPath!, s.worktreePath!)
@@ -579,12 +585,13 @@ export async function endTalk(sessionId: string) {
         const base = (await git(r.localPath!, ['rev-parse', '--verify', '--quiet', `origin/${def}`], { allowFail: true })).code === 0 ? `origin/${def}` : def // the same base it was cut from
         const ahead = await git(r.localPath!, ['rev-list', '--count', `${base}..${s.branch}`], { allowFail: true })
         if (ahead.code === 0 && Number(ahead.stdout) === 0) await git(r.localPath!, ['branch', '-D', s.branch], { allowFail: true })
-        else branchKept = s.branch
+        else { branchKept = s.branch; keptIn.push(r.fullName.split('/').pop() ?? r.fullName) }
       }
     })
+    for (const k of await removeMates(s.appId, s.worktreePath, s.branch)) { branchKept = k.branch; keptIn.push(k.name) } // the app's other repositories
   }
   await db.update(session).set({ status: 'ended' }).where(eq(session.id, sessionId))
-  return { ended: true, branchKept }
+  return { ended: true, branchKept, keptIn }
 }
 
 /** On shutdown: close the live conversations; they resume from their SDK session ids on the next message. */

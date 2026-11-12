@@ -13,6 +13,7 @@ import { extname, join, resolve, sep } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, repo, session } from './db/schema.js'
+import { homeRepo } from './workbench.js'
 import { PlanError } from './projects.js'
 
 export const SKETCH_DIR = 'sketches'
@@ -31,7 +32,7 @@ export async function placeOf(scope: string): Promise<Place> {
   }
   const [a] = await db.select().from(app).where(eq(app.id, scope))
   if (!a) throw new PlanError(`no app ${scope}`)
-  const [r] = await db.select().from(repo).where(eq(repo.appId, a.id))
+  const r = await homeRepo(a.id)
   return { appId: a.id, root: r?.localPath ?? null, branch: a.defaultBranch ?? 'main', main: true }
 }
 

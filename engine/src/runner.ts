@@ -7,6 +7,7 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import { join } from 'node:path'
 import { db } from './db/client.js'
 import { app, build, event, issue, project, pr as prTable, repo, run, step } from './db/schema.js'
+import { homeRepo } from './workbench.js'
 import { appendEvent, type NewEvent } from './events.js'
 import { addItems, laterFrom } from './backlog.js'
 import { runTask, type Execute } from './executor.js'
@@ -420,7 +421,7 @@ export class Runner {
     const [p] = await db.select().from(project).where(eq(project.id, projectId))
     if (!p) throw new PlanError(`no project ${projectId}`)
     const [a] = await db.select().from(app).where(eq(app.id, p.appId))
-    const [r] = await db.select().from(repo).where(eq(repo.appId, a.id))
+    const r = await homeRepo(a.id)
     const base: Omit<NewEvent, 'type'> = { workspaceId: a.workspaceId, appId: a.id, projectId, actor: 'engine' }
     return { p, a, r: r?.localPath ? r : null, base }
   }

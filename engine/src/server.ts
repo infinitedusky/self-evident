@@ -38,6 +38,7 @@ import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, 
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { runner } from './runner.js'
+import { inOrder } from './workbench.js'
 import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, setupIntegration, statuses, type Local, type Values } from './integrations.js'
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
 import { linearFor } from './linear-home.js'
@@ -109,7 +110,7 @@ export function buildApp(bus: EventBus) {
   // Apps carry their repos; setup is the whole object (test_cmd, model, max_budget_usd, max_turns, …).
   api.get('/apps', async (c) => {
     const [apps, repos] = await Promise.all([db.select().from(appTable), db.select().from(repoTable)])
-    return c.json(apps.map((a) => ({ ...a, repos: repos.filter((r) => r.appId === a.id) })))
+    return c.json(apps.map((a) => ({ ...a, repos: inOrder(repos.filter((r) => r.appId === a.id), a.setup) }))) // home first (workbench.ts)
   })
   // Settings: the workspace's integrations, plugins and the jobs their skills cover; an app's own view is the merge,
   // plus its repo's skills.

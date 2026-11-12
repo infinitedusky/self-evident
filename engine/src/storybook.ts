@@ -16,6 +16,7 @@ import { promisify } from 'node:util'
 import { eq, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, repo, session } from './db/schema.js'
+import { homeRepo } from './workbench.js'
 import { git } from './git.js'
 import { remoteAndBase } from './lifecycle.js'
 import { PlanError } from './projects.js'
@@ -82,7 +83,7 @@ export async function migrateStorybookSetup(): Promise<number> {
 async function setupOf(appId: string) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError(`no app ${appId}`)
-  const [r] = await db.select().from(repo).where(eq(repo.appId, appId))
+  const r = await homeRepo(appId)
   const { url, cmd } = await storybookValues(a.setup, r?.localPath ?? null)
   return { a, cwd: r?.localPath ?? null, url, cmd }
 }
