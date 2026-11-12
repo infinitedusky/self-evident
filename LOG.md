@@ -2471,3 +2471,25 @@ been. Decided:
 Code: `engine/src/delete-issue.ts` (`DELETE /issues/:id`), the button in `app/src/pages/IssuePage.tsx`. Tests:
 `delete-issue.test.ts`; stories `Pages/TaskPage › Delete Refused` and `Delete Declined`. Not built: deleting
 from the Tasks list, or several at once.
+
+## Assets: what an app or a project is worked from (Sandy, 2026-11-12: "I would like a place to put like project or app level assets")
+
+A task's steps leave their own assets (a sketch, a story, a prototype, an ADR), and nothing held what belongs to no
+one task: the design file, the requirements document, the build order, an architecture diagram. They were said
+again in each conversation. Decided, with Sandy:
+
+- **An asset is a name, where it is, and a line on what it is.** Where it is: a link, or a path on this computer.
+  Self Evident keeps the pointer, never a copy.
+- **An app has assets; a project has its own on top.** The app's are on Plan, a project's on its page. Add and
+  remove there.
+- **Every conversation is told them:** the app's always, and the project's when the conversation is about that
+  project or a task in it (`assetPrompt`, beside the reference apps). The agent is told to read the one a question
+  turns on, and to say so when a link needs a sign-in it does not have.
+
+Also said that day, and already there: a task has two kinds, code (a brief, built by agents, a pull request) and
+to-do (work outside the code, a checklist and notes). Setting up a development environment is a to-do.
+
+Code: `engine/src/assets.ts`, the table `asset` (migration `0014_asset`), `app/src/components/Assets.tsx`. Tests:
+`assets.test.ts`; stories `Components/Assets`. Not built: editing one in place (remove it and add it again);
+ordering them by hand; the planner and the builder being told (conversations and a task's own agent are); the
+agent adding one itself; a file kept by Self Evident instead of pointed at.

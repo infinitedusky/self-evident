@@ -131,6 +131,7 @@ committed event as it happens, via Postgres `LISTEN/NOTIFY`. Several clients can
 | `src/machine.ts`, `src/db/home-path.ts` | Each computer registers its name, user and root; path columns are stored from the root (`~/…`) and read back under this computer's. |
 | `src/references.ts` | Reference apps: other apps whose checkout an app's agents may read and never change. |
 | `src/linear-import.ts` | Tasks from Linear tickets: the app's team's open tickets, and bringing the ticked ones in. Reads Linear, never writes. |
+| `src/assets.ts` | Assets: what an app or a project is worked from (a name, a link or path, a note), and what a conversation is told of them. |
 | `src/delete-issue.ts` | Deleting a task with no work on it, with its sub-tasks; one with work is refused (cancel it). |
 | `src/folders.ts` | Choosing an app's repositories by folder: the system's folder dialog, and the git repositories in the folder picked. |
 | `src/workbench.ts` | An app's repositories: which is home, and a piece of work's worktree in each of the others. |

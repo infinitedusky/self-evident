@@ -18,6 +18,7 @@ import { withLock } from './landing.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { referenceHolding, referencePrompt, referencesOf, refusal } from './references.js'
+import { assetPrompt, assetsFor } from './assets.js'
 import { addMates, homeRepo, mateHolding, matePrompt, matesOf, removeMates } from './workbench.js'
 import { EDIT_TOOLS, rank, riskOf, type Risk } from './risk.js'
 import { holdMinutes, isOutage } from './outage.js'
@@ -395,6 +396,7 @@ async function open(sessionId: string): Promise<Live> {
   const check = (s.subjectRef as SubjectRef | null)?.check
   const refs = await referencesOf(s.appId)
   const mates = await matesOf(s.appId, s.worktreePath)
+  const assets = await assetsFor(s.appId, (s.subjectRef as SubjectRef | null)?.projectId ?? ownTask?.projectId) // the app's, and the project's when it is about one
   const q = query({
     prompt: input.it,
     options: {
@@ -404,7 +406,7 @@ async function open(sessionId: string): Promise<Live> {
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : check ? checkPrompt(check, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') + matePrompt(mates, s.branch) + referencePrompt(refs) },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : check ? checkPrompt(check, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...(check ? CHECK_TOOLS : ASK_TOOLS)],
