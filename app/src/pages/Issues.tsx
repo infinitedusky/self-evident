@@ -9,6 +9,7 @@ import { Badge, type Tone } from '../components/Badge'
 import { LinearImport } from '../components/LinearImport'
 import { engine, STATE_LABEL, type IssueRow, type ProjectSummary } from '../engine'
 import { useCurrentApp } from '../current-app'
+import { Md } from '../components/Md'
 
 export function standing(t: IssueRow): { label: string; tone: Tone } {
   const total = Object.values(t.builds).reduce((a, b) => a + b, 0)
@@ -53,7 +54,7 @@ export function Issues() {
               <li key={t.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center' }}>
                 <div>
                   <Link to={`/tasks/${t.id}`} style={{ fontWeight: 600, textDecoration: 'none' }}><span className="mono faint">{t.identifier}</span> {t.title}</Link>
-                  {t.description && <div className="muted" style={{ fontSize: 14, margin: '2px 0' }}>{t.description}</div>}
+                  {t.description && <div className="muted" style={{ fontSize: 14, margin: '2px 0' }}><Md text={t.description} clamp={3} /></div>}
                 </div>
                 {targets.length > 0 && (
                   <select disabled={busy === t.id} value="" onChange={(e) => e.target.value && act(t.id, () => engine.updateIssue(t.id, { projectId: e.target.value }))} aria-label={`Add ${t.identifier} to a project`}>
@@ -72,7 +73,7 @@ export function Issues() {
             <li key={t.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center' }}>
               <div>
                 <Link to={`/tasks/${t.id}`} style={{ fontWeight: 600, textDecoration: 'none' }}><span className="mono faint">{t.identifier}</span> {t.title}</Link>
-                {t.description && <div className="muted" style={{ fontSize: 14, margin: '2px 0' }}>{t.description}</div>}
+                {t.description && <div className="muted" style={{ fontSize: 14, margin: '2px 0' }}><Md text={t.description} clamp={3} /></div>}
                 <div className="faint" style={{ fontSize: 13 }}>in <Link to={`/projects/${t.project!.id}`}>{t.project!.name}</Link> · {t.project!.status}</div>
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

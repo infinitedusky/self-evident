@@ -10,6 +10,7 @@ import { Badge } from '../components/Badge'
 import { LaneColumn } from '../components/LaneColumn'
 import { engine, type IdeaRow, type ProjectSummary } from '../engine'
 import { useCurrentApp } from '../current-app'
+import { Md } from '../components/Md'
 
 export function Board({ ideas }: { ideas: Idea[] }) {
   const nav = useNavigate()
@@ -64,7 +65,7 @@ export function Board({ ideas }: { ideas: Idea[] }) {
             {inbox.map((i) => (
               <li key={i.id}>
                 <span className="mono faint">#{i.number}</span>
-                <div><Link to={`/ideas/${i.id}`} style={{ fontWeight: 600, textDecoration: 'none' }}>{i.title}</Link>{i.body && <div className="muted" style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{i.body}</div>}
+                <div><Link to={`/ideas/${i.id}`} style={{ fontWeight: 600, textDecoration: 'none' }}>{i.title}</Link>{i.body && <div className="muted" style={{ fontSize: 13 }}><Md text={i.body} clamp={4} /></div>}
                   <div className="faint" style={{ fontSize: 12 }}>{apps.find((a) => a.id === i.appId)?.name}</div></div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <Link className="btn quiet small" to={`/ideas/${i.id}`} title="Research, a rough draft, mockups, a prototype: nothing committed">Work on it</Link>

@@ -13,6 +13,7 @@ import { engine, STATE_LABEL, useLiveProject, type BacklogIssue, type Graph, typ
 import { useCurrentApp } from '../current-app'
 import { pendingOpen } from '../workspace'
 import { TodoCard } from './Todos'
+import { Md } from '../components/Md'
 
 const PROJECT_TONE: Record<string, Tone> = { paused: 'warn', drafting: 'neutral', proposed: 'neutral', approved: 'neutral', running: 'accent', landed: 'ok', stopped: 'warn', superseded: 'neutral' }
 const COST_TONE: Record<string, Tone> = { cheap: 'neutral', moderate: 'warn', expensive: 'bad' }
@@ -157,7 +158,7 @@ function BacklogPanel({ graph, busy, act }: { graph: Graph; busy: boolean; act: 
       {!items.length && <p className="muted" style={{ margin: '0 0 10px' }}>Everything this project has to cover. Add what you don't want to forget; the planner and builders add what they notice. Each is taken on, covered by a task the project has, or dropped with a reason, and the project lands only when nothing is left here.</p>}
       {open.length > 0 && <ul className="backlog-items">{open.map((i) => (
         <li key={i.id}>
-          <div><span className="mono faint">{i.identifier}</span> <span>{i.title}</span> <Badge>{SOURCE_LABEL[i.source]}</Badge>{i.description && <div className="faint" style={{ fontSize: 13 }}>{i.description}</div>}</div>
+          <div><span className="mono faint">{i.identifier}</span> <span>{i.title}</span> <Badge>{SOURCE_LABEL[i.source]}</Badge>{i.description && <div className="faint" style={{ fontSize: 13 }}><Md text={i.description} clamp={3} /></div>}</div>
           {!closed && <span className="backlog-actions">
             <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.takeOn(i.id))} title="It joins the work, at the end of the project">Take on</button>
             <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.itemToTodo(i.id))} title="Work outside the code: a to-do of the app, with a checklist">To-do</button>
@@ -220,7 +221,7 @@ function QuestionCard({ q, issue, busy, act }: { q: Question; issue?: GraphIssue
           <Badge tone={q.status === 'open' ? 'warn' : 'ok'}>{q.status}</Badge>
         </span>
       </div>
-      <div className="card-title">{q.text}</div>
+      <div className="card-title"><Md text={q.text} inline /></div>
       {q.status === 'open' ? (
         <>
           <div className="opts">
@@ -230,8 +231,8 @@ function QuestionCard({ q, issue, busy, act }: { q: Question; issue?: GraphIssue
               </button>
             ))}
           </div>
-          {rec && q.reason && <div className="faint" style={{ marginTop: 6, fontSize: 13 }}>Why {rec.label}: {q.reason}</div>}
-          {q.options.some((o) => o.description) && <ul className="faint" style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 13 }}>{q.options.filter((o) => o.description).map((o) => <li key={o.label}><strong>{o.label}</strong>: {o.description}</li>)}</ul>}
+          {rec && q.reason && <div className="faint" style={{ marginTop: 6, fontSize: 13 }}>Why {rec.label}: <Md text={q.reason} inline /></div>}
+          {q.options.some((o) => o.description) && <ul className="faint" style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 13 }}>{q.options.filter((o) => o.description).map((o) => <li key={o.label}><strong>{o.label}</strong>: <Md text={o.description} inline /></li>)}</ul>}
         </>
       ) : <div style={{ marginTop: 6 }}>Answer: <strong>{q.answer}</strong>{rec && q.answer !== rec.label ? <span className="faint"> (the planner recommended {rec.label}; the sub-tasks assume it)</span> : null}</div>}
     </div>
@@ -247,9 +248,9 @@ function DecisionCard({ d, issue }: { d: Decision; issue?: GraphIssue }) {
         <span className="mono faint">{issue?.identifier ?? ''}</span>
         {d.provisional && <Badge>provisional</Badge>}
       </div>
-      <div className="card-title">{d.question}</div>
-      <div style={{ marginTop: 4 }}>{chosen?.text}</div>
-      {d.rationale && <div className="faint" style={{ marginTop: 4, fontSize: 13 }}>{d.rationale}</div>}
+      <div className="card-title"><Md text={d.question} inline /></div>
+      <div style={{ marginTop: 4 }}><Md text={chosen?.text} /></div>
+      {d.rationale && <div className="faint" style={{ marginTop: 4, fontSize: 13 }}><Md text={d.rationale} /></div>}
       {rejected.length > 0 && <div className="faint" style={{ marginTop: 4, fontSize: 13 }}>Rejected: {rejected.map((o) => o.text).join('; ')}</div>}
     </div>
   )
@@ -262,7 +263,7 @@ function SubIssueDetail({ phase, issue: task, planStatus, busy, act }: { phase: 
     <>
       <h2><Link to={`/tasks/${phase.id}`}>{phase.identifier}</Link> {phase.title} <Badge tone={STATUS_TONE[phase.status]}>{phase.status.replace('_', ' ')}</Badge></h2>
       <dl className="fields">
-        <dt>Task</dt><dd>{task ? <><Link to={`/tasks/${task.id}`}>{task.identifier}</Link> {task.title}{task.description && <div className="faint" style={{ fontSize: 13 }}>{task.description}</div>}</> : '—'}</dd>
+        <dt>Task</dt><dd>{task ? <><Link to={`/tasks/${task.id}`}>{task.identifier}</Link> {task.title}{task.description && <div className="faint" style={{ fontSize: 13 }}><Md text={task.description} clamp={3} /></div>}</> : '—'}</dd>
         <dt>What</dt><dd><Brief description={phase.description} brief={phase.brief} /></dd>
         <dt>Files</dt><dd>{phase.files.length ? <span className="mono">{phase.files.join(', ')}</span> : <span className="faint">None declared: claims the whole app.</span>}</dd>
         <dt>Depends on</dt><dd>
@@ -276,7 +277,7 @@ function SubIssueDetail({ phase, issue: task, planStatus, busy, act }: { phase: 
           <ul className="steps">{steps.map((s) => <li key={s.id} className={s.status}><span className="mono">{s.status === 'completed' ? '✓' : s.status === 'in_progress' ? '●' : '○'}</span> {s.text}</li>)}</ul>
         </dd></>}
         {phase.lastRun && <><dt>Last run</dt><dd>{phase.lastRun.status}{phase.lastRun.model ? ` · ${phase.lastRun.model}` : ''}{phase.lastRun.costUsd ? ` · $${Number(phase.lastRun.costUsd).toFixed(2)} est.` : ''}
-          {phase.lastRun.summary && <div className="summary">{phase.lastRun.summary}</div>}
+          {phase.lastRun.summary && <div className="summary"><Md text={phase.lastRun.summary} /></div>}
           {phase.lastRun.error && <div className="summary bad">{phase.lastRun.error}</div>}</dd></>}
       </dl>
       {['failed', 'cancelled'].includes(phase.status) && (

@@ -2422,3 +2422,18 @@ in (nothing re-reads it until it is brought in again). Code: `engine/src/linear-
 source `linear`), `app/src/components/LinearImport.tsx`. Tests: `linear-import.test.ts`, against a stand-in for
 Linear; stories `Components/LinearImport` and `Pages/Tasks › With Linear` (a made-up team). Not tried: the real
 Linear API, which needs a key in the engine's environment.
+
+## Text someone wrote is shown as Markdown, everywhere (Sandy, 2026-11-12: "make sure that we are formatting md where ever there is text")
+
+A task brought in from a Linear ticket showed its description as one run of raw Markdown: headings, lists and
+links as marks. Briefs, comments and the agent's messages were already rendered; descriptions, notes, reasons,
+questions and decisions were not. Decided: one component, `Md` (`app/src/components/Md.tsx`), for any text a person
+or an agent wrote, so every page reads it the same way. A block takes the size and colour of where it is put;
+`inline` is for a line inside a sentence; `clamp` shows the first few lines in a list row, the rest on the thing's
+own page. Links open in a new tab.
+
+Used for: a task's and a sub-task's description (the task page, the Tasks list, a project's backlog and phase), an
+idea's body and notes, a to-do's notes and why it was dropped, a question, its options and its reason, a decision
+and its rationale, why a task was canceled, a run's summary, the summary page's lines, a question on Now. Left as
+typed: what the person says in a conversation, tool output, errors, and one-line labels from the engine. Stories:
+`Components/Md`. New text shown anywhere should go through `Md`.

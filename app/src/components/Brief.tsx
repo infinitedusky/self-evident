@@ -4,6 +4,7 @@
  */
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Md } from './Md'
 
 const firstSentence = (s: string) => (s.match(/^[\s\S]*?[.!?](\s|$)/)?.[0] ?? s.slice(0, 200)).trim()
 
@@ -11,7 +12,7 @@ export function Brief({ description, brief, open }: { description?: string | nul
   const lead = description?.trim() || (brief ? firstSentence(brief) : '')
   return (
     <div className="brief-block" data-component="Brief">
-      {lead ? <p className="brief-lead">{lead}</p> : <p className="faint">No description yet.</p>}
+      {lead ? <Md text={lead} className="brief-lead" /> : <p className="faint">No description yet.</p>}
       {brief && (
         <details open={open}>
           <summary className="faint">For the builder</summary>

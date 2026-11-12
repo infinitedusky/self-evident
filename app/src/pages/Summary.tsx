@@ -9,6 +9,7 @@ import { Link } from 'react-router'
 import { Badge } from '../components/Badge'
 import { openEvents, API, engine, type FocusLine, type FocusRef, type SummaryState } from '../engine'
 import { useCurrentApp } from '../current-app'
+import { Md } from '../components/Md'
 
 const ago = (iso: string) => {
   const m = Math.round((Date.now() - new Date(iso).getTime()) / 60_000)
@@ -28,7 +29,7 @@ function Lines({ lines, links }: { lines: FocusLine[]; links: Record<string, Foc
     <ul className="summary-lines">
       {lines.map((l, i) => (
         <li key={i}>
-          <div>{l.text}</div>
+          <div><Md text={l.text} inline /></div>
           <div className="summary-refs">{l.refs.filter((r) => links[r]).map((r) => <RefLink key={r} id={r} r={links[r]} />)}</div>
         </li>
       ))}
