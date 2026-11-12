@@ -26,6 +26,9 @@ checkout, its test command), then **Ideate** → keep an idea → make it an iss
 the repo and comes back with sub-issues, decisions and the questions it could not settle. The agent in the corner
 (or ⌘J) knows which page you are on; ask it to do any of this for you.
 
+A second computer, a shared database, two GitHub accounts, a product in two repositories, and what to do when it
+won't start: [docs/running-it.md](docs/running-it.md).
+
 ## Where things stand
 
 This repository holds the design and the first code. Read [LOG.md](LOG.md) for where things stand and every

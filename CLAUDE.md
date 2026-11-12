@@ -4,6 +4,8 @@ The product is **Self Evident** (repository `infinitedusky/self-evident`; it was
 
 Start here: read [LOG.md](LOG.md) (where things stand, decisions, next step)
 and [SHAPE.md](SHAPE.md) (what we're building). Research is in `research/`.
+How it runs on a computer, moving between computers, adding apps and what to do when it won't start:
+[docs/running-it.md](docs/running-it.md).
 
 This folder holds the design (LOG.md, SHAPE.md, `research/`), the ideas (`ideas/`, one file each) and, since
 2026-10-20, the factory's code: `engine/` (Postgres schema, server, event stream, scheduler, planner; see
