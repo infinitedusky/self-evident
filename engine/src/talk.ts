@@ -16,7 +16,8 @@ import { checkoutProblem } from './checkout.js'
 import { withLock } from './landing.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
-import { rank, riskOf, type Risk } from './risk.js'
+import { referenceHolding, referencePrompt, referencesOf, refusal } from './references.js'
+import { EDIT_TOOLS, rank, riskOf, type Risk } from './risk.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { engineTools } from './tools.js'
 import { prototypeEnv } from './prototype.js'
@@ -384,15 +385,17 @@ async function open(sessionId: string): Promise<Live> {
   const ownTaskId = (s.subjectRef as SubjectRef | null)?.issueId
   const [ownTask] = ownTaskId ? await db.select().from(issue).where(eq(issue.id, ownTaskId)) : []
   const check = (s.subjectRef as SubjectRef | null)?.check
+  const refs = await referencesOf(s.appId)
   const q = query({
     prompt: input.it,
     options: {
       cwd: s.cwd!,
+      ...(refs.length ? { additionalDirectories: refs.map((r) => r.path) } : {}),
       ...(proto ? { env: { ...process.env, ...(await prototypeEnv(proto)) } } : {}),
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : check ? checkPrompt(check, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : check ? checkPrompt(check, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') + referencePrompt(refs) },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...(check ? CHECK_TOOLS : ASK_TOOLS)],
@@ -402,6 +405,8 @@ async function open(sessionId: string): Promise<Live> {
       hooks: { PreToolUse: [{ hooks: [async (h) => {
         if (h.hook_event_name !== 'PreToolUse') return { continue: true }
         const input = (h.tool_input ?? {}) as Record<string, unknown>
+        const ref = EDIT_TOOLS.has(h.tool_name) ? referenceHolding(refs, entry.cwd, input.file_path ?? input.notebook_path) : null
+        if (ref) return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: refusal(ref) } } // not asked: a reference is never changed from here
         const branch = ASK_TOOLS.includes(h.tool_name) ? await branchOf(entry.cwd) : undefined
         const { risk, why } = riskOf(h.tool_name, input, { cwd: entry.cwd, branch })
         const auto = risk === 'free' || entry.always.has(h.tool_name) || (risk !== 'expensive' && rank(risk) <= rank(entry.autoApprove))

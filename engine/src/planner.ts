@@ -19,6 +19,7 @@ import { addItems } from './backlog.js'
 import { identifier } from './issues.js'
 import { addSubIssues, PlanError, projectGraph, type NewSubIssue } from './projects.js'
 import { hasStorybook } from './storybook.js'
+import { referencePrompt, referencesOf, type Reference } from './references.js'
 
 export interface ProposeInput {
   repoPath: string
@@ -28,6 +29,7 @@ export interface ProposeInput {
   earlier: { identifier: string; title: string; subIssues: { identifier: string; title: string }[] }[] // issues before this one in the project
   testCmd?: string
   storybook?: boolean // the app keeps a Storybook: stories lead its UI
+  references?: Reference[] // other apps' checkouts to read (references.ts)
   model?: string
   maxTurns?: number
   maxBudgetUsd?: number
@@ -102,6 +104,7 @@ function prompt(i: ProposeInput): string {
     '- checks: behavioural checks a non-engineer could read aloud, with the command and the expected result where there is one.',
     '- done_when: one sentence.',
     i.testCmd ? `- The tests run with: ${i.testCmd}` : '- There is no test command configured; say in each sub-task how it is verified.',
+    referencePrompt(i.references ?? []),
     i.storybook ? '- Stories lead the UI: this app keeps a Storybook. In a sub-task that adds or changes a screen, the first step writes the stories (each new or changed page, component and state, with labelled sample data) and the steps after it build the screen to match. A check says the stories render.' : '',
     '',
     'Decisions and questions:',
@@ -127,6 +130,7 @@ export const proposeWithAgent: Propose = async (i) => {
       prompt: prompt(i),
       options: {
         cwd: i.repoPath,
+        ...(i.references?.length ? { additionalDirectories: i.references.map((r) => r.path) } : {}),
         abortController: i.abort,
         model: i.model,
         maxTurns: i.maxTurns ?? 40,
@@ -221,7 +225,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
     runId, issueId, projectId: t.projectId, appId: a.id, attempt, base,
     input: {
       repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, project: { name: g.project.name, content: g.project.content }, earlier,
-      testCmd: setup.test_cmd, storybook: hasStorybook(setup), model: setup.model, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
+      testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), model: setup.model, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }
 }

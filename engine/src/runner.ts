@@ -21,6 +21,7 @@ import { projectGraph, PlanError, setBuild, tickAll, type Graph } from './projec
 import { finishPlanning, preparePlanning, type Propose } from './planner.js'
 import { reapAgentProcesses } from './reap.js'
 import { holdMinutes, isOutage } from './outage.js'
+import { referencesOf } from './references.js'
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
 
@@ -149,7 +150,7 @@ export class Runner {
 
     const result = await this.execute({
       subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief },
-      worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: hasStorybook(setup), previousFailure, model: setup.model, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
+      worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
       resumeSessionId: interrupted?.agentSessionId ?? undefined, abort: this.active.get(subId),
       onEvent: async (type, payload) => {
         if (type === 'run.steps') await this.saveSteps(a.id, subId, runId, (payload.steps as { text: string; status: string }[]) ?? [])
