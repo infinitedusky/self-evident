@@ -212,8 +212,10 @@ export function startSync(minutes = 2, api: GitHubApi = ghCli) {
     const apps = await db.select({ appId: repo.appId }).from(repo).where(isNotNull(repo.localPath))
     for (const { appId } of apps) { const r = await syncApp(appId, api); if (r.error) console.log(`[github] ${appId}: ${r.error}`) }
   }
-  const first = setTimeout(() => void pass(), 5_000)
-  const timer = setInterval(() => void pass(), minutes * 60_000)
+  // The database read can fail (the connection to Fly drops); a pass that throws waits for the next one, like a sync does.
+  const run = () => void pass().catch((err: any) => console.error(`[github] sync pass failed: ${String(err?.message ?? err).slice(0, 300)}`))
+  const first = setTimeout(run, 5_000)
+  const timer = setInterval(run, minutes * 60_000)
   return () => { clearTimeout(first); clearInterval(timer) }
 }
 
