@@ -2323,3 +2323,16 @@ asks about shell commands as before; the builder is told not to). Not tried with
 extra folder reads as expected. Code: `engine/src/references.ts`; tests: `references.test.ts`, and the story
 `Pages/Settings › App References` (made-up apps).
 
+## One guide to running it, and every agent knows where it is (Sandy, 2026-11-12: "make sure all our docs are up to date so I can ask the agents in self evident for any help regarding this")
+
+Two days of set-up decisions (the database on Fly, Doppler, leave and arrive, a computer's root, two GitHub
+accounts, reference apps) were spread over this log in the order they were made. `docs/running-it.md` now says how
+things are, in one place: the two ways a computer runs it (its own database, or the shared one), moving between
+computers, adding an app and what the GitHub field turns on, a second GitHub account, a product in two
+repositories, a table of what goes wrong and what to do, and the known limits. This log keeps the why.
+
+Every conversation's agent is told where that file is and to read it before answering a question about Self
+Evident itself, whichever app it is working in (`GUIDE` in `engine/src/talk.ts`); `guide.test.ts` fails if the
+file moves or loses a section the agents are told it has. Linked from CLAUDE.md, the README and `engine/README.md`,
+whose own account of running it now points there.
+

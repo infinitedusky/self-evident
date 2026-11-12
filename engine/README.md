@@ -31,14 +31,9 @@ pnpm dev        # Postgres 17 (docker compose, localhost:5433) + the engine on :
 pnpm start      # or: the engine alone on http://localhost:4000, serving the built UI (`pnpm build` first)
 ```
 
-Sandy's own set-up keeps the database on Fly and the settings in Doppler, and moves between Macs with two commands
-(LOG.md, "Moving between Macs is two commands"):
-
-```bash
-pnpm leave          # here: stops the engine, commits and pushes each open conversation's worktree, sends the histories
-pnpm arrive         # there: clones and fetches the apps, makes the worktrees, brings the histories in, starts the engine
-pnpm handoff check  # what leaving would send; changes nothing
-```
+The database is this checkout's own container unless `DATABASE_URL` names another. A shared database, Doppler,
+moving between computers (`pnpm leave`, `pnpm arrive`, `pnpm handoff check`), adding apps and troubleshooting are in
+[docs/running-it.md](../docs/running-it.md).
 
 The database is `selfevident`; the engine creates it if missing and runs migrations when it boots. The API is under
 `/api` (`GET /api` lists the routes); the UI is served at `/`. The database from before the Linear shape,
@@ -132,6 +127,9 @@ committed event as it happens, via Postgres `LISTEN/NOTIFY`. Several clients can
 | `src/summary.ts` | The Summary page's focus section, written by a model from the facts, stated goals first. |
 | `src/db/copy-legacy.ts` | One-off: the database from before the Linear shape into this one. |
 | `src/cli/if.ts` | The `se` CLI. A client; only `migrate` touches the database. |
+| `src/handoff.ts`, `src/cli/handoff.ts` | Moving between computers: `leave` sends each conversation's worktree and history out, `arrive` brings them in and starts the engine; the launchd agents and the database's proxy. |
+| `src/machine.ts`, `src/db/home-path.ts` | Each computer registers its name, user and root; path columns are stored from the root (`~/…`) and read back under this computer's. |
+| `src/references.ts` | Reference apps: other apps whose checkout an app's agents may read and never change. |
 
 `pnpm test` runs the scheduler and landing tests anywhere (landing uses a throwaway git repo) and, when Postgres
 is up, the project, issue, planner and runner tests (a fake proposer; a fake executor on a throwaway repo: the cap,
