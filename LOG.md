@@ -2452,3 +2452,22 @@ stays for code. Written text (`Md`) follows Linear's issue page: larger section 
 looser lists, code in a bordered chip, and links in Linear's indigo with no underline until hovered (a new token,
 `--link`). Storybook now loads the same fonts as the app (`.storybook/preview-head.html`); before, stories fell
 back to the system font. The palette is still InDusk's and still provisional.
+
+## A task can be deleted, when nothing has been done on it (Sandy, 2026-11-12: "we need a way to delete a task")
+
+Until now a task could only be canceled, which keeps it, with a reason. That is right for work that was started
+and dropped, and wrong for a task made by mistake, a test, or a ticket brought in from Linear that shouldn't have
+been. Decided:
+
+- **Delete removes it and leaves nothing behind:** the task, its sub-tasks, and what was written on them (comments,
+  steps, decisions, questions, planned builds and file claims). An open conversation pinned to it is ended first,
+  which removes its worktree. The event log keeps one line, `issue.deleted`, with its name and title. Its number
+  is not handed out again unless it was the app's last.
+- **Only a task with no work on it.** One an agent has run on, or with a pull request, a recorded check or a live
+  prototype, is refused, and the page says to cancel it instead: its record is what happened.
+- On the task's page, top right, behind a confirmation that says what goes. A ticket deleted here can be brought
+  in from Linear again; nothing in Linear changes.
+
+Code: `engine/src/delete-issue.ts` (`DELETE /issues/:id`), the button in `app/src/pages/IssuePage.tsx`. Tests:
+`delete-issue.test.ts`; stories `Pages/TaskPage › Delete Refused` and `Delete Declined`. Not built: deleting
+from the Tasks list, or several at once.

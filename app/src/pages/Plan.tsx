@@ -5,7 +5,7 @@ import { PlanHome, type Plan as PlanData } from './PlanHome'
 import { openEvents, API, engine } from '../engine'
 import { useCurrentApp } from '../current-app'
 
-const LIVE = ['issue.created', 'issue.updated', 'issue.state', 'project.created', 'project.started', 'project.landed', 'project.cancelled', 'step.updated', 'brief.approved', 'brief.unapproved', 'workflow.used', 'workflow.saved', 'idea.converted', 'prototype.created', 'prototype.discarded']
+const LIVE = ['issue.created', 'issue.deleted', 'issue.updated', 'issue.state', 'project.created', 'project.started', 'project.landed', 'project.cancelled', 'step.updated', 'brief.approved', 'brief.unapproved', 'workflow.used', 'workflow.saved', 'idea.converted', 'prototype.created', 'prototype.discarded']
 
 export function Plan() {
   const { app } = useCurrentApp()

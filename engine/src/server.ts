@@ -40,6 +40,7 @@ import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueD
 import { runner } from './runner.js'
 import { homeRepo, inOrder } from './workbench.js'
 import { chooseFolder } from './folders.js'
+import { deleteIssue } from './delete-issue.js'
 import { importTickets, linearTickets, type Scope } from './linear-import.js'
 import { outsidePr, pr as prRows } from './db/schema.js'
 import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, setupIntegration, statuses, type Local, type Values } from './integrations.js'
@@ -72,7 +73,7 @@ export function buildApp(bus: EventBus) {
       'GET /issues?app=&kind=&project=&top=1&open=1': 'tasks, filtered (project=none: in no project)', 'GET /issues?app=&view=code': 'the Tasks page: top-level code tasks with builds and planning',
       'POST /issues': '{appId, title, kind?, description?, brief?, projectId?, parentId?, state?, priority?, cycleId?, workflowId?}', 'GET /issues/:id': 'one task with its sub-tasks as a list',
       'PATCH /issues/:id': '{title?, description?, brief?, priority?, estimate?, cycleId?, projectId?, sortOrder?}', 'POST /issues/:id/state': '{state, reason?}', 'POST /issues/reorder': '{ids} — siblings, in this order',
-      'POST /issues/:id/sub-issues': '[{key, title, brief?, dependsOn?, files?}] — by hand', 'DELETE /issues/:id/sub-issues': 'a draft task back to its brief',
+      'POST /issues/:id/sub-issues': '[{key, title, brief?, dependsOn?, files?}] — by hand', 'DELETE /issues/:id/sub-issues': 'a draft task back to its brief', 'DELETE /issues/:id': 'a task with no work on it, with its sub-tasks; refused when it has runs, a pull request, checks or a prototype',
       'POST /issues/:id/plan?wait=1': 'the planner: the task\'s brief → sub-tasks, decisions, questions (one read-only agent run); 202 at once, or wait',
       'POST /issues/:id/retry': '{fresh?} — a failed or cancelled build, three more attempts', 'POST /issues/:id/build': '{status} — by hand, for drafts',
       'POST /questions/:id/answer': '{answer}',
@@ -514,6 +515,8 @@ export function buildApp(bus: EventBus) {
     try { return c.json(await tick(c.req.param('id'), room)) } catch (err) { return planError(c, err, 404) }
   })
 
+  // A task with no work on it, gone with its sub-tasks (delete-issue.ts); one with work is refused: cancel it instead.
+  api.delete('/issues/:id', async (c) => { try { return c.json(await deleteIssue(c.req.param('id'), 'user', endTalk)) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/sub-issues', async (c) => {
     try { return c.json(await addSubIssues(c.req.param('id'), await c.req.json(), 'user'), 201) } catch (err) { return planError(c, err) }
   })

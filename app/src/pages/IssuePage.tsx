@@ -7,7 +7,7 @@
  * then a page per step in its workflow's order, then the build, each at its own address: /tasks/:id/:section.
  */
 import { useEffect, useRef, useState } from 'react'
-import { Link, Navigate, useParams } from 'react-router'
+import { Link, Navigate, useNavigate, useParams } from 'react-router'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Badge, type Tone } from '../components/Badge'
@@ -31,6 +31,8 @@ export function IssuePage() {
   const [i, setI] = useState<IssueDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [refused, setRefused] = useState<string | null>(null) // why the engine wouldn't delete it
+  const nav = useNavigate()
   const timer = useRef<number | undefined>(undefined)
   useEffect(() => {
     if (!id) return
@@ -47,6 +49,16 @@ export function IssuePage() {
     return () => { closed = true; es?.close(); window.clearTimeout(timer.current) }
   }, [id])
   const act = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn(); setI(await engine.issue(id!)) } catch (e: any) { setError(String(e.message ?? e)) } finally { setBusy(false) } }
+
+  /** Delete: for a task made by mistake. The engine refuses one with work on it (runs, a pull request, checks, a prototype) and says to cancel it. */
+  const remove = async () => {
+    if (!i) return
+    const subs = i.subIssues?.length ?? 0
+    if (!window.confirm(`Delete ${i.identifier} "${i.title}"?${subs ? ` Its ${subs} sub-task${subs === 1 ? '' : 's'} go with it.` : ''} What was written on it goes too, and its conversation is ended. This can't be undone.`)) return
+    setBusy(true); setRefused(null)
+    try { await engine.deleteIssue(i.id); nav(i.parent ? `/tasks/${i.parent.id}` : '/tasks') }
+    catch (e: any) { const m = String(e.message ?? e); try { setRefused(JSON.parse(m).error ?? m) } catch { setRefused(m) } } finally { setBusy(false) }
+  }
 
   if (error && !i) return <div className="empty">{error}</div>
   if (!i) return <p className="muted">Loading…</p>
@@ -73,8 +85,10 @@ export function IssuePage() {
         <div style={{ display: 'flex', gap: 8 }}>
           {error && <Badge tone="warn" dot>{error}</Badge>}
           {i.build && ['failed', 'cancelled'].includes(i.build.status) && <button className="btn" disabled={busy} onClick={() => act(() => engine.retry(i.id))}>Retry</button>}
+          <button className="btn quiet" disabled={busy} onClick={() => void remove()} title="For a task made by mistake: it leaves nothing behind. One with work on it is canceled instead.">Delete</button>
         </div>
       </div>
+      {refused && <div className="empty bad" style={{ marginBottom: 16 }}>{refused}</div>}
 
       {i.reason && <div className="empty" style={{ marginBottom: 16 }}>{STATE_LABEL[i.state]}: <Md text={i.reason} inline /></div>}
       {i.build?.heldReason && i.build.status !== 'done' && <div className="empty" style={{ marginBottom: 16 }}>{i.build.heldReason}</div>}
