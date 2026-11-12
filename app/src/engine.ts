@@ -109,6 +109,13 @@ export interface Repo { id: string; appId: string; fullName: string; localPath: 
 /** One of the person's repositories on GitHub, as gh lists them; `problem` is why there is no list (gh missing, signed out). */
 export interface GitHubRepo { fullName: string; defaultBranch: string; private: boolean }
 export interface GitHubRepos { repos: GitHubRepo[]; problem: string | null }
+/** A ticket of the app's Linear team, as the engine lists it for bringing in; `task` is the task it already is here. */
+export interface LinearTicket {
+  id: string; identifier: string; title: string; url: string; branchName: string | null; priority: number
+  state: { name: string; type: string }; assignee: string | null; mine: boolean; project: string | null; task: { id: string; identifier: string } | null
+}
+export type LinearScope = 'mine' | 'unassigned' | 'all'
+export interface LinearImported { made: { id: string; identifier: string; title: string; linear: string }[]; updated: { id: string; identifier: string; title: string; linear: string }[]; missing: string[] }
 /** A folder on the engine's computer and the git repositories in it (itself, or the ones directly inside); `path` null: the folder dialog was closed. */
 export interface FoundRepo { name: string; path: string; fullName: string | null; branch: string | null }
 export interface Folder { path: string | null; repos: FoundRepo[] }
@@ -272,6 +279,9 @@ export const engine = {
   githubRepos: () => call<GitHubRepos>('GET', '/github/repos'),
   updateApp: (id: string, body: { name?: string; defaultBranch?: string; setup?: AppSetup }) => call<App>('PATCH', `/apps/${id}`, body),
   createRepo: (body: { appId: string; fullName: string; localPath?: string; baseBranch?: string }) => call<Repo & { note: string | null }>('POST', '/repos', body),
+  /** The open tickets of the app's Linear team (Integrations › Linear). Reads Linear; nothing is written there. */
+  linearTickets: (appId: string, scope: LinearScope) => call<{ team: string; tickets: LinearTicket[] }>('GET', `/apps/${appId}/linear/tickets?scope=${scope}`),
+  importLinear: (appId: string, identifiers: string[]) => call<LinearImported>('POST', `/apps/${appId}/linear/import`, { identifiers }),
   deleteRepo: (id: string) => call<{ removed: string }>('DELETE', `/repos/${id}`),
   /** Opens the folder dialog on the engine's computer (or scans `path`) and says which repositories are there. */
   chooseFolder: (path?: string) => call<Folder>('POST', '/folders/choose', path ? { path } : {}),

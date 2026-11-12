@@ -49,7 +49,7 @@ export const CLOSED_STATES: IssueState[] = ['done', 'canceled', 'duplicate']
 export const ISSUE_KINDS = ['code', 'todo'] as const // code: planned, built, landed; todo: work outside the code
 export type IssueKind = (typeof ISSUE_KINDS)[number]
 export const DELEGATES = ['builder', 'planner', 'agent'] as const // the agents an issue can be delegated to; a person is the assignee
-export const ISSUE_SOURCES = ['person', 'agent', 'idea', 'planner', 'builder'] as const
+export const ISSUE_SOURCES = ['person', 'agent', 'idea', 'planner', 'builder', 'linear'] as const // linear: brought in from a Linear ticket (linear-import.ts)
 export const RELATION_TYPES = ['blocks', 'related', 'duplicate'] as const
 
 // The engine's status for building a code sub-issue; the sub-issue's state follows it (BUILD_STATE).

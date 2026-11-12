@@ -7,6 +7,7 @@ import type { StepState, Workflow } from '@self-evident/engine/steps'
 import type { Plan } from '../pages/PlanHome'
 import type {
   Folder,
+  LinearTicket,
   App, AppSettings, BacklogIssue, Cycle, Decision, Event, FactorySettings, Graph, GraphIssue, GraphSubIssue, IdeaRow, Initiative, Issue,
   IssueDetail, IssueRow, Now, StepsView, StepWork, WorkflowRow, ProjectSummary, Prototype, Question, Run, Step, SummaryState, TalkMessage, TalkSession, ClaudeSession, Todo, Transcript, Workspace, GitHubRepos,
 } from '../engine'
@@ -23,6 +24,18 @@ export const sampleApp: App = {
 export const otherApp: App = { id: 'app_sample2', workspaceId: workspace.id, name: 'Sample Blog', key: 'SB', defaultBranch: 'main', setup: {}, repos: [] }
 export const apps = [otherApp, sampleApp] // the newest last: the app the UI picks when none is chosen
 
+/** Made-up tickets of a made-up Linear team, SHOP: two of the sample person's, one already a task here, one unassigned. */
+const linearTicket = (n: number, title: string, over: Partial<LinearTicket> = {}): LinearTicket => ({
+  id: `lin_sample${n}`, identifier: `SHOP-${n}`, title: `${title} (sample)`, url: `https://linear.app/example/issue/SHOP-${n}`, branchName: `sample/shop-${n}`, priority: 2,
+  state: { name: 'Todo', type: 'unstarted' }, assignee: 'Sample Owner', mine: true, project: 'Checkout', task: null, ...over,
+})
+export const linearTickets: LinearTicket[] = [
+  linearTicket(41, 'Saved cards at checkout'),
+  linearTicket(42, 'Address autocomplete', { state: { name: 'In Progress', type: 'started' }, priority: 1 }),
+  linearTicket(38, 'Order confirmation email', { task: { id: 'iss_sample20', identifier: 'SS-20' } }),
+  linearTicket(44, 'Gift wrap option', { assignee: null, mine: false, project: null, state: { name: 'Backlog', type: 'backlog' }, priority: 0 }),
+  linearTicket(45, 'Faster search results', { assignee: 'Made-up Teammate', mine: false, project: 'Search', priority: 3 }),
+]
 /** A made-up folder holding three checkouts, as the folder chooser reports it: the shop's frontend (already the app's), its backend, and one with no remote. */
 export const folder: Folder = { path: '/code', repos: [
   { name: 'old-site', path: '/code/old-site', fullName: null, branch: 'master' },

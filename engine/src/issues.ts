@@ -13,7 +13,7 @@ import { newId } from './ids.js'
 export class PlanError extends Error {}
 
 export type Issue = typeof issue.$inferSelect
-export type Source = 'person' | 'agent' | 'idea' | 'planner' | 'builder'
+export type Source = 'person' | 'agent' | 'idea' | 'planner' | 'builder' | 'linear'
 export interface NewIssue {
   kind?: IssueKind; title: string; description?: string | null; brief?: string | null; parentId?: string | null; projectId?: string | null
   ideaId?: string | null; cycleId?: string | null; state?: IssueState; priority?: number; estimate?: string | null; sortOrder?: number

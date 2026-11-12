@@ -2395,3 +2395,30 @@ Tests: `folders.test.ts` (real git repositories); stories `Pages/Settings › Ap
 `App Repos Empty Folder`, `App Repos None` (made-up repositories). Not done: New app still takes one typed
 repository; a saved row cannot be edited, only removed and added again. Not tried: the dialog itself, which needs
 a person at the screen.
+
+## Tasks from Linear tickets (Sandy, 2026-11-12: "we should be able to create plans and tasks from linear … it needs to be connected to self evident")
+
+Until now Linear was one way and mostly on paper: the integration declares create, comment and move, and nothing
+read a ticket. Sandy's work on the two-repository product arrives as Linear tickets, so the first thing built is
+the other direction. Decided, with Sandy:
+
+- **A ticket becomes a task.** On the Tasks page of an app whose Linear team is set (Integrations › Linear: team
+  key, key variable), "From Linear" lists the team's open tickets: the person's own, unassigned, or everyone's,
+  with a filter. The ones ticked are brought in. A task made this way has `source: 'linear'` and
+  `sourceRef.linear` (the ticket's id, identifier, URL, the branch name Linear gives it, its Linear project), the
+  ticket's words as its description under a line saying where it came from, and its priority.
+- **Once.** A ticket already brought in shows the task it is and is not offered again; bringing it in through the
+  API again updates that task's title, description and priority and makes no second one.
+- **Read only.** Nothing is written to Linear. A task's state here is its own: a ticket someone started there is
+  still to do here until work starts here.
+- **The key stays where the engine runs.** A personal API key, in the variable the app names; for a company's
+  Linear that is this computer's environment, not the shared settings.
+
+Not built: a Linear project becoming a project here (the project's name is kept on each task, so it can be done
+from what is stored); the task's branch taking the ticket's branch name (kept, not used yet: conversations still
+cut `talk/<id>`); moving the ticket in Linear as the task moves; a ticket changing in Linear after it was brought
+in (nothing re-reads it until it is brought in again). Code: `engine/src/linear-import.ts`
+(`GET /apps/:id/linear/tickets`, `POST /apps/:id/linear/import`), migration `0013_issue_from_linear` (the task
+source `linear`), `app/src/components/LinearImport.tsx`. Tests: `linear-import.test.ts`, against a stand-in for
+Linear; stories `Components/LinearImport` and `Pages/Tasks › With Linear` (a made-up team). Not tried: the real
+Linear API, which needs a key in the engine's environment.
