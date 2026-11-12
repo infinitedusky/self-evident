@@ -43,7 +43,7 @@ One database on a server, reached from each computer, so the same apps and tasks
 | `STATE_REPO` | A private git repository the conversations' histories travel through. |
 | `UI_URL` | The page's address as people open it. |
 | `STORYBOOK_FRAME` | The address pattern an app's Storybook is framed at. |
-| `LINEAR_API_KEY` | For the Linear integration. Secret. |
+| `LINEAR_API_KEY` | For the Linear integration: a personal API key (Linear › Settings › Account › Security & access). Read access is enough to bring tickets in as tasks. An app can name another variable (Integrations › Linear › Key variable), for a second Linear workspace. Secret. |
 
 Two launchd agents keep it running, both written by `pnpm arrive` and holding no secrets:
 

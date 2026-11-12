@@ -1,0 +1,2 @@
+ALTER TABLE "issue" DROP CONSTRAINT "issue_source";--> statement-breakpoint
+ALTER TABLE "issue" ADD CONSTRAINT "issue_source" CHECK ("issue"."source" in ('person', 'agent', 'idea', 'planner', 'builder', 'linear'));

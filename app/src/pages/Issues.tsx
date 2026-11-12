@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge, type Tone } from '../components/Badge'
+import { LinearImport } from '../components/LinearImport'
 import { engine, STATE_LABEL, type IssueRow, type ProjectSummary } from '../engine'
 import { useCurrentApp } from '../current-app'
 
@@ -32,6 +33,7 @@ export function Issues() {
   const act = async (key: string, fn: () => Promise<unknown>) => { setBusy(key); try { await fn(); reload() } catch (e: any) { setError(String(e.message ?? e)) } finally { setBusy(null) } }
   const open = (s: string) => !['landed', 'stopped', 'superseded'].includes(s) // an issue can be planned until its project is over
   const targets = projects.filter((p) => open(p.status))
+  const linearTeam = app?.setup?.integrations?.linear?.team?.trim().toUpperCase() // set under Integrations › Linear: tickets can be brought in
   const loose = rows?.filter((t) => !t.project && !['done', 'canceled', 'duplicate'].includes(t.state)) ?? []
   const placed = rows?.filter((t) => t.project) ?? []
   return (
@@ -41,6 +43,7 @@ export function Issues() {
         <p className="muted" style={{ margin: '4px 0 0', maxWidth: 760 }}>Every task of code work: what it will change, and where it stands. One in no project waits until you add it to one; a project builds its tasks in order, each planned into sub-tasks when its turn comes.</p>
       </div></div>
       {error && <div className="empty bad">{error}</div>}
+      {app && linearTeam && <LinearImport appId={app.id} team={linearTeam} onImported={reload} />}
       {rows && !rows.length && <div className="empty">No tasks yet. Ask in the conversation, start a project, or make an idea a task.</div>}
       {loose.length > 0 && (
         <section className="panel">

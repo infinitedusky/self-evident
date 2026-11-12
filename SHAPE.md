@@ -510,6 +510,10 @@ Details and sources in `research/`.
   seeds in `docs/lifecycle/` are its documents' templates. The rest of the integrations move from the code into
   documents next, and the engine becomes their reader; a check the common forms cannot express (a command's exit
   code, a file containing a line, a URL answering) stays a named check the document points at.
+- **Self Evident pulls from Linear: a ticket becomes a task** (Sandy, 2026-11-12: "we should be able to create plans
+  and tasks from linear"; LOG.md, "Tasks from Linear tickets"). On the Tasks page of an app whose Linear team is set,
+  the team's open tickets are listed and the ones ticked are brought in, each once, with a link back and the branch
+  name Linear gives it. Read only for now: nothing is written to Linear, and a task's state here is its own.
 - **tkt reads from Self Evident; a switch lets it run on its own against Linear** (Sandy, 2026-11-10: "we want Self
   Evident to be pulling from Linear and we want TKT to be pulling from Self Evident. But I want to test TKT on its
   own"). The arrangement stays as in "tkt is the runner; Self Evident is the tracker and the window": tkt's skills read
