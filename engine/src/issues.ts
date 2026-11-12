@@ -137,6 +137,10 @@ export async function updateIssue(issueId: string, input: Partial<Pick<NewIssue,
       if (i.parentId) throw new PlanError('a sub-task goes where its parent goes')
       await openProjectIn(tx, input.projectId, i.appId)
     }
+    if (input.projectId !== undefined && (input.projectId ?? null) !== i.projectId && i.projectId) { // leaving a project: not while it is being built
+      const [from] = await tx.select().from(project).where(eq(project.id, i.projectId))
+      if (from?.status === 'running') throw new PlanError(`${from.name} is running, and its tasks are built in order: stop it before moving a task out.`)
+    }
     const set: Partial<Issue> = {}
     for (const k of ['title', 'description', 'brief', 'priority', 'estimate', 'assignee', 'delegate', 'waitingOn', 'cycleId', 'projectId', 'sortOrder', 'kind'] as const) {
       if (input[k] === undefined) continue

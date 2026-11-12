@@ -1,12 +1,16 @@
 /**
- * The composer: a project as issues in order (title + brief, what you author), each with its sub-issues. Sub-issues are what the
- * planner will propose from the brief; until it exists you can write them here. Straight into the engine.
+ * The composer: a project is a name and a why. Its tasks can come three ways (Sandy, 2026-11-12): none yet (an empty
+ * project, filled later from Tasks or its own page), described in words for the agent to draft, or written here by
+ * hand, each with sub-tasks if wanted. Straight into the engine.
  */
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { engine, useIdeaFirst, useWorkflows } from '../engine'
 import { RulesPicker } from '../components/RulesPicker'
 import { useCurrentApp } from '../current-app'
+
+/** The job handed to the agent: draft this project's tasks from what the person said. */
+const draftAsk = (name: string, projectId: string, said: string, already: number) => `Draft the tasks for the project "${name}" (${projectId}), from what I wrote below. Read the code and the app's assets first where they bear on it. Make each task with create_task (projectId: ${projectId}), in the order they should be built: a title, and a description of what will be different in plain words.${already ? ` It has ${already} task${already === 1 ? '' : 's'} already: add to them, don't repeat them.` : ''} Don't plan sub-tasks and don't start the project. Then tell me what you made and what you weren't sure of.\n\n${said}`
 
 interface PhaseRow { key: string; title: string; description: string; brief: string; dependsOn: string[]; files: string }
 interface TaskRow { key: string; title: string; description: string; brief: string; phases: PhaseRow[] }
@@ -20,7 +24,8 @@ export function NewProject() {
   const [appId, setAppId] = useState('')
   const [title, setTitle] = useState('')
   const [spec, setSpec] = useState('')
-  const [tasks, setTasks] = useState<TaskRow[]>([blankTask()])
+  const [tasks, setTasks] = useState<TaskRow[]>([]) // none: an empty project is a project
+  const [prompt, setPrompt] = useState('') // what it should cover, for the agent to draft the tasks from
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [params] = useSearchParams()
@@ -52,11 +57,13 @@ export function NewProject() {
           files: p.files.split(',').map((f) => f.trim()).filter(Boolean),
         })),
       }))
-      if (!body.length) throw new Error('add at least one task with a title')
       const { project } = await engine.createProject({ appId, name: title.trim(), content: spec.trim() || undefined, ideaId: ideaId ?? undefined, workflowId: rules || undefined, issues: body })
+      if (prompt.trim()) await engine.ask({ appId, subjectRef: { projectId: project.id }, text: draftAsk(title.trim(), project.id, prompt.trim(), body.length) }) // its conversation opens beside the page
       nav(`/projects/${project.id}`)
     } catch (e: any) { setError(String(e.message ?? e)) } finally { setBusy(false) }
   }
+
+  const written = tasks.some((t) => t.title.trim())
 
   if (ideaFirst && !ideaId) return (
     <>
@@ -79,8 +86,15 @@ export function NewProject() {
         </div>
       </section>
 
+      <section className="panel" data-component="DraftTasks">
+        <h2>Tasks</h2>
+        <p className="muted" style={{ margin: '0 0 12px' }}>A project can start with none: add tasks later, or move existing ones in, from Tasks or the project's page. Or say what it should cover and the agent drafts them.</p>
+        <label style={{ display: 'block' }}><span className="label-text">Have the agent draft the tasks (optional)</span>
+          <textarea aria-label="What the project should cover" value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} style={{ width: '100%' }} placeholder="What it should cover, in your own words: the tickets, the order, what done looks like. The agent reads the code and the app's assets, makes the tasks in order, and tells you what it made." /></label>
+      </section>
+
       <section className="panel">
-        <h2>Tasks, in order</h2>
+        <h2>Or write them here, in order</h2>
         <p className="muted" style={{ margin: '0 0 12px' }}>A task is a title and a brief: what to change and why. Tasks are built in order. Each is planned into sub-tasks, one agent each in its own worktree; write them below or leave them for the planner.</p>
         {tasks.map((t, ti) => (
           <div className="task-block" key={t.key} data-component="TaskRow">
@@ -120,7 +134,7 @@ export function NewProject() {
         <button className="btn quiet" onClick={() => setTasks((ts) => [...ts, blankTask()])}>+ Add a task</button>
       </section>
       {error && <div className="empty bad">{error}</div>}
-      <p><button className="btn" disabled={busy || !title.trim() || !appId} onClick={submit}>Create project</button> <span className="faint">You run it from the project page once its tasks are planned.</span></p>
+      <p><button className="btn" disabled={busy || !title.trim() || !appId} onClick={submit}>{prompt.trim() ? 'Create and draft the tasks' : written ? 'Create project' : 'Create an empty project'}</button> <span className="faint">You run it from the project page once its tasks are planned.</span></p>
     </>
   )
 }

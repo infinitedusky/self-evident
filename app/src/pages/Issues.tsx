@@ -31,7 +31,7 @@ export function Issues() {
   const [busy, setBusy] = useState<string | null>(null)
   const reload = () => { if (app) { engine.codeIssues(app.id).then(setRows).catch((e) => setError(String(e.message ?? e))); engine.projects(app.id).then(setProjects).catch(() => {}) } }
   useEffect(() => { setRows(null); reload() }, [app?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-  const act = async (key: string, fn: () => Promise<unknown>) => { setBusy(key); try { await fn(); reload() } catch (e: any) { setError(String(e.message ?? e)) } finally { setBusy(null) } }
+  const act = async (key: string, fn: () => Promise<unknown>) => { setBusy(key); setError(null); try { await fn(); reload() } catch (e: any) { const m = String(e.message ?? e); try { setError(JSON.parse(m).error ?? m) } catch { setError(m) } } finally { setBusy(null) } }
   const open = (s: string) => !['landed', 'stopped', 'superseded'].includes(s) // an issue can be planned until its project is over
   const targets = projects.filter((p) => open(p.status))
   const linearTeam = app?.setup?.integrations?.linear?.team?.trim().toUpperCase() // set under Integrations › Linear: tickets can be brought in
@@ -79,6 +79,14 @@ export function Issues() {
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <Badge tone={s.tone} dot={s.tone === 'accent'}>{s.label}</Badge>
                 {unplanned && t.state === 'todo' && open(t.project!.status) && !['issue.planning', 'issue.plan_waiting'].includes(t.planning ?? '') && <button className="btn small" disabled={busy === t.id} onClick={() => act(t.id, () => engine.planIssue(t.id))}>Plan</button>}
+                {open(t.project!.status) && !['done', 'canceled', 'duplicate'].includes(t.state) && (
+                  <select className="small" disabled={busy === t.id} value="" aria-label={`Move ${t.identifier}`} title={t.project!.status === 'running' ? 'Its project is running: stop it before moving a task out' : undefined}
+                    onChange={(e) => e.target.value && act(t.id, () => engine.updateIssue(t.id, { projectId: e.target.value === 'none' ? null : e.target.value }))}>
+                    <option value="">Move…</option>
+                    {targets.filter((p) => p.id !== t.project!.id).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    <option value="none">No project</option>
+                  </select>
+                )}
               </div>
             </li>) })}
         </ul>

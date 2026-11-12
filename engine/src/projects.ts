@@ -18,7 +18,7 @@ export { PlanError } from './issues.js'
 
 export interface NewSubIssue { key: string; title: string; description?: string; brief?: string; dependsOn?: string[]; files?: string[]; priority?: number }
 export interface NewProjectIssue { title: string; description?: string; brief?: string; subIssues?: NewSubIssue[] }
-export interface NewProject { appId: string; name: string; content?: string; description?: string; ideaId?: string; workflowId?: string | null; issues: NewProjectIssue[] }
+export interface NewProject { appId: string; name: string; content?: string; description?: string; ideaId?: string; workflowId?: string | null; issues?: NewProjectIssue[] } // no issues: an empty project, filled later
 
 const BACKLOG = ['triage', 'backlog']
 const ACTIVE: BuildStatus[] = ['running', 'awaiting_answer', 'merging', 'testing']
@@ -43,9 +43,9 @@ async function insertSubIssues(tx: Tx, appId: string, projectId: string, parentI
   return rows
 }
 
-export async function createProject(input: NewProject, actor = 'engine') {
-  if (!input.name?.trim()) throw new PlanError('a project needs a name')
-  if (!input.issues?.length) throw new PlanError('a project needs at least one task')
+export async function createProject(given: NewProject, actor = 'engine') {
+  if (!given.name?.trim()) throw new PlanError('a project needs a name')
+  const input = { ...given, issues: given.issues ?? [] } // a project may start empty (Sandy, 2026-11-12): tasks are added, moved in, or drafted by the agent
   const all = input.issues.flatMap((t, ti) => (t.subIssues ?? []).map((s) => ({ ...s, issueIndex: ti })))
   const keys = new Map(all.map((s) => [s.key, s]))
   if (keys.size !== all.length) throw new PlanError('sub-task keys must be unique within the project')
