@@ -102,13 +102,16 @@ export interface StepsView { on: On; resolved: Resolved; states: StepState[]; ro
 export interface StepWork { id: string; key: StepKey; status: 'none' | 'started' | 'done'; detail: string | null; body: string | null; refs: string[]; updatedBy: string | null; updatedAt: string | null }
 export interface WorkflowRow extends Workflow { appDefault: boolean; projects: number; tasks: number }
 export interface IdeaRow { id: string; appId: string; number: number; title: string; body: string | null; lane: string }
-export interface AppSetup { integrations?: IntegrationValues; plugins?: Record<string, { on: boolean }>; pr_mode?: 'project' | 'issue'; test_cmd?: string; prototype_cmd?: string; prototype_db?: { url: string; env?: string; schema_cmd?: string }; model?: string; max_budget_usd?: number; max_turns?: number; references?: AppReference[] }
+export interface AppSetup { /** The repository an agent starts in, when the app has several (a repo id). */ home_repo?: string; integrations?: IntegrationValues; plugins?: Record<string, { on: boolean }>; pr_mode?: 'project' | 'issue'; test_cmd?: string; prototype_cmd?: string; prototype_db?: { url: string; env?: string; schema_cmd?: string }; model?: string; max_budget_usd?: number; max_turns?: number; references?: AppReference[] }
 /** Another app whose checkout this app's agents may read and never change (the engine's references.ts). */
 export interface AppReference { appId: string; note?: string }
 export interface Repo { id: string; appId: string; fullName: string; localPath: string | null; baseBranch: string | null }
 /** One of the person's repositories on GitHub, as gh lists them; `problem` is why there is no list (gh missing, signed out). */
 export interface GitHubRepo { fullName: string; defaultBranch: string; private: boolean }
 export interface GitHubRepos { repos: GitHubRepo[]; problem: string | null }
+/** A folder on the engine's computer and the git repositories in it (itself, or the ones directly inside); `path` null: the folder dialog was closed. */
+export interface FoundRepo { name: string; path: string; fullName: string | null; branch: string | null }
+export interface Folder { path: string | null; repos: FoundRepo[] }
 export interface App { id: string; workspaceId?: string; name: string; key: string; defaultBranch: string; setup?: AppSetup; repos?: Repo[] }
 export interface Workspace { id: string; name: string; settings?: { integrations?: IntegrationValues } }
 
@@ -269,6 +272,9 @@ export const engine = {
   githubRepos: () => call<GitHubRepos>('GET', '/github/repos'),
   updateApp: (id: string, body: { name?: string; defaultBranch?: string; setup?: AppSetup }) => call<App>('PATCH', `/apps/${id}`, body),
   createRepo: (body: { appId: string; fullName: string; localPath?: string; baseBranch?: string }) => call<Repo & { note: string | null }>('POST', '/repos', body),
+  deleteRepo: (id: string) => call<{ removed: string }>('DELETE', `/repos/${id}`),
+  /** Opens the folder dialog on the engine's computer (or scans `path`) and says which repositories are there. */
+  chooseFolder: (path?: string) => call<Folder>('POST', '/folders/choose', path ? { path } : {}),
   updateRepo: (id: string, body: { fullName?: string; localPath?: string | null; baseBranch?: string | null }) => call<Repo & { note: string | null }>('PATCH', `/repos/${id}`, body),
   projects: (appId?: string) => call<ProjectSummary[]>('GET', `/projects${appId ? `?app=${appId}` : ''}`),
   graph: (id: string) => call<Graph>('GET', `/projects/${id}/graph`),

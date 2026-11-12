@@ -52,6 +52,51 @@ export const AppReferences: Story = {
     await expect(c.getByLabelText('What Sample Blog is to Sample Shop')).toHaveValue('')
   },
 }
+/** Made up: an app of two repositories, the frontend as home and its backend cut from develop. */
+const shopApi = { id: 'repo_sample_api', appId: sampleApp.id, fullName: 'example/sample-shop-api', localPath: '/code/sample-shop-api', baseBranch: 'develop' }
+const twoRepos = { ...sampleApp, repos: [...sampleApp.repos!, shopApi], setup: { ...sampleApp.setup, home_repo: sampleApp.repos![0].id } }
+export const AppRepos: Story = {
+  parameters: appPage(sampleApp.id, 'repo'),
+  beforeEach: withEngine({ apps: [otherApp, twoRepos] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('example/sample-shop-api')).toBeVisible()
+    await expect(c.getByText('from develop')).toBeVisible()
+    await expect(c.getByLabelText('Home: example/sample-shop')).toBeChecked()
+    await userEvent.click(c.getByLabelText('Home: example/sample-shop-api')) // the backend becomes home: something to save
+    await expect(c.getByLabelText('Home: example/sample-shop')).not.toBeChecked()
+    await userEvent.click(c.getByRole('button', { name: 'Remove example/sample-shop' }))
+    await expect(c.queryByText('/code/sample-shop')).toBeNull()
+    await expect(c.queryByLabelText('Home: example/sample-shop-api')).toBeNull() // one repository left: nothing to choose
+  },
+}
+/** A folder chosen: the repositories in it, the app's own already ticked; ticking one adds it with its remote's name, and its branch when it isn't the app's. */
+export const AppReposFolderChosen: Story = {
+  parameters: appPage(sampleApp.id, 'repo'),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Choose folder…' }))
+    await expect(await c.findByText('Repositories in')).toBeVisible()
+    await expect(c.getByLabelText('sample-shop')).toBeChecked()
+    await expect(c.getByText('no GitHub remote')).toBeVisible() // old-site
+    await userEvent.click(c.getByLabelText('sample-shop-api'))
+    await expect(c.getByLabelText('Home: example/sample-shop-api')).not.toBeChecked()
+    await expect(c.getByText('from develop')).toBeVisible()
+    await userEvent.click(c.getByLabelText('sample-shop-api')) // unticked: it goes again
+    await expect(c.queryByLabelText('Home: example/sample-shop-api')).toBeNull()
+  },
+}
+/** A folder with no repository in it, and the dialog closed without a pick (nothing changes). */
+export const AppReposEmptyFolder: Story = {
+  parameters: appPage(sampleApp.id, 'repo'), beforeEach: withEngine({ folder: { path: '/code/notes', repos: [] } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Choose folder…' }))
+    await expect(await c.findByText(/No git repository in/)).toBeVisible()
+  },
+}
+/** No repository yet: the folder chooser is the way in. */
+export const AppReposNone: Story = { parameters: appPage('app_sample2', 'repo') }
 /** The only app: nothing to refer to yet, and the way on is to add the other repo as an app. */
 export const AppReferencesNoOthers: Story = { parameters: appPage(sampleApp.id, 'repo'), beforeEach: withEngine({ apps: [sampleApp] }) }
 export const AppBare: Story = { parameters: appPage('app_sample2'), beforeEach: withEngine({ appSettings: { integrations: {}, status: {}, plugins: [], skills: [] } }) }

@@ -6,6 +6,7 @@
 import type { StepState, Workflow } from '@self-evident/engine/steps'
 import type { Plan } from '../pages/PlanHome'
 import type {
+  Folder,
   App, AppSettings, BacklogIssue, Cycle, Decision, Event, FactorySettings, Graph, GraphIssue, GraphSubIssue, IdeaRow, Initiative, Issue,
   IssueDetail, IssueRow, Now, StepsView, StepWork, WorkflowRow, ProjectSummary, Prototype, Question, Run, Step, SummaryState, TalkMessage, TalkSession, ClaudeSession, Todo, Transcript, Workspace, GitHubRepos,
 } from '../engine'
@@ -22,6 +23,12 @@ export const sampleApp: App = {
 export const otherApp: App = { id: 'app_sample2', workspaceId: workspace.id, name: 'Sample Blog', key: 'SB', defaultBranch: 'main', setup: {}, repos: [] }
 export const apps = [otherApp, sampleApp] // the newest last: the app the UI picks when none is chosen
 
+/** A made-up folder holding three checkouts, as the folder chooser reports it: the shop's frontend (already the app's), its backend, and one with no remote. */
+export const folder: Folder = { path: '/code', repos: [
+  { name: 'old-site', path: '/code/old-site', fullName: null, branch: 'master' },
+  { name: 'sample-shop', path: '/code/sample-shop', fullName: 'example/sample-shop', branch: 'main' },
+  { name: 'sample-shop-api', path: '/code/sample-shop-api', fullName: 'example/sample-shop-api', branch: 'develop' },
+] }
 /** What gh would list for the sample person, for picking a repo when an app is made: made up. */
 export const githubRepos: GitHubRepos = { repos: [
   { fullName: 'example/sample-shop', defaultBranch: 'main', private: false },

@@ -38,7 +38,9 @@ import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, 
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { runner } from './runner.js'
-import { inOrder } from './workbench.js'
+import { homeRepo, inOrder } from './workbench.js'
+import { chooseFolder } from './folders.js'
+import { outsidePr, pr as prRows } from './db/schema.js'
 import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, setupIntegration, statuses, type Local, type Values } from './integrations.js'
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
 import { linearFor } from './linear-home.js'
@@ -61,7 +63,7 @@ export function buildApp(bus: EventBus) {
     routes: {
       'GET /health': 'database reachable?',
       'POST /workspaces': '{name}', 'POST /apps': '{workspaceId, name, key?, defaultBranch?, setup?}', 'POST /repos': '{appId, fullName, localPath?, baseBranch?}',
-      'GET /apps': 'all apps, each with its repos', 'PATCH /apps/:id': '{name?, defaultBranch?, setup?}', 'PATCH /repos/:id': '{fullName?, localPath?, baseBranch?}', 'GET /workspaces': 'all workspaces',
+      'GET /apps': 'all apps, each with its repos', 'PATCH /apps/:id': '{name?, defaultBranch?, setup?}', 'PATCH /repos/:id': '{fullName?, localPath?, baseBranch?}', 'DELETE /repos/:id': 'the repository leaves the app', 'POST /folders/choose': '{path?} → {path, repos: [{name, path, fullName, branch}]}; no path opens the folder dialog', 'GET /workspaces': 'all workspaces',
       'GET /apps/:id/graph': 'the top-level graph: every sub-task of every project in the app', 'GET /now': 'the front door: running, needs you, recent',
       'POST /projects': '{appId, name, content?, description?, ideaId?, issues: [{title, description?, brief?, subIssues?: [{key, title, brief?, dependsOn?, files?}]}]}',
       'GET /projects?app=': 'the app\'s projects with counts', 'GET /projects/:id/graph': 'tasks in order, sub-tasks with builds, edges, claims, held reasons, last run, steps, the PR, backlog, to-dos',
@@ -256,11 +258,14 @@ export function buildApp(bus: EventBus) {
     return row ? c.json(row) : c.json({ error: 'no such app' }, 404)
   })
   // A local checkout is made ready as it is set (a folder becomes a repository; the branch follows); the row comes back with a `note` saying what was done.
-  const readyCheckout = async (appId: string, localPath: string) => {
+  // The app's default branch follows its home repository only; another of its repositories has its own base branch.
+  const readyCheckout = async (appId: string, localPath: string, own: { repoId?: string; baseBranch?: string | null } = {}) => {
     const [a] = await db.select().from(appTable).where(eq(appTable.id, appId))
     if (!a) throw new PlanError('no such app')
-    const p = await prepareCheckout(localPath, a.defaultBranch, a.name)
-    if (p.branch !== a.defaultBranch) await db.update(appTable).set({ defaultBranch: p.branch }).where(eq(appTable.id, appId))
+    const home = await homeRepo(appId)
+    const mate = !!home && home.id !== own.repoId
+    const p = await prepareCheckout(localPath, mate ? own.baseBranch ?? a.defaultBranch : a.defaultBranch, a.name)
+    if (!mate && p.branch !== a.defaultBranch) await db.update(appTable).set({ defaultBranch: p.branch }).where(eq(appTable.id, appId))
     return p.note
   }
   api.patch('/repos/:id', async (c) => {
@@ -269,7 +274,7 @@ export function buildApp(bus: EventBus) {
     if (!was) return c.json({ error: 'no such repo' }, 404)
     const localPath = body.localPath?.trim() || null
     let note: string | null = null
-    try { if (localPath) note = await readyCheckout(was.appId, localPath) } catch (err) { return planError(c, err) }
+    try { if (localPath) note = await readyCheckout(was.appId, localPath, { repoId: was.id, baseBranch: body.baseBranch !== undefined ? body.baseBranch : was.baseBranch }) } catch (err) { return planError(c, err) }
     const [row] = await db.update(repoTable).set({ ...(body.fullName !== undefined ? { fullName: body.fullName } : {}), ...(body.localPath !== undefined ? { localPath } : {}), ...(body.baseBranch !== undefined ? { baseBranch: body.baseBranch } : {}) })
       .where(eq(repoTable.id, was.id)).returning()
     return c.json({ ...row, note })
@@ -327,9 +332,25 @@ export function buildApp(bus: EventBus) {
     const body = await c.req.json<{ appId: string; fullName: string; localPath?: string; baseBranch?: string }>()
     const localPath = body.localPath?.trim() || null
     let note: string | null = null
-    try { if (localPath) note = await readyCheckout(body.appId, localPath) } catch (err) { return planError(c, err) }
+    try { if (localPath) note = await readyCheckout(body.appId, localPath, { baseBranch: body.baseBranch }) } catch (err) { return planError(c, err) }
     const [row] = await db.insert(repoTable).values({ id: newId('repo'), appId: body.appId, fullName: body.fullName, localPath, baseBranch: body.baseBranch ?? null }).returning()
     return c.json({ ...row, note }, 201)
+  })
+  // A repository leaves the app: its row and the teammates' pull requests kept for it. Our own pull requests stay, without it. The checkout is not touched.
+  api.delete('/repos/:id', async (c) => {
+    const [was] = await db.select().from(repoTable).where(eq(repoTable.id, c.req.param('id')))
+    if (!was) return c.json({ error: 'no such repo' }, 404)
+    await db.transaction(async (tx) => {
+      await tx.delete(outsidePr).where(eq(outsidePr.repoId, was.id))
+      await tx.update(prRows).set({ repoId: null }).where(eq(prRows.repoId, was.id))
+      await tx.delete(repoTable).where(eq(repoTable.id, was.id))
+    })
+    return c.json({ removed: was.id })
+  })
+  // A folder on this computer and the repositories in it: the one named, or the one picked in the system's folder dialog (folders.ts).
+  api.post('/folders/choose', async (c) => {
+    const body = await c.req.json<{ path?: string }>().catch(() => ({} as { path?: string }))
+    try { return c.json(await chooseFolder(body.path)) } catch (err) { return planError(c, err) }
   })
 
   // Talk: an interactive agent session, the conversation as rows and events, permissions answered from the UI.
