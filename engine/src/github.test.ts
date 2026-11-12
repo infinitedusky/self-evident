@@ -33,7 +33,8 @@ describe.skipIf(!reachable)('github sync', () => {
   const wsId = newId('workspace')
   let appId: string, repoId: string, local: string, teammate: string
   const retargeted: [number, string][] = []
-  const fake = (prs: GhPr[]): GitHubApi => ({ me: async () => 'sandy', listPrs: async () => prs, retarget: async (_f, n, base) => { retargeted.push([n, base]) } })
+  // Like GitHub: the list carries no checks; they come one PR at a time.
+  const fake = (prs: GhPr[]): GitHubApi => ({ me: async () => 'sandy', listPrs: async () => prs.map(({ statusCheckRollup: _, ...g }) => g), checks: async (_f, n) => prs.find((g) => g.number === n)?.statusCheckRollup ?? [], retarget: async (_f, n, base) => { retargeted.push([n, base]) } })
   beforeAll(async () => {
     const dir = await mkdtemp(join(tmpdir(), 'if-github-'))
     await git(dir, ['init', '-q', '--bare', '-b', 'main', 'origin.git'])
