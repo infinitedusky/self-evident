@@ -9,7 +9,7 @@ import { Link, NavLink, useLocation, useMatch, useNavigate, useParams } from 're
 import { Badge } from '../components/Badge'
 import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
-import { engine, type AgentRole, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type GitHubRepos, type PluginInfo, type Repo } from '../engine'
+import { engine, type AgentRole, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
@@ -284,7 +284,9 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   const [name, setName] = useState(app.name)
   const [branch, setBranch] = useState(app.defaultBranch)
   const [setup, setSetup] = useState<AppSetup>(app.setup ?? {})
-  const [repo, setRepo] = useState<Partial<Repo>>(app.repos?.[0] ?? { fullName: '', localPath: '' })
+  const was = (app.repos ?? []).map(rowOf) // the engine lists home first
+  const [repos, setRepos] = useState<RepoRow[]>(was)
+  const [home, setHome] = useState<string | null>(was[0]?.key ?? null)
   const [info, setInfo] = useState<AppSettingsData | null>(null)
   const [factory, setFactory] = useState<FactorySettings | null>(null)
   const [gh, setGh] = useState<GitHubRepos | null>(null)
@@ -298,16 +300,28 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   useEffect(() => { setBranch(app.defaultBranch) }, [app.defaultBranch]) // the engine may have made the checkout's branch the default
 
   const dirty = name !== app.name || branch !== app.defaultBranch || JSON.stringify(setup) !== JSON.stringify(app.setup ?? {})
-    || repo.fullName !== (app.repos?.[0]?.fullName ?? '') || (repo.localPath ?? '') !== (app.repos?.[0]?.localPath ?? '')
+    || repos.map((r) => r.key).join() !== was.map((r) => r.key).join() || (repos.length > 1 && homeOf(repos, home) !== was[0]?.key)
   const num = (v: string) => (v.trim() === '' ? undefined : Number(v))
   const set = (patch: Partial<AppSetup>) => setSetup({ ...setup, ...patch })
   const save = async () => {
     setBusy(true); setError(null)
     try {
-      await engine.updateApp(app.id, { name: name.trim(), defaultBranch: branch.trim() || 'main', setup: clean(setup) })
-      const saved = repo.id ? await engine.updateRepo(repo.id, { fullName: repo.fullName ?? '', localPath: repo.localPath?.trim() || null })
-        : repo.fullName?.trim() || repo.localPath?.trim() ? await engine.createRepo({ appId: app.id, fullName: repo.fullName?.trim() ?? '', localPath: repo.localPath?.trim() || undefined }) : null
-      if (saved) { const { note: said, ...row } = saved; setRepo(row); setNote(said) }
+      const homeKey = homeOf(repos, home)
+      const many = (id?: string) => ({ ...setup, home_repo: repos.length > 1 ? id : undefined })
+      await engine.updateApp(app.id, { name: name.trim(), defaultBranch: branch.trim() || 'main', setup: clean(many(repos.find((r) => r.key === homeKey)?.id ?? setup.home_repo)) })
+      for (const r of was.filter((w) => !repos.some((x) => x.key === w.key))) await engine.deleteRepo(r.id!)
+      const notes: string[] = []
+      const rows: RepoRow[] = []
+      for (const r of [...repos].sort((x, y) => Number(y.key === homeKey) - Number(x.key === homeKey))) { // home first: the app's default branch follows it
+        if (r.id) { rows.push(r); continue }
+        const { note: said, ...made } = await engine.createRepo({ appId: app.id, fullName: r.fullName, localPath: r.localPath || undefined, baseBranch: r.baseBranch || undefined })
+        if (said) notes.push(said)
+        rows.push({ ...rowOf(made), key: r.key })
+      }
+      const homeId = rows.find((r) => r.key === homeKey)?.id
+      if (repos.length > 1 && homeId && repos.find((r) => r.key === homeKey)?.id !== homeId) await engine.updateApp(app.id, { setup: clean(many(homeId)) }) // home was only just made
+      setRepos(rows.map((r) => ({ ...r, key: r.id! }))); setHome(homeId ?? null); setSetup(clean(many(homeId)))
+      if (notes.length) setNote(notes.join(' '))
       await onSaved(); await load()
     } catch (e) { setError(err(e)) } finally { setBusy(false) }
   }
@@ -318,11 +332,11 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
     : error ? <div className="empty bad">{error}</div> : <p className="muted">Loading…</p>
   const groups: Record<string, React.ReactNode> = {
     repo: <>
-      <Group title="Repo" lead="The code and the checkout on this machine the agents work from.">
+      <Group title="Repo" lead="What the app is called, and the branch its work is cut from.">
         <label>Name<input value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label>Default branch<input className="mono" value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" /></label>
-        <RepoFields fullName={repo.fullName ?? ''} localPath={repo.localPath ?? ''} gh={gh} onChange={(p) => setRepo({ ...repo, ...p })} />
       </Group>
+      <Repos appName={app.name} defaultBranch={branch.trim() || 'main'} rows={repos} home={homeOf(repos, home)} gh={gh} onRows={setRepos} onHome={setHome} />
       <References app={app} others={others} value={setup.references ?? []} onChange={(references) => set({ references: references.length ? references : undefined })} />
       {note && <p className="settings-note" data-component="CheckoutNote"><Badge tone="ok">Set up</Badge><span>{note}</span></p>}
     </>,
@@ -333,7 +347,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         <label>Turns per run<input type="number" min={1} step={1} value={setup.max_turns ?? ''} onChange={(e) => set({ max_turns: num(e.target.value) })} placeholder="60" /></label>
         <div style={{ gridColumn: '1 / -1' }}>
           <div className="label-text">Skills in this repo</div>
-          {info?.skills.length ? <SkillList skills={info.skills} /> : <div className="faint settings-desc">None in <span className="mono">.claude/skills/</span>{repo.localPath ? '' : ' (no local checkout set)'}. Plugins' skills apply too: see Plugins below and <NavLink to="/settings">All apps</NavLink>.</div>}
+          {info?.skills.length ? <SkillList skills={info.skills} /> : <div className="faint settings-desc">None in <span className="mono">.claude/skills/</span>{repos[0]?.localPath ? '' : ' (no local checkout set)'}. Plugins' skills apply too: see Plugins below and <NavLink to="/settings">All apps</NavLink>.</div>}
         </div>
       </Group>
     </>,
@@ -436,6 +450,83 @@ function References({ app, others, value, onChange }: { app: App; others: App[];
             )
           })}
         </ul>}
+    </div>
+  )
+}
+
+/** One of the app's repositories on the Repo page: saved (it has an id) or chosen and not saved yet. */
+interface RepoRow { key: string; id?: string; fullName: string; localPath: string; baseBranch: string | null }
+const rowOf = (r: { id: string; fullName: string; localPath: string | null; baseBranch: string | null }): RepoRow => ({ key: r.id, id: r.id, fullName: r.fullName, localPath: r.localPath ?? '', baseBranch: r.baseBranch })
+/** Home is the one picked, or the first when that one has gone. */
+const homeOf = (rows: RepoRow[], home: string | null) => (rows.some((r) => r.key === home) ? home : rows[0]?.key ?? null)
+
+/**
+ * The app's repositories (LOG.md, "The workbench"): one or several, chosen by folder. Choose folder… opens the folder
+ * dialog on the engine's computer and lists the git repositories in the folder picked (itself, or the ones directly
+ * inside); ticking one adds it with the GitHub name its origin remote gives. With more than one, one is home.
+ */
+function Repos({ appName, defaultBranch, rows, home, gh, onRows, onHome }: { appName: string; defaultBranch: string; rows: RepoRow[]; home: string | null; gh: GitHubRepos | null; onRows: (r: RepoRow[]) => void; onHome: (key: string) => void }) {
+  const [folder, setFolder] = useState<Folder | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+  const [byHand, setByHand] = useState({ fullName: '', localPath: '' })
+  const choose = async () => {
+    setBusy(true); setProblem(null)
+    try { const f = await engine.chooseFolder(); if (f.path) setFolder(f) } catch (e) { setProblem(err(e)) } finally { setBusy(false) }
+  }
+  const label = (r: RepoRow) => r.fullName || r.localPath
+  const add = (r: Omit<RepoRow, 'key'>) => onRows([...rows, { ...r, key: `new:${r.localPath || r.fullName}` }])
+  return (
+    <div className="settings-group" data-component="Repos">
+      <h3 className="settings-h3">Repositories</h3>
+      <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>The code {appName} is made of, each with its checkout on this machine. With more than one, a conversation gets a worktree in each and a change in several is a pull request in each; home is where an agent starts, and where Storybook, tests and prototypes run.</p>
+      {rows.length === 0
+        ? <p className="faint settings-desc">None yet. Choose the folder its code is in.</p>
+        : <ul className="repos">
+          {rows.map((r) => (
+            <li key={r.key}>
+              {rows.length > 1 && <label className="repo-home" title="Where an agent starts"><input type="radio" name="home-repo" aria-label={`Home: ${label(r)}`} checked={r.key === home} onChange={() => onHome(r.key)} /> Home</label>}
+              <span className="repo-names">
+                <span className="mono">{r.fullName || <span className="faint">no GitHub repo</span>}</span>
+                <span className="mono faint">{r.localPath || 'no checkout on this machine'}</span>
+              </span>
+              {r.baseBranch && r.baseBranch !== defaultBranch && <span className="faint">from {r.baseBranch}</span>}
+              {!r.id && <Badge tone="warn">not saved</Badge>}
+              <button type="button" className="btn quiet small" aria-label={`Remove ${label(r)}`} title="The app stops using it; the folder is not touched" onClick={() => onRows(rows.filter((x) => x.key !== r.key))}>Remove</button>
+            </li>
+          ))}
+        </ul>}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 10 }}>
+        <button type="button" className="btn quiet" disabled={busy} onClick={() => void choose()}>{busy ? 'Choosing…' : 'Choose folder…'}</button>
+        <span className="faint settings-desc">Opens the folder dialog on this computer: pick the folder the repositories are in, or one repository.</span>
+      </div>
+      {problem && <div className="empty bad" style={{ marginTop: 8 }}>{problem}</div>}
+      {folder && <div className="repos-found" data-component="FolderRepos">
+        <div className="label-text">Repositories in <span className="mono">{folder.path}</span></div>
+        {folder.repos.length === 0
+          ? <p className="faint settings-desc">No git repository in <span className="mono">{folder.path}</span> or directly inside it. Choose another folder.</p>
+          : <ul className="references">
+            {folder.repos.map((f) => {
+              const mine = rows.find((r) => r.localPath === f.path)
+              return (
+                <li key={f.path}>
+                  <label><input type="checkbox" checked={!!mine} onChange={(e) => (e.target.checked
+                    ? add({ fullName: f.fullName ?? '', localPath: f.path, baseBranch: f.branch && f.branch !== defaultBranch && rows.length > 0 ? f.branch : null })
+                    : onRows(rows.filter((r) => r.key !== mine!.key)))} /> {f.name}</label>
+                  <span className="mono faint">{f.fullName ?? 'no GitHub remote'}</span>
+                  {f.branch && <span className="faint">{f.branch}</span>}
+                </li>
+              )
+            })}
+          </ul>}
+      </div>}
+      <details className="repos-by-hand">
+        <summary className="faint">Add one by hand</summary>
+        <div className="form-grid" style={{ marginTop: 8 }}>
+          <RepoFields fullName={byHand.fullName} localPath={byHand.localPath} gh={gh} onChange={(p) => setByHand({ ...byHand, ...p })} />
+        </div>
+        <button type="button" className="btn quiet" disabled={!byHand.fullName.trim() && !byHand.localPath.trim()} onClick={() => { add({ fullName: byHand.fullName.trim(), localPath: byHand.localPath.trim(), baseBranch: null }); setByHand({ fullName: '', localPath: '' }) }}>Add</button>
+      </details>
     </div>
   )
 }

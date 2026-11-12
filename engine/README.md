@@ -130,6 +130,7 @@ committed event as it happens, via Postgres `LISTEN/NOTIFY`. Several clients can
 | `src/handoff.ts`, `src/cli/handoff.ts` | Moving between computers: `leave` sends each conversation's worktree and history out, `arrive` brings them in and starts the engine; the launchd agents and the database's proxy. |
 | `src/machine.ts`, `src/db/home-path.ts` | Each computer registers its name, user and root; path columns are stored from the root (`~/…`) and read back under this computer's. |
 | `src/references.ts` | Reference apps: other apps whose checkout an app's agents may read and never change. |
+| `src/folders.ts` | Choosing an app's repositories by folder: the system's folder dialog, and the git repositories in the folder picked. |
 | `src/workbench.ts` | An app's repositories: which is home, and a piece of work's worktree in each of the others. |
 
 `pnpm test` runs the scheduler and landing tests anywhere (landing uses a throwaway git repo) and, when Postgres

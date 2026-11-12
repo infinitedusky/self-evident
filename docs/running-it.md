@@ -163,15 +163,14 @@ with the GitHub repo field filled and `gh` on the other account, the sync and pu
 
 **One app with both repositories**, when a ticket can touch either or both. A conversation gets a worktree in
 each, on the same branch, and opens a pull request in each one it changed. One is home: the folder the agent
-starts in, and where the app's Storybook, test command and prototypes run. Settings shows and edits the home
-repository only, so the second is added through the API for now:
+starts in, and where the app's Storybook, test command and prototypes run.
 
-```sh
-curl -X POST localhost:4000/api/repos -H 'content-type: application/json' \
-  -d '{"appId":"app_…","fullName":"owner/the-other-repo","localPath":"/path/to/its/checkout","baseBranch":"main"}'
-```
+Settings › the app › Repo › Repositories: Choose folder… opens the folder dialog on this computer. Pick the folder
+the checkouts are in (or one checkout); the repositories found there are listed, each with the GitHub name its
+origin remote gives, and ticking one adds it. With more than one, pick which is home; Remove takes one out of the
+app and leaves its folder alone. Save applies it. The dialog is the Mac's; elsewhere, "Add one by hand".
 
-Home is the first by name unless the app's set-up names one (`setup.home_repo`, a repo id). So far only
+So far only
 conversations work across the repositories; the planner, the builder, a task's own agent, checks, prototypes,
 Storybook and catching up from main work in home only.
 

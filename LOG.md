@@ -2365,5 +2365,33 @@ Not built yet, in the order planned: the builder and a task's own agent (they st
 planner, checks and prototypes; catching up from main for the mates' branches; Settings for a second repository
 and for choosing home (the API takes both today; Settings edits home only); merging the two apps of that product into
 one; then tasks from Linear tickets, which is what this is for. Known gap: the GitHub sync matches a pull request
-to ours by number, and a `pr` row recorded without its repository could match the same number in a mate. Not
-tried with a live agent yet. Code: `workbench.ts`; tests: `workbench.test.ts` (two real git repositories).
+to ours by number, and a `pr` row recorded without its repository could match the same number in a mate. Code: `workbench.ts`; tests: `workbench.test.ts` (two real git repositories).
+
+**Tried the same day, with a live agent.** The two apps of Sandy's two-repository product were made one (the
+second repository and its kept pull requests moved under the first app, the emptied app removed; by hand in the
+database, since nothing in the API moves a repository). A conversation there got a worktree in each on one branch,
+its agent named both folders and said a change in both is a pull request in each, and ending it removed both.
+Found by that agent: those repositories' own rules want a branch named after the ticket, and ours are `talk/<id>`.
+Open, and it belongs with tasks from Linear tickets: the branch should come from the ticket.
+
+## An app's repositories are chosen by folder (Sandy, 2026-11-12: "repo needs to be choosing multiple repos … select local folder and make that a chooser … then it will have a list of the repos in that folder … choosing them should give you the remote for each automatically")
+
+Settings showed one repository, the first, with a typed path; a second one was there and could not be seen.
+Decided, with Sandy: the Repo page lists every repository of the app, and they are added by choosing a folder.
+
+- **Choose folder…** asks the engine, which is on the person's computer, to open the system's folder dialog (a
+  web page is never given a folder's path). The engine says which git repositories are in the folder picked: the
+  folder itself, or the ones directly inside it. Each comes with the GitHub name read from its origin remote
+  (whatever the host is called in `~/.ssh/config`) and its default branch. Ticking one adds it; nothing is typed.
+- With more than one, a radio button says which is **home**. **Remove** takes a repository out of the app (and the
+  teammates' pull requests kept for it); the folder is not touched. One Save applies the lot, as on the rest of
+  the page. "Add one by hand" keeps the old two fields, for a repository with no checkout here or a system without
+  the dialog (it is the Mac's, through `osascript`).
+- A repository added to an app that already has a home no longer changes the app's default branch: it carries its
+  own base branch when that differs.
+
+Code: `engine/src/folders.ts` (`POST /folders/choose`, `DELETE /repos/:id`), `Repos` in `app/src/pages/Settings.tsx`.
+Tests: `folders.test.ts` (real git repositories); stories `Pages/Settings › App Repos`, `App Repos Folder Chosen`,
+`App Repos Empty Folder`, `App Repos None` (made-up repositories). Not done: New app still takes one typed
+repository; a saved row cannot be edited, only removed and added again. Not tried: the dialog itself, which needs
+a person at the screen.
