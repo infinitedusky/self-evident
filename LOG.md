@@ -2443,3 +2443,12 @@ idea's body and notes, a to-do's notes and why it was dropped, a question, its o
 and its rationale, why a task was canceled, a run's summary, the summary page's lines, a question on Now. Left as
 typed: what the person says in a conversation, tool output, errors, and one-line labels from the engine. Stories:
 `Components/Md`. New text shown anywhere should go through `Md`.
+
+## The type is Linear's (Sandy, 2026-11-12, a task beside the same ticket in Linear: "can we update the font to be a little more linear like")
+
+The fonts were InDusk's and marked provisional: Bricolage Grotesque for headings, IBM Plex Sans for text. Decided:
+Inter for both, as Linear has it, with semibold headings, a 1.6 line height and smoothed rendering; IBM Plex Mono
+stays for code. Written text (`Md`) follows Linear's issue page: larger section headings with room above them,
+looser lists, code in a bordered chip, and links in Linear's indigo with no underline until hovered (a new token,
+`--link`). Storybook now loads the same fonts as the app (`.storybook/preview-head.html`); before, stories fell
+back to the system font. The palette is still InDusk's and still provisional.
