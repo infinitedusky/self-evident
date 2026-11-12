@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { expect, spyOn, userEvent, within } from 'storybook/test'
 import { IssuePage } from './IssuePage'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
 import { approvedTaskStepsView, issueDetails, waitingTaskStepsView } from '../stories/sample'
@@ -51,5 +52,26 @@ export const Commented: Story = { parameters: at('iss_sample22') }
 /** A failed build, with Retry. */
 export const BuildFailed: Story = { parameters: at('iss_sample5'), beforeEach: withEngine({ issueDetails: { ...sampleData.issueDetails,
   iss_sample5: { ...issueDetails.iss_sample5, build: { status: 'failed', attempt: 3, heldReason: 'landing failed at test: tests failed (exit 1)' } } } }) }
+/** Delete, on a task with work on it: the engine refuses and says what to do instead (made up: two agent runs). */
+export const DeleteRefused: Story = {
+  parameters: at('iss_sample16'),
+  beforeEach: (ctx) => { spyOn(window, 'confirm').mockReturnValue(true); withEngine({ deleteProblem: "SS-16 has work on it (2 agent runs), so it can't be deleted: cancel it instead, and its record stays." })(ctx) },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Delete' }))
+    await expect(await c.findByText(/has work on it \(2 agent runs\)/)).toBeVisible()
+    await expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("This can't be undone."))
+  },
+}
+/** Delete, asked and declined: nothing happens. */
+export const DeleteDeclined: Story = {
+  parameters: at('iss_sample16'),
+  beforeEach: () => { spyOn(window, 'confirm').mockReturnValue(false) },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Delete' }))
+    await expect(c.getByRole('button', { name: 'Delete' })).toBeEnabled()
+  },
+}
 export const Loading: Story = { parameters: at('iss_sample1'), beforeEach: withEngine({}, { latency: 'infinite' }) }
 export const EngineDown: Story = { parameters: at('iss_sample1'), beforeEach: withEngine(engineDown) }

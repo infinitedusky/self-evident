@@ -19,6 +19,7 @@ export interface MockData {
   setup: { done: boolean; did: string[]; ask: string | null; detail: string; talkId: string | null }
   trackerGuide: string
   githubRepos: typeof s.githubRepos; repoNote: string | null; folder: typeof s.folder
+  /** Why a task can't be deleted, as the engine says it; null when it can. */ deleteProblem: string | null
   linearTickets: typeof s.linearTickets; /** Why Linear can't be read, as the engine says it; null when it can. */ linearProblem: string | null
   plan: typeof s.plan; workflows: typeof s.workflowRows; steps: Record<string, typeof s.taskStepsView>; stepWork: typeof s.researchWork | null
 }
@@ -34,7 +35,7 @@ export const sampleData: MockData = {
   check: { ok: true, detail: 'Signed in as Sample Owner; team SHOP (Sample Shop) found.' },
   setup: { done: false, did: ['Wrote docs/agents/issue-tracker.md, pointing at SS here.', 'Wrote docs/agents/forge.md, docs/agents/workflow.md, docs/agents/domain.md, docs/agents/pull-request.md and the Ticket lifecycle block in CLAUDE.md, from the app, the repo and the house profile.', 'Committed to main and pushed (abc1234).'], ask: 'Self Evident\'s tkt check for Sample Shop (SS) says: tkt doctor: fail herdr herdr is not installed. (sample)', detail: 'tkt doctor: fail  herdr  herdr is not installed. Get tkt working: https://gitlab.com/rogs/tkt', talkId: 'sess_sample_setup' },
   trackerGuide: s.trackerGuideSample,
-  githubRepos: s.githubRepos, repoNote: s.repoNote, folder: s.folder, linearTickets: s.linearTickets, linearProblem: null,
+  githubRepos: s.githubRepos, repoNote: s.repoNote, folder: s.folder, linearTickets: s.linearTickets, linearProblem: null, deleteProblem: null,
   plan: s.plan, workflows: s.workflowRows, steps: { ideas: s.ideaStepsView, issues: s.taskStepsView, projects: s.projectStepsView }, stepWork: s.researchWork,
 }
 
@@ -61,6 +62,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/apps', async ({ request }) => { const b = await request.json() as { name: string }; return reply({ ...s.otherApp, id: 'app_new', name: b.name, key: 'NEW', note: d.repoNote }) }),
     http.post('/api/repos', () => reply({ ...s.sampleApp.repos![0], note: d.repoNote })),
     http.patch('/api/repos/:id', () => reply({ ...s.sampleApp.repos![0], note: d.repoNote })),
+    http.delete('/api/issues/:id', () => (d.deleteProblem ? HttpResponse.json({ error: d.deleteProblem }, { status: 400 }) : reply({ deleted: 'SS-16', title: 'sample', subIssues: 0, talksEnded: 0 }))),
     http.delete('/api/repos/:id', ({ params }) => reply({ removed: params.id })),
     http.post('/api/folders/choose', () => reply(d.folder)),
     http.get('/api/apps/:id/linear/tickets', ({ request }) => {

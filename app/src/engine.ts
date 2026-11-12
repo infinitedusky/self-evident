@@ -298,6 +298,8 @@ export const engine = {
   issues: (appId: string, f: { kind?: 'code' | 'todo'; project?: string; top?: boolean; open?: boolean } = {}) => call<Issue[]>('GET', `/issues?app=${appId}${f.kind ? `&kind=${f.kind}` : ''}${f.project ? `&project=${f.project}` : ''}${f.top ? '&top=1' : ''}${f.open ? '&open=1' : ''}`),
   issue: (id: string) => call<IssueDetail>('GET', `/issues/${id}`),
   createIssue: (body: { appId: string; title: string; kind?: 'code' | 'todo'; brief?: string; description?: string; projectId?: string; parentId?: string; state?: 'todo' | 'backlog'; workflowId?: string }) => call<Issue>('POST', '/issues', body),
+  /** A task with no work on it, gone with its sub-tasks; the engine refuses one with work on it and says to cancel it. */
+  deleteIssue: (id: string) => call<{ deleted: string; title: string; subIssues: number; talksEnded: number }>('DELETE', `/issues/${id}`),
   updateIssue: (id: string, body: { title?: string; description?: string | null; brief?: string | null; priority?: number; projectId?: string | null; cycleId?: string | null }) => call<Issue>('PATCH', `/issues/${id}`, body),
   setState: (id: string, state: IssueState, reason?: string) => call<Issue>('POST', `/issues/${id}/state`, { state, reason }),
   reorder: (ids: string[]) => call<string[]>('POST', '/issues/reorder', { ids }),
@@ -337,7 +339,7 @@ export const engine = {
 
 export const EVENT_TYPES = [
   'project.created', 'project.started', 'project.landed', 'project.cleaned', 'project.cancelled', 'project.paused', 'project.resumed', 'project.described',
-  'issue.created', 'issue.updated', 'issue.state', 'issue.reordered', 'issue.cleared', 'issue.planning', 'issue.planned', 'issue.plan_failed', 'issue.plan_waiting', 'issue.commented',
+  'issue.created', 'issue.deleted', 'issue.updated', 'issue.state', 'issue.reordered', 'issue.cleared', 'issue.planning', 'issue.planned', 'issue.plan_failed', 'issue.plan_waiting', 'issue.commented',
   'question.asked', 'question.answered', 'initiative.created', 'initiative.updated', 'cycle.created',
   'talk.message', 'talk.permission', 'talk.result', 'idea.created', 'idea.converted', 'step.updated', 'brief.approved', 'brief.unapproved', 'workflow.saved', 'workflow.used', 'engine.hold', 'engine.resumed',
   'pr.merged', 'pr.closed', 'pr.retargeted', 'pr.review', 'pr.checks', 'review.requested', 'project.caught_up', 'project.behind_main',
