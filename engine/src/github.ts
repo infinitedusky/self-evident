@@ -27,14 +27,17 @@ export interface GhPr {
   statusCheckRollup?: { name?: string; context?: string; status?: string; conclusion?: string; state?: string }[]
   mergeable?: string; mergedAt?: string | null; updatedAt?: string; files?: { path: string }[]; mergeCommit?: { oid: string } | null
 }
-export interface GitHubApi { me: () => Promise<string>; listPrs: (fullName: string, cwd: string) => Promise<GhPr[]>; retarget: (fullName: string, number: number, base: string, cwd: string) => Promise<void> }
+export interface GitHubApi { me: () => Promise<string>; listPrs: (fullName: string, cwd: string) => Promise<GhPr[]>; retarget: (fullName: string, number: number, base: string, cwd: string) => Promise<void>; checks: (fullName: string, number: number, cwd: string) => Promise<GhPr['statusCheckRollup']> }
 
-const FIELDS = 'number,title,url,state,isDraft,author,headRefName,baseRefName,reviewDecision,reviewRequests,statusCheckRollup,mergeable,mergedAt,updatedAt,files,mergeCommit'
+// No statusCheckRollup here: a big repo's PRs carry 100+ checks each, and asking for them across 60 PRs times GitHub
+// out (502/504). Checks are asked for one PR at a time, only for ours (see `checks`).
+const FIELDS = 'number,title,url,state,isDraft,author,headRefName,baseRefName,reviewDecision,reviewRequests,mergeable,mergedAt,updatedAt,files,mergeCommit'
 let login: string | null = null
 export const ghCli: GitHubApi = {
   me: async () => (login ??= (await execFileP('gh', ['api', 'user', '--jq', '.login'])).stdout.trim()),
   retarget: async (fullName, number, base, cwd) => { await execFileP('gh', ['pr', 'edit', String(number), '-R', fullName, '--base', base], { cwd }) },
   listPrs: async (fullName, cwd) => JSON.parse((await execFileP('gh', ['pr', 'list', '-R', fullName, '--state', 'all', '--limit', '60', '--json', FIELDS], { cwd, maxBuffer: 32 * 1024 * 1024 })).stdout),
+  checks: async (fullName, number, cwd) => JSON.parse((await execFileP('gh', ['pr', 'view', String(number), '-R', fullName, '--json', 'statusCheckRollup'], { cwd, maxBuffer: 32 * 1024 * 1024 })).stdout).statusCheckRollup ?? [],
 }
 
 /** The CI checks, as one word: passing, failing, pending, or none. */
@@ -65,11 +68,13 @@ export async function syncPrs(appId: string, api: GitHubApi = ghCli) {
       const p = projects.find((x) => x.integrationBranch === g.headRefName || g.headRefName.startsWith(`${x.integrationBranch}--`)) // the project's branch, or one of its issue branches
       if (!known && !p) { await keepOutside(appId, r.id, g, me); continue } // not ours: a teammate's, or opened by hand
       if (!known) continue // our branch, but a PR we never recorded: leave it
-      const checks = checksOf(g.statusCheckRollup)
-      const signals = { review: g.reviewDecision || null, checks: checks.state, failing: checks.failing, mergeable: g.mergeable ?? null, syncedAt: new Date().toISOString() }
       const status = g.state === 'OPEN' ? (g.isDraft ? 'draft' : 'open') : STATE[g.state]
       const before = known
-      const prev = (before.signals ?? {}) as { review?: string | null; checks?: string }
+      const prev = (before.signals ?? {}) as { review?: string | null; checks?: string; failing?: string[] }
+      // Checks are fetched only while the PR is open, or the sync that sees it merge or close; after that they keep.
+      const fresh = status === 'open' || status === 'draft' || before.status !== status
+      const checks = fresh ? checksOf(await api.checks(r.fullName, g.number, r.localPath!)) : { state: prev.checks ?? 'none', failing: prev.failing ?? [] }
+      const signals = { review: g.reviewDecision || null, checks: checks.state, failing: checks.failing, mergeable: g.mergeable ?? null, syncedAt: new Date().toISOString() }
       await db.update(prTable).set({ status, signals, repoId: r.id, url: g.url, headBranch: g.headRefName, baseBranch: g.baseRefName, changedFiles: g.files?.length ?? null, mergedAt: g.mergedAt ? new Date(g.mergedAt) : null, mergeSha: g.mergeCommit?.oid ?? null }).where(eq(prTable.id, before.id))
       const projectId = before.projectId
       const base = { workspaceId: a.workspaceId, appId, projectId, actor: 'github' }
