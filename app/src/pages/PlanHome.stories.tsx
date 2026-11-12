@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { fn } from 'storybook/test'
+import { expect, fn } from 'storybook/test'
 import { PlanHome } from './PlanHome'
-import { plan } from '../stories/sample'
+import { plan, sampleApp } from '../stories/sample'
 
 // Plan's page: the rail opens it. Made up: one project with three tasks at different points, and a stand-alone fix.
 const meta = { title: 'Pages/PlanHome', component: PlanHome, parameters: { layout: 'fullscreen' }, args: { plan, app: 'Sample Shop', onNewTask: fn(async () => {}) }, render: (a) => <div className="tab-page"><PlanHome {...a} /></div> } satisfies Meta<typeof PlanHome>
@@ -20,6 +20,17 @@ export const NewTaskRefused: Story = {
     await userEvent.type(canvas.getByPlaceholderText(/What will be built/), 'Sample: a gift note at checkout')
     await userEvent.click(canvas.getByRole('button', { name: 'Make the task' }))
     await canvas.findByText(/starts every task as an idea/)
+  },
+}
+/** An app whose Linear team is set (made up: SHOP): From Linear, beside New task, opens the team's tickets to bring in. */
+export const FromLinear: Story = {
+  args: { appId: sampleApp.id, linearTeam: 'SHOP' },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'From Linear' }))
+    await canvas.findByText('Saved cards at checkout (sample)')
+    await userEvent.click(canvas.getByRole('button', { name: 'From Linear' })) // pressed again: it closes
+    await expect(canvas.queryByText('Saved cards at checkout (sample)')).toBeNull()
+    await userEvent.click(canvas.getByRole('button', { name: 'From Linear' }))
   },
 }
 /** The app's workflow makes everything start as an idea: no New task or New project, only From an idea. */

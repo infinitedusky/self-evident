@@ -14,8 +14,9 @@ const PRIORITY = ['', 'Urgent', 'High', 'Medium', 'Low']
 /** The engine's sentence, out of its JSON reply. */
 const said = (e: any) => { const m = String(e?.message ?? e); try { return JSON.parse(m).error ?? m } catch { return m } }
 
-export function LinearImport({ appId, team, onImported }: { appId: string; team: string; onImported: () => void }) {
-  const [open, setOpen] = useState(false)
+/** `startOpen`: asked for by a button (Plan's From Linear), so it opens on the tickets straight away. */
+export function LinearImport({ appId, team, onImported, startOpen = false }: { appId: string; team: string; onImported: () => void; startOpen?: boolean }) {
+  const [open, setOpen] = useState(startOpen)
   const [scope, setScope] = useState<LinearScope>('mine')
   const [tickets, setTickets] = useState<LinearTicket[] | null>(null)
   const [picked, setPicked] = useState<string[]>([])
