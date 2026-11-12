@@ -49,7 +49,22 @@ describe.skipIf(!reachable)('projects in Postgres', () => {
     await expect(createProject({ appId, name: 'bad', issues: [
       { title: 'T1', subIssues: [{ key: 'a', title: 'A', dependsOn: ['b'] }] }, { title: 'T2', subIssues: [{ key: 'b', title: 'B' }] },
     ] })).rejects.toThrow(/later task/)
-    await expect(createProject({ appId, name: 'bad', issues: [] })).rejects.toThrow(/at least one task/)
+    await expect(createProject({ appId, name: ' ' })).rejects.toThrow(/needs a name/)
+  })
+
+  it('may be made empty; tasks are moved in from none or from another project, and not out of one that is running', async () => {
+    const { project: empty, issues } = await createProject({ appId, name: 'starts empty' })
+    expect(issues).toEqual([])
+    const loose = await createIssue(appId, { title: 'made on its own' })
+    expect((await updateIssue(loose.id, { projectId: empty.id })).projectId).toBe(empty.id)
+    const { project: other } = await createProject({ appId, name: 'the other one', issues: [] })
+    expect((await updateIssue(loose.id, { projectId: other.id })).projectId).toBe(other.id)
+    expect((await updateIssue(loose.id, { projectId: null })).projectId).toBeNull()
+    await updateIssue(loose.id, { projectId: other.id })
+    await db.update(project).set({ status: 'running' }).where(eq(project.id, other.id))
+    await expect(updateIssue(loose.id, { projectId: empty.id })).rejects.toThrow('is running')
+    await db.update(project).set({ status: 'superseded' }).where(eq(project.id, other.id))
+    await db.update(project).set({ status: 'superseded' }).where(eq(project.id, empty.id))
   })
 
   it('a dispatch pass starts what it can, holds the rest with reasons, treats issue order as a dependency, and rolls states up', async () => {

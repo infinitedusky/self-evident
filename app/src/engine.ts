@@ -294,7 +294,7 @@ export const engine = {
   updateRepo: (id: string, body: { fullName?: string; localPath?: string | null; baseBranch?: string | null }) => call<Repo & { note: string | null }>('PATCH', `/repos/${id}`, body),
   projects: (appId?: string) => call<ProjectSummary[]>('GET', `/projects${appId ? `?app=${appId}` : ''}`),
   graph: (id: string) => call<Graph>('GET', `/projects/${id}/graph`),
-  createProject: (body: { appId: string; name: string; content?: string; description?: string; ideaId?: string; workflowId?: string; issues: NewProjectIssue[] }) => call<{ project: { id: string } }>('POST', '/projects', body),
+  createProject: (body: { appId: string; name: string; content?: string; description?: string; ideaId?: string; workflowId?: string; issues?: NewProjectIssue[] }) => call<{ project: { id: string } }>('POST', '/projects', body),
   cancelProject: (projectId: string) => call<{ cancelled: number; landed: number }>('POST', `/projects/${projectId}/cancel`),
   start: (id: string) => call<unknown>('POST', `/projects/${id}/start`),
   tick: (id: string) => call<unknown>('POST', `/projects/${id}/tick`),

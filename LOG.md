@@ -2493,3 +2493,27 @@ Code: `engine/src/assets.ts`, the table `asset` (migration `0014_asset`), `app/s
 `assets.test.ts`; stories `Components/Assets`. Not built: editing one in place (remove it and add it again);
 ordering them by hand; the planner and the builder being told (conversations and a task's own agent are); the
 agent adding one itself; a file kept by Self Evident instead of pointed at.
+
+## A project can start empty, be drafted by the agent, and take tasks that already exist (Sandy, 2026-11-12: "when I create a project, I shouldn't need to create a task … it could be just a prompt that would trigger an agent to create the tasks for you … add tasks that already exist to a project or move them from one to the other")
+
+Making a project asked for its tasks up front, written by hand. With tasks now arriving from Linear, the project
+often comes second: the tasks exist, and the project is how they are ordered. Decided, with Sandy:
+
+- **A project is a name.** No task is needed to make one (`createProject` no longer refuses an empty list; the
+  agent's `create_project` tool neither).
+- **Or a prompt.** New project has "Have the agent draft the tasks": what it should cover, in the person's words.
+  The project is made, then a conversation about it is opened and handed the job (the same `talks/ask` a page uses
+  for any job): read the code and the assets, make the tasks in order with `create_task`, plan no sub-tasks, start
+  nothing, and say what it made. Writing them by hand is still there, below.
+- **Tasks move.** The engine already let a task change project (`updateIssue`, sub-tasks following); only a task in
+  no project had a control for it. Now: on Tasks, a task in a project has Move… (another open project, or no
+  project); on a project's page, "Existing tasks" lists the app's other open tasks to add or move in. A moved task
+  goes to the end of the order.
+- **Not out of a running project.** Its tasks are built in order, so the engine refuses until it is stopped, and
+  the project page does not offer those tasks.
+
+Code: `createProject` in `engine/src/projects.ts`, the guard in `updateIssue` (`issues.ts`),
+`app/src/pages/NewProject.tsx`, `app/src/components/AddTasks.tsx`, Move… in `app/src/pages/Issues.tsx`. Tests:
+`projects.test.ts`; stories `Pages/NewProject` (Blank, Drafted By The Agent, Written By Hand), `Components/AddTasks`,
+`Pages/Tasks › Moving`. Not tried: the agent drafting a real project. Not built: picking several tasks at once;
+choosing where in the order a moved task lands (reorder it on the project's page after).

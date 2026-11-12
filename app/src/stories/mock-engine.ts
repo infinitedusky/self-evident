@@ -67,6 +67,8 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/apps/:id/assets', ({ request }) => { const project = new URL(request.url).searchParams.get('project'); return reply(d.assets.filter((a) => (project ? a.projectId === project : !a.projectId))) }),
     http.post('/api/assets', async ({ request }) => { const b = await request.json() as { appId: string; projectId?: string; name: string; location: string; note?: string }; return reply({ id: 'asset_sample_new', appId: b.appId, projectId: b.projectId ?? null, name: b.name, location: b.location, note: b.note ?? null }) }),
     http.delete('/api/assets/:id', ({ params }) => reply({ removed: params.id })),
+    http.post('/api/projects', () => reply({ project: { id: 'proj_checkout' } })),
+    http.post('/api/talks/ask', () => reply(d.talks[0] ?? s.talkSession)),
     http.delete('/api/repos/:id', ({ params }) => reply({ removed: params.id })),
     http.post('/api/folders/choose', () => reply(d.folder)),
     http.get('/api/apps/:id/linear/tickets', ({ request }) => {

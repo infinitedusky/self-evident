@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { expect, userEvent, within } from 'storybook/test'
 import { Issues } from './Issues'
 import { engineDown, withEngine } from '../stories/mock-engine'
 import { issueRows, sampleApp } from '../stories/sample'
@@ -28,6 +29,15 @@ export const Typical: Story = {}
 export const EveryStanding: Story = { beforeEach: withEngine({ issueRows: standings }) }
 /** An app whose Linear team is set (made up: SHOP): tickets can be brought in from the top of the page. */
 export const WithLinear: Story = { beforeEach: withEngine({ apps: [{ ...sampleApp, setup: { ...sampleApp.setup, integrations: { linear: { team: 'SHOP', key_env: 'LINEAR_API_KEY' } } } }] }) }
+/** A task in a project can be moved to another open one, or out to no project. */
+export const Moving: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const move = (await c.findAllByRole('combobox', { name: /^Move SS-/ }))[0]
+    await expect(within(move).getByRole('option', { name: 'No project' })).toBeInTheDocument()
+    await userEvent.selectOptions(move, 'none')
+  },
+}
 /** Only tasks in no project, and no open project to send them to. */
 export const NothingToAddTo: Story = { beforeEach: withEngine({ issueRows: [issueRows[2]], projects: [] }) }
 /** No tasks yet. */
