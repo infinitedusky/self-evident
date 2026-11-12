@@ -19,6 +19,7 @@ import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAge
 import { finished, label, ready, step, type Row, type StepKey } from '@self-evident/engine/steps'
 import { STATUS_TONE } from '../components/PlanGraphView'
 import { openEvents, type Events, API, engine, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState } from '../engine'
+import { Md } from '../components/Md'
 
 /** Where a task's workflow comes from, after its name. */
 const FROM = { task: ', its own', project: ', from its project', app: ', the app\'s default' }
@@ -75,7 +76,7 @@ export function IssuePage() {
         </div>
       </div>
 
-      {i.reason && <div className="empty" style={{ marginBottom: 16 }}>{STATE_LABEL[i.state]}: {i.reason}</div>}
+      {i.reason && <div className="empty" style={{ marginBottom: 16 }}>{STATE_LABEL[i.state]}: <Md text={i.reason} inline /></div>}
       {i.build?.heldReason && i.build.status !== 'done' && <div className="empty" style={{ marginBottom: 16 }}>{i.build.heldReason}</div>}
 
       {task ? <Task i={i} section={section} busy={busy} act={act} /> : (
@@ -228,7 +229,7 @@ function SubTasks({ i, plan }: { i: IssueDetail; plan?: React.ReactNode }) {
               <span className="mono faint">{s.identifier}</span>
               <div>
                 <Link to={`/tasks/${s.id}`} style={{ textDecoration: 'none' }}>{s.title}</Link>
-                {s.description && <div className="muted" style={{ fontSize: 14 }}>{s.description}</div>}
+                {s.description && <div className="muted" style={{ fontSize: 14 }}><Md text={s.description} /></div>}
                 {s.build?.heldReason && s.build.status !== 'done' && <div className="faint" style={{ fontSize: 13 }}>{s.build.heldReason}</div>}
                 {s.waitingOn && s.state !== 'done' && <div className="faint" style={{ fontSize: 13 }}>waiting on {s.waitingOn}</div>}
               </div>
@@ -273,8 +274,8 @@ function Planner({ i }: { i: IssueDetail }) {
   return (
     <section className="panel">
       <h2>The planner</h2>
-      {i.questions.filter((q) => q.status === 'open').map((q) => <p key={q.id} style={{ margin: '0 0 8px' }}><Badge tone="warn">asks</Badge> {q.text}</p>)}
-      {i.decisions.map((d) => <p key={d.id} className="muted" style={{ margin: '0 0 6px' }}>Decided: {d.question}: {d.options.find((o) => o.key === d.chosen)?.text}{d.provisional ? ' (provisional)' : ''}</p>)}
+      {i.questions.filter((q) => q.status === 'open').map((q) => <p key={q.id} style={{ margin: '0 0 8px' }}><Badge tone="warn">asks</Badge> <Md text={q.text} inline /></p>)}
+      {i.decisions.map((d) => <p key={d.id} className="muted" style={{ margin: '0 0 6px' }}>Decided: <Md text={d.question} inline />: <Md text={d.options.find((o) => o.key === d.chosen)?.text} inline />{d.provisional ? ' (provisional)' : ''}</p>)}
       {i.project && <Link to={`/projects/${i.project.id}`}>Answer on the project →</Link>}
     </section>
   )

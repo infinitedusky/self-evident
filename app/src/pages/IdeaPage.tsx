@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import type { Idea } from '../ideas'
 import { LANES } from '../ideas'
 import { Badge } from '../components/Badge'
+import { Md } from '../components/Md'
 
 /** One idea: what we believe, how it's measured, the PRs that build it, and the evidence so far. */
 export function IdeaPage({ idea }: { idea: Idea }) {
@@ -50,7 +51,7 @@ export function IdeaPage({ idea }: { idea: Idea }) {
           The database isn't connected yet.</div>
       </section>
 
-      {idea.notes && <section className="panel"><h2>Notes</h2><p style={{ margin: 0 }}>{idea.notes}</p></section>}
+      {idea.notes && <section className="panel"><h2>Notes</h2><Md text={idea.notes} /></section>}
     </>
   )
 }

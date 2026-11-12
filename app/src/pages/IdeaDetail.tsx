@@ -9,6 +9,7 @@ import { Badge } from '../components/Badge'
 import { StepsPanel } from '../components/StepsPanel'
 import { engine, type IdeaRow } from '../engine'
 import { useCurrentApp } from '../current-app'
+import { Md } from '../components/Md'
 
 export function IdeaDetail({ id }: { id: string }) {
   const nav = useNavigate()
@@ -37,7 +38,7 @@ export function IdeaDetail({ id }: { id: string }) {
         <div>
           <h1><span className="mono faint" style={{ fontWeight: 400 }}>#{idea.number}</span> {idea.title}</h1>
           <div style={{ display: 'flex', gap: 6, marginTop: 6 }}><Badge tone={open ? 'neutral' : 'ok'}>{open ? 'an idea' : 'converted'}</Badge></div>
-          {idea.body && <p className="muted" style={{ margin: '8px 0 0', maxWidth: 720, whiteSpace: 'pre-wrap' }}>{idea.body}</p>}
+          {idea.body && <div className="muted" style={{ margin: '8px 0 0', maxWidth: 720 }}><Md text={idea.body} /></div>}
         </div>
       </div>
       <StepsPanel subject={{ kind: 'ideas', id: idea.id }} appId={idea.appId} name={idea.title} />

@@ -8,6 +8,7 @@ import { Link, useLocation } from 'react-router'
 import { Badge } from '../components/Badge'
 import { openEvents, API, engine, type ProjectSummary, type Todo } from '../engine'
 import { useCurrentApp } from '../current-app'
+import { Md } from '../components/Md'
 
 const errText = (e: any) => { const m = String(e?.message ?? e); try { return JSON.parse(m).error ?? m } catch { return m } }
 type Filter = 'open' | 'done' | 'dropped' | 'all'
@@ -123,7 +124,7 @@ export function TodoCard({ todo: t, projects = [], onChange, onError, compact = 
       </div>
       <div className="card-title">{t.title}</div>
       {project && !compact && <div className="faint" style={{ fontSize: 13 }}>Unblocks <Link to={`/projects/${project.id}`}>{project.name}</Link></div>}
-      {t.status === 'dropped' && t.reason && <div className="faint" style={{ fontSize: 13 }}>Dropped: {t.reason}</div>}
+      {t.status === 'dropped' && t.reason && <div className="faint" style={{ fontSize: 13 }}>Dropped: <Md text={t.reason} inline /></div>}
       {t.checklist.length > 0 && (
         <ul className="checklist">
           {t.checklist.map((l) => (
@@ -149,7 +150,7 @@ export function TodoCard({ todo: t, projects = [], onChange, onError, compact = 
           <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Links, who, what was said" />
           <div style={{ display: 'flex', gap: 6 }}><button className="btn small" disabled={busy} onClick={() => act(async () => { const r = await engine.updateTodo(t.id, { notes }); setEditingNotes(false); return r })}>Save notes</button><button className="btn quiet small" onClick={() => { setNotes(t.notes ?? ''); setEditingNotes(false) }}>Cancel</button></div>
         </div>
-      ) : t.notes ? <p className="todo-notes" onClick={() => setEditingNotes(true)} title="Click to edit">{t.notes}</p> : null)}
+      ) : t.notes ? <div className="todo-notes" onClick={(e) => { if (!(e.target as HTMLElement).closest('a')) setEditingNotes(true) }} title="Click to edit"><Md text={t.notes} /></div> : null)}
       <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
         {t.status === 'open' ? <>
           <button className="btn small" disabled={busy} onClick={() => act(() => engine.todoDone(t.id))} title="Done, whatever the checklist says">Done</button>

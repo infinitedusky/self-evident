@@ -9,6 +9,7 @@ import { Badge, type Tone } from '../components/Badge'
 import { openEvents, API, engine, EVENT_TYPES, useIdeaFirst, type Attention, type Event, type Now as NowData, type RunningProject } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { describeEvent } from '../describe-event'
+import { Md } from '../components/Md'
 
 const COST_TONE: Record<string, Tone> = { cheap: 'neutral', moderate: 'warn', expensive: 'bad' }
 
@@ -93,7 +94,7 @@ function AttentionRow({ a, busy, act }: { a: Attention; busy: string | null; act
       <li><Badge tone="bad">failed</Badge><div><strong><Link to={`/tasks/${a.issueId}`}>{a.identifier}</Link> {a.title}</strong> {where}{a.error && <div className="muted" style={{ fontSize: 13 }}>{a.error.slice(0, 200)}</div>}</div>
         <span style={{ display: 'flex', gap: 6 }}><button className="btn small" disabled={busy === a.issueId} onClick={() => act(a.issueId, () => engine.retry(a.issueId))}>Retry</button><Link className="btn quiet small" to={`/projects/${a.projectId}`}>Look</Link></span></li>)
     case 'question': return (
-      <li><Badge tone={COST_TONE[a.cost ?? ''] ?? 'neutral'}>question</Badge><div><strong>{a.text}</strong> {where}{a.issueIdentifier && <span className="faint"> · {a.issueIdentifier}</span>}</div>
+      <li><Badge tone={COST_TONE[a.cost ?? ''] ?? 'neutral'}>question</Badge><div><strong><Md text={a.text} inline /></strong> {where}{a.issueIdentifier && <span className="faint"> · {a.issueIdentifier}</span>}</div>
         <Link className="btn quiet small" to={`/projects/${a.projectId}`}>Answer</Link></li>)
     case 'run_project': return (
       <li><Badge tone="ok">ready</Badge><div><strong>{a.projectName}</strong> <span className="faint">{a.appName} · {a.subIssues} sub-task{a.subIssues === 1 ? '' : 's'} planned, nothing open</span></div>
