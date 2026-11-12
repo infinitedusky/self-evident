@@ -307,6 +307,12 @@ button.badge { border: 0; cursor: pointer; }
 .settings-group { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--line); }
 .settings-group:first-of-type { border-top: 0; margin-top: 4px; padding-top: 0; }
 .settings-group-head { margin-bottom: 8px; }
+/* Reference apps: one row per other app, its note beside it once it is ticked. */
+.references { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.references li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.references label { display: inline-flex; align-items: center; gap: 6px; min-width: 180px; }
+.references input:not([type="checkbox"]) { flex: 1 1 260px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 14px var(--sans); }
+.references input::placeholder { color: var(--ink-faint); font-style: italic; opacity: 1; }
 .settings-group .settings-h3 { margin-top: 0; }
 .settings-save { display: flex; gap: 10px; align-items: center; margin-top: 18px; }
 .settings-save .bad { color: var(--bad); }

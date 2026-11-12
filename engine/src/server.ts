@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url'
 import { DATABASE_URL, db, pool } from './db/client.js'
 import { ensureDatabase } from './db/ensure.js'
 import { registerMachine } from './machine.js'
+import { cleanReferences } from './references.js'
 import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, workspace, type BuildStatus, type IssueState } from './db/schema.js'
 import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
 import { appKey, newId } from './ids.js'
@@ -243,6 +244,7 @@ export function buildApp(bus: EventBus) {
   api.patch('/apps/:id', async (c) => {
     const body = await c.req.json<{ name?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
     if (body.setup && 'integrations' in body.setup) body.setup.integrations = cleanValues(body.setup.integrations)
+    if (body.setup && 'references' in body.setup) body.setup.references = cleanReferences(body.setup.references, c.req.param('id'))
     if (body.setup && 'plugins' in body.setup) { // an app's own switch per plugin; null inherits
       const known = new Set(installed().map((p) => p.id))
       body.setup.plugins = Object.fromEntries(Object.entries((body.setup.plugins ?? {}) as Record<string, { on?: unknown } | null>)

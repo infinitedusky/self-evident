@@ -6,6 +6,7 @@
  */
 import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import { builderGuard, guardOptions } from './guard.js'
+import { referencePrompt, type Reference } from './references.js'
 
 export interface RunInput {
   subIssue: { id: string; identifier: string; title: string; brief: string | null }
@@ -15,6 +16,7 @@ export interface RunInput {
   files: string[]
   testCmd?: string
   storybook?: boolean // the app keeps a Storybook: stories lead its UI
+  references?: Reference[] // other apps' checkouts to read, never change (references.ts)
   previousFailure?: string
   model?: string
   maxTurns?: number
@@ -56,6 +58,7 @@ function prompt(i: RunInput): string {
     '- Commit your work with a clear message when it is done (git add -A && git commit). Leave nothing uncommitted.',
     '- Finish with a short summary for the reviewer: what changed, why, how you verified it, and anything you were unsure of.',
     '- If you noticed something this sub-task should not do but someone should (a bug nearby, a follow-up, a missing test elsewhere), end the summary with a line `Later:` and one `- ` line for each. They go on the project\'s backlog so nothing is forgotten. Leave it out if there is nothing.',
+    referencePrompt(i.references ?? []),
     i.previousFailure ? `\nYour previous attempt did not land. The reason:\n${i.previousFailure}\nFix that first.` : '',
     i.resumeSessionId ? '\nThe engine restarted while you were working; your earlier conversation is resumed. Check the worktree state (git status, git log) before continuing.' : '',
   ].join('\n')
@@ -71,6 +74,7 @@ export async function runTask(i: RunInput): Promise<RunOutput> {
       prompt: prompt(i),
       options: {
         cwd: i.worktreePath,
+        ...(i.references?.length ? { additionalDirectories: i.references.map((r) => r.path) } : {}), // readable; the guard keeps edits inside the worktree
         resume: i.resumeSessionId,
         abortController: i.abort,
         model: i.model,

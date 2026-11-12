@@ -594,6 +594,9 @@ Details and sources in `research/`.
   enforced. Nothing is copied by hand (LOG.md, "Moving between Macs is two commands"). Two computers share a folder
   layout under a root, not a user name: each registers its name, user and root, and the database stores paths from
   the root (Sandy, 2026-11-12; LOG.md, "A computer registers its root").
+- **A product in two repositories is two apps that read each other** (Sandy, 2026-11-12): each app keeps its own
+  tasks, worktrees and pull requests, and names the other as a reference, a checkout its agents may read and never
+  change. One app with several repositories is not built (LOG.md, "Reference apps").
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 

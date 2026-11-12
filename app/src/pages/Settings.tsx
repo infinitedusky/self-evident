@@ -5,11 +5,11 @@
  * landing, prototype, Storybook, integration values, and its workflow rules.
  */
 import { useEffect, useState } from 'react'
-import { NavLink, useLocation, useMatch, useNavigate, useParams } from 'react-router'
+import { Link, NavLink, useLocation, useMatch, useNavigate, useParams } from 'react-router'
 import { Badge } from '../components/Badge'
 import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
-import { engine, type AgentRole, type App, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type GitHubRepos, type PluginInfo, type Repo } from '../engine'
+import { engine, type AgentRole, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type GitHubRepos, type PluginInfo, type Repo } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
@@ -280,6 +280,7 @@ function asEffective(s: FactorySettings): EffectiveValues {
 
 /** One app: grouped, one Save for the lot. Integration fields show the inherited value until overridden. */
 function AppPage({ app, section, item, onSaved }: { app: App; section: string; item?: string; onSaved: () => Promise<unknown> }) {
+  const others = useCurrentApp().apps.filter((x) => x.id !== app.id)
   const [name, setName] = useState(app.name)
   const [branch, setBranch] = useState(app.defaultBranch)
   const [setup, setSetup] = useState<AppSetup>(app.setup ?? {})
@@ -322,6 +323,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         <label>Default branch<input className="mono" value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" /></label>
         <RepoFields fullName={repo.fullName ?? ''} localPath={repo.localPath ?? ''} gh={gh} onChange={(p) => setRepo({ ...repo, ...p })} />
       </Group>
+      <References app={app} others={others} value={setup.references ?? []} onChange={(references) => set({ references: references.length ? references : undefined })} />
       {note && <p className="settings-note" data-component="CheckoutNote"><Badge tone="ok">Set up</Badge><span>{note}</span></p>}
     </>,
     agents: <>
@@ -409,6 +411,35 @@ function SaveRow({ dirty, busy, error, onSave }: { dirty: boolean; busy: boolean
 }
 
 /** Drop empty strings so the engine's defaults apply. */
+/**
+ * Reference apps: other apps whose code this one's agents may read and never change (a frontend and the backend it
+ * talks to). Each stays its own app, with its own tasks and pull requests.
+ */
+function References({ app, others, value, onChange }: { app: App; others: App[]; value: AppReference[]; onChange: (v: AppReference[]) => void }) {
+  return (
+    <div className="settings-group" data-component="References">
+      <h3 className="settings-h3">Reference apps</h3>
+      <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>Other apps whose code {app.name}'s agents may read and never change: the backend a frontend talks to, or the other way round. Each keeps its own tasks and pull requests.</p>
+      {others.length === 0
+        ? <p className="faint settings-desc">No other apps yet. <Link to="/settings/new">Add the other repo as an app</Link>, then name it here.</p>
+        : <ul className="references">
+          {others.map((o) => {
+            const mine = value.find((r) => r.appId === o.id)
+            const here = !!o.repos?.[0]?.localPath
+            return (
+              <li key={o.id}>
+                <label><input type="checkbox" checked={!!mine} onChange={(e) => onChange(e.target.checked ? [...value, { appId: o.id }] : value.filter((r) => r.appId !== o.id))} /> {o.name}</label>
+                {mine && <input value={mine.note ?? ''} aria-label={`What ${o.name} is to ${app.name}`} placeholder="What it is to this app: the backend it calls"
+                  onChange={(e) => onChange(value.map((r) => (r.appId === o.id ? (e.target.value ? { appId: o.id, note: e.target.value } : { appId: o.id }) : r)))} />}
+                {mine && !here && <Badge tone="warn">no checkout set: nothing to read yet</Badge>}
+              </li>
+            )
+          })}
+        </ul>}
+    </div>
+  )
+}
+
 function clean(s: AppSetup): AppSetup {
   return Object.fromEntries(Object.entries(s).filter(([, v]) => v !== '' && v !== undefined && !(typeof v === 'number' && Number.isNaN(v)))) as AppSetup
 }

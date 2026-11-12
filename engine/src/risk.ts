@@ -18,7 +18,7 @@ export const rank = (r: Risk) => RISKS.indexOf(r)
 export interface RiskContext { cwd: string; branch?: string | null } // branch: what the checkout at cwd has checked out
 
 const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']) // Skill loads instructions; what they lead to is rated on its own
-const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
+export const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 const ENGINE_FREE = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent'])
 const ENGINE: Record<string, [Risk, string]> = {
   create_idea: ['cheap', 'keeps an idea; easy to drop'],

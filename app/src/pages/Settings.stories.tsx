@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { expect, userEvent, within } from 'storybook/test'
 import { Settings } from './Settings'
 import { engineDown, withEngine } from '../stories/mock-engine'
-import { appSettings, apps, factorySettings, repoNote, sampleApp, storybookCheck } from '../stories/sample'
+import { appSettings, apps, factorySettings, otherApp, repoNote, sampleApp, storybookCheck } from '../stories/sample'
 import type { PluginInfo } from '../engine'
 
 // Settings: which settings across the top (All apps, each app), that scope's sections down the side.
@@ -36,6 +37,23 @@ export const AppWithRepoSkills: Story = {
   }),
 }
 /** An app with nothing set: no repo, no skills, every value inherited. */
+/** Made-up apps: a frontend that reads its backend. One reference on, with its note; another app offered; one with no checkout on this computer. */
+const apiApp = { ...otherApp, id: 'app_sample_api', name: 'Sample Shop API', key: 'SA', repos: [{ id: 'repo_sample_api', appId: 'app_sample_api', fullName: 'example/sample-shop-api', localPath: '/code/sample-shop-api', baseBranch: 'main' }] }
+export const AppReferences: Story = {
+  parameters: appPage(sampleApp.id, 'repo'),
+  beforeEach: withEngine({ apps: [apiApp, otherApp, { ...sampleApp, setup: { ...sampleApp.setup, references: [{ appId: apiApp.id, note: 'the backend this app calls' }, { appId: otherApp.id }] } }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByLabelText('What Sample Shop API is to Sample Shop')).toHaveValue('the backend this app calls')
+    await expect(c.getByText('no checkout set: nothing to read yet')).toBeVisible() // Sample Blog has no checkout on this computer
+    await userEvent.click(c.getByLabelText('Sample Blog')) // unticked: its note and its warning go
+    await expect(c.queryByLabelText('What Sample Blog is to Sample Shop')).toBeNull()
+    await userEvent.click(c.getByLabelText('Sample Blog'))
+    await expect(c.getByLabelText('What Sample Blog is to Sample Shop')).toHaveValue('')
+  },
+}
+/** The only app: nothing to refer to yet, and the way on is to add the other repo as an app. */
+export const AppReferencesNoOthers: Story = { parameters: appPage(sampleApp.id, 'repo'), beforeEach: withEngine({ apps: [sampleApp] }) }
 export const AppBare: Story = { parameters: appPage('app_sample2'), beforeEach: withEngine({ appSettings: { integrations: {}, status: {}, plugins: [], skills: [] } }) }
 export const NoSuchApp: Story = { parameters: appPage('app_missing') }
 // New app, with its code: a GitHub repo picked from gh's list or typed, a folder on this machine, or both (Sandy, 2026-11-09).

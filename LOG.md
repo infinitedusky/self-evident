@@ -2296,3 +2296,30 @@ tried yet: resuming a conversation on a computer with a different user. The sess
 (tested), but its turns still mention the first computer's paths, and what the agent makes of that is unknown until
 a real move. Tests: `machine.test.ts`, `handoff.test.ts`.
 
+## Reference apps: read the other repo, never change it (Sandy, 2026-11-12: "when I'm working on one, I want to be able to use the other one as a reference for how do I build it")
+
+Sandy has a product in two repositories, a backend and a frontend: most features touch one, pull requests are
+separate, and the need is to read one while building in the other. The engine has always used one repository per
+app (the `repo` table allows several; about a dozen places take the first). Decided, with Sandy: **two apps, each
+naming the other as a reference**, not one app with two repositories. Each app keeps its own tasks, worktrees and
+pull requests; a reference is another app whose checkout this app's agents may read and never change. One app with
+member repositories would give a shared backlog, which wasn't asked for, at the cost of every task choosing a
+repository; the reference is needed in either shape, so it comes first.
+
+- Kept on the app as `setup.references: [{ appId, note }]`: by app, not by path, so it means the same on every
+  computer. Settings › an app › Repo › Reference apps: tick another app, say what it is to this one.
+- Every agent of the app gets each reference's main checkout as an extra folder (the Agent SDK's
+  `additionalDirectories`) and is told where it is, what it is, and that a change there is a task for that app: a
+  conversation, a check, a prototype's agent, the planner and the builder.
+- An edit to a file in a reference is refused outright in a conversation, not asked about (before, any edit outside
+  the checkout was rated expensive and asked). The builder's guard already keeps edits inside its worktree and the
+  planner changes nothing.
+- A reference whose app has no checkout on this computer is left out, and the Settings page says so.
+
+What it reads is whatever is checked out in the other app's main checkout, normally the default branch; pointing
+at an unmerged worktree is not built. A feature that touches both is two tasks, one per app; nothing links them
+yet. Not covered: a shell command that writes into a reference is not refused by path (a conversation rates and
+asks about shell commands as before; the builder is told not to). Not tried with a live agent yet: that the SDK's
+extra folder reads as expected. Code: `engine/src/references.ts`; tests: `references.test.ts`, and the story
+`Pages/Settings › App References` (made-up apps).
+
