@@ -118,7 +118,8 @@ this sets up. Without them, use `http://localhost:5180`.
 
 ## Adding an app
 
-Settings › + App. An app is one repository.
+Settings › + App. An app is one repository, or several that are worked on together ("A product in two
+repositories", below).
 
 | Field | What to put |
 | --- | --- |
@@ -158,13 +159,27 @@ with the GitHub repo field filled and `gh` on the other account, the sync and pu
 
 ## A product in two repositories
 
-(LOG.md, "Reference apps".) Make each repository its own app, then name each as a reference of the other:
-Settings › the app › Repo › Reference apps, tick the other app and say what it is ("the backend this app calls").
+(LOG.md, "The workbench".) Two ways, by whether the work crosses them:
 
-Each app keeps its own tasks, worktrees and pull requests. Every agent of an app can read its references'
-checkouts and is told what they are; an edit to a file there is refused. It reads whatever is checked out in the
-other app's main checkout, normally the default branch. A feature that touches both is two tasks, one in each
-app. One app with several repositories is not built.
+**One app with both repositories**, when a ticket can touch either or both. A conversation gets a worktree in
+each, on the same branch, and opens a pull request in each one it changed. One is home: the folder the agent
+starts in, and where the app's Storybook, test command and prototypes run. Settings shows and edits the home
+repository only, so the second is added through the API for now:
+
+```sh
+curl -X POST localhost:4000/api/repos -H 'content-type: application/json' \
+  -d '{"appId":"app_…","fullName":"owner/the-other-repo","localPath":"/path/to/its/checkout","baseBranch":"main"}'
+```
+
+Home is the first by name unless the app's set-up names one (`setup.home_repo`, a repo id). So far only
+conversations work across the repositories; the planner, the builder, a task's own agent, checks, prototypes,
+Storybook and catching up from main work in home only.
+
+**Two apps, each a reference of the other**, when one is only read while building in the other: Settings › the
+app › Repo › Reference apps, tick the other app and say what it is ("the backend this app calls"). Each app keeps
+its own tasks, worktrees and pull requests. Every agent of an app can read its references' checkouts and is told
+what they are; an edit to a file there is refused. It reads whatever is checked out in the other app's main
+checkout, normally the default branch.
 
 ## When something goes wrong
 

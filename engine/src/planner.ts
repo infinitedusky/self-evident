@@ -9,6 +9,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, decision, issue, question, repo, run } from './db/schema.js'
+import { homeRepo } from './workbench.js'
 import { appendEvent, type NewEvent } from './events.js'
 import { handle } from './executor.js'
 import { guardOptions, readerGuard } from './guard.js'
@@ -209,7 +210,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
   if (['landed', 'stopped', 'superseded'].includes(g.project.status)) throw new PlanError(`project is ${g.project.status}; it takes no more planning`) // drafts, and running or paused projects planning their next task
   if (['backlog', 'triage', 'canceled', 'duplicate', 'done'].includes(t.state)) throw new PlanError(`${name} is ${t.state}; take it on first`)
   const [a] = await db.select().from(app).where(eq(app.id, t.appId))
-  const [r] = await db.select().from(repo).where(eq(repo.appId, t.appId))
+  const r = await homeRepo(t.appId)
   if (!r?.localPath) throw new PlanError(`app ${a.name} has no repo with a local path`)
   const setup = (a.setup ?? {}) as AppSetup
   const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(run).where(and(eq(run.issueId, issueId), eq(run.kind, 'plan')))

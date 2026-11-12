@@ -13,6 +13,7 @@ import { promisify } from 'node:util'
 import { and, eq, inArray, isNotNull, notInArray } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, issue, outsidePr, pr as prTable, project, repo } from './db/schema.js'
+import { homeRepo } from './workbench.js'
 import { appendEvent } from './events.js'
 import { addWorktree, branchExists, git, headSha, isAncestor, mergeInto, push, removeWorktree, fastForward } from './git.js'
 import { setState } from './issues.js'
@@ -132,7 +133,7 @@ export async function catchUp(projectId: string): Promise<{ state: 'current' | '
   const [p] = await db.select().from(project).where(eq(project.id, projectId))
   if (!p?.integrationBranch) return { state: 'skipped' }
   const [a] = await db.select().from(app).where(eq(app.id, p.appId))
-  const [r] = await db.select().from(repo).where(eq(repo.appId, p.appId))
+  const r = await homeRepo(p.appId)
   if (!r?.localPath) return { state: 'skipped' }
   const main = `origin/${a.defaultBranch}`
   if ((await git(r.localPath, ['rev-parse', '--verify', '-q', main], { allowFail: true })).code !== 0) return { state: 'skipped' }
@@ -185,7 +186,7 @@ async function mergeFrom(p: typeof project.$inferSelect, a: typeof app.$inferSel
 /** Fetch the default branch, then bring every open project of the app up to date with it. */
 export async function catchUpApp(appId: string) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
-  const [r] = await db.select().from(repo).where(eq(repo.appId, appId))
+  const r = await homeRepo(appId)
   if (!a || !r?.localPath) return []
   const fetched = await git(r.localPath, ['fetch', '-q', 'origin', a.defaultBranch], { allowFail: true })
   if (fetched.code !== 0) return []

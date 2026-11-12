@@ -594,9 +594,14 @@ Details and sources in `research/`.
   enforced. Nothing is copied by hand (LOG.md, "Moving between Macs is two commands"). Two computers share a folder
   layout under a root, not a user name: each registers its name, user and root, and the database stores paths from
   the root (Sandy, 2026-11-12; LOG.md, "A computer registers its root").
-- **A product in two repositories is two apps that read each other** (Sandy, 2026-11-12): each app keeps its own
-  tasks, worktrees and pull requests, and names the other as a reference, a checkout its agents may read and never
-  change. One app with several repositories is not built (LOG.md, "Reference apps").
+- **An app is a workbench: one or more repositories worked on together** (Sandy, 2026-11-12, after InDusk's
+  workbench; LOG.md, "The workbench"). A task belongs to the app; a worktree and a pull request belong to a
+  repository. One repository is home (where an agent starts; the app's Storybook, test command and prototypes); a
+  piece of work has a worktree in each of the others on the same branch, and a pull request in each it changed.
+  `engine/src/workbench.ts` is the one place that says which repositories an app is made of. This replaces the
+  morning's "two apps that read each other" for a product whose tickets cross repositories.
+- **A reference app is another app's checkout, read and never changed** (Sandy, 2026-11-12; LOG.md, "Reference
+  apps"): for code that is looked at but is not part of this app's work.
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 

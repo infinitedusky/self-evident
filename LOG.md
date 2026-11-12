@@ -2336,3 +2336,34 @@ Evident itself, whichever app it is working in (`GUIDE` in `engine/src/talk.ts`)
 file moves or loses a section the agents are told it has. Linked from CLAUDE.md, the README and `engine/README.md`,
 whose own account of running it now points there.
 
+
+## The workbench: an app is one or more repositories (Sandy, 2026-11-12: "a single project that could have multiple repos underneath it … the agent's job was to make edits to the repos and to do PRs for those repos, create work trees")
+
+This reverses the morning's decision ("Reference apps": two apps, each naming the other). What changed: Sandy's
+work on the two-repository product arrives as Linear tickets, per team and not per repository, and a ticket can
+touch the frontend, the backend or both. Two apps would make every ticket choose an app, or become two tasks.
+InDusk had this as the workbench: one project, its repositories under it, a worktree and a pull request in each
+one a piece of work touches. Decided, with Sandy ("let's just get it over with"):
+
+- **An app is a workbench of one or more repositories. A task belongs to the app; a worktree and a pull request
+  belong to a repository.** The `repo` table already allowed several and `pr` rows already name their repository.
+- **One definition** of which repositories an app is made of: `engine/src/workbench.ts` (InDusk's lesson, from its
+  `worktree/repos.ts`: two places answering that apart disagree silently). The eleven places that took "the first
+  repository" of an app, in whatever order the database gave it, now ask for the home repository.
+- **Home and mates.** Home is where an agent starts and where the app's Storybook, test command and prototypes
+  run: `setup.home_repo` (a repo id), else the first by name. A mate is any other repository with a checkout here
+  that may be written to. A piece of work with a worktree at `<home>-worktrees/<slug>` has `<mate>-worktrees/<slug>`
+  in each mate, on the same branch, cut from that repository's own base branch. The path is the record: no new
+  column, and the same on every computer.
+- **Built first: conversations.** Starting one adds a worktree in every mate; its agent gets them as extra folders
+  and is told a change in more than one is a commit and a pull request in each; an edit in a mate is rated by that
+  worktree's branch, like an edit at home (before, it was "outside the checkout" and always asked); ending removes
+  them all and keeps a branch only where it has commits.
+- Reference apps stay, for code that is read and is not part of the app's work.
+
+Not built yet, in the order planned: the builder and a task's own agent (they still work in home only), the
+planner, checks and prototypes; catching up from main for the mates' branches; Settings for a second repository
+and for choosing home (the API takes both today; Settings edits home only); merging the two apps of that product into
+one; then tasks from Linear tickets, which is what this is for. Known gap: the GitHub sync matches a pull request
+to ours by number, and a `pr` row recorded without its repository could match the same number in a mate. Not
+tried with a live agent yet. Code: `workbench.ts`; tests: `workbench.test.ts` (two real git repositories).
