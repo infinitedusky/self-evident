@@ -7,7 +7,8 @@
  *
  * - a worktree's work goes through the app's own GitHub repository: anything uncommitted is committed as work in
  *   progress, and the branch is pushed. On the other Mac the checkout is cloned if it's missing and the worktree is
- *   made again from the branch, at the same path (the database stores paths, so both Macs use the same ones);
+ *   made again from the branch, at the same place under the computer's root (the database stores paths from the
+ *   root, db/home-path.ts, so two Macs share a folder layout, not a user name);
  * - the histories go through a private repository (STATE_REPO), kept in ~/.self-evident/state: each conversation's
  *   session file, and the memory Claude Code keeps beside each app's checkout;
  * - the same repository says which Mac holds the engine. Two engines on one database would both schedule and build,
@@ -18,6 +19,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { branchExists, commitAll, git, hasUncommitted, worktreeExists } from './git.js'
+import { machineRoot } from './db/home-path.js'
 import { projectsDir, sessionDir } from './terminal.js'
 
 /** An app's main checkout. */
@@ -28,6 +30,8 @@ export interface Plan { checkouts: Checkout[]; places: Place[] }
 
 export interface Options {
   host: string
+  /** This computer's root folder; its home unless a test says otherwise. */
+  root?: string
   stateDir: string
   stateRepo: string
   /** Branches to leave alone. */
@@ -38,6 +42,14 @@ export interface Options {
   cloneUrl?: (fullName: string) => string
   log?: (line: string) => void
 }
+
+/**
+ * Claude Code names a conversation's folder after the full path it works in, so the same conversation's folder has a
+ * different name on a computer with a different root. In the state repository the root's part of the name is `ROOT`.
+ */
+const encoded = (path: string) => path.replace(/[^A-Za-z0-9]/g, '-')
+export const stateName = (folder: string, root = machineRoot()) => (folder.startsWith(encoded(root) + '-') ? 'ROOT' + folder.slice(encoded(root).length) : folder)
+export const folderName = (name: string, root = machineRoot()) => (name.startsWith('ROOT-') ? encoded(root) + name.slice('ROOT'.length) : name)
 
 export const WIP = (host: string) => `Handoff: work in progress, from ${host}`
 const MAX_FILE = 95 * 1024 * 1024 // GitHub refuses a file over 100 MB
@@ -115,7 +127,7 @@ export async function leave(plan: Plan, o: Options): Promise<Line[]> {
     const from = join(dir, f)
     if (!existsSync(from)) continue
     if (tooBig(from)) { say({ name: f, what: 'history over 95 MB: GitHub would refuse it, so it stays on this Mac', ok: false }); continue }
-    const to = join(o.stateDir, 'claude', dir.slice(projectsDir().length + 1), f)
+    const to = join(o.stateDir, 'claude', stateName(dir.slice(projectsDir().length + 1), o.root), f)
     mkdirSync(dirname(to), { recursive: true })
     cpSync(from, to, { recursive: true, force: true })
     files++
@@ -183,7 +195,10 @@ export async function arrive(plan: Plan, o: Options): Promise<Line[]> {
   }
 
   const from = join(o.stateDir, 'claude')
-  if (fresh && existsSync(from)) { cpSync(from, projectsDir(), { recursive: true, force: true }); say({ name: 'histories', what: 'brought in', ok: true }) }
+  if (fresh && existsSync(from)) {
+    for (const name of readdirSync(from)) cpSync(join(from, name), join(projectsDir(), folderName(name, o.root)), { recursive: true, force: true })
+    say({ name: 'histories', what: 'brought in', ok: true })
+  }
   writeFileSync(holderFile(o.stateDir), JSON.stringify({ holder: o.host, by: o.host, at: new Date().toISOString() } satisfies Holder, null, 2) + '\n')
   await saveState(o.stateDir, `Arrived on ${o.host}`)
   return lines

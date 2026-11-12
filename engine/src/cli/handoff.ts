@@ -8,17 +8,17 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { connect } from 'node:net'
-import { homedir, hostname, userInfo } from 'node:os'
+import { homedir, userInfo } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Command } from 'commander'
 import { git, hasUncommitted } from '../git.js'
+import { machineName } from '../machine.js'
 import { arrive, leave, openState, readHolder, type Line, type Options, type Plan } from '../handoff.js'
 
 const ENGINE = 'com.thedusky.self-evident'
 const PROXY = 'com.thedusky.self-evident-dbproxy'
-/** The Mac's own name, which stays the same on every network (`hostname` follows the network: mac.lan here, mac.local there). */
-const HOST = (() => { try { return execFileSync('/usr/sbin/scutil', ['--get', 'LocalHostName'], { encoding: 'utf8' }).trim() } catch { return hostname().split('.')[0] } })()
+const HOST = machineName()
 const DATABASE_URL = process.env.DATABASE_URL
 const here = fileURLToPath(new URL('../../..', import.meta.url))
 
@@ -95,12 +95,17 @@ async function ensureProxy(): Promise<void> {
 
 // the plan
 
+let known: { name: string; userName: string; root: string; seenAt: Date }[] = []
+
 async function readPlan(): Promise<Plan> {
   await ensureProxy()
   const { db, pool } = await import('../db/client.js')
   const { app, prototype, repo, session } = await import('../db/schema.js')
   const { eq } = await import('drizzle-orm')
   try {
+    const { registerMachine, machines } = await import('../machine.js')
+    await registerMachine()
+    known = await machines()
     const apps = await db.select().from(app)
     const repos = (await db.select().from(repo)).filter((r) => r.localPath)
     const protos = await db.select().from(prototype)
@@ -149,6 +154,7 @@ program.command('check').description('what leaving would send, without changing 
   await openState(o)
   const h = readHolder(o.stateDir)
   console.log(`This Mac: ${HOST}. The engine is held by: ${h?.holder ?? 'nobody'}${h ? ` (${h.at})` : ''}.`)
+  for (const m of known) console.log(`  ${m.name}: user ${m.userName}, root ${m.root}, last seen ${m.seenAt.toISOString().slice(0, 16).replace('T', ' ')}${m.name === HOST ? ' (this one)' : ''}`)
   for (const c of plan.checkouts) console.log(`${existsSync(c.localPath) ? '✓' : '✗'} ${c.name}: ${c.localPath}${existsSync(c.localPath) ? '' : ' (not here)'}`)
   const seen = new Set<string>()
   for (const p of plan.places) {
