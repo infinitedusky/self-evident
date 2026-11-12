@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { git } from './git.js'
-import { arrive, leave, mayArrive, readHolder, WIP, type Options, type Plan } from './handoff.js'
+import { arrive, folderName, leave, mayArrive, readHolder, stateName, WIP, type Options, type Plan } from './handoff.js'
 import { sessionDir } from './terminal.js'
 
 const before = process.env.CLAUDE_CONFIG_DIR
@@ -112,6 +112,21 @@ describe('leave, then arrive on the other Mac', () => {
     const sha = (await git(w.repo, ['rev-parse', 'origin/main'])).stdout
     await arrive(plan, w.on('desk'))
     expect((await git(w.repo, ['rev-parse', 'origin/main'])).stdout).toBe(sha) // not fetched
+  })
+
+  it('files a history by its place under the root, so it lands in the right folder for another user', async () => {
+    const w = await world()
+    const desk = join(w.root, 'Users', 'desk'), laptop = join(w.root, 'Users', 'laptop')
+    const at = (root: string) => join(root, 'code', 'golf-worktrees', 'talk-abc123')
+    const plan = (root: string): Plan => ({ checkouts: [], places: [{ name: 'RG · Swing', repo: join(root, 'code', 'golf'), path: null, branch: null, cwd: at(root), agentSessionId: 'sess-1' }] })
+    await mkdir(sessionDir(at(desk)), { recursive: true }); await writeFile(join(sessionDir(at(desk)), 'sess-1.jsonl'), '{"turn":1}\n')
+    await leave(plan(desk), w.on('desk', { root: desk }))
+    expect(existsSync(join(w.on('desk').stateDir, 'claude', 'ROOT-code-golf-worktrees-talk-abc123', 'sess-1.jsonl'))).toBe(true)
+    process.env.CLAUDE_CONFIG_DIR = join(w.root, 'claude-laptop')
+    await arrive(plan(laptop), w.on('laptop', { root: laptop }))
+    expect(await readFile(join(sessionDir(at(laptop)), 'sess-1.jsonl'), 'utf8')).toBe('{"turn":1}\n')
+    expect(stateName('-Users-desk-other-x', '/Users/desk')).toBe('ROOT-other-x') // a folder name can't tell these apart; the layout under the root is what's shared
+    expect(folderName('-tmp-elsewhere', '/Users/laptop')).toBe('-tmp-elsewhere')
   })
 
   it('does not overwrite this Mac\'s histories when it arrives without having left', async () => {

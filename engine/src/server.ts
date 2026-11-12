@@ -13,6 +13,7 @@ import { relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DATABASE_URL, db, pool } from './db/client.js'
 import { ensureDatabase } from './db/ensure.js'
+import { registerMachine } from './machine.js'
 import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, workspace, type BuildStatus, type IssueState } from './db/schema.js'
 import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
 import { appKey, newId } from './ids.js'
@@ -635,6 +636,8 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     }
   }
   await migrate(db, { migrationsFolder: fileURLToPath(new URL('../drizzle', import.meta.url)) }) // idempotent; `pnpm dev` just works
+  const me = await registerMachine() // paths are stored from this computer's root (db/home-path.ts)
+  console.log(`[engine] this computer: ${me.name}, user ${me.userName}, root ${me.root}`)
   const bus = new EventBus()
   await bus.start()
   const recovered = await runner.recover()

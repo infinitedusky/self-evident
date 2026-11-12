@@ -23,6 +23,7 @@ import {
   bigint, bigserial, boolean, check, date, foreignKey, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp,
   uniqueIndex, type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
+import { homePath } from './home-path.js'
 
 const id = () => text('id').primaryKey()
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
@@ -94,7 +95,7 @@ const appId = () => text('app_id').notNull().references(() => app.id)
 
 export const repo = pgTable('repo', { // [LS] member repos
   id: id(), appId: appId(), fullName: text('full_name').notNull(),
-  localPath: text('local_path'), writable: boolean('writable').notNull().default(true), baseBranch: text('base_branch'),
+  localPath: homePath('local_path'), writable: boolean('writable').notNull().default(true), baseBranch: text('base_branch'),
 }, (t) => [index('repo_app').on(t.appId)])
 
 export const providerConnection = pgTable('provider_connection', { // [IF] modules and providers
@@ -218,7 +219,7 @@ export const build = pgTable('build', {
   issueId: text('issue_id').primaryKey().references(() => issue.id), appId: appId(),
   status: text('status').notNull().default('queued'),
   attempt: integer('attempt').notNull().default(0), maxAttempts: integer('max_attempts').notNull().default(3),
-  branch: text('branch'), worktreePath: text('worktree_path'), baseSha: text('base_sha'),
+  branch: text('branch'), worktreePath: homePath('worktree_path'), baseSha: text('base_sha'),
   requiresSchemaChange: boolean('requires_schema_change').notNull().default(false), // [LS]
   heldReason: text('held_reason'), // [ID] why the scheduler is holding it, for the graph view
   updatedAt: at('updated_at'),
@@ -247,9 +248,17 @@ export const step = pgTable('step', { // how the builder intends to build a sub-
 }, (t) => [index('step_issue').on(t.issueId), inList('step_status', t.status, ['pending', 'in_progress', 'completed']),
   foreignKey({ name: 'step_issue_app_fk', columns: [t.issueId, t.appId], foreignColumns: [issue.id, issue.appId] })])
 
+// The computers this database is used from. Each registers its name, user and root folder when its engine starts or it
+// arrives (machine.ts). Paths are stored from the root (home-path.ts), so the folder layout under the root is what two
+// computers must share, not the user name.
+export const machine = pgTable('machine', {
+  name: text('name').primaryKey(), userName: text('user_name').notNull(), root: text('root').notNull(),
+  firstSeenAt: createdAt(), seenAt: at('seen_at').notNull().defaultNow(),
+})
+
 export const session = pgTable('session', { // a conversation with an agent: a talk session (a person and the app's agent)
   id: id(), appId: appId(), kind: text('kind').notNull().default('talk'), issueId: text('issue_id').references(() => issue.id),
-  cwd: text('cwd'), branch: text('branch'), worktreePath: text('worktree_path'), // where the agent works: its own worktree of the app's repo, on its own branch
+  cwd: homePath('cwd'), branch: text('branch'), worktreePath: homePath('worktree_path'), // where the agent works: its own worktree of the app's repo, on its own branch
   title: text('title'), subject: text('subject'), subjectRef: jsonb('subject_ref'), // what the conversation is about, pinned on first contact: {projectId} | {issueId} | {ideaId} | {path}
   agentSessionId: text('agent_session_id'), // the SDK session, for --resume after a restart
   alwaysAllow: jsonb('always_allow').$type<string[]>().notNull().default([]), // tools the person said Always to, in this conversation
@@ -358,7 +367,7 @@ export const prototype = pgTable('prototype', {
   title: text('title').notNull(), brief: text('brief'), // what to build and what it should teach us
   sessionId: text('session_id'), // the conversation that builds it, working in its worktree
   scenario: text('scenario'), // the made-up data its database was last built from (.prototype/scenarios/<name>)
-  branch: text('branch').notNull(), path: text('path').notNull(), port: integer('port'),
+  branch: text('branch').notNull(), path: homePath('path').notNull(), port: integer('port'),
   status: text('status').notNull().default('stopped'), createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [index('prototype_app').on(t.appId), inList('prototype_status', t.status, PROTOTYPE_STATUSES)])
 

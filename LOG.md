@@ -2252,7 +2252,8 @@ resumes from it). Decided, with Sandy:
 - **A worktree's work travels through the app's own GitHub repository** (Sandy chose this over a private mirror):
   `leave` commits anything uncommitted as "Handoff: work in progress, from <Mac>" and pushes the branch; `arrive`
   clones a missing checkout and makes the worktree again from the branch, at the same path. The database stores
-  paths, so both Macs use the same ones, which means the same user name. An app whose GitHub repository Self
+  paths, so both Macs use the same ones, which means the same user name (lifted the next day: "A computer
+  registers its root"). An app whose GitHub repository Self
   Evident was not given (Avoca practice) is never pushed or fetched. A main checkout is the person's: reported when
   it has unpushed work, never committed for them.
 - **Histories travel through a private repository** (`STATE_REPO`, Sandy chose it over Mac-to-Mac copying), kept in
@@ -2271,3 +2272,27 @@ dnsmasq, which this does not set up. Code: `engine/src/handoff.ts`, `engine/src/
 Found on the way: Ragdoll Golf's prototype branch has Mixamo's X Bot model in its first commit (deleted two commits
 later; the agent's note says it isn't CC0) and the repository is public, so that branch is not pushed until Sandy
 says how (`pnpm leave --except <branch>` leaves it on this Mac).
+
+## A computer registers its root; paths are stored from it (Sandy, 2026-11-12: "as long as our folder structure is identical, we can move between the two … computers should register their username, their root folder")
+
+The day before, moving between Macs needed the same user name on both, because the shared database held full paths
+(`/Users/<name>/code/sandbox/ragdoll-golf`) and a full path names one computer. Decided: what two computers share is
+the folder layout under a root, not the user name.
+
+- **Paths are stored from the root.** The five columns that hold a path on disk (an app's checkout, a conversation's
+  folder and worktree, a build's worktree, a prototype's folder) store `~/code/sandbox/ragdoll-golf`, and each
+  computer puts its own root back when it reads (`engine/src/db/home-path.ts`, a column type, so the engine's code
+  sees full paths as before and nothing that reads one changed). The root is the home folder, or `MACHINE_ROOT`. A
+  path outside the root is stored as it is. Migration `0012_machine_root` rewrote the stored ones.
+- **Each computer registers itself**: its name (the Mac's own, which doesn't follow the network), its user and its
+  root, in the `machine` table, when its engine starts and when it arrives. `pnpm handoff check` lists them.
+- **Histories are filed by their place under the root.** Claude Code names a conversation's folder after the full
+  path it works in, so the state repository keeps the root's part of that name as `ROOT`, and `arrive` puts each
+  folder back under the arriving computer's own name for it.
+
+Not rewritten: full paths inside old events and old messages (history, as it was said), and inside what a person
+typed (Homework Gate's test command names a folder under this Mac's user; it needs editing to run elsewhere). Not
+tried yet: resuming a conversation on a computer with a different user. The session file lands in the right folder
+(tested), but its turns still mention the first computer's paths, and what the agent makes of that is unknown until
+a real move. Tests: `machine.test.ts`, `handoff.test.ts`.
+
