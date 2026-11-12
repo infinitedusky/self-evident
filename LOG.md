@@ -2517,3 +2517,19 @@ Code: `createProject` in `engine/src/projects.ts`, the guard in `updateIssue` (`
 `projects.test.ts`; stories `Pages/NewProject` (Blank, Drafted By The Agent, Written By Hand), `Components/AddTasks`,
 `Pages/Tasks › Moving`. Not tried: the agent drafting a real project. Not built: picking several tasks at once;
 choosing where in the order a moved task lands (reorder it on the project's page after).
+
+## A project's Add task(s): new, existing, or from Linear (Sandy, 2026-11-12: "We need to be able to select issues from linear when adding existing tasks. It should be Add Task(s) and allow you to create new ones, select existing ones, or choose from Linear")
+
+The project page's "Existing tasks" panel is now **Add tasks**, opened by **Add task(s)…**, with three ways in:
+
+- **New**: a title and, if wanted, a description. The task is made in this project; the form clears and says what was
+  added, so several can be written in a row.
+- **Existing**: as before. The app's other open tasks: Add (from no project) or Move here (from another open project).
+- **From Linear**: only when the app has a Linear team. The same ticket list as the Tasks page (`LinearImport`, now with
+  `embedded`), and the ticked tickets become tasks and are put in this project. A ticket that already is a task is
+  named, not ticked: it is under Existing.
+
+Decided: the Linear tab brings the tickets in with the import as it was, then moves each new task into the project,
+one call each. No change to the engine. If a move fails part-way, the tasks exist in no project and are under Existing.
+
+Whatever comes in goes at the end of the project's order.

@@ -81,7 +81,9 @@ export function ProjectPage() {
 
       <Assets appId={graph.app.id} projectId={graph.project.id} />
 
-      {!['landed', 'stopped', 'superseded'].includes(graph.project.status) && <AddTasks appId={graph.app.id} projectId={graph.project.id} onAdd={(issueId) => act(() => engine.updateIssue(issueId, { projectId: graph.project.id }))} />}
+      {!['landed', 'stopped', 'superseded'].includes(graph.project.status) && <AddTasks appId={graph.app.id} projectId={graph.project.id} linearTeam={app?.setup?.integrations?.linear?.team?.trim().toUpperCase() || undefined}
+        onAdd={(issueId) => act(() => engine.updateIssue(issueId, { projectId: graph.project.id }))}
+        onCreate={(title, description) => act(() => engine.createIssue({ appId: graph.app.id, title, description, projectId: graph.project.id }))} />}
 
       <BacklogPanel graph={graph} busy={busy} act={act} />
 

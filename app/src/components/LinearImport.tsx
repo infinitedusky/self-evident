@@ -14,9 +14,13 @@ const PRIORITY = ['', 'Urgent', 'High', 'Medium', 'Low']
 /** The engine's sentence, out of its JSON reply. */
 const said = (e: any) => { const m = String(e?.message ?? e); try { return JSON.parse(m).error ?? m } catch { return m } }
 
-/** `startOpen`: asked for by a button (Plan's From Linear), so it opens on the tickets straight away. */
-export function LinearImport({ appId, team, onImported, startOpen = false }: { appId: string; team: string; onImported: () => void; startOpen?: boolean }) {
-  const [open, setOpen] = useState(startOpen)
+/**
+ * `startOpen`: asked for by a button (Plan's From Linear), so it opens on the tickets straight away.
+ * `embedded`: inside another panel (a project's Add tasks): no panel or heading of its own, always open, and the
+ * button says `verb`. `onImported` is given what was made, so the caller can put the new tasks where they belong.
+ */
+export function LinearImport({ appId, team, onImported, startOpen = false, embedded = false, verb = 'Bring in' }: { appId: string; team: string; onImported: (r: LinearImported) => unknown; startOpen?: boolean; embedded?: boolean; verb?: string }) {
+  const [open, setOpen] = useState(startOpen || embedded)
   const [scope, setScope] = useState<LinearScope>('mine')
   const [tickets, setTickets] = useState<LinearTicket[] | null>(null)
   const [picked, setPicked] = useState<string[]>([])
@@ -30,16 +34,19 @@ export function LinearImport({ appId, team, onImported, startOpen = false }: { a
   const shown = (tickets ?? []).filter((t) => !words || `${t.identifier} ${t.title} ${t.project ?? ''} ${t.assignee ?? ''}`.toLowerCase().includes(words))
   const bring = async () => {
     setBusy(true); setProblem(null)
-    try { const r = await engine.importLinear(appId, picked); setDone(r); setPicked([]); onImported(); load() } catch (e) { setProblem(said(e)) } finally { setBusy(false) }
+    try { const r = await engine.importLinear(appId, picked); await onImported(r); setDone(r); setPicked([]); load() } catch (e) { setProblem(said(e)) } finally { setBusy(false) }
   }
   const list = (rows: LinearImported['made']) => rows.map((r) => `${r.identifier} (${r.linear})`).join(', ')
+  const Wrap = embedded ? 'div' : 'section'
   return (
-    <section className="panel" data-component="LinearImport">
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+    <Wrap className={embedded ? undefined : 'panel'} data-component="LinearImport">
+      {embedded
+        ? <p className="muted" style={{ margin: '12px 0 0', fontSize: 14 }}>Open tickets of <span className="mono">{team}</span>. A ticked one becomes a task in this project, with its words and a link back. Linear is read, never written to.</p>
+        : <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
         <h2 style={{ margin: 0 }}>From Linear <span className="mono faint" style={{ fontWeight: 400 }}>{team}</span></h2>
         <span className="muted" style={{ flex: '1 1 300px', fontSize: 14 }}>A ticket becomes a task here, with its words and a link back. Linear is read, never written to.</span>
         <button type="button" className="btn quiet" onClick={() => setOpen(!open)}>{open ? 'Close' : 'Bring in tickets…'}</button>
-      </div>
+      </div>}
       {done && <p className="settings-note" style={{ marginTop: 10 }}><Badge tone="ok">Brought in</Badge><span>
         {done.made.length > 0 && <>Made {list(done.made)}. </>}{done.updated.length > 0 && <>Updated {list(done.updated)}. </>}{done.missing.length > 0 && <>Not found in {team}: {done.missing.join(', ')}.</>}
       </span></p>}
@@ -47,7 +54,7 @@ export function LinearImport({ appId, team, onImported, startOpen = false }: { a
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, margin: '12px 0 8px' }}>
           {SCOPES.map((s) => <button key={s.key} type="button" className={`btn small ${scope === s.key ? '' : 'quiet'}`} aria-pressed={scope === s.key} onClick={() => { setScope(s.key); setPicked([]) }}>{s.label}</button>)}
           <input aria-label="Filter tickets" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter: words, a number, a project" style={{ flex: '1 1 220px', minWidth: 0, padding: '6px 10px', border: '1px solid var(--line)', borderRadius: 8, background: 'var(--surface)', color: 'var(--ink)' }} />
-          <button type="button" className="btn" disabled={busy || !picked.length} onClick={() => void bring()}>{busy ? 'Bringing in…' : picked.length ? `Bring in ${picked.length}` : 'Bring in'}</button>
+          <button type="button" className="btn" disabled={busy || !picked.length} onClick={() => void bring()}>{busy ? 'Bringing in…' : picked.length ? `${verb} ${picked.length}` : verb}</button>
         </div>
         {problem && <div className="empty bad">{problem}</div>}
         {!problem && tickets === null && <p className="muted">Asking Linear…</p>}
@@ -71,6 +78,6 @@ export function LinearImport({ appId, team, onImported, startOpen = false }: { a
           ))}
         </ul>}
       </>}
-    </section>
+    </Wrap>
   )
 }
