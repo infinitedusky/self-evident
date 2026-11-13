@@ -129,14 +129,15 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   const rows = v.rows
   const here = section === 'build' || section === 'saves' || rows.some((r) => r.key === section) ? section! : 'overview'
   if (section && here === 'overview') return <Navigate to={base} replace />
-  const done = i.subIssues.filter((s) => s.state === 'done').length
+  const live = i.subIssues.filter((s) => !dropped(s)) // canceled sub-tasks are out of the plan
+  const done = live.filter((s) => s.state === 'done').length
   const buildWaits = i.briefApprovedBy ? null : 'the brief\'s approval'
   const row = rows.find((r) => r.key === here)
   const next = rows.find((r) => !r.waitingOn && r.state.status !== 'done' && r.key !== 'idea')
   const wf = v.resolved.workflow
   return (
     <div className={`task-layout with-agent ${agent.open ? '' : 'agent-folded'} ${navOpen ? '' : 'nav-folded'}`}>
-      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} rows={rows} saves={navSaves} onSave={saveHere} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: i.subIssues.length, waitingOn: buildWaits }} />
+      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} rows={rows} saves={navSaves} onSave={saveHere} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: live.length, waitingOn: buildWaits }} />
       <div className="task-main">
         {here === 'overview' && (
           <>
@@ -167,9 +168,9 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
         {here === 'build' && (buildWaits
           ? <section className="panel"><h2>🏗️ Sub-tasks</h2><div className="empty">Planning and building wait for the brief's approval. <Link to={`${base}/brief`}>Go to the brief →</Link></div></section>
           : <>
-              <SubTasks i={i} plan={!i.subIssues.length && i.state === 'todo' ? <button className="btn" disabled={busy} onClick={() => act(() => engine.planIssue(i.id))}>Plan it</button> : null} />
+              <SubTasks i={i} plan={!live.length && i.state === 'todo' ? <button className="btn" disabled={busy} onClick={() => act(() => engine.planIssue(i.id))}>Plan it</button> : null} />
               <Planner i={i} />
-              {i.subIssues.length > 0 && <MergeGuide issueId={i.id} stamp={i.updatedAt} />}
+              {live.length > 0 && <MergeGuide issueId={i.id} stamp={i.updatedAt} />}
             </>)}
       </div>
       {agent.session !== undefined && (
@@ -242,20 +243,25 @@ function BriefStep({ i, busy, act, feeds, base }: { i: IssueDetail; busy: boolea
 }
 
 /** Sub-tasks under code, a checklist under a to-do. */
+/** A sub-task that is out of the plan: canceled, or a duplicate. Not counted, not built, folded away (Sandy, 2026-11-13). */
+const dropped = (s: { state: string }) => s.state === 'canceled' || s.state === 'duplicate'
+
 function SubTasks({ i, plan }: { i: IssueDetail; plan?: React.ReactNode }) {
   const code = i.kind === 'code'
-  const planned = i.subIssues.length > 0
-  if (!planned && i.parentId) return null
+  const subs = i.subIssues.filter((s) => !dropped(s))
+  const gone = i.subIssues.filter(dropped)
+  const planned = subs.length > 0
+  if (!planned && !gone.length && i.parentId) return null
   return (
     <section className="panel">
       <div className="card-head">
-        <h2 style={{ margin: 0 }}>{code ? 'Sub-tasks' : 'Checklist'} {planned && <Badge>{i.subIssues.filter((s) => s.state === 'done').length}/{i.subIssues.length}</Badge>}</h2>
+        <h2 style={{ margin: 0 }}>{code ? 'Sub-tasks' : 'Checklist'} {planned && <Badge>{subs.filter((s) => s.state === 'done').length}/{subs.length}</Badge>}</h2>
         {plan}
       </div>
       {!planned && <p className="faint" style={{ margin: '8px 0 0' }}>{code ? 'Not planned yet: the planner reads the code and the brief, and cuts it into sub-tasks, one agent each.' : 'No lines yet.'}</p>}
       {planned && (
         <ol className="list sub-issues">
-          {i.subIssues.map((s) => (
+          {subs.map((s) => (
             <li key={s.id} className={`sub-issue ${s.state}`}>
               <span className="mono faint">{s.identifier}</span>
               <div>
@@ -268,6 +274,23 @@ function SubTasks({ i, plan }: { i: IssueDetail; plan?: React.ReactNode }) {
             </li>
           ))}
         </ol>
+      )}
+      {gone.length > 0 && (
+        <details className="sub-issues-gone">
+          <summary>{gone.length} canceled <span className="faint">not counted, not built</span></summary>
+          <ol className="list sub-issues">
+            {gone.map((s) => (
+              <li key={s.id} className={`sub-issue ${s.state}`}>
+                <span className="mono faint">{s.identifier}</span>
+                <div>
+                  <Link to={`/tasks/${s.id}`} style={{ textDecoration: 'none' }}>{s.title}</Link>
+                  {s.reason && <div className="faint" style={{ fontSize: 13 }}>{s.reason}</div>}
+                </div>
+                <Badge tone={STATE_TONE[s.state]}>{STATE_LABEL[s.state]}</Badge>
+              </li>
+            ))}
+          </ol>
+        </details>
       )}
     </section>
   )

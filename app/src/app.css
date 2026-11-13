@@ -798,3 +798,7 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .run-log-lines .said .md-text > :first-child { margin-top: 0; } .run-log-lines .said .md-text > :last-child { margin-bottom: 0; }
 .run-log-lines .mark { font-weight: 600; } .run-log-lines .mark.ok { color: var(--ok); } .run-log-lines .mark.bad { color: var(--bad); } .run-log-lines .mark.warn { color: var(--warn); }
 .run-log-working { display: flex; gap: 8px; align-items: center; margin: 10px 0 0; color: var(--ink-soft); }
+
+/* Canceled sub-tasks: under the list, folded. */
+.sub-issues-gone { margin-top: 10px; } .sub-issues-gone > summary { cursor: pointer; font-size: 13px; color: var(--ink-soft); padding: 4px 0; } .sub-issues-gone > summary .faint { margin-left: 6px; }
+.sub-issues-gone .sub-issue { opacity: .7; }

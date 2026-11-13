@@ -3181,3 +3181,20 @@ says why: there is nothing to say to a planner; change the brief and plan again.
 
 It is still a run, not a conversation. Not done: making the planner a conversation one can answer in; the same tab
 for a sub-task's builder, which is also a run.
+
+## A canceled sub-task is out of the plan (Sandy, 2026-11-13: "canceled sub-tasks show as 'queued' and count toward '14 sub-tasks' … it also needs to remove the canceled from the graph")
+
+Found on a real task whose planner had run twice: the first run's six sub-tasks were canceled as duplicates, and
+still showed as queued beside the eight real ones, in the count and in the graph. Canceling a task canceled its
+sub-tasks' builds; canceling one sub-task by itself left its build as it was, queued, and the page showed the
+build's status over the task's state.
+
+- A sub-task's build follows it: canceled or marked a duplicate, its build is cancelled, so the engine never builds
+  it; reopened, it is queued again. Rows already in that state are repaired once (migration 0021).
+- The project's graph leaves canceled sub-tasks out: not drawn, not counted, not in the pull request's lists, and a
+  sub-task that waited on one waits no longer. A task whose sub-tasks were all canceled can be planned again.
+- The task's page counts only the live ones (the badge, the nav's "done/total") and folds the canceled ones under
+  the list, "6 canceled, not counted, not built", each shown as Canceled with its reason.
+
+Also: the "Go back" story of the save points list read the list before it had been read again after the move, and
+failed now and then under load; it waits for it now.

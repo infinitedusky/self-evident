@@ -45,11 +45,11 @@ export const GoBack: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Go back to Proto before review (sample)' }))
-    await expect(c.getByText(/The 4 changes since are set aside as “Main”, not lost/)).toBeInTheDocument()
+    await expect(await c.findByText(/The 4 changes since are set aside as “Main”, not lost/)).toBeInTheDocument() // the dialog opens on the next render
     await expect(c.getByRole('checkbox', { name: /Also rebuild the prototype's data from its sample data/ })).not.toBeChecked()
-    await userEvent.click(c.getByRole('button', { name: 'Go back' }))
+    await userEvent.click(await c.findByRole('button', { name: 'Go back' }))
     await expect(await c.findByText(/Now working on “From Proto before review \(sample\)”/)).toBeInTheDocument()
-    await expect(c.getByLabelText('Working on From Proto before review (sample)')).toBeInTheDocument()
+    await expect(await c.findByLabelText('Working on From Proto before review (sample)')).toBeInTheDocument() // the list is read again after the move
   },
 }
 /** A move the engine refuses says why, and nothing changes. */

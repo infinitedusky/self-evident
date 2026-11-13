@@ -41,6 +41,23 @@ export const LockedStep: Story = { parameters: at('iss_sample20', 'risk'), befor
 export const BuildReady: Story = { parameters: at('iss_sample20', 'build'), beforeEach: approved }
 /** A task planned: its sub-tasks, and what the planner decided. */
 export const Planned: Story = { parameters: at('iss_sample1', 'build'), beforeEach: approved }
+// Made up: the planner ran twice on the sample task, and the first run's two sub-tasks were canceled as duplicates.
+const s1 = issueDetails.iss_sample1
+const dropped = s1.subIssues.map((s, n) => ({ ...s, id: `iss_dropped${n}`, identifier: `SH-9${n}`, title: `${s.title} (first plan, sample)`, state: 'canceled' as const, reason: 'Duplicate plan: the planner ran twice (sample)', build: { status: 'queued' as const, attempt: 0, heldReason: null } }))
+/** Canceled sub-tasks are out of the count and folded away under the list, each as canceled with why, never as queued. */
+export const CanceledSubTasks: Story = {
+  parameters: at('iss_sample1', 'build'),
+  beforeEach: withEngine({ steps: { ...sampleData.steps, issues: approvedTaskStepsView }, issueDetails: { ...sampleData.issueDetails, iss_sample1: { ...s1, briefApprovedBy: 'Sam (sample)', briefApprovedAt: '2026-10-28T10:00:00Z', subIssues: [...dropped, ...s1.subIssues] } } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const fold = await c.findByText(/2 canceled/)
+    await expect(c.getByRole('heading', { name: /Sub-tasks/ })).toHaveTextContent(`/${s1.subIssues.length}`) // the two canceled are not counted
+    await expect(c.getAllByText(/first plan, sample/, { selector: 'a' })[0]).not.toBeVisible()
+    await userEvent.click(fold)
+    await expect(c.getAllByText('Canceled')).toHaveLength(2)
+    await expect(c.getAllByText(/Duplicate plan: the planner ran twice/)).toHaveLength(2)
+  },
+}
 /** A sub-task being built: the builder's own steps, live, with the plan folded under them. */
 export const SubTaskBuilding: Story = { parameters: at('iss_sample5') }
 /** A sub-task not built yet: the planner's steps, from its brief. */
