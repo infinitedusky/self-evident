@@ -663,6 +663,12 @@ Details and sources in `research/`.
   task holds (its description, each acceptance criterion with the build's mark, the decisions, the risks and how we
   would know), with the record of what landed under it.
 
+- **The build starts from scratch, on purpose (Sandy, 2026-11-13: "starting from scratch is meant to avoid the
+  fixing is slower than building correctly").** The prototype is built for speed on the real path and is not tidied,
+  so its code carries shortcuts by design. The build does not start from its branch: it starts from the default
+  branch with the prototype as a map, and the analysis, the ADR and the acceptance criteria in hand. Settled; not an
+  open question.
+
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
 > "When I use VS Code, I can just move really quickly … I just set things to dangerously skip permissions and just

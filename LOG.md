@@ -3160,3 +3160,12 @@ Not done: an agent writing the guide's prose after the build (the risks are the 
 build, so what the build itself turned up is only there if a criterion or a decision records it); a summary on the
 brief itself; summaries for reports already written (ask the task's agent). Not tried: a real check writing a
 summary, or a real pull request opened with the guide.
+
+## The build starts from scratch, on purpose (Sandy, 2026-11-13: "starting from scratch is meant to avoid the fixing is slower than building correctly")
+
+Asked more than once as an open question since the prototype's mandate changed to "essentially what we'd go live
+with": should the build start from the prototype's branch? No. Fixing a fast prototype is slower than building it
+correctly once the shape is known, so the build starts from the default branch and reads the prototype as a map.
+Settled. What may still carry over as files, not as code to fix: the sample data and scenarios, the recorded stubs
+and seams, and the checks behind the acceptance criteria. Not built; to look at after a real run shows whether
+builders redo that work.
