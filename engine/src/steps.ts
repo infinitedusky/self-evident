@@ -12,7 +12,7 @@
  * Fixed in every workflow:
  * - "starts as an idea" is always there and always first; a workflow makes it required or not;
  * - research, sketches, mockups and the prototype come next, in the workflow's order, each on or off;
- * - the checks (the prototype analysis, the clean-up, an ADR, the blast radius, a brief audit) come after those, added or removed:
+ * - the checks (the prototype analysis, an ADR, the blast radius, a brief audit) come after those, added or removed:
  *   they read what the others produced, and run in that order, each a fresh agent, once the person approves the
  *   prototype (checks.ts; Sandy, 2026-11-11);
  * - the brief is always there and always required. It is kept last in the stored list, and its place there means
@@ -22,7 +22,7 @@
  * The app imports this module too (`@self-evident/engine/steps`), so the rules live in one place.
  */
 
-export type StepKey = 'idea' | 'research' | 'brief' | 'sketch' | 'mockup' | 'prototype' | 'analysis' | 'cleanup' | 'adr' | 'risk' | 'audit'
+export type StepKey = 'idea' | 'research' | 'brief' | 'sketch' | 'mockup' | 'prototype' | 'analysis' | 'adr' | 'risk' | 'audit'
 export type On = 'idea' | 'task' | 'project'
 /** What kind of step it is: the idea, first; research; the brief, the parent of the rest; a way of looking (sketch, mockup, prototype); a check, after those, added or removed. */
 export type Place = 'first' | 'before' | 'brief' | 'either' | 'check'
@@ -35,8 +35,7 @@ export const STEPS: StepDef[] = [
   { key: 'sketch', label: 'Sketches', icon: '✏️', what: 'The first look, fast: plain HTML screens to react to and change in moments, before a real story.', place: 'either' },
   { key: 'mockup', label: 'Mockups', icon: '🎨', what: 'How it looks, done properly: stories with made-up data, variants side by side. The brief points at the agreed one.', place: 'either' },
   { key: 'prototype', label: 'Prototype', icon: '🛠️', what: 'The agent\'s quick working attempt, to use, show people and find the best way to build it.', place: 'either' },
-  { key: 'analysis', label: 'Prototype analysis', icon: '🔬', what: 'The prototype read by a fresh agent: how it was built, what was faked, what to keep.', place: 'check' },
-  { key: 'cleanup', label: 'Clean-up', icon: '🧹', what: 'The prototype\'s code read for the cleaner way: what repeats and should be one function, what to refactor, what could be simpler. The real build is told to do it that way.', place: 'check' },
+  { key: 'analysis', label: 'Prototype analysis', icon: '🔬', what: 'The prototype read by a fresh agent: how it was built, what was faked, what to keep, and how the real build should be cleaner: what repeats, what to refactor, the simpler way.', place: 'check' },
   { key: 'adr', label: 'ADR', icon: '🏛️', what: 'The architecture decision for the real build, from the analysis and the code: the options, the choice, why.', place: 'check' },
   { key: 'risk', label: 'Blast radius', icon: '💥', what: 'What the change touches, what could break, and how we\'d know.', place: 'check' },
   { key: 'audit', label: 'Brief audit', icon: '🧐', what: 'The brief read against the code and the prototype by a fresh agent: gaps, wrong guesses.', place: 'check' },
