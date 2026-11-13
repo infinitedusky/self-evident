@@ -23,7 +23,7 @@ const only = (w: NonNullable<TaskBranch['work']>) => [w.commits ? n(w.commits, '
 
 type Asking = { kind: 'back'; save: SavePoint } | { kind: 'switch'; branch: TaskBranch } | { kind: 'delete'; branch: TaskBranch } | { kind: 'clear' } | null
 
-export function TaskBranches({ issueId, onMoved }: { issueId: string; /** The task changed under the page: read it again. */ onMoved?: () => void }) {
+export function TaskBranches({ issueId, onMoved, onChanged, stamp }: { issueId: string; /** The task changed under the page: read it again. */ onMoved?: () => void; /** The list changed (saved, deleted, moved). */ onChanged?: () => void; /** Changes when the list was changed from elsewhere (the nav): read it again. */ stamp?: number }) {
   const [v, setV] = useState<View | null>(null)
   const [name, setName] = useState('')
   const [asking, setAsking] = useState<Asking>(null)
@@ -33,10 +33,10 @@ export function TaskBranches({ issueId, onMoved }: { issueId: string; /** The ta
   const [error, setError] = useState<string | null>(null)
   const [said, setSaid] = useState<string | null>(null)
   const load = useCallback(() => engine.taskBranches(issueId).then(setV).catch((e) => setError(problem(e))), [issueId])
-  useEffect(() => { void load() }, [load])
+  useEffect(() => { void load() }, [load, stamp])
   const run = async (fn: () => Promise<string | void>) => {
     setBusy(true); setError(null); setSaid(null)
-    try { const s = await fn(); setAsking(null); setAs(''); setReset(false); if (s) setSaid(s); await load(); return true } catch (e: any) { setError(problem(e)); return false } finally { setBusy(false) }
+    try { const s = await fn(); setAsking(null); setAs(''); setReset(false); if (s) setSaid(s); await load(); onChanged?.(); return true } catch (e: any) { setError(problem(e)); return false } finally { setBusy(false) }
   }
   const move = (go: () => Promise<{ now: { name: string }; setAside: { name: string }; restarted: number; leftAlone: string[]; problems: string[] }>) => run(async () => {
     const r = await go(); onMoved?.()

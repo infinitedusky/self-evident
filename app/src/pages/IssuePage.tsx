@@ -6,7 +6,7 @@
  * A task (a top-level code issue) is laid out like Settings: its own nav down the left (TaskNav), its overview first,
  * then a page per step in its workflow's order, then the build, each at its own address: /tasks/:id/:section.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -20,7 +20,7 @@ import { mark, TaskNav } from '../components/TaskNav'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
 import { finished, label, ready, step, type Row, type StepKey } from '@self-evident/engine/steps'
 import { STATUS_TONE } from '../components/PlanGraphView'
-import { openEvents, type Events, API, engine, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState } from '../engine'
+import { openEvents, type Events, API, engine, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
 import { Md } from '../components/Md'
 
 /** Where a task's workflow comes from, after its name. */
@@ -116,10 +116,17 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   const [navOpen, setNavOpen] = useState(() => { try { return localStorage.getItem('se.task-nav.open') !== '0' } catch { return true } })
   const toggleNav = () => setNavOpen((o) => { try { localStorage.setItem('se.task-nav.open', o ? '0' : '1') } catch { /* fine */ } return !o })
   const base = `/tasks/${i.id}`
+  // Its save points, for the nav: read again when one is made, deleted or gone back to.
+  const [saved, setSaved] = useState<TaskBranchesView | null>(null)
+  const [savesStamp, setSavesStamp] = useState(0)
+  const readSaves = useCallback(() => { void engine.taskBranches(i.id).then(setSaved).catch(() => {}) }, [i.id])
+  useEffect(() => { readSaves() }, [readSaves, section, i.updatedAt]) // an agent may have saved or moved it: read on each page of the task and when the task changes
+  const navSaves = saved ? { current: saved.branches.find((b) => b.current)?.name ?? null, points: saved.saves.map((s) => ({ id: s.id, name: s.name })), aside: saved.branches.filter((b) => !b.current).map((b) => ({ id: b.id, name: b.name })) } : undefined
+  const saveHere = async (name: string) => { await engine.saveHere(i.id, name).catch(() => {}); readSaves(); setSavesStamp((n) => n + 1) }
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
   const rows = v.rows
-  const here = section === 'build' || rows.some((r) => r.key === section) ? section! : 'overview'
+  const here = section === 'build' || section === 'saves' || rows.some((r) => r.key === section) ? section! : 'overview'
   if (section && here === 'overview') return <Navigate to={base} replace />
   const done = i.subIssues.filter((s) => s.state === 'done').length
   const buildWaits = i.briefApprovedBy ? null : 'the brief\'s approval'
@@ -128,7 +135,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   const wf = v.resolved.workflow
   return (
     <div className={`task-layout with-agent ${agent.open ? '' : 'agent-folded'} ${navOpen ? '' : 'nav-folded'}`}>
-      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} rows={rows} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: i.subIssues.length, waitingOn: buildWaits }} />
+      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} rows={rows} saves={navSaves} onSave={saveHere} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: i.subIssues.length, waitingOn: buildWaits }} />
       <div className="task-main">
         {here === 'overview' && (
           <>
@@ -146,7 +153,6 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
                 <Link to={`/settings/apps/${i.appId}/workflows`}>Configure the rules</Link>
               </p>
             </section>
-            <TaskBranches issueId={i.id} onMoved={() => void act(async () => {})} />
             <Comments i={i} />
             <Planner i={i} />
           </>
@@ -156,6 +162,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
             {row.key === 'brief' ? <BriefStep i={i} busy={busy} act={act} feeds={rows.filter((r) => r.key !== 'brief')} base={base} /> : undefined}
           </StepSection>
         )}
+        {here === 'saves' && <TaskBranches issueId={i.id} stamp={savesStamp} onMoved={() => void act(async () => {})} onChanged={readSaves} />}
         {here === 'build' && (buildWaits
           ? <section className="panel"><h2>🏗️ Sub-tasks</h2><div className="empty">Planning and building wait for the brief's approval. <Link to={`${base}/brief`}>Go to the brief →</Link></div></section>
           : <>

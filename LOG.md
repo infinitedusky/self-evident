@@ -3114,3 +3114,13 @@ Not done: a save point at "build started" (the one at "Brief approved" is before
 pushed git branch's remote copy; a fresh conversation for the agent on a move (it gets a message instead); the
 prototype's data per task branch; sizes on disk. Not tried: any of it on a real task with a real prototype; the
 engine is tested against real git worktrees, the list in stories.
+
+## Save points live in the task's nav (Sandy, 2026-11-13: "maybe at the bottom … then a list could start and the one you are on could be shown")
+
+On the overview they were a panel you had to go and find. Now the task's left nav ends with a Save points section:
+the task branch being worked on first ("working on"), then each save point, then what was set aside, and "＋ Save
+here", which takes a name and Enter without leaving the page you are on. Before the first save there is only the
+button, and the list starts from there. Every row goes to a Save points page of the task (`/tasks/<id>/saves`), which
+is the full list with go back, work on this, delete and clear all; that list left the overview. Folded, the nav
+shows one icon with the counts in its tooltip. The nav reads the list again on each page of the task and when the
+task changes, so a save point an agent made shows up.

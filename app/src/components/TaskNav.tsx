@@ -6,6 +6,7 @@
  * before it (Sandy, 2026-10-29: "you can't go to them until you've done the ones that are required"); the brief is
  * approved once the required steps are done, and the build waits on that approval.
  */
+import { useState } from 'react'
 import { NavLink } from 'react-router'
 import { finished, label, ready, step, type On, type Row } from '@self-evident/engine/steps'
 
@@ -26,7 +27,7 @@ export function briefStands(rows: Row[], on: On) {
 /** ✓ finished (approved, where a person approves it), ◐ started or ready for the person, ○ not started. */
 export const mark = (r: Row, on: On) => (finished(r.state, on) ? '✓' : r.state.status === 'none' ? '○' : '◐')
 
-export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded, onToggle }: {
+export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded, onToggle, saves, onSave }: {
   base: string; here: string; on?: On; rows: Row[]
   /** The workflow in force and where it comes from (", the app's default"); its steps are the list. */
   workflow?: { name: string; from: string } | null
@@ -35,7 +36,16 @@ export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded
   /** Folded to a strip of icons, to give the step's page the room (Sandy, 2026-11-10: "make the left nav steps collapsible too"). */
   folded?: boolean
   onToggle?: () => void
+  /**
+   * The task's save points, at the bottom (Sandy, 2026-11-13: "a list could start and the one you are on could be
+   * shown"): the task branch being worked on, each save point, each task branch set aside. Left out: no section.
+   */
+  saves?: { current: string | null; points: { id: string; name: string }[]; aside: { id: string; name: string }[] }
+  /** Save here, under this name (empty: the engine names it). */
+  onSave?: (name: string) => unknown
 }) {
+  const [naming, setNaming] = useState(false)
+  const [name, setName] = useState('')
   const item = (key: string, to: string, body: React.ReactNode, waitingOn: string | null, extra = '') =>
     waitingOn
       ? <span key={key} className={`link locked ${extra}`} title={`After ${waitingOn}`} aria-disabled="true">{body}<span className="task-nav-after">after {waitingOn}</span></span>
@@ -57,6 +67,7 @@ export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded
         {brief && icon('brief', `${base}/brief`, step('brief').icon, on === 'task' ? 'The brief' : label('brief', on), stands ?? said(brief), null, finished(brief.state, on))}
         {feeds.map((r) => icon(r.key, `${base}/${r.key}`, step(r.key).icon, label(r.key, on), said(r), after(r, rows, on), finished(r.state, on)))}
         {build && icon('build', `${base}/build`, '🏗️', 'Sub-tasks', build.total ? `${build.done}/${build.total}` : 'not planned', build.waitingOn, !!build.total && build.done === build.total)}
+        {saves && icon('saves', `${base}/saves`, '💾', 'Save points', saves.points.length || saves.aside.length ? `${saves.points.length} saved${saves.aside.length ? `, ${saves.aside.length} set aside` : ''}${saves.current ? `; working on ${saves.current}` : ''}` : 'none yet', null, false)}
       </nav>
     )
   }
@@ -90,6 +101,33 @@ export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded
           <span className="task-nav-text">🏗️ Sub-tasks</span>
           {build.total > 0 && <span className="faint mono" style={{ fontSize: 12 }}>{build.done}/{build.total}</span>}
         </span>, build.waitingOn)}
+      {saves && (
+        <>
+          <div className="task-nav-label faint">Save points</div>
+          {(saves.points.length > 0 || saves.aside.length > 0) && (
+            <NavLink to={`${base}/saves`} end className={() => `link task-nav-save current ${here === 'saves' ? 'active' : ''}`} title="The task branch being worked on">
+              <span className="task-nav-row"><span className="task-nav-mark ok">▸</span><span className="task-nav-text">{saves.current ?? 'Main'}</span></span>
+              <span className="task-nav-after">working on</span>
+            </NavLink>
+          )}
+          {saves.points.map((p) => (
+            <NavLink key={p.id} to={`${base}/saves`} end className="link task-nav-save" title={`Save point: ${p.name}`}>
+              <span className="task-nav-row"><span className="task-nav-mark task-nav-point">●</span><span className="task-nav-text">{p.name}</span></span>
+            </NavLink>
+          ))}
+          {saves.aside.map((b) => (
+            <NavLink key={b.id} to={`${base}/saves`} end className="link task-nav-save" title={`Set aside: ${b.name}`}>
+              <span className="task-nav-row"><span className="task-nav-mark">⑂</span><span className="task-nav-text">{b.name}</span></span>
+              <span className="task-nav-after">set aside</span>
+            </NavLink>
+          ))}
+          {onSave && (naming
+            ? <form className="task-nav-saving" onSubmit={async (e) => { e.preventDefault(); await onSave(name.trim()); setName(''); setNaming(false) }}>
+                <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') setNaming(false) }} aria-label="Name of the save point" placeholder="Name it, then Enter" />
+              </form>
+            : <button className="task-nav-save-here" aria-label="Save here" onClick={() => setNaming(true)} title="Mark where the task is now, to come back to. The work carries on.">＋ Save here</button>)}
+        </>
+      )}
     </nav>
   )
 }
