@@ -26,6 +26,7 @@ import { engineTools } from './tools.js'
 import { prototypeEnv } from './prototype.js'
 import { skillOptions } from './skills.js'
 import { issueDetail, PlanError, projectGraph } from './projects.js'
+import { onIdeaMoved } from './work.js'
 import { existsSync, statSync } from 'node:fs'
 import { stopStorybookAt } from './storybook.js'
 import { lastUuid, latestSession, readTurns, sessionFile, sessionLabel, sessionsIn, sessionTitle } from './terminal.js'
@@ -151,12 +152,12 @@ async function subjectFrom(ref?: SubjectRef): Promise<{ subject: string | null; 
 }
 
 /**
- * A new conversation. Only a task's agent, and an integration's set-up (which ends in a pull request), gets a worktree
+ * A new conversation. Only a task's agent, an idea's (ensureIdeaTalk), and an integration's set-up (which ends in a pull request), gets a worktree
  * of each of the app's repos on a branch of its own. Every other one is a conversation about the app as a whole
  * (Sandy, 2026-11-13: "only tasks should … they are now just different conversations about the app as a whole"): it
  * sits in the app's checkout, reads it, and has no worktree or branch (`subjectRef.app`).
  */
-export async function startTalk(input: { appId: string; subjectRef?: SubjectRef; actor?: string }) {
+export async function startTalk(input: { appId: string; subjectRef?: SubjectRef; actor?: string; /** An idea's own agent (ensureIdeaTalk): it gets a worktree, as a task's does. */ own?: boolean }) {
   const [a] = await db.select().from(app).where(eq(app.id, input.appId))
   if (!a) throw new PlanError(`no app ${input.appId}`)
   const r = await homeRepo(input.appId)
@@ -164,7 +165,7 @@ export async function startTalk(input: { appId: string; subjectRef?: SubjectRef;
   const problem = await checkoutProblem(r.localPath)
   if (problem) throw new PlanError(`${problem} Save it under Settings › Repo and Self Evident sets it up.`)
   const id = newId('session')
-  if (!input.subjectRef?.issueId && !input.subjectRef?.setup) {
+  if (!input.subjectRef?.issueId && !input.subjectRef?.setup && !input.own) {
     const { subject, subjectRef } = await subjectFrom(input.subjectRef)
     const [row] = await db.insert(session).values({
       id, appId: a.id, kind: 'talk', cwd: r.localPath, branch: null, worktreePath: null, subject, subjectRef: { ...subjectRef, app: true }, createdBy: input.actor ?? 'user', lastActiveAt: new Date(),
@@ -198,6 +199,58 @@ export async function taskTalk(issueId: string) {
   const [row] = await db.select().from(session)
     .where(and(eq(session.kind, 'talk'), eq(session.status, 'open'), sql`${session.subjectRef}->>'issueId' = ${issueId}`)).orderBy(session.createdAt).limit(1)
   return row ? { ...row, live: live.has(row.id), busy: live.get(row.id)?.busy ?? false } : null
+}
+
+/** An idea's own agent is a conversation pinned to the idea with a worktree of its own; one about the app that only started from the idea is not. */
+const ownIdea = sql`${session.worktreePath} is not null and ${session.subjectRef}->>'app' is null`
+
+/**
+ * An idea's own agent: the one open conversation pinned to the idea that has a worktree (Sandy, 2026-11-13: "when you
+ * go to one and work on it you get a dedicated agent … a task in all but name until you convert"). The oldest, as for
+ * a task.
+ */
+export async function ideaTalk(ideaId: string) {
+  const [row] = await db.select().from(session)
+    .where(and(eq(session.kind, 'talk'), eq(session.status, 'open'), sql`${session.subjectRef}->>'ideaId' = ${ideaId}`, ownIdea)).orderBy(session.createdAt).limit(1)
+  return row ? { ...row, live: live.has(row.id), busy: live.get(row.id)?.busy ?? false } : null
+}
+
+/** The idea's agent, started if it has none: one conversation and one worktree, cut when the person first works on the idea. */
+export async function ensureIdeaTalk(ideaId: string, actor = 'user') {
+  return withLock(`idea-talk:${ideaId}`, async () => {
+    const there = await ideaTalk(ideaId)
+    if (there) return there
+    const [i] = await db.select().from(idea).where(eq(idea.id, ideaId))
+    if (!i) throw new PlanError(`no idea ${ideaId}`)
+    if (i.lane !== 'inbox') throw new PlanError('this idea was converted: its work carries on where it went')
+    const row = await startTalk({ appId: i.appId, subjectRef: { ideaId }, actor, own: true })
+    return { ...row, live: false, busy: false }
+  })
+}
+
+/** The agents an idea's agent has out: the conversation of each prototype started on the idea. */
+export async function ideaAgents(ideaId: string) {
+  const protos = await db.select().from(prototype).where(and(eq(prototype.ideaId, ideaId), inArray(prototype.status, ['running', 'stopped']), isNotNull(prototype.sessionId))).orderBy(prototype.createdAt)
+  const rows = protos.length ? await db.select().from(session).where(inArray(session.id, protos.map((p) => p.sessionId!))) : []
+  return protos.flatMap((p) => {
+    const s = rows.find((r) => r.id === p.sessionId)
+    return s && s.status === 'open' ? [{ sessionId: s.id, kind: 'prototype' as const, what: 'Prototype', icon: step('prototype').icon, title: p.title, prototypeId: p.id, busy: live.get(s.id)?.busy ?? false }] : []
+  })
+}
+
+/**
+ * An idea became a task: its agent goes with it. The conversation was re-pinned to the task by convertIdea (work.ts);
+ * this says so in it and has the agent start again with the task's instructions: now if it is idle, else when its
+ * turn ends (it may be the one that converted the idea).
+ */
+const repinned = new Set<string>()
+onIdeaMoved((m) => { void ideaTalkMoved(m.talkId, m.task) })
+export async function ideaTalkMoved(sessionId: string, task: string) {
+  await record(sessionId, 'engine', 'handoff', `This idea is now the task ${task}. This conversation, its worktree and what it made are the task's.`).catch(() => {})
+  const l = live.get(sessionId)
+  if (!l) return
+  if (l.busy) { repinned.add(sessionId); return }
+  l.close(); live.delete(sessionId)
 }
 
 /**
@@ -303,7 +356,7 @@ async function reportBack(sessionId: string) {
   await say(r.from, `The ${r.what} agent finished what you asked.\n\n${r.said ? clip(r.said, 6000) : 'It stopped without saying anything; read_agent shows what happened.'}`, undefined, { author: 'engine', kind: 'brief', payload: { back: sessionId, label: `Back from the ${r.what} agent` } })
 }
 
-const turnEnded: ((sessionId: string) => void)[] = [(id) => { void reportBack(id).catch((err) => console.error('talk: could not report back to the conductor', err)) }]
+const turnEnded: ((sessionId: string) => void)[] = [(id) => { if (repinned.delete(id)) { live.get(id)?.close(); live.delete(id) } }, (id) => { void reportBack(id).catch((err) => console.error('talk: could not report back to the conductor', err)) }]
 /** Called each time a conversation's agent finishes a turn; what follows from it (the next check) lives elsewhere. */
 export const onTurnEnd = (fn: (sessionId: string) => void) => { turnEnded.push(fn) }
 
@@ -330,6 +383,9 @@ export const modelFor = (setup: { model?: string; prototype_model?: string }, pr
 
 const taskPrompt = (t: { id: string; number: number; title: string }, key: string) => `
 This conversation is the agent of one task, ${key}-${t.number} "${t.title}" (${t.id}), and the only one: you are its conductor from its first sketch to its merge, in this one worktree. Every step of its brief (research, sketches, mockups, the prototype, the checks) and its build is done or directed from here: record each with set_step on this task, and keep its brief current with update_task. Marking a step done says it is ready for the person; they approve it on its page, and only then does it count. The person sees this conversation on the task's page, beside the step they are looking at, and "this" means this task. open_tab with a sketch, a story or the prototype takes them to that step's page of this task, where it shows beside you; it never splits a tab off. A prototype you start gets an agent of its own, in the prototype's worktree: the person sees it as a second tab at the top of this same column, named Prototype, with a dot that pulses while it works; name the tab when you point them to it, never "the conversation beside you". You direct the agents you have out, so the person talks to you alone: agents_out lists them with what each last said; tell_agent sends one a message (when the person asks for a change to the prototype, pass it on in full, with what you know from the conversation, instead of sending them to the tab); its answer comes back to you here as a message when it finishes, so say you have passed it on and carry on, never wait or poll; read_agent reads its conversation, since the person may have talked to it directly. When an answer comes back, tell the person in a line or two what changed and what to look at. When the person approves the prototype, the engine sends a fresh agent for each check this task's workflow has, one after the other (the prototype analysis, the ADR, the blast radius), each a tab in this same column; you do not write those yourself. The engine then tells you here to bring the brief up to date, and after that the brief audit runs the same way. Keep to this task: for a new idea, another task or a look at findings, point them to the app's agent in the left column.`
+
+const ideaPrompt = (i: { id: string; number: number; title: string }) => `
+This conversation is the agent of one idea, #${i.number} "${i.title}" (${i.id}), and the only one: a task in all but name. You work it through in this one worktree without committing to anything: research, sketches, mockups, a prototype, and a rough draft of the brief (set_step on this idea, key brief). Record each with set_step on this idea (ideaId). The person sees this conversation on the idea's page, beside the step they are looking at, and "this" means this idea. open_tab with a sketch, a story or the prototype takes them to that step's page of this idea, where it shows beside you. A prototype you start gets an agent of its own, shown as a second tab at the top of this same column, named Prototype. Nothing here is planned or built: when the person says it is worth building, convert it with convert_idea. As a task, this conversation, this worktree and everything in it become the task's, and you carry on as its agent. Keep to this idea: for another idea or a task, point them to the app's agent in the left column.`
 
 /** A fresh agent out on one check: it reads, reports once with set_step, and stops. Its first message says what to read and what to report. */
 const checkPrompt = (key: StepKey, cwd: string) => `You are a fresh agent sent out for one piece of work on one task: its ${step(key).label.toLowerCase()}. You start from the message you are given and nothing else; that is the point, eyes that have not seen the conversation. You work in ${cwd}, which is someone else's folder: read anything, change nothing. You have no editing tools; use the shell only to read (git log, git diff, git show, ls, cat, grep, rg). Never commit, push, install or start anything. Your report is the whole result: record it once with set_step as you are told, then say in two or three lines what you found and stop. If the person writes to you afterwards, answer from what you read.`
@@ -383,14 +439,16 @@ export async function renameTalk(sessionId: string, subject: string) {
   return row
 }
 
-/** `taskId` on a conversation that belongs to a task: its own agent, a prototype's started on it, or a check's. The app's column leaves those out. */
+/** `taskId` on a conversation that belongs to a task: its own agent, a prototype's started on it, or a check's; `ideaId` on one that belongs to an idea: its own agent, or a prototype's. The app's column leaves those out. */
 export const listTalks = async (opts: { open?: boolean } = {}) => {
   const rows = await db.select().from(session).where(opts.open ? and(eq(session.kind, 'talk'), eq(session.status, 'open')) : eq(session.kind, 'talk')).orderBy(desc(session.lastActiveAt))
   const counts = await db.select({ sessionId: sessionMessage.sessionId, n: sql<number>`count(*)` }).from(sessionMessage).groupBy(sessionMessage.sessionId)
   const n = new Map(counts.map((c) => [c.sessionId, Number(c.n)]))
-  const protos = await db.select({ sessionId: prototype.sessionId, issueId: prototype.issueId }).from(prototype).where(isNotNull(prototype.issueId))
-  const ofTask = new Map(protos.filter((p) => p.sessionId).map((p) => [p.sessionId!, p.issueId!]))
-  return rows.map((s) => ({ ...s, live: live.has(s.id), busy: live.get(s.id)?.busy ?? false, messages: n.get(s.id) ?? 0, taskId: (s.subjectRef as SubjectRef | null)?.issueId ?? (s.subjectRef as SubjectRef | null)?.checkOf ?? ofTask.get(s.id) ?? null }))
+  const protos = await db.select({ sessionId: prototype.sessionId, issueId: prototype.issueId, ideaId: prototype.ideaId }).from(prototype).where(isNotNull(prototype.sessionId))
+  const ofTask = new Map(protos.filter((p) => p.issueId).map((p) => [p.sessionId!, p.issueId!]))
+  const ofIdea = new Map(protos.filter((p) => p.ideaId).map((p) => [p.sessionId!, p.ideaId!]))
+  const own = (s: typeof rows[number]) => { const r = s.subjectRef as SubjectRef | null; return s.worktreePath && !r?.app ? r?.ideaId : undefined } // an idea's own agent
+  return rows.map((s) => ({ ...s, live: live.has(s.id), busy: live.get(s.id)?.busy ?? false, messages: n.get(s.id) ?? 0, taskId: (s.subjectRef as SubjectRef | null)?.issueId ?? (s.subjectRef as SubjectRef | null)?.checkOf ?? ofTask.get(s.id) ?? null, ideaId: own(s) ?? ofIdea.get(s.id) ?? null }))
 }
 
 export async function talkTranscript(sessionId: string) {
@@ -418,6 +476,8 @@ async function open(sessionId: string): Promise<Live> {
   const ownTaskId = (s.subjectRef as SubjectRef | null)?.issueId
   const [ownTask] = ownTaskId ? await db.select().from(issue).where(eq(issue.id, ownTaskId)) : []
   const check = (s.subjectRef as SubjectRef | null)?.check
+  const ownIdeaId = s.worktreePath && !(s.subjectRef as SubjectRef | null)?.app ? (s.subjectRef as SubjectRef | null)?.ideaId : undefined
+  const [ownIdeaRow] = ownIdeaId ? await db.select().from(idea).where(eq(idea.id, ownIdeaId)) : []
   const whole = !!(s.subjectRef as SubjectRef | null)?.app && !s.worktreePath // about the app as a whole: it reads the app's checkout
   const refs = await referencesOf(s.appId)
   const mates = await matesOf(s.appId, s.worktreePath)
@@ -431,7 +491,7 @@ async function open(sessionId: string): Promise<Live> {
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...(check || whole ? CHECK_TOOLS : ASK_TOOLS)],

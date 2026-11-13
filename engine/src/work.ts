@@ -6,9 +6,9 @@
  * A task's steps are read from where they live: the brief is the issue's own, the prototype is the prototype table,
  * "starts as an idea" is the idea it came from, and the rest are step_work rows.
  */
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { db, type Tx } from './db/client.js'
-import { app, idea, issue, project, prototype, stepWork, workflow } from './db/schema.js'
+import { app, idea, issue, project, prototype, session, stepWork, workflow } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { getIssue, insertIssues, PlanError } from './issues.js'
@@ -279,7 +279,17 @@ export async function guardDirect(tx: Tx | typeof db, appId: string, projectId?:
  * An idea becomes a task or a project, and its steps come with it: research, mockups and the rest move over, its
  * prototypes point at the new thing, and its rough draft becomes the task's brief, unapproved.
  */
+const ideaMoved: ((m: { talkId: string; task: string }) => void)[] = []
+/** Called when an idea's own agent became a task's (talk.ts tells the agent). */
+export const onIdeaMoved = (fn: (m: { talkId: string; task: string }) => void) => { ideaMoved.push(fn) }
+
 export async function convertIdea(ideaId: string, as: 'task' | 'project', opts: { title?: string; projectId?: string; why?: string } = {}, actor = 'user') {
+  const out = await convertIdeaTx(ideaId, as, opts, actor)
+  if ('moved' in out && out.moved) for (const fn of ideaMoved) fn(out.moved)
+  return out
+}
+
+async function convertIdeaTx(ideaId: string, as: 'task' | 'project', opts: { title?: string; projectId?: string; why?: string }, actor: string) {
   return db.transaction(async (tx) => {
     const [i] = await tx.select().from(idea).where(eq(idea.id, ideaId))
     if (!i) throw new PlanError(`no idea ${ideaId}`)
@@ -288,6 +298,7 @@ export async function convertIdea(ideaId: string, as: 'task' | 'project', opts: 
     const draft = work.find((w) => w.key === 'brief')
     const title = opts.title?.trim() || i.title
     let target: { issueId: string } | { projectId: string }
+    let moved: { talkId: string; task: string } | null = null // the idea's own agent, now the task's
     if (as === 'task') {
       if (opts.projectId) {
         const [p] = await tx.select().from(project).where(eq(project.id, opts.projectId))
@@ -295,6 +306,13 @@ export async function convertIdea(ideaId: string, as: 'task' | 'project', opts: 
       }
       const [row] = await insertIssues(tx, a.id, [{ kind: 'code', projectId: opts.projectId ?? null, ideaId: i.id, title, description: i.body ?? undefined, brief: draft?.body ?? undefined, delegate: 'planner', source: 'idea' }], actor)
       target = { issueId: row.id }
+      // The idea's own agent goes with it: one conversation and one worktree from the first sketch on (talk.ts, ideaTalk).
+      const [own] = await tx.select().from(session).where(and(eq(session.kind, 'talk'), eq(session.status, 'open'), sql`${session.subjectRef}->>'ideaId' = ${ideaId}`, sql`${session.worktreePath} is not null and ${session.subjectRef}->>'app' is null`)).orderBy(session.createdAt).limit(1)
+      if (own) {
+        const task = `${a.key}-${row.number} ${title}`
+        await tx.update(session).set({ subject: task, subjectRef: { issueId: row.id }, closedAt: null }).where(eq(session.id, own.id))
+        moved = { talkId: own.id, task }
+      }
     } else {
       const id = newId('project')
       await tx.insert(project).values({ id, appId: a.id, ideaId: i.id, name: title, content: i.body ?? null, integrationBranch: `project/${id}` })
@@ -310,7 +328,7 @@ export async function convertIdea(ideaId: string, as: 'task' | 'project', opts: 
     await tx.update(prototype).set({ ideaId: null, ...target, updatedAt: new Date() }).where(eq(prototype.ideaId, ideaId))
     await tx.update(idea).set({ lane: 'build', updatedAt: new Date() }).where(eq(idea.id, ideaId))
     await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, ideaId, ...target, actor, type: 'idea.converted', payload: { as, title, ...(opts.why ? { why: opts.why } : {}) } })
-    return { as, ...target }
+    return { as, ...target, ...(moved ? { moved } : {}) }
   })
 }
 
