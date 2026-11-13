@@ -127,6 +127,11 @@ describe('installing it', () => {
       await writeFile(join(cwd!, 'src/stories/Page.stories.js'), "export default { title: 'Example/Page' }\nexport const LoggedOut = {}\n")
       pkg.devDependencies = { ...pkg.devDependencies, storybook: '^10.6.6', '@storybook/react-vite': '^10.6.6', '@storybook/addon-docs': '^10.6.6' }
       pkg.scripts = { ...pkg.scripts, storybook: 'storybook dev -p 6006' }
+    } else if (args.includes('upgrade')) { // what Storybook's upgrade left on Merman, 2026-11-12: the packages moved to 10, its log beside them
+      pkg.devDependencies = { ...pkg.devDependencies, storybook: '^10.6.7', '@storybook/react-vite': '^10.6.7' }
+      await writeFile(join(cwd!, 'debug-storybook.log'), 'log')
+      await writeFile(join(cwd!, '.storybook/main.ts'), "export default { stories: ['../src/**/*.stories.tsx'], framework: '@storybook/react-vite', addons: ['@storybook/addon-mcp'] }\n")
+    } else if (args[0] === 'install' && args.length <= 2 && !args.includes('-D')) { /* the install after an upgrade: nothing to fake */
     } else if (args[0] === 'add' || args[0] === 'install') pkg.devDependencies = { ...pkg.devDependencies, [args[args.length - 1]]: '^0.10.0' }
     await writeFile(pkgPath, JSON.stringify(pkg, null, 2))
     return { stdout: '', stderr: '' }
@@ -163,6 +168,28 @@ describe('installing it', () => {
     expect((await checkStorybook({ ...sb(dir), url: 'http://localhost:6006' }, { answers: async () => false })).ok).toBe(true)
   })
 
+  it('upgrades an older Storybook with its own upgrade, installs, then goes on to the standard', async () => {
+    const dir = await committed({
+      'package.json': JSON.stringify({ name: 'merman', devDependencies: { storybook: '^8.4.7', '@storybook/react-vite': '^8.4.7', vite: '^5' } }), 'pnpm-lock.yaml': '', 'README.md': '# Merman\n',
+      '.storybook/main.ts': "export default { stories: ['../src/**/*.stories.tsx'], framework: '@storybook/react-vite' }\n",
+      '.storybook/preview.ts': 'export default {}\n',
+    })
+    const log: string[] = []
+    const r = await installStorybook(sb(dir), { run: fakeRun(log) })
+    expect(log.slice(0, 2)).toEqual([`pnpm dlx storybook@latest upgrade --yes --disable-telemetry @ ${dir}`, `pnpm install --no-frozen-lockfile @ ${dir}`])
+    expect(r.left).toEqual([])
+    expect(r.did[0]).toBe('Upgraded Storybook in . from ^8.4.7 to ^10.6.7 with its own upgrade.')
+    expect(r.did).toContain('Wired the add-on into .storybook/main.ts, flowGlob ../src/**/*.flow.json.')
+    expect((await git(dir, ['status', '--porcelain'])).stdout).toBe('') // committed, and the upgrade's log is gone
+    expect((await git(dir, ['ls-files', 'debug-storybook.log'])).stdout).toBe('')
+    expect((await checkStorybook({ ...sb(dir), url: null }, {})).ok).toBe(true)
+  })
+  it('says so when the upgrade does not reach Storybook 10', async () => {
+    const dir = await committed({ 'package.json': JSON.stringify({ name: 'old', devDependencies: { storybook: '^8.4.7' } }), 'pnpm-lock.yaml': '', '.storybook/main.ts': 'export default { addons: [] }\n' })
+    const r = await installStorybook(sb(dir), { run: async (file, args, cwd) => { if (file === 'git') return execFileP('git', args, { cwd }); throw Object.assign(new Error('x'), { stderr: 'no network' }) } })
+    expect(r).toEqual({ did: [], left: ["Storybook ^8.4.7 in .: the screen map's add-on needs Storybook 10, and Storybook's upgrade didn't get there (x). Run `pnpm dlx storybook@latest upgrade --yes --disable-telemetry` there and see."] })
+  })
+
   it('finishes a Storybook that is already there (in a workspace package, with pnpm) and leaves the vitest exclude to the agent', async () => {
     const dir = await committed({
       'package.json': JSON.stringify({ name: 'root', private: true }), 'pnpm-lock.yaml': '', 'pnpm-workspace.yaml': 'packages:\n  - app\n',
@@ -181,7 +208,7 @@ describe('installing it', () => {
     expect(await read(dir, 'app/.storybook/main.ts')).toContain(`addons: [\n    { name: "${ADDON}", options: { flowGlob: "../src/**/*.flow.json" } },'@storybook/addon-docs']`)
   })
 
-  it('commits only what it touched, leaving the person\'s own changes as they were, and stops at a Storybook older than 10', async () => {
+  it('commits only what it touched, leaving the person\'s own changes as they were', async () => {
     const dir = await committed({ 'package.json': JSON.stringify({ devDependencies: { vite: '^8' } }), 'index.html': '<p>old</p>' })
     await writeFile(join(dir, 'notes.txt'), 'in progress')
     await writeFile(join(dir, 'index.html'), '<p>new</p>')
@@ -189,9 +216,6 @@ describe('installing it', () => {
     expect(r.did.at(-1)).toMatch(/^Committed to main and pushed/)
     expect((await git(dir, ['status', '--porcelain'])).stdout.split('\n').map((l) => l.trim()).sort()).toEqual(['?? notes.txt', 'M index.html']) // theirs, untouched
     expect((await git(dir, ['show', '--stat', '--format=', 'HEAD'])).stdout).toMatch(/\.storybook\/main\.js/)
-    const old = await repoWith({ 'package.json': JSON.stringify({ devDependencies: { storybook: '^9.1.0' } }), '.storybook/main.ts': 'export default { addons: [] }' })
-    const o = await installStorybook(sb(old), { run: fakeRun([]) })
-    expect(o).toEqual({ did: [], left: ["Storybook ^9.1.0 in .: the screen map's add-on needs Storybook 10. Upgrade it (npx storybook@latest upgrade) and press again."] })
   })
 
   it('reads the stories folder from main', () => {

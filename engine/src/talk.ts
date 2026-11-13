@@ -136,13 +136,14 @@ async function record(sessionId: string, author: string, kind: string, body: str
 }
 
 /** `issueId` pins a task's own agent; `checkOf` and `check` mark a fresh agent out on one check of that task (checks.ts). */
-export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string; checkOf?: string; check?: StepKey }
+export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string; checkOf?: string; check?: StepKey; setup?: string }
 
 /** What a conversation is about, from where it started: a project's title, an idea's title, or nothing yet. */
 async function subjectFrom(ref?: SubjectRef): Promise<{ subject: string | null; subjectRef: SubjectRef | null }> {
   if (ref?.projectId) { const [p] = await db.select().from(project).where(eq(project.id, ref.projectId)); if (p) return { subject: p.name, subjectRef: { projectId: p.id } } }
   if (ref?.ideaId) { const [i] = await db.select().from(idea).where(eq(idea.id, ref.ideaId)); if (i) return { subject: i.title, subjectRef: { ideaId: i.id } } }
   if (ref?.issueId) { const [t] = await db.select().from(issue).where(eq(issue.id, ref.issueId)); const [a] = t ? await db.select().from(app).where(eq(app.id, t.appId)) : []; if (t && a) return { subject: `${a.key}-${t.number} ${t.title}`, subjectRef: { issueId: t.id } } } // a task's own agent (ensureTaskTalk)
+  if (ref?.setup) return { subject: `Set up ${ref.setup}`, subjectRef: { setup: ref.setup } } // an integration's set-up, handed to the agent (one per app at a time)
   return { subject: null, subjectRef: ref?.path ? { path: ref.path } : null }
 }
 
@@ -342,6 +343,13 @@ export async function showTalk(sessionId: string, appId: string) {
  * leaves the agent's column and nothing else changes. The conversation stays open, its agent carries on if it is
  * working, its worktree and branch stay; reopening puts the tab back. Ending (endTalk) is what removes the worktree.
  */
+/** The open conversation already setting an integration up for an app, so a second press joins it and starts no other. */
+export async function setupTalk(appId: string, key: string) {
+  const [s] = await db.select().from(session)
+    .where(and(eq(session.kind, 'talk'), eq(session.status, 'open'), eq(session.appId, appId), sql`${session.subjectRef}->>'setup' = ${key}`)).orderBy(desc(session.createdAt)).limit(1)
+  return s ?? null
+}
+
 export async function closeTalk(sessionId: string) {
   const [row] = await db.update(session).set({ closedAt: new Date() }).where(and(eq(session.id, sessionId), eq(session.status, 'open'))).returning()
   if (!row) throw new PlanError(`no open conversation ${sessionId}`)

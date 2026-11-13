@@ -9,7 +9,7 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { closeSync, openSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -310,6 +310,8 @@ async function uiPackage(repoPath: string): Promise<string> {
 }
 const dlx = (pm: Pm, yarn2: boolean, args: string[]): [string, string[]] => pm === 'pnpm' ? ['pnpm', ['dlx', ...args]] : pm === 'bun' ? ['bunx', args] : pm === 'yarn' && yarn2 ? ['yarn', ['dlx', ...args]] : ['npx', ['-y', ...args]]
 const addDev = (pm: Pm, pkg: string): [string, string[]] => pm === 'pnpm' ? ['pnpm', ['add', '-D', pkg]] : pm === 'yarn' ? ['yarn', ['add', '-D', pkg]] : pm === 'bun' ? ['bun', ['add', '-d', pkg]] : ['npm', ['install', '-D', pkg]]
+/** The install after Storybook's upgrade: its own runs frozen under CI, against a lockfile it has just outdated. */
+const installAll = (pm: Pm, yarn2: boolean): [string, string[]] => pm === 'pnpm' ? ['pnpm', ['install', '--no-frozen-lockfile']] : pm === 'yarn' ? ['yarn', ['install', yarn2 ? '--no-immutable' : '--no-frozen-lockfile']] : pm === 'bun' ? ['bun', ['install']] : ['npm', ['install']]
 const lastLine = (e: unknown) => { const x = e as { stdout?: string; stderr?: string; message?: string }; return `${x.stderr ?? ''}\n${x.stdout ?? ''}\n${x.message ?? ''}`.split('\n').map((l) => l.trim()).filter(Boolean).slice(-1)[0] ?? 'no output' }
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 /** The stories folder's prefix from main's first `stories` glob (a glob under ../src gives "../src/"), for the flowGlob and the first map. */
@@ -342,8 +344,21 @@ export async function installStorybook(ctx: StorybookContext, deps: StorybookDep
   }
   const main = mains[0]
   const sbDir = dirname(join(repo, main))
-  const pkg = { ...depsOf(await text(join(repo, 'package.json'))), ...depsOf(await text(join(pkgDir, 'package.json'))) }
-  if (pkg.storybook && major(pkg.storybook) < 10) return { did, left: [`Storybook ${pkg.storybook} in ${where}: the screen map's add-on needs Storybook 10. Upgrade it (npx storybook@latest upgrade) and press again.`] }
+  const readPkg = async () => ({ ...depsOf(await text(join(repo, 'package.json'))), ...depsOf(await text(join(pkgDir, 'package.json'))) })
+  let pkg = await readPkg()
+  if (pkg.storybook && major(pkg.storybook) < 10) { // an older Storybook: its own upgrade, then the install (Sandy, 2026-11-12, Merman on Storybook 8: the press went to an agent)
+    const from = pkg.storybook
+    const hadLog = await exists(join(pkgDir, 'debug-storybook.log'))
+    const [file, args] = dlx(pm, yarn2, ['storybook@latest', 'upgrade', '--yes', '--disable-telemetry'])
+    let failed: string | null = null
+    try { await run(file, args, pkgDir) } catch (e) { failed = lastLine(e) }
+    if (!hadLog) await rm(join(pkgDir, 'debug-storybook.log'), { force: true }) // the upgrade's own log, not the repo's
+    pkg = await readPkg()
+    if (!pkg.storybook || major(pkg.storybook) < 10) return { did, left: [`Storybook ${from} in ${where}: the screen map's add-on needs Storybook 10, and Storybook's upgrade didn't get there${failed ? ` (${failed})` : ''}. Run \`${file} ${args.join(' ')}\` there and see.`] }
+    did.push(`Upgraded Storybook in ${where} from ${from} to ${pkg.storybook} with its own upgrade.`)
+    const [ifile, iargs] = installAll(pm, yarn2)
+    try { await run(ifile, iargs, pkgDir) } catch (e) { left.push(`Installing after the upgrade failed in ${where}: ${lastLine(e)}. Run \`${ifile} ${iargs.join(' ')}\` there.`) }
+  }
   if (!pkg[ADDON]) {
     const [file, args] = addDev(pm, ADDON)
     try { await run(file, args, pkgDir); did.push(`Added ${ADDON} as a dev dependency in ${where}.`) } catch (e) { left.push(`Adding ${ADDON} in ${where} failed: ${lastLine(e)}.`) }

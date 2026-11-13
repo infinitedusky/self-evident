@@ -12,7 +12,7 @@ import { db, pool } from './db/client.js'
 import { app, repo, session, workspace } from './db/schema.js'
 import { branchExists, commitAll, git } from './git.js'
 import { newId } from './ids.js'
-import { endTalk, startTalk } from './talk.js'
+import { endTalk, setupTalk, startTalk } from './talk.js'
 import { homeRepo, inOrder, mateHolding, matePath, matePrompt, matesOf, reposOf, type Mate } from './workbench.js'
 
 const api: Mate = { repoId: 'repo_b', name: 'shop-api', fullName: 'made-up/shop-api', repoPath: '/code/shop-api', path: '/code/shop-api-worktrees/talk-abc123', base: 'develop' }
@@ -95,6 +95,17 @@ describe.skipIf(!reachable)('a conversation in an app of two repositories', () =
     expect(await branchExists(web, s.branch!)).toBe(false) // nothing committed there
     expect(await branchExists(apiPath, s.branch!)).toBe(true)
     expect(await matesOf(appId, s.worktreePath)).toEqual([])
+    await db.delete(session).where(eq(session.id, s.id))
+  })
+
+  it('finds the conversation already setting an integration up, so a second press starts no other', async () => {
+    expect(await setupTalk(appId, 'Storybook')).toBeNull()
+    const s = await startTalk({ appId, subjectRef: { setup: 'Storybook' } })
+    expect(s.subject).toBe('Set up Storybook')
+    expect((await setupTalk(appId, 'Storybook'))?.id).toBe(s.id)
+    expect(await setupTalk(appId, 'tkt')).toBeNull() // another integration's set-up is its own
+    await endTalk(s.id)
+    expect(await setupTalk(appId, 'Storybook')).toBeNull() // ended: the next press starts again
     await db.delete(session).where(eq(session.id, s.id))
   })
 })
