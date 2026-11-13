@@ -3066,3 +3066,13 @@ only by a small × that read as "close for good".
   remembered from page to page.
 - Pinned harder: the tab is attached beside the page's body, not inside it, and its position is set so the page's
   own styles cannot move it. A page that transforms or scrolls its body no longer carries the tab away.
+
+## A service stopped for a share is put back even if the engine restarts (2026-11-13)
+
+Found the first time it was used for real: Sandy freed ngrok from the share panel, which stopped the tunnel service
+on the laptop; then a merge restarted the engine, and the service stayed stopped. The list of stopped services lived
+only in memory, and the engine's restart-on-change does not run its shutdown.
+
+The list is now also written to `~/.self-evident/ngrok-paused.json`, before a service is stopped, and a starting
+engine puts back whatever is in it (no share outlives the engine, so nothing still needs the address). The service
+was started again by hand that day.

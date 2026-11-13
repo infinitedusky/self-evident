@@ -1,6 +1,9 @@
 /** Freeing ngrok's one address: which tunnels on this computer hold it, stopping them, and putting a service back. Nothing real is stopped here: ps, launchctl and kill are stand-ins. */
 import { describe, expect, it } from 'vitest'
-import { freeNgrok, ngrokHolders, parsePs, pausedServices, restoreNgrok, serviceOf, type Run } from './ngrok-holders.js'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { freeNgrok, ngrokHolders, parsePs, pausedServices, reloadPaused, restoreNgrok, serviceOf, type Run } from './ngrok-holders.js'
 
 const PS = ` 1172 /opt/homebrew/bin/ngrok http --url=https://sample-made-up.ngrok-free.dev 3000
  2001 /bin/zsh -c grep ngrok
@@ -30,5 +33,21 @@ describe('other ngrok tunnels on this computer', () => {
     expect(pausedServices()).toEqual([])
     expect(await restoreNgrok(run)).toEqual([])
     expect(calls.some((c) => c.startsWith('launchctl bootout'))).toBe(false)
+  })
+
+  it('remembers a stopped service in a file, so an engine that restarts mid-share still puts it back', async () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'if-ngrok-')), 'paused.json')
+    const was = process.env.NGROK_PAUSED_FILE
+    process.env.NGROK_PAUSED_FILE = file
+    try {
+      writeFileSync(file, JSON.stringify(['com.sample.ngrok-tunnel'])) // what an engine killed mid-share left behind
+      reloadPaused() // a new engine starting
+      expect(pausedServices()).toEqual(['com.sample.ngrok-tunnel'])
+      const calls: string[] = []
+      expect(await restoreNgrok(async (cmd, args) => { calls.push([cmd, ...args].join(' ')); return '' })).toEqual(['com.sample.ngrok-tunnel'])
+      expect(calls).toHaveLength(1); expect(calls[0]).toMatch(/^launchctl bootstrap gui\/\d+ .*com\.sample\.ngrok-tunnel\.plist$/)
+      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual([]) // put back: forgotten
+      expect(pausedServices()).toEqual([])
+    } finally { process.env.NGROK_PAUSED_FILE = was; reloadPaused() }
   })
 })
