@@ -9,7 +9,8 @@ import { Link, NavLink, useLocation, useMatch, useNavigate, useParams } from 're
 import { Badge } from '../components/Badge'
 import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
-import { engine, type AccountStatus, type AgentRole, type AppJob, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
+import { STEPS } from '@self-evident/engine/steps'
+import { engine, type AccountStatus, type AgentRole, type AppJob, type UsableSkill, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
@@ -19,7 +20,7 @@ export const FACTORY_SECTIONS = [
   { key: 'plugins', label: 'Plugins' }, { key: 'skills', label: 'Skills by job' }, { key: 'integrations', label: 'Integrations' },
 ] as const
 export const APP_SECTIONS = [
-  { key: 'repo', label: 'Repo' }, { key: 'agents', label: 'Agents' }, { key: 'plugins', label: 'Plugins' }, { key: 'skills', label: 'Skills by job' }, { key: 'landing', label: 'Landing' },
+  { key: 'repo', label: 'Repo' }, { key: 'agents', label: 'Agents' }, { key: 'plugins', label: 'Plugins' }, { key: 'skills', label: 'Skills' }, { key: 'landing', label: 'Landing' },
   { key: 'prototype', label: 'Prototype' }, { key: 'integrations', label: 'Integrations' }, { key: 'workflows', label: 'Workflow rules' },
 ] as const
 
@@ -379,7 +380,8 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         </dl>
       </div>
     </>,
-    skills: <AppJobs jobs={info?.jobs ?? null} value={setup.skills_by_job ?? {}} onChange={(next) => set({ skills_by_job: Object.keys(next).length ? next : undefined })} />,
+    skills: <><StepSkills usable={info?.usable ?? null} value={setup.step_skills ?? {}} onChange={(next) => set({ step_skills: Object.keys(next).length ? next : undefined })} />
+      <AppJobs jobs={info?.jobs ?? null} value={setup.skills_by_job ?? {}} onChange={(next) => set({ skills_by_job: Object.keys(next).length ? next : undefined })} /></>,
     landing: <>
       <Group title="Landing" lead="How finished work reaches the default branch.">
         <label style={{ gridColumn: '1 / -1' }}>Test command<input className="mono" value={setup.test_cmd ?? ''} onChange={(e) => set({ test_cmd: e.target.value })} placeholder="runs in the worktree on the merged commit; must exit 0 to land" /></label>
@@ -403,6 +405,49 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
       {groups[section]}
       <SaveRow dirty={dirty} busy={busy} error={error} onSave={save} />
     </section>
+  )
+}
+
+/**
+ * An app's skills for the steps of its workflow (Sandy, 2026-11-13: "a skill that can be used in sketch, or mockup
+ * etc. This allows an app to have special context"). Each step takes any number of the skills the app's conversations
+ * already get: its repo's own and the plugins' that are on for it. The agent doing that step is told to use them.
+ * A skill saved for a step and no longer there is shown as missing, to remove.
+ */
+function StepSkills({ usable, value, onChange }: { usable: UsableSkill[] | null; value: Record<string, string[]>; onChange: (next: Record<string, string[]>) => void }) {
+  const put = (key: string, names: string[]) => { const { [key]: _, ...rest } = value; onChange(names.length ? { ...rest, [key]: names } : rest) }
+  return (
+    <div className="settings-group" data-component="StepSkills">
+      <h3 className="settings-h3">Skills by workflow step</h3>
+      <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>What this app knows about doing a step: its design rules for a sketch or a mockup, its standard for a decision record. The agent doing the step is told to use the skills chosen for it. Choose from the skills in this app's repo (<span className="mono">.claude/skills/</span>) and the plugins on for it.</p>
+      {usable === null ? <p className="muted">Loading…</p> : <>
+        {!usable.length && <p className="settings-note" style={{ margin: '0 0 8px' }}><Badge>Nothing to choose yet</Badge><span>This app's conversations get no skills: none in its repo's <span className="mono">.claude/skills/</span>, and no plugin with skills on for it.</span></p>}
+        <dl className="fields">
+          {STEPS.filter((s) => s.key !== 'idea').map((s) => {
+            const chosen = value[s.key] ?? []
+            const rest = usable.filter((u) => !chosen.includes(u.name))
+            return (
+              <div key={s.key} style={{ display: 'contents' }}>
+                <dt>{s.icon} {s.label}</dt>
+                <dd style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                  {chosen.map((n) => {
+                    const u = usable.find((x) => x.name === n)
+                    return <span key={n} className={`badge ${u ? 'accent' : 'warn'}`} title={u ? `${u.description} (${u.from})` : 'This app\'s conversations no longer get this skill, so it is not used.'}>
+                      {u?.label ?? n}{u ? '' : ' · missing'} <button type="button" className="linkish" aria-label={`Remove ${u?.label ?? n} from ${s.label}`} onClick={() => put(s.key, chosen.filter((x) => x !== n))}>✕</button>
+                    </span>
+                  })}
+                  {rest.length > 0 && <select className="small" aria-label={`Add a skill to ${s.label}`} value="" onChange={(e) => { if (e.target.value) put(s.key, [...chosen, e.target.value]) }}>
+                    <option value="">Add a skill…</option>
+                    {rest.map((u) => <option key={u.name} value={u.name}>{u.label} ({u.from})</option>)}
+                  </select>}
+                  {!chosen.length && !rest.length && <span className="faint">None.</span>}
+                </dd>
+              </div>
+            )
+          })}
+        </dl>
+      </>}
+    </div>
   )
 }
 

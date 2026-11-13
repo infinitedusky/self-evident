@@ -1,6 +1,6 @@
 /** Plugins: switched for the factory and overridden per app; skills filed by the job they cover, one per job. */
 import { describe, expect, it } from 'vitest'
-import { cleanJobs, describeJobs, fileSkill, forgetPlugin, pluginOn, resolvePlugins, skillCategory, type Installed } from './skills.js'
+import { cleanStepSkills, stepSkillPrompt, cleanJobs, describeJobs, fileSkill, forgetPlugin, pluginOn, resolvePlugins, skillCategory, type Installed } from './skills.js'
 
 const plugin = (id: string, sdkName: string, skills: string[]): Installed => ({
   id, name: id.split('@')[0], sdkName, path: `/p/${id}`, version: null, description: '', source: null, builtIn: false, mcpServers: [], shim: null,
@@ -80,5 +80,28 @@ describe('an app\'s own skill per job', () => {
     expect(jobs[1]).toMatchObject({ factory: 'superpowers@sp/systematic-debugging', overridden: true, own: null })
     expect(jobs[1].skills.map((s) => s.name)).toEqual(['systematic-debugging', 'brainstorming'])
     expect(jobs[0]).toMatchObject({ factory: 'rea@rea/reverse-engineer-anything', overridden: false })
+  })
+})
+
+describe('an app\'s skills for the steps of its workflow', () => {
+  it('keeps known steps and plain names, none twice; the idea step takes none', () => {
+    expect(cleanStepSkills({ mockup: ['shop-design', 'shop-design', 7, 'has space'], idea: ['x'], nonsense: ['x'], adr: [], sketch: 'shop-design', risk: ['superpowers:systematic-debugging'] }))
+      .toEqual({ mockup: ['shop-design'], risk: ['superpowers:systematic-debugging'] })
+  })
+  it('tells a conversation which skill goes with which step, leaving out one the session does not have', () => {
+    const chosen = { mockup: ['shop-design'], sketch: ['shop-design', 'gone'], adr: ['decision-record'] }
+    const said = stepSkillPrompt(chosen, ['shop-design', 'decision-record'])
+    expect(said).toContain('- Sketches: `shop-design`\n- Mockups: `shop-design`\n- ADR: `decision-record`')
+    expect(said).not.toContain('gone')
+    expect(stepSkillPrompt(chosen, [])).toBe('')
+    expect(stepSkillPrompt(undefined, ['shop-design'])).toBe('')
+  })
+  it('tells a check\'s fresh agent only its own step\'s skill, and that it wins on form and place', () => {
+    const chosen = { mockup: ['shop-design'], adr: ['decision-record'] }
+    const said = stepSkillPrompt(chosen, ['shop-design', 'decision-record'], 'adr')
+    expect(said).toContain('`decision-record`')
+    expect(said).toContain('wins')
+    expect(said).not.toContain('shop-design')
+    expect(stepSkillPrompt(chosen, ['shop-design', 'decision-record'], 'risk')).toBe('')
   })
 })

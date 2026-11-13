@@ -49,7 +49,7 @@ import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError,
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
 import { linearFor } from './linear-home.js'
 import { CATALOGUE } from './catalogue.js'
-import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role, cleanJobs, describeJobs, type AppJobs } from './skills.js'
+import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role, cleanJobs, cleanStepSkills, describeJobs, usableSkills, type AppJobs } from './skills.js'
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
 
@@ -183,7 +183,7 @@ export function buildApp(bus: EventBus) {
     const setup = a.setup as { integrations?: Values; plugins?: AppPlugins; skills_by_job?: AppJobs }
     const plugins = installed().map((p) => ({ id: p.id, name: p.name, factoryOn: pluginOn(p.id, f), own: setup.plugins?.[p.id]?.on ?? null, on: pluginOn(p.id, f, setup.plugins) }))
     const integrations = effectiveIntegrations(f.integrations, setup.integrations)
-    return c.json({ integrations, status: statuses(integrations), plugins, jobs: describeJobs(f, setup.skills_by_job), skills: r?.localPath ? appSkills(r.localPath) : [] })
+    return c.json({ integrations, status: statuses(integrations), plugins, jobs: describeJobs(f, setup.skills_by_job), usable: await usableSkills(a.id, r?.localPath), skills: r?.localPath ? appSkills(r.localPath) : [] })
   })
   // Tries an integration's saved connection: the workspace's values, or an app's with its overrides.
   // An integration's effective values for an app (or the workspace's), and what its per-app check needs from the app.
@@ -268,6 +268,7 @@ export function buildApp(bus: EventBus) {
     const body = await c.req.json<{ name?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
     if (body.setup && 'integrations' in body.setup) body.setup.integrations = cleanValues(body.setup.integrations)
     if (body.setup && 'account' in body.setup) { try { const acct = cleanAccount(body.setup.account); if (acct) body.setup.account = acct; else delete body.setup.account } catch (err) { return planError(c, err) } }
+    if (body.setup && 'step_skills' in body.setup) { const steps = cleanStepSkills(body.setup.step_skills); if (Object.keys(steps).length) body.setup.step_skills = steps; else delete body.setup.step_skills }
     if (body.setup && 'skills_by_job' in body.setup) { // an app's own skill per job; absent inherits
       const [of] = await db.select().from(appTable).where(eq(appTable.id, c.req.param('id')))
       const [w] = of ? await db.select().from(workspace).where(eq(workspace.id, of.workspaceId)) : []

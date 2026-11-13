@@ -340,6 +340,11 @@ export const appSettings: AppSettings = {
     { key: 'review', name: 'Review', for: 'Reading a change before it lands', group: 'Build', builtIn: null, skills: [{ key: 'sample-plugin/audit', name: 'audit', plugin: 'sample-plugin' }], factory: null, overridden: false, own: null },
     { key: 'planning', name: 'Planning', for: 'Turning decisions into tasks', group: 'Plan', builtIn: 'The planner: sub-tasks with a brief each', skills: [], factory: null, overridden: false, own: null },
   ],
+  usable: [
+    { name: 'checkout-rules', label: 'checkout-rules', from: 'this repo', description: 'How this shop prices and taxes an order.' },
+    { name: 'shop-design', label: 'shop-design', from: 'this repo', description: 'The shop\'s look: spacing, type and the components to reach for (sample).' },
+    { name: 'sample-plugin:write-tests', label: 'write-tests', from: 'sample-plugin', description: 'Writes tests for a change.' },
+  ],
   skills: [{ key: 'checkout-rules', name: 'checkout-rules', description: 'How this shop prices and taxes an order.' }],
 }
 /** What the Storybook check says for the shop when all is well (sample). */

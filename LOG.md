@@ -2684,3 +2684,24 @@ With left-column conversations no longer able to write files, an idea's Sketch a
 
 Not built: an end to the idea's conversation when an idea is dropped, and the same page for a project's steps (those
 still go to a conversation about the app, which cannot write files).
+
+## An app's skills for the steps of its workflow (Sandy, 2026-11-13: "this is where we want to be able to apply a skill to a part of the workflow. So like having a skill that can be used in sketch, or mockup etc. This allows an app to have special context")
+
+The app's Skills section (it was "Skills by job") now opens with **Skills by workflow step**. Each step that an agent
+does (research, the brief, sketches, mockups, the prototype, and the checks: prototype analysis, ADR, blast radius,
+brief audit) takes any number of skills. This is where an app's own way of doing a step lives: its design rules for a
+sketch or mockup, its standard for a decision record.
+
+- **What can be chosen**: the skills the app's conversations already get, which are its repo's own
+  (`.claude/skills/`) and those of the plugins on for it. Choosing one for a step does not switch anything on; it
+  says when to use it.
+- **How it reaches the agent**: kept in `setup.step_skills`. A conversation's prompt lists the app's steps and their
+  skills and says to invoke them before doing that step (`stepSkillPrompt`, engine/src/skills.ts). A check's fresh
+  agent is told only its own step's skills, and that where the skill and its instructions differ on the form of the
+  result or where it belongs, the skill wins: the app's standard for an ADR beats the engine's general shape.
+- **A skill that is gone** (removed from the repo, its plugin switched off) is left out of the prompt, never
+  promised, and shown as missing in Settings.
+
+Not done: the skills are read from the app's first repository only, as before, so a skill kept in a second repository
+of a workbench isn't offered. The builder and the planner get no step skills: the steps are done in conversations.
+"Skills by job" stays below it, unchanged.
