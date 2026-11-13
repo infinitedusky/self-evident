@@ -21,6 +21,7 @@ export interface NewProjectIssue { title: string; description?: string; brief?: 
 export interface NewProject { appId: string; name: string; content?: string; description?: string; ideaId?: string; workflowId?: string | null; issues?: NewProjectIssue[] } // no issues: an empty project, filled later
 
 const BACKLOG = ['triage', 'backlog']
+const DROPPED = ['canceled', 'duplicate'] // a sub-task in one of these is out of the plan
 const ACTIVE: BuildStatus[] = ['running', 'awaiting_answer', 'merging', 'testing']
 const FINISHED: BuildStatus[] = ['done', 'failed', 'cancelled']
 
@@ -125,8 +126,10 @@ async function loadProject(tx: Tx | typeof db, projectId: string) {
   const code = top.filter((i) => i.kind === 'code')
   const backlogIds = new Set(code.filter((i) => BACKLOG.includes(i.state) || (['duplicate', 'canceled'].includes(i.state) && !all.some((s) => s.parentId === i.id) && !i.startedAt)).map((i) => i.id))
   const issues = code.filter((i) => !backlogIds.has(i.id))
-  const subs = all.filter((i) => i.parentId && i.kind === 'code')
+  // A canceled sub-task (or a duplicate) is not part of the plan any more: it is not in the graph, not built, not counted. The task's own page still lists it, folded away.
+  const subs = all.filter((i) => i.parentId && i.kind === 'code' && !DROPPED.includes(i.state))
   const ids = subs.map((x) => x.id)
+  const live = new Set(ids)
   const builds = ids.length ? await tx.select().from(build).where(inArray(build.issueId, ids)) : []
   const rels = all.length ? await tx.select().from(issueRelation).where(inArray(issueRelation.relatedIssueId, all.map((i) => i.id))) : []
   const claims = ids.length ? await tx.select().from(fileClaim).where(inArray(fileClaim.issueId, ids)) : []
@@ -143,7 +146,7 @@ async function loadProject(tx: Tx | typeof db, projectId: string) {
     return {
       ...id(x), status: (b?.status ?? 'queued') as BuildStatus, attempt: b?.attempt ?? 0, maxAttempts: b?.maxAttempts ?? 3, heldReason: b?.heldReason ?? null,
       branch: b?.branch ?? null, worktreePath: b?.worktreePath ?? null, baseSha: b?.baseSha ?? null,
-      dependsOn: rels.filter((d) => d.relatedIssueId === x.id && d.type === 'blocks').map((d) => d.issueId),
+      dependsOn: rels.filter((d) => d.relatedIssueId === x.id && d.type === 'blocks' && live.has(d.issueId)).map((d) => d.issueId), // one that waited on a canceled sub-task waits no longer
       files: claims.filter((c) => c.issueId === x.id).map((c) => c.path),
       lastRun: last,
       steps: last ? steps.filter((s) => s.issueId === x.id && s.runId === last.id) : [],
@@ -386,7 +389,7 @@ export async function listCodeIssues(appId: string) {
   const projects = (await db.select().from(project).where(eq(project.appId, appId))).filter((p) => p.status !== 'superseded')
   const rows = (await db.select().from(issue).where(and(eq(issue.appId, appId), eq(issue.kind, 'code'), isNull(issue.parentId))))
     .filter((i) => !i.projectId || projects.some((p) => p.id === i.projectId))
-  const subs = rows.length ? await db.select({ id: issue.id, parentId: issue.parentId }).from(issue).where(inArray(issue.parentId, rows.map((r) => r.id))) : []
+  const subs = rows.length ? await db.select({ id: issue.id, parentId: issue.parentId }).from(issue).where(and(inArray(issue.parentId, rows.map((r) => r.id)), sql`${issue.state} not in ('canceled', 'duplicate')`)) : [] // canceled sub-tasks are not counted
   const builds = subs.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, subs.map((s) => s.id))) : []
   const planning = rows.length ? await db.select({ issueId: event.issueId, type: event.type, seq: event.seq }).from(event)
     .where(and(inArray(event.issueId, rows.map((r) => r.id)), sql`${event.type} like 'issue.plan%'`)).orderBy(desc(event.seq)) : []

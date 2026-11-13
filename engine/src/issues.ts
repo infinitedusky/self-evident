@@ -115,6 +115,9 @@ export async function setState(tx: Tx, i: Issue, to: IssueState, opts: { actor?:
     completedAt: to === 'done' ? now : null, canceledAt: to === 'canceled' || to === 'duplicate' ? now : null,
     closedBy: closing ? actor : null, reason: closing ? (opts.reason?.trim() || null) : null,
   }).where(eq(issue.id, i.id)).returning()
+  // A sub-task's build follows it out of the plan and back in: canceled (or a duplicate), the engine never builds it; reopened, it is queued again.
+  if (i.parentId && (to === 'canceled' || to === 'duplicate')) await tx.update(build).set({ status: 'cancelled', heldReason: opts.reason?.trim() || to, updatedAt: now }).where(and(eq(build.issueId, i.id), sql`${build.status} not in ('done', 'cancelled')`))
+  if (i.parentId && (i.state === 'canceled' || i.state === 'duplicate') && !closing) await tx.update(build).set({ status: 'queued', heldReason: null, updatedAt: now }).where(and(eq(build.issueId, i.id), eq(build.status, 'cancelled')))
   const base = await baseOf(tx, i)
   await appendEvent(tx, { ...base, actor, type: 'issue.state', payload: { identifier: identifier(base.key, i.number), number: i.number, title: i.title, kind: i.kind, from: i.state, to, ...(opts.reason ? { reason: opts.reason } : {}) } })
   if (to === 'canceled' && !i.parentId && i.kind === 'code') { // a to-do's checklist stays as it was, so reopening it loses nothing
