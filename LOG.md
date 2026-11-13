@@ -2748,3 +2748,9 @@ Decided:
 Not done: only folders with their own `SKILL.md` are copied, so a skill that leans on a sibling folder of shared files
 arrives without it. A pulled skill edited here by hand is replaced at the next update that finds it different.
 Tried on two real repositories on this computer: 4 and 8 skills pulled, and a second pull reported nothing changed.
+
+Changed the same day (Sandy, asked whether there was anything in the UI for this, then "yes" to moving it): your own
+skills were a block named `shared` inside All apps › Plugins, which is not where anyone looks for skills. They are now
+their own section, **All apps › Your skills**: the skills with where each came from (written here, or pulled from
+which repository), the form that writes one, and the repositories to pull from. Plugins lists installed plugins only.
+Underneath it is still the `shared` plugin, and an app's own Plugins switches still name it that way.

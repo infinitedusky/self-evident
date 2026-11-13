@@ -17,7 +17,7 @@ const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
 const err = (e: any) => String(e?.message ?? e)
 
 export const FACTORY_SECTIONS = [
-  { key: 'plugins', label: 'Plugins' }, { key: 'skills', label: 'Skills by job' }, { key: 'integrations', label: 'Integrations' },
+  { key: 'plugins', label: 'Plugins' }, { key: 'yours', label: 'Your skills' }, { key: 'skills', label: 'Skills by job' }, { key: 'integrations', label: 'Integrations' },
 ] as const
 export const APP_SECTIONS = [
   { key: 'repo', label: 'Repo' }, { key: 'agents', label: 'Agents' }, { key: 'plugins', label: 'Plugins' }, { key: 'skills', label: 'Skills' }, { key: 'landing', label: 'Landing' },
@@ -126,8 +126,15 @@ function FactoryPage({ section, item }: { section: string; item?: string }) {
       {section === 'plugins' && <section className="panel" data-component="Plugins">
         <h2>Plugins</h2>
         <p className="muted settings-lead">What the factory installs to give its agents more to work with: skills, tools, or both. Each is a Claude Code plugin, installed for Self Evident only (not your own Claude Code). The builder gets none; it builds what the plan says.</p>
-        {s.plugins.map((p) => <PluginBlock key={p.id} p={p} catalogue={s.catalogue} act={act} />)}
+        {s.plugins.filter((p) => p.id !== 'shared').map((p) => <PluginBlock key={p.id} p={p} catalogue={s.catalogue} act={act} />)}
         <AddPlugin onAdded={load} />
+      </section>}
+
+      {section === 'yours' && <section className="panel" data-component="YourSkills">
+        <h2>Your skills</h2>
+        <p className="muted settings-lead">Skills of your own, kept on this computer outside every repo, and given to every app. Write one here, or pull every skill from a repository and update them when it changes. File one under a job below, or choose it for a step of the workflow in an app's Skills.</p>
+        {s.plugins.filter((p) => p.id === 'shared').map((p) => <YourSkills key={p.id} p={p} catalogue={s.catalogue} act={act} />)}
+        {!s.plugins.some((p) => p.id === 'shared') && <div className="empty">This engine has no folder for your own skills. Update the engine.</div>}
       </section>}
 
       {section === 'skills' && <section className="panel" data-component="SkillsByJob">
@@ -145,15 +152,25 @@ function FactoryPage({ section, item }: { section: string; item?: string }) {
 }
 
 /** One plugin: its switch, its agents, its skills filed by job, and what its tools could cost. */
-function PluginBlock({ p, catalogue, act }: { p: PluginInfo; catalogue: CategoryGroup[]; act: (f: () => Promise<unknown>) => () => Promise<void> }) {
+/** Your own skills (the `shared` plugin), as a page of their own: the skills with where each came from, the form that writes one, the repositories to pull from. */
+function YourSkills({ p, catalogue, act }: { p: PluginInfo; catalogue: CategoryGroup[]; act: (f: () => Promise<unknown>) => () => Promise<void> }) {
+  const [sources, setSources] = useState<SkillSource[]>([])
+  const load = () => engine.skillSources().then(setSources).catch(() => setSources([]))
+  useEffect(() => { void load() }, [p.skills.length])
+  const origin = (name: string) => { const from = sources.find((x) => x.skills.includes(name)); return from ? `pulled from ${from.url}` : 'written here' }
+  return <PluginBlock p={p} catalogue={catalogue} act={act} origin={origin} />
+}
+
+/** `origin`: given for your own skills, where each came from; the block then drops the plugin's name and shows the rows that add skills. */
+function PluginBlock({ p, catalogue, act, origin }: { p: PluginInfo; catalogue: CategoryGroup[]; act: (f: () => Promise<unknown>) => () => Promise<void>; origin?: (name: string) => string }) {
   const roles = (r: AgentRole) => (p.roles.includes(r) ? p.roles.filter((x) => x !== r) : [...p.roles, r])
   const remove = act(async () => { if (window.confirm(`Uninstall ${p.name}? Its settings go with it.`)) await engine.removePlugin(p.id) })
   return (
     <div className={`settings-group plugin ${p.on ? '' : 'off'}`}>
       <div className="plugin-head">
         <div>
-          <strong>{p.name}</strong> <span className="mono faint">{p.version ?? ''}</span> {p.builtIn && <Badge>built in</Badge>}
-          <div className="muted settings-desc">{p.description}</div>
+          {origin ? <strong>For every app</strong> : <><strong>{p.name}</strong> <span className="mono faint">{p.version ?? ''}</span> {p.builtIn && <Badge>built in</Badge>}</>}
+          <div className="muted settings-desc">{origin ? <>Off: no app gets them. An app can switch them for itself under its Plugins, where they are named <span className="mono">shared</span>.</> : p.description}</div>
           {p.source && <div className="faint settings-desc mono">from {p.source}</div>}
         </div>
         <div className="plugin-actions">
@@ -182,13 +199,14 @@ function PluginBlock({ p, catalogue, act }: { p: PluginInfo; catalogue: Category
                   <button className={`switch small ${k.on ? 'on' : ''}`} aria-pressed={k.on} onClick={act(() => engine.fileSkill(k.key, { on: !k.on }))}>{k.on ? 'On' : 'Off'}</button>
                 </div>
                 {k.description && <div className="muted settings-desc">{k.description}</div>}
+                {origin && <div className="faint settings-desc">{origin(k.name)}</div>}
               </li>
             ))}
           </ul>
         ) : <span className="faint">None yet{p.builtIn ? <>: a skill is a folder under <span className="mono">{p.skillsDir ?? 'engine/plugin/skills/'}</span></> : ''}.</span>}
       </div>
-      {p.id === 'shared' && <AddSharedSkill dir={p.skillsDir ?? null} onAdded={act(async () => {})} />}
-      {p.id === 'shared' && <SkillSources onChanged={act(async () => {})} />}
+      {origin && <AddSharedSkill dir={p.skillsDir ?? null} onAdded={act(async () => {})} />}
+      {origin && <SkillSources onChanged={act(async () => {})} />}
       {p.tools && (
         <div className="plugin-row top"><span className="label-text">Tools</span>
           <div>
@@ -233,7 +251,7 @@ function AddSharedSkill({ dir, onAdded }: { dir: string | null; onAdded: () => u
   return (
     <div className="plugin-row top" data-component="AddSharedSkill"><span className="label-text">Add</span>
       <div style={{ display: 'grid', gap: 8 }}>
-        <div className="faint settings-desc">Skills kept on this computer, outside every repo{dir ? <>, in <span className="mono">{dir}</span></> : ''}. Every app gets them: file one under a job here, or choose it for a step in an app's Skills.</div>
+        <div className="faint settings-desc">Skills kept on this computer, outside every repo{dir ? <>, in <span className="mono">{dir}</span></> : ''}. The same name again replaces the one here.</div>
         {wrote && <p className="settings-note" style={{ margin: 0 }}><Badge tone="ok">Written</Badge><span className="mono">{wrote}</span></p>}
         {!open ? <div><button className="btn quiet" onClick={() => { setOpen(true); setWrote(null) }}>Write a skill</button></div> : <>
           <label>Name<input className="mono" aria-label="Skill name" value={name} onChange={(e) => setName(e.target.value)} placeholder="decision-record" /></label>
@@ -516,9 +534,9 @@ function StepSkills({ usable, value, onChange }: { usable: UsableSkill[] | null;
   return (
     <div className="settings-group" data-component="StepSkills">
       <h3 className="settings-h3">Skills by workflow step</h3>
-      <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>What this app knows about doing a step: its design rules for a sketch or a mockup, its standard for a decision record. The agent doing the step is told to use the skills chosen for it. Choose from the skills in this app's repo (<span className="mono">.claude/skills/</span>) and the plugins on for it.</p>
+      <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>What this app knows about doing a step: its design rules for a sketch or a mockup, its standard for a decision record. The agent doing the step is told to use the skills chosen for it. Choose from the skills in this app's repo (<span className="mono">.claude/skills/</span>), your own (<NavLink to="/settings/yours">All apps › Your skills</NavLink>) and the plugins on for it.</p>
       {usable === null ? <p className="muted">Loading…</p> : <>
-        {!usable.length && <p className="settings-note" style={{ margin: '0 0 8px' }}><Badge>Nothing to choose yet</Badge><span>This app's conversations get no skills: none in its repo's <span className="mono">.claude/skills/</span>, and no plugin with skills on for it.</span></p>}
+        {!usable.length && <p className="settings-note" style={{ margin: '0 0 8px' }}><Badge>Nothing to choose yet</Badge><span>This app's conversations get no skills: none in its repo's <span className="mono">.claude/skills/</span>, none of your own (<NavLink to="/settings/yours">All apps › Your skills</NavLink>), and no plugin with skills on for it.</span></p>}
         <dl className="fields">
           {STEPS.filter((s) => s.key !== 'idea').map((s) => {
             const chosen = value[s.key] ?? []
@@ -563,7 +581,7 @@ function AppJobs({ jobs, value, onChange }: { jobs: AppJob[] | null; value: Reco
       <div className="settings-group">
         <h3 className="settings-h3">Skills by job</h3>
         <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>One skill does each job. Each follows All apps unless this app picks another skill filed under that job, or none. A skill is filed under a job in <NavLink to="/settings/skills">All apps › Skills by job</NavLink>.</p>
-        {!filed && <p className="settings-note" style={{ margin: '0 0 8px' }}><Badge>Nothing to choose yet</Badge><span>No skill is filed under any job. Install a plugin that brings skills (All apps › Plugins) and file them (All apps › Skills by job); then each job here can be chosen for this app.</span></p>}
+        {!filed && <p className="settings-note" style={{ margin: '0 0 8px' }}><Badge>Nothing to choose yet</Badge><span>No skill is filed under any job. Write or pull skills of your own (All apps › Your skills), or install a plugin that brings some (All apps › Plugins), and file them (All apps › Skills by job); then each job here can be chosen for this app.</span></p>}
       </div>
       {groups.map((g) => (
         <div className="settings-group" key={g}>

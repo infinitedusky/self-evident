@@ -176,7 +176,7 @@ stay in the folder they were started in.
 
 A skill you want every app's agents to have, without putting it in any repo, goes in `~/.self-evident/shared/skills/`:
 one folder per skill, holding a `SKILL.md` (a `name` and `description` at the top, then the instructions). Write one
-from Settings › All apps › Plugins › shared › **Write a skill**, or make the folder by hand. Then file it under a job
+from Settings › All apps › **Your skills** (write one, or pull every skill from a repository and update them there), or make the folder by hand. Then file it under a job
 there, or choose it for a step under an app's Settings › Skills. This folder stays on this computer: copy it to
 another by hand.
 
