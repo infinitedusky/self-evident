@@ -212,7 +212,7 @@ export async function skillOptions(role: Role, cwd: string, appId: string): Prom
   return {
     plugins: r.plugins.map((p) => ({ type: 'local', path: p.path })),
     mcpServers: Object.assign({}, ...r.plugins.map((p) => (p.shim ? SHIMS[p.id].mcpServers : {}))),
-    skills: [...r.skills, ...skillDirs(join(cwd, '.claude', 'skills'))],
+    skills: yoursFirst([...r.skills, ...skillDirs(join(cwd, '.claude', 'skills'))]),
   }
 }
 
@@ -224,6 +224,22 @@ export async function skillOptions(role: Role, cwd: string, appId: string): Prom
  * work an agent does, so it takes none.
  */
 export type StepSkills = Partial<Record<StepKey, string[]>>
+
+/** A skill of the person's own with the name of one Self Evident brings replaces it: two of one name would compete on their descriptions. */
+export const yoursFirst = (skills: string[]) => skills.filter((s) => !(s.startsWith('self-evident:') && skills.includes(`${SHARED_ID}:${s.slice('self-evident:'.length)}`)))
+
+/**
+ * The skill every prototype is built by (Sandy, 2026-11-13): what a prototype is for, its definition of done, where
+ * fakes go, how to report. Self Evident brings one (`self-evident:prototype`); the person's own of that name
+ * (`shared:prototype`, in Your skills) wins. Null when the session has neither (the plugin switched off).
+ */
+export const prototypeSkill = (given: string[]) => [`${SHARED_ID}:prototype`, 'self-evident:prototype'].find((n) => given.includes(n)) ?? null
+
+/** An app's step skills with what every app gets: the prototype skill on the Prototype step, before the app's own. */
+export function withStepDefaults(chosen: StepSkills | undefined, given: string[]): StepSkills {
+  const d = prototypeSkill(given)
+  return d ? { ...chosen, prototype: [d, ...(chosen?.prototype ?? []).filter((n) => n !== d && n !== 'self-evident:prototype' && n !== `${SHARED_ID}:prototype`)] } : chosen ?? {}
+}
 export const SKILL_STEPS = STEPS.filter((s) => s.key !== 'idea').map((s) => s.key)
 
 /** What Settings saved, tidied: known steps, skill names as short strings, none twice, no empty lists. */

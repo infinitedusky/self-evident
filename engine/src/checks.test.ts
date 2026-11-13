@@ -53,9 +53,10 @@ describe('the checks after the prototype is approved', () => {
       expect(text).toContain(`key ${key}, status done`)
       for (const b of CHECKS.slice(0, CHECKS.indexOf(key))) expect(text).toContain(`${b} (`)
     }
-    expect(checkBrief('analysis', f)).toMatch(/shortcut:/)
+    expect(checkBrief('analysis', f)).not.toMatch(/shortcut/) // a prototype is built the way we would ship it: the analysis checks that, and lists the seams
+    expect(checkBrief('analysis', f)).toMatch(/\*\*Requirements\*\*[\s\S]*\*\*Against the conventions\*\*[\s\S]*\*\*Seams and stubs\*\*[\s\S]*\*\*Faked inside the system\*\*/)
     expect(checkBrief('analysis', f)).toMatch(/\*\*Cleaner\*\*[^]*\*Repeats\*[^]*should be one function[^]*\*Simpler\*[^]*more efficient[^]*\*Refactor\*[^]*\*Leave out\*/) // clean-up is part of the analysis
-    expect(checkBrief('adr', f)).toMatch(/never as code to carry over/)
+    expect(checkBrief('adr', f)).toMatch(/the reference for the build[\s\S]*its branch is not merged/)
     expect(checkBrief('risk', { ...f, prototype: null })).not.toContain('/tmp/proto')
     expect(() => checkBrief('sketch', f)).toThrow(/not a check/)
     expect(finalizeBrief(['analysis', 'adr', 'risk'], f)).toMatch(/\*\*Prototype\*\* section: the branch prototype\/swing/)

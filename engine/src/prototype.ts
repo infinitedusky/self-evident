@@ -1,12 +1,13 @@
 /**
- * Prototypes: the actual thing, built fast in a worktree of its own (branch `prototype/<slug>`, beside the builders'
- * worktrees) so it can be used, changed in moments and shown to people. Then it is analysed into the plan and built
- * again from scratch. The engine starts its server with the app's `prototype_cmd`, on a free port it passes as
+ * Prototypes: the thing built the way we would ship it, in a worktree of its own (branch `prototype/<slug>`, beside
+ * the builders' worktrees), to show with evidence that it works (Sandy, 2026-11-13; before that, "built fast"). Only
+ * what is outside the system is faked, through seams. Then it is analysed into the plan; it is not merged. The engine starts its server with the app's `prototype_cmd`, on a free port it passes as
  * PORT, and keeps it running; the row outlives the process, so after an engine restart a prototype reads as stopped
  * until it is started again. Each has its own conversation, working in its worktree: given a brief, it builds a first
  * version at once, and the person iterates there.
  */
 import { spawn, type ChildProcess } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { and, desc, eq, ne } from 'drizzle-orm'
@@ -20,6 +21,7 @@ import { PlanError } from './projects.js'
 import { databaseExists, databaseName, databaseUrl, dropDatabase, listScenarios, rebuild, save, type PrototypeDb } from './prototype-data.js'
 import { endTalk, say, showTalk, startPrototypeTalk } from './talk.js'
 
+const STOP_TIMEOUT_MS = Number(process.env.PROTOTYPE_STOP_TIMEOUT_MS ?? 120_000)
 const running = new Map<string, { proc: ChildProcess; log: string[] }>()
 const alive = (id: string) => { const m = running.get(id); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
 
@@ -27,8 +29,8 @@ async function setupOf(appId: string) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError(`no app ${appId}`)
   const r = await homeRepo(appId)
-  const s = (a.setup ?? {}) as { prototype_cmd?: string; prototype_db?: PrototypeDb }
-  return { a, repoPath: r?.localPath ?? null, cmd: s.prototype_cmd?.trim() || null, dbCfg: s.prototype_db?.url ? s.prototype_db : null }
+  const s = (a.setup ?? {}) as { prototype_cmd?: string; prototype_stop_cmd?: string; prototype_db?: PrototypeDb }
+  return { a, repoPath: r?.localPath ?? null, cmd: s.prototype_cmd?.trim() || null, stopCmd: s.prototype_stop_cmd?.trim() || null, dbCfg: s.prototype_db?.url ? s.prototype_db : null }
 }
 
 const slugOf = (p: typeof prototype.$inferSelect) => p.branch.slice('prototype/'.length)
@@ -68,7 +70,7 @@ export async function prototypeStatus(id: string) {
   const url = p.port ? `http://localhost:${p.port}` : null
   const { dbCfg } = await setupOf(p.appId)
   const data = dbCfg ? { database: databaseName(slugOf(p)), scenarios: await listScenarios(p.path).catch(() => []) } : { database: null, scenarios: [] }
-  return { ...p, ...data, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up: on && url ? await answers(url) : false, log: running.get(id)?.log.slice(-40) ?? [] }
+  return { ...p, ...data, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up: on && url ? await answers(url) : false, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [] }
 }
 
 export async function listPrototypes(appId: string) {
@@ -80,7 +82,7 @@ export async function listPrototypes(appId: string) {
 export async function runPrototype(id: string, actor = 'person', opts: { restart?: boolean } = {}) {
   const p = await rowOf(id)
   if (p.status === 'discarded') throw new PlanError('that prototype was discarded')
-  if (opts.restart) await kill(id)
+  if (opts.restart) { await kill(id); await cleanUp(p) }
   else if (alive(id)) return prototypeStatus(id)
   const { a, cmd, dbCfg } = await setupOf(p.appId)
   if (!cmd) throw new PlanError(`${a.name} has no prototype command yet: set it in Settings, or work it out from the app and set it with set_prototype_command`)
@@ -150,9 +152,33 @@ function kill(id: string): Promise<void> {
   return gone
 }
 
+/**
+ * What the start command left running that is not its own process (Sandy, 2026-11-13: a command that brings up a whole
+ * stack of containers leaves them up when its process is stopped). The app's stop command, run in the prototype's
+ * worktree with the port and database variable the start command had. It never stops a stop or a discard: what it
+ * printed when it failed is kept with the server's last lines.
+ */
+const lastCleanUp = new Map<string, string[]>()
+async function cleanUp(p: typeof prototype.$inferSelect): Promise<void> {
+  const { stopCmd } = await setupOf(p.appId)
+  if (!stopCmd || !p.port || !existsSync(p.path)) return
+  const env = { ...process.env, ...(await prototypeEnv(p)), PORT: String(p.port), CI: '1' }
+  const out = await new Promise<string[]>((done) => {
+    const proc = spawn('sh', ['-c', stopCmd], { cwd: p.path, env, stdio: ['ignore', 'pipe', 'pipe'] })
+    const log: string[] = []
+    const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)) }
+    proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
+    const timer = setTimeout(() => { log.push(`stop command still running after ${STOP_TIMEOUT_MS / 1000}s: left to finish`); done(log) }, STOP_TIMEOUT_MS)
+    proc.on('error', (e) => { clearTimeout(timer); done([...log, `stop command could not run: ${e.message}`]) })
+    proc.on('exit', (code) => { clearTimeout(timer); done(code ? [...log, `stop command exited with ${code}`] : []) })
+  })
+  if (out.length) lastCleanUp.set(p.id, out.slice(-20)); else lastCleanUp.delete(p.id)
+}
+
 export async function stopPrototype(id: string, actor = 'person') {
   const p = await rowOf(id)
   await kill(id)
+  await cleanUp(p)
   if (p.status === 'running') { await db.update(prototype).set({ status: 'stopped', updatedAt: new Date() }).where(eq(prototype.id, id)); await emit(p, 'prototype.stopped', actor) }
   return prototypeStatus(id)
 }
@@ -161,6 +187,7 @@ export async function stopPrototype(id: string, actor = 'person') {
 export async function discardPrototype(id: string, actor = 'person') {
   const p = await rowOf(id)
   await kill(id)
+  await cleanUp(p) // while its worktree is still there for the command to run in
   if (p.sessionId) await endTalk(p.sessionId)
   const { repoPath, dbCfg } = await setupOf(p.appId)
   if (dbCfg) await dropDatabase(dbCfg, slugOf(p)).catch(() => {})
@@ -208,10 +235,11 @@ export async function setPrototypeDatabase(appId: string, cfg: PrototypeDb) {
 }
 
 /** How this app's prototype server starts: a shell command run in the prototype's worktree, serving on $PORT. */
-export async function setPrototypeCommand(appId: string, cmd: string) {
+export async function setPrototypeCommand(appId: string, cmd: string, stop?: string) {
   const { a } = await setupOf(appId)
-  await db.update(app).set({ setup: { ...(a.setup as object), prototype_cmd: cmd.trim() } }).where(eq(app.id, appId))
-  return { prototype_cmd: cmd.trim() }
+  const next = { ...(a.setup as object), prototype_cmd: cmd.trim(), ...(stop === undefined ? {} : { prototype_stop_cmd: stop.trim() || undefined }) }
+  await db.update(app).set({ setup: next }).where(eq(app.id, appId))
+  return { prototype_cmd: cmd.trim(), prototype_stop_cmd: (next as { prototype_stop_cmd?: string }).prototype_stop_cmd ?? null }
 }
 
 export function stopPrototypes() { for (const id of [...running.keys()]) void kill(id) }

@@ -21,7 +21,7 @@
  * so the blast radius and the brief have something to read; the planner settles it as a decision against the real
  * plan, and the final record is a file the build writes, in the form the repository keeps (planner.ts).
  * The three ways of looking (Sandy, 2026-11-09): a sketch is about speed, plain HTML until the screen is liked; a
- * mockup is the story done properly; the prototype finds the best way to build it.
+ * mockup is the story done properly; the prototype shows, built the way we would ship it, that it works.
  * The app imports this module too (`@self-evident/engine/steps`), so the rules live in one place.
  */
 
@@ -37,7 +37,7 @@ export const STEPS: StepDef[] = [
   { key: 'brief', label: 'Brief', icon: '📝', what: 'What to build, for the builder: the parent of every step here. Approved last; the build starts from it.', place: 'brief' },
   { key: 'sketch', label: 'Sketches', icon: '✏️', what: 'The first look, fast: plain HTML screens to react to and change in moments, before a real story.', place: 'either' },
   { key: 'mockup', label: 'Mockups', icon: '🎨', what: 'How it looks, done properly: stories with made-up data, variants side by side. The brief points at the agreed one.', place: 'either' },
-  { key: 'prototype', label: 'Prototype', icon: '🛠️', what: 'The agent\'s quick working attempt, to use, show people and find the best way to build it.', place: 'either' },
+  { key: 'prototype', label: 'Prototype', icon: '🛠️', what: 'The thing built the way we would ship it, with only what is outside the system faked, to show with evidence that it works.', place: 'either' },
   { key: 'analysis', label: 'Prototype analysis', icon: '🔬', what: 'The prototype read by a fresh agent: how it was built, what was faked, what to keep, and how the real build should be cleaner: what repeats, what to refactor, the simpler way.', place: 'check' },
   { key: 'adr', label: 'Draft ADR', icon: '🏛️', what: 'A first pass at the architecture decision, from the analysis and the code: the options, a proposed choice, why. A draft: the planner settles it, and the record is written with the build.', place: 'check' },
   { key: 'risk', label: 'Blast radius', icon: '💥', what: 'What the change touches, what could break, and how we\'d know.', place: 'check' },
