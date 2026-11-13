@@ -247,9 +247,9 @@ select, input { color-scheme: light dark; }
 .viewer-bar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 0 0 6px; }
 .viewer.embedded { flex: 1; min-height: 0; margin-top: 10px; }
 .viewer.embedded > .viewer-bar { position: absolute; top: 0; right: 0; padding: 0; z-index: 1; } /* Detach shares a row with the view's own controls */
-.viewer.embedded .page-head { margin: 0 96px 8px 0 !important; min-height: 28px; }
+.viewer.embedded .page-head { margin: 0 190px 8px 0 !important; min-height: 28px; }
 .viewer.embedded:has(> .preview) > .viewer-bar { top: 9px; right: 8px; }
-.viewer.embedded > .preview > .preview-bar:first-child { padding-right: 104px; } /* room for Detach, after the server's buttons */
+.viewer.embedded > .preview > .preview-bar:first-child { padding-right: 196px; } /* room for Share and Detach, after the server's buttons */
 /* A step's page showing its view: the panel takes the height of the tab, so the view is all in sight. */
 .step-section.viewing { display: flex; flex-direction: column; height: calc(100vh - 250px); min-height: 520px; }
 .step-section .card-head .step-tabs { margin-left: auto; margin-right: 10px; }
@@ -732,3 +732,12 @@ button.acceptance-mark { cursor: pointer; border-radius: 6px; } button.acceptanc
 .acceptance-edit input, .acceptance-add input { margin: 0; }
 .acceptance-add { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) auto; gap: 6px; align-items: center; }
 @media (max-width: 700px) { .acceptance-add { grid-template-columns: 1fr; } }
+
+/* Share: a public link to what the viewer shows, beside Detach */
+.share { position: relative; }
+.share .share-on { color: var(--warn); border-color: var(--warn); font-weight: 600; }
+.share-panel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: min(380px, calc(100vw - 32px)); padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.14); font-size: 14px; text-align: left; }
+.share-panel p { margin: 6px 0 10px; font-size: 13px; }
+.share-link { display: flex; gap: 6px; margin: 8px 0 0; }
+.share-link input { flex: 1; min-width: 0; margin: 0; font-size: 12px; }
+.share-panel .empty { margin-top: 10px; }

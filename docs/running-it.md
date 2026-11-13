@@ -229,3 +229,11 @@ checkout, normally the default branch.
 - `pnpm arrive` does not install an app's own dependencies, and does not carry the global Claude Code set-up in
   `~/.claude` (instructions, skills, settings).
 - A shell command that writes into a reference app's folder is not refused by path; file edits are.
+
+## Sharing a prototype, mockups or sketches
+
+The Share button over a view makes a public link through a Cloudflare quick tunnel. It needs `cloudflared` on the
+computer: `brew install cloudflared` (no account, no sign-in). The link works while this computer is on and awake,
+and ends when you stop it, when what it shows stops, or after 8 hours (`SHARE_HOURS` in the engine's environment
+changes that). If the panel says the tunnel got an address but did not connect, the network is blocking it: try
+another network, or allow outbound connections to Cloudflare on port 7844.

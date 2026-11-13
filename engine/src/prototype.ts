@@ -177,8 +177,14 @@ async function cleanUp(p: typeof prototype.$inferSelect, why: 'stop' | 'discard'
   if (out.length) lastCleanUp.set(p.id, [...(why === 'discard' ? lastCleanUp.get(p.id) ?? [] : []), ...out].slice(-20)); else if (why === 'stop') lastCleanUp.delete(p.id)
 }
 
+const stopped: ((id: string) => void)[] = []
+/** Called when a prototype is stopped or thrown away (not on a restart): what hangs on it running, such as a share, ends. */
+export const onPrototypeStopped = (fn: (id: string) => void) => { stopped.push(fn) }
+const sayStopped = (id: string) => { for (const fn of stopped) { try { fn(id) } catch { /* never blocks the stop */ } } }
+
 export async function stopPrototype(id: string, actor = 'person') {
   const p = await rowOf(id)
+  sayStopped(id)
   await kill(id)
   await cleanUp(p)
   if (p.status === 'running') { await db.update(prototype).set({ status: 'stopped', updatedAt: new Date() }).where(eq(prototype.id, id)); await emit(p, 'prototype.stopped', actor) }
@@ -188,6 +194,7 @@ export async function stopPrototype(id: string, actor = 'person') {
 /** Done with it: the server stopped, its worktree and branch removed. The row stays, so what it taught can be found. */
 export async function discardPrototype(id: string, actor = 'person') {
   const p = await rowOf(id)
+  sayStopped(id)
   await kill(id)
   await cleanUp(p) // while its worktree is still there for the commands to run in
   await cleanUp(p, 'discard') // what is only removed when it is thrown away: its containers, volumes, data

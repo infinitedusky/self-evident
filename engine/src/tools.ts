@@ -24,6 +24,7 @@ import { runner } from './runner.js'
 import { listStories } from './storybook.js'
 import { prototypeCode, showInPrototype, unshowInPrototype } from './prototype-code.js'
 import { setAcceptance } from './acceptance.js'
+import { share, sharesOf, unshare } from './share.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, setPrototypeCleanup, setPrototypeCommand, setPrototypeDatabase, startPrototype, stopPrototype } from './prototype.js'
 import { agentsOut, readAgent, tellAgent } from './talk.js'
 import { syncApp } from './github.js'
@@ -35,7 +36,7 @@ export interface EngineTool { name: string; description: string; shape: z.ZodRaw
 export interface ToolScope { appId: string; sessionId?: string; actor?: string; waitForPlanner?: boolean }
 
 /** Tools that only read: safe to run without asking. */
-export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code'])
+export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'shares'])
 
 export function engineTools(opts: ToolScope): EngineTool[] {
   const { appId, sessionId } = opts
@@ -217,6 +218,17 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         async (a) => tryIt(() => setPrototypeDatabase(appId, a))),
       def('set_prototype_command', 'How this app\'s prototype server starts: a shell command run in the prototype\'s worktree that installs what it needs and serves on $PORT (like "pnpm install && pnpm dev --port $PORT"). Work it out from the app (package.json scripts, Procfile, README) and confirm it with the person first. stop: a command run in the same worktree when a prototype is stopped, restarted or discarded, for what the start command leaves running that is not its own process (containers: "docker compose -p proto-$PORT down -v"); it gets the same $PORT and database variable. Empty string clears it.', { command: z.string(), stop: z.string().optional() },
         async (a) => tryIt(() => setPrototypeCommand(appId, a.command, a.stop))),
+      def('share', 'Make a public address for something of this task, to send to a person outside for a look: a running prototype (what: prototype, with prototypeId), the mockups (what: mockups; this conversation\'s Storybook, which must be running), or the sketches (what: sketches; this conversation\'s sketches/ folder, with a front page listing them). It is a Cloudflare quick tunnel: anyone who has the address can open it, with whatever sample data is in it, until it is stopped, the thing it shows stops, or some hours pass. So it always asks the person first, and only when they asked to share. Returns the address and when it ends; sharing something already shared returns the same address. Give the person the address and say who can see it and when it ends.', { what: z.enum(['prototype', 'mockups', 'sketches']), prototypeId: z.string().optional() },
+        async (a) => tryIt(async () => {
+          if (a.what === 'prototype') { if (!a.prototypeId) throw new PlanError('sharing a prototype needs prototypeId'); await ownPrototype(a.prototypeId); return share('prototype', a.prototypeId, actor) }
+          return share(a.what === 'mockups' ? 'storybook' : 'sketch', sessionId ?? appId, actor)
+        })),
+      def('stop_sharing', 'End a public address made with share: it stops answering at once. what and prototypeId as for share.', { what: z.enum(['prototype', 'mockups', 'sketches']), prototypeId: z.string().optional() },
+        async (a) => tryIt(async () => {
+          if (a.what === 'prototype') { if (!a.prototypeId) throw new PlanError('needs prototypeId'); await ownPrototype(a.prototypeId); return unshare('prototype', a.prototypeId, actor) }
+          return unshare(a.what === 'mockups' ? 'storybook' : 'sketch', sessionId ?? appId, actor)
+        })),
+      def('shares', 'What of this app is public right now: each address, what it shows and when it ends.', {}, async () => tryIt(async () => sharesOf(appId))),
       def('set_prototype_cleanup', 'How this app cleans up after a prototype, when its start command leaves things running that are not its own process (containers, a whole stack). Both are shell commands run in the prototype\'s worktree with the same $PORT and database variable as the start command. stop: run when a prototype is stopped or restarted; it should stop the stack and keep its data (like "docker compose -p proto-$PORT stop"). discard: run after stop when a prototype is thrown away; it should remove everything it made: containers, volumes, networks of its own, data (like "docker compose -p proto-$PORT down -v --remove-orphans"). Give either or both; an empty string clears one. Work them out from the start command (they must name the same project or stack it starts) and confirm them with the person first. A failing command never blocks the stop or the discard: what it printed shows in the prototype\'s last lines.', { stop: z.string().optional(), discard: z.string().optional() },
         async (a) => tryIt(() => { if (a.stop === undefined && a.discard === undefined) throw new PlanError('give stop, discard or both'); return setPrototypeCleanup(appId, a) })),
       def('events', 'This app\'s event log, newest last. Filter by project or task (issueId: the task\'s id); since is a sequence number.', { projectId: z.string().optional(), issueId: z.string().optional(), since: z.number().optional(), limit: z.number().optional() },

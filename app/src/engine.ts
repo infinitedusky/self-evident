@@ -173,6 +173,9 @@ export interface PrototypeFile { path: string; patch: string | null; content: st
 /** One acceptance criterion of a task: a statement a person can check, how we will know, and what the prototype showed. */
 export interface Criterion { id: string; text: string; check?: string; shown?: boolean; evidence?: string; /** For the final build only: the prototype skips it. */ buildOnly?: boolean; why?: string; /** The final build's mark: met, not met, or not checked yet. */ built?: boolean; builtEvidence?: string; by: string; at: string }
 export interface AcceptanceChange { add?: { text: string; check?: string }[]; update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null; built?: boolean | null; builtEvidence?: string | null }[]; remove?: string[] }
+/** Something made public for a look: a prototype, a place's mockups or its sketches, at a temporary address. */
+export type ShareKind = 'prototype' | 'storybook' | 'sketch'
+export interface Shared { kind: ShareKind; id: string; url: string; since: string; expiresAt: string; by: string; what?: string }
 export interface Event { seq: number; ts: string; type: string; actor: string; issueId: string | null; projectId: string | null; payload: Record<string, unknown> }
 export interface NewSubIssue { key: string; title: string; description?: string; brief?: string; dependsOn?: string[]; files?: string[] }
 export interface NewProjectIssue { title: string; description?: string; brief?: string; subIssues?: NewSubIssue[] }
@@ -266,6 +269,9 @@ export const engine = {
   prototypeCode: (id: string) => call<PrototypeCode>('GET', `/prototypes/${id}/code`),
   prototypeFile: (id: string, path: string) => call<PrototypeFile>('GET', `/prototypes/${id}/file?path=${encodeURIComponent(path)}`),
   unshowInPrototype: (id: string, shownId: string) => call<unknown>('DELETE', `/prototypes/${id}/shown/${encodeURIComponent(shownId)}`),
+  shared: (kind: ShareKind, id: string) => call<{ share: Shared | null }>('GET', `/shares/${kind}/${id}`).then((r) => r.share),
+  share: (kind: ShareKind, id: string) => call<{ share: Shared }>('POST', `/shares/${kind}/${id}`).then((r) => r.share),
+  unshare: (kind: ShareKind, id: string) => call<{ stopped: boolean }>('DELETE', `/shares/${kind}/${id}`),
   prototypeTalk: (id: string) => call<{ id: string }>('POST', `/prototypes/${id}/talk`),
   now: (appId?: string) => call<Now>('GET', `/now${appId ? `?app=${appId}` : ''}`),
   ideas: (appId?: string) => call<IdeaRow[]>('GET', `/ideas${appId ? `?app=${appId}` : ''}`),
@@ -382,7 +388,7 @@ export const EVENT_TYPES = [
   'project.created', 'project.started', 'project.landed', 'project.cleaned', 'project.cancelled', 'project.paused', 'project.resumed', 'project.described',
   'issue.created', 'issue.deleted', 'issue.updated', 'issue.state', 'issue.reordered', 'issue.cleared', 'issue.planning', 'issue.planned', 'issue.plan_failed', 'issue.plan_waiting', 'issue.commented',
   'question.asked', 'question.answered', 'initiative.created', 'initiative.updated', 'cycle.created',
-  'talk.message', 'talk.permission', 'talk.result', 'prototype.shown', 'idea.created', 'idea.converted', 'step.updated', 'brief.approved', 'brief.unapproved', 'workflow.saved', 'workflow.used', 'engine.hold', 'engine.resumed',
+  'talk.message', 'talk.permission', 'talk.result', 'prototype.shown', 'share.started', 'share.stopped', 'idea.created', 'idea.converted', 'step.updated', 'brief.approved', 'brief.unapproved', 'workflow.saved', 'workflow.used', 'engine.hold', 'engine.resumed',
   'pr.merged', 'pr.closed', 'pr.retargeted', 'pr.review', 'pr.checks', 'review.requested', 'project.caught_up', 'project.behind_main',
   'backlog.error', 'project.backlog_open',
   'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted',
