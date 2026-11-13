@@ -141,6 +141,13 @@
       "when": 1794606436430,
       "tag": "0019_task_branches",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794609501413,
+      "tag": "0020_step_summary",
+      "breakpoints": true
     }
   ]
 }

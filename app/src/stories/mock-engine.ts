@@ -13,6 +13,7 @@ export interface MockData {
   summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript; /** A task's own agent, or null when it has none. */ taskTalk: typeof s.talkSession | null; /** The agents it has out. */ taskAgents?: import('../engine').TaskAgentOut[]; /** An idea's own agent, or null when it has none. */ ideaTalk?: typeof s.talkSession | null
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[] }
+  /** What a task's pull request will open with; none when left out. */ mergeGuide?: string
   /** A task's save points and task branches; none when left out. */ taskBranches?: import('../engine').TaskBranches; /** Why a move fails, when it should. */ moveError?: string
   /** What is public right now, by "kind:id". */ shares?: Record<string, import('../engine').Shared>; /** Why making a link fails, when it should. */ shareError?: string; /** ngrok's one address is held by these, until the person frees it. */ ngrokHolders?: import('../engine').NgrokHolder[]; /** What the guide tab of a shared prototype is given. */ visitorGuide?: { title: string; guide: import('../engine').Guide | null }
   prototypes: typeof s.prototypes; /** A prototype's changed files and what the agent shows. */ prototypeCode: typeof s.prototypeCode
@@ -133,6 +134,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       return reply(all.filter((i) => (!q.get('kind') || i.kind === q.get('kind')) && (!q.get('project') || i.projectId === q.get('project')) && (!q.get('top') || !i.parentId)))
     }),
     // Task branches and save points: the engine's rules, roughly.
+    http.get('/api/issues/:id/merge-guide', () => reply({ guide: d.mergeGuide ?? '', subTasks: 3 })),
     http.get('/api/issues/:id/branches', ({ params }) => reply(d.taskBranches ?? { issueId: params.id as string, worktrees: [], branches: [], saves: [] })),
     http.post('/api/issues/:id/save-points', async ({ params, request }) => {
       const { name } = await request.json() as { name: string }
