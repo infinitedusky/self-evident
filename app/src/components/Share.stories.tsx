@@ -27,6 +27,11 @@ export const MakeTheLink: Story = {
 }
 /** Shared: the button says so; the panel has the link, when it ends, and the way to stop. */
 export const Shared: Story = { args: { open: true }, beforeEach: withEngine({ shares: { 'prototype:proto_sample1': live } }) }
+/** Through ngrok, because this network blocks Cloudflare's tunnel: the panel says so, and what that means for the visitor. */
+export const ThroughNgrok: Story = {
+  args: { open: true }, beforeEach: withEngine({ shares: { 'prototype:proto_sample1': { ...live, url: 'https://sample-made-up.ngrok-free.dev', via: 'ngrok' } } }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/Through ngrok, since this network blocks Cloudflare's tunnel/)).toBeInTheDocument() },
+}
 /** Stopping: the link is dead at once and the button goes quiet. */
 export const StopSharing: Story = {
   args: { open: true }, beforeEach: withEngine({ shares: { 'prototype:proto_sample1': live } }),
@@ -38,6 +43,15 @@ export const StopSharing: Story = {
 }
 /** Sketches: the same, in their words. */
 export const Sketches: Story = { args: { kind: 'sketch', id: 'sess_sample', open: true } }
+/** Neither tunnel could be used: Cloudflare's is blocked here and ngrok's one free address is taken. It says what to stop. */
+export const BothBlocked: Story = {
+  args: { open: true }, beforeEach: withEngine({ shareError: 'this network does not let the Cloudflare tunnel connect: it blocks outbound port 7844, which the tunnel uses. A managed laptop or a work network often does. Another network works, or ask for that port to be allowed. Tried ngrok instead: ngrok\'s address is already in use: another ngrok tunnel is running on this account, and a free account has one address. Stop that tunnel (or what is shared now), or use a paid ngrok plan, then share again.' }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(c.getByRole('button', { name: 'Make the link' }))
+    await expect(await c.findByRole('alert')).toHaveTextContent('another ngrok tunnel is running on this account')
+  },
+}
 /** It could not be made: the tunnel is not installed on this computer; says what to do. */
 export const NotInstalled: Story = {
   args: { open: true }, beforeEach: withEngine({ shareError: 'cloudflared is not installed on this computer: sharing uses a Cloudflare quick tunnel. Install it (brew install cloudflared), then share again. No account is needed.' }),
