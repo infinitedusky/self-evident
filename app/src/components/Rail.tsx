@@ -18,6 +18,7 @@ const LOOP: Item[] = [
 ]
 const OUTSIDE: Item[] = [
   { icon: '📰', label: 'Summary', tab: page('/summary') },
+  { icon: '🗞️', label: 'Reports', tab: page('/reports') },
   { icon: '📌', label: 'My Stuff', tab: page('/'), also: /^\/$/ },
 ]
 

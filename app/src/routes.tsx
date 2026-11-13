@@ -19,6 +19,7 @@ import { IssuePage } from './pages/IssuePage'
 import { Observe } from './pages/Observe'
 import { Todos } from './pages/Todos'
 import { Summary } from './pages/Summary'
+import { Reports } from './pages/Reports'
 
 /** Links from before projects were called projects. */
 function OldPlanLink() { return <Navigate to={`/projects/${useParams().id}`} replace /> }
@@ -44,6 +45,7 @@ export function PageRoutes() {
     <Routes>
       <Route path="/" element={<Now />} />
       <Route path="/summary" element={<Summary />} />
+      <Route path="/reports" element={<Reports />} />
       <Route path="/observe" element={<Observe />} />
       <Route path="/learn" element={<Learn />} />
       <Route path="/projects" element={<Projects mode="project" />} />

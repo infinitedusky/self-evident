@@ -375,6 +375,16 @@ export const prototype = pgTable('prototype', {
   status: text('status').notNull().default('stopped'), createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [index('prototype_app').on(t.appId), inList('prototype_status', t.status, PROTOTYPE_STATUSES)])
 
+// Reports on an app's work over a period (reports.ts; Sandy, 2026-11-13): the end-of-day note, the weekly status. Written
+// by a model from what happened in the period, in the person's own format, then theirs to edit and send. `facts` is
+// what it was written from; `notes` what the person added that the engine could not know (a meeting, a call).
+export const report = pgTable('report', {
+  id: id(), appId: appId(), kind: text('kind').notNull(), // daily | weekly
+  fromAt: at('from_at').notNull(), toAt: at('to_at').notNull(), label: text('label').notNull(), // "Today, Nov 13"; "Week of Nov 9"
+  body: text('body').notNull(), notes: text('notes'), facts: jsonb('facts').notNull(),
+  model: text('model'), costUsd: numeric('cost_usd'), editedAt: at('edited_at'), createdBy: text('created_by'), createdAt: createdAt(),
+}, (t) => [index('report_app').on(t.appId, t.createdAt), inList('report_kind', t.kind, ['daily', 'weekly'])])
+
 // Task branches and save points (task-branches.ts; Sandy, 2026-11-13). A task branch is a version of the task: the git
 // branch each of its worktrees is on, and, once set aside, the task as it was left (brief, criteria, approvals, steps,
 // comments, sub-tasks). One is current. A save point is a named point on a task branch: a git branch at each

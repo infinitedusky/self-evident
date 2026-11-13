@@ -32,6 +32,7 @@ import { createCycle, createInitiative, listCycles, listInitiatives, updateIniti
 import { changeState, commentOnIssue, createIssue, listComments, identifier, listIssues, reorder, resolveIssue, updateIssue } from './issues.js'
 import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
+import { deleteReport, editReport, getReport, isWritingReport, listReports, setReportFormat, writeReport, type Period } from './reports.js'
 import { listSketches, readSketch } from './sketches.js'
 import { migrateStorybookSetup, startStorybook, stopStorybooks, storybookStatus, storybookValues, STORY_FLOW_CSS } from './storybook.js'
 import { prototypeCode, prototypeFile, unshowInPrototype } from './prototype-code.js'
@@ -708,6 +709,20 @@ export function buildApp(bus: EventBus) {
   api.post('/projects/:id/pause', async (c) => { try { return c.json(await runner.pauseProject(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/projects/:id/resume', async (c) => { try { return c.json(await runner.resumeProject(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/sync', async (c) => c.json(await syncApp(c.req.param('id')))) // GitHub now: PRs, reviews, checks, main
+  // Reports on an app's work over a period (reports.ts): the end-of-day note, the weekly status. Drafts; nothing is sent.
+  api.get('/apps/:id/reports', async (c) => { try { return c.json(await listReports(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/reports', async (c) => { // {period: today|yesterday|this_week|last_week} or {from, to, kind?}; notes?: what the person adds. A model call of a minute or so: 202, report.written or report.failed says when
+    const id = c.req.param('id')
+    const body = await c.req.json<{ period?: Period; from?: string; to?: string; kind?: 'daily' | 'weekly'; notes?: string }>().catch(() => ({} as { period?: Period }))
+    if (isWritingReport(id)) return c.json({ error: 'a report on this app is being written: wait for it' }, 409)
+    if (!('period' in body && body.period) && !('from' in body && body.from)) return c.json({ error: 'say which period: today, yesterday, this_week, last_week, or from and to' }, 400)
+    void writeReport(id, { ...body, actor: 'user' }).catch((err) => console.log(`[report] ${id}: ${err.message}`))
+    return c.json({ writing: true }, 202)
+  })
+  api.put('/apps/:id/report-format', async (c) => { try { return c.json(await setReportFormat(c.req.param('id'), await c.req.json())) } catch (err) { return planError(c, err) } })
+  api.get('/reports/:id', async (c) => { try { return c.json(await getReport(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
+  api.put('/reports/:id', async (c) => { try { return c.json(await editReport(c.req.param('id'), (await c.req.json<{ body: string }>()).body)) } catch (err) { return planError(c, err) } })
+  api.delete('/reports/:id', async (c) => { try { return c.json(await deleteReport(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/summary', async (c) => c.json(await latestFocus(c.req.param('id'))))
   api.post('/apps/:id/summary', (c) => { // a model call of a minute or so: answer now, the event says when it is there
     const id = c.req.param('id')

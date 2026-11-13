@@ -178,6 +178,10 @@ export interface PrototypeFile { path: string; patch: string | null; content: st
 /** One acceptance criterion of a task: a statement a person can check, how we will know, and what the prototype showed. */
 export interface Criterion { id: string; text: string; check?: string; shown?: boolean; evidence?: string; /** For the final build only: the prototype skips it. */ buildOnly?: boolean; why?: string; /** The final build's mark: met, not met, or not checked yet. */ built?: boolean; builtEvidence?: string; by: string; at: string }
 export interface AcceptanceChange { add?: { text: string; check?: string }[]; update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null; built?: boolean | null; builtEvidence?: string | null }[]; remove?: string[] }
+/** A report on an app's work over a period: the end-of-day note or the weekly status, a draft the person edits and sends. */
+export type ReportPeriod = 'today' | 'yesterday' | 'this_week' | 'last_week'
+export interface Report { id: string; appId: string; kind: 'daily' | 'weekly'; fromAt: string; toAt: string; label: string; body: string; notes: string | null; editedAt: string | null; createdAt: string; costUsd: string | null }
+export interface Reports { writing: boolean; format: { daily: string; weekly: string }; reports: Report[] }
 /** A version of a task: the git branch each of its worktrees is on, and (set aside) the task as it was left. */
 export interface TaskBranch { id: string; name: string; current: boolean; fromSave: string | null; createdAt: string; gitBranches: string[]; /** Set aside: what is only on it. */ work: { commits: number; comments: number } | null }
 /** A named point on a task branch that the whole task can be taken back to. */
@@ -302,6 +306,11 @@ export const engine = {
   approveStep: (issueId: string, key: StepKey, approve = true) => call<StepWork>('POST', `/issues/${issueId}/steps/${key}/approve`, { approve }),
   setAcceptance: (issueId: string, change: AcceptanceChange) => call<{ acceptance: Criterion[]; note?: string }>('PUT', `/issues/${issueId}/acceptance`, change),
   mergeGuide: (issueId: string) => call<{ guide: string; subTasks: number }>('GET', `/issues/${issueId}/merge-guide`),
+  reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
+  writeReport: (appId: string, body: { period: ReportPeriod; notes?: string }) => call<{ writing: boolean }>('POST', `/apps/${appId}/reports`, body),
+  editReport: (id: string, body: string) => call<Report>('PUT', `/reports/${id}`, { body }),
+  deleteReport: (id: string) => call<{ deleted: string }>('DELETE', `/reports/${id}`),
+  setReportFormat: (appId: string, f: { daily?: string; weekly?: string }) => call<{ daily: string; weekly: string }>('PUT', `/apps/${appId}/report-format`, f),
   taskBranches: (issueId: string) => call<TaskBranches>('GET', `/issues/${issueId}/branches`),
   saveHere: (issueId: string, name: string) => call<{ id: string; name: string }>('POST', `/issues/${issueId}/save-points`, { name }),
   goBack: (savePointId: string, body: { name?: string; resetData?: boolean }) => call<TaskMoved>('POST', `/save-points/${savePointId}/go-back`, body),
