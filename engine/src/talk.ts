@@ -51,6 +51,8 @@ How this person works: PRs only, main is production; short answers that lead wit
  * A prototype's conversation: the actual thing built fast, to demo and learn from, then analysed into the plan and built
  * again from scratch. Speed and change come first; quality lives in the real build.
  */
+const appPrompt = (name: string, cwd: string) => `This conversation is about ${name} as a whole: an idea, a new task, a question about the code, a look at what was found. You are in its checkout, ${cwd}, which is the person's own: read it and run its tests or a read-only command, and change nothing in it. You have no editing tools here, no worktree and no branch, and a command that leaves a mark asks the person first. Anything that changes files (code, a sketch, a story, a fix) is a task's work: create the task with create_task, or name the one that exists, and tell the person to open it; its own agent works there, in a worktree of its own. A prototype still starts from here (start_prototype) and gets its own worktree.`
+
 const prototypePrompt = (p: typeof prototype.$inferSelect) => `This conversation builds the prototype "${p.title}" (${p.id}), in its own worktree ${p.path} on branch ${p.branch}. The person sees it running in the Prototype tab beside you${p.port ? ` (http://localhost:${p.port})` : ''}; its server is the engine's, started with the app's prototype command on $PORT.
 What a prototype is: the actual thing, built fast so it can be used, changed in moments and shown to people. It is never merged: when it is ready, everything about it (the diff, its data's final shape, the conversation, people's feedback, what changed between iterations and why) is analysed into the plan, and the real build starts from main, from scratch. So:
 - Speed over quality. Shortcuts are the default: hardcode, fake, skip error handling and edge cases. No tests, no review, no conventions to keep. Build only what the person needs to see or try.
@@ -104,8 +106,9 @@ function engineServer(appId: string, sessionId?: string) {
 
 /**
  * Where a new conversation's auto-approve starts: the level last picked in any conversation (kept on the workspace), or
- * up to moderate. A conversation works in its own worktree and branch, so moderate (commits there, the engine's own
- * actions) is contained; expensive (pushing main, deleting, spending) always asks.
+ * up to moderate. A task's agent works in its own worktree and branch, so moderate (commits there, the engine's own
+ * actions) is contained; a conversation about the app has no editing tools and asks before a command that leaves a
+ * mark; expensive (pushing main, deleting, spending) always asks.
  */
 async function defaultAutoApprove(appId: string): Promise<Risk> {
   const [w] = await db.select().from(workspace).where(eq(workspace.id, await workspaceFor(appId)))
@@ -136,7 +139,7 @@ async function record(sessionId: string, author: string, kind: string, body: str
 }
 
 /** `issueId` pins a task's own agent; `checkOf` and `check` mark a fresh agent out on one check of that task (checks.ts). */
-export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string; checkOf?: string; check?: StepKey; setup?: string }
+export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string; checkOf?: string; check?: StepKey; setup?: string; /** About the app as a whole: in its checkout, reading, with no worktree. */ app?: boolean }
 
 /** What a conversation is about, from where it started: a project's title, an idea's title, or nothing yet. */
 async function subjectFrom(ref?: SubjectRef): Promise<{ subject: string | null; subjectRef: SubjectRef | null }> {
@@ -147,7 +150,12 @@ async function subjectFrom(ref?: SubjectRef): Promise<{ subject: string | null; 
   return { subject: null, subjectRef: ref?.path ? { path: ref.path } : null }
 }
 
-/** A conversation gets its own worktree of each of the app's repos, on its own branch, so its edits are cheap and a PR is the natural end. */
+/**
+ * A new conversation. Only a task's agent, and an integration's set-up (which ends in a pull request), gets a worktree
+ * of each of the app's repos on a branch of its own. Every other one is a conversation about the app as a whole
+ * (Sandy, 2026-11-13: "only tasks should … they are now just different conversations about the app as a whole"): it
+ * sits in the app's checkout, reads it, and has no worktree or branch (`subjectRef.app`).
+ */
 export async function startTalk(input: { appId: string; subjectRef?: SubjectRef; actor?: string }) {
   const [a] = await db.select().from(app).where(eq(app.id, input.appId))
   if (!a) throw new PlanError(`no app ${input.appId}`)
@@ -156,6 +164,14 @@ export async function startTalk(input: { appId: string; subjectRef?: SubjectRef;
   const problem = await checkoutProblem(r.localPath)
   if (problem) throw new PlanError(`${problem} Save it under Settings › Repo and Self Evident sets it up.`)
   const id = newId('session')
+  if (!input.subjectRef?.issueId && !input.subjectRef?.setup) {
+    const { subject, subjectRef } = await subjectFrom(input.subjectRef)
+    const [row] = await db.insert(session).values({
+      id, appId: a.id, kind: 'talk', cwd: r.localPath, branch: null, worktreePath: null, subject, subjectRef: { ...subjectRef, app: true }, createdBy: input.actor ?? 'user', lastActiveAt: new Date(),
+      autoApprove: await defaultAutoApprove(a.id),
+    }).returning()
+    return row
+  }
   const short = id.slice(-6).toLowerCase()
   const branch = `talk/${short}`
   const worktreePath = `${r.localPath}-worktrees/talk-${short}`
@@ -402,6 +418,7 @@ async function open(sessionId: string): Promise<Live> {
   const ownTaskId = (s.subjectRef as SubjectRef | null)?.issueId
   const [ownTask] = ownTaskId ? await db.select().from(issue).where(eq(issue.id, ownTaskId)) : []
   const check = (s.subjectRef as SubjectRef | null)?.check
+  const whole = !!(s.subjectRef as SubjectRef | null)?.app && !s.worktreePath // about the app as a whole: it reads the app's checkout
   const refs = await referencesOf(s.appId)
   const mates = await matesOf(s.appId, s.worktreePath)
   const assets = await assetsFor(s.appId, (s.subjectRef as SubjectRef | null)?.projectId ?? ownTask?.projectId) // the app's, and the project's when it is about one
@@ -414,10 +431,10 @@ async function open(sessionId: string): Promise<Live> {
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : check ? checkPrompt(check, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
-      tools: [...READ_TOOLS, ...(check ? CHECK_TOOLS : ASK_TOOLS)],
+      tools: [...READ_TOOLS, ...(check || whole ? CHECK_TOOLS : ASK_TOOLS)],
       allowedTools: READ_TOOLS, // everything else is rated by the hook (the hook sees every call; allowedTools would not)
       permissionMode: 'default',
       // The gate: rate the call; up to the person's threshold allow it and log it; above, ask (which lands in canUseTool).
@@ -429,7 +446,7 @@ async function open(sessionId: string): Promise<Live> {
         const at = (EDIT_TOOLS.has(h.tool_name) ? mateHolding(mates, entry.cwd, input.file_path ?? input.notebook_path)?.path : null) ?? entry.cwd // an edit in another of the app's repos is rated by that worktree and its branch
         const branch = ASK_TOOLS.includes(h.tool_name) ? await branchOf(at) : undefined
         const { risk, why } = riskOf(h.tool_name, input, { cwd: at, branch })
-        const auto = risk === 'free' || entry.always.has(h.tool_name) || (risk !== 'expensive' && rank(risk) <= rank(entry.autoApprove))
+        const auto = risk === 'free' || entry.always.has(h.tool_name) || ((risk !== 'expensive' && rank(risk) <= rank(entry.autoApprove)) && !(whole && h.tool_name === 'Bash' && risk === 'moderate')) // in the app's own checkout, a command that leaves a mark asks
         if (auto) {
           if (risk !== 'free') await record(sessionId, 'engine', 'auto', `${h.tool_name} · ${risk}`, { tool: h.tool_name, risk, why, input: summariseInput(h.tool_name, input) })
           return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow' } }

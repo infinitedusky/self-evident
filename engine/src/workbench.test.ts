@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
 import { app, repo, session, workspace } from './db/schema.js'
@@ -79,8 +79,20 @@ describe.skipIf(!reachable)('a conversation in an app of two repositories', () =
     expect((await reposOf(appId)).repos.map((r) => r.id)).toEqual([webId, apiId, readId])
   })
 
-  it('starts with a worktree in each on one branch, each cut from its own base; ending removes both, keeping the branch only where it has commits', async () => {
+  it('starts a conversation about the app in its checkout, with no worktree and no branch; ending it removes nothing', async () => {
     const s = await startTalk({ appId })
+    expect(s).toMatchObject({ cwd: web, worktreePath: null, branch: null, subjectRef: { app: true } })
+    expect(existsSync(`${web}-worktrees`)).toBe(false)
+    expect(await matesOf(appId, s.worktreePath)).toEqual([])
+    const pinned = await startTalk({ appId, subjectRef: { path: '/ideas' } })
+    expect(pinned).toMatchObject({ cwd: web, worktreePath: null, subjectRef: { path: '/ideas', app: true } })
+    expect(await endTalk(s.id)).toMatchObject({ ended: true })
+    expect(existsSync(web)).toBe(true)
+    await db.delete(session).where(inArray(session.id, [s.id, pinned.id]))
+  })
+
+  it('starts work that changes the code with a worktree in each on one branch, each cut from its own base; ending removes both, keeping the branch only where it has commits', async () => {
+    const s = await startTalk({ appId, subjectRef: { setup: 'made-up integration' } })
     expect(s.cwd).toBe(join(`${web}-worktrees`, `talk-${s.id.slice(-6).toLowerCase()}`))
     const mates = await matesOf(appId, s.worktreePath)
     expect(mates.map((m) => [m.repoId, m.base])).toEqual([[apiId, 'develop']])
