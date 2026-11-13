@@ -411,9 +411,9 @@ export const prototypes: Prototype[] = [
 
 // A task's acceptance criteria (made up): two the prototype showed, one it did not, one nobody has tried, one left to the final build.
 export const acceptance: import('../engine').Criterion[] = [
-  { id: 'ac_sample1', text: 'A returning customer pays with the saved card in one tap (sample)', check: 'The returning-customer scenario: /checkout shows one Pay button', shown: true, evidence: '/checkout as Ada (sample), scenario returning-customer', by: 'agent', at: '2026-10-28T11:00:00Z' },
+  { id: 'ac_sample1', text: 'A returning customer pays with the saved card in one tap (sample)', check: 'The returning-customer scenario: /checkout shows one Pay button', shown: true, evidence: '/checkout as Ada (sample), scenario returning-customer', built: true, builtEvidence: 'checkout.one-tap.test.ts passes (sample)', by: 'agent', at: '2026-10-28T11:00:00Z' },
   { id: 'ac_sample2', text: 'A customer with no saved card gets the old form (sample)', check: 'The empty-cart scenario, signed in as a new customer', shown: true, evidence: '/checkout as Bo (sample)', by: 'agent', at: '2026-10-28T11:05:00Z' },
-  { id: 'ac_sample3', text: 'A failed charge is retried once and never charges twice (sample)', check: 'scripts/charge-twice.sh prints one charge', shown: false, evidence: 'The retry runs, but nothing stops a second charge when the first one was slow, not failed', by: 'agent', at: '2026-10-28T11:20:00Z' },
+  { id: 'ac_sample3', text: 'A failed charge is retried once and never charges twice (sample)', check: 'scripts/charge-twice.sh prints one charge', shown: false, evidence: 'The retry runs, but nothing stops a second charge when the first one was slow, not failed', built: false, builtEvidence: 'scripts/charge-twice.sh prints two charges (sample)', by: 'agent', at: '2026-10-28T11:20:00Z' },
   { id: 'ac_sample4', text: 'A customer sees only their own saved cards (sample)', by: 'Sam (sample)', at: '2026-10-28T11:30:00Z' },
   { id: 'ac_sample5', text: 'The Pay button\'s wording is signed off by support (sample)', check: 'Support\'s sign-off on the pull request', buildOnly: true, why: 'Copy, not behaviour: nothing to prove in a prototype', by: 'agent', at: '2026-10-28T11:40:00Z' },
 ]

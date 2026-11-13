@@ -2916,3 +2916,19 @@ still makes each a check of a sub-task, since they are still required.
   ("N for the final build only") and the approval line says "N left to the final build, unproven". The audit checks
   whether each reason holds.
 - Marking or unmarking one does not take the brief's approval back: what must be true is unchanged.
+
+## Two marks on each criterion: the prototype's and the final build's (Sandy, 2026-11-13: "You should have probably prototype and final build check marks and the acceptance criteria")
+
+Each acceptance criterion now carries two marks, side by side on the brief's page under "Prototype" and "Build", each
+column with its count.
+
+- **Prototype**: shown, not shown, not tried, or skipped (a criterion for the final build only). Set by the
+  prototype's agent, as before.
+- **Build** (`built`, `builtEvidence`): met, not met, or not checked yet. The task's agent is told to set it from
+  what landed, as sub-tasks land and before it calls the task done, with where to see it, and never to copy the
+  prototype's mark across. The person can set it with a click on the mark. The prototype's agent cannot set it.
+- Neither mark takes the brief's approval back. The lines given to the planner and the checks carry both.
+
+Not done: nothing stops a task being completed with a criterion unmet or unchecked, and the builders themselves do
+not set the mark (they have no engine tools); the conductor does, after they land. That closes most of "nothing
+reports per criterion after the build", but by instruction, not by a step of the engine.

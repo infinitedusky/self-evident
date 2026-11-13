@@ -171,8 +171,8 @@ export interface ShownRef { id: string; kind: 'file' | 'link'; path?: string; ur
 export interface PrototypeCode { prototypeId: string; branch: string; base: string; files: ChangedFile[]; shown: ShownRef[] }
 export interface PrototypeFile { path: string; patch: string | null; content: string | null; missing: boolean; unreadable: boolean }
 /** One acceptance criterion of a task: a statement a person can check, how we will know, and what the prototype showed. */
-export interface Criterion { id: string; text: string; check?: string; shown?: boolean; evidence?: string; /** For the final build only: the prototype skips it. */ buildOnly?: boolean; why?: string; by: string; at: string }
-export interface AcceptanceChange { add?: { text: string; check?: string }[]; update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null }[]; remove?: string[] }
+export interface Criterion { id: string; text: string; check?: string; shown?: boolean; evidence?: string; /** For the final build only: the prototype skips it. */ buildOnly?: boolean; why?: string; /** The final build's mark: met, not met, or not checked yet. */ built?: boolean; builtEvidence?: string; by: string; at: string }
+export interface AcceptanceChange { add?: { text: string; check?: string }[]; update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null; built?: boolean | null; builtEvidence?: string | null }[]; remove?: string[] }
 export interface Event { seq: number; ts: string; type: string; actor: string; issueId: string | null; projectId: string | null; payload: Record<string, unknown> }
 export interface NewSubIssue { key: string; title: string; description?: string; brief?: string; dependsOn?: string[]; files?: string[] }
 export interface NewProjectIssue { title: string; description?: string; brief?: string; subIssues?: NewSubIssue[] }

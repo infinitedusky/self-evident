@@ -718,10 +718,12 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .acceptance-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 2px; }
 .acceptance-list li { display: flex; gap: 10px; align-items: flex-start; padding: 7px 8px; border-radius: 8px; }
 .acceptance-list li:hover { background: var(--idle-wash); }
-.acceptance-mark { flex: none; width: 18px; text-align: center; font-weight: 700; color: var(--ink-faint); }
-.acceptance-list li.shown .acceptance-mark { color: var(--ok); } .acceptance-list li.not .acceptance-mark { color: var(--bad); }
+.acceptance-mark { flex: none; width: 92px; text-align: center; font: 700 15px var(--sans); color: var(--ink-faint); border: 0; background: none; padding: 0; }
+button.acceptance-mark { cursor: pointer; border-radius: 6px; } button.acceptance-mark:hover { background: var(--accent-wash); }
+.acceptance-mark.shown, .acceptance-mark.met { color: var(--ok); } .acceptance-mark.not { color: var(--bad); }
+.acceptance-heads { display: flex; gap: 10px; padding: 0 8px 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); }
+.acceptance-heads > span { width: 92px; text-align: center; white-space: nowrap; } .acceptance-heads .faint, .acceptance-heads .acceptance-warn { font-size: 11px; }
 .acceptance-body { flex: 1; min-width: 0; font-size: 14px; } .acceptance-body .faint { font-size: 13px; }
-.acceptance-list li.build .acceptance-mark { color: var(--accent); }
 .acceptance-build { font-size: 13px; color: var(--accent); }
 .acceptance-skip { display: flex; gap: 6px; align-items: center; font-size: 13px; }
 .acceptance-skip input { margin: 0; width: auto; }

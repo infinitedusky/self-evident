@@ -29,6 +29,11 @@ describe('acceptance criteria, as a list', () => {
     expect(acceptanceLines(left.list)).toContain('· FINAL BUILD ONLY, the prototype skips it: only real traffic shows it (sample)')
     expect(applyAcceptance(sharper.list, { update: [{ id: two.id, buildOnly: true }] }, 'agent', at).changed).toBe(false) // which half proves it is not what the person approved
     expect(applyAcceptance(left.list, { update: [{ id: two.id, buildOnly: false }] }, 'user', at).list[0]).not.toHaveProperty('why')
+    const built = applyAcceptance(left.list, { update: [{ id: two.id, built: true, builtEvidence: 'twice.test.ts passes (sample)' }] }, 'agent', at)
+    expect(built.changed).toBe(false) // the build's mark is not what the person approved either
+    expect(built.list[0]).toMatchObject({ built: true, builtEvidence: 'twice.test.ts passes (sample)', shown: false }) // two marks, kept apart
+    expect(acceptanceLines(built.list)).toContain('· met by the build: twice.test.ts passes (sample)')
+    expect(applyAcceptance(built.list, { update: [{ id: two.id, built: null }] }, 'user', at).list[0]).not.toHaveProperty('builtEvidence')
     expect(() => applyAcceptance(a.list, { update: [{ id: 'ac_none', text: 'x' }] }, 'agent')).toThrow(/no acceptance criterion/)
     expect(() => applyAcceptance(a.list, { update: [{ id: one.id, text: ' ' }] }, 'agent')).toThrow(/remove it instead/)
     expect(() => applyAcceptance([], { add: [{ text: '' }] }, 'agent')).toThrow(/needs its statement/)
@@ -73,6 +78,7 @@ describe.skipIf(!reachable)('acceptance criteria, on a task', () => {
     expect(row.acceptance).toHaveLength(2)
     await expect(setAcceptance(t.id, { update: [{ id, buildOnly: true }] }, 'agent', { prototyping: true })).rejects.toThrow(/cannot mark a criterion as for the final build only/) // the prototype's agent cannot excuse itself
     expect((await setAcceptance(t.id, { update: [{ id, buildOnly: true, why: 'polish (sample)' }] }, 'agent')).acceptance[0]).toMatchObject({ buildOnly: true, why: 'polish (sample)' })
+    await expect(setAcceptance(t.id, { update: [{ id, built: true }] }, 'agent', { prototyping: true })).rejects.toThrow(/final build's mark is not its to set/)
     const sub = await createIssue(appId, { title: 'A sub-task (sample)', kind: 'code', parentId: t.id })
     await expect(setAcceptance(sub.id, { add: [{ text: 'x' }] })).rejects.toThrow(/only a top-level code task/)
   })

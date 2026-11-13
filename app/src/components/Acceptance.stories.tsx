@@ -17,7 +17,17 @@ export const Criteria: Story = {
     const c = within(canvasElement)
     await expect(c.getByText('1 not shown in the prototype')).toBeInTheDocument()
     await expect(c.getByText('No way to check it yet')).toBeInTheDocument()
-    await expect(c.getByText(/Missing: The retry runs/)).toBeInTheDocument()
+    await expect(c.getByText(/Prototype, missing: The retry runs/)).toBeInTheDocument()
+    await expect(c.getByText(/Build, missing: scripts\/charge-twice\.sh prints two charges/)).toBeInTheDocument()
+  },
+}
+/** Two marks on each: the prototype's and the final build's. The person sets the build's with a click: not checked, met, not met. */
+export const BuildMark: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.getByLabelText(/^Prototype: The prototype showed it/, { selector: 'li:first-child *' })).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: /Final build: Not checked against the final build yet \(A customer with no saved card/ }))
+    await expect(await c.findByRole('button', { name: /Final build: The final build meets it \(A customer with no saved card/ })).toBeInTheDocument()
   },
 }
 /** None yet: says what approving the brief would then mean. */
