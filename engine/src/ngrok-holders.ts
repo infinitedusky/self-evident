@@ -10,9 +10,9 @@
  * know how it was started. A tunnel on another computer cannot be seen or stopped from here.
  */
 import { execFile, spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir, userInfo } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 
 export interface Holder { pid: number; /** What it is tunnelling, as it was started: "http 3000". */ what: string; /** The login service that keeps it running, when one does. */ service?: string }
@@ -40,13 +40,23 @@ export async function ngrokHolders(ours: number[] = [], run: Run = real): Promis
 }
 
 const plistOf = (label: string) => join(homedir(), 'Library', 'LaunchAgents', `${label}.plist`)
-const paused = new Set<string>() // services we stopped, to put back
+/**
+ * The services we stopped, to put back. Kept in a file as well as in memory: the engine restarts on every change to
+ * its code and can be killed outright, and a service stopped for a share must not stay stopped because of that
+ * (it did, 2026-11-13: a merge restarted the engine while Sandy's tunnel service was stopped for a share).
+ */
+const pausedFile = () => process.env.NGROK_PAUSED_FILE ?? join(homedir(), '.self-evident', 'ngrok-paused.json')
+const readPaused = (): string[] => { try { const j = JSON.parse(readFileSync(pausedFile(), 'utf8')); return Array.isArray(j) ? j.filter((x) => typeof x === 'string') : [] } catch { return [] } }
+const paused = new Set<string>(readPaused())
+const keep = () => { try { mkdirSync(dirname(pausedFile()), { recursive: true }); writeFileSync(pausedFile(), JSON.stringify([...paused])) } catch { /* the memory still has it */ } }
+/** For tests: read the file again, as a starting engine does. */
+export const reloadPaused = () => { paused.clear(); for (const l of readPaused()) paused.add(l) }
 
 /** Stop the other ngrok tunnels on this computer. Returns what was stopped; a service among them is remembered so it can be put back. */
 export async function freeNgrok(ours: number[] = [], run: Run = real, kill: (pid: number) => void = (pid) => { try { process.kill(pid, 'SIGTERM') } catch { /* gone */ } }): Promise<Holder[]> {
   const holders = await ngrokHolders(ours, run)
   for (const h of holders) {
-    if (h.service && existsSync(plistOf(h.service))) { await run('launchctl', ['bootout', `gui/${userInfo().uid}/${h.service}`]); paused.add(h.service) }
+    if (h.service && existsSync(plistOf(h.service))) { paused.add(h.service); keep(); await run('launchctl', ['bootout', `gui/${userInfo().uid}/${h.service}`]) } // written down before it is stopped
     else kill(h.pid)
   }
   if (holders.length) await new Promise((r) => setTimeout(r, Number(process.env.NGROK_FREE_WAIT_MS ?? 2000))) // ngrok's side takes a moment to let the address go
@@ -57,8 +67,8 @@ export const pausedServices = () => [...paused]
 /** Put back the services stopped for sharing. Safe to call when there are none. */
 export async function restoreNgrok(run: Run = real): Promise<string[]> {
   const back = [...paused]
-  for (const label of back) { paused.delete(label); await run('launchctl', ['bootstrap', `gui/${userInfo().uid}`, plistOf(label)]) }
+  for (const label of back) { await run('launchctl', ['bootstrap', `gui/${userInfo().uid}`, plistOf(label)]); paused.delete(label); keep() }
   return back
 }
 /** The same, when the engine is going down and cannot wait. */
-export function restoreNgrokNow() { for (const label of [...paused]) { paused.delete(label); spawnSync('launchctl', ['bootstrap', `gui/${userInfo().uid}`, plistOf(label)], { timeout: 5000 }) } }
+export function restoreNgrokNow() { for (const label of [...paused]) { spawnSync('launchctl', ['bootstrap', `gui/${userInfo().uid}`, plistOf(label)], { timeout: 5000 }); paused.delete(label); keep() } }

@@ -246,5 +246,7 @@ export async function unshare(kind: ShareKind, id: string, actor = 'person', why
 export const shared = (kind: ShareKind, id: string): Shared | null => { const s = live.get(keyOf(kind, id)); return s ? view(s) : null }
 /** Everything of one app that is public right now. */
 export const sharesOf = (appId: string): (Shared & { what: string })[] => [...live.values()].filter((s) => s.appId === appId).map((s) => ({ ...view(s), what: WHAT[s.kind] }))
+/** The engine has just started: no share outlives it, so a service left stopped for one (the engine was killed mid-share) is put back now. */
+export const restoreAfterRestart = () => restoreNgrok().catch(() => [] as string[])
 /** The engine is going down: every address with it. */
 export function stopShares() { for (const s of live.values()) { clearTimeout(s.timer); try { s.proc.kill('SIGTERM') } catch { /* gone */ } s.server?.close() } live.clear(); restoreNgrokNow() }
