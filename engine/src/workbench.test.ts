@@ -12,7 +12,7 @@ import { db, pool } from './db/client.js'
 import { app, repo, session, workspace } from './db/schema.js'
 import { branchExists, commitAll, git } from './git.js'
 import { newId } from './ids.js'
-import { endTalk, setupTalk, startTalk } from './talk.js'
+import { endTalk, pinnedTo, setupTalk, startTalk } from './talk.js'
 import { homeRepo, inOrder, mateHolding, matePath, matePrompt, matesOf, reposOf, type Mate } from './workbench.js'
 
 const api: Mate = { repoId: 'repo_b', name: 'shop-api', fullName: 'made-up/shop-api', repoPath: '/code/shop-api', path: '/code/shop-api-worktrees/talk-abc123', base: 'develop' }
@@ -86,6 +86,8 @@ describe.skipIf(!reachable)('a conversation in an app of two repositories', () =
     expect(await matesOf(appId, s.worktreePath)).toEqual([])
     const pinned = await startTalk({ appId, subjectRef: { path: '/ideas' } })
     expect(pinned).toMatchObject({ cwd: web, worktreePath: null, subjectRef: { path: '/ideas', app: true } })
+    expect(pinnedTo(s.subjectRef as never, { projectId: 'proj_made_up' })).toEqual({ projectId: 'proj_made_up', app: true }) // pinned by the first message, and still about the app
+    expect(pinnedTo({ app: true }, null)).toEqual({ app: true })
     expect(await endTalk(s.id)).toMatchObject({ ended: true })
     expect(existsSync(web)).toBe(true)
     await db.delete(session).where(inArray(session.id, [s.id, pinned.id]))
