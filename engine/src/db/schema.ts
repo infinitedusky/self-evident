@@ -368,6 +368,7 @@ export const prototype = pgTable('prototype', {
   title: text('title').notNull(), brief: text('brief'), // what to build and what it should teach us
   sessionId: text('session_id'), // the conversation that builds it, working in its worktree
   scenario: text('scenario'), // the made-up data its database was last built from (.prototype/scenarios/<name>)
+  shown: jsonb('shown').notNull().default([]), // what the agent put in its Code view to explain it: files (with lines) and pages (prototype-code.ts)
   branch: text('branch').notNull(), path: homePath('path').notNull(), port: integer('port'),
   status: text('status').notNull().default('stopped'), createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [index('prototype_app').on(t.appId), inList('prototype_status', t.status, PROTOTYPE_STATUSES)])

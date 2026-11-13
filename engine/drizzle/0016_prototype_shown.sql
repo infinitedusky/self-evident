@@ -1,0 +1,1 @@
+ALTER TABLE "prototype" ADD COLUMN "shown" jsonb DEFAULT '[]'::jsonb NOT NULL;

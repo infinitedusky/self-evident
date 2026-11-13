@@ -631,6 +631,9 @@ Details and sources in `research/`.
   gets a record when its plan makes a decision that deserves one. This replaces "ADRs in `docs/adr/`" in the house
   profile as the rule for where a record goes; `docs/adr/` remains the fallback when a repository keeps none.
 
+- **A prototype is read as well as used** (2026-11-13). It is a sample of what will be merged, so its step shows it
+  running and, beside that, its code: every file it changed with its diff, and the files and docs pages the agent puts
+  there, with lines highlighted and a note, to answer a question about it.
 - **What an agent asks shows in its conductor's column** (2026-11-13). What an agent the conductor has out asks the
   person to allow shows in the conductor's conversation, named for the agent, and is answered there; an agent stopped
   on the person is reported as waiting, never working. Above the threshold the answer stays the person's.

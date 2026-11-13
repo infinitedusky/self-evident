@@ -2,7 +2,8 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { rows } from '@self-evident/engine/steps'
 import { StepSection } from './StepSection'
 import { withEngine } from '../stories/mock-engine'
-import { sampleApp, taskStepsView } from '../stories/sample'
+import { expect, within } from 'storybook/test'
+import { prototypes, sampleApp, taskStepsView } from '../stories/sample'
 
 // One step of a task as its own page. Made up: the sample task's steps under "UI change (sample)".
 const all = rows('task', taskStepsView.states, taskStepsView.resolved.workflow)
@@ -17,6 +18,17 @@ type Story = StoryObj<typeof meta>
 export const Done: Story = {}
 /** Not started: hand it to the agent. */
 export const NotStarted: Story = { args: { row: { ...row('research'), state: { key: 'research', status: 'none' } } }, beforeEach: withEngine({ stepWork: null }) }
+/** The prototype's step: the thing running (View), every file it changed and what the agent shows (Code), and what it wrote for the brief. Here the agent has just shown a file. */
+export const PrototypeCodeView: Story = {
+  args: { row: { ...row('research'), key: 'prototype', state: { key: 'prototype', status: 'started', detail: 'A first version is up (sample)' }, waitingOn: undefined } as typeof all[number] },
+  beforeEach: withEngine({ prototypes: prototypes.map((p, i) => i === 0 ? { ...p, issueId: 'iss_sample20' } : p) }),
+  parameters: { route: { path: '/tasks/:id/prototype', url: '/tasks/iss_sample20/prototype?shown=shown_sample1' } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('tab', { name: 'Code' })).toHaveAttribute('aria-selected', 'true')
+    await expect(await c.findByText(/the saved card is read here/)).toBeInTheDocument()
+  },
+}
 /** Waiting on a step before it: says which, and links there. */
 export const Waiting: Story = { args: { row: row('risk'), waitingState: row('brief').state }, beforeEach: withEngine({ stepWork: null }) }
 /** Started from an idea. */

@@ -409,6 +409,32 @@ export const prototypes: Prototype[] = [
   { id: 'proto_sample2', appId: sampleApp.id, projectId: null, title: 'Sample: gift cards', brief: null, sessionId: null, scenario: null, branch: 'prototype/sample-gift-cards-c3d4', path: '/code/sample-shop-worktrees/prototype--sample-gift-cards-c3d4', port: 51240, status: 'stopped', url: 'http://localhost:51240', createdAt: '2026-10-28T16:00:00Z' },
 ]
 
+// A prototype's code (made up): three files changed, and two things the agent put there to answer a question.
+export const prototypeCode: import('../engine').PrototypeCode = {
+  prototypeId: 'proto_sample1', branch: 'prototype/sample-one-tap-checkout-a1b2', base: 'a1b2c3d4e',
+  files: [
+    { path: 'docs/checkout.md', status: 'added', added: 6, removed: 0 },
+    { path: 'web/checkout/legacy-steps.ts', status: 'deleted', added: 0, removed: 41 },
+    { path: 'web/checkout/submit.ts', status: 'modified', added: 5, removed: 2 },
+  ],
+  shown: [
+    { id: 'shown_sample1', kind: 'file', path: 'web/checkout/payment.ts', note: 'Sample: the saved card is read here. The prototype did not change this file; it only calls it from submit.ts.', lines: [{ from: 4, to: 6 }], by: 'agent', at: '2026-10-28T15:20:00Z' },
+    { id: 'shown_sample2', kind: 'link', url: 'https://example.com/docs/payment-intents', title: 'Payment intents (sample docs)', note: 'Sample: why one call can both save the card and charge it.', by: 'agent', at: '2026-10-28T15:21:00Z' },
+  ],
+}
+export const prototypeFiles: Record<string, import('../engine').PrototypeFile> = {
+  'web/checkout/submit.ts': { path: 'web/checkout/submit.ts', missing: false, unreadable: false,
+    content: "import { charge } from './payment'\n\nexport async function submit(cart: Cart) {\n  const card = await savedCard(cart.customer) // sample\n  if (!card) return askForCard(cart)\n  return charge(card, cart.total, { retries: 1 })\n}\n",
+    patch: "diff --git a/web/checkout/submit.ts b/web/checkout/submit.ts\n--- a/web/checkout/submit.ts\n+++ b/web/checkout/submit.ts\n@@ -1,6 +1,7 @@\n import { charge } from './payment'\n \n export async function submit(cart: Cart) {\n-  const card = await askForCard(cart)\n-  return charge(card, cart.total, { retries: 0 })\n+  const card = await savedCard(cart.customer) // sample\n+  if (!card) return askForCard(cart)\n+  return charge(card, cart.total, { retries: 1 })\n }\n" },
+  'web/checkout/payment.ts': { path: 'web/checkout/payment.ts', missing: false, unreadable: false, patch: null,
+    content: "// Sample file, made up.\nimport { vault } from './vault'\n\nexport async function savedCard(customer: string) {\n  return vault.find({ customer, kind: 'card' })\n}\n\nexport async function charge(card: Card, total: number, opts: { retries: number }) {\n  return vault.charge(card, total, opts)\n}\n" },
+  'docs/checkout.md': { path: 'docs/checkout.md', missing: false, unreadable: false,
+    content: "# One-tap checkout (sample)\n\nA returning customer pays with the saved card in one tap.\n\n- No saved card: the old form.\n- A failed charge is retried once.\n",
+    patch: "--- /dev/null\n+++ b/docs/checkout.md\n@@ -0,0 +1,6 @@\n+# One-tap checkout (sample)\n+\n+A returning customer pays with the saved card in one tap.\n+\n+- No saved card: the old form.\n+- A failed charge is retried once." },
+  'web/checkout/legacy-steps.ts': { path: 'web/checkout/legacy-steps.ts', missing: true, unreadable: false, content: null,
+    patch: "--- a/web/checkout/legacy-steps.ts\n+++ /dev/null\n@@ -1,3 +0,0 @@\n-// Sample: the three-step checkout, removed.\n-export const steps = ['address', 'payment', 'review']\n-export const next = (s: string) => steps[steps.indexOf(s) + 1]" },
+}
+
 // Workflows and steps (made up). "UI change" requires starting as an idea, a mockup and the brief, in order, then a
 // blast-radius check; "Quick fix" has only the brief, with research and the steps either side of it switched off.
 export const uiWorkflow: Workflow = { id: 'wf_sample_ui', name: 'UI change (sample)', ordered: true, steps: [
