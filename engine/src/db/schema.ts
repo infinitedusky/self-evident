@@ -173,6 +173,7 @@ export const issue = pgTable('issue', {
   description: text('description'), // for a person: what will be different, plain words; no file names or code
   brief: text('brief'), // for the builder: its instructions, Markdown
   briefApprovedBy: text('brief_approved_by'), briefApprovedAt: at('brief_approved_at'), // a task completes only once its brief is approved
+  acceptance: jsonb('acceptance').notNull().default([]), // how we will know it is done: [{id, text, check?, shown?, evidence?}], approved with the brief (acceptance.ts)
   workflowId: text('workflow_id').references((): AnyPgColumn => workflow.id), // its own, over its project's and the app's
   state: text('state').notNull().default('todo'),
   priority: integer('priority').notNull().default(0), // Linear's: 0 none, 1 urgent, 2 high, 3 medium, 4 low

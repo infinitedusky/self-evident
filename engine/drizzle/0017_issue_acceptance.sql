@@ -1,0 +1,1 @@
+ALTER TABLE "issue" ADD COLUMN "acceptance" jsonb DEFAULT '[]'::jsonb NOT NULL;

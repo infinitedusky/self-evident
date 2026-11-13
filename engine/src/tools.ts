@@ -23,6 +23,7 @@ import { delegateFor } from './tkt.js'
 import { runner } from './runner.js'
 import { listStories } from './storybook.js'
 import { prototypeCode, showInPrototype, unshowInPrototype } from './prototype-code.js'
+import { setAcceptance } from './acceptance.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, setPrototypeCommand, setPrototypeDatabase, startPrototype, stopPrototype } from './prototype.js'
 import { agentsOut, readAgent, tellAgent } from './talk.js'
 import { syncApp } from './github.js'
@@ -67,7 +68,7 @@ export function engineTools(opts: ToolScope): EngineTool[] {
       def('now', 'What is running, what needs a person, what just happened, in this app.', {}, async () => tryIt(() => now(appId))),
       def('projects', 'This app\'s projects with counts (superseded hidden unless all=true).', { all: z.boolean().optional() }, async (a) => tryIt(() => listProjects({ all: a.all, appId }))),
       def('project_graph', 'A project in full: its backlog (open, a duplicate of what covers it, or canceled with why), tasks in order, their sub-tasks with builds, dependencies, files, held reasons, steps and last run; the planner\'s decisions and questions; the to-dos it waits on.', { projectId: z.string() }, async (a) => tryIt(() => ownProject(a.projectId))),
-      def('task', 'One task in full, by id: its sub-tasks as a list (builds, or checklist lines), relations, questions and decisions.', { issueId: z.string().describe('the task\'s id') }, async (a) => tryIt(async () => { await ownIssue(a.issueId); return issueDetail(a.issueId) })),
+      def('task', 'One task in full, by id: its brief and acceptance criteria (each with its id), its sub-tasks as a list (builds, or checklist lines), relations, questions and decisions.', { issueId: z.string().describe('the task\'s id') }, async (a) => tryIt(async () => { await ownIssue(a.issueId); return issueDetail(a.issueId) })),
       def('tasks', 'This app\'s tasks: filter by kind (code or todo), by project (projectId; "none" for tasks in no project), top level only, open only.', {
         kind: z.enum(['code', 'todo']).optional(), projectId: z.string().optional(), topLevel: z.boolean().optional(), open: z.boolean().optional(),
       }, async (a) => tryIt(async () => { if (a.projectId && a.projectId !== 'none') await ownProject(a.projectId); return listIssues(appId, { kind: a.kind, projectId: a.projectId === 'none' ? null : a.projectId, topLevel: a.topLevel, open: a.open }) })),
@@ -85,6 +86,12 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         issueId: z.string(), title: z.string().optional(), description: z.string().optional(), brief: z.string().optional(), priority: z.number().int().min(0).max(4).optional(),
         estimate: z.enum(['S', 'M', 'L', 'XL']).optional(), cycleId: z.string().optional(), projectId: z.string().optional(),
       }, async (a) => tryIt(async () => { await ownIssue(a.issueId); if (a.projectId) await ownProject(a.projectId); const { issueId, ...rest } = a; return updateIssue(issueId, rest, actor) })),
+      def('set_acceptance', 'A task\'s acceptance criteria (issueId: the task\'s id): how we will know it is done, each one statement a person can check ("A returning customer pays in one tap"), with check: how we will know (the page, the scenario, the test or script that shows it). They are part of the brief and the person approves them with it, so build them as the task goes: write the first from what was asked, sharpen them as research, sketches and mockups settle things, and add what building the prototype turns up (edge cases, guarantees such as "running it twice makes no duplicates"). For the prototype: shown true with evidence (where to see it working) or shown false with what is missing. add, update (by id, from the task tool) and remove in one call; returns the list. Changing a statement or its check after the brief was approved asks for the approval again; recording what the prototype showed does not.', {
+        issueId: z.string(),
+        add: z.array(z.object({ text: z.string(), check: z.string().optional(), shown: z.boolean().optional(), evidence: z.string().optional() })).optional(),
+        update: z.array(z.object({ id: z.string(), text: z.string().optional(), check: z.string().nullable().optional(), shown: z.boolean().nullable().optional(), evidence: z.string().nullable().optional() })).optional(),
+        remove: z.array(z.string()).optional(),
+      }, async (a) => tryIt(async () => { await ownIssue(a.issueId); const { issueId, ...change } = a; return setAcceptance(issueId, change, actor) })),
       def('set_task_state', `Move a task of this app (issueId: the task's id) to a state (${ISSUE_STATES.join(', ')}). Canceling needs the reason. A code task's state otherwise follows its sub-tasks; use this for what the engine cannot see.`, {
         issueId: z.string(), state: z.enum(ISSUE_STATES), reason: z.string().optional(),
       }, async (a) => tryIt(async () => { await ownIssue(a.issueId); if (a.state === 'done') await guardComplete(db, a.issueId); const out = await changeState(a.issueId, a.state, { actor, reason: a.reason }); void runner.dispatch(); return out })),

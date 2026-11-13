@@ -49,6 +49,8 @@ export interface Issue {
   assignee: string | null; delegate: 'builder' | 'planner' | 'agent' | null; waitingOn: string | null; source: 'person' | 'agent' | 'idea' | 'planner' | 'builder'; reason: string | null
   createdBy: string | null; createdAt: string; startedAt: string | null; completedAt: string | null; canceledAt: string | null
   briefApprovedBy?: string | null; briefApprovedAt?: string | null; workflowId?: string | null
+  /** How we will know it is done: approved with the brief. */
+  acceptance?: Criterion[]
 }
 /** A code sub-issue on the graph, with its build: the engine's status, attempts, why it waits. */
 export interface GraphSubIssue extends Issue {
@@ -168,6 +170,9 @@ export interface ChangedFile { path: string; status: 'added' | 'modified' | 'del
 export interface ShownRef { id: string; kind: 'file' | 'link'; path?: string; url?: string; title?: string; note?: string; lines?: { from: number; to: number }[]; by: string; at: string }
 export interface PrototypeCode { prototypeId: string; branch: string; base: string; files: ChangedFile[]; shown: ShownRef[] }
 export interface PrototypeFile { path: string; patch: string | null; content: string | null; missing: boolean; unreadable: boolean }
+/** One acceptance criterion of a task: a statement a person can check, how we will know, and what the prototype showed. */
+export interface Criterion { id: string; text: string; check?: string; shown?: boolean; evidence?: string; by: string; at: string }
+export interface AcceptanceChange { add?: { text: string; check?: string }[]; update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null }[]; remove?: string[] }
 export interface Event { seq: number; ts: string; type: string; actor: string; issueId: string | null; projectId: string | null; payload: Record<string, unknown> }
 export interface NewSubIssue { key: string; title: string; description?: string; brief?: string; dependsOn?: string[]; files?: string[] }
 export interface NewProjectIssue { title: string; description?: string; brief?: string; subIssues?: NewSubIssue[] }
@@ -274,6 +279,7 @@ export const engine = {
   setStep: (s: StepSubject, key: StepKey, body: { status?: 'started' | 'done'; detail?: string | null; body?: string | null; refs?: string[] }) => call<StepWork>('PUT', `/${s.kind}/${s.id}/steps/${key}`, body),
   /** A person approves a step of a task (research, sketches, mockups, the prototype), or takes it back. */
   approveStep: (issueId: string, key: StepKey, approve = true) => call<StepWork>('POST', `/issues/${issueId}/steps/${key}/approve`, { approve }),
+  setAcceptance: (issueId: string, change: AcceptanceChange) => call<{ acceptance: Criterion[]; note?: string }>('PUT', `/issues/${issueId}/acceptance`, change),
   approveBrief: (issueId: string, approve = true) => call<Issue>('POST', `/issues/${issueId}/brief/approve`, { approve }),
   workflows: (appId: string) => call<WorkflowRow[]>('GET', `/workflows?app=${appId}`),
   saveWorkflow: (body: { id?: string; appId: string; name: string; steps: WorkflowStep[]; ordered: boolean }) => call<Workflow>(body.id ? 'PUT' : 'POST', body.id ? `/workflows/${body.id}` : '/workflows', body),

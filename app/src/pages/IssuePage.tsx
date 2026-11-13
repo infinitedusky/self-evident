@@ -14,6 +14,7 @@ import { Badge, type Tone } from '../components/Badge'
 import { Brief } from '../components/Brief'
 import { askStep, useSteps } from '../components/StepsPanel'
 import { StepSection } from '../components/StepSection'
+import { Acceptance } from '../components/Acceptance'
 import { mark, TaskNav } from '../components/TaskNav'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
 import { finished, label, ready, step, type Row, type StepKey } from '@self-evident/engine/steps'
@@ -197,6 +198,8 @@ function StandsOn({ feeds, base }: { feeds: Row[]; base: string }) {
 function BriefStep({ i, busy, act, feeds, base }: { i: IssueDetail; busy: boolean; act: (fn: () => Promise<unknown>) => Promise<void>; feeds: Row[]; base: string }) {
   const [asked, setAsked] = useState(false)
   const owed = feeds.filter((r) => r.required && !finished(r.state, 'task'))
+  const criteria = i.acceptance?.length ?? 0
+  const unshown = (i.acceptance ?? []).filter((c) => c.shown === false).length
   if (!i.brief?.trim()) return (
     <div>
       <p className="faint">No brief yet. Every step here feeds it, and the task is built from it once it's approved.</p>
@@ -204,12 +207,14 @@ function BriefStep({ i, busy, act, feeds, base }: { i: IssueDetail; busy: boolea
         <button className="btn" disabled={busy || asked} onClick={() => act(async () => { await askStep({ kind: 'issues', id: i.id }, i.appId, i.title, 'brief', 'task'); window.dispatchEvent(new Event(TASK_AGENT_ASKED)); setAsked(true) })}>Write it with the agent</button>
         {asked && <span className="faint">Handed to this task's agent, on the right.</span>}
       </div>
+      <Acceptance issueId={i.id} items={i.acceptance ?? []} onChanged={() => void act(async () => {})} />
       <StandsOn feeds={feeds} base={base} />
     </div>
   )
   return (
     <>
       <div className="md step-body"><Markdown remarkPlugins={[remarkGfm]}>{i.brief}</Markdown></div>
+      <Acceptance issueId={i.id} items={i.acceptance ?? []} approved={!!i.briefApprovedBy} onChanged={() => void act(async () => {})} />
       <StandsOn feeds={feeds} base={base} />
       <div className="brief-approval">
         {i.briefApprovedBy
@@ -217,8 +222,8 @@ function BriefStep({ i, busy, act, feeds, base }: { i: IssueDetail; busy: boolea
             <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.approveBrief(i.id, false))}>Withdraw</button></>
           : owed.length
           ? <span className="faint">It can be approved once {owed.map((r, n) => <span key={r.key}>{n ? ', ' : ''}<Link to={`${base}/${r.key}`}>{label(r.key, 'task')}</Link></span>)} {owed.length === 1 ? 'is' : 'are'} done.</span>
-          : <><Badge tone="warn">waiting for your approval</Badge><span className="faint">Planning and building wait for it.</span>
-            <button className="btn small" disabled={busy} onClick={() => act(() => engine.approveBrief(i.id))}>Approve the brief</button></>}
+          : <><Badge tone="warn">waiting for your approval</Badge><span className="faint">Planning and building wait for it. {criteria ? `Approving it approves its ${criteria === 1 ? 'acceptance criterion' : `${criteria} acceptance criteria`} as enough${unshown ? `; ${unshown} ${unshown === 1 ? 'was' : 'were'} not shown in the prototype` : ''}.` : 'It has no acceptance criteria yet.'}</span>
+            <button className="btn small" disabled={busy} onClick={() => act(() => engine.approveBrief(i.id))}>{criteria ? `Approve the brief and its ${criteria === 1 ? 'criterion' : `${criteria} criteria`}` : 'Approve the brief'}</button></>}
       </div>
     </>
   )

@@ -5,6 +5,7 @@
  * brief and the code is a decision (provisional until a person approves); one it cannot settle is a question. The
  * server sets the cost of every question, never the agent.
  */
+import { acceptanceLines, acceptanceOf } from './acceptance.js'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
@@ -28,6 +29,8 @@ export interface ProposeInput {
   repoPath: string
   appId?: string // its plugins, as switched for it; none without
   issue: { identifier: string; title: string; brief: string | null }
+  /** The task's acceptance criteria, as lines (acceptance.ts): approved with the brief; every one must be met by a sub-task. */
+  acceptance?: string | null
   /** The task's draft ADR, when its workflow has that step and it was done: the planner settles it. */
   draftAdr?: string | null
   project: { name: string; content: string | null }
@@ -91,6 +94,7 @@ export function prompt(i: ProposeInput, recordSkills: string[] = []): string {
     `It is part of the project "${i.project.name}".`,
     '',
     i.issue.brief ?? '(The task has no brief beyond its title.)',
+    i.acceptance ? `\nAcceptance criteria (the person approved these with the brief; the task is done when every one holds):\n${i.acceptance}` : '',
     i.project.content ? `\nWhy the project exists:\n${i.project.content}` : '',
     '',
     'Tasks earlier in the project (their sub-tasks land before yours start; you need not depend on them explicitly):',
@@ -107,7 +111,7 @@ export function prompt(i: ProposeInput, recordSkills: string[] = []): string {
     '- description: one to three short sentences for the person who asked for this, who may never read the code: what will be different for the people using the app, and why it matters. No file names, functions, columns, routes or environment variables. Write it so it reads aloud.',
     '- summary: for the builder, in short paragraphs (a blank line between them, at most four sentences each): what the phase does in this codebase and why. File names and code go in backticks.',
     '- steps: the work in order, one action each, each with a technical note (the file, the function, the approach) so the builder does not rediscover it. Keep each step to one sentence; put detail in the note.',
-    '- checks: behavioural checks a non-engineer could read aloud, with the command and the expected result where there is one.',
+    '- checks: behavioural checks a non-engineer could read aloud, with the command and the expected result where there is one.' + (i.acceptance ? ' Every acceptance criterion above must be a check of the sub-task that makes it true, in its own words with its id in brackets; one that no sub-task can make true is a question, not something to drop.' : ''),
     '- done_when: one sentence.',
     i.testCmd ? `- The tests run with: ${i.testCmd}` : '- There is no test command configured; say in each sub-task how it is verified.',
     referencePrompt(i.references ?? []),
@@ -242,7 +246,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
   return {
     runId, issueId, projectId: t.projectId, appId: a.id, attempt, base,
     input: {
-      repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
+      repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, acceptance: acceptanceOf(t).length ? acceptanceLines(acceptanceOf(t)) : null, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
       testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }
