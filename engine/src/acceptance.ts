@@ -35,12 +35,19 @@ export interface Criterion {
    */
   buildOnly?: boolean
   why?: string
+  /**
+   * The second mark, for the final build (Sandy, 2026-11-13: "prototype and final build check marks"): true, the built
+   * code meets it (builtEvidence says where to see it); false, it does not. Absent: not checked yet.
+   */
+  built?: boolean
+  builtEvidence?: string
   by: string
   at: string
 }
 export interface AcceptanceChange {
   add?: { text: string; check?: string; shown?: boolean; evidence?: string; buildOnly?: boolean; why?: string }[]
-  update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null }[]
+  // built and builtEvidence are only ever updated: nothing is built when a criterion is written
+  update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null; built?: boolean | null; builtEvidence?: string | null }[]
   remove?: string[]
 }
 
@@ -63,6 +70,8 @@ export function applyAcceptance(list: Criterion[], c: AcceptanceChange, by: stri
     if (u.check !== undefined) { const k = line(u.check) || undefined; if (k !== x.check) { x.check = k; changed = true } }
     if (u.shown !== undefined) { if (u.shown === null) delete x.shown; else x.shown = u.shown }
     if (u.evidence !== undefined) { const e = line(u.evidence, 1000); if (e) x.evidence = e; else delete x.evidence }
+    if (u.built !== undefined) { if (u.built === null) { delete x.built; delete x.builtEvidence } else x.built = u.built }
+    if (u.builtEvidence !== undefined) { const e = line(u.builtEvidence, 1000); if (e) x.builtEvidence = e; else delete x.builtEvidence }
     if (u.buildOnly !== undefined) { if (u.buildOnly) x.buildOnly = true; else { delete x.buildOnly; delete x.why } } // which half proves it, not what must be true: no new approval
     if (u.why !== undefined) { const w = line(u.why); if (w && x.buildOnly) x.why = w; else delete x.why }
     x.by = by; x.at = now.toISOString()
@@ -80,6 +89,7 @@ export function applyAcceptance(list: Criterion[], c: AcceptanceChange, by: stri
 
 /** Add, change or remove a task's acceptance criteria. Changing what is approved (a statement, how it is checked) takes the brief's approval back. */
 export async function setAcceptance(issueId: string, change: AcceptanceChange, actor = 'user', opts: { /** The prototype's own agent: it cannot excuse itself from a criterion. */ prototyping?: boolean } = {}) {
+  if (opts.prototyping && (change.update ?? []).some((c) => c.built != null)) throw new PlanError('the prototype\'s agent records what the prototype showed (shown); the final build\'s mark is not its to set')
   if (opts.prototyping && [...(change.add ?? []), ...(change.update ?? [])].some((c) => c.buildOnly)) throw new PlanError('the prototype\'s agent cannot mark a criterion as for the final build only: build it, or say why it should be and let the task\'s agent or the person mark it')
   return db.transaction(async (tx) => {
     const i = await getIssue(tx, issueId)
@@ -96,5 +106,5 @@ export async function setAcceptance(issueId: string, change: AcceptanceChange, a
 
 /** The criteria as the lines an agent is given: each with its id, how it is checked, and what the prototype showed. */
 export function acceptanceLines(list: Criterion[]): string {
-  return list.map((c) => `- [${c.id}] ${c.text}${c.check ? ` (how we will know: ${c.check})` : ''}${c.buildOnly ? ` · FINAL BUILD ONLY, the prototype skips it${c.why ? `: ${c.why}` : ''}` : ''}${c.shown === true ? ` · shown in the prototype${c.evidence ? `: ${c.evidence}` : ''}` : c.shown === false ? ` · NOT shown in the prototype${c.evidence ? `: ${c.evidence}` : ''}` : ''}`).join('\n')
+  return list.map((c) => `- [${c.id}] ${c.text}${c.check ? ` (how we will know: ${c.check})` : ''}${c.buildOnly ? ` · FINAL BUILD ONLY, the prototype skips it${c.why ? `: ${c.why}` : ''}` : ''}${c.shown === true ? ` · shown in the prototype${c.evidence ? `: ${c.evidence}` : ''}` : c.shown === false ? ` · NOT shown in the prototype${c.evidence ? `: ${c.evidence}` : ''}` : ''}${c.built === true ? ` · met by the build${c.builtEvidence ? `: ${c.builtEvidence}` : ''}` : c.built === false ? ` · NOT met by the build${c.builtEvidence ? `: ${c.builtEvidence}` : ''}` : ''}`).join('\n')
 }
