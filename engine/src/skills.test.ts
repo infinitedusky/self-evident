@@ -1,6 +1,6 @@
 /** Plugins: switched for the factory and overridden per app; skills filed by the job they cover, one per job. */
 import { describe, expect, it } from 'vitest'
-import { fileSkill, forgetPlugin, pluginOn, resolvePlugins, skillCategory, type Installed } from './skills.js'
+import { cleanJobs, describeJobs, fileSkill, forgetPlugin, pluginOn, resolvePlugins, skillCategory, type Installed } from './skills.js'
 
 const plugin = (id: string, sdkName: string, skills: string[]): Installed => ({
   id, name: id.split('@')[0], sdkName, path: `/p/${id}`, version: null, description: '', source: null, builtIn: false, mcpServers: [], shim: null,
@@ -56,5 +56,26 @@ describe('forgetPlugin', () => {
   it('drops a removed plugin’s switches and its skills’ filing', () => {
     expect(forgetPlugin({ plugins: { 'rea@rea': { on: false }, 'superpowers@sp': {} }, skills: { 'rea@rea/reverse-engineer-anything': { on: false }, 'superpowers@sp/brainstorming': {} } }, 'rea@rea'))
       .toEqual({ plugins: { 'superpowers@sp': {} }, skills: { 'superpowers@sp/brainstorming': {} } })
+  })
+})
+
+describe('an app\'s own skill per job', () => {
+  // Both filed under debugging; All apps uses systematic-debugging.
+  const f = { skills: { 'superpowers@sp/systematic-debugging': { category: 'debugging', on: true }, 'superpowers@sp/brainstorming': { category: 'debugging', on: false } } }
+  it('follows All apps until the app chooses, then gives only its choice for that job', () => {
+    expect(resolvePlugins(list, f, {}, 'talk').skills).toEqual(['unknown:reverse-engineer-anything', 'superpowers:systematic-debugging'])
+    expect(resolvePlugins(list, f, {}, 'talk', { debugging: 'superpowers@sp/brainstorming' }).skills).toEqual(['unknown:reverse-engineer-anything', 'superpowers:brainstorming'])
+    expect(resolvePlugins(list, f, {}, 'talk', { debugging: null }).skills).toEqual(['unknown:reverse-engineer-anything'])
+  })
+  it('keeps only known jobs, and a skill only under the job it is filed in', () => {
+    expect(cleanJobs({ debugging: 'superpowers@sp/brainstorming', 'no-such-job': null, simplify: 'superpowers@sp/brainstorming', falsify: null, 'plan-review': 'gone@x/skill' }, f, list))
+      .toEqual({ debugging: 'superpowers@sp/brainstorming', falsify: null })
+  })
+  it('lists the jobs that have a skill filed, with All apps\' choice and the app\'s own', () => {
+    const jobs = describeJobs(f, { debugging: null }, list)
+    expect(jobs.map((j) => j.key)).toEqual(['study-a-shipped-product', 'debugging'])
+    expect(jobs[1]).toMatchObject({ factory: 'superpowers@sp/systematic-debugging', overridden: true, own: null })
+    expect(jobs[1].skills.map((s) => s.name)).toEqual(['systematic-debugging', 'brainstorming'])
+    expect(jobs[0]).toMatchObject({ factory: 'rea@rea/reverse-engineer-anything', overridden: false })
   })
 })

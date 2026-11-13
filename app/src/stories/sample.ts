@@ -335,6 +335,10 @@ export const appSettings: AppSettings = {
   },
   status: { tkt: { state: 'ready', missing: [], keyVar: null }, storybook: { state: 'ready', missing: [], keyVar: null }, posthog: { state: 'ready', missing: [], keyVar: null }, linear: { state: 'ready', missing: [], keyVar: 'LINEAR_API_KEY' }, confluence: { state: 'off', missing: ['Site', 'Account email', 'Space key', 'Key variable'], keyVar: null } },
   plugins: [{ id: 'sample-plugin@sample', name: 'sample-plugin', factoryOn: true, own: null, on: true }],
+  jobs: [
+    { key: 'testing', name: 'Testing', for: 'Writing and running tests', skills: [{ key: 'sample-plugin/write-tests', name: 'write-tests', plugin: 'sample-plugin' }, { key: 'other-plugin/test-first', name: 'test-first', plugin: 'other-plugin' }], factory: 'sample-plugin/write-tests', overridden: false, own: null },
+    { key: 'review', name: 'Review', for: 'Reading a change before it lands', skills: [{ key: 'sample-plugin/audit', name: 'audit', plugin: 'sample-plugin' }], factory: null, overridden: false, own: null },
+  ],
   skills: [{ key: 'checkout-rules', name: 'checkout-rules', description: 'How this shop prices and taxes an order.' }],
 }
 /** What the Storybook check says for the shop when all is well (sample). */

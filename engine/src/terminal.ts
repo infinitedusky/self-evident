@@ -11,13 +11,14 @@ import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, s
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-export const projectsDir = () => join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude'), 'projects')
-export const sessionDir = (cwd: string) => join(projectsDir(), cwd.replace(/[^A-Za-z0-9]/g, '-'))
-export const sessionFile = (cwd: string, sessionId: string) => join(sessionDir(cwd), `${sessionId}.jsonl`)
+/** `home`: the config folder of an app whose agents run on their own login (account.ts); else the engine's. */
+export const projectsDir = (home?: string) => join(home ?? process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude'), 'projects')
+export const sessionDir = (cwd: string, home?: string) => join(projectsDir(home), cwd.replace(/[^A-Za-z0-9]/g, '-'))
+export const sessionFile = (cwd: string, sessionId: string, home?: string) => join(sessionDir(cwd, home), `${sessionId}.jsonl`)
 
 /** The session most recently written in a folder: the one a terminal or editor there is using now. */
-export function latestSession(cwd: string): string | null {
-  const dir = sessionDir(cwd)
+export function latestSession(cwd: string, home?: string): string | null {
+  const dir = sessionDir(cwd, home)
   if (!existsSync(dir)) return null
   const files = readdirSync(dir).filter((f) => f.endsWith('.jsonl')).map((f) => ({ f, t: statSync(join(dir, f)).mtimeMs }))
   files.sort((a, b) => b.t - a.t)
@@ -25,8 +26,8 @@ export function latestSession(cwd: string): string | null {
 }
 
 /** Every session file in a folder, newest first: its id, when it was last written, how big it is. */
-export function sessionsIn(cwd: string): { id: string; file: string; at: Date; bytes: number }[] {
-  const dir = sessionDir(cwd)
+export function sessionsIn(cwd: string, home?: string): { id: string; file: string; at: Date; bytes: number }[] {
+  const dir = sessionDir(cwd, home)
   if (!existsSync(dir)) return []
   return readdirSync(dir).filter((f) => f.endsWith('.jsonl')).map((f) => {
     const st = statSync(join(dir, f))

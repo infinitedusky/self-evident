@@ -9,7 +9,7 @@ import { Link, NavLink, useLocation, useMatch, useNavigate, useParams } from 're
 import { Badge } from '../components/Badge'
 import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
-import { engine, type AgentRole, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
+import { engine, type AccountStatus, type AgentRole, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
@@ -345,6 +345,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         <label>Model<input className="mono" value={setup.model ?? ''} onChange={(e) => set({ model: e.target.value })} placeholder="default: the agent's own" /></label>
         <label>Budget per run (USD)<input type="number" min={0} step={1} value={setup.max_budget_usd ?? ''} onChange={(e) => set({ max_budget_usd: num(e.target.value) })} placeholder="no cap" /></label>
         <label>Turns per run<input type="number" min={1} step={1} value={setup.max_turns ?? ''} onChange={(e) => set({ max_turns: num(e.target.value) })} placeholder="60" /></label>
+        <Account appId={app.id} value={setup.account} saved={app.setup?.account} onChange={(account) => set({ account })} />
         <div style={{ gridColumn: '1 / -1' }}>
           <div className="label-text">Skills in this repo</div>
           {info?.skills.length ? <SkillList skills={info.skills} /> : <div className="faint settings-desc">None in <span className="mono">.claude/skills/</span>{repos[0]?.localPath ? '' : ' (no local checkout set)'}. Plugins' skills apply too: see Plugins below and <NavLink to="/settings">All apps</NavLink>.</div>}
@@ -377,6 +378,34 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
           })}
         </dl>
       </div>
+      {(info?.jobs?.length ?? 0) > 0 && <div className="settings-group" data-component="AppJobs">
+        <h3 className="settings-h3">Skills by job</h3>
+        <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>One skill does each job. Each follows All apps unless this app picks another skill filed under that job, or none. Skills are filed under jobs in <NavLink to="/settings">All apps</NavLink>.</p>
+        <dl className="fields">
+          {info!.jobs!.map((j) => {
+            const jobs = setup.skills_by_job ?? {}
+            const mine = j.key in jobs
+            const named = (key: string | null) => j.skills.find((s) => s.key === key)?.name ?? 'none'
+            const choose = (v: string) => {
+              const { [j.key]: _, ...rest } = jobs
+              const next = v === '' ? rest : { ...rest, [j.key]: v === '-' ? null : v }
+              set({ skills_by_job: Object.keys(next).length ? next : undefined })
+            }
+            return (
+              <div key={j.key} style={{ display: 'contents' }}>
+                <dt title={j.for}>{j.name}</dt>
+                <dd>
+                  <select aria-label={`Skill for ${j.name}`} value={!mine ? '' : jobs[j.key] ?? '-'} onChange={(e) => choose(e.target.value)}>
+                    <option value="">As All apps ({named(j.factory)})</option>
+                    {j.skills.map((s) => <option key={s.key} value={s.key}>{s.name} ({s.plugin})</option>)}
+                    <option value="-">None for this app</option>
+                  </select> {mine && <Badge tone="accent">override</Badge>}
+                </dd>
+              </div>
+            )
+          })}
+        </dl>
+      </div>}
     </>,
     landing: <>
       <Group title="Landing" lead="How finished work reaches the default branch.">
@@ -401,6 +430,38 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
       {groups[section]}
       <SaveRow dirty={dirty} busy={busy} error={error} onSave={save} />
     </section>
+  )
+}
+
+/**
+ * Which Claude account this app's agents run on: the engine's default, or the app's own. The app's own is the NAME of
+ * an environment variable holding an API key (the key stays in the engine's environment), or a folder with its own
+ * Claude login. Below, what the engine finds for what is saved: who the account is, or what is wrong.
+ */
+type AccountValue = NonNullable<AppSetup['account']>
+function Account({ appId, value, saved, onChange }: { appId: string; value?: AccountValue; saved?: AccountValue; onChange: (v: AccountValue | undefined) => void }) {
+  const [kind, setKind] = useState<'default' | 'key' | 'login'>(value?.key_env !== undefined ? 'key' : value?.config_dir !== undefined ? 'login' : 'default')
+  const [status, setStatus] = useState<AccountStatus | null>(null)
+  const savedKey = JSON.stringify(saved ?? {})
+  useEffect(() => { setStatus(null); engine.appAccount(appId).then(setStatus).catch(() => setStatus(null)) }, [appId, savedKey])
+  const changed = JSON.stringify({ key_env: value?.key_env || undefined, config_dir: value?.config_dir || undefined }) !== JSON.stringify({ key_env: saved?.key_env, config_dir: saved?.config_dir })
+  const choose = (k: typeof kind) => { setKind(k); onChange(k === 'key' ? { key_env: '' } : k === 'login' ? { config_dir: '' } : undefined) }
+  return (
+    <div style={{ gridColumn: '1 / -1', display: 'grid', gap: 8 }} data-component="Account">
+      <label>Claude account
+        <select aria-label="Claude account" value={kind} onChange={(e) => choose(e.target.value as typeof kind)}>
+          <option value="default">The engine's default</option>
+          <option value="key">This app's own API key</option>
+          <option value="login">This app's own Claude login</option>
+        </select>
+      </label>
+      {kind === 'key' && <label>Key variable<input className="mono" aria-label="Key variable" value={value?.key_env ?? ''} onChange={(e) => onChange({ key_env: e.target.value })} placeholder="WORK_ANTHROPIC_KEY (its name; the key stays in the engine's environment)" /></label>}
+      {kind === 'login' && <label>Login folder<input className="mono" aria-label="Login folder" value={value?.config_dir ?? ''} onChange={(e) => onChange({ config_dir: e.target.value })} placeholder="~/.claude-work" /></label>}
+      {kind === 'login' && <div className="faint settings-desc">Log in there once, in a terminal: <span className="mono">CLAUDE_CONFIG_DIR={value?.config_dir?.trim() || '~/.claude-work'} claude auth login</span>. This app's conversations are then kept in that folder.</div>}
+      {changed
+        ? <div className="faint settings-desc">Save to check this account.</div>
+        : status && <p className="settings-note" style={{ margin: 0 }}><Badge tone={status.ok ? 'ok' : 'bad'}>{status.ok ? 'In use' : 'Not usable'}</Badge><span>{status.note}{!status.ok && status.kind !== 'default' ? ' Until this is fixed, this app\'s agents won\'t start: they never fall back to the default.' : ''}</span></p>}
+    </div>
   )
 }
 
