@@ -33,8 +33,8 @@ function WorkflowsMoved() {
 
 /** An idea in the inbox (the engine's, by id) or one of the design-phase idea files (by slug). */
 function IdeaRoute() {
-  const slug = useParams().slug ?? ''
-  if (slug.startsWith('idea_')) return <IdeaDetail id={slug} />
+  const { slug = '', section } = useParams()
+  if (slug.startsWith('idea_')) return <IdeaDetail id={slug} section={section} />
   const idea = findIdea(slug)
   return idea ? <IdeaPage idea={idea} /> : <p>No such idea.</p>
 }
@@ -62,6 +62,7 @@ export function PageRoutes() {
       <Route path="/build" element={<Projects mode="build" />} />
       <Route path="/ideas" element={<Board ideas={ideas} />} />
       <Route path="/ideas/:slug" element={<IdeaRoute />} />
+      <Route path="/ideas/:slug/:section" element={<IdeaRoute />} />
       <Route path="/graph" element={<AppGraph />} />
       <Route path="/projects/new" element={<NewProject />} />
       <Route path="/projects/:id" element={<ProjectPage />} />

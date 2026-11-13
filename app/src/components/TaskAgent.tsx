@@ -21,7 +21,8 @@ export const TASK_AGENT_ASKED = 'se:task-agent-asked'
  * The task's own conversation, kept up to date on its app's talk events (so the dot shows it working), with the
  * column's open or folded state remembered in this browser, and a way to start the agent when the task has none.
  */
-export function useTaskAgent(taskId: string, appId: string) {
+export function useTaskAgent(taskId: string, appId: string, of: 'task' | 'idea' = 'task') {
+  const api = of === 'idea' ? { talk: engine.ideaTalk, agents: engine.ideaAgents, start: engine.startIdeaTalk } : { talk: engine.taskTalk, agents: engine.taskAgents, start: engine.startTaskTalk }
   const [session, setSession] = useState<TalkSession | null | undefined>(undefined)
   const [out, setOut] = useState<TaskAgentOut[]>([])
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0' } catch { return true } })
@@ -31,7 +32,7 @@ export function useTaskAgent(taskId: string, appId: string) {
   const show = useCallback((on: boolean) => { setOpen(on); try { localStorage.setItem(OPEN_KEY, on ? '1' : '0') } catch { /* fine */ } }, [])
   useEffect(() => {
     let closed = false
-    const refresh = () => { void engine.taskAgents(taskId).then((a) => { if (!closed) setOut(Array.isArray(a) ? a : []) }).catch(() => {}); return engine.taskTalk(taskId).then((s) => { if (!closed) setSession(s) }).catch(() => { if (!closed) setSession(null) }) }
+    const refresh = () => { void api.agents(taskId).then((a) => { if (!closed) setOut(Array.isArray(a) ? a : []) }).catch(() => {}); return api.talk(taskId).then((s) => { if (!closed) setSession(s) }).catch(() => { if (!closed) setSession(null) }) }
     void refresh()
     const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 200) }
     const es = openEvents(`${API}/events?since=now&app=${appId}`)
@@ -39,11 +40,11 @@ export function useTaskAgent(taskId: string, appId: string) {
     const asked = () => { show(true); bump() }
     window.addEventListener(TASK_AGENT_ASKED, asked)
     return () => { closed = true; es.close(); window.clearTimeout(timer.current); window.removeEventListener(TASK_AGENT_ASKED, asked) }
-  }, [taskId, appId, show])
+  }, [taskId, appId, show, of]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (session?.id) currentTalk.set(session.id) }, [session?.id]) // a Sketches or Mockups tab opened from here shows this task's worktree
   const start = async () => {
     setStarting(true); setError(null)
-    try { setSession(await engine.startTaskTalk(taskId)) } catch (e: any) { setError(String(e.message ?? e)) } finally { setStarting(false) }
+    try { setSession(await api.start(taskId)) } catch (e: any) { setError(String(e.message ?? e)) } finally { setStarting(false) }
   }
   return { session, out, open, toggle: () => show(!open), start, starting, error }
 }
@@ -51,10 +52,12 @@ export function useTaskAgent(taskId: string, appId: string) {
 /** A fresh agent the conductor sent out, and what it is on; with `sessionId`, its conversation can be read here, as a tab of its own. */
 export interface Deployed { what: string; icon?: string; state: 'out' | 'back'; detail?: string; sessionId?: string; title?: string }
 
-export function TaskAgent({ sessionId, taskId, stage, state = 'idle', deployed = [], open, onToggle, onStart, starting, error }: {
+export function TaskAgent({ sessionId, taskId, of = 'task', stage, state = 'idle', deployed = [], open, onToggle, onStart, starting, error }: {
   /** The task's conversation; none until its agent is started. */
   sessionId: string | null
   taskId: string
+  /** What it is the agent of: a task, or an idea being worked through before it is one (`taskId` is then the idea's id). */
+  of?: 'task' | 'idea'
   /** The stage it's at now: Sketches, Brief, Build. */
   stage: string
   state?: AgentStripProps['state']
@@ -67,26 +70,28 @@ export function TaskAgent({ sessionId, taskId, stage, state = 'idle', deployed =
   error?: string | null
 }) {
   const color = talkColor(sessionId ?? taskId)
+  const name = `This ${of}'s agent`
+  const at = of === 'idea' ? { path: `/ideas/${taskId}`, ideaId: taskId } : { path: `/tasks/${taskId}`, issueId: taskId }
   // Which conversation the column shows: the conductor's, or one of the agents it has out. They are tabs, so an agent at work is never out of sight.
   const [shown, setShown] = useState<string | null>(null)
   const tabs = deployed.filter((d) => d.sessionId)
   const sub = tabs.find((d) => d.sessionId === shown) ?? null
   if (!open) return (
     <aside className="task-agent folded" data-component="TaskAgent" style={{ ['--talk' as string]: color }}>
-      <button className="task-agent-fold" onClick={onToggle} aria-expanded="false" aria-label="Show this task's agent" title="Show this task's agent">
-        <span className={`dot ${state}`} /><span className="task-agent-fold-text">This task's agent</span><span aria-hidden="true">‹</span>
+      <button className="task-agent-fold" onClick={onToggle} aria-expanded="false" aria-label={`Show this ${of}'s agent`} title={`Show this ${of}'s agent`}>
+        <span className={`dot ${state}`} /><span className="task-agent-fold-text">{name}</span><span aria-hidden="true">‹</span>
       </button>
     </aside>
   )
   return (
     <aside className="task-agent" data-component="TaskAgent">
       <div className="task-agent-head">
-        <AgentStrip color={color} name="This task's agent" stage={stage} state={state} />
-        <button className="btn quiet small" onClick={onToggle} aria-expanded="true" aria-label="Hide this task's agent" title="Hide this task's agent">›</button>
+        <AgentStrip color={color} name={name} stage={stage} state={state} />
+        <button className="btn quiet small" onClick={onToggle} aria-expanded="true" aria-label={`Hide this ${of}'s agent`} title={`Hide this ${of}'s agent`}>›</button>
       </div>
       {tabs.length > 0 && (
-        <div className="task-agent-tabs" role="tablist" aria-label="This task's agents">
-          <button role="tab" aria-selected={!sub} className={!sub ? 'on' : ''} onClick={() => setShown(null)}><span className={`dot ${state}`} />This task's agent</button>
+        <div className="task-agent-tabs" role="tablist" aria-label={`This ${of}'s agents`}>
+          <button role="tab" aria-selected={!sub} className={!sub ? 'on' : ''} onClick={() => setShown(null)}><span className={`dot ${state}`} />{name}</button>
           {tabs.map((d) => (
             <button key={d.sessionId} role="tab" aria-selected={sub === d} className={sub === d ? 'on' : ''} onClick={() => setShown(d.sessionId!)} title={`${d.title ?? d.what}: ${d.state === 'out' ? 'working' : 'idle'}`}>
               <span className={`dot ${d.state === 'out' ? 'working' : ''}`} />{d.icon} {d.what}{d.state === 'out' && <span className="faint"> · working</span>}
@@ -106,13 +111,15 @@ export function TaskAgent({ sessionId, taskId, stage, state = 'idle', deployed =
         </ul>
       )}
       {sub
-        ? <Conversation key={sub.sessionId} sessionId={sub.sessionId!} compact context={{ path: `/tasks/${taskId}`, issueId: taskId, label: `the ${sub.what.toLowerCase()}` }} />
+        ? <Conversation key={sub.sessionId} sessionId={sub.sessionId!} compact context={{ ...at, label: `the ${sub.what.toLowerCase()}` }} />
         : sessionId
-        ? <Conversation key={sessionId} sessionId={sessionId} compact context={{ path: `/tasks/${taskId}`, issueId: taskId, label: 'this task' }} />
+        ? <Conversation key={sessionId} sessionId={sessionId} compact context={{ ...at, label: `this ${of}` }} />
         : (
           <div className="task-agent-empty">
-            <p className="faint">No agent on this task yet. One agent stays with it from the first sketch to the merge, and sends out others where the work needs fresh eyes.</p>
-            <button className="btn" disabled={starting || !onStart} onClick={onStart}>{starting ? 'Starting…' : 'Start this task\'s agent'}</button>
+            <p className="faint">{of === 'idea'
+              ? 'No agent on this idea yet. Work on it and it gets one of its own, with its own worktree: research, sketches, mockups and a prototype, without committing to a task. If you convert it, the agent and everything it made go with it.'
+              : 'No agent on this task yet. One agent stays with it from the first sketch to the merge, and sends out others where the work needs fresh eyes.'}</p>
+            <button className="btn" disabled={starting || !onStart} onClick={onStart}>{starting ? 'Starting…' : of === 'idea' ? 'Work on this idea' : 'Start this task\'s agent'}</button>
             {error && <div className="empty bad">{error}</div>}
           </div>
         )}

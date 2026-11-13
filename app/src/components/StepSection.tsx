@@ -55,7 +55,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   }, [subject.id, row.key, s.status, s.detail]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const act = async (fn: () => Promise<unknown>) => { setBusy(true); setError(null); try { await fn() } catch (e) { setError(err(e)) } finally { setBusy(false) } }
-  const ownAgent = subject.kind === 'issues' // a task's steps go to the task's own agent, on its page
+  const ownAgent = subject.kind !== 'projects' // a task's steps go to the task's own agent, an idea's to the idea's, on its page
   const ask = () => act(async () => { await askStep(subject, appId, name, row.key, on); if (ownAgent) window.dispatchEvent(new Event(TASK_AGENT_ASKED)); setAsked(true) })
 
   // With something to look at, the step's page is two tabs: the view (the sketch, the story, the prototype), which gets the whole
