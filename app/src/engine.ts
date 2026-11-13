@@ -102,7 +102,7 @@ export interface StepsView { on: On; resolved: Resolved; states: StepState[]; ro
 export interface StepWork { id: string; key: StepKey; status: 'none' | 'started' | 'done'; detail: string | null; body: string | null; refs: string[]; updatedBy: string | null; updatedAt: string | null }
 export interface WorkflowRow extends Workflow { appDefault: boolean; projects: number; tasks: number }
 export interface IdeaRow { id: string; appId: string; number: number; title: string; body: string | null; lane: string }
-export interface AppSetup { /** The repository an agent starts in, when the app has several (a repo id). */ home_repo?: string; integrations?: IntegrationValues; plugins?: Record<string, { on: boolean }>; pr_mode?: 'project' | 'issue'; test_cmd?: string; prototype_cmd?: string; prototype_db?: { url: string; env?: string; schema_cmd?: string }; model?: string; max_budget_usd?: number; max_turns?: number; references?: AppReference[]; /** The app's own Claude account: the name of a variable holding an API key, or a config folder with its own login. Neither: the engine's default. */ account?: { key_env?: string; config_dir?: string } }
+export interface AppSetup { /** The repository an agent starts in, when the app has several (a repo id). */ home_repo?: string; integrations?: IntegrationValues; plugins?: Record<string, { on: boolean }>; pr_mode?: 'project' | 'issue'; test_cmd?: string; prototype_cmd?: string; prototype_db?: { url: string; env?: string; schema_cmd?: string }; model?: string; max_budget_usd?: number; max_turns?: number; references?: AppReference[]; /** The app's own skill per job (a category key): a skill's key, or null for none. A job left out follows All apps. */ skills_by_job?: Record<string, string | null>; /** The app's own Claude account: the name of a variable holding an API key, or a config folder with its own login. Neither: the engine's default. */ account?: { key_env?: string; config_dir?: string } }
 /** Which Claude account an app's agents run on, as the engine finds it. */
 export interface AccountStatus { kind: 'default' | 'key' | 'login'; ok: boolean; note: string }
 /** Another app whose checkout this app's agents may read and never change (the engine's references.ts). */
@@ -150,7 +150,9 @@ export interface Category { key: string; name: string; for: string; builtIn?: st
 export interface CategoryGroup { name: string; categories: Category[] }
 export interface FactorySettings { workspace: Workspace | null; integrations: Integration[]; values: IntegrationValues; status: Record<string, IntegrationStatus>; plugins: PluginInfo[]; catalogue: CategoryGroup[] }
 export interface AppPlugin { id: string; name: string; factoryOn: boolean; own: boolean | null; on: boolean }
-export interface AppSettings { integrations: EffectiveValues; status: Record<string, IntegrationStatus>; plugins: AppPlugin[]; skills: SkillInfo[] }
+/** A job that has a skill filed: the skills that could do it, the one All apps uses (`factory`), and this app's own choice when it made one (`own`: a skill, or null for none). */
+export interface AppJob { key: string; name: string; for: string; skills: { key: string; name: string; plugin: string }[]; factory: string | null; overridden: boolean; own: string | null }
+export interface AppSettings { integrations: EffectiveValues; status: Record<string, IntegrationStatus>; plugins: AppPlugin[]; /** Absent from an older engine. */ jobs?: AppJob[]; skills: SkillInfo[] }
 export interface Prototype {
   id: string; appId: string; projectId: string | null; ideaId?: string | null; issueId?: string | null; title: string; brief: string | null; sessionId: string | null; branch: string; path: string; port: number | null
   status: 'running' | 'stopped' | 'discarded'; url: string | null; createdAt: string; updatedAt?: string | null

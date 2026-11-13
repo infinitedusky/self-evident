@@ -2645,3 +2645,17 @@ Decided:
 - Not done: conversations begun on one account are not moved when the app's account changes; they stay in the folder
   they were written in, so an open conversation should be ended before switching a login. No default override at
   the All apps level: the default is the engine's own environment.
+
+## An app can choose its own skill for a job (Sandy, 2026-11-13: "can we also have the skills by job be app level overridable?")
+
+Skills are filed under jobs in All apps, one skill on per job. An app could switch a whole plugin for itself, never a
+skill. Now, under Settings › an app › Plugins › **Skills by job**, each job that has a skill filed follows All apps
+unless the app picks another skill filed under that job, or none.
+
+Kept in `setup.skills_by_job` (`{ <job>: <skill key> | null }`; a job left out follows All apps) and applied where a
+session's skills are resolved (`skillOnFor` in `engine/src/skills.ts`), so it reaches the planner and conversations.
+
+Decided: filing stays in All apps. An app chooses among the skills already filed under a job; it does not file a skill
+under a different job for itself. A choice whose skill is later refiled or uninstalled is dropped at the next save, and
+until then gives that job no skill in that app. The plugin switch still wins: a skill chosen from a plugin that is off
+for the app is not given. Skills in the app repo's own `.claude/skills/` are not filed under jobs and always apply.

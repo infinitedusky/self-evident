@@ -378,6 +378,34 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
           })}
         </dl>
       </div>
+      {(info?.jobs?.length ?? 0) > 0 && <div className="settings-group" data-component="AppJobs">
+        <h3 className="settings-h3">Skills by job</h3>
+        <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>One skill does each job. Each follows All apps unless this app picks another skill filed under that job, or none. Skills are filed under jobs in <NavLink to="/settings">All apps</NavLink>.</p>
+        <dl className="fields">
+          {info!.jobs!.map((j) => {
+            const jobs = setup.skills_by_job ?? {}
+            const mine = j.key in jobs
+            const named = (key: string | null) => j.skills.find((s) => s.key === key)?.name ?? 'none'
+            const choose = (v: string) => {
+              const { [j.key]: _, ...rest } = jobs
+              const next = v === '' ? rest : { ...rest, [j.key]: v === '-' ? null : v }
+              set({ skills_by_job: Object.keys(next).length ? next : undefined })
+            }
+            return (
+              <div key={j.key} style={{ display: 'contents' }}>
+                <dt title={j.for}>{j.name}</dt>
+                <dd>
+                  <select aria-label={`Skill for ${j.name}`} value={!mine ? '' : jobs[j.key] ?? '-'} onChange={(e) => choose(e.target.value)}>
+                    <option value="">As All apps ({named(j.factory)})</option>
+                    {j.skills.map((s) => <option key={s.key} value={s.key}>{s.name} ({s.plugin})</option>)}
+                    <option value="-">None for this app</option>
+                  </select> {mine && <Badge tone="accent">override</Badge>}
+                </dd>
+              </div>
+            )
+          })}
+        </dl>
+      </div>}
     </>,
     landing: <>
       <Group title="Landing" lead="How finished work reaches the default branch.">

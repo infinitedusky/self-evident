@@ -49,7 +49,7 @@ import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError,
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
 import { linearFor } from './linear-home.js'
 import { CATALOGUE } from './catalogue.js'
-import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role } from './skills.js'
+import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role, cleanJobs, describeJobs, type AppJobs } from './skills.js'
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
 
@@ -180,10 +180,10 @@ export function buildApp(bus: EventBus) {
     if (!a) return c.json({ error: 'no such app' }, 404)
     const [[w], [r]] = await Promise.all([db.select().from(workspace).where(eq(workspace.id, a.workspaceId)), db.select().from(repoTable).where(eq(repoTable.appId, a.id))])
     const f = (w?.settings ?? {}) as FactorySettings & { integrations?: Values }
-    const setup = a.setup as { integrations?: Values; plugins?: AppPlugins }
+    const setup = a.setup as { integrations?: Values; plugins?: AppPlugins; skills_by_job?: AppJobs }
     const plugins = installed().map((p) => ({ id: p.id, name: p.name, factoryOn: pluginOn(p.id, f), own: setup.plugins?.[p.id]?.on ?? null, on: pluginOn(p.id, f, setup.plugins) }))
     const integrations = effectiveIntegrations(f.integrations, setup.integrations)
-    return c.json({ integrations, status: statuses(integrations), plugins, skills: r?.localPath ? appSkills(r.localPath) : [] })
+    return c.json({ integrations, status: statuses(integrations), plugins, jobs: describeJobs(f, setup.skills_by_job), skills: r?.localPath ? appSkills(r.localPath) : [] })
   })
   // Tries an integration's saved connection: the workspace's values, or an app's with its overrides.
   // An integration's effective values for an app (or the workspace's), and what its per-app check needs from the app.
@@ -268,6 +268,12 @@ export function buildApp(bus: EventBus) {
     const body = await c.req.json<{ name?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
     if (body.setup && 'integrations' in body.setup) body.setup.integrations = cleanValues(body.setup.integrations)
     if (body.setup && 'account' in body.setup) { try { const acct = cleanAccount(body.setup.account); if (acct) body.setup.account = acct; else delete body.setup.account } catch (err) { return planError(c, err) } }
+    if (body.setup && 'skills_by_job' in body.setup) { // an app's own skill per job; absent inherits
+      const [of] = await db.select().from(appTable).where(eq(appTable.id, c.req.param('id')))
+      const [w] = of ? await db.select().from(workspace).where(eq(workspace.id, of.workspaceId)) : []
+      const jobs = cleanJobs(body.setup.skills_by_job, (w?.settings ?? {}) as FactorySettings, installed())
+      if (Object.keys(jobs).length) body.setup.skills_by_job = jobs; else delete body.setup.skills_by_job
+    }
     if (body.setup && 'references' in body.setup) body.setup.references = cleanReferences(body.setup.references, c.req.param('id'))
     if (body.setup && 'plugins' in body.setup) { // an app's own switch per plugin; null inherits
       const known = new Set(installed().map((p) => p.id))

@@ -36,6 +36,20 @@ export const AppWithRepoSkills: Story = {
     appSettings: { ...appSettings, skills: [...appSettings.skills, { key: 'release-notes', name: 'release-notes', description: 'Writes the release note in the shop’s voice (sample).' }] },
   }),
 }
+/** Plugins: under the plugin switches, a skill per job. Each follows All apps until this app picks another filed there, or none (made-up skills). */
+export const AppSkillsByJob: Story = {
+  parameters: appPage(sampleApp.id, 'plugins'),
+  beforeEach: withEngine({ apps: apps.map((a) => (a.id === sampleApp.id ? { ...a, setup: { ...a.setup, skills_by_job: { review: null } } } : a)) }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const testing = await c.findByLabelText('Skill for Testing')
+    await expect(testing).toHaveValue('')
+    await expect(within(testing).getByRole('option', { name: 'As All apps (write-tests)' })).toBeInTheDocument()
+    await expect(c.getByLabelText('Skill for Review')).toHaveValue('-')
+    await userEvent.selectOptions(testing, 'other-plugin/test-first')
+    await expect(c.getAllByText('override').length).toBe(2)
+  },
+}
 /** Agents: the Claude account this app's agents run on. Nothing chosen: the engine's default, and who that is (made up). */
 export const AppAccountDefault: Story = {
   parameters: appPage(sampleApp.id, 'agents'),
