@@ -163,6 +163,11 @@ export interface Prototype {
   status: 'running' | 'stopped' | 'discarded'; url: string | null; createdAt: string; updatedAt?: string | null
   scenario: string | null; database?: string | null; scenarios?: string[]; up?: boolean; log?: string[]
 }
+/** A prototype's code: what changed since its branch left the default branch, and what the agent is showing there. */
+export interface ChangedFile { path: string; status: 'added' | 'modified' | 'deleted' | 'renamed'; added: number | null; removed: number | null; from?: string }
+export interface ShownRef { id: string; kind: 'file' | 'link'; path?: string; url?: string; title?: string; note?: string; lines?: { from: number; to: number }[]; by: string; at: string }
+export interface PrototypeCode { prototypeId: string; branch: string; base: string; files: ChangedFile[]; shown: ShownRef[] }
+export interface PrototypeFile { path: string; patch: string | null; content: string | null; missing: boolean; unreadable: boolean }
 export interface Event { seq: number; ts: string; type: string; actor: string; issueId: string | null; projectId: string | null; payload: Record<string, unknown> }
 export interface NewSubIssue { key: string; title: string; description?: string; brief?: string; dependsOn?: string[]; files?: string[] }
 export interface NewProjectIssue { title: string; description?: string; brief?: string; subIssues?: NewSubIssue[] }
@@ -253,6 +258,9 @@ export const engine = {
   restartPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/start?restart=1`),
   resetPrototypeData: (id: string, scenario: string | null) => call<unknown>('POST', `/prototypes/${id}/data/reset`, { scenario }),
   savePrototypeData: (id: string, name: string) => call<unknown>('POST', `/prototypes/${id}/data/save`, { name }),
+  prototypeCode: (id: string) => call<PrototypeCode>('GET', `/prototypes/${id}/code`),
+  prototypeFile: (id: string, path: string) => call<PrototypeFile>('GET', `/prototypes/${id}/file?path=${encodeURIComponent(path)}`),
+  unshowInPrototype: (id: string, shownId: string) => call<unknown>('DELETE', `/prototypes/${id}/shown/${encodeURIComponent(shownId)}`),
   prototypeTalk: (id: string) => call<{ id: string }>('POST', `/prototypes/${id}/talk`),
   now: (appId?: string) => call<Now>('GET', `/now${appId ? `?app=${appId}` : ''}`),
   ideas: (appId?: string) => call<IdeaRow[]>('GET', `/ideas${appId ? `?app=${appId}` : ''}`),
@@ -368,7 +376,7 @@ export const EVENT_TYPES = [
   'project.created', 'project.started', 'project.landed', 'project.cleaned', 'project.cancelled', 'project.paused', 'project.resumed', 'project.described',
   'issue.created', 'issue.deleted', 'issue.updated', 'issue.state', 'issue.reordered', 'issue.cleared', 'issue.planning', 'issue.planned', 'issue.plan_failed', 'issue.plan_waiting', 'issue.commented',
   'question.asked', 'question.answered', 'initiative.created', 'initiative.updated', 'cycle.created',
-  'talk.message', 'talk.permission', 'talk.result', 'idea.created', 'idea.converted', 'step.updated', 'brief.approved', 'brief.unapproved', 'workflow.saved', 'workflow.used', 'engine.hold', 'engine.resumed',
+  'talk.message', 'talk.permission', 'talk.result', 'prototype.shown', 'idea.created', 'idea.converted', 'step.updated', 'brief.approved', 'brief.unapproved', 'workflow.saved', 'workflow.used', 'engine.hold', 'engine.resumed',
   'pr.merged', 'pr.closed', 'pr.retargeted', 'pr.review', 'pr.checks', 'review.requested', 'project.caught_up', 'project.behind_main',
   'backlog.error', 'project.backlog_open',
   'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted',

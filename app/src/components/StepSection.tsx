@@ -5,6 +5,7 @@
  */
 import { TASK_AGENT_ASKED } from './TaskAgent'
 import { Viewer, type Viewed } from './Viewer'
+import { PrototypeCode } from './PrototypeCode'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import Markdown from 'react-markdown'
@@ -33,7 +34,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   const [protos, setProtos] = useState<Prototype[]>([])
   const [busy, setBusy] = useState(false)
   const [asked, setAsked] = useState(false)
-  const [pane, setPane] = useState<'view' | 'notes'>('view')
+  const [pane, setPane] = useState<'view' | 'code' | 'notes'>('view')
   const [error, setError] = useState<string | null>(null)
   const s = row.state
   // What there is to look at, right on the step's page: the task's sketches, its Storybook at the first story named, its prototype.
@@ -44,6 +45,10 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
     : row.key === 'sketch' && session ? { kind: 'sketch', session, file: asked_.get('file') ?? work?.refs?.[0] }
     : row.key === 'mockup' && session ? { kind: 'storybook', session, story: asked_.get('story') ?? work?.refs?.[0] }
     : row.key === 'prototype' && proto && s.status !== 'none' ? { kind: 'prototype', id: proto.id } : null
+  // The agent showed a file or a page in the prototype's code (?shown=<its id>): the Code view, on that.
+  const shown = row.key === 'prototype' ? asked_.get('shown') : null
+  useEffect(() => { if (shown) setPane('code') }, [shown])
+  const code = viewed?.kind === 'prototype' ? viewed.id : null // a prototype's step also has its code to read
   const waitsOnApproval = row.waitingOn === 'brief' && on === 'task' && waitingState?.status === 'done'
   const own = row.key !== 'idea' && row.key !== 'brief' // the steps whose work is kept as a step
   const approves = own && subject.kind === 'issues' && needsApproval(row.key, on) // a person approves it, here
@@ -62,8 +67,9 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   // page so it is never pushed out of sight, and what the step wrote for the brief (Sandy, 2026-11-10: "we make them tabs so you go
   // back and forth. Then the view can be visible").
   const showView = !!viewed && pane === 'view'
+  const showCode = !!code && pane === 'code'
   return (
-    <section className={`panel step-section ${showView ? 'viewing' : ''}`} data-component="StepSection">
+    <section className={`panel step-section ${showView || showCode ? 'viewing' : ''}`} data-component="StepSection">
       <div className="card-head">
         <h2 style={{ margin: 0 }}>{step(row.key).icon} {label(row.key, on)}</h2>
         {approves && s.approved && <Badge tone="ok">approved by {s.approved.by}</Badge>}
@@ -71,6 +77,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
         {viewed && (
           <div className="seg step-tabs" role="tablist" aria-label="What to show">
             <button role="tab" aria-selected={pane === 'view'} className={pane === 'view' ? 'on' : ''} onClick={() => setPane('view')}>View</button>
+            {code && <button role="tab" aria-selected={pane === 'code'} className={pane === 'code' ? 'on' : ''} onClick={() => setPane('code')} title="Every file the prototype changed, with its diff, and what the agent is showing you">Code</button>}
             <button role="tab" aria-selected={pane === 'notes'} className={pane === 'notes' ? 'on' : ''} onClick={() => setPane('notes')}>For the brief</button>
           </div>
         )}
@@ -80,7 +87,8 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
         {approves && s.approved && <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.approveStep(subject.id, row.key, false))} title="Take the approval back">Withdraw</button>}
       </div>
       {showView && viewed && <Viewer tab={viewed} embedded />}
-      {!showView && <>
+      {showCode && code && <PrototypeCode id={code} appId={appId} focus={shown} />}
+      {!showView && !showCode && <>
       <p className="faint" style={{ margin: '4px 0 14px' }}>{step(row.key).what}</p>
 
       {row.waitingOn && (

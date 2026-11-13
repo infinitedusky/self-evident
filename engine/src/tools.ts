@@ -22,6 +22,7 @@ import { createProject, issueDetail, listProjects, PlanError, projectGraph } fro
 import { delegateFor } from './tkt.js'
 import { runner } from './runner.js'
 import { listStories } from './storybook.js'
+import { prototypeCode, showInPrototype, unshowInPrototype } from './prototype-code.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, setPrototypeCommand, setPrototypeDatabase, startPrototype, stopPrototype } from './prototype.js'
 import { agentsOut, readAgent, tellAgent } from './talk.js'
 import { syncApp } from './github.js'
@@ -33,7 +34,7 @@ export interface EngineTool { name: string; description: string; shape: z.ZodRaw
 export interface ToolScope { appId: string; sessionId?: string; actor?: string; waitForPlanner?: boolean }
 
 /** Tools that only read: safe to run without asking. */
-export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent'])
+export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code'])
 
 export function engineTools(opts: ToolScope): EngineTool[] {
   const { appId, sessionId } = opts
@@ -184,6 +185,15 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         async (a) => tryIt(async () => { await ownIdea(a.ideaId); if (a.projectId) await ownProject(a.projectId); return convertIdea(a.ideaId, a.as, { title: a.title, projectId: a.projectId, why: a.why }, actor) })),
       def('workflows', 'This app\'s workflows: which steps each requires, which are on, the order and whether it is enforced, and how many projects and tasks use it.', {},
         async () => tryIt(async () => listWorkflows(appId))),
+      def('prototype_code', 'What a prototype changed: every file that differs from where its branch left the default branch (committed or not), with lines added and removed, and what is being shown in its Code view. The person sees the same list, each file with its diff, in the Code tab of the prototype.', { prototypeId: z.string() },
+        async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return prototypeCode(a.prototypeId) })),
+      def('show_code', 'Show the person something in a prototype\'s Code view, to answer a question about how it works: a file in the prototype\'s worktree (changed or not; path relative to the worktree) with the lines to look at highlighted, or a page on the web such as the docs of a library it uses (url, with a title). note says in a line or two why it is there; the person reads it above the file. It is added to the "Shown by the agent" list, selected, and the person is taken to the Code view. Showing the same file again replaces its note and lines. remove: true takes it out again (with no file or url, everything shown).', {
+        prototypeId: z.string(), file: z.string().optional(), lines: z.array(z.object({ from: z.number(), to: z.number() })).optional().describe('line ranges of the file as it is now, like [{from: 12, to: 30}]'), url: z.string().optional(), title: z.string().optional().describe('for a url'), note: z.string().optional(), remove: z.boolean().optional(),
+      }, async (a) => tryIt(async () => {
+        await ownPrototype(a.prototypeId)
+        if (a.remove) return unshowInPrototype(a.prototypeId, a.file ?? a.url, actor)
+        return showInPrototype(a.prototypeId, a, actor)
+      })),
       def('run_prototype', 'Start a stopped prototype\'s server again, on a fresh port; restart=true stops it first (after a change that needs a restart).', { prototypeId: z.string(), restart: z.boolean().optional() },
         async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return runPrototype(a.prototypeId, actor, { restart: a.restart }) })),
       def('stop_prototype', 'Stop a prototype\'s server; its worktree stays.', { prototypeId: z.string() },

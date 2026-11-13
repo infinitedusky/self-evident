@@ -2812,3 +2812,28 @@ asking; above it the answer is the person's, and a model deciding it would be th
 done: waking the conductor with a message when an agent asks (the card in its column is the notice, and a turn costs
 money). Not tried: a real agent asking, end to end; the engine test drives the ask with a stand-in for the live
 conversation.
+
+## A prototype's code, beside it running (Sandy, 2026-11-13: "For prototypes, we are building a sample of what will eventually get merged. We should have the view of it functioning, and we should have a diff view of all the files that changed. The agent should be able to add files to that view for reference if the user asks a question. It can then highlight areas, or show docs pages")
+
+The prototype's step now has three views: **View** (it running), **Code**, and For the brief.
+
+- **Changed.** Every file that differs from where the prototype's branch left the app's default branch, committed
+  or not, including new files nobody has added yet, with lines added and removed. Pick one for its diff; a changed
+  file can also be read whole, and a Markdown file as a page. The diff is read from git each time, never stored.
+- **Shown by the agent.** `show_code` puts a file from the prototype's worktree (changed or not) into the view with
+  a note saying why and the lines to look at highlighted, or a page on the web (a library's docs) in a frame with a
+  link out, since many sites refuse to be framed. Showing the same file again replaces its note and lines; `remove`
+  takes it out, and so can the person (×). Kept on the prototype's row (`shown`, migration 0016), newest first, 40 at
+  most.
+- **The person is taken there.** Showing something moves the task's (or idea's) tab to the prototype's step, on Code,
+  with that thing selected (`?shown=<id>`), the way open_tab takes them to a sketch. Lines the agent highlights show
+  in the diff when the diff holds them, else in the whole file, scrolled to.
+- Both the prototype's agent and the task's conductor have `show_code` and `prototype_code` (the list of changes);
+  both are told to answer a "how does this work" question in a line or two and show the place, not paste code.
+
+After GitHub's "Files changed": the list with counts, one diff at a time, a note on a range of lines.
+
+Not done: syntax colouring; the code of an app's other repositories (only the worktree the prototype was cut in);
+the Code view on a prototype opened as a workspace tab of its own or one that belongs to no task or idea (it is on
+the step's page only); highlighting inside a docs page. Not tried: a real agent calling `show_code` in a
+conversation; the engine test runs against a real temporary repository, and the screens against made-up data.
