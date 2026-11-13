@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { expect, fn, userEvent, within } from 'storybook/test'
 import { rows } from '@self-evident/engine/steps'
 import { TaskNav } from './TaskNav'
 import { approvedTaskStepsView, quickWorkflow, taskStepsView, waitingTaskStepsView } from '../stories/sample'
@@ -22,3 +23,31 @@ export const OnAStep: Story = { args: { here: 'mockup' } }
 export const BriefApproved: Story = { args: { here: 'build', rows: rows('task', approvedTaskStepsView.states, approvedTaskStepsView.resolved.workflow), build: { done: 1, total: 3, waitingOn: null } } }
 /** A workflow with no order and fewer steps: nothing waits but the build. */
 export const NoOrder: Story = { args: { rows: rows('task', [{ key: 'brief', status: 'started' }], quickWorkflow) } }
+
+// Made up: the sample task saved twice, with one earlier try set aside.
+const saves = { current: 'Main', points: [{ id: 'save_review', name: 'Proto before review (sample)' }, { id: 'save_approved', name: 'Prototype approved' }], aside: [{ id: 'tb_wallet', name: 'Wallet first (sample)' }] }
+/** Save points at the bottom: the task branch being worked on first, then each save point and what was set aside. Each goes to the save points page. */
+export const SavePoints: Story = {
+  args: { saves, onSave: fn() },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.getByText('Main')).toBeInTheDocument()
+    await expect(c.getByText('working on')).toBeInTheDocument()
+    await expect(c.getByRole('link', { name: /Proto before review \(sample\)/ })).toHaveAttribute('href', '/tasks/iss_sample20/saves')
+    await expect(c.getByRole('link', { name: /Wallet first \(sample\)/ })).toBeInTheDocument()
+  },
+}
+/** Nothing saved yet: only the way to save. */
+export const NoSavePointsYet: Story = { args: { saves: { current: null, points: [], aside: [] }, onSave: fn() } }
+/** Saving from the nav: a name, Enter, and the work carries on. */
+export const SaveFromTheNav: Story = {
+  args: { saves, onSave: fn() },
+  play: async ({ canvasElement, args }) => {
+    const c = within(canvasElement)
+    await userEvent.click(c.getByRole('button', { name: 'Save here' }))
+    await userEvent.type(c.getByLabelText('Name of the save point'), 'Waiting for approval (sample){Enter}')
+    await expect(args.onSave).toHaveBeenCalledWith('Waiting for approval (sample)')
+  },
+}
+/** Folded: one icon for the save points, with how many in its tooltip. */
+export const FoldedWithSavePoints: Story = { args: { folded: true, saves, onToggle: () => {} }, render: (a) => <div style={{ width: 52 }}><TaskNav {...a} /></div> }

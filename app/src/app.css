@@ -764,3 +764,11 @@ button.acceptance-mark { cursor: pointer; border-radius: 6px; } button.acceptanc
 .task-branches-save { display: flex; gap: 8px; align-items: center; } .task-branches-save input { flex: 1; min-width: 0; }
 .task-branches-said { margin-top: 8px; font-size: 13px; color: var(--ok); }
 @media (max-width: 560px) { .task-branches-row { flex-wrap: wrap; } .task-branches-actions { margin-left: 28px; } .task-branches-ask { margin-left: 8px; } }
+
+/* Save points in a task's nav: the one worked on, then the list. */
+.task-nav .link.task-nav-save { padding: 4px 10px; font-size: 13px; }
+.task-nav .link.task-nav-save.current { color: var(--ink); font-weight: 600; }
+.task-nav-mark.task-nav-point { color: var(--accent); font-size: 11px; }
+.task-nav-save-here { margin: 4px 10px 0; padding: 4px 8px; text-align: left; border: 1px dashed var(--line); border-radius: 8px; background: none; color: var(--ink-soft); font: 13px var(--sans); cursor: pointer; }
+.task-nav-save-here:hover { background: var(--accent-wash); color: var(--ink); }
+.task-nav-saving { margin: 4px 10px 0; } .task-nav-saving input { width: 100%; margin: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 13px var(--sans); }
