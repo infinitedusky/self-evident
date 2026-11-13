@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { mergeGuide, taskGuide, type GuideTask } from './merge-guide.js'
 import { prBody } from './pr.js'
-import { checkBrief, SUMMARY } from './checks.js'
+import { checkBrief, finalizeBrief, SUMMARY } from './checks.js'
 
 const at = '2026-11-13T00:00:00.000Z'
 const task: GuideTask = {
@@ -48,5 +48,8 @@ describe('the merge guide', () => {
     const f = { identifier: 'XX-1', title: 'Export', issueId: 'iss_x', base: 'main', prototype: null, before: [] }
     for (const key of ['analysis', 'adr', 'risk', 'audit'] as const) { expect(checkBrief(key, f)).toContain(SUMMARY); expect(checkBrief(key, f)).toContain('written for the next agent') }
     expect(SUMMARY).toMatch(/At most eight bullets/)
+    expect(checkBrief('analysis', f)).toMatch(/\*\*Telemetry hook points\*\*[\s\S]*never names, links or other personal data[\s\S]*which failure would otherwise be silent/)
+    expect(finalizeBrief(['analysis'], f)).toMatch(/a \*\*Telemetry\*\* section[\s\S]*the telemetry has criteria of its own/)
+    expect(checkBrief('audit', f)).toMatch(/telemetry: whether the brief's Telemetry section has every hook point/)
   })
 })

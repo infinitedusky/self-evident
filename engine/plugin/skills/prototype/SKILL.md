@@ -56,6 +56,13 @@ approach altogether) is the prototype analysis's job, and the build follows what
    showed.
 5. **It proves the claims that matter.** Where a requirement is a guarantee (no duplicates on re-run, a company sees
    only its own data), show it: a scenario, a script or a test that runs it twice or as two companies.
+6. **It finds the telemetry hook points.** With the real path built, mark where production would tell us the feature
+   works and is used, using the app's own telemetry channels (find them first: structured logs, metrics, monitors,
+   product analytics). For each hook point: where in the code, what it records (counts and states, never personal
+   data), what question it answers ("did the vendor change its format?", "is anyone using it?"), and what would alert.
+   Cover at least: data coming in (found, skipped, absent), writes (inserted, updated, pruned), failures, latency of
+   the new reads, and the user actions that show the feature is used. Emit them in the prototype where it is cheap, so
+   the analysis can see them work; the full list goes in the report either way.
 
 ## Where fakes go, and where they don't
 
@@ -87,6 +94,9 @@ When you say you are done, report against the checklist, one line per requiremen
 
 Then: each seam and stub used (existing or added), what is assumed rather than recorded from the real service, and
 what was hard or surprising; the analysis reads it.
+
+Then the **telemetry hook points**, as a table (where, what it records, the question it answers, the alert), saying
+which ones the prototype already emits. The brief and the plan take them from here.
 
 Where you knowingly took the quick way (copied code, an awkward structure, a choice you would revisit), say so in a
 line each, so the analysis starts there.

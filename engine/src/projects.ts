@@ -98,6 +98,23 @@ export async function addSubIssues(issueId: string, subs: NewSubIssue[], actor =
 }
 
 /**
+ * One more sub-task on a task that is already planned, by a person or the task's agent (Sandy, 2026-11-13: one made
+ * with create_task had no build and no builder, so the engine would never have built it). It is a sub-task like the
+ * planner's: built by the engine, in the graph. after: sub-tasks it waits for; before: sub-tasks that wait for it.
+ */
+export async function addSubTask(issueId: string, input: { title: string; description?: string; brief?: string; after?: string[]; before?: string[]; files?: string[] }, actor = 'user') {
+  if (!input.title?.trim()) throw new PlanError('a sub-task needs a title')
+  return db.transaction(async (tx) => {
+    const t = await getIssue(tx, issueId)
+    const siblings = new Set((await tx.select({ id: issue.id }).from(issue).where(eq(issue.parentId, issueId))).map((x) => x.id))
+    for (const id of [...(input.after ?? []), ...(input.before ?? [])]) if (!siblings.has(id)) throw new PlanError(`${id} is not a sub-task of this task`)
+    const [row] = await addSubIssues(issueId, [{ key: 'new', title: input.title.trim(), description: input.description, brief: input.brief, dependsOn: input.after, files: input.files }], actor, tx)
+    if (input.before?.length) await tx.insert(issueRelation).values(input.before.map((id) => ({ appId: t.appId, issueId: row.id, relatedIssueId: id, type: 'blocks' })))
+    return row
+  })
+}
+
+/**
  * A new code issue at the end of a project (from its backlog, or by hand). In a running project it is planned when
  * the issues before it have landed, like any other; a project that has landed, stopped or been superseded takes none.
  */
