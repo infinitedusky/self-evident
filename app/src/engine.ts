@@ -144,6 +144,7 @@ export interface PluginSkill extends SkillInfo { category: string | null; on: bo
 export type Ratings = Record<'free' | 'moderate' | 'expensive', number>
 export interface PluginInfo {
   id: string; name: string; version: string | null; description: string; source: string | null; builtIn: boolean
+  /** Where a built-in plugin's skills are kept on this computer: a folder per skill. */ skillsDir?: string | null
   on: boolean; roles: AgentRole[]; mcpServers: string[]; note: string | null; skills: PluginSkill[]; tools: { count: number; ratings: Ratings } | null
 }
 export interface Category { key: string; name: string; for: string; builtIn?: string }
@@ -282,6 +283,8 @@ export const engine = {
     return text
   },
   installPlugin: (marketplace: string, name: string) => call<{ id: string }>('POST', '/plugins', { marketplace, name }),
+  /** One of your own skills, for every app: written as a SKILL.md outside every repo. */
+  addSharedSkill: (body: { name: string; description: string; body: string }) => call<{ key: string; name: string; file: string }>('POST', '/skills/shared', body),
   removePlugin: (id: string) => call<{ ok: true }>('DELETE', `/plugins/${encodeURIComponent(id)}`),
   updatePlugin: (id: string, body: { on?: boolean; roles?: AgentRole[] }) => call<{ ok: true }>('PATCH', `/plugins/${encodeURIComponent(id)}`, body),
   fileSkill: (key: string, body: { category?: string | null; on?: boolean }) => call<{ ok: true }>('PATCH', `/skills/${key.split('/').map(encodeURIComponent).join('/')}`, body),

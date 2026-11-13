@@ -185,8 +185,9 @@ function PluginBlock({ p, catalogue, act }: { p: PluginInfo; catalogue: Category
               </li>
             ))}
           </ul>
-        ) : <span className="faint">None yet{p.builtIn ? <>: a skill is a folder under <span className="mono">engine/plugin/skills/</span></> : ''}.</span>}
+        ) : <span className="faint">None yet{p.builtIn ? <>: a skill is a folder under <span className="mono">{p.skillsDir ?? 'engine/plugin/skills/'}</span></> : ''}.</span>}
       </div>
+      {p.id === 'shared' && <AddSharedSkill dir={p.skillsDir ?? null} onAdded={act(async () => {})} />}
       {p.tools && (
         <div className="plugin-row top"><span className="label-text">Tools</span>
           <div>
@@ -211,6 +212,43 @@ function SkillList({ skills }: { skills: { name: string; description: string }[]
 }
 
 /** Adding is a form only once asked for: a marketplace and a plugin name, installed by Claude Code's installer. */
+/**
+ * Write one of your own skills (Sandy, 2026-11-13: "skills … outside the repo we are using that become available for
+ * any app"): a name, when to use it, what it says. It becomes a SKILL.md in the shared folder on this computer, there
+ * to edit by hand afterwards; the same name again replaces it.
+ */
+function AddSharedSkill({ dir, onAdded }: { dir: string | null; onAdded: () => unknown }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [body, setBody] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [wrote, setWrote] = useState<string | null>(null)
+  const add = async () => {
+    setBusy(true); setError(null)
+    try { const r = await engine.addSharedSkill({ name, description, body }); setWrote(r.file); setOpen(false); setName(''); setDescription(''); setBody(''); await onAdded() } catch (e) { { const m = err(e); try { setError(JSON.parse(m).error ?? m) } catch { setError(m) } } } finally { setBusy(false) }
+  }
+  return (
+    <div className="plugin-row top" data-component="AddSharedSkill"><span className="label-text">Add</span>
+      <div style={{ display: 'grid', gap: 8 }}>
+        <div className="faint settings-desc">Skills kept on this computer, outside every repo{dir ? <>, in <span className="mono">{dir}</span></> : ''}. Every app gets them: file one under a job here, or choose it for a step in an app's Skills.</div>
+        {wrote && <p className="settings-note" style={{ margin: 0 }}><Badge tone="ok">Written</Badge><span className="mono">{wrote}</span></p>}
+        {!open ? <div><button className="btn quiet" onClick={() => { setOpen(true); setWrote(null) }}>Write a skill</button></div> : <>
+          <label>Name<input className="mono" aria-label="Skill name" value={name} onChange={(e) => setName(e.target.value)} placeholder="decision-record" /></label>
+          <label>When to use it<input aria-label="When to use it" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="One or two sentences. An agent picks a skill by this." /></label>
+          <label>What it says<textarea aria-label="What it says" rows={8} value={body} onChange={(e) => setBody(e.target.value)} placeholder="The instructions, in Markdown: what to do, in what order, what the result looks like." /></label>
+          {error && <div className="empty bad">{error}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn" disabled={busy || !name.trim() || !description.trim() || !body.trim()} onClick={() => void add()}>{busy ? 'Writing…' : 'Write the skill'}</button>
+            <button className="btn quiet" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
+          </div>
+        </>}
+      </div>
+    </div>
+  )
+}
+
 function AddPlugin({ onAdded }: { onAdded: () => Promise<unknown> }) {
   const [open, setOpen] = useState(false)
   const [market, setMarket] = useState('')

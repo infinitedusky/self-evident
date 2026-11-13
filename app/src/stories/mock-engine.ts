@@ -58,6 +58,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/apps', () => reply(d.apps)),
     http.get('/api/workspaces', () => reply([s.workspace])),
     http.get('/api/settings', () => reply(d.settings)),
+    http.post('/api/skills/shared', async ({ request }) => { const b = (await request.json()) as { name: string }; return reply({ key: `shared/${b.name}`, name: b.name, file: `/Users/sample/.self-evident/shared/skills/${b.name}/SKILL.md` }) }),
     http.get('/api/apps/:id/settings', () => reply(d.appSettings)),
     http.get('/api/apps/:id/account', () => reply(d.account)),
     http.post('/api/integrations/:key/check', () => reply(d.check)),

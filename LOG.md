@@ -2705,3 +2705,25 @@ sketch or mockup, its standard for a decision record.
 Not done: the skills are read from the app's first repository only, as before, so a skill kept in a second repository
 of a workbench isn't offered. The builder and the planner get no step skills: the steps are done in conversations.
 "Skills by job" stays below it, unchanged.
+
+## Your own skills, outside every repo (Sandy, 2026-11-13: "can we then add skills somewhere that sit outside the repo we are using that become available for any app?")
+
+Skills came from two places: an app repo's own `.claude/skills/` (that app only, and it means putting files in the
+repo) and installed plugins. Nothing held a skill you write yourself for every app, without touching a repo.
+
+Now there is a folder on this computer, `~/.self-evident/shared/skills/` (`SHARED_SKILLS_HOME` moves it), one folder
+per skill with a `SKILL.md`. The engine loads it as a built-in plugin named `shared`, so nothing else had to change:
+
+- it is listed in Settings › All apps › Plugins, with a **Write a skill** form (name, when to use it, what it says)
+  that writes the file, there to edit by hand afterwards; the same name again replaces it;
+- its skills are filed under jobs in All apps like any plugin's, and offered for a step in every app's Skills, where
+  a session names one `shared:<name>`;
+- it switches off, for all apps or one, and does not uninstall.
+
+Checked against the real Claude Code: a skill written there is loaded by a session as `shared:<name>`.
+
+This is the third home for the decision-record skill discussed on 2026-11-12, and the one that puts nothing in the
+code repos or the docs repo: write it here, then choose it for the ADR step of the app it is the standard for.
+
+Not done: the folder is on one computer. It is not carried by the state repository, so on a second computer the
+skills are copied by hand. There is no delete or edit in Settings: remove or change the folder.

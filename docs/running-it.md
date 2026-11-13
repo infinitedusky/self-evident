@@ -172,6 +172,14 @@ Save, and the same place says which account is in use, or what is wrong. An over
 app's agents; it never falls back to the default. End an app's open conversations before changing its login: they
 stay in the folder they were started in.
 
+## Your own skills, for every app
+
+A skill you want every app's agents to have, without putting it in any repo, goes in `~/.self-evident/shared/skills/`:
+one folder per skill, holding a `SKILL.md` (a `name` and `description` at the top, then the instructions). Write one
+from Settings › All apps › Plugins › shared › **Write a skill**, or make the folder by hand. Then file it under a job
+there, or choose it for a step under an app's Settings › Skills. This folder stays on this computer: copy it to
+another by hand.
+
 ## A product in two repositories
 
 (LOG.md, "The workbench".) Two ways, by whether the work crosses them:

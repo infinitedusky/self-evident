@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { defineConfig } from 'vitest/config'
 
 // Tests get their own database, created and migrated by the global setup, so they never touch the one the
@@ -6,7 +8,7 @@ export const TEST_DATABASE_URL = process.env.DATABASE_URL_TEST ?? 'postgres://id
 
 export default defineConfig({
   test: {
-    env: { DATABASE_URL: TEST_DATABASE_URL },
+    env: { DATABASE_URL: TEST_DATABASE_URL, SHARED_SKILLS_HOME: join(tmpdir(), 'self-evident-test-shared-skills') }, // never the person's own shared skills
     globalSetup: ['./src/test-setup.ts'],
     testTimeout: 20_000,
   },
