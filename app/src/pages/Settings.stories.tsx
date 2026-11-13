@@ -42,6 +42,20 @@ export const AllAppsSharedSkills: Story = {
     await expect(await c.findByText('/Users/sample/.self-evident/shared/skills/shop-voice/SKILL.md')).toBeVisible()
   },
 }
+/** Skills pulled from a repository: one source already there (made up); Update says what changed, and a new repository is pulled. */
+export const AllAppsSkillsFromARepo: Story = {
+  parameters: all,
+  beforeEach: withEngine({ settings: { ...factorySettings, plugins: [shared, ...factorySettings.plugins] }, skillSources: [{ url: 'git@example.com:sample/team-skills.git', commit: '0a1b2c3d4e5f6071', pulledAt: '2026-11-12T09:00:00.000Z', skills: ['decision-record', 'review-notes'] }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Update git@example.com:sample/team-skills.git' }))
+    await expect(await c.findByText(/Updated decision-record\./)).toBeVisible()
+    await userEvent.type(c.getByLabelText('Repository'), '/Users/sample/code/shop-skills')
+    await userEvent.click(c.getByRole('button', { name: 'Pull skills' }))
+    await expect(await c.findByText(/Added shop-design, shop-voice\./)).toBeVisible()
+    await expect(c.getByRole('button', { name: 'Update /Users/sample/code/shop-skills' })).toBeVisible()
+  },
+}
 export const NoWorkspace: Story = { parameters: all, beforeEach: withEngine({ apps: [], settings: { ...factorySettings, workspace: null, plugins: [] } }) }
 export const SettingsToday: Story = { parameters: appPage() }
 /** An app whose repo has its own skills, a plugin overridden for it, and integration values from both levels. */

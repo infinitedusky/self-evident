@@ -10,7 +10,7 @@ import { Badge } from '../components/Badge'
 import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
 import { STEPS } from '@self-evident/engine/steps'
-import { engine, type AccountStatus, type AgentRole, type AppJob, type UsableSkill, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
+import { engine, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type AppJob, type UsableSkill, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
@@ -188,6 +188,7 @@ function PluginBlock({ p, catalogue, act }: { p: PluginInfo; catalogue: Category
         ) : <span className="faint">None yet{p.builtIn ? <>: a skill is a folder under <span className="mono">{p.skillsDir ?? 'engine/plugin/skills/'}</span></> : ''}.</span>}
       </div>
       {p.id === 'shared' && <AddSharedSkill dir={p.skillsDir ?? null} onAdded={act(async () => {})} />}
+      {p.id === 'shared' && <SkillSources onChanged={act(async () => {})} />}
       {p.tools && (
         <div className="plugin-row top"><span className="label-text">Tools</span>
           <div>
@@ -244,6 +245,64 @@ function AddSharedSkill({ dir, onAdded }: { dir: string | null; onAdded: () => u
             <button className="btn quiet" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
           </div>
         </>}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Skills from a repository (Sandy, 2026-11-13: "point to a repo and pull all the skills of that repo, or update if we
+ * already have them and the repo has changed"). Give a git URL or a folder on this computer: every skill in it is
+ * copied into the shared skills. Update fetches it again and says what changed. A name a skill from somewhere else
+ * already holds is left alone and named.
+ */
+function SkillSources({ onChanged }: { onChanged: () => unknown }) {
+  const [rows, setRows] = useState<SkillSource[] | null>(null)
+  const [url, setUrl] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [did, setDid] = useState<PulledSkills | null>(null)
+  const load = () => engine.skillSources().then(setRows).catch(() => setRows([]))
+  useEffect(() => { void load() }, [])
+  const words = (e: unknown) => { const m = err(e); try { return JSON.parse(m).error ?? m } catch { return m } }
+  const pull = async (from: string) => {
+    setBusy(from); setError(null); setDid(null)
+    try { setDid(await engine.pullSkills(from)); setUrl(''); await load(); await onChanged() } catch (e) { setError(words(e)) } finally { setBusy(null) }
+  }
+  const remove = async (from: string, n: number) => {
+    if (!window.confirm(`Stop pulling from ${from}? Its ${n} skill${n === 1 ? '' : 's'} here ${n === 1 ? 'is' : 'are'} removed.`)) return
+    setBusy(from); setError(null); setDid(null)
+    try { await engine.removeSkillSource(from); await load(); await onChanged() } catch (e) { setError(words(e)) } finally { setBusy(null) }
+  }
+  const part = (label: string, names: string[]) => (names.length ? `${label} ${names.join(', ')}. ` : '')
+  const changed = did && (did.added.length || did.updated.length || did.removed.length)
+  return (
+    <div className="plugin-row top" data-component="SkillSources"><span className="label-text">From a repo</span>
+      <div style={{ display: 'grid', gap: 8 }}>
+        <div className="faint settings-desc">Pull every skill in a repository into the shared skills. Update fetches it again and brings them up to date: changed ones are replaced, new ones added, dropped ones removed.</div>
+        {(rows ?? []).length > 0 && <ul className="list">
+          {rows!.map((r) => (
+            <li key={r.url} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center' }}>
+              <div style={{ minWidth: 0 }}>
+                <div className="mono" style={{ overflowWrap: 'anywhere' }}>{r.url}</div>
+                <div className="faint" style={{ fontSize: 13 }}>{r.skills.length} skill{r.skills.length === 1 ? '' : 's'}: {r.skills.join(', ')} · at <span className="mono">{r.commit.slice(0, 7)}</span>, pulled {r.pulledAt.slice(0, 10)}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn quiet small" disabled={!!busy} aria-label={`Update ${r.url}`} onClick={() => void pull(r.url)}>{busy === r.url ? 'Updating…' : 'Update'}</button>
+                <button className="btn quiet small" disabled={!!busy} aria-label={`Remove ${r.url}`} onClick={() => void remove(r.url, r.skills.length)}>Remove</button>
+              </div>
+            </li>
+          ))}
+        </ul>}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input className="mono" aria-label="Repository" style={{ flex: 1, minWidth: 0 }} value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && url.trim() && !busy) void pull(url) }} placeholder="git@github.com:owner/skills.git, an https URL, or a folder on this computer" />
+          <button className="btn" disabled={!!busy || !url.trim()} onClick={() => void pull(url)}>{busy && busy === url ? 'Pulling…' : 'Pull skills'}</button>
+        </div>
+        {error && <div className="empty bad">{error}</div>}
+        {did && <p className="settings-note" style={{ margin: 0 }}><Badge tone={changed ? 'ok' : 'neutral'}>{changed ? 'Pulled' : 'Up to date'}</Badge><span>
+          {part('Added', did.added)}{part('Updated', did.updated)}{part('Removed', did.removed)}{!changed && `Nothing has changed in ${did.unchanged.length} skill${did.unchanged.length === 1 ? '' : 's'}. `}
+          {did.skipped.length > 0 && `Left alone, because a skill of that name here came from somewhere else: ${did.skipped.join(', ')}.`}
+        </span></p>}
       </div>
     </div>
   )

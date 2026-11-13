@@ -2727,3 +2727,24 @@ code repos or the docs repo: write it here, then choose it for the ADR step of t
 
 Not done: the folder is on one computer. It is not carried by the state repository, so on a second computer the
 skills are copied by hand. There is no delete or edit in Settings: remove or change the folder.
+
+Added the same day (Sandy: "can we also point to a repo and pull all the skills of that repo, or update if we already
+have them and the repo has changed?"): **skills from a repository** (`engine/src/skill-sources.ts`). In the `shared`
+block, give a git URL or a folder on this computer that is a git repository. The engine clones it (shallow) under
+`~/.self-evident/shared/sources/`, finds every folder holding a `SKILL.md`, and copies each into the shared skills
+with its files. **Update** fetches the repository again: changed skills are replaced, new ones added, ones the
+repository dropped are removed, and it says which. What was pulled, and at which commit, is in
+`~/.self-evident/shared/sources.json`.
+
+Decided:
+
+- **A skill from somewhere else is never overwritten or removed.** Each copy carries a marker naming its source; a
+  name already held by a hand-written skill, or one from another repository, is left alone and reported as skipped.
+- **Nothing in the repository is run.** Files are copied. Git uses this computer's own access (SSH aliases work).
+- **Update is by hand.** A button per source; nothing fetches on a timer.
+- This is also how a second repository's skills reach a workbench app: pull that repository's folder, and its skills
+  are offered for a step like any other shared skill.
+
+Not done: only folders with their own `SKILL.md` are copied, so a skill that leans on a sibling folder of shared files
+arrives without it. A pulled skill edited here by hand is replaced at the next update that finds it different.
+Tried on two real repositories on this computer: 4 and 8 skills pulled, and a second pull reported nothing changed.

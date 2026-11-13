@@ -147,6 +147,9 @@ export interface PluginInfo {
   /** Where a built-in plugin's skills are kept on this computer: a folder per skill. */ skillsDir?: string | null
   on: boolean; roles: AgentRole[]; mcpServers: string[]; note: string | null; skills: PluginSkill[]; tools: { count: number; ratings: Ratings } | null
 }
+export interface SkillSource { url: string; commit: string; pulledAt: string; skills: string[] }
+/** What a pull did; `skipped` are names a skill from somewhere else already holds here, left alone. */
+export interface PulledSkills { source: SkillSource; added: string[]; updated: string[]; unchanged: string[]; removed: string[]; skipped: string[] }
 export interface Category { key: string; name: string; for: string; builtIn?: string }
 export interface CategoryGroup { name: string; categories: Category[] }
 export interface FactorySettings { workspace: Workspace | null; integrations: Integration[]; values: IntegrationValues; status: Record<string, IntegrationStatus>; plugins: PluginInfo[]; catalogue: CategoryGroup[] }
@@ -285,6 +288,11 @@ export const engine = {
   installPlugin: (marketplace: string, name: string) => call<{ id: string }>('POST', '/plugins', { marketplace, name }),
   /** One of your own skills, for every app: written as a SKILL.md outside every repo. */
   addSharedSkill: (body: { name: string; description: string; body: string }) => call<{ key: string; name: string; file: string }>('POST', '/skills/shared', body),
+  /** Repositories skills were pulled from, into the shared skills. */
+  skillSources: () => call<SkillSource[]>('GET', '/skills/sources'),
+  /** Pull a repository's skills, or bring the ones already pulled from it up to date. */
+  pullSkills: (url: string) => call<PulledSkills>('POST', '/skills/sources', { url }),
+  removeSkillSource: (url: string) => call<{ removed: string[] }>('DELETE', `/skills/sources?url=${encodeURIComponent(url)}`),
   removePlugin: (id: string) => call<{ ok: true }>('DELETE', `/plugins/${encodeURIComponent(id)}`),
   updatePlugin: (id: string, body: { on?: boolean; roles?: AgentRole[] }) => call<{ ok: true }>('PATCH', `/plugins/${encodeURIComponent(id)}`, body),
   fileSkill: (key: string, body: { category?: string | null; on?: boolean }) => call<{ ok: true }>('PATCH', `/skills/${key.split('/').map(encodeURIComponent).join('/')}`, body),
