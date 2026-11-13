@@ -119,16 +119,13 @@ describe.skipIf(!reachable)('planner', () => {
     expect((await db.select().from(run).where(eq(run.id, again.runId)))[0].attempt).toBe(2)
   })
 
-  it('refuses an issue that already has sub-issues, one in the backlog or in no project, and a proposal that does not hold together', async () => {
+  it('refuses an issue that already has sub-issues, one in the backlog, and a proposal that does not hold together', async () => {
     const { project: p, issues: tasks } = await createProject({ appId, name: 'twice', issues: [{ title: 'T', subIssues: [{ key: 'x', title: 'X' }] }] })
     await approveBriefs(appId)
     await expect(planIssue(tasks[0].id, { propose: fake(proposal) })).rejects.toThrow(PlanError)
     const [inBacklog] = await addItems(p.id, [{ text: 'later' }])
     await approveBriefs(appId)
     await expect(planIssue(inBacklog.id, { propose: fake(proposal) })).rejects.toThrow(/backlog/)
-    const loose = await createIssue(appId, { title: 'in no project' })
-    await approveBriefs(appId)
-    await expect(planIssue(loose.id, { propose: fake(proposal) })).rejects.toThrow(/add it to a project/)
     const bad = (patch: Partial<Proposal>) => () => validateProposal({ ...proposal, ...patch })
     expect(bad({ phases: [] })).toThrow('no sub-tasks')
     expect(bad({ phases: [{ ...proposal.phases[0] }, { ...proposal.phases[0] }] })).toThrow('used twice')

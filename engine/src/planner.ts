@@ -19,6 +19,7 @@ import { newId } from './ids.js'
 import { addItems } from './backlog.js'
 import { identifier } from './issues.js'
 import { addSubIssues, PlanError, projectGraph, type NewSubIssue } from './projects.js'
+import { ensureSolo } from './solo.js'
 import { hasStorybook } from './storybook.js'
 import { referencePrompt, referencesOf, type Reference } from './references.js'
 
@@ -201,8 +202,9 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
   const [t] = await db.select().from(issue).where(eq(issue.id, issueId))
   if (!t) throw new PlanError(`no task ${issueId}`)
   if (t.kind !== 'code' || t.parentId) throw new PlanError('only a top-level code task is planned')
-  if (!t.projectId) throw new PlanError(`${t.title}: add it to a project before planning it`)
   if (!t.briefApprovedBy) throw new PlanError(`${t.title}: ${t.brief?.trim() ? 'approve its brief' : 'write and approve its brief'} before planning it`)
+  if (!t.projectId && ['backlog', 'triage', 'canceled', 'duplicate', 'done'].includes(t.state)) throw new PlanError(`${t.title} is ${t.state}; take it on first`)
+  if (!t.projectId) t.projectId = await ensureSolo(t.id, opts.actor) // a task in no project is planned in one of its own (solo.ts)
   const g = (await projectGraph(t.projectId))!
   const mine = g.subIssues.filter((x) => x.parentId === issueId)
   const name = identifier(g.app.key, t.number)

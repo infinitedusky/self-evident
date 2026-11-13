@@ -88,7 +88,7 @@ export async function addSubIssues(issueId: string, subs: NewSubIssue[], actor =
     const t = await getIssue(tx, issueId)
     if (t.parentId) throw new PlanError('sub-tasks go one level deep')
     if (t.kind !== 'code') throw new PlanError('only a code task is built in sub-tasks; a to-do has a checklist')
-    if (!t.projectId) throw new PlanError(`${t.title}: add it to a project before planning it`)
+    if (!t.projectId) throw new PlanError(`${t.title}: plan it first (a task in no project gets its own plan and build when it is planned)`)
     const known = new Map((await tx.select({ id: issue.id }).from(issue).where(and(eq(issue.projectId, t.projectId), sql`${issue.parentId} is not null`))).map((e) => [e.id, e.id]))
     const [{ maxSort }] = await tx.select({ maxSort: sql<number>`coalesce(max(${issue.sortOrder}), -1)` }).from(issue).where(and(eq(issue.projectId, t.projectId), sql`${issue.parentId} is not null`))
     return insertSubIssues(tx, t.appId, t.projectId, t.id, subs, known, Number(maxSort) + 1, actor)
@@ -359,7 +359,7 @@ export async function clearSubIssues(issueId: string, actor = 'user') {
 
 /** Every project, newest first, with its app and counts: the Projects page. Superseded projects are hidden unless asked. */
 export async function listProjects(opts: { all?: boolean; appId?: string } = {}) {
-  const projects = (await db.select().from(project).orderBy(sql`${project.createdAt} desc`)).filter((p) => (opts.all || p.status !== 'superseded') && (!opts.appId || p.appId === opts.appId))
+  const projects = (await db.select().from(project).orderBy(sql`${project.createdAt} desc`)).filter((p) => !p.solo && (opts.all || p.status !== 'superseded') && (!opts.appId || p.appId === opts.appId)) // a task's own project is not one to list (solo.ts)
   const apps = await db.select().from(app)
   const ids = projects.map((p) => p.id)
   const issues = ids.length ? await db.select({ id: issue.id, projectId: issue.projectId, parentId: issue.parentId, kind: issue.kind, state: issue.state }).from(issue).where(inArray(issue.projectId, ids)) : []
@@ -391,14 +391,15 @@ export async function listCodeIssues(appId: string) {
   const planning = rows.length ? await db.select({ issueId: event.issueId, type: event.type, seq: event.seq }).from(event)
     .where(and(inArray(event.issueId, rows.map((r) => r.id)), sql`${event.type} like 'issue.plan%'`)).orderBy(desc(event.seq)) : []
   const order = new Map(projects.map((p) => [p.id, p.createdAt.getTime()]))
+  const loose = (t: { projectId: string | null }) => !t.projectId || !!projects.find((p) => p.id === t.projectId)?.solo // in no project, or in one of its own
   return rows
-    .sort((x, y) => (!x.projectId ? -1 : 0) - (!y.projectId ? -1 : 0) || (order.get(y.projectId!) ?? 0) - (order.get(x.projectId!) ?? 0) || x.sortOrder - y.sortOrder || x.number - y.number)
+    .sort((x, y) => (loose(x) ? -1 : 0) - (loose(y) ? -1 : 0) || (order.get(y.projectId!) ?? 0) - (order.get(x.projectId!) ?? 0) || x.sortOrder - y.sortOrder || x.number - y.number)
     .map((t) => {
       const p = projects.find((x) => x.id === t.projectId)
       const mine = subs.filter((s) => s.parentId === t.id).map((s) => builds.find((b) => b.issueId === s.id)?.status ?? 'queued')
       return {
         id: t.id, identifier: identifier(a.key, t.number), number: t.number, title: t.title, description: t.description, state: t.state, sortOrder: t.sortOrder, priority: t.priority,
-        project: p ? { id: p.id, name: p.name, status: p.status } : null,
+        project: p ? { id: p.id, name: p.name, status: p.status, solo: p.solo } : null,
         builds: mine.reduce<Record<string, number>>((acc, s) => ({ ...acc, [s]: (acc[s] ?? 0) + 1 }), {}),
         planning: planning.find((e) => e.issueId === t.id)?.type ?? null, // issue.planning | issue.plan_waiting | issue.planned | issue.plan_failed
       }
@@ -422,7 +423,7 @@ export async function issueDetail(issueId: string) {
   const steps = last ? await db.select().from(step).where(and(eq(step.issueId, issueId), eq(step.runId, last.id))).orderBy(asc(step.position)) : []
   const comments = await listComments(db, issueId)
   return {
-    ...i, identifier: identifier(a.key, i.number), project: p ? { id: p.id, name: p.name, status: p.status } : null, comments,
+    ...i, identifier: identifier(a.key, i.number), project: p ? { id: p.id, name: p.name, status: p.status, solo: p.solo } : null, comments,
     runner: tktOn(a.setup) ? 'tkt' as const : null, // who builds it once the brief is approved: tkt, or Self Evident's own agents
     parent: parent ? { id: parent.id, identifier: identifier(a.key, parent.number), title: parent.title } : null,
     build: b ?? null, questions, decisions, relations: rels, steps, stepsAttempt: last?.attempt ?? null, // the builder's list, from its latest run
