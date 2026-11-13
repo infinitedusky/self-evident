@@ -36,6 +36,9 @@ What Set up does, in this order, in the app's checkout; a step already done is s
 2. **Storybook itself**, with Storybook's own installer, non-interactive, docs only (the vitest add-on and its browser
    are not part of the default; switch them on in the repo when wanted):
    `<pnpm dlx | npx -y | yarn dlx | bunx> storybook@latest init --yes --no-dev --features docs --package-manager <pnpm|npm|yarn1|yarn2|bun> --no-agent --disable-telemetry`
+   **A Storybook older than 10 is upgraded** with Storybook's own upgrade, then the package manager's install (the
+   upgrade's own runs frozen under CI): `<pnpm dlx | npx -y | yarn dlx | bunx> storybook@latest upgrade --yes --disable-telemetry`,
+   then `<pnpm install --no-frozen-lockfile | npm install | yarn install | bun install>`.
 3. **The add-on:** `<pnpm add -D | npm install -D | yarn add -D | bun add -d> @zigbang/storybook-addon-story-flow`.
 4. **The stylesheet:** `.storybook/story-flow.css`, the engine's copy.
 5. **main:** the add-on entry first in `addons`, with `flowGlob` derived from the first `stories` glob (`../src/**/*.stories.*`
@@ -54,6 +57,7 @@ Then the check runs again; the Start button starts it with the default command; 
 
 ## What the agent gets
 
-When a step cannot be done from here (a main without an addons list, the vitest exclude, a Storybook older than 10,
-an installer that failed), the agent gets this document and the check's line, in a conversation in the repo, and
-finishes the install without asking: these are the house standard, not choices.
+When a step cannot be done from here (a main without an addons list, the vitest exclude, an installer or an upgrade
+that failed), the agent gets this document and the check's line, in a conversation in the repo, and
+finishes the install without asking: these are the house standard, not choices. One set-up per app at a time: while
+that conversation is open, pressing Set up Storybook again shows it and starts no other.

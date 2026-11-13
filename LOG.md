@@ -2533,3 +2533,19 @@ Decided: the Linear tab brings the tickets in with the import as it was, then mo
 one call each. No change to the engine. If a move fails part-way, the tasks exist in no project and are under Existing.
 
 Whatever comes in goes at the end of the project's order.
+
+## Set up Storybook upgrades an older Storybook itself, and one set-up runs at a time (Sandy, 2026-11-12: "Set up storybook doesn't seem to work")
+
+Merman had Storybook 8. The screen map's add-on needs 10, the engine stopped there and gave the whole job to an agent,
+and the page's only sign was one line. Sandy pressed again and a second agent started the same upgrade in a second
+worktree.
+
+- **The upgrade is the engine's.** A Storybook older than 10 gets Storybook's own `storybook@latest upgrade --yes`
+  (tried on a copy of Merman: 8.4.7 to 10.6.7 in one go, and it builds), then the package manager's install without
+  the frozen lockfile (the upgrade's own install runs frozen under `CI=1` and fails on the lockfile it has just
+  outdated), then the standard as before, in the same commit. The upgrade's `debug-storybook.log` is removed. Only an
+  upgrade that does not reach 10 is said and left.
+- **One set-up per app.** The conversation the set-up hands to is marked (`subjectRef.setup`, subject "Set up
+  Storybook"). A press while it is open shows it and starts nothing; a press while the engine's own part still runs
+  waits for the same answer. tkt's set-up goes through the same door.
+
