@@ -20,6 +20,11 @@ That is what makes the prototype worth analysing. After the person approves it, 
 a blast radius are read out of it, and they describe **what we intend to build**. A prototype full of shortcuts would
 teach them the shortcuts.
 
+**Speed is the point.** The prototype exists to show the shape of the thing fast: what the data really is, where it
+lands, what the screens need, what is hard. Get every criterion working end to end first, then stop. Do not refactor,
+abstract, de-duplicate or tidy as you go. How the code could be better (simpler, more maintainable, DRYer, a better
+approach altogether) is the prototype analysis's job, and the build follows what the analysis finds.
+
 ## What it is not
 
 - **Not a UI guide.** Screens on sample data in the browser answer *what it should look like*. That is the job of
@@ -60,8 +65,11 @@ config values. Name each seam you used in your report, and say whether it alread
 added is something the real build will need too.
 
 Not allowed: skipping a layer, hard-coding what a query should return, parsing that only handles the sample, a
-schema you would not ship, logic in the browser that belongs on the server. Polish is optional (exhaustive tests,
-final copy, every error state), correctness on the path is not.
+schema you would not ship, logic in the browser that belongs on the server.
+
+Optional, and better left out: polish (final copy, every error state, exhaustive tests beyond what proves a
+criterion), refactoring, shared abstractions and tidying. Required: every layer present and correct on the path.
+Duplicated or clumsy code is fine; a skipped or faked layer is not.
 
 ## Rules
 
@@ -79,6 +87,9 @@ When you say you are done, report against the checklist, one line per requiremen
 
 Then: each seam and stub used (existing or added), what is assumed rather than recorded from the real service, and
 what was hard or surprising; the analysis reads it.
+
+Where you knowingly took the quick way (copied code, an awkward structure, a choice you would revisit), say so in a
+line each, so the analysis starts there.
 
 Never call it ready, or suggest the person approve it, while any requirement is not met, unless the person has
 explicitly accepted that gap. The conductor holds the report against the same checklist before telling the person.

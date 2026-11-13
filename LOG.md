@@ -2932,3 +2932,36 @@ column with its count.
 Not done: nothing stops a task being completed with a criterion unmet or unchecked, and the builders themselves do
 not set the mark (they have no engine tools); the conductor does, after they land. That closes most of "nothing
 reports per criterion after the build", but by instruction, not by a step of the engine.
+
+## A prototype is fast on the real path; the analysis makes the code good (Sandy, 2026-11-13: "The goal of the proto is speed so we can see the shape of things fast and then improve"; "cleanup is meant to be part of the analysis … could the code be cleaner, is there a better way to accomplish this that is more maintainable, simpler, dryer")
+
+This sharpens the mandate of earlier today, which said "built the way we would ship it" and could be read as "clean
+code". The two halves:
+
+- **Strict about the path.** Every layer real and present, real schema and migrations, the repository's conventions,
+  fakes only outside the system through seams, every criterion shown end to end. Unchanged.
+- **Not about clean code.** Speed is the point. The prototype's agent gets each criterion working and stops: no
+  refactoring, abstracting, de-duplicating, tidying or polish. Duplicated or clumsy code is fine; a skipped or faked
+  layer is not. It reports, a line each, where it knowingly took the quick way.
+- **The analysis is where the code is made good.** Its Cleaner section starts from the quick ways the agent named
+  and finds the rest; duplication and clumsy structure are no longer counted against the conventions.
+
+The `prototype` skill (built in, and the person's own copy, which was brought level with it), the prototype agent's
+instructions, the conductor's and the analysis's all say so.
+
+## Cleaning up after a prototype: a stop command and a discard command (Sandy, 2026-11-13: "how does it cleanup the environment after the prototype")
+
+A conductor reported it had no tool to set the stop command. It had one (`set_prototype_command` took `stop`), but
+only as a side door that also wanted the start command again, and one command could not serve both a restart (keep
+the data) and throwing the prototype away (remove it all).
+
+- **Two commands per app**, both optional, run in the prototype's worktree with the start command's `$PORT` and
+  database variable: **stop** (`prototype_stop_cmd`), when a prototype is stopped or restarted: stop the stack, keep
+  its data. **discard** (`prototype_discard_cmd`), after stop when a prototype is thrown away: remove its containers,
+  volumes and data. Both are in Settings › app › Prototype.
+- **A tool of its own**, `set_prototype_cleanup` (stop, discard), and the `prototype` tool now says whether each is
+  set. The conductor is told to see that an app whose start command brings up a stack has both.
+- Neither blocks: a command that fails or runs past two minutes leaves its output where the server's last lines show.
+
+Not done: neither runs when the engine itself shuts down; a prototype discarded before these were set has left its
+containers and volumes behind, to be removed by hand.

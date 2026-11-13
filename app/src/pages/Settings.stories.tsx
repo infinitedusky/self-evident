@@ -255,7 +255,7 @@ export const AllAppsStorybook: Story = { parameters: { route: { path: '/settings
 /** An app's prototype settings: how its server starts and where its throwaway databases go. */
 export const AppPrototype: Story = {
   parameters: appPage(sampleApp.id, 'prototype'),
-  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByLabelText(/Stop command/)).toBeInTheDocument() }, // for what the start command leaves running
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByLabelText(/Stop command/)).toBeInTheDocument(); await expect(within(canvasElement).getByLabelText(/Discard command/)).toBeInTheDocument() }, // for what the start command leaves running, and what is removed when a prototype is thrown away
 }
 /** An app's workflow rules: configuration, not something that runs. */
 export const AppWorkflowRules: Story = { parameters: appPage(sampleApp.id, 'workflows') }
