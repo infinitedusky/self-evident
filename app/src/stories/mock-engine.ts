@@ -14,6 +14,7 @@ export interface MockData {
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[] }
   /** What a task's pull request will open with; none when left out. */ mergeGuide?: string
+  /** The app's reports; none when left out. */ reports?: import('../engine').Reports
   /** A task's save points and task branches; none when left out. */ taskBranches?: import('../engine').TaskBranches; /** Why a move fails, when it should. */ moveError?: string
   /** What a run read and said, for the planner's tab. */ runLog?: import('../engine').RunLog
   /** What is public right now, by "kind:id". */ shares?: Record<string, import('../engine').Shared>; /** Why making a link fails, when it should. */ shareError?: string; /** ngrok's one address is held by these, until the person frees it. */ ngrokHolders?: import('../engine').NgrokHolder[]; /** What the guide tab of a shared prototype is given. */ visitorGuide?: { title: string; guide: import('../engine').Guide | null }
@@ -122,6 +123,20 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/prototypes/:id/file', ({ request }) => { const f = s.prototypeFiles[new URL(request.url).searchParams.get('path') ?? '']; return f ? reply(f) : missing('file') }),
     http.delete('/api/prototypes/:id/shown/:shownId', ({ params }) => { d.prototypeCode = { ...d.prototypeCode, shown: d.prototypeCode.shown.filter((x) => x.id !== params.shownId) }; return reply({ shown: d.prototypeCode.shown }) }),
     http.get('/api/prototypes/:id', ({ params }) => { const p = d.prototypes.find((x) => x.id === params.id); return p ? reply({ log: [], ...p, up: p.up ?? p.status === 'running' }) : missing('prototype') }),
+    // Reports: the engine's rules, roughly. Writing one here answers at once.
+    http.get('/api/apps/:id/reports', () => reply(d.reports ?? { writing: false, format: { daily: '', weekly: '' }, reports: [] })),
+    http.post('/api/apps/:id/reports', async ({ params, request }) => {
+      const b = await request.json() as { period: string; notes?: string }
+      const t = d.reports ?? { writing: false, format: { daily: '', weekly: '' }, reports: [] }
+      const weekly = b.period.endsWith('week')
+      const made = { id: `rep_${t.reports.length + 1}`, appId: params.id as string, kind: weekly ? 'weekly' as const : 'daily' as const, fromAt: new Date().toISOString(), toAt: new Date().toISOString(), label: ({ today: 'Today, Nov 13', yesterday: 'Yesterday, Nov 12', this_week: 'Week of Nov 9', last_week: 'Week of Nov 2' } as Record<string, string>)[b.period], notes: b.notes ?? null, editedAt: null, createdAt: new Date().toISOString(), costUsd: '0.02',
+        body: `${weekly ? 'Where it stands' : 'Today:'}\n- Written just now (sample)${b.notes ? `\n- ${b.notes}` : ''}` }
+      d.reports = { ...t, reports: [made, ...t.reports] }
+      return HttpResponse.json({ writing: true }, { status: 202 })
+    }),
+    http.put('/api/apps/:id/report-format', async ({ request }) => { const f = await request.json() as { daily?: string; weekly?: string }; const t = d.reports ?? { writing: false, format: { daily: '', weekly: '' }, reports: [] }; d.reports = { ...t, format: { ...t.format, ...f } }; return reply(d.reports.format) }),
+    http.put('/api/reports/:id', async ({ params, request }) => { const { body } = await request.json() as { body: string }; const t = d.reports!; d.reports = { ...t, reports: t.reports.map((r) => (r.id === params.id ? { ...r, body, editedAt: new Date().toISOString() } : r)) }; return reply(d.reports.reports.find((r) => r.id === params.id)) }),
+    http.delete('/api/reports/:id', ({ params }) => { const t = d.reports!; d.reports = { ...t, reports: t.reports.filter((r) => r.id !== params.id) }; return reply({ deleted: params.id }) }),
     http.get('/api/apps/:id/summary', () => reply(d.summary)),
     http.get('/api/apps/:id/graph', () => reply(appGraph())),
     http.get('/api/now', () => reply(d.now)),

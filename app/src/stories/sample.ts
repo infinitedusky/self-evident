@@ -534,3 +534,11 @@ export const plannerLog: import('../engine').RunLog = { runId: 'run_sample_plan'
   { seq: 5, at: '2026-11-13T15:00:41Z', type: 'run.tool_call', tool: 'Read', input: { file: 'src/checkout/address.ts' } },
 ] }
 export const plannerLogDone: import('../engine').RunLog = { ...plannerLog, status: 'completed', working: false, endedAt: '2026-11-13T15:04:00Z', costUsd: 0.42, lines: [...plannerLog.lines, { seq: 6, at: '2026-11-13T15:04:00Z', type: 'issue.planned', subIssues: [1, 2, 3] }] }
+
+// Reports on the sample app (made up): today's end-of-day note and last week's status, as the person would send them.
+export const reports: import('../engine').Reports = { writing: false, format: { daily: '', weekly: '' }, reports: [
+  { id: 'rep_today', appId: 'app_shop', kind: 'daily', fromAt: '2026-11-13T08:00:00Z', toAt: '2026-11-13T23:00:00Z', label: 'Today, Nov 13', notes: 'Met with Em about the checkout copy (sample)', editedAt: null, createdAt: '2026-11-13T23:00:00Z', costUsd: '0.03',
+    body: 'Today:\n- SHOP-20, one-page checkout (#412): prototyped address and payment on one page and shared it for a look (sample)\n- Wrote the acceptance criteria for SHOP-20; 5 of 6 shown in the prototype (sample)\n- Merged #409, the saved-card fix (sample)\n- Met with Em about the checkout copy (sample)\n\nTomorrow:\n- Address feedback on the SHOP-20 prototype (sample)\n- Get review on #412 (sample)' },
+  { id: 'rep_week', appId: 'app_shop', kind: 'weekly', fromAt: '2026-11-02T08:00:00Z', toAt: '2026-11-09T08:00:00Z', label: 'Week of Nov 2', notes: null, editedAt: '2026-11-09T10:00:00Z', createdAt: '2026-11-09T09:00:00Z', costUsd: '0.05',
+    body: 'One-page checkout: weekly status (week of Nov 2)\n\nWhere it stands\nThe saved-card work is merged. The one-page checkout is designed and its prototype starts next week (sample).\n\nDone this week\n- Merged the saved-card stack, #401 to #405 (sample)\n\nNext week\n- Prototype the one-page checkout, SHOP-20 (sample)\n\nOpen decisions and risks\n- Whether the old two-step route stays for a release (sample)' },
+] }

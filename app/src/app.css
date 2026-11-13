@@ -802,3 +802,17 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 /* Canceled sub-tasks: under the list, folded. */
 .sub-issues-gone { margin-top: 10px; } .sub-issues-gone > summary { cursor: pointer; font-size: 13px; color: var(--ink-soft); padding: 4px 0; } .sub-issues-gone > summary .faint { margin-left: 6px; }
 .sub-issues-gone .sub-issue { opacity: .7; }
+
+/* Reports: ask for a period, then the draft to edit and copy, earlier ones beside it. */
+.report-ask { display: grid; gap: 10px; }
+.report-notes { display: grid; gap: 4px; font-size: 13px; }
+.report-ask textarea, .report-format textarea, .report-text { width: 100%; margin: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 14px/1.5 var(--sans); resize: vertical; }
+.report-periods { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.report-layout { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 16px; align-items: start; }
+.report-layout > .report-draft:only-child { grid-column: 1 / -1; }
+.report-text { margin-top: 10px; font: 14px/1.55 var(--sans); white-space: pre-wrap; }
+.report-list h3 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); }
+.report-pick { display: block; width: 100%; text-align: left; padding: 6px 8px; border: 0; border-radius: 8px; background: none; color: var(--ink-soft); font: 13px var(--sans); cursor: pointer; }
+.report-pick:hover { background: var(--idle-wash); } .report-pick.on { background: var(--accent-wash); color: var(--ink); font-weight: 600; }
+.report-format > summary { cursor: pointer; font-weight: 600; } .report-format label { display: grid; gap: 4px; margin: 10px 0; font-size: 13px; }
+@media (max-width: 800px) { .report-layout { grid-template-columns: 1fr; } }

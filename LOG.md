@@ -3224,3 +3224,28 @@ same; and the ones already there are repaired once (migration 0022).
 
 Not done: a telemetry step of its own in the workflow; checking after release that the hook points report. Not
 tried: a real analysis writing the table.
+
+## Reports: the end-of-day note and the weekly status (Sandy, 2026-11-13: "a way to do a daily report of what was built or what was worked on that I can produce and report every day … It would be on an app level and we could ask for today or last week")
+
+A Reports page per app, beside Summary. Ask for a period (today, yesterday, this week, last week), add what the
+engine cannot know (a meeting, a review given, what is next), and a draft comes back in about a minute: edit it, copy
+it, send it yourself. Nothing is sent from here. Earlier ones are kept and listed.
+
+- **What it is written from** (`reportFacts`, kept beside each report): what moved on each task in the period, under
+  its top-level task and named by the team's own ticket id when it came from their tracker; the steps finished and
+  what each says in a line; what was written on the tickets; pull requests opened and merged, ours and the ones the
+  person opened by hand; the commits in the app's repositories by the person; and, for "tomorrow", what is in
+  progress, the pull requests waiting, the open questions.
+- **How it is written**: one model call, no tools. Told to write as the engineer, for readers who know the product
+  and its tickets and have never heard of this tool: outcomes ("prototyped the page", "planned the build in 8
+  parts"), never steps, briefs, sub-task ids or agents; only what the facts hold.
+- **The person's format wins.** Each app keeps the person's own format for each kind, with real reports of theirs
+  as examples (`setup.report_format`): the shape, the section names, the tone and the level of detail come from
+  them, their content never. The built-in shapes are the fallback: "Today / Tomorrow", and "Where it stands / Done
+  this week / Delays and why / Next week / Open decisions and risks". The examples live in the app's settings on the
+  person's computer, not in this repository.
+- The app's agent can write one when asked (`write_report`).
+
+Not done: sending it (Slack, email); writing it by itself at a set hour; a custom range in the page (the engine takes
+from and to); work done outside the app's repositories and tasks, except what the person adds. Not tried: a real
+report written by the model from a real day.
