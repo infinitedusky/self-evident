@@ -2754,3 +2754,26 @@ skills were a block named `shared` inside All apps › Plugins, which is not whe
 their own section, **All apps › Your skills**: the skills with where each came from (written here, or pulled from
 which repository), the form that writes one, and the repositories to pull from. Plugins lists installed plugins only.
 Underneath it is still the `shared` plugin, and an app's own Plugins switches still name it that way.
+
+## The ADR step is a draft; the planner settles it (Sandy, 2026-11-13: "I think maybe the ADR should be part of that process, not part of the pre-process that we go step by step … draft ADR is what the step should be")
+
+The ADR was a check before the brief was approved: a fresh agent decided the architecture and wrote a decision record
+as a report on the task. Then the planner, reading the code to cut sub-tasks, made architecture decisions again. And
+the record stayed a report: never a file in the repository, so never in the pull request, which is where a team that
+keeps decision records expects it.
+
+Now:
+
+- The step is **Draft ADR**. Same place in the line, same fresh agent, but it proposes: the options, the choice it
+  would make, why, and what it is unsure of. The blast radius and the brief read it as proposed.
+- **The planner settles it.** It is given the draft with the brief, records the choice as a decision (the draft's or
+  a better one, saying why it changed), or asks it as a question when the person might want it either way.
+- **The build writes the record.** For a decision worth a record, the planner adds the record's file and a step that
+  writes it to the sub-task that first builds on the decision. It follows how the repository keeps its records (it
+  looks for `docs/decisions/`, `docs/adr/`, or what CLAUDE.md or AGENTS.md says), or the app's skill for the Draft ADR
+  step, which the planner now gets too and which wins on place and form.
+- A task whose workflow has no draft step still gets a record when its plan makes a decision that deserves one.
+
+Not done: a decision row does not say whether it has a record; that is read from the sub-task's files. The planner
+is told the skill only when its session has it (the app repo's own skills and plugins on for the planner). Not tried:
+a real planning run on a task with a draft.

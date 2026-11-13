@@ -17,6 +17,7 @@ import { reaRisk, skillOptions } from './skills.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { newId } from './ids.js'
 import { identifier } from './issues.js'
+import { getStep } from './work.js'
 import { accountEnv } from './account.js'
 import { addSubIssues, PlanError, projectGraph, type NewSubIssue } from './projects.js'
 import { ensureSolo } from './solo.js'
@@ -27,6 +28,8 @@ export interface ProposeInput {
   repoPath: string
   appId?: string // its plugins, as switched for it; none without
   issue: { identifier: string; title: string; brief: string | null }
+  /** The task's draft ADR, when its workflow has that step and it was done: the planner settles it. */
+  draftAdr?: string | null
   project: { name: string; content: string | null }
   earlier: { identifier: string; title: string; subIssues: { identifier: string; title: string }[] }[] // issues before this one in the project
   testCmd?: string
@@ -78,7 +81,8 @@ export const PROPOSAL_SCHEMA = obj({
   notes: str,
 })
 
-function prompt(i: ProposeInput): string {
+/** What the planner is told. `recordSkills`: the app's skills for decision records that this session has. */
+export function prompt(i: ProposeInput, recordSkills: string[] = []): string {
   const earlier = i.earlier.length
     ? i.earlier.map((t) => `  - ${t.identifier} ${t.title}${t.subIssues.length ? `: ${t.subIssues.map((p) => `${p.identifier} ${p.title}`).join('; ')}` : ' (not planned yet)'}`).join('\n')
     : '  (none: this is the first task)'
@@ -114,7 +118,15 @@ function prompt(i: ProposeInput): string {
     '- A choice the brief does not settle, where the person might reasonably want it either way: ask it as a question. Give at least two options, say which you recommend and why, and for each option say what it changes (brief, promise, look, gate) when it changes what was agreed. Rate the cost of getting it wrong: cheap (easy to undo), moderate, expensive. Plan the phases as if your recommendation were chosen.',
     '- notes: what you assumed, and anything in the brief you could not place in the code.',
     '',
+    'Decision records:',
+    i.draftAdr?.trim()
+      ? '- This task has a draft ADR, given at the end. It proposed the architecture before the plan existed. Settle it now, against the code and your sub-tasks: record it as a decision, with its choice or a better one as `chosen`, the options you turn down as `rejected`, and in `reason` why, saying plainly if you changed what the draft proposed. If the choice is one the person might reasonably want either way, ask it as a question instead and plan as if your recommendation were chosen.'
+      : '- This task has no draft ADR: the architecture is yours to settle, as decisions.',
+    `- A decision is worth a record when it is hard to undo, shapes more than one part of the system, or goes against a record the repository already keeps${i.draftAdr?.trim() ? '; the settled draft ADR always is' : ''}. For each such decision the build writes the final record: in the sub-task that first builds on the decision, add the record's file to \`files\` and a step that writes it, with a technical note saying what it must hold. Follow how this repository keeps its records: look for them (\`docs/decisions/\`, \`docs/adr/\`, or where CLAUDE.md or AGENTS.md says) and match their place, file naming and sections; read the ones that touch this area, and say so in the record when this decision goes against one. With none kept, use \`docs/adr/NNNN-<slug>.md\` with Context, Decision, Alternatives considered, Consequences. A decision not worth a record stays a decision here and nothing more.`,
+    recordSkills.length ? `- This app has ${recordSkills.length > 1 ? 'skills' : 'a skill'} for decision records: ${recordSkills.map((n) => `\`${n}\``).join(', ')}. Invoke ${recordSkills.length > 1 ? 'each' : 'it'} with the Skill tool before you plan a record; where it and the line above differ, the skill is this app's standard and wins. The builder cannot use skills, so put what the skill says about place and form into the step's technical note.` : '',
+    '',
     'Before you answer, review your own plan once: does it build what the brief asks and nothing it does not? What else would have to change for it to hold? What would the sub-tasks do that the brief never asked for? Fix what you find, then answer.',
+    i.draftAdr?.trim() ? `\nThe draft ADR:\n\n${i.draftAdr.trim()}` : '',
   ].join('\n')
 }
 
@@ -128,8 +140,10 @@ export const proposeWithAgent: Propose = async (i) => {
   try {
     const skills = i.appId ? await skillOptions('planner', i.repoPath, i.appId) : {}
     const account = accountEnv(i.setup)
+    // The app's skills for the draft ADR step are its standard for a decision record: the planner has them too, when its session does.
+    const recordSkills = ((i.setup as { step_skills?: { adr?: string[] } } | undefined)?.step_skills?.adr ?? []).filter((n) => ((skills as { skills?: string[] }).skills ?? []).includes(n))
     for await (const m of query({
-      prompt: prompt(i),
+      prompt: prompt(i, recordSkills),
       options: {
         cwd: i.repoPath,
         ...account,
@@ -228,7 +242,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
   return {
     runId, issueId, projectId: t.projectId, appId: a.id, attempt, base,
     input: {
-      repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, project: { name: g.project.name, content: g.project.content }, earlier,
+      repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
       testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }

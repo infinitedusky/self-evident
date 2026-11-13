@@ -619,6 +619,17 @@ Details and sources in `research/`.
 - **A task can stand on its own** (Sandy, 2026-11-12; LOG.md, "A task can be planned and built on its own"): a task in
   no project is planned and built by itself. Underneath it has a project of its own, made when it is planned and never
   shown as a project; it can join a real project until building starts.
+- **The ADR step is a draft; the planner settles it and the build writes the record** (Sandy, 2026-11-13: "the ADR
+  should be part of that process, not part of the pre-process … draft ADR is what the step should be"). The step
+  before the brief is now **Draft ADR**: it proposes the architecture and says what it is unsure of, so the blast
+  radius and the brief have something to read. The decision itself is made in planning: the planner is given the
+  draft, settles it as a decision against the code and its sub-tasks (or asks, when the person might want it either
+  way), and for any decision worth a record (hard to undo, shapes more than one part, or goes against a record the
+  repository keeps) puts the record's file and a step that writes it into the sub-task that first builds on it. The
+  record follows how the repository keeps its own, or the app's skill for the Draft ADR step, which the planner gets
+  too. So the final record is a file on the task's branch, in the pull request, and a task with no draft step still
+  gets a record when its plan makes a decision that deserves one. This replaces "ADRs in `docs/adr/`" in the house
+  profile as the rule for where a record goes; `docs/adr/` remains the fallback when a repository keeps none.
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 

@@ -92,7 +92,7 @@ describe.skipIf(!reachable)('a task\'s own agent', () => {
     expect(await takeReply(builder.id)).toEqual({ from: own.id, what: 'Prototype', said: 'The swing is slower now; look at the downswing.' })
     expect(await takeReply(builder.id)).toBeNull() // once
     await said(reader.id, 'engine', 'brief', 'Also weigh a queue (sample).', { from: own.id })
-    expect(await takeReply(reader.id)).toEqual({ from: own.id, what: 'ADR', said: null }) // it stopped without a word
+    expect(await takeReply(reader.id)).toEqual({ from: own.id, what: 'Draft ADR', said: null }) // it stopped without a word
   })
 
   it('runs a prototype\'s agent on Sonnet unless the app names another model, and everything else on the app\'s model', () => {

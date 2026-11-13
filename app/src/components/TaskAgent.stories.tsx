@@ -28,7 +28,7 @@ const sketching = withEngine({ transcript: { ...transcript, pending: [], session
 export const Talking: Story = { beforeEach: sketching }
 /** The prototype approved: it has fresh agents out on the ADR and the blast radius, and keeps talking. */
 export const AgentsOut: Story = { beforeEach: sketching, args: { stage: 'Brief', state: 'working', deployed: [
-  { what: 'ADR', icon: '🏛️', state: 'back', detail: 'back: one decision, two options weighed' },
+  { what: 'Draft ADR', icon: '🏛️', state: 'back', detail: 'back: one decision, two options weighed' },
   { what: 'Blast radius', icon: '💥', state: 'out' },
 ] } }
 /** A prototype under way: its own agent is a second tab in the column, its dot pulsing while it works; press it to read that conversation. */
@@ -40,7 +40,7 @@ export const PrototypeAgentOut: Story = { beforeEach: sketching, args: { stage: 
 export const ChecksRunning: Story = { beforeEach: sketching, args: { stage: 'Brief', deployed: [
   { what: 'Prototype', icon: '🛠️', title: 'Checkout in one page (sample)', sessionId: 'talk_sample_proto', state: 'back' },
   { what: 'Prototype analysis', icon: '🔬', title: 'Prototype analysis: SS-20 (sample)', sessionId: 'talk_sample_analysis', state: 'back' },
-  { what: 'ADR', icon: '🏛️', title: 'ADR: SS-20 (sample)', sessionId: 'talk_sample_adr', state: 'out' },
+  { what: 'Draft ADR', icon: '🏛️', title: 'Draft ADR: SS-20 (sample)', sessionId: 'talk_sample_adr', state: 'out' },
 ] } }
 /** Waiting on the person: the dot turns amber. */
 export const WaitingOnYou: Story = { beforeEach: sketching, args: { stage: 'Brief', state: 'waiting' } }

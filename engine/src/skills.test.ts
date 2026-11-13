@@ -94,7 +94,7 @@ describe('an app\'s skills for the steps of its workflow', () => {
   it('tells a conversation which skill goes with which step, leaving out one the session does not have', () => {
     const chosen = { mockup: ['shop-design'], sketch: ['shop-design', 'gone'], adr: ['decision-record'] }
     const said = stepSkillPrompt(chosen, ['shop-design', 'decision-record'])
-    expect(said).toContain('- Sketches: `shop-design`\n- Mockups: `shop-design`\n- ADR: `decision-record`')
+    expect(said).toContain('- Sketches: `shop-design`\n- Mockups: `shop-design`\n- Draft ADR: `decision-record`')
     expect(said).not.toContain('gone')
     expect(stepSkillPrompt(chosen, [])).toBe('')
     expect(stepSkillPrompt(undefined, ['shop-design'])).toBe('')
