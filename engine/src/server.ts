@@ -36,6 +36,7 @@ import { listSketches, readSketch } from './sketches.js'
 import { migrateStorybookSetup, startStorybook, stopStorybooks, storybookStatus, storybookValues, STORY_FLOW_CSS } from './storybook.js'
 import { prototypeCode, prototypeFile, unshowInPrototype } from './prototype-code.js'
 import { setAcceptance, type AcceptanceChange } from './acceptance.js'
+import { share, shared, sharesOf, SHARE_KINDS, stopShares, unshare, type ShareKind } from './share.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
@@ -360,6 +361,12 @@ export function buildApp(bus: EventBus) {
   api.get('/prototypes/:id/code', async (c) => { try { return c.json(await prototypeCode(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/prototypes/:id/file', async (c) => { try { return c.json(await prototypeFile(c.req.param('id'), c.req.query('path') ?? '')) } catch (err) { return planError(c, err, 404) } })
   api.delete('/prototypes/:id/shown/:shownId', async (c) => { try { return c.json(await unshowInPrototype(c.req.param('id'), c.req.param('shownId'))) } catch (err) { return planError(c, err) } })
+  // Sharing: a public address (a Cloudflare quick tunnel) for a prototype, a place's mockups or its sketches. id: the prototype's, or a conversation's or app's.
+  const shareKind = (k: string) => { if (!(SHARE_KINDS as readonly string[]).includes(k)) throw new PlanError(`share a prototype, storybook or sketch, not ${k}`); return k as ShareKind }
+  api.get('/apps/:id/shares', (c) => c.json(sharesOf(c.req.param('id'))))
+  api.get('/shares/:kind/:id', (c) => { try { return c.json({ share: shared(shareKind(c.req.param('kind')), c.req.param('id')) }) } catch (err) { return planError(c, err) } })
+  api.post('/shares/:kind/:id', async (c) => { try { return c.json({ share: await share(shareKind(c.req.param('kind')), c.req.param('id'), 'user') }, 201) } catch (err) { return planError(c, err) } })
+  api.delete('/shares/:kind/:id', async (c) => { try { return c.json(await unshare(shareKind(c.req.param('kind')), c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/talk', async (c) => { try { return c.json(await talkFor(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/stop', async (c) => { try { return c.json(await stopPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/discard', async (c) => { try { return c.json(await discardPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
@@ -747,7 +754,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   void watchTerminals().catch(() => {}) // conversations still in a terminal: keep copying what's said there
   const stopSync = process.env.GITHUB_SYNC === '0' ? () => undefined : startSync(Number(process.env.GITHUB_SYNC_MINUTES ?? 2)) // GitHub: reviews, checks, merges, main moving
   const stopSummaries = process.env.SUMMARY === '0' ? () => undefined : startSummaries(Number(process.env.SUMMARY_HOURS ?? 24)) // the summary page, rewritten when a day old and something moved
-  const shutdown = async () => { stopSync(); stopSummaries(); stopStorybooks(); stopPrototypes(); closeTalks(); await runner.shutdown(); await bus.stop(); await pool.end(); process.exit(0) }
+  const shutdown = async () => { stopSync(); stopSummaries(); stopStorybooks(); stopShares(); stopPrototypes(); closeTalks(); await runner.shutdown(); await bus.stop(); await pool.end(); process.exit(0) }
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
 }

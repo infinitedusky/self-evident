@@ -2965,3 +2965,33 @@ the data) and throwing the prototype away (remove it all).
 
 Not done: neither runs when the engine itself shuts down; a prototype discarded before these were set has left its
 containers and volumes behind, to be removed by hand.
+
+## Sharing a prototype, mockups or sketches with someone outside (Sandy, 2026-11-13: "I want to be able to share something with people to say, 'Take a look at this prototype and tell me what you think.' We need to have a tunnel system built in, ready to go … I think it's critical"; "Same with mockups and sketches as well")
+
+A **Share** button sits beside Detach over every view (a prototype, the mockups, the sketches). It opens a panel that
+says what sharing does, makes a public address, then holds the link to copy and the way to stop. While something is
+shared the button reads "● Shared" in the warning colour.
+
+- **The tunnel is a Cloudflare quick tunnel** (`cloudflared tunnel --url`): no account, no setup, a random
+  `trycloudflare.com` address. Chosen over ngrok, which wants an account and a token before the first link. It needs
+  `cloudflared` on the computer (`brew install cloudflared`); without it the panel says so.
+- **One thing per address, never the engine.** A prototype: its server. Mockups: the Storybook of the conversation's
+  worktree. Sketches: a small server of their own that reads only the `sketches/` folder, with a front page listing
+  them. The origin is asked for as itself (`--http-host-header`), so a dev server that checks the host still answers.
+- **Ready means connected.** `cloudflared` prints its address before it has connected; until then the address shows
+  Cloudflare's error page. A share is handed over only once the tunnel reports a connection, and if it never does
+  (45 seconds) the panel says the network may be blocking it.
+- **It ends**: when stopped, when the prototype is stopped or discarded (a restart keeps its port, so the link goes
+  on working), after 8 hours (`SHARE_HOURS`), and with the engine. Nothing about a share is stored.
+- **A person's decision.** The agent has `share`, `stop_sharing` and `shares`; `share` is rated expensive, so it
+  always asks. The conductor is told never to share unasked.
+
+Tried for real once, with a throwaway page: the installed `cloudflared` gave an address, which then answered with
+Cloudflare's tunnel error because it had not connected yet. That is what the "ready means connected" rule comes
+from. A link working end to end from another computer has not been seen yet.
+
+Not done: anything for the person at the other end to say what they think (they answer wherever the link was sent);
+a password or a list of who may open it (anyone with the link can); an app whose pages call a second port on
+`localhost` from the browser (only the one port is tunnelled, so those calls fail for a visitor); a stable address
+(each share gets a new one); a list of everything public in one place in the UI (`GET /apps/:id/shares` and the
+agent's `shares` have it).

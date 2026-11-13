@@ -638,6 +638,9 @@ Details and sources in `research/`.
   can check, each with how. The agents build them as the task goes (the prototype's agent works to them and records
   what the prototype showed), the audit asks whether they are enough, the person approves them with the brief, and the
   planner makes each a check of a sub-task.
+- **Sharing is built in** (2026-11-13). A prototype, a task's mockups or its sketches can be given a public address to
+  send to someone for a look, from a Share button over the view: a Cloudflare quick tunnel to that one thing, never
+  to the engine. Always a person's decision, always visible while it is on, and it ends by itself.
 - **What an agent asks shows in its conductor's column** (2026-11-13). What an agent the conductor has out asks the
   person to allow shows in the conductor's conversation, named for the agent, and is answered there; an agent stopped
   on the person is reported as waiting, never working. Above the threshold the answer stays the person's.

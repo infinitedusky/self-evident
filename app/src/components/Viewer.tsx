@@ -13,6 +13,8 @@ import { Mockups } from '../pages/Mockups'
 import { Sketches } from '../pages/Sketches'
 import { PagePane } from './PagePane'
 import { PrototypePane } from './PrototypePane'
+import { Share } from './Share'
+import { useCurrentApp } from '../current-app'
 import type { Tab } from '../workspace'
 
 export type Viewed = Extract<Tab, { kind: 'sketch' | 'storybook' | 'prototype' }>
@@ -32,6 +34,9 @@ function Body({ tab, embedded, onNavigate }: { tab: Viewed; embedded?: boolean; 
 /** `embedded`: inside a page that already has a heading (a step's page), so the viewer shows only its controls. */
 export function Viewer({ tab, embedded, onNavigate, detached: startDetached = false }: { tab: Viewed; embedded?: boolean; /** A prototype's page changed (its tab keeps the address). */ onNavigate?: (path: string) => void; /** For a story: start as detached. */ detached?: boolean }) {
   const key = viewKey(tab)
+  const { app } = useCurrentApp()
+  // What a share of this reaches: the prototype, or the mockups or sketches of the conversation they are from (else the app's).
+  const shareId = tab.kind === 'prototype' ? tab.id : tab.session ?? app?.id
   const [detached, setDetached] = useState(startDetached)
   const [problem, setProblem] = useState<string | null>(null)
   const ch = useRef<BroadcastChannel | null>(null)
@@ -51,6 +56,7 @@ export function Viewer({ tab, embedded, onNavigate, detached: startDetached = fa
   return (
     <div className={`viewer ${embedded ? 'embedded' : ''}`} data-component="Viewer">
       <div className="viewer-bar">
+        {shareId && <Share kind={tab.kind} id={shareId} appId={app?.id} />}
         {detached
           ? <button className="btn quiet small" onClick={back} title="Close its browser tab and show it here again">↙ Bring it back</button>
           : <button className="btn quiet small" onClick={detach} title="Open it in a browser tab of its own">↗ Detach</button>}
