@@ -52,12 +52,13 @@ export function Share({ kind, id, appId, open: startOpen = false }: { kind: Shar
             <strong>Anyone with this link can open {NAME[kind].it}</strong>
             <div className="share-link"><input className="mono" readOnly value={share.url} aria-label="The public link" onFocus={(e) => e.target.select()} /><button className="btn small" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button></div>
             <p className="faint">Public since {clock(share.since)}. It ends at {clock(share.expiresAt)}, or sooner when {NAME[kind].ends}.{kind === 'prototype' ? ' They use it with the sample data that is in it now, and what they do there changes it for everyone.' : ''}</p>
+            {share.via === 'ngrok' && <p className="faint">Through ngrok, since this network blocks Cloudflare's tunnel. On a free ngrok account the visitor sees ngrok's notice first and presses Visit Site, and only one thing can be shared at a time.</p>}
             <button className="btn quiet small" disabled={busy} onClick={() => void act(async () => { await engine.unshare(kind, id); setShare(null) })}>Stop sharing</button>
           </> : <>
             <strong>Share {NAME[kind].it} for a look</strong>
             <p className="faint">This makes a public link to it, running on this computer. Anyone who has the link can open it{kind === 'prototype' ? ', with the sample data in it' : ''}; no sign-in. It ends when you stop it, when {NAME[kind].ends}, or after 8 hours. This computer has to stay on and awake.</p>
             <button className="btn small" disabled={busy} onClick={() => void act(async () => setShare(await engine.share(kind, id)))}>{busy ? 'Making the link…' : 'Make the link'}</button>
-            {busy && <span className="faint"> It takes a few seconds.</span>}
+            {busy && <span className="faint"> It takes a few seconds; longer the first time on a network that blocks one tunnel, while it tries the other.</span>}
           </>}
           {error && <div className="empty bad" role="alert">{error}</div>}
         </div>

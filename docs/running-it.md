@@ -235,5 +235,11 @@ checkout, normally the default branch.
 The Share button over a view makes a public link through a Cloudflare quick tunnel. It needs `cloudflared` on the
 computer: `brew install cloudflared` (no account, no sign-in). The link works while this computer is on and awake,
 and ends when you stop it, when what it shows stops, or after 8 hours (`SHARE_HOURS` in the engine's environment
-changes that). If the panel says the tunnel got an address but did not connect, the network is blocking it: try
-another network, or allow outbound connections to Cloudflare on port 7844.
+changes that).
+
+A managed laptop or a work network may block the port Cloudflare's tunnel connects out on (7844). Sharing notices
+within a few seconds and goes through **ngrok** instead, which uses the ordinary HTTPS port: install it
+(`brew install ngrok`) and give it your account's token once (`ngrok config add-authtoken <token>`). A free ngrok
+account has one address, so only one thing can be shared at a time and any other ngrok tunnel on the account has to
+be stopped first; visitors see ngrok's notice page before the prototype. `SHARE_TUNNEL=ngrok` (or `cloudflare`) in the
+engine's environment picks one and skips the other.

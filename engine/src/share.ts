@@ -9,8 +9,9 @@
  *   The engine's own port is never tunnelled: it holds everything.
  *
  * The tunnel is a Cloudflare quick tunnel (`cloudflared tunnel --url`): no account, no configuration, a random
- * `trycloudflare.com` address that lasts as long as the process does. Chosen over ngrok, which needs an account and
- * a token before the first link. Anyone with the address can open it, so a share is always a person's decision (the
+ * `trycloudflare.com` address that lasts as long as the process does. Where a network will not let that connect
+ * (it uses port 7844, which managed laptops block), ngrok is used instead: it needs an account's token, and gets
+ * through on the ordinary HTTPS port. Anyone with the address can open it, so a share is always a person's decision (the
  * agent's tool is rated expensive, which always asks), it ends by itself after a few hours, and it ends with the
  * thing it shows. Nothing about a share is kept: after an engine restart there are none.
  *
@@ -31,7 +32,7 @@ import { storybookStatus } from './storybook.js'
 
 export const SHARE_KINDS = ['prototype', 'storybook', 'sketch'] as const
 export type ShareKind = (typeof SHARE_KINDS)[number]
-export interface Shared { kind: ShareKind; id: string; url: string; since: string; expiresAt: string; by: string }
+export interface Shared { kind: ShareKind; id: string; url: string; since: string; expiresAt: string; by: string; /** Which tunnel it goes through. */ via: 'cloudflare' | 'ngrok' }
 interface Live extends Shared { appId: string; proc: ChildProcess; server?: Server; timer: NodeJS.Timeout }
 
 const live = new Map<string, Live>()
@@ -40,7 +41,7 @@ const keyOf = (kind: ShareKind, id: string) => `${kind}:${id}`
 const hours = () => Math.min(Math.max(Number(process.env.SHARE_HOURS ?? 8) || 8, 0.00001), 72)
 const bin = () => process.env.CLOUDFLARED_BIN ?? 'cloudflared'
 const WHAT = { prototype: 'The prototype', storybook: 'The mockups', sketch: 'The sketches' } as const
-const view = (s: Live): Shared => ({ kind: s.kind, id: s.id, url: s.url, since: s.since, expiresAt: s.expiresAt, by: s.by })
+const view = (s: Live): Shared => ({ kind: s.kind, id: s.id, url: s.url, since: s.since, expiresAt: s.expiresAt, by: s.by, via: s.via })
 
 /** The app a conversation or an app id belongs to: mockups and sketches are shared by where they live. */
 async function scopeApp(id: string): Promise<string> {
@@ -92,30 +93,89 @@ async function targetOf(kind: ShareKind, id: string): Promise<{ appId: string; u
   return { appId, url: `http://127.0.0.1:${port}`, server }
 }
 
+export type Via = 'cloudflare' | 'ngrok'
+type Tunnel = { proc: ChildProcess; url: string; via: Via }
+/** Why a tunnel did not come up, in a form the next step can act on: `blocked` means this network, so another provider may work. */
+class TunnelError extends PlanError { constructor(message: string, readonly blocked = false) { super(message) } }
+
 const ADDRESS = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/
 const CONNECTED = /Registered tunnel connection/ // cloudflared prints the address first and connects after: until this line the address answers with Cloudflare's error page
+const EDGE_REFUSED = /Unable to establish connection with Cloudflare edge|Failed to dial a quic connection|dial tcp [^ ]+:7844: i\/o timeout/g
+const startTimeout = () => Number(process.env.SHARE_START_TIMEOUT_MS ?? 45_000)
+const ngrokBin = () => process.env.NGROK_BIN ?? 'ngrok'
 
-/** Start the tunnel and wait for its address and for it to be connected, so the link works when it is handed over. The origin is told it is asked for as itself, so a dev server that checks the host still answers. */
-function tunnel(target: string, timeoutMs = Number(process.env.SHARE_START_TIMEOUT_MS ?? 45_000)): Promise<{ proc: ChildProcess; url: string }> {
+/** Run a tunnel program and settle on the first of: `ready` says it has an address and is connected, `broken` says why it will not, it exits, or time is up. */
+function run(cmd: string, args: string[], o: { via: Via; ready: (all: string) => string | null; broken: (all: string, final?: boolean) => TunnelError | null; missing: string; timeoutMs: number }): Promise<Tunnel> {
   return new Promise((ok, bad) => {
-    const host = new URL(target).host
-    const proc = spawn(bin(), ['tunnel', '--no-autoupdate', '--url', target, '--http-host-header', host], { stdio: ['ignore', 'pipe', 'pipe'] })
-    const said: string[] = []
+    const proc = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] })
     let done = false
-    let url: string | null = null
     let all = ''
-    const fail = (why: string) => { if (done) return; done = true; clearTimeout(timer); try { proc.kill('SIGTERM') } catch { /* gone */ } bad(new PlanError(why)) }
-    const timer = setTimeout(() => fail(url ? `the tunnel got an address but did not connect to Cloudflare in ${Math.round(timeoutMs / 1000)} seconds, so the link would not work. This network may block it. Its last lines: ${said.slice(-3).join(' | ')}` : `the tunnel gave no address in ${Math.round(timeoutMs / 1000)} seconds. Its last lines: ${said.slice(-3).join(' | ') || '(nothing)'}`), timeoutMs)
+    const last = () => all.split('\n').map((l) => l.trim()).filter(Boolean).slice(-3).map((l) => l.slice(0, 200)).join(' | ') || '(nothing)'
+    const fail = (e: TunnelError) => { if (done) return; done = true; clearTimeout(timer); try { proc.kill('SIGTERM') } catch { /* gone */ } bad(e) }
+    const timer = setTimeout(() => fail(o.broken(all, true) ?? new TunnelError(`the tunnel was not ready in ${Math.round(o.timeoutMs / 1000)} seconds. Its last lines: ${last()}`)), o.timeoutMs)
     const read = (b: Buffer) => {
-      for (const line of b.toString().split('\n')) if (line.trim()) said.push(line.trim().slice(0, 200))
-      all = (all + b.toString()).slice(-20_000)
-      url ??= ADDRESS.exec(all)?.[0] ?? null
-      if (url && CONNECTED.test(all) && !done) { done = true; clearTimeout(timer); ok({ proc, url }) }
+      all = (all + b.toString()).slice(-40_000)
+      const url = o.ready(all)
+      if (url && !done) { done = true; clearTimeout(timer); ok({ proc, url, via: o.via }); return }
+      const why = o.broken(all)
+      if (why) fail(why)
     }
     proc.stdout?.on('data', read); proc.stderr?.on('data', read)
-    proc.on('error', (e: NodeJS.ErrnoException) => fail(e.code === 'ENOENT' ? 'cloudflared is not installed on this computer: sharing uses a Cloudflare quick tunnel. Install it (brew install cloudflared), then share again. No account is needed.' : `the tunnel could not start: ${e.message}`))
-    proc.on('exit', (code) => fail(`the tunnel stopped before giving an address (exit ${code}). Its last lines: ${said.slice(-3).join(' | ') || '(nothing)'}`))
+    proc.on('error', (e: NodeJS.ErrnoException) => fail(new TunnelError(e.code === 'ENOENT' ? o.missing : `the tunnel could not start: ${e.message}`)))
+    proc.on('exit', (code) => fail(o.broken(all) ?? new TunnelError(`the tunnel stopped before it was ready (exit ${code}). Its last lines: ${last()}`)))
   })
+}
+
+/**
+ * A Cloudflare quick tunnel: no account. The origin is told it is asked for as itself, so a dev server that checks the
+ * host still answers. It connects out on port 7844, which some managed networks block (Sandy's work laptop, 2026-11-13):
+ * two refusals from the edge and no connection is that, said after seconds, not the whole wait.
+ */
+const cloudflare = (target: string, timeoutMs = startTimeout()) => run(bin(), ['tunnel', '--no-autoupdate', '--url', target, '--http-host-header', new URL(target).host], {
+  via: 'cloudflare', timeoutMs,
+  ready: (all) => (CONNECTED.test(all) ? ADDRESS.exec(all)?.[0] ?? null : null),
+  broken: (all, final) => (!CONNECTED.test(all) && (all.match(EDGE_REFUSED)?.length ?? 0) >= (final ? 1 : 2) ? new TunnelError('this network does not let the Cloudflare tunnel connect: it blocks outbound port 7844, which the tunnel uses. A managed laptop or a work network often does. Another network works, or ask for that port to be allowed.', true) : null),
+  missing: 'cloudflared is not installed on this computer: sharing uses a Cloudflare quick tunnel. Install it (brew install cloudflared), then share again. No account is needed.',
+})
+
+/**
+ * ngrok: connects out on the ordinary HTTPS port, so it gets through where Cloudflare's does not. It needs an account's
+ * token (`ngrok config add-authtoken`), and a free account has one address: a second tunnel is refused while one is up.
+ * Its JSON log says "started tunnel" with the address once it is live.
+ */
+function ngrokUrl(all: string): string | null {
+  for (const line of all.split('\n')) { if (!line.includes('"url"')) continue; try { const j = JSON.parse(line) as { url?: string; msg?: string }; if (j.url && /^https:\/\//.test(j.url) && j.msg === 'started tunnel') return j.url } catch { /* a partial line */ } }
+  return null
+}
+const ngrok = (target: string, timeoutMs = startTimeout()) => run(ngrokBin(), ['http', target.replace(/^http:\/\//, ''), '--host-header', new URL(target).host, '--log', 'stdout', '--log-format', 'json'], {
+  via: 'ngrok', timeoutMs, ready: ngrokUrl,
+  broken: (all) => /ERR_NGROK_334|is already online/.test(all) ? new TunnelError('ngrok\'s address is already in use: another ngrok tunnel is running on this account, and a free account has one address. Stop that tunnel (or what is shared now), or use a paid ngrok plan, then share again.')
+    : /ERR_NGROK_(4018|105|107)|authtoken/i.test(all) && /ERR_NGROK_/.test(all) ? new TunnelError('ngrok has no working token on this computer: sign in at ngrok.com, then run "ngrok config add-authtoken <token>" and share again.')
+    : /ERR_NGROK_\d+/.test(all) ? new TunnelError(`ngrok would not start the tunnel (${/ERR_NGROK_\d+/.exec(all)![0]}): ${(/failed to start tunnel: ([^\\"\n]+)/.exec(all)?.[1] ?? 'see ngrok.com/docs/errors').slice(0, 200)}`) : null,
+  missing: 'ngrok is not installed on this computer (brew install ngrok), and it needs an account\'s token.',
+})
+
+/**
+ * Which tunnel a share goes through. `SHARE_TUNNEL`: cloudflare, ngrok, or auto (the default): Cloudflare first, since
+ * it needs no account, and ngrok when this network will not let Cloudflare connect. A network that blocked it once is
+ * not asked again for an hour, so the next share does not wait to find out.
+ */
+let cloudflareBlockedAt = 0
+export const forgetBlocked = () => { cloudflareBlockedAt = 0 } // for tests
+async function tunnel(target: string): Promise<Tunnel> {
+  const want = (process.env.SHARE_TUNNEL ?? 'auto').toLowerCase()
+  if (want === 'ngrok') return ngrok(target)
+  if (want === 'cloudflare' || want === 'cloudflared') return cloudflare(target)
+  let first: TunnelError | null = null
+  if (Date.now() - cloudflareBlockedAt > 3_600_000) {
+    try { return await cloudflare(target) } catch (err) {
+      if (!(err instanceof TunnelError) || !err.blocked) throw err
+      first = err; cloudflareBlockedAt = Date.now()
+    }
+  }
+  try { return await ngrok(target) } catch (err) {
+    throw new PlanError(`${first ? first.message : 'This network does not let the Cloudflare tunnel connect (found earlier).'} Tried ngrok instead: ${(err as Error).message}`)
+  }
 }
 
 async function tell(appId: string, actor: string, type: 'share.started' | 'share.stopped', payload: Record<string, unknown>) {
@@ -139,17 +199,17 @@ export async function share(kind: ShareKind, id: string, actor = 'person'): Prom
   if (pending) return pending
   const p = (async () => {
     const target = await targetOf(kind, id)
-    let t: { proc: ChildProcess; url: string }
+    let t: Tunnel
     try { t = await tunnel(target.url) } catch (err) { target.server?.close(); throw err }
     const now = Date.now()
     const s: Live = {
-      kind, id, appId: target.appId, url: t.url, since: new Date(now).toISOString(), expiresAt: new Date(now + hours() * 3_600_000).toISOString(), by: actor,
+      kind, id, appId: target.appId, url: t.url, via: t.via, since: new Date(now).toISOString(), expiresAt: new Date(now + hours() * 3_600_000).toISOString(), by: actor,
       proc: t.proc, server: target.server, timer: setTimeout(() => void unshare(kind, id, 'engine', 'its time was up'), hours() * 3_600_000),
     }
     s.timer.unref?.()
     live.set(key, s)
     t.proc.on('exit', () => { if (live.get(key) === s) void unshare(kind, id, 'engine', 'the tunnel stopped') }) // it died by itself: the address is dead, so say so
-    await tell(target.appId, actor, 'share.started', { kind, id, url: s.url, expiresAt: s.expiresAt })
+    await tell(target.appId, actor, 'share.started', { kind, id, url: s.url, via: s.via, expiresAt: s.expiresAt })
     return view(s)
   })().finally(() => starting.delete(key))
   starting.set(key, p)

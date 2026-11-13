@@ -2995,3 +2995,24 @@ a password or a list of who may open it (anyone with the link can); an app whose
 `localhost` from the browser (only the one port is tunnelled, so those calls fail for a visitor); a stable address
 (each share gets a new one); a list of everything public in one place in the UI (`GET /apps/:id/shares` and the
 agent's `shares` have it).
+
+## ngrok as the second tunnel, for networks that block Cloudflare's (Sandy, 2026-11-13: "make the link is taking a long time … Let's add ngrok as a second provider")
+
+The first real share failed after 45 seconds: Sandy's work laptop is managed, and its network refuses outbound port
+7844, which a Cloudflare tunnel connects on (tried both of its protocols; both timed out at the edge). The tunnel
+prints an address anyway, which is why "ready means connected" caught it.
+
+- **Two providers, tried in order** (`SHARE_TUNNEL=auto`, the default): Cloudflare first, since it needs no account;
+  ngrok when the network will not let Cloudflare connect. ngrok goes out on the ordinary HTTPS port. `SHARE_TUNNEL`
+  set to `cloudflare` or `ngrok` uses only that one.
+- **Blocked is noticed in seconds.** Two refusals from Cloudflare's edge with no connection is a blocked network, said
+  at once instead of after the whole wait, and remembered for an hour so the next share goes straight to ngrok.
+- **ngrok's limits are said in words**: no token on this computer; its one free address already in use by another
+  tunnel on the account (that is the case on this laptop today, where an ngrok tunnel was already running); not
+  installed. When both fail the message gives both reasons.
+- A share says which tunnel it goes through (`via`); for ngrok the panel adds what a visitor sees on a free account
+  (ngrok's notice page first) and that only one thing can be shared at a time.
+
+Checked against the installed ngrok: its flags (`--host-header` is accepted though no longer listed) and the shape of
+its JSON log, including the refusal. Not seen: a share through ngrok working end to end, since this account's one
+address was in use; the tests use stand-ins for both programs.
