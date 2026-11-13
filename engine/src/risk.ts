@@ -55,6 +55,7 @@ const ENGINE: Record<string, [Risk, string]> = {
   stop_prototype: ['cheap', "stops a prototype's dev server; run starts it again"],
   discard_prototype: ['moderate', "removes a prototype's worktree and branch; what it changed is gone"],
   set_prototype_command: ['moderate', 'changes how this app\'s prototypes start'],
+  set_prototype_cleanup: ['moderate', 'changes the commands run when this app\'s prototypes are stopped or discarded'],
   prototype_data: ['cheap', "rebuilds a prototype's made-up data, or saves it as a scenario"],
   set_prototype_database: ['moderate', "changes where this app's prototypes get their databases"],
   start_project: ['expensive', 'runs agents, spends money, opens a pull request'],

@@ -9,7 +9,7 @@ import { and, eq } from 'drizzle-orm'
 import { app, event, repo, session, workspace } from './db/schema.js'
 import { branchExists, commitAll, git } from './git.js'
 import { newId } from './ids.js'
-import { discardPrototype, listPrototypes, prototypeStatus, runPrototype, setPrototypeCommand, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
+import { discardPrototype, listPrototypes, prototypeStatus, runPrototype, setPrototypeCleanup, setPrototypeCommand, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -88,7 +88,11 @@ describe.skipIf(!reachable)('prototypes', () => {
     const stopped = await stopPrototype(p.id)
     expect(stopped.status).toBe('stopped')
     expect(stopped.log).toEqual(['no such stack (sample)', 'stop command exited with 3'])
+    const gone = join(repoPath, '..', 'discards.txt')
+    expect(await setPrototypeCleanup(appId, { stop: `echo "stop $PORT" >> "${gone}"`, discard: `echo "discard $PORT" >> "${gone}"` })).toMatchObject({ prototype_stop_cmd: expect.stringContaining('stop'), prototype_discard_cmd: expect.stringContaining('discard') })
+    expect((await prototypeStatus(p.id)).cleanup).toEqual({ stop: true, discard: true })
     expect((await discardPrototype(p.id)).status).toBe('discarded')
-    expect((await setPrototypeCommand(appId, SERVER, '')).prototype_stop_cmd).toBeNull()
+    expect(readFileSync(gone, 'utf8').trim().split('\n')).toEqual([`stop ${port}`, `discard ${port}`]) // thrown away: stopped, then what it made removed, while its worktree was still there
+    expect(await setPrototypeCleanup(appId, { stop: '', discard: '' })).toEqual({ prototype_stop_cmd: null, prototype_discard_cmd: null })
   })
 })

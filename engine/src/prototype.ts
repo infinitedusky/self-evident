@@ -29,8 +29,8 @@ async function setupOf(appId: string) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError(`no app ${appId}`)
   const r = await homeRepo(appId)
-  const s = (a.setup ?? {}) as { prototype_cmd?: string; prototype_stop_cmd?: string; prototype_db?: PrototypeDb }
-  return { a, repoPath: r?.localPath ?? null, cmd: s.prototype_cmd?.trim() || null, stopCmd: s.prototype_stop_cmd?.trim() || null, dbCfg: s.prototype_db?.url ? s.prototype_db : null }
+  const s = (a.setup ?? {}) as { prototype_cmd?: string; prototype_stop_cmd?: string; prototype_discard_cmd?: string; prototype_db?: PrototypeDb }
+  return { a, repoPath: r?.localPath ?? null, cmd: s.prototype_cmd?.trim() || null, stopCmd: s.prototype_stop_cmd?.trim() || null, discardCmd: s.prototype_discard_cmd?.trim() || null, dbCfg: s.prototype_db?.url ? s.prototype_db : null }
 }
 
 const slugOf = (p: typeof prototype.$inferSelect) => p.branch.slice('prototype/'.length)
@@ -69,8 +69,9 @@ export async function prototypeStatus(id: string) {
   const on = alive(id)
   const url = p.port ? `http://localhost:${p.port}` : null
   const { dbCfg } = await setupOf(p.appId)
+  const { stopCmd, discardCmd } = await setupOf(p.appId)
   const data = dbCfg ? { database: databaseName(slugOf(p)), scenarios: await listScenarios(p.path).catch(() => []) } : { database: null, scenarios: [] }
-  return { ...p, ...data, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up: on && url ? await answers(url) : false, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [] }
+  return { ...p, ...data, cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up: on && url ? await answers(url) : false, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [] }
 }
 
 export async function listPrototypes(appId: string) {
@@ -159,8 +160,9 @@ function kill(id: string): Promise<void> {
  * printed when it failed is kept with the server's last lines.
  */
 const lastCleanUp = new Map<string, string[]>()
-async function cleanUp(p: typeof prototype.$inferSelect): Promise<void> {
-  const { stopCmd } = await setupOf(p.appId)
+async function cleanUp(p: typeof prototype.$inferSelect, why: 'stop' | 'discard' = 'stop'): Promise<void> {
+  const s = await setupOf(p.appId)
+  const stopCmd = why === 'discard' ? s.discardCmd : s.stopCmd // discarding runs the stop command first, then this
   if (!stopCmd || !p.port || !existsSync(p.path)) return
   const env = { ...process.env, ...(await prototypeEnv(p)), PORT: String(p.port), CI: '1' }
   const out = await new Promise<string[]>((done) => {
@@ -168,11 +170,11 @@ async function cleanUp(p: typeof prototype.$inferSelect): Promise<void> {
     const log: string[] = []
     const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)) }
     proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
-    const timer = setTimeout(() => { log.push(`stop command still running after ${STOP_TIMEOUT_MS / 1000}s: left to finish`); done(log) }, STOP_TIMEOUT_MS)
-    proc.on('error', (e) => { clearTimeout(timer); done([...log, `stop command could not run: ${e.message}`]) })
-    proc.on('exit', (code) => { clearTimeout(timer); done(code ? [...log, `stop command exited with ${code}`] : []) })
+    const timer = setTimeout(() => { log.push(`${why} command still running after ${STOP_TIMEOUT_MS / 1000}s: left to finish`); done(log) }, STOP_TIMEOUT_MS)
+    proc.on('error', (e) => { clearTimeout(timer); done([...log, `${why} command could not run: ${e.message}`]) })
+    proc.on('exit', (code) => { clearTimeout(timer); done(code ? [...log, `${why} command exited with ${code}`] : []) })
   })
-  if (out.length) lastCleanUp.set(p.id, out.slice(-20)); else lastCleanUp.delete(p.id)
+  if (out.length) lastCleanUp.set(p.id, [...(why === 'discard' ? lastCleanUp.get(p.id) ?? [] : []), ...out].slice(-20)); else if (why === 'stop') lastCleanUp.delete(p.id)
 }
 
 export async function stopPrototype(id: string, actor = 'person') {
@@ -187,7 +189,8 @@ export async function stopPrototype(id: string, actor = 'person') {
 export async function discardPrototype(id: string, actor = 'person') {
   const p = await rowOf(id)
   await kill(id)
-  await cleanUp(p) // while its worktree is still there for the command to run in
+  await cleanUp(p) // while its worktree is still there for the commands to run in
+  await cleanUp(p, 'discard') // what is only removed when it is thrown away: its containers, volumes, data
   if (p.sessionId) await endTalk(p.sessionId)
   const { repoPath, dbCfg } = await setupOf(p.appId)
   if (dbCfg) await dropDatabase(dbCfg, slugOf(p)).catch(() => {})
@@ -240,6 +243,21 @@ export async function setPrototypeCommand(appId: string, cmd: string, stop?: str
   const next = { ...(a.setup as object), prototype_cmd: cmd.trim(), ...(stop === undefined ? {} : { prototype_stop_cmd: stop.trim() || undefined }) }
   await db.update(app).set({ setup: next }).where(eq(app.id, appId))
   return { prototype_cmd: cmd.trim(), prototype_stop_cmd: (next as { prototype_stop_cmd?: string }).prototype_stop_cmd ?? null }
+}
+
+/**
+ * How this app cleans up after a prototype whose start command leaves things running that are not its own process
+ * (Sandy, 2026-11-13: "how does it cleanup the environment after the prototype"). stop: run when a prototype is
+ * stopped or restarted (stop the stack, keep its data). discard: run after it when a prototype is thrown away (remove
+ * the containers, volumes and data). Each is given, undefined leaves it as it is, empty clears it.
+ */
+export async function setPrototypeCleanup(appId: string, i: { stop?: string; discard?: string }) {
+  const { a } = await setupOf(appId)
+  const next = { ...(a.setup as Record<string, unknown>) }
+  if (i.stop !== undefined) { if (i.stop.trim()) next.prototype_stop_cmd = i.stop.trim(); else delete next.prototype_stop_cmd }
+  if (i.discard !== undefined) { if (i.discard.trim()) next.prototype_discard_cmd = i.discard.trim(); else delete next.prototype_discard_cmd }
+  await db.update(app).set({ setup: next }).where(eq(app.id, appId))
+  return { prototype_stop_cmd: (next.prototype_stop_cmd as string | undefined) ?? null, prototype_discard_cmd: (next.prototype_discard_cmd as string | undefined) ?? null }
 }
 
 export function stopPrototypes() { for (const id of [...running.keys()]) void kill(id) }
