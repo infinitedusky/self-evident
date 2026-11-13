@@ -253,6 +253,9 @@ export const AppStorybookNoMap: Story = { parameters: { route: { path: '/setting
 export const AppStorybookNotSet: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/storybook` } }, beforeEach: withEngine({ appSettings: { ...appSettings, integrations: { ...appSettings.integrations, storybook: { on: { value: null, from: null }, cmd: { value: null, from: null }, url: { value: null, from: null } } }, status: { ...appSettings.status, storybook: { state: 'off', missing: [], keyVar: null } } } }) }
 export const AllAppsStorybook: Story = { parameters: { route: { path: '/settings/:section/:item', url: '/settings/integrations/storybook' } } }
 /** An app's prototype settings: how its server starts and where its throwaway databases go. */
-export const AppPrototype: Story = { parameters: appPage(sampleApp.id, 'prototype') }
+export const AppPrototype: Story = {
+  parameters: appPage(sampleApp.id, 'prototype'),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByLabelText(/Stop command/)).toBeInTheDocument() }, // for what the start command leaves running
+}
 /** An app's workflow rules: configuration, not something that runs. */
 export const AppWorkflowRules: Story = { parameters: appPage(sampleApp.id, 'workflows') }

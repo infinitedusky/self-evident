@@ -1,6 +1,6 @@
 /**
- * A prototype, in a tab: the actual thing, built fast in a worktree of its own to use, change in moments and show
- * people, then analysed into the plan and built again from scratch. With an id, its server in a frame with an
+ * A prototype, in a tab: the thing built the way we would ship it, in a worktree of its own, to show that it works;
+ * then analysed into the plan (it is not merged). With an id, its server in a frame with an
  * address bar, reload, device widths and a way out to a browser tab (after Replit's preview pane); without, the
  * app's prototypes. The agent starts them (start_prototype); the engine runs their servers; each has a conversation
  * of its own that builds it, which 💬 brings to the agent's column.
@@ -27,7 +27,7 @@ function Prototypes() {
     <div className="preview-empty" data-component="PrototypePane">
       <div className="big" aria-hidden="true">🛠️</div>
       <h3>No prototype yet</h3>
-      <p className="muted">Ask the agent to prototype an idea. It builds the actual thing fast, in a worktree of its own, with made-up data, so you can use it, change it and show people before anything is planned.</p>
+      <p className="muted">Ask the agent to prototype an idea. It builds it the way it would ship, in a worktree of its own, with only what is outside the app stood in for, so you can see it work end to end before anything is planned.</p>
       {!app?.setup?.prototype_cmd && <p className="muted">It works out how {app?.name ?? 'this app'} starts the first time, and asks you to confirm.</p>}
     </div>
   )

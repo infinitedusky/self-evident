@@ -2837,3 +2837,42 @@ Not done: syntax colouring; the code of an app's other repositories (only the wo
 the Code view on a prototype opened as a workspace tab of its own or one that belongs to no task or idea (it is on
 the step's page only); highlighting inside a docs page. Not tried: a real agent calling `show_code` in a
 conversation; the engine test runs against a real temporary repository, and the screens against made-up data.
+
+## A prototype is built the way we would ship it (Sandy, 2026-11-13: "a prototype's code is essentially what we'd go live with; only what's outside the system is faked, through seams")
+
+The engine told every prototype agent the opposite: "Speed over quality. Shortcuts are the default … No tests, no
+review, no conventions to keep … write no migrations." Those lines came before anything a conductor or a skill said,
+so an agent given the new mandate got two sets of rules. The checks then read the prototype and described its
+shortcuts as the thing to build.
+
+- **The prototype agent's instructions** are rewritten: build it as the repository builds things; fake only what is
+  outside the system, through a seam; turn the brief's requirements into a checklist and meet each end to end;
+  report one line per requirement, what is not met first; never call it ready with a requirement open. The
+  "shortcut:" commit lines are gone.
+- **One skill holds the whole mandate.** Self Evident now brings a `prototype` skill (`engine/plugin/skills/prototype`,
+  the first skill in its own plugin) and puts it on the Prototype step of every app without any setting: the
+  prototype's agent is told to invoke it before writing anything, and the conductor gets it for the step. A skill
+  named `prototype` in Your skills replaces the built-in one (a person's skill wins over Self Evident's of the same
+  name, for any name), so the text can be edited without touching the engine. An app's own skills for the step come
+  after it.
+- **The conductor** is told what a prototype is, to write its brief as checkable requirements with what is outside
+  the system, and to hold the agent's report against them before telling the person.
+- **The prototype analysis** no longer looks for "shortcut:" lines. It checks each requirement end to end, the code
+  against the repository's conventions, lists every seam and stub (existing or added; recorded or assumed), and
+  names anything faked inside the system as a defect. The draft ADR treats the prototype as the reference for the
+  build, where it used to say "never as code to carry over".
+- **A stop command per app** (`setup.prototype_stop_cmd`, Settings › app › Prototype, or `set_prototype_command`
+  with `stop`). The engine only stops the start command's own processes; a command that brings up containers left
+  them running. The stop command runs in the prototype's worktree, with the same `$PORT` and database variable,
+  when a prototype is stopped, restarted or discarded. It never blocks the stop: if it fails or takes more than two
+  minutes, what it printed shows where the server's last lines do.
+- Wording changed to match in the tools' descriptions, the step's one-line description, the prototype pane's empty
+  state and the code comments.
+
+Unchanged, and worth a decision: the prototype's branch is still not merged, and the build still starts from the
+default branch, now with the prototype as its reference. If its code is what we would ship, building it a second
+time is a cost; whether the build should start from the prototype's branch is open.
+
+Not done: the stop command is not run when the engine itself shuts down (prototypes are only signalled then), nor
+for a prototype that never got a port. Not tried: a real prototype built under the new instructions, or a real
+stack torn down by a stop command; the tests run a stand-in command against a real temporary repository.

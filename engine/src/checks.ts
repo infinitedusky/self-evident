@@ -24,20 +24,23 @@ export interface CheckFacts { identifier: string; title: string; issueId: string
 
 const report = (key: StepKey, issueId: string) => `Record it with set_step: issueId ${issueId}, key ${key}, status done, body: the report in Markdown, detail: its one-line verdict. Then say in two or three lines what you found, and stop.`
 const earlier = (f: CheckFacts) => (f.before.length ? `Read first, with get_step on this task: ${f.before.map((k) => `${k} (${step(k).label})`).join(', ')}. ` : '')
-const proto = (f: CheckFacts) => (f.prototype ? `The prototype "${f.prototype.title}" is in ${f.prototype.path} on branch ${f.prototype.branch}, cut from ${f.base}: read it there (git -C ${f.prototype.path} log ${f.base}..HEAD, git -C ${f.prototype.path} diff ${f.base}...HEAD). It was built fast and is never merged. ` : '')
+const proto = (f: CheckFacts) => (f.prototype ? `The prototype "${f.prototype.title}" is in ${f.prototype.path} on branch ${f.prototype.branch}, cut from ${f.base}: read it there (git -C ${f.prototype.path} log ${f.base}..HEAD, git -C ${f.prototype.path} diff ${f.base}...HEAD). It was built the way we would ship it, with only what is outside the system faked through seams; it is not merged. ` : '')
 
 /** What each check's fresh agent is told: what to read and what to report. It starts from this and nothing else. */
 export function checkBrief(key: StepKey, f: CheckFacts): string {
   const task = `Task ${f.identifier} "${f.title}" (${f.issueId}). Read the task and its brief with the task tool.`
   switch (key) {
     case 'analysis': return `**Prototype analysis.** ${task}
-${proto(f)}Its agent was told to take the agreed mockup and make it work however it thought best, with shortcuts. Read how it did: every commit since ${f.base} (messages too: a line starting "shortcut:" marks something faked or skipped), the diff, the made-up data under .prototype/scenarios, and the code it leans on.
+${proto(f)}Its agent was told to build it the way we would ship it: every requirement of the brief met end to end, by the repository's conventions, with fakes only at the system's edges and through seams. Do not take its word for that: check. Read every commit since ${f.base}, the diff, the sample data under .prototype/scenarios, the repository's conventions (AGENTS.md, CLAUDE.md, the code around it on ${f.base}), and the code it leans on.
 Report, with file paths:
-- **How it was built**: the parts, how they fit, the data's final shape.
-- **What was faked or skipped**: each shortcut, and what the real build has to do there.
+- **Requirements**: each requirement of the brief, one line: met end to end (where: the integration point, the storage, the API, the screen), partly, or not met. Not met and partly first.
+- **Against the conventions**: where the code departs from how the repository builds things (structure, naming, migrations, privacy rules, tests), with the line and the convention it breaks. Say plainly when it holds.
+- **Seams and stubs**: every place something outside the system is stood in for (a base URL pointed at a stub, an injected transport, a dependency override, a fixture), whether the seam already existed on ${f.base} or the prototype added it (the build needs each one it added), and whether the stub's data was recorded from the real service or its shape is assumed.
+- **Faked inside the system**: anything that is not at an edge: a skipped layer, a hard-coded result, parsing that only handles the sample, logic on the wrong side. Each is a defect of the prototype; say what the build must do there.
+- **How it was built**: the parts, how they fit, the data's final shape, the migrations.
 - **What was hard**: what took several tries or was changed and why (the commit history shows it).
 - **What surprised**: what the mockup or the brief did not foresee.
-- **Keep or leave**: which choices are worth following in the real build, and which were only speed.
+- **Keep or leave**: which choices the build should follow as they are, and which it should not, with why.
 - **Cleaner** (Sandy, 2026-11-12: the build has nobody to ask and nothing to work out, so whatever would make this code simpler is found here). Read the prototype's code, and the code on ${f.base} it sits in, for how the real build should be cleaner than it, with the lines you mean:
   - *Repeats*: logic, markup or styles written two or three times (in the prototype, or already on ${f.base}) that should be one function, component or rule. Name it and say where it lives.
   - *Simpler*: anything done in a roundabout or wasteful way, with the plainer or more efficient way to do it.
@@ -47,7 +50,7 @@ Report, with file paths:
 Describe; do not decide the architecture: that is the draft ADR's, which reads this.
 ${report(key, f.issueId)}`
     case 'adr': return `**Draft ADR.** ${task}
-${earlier(f)}${proto(f)}Propose the architecture for the real build, which starts from ${f.base}, from scratch, with the prototype as a map to follow and improve on, never as code to carry over. Read the code on ${f.base} where the build would land.
+${earlier(f)}${proto(f)}Propose the architecture for the real build, which starts from ${f.base}. The prototype was built the way we would ship it, so it is the reference for the build: say where the build should follow it as it is and where it should differ; its branch is not merged. Read the code on ${f.base} where the build would land.
 Write it as a draft decision record: the context in a few lines; the options (the prototype's way among them, and at least one other); the choice you propose; why, against what the analysis found and how the code is built today; what follows from it (what the build must do, what it must not copy from the prototype); and what you are unsure of, with what would change the choice.
 It is a draft. The planner settles it when it cuts the task into sub-tasks, and the final record is a file the build writes, so do not write any file and do not polish: be clear about the choice and honest about the doubts.
 ${report(key, f.issueId)}`

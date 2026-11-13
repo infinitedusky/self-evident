@@ -1,5 +1,5 @@
 /** Prototypes: a worktree of their own, a server on a free port that answers, stop and start again, discard. */
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -72,5 +72,23 @@ describe.skipIf(!reachable)('prototypes', () => {
     expect(await branchExists(repoPath, p.branch)).toBe(false)
     expect(await listPrototypes(appId)).toEqual([])
     await expect(runPrototype(p.id)).rejects.toThrow(/discarded/)
+  })
+
+  it('runs the app\'s stop command in the prototype\'s worktree when it is stopped, restarted and discarded, with its port; a failing one never blocks, and says so', async () => {
+    const out = join(repoPath, '..', 'stops.txt')
+    expect(await setPrototypeCommand(appId, SERVER, `echo "$PORT $(basename "$PWD")" >> "${out}"`)).toMatchObject({ prototype_stop_cmd: expect.stringContaining('stops.txt') })
+    const p = await startPrototype({ appId, title: 'Stack (sample)' })
+    const port = (await prototypeStatus(p.id)).port
+    await stopPrototype(p.id)
+    await runPrototype(p.id)
+    await runPrototype(p.id, 'person', { restart: true })
+    expect(readFileSync(out, 'utf8').trim().split('\n')).toEqual(Array(2).fill(`${port} ${p.path.split('/').pop()}`)) // the stop, then the restart
+
+    await setPrototypeCommand(appId, SERVER, 'echo "no such stack (sample)" >&2; exit 3')
+    const stopped = await stopPrototype(p.id)
+    expect(stopped.status).toBe('stopped')
+    expect(stopped.log).toEqual(['no such stack (sample)', 'stop command exited with 3'])
+    expect((await discardPrototype(p.id)).status).toBe('discarded')
+    expect((await setPrototypeCommand(appId, SERVER, '')).prototype_stop_cmd).toBeNull()
   })
 })

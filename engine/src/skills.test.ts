@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { installed, removePlugin, writeSharedSkill, cleanStepSkills, stepSkillPrompt, cleanJobs, describeJobs, fileSkill, forgetPlugin, pluginOn, resolvePlugins, skillCategory, type Installed } from './skills.js'
+import { prototypeSkill, withStepDefaults, yoursFirst, installed, removePlugin, writeSharedSkill, cleanStepSkills, stepSkillPrompt, cleanJobs, describeJobs, fileSkill, forgetPlugin, pluginOn, resolvePlugins, skillCategory, type Installed } from './skills.js'
 
 const plugin = (id: string, sdkName: string, skills: string[]): Installed => ({
   id, name: id.split('@')[0], sdkName, path: `/p/${id}`, version: null, description: '', source: null, builtIn: false, mcpServers: [], shim: null,
@@ -110,6 +110,17 @@ describe('an app\'s skills for the steps of its workflow', () => {
 })
 
 describe('your own skills, outside every repo', () => {
+  it('brings a prototype skill to every app, on the Prototype step before the app\'s own; the person\'s own skill of that name replaces it', () => {
+    expect(installed().find((p) => p.id === 'self-evident')!.skills.map((x) => x.name)).toContain('prototype')
+    expect(prototypeSkill(['self-evident:prototype', 'shop-design'])).toBe('self-evident:prototype')
+    expect(yoursFirst(['self-evident:prototype', 'shared:prototype', 'shared:other'])).toEqual(['shared:prototype', 'shared:other'])
+    expect(prototypeSkill(['shared:prototype'])).toBe('shared:prototype')
+    expect(prototypeSkill(['shop-design'])).toBeNull()
+    expect(withStepDefaults({ prototype: ['shop-stack', 'self-evident:prototype'], adr: ['decision-record'] }, ['shared:prototype', 'shop-stack'])).toEqual({ prototype: ['shared:prototype', 'shop-stack'], adr: ['decision-record'] })
+    expect(withStepDefaults(undefined, ['shop-design'])).toEqual({})
+    expect(stepSkillPrompt(withStepDefaults(undefined, ['self-evident:prototype']), ['self-evident:prototype'])).toMatch(/- Prototype: `self-evident:prototype`/)
+  })
+
   it('writes a SKILL.md in the shared folder, which is then a plugin every app gets; the same name replaces it', async () => {
     process.env.SHARED_SKILLS_HOME = mkdtempSync(join(tmpdir(), 'shared-skills-'))
     expect(installed().find((p) => p.id === 'shared')).toMatchObject({ sdkName: 'shared', builtIn: true, skills: [] })

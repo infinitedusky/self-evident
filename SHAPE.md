@@ -660,6 +660,19 @@ Direction, not yet built. The work has two halves with a hinge between them.
 - **Calm screens.** Each screen answers one question. In explore, the default screen is the conversation and the
   thing being made; the rest waits until asked for.
 
+**A prototype is built the way we would ship it** (Sandy, 2026-11-13; replaces "built at hyperspeed with no concern
+for safety" below and "shortcuts are the default" in the prototype agent's instructions). A prototype answers one
+question with evidence: will this work, built the way we would ship it? Its code is essentially what we would go
+live with: the real integration point, schema and migrations, storage, API and screens, by the repository's
+conventions. Only what is outside the system (vendors, other services, identity, real people's data) is faked, and
+only through seams the production code has or should have. Done means every requirement of the brief works end to
+end; the agent reports one line per requirement, what is not met first. Why: the analysis, the draft ADR and the
+blast radius are read out of the prototype and describe what we intend to build, so a prototype full of shortcuts
+taught them the shortcuts. Speed in exploring is the job of sketches and mockups. The whole mandate is one skill,
+`prototype`, which Self Evident brings to every app and puts on the Prototype step; a skill of that name in Your
+skills replaces it. The prototype's branch is still not merged: the build starts from the default branch with the
+prototype as its reference.
+
 **Three steps, each with its tool as an integration** (Sandy, 2026-11-09): **sketches**, the first mockups, written
 rapidly in HTML or whatever; **mockups**, the real ones, which are Storybook; **prototypes**, an actual working
 branch built at hyperspeed with no concern for safety, something you could merge in form but never would. The tool
