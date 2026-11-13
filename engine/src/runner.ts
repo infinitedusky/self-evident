@@ -9,7 +9,6 @@ import { db } from './db/client.js'
 import { app, build, event, issue, project, pr as prTable, repo, run, step } from './db/schema.js'
 import { homeRepo } from './workbench.js'
 import { appendEvent, type NewEvent } from './events.js'
-import { addItems, laterFrom } from './backlog.js'
 import { runTask, type Execute } from './executor.js'
 import { addWorktree, branchExists, ensureBranch, git, headSha, removeWorktree } from './git.js'
 import { hasStorybook } from './storybook.js'
@@ -180,8 +179,6 @@ export class Runner {
     if (!landed.ok) return this.failed(subId, attempt, x.maxAttempts, `landing failed at ${landed.stage}: ${landed.detail}`, rb)
 
     await db.transaction((tx) => setBuild(tx, subId, { status: 'done' }, { runId, payload: { sha: landed.sha } }))
-    const later = laterFrom(result.summary) // what the builder noticed and left for later joins the backlog, once its work has landed
-    if (later.length) await addItems(projectId, later.map((text) => ({ text, source: 'builder' as const, sourceRef: { issueId: subId, runId } })), `agent:${runId}`).catch((err) => this.emit({ ...rb, type: 'backlog.error', payload: { error: String(err?.message ?? err) } }))
     await withLock(`land:${projectId}`, () => this.updatePr(projectId, mode === 'issue' ? x.parentId! : undefined)).catch((err) => this.emit({ ...rb, type: 'pr.error', payload: { error: String(err?.message ?? err) } }))
     this.active.delete(subId)
     await this.dispatch()

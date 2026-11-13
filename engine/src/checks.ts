@@ -3,7 +3,7 @@
  * anything is decided from it"; Sandy, 2026-11-11). In order, each a fresh agent in a conversation of its own, read
  * only, shown as a tab in the task's agent column:
  *
- *   prototype analysis → ADR → blast radius → the conductor brings the brief up to date → brief audit → the conductor
+ *   prototype analysis → clean-up → ADR → blast radius → the conductor brings the brief up to date → brief audit → the conductor
  *   is told the reports are in, and the person approves the brief.
  *
  * Only the checks the task's workflow has are run. Where the line stands is worked out from what is stored each time
@@ -26,6 +26,9 @@ const report = (key: StepKey, issueId: string) => `Record it with set_step: issu
 const earlier = (f: CheckFacts) => (f.before.length ? `Read first, with get_step on this task: ${f.before.map((k) => `${k} (${step(k).label})`).join(', ')}. ` : '')
 const proto = (f: CheckFacts) => (f.prototype ? `The prototype "${f.prototype.title}" is in ${f.prototype.path} on branch ${f.prototype.branch}, cut from ${f.base}: read it there (git -C ${f.prototype.path} log ${f.base}..HEAD, git -C ${f.prototype.path} diff ${f.base}...HEAD). It was built fast and is never merged. ` : '')
 
+/** The checks that read the prototype's own checkout, and are skipped without one. */
+const READS_PROTOTYPE: StepKey[] = ['analysis', 'cleanup']
+
 /** What each check's fresh agent is told: what to read and what to report. It starts from this and nothing else. */
 export function checkBrief(key: StepKey, f: CheckFacts): string {
   const task = `Task ${f.identifier} "${f.title}" (${f.issueId}). Read the task and its brief with the task tool.`
@@ -39,6 +42,15 @@ Report, with file paths:
 - **What surprised**: what the mockup or the brief did not foresee.
 - **Keep or leave**: which choices are worth following in the real build, and which were only speed.
 Describe; do not decide the architecture: that is the ADR's, which reads this.
+${report(key, f.issueId)}`
+    case 'cleanup': return `**Clean-up.** ${task}
+${earlier(f)}${proto(f)}The prototype was written fast, to find out how to build this. Read its code, and the code on ${f.base} it sits in, for how the real build should be cleaner than it. The build has nobody to ask and nothing to work out: whatever would make this code simpler has to be found now and written into the brief.
+Report, with file paths and the lines you mean:
+- **Repeats**: logic, markup or styles written two or three times (within the prototype, or already on ${f.base}) that should be one function, component or rule. Name it and say where it lives.
+- **Simpler**: anything done in a roundabout way, with the plainer way to do it.
+- **Refactor**: what in the existing code should change shape so this fits cleanly, and only that; no refactoring for its own sake.
+- **Leave out**: dead code, leftovers, debug hooks and stray files the build must not copy.
+For each, one line the builder can act on. Say plainly when a part is already as simple as it should be. Describe; the ADR, which reads this, decides the architecture.
 ${report(key, f.issueId)}`
     case 'adr': return `**ADR.** ${task}
 ${earlier(f)}${proto(f)}Decide the architecture for the real build, which starts from ${f.base}, from scratch, with the prototype as a map to follow and improve on, never as code to carry over. Read the code on ${f.base} where the build would land.
@@ -59,6 +71,7 @@ ${report(key, f.issueId)}`
 /** Said to the conductor once the reports before the audit are in. */
 export const finalizeBrief = (done: StepKey[], f: CheckFacts) => `The prototype is approved and the reports are in: ${done.map((k) => step(k).label).join(', ')}. Read each with get_step on this task, then bring the brief up to date with update_task so the build can start from it alone:
 - a **Prototype** section: the branch ${f.prototype?.branch ?? '(none)'}, what the analysis found, what to keep and what to change, and that the build starts from ${f.base} with the prototype as a map, never as code to carry over;
+- what the clean-up found, as instructions to the builder: what to write once instead of twice, what to do the simpler way, what to refactor first, what to leave out;
 - the ADR's decision, in the brief's own words, and what the blast radius says to watch;
 - the assets each step left (sketch files, story ids, the reports), named so the brief points at them.
 Change nothing else, and do not ask the person anything: when your turn ends the brief audit reads the result.`
@@ -70,7 +83,7 @@ const note = async (sessionId: string, stage: string) => (await db.select({ id: 
 export function nextMove(i: { approved: boolean; checks: { key: StepKey; done: boolean; out: boolean }[]; hasPrototype: boolean; conductor: { busy: boolean; askedToFinalize: boolean; toldDone: boolean } | null }):
   { do: 'nothing' } | { do: 'run'; key: StepKey } | { do: 'finalize' } | { do: 'tell' } {
   if (!i.approved) return { do: 'nothing' }
-  const list = i.checks.filter((c) => c.key !== 'analysis' || i.hasPrototype) // nothing to analyse without a prototype
+  const list = i.checks.filter((c) => !READS_PROTOTYPE.includes(c.key) || i.hasPrototype) // nothing to analyse or clean up without a prototype
   if (!list.length) return { do: 'nothing' }
   const first = list.filter((c) => c.key !== 'audit').find((c) => !c.done)
   if (first) return first.out ? { do: 'nothing' } : { do: 'run', key: first.key }
@@ -107,9 +120,9 @@ export async function advanceChecks(issueId: string): Promise<ReturnType<typeof 
     const done = rows.filter((x) => x.state.status === 'done').map((x) => x.key)
     const facts: CheckFacts = { identifier: `${a.key}-${t.number}`, title: t.title, issueId, base: a.defaultBranch, prototype: p ? { path: p.path, branch: p.branch, title: p.title } : null, before: done }
     if (move.do === 'run') {
-      const cwd = move.key === 'analysis' && p ? p.path : conductor?.cwd ?? r?.localPath
+      const cwd = READS_PROTOTYPE.includes(move.key) && p ? p.path : conductor?.cwd ?? r?.localPath
       if (!cwd) return { do: 'nothing' as const } // nowhere to read from
-      const s = await startCheckTalk({ appId: t.appId, issueId, check: move.key, cwd, branch: move.key === 'analysis' && p ? p.branch : conductor?.branch ?? null, subject: `${step(move.key).label}: ${facts.identifier} ${t.title}` })
+      const s = await startCheckTalk({ appId: t.appId, issueId, check: move.key, cwd, branch: READS_PROTOTYPE.includes(move.key) && p ? p.branch : conductor?.branch ?? null, subject: `${step(move.key).label}: ${facts.identifier} ${t.title}` })
       await say(s.id, checkBrief(move.key, facts), undefined, { author: 'engine', kind: 'brief' })
     } else if (move.do === 'finalize') {
       await say(conductor!.id, finalizeBrief(done, facts), undefined, { author: 'engine', kind: 'brief', payload: { checks: 'finalize', label: 'The reports are in' } })

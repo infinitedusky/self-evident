@@ -218,9 +218,10 @@ describe.skipIf(!reachable)('runner', () => {
     expect(tasks).toHaveLength(2)
   })
 
-  it('a project with issues left in its backlog waits instead of landing; a builder\'s Later: lines join the backlog', async () => {
+  it('a project with issues left in its backlog waits instead of landing; what a builder says it noticed makes no task', async () => {
     const { project: p } = await createProject({ appId, name: 'backlog gate', issues: [one('T', [{ key: 'b', title: 'B', files: ['b.txt'] }])] })
     const [kept] = await addItems(p.id, [{ text: 'Refunds' }])
+    const [extra] = await addItems(p.id, [{ text: 'Gift cards' }])
     const runner = new Runner({ execute: async (i) => ({ ...(await commits('bg')(i)), summary: 'did B\n\nLater:\n- The header link 404s' }), sessionsMax: 2 })
     await approveBriefs(appId)
     await runner.startProject(p.id)
@@ -228,9 +229,9 @@ describe.skipIf(!reachable)('runner', () => {
     await until(waiting)
     let g = (await projectGraph(p.id))!
     expect(g.project.status).toBe('running')
-    expect(g.backlog.map((b) => [b.title, b.source, b.state])).toEqual([['Refunds', 'person', 'backlog'], ['The header link 404s', 'builder', 'backlog']])
+    expect(g.backlog.map((b) => [b.title, b.source, b.state])).toEqual([['Refunds', 'person', 'backlog'], ['Gift cards', 'person', 'backlog']]) // the build is quiet: the builder's "Later:" is only words in its summary
     await dropItem(kept.id, 'not in this project')
-    await promote(g.backlog[1].id) // taken on: planned and built before the project lands, once its brief is approved
+    await promote(extra.id) // taken on: planned and built before the project lands, once its brief is approved
     await approveBriefs(appId)
     const propose: Propose = async () => ({ status: 'completed', costUsd: 0, proposal: {
       phases: [{ key: 'h', title: 'H', description: 'h', summary: 'h', depends_on: [], files: ['h.txt'], steps: [], checks: [], done_when: '' }], decisions: [], questions: [], notes: '' } })
@@ -239,7 +240,7 @@ describe.skipIf(!reachable)('runner', () => {
     await until(cleaned(p.id))
     g = (await projectGraph(p.id))!
     expect(g.project.status).toBe('landed')
-    expect(g.issues.map((t) => t.title)).toEqual(['T', 'The header link 404s'])
+    expect(g.issues.map((t) => t.title)).toEqual(['T', 'Gift cards'])
     expect(g.subIssues.map((x) => x.status)).toEqual(['done', 'done'])
   })
 

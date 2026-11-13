@@ -16,7 +16,6 @@ import { guardOptions, readerGuard } from './guard.js'
 import { reaRisk, skillOptions } from './skills.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { newId } from './ids.js'
-import { addItems } from './backlog.js'
 import { identifier } from './issues.js'
 import { addSubIssues, PlanError, projectGraph, type NewSubIssue } from './projects.js'
 import { ensureSolo } from './solo.js'
@@ -51,7 +50,6 @@ export interface Proposal {
   decisions: { title: string; chosen: string; rejected: string[]; reason: string }[]
   questions: { question: string; options: { label: string; description: string; changes: Changes[] }[]; recommended: string; reason: string; cost: Cost }[]
   notes: string
-  later?: { text: string; why: string }[] // noticed, not this issue's to do; joins the project's backlog
 }
 export interface ProposeOutput { status: 'completed' | 'failed'; proposal?: Proposal; agentSessionId?: string; costUsd?: number; numTurns?: number; error?: string }
 export type Propose = (i: ProposeInput) => Promise<ProposeOutput>
@@ -75,7 +73,6 @@ export const PROPOSAL_SCHEMA = obj({
     recommended: str, reason: str, cost: { type: 'string', enum: ['cheap', 'moderate', 'expensive'] },
   })),
   notes: str,
-  later: arr(obj({ text: str, why: str })),
 })
 
 function prompt(i: ProposeInput): string {
@@ -113,7 +110,6 @@ function prompt(i: ProposeInput): string {
     '- A choice you can settle from the brief and the code: settle it, and record it as a decision with the alternatives you rejected and the reason. Never settle such a choice silently.',
     '- A choice the brief does not settle, where the person might reasonably want it either way: ask it as a question. Give at least two options, say which you recommend and why, and for each option say what it changes (brief, promise, look, gate) when it changes what was agreed. Rate the cost of getting it wrong: cheap (easy to undo), moderate, expensive. Plan the phases as if your recommendation were chosen.',
     '- notes: what you assumed, and anything in the brief you could not place in the code.',
-    '- later: things you noticed that this task should not do but the project should not forget (a bug nearby, a follow-up the brief implies, something an earlier task left undone). One plain line each, and why. They join the project\'s backlog, where a person takes them on or drops them. Empty if none.',
     '',
     'Before you answer, review your own plan once: does it build what the brief asks and nothing it does not? What else would have to change for it to hold? What would the sub-tasks do that the brief never asked for? Fix what you find, then answer.',
   ].join('\n')
@@ -289,14 +285,13 @@ export async function finishPlanning(ctx: PlanningContext, opts: { propose?: Pro
         options: q.options.map((o) => ({ ...o, recommended: o.label === q.recommended })), reason: q.reason, cost: questionCost(q), status: 'open',
       }))).returning() : []
       for (const q of questions) await appendEvent(tx, { ...ctx.base, type: 'question.asked', payload: { questionId: q.id, text: q.text, cost: q.cost } })
-      const later = await addItems(ctx.projectId, (proposal.later ?? []).map((l) => ({ text: l.text, body: l.why || undefined, source: 'planner' as const, sourceRef: { issueId: ctx.issueId, runId: ctx.runId } })), 'planner', tx)
       await tx.update(run).set({
         status: 'completed', endedAt: new Date(), costUsd: out.costUsd?.toString() ?? null, agentSessionId: out.agentSessionId ?? null,
         summary: [proposal.notes?.trim(), `${subs.length} sub-task(s), ${decisions.length} decision(s), ${questions.length} question(s)`].filter(Boolean).join('\n\n'),
       }).where(eq(run.id, ctx.runId))
       await appendEvent(tx, { ...ctx.base, type: 'issue.planned', payload: {
         attempt: ctx.attempt, subIssues: subs.map((p) => ({ id: p.id, number: p.number, title: p.title })),
-        decisions: decisions.length, questions: questions.length, later: later.length, costUsd: out.costUsd ?? null, notes: proposal.notes ?? '',
+        decisions: decisions.length, questions: questions.length, costUsd: out.costUsd ?? null, notes: proposal.notes ?? '',
       } })
       return { subs, decisions, questions }
     })
