@@ -43,6 +43,7 @@ import { chooseFolder } from './folders.js'
 import { deleteIssue } from './delete-issue.js'
 import { addAsset, listAssets, removeAsset, updateAsset } from './assets.js'
 import { importTickets, linearTickets, type Scope } from './linear-import.js'
+import { accountStatus, cleanAccount } from './account.js'
 import { outsidePr, pr as prRows } from './db/schema.js'
 import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, setupIntegration, statuses, type Local, type SetupResult, type Values } from './integrations.js'
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
@@ -66,7 +67,7 @@ export function buildApp(bus: EventBus) {
     routes: {
       'GET /health': 'database reachable?',
       'POST /workspaces': '{name}', 'POST /apps': '{workspaceId, name, key?, defaultBranch?, setup?}', 'POST /repos': '{appId, fullName, localPath?, baseBranch?}',
-      'GET /apps': 'all apps, each with its repos', 'PATCH /apps/:id': '{name?, defaultBranch?, setup?}', 'PATCH /repos/:id': '{fullName?, localPath?, baseBranch?}', 'DELETE /repos/:id': 'the repository leaves the app', 'GET /apps/:id/linear/tickets?scope=mine|unassigned|all': 'the Linear team\'s open tickets, each with the task it already is here', 'POST /apps/:id/linear/import': '{identifiers: ["ENG-12"]} → {made, updated, missing}', 'GET /apps/:id/assets?project=': 'the app\'s assets, or one project\'s own', 'POST /assets': '{appId, projectId?, name, location, note?}', 'PATCH /assets/:id': '{name?, location?, note?}', 'DELETE /assets/:id': 'removes it',  'POST /folders/choose': '{path?} → {path, repos: [{name, path, fullName, branch}]}; no path opens the folder dialog', 'GET /workspaces': 'all workspaces',
+      'GET /apps': 'all apps, each with its repos', 'PATCH /apps/:id': '{name?, defaultBranch?, setup?}', 'PATCH /repos/:id': '{fullName?, localPath?, baseBranch?}', 'DELETE /repos/:id': 'the repository leaves the app', 'GET /apps/:id/account': 'which Claude account the app\'s agents run on: {kind: default|key|login, ok, note}', 'GET /apps/:id/linear/tickets?scope=mine|unassigned|all': 'the Linear team\'s open tickets, each with the task it already is here', 'POST /apps/:id/linear/import': '{identifiers: ["ENG-12"]} → {made, updated, missing}', 'GET /apps/:id/assets?project=': 'the app\'s assets, or one project\'s own', 'POST /assets': '{appId, projectId?, name, location, note?}', 'PATCH /assets/:id': '{name?, location?, note?}', 'DELETE /assets/:id': 'removes it',  'POST /folders/choose': '{path?} → {path, repos: [{name, path, fullName, branch}]}; no path opens the folder dialog', 'GET /workspaces': 'all workspaces',
       'GET /apps/:id/graph': 'the top-level graph: every sub-task of every project in the app', 'GET /now': 'the front door: running, needs you, recent',
       'POST /projects': '{appId, name, content?, description?, ideaId?, issues: [{title, description?, brief?, subIssues?: [{key, title, brief?, dependsOn?, files?}]}]}',
       'GET /projects?app=': 'the app\'s projects with counts', 'GET /projects/:id/graph': 'tasks in order, sub-tasks with builds, edges, claims, held reasons, last run, steps, the PR, backlog, to-dos',
@@ -266,6 +267,7 @@ export function buildApp(bus: EventBus) {
   api.patch('/apps/:id', async (c) => {
     const body = await c.req.json<{ name?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
     if (body.setup && 'integrations' in body.setup) body.setup.integrations = cleanValues(body.setup.integrations)
+    if (body.setup && 'account' in body.setup) { try { const acct = cleanAccount(body.setup.account); if (acct) body.setup.account = acct; else delete body.setup.account } catch (err) { return planError(c, err) } }
     if (body.setup && 'references' in body.setup) body.setup.references = cleanReferences(body.setup.references, c.req.param('id'))
     if (body.setup && 'plugins' in body.setup) { // an app's own switch per plugin; null inherits
       const known = new Set(installed().map((p) => p.id))
@@ -367,6 +369,11 @@ export function buildApp(bus: EventBus) {
     return c.json({ removed: was.id })
   })
   // Tasks from Linear tickets (linear-import.ts): the team's open tickets for the app, and bringing the ticked ones in. Reads Linear, never writes.
+  // Which Claude account this app's agents run on (account.ts): the engine's default, or the app's own key or login.
+  api.get('/apps/:id/account', async (c) => {
+    const [a] = await db.select().from(appTable).where(eq(appTable.id, c.req.param('id')))
+    return a ? c.json(await accountStatus(a.setup)) : c.json({ error: 'no such app' }, 404)
+  })
   api.get('/apps/:id/linear/tickets', async (c) => {
     const scope = (['mine', 'unassigned', 'all'] as Scope[]).find((s) => s === c.req.query('scope')) ?? 'mine'
     try { return c.json(await linearTickets(c.req.param('id'), scope)) } catch (err) { return planError(c, err) }

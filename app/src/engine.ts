@@ -102,7 +102,9 @@ export interface StepsView { on: On; resolved: Resolved; states: StepState[]; ro
 export interface StepWork { id: string; key: StepKey; status: 'none' | 'started' | 'done'; detail: string | null; body: string | null; refs: string[]; updatedBy: string | null; updatedAt: string | null }
 export interface WorkflowRow extends Workflow { appDefault: boolean; projects: number; tasks: number }
 export interface IdeaRow { id: string; appId: string; number: number; title: string; body: string | null; lane: string }
-export interface AppSetup { /** The repository an agent starts in, when the app has several (a repo id). */ home_repo?: string; integrations?: IntegrationValues; plugins?: Record<string, { on: boolean }>; pr_mode?: 'project' | 'issue'; test_cmd?: string; prototype_cmd?: string; prototype_db?: { url: string; env?: string; schema_cmd?: string }; model?: string; max_budget_usd?: number; max_turns?: number; references?: AppReference[] }
+export interface AppSetup { /** The repository an agent starts in, when the app has several (a repo id). */ home_repo?: string; integrations?: IntegrationValues; plugins?: Record<string, { on: boolean }>; pr_mode?: 'project' | 'issue'; test_cmd?: string; prototype_cmd?: string; prototype_db?: { url: string; env?: string; schema_cmd?: string }; model?: string; max_budget_usd?: number; max_turns?: number; references?: AppReference[]; /** The app's own Claude account: the name of a variable holding an API key, or a config folder with its own login. Neither: the engine's default. */ account?: { key_env?: string; config_dir?: string } }
+/** Which Claude account an app's agents run on, as the engine finds it. */
+export interface AccountStatus { kind: 'default' | 'key' | 'login'; ok: boolean; note: string }
 /** Another app whose checkout this app's agents may read and never change (the engine's references.ts). */
 export interface AppReference { appId: string; note?: string }
 export interface Repo { id: string; appId: string; fullName: string; localPath: string | null; baseBranch: string | null }
@@ -262,6 +264,7 @@ export const engine = {
   settings: () => call<FactorySettings>('GET', '/settings'),
   updateWorkspace: (id: string, body: { name?: string; integrations?: IntegrationValues }) => call<Workspace>('PATCH', `/workspaces/${id}`, body),
   appSettings: (id: string) => call<AppSettings>('GET', `/apps/${id}/settings`),
+  appAccount: (id: string) => call<AccountStatus>('GET', `/apps/${id}/account`),
   checkIntegration: (key: string, appId?: string) => call<{ ok: boolean; detail: string; links?: { label: string; href: string }[] }>('POST', `/integrations/${key}/check`, { appId }),
   // Set up what's missing: what the engine did itself (did), whether the rest went to the agent (ask), or what waits on the person (detail).
   setupIntegration: (key: string, appId: string) => call<{ done: boolean; did: string[]; ask: string | null; detail: string; talkId: string | null }>('POST', `/integrations/${key}/setup`, { appId }),

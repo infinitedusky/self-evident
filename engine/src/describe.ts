@@ -3,6 +3,7 @@
  * and brief. One model call per project, no tools, structured output. For projects written before descriptions existed,
  * and for anything hand-written in builder's language.
  */
+import { accountEnv } from './account.js'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { and, eq, isNull } from 'drizzle-orm'
 import { db } from './db/client.js'
@@ -31,7 +32,7 @@ export async function describeProject(projectId: string, opts: { model?: string 
     JSON.stringify(items.map((i) => ({ id: i.id, title: i.title, brief: i.brief.slice(0, 4000) })), null, 1),
   ].join('\n')
   let out: unknown
-  for await (const m of query({ prompt, options: { model: opts.model, maxTurns: 3, tools: [], allowedTools: [], settingSources: [], outputFormat: { type: 'json_schema', schema: SCHEMA } } })) {
+  for await (const m of query({ prompt, options: { ...accountEnv(a.setup), model: opts.model, maxTurns: 3, tools: [], allowedTools: [], settingSources: [], outputFormat: { type: 'json_schema', schema: SCHEMA } } })) {
     if (m.type === 'result') { if ((m as any).subtype !== 'success') throw new PlanError(`describe failed: ${(m as any).subtype}`); out = (m as any).structured_output }
   }
   const got = ((out as any)?.items ?? []) as { id: string; description: string }[]

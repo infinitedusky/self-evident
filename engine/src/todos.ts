@@ -6,6 +6,7 @@
  * review"). The to-do is done when every line is, or when a person says so; unchecking a line of a done to-do opens
  * it again.
  */
+import { accountEnv } from './account.js'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 import { db, type Tx } from './db/client.js'
@@ -228,7 +229,7 @@ export async function draftChecklist(todoId: string, opts: { model?: string; dra
   if (opts.draft) lines = await opts.draft(prompt)
   else {
     let out: unknown
-    for await (const m of query({ prompt, options: { model: opts.model ?? setup.model, maxTurns: 12, tools: ['WebSearch', 'WebFetch'], allowedTools: ['WebSearch', 'WebFetch'], settingSources: [], outputFormat: { type: 'json_schema', schema: DRAFT_SCHEMA } } })) {
+    for await (const m of query({ prompt, options: { ...accountEnv(a.setup), model: opts.model ?? setup.model, maxTurns: 12, tools: ['WebSearch', 'WebFetch'], allowedTools: ['WebSearch', 'WebFetch'], settingSources: [], outputFormat: { type: 'json_schema', schema: DRAFT_SCHEMA } } })) {
       if (m.type === 'result') { if ((m as any).subtype !== 'success') throw new PlanError(`drafting failed: ${(m as any).subtype}`); out = (m as any).structured_output }
     }
     lines = ((out as any)?.lines ?? []) as { text: string; waitingOn: string }[]

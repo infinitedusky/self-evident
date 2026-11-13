@@ -169,7 +169,7 @@ export function describePlugins(f: FactorySettings) {
 
 // The installer: the SDK's own Claude Code binary, pointed at the factory's config dir.
 const execFileP = promisify(execFile)
-function claudeBinary() {
+export function claudeBinary() {
   try { return createRequire(createRequire(import.meta.url).resolve('@anthropic-ai/claude-agent-sdk')).resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/claude`) } catch { return 'claude' }
 }
 

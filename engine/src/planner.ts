@@ -17,6 +17,7 @@ import { reaRisk, skillOptions } from './skills.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { newId } from './ids.js'
 import { identifier } from './issues.js'
+import { accountEnv } from './account.js'
 import { addSubIssues, PlanError, projectGraph, type NewSubIssue } from './projects.js'
 import { ensureSolo } from './solo.js'
 import { hasStorybook } from './storybook.js'
@@ -32,6 +33,8 @@ export interface ProposeInput {
   storybook?: boolean // the app keeps a Storybook: stories lead its UI
   references?: Reference[] // other apps' checkouts to read (references.ts)
   model?: string
+  /** The app's settings, for the Claude account its agents run on (account.ts). */
+  setup?: unknown
   maxTurns?: number
   maxBudgetUsd?: number
   abort?: AbortController
@@ -124,10 +127,12 @@ export const proposeWithAgent: Propose = async (i) => {
   let structured: unknown
   try {
     const skills = i.appId ? await skillOptions('planner', i.repoPath, i.appId) : {}
+    const account = accountEnv(i.setup)
     for await (const m of query({
       prompt: prompt(i),
       options: {
         cwd: i.repoPath,
+        ...account,
         ...(i.references?.length ? { additionalDirectories: i.references.map((r) => r.path) } : {}),
         abortController: i.abort,
         model: i.model,
@@ -224,7 +229,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
     runId, issueId, projectId: t.projectId, appId: a.id, attempt, base,
     input: {
       repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, project: { name: g.project.name, content: g.project.content }, earlier,
-      testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), model: setup.model, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
+      testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }
 }
