@@ -162,7 +162,7 @@ export function engineTools(opts: ToolScope): EngineTool[] {
       })),
       def('stories', 'This app\'s Storybook stories, from the Storybook of this conversation\'s worktree when it has one (so a story you just wrote is there), else the app\'s: id (open one with open_tab kind storybook), title (the page or component) and name (the state). match narrows by id, title or name.', { match: z.string().optional() },
         async (a) => tryIt(() => listStories(appId, a.match, sessionId))),
-      def('agents_out', 'For a task\'s own agent: the agents this task has out (a prototype\'s builder, a fresh agent on each check), each with its sessionId, whether it is working, and the last thing it said.', {},
+      def('agents_out', 'For a task\'s own agent: the agents this task has out (a prototype\'s builder, a fresh agent on each check), each with its sessionId, its state (working, idle, or waiting for the person to allow something, with what), and the last thing it said.', {},
         async () => tryIt(() => { if (!sessionId) throw new PlanError('this needs a conversation'); return agentsOut(sessionId) })),
       def('tell_agent', 'For a task\'s own agent: say something to an agent this task has out, like a change the person wants in the prototype. agent: its sessionId, or prototype, or a check\'s key (analysis, adr, risk, audit). It starts from your message, so write it in full. Returns at once; its answer comes back to you as a message when it finishes.', { agent: z.string(), message: z.string() },
         async (a) => tryIt(() => { if (!sessionId) throw new PlanError('this needs a conversation'); return tellAgent(sessionId, a.agent, a.message) })),

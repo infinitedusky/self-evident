@@ -96,8 +96,8 @@ function Work({ idea, section, open }: { idea: IdeaRow; section?: string; open: 
         {row && <StepSection subject={subject} appId={idea.appId} name={idea.title} on="idea" row={row} base={base} waitingState={rows.find((r) => r.key === row.waitingOn)?.state} session={agent.session?.id} />}
       </div>
       {hasAgent && agent.session !== undefined && (
-        <TaskAgent sessionId={agent.session?.id ?? null} taskId={idea.id} of="idea" stage={row ? label(row.key, 'idea') : 'Idea'} state={agent.session?.busy ? 'working' : 'idle'}
-          deployed={agent.out.map((a) => ({ what: a.what, icon: a.icon ?? '🛠️', title: a.title, sessionId: a.sessionId, state: a.busy ? 'out' as const : 'back' as const }))}
+        <TaskAgent sessionId={agent.session?.id ?? null} taskId={idea.id} of="idea" stage={row ? label(row.key, 'idea') : 'Idea'} state={agent.out.some((a) => a.asking) ? 'waiting' : agent.session?.busy ? 'working' : 'idle'}
+          deployed={agent.out.map((a) => ({ what: a.what, icon: a.icon ?? '🛠️', title: a.title, sessionId: a.sessionId, state: a.busy ? 'out' as const : 'back' as const, asking: a.asking ? `${a.asking.tool}: ${a.asking.what}` : undefined }))}
           open={agent.open} onToggle={agent.toggle} onStart={open ? agent.start : undefined} starting={agent.starting} error={agent.error} />
       )}
     </div>

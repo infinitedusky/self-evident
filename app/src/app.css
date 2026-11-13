@@ -148,6 +148,8 @@ a.badge { text-decoration: none; }
 .perm { align-self: stretch; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; background: var(--surface); }
 .perm.open { border-color: var(--warn); background: var(--warn-wash); }
 .perm code { font-size: 13px; }
+.perm-from { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.task-agent-tabs .asks { color: var(--warn); font-weight: 600; }
 .perm .diff { margin: 6px 0 0; font-size: 12px; white-space: pre-wrap; background: var(--ground); padding: 8px; border-radius: 8px; }
 .perm .del { color: var(--bad); } .perm .add { color: var(--ok); }
 .talk-input { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }

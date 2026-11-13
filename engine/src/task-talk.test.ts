@@ -10,7 +10,7 @@ import { createIssue } from './issues.js'
 import { createIdea } from './ideas.js'
 import { convertIdea } from './work.js'
 import { eq } from 'drizzle-orm'
-import { agentsOut, closeTalk, closeTalks, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, listTalks, modelFor, readAgent, reopenTalk, showTalk, startCheckTalk, takeReply, taskAgents, taskTalk } from './talk.js'
+import { agentsOut, answerPermission, askPerson, conductorOf, liveForTest, talkTranscript, closeTalk, closeTalks, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, listTalks, modelFor, readAgent, reopenTalk, showTalk, startCheckTalk, takeReply, taskAgents, taskTalk } from './talk.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -93,6 +93,38 @@ describe.skipIf(!reachable)('a task\'s own agent', () => {
     expect(await takeReply(builder.id)).toBeNull() // once
     await said(reader.id, 'engine', 'brief', 'Also weigh a queue (sample).', { from: own.id })
     expect(await takeReply(reader.id)).toEqual({ from: own.id, what: 'Draft ADR', said: null }) // it stopped without a word
+  })
+
+  it('shows the conductor what an agent it has out asks the person to allow: the card in its column, the agent waiting (never working), answered from either place', async () => {
+    const t = await createIssue(appId, { title: 'Asks', kind: 'code' })
+    const own = await talk({ issueId: t.id })
+    const builder = await talk({ prototypeId: 'proto_ask' })
+    await db.insert(prototype).values({ id: newId('prototype'), appId, issueId: t.id, title: 'Asks (sample)', sessionId: builder.id, branch: 'proto/ask', path: '/tmp/none', status: 'running' })
+    expect(await conductorOf(builder.id)).toEqual({ id: own.id, what: 'Prototype' })
+    expect(await conductorOf(own.id)).toBeNull()
+    const l = liveForTest(builder.id)
+    try {
+      const asked = askPerson(builder.id, l.pending, 'Bash', { command: 'docker compose up -d (sample)' }, { risk: 'expensive', why: 'starts containers' })
+      await expect.poll(async () => (await talkTranscript(own.id)).pending.length).toBe(1)
+      const [out] = await agentsOut(own.id)
+      expect(out.state).toMatch(/^waiting for the person to allow Bash \(expensive\): docker compose up -d \(sample\)/)
+      expect((await readAgent(own.id, 'prototype')).state).toMatch(/^waiting for the person/)
+      const mine = await talkTranscript(own.id)
+      const card = mine.messages.find((m) => m.kind === 'permission')!
+      expect(card.payload).toMatchObject({ of: builder.id, agent: 'Prototype', tool: 'Bash', risk: 'expensive', input: { command: 'docker compose up -d (sample)' } })
+      expect(mine.pending).toEqual([(card.payload as { requestId: string }).requestId])
+      await answerPermission(own.id, mine.pending[0], true) // from the conductor's column
+      expect(await asked).toMatchObject({ allow: true })
+      const after = await talkTranscript(own.id)
+      expect(after.pending).toEqual([])
+      expect(after.messages.at(-1)).toMatchObject({ author: 'user', body: 'Allowed Bash for the Prototype agent.' })
+      expect((await talkTranscript(builder.id)).messages.at(-1)).toMatchObject({ body: 'Allowed Bash.' })
+      expect((await agentsOut(own.id))[0].state).toBe('working')
+
+      const late = await askPerson(builder.id, l.pending, 'Bash', { command: 'git push (sample)' }, { risk: 'expensive', why: 'pushes' }, 20) // nobody answers
+      expect(late).toMatchObject({ allow: false, timedOut: true })
+      expect((await talkTranscript(own.id)).messages.at(-1)).toMatchObject({ author: 'engine', body: 'No answer in 0 minutes, so the Prototype agent did not run Bash.' })
+    } finally { l.end() }
   })
 
   it('runs a prototype\'s agent on Sonnet unless the app names another model, and everything else on the app\'s model', () => {

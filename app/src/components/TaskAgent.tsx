@@ -50,7 +50,7 @@ export function useTaskAgent(taskId: string, appId: string, of: 'task' | 'idea' 
 }
 
 /** A fresh agent the conductor sent out, and what it is on; with `sessionId`, its conversation can be read here, as a tab of its own. */
-export interface Deployed { what: string; icon?: string; state: 'out' | 'back'; detail?: string; sessionId?: string; title?: string }
+export interface Deployed { what: string; icon?: string; state: 'out' | 'back'; detail?: string; sessionId?: string; title?: string; /** Stopped on the person: what it asked to be allowed. Its card is in the conductor's conversation too. */ asking?: string }
 
 export function TaskAgent({ sessionId, taskId, of = 'task', stage, state = 'idle', deployed = [], open, onToggle, onStart, starting, error }: {
   /** The task's conversation; none until its agent is started. */
@@ -93,8 +93,8 @@ export function TaskAgent({ sessionId, taskId, of = 'task', stage, state = 'idle
         <div className="task-agent-tabs" role="tablist" aria-label={`This ${of}'s agents`}>
           <button role="tab" aria-selected={!sub} className={!sub ? 'on' : ''} onClick={() => setShown(null)}><span className={`dot ${state}`} />{name}</button>
           {tabs.map((d) => (
-            <button key={d.sessionId} role="tab" aria-selected={sub === d} className={sub === d ? 'on' : ''} onClick={() => setShown(d.sessionId!)} title={`${d.title ?? d.what}: ${d.state === 'out' ? 'working' : 'idle'}`}>
-              <span className={`dot ${d.state === 'out' ? 'working' : ''}`} />{d.icon} {d.what}{d.state === 'out' && <span className="faint"> · working</span>}
+            <button key={d.sessionId} role="tab" aria-selected={sub === d} className={sub === d ? 'on' : ''} onClick={() => setShown(d.sessionId!)} title={`${d.title ?? d.what}: ${d.asking ? `waiting for you to allow ${d.asking}` : d.state === 'out' ? 'working' : 'idle'}`}>
+              <span className={`dot ${d.asking ? 'waiting' : d.state === 'out' ? 'working' : ''}`} />{d.icon} {d.what}{d.asking ? <span className="asks"> · asks you</span> : d.state === 'out' && <span className="faint"> · working</span>}
             </button>
           ))}
         </div>

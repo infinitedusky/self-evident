@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import Markdown from 'react-markdown'
+import { expect, within } from 'storybook/test'
 import { rows } from '@self-evident/engine/steps'
 import { TaskAgent } from './TaskAgent'
 import { TaskNav } from './TaskNav'
@@ -33,6 +34,20 @@ export const AgentsOut: Story = { beforeEach: sketching, args: { stage: 'Brief',
 ] } }
 /** A prototype under way: its own agent is a second tab in the column, its dot pulsing while it works; press it to read that conversation. */
 export const PrototypeAgentOut: Story = { beforeEach: sketching, args: { stage: 'Brief', deployed: [{ what: 'Prototype', icon: '🛠️', title: 'Checkout in one page (sample)', sessionId: 'talk_sample_proto', state: 'out' }] } }
+/** The prototype's agent is stopped on something only the person can allow: its tab says so in amber, the conductor's dot turns amber, and the card is in the conductor's conversation. */
+export const PrototypeAgentAsks: Story = {
+  beforeEach: withEngine({ transcript: { ...transcript, session: { ...talkSession, subject: 'Address and payment on one page (sample)' }, pending: ['req_sample_out'], messages: [
+    msg(1, 'user', 'Prototype the one-page checkout. (sample)'),
+    msg(2, 'agent', 'Started. Its agent is building it in the Prototype tab.'),
+    { ...msg(3, 'engine', 'The Prototype agent: Bash, may I?'), kind: 'permission', payload: { requestId: 'req_sample_out', of: 'talk_sample_proto', agent: 'Prototype', tool: 'Bash', risk: 'expensive', why: 'starts containers on this computer', input: { command: 'docker compose up -d db (sample)' } } },
+  ] } }),
+  args: { stage: 'Brief', state: 'waiting', deployed: [{ what: 'Prototype', icon: '🛠️', title: 'Checkout in one page (sample)', sessionId: 'talk_sample_proto', state: 'out', asking: 'Bash: docker compose up -d db (sample)' }] },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('tab', { name: /Prototype · asks you/ })).toBeInTheDocument()
+    await expect(await c.findByText('The Prototype agent asks')).toBeInTheDocument()
+  },
+}
 /**
  * The prototype is approved: the checks run by themselves, one fresh agent after the other, each a tab. The analysis is
  * back, the ADR's agent is on it; the blast radius and the audit have not started, so they have no tab yet.
