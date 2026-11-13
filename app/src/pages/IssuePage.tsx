@@ -162,7 +162,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
             {row.key === 'brief' ? <BriefStep i={i} busy={busy} act={act} feeds={rows.filter((r) => r.key !== 'brief')} base={base} /> : undefined}
           </StepSection>
         )}
-        {here === 'saves' && <TaskBranches issueId={i.id} stamp={savesStamp} onMoved={() => void act(async () => {})} onChanged={readSaves} />}
+        {here === 'saves' && <TaskBranches issueId={i.id} at={new URLSearchParams(window.location.search).get('at')} stamp={savesStamp} onMoved={() => void act(async () => {})} onChanged={readSaves} />}
         {here === 'build' && (buildWaits
           ? <section className="panel"><h2>🏗️ Sub-tasks</h2><div className="empty">Planning and building wait for the brief's approval. <Link to={`${base}/brief`}>Go to the brief →</Link></div></section>
           : <>
