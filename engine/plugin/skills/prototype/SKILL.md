@@ -33,7 +33,10 @@ teach them the shortcuts.
 ## Definition of done
 
 1. **Every requirement of the task's brief (or description) is met, end to end.** Turn them into a checklist before
-   writing code and work through it. For each one, the running prototype shows it working through the whole path:
+   writing code and work through it. On a task, the checklist is its **acceptance criteria** (`set_acceptance`; the
+   `task` tool shows them): the person approves them with the brief, so build them as you build. Add what the brief
+   implies and what building turns up, sharpen any that cannot be checked, and record for each whether the prototype
+   shows it and where. For each one, the running prototype shows it working through the whole path:
    in through the real integration point, into storage, out through the API, onto the screen the task names.
 2. **Real data shapes.** Stub responses are recorded from the real service whenever possible (a real run, captured
    once, kept out of git if it holds real people's data, with a committed copy whose people are invented but whose

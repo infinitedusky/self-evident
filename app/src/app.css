@@ -708,3 +708,21 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .code-lines tr.hl.add .t { background: color-mix(in srgb, var(--accent) 16%, var(--ok-wash)); }
 .code-lines tr.hl .n { color: var(--accent); font-weight: 600; }
 @media (max-width: 900px) { .proto-code { grid-template-columns: 1fr; grid-template-rows: minmax(90px, 30%) minmax(0, 1fr); } .proto-code-list { border-right: 0; border-bottom: 1px solid var(--line); } }
+
+/* A task's acceptance criteria, on its brief's page */
+.acceptance { margin: 18px 0 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+.acceptance h3 { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin: 0; font-size: 15px; }
+.acceptance h3 .faint, .acceptance h3 .acceptance-warn { font-size: 13px; font-weight: 400; }
+.acceptance-warn { color: var(--warn); font-size: 13px; }
+.acceptance-lead { margin: 2px 0 10px; font-size: 13px; }
+.acceptance-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 2px; }
+.acceptance-list li { display: flex; gap: 10px; align-items: flex-start; padding: 7px 8px; border-radius: 8px; }
+.acceptance-list li:hover { background: var(--idle-wash); }
+.acceptance-mark { flex: none; width: 18px; text-align: center; font-weight: 700; color: var(--ink-faint); }
+.acceptance-list li.shown .acceptance-mark { color: var(--ok); } .acceptance-list li.not .acceptance-mark { color: var(--bad); }
+.acceptance-body { flex: 1; min-width: 0; font-size: 14px; } .acceptance-body .faint { font-size: 13px; }
+.acceptance-actions { flex: none; display: flex; gap: 2px; align-items: center; }
+.acceptance-edit { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.acceptance-edit input, .acceptance-add input { margin: 0; }
+.acceptance-add { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) auto; gap: 6px; align-items: center; }
+@media (max-width: 700px) { .acceptance-add { grid-template-columns: 1fr; } }

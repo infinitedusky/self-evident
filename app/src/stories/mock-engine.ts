@@ -118,6 +118,14 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       const all = Object.values(d.issueDetails)
       return reply(all.filter((i) => (!q.get('kind') || i.kind === q.get('kind')) && (!q.get('project') || i.projectId === q.get('project')) && (!q.get('top') || !i.parentId)))
     }),
+    http.put('/api/issues/:id/acceptance', async ({ params, request }) => { // the engine's rules, roughly: add, change, remove
+      const i = d.issueDetails[params.id as string]; if (!i) return missing('issue')
+      const c = await request.json() as import('../engine').AcceptanceChange
+      let list = (i.acceptance ?? []).filter((x) => !(c.remove ?? []).includes(x.id)).map((x) => { const u = (c.update ?? []).find((y) => y.id === x.id); return u ? { ...x, ...(u.text != null ? { text: u.text } : {}), check: u.check === undefined ? x.check : u.check ?? undefined } : x })
+      list = [...list, ...(c.add ?? []).map((a, n) => ({ id: `ac_sample_new${list.length + n}`, text: a.text, check: a.check, by: 'user', at: '2026-10-28T12:00:00Z' }))]
+      d.issueDetails = { ...d.issueDetails, [params.id as string]: { ...i, acceptance: list, briefApprovedBy: null, briefApprovedAt: null } }
+      return reply({ acceptance: list })
+    }),
     http.get('/api/issues/:id', ({ params }) => { const i = d.issueDetails[params.id as string]; return i ? reply(i) : missing('issue') }),
     http.get('/api/todos', () => reply(d.todos)),
     http.get('/api/plan', () => reply(d.plan)),

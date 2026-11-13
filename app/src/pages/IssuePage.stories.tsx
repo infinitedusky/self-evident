@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, spyOn, userEvent, within } from 'storybook/test'
 import { IssuePage } from './IssuePage'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
-import { approvedTaskStepsView, issueDetails, waitingTaskStepsView } from '../stories/sample'
+import { acceptance, approvedTaskStepsView, issueDetails, waitingTaskStepsView } from '../stories/sample'
 
 // One task at /tasks/:id, from the sample engine. Each story stands on a different task. A task has its own nav down
 // the left: overview, then its two stages: the brief, with the steps that feed it under it ("UI change (sample)", in
@@ -25,6 +25,16 @@ export const MockupsStep: Story = { parameters: at('iss_sample20', 'mockup') }
 export const PrototypeStep: Story = { parameters: at('iss_sample20', 'prototype') }
 /** The brief's page: written, what it stands on listed under it; it can be approved once the blast radius is done. */
 export const BriefStep: Story = { parameters: at('iss_sample20', 'brief') }
+/** The brief ready to approve, with its acceptance criteria: approving it says they are enough, and one the prototype did not show is named. */
+export const BriefWithAcceptanceCriteria: Story = {
+  parameters: at('iss_sample20', 'brief'),
+  beforeEach: withEngine({ steps: { ...sampleData.steps, issues: approvedTaskStepsView }, issueDetails: { ...sampleData.issueDetails, iss_sample20: { ...issueDetails.iss_sample20, acceptance } } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('button', { name: 'Approve the brief and its 4 criteria' })).toBeInTheDocument()
+    await expect(c.getByText(/Approving it approves its 4 acceptance criteria as enough; 1 was not shown in the prototype/)).toBeInTheDocument()
+  },
+}
 /** A step the workflow puts after one not finished (the mockups): greyed in the nav, and its page says where to go first. */
 export const LockedStep: Story = { parameters: at('iss_sample20', 'risk'), beforeEach: withEngine({ steps: { ...sampleData.steps, issues: waitingTaskStepsView } }) }
 /** Every required step done and the brief approved: the build opens, with a Plan button. */

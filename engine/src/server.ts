@@ -35,6 +35,7 @@ import { latestFocus, startSummaries, writeFocus } from './summary.js'
 import { listSketches, readSketch } from './sketches.js'
 import { migrateStorybookSetup, startStorybook, stopStorybooks, storybookStatus, storybookValues, STORY_FLOW_CSS } from './storybook.js'
 import { prototypeCode, prototypeFile, unshowInPrototype } from './prototype-code.js'
+import { setAcceptance, type AcceptanceChange } from './acceptance.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
@@ -495,6 +496,9 @@ export function buildApp(bus: EventBus) {
       if (approve && c.req.param('key') === 'prototype') void advanceChecks(c.req.param('id')).catch((err) => console.error('checks: could not start', err)) // the checks run by themselves from here
       return c.json(row)
     } catch (err) { return planError(c, err) }
+  })
+  api.put('/issues/:id/acceptance', async (c) => { // {add?, update?, remove?}: the task's acceptance criteria
+    try { return c.json(await setAcceptance(c.req.param('id'), await c.req.json<AcceptanceChange>(), 'user')) } catch (err) { return planError(c, err) }
   })
   api.post('/issues/:id/brief/approve', async (c) => {
     const { approve = true } = await c.req.json<{ approve?: boolean }>().catch(() => ({ approve: true }))

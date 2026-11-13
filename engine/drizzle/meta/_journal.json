@@ -120,6 +120,13 @@
       "when": 1794583405504,
       "tag": "0016_prototype_shown",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794585843420,
+      "tag": "0017_issue_acceptance",
+      "breakpoints": true
     }
   ]
 }

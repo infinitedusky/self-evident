@@ -634,6 +634,10 @@ Details and sources in `research/`.
 - **A prototype is read as well as used** (2026-11-13). It is a sample of what will be merged, so its step shows it
   running and, beside that, its code: every file it changed with its diff, and the files and docs pages the agent puts
   there, with lines highlighted and a note, to answer a question about it.
+- **Acceptance criteria are part of the brief** (2026-11-13). How we will know a task is done, as statements a person
+  can check, each with how. The agents build them as the task goes (the prototype's agent works to them and records
+  what the prototype showed), the audit asks whether they are enough, the person approves them with the brief, and the
+  planner makes each a check of a sub-task.
 - **What an agent asks shows in its conductor's column** (2026-11-13). What an agent the conductor has out asks the
   person to allow shows in the conductor's conversation, named for the agent, and is answered there; an agent stopped
   on the person is reported as waiting, never working. Above the threshold the answer stays the person's.

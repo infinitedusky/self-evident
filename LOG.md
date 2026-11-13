@@ -2876,3 +2876,28 @@ time is a cost; whether the build should start from the prototype's branch is op
 Not done: the stop command is not run when the engine itself shuts down (prototypes are only signalled then), nor
 for a prototype that never got a port. Not tried: a real prototype built under the new instructions, or a real
 stack torn down by a stop command; the tests run a stand-in command against a real temporary repository.
+
+## Acceptance criteria are part of the brief, built as the task goes (Sandy, 2026-11-13: "we need to add acceptance criteria to the brief, and this is something that the agent should build as it's building the prototype … part of what you approve before you actually start building is whether or not your acceptance criteria is sufficient")
+
+- **A list of their own on the task** (`issue.acceptance`, migration 0017), beside the brief's text, so each can be
+  added, sharpened and marked one at a time. A criterion is one statement a person can check, how we will know (a
+  page, a scenario, a test, a script), and what the prototype showed for it: shown, with where to see it; not shown,
+  with what is missing; or not tried.
+- **Built along the way.** `set_acceptance` adds, changes and removes them. The conductor writes the first ones as
+  soon as it knows what is asked and sharpens them as research, sketches and mockups settle things. The prototype's
+  agent takes them as its checklist, adds what building turns up (edge cases, guarantees) and records for each what
+  the prototype showed. When the reports are in, the conductor brings them up to date with the brief.
+- **Checked before approval.** The prototype analysis reports against each criterion and checks the agent's claims.
+  The brief audit asks whether they are sufficient: requirements with no criterion, criteria nobody could check,
+  missing cases, guarantees the blast radius says matter.
+- **Approved with the brief.** The brief's page lists them under the brief, with the marks, and the button reads
+  "Approve the brief and its N criteria", naming how many the prototype did not show. The person can add, reword and
+  remove them there. Changing a statement or how it is checked after approval takes the approval back, like a change
+  to the brief's text; recording what the prototype showed does not.
+- **Carried into the build.** The planner is given them and must make each one a check of the sub-task that makes it
+  true, with its id; one no sub-task can make true comes back as a question.
+
+Not a gate: a brief with no criteria can still be approved; the page says that approving it then approves no way of
+knowing it is done. Not done: checking the criteria again against the finished build (a sub-task's checks carry
+them, but nothing reports per criterion after landing); criteria on an idea before it is a task; showing them on the
+prototype's step. Not tried: a real conductor and prototype agent building them through a task.

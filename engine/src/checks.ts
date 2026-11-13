@@ -33,7 +33,7 @@ export function checkBrief(key: StepKey, f: CheckFacts): string {
     case 'analysis': return `**Prototype analysis.** ${task}
 ${proto(f)}Its agent was told to build it the way we would ship it: every requirement of the brief met end to end, by the repository's conventions, with fakes only at the system's edges and through seams. Do not take its word for that: check. Read every commit since ${f.base}, the diff, the sample data under .prototype/scenarios, the repository's conventions (AGENTS.md, CLAUDE.md, the code around it on ${f.base}), and the code it leans on.
 Report, with file paths:
-- **Requirements**: each requirement of the brief, one line: met end to end (where: the integration point, the storage, the API, the screen), partly, or not met. Not met and partly first.
+- **Requirements**: each acceptance criterion of the task (the task tool lists them, with what the prototype's agent recorded as shown; check its claim, do not repeat it) and any requirement of the brief that has no criterion, one line: met end to end (where: the integration point, the storage, the API, the screen), partly, or not met. Not met and partly first.
 - **Against the conventions**: where the code departs from how the repository builds things (structure, naming, migrations, privacy rules, tests), with the line and the convention it breaks. Say plainly when it holds.
 - **Seams and stubs**: every place something outside the system is stood in for (a base URL pointed at a stub, an injected transport, a dependency override, a fixture), whether the seam already existed on ${f.base} or the prototype added it (the build needs each one it added), and whether the stub's data was recorded from the real service or its shape is assumed.
 - **Faked inside the system**: anything that is not at an edge: a skipped layer, a hard-coded result, parsing that only handles the sample, logic on the wrong side. Each is a defect of the prototype; say what the build must do there.
@@ -61,6 +61,7 @@ ${report(key, f.issueId)}`
     case 'audit': return `**Brief audit.** ${task}
 ${earlier(f)}${proto(f)}The brief has just been brought up to date and is about to be approved; the build starts from it and from nothing else. Read it against the code on ${f.base}, the prototype and the reports above.
 Report: gaps (what a builder would have to guess); wrong guesses (where the brief says something the code, the prototype or a report contradicts, with the file); things it asks for that nothing so far supports; references that do not resolve (a sketch file, a story id, a branch, a path). Say plainly when a section holds.
+Then the **acceptance criteria** (the task tool shows them; the person approves them with the brief, and the build is done when they hold): are they sufficient? Report: requirements of the brief that no criterion covers; criteria nobody could check as written, or with no way given to check them; cases that are missing (empty, many, repeated, the wrong person, failure of something outside); guarantees the blast radius says matter that none states; criteria the prototype did not show, and whether that is a gap in the prototype or in the criterion. For each, the criterion you would add or the wording you would change. Say plainly when they are enough.
 ${report(key, f.issueId)}`
     default: throw new Error(`${key} is not a check`)
   }
@@ -72,6 +73,7 @@ export const finalizeBrief = (done: StepKey[], f: CheckFacts) => `The prototype 
 - what the analysis says under Cleaner, as instructions to the builder: what to write once instead of twice, what to do the simpler way, what to refactor first, what to leave out;
 - the draft ADR's proposed decision, in the brief's own words and marked as proposed (the planner settles it), and what the blast radius says to watch;
 - the assets each step left (sketch files, story ids, the reports), named so the brief points at them.
+Then bring the acceptance criteria up to date with set_acceptance (the task tool shows them): every requirement of the brief has one, each can be checked as written and says how, what the analysis found not met or faked is recorded on its criterion (shown false, with what is missing), and anything the reports show we must guarantee that no criterion covers is added. Do not put them in the brief's text: they are kept beside it and approved with it.
 Change nothing else, and do not ask the person anything: when your turn ends the brief audit reads the result.`
 export const reportsIn = (done: StepKey[]) => `The checks are done: ${done.map((k) => step(k).label).join(', ')}. ${done.includes('audit') ? 'Read the brief audit with get_step and fix in the brief what it found (update_task); leave what it says holds. Then tell' : 'Tell'} the person in a few lines what the reports say and that the brief is ready for them to approve.`
 

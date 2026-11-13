@@ -25,6 +25,7 @@ const ENGINE: Record<string, [Risk, string]> = {
   create_project: ['cheap', 'a draft project; nothing runs'],
   create_task: ['cheap', 'a task; easy to cancel'],
   update_task: ['cheap', 'edits a task; easy to change back'],
+  set_acceptance: ['cheap', 'edits a task\'s acceptance criteria; easy to change back'],
   set_task_state: ['cheap', 'moves a task; moving it back undoes it'],
   reorder_tasks: ['cheap', 'changes the order; reorder undoes it'],
   plan_task: ['moderate', 'runs the planner: minutes and money'],
