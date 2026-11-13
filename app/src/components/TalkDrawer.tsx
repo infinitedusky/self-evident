@@ -95,7 +95,7 @@ export function TalkDrawer({ standalone = false, context: given, onOpen, onHide 
   }
   const backIn = () => { channel()?.postMessage({ type: 'closed' } satisfies Msg); window.close() }
   // Conversations belong to an app: only the app in the nav's are tabs here, and each app remembers its own.
-  const ofApp = (all: TalkSession[]) => all.filter((s) => s.appId === app?.id && !s.taskId && !s.subjectRef?.issueId) // a task's agents (its own, a prototype's) show on the task's page, not here
+  const ofApp = (all: TalkSession[]) => all.filter((s) => s.appId === app?.id && !s.taskId && !s.subjectRef?.issueId && !s.ideaId) // a task's agents (its own, a prototype's) show on the task's page, not here
   const mine = (all: TalkSession[]) => ofApp(all).filter((s) => !s.closedAt) // the tabs
   const shown = mine(sessions)
   const closed = ofApp(sessions).filter((s) => s.closedAt) // tabs closed with ×: still there, behind ▾

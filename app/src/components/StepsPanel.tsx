@@ -31,10 +31,10 @@ export function useSteps(subject: StepSubject, appId: string) {
   return { v, error }
 }
 
-/** Hands a step to the agent: a task's goes to the task's own agent (the engine sees to it); an idea's or a project's gets a conversation of its own. */
+/** Hands a step to the agent: a task's goes to the task's own agent and an idea's to the idea's (the engine sees to it); a project's gets a conversation about the app. */
 export function askStep(subject: StepSubject, appId: string, name: string, key: StepKey, on: On) {
   const ref = subject.kind === 'ideas' ? { ideaId: subject.id } : subject.kind === 'issues' ? { issueId: subject.id } : { projectId: subject.id }
-  return engine.ask({ appId, subjectRef: ref, text: key === 'prototype'
+  return engine.ask({ appId, subjectRef: ref, own: subject.kind === 'ideas', text: key === 'prototype'
     ? `Start a prototype for ${WHAT[subject.kind]} "${name}" (${subject.id}), as a step of it.`
     : key === 'sketch'
     ? `Sketch ${WHAT[subject.kind]} "${name}" (${subject.id}): the screens as plain HTML files under sketches/, fast, for me to react to; record them with set_step (key sketch).`

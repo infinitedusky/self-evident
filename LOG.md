@@ -2665,3 +2665,22 @@ at the bottom of the app's Plugins section, shown only when some job had a skill
 was simply absent. It is now its own section of an app's settings, **Skills by job**, and lists every job, grouped as
 in All apps: a job with skills filed has the menu; a job with none says "No skill filed" and what the engine does
 there itself; and with nothing filed anywhere the page says how to get something to choose.
+
+## An idea has an agent of its own, like a task (Sandy, 2026-11-13: "when you go to one and 'work on it' you get a dedicated agent. It should really be a task in all but name until you convert. That allows you to work through the sketches etc etc without committing to full task")
+
+With left-column conversations no longer able to write files, an idea's Sketch and Mockup steps had nowhere to go.
+
+- **An idea's page is a task's page.** Its steps are down the side, each with a page of its own (`/ideas/<id>/<step>`),
+  and its own agent is in a column beside them (the same `TaskNav`, `StepSection` and `TaskAgent`). It has no Build
+  section and nothing is approved on it. After Linear, where an issue in triage has the same page as any other.
+- **The agent and its worktree start on "Work on this idea"** (Sandy picked this over a worktree cut on the first
+  write, and over none). An idea nobody works on has neither. One conversation per idea (`ensureIdeaTalk`), told it
+  is the idea's agent; a step started on the idea goes to it, and a sketch, story or prototype it shows opens on that
+  step's page of the idea. The left column leaves the idea's agent and its prototype's agent out.
+- **Converting to a task takes the agent with it.** The same conversation, worktree and branch are re-pinned to the
+  task (`convertIdea`), so the sketches and stories are already there; the agent is told, and starts its next turn
+  with the task's instructions. Converted to a project, the conversation stays on the idea's page.
+- "Ask the agent to convert it" goes to the idea's agent when it has one, else to a conversation about the app.
+
+Not built: an end to the idea's conversation when an idea is dropped, and the same page for a project's steps (those
+still go to a conversation about the app, which cannot write files).

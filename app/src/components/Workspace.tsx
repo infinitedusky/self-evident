@@ -261,12 +261,13 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
     if (!app) return
     const es = openEvents(`${API}/events?since=now&app=${app.id}`)
     es.addEventListener('ui.open', ((ev: MessageEvent) => {
-      const p = (JSON.parse(ev.data) as { payload?: { tab?: Tab; split?: Split | null; issueId?: string } }).payload
+      const p = (JSON.parse(ev.data) as { payload?: { tab?: Tab; split?: Split | null; issueId?: string; ideaId?: string } }).payload
       if (!p?.tab) return
+      const root = p.issueId ? `/tasks/${p.issueId}` : p.ideaId ? `/ideas/${p.ideaId}` : null // a task's own agent, or an idea's
       // A task's own agent takes the person to a page of its task: the task's tab goes there, and no tab is added or split off.
       const api = dock.current
-      const home = p.issueId && p.tab.kind === 'page' && p.tab.path.startsWith(`/tasks/${p.issueId}`)
-        ? api?.panels.find((x) => { const t = (x.params as Params).tab; return t.kind === 'page' && t.path.startsWith(`/tasks/${p.issueId}`) }) : undefined
+      const home = root && p.tab.kind === 'page' && p.tab.path.startsWith(root)
+        ? api?.panels.find((x) => { const t = (x.params as Params).tab; return t.kind === 'page' && t.path.startsWith(root) }) : undefined
       if (home) { home.api.updateParameters({ ...(home.params as Params), tab: p.tab }); home.api.setActive(); sync(); return }
       add(p.tab, { split: p.split ?? undefined })
     }) as EventListener)
