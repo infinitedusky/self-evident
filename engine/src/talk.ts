@@ -534,13 +534,16 @@ async function describeContext(c?: TalkContext): Promise<string> {
   return `(The person is looking at ${bits.join(', ')}. "This" means that unless they say otherwise; use the engine tools for details.${tabs})\n\n`
 }
 
+/** What a conversation is pinned to after its first message: the project or idea in view, and still about the app as a whole if it was (that mark is what keeps it out of the app's files). */
+export const pinnedTo = (was: SubjectRef | null, from: SubjectRef | null): SubjectRef | null => (from ? { ...from, ...(was?.app ? { app: true } : {}) } : was)
+
 export async function say(sessionId: string, text: string, context?: TalkContext, as?: { author: string; kind: string; payload?: Record<string, unknown> }) {
   if (!text.trim()) throw new PlanError('say something')
   const [s] = await db.select().from(session).where(eq(session.id, sessionId))
   if (s && !s.subject) { // pinned by first contact: the project or idea in view, else the first thing said
     const from = await subjectFrom({ projectId: context?.projectId, ideaId: context?.ideaId })
     const said = text.trim().replace(/\s+/g, ' ').slice(0, 48).replace(/[\s.,;:!?]+$/, '')
-    await db.update(session).set({ subject: from.subject ?? said, subjectRef: from.subjectRef ?? s.subjectRef }).where(eq(session.id, sessionId))
+    await db.update(session).set({ subject: from.subject ?? said, subjectRef: pinnedTo(s.subjectRef as SubjectRef | null, from.subjectRef) }).where(eq(session.id, sessionId))
   }
   const l = await open(sessionId)
   const row = await record(sessionId, as?.author ?? 'user', as?.kind ?? 'text', text.trim(), context || as?.payload ? { ...(context ? { context } : {}), ...as?.payload } : undefined)
