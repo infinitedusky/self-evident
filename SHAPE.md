@@ -647,6 +647,15 @@ Details and sources in `research/`.
   person to allow shows in the conductor's conversation, named for the agent, and is answered there; an agent stopped
   on the person is reported as waiting, never working. Above the threshold the answer stays the person's.
 
+- **Task branches and save points (Sandy, 2026-11-13).** A task owns a fixed set of worktrees (its own, its
+  prototype's) and only one version of it is worked on at a time, so a version is not more worktrees: it is a git
+  branch in each of them with a shared suffix, plus a copy of the task (brief, acceptance criteria and marks,
+  approvals, steps, comments, sub-tasks). A **save point** is a name on where the task is now; saving does not stop
+  the work. Going back to one starts a new **task branch** there and sets aside the one worked on, whole. Nothing is
+  reset or renamed, so a pushed git branch never disagrees with its remote copy. Any set-aside task branch can be made
+  current again; any save point or set-aside task branch can be deleted from one flat list; completing the task keeps
+  the current one and clears the rest. The prototype's database is one per prototype, not per task branch.
+
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
 > "When I use VS Code, I can just move really quickly … I just set things to dangerously skip permissions and just

@@ -375,6 +375,30 @@ export const prototype = pgTable('prototype', {
   status: text('status').notNull().default('stopped'), createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [index('prototype_app').on(t.appId), inList('prototype_status', t.status, PROTOTYPE_STATUSES)])
 
+// Task branches and save points (task-branches.ts; Sandy, 2026-11-13). A task branch is a version of the task: the git
+// branch each of its worktrees is on, and, once set aside, the task as it was left (brief, criteria, approvals, steps,
+// comments, sub-tasks). One is current. A save point is a named point on a task branch: a git branch at each
+// worktree's commit and the same copy of the task, to start a new task branch from.
+export const taskBranch = pgTable('task_branch', {
+  id: id(), appId: appId(), issueId: text('issue_id').notNull().references(() => issue.id),
+  name: text('name').notNull(), slug: text('slug').notNull(), // '' for the first one: its git branches keep the names they had
+  current: boolean('current').notNull().default(false),
+  fromSave: text('from_save'), // the name of the save point it was started from
+  refs: jsonb('refs').notNull().default([]), // [{key, branch, from?}]: per worktree, its git branch and the commit it started at
+  state: jsonb('state'), // set aside: the task as it was left; null while it is the current one
+  createdBy: text('created_by'), createdAt: createdAt(),
+}, (t) => [index('task_branch_issue').on(t.issueId)])
+
+export const savePoint = pgTable('save_point', {
+  id: id(), appId: appId(), issueId: text('issue_id').notNull().references(() => issue.id),
+  branchId: text('branch_id').notNull().references(() => taskBranch.id),
+  name: text('name').notNull(), slug: text('slug').notNull(),
+  auto: text('auto'), // made by the engine at a transition: prototype_approved | brief_approved; only the latest of each is kept
+  refs: jsonb('refs').notNull().default([]), // [{key, branch, sha}]: per worktree, the git branch that marks it and its commit
+  state: jsonb('state').notNull(),
+  createdBy: text('created_by'), createdAt: createdAt(),
+}, (t) => [index('save_point_issue').on(t.issueId)])
+
 // Workflows and steps (LOG.md, 2026-10-29). A workflow's steps are [{key, on, required}] in its order, under the fixed
 // rules in steps.ts. A step's work on an idea, a task or a project is one row per step: its status, a line about it,
 // and what it produced (research notes, an ADR, a rough draft; mockups as story ids). The brief of a task is the

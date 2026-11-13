@@ -126,7 +126,10 @@ export async function setState(tx: Tx, i: Issue, to: IssueState, opts: { actor?:
 }
 
 export async function changeState(issueId: string, to: IssueState, opts: { actor?: string; reason?: string } = {}) {
-  return db.transaction(async (tx) => setState(tx, await getIssue(tx, issueId), to, opts))
+  const row = await db.transaction(async (tx) => setState(tx, await getIssue(tx, issueId), to, opts))
+  // Done: the task branch worked on is the one that counts; its save points and the set-aside ones go (task-branches.ts).
+  if (to === 'done' && !row.parentId) await import('./task-branches.js').then((m) => m.clearTaskBranches(issueId, opts.actor ?? 'user')).catch((err) => console.error(`task branches of ${issueId}: could not be cleared`, err))
+  return row
 }
 
 /** Change what an issue says or where it sits. Moving it into a project puts it at the end unless an order is given. */

@@ -178,6 +178,12 @@ export interface PrototypeFile { path: string; patch: string | null; content: st
 /** One acceptance criterion of a task: a statement a person can check, how we will know, and what the prototype showed. */
 export interface Criterion { id: string; text: string; check?: string; shown?: boolean; evidence?: string; /** For the final build only: the prototype skips it. */ buildOnly?: boolean; why?: string; /** The final build's mark: met, not met, or not checked yet. */ built?: boolean; builtEvidence?: string; by: string; at: string }
 export interface AcceptanceChange { add?: { text: string; check?: string }[]; update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null; built?: boolean | null; builtEvidence?: string | null }[]; remove?: string[] }
+/** A version of a task: the git branch each of its worktrees is on, and (set aside) the task as it was left. */
+export interface TaskBranch { id: string; name: string; current: boolean; fromSave: string | null; createdAt: string; gitBranches: string[]; /** Set aside: what is only on it. */ work: { commits: number; comments: number } | null }
+/** A named point on a task branch that the whole task can be taken back to. */
+export interface SavePoint { id: string; name: string; /** Made by the engine at a transition. */ auto: string | null; branchId: string; branchName: string | null; onCurrent: boolean; /** Commits (and uncommitted work) since, when it is on the task branch being worked on. */ changesSince: number | null; createdBy: string | null; createdAt: string; gitBranches: string[] }
+export interface TaskBranches { issueId: string; worktrees: { key: string; label: string; branch: string }[]; branches: TaskBranch[]; saves: SavePoint[] }
+export interface TaskMoved { now: { id: string; name: string }; setAside: { id: string; name: string; commits: number }; switched: { worktree: string; branch: string }[]; leftAlone: string[]; restarted: number; problems: string[] }
 /** Something made public for a look: a prototype, a place's mockups or its sketches, at a temporary address. */
 export type ShareKind = 'prototype' | 'storybook' | 'sketch'
 export interface Shared { kind: ShareKind; id: string; url: string; since: string; expiresAt: string; by: string; /** Which tunnel it goes through. */ via?: 'cloudflare' | 'ngrok'; what?: string }
@@ -291,6 +297,13 @@ export const engine = {
   /** A person approves a step of a task (research, sketches, mockups, the prototype), or takes it back. */
   approveStep: (issueId: string, key: StepKey, approve = true) => call<StepWork>('POST', `/issues/${issueId}/steps/${key}/approve`, { approve }),
   setAcceptance: (issueId: string, change: AcceptanceChange) => call<{ acceptance: Criterion[]; note?: string }>('PUT', `/issues/${issueId}/acceptance`, change),
+  taskBranches: (issueId: string) => call<TaskBranches>('GET', `/issues/${issueId}/branches`),
+  saveHere: (issueId: string, name: string) => call<{ id: string; name: string }>('POST', `/issues/${issueId}/save-points`, { name }),
+  goBack: (savePointId: string, body: { name?: string; resetData?: boolean }) => call<TaskMoved>('POST', `/save-points/${savePointId}/go-back`, body),
+  switchTaskBranch: (branchId: string, body: { resetData?: boolean } = {}) => call<TaskMoved>('POST', `/task-branches/${branchId}/switch`, body),
+  deleteSavePoint: (id: string) => call<{ deleted: string }>('DELETE', `/save-points/${id}`),
+  deleteTaskBranch: (id: string) => call<{ deleted: string }>('DELETE', `/task-branches/${id}`),
+  clearTaskBranches: (issueId: string) => call<{ taskBranches: number; savePoints: number }>('DELETE', `/issues/${issueId}/branches`),
   approveBrief: (issueId: string, approve = true) => call<Issue>('POST', `/issues/${issueId}/brief/approve`, { approve }),
   workflows: (appId: string) => call<WorkflowRow[]>('GET', `/workflows?app=${appId}`),
   saveWorkflow: (body: { id?: string; appId: string; name: string; steps: WorkflowStep[]; ordered: boolean }) => call<Workflow>(body.id ? 'PUT' : 'POST', body.id ? `/workflows/${body.id}` : '/workflows', body),
