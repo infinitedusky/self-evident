@@ -29,12 +29,18 @@ export interface Criterion {
   /** What the prototype showed: true, it works there (evidence says where to see it); false, it does not yet. Absent: not tried. */
   shown?: boolean
   evidence?: string
+  /**
+   * For the final build only (Sandy, 2026-11-13: "marked as prototype-skip or final-build only … so that the prototype
+   * agent knows it can ignore it"): the prototype need not show it. `why` says what makes it not worth prototyping.
+   */
+  buildOnly?: boolean
+  why?: string
   by: string
   at: string
 }
 export interface AcceptanceChange {
-  add?: { text: string; check?: string; shown?: boolean; evidence?: string }[]
-  update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null }[]
+  add?: { text: string; check?: string; shown?: boolean; evidence?: string; buildOnly?: boolean; why?: string }[]
+  update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null }[]
   remove?: string[]
 }
 
@@ -57,13 +63,15 @@ export function applyAcceptance(list: Criterion[], c: AcceptanceChange, by: stri
     if (u.check !== undefined) { const k = line(u.check) || undefined; if (k !== x.check) { x.check = k; changed = true } }
     if (u.shown !== undefined) { if (u.shown === null) delete x.shown; else x.shown = u.shown }
     if (u.evidence !== undefined) { const e = line(u.evidence, 1000); if (e) x.evidence = e; else delete x.evidence }
+    if (u.buildOnly !== undefined) { if (u.buildOnly) x.buildOnly = true; else { delete x.buildOnly; delete x.why } } // which half proves it, not what must be true: no new approval
+    if (u.why !== undefined) { const w = line(u.why); if (w && x.buildOnly) x.why = w; else delete x.why }
     x.by = by; x.at = now.toISOString()
   }
   for (const a of c.add ?? []) {
     const text = line(a.text)
     if (!text) throw new PlanError('a criterion needs its statement')
     if (out.some((x) => x.text.toLowerCase() === text.toLowerCase())) continue // said already
-    out.push({ id: newId('run').replace(/^run_/, 'ac_'), text, ...(line(a.check) ? { check: line(a.check) } : {}), ...(a.shown !== undefined ? { shown: a.shown } : {}), ...(line(a.evidence, 1000) ? { evidence: line(a.evidence, 1000) } : {}), by, at: now.toISOString() })
+    out.push({ id: newId('run').replace(/^run_/, 'ac_'), text, ...(line(a.check) ? { check: line(a.check) } : {}), ...(a.shown !== undefined ? { shown: a.shown } : {}), ...(line(a.evidence, 1000) ? { evidence: line(a.evidence, 1000) } : {}), ...(a.buildOnly ? { buildOnly: true, ...(line(a.why) ? { why: line(a.why) } : {}) } : {}), by, at: now.toISOString() })
     changed = true
   }
   if (out.length > MAX) throw new PlanError(`${MAX} acceptance criteria at most: merge the ones that say the same thing`)
@@ -71,7 +79,8 @@ export function applyAcceptance(list: Criterion[], c: AcceptanceChange, by: stri
 }
 
 /** Add, change or remove a task's acceptance criteria. Changing what is approved (a statement, how it is checked) takes the brief's approval back. */
-export async function setAcceptance(issueId: string, change: AcceptanceChange, actor = 'user') {
+export async function setAcceptance(issueId: string, change: AcceptanceChange, actor = 'user', opts: { /** The prototype's own agent: it cannot excuse itself from a criterion. */ prototyping?: boolean } = {}) {
+  if (opts.prototyping && [...(change.add ?? []), ...(change.update ?? [])].some((c) => c.buildOnly)) throw new PlanError('the prototype\'s agent cannot mark a criterion as for the final build only: build it, or say why it should be and let the task\'s agent or the person mark it')
   return db.transaction(async (tx) => {
     const i = await getIssue(tx, issueId)
     if (i.parentId || i.kind !== 'code') throw new PlanError('only a top-level code task has acceptance criteria')
@@ -87,5 +96,5 @@ export async function setAcceptance(issueId: string, change: AcceptanceChange, a
 
 /** The criteria as the lines an agent is given: each with its id, how it is checked, and what the prototype showed. */
 export function acceptanceLines(list: Criterion[]): string {
-  return list.map((c) => `- [${c.id}] ${c.text}${c.check ? ` (how we will know: ${c.check})` : ''}${c.shown === true ? ` · shown in the prototype${c.evidence ? `: ${c.evidence}` : ''}` : c.shown === false ? ` · NOT shown in the prototype${c.evidence ? `: ${c.evidence}` : ''}` : ''}`).join('\n')
+  return list.map((c) => `- [${c.id}] ${c.text}${c.check ? ` (how we will know: ${c.check})` : ''}${c.buildOnly ? ` · FINAL BUILD ONLY, the prototype skips it${c.why ? `: ${c.why}` : ''}` : ''}${c.shown === true ? ` · shown in the prototype${c.evidence ? `: ${c.evidence}` : ''}` : c.shown === false ? ` · NOT shown in the prototype${c.evidence ? `: ${c.evidence}` : ''}` : ''}`).join('\n')
 }

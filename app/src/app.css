@@ -721,6 +721,10 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .acceptance-mark { flex: none; width: 18px; text-align: center; font-weight: 700; color: var(--ink-faint); }
 .acceptance-list li.shown .acceptance-mark { color: var(--ok); } .acceptance-list li.not .acceptance-mark { color: var(--bad); }
 .acceptance-body { flex: 1; min-width: 0; font-size: 14px; } .acceptance-body .faint { font-size: 13px; }
+.acceptance-list li.build .acceptance-mark { color: var(--accent); }
+.acceptance-build { font-size: 13px; color: var(--accent); }
+.acceptance-skip { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+.acceptance-skip input { margin: 0; width: auto; }
 .acceptance-actions { flex: none; display: flex; gap: 2px; align-items: center; }
 .acceptance-edit { flex: 1; min-width: 0; display: grid; gap: 6px; }
 .acceptance-edit input, .acceptance-add input { margin: 0; }

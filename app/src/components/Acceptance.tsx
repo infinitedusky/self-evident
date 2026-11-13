@@ -9,13 +9,13 @@
 import { useEffect, useState } from 'react'
 import { engine, type AcceptanceChange, type Criterion } from '../engine'
 
-const MARK = { shown: ['✓', 'The prototype showed it'], not: ['✗', 'The prototype did not show it'], open: ['○', 'Not tried in a prototype'] } as const
-const stateOf = (c: Criterion) => (c.shown === true ? 'shown' : c.shown === false ? 'not' : 'open')
+const MARK = { shown: ['✓', 'The prototype showed it'], not: ['✗', 'The prototype did not show it'], open: ['○', 'Not tried in a prototype'], build: ['⇢', 'For the final build only: the prototype skips it'] } as const
+const stateOf = (c: Criterion) => (c.buildOnly ? 'build' : c.shown === true ? 'shown' : c.shown === false ? 'not' : 'open')
 
 export function Acceptance({ issueId, items, approved, onChanged }: { issueId: string; items: Criterion[]; /** The brief is approved: a change here asks for approval again. */ approved?: boolean; onChanged?: () => void }) {
   const [list, setList] = useState(items)
   const [editing, setEditing] = useState<string | null>(null)
-  const [draft, setDraft] = useState({ text: '', check: '' })
+  const [draft, setDraft] = useState({ text: '', check: '', buildOnly: false, why: '' })
   const [fresh, setFresh] = useState({ text: '', check: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -24,13 +24,15 @@ export function Acceptance({ issueId, items, approved, onChanged }: { issueId: s
     setBusy(true); setError(null)
     try { setList((await engine.setAcceptance(issueId, c)).acceptance); onChanged?.(); return true } catch (e: any) { setError(String(e.message ?? e)); return false } finally { setBusy(false) }
   }
-  const notShown = list.filter((c) => c.shown === false).length
-  const untried = list.filter((c) => c.shown === undefined).length
+  const notShown = list.filter((c) => !c.buildOnly && c.shown === false).length
+  const untried = list.filter((c) => !c.buildOnly && c.shown === undefined).length
+  const left = list.filter((c) => c.buildOnly).length
   return (
     <section className="acceptance" data-component="Acceptance" aria-label="Acceptance criteria">
       <h3>Acceptance criteria <span className="faint">{list.length ? `${list.length}` : 'none yet'}</span>
         {notShown > 0 && <span className="acceptance-warn">{notShown} not shown in the prototype</span>}
         {list.length > 0 && notShown === 0 && untried > 0 && <span className="faint">{untried} not tried</span>}
+        {left > 0 && <span className="faint">{left} for the final build only</span>}
       </h3>
       <p className="faint acceptance-lead">How we will know it is done. The agent builds these as the task goes and the prototype is made; you approve them with the brief.{approved ? ' The brief is approved: changing one asks for your approval again.' : ''}</p>
       {list.length === 0 && <p className="muted">No acceptance criteria yet. Without them, approving the brief approves no way of knowing it is done.</p>}
@@ -41,20 +43,23 @@ export function Acceptance({ issueId, items, approved, onChanged }: { issueId: s
             <li key={c.id} className={s}>
               <span className="acceptance-mark" title={MARK[s][1]} aria-label={MARK[s][1]}>{MARK[s][0]}</span>
               {editing === c.id ? (
-                <form className="acceptance-edit" onSubmit={async (e) => { e.preventDefault(); if (await change({ update: [{ id: c.id, text: draft.text, check: draft.check || null }] })) setEditing(null) }}>
+                <form className="acceptance-edit" onSubmit={async (e) => { e.preventDefault(); if (await change({ update: [{ id: c.id, text: draft.text, check: draft.check || null, buildOnly: draft.buildOnly, why: draft.buildOnly ? draft.why || null : null }] })) setEditing(null) }}>
                   <input autoFocus value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })} aria-label="Criterion" />
                   <input value={draft.check} onChange={(e) => setDraft({ ...draft, check: e.target.value })} aria-label="How we will know" placeholder="How we will know: a page, a scenario, a test" />
+                  <label className="acceptance-skip"><input type="checkbox" checked={draft.buildOnly} onChange={(e) => setDraft({ ...draft, buildOnly: e.target.checked })} /> For the final build only: the prototype skips it</label>
+                  {draft.buildOnly && <input value={draft.why} onChange={(e) => setDraft({ ...draft, why: e.target.value })} aria-label="Why the prototype skips it" placeholder="Why the prototype skips it" />}
                   <div><button className="btn small" disabled={busy || !draft.text.trim()}>Save</button> <button type="button" className="btn quiet small" onClick={() => setEditing(null)}>Cancel</button></div>
                 </form>
               ) : (
                 <div className="acceptance-body">
                   <div>{c.text}</div>
                   {c.check ? <div className="faint">How we will know: {c.check}</div> : <div className="acceptance-warn">No way to check it yet</div>}
-                  {c.evidence && <div className="faint">{s === 'not' ? 'Missing' : 'Seen'}: {c.evidence}</div>}
+                  {c.buildOnly && <div className="acceptance-build">Final build only: the prototype skips it{c.why ? `. ${c.why}` : ''}</div>}
+                  {c.evidence && !c.buildOnly && <div className="faint">{s === 'not' ? 'Missing' : 'Seen'}: {c.evidence}</div>}
                 </div>
               )}
               {editing !== c.id && <span className="acceptance-actions">
-                <button className="btn quiet small" disabled={busy} onClick={() => { setDraft({ text: c.text, check: c.check ?? '' }); setEditing(c.id) }} aria-label={`Edit: ${c.text}`}>Edit</button>
+                <button className="btn quiet small" disabled={busy} onClick={() => { setDraft({ text: c.text, check: c.check ?? '', buildOnly: !!c.buildOnly, why: c.why ?? '' }); setEditing(c.id) }} aria-label={`Edit: ${c.text}`}>Edit</button>
                 <button className="icon-btn" disabled={busy} onClick={() => void change({ remove: [c.id] })} title="Remove it" aria-label={`Remove: ${c.text}`}>×</button>
               </span>}
             </li>

@@ -24,6 +24,11 @@ describe('acceptance criteria, as a list', () => {
     expect(sharper.changed).toBe(true)
     expect(sharper.list).toHaveLength(1)
     expect(acceptanceLines(sharper.list)).toBe(`- [${two.id}] Running it twice makes no duplicates (sample) (how we will know: scripts/twice.sh prints 0 new rows) · NOT shown in the prototype: the second run adds a row`)
+    const left = applyAcceptance(sharper.list, { update: [{ id: two.id, buildOnly: true, why: 'only real traffic shows it (sample)' }], add: [{ text: 'Final copy is reviewed (sample)', buildOnly: true }] }, 'agent', at)
+    expect(left.list.map((c) => [c.buildOnly, c.why])).toEqual([[true, 'only real traffic shows it (sample)'], [true, undefined]])
+    expect(acceptanceLines(left.list)).toContain('· FINAL BUILD ONLY, the prototype skips it: only real traffic shows it (sample)')
+    expect(applyAcceptance(sharper.list, { update: [{ id: two.id, buildOnly: true }] }, 'agent', at).changed).toBe(false) // which half proves it is not what the person approved
+    expect(applyAcceptance(left.list, { update: [{ id: two.id, buildOnly: false }] }, 'user', at).list[0]).not.toHaveProperty('why')
     expect(() => applyAcceptance(a.list, { update: [{ id: 'ac_none', text: 'x' }] }, 'agent')).toThrow(/no acceptance criterion/)
     expect(() => applyAcceptance(a.list, { update: [{ id: one.id, text: ' ' }] }, 'agent')).toThrow(/remove it instead/)
     expect(() => applyAcceptance([], { add: [{ text: '' }] }, 'agent')).toThrow(/needs its statement/)
@@ -66,6 +71,8 @@ describe.skipIf(!reachable)('acceptance criteria, on a task', () => {
     const [row] = await db.select().from(issue).where(eq(issue.id, t.id))
     expect(row.briefApprovedBy).toBeNull()
     expect(row.acceptance).toHaveLength(2)
+    await expect(setAcceptance(t.id, { update: [{ id, buildOnly: true }] }, 'agent', { prototyping: true })).rejects.toThrow(/cannot mark a criterion as for the final build only/) // the prototype's agent cannot excuse itself
+    expect((await setAcceptance(t.id, { update: [{ id, buildOnly: true, why: 'polish (sample)' }] }, 'agent')).acceptance[0]).toMatchObject({ buildOnly: true, why: 'polish (sample)' })
     const sub = await createIssue(appId, { title: 'A sub-task (sample)', kind: 'code', parentId: t.id })
     await expect(setAcceptance(sub.id, { add: [{ text: 'x' }] })).rejects.toThrow(/only a top-level code task/)
   })

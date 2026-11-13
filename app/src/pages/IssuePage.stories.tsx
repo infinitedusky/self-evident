@@ -31,8 +31,8 @@ export const BriefWithAcceptanceCriteria: Story = {
   beforeEach: withEngine({ steps: { ...sampleData.steps, issues: approvedTaskStepsView }, issueDetails: { ...sampleData.issueDetails, iss_sample20: { ...issueDetails.iss_sample20, acceptance } } }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByRole('button', { name: 'Approve the brief and its 4 criteria' })).toBeInTheDocument()
-    await expect(c.getByText(/Approving it approves its 4 acceptance criteria as enough; 1 was not shown in the prototype/)).toBeInTheDocument()
+    await expect(await c.findByRole('button', { name: 'Approve the brief and its 5 criteria' })).toBeInTheDocument()
+    await expect(c.getByText(/Approving it approves its 5 acceptance criteria as enough; 1 was not shown in the prototype; 1 is left to the final build, unproven/)).toBeInTheDocument()
   },
 }
 /** A step the workflow puts after one not finished (the mockups): greyed in the nav, and its page says where to go first. */
