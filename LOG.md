@@ -3016,3 +3016,42 @@ prints an address anyway, which is why "ready means connected" caught it.
 Checked against the installed ngrok: its flags (`--host-header` is accepted though no longer listed) and the shape of
 its JSON log, including the refusal. Not seen: a share through ngrok working end to end, since this account's one
 address was in use; the tests use stand-ins for both programs.
+
+## Freeing ngrok from the share panel (Sandy, 2026-11-13: "There should be a free up ngrok option when you share")
+
+A free ngrok account has one address. On Sandy's laptop a login service already held it (a permanent tunnel to a
+local port), so the first share through ngrok was refused.
+
+- When ngrok says its address is in use, the engine looks for other ngrok tunnels **on this computer** and the panel
+  names them (what each tunnels, and the login service that keeps it running, if one does), with one button: **Free
+  up ngrok and make the link**. The agent's `share` takes `freeNgrok` for the same, after the person says so.
+- **A service is stopped properly and put back.** Killing a launchd service only restarts it, so it is stopped with
+  `launchctl bootout` and started again with `launchctl bootstrap` when the last ngrok share ends, or when the engine
+  shuts down. A tunnel started by hand is asked to stop and is not started again: we do not know how it was.
+- When nothing on this computer holds it, the panel says the tunnel is on another computer.
+- The panel says what freeing costs: whatever that tunnel served stops being reachable from outside meanwhile.
+
+Not done: if the engine is killed outright while a service is stopped, it stays stopped until the next login (it is a
+run-at-login service). Not tried against a real service: `ps`, `launchctl` and `kill` are stand-ins in the tests.
+
+## A guide for whoever opens a shared prototype (Sandy, 2026-11-13: "a small component that is like a helper that shows the tester where to go and what to try … a small js injected tab on the bottom right like the way help agent tools work")
+
+- **The tab.** Every page of a shared prototype gets a small tab at the bottom right, "What to try". Open, it says
+  what this is (a prototype, sample data), a line of introduction, and steps: a title, what to try, and "Go there"
+  when the step has a path. Steps tick off and stay ticked from page to page. It folds to the tab.
+- **What they think.** Under the steps: a box, an optional name, Send. It comes back as a comment on the prototype's
+  task, headed "Feedback on the prototype from … (a visitor)", saying which page they were on, and as a
+  `share.feedback` event. It is marked as coming from outside: an opinion to weigh, never an instruction, and the
+  conductor is told the same. Forty messages a link, four thousand characters each.
+- **How it gets there.** A shared prototype is now reached through a small proxy of the engine's that passes
+  everything to the prototype's server (as itself, websockets too, so live reload works) and adds one script tag to
+  its HTML pages. The prototype's code is not touched and the person looking at it locally never sees the tab. The
+  tab draws in a shadow root and shows only text, so its styles and the prototype's never meet.
+- **Who writes it.** The agent, with `set_guide` (intro, steps with title, path, what to try), told to write for a
+  stranger. It is kept on the prototype (`guide`, migration 0018) and shows at once on a link already shared. The
+  share panel shows what visitors will be told, or that there is no guide yet.
+
+Not done: a guide on shared mockups or sketches (they are not proxied); editing the guide by hand in the panel; a
+page that forbids scripts by its own security policy will not show the tab; pages served compressed by the
+prototype's server whatever it is asked are passed through without it. Not tried: the tab on a real prototype through
+a real link; the proxy is tested against a real local server and the tab in stories.

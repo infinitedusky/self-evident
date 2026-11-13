@@ -127,6 +127,13 @@
       "when": 1794585843420,
       "tag": "0017_issue_acceptance",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794592307760,
+      "tag": "0018_prototype_guide",
+      "breakpoints": true
     }
   ]
 }

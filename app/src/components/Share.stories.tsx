@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, userEvent, within } from 'storybook/test'
 import { Share } from './Share'
 import { withEngine } from '../stories/mock-engine'
-import { sampleApp } from '../stories/sample'
+import { prototypes, sampleApp } from '../stories/sample'
 
 // Sharing a prototype, mockups or sketches with someone outside. All made up: the address is not a real one and
 // nothing is published from a story.
@@ -50,6 +50,39 @@ export const BothBlocked: Story = {
     const c = within(canvasElement)
     await userEvent.click(c.getByRole('button', { name: 'Make the link' }))
     await expect(await c.findByRole('alert')).toHaveTextContent('another ngrok tunnel is running on this account')
+  },
+}
+/**
+ * ngrok's one free address is held by another tunnel on this computer (here a login service, made up): the panel names
+ * it, says what freeing it does, and one press stops it and makes the link.
+ */
+export const FreeUpNgrok: Story = {
+  args: { open: true }, beforeEach: withEngine({ ngrokHolders: [{ pid: 1172, what: 'http 3000', service: 'com.sample.ngrok-tunnel' }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(c.getByRole('button', { name: 'Make the link' }))
+    await expect(await c.findByText(/A service is put back when you stop sharing/)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Free up ngrok and make the link' }))
+    await expect(await c.findByLabelText('The public link')).toHaveValue('https://sample-made-up.ngrok-free.dev')
+  },
+}
+/** The tunnel holding ngrok's address is on another computer: nothing here to free, and it says so. */
+export const NgrokHeldElsewhere: Story = {
+  args: { open: true }, beforeEach: withEngine({ ngrokHolders: [] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(c.getByRole('button', { name: 'Make the link' }))
+    await expect(await c.findByText(/the tunnel holding its address is on another one/)).toBeInTheDocument()
+  },
+}
+/** A prototype with a guide for whoever opens the link: the panel shows what they will be told. */
+export const WithAGuide: Story = {
+  args: { open: true },
+  beforeEach: withEngine({ prototypes: prototypes.map((p, i) => i === 0 ? { ...p, guide: { intro: 'A one-tap checkout. Tell us if paying felt safe (sample).', steps: [{ title: 'Pay with a saved card', path: '/checkout', try: 'Sign in as Ada (sample) and press Pay.' }, { title: 'Pay with no saved card', path: '/checkout?as=bo' }] } } : p) }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('Pay with a saved card')).toBeInTheDocument()
+    await expect(c.getByText(/It opens with: “A one-tap checkout/)).toBeInTheDocument()
   },
 }
 /** It could not be made: the tunnel is not installed on this computer; says what to do. */

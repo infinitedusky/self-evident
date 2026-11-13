@@ -13,7 +13,7 @@ export interface MockData {
   summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript; /** A task's own agent, or null when it has none. */ taskTalk: typeof s.talkSession | null; /** The agents it has out. */ taskAgents?: import('../engine').TaskAgentOut[]; /** An idea's own agent, or null when it has none. */ ideaTalk?: typeof s.talkSession | null
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[] }
-  /** What is public right now, by "kind:id". */ shares?: Record<string, import('../engine').Shared>; /** Why making a link fails, when it should. */ shareError?: string
+  /** What is public right now, by "kind:id". */ shares?: Record<string, import('../engine').Shared>; /** Why making a link fails, when it should. */ shareError?: string; /** ngrok's one address is held by these, until the person frees it. */ ngrokHolders?: import('../engine').NgrokHolder[]; /** What the guide tab of a shared prototype is given. */ visitorGuide?: { title: string; guide: import('../engine').Guide | null }
   prototypes: typeof s.prototypes; /** A prototype's changed files and what the agent shows. */ prototypeCode: typeof s.prototypeCode
   claudeSessions: typeof s.claudeSessions
   check: { ok: boolean; detail: string; links?: { label: string; href: string }[] }
@@ -104,9 +104,13 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/sketches/:scope/file/*', ({ request }) => HttpResponse.html(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font:16px system-ui;margin:0;padding:24px;background:#fbfaf7;color:#222"><p style="font:12px ui-monospace,monospace;color:#888;margin:0 0 16px">sample sketch · ${new URL(request.url).pathname.split('/file/')[1]} · made-up data</p><h1 style="font-size:22px;margin:0 0 12px">Sample Shop</h1><div style="border:1px solid #ddd;border-radius:12px;padding:16px;background:#fff">A plain HTML screen, written fast, to react to.</div><button style="margin-top:16px;padding:10px 16px;border-radius:10px;border:0;background:#222;color:#fff">Continue</button></body>`)),
     http.get('/api/apps/:id/prototypes', () => reply(d.prototypes)),
     http.get('/api/shares/:kind/:id', ({ params }) => reply({ share: d.shares?.[`${params.kind}:${params.id}`] ?? null })),
-    http.post('/api/shares/:kind/:id', ({ params }) => {
+    http.get('/__self-evident/guide.json', () => reply(d.visitorGuide ?? { title: 'Sample: one-tap checkout', guide: null })),
+    http.post('/__self-evident/feedback', () => reply({ ok: true })),
+    http.post('/api/shares/:kind/:id', async ({ params, request }) => {
       if (d.shareError) return HttpResponse.json({ error: d.shareError }, { status: 400 })
-      const made = { kind: params.kind as import('../engine').ShareKind, id: params.id as string, url: 'https://sample-made-up-words.trycloudflare.com', since: '2026-10-28T10:02:00Z', expiresAt: '2026-10-28T18:02:00Z', by: 'user' }
+      const asked = await request.json().catch(() => ({})) as { freeNgrok?: boolean }
+      if (d.ngrokHolders && !asked.freeNgrok) return HttpResponse.json({ error: 'This network does not let the Cloudflare tunnel connect. Tried ngrok instead: ngrok\'s address is already in use: another ngrok tunnel is running on this account, and a free account has one address.', code: 'ngrok_busy', holders: d.ngrokHolders }, { status: 409 })
+      const made = { kind: params.kind as import('../engine').ShareKind, id: params.id as string, ...(d.ngrokHolders ? { via: 'ngrok' as const } : {}), url: d.ngrokHolders ? 'https://sample-made-up.ngrok-free.dev' : 'https://sample-made-up-words.trycloudflare.com', since: '2026-10-28T10:02:00Z', expiresAt: '2026-10-28T18:02:00Z', by: 'user' }
       d.shares = { ...d.shares, [`${params.kind}:${params.id}`]: made }
       return reply({ share: made })
     }),

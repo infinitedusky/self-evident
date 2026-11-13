@@ -52,7 +52,10 @@ describe.skipIf(!reachable)('sharing', () => {
     expect(s).toMatchObject({ kind: 'prototype', id: p.id, url: 'https://sample-made-up-words.trycloudflare.com', by: 'user', via: 'cloudflare' })
     expect(Date.parse(s.expiresAt) - Date.parse(s.since)).toBe(8 * 3_600_000)
     const { readFileSync } = await import('node:fs')
-    expect(readFileSync(join(dir, 'asked.txt'), 'utf8').trim()).toBe(`tunnel --no-autoupdate --url http://localhost:${port} --http-host-header localhost:${port}`)
+    const asked = /^tunnel --no-autoupdate --url (http:\/\/127\.0\.0\.1:\d+) --http-host-header 127\.0\.0\.1:\d+$/.exec(readFileSync(join(dir, 'asked.txt'), 'utf8').trim())
+    expect(asked).not.toBeNull() // the tunnel reaches our proxy, which adds the tester's guide, never the prototype straight
+    expect(await (await fetch(asked![1])).text()).toBe(`host localhost:${port}`) // and through it the prototype answers as itself
+    expect(await (await fetch(`${asked![1]}/__self-evident/guide.json`)).json()).toEqual({ title: 'Shared (sample)', guide: null })
     expect(await share('prototype', p.id)).toEqual(s) // not a second tunnel
     expect(sharesOf(appId)).toEqual([{ ...s, what: 'The prototype' }])
     const [started] = await db.select().from(event).where(eq(event.appId, appId)).orderBy(desc(event.seq)).limit(1)
@@ -124,6 +127,7 @@ describe.skipIf(!reachable)('sharing', () => {
     await writeFile(busy, `#!/bin/sh\necho '{"lvl":"eror","msg":"session closing","err":"failed to start tunnel: The endpoint is already online."}'\necho "ERROR:  ERR_NGROK_334" >&2\nexit 1\n`); await chmod(busy, 0o755)
     process.env.NGROK_BIN = busy
     await expect(share('sketch', appId)).rejects.toThrow(/Cloudflare tunnel connect \(found earlier\)\. Tried ngrok instead: ngrok's address is already in use: another ngrok tunnel is running on this account/)
+    await expect(share('sketch', appId)).rejects.toMatchObject({ code: 'ngrok_busy', holders: expect.any(Array) }) // so the panel can offer to free it
     forgetBlocked()
     await expect(share('sketch', appId)).rejects.toThrow(/blocks outbound port 7844[\s\S]*Tried ngrok instead: ngrok's address is already in use/)
     process.env.NGROK_BIN = join(dir, 'no-ngrok'); forgetBlocked()

@@ -164,7 +164,12 @@ export interface Prototype {
   id: string; appId: string; projectId: string | null; ideaId?: string | null; issueId?: string | null; title: string; brief: string | null; sessionId: string | null; branch: string; path: string; port: number | null
   status: 'running' | 'stopped' | 'discarded'; url: string | null; createdAt: string; updatedAt?: string | null
   scenario: string | null; database?: string | null; scenarios?: string[]; up?: boolean; log?: string[]
+  /** What someone opening its shared link is told, in the tab at the bottom right. */
+  guide?: Guide | null
 }
+export interface Guide { intro?: string; steps: { title: string; path?: string; try?: string }[]; by?: string; at?: string }
+/** Another ngrok tunnel on this computer, holding the account's one address. */
+export interface NgrokHolder { pid: number; what: string; service?: string }
 /** A prototype's code: what changed since its branch left the default branch, and what the agent is showing there. */
 export interface ChangedFile { path: string; status: 'added' | 'modified' | 'deleted' | 'renamed'; added: number | null; removed: number | null; from?: string }
 export interface ShownRef { id: string; kind: 'file' | 'link'; path?: string; url?: string; title?: string; note?: string; lines?: { from: number; to: number }[]; by: string; at: string }
@@ -270,7 +275,7 @@ export const engine = {
   prototypeFile: (id: string, path: string) => call<PrototypeFile>('GET', `/prototypes/${id}/file?path=${encodeURIComponent(path)}`),
   unshowInPrototype: (id: string, shownId: string) => call<unknown>('DELETE', `/prototypes/${id}/shown/${encodeURIComponent(shownId)}`),
   shared: (kind: ShareKind, id: string) => call<{ share: Shared | null }>('GET', `/shares/${kind}/${id}`).then((r) => r.share),
-  share: (kind: ShareKind, id: string) => call<{ share: Shared }>('POST', `/shares/${kind}/${id}`).then((r) => r.share),
+  share: (kind: ShareKind, id: string, opts: { freeNgrok?: boolean } = {}) => call<{ share: Shared }>('POST', `/shares/${kind}/${id}`, opts).then((r) => r.share),
   unshare: (kind: ShareKind, id: string) => call<{ stopped: boolean }>('DELETE', `/shares/${kind}/${id}`),
   prototypeTalk: (id: string) => call<{ id: string }>('POST', `/prototypes/${id}/talk`),
   now: (appId?: string) => call<Now>('GET', `/now${appId ? `?app=${appId}` : ''}`),

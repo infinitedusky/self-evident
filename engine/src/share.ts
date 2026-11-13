@@ -3,7 +3,7 @@
  * think" (Sandy, 2026-11-13: "we need to have a tunnel system built in, ready to go … I think it's critical"; "same
  * with mockups and sketches as well"). A share is a public address that reaches one local thing and nothing else:
  *
- * - a **prototype**: its server, on its port;
+ * - a **prototype**: its server, through a small proxy of ours that adds the tester's guide tab (share-guide.ts);
  * - **mockups**: the Storybook of a conversation's worktree (or the app's);
  * - **sketches**: the HTML files under sketches/, served by a small server of their own that reads only that folder.
  *   The engine's own port is never tunnelled: it holds everything.
@@ -26,7 +26,9 @@ import { db } from './db/client.js'
 import { app, session } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { PlanError } from './projects.js'
+import { freeNgrok, ngrokHolders, pausedServices, restoreNgrok, restoreNgrokNow, type Holder } from './ngrok-holders.js'
 import { onPrototypeStopped, prototypeStatus } from './prototype.js'
+import { guideOf, guideProxy, takeFeedback } from './share-guide.js'
 import { listSketches, readSketch } from './sketches.js'
 import { storybookStatus } from './storybook.js'
 
@@ -80,7 +82,9 @@ async function targetOf(kind: ShareKind, id: string): Promise<{ appId: string; u
   if (kind === 'prototype') {
     const p = await prototypeStatus(id)
     if (p.status !== 'running' || !p.up || !p.url) throw new PlanError('the prototype is not running: start it, then share it')
-    return { appId: p.appId, url: p.url }
+    // Reached through a proxy of ours that adds the tester's guide tab to its pages and takes what they say (share-guide.ts).
+    const { server, port } = await guideProxy(p.url, { title: p.title, guide: async () => guideOf(await prototypeStatus(id)), onFeedback: (f) => takeFeedback(id, f) })
+    return { appId: p.appId, url: `http://127.0.0.1:${port}`, server }
   }
   const appId = await scopeApp(id)
   if (kind === 'storybook') {
@@ -96,7 +100,9 @@ async function targetOf(kind: ShareKind, id: string): Promise<{ appId: string; u
 export type Via = 'cloudflare' | 'ngrok'
 type Tunnel = { proc: ChildProcess; url: string; via: Via }
 /** Why a tunnel did not come up, in a form the next step can act on: `blocked` means this network, so another provider may work. */
-class TunnelError extends PlanError { constructor(message: string, readonly blocked = false) { super(message) } }
+class TunnelError extends PlanError { constructor(message: string, readonly blocked = false, readonly busy = false) { super(message) } }
+/** A share that could not be made, with what the person can do about it: ngrok's address held by tunnels on this computer, which can be stopped for them. */
+export class ShareError extends PlanError { constructor(message: string, readonly code: 'ngrok_busy', readonly holders: Holder[]) { super(message) } }
 
 const ADDRESS = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/
 const CONNECTED = /Registered tunnel connection/ // cloudflared prints the address first and connects after: until this line the address answers with Cloudflare's error page
@@ -149,7 +155,7 @@ function ngrokUrl(all: string): string | null {
 }
 const ngrok = (target: string, timeoutMs = startTimeout()) => run(ngrokBin(), ['http', target.replace(/^http:\/\//, ''), '--host-header', new URL(target).host, '--log', 'stdout', '--log-format', 'json'], {
   via: 'ngrok', timeoutMs, ready: ngrokUrl,
-  broken: (all) => /ERR_NGROK_334|is already online/.test(all) ? new TunnelError('ngrok\'s address is already in use: another ngrok tunnel is running on this account, and a free account has one address. Stop that tunnel (or what is shared now), or use a paid ngrok plan, then share again.')
+  broken: (all) => /ERR_NGROK_334|is already online/.test(all) ? new TunnelError('ngrok\'s address is already in use: another ngrok tunnel is running on this account, and a free account has one address. Stop that tunnel (or what is shared now), or use a paid ngrok plan, then share again.', false, true)
     : /ERR_NGROK_(4018|105|107)|authtoken/i.test(all) && /ERR_NGROK_/.test(all) ? new TunnelError('ngrok has no working token on this computer: sign in at ngrok.com, then run "ngrok config add-authtoken <token>" and share again.')
     : /ERR_NGROK_\d+/.test(all) ? new TunnelError(`ngrok would not start the tunnel (${/ERR_NGROK_\d+/.exec(all)![0]}): ${(/failed to start tunnel: ([^\\"\n]+)/.exec(all)?.[1] ?? 'see ngrok.com/docs/errors').slice(0, 200)}`) : null,
   missing: 'ngrok is not installed on this computer (brew install ngrok), and it needs an account\'s token.',
@@ -162,6 +168,7 @@ const ngrok = (target: string, timeoutMs = startTimeout()) => run(ngrokBin(), ['
  */
 let cloudflareBlockedAt = 0
 export const forgetBlocked = () => { cloudflareBlockedAt = 0 } // for tests
+const ownNgrok = () => [...live.values()].filter((s) => s.via === 'ngrok' && s.proc.pid).map((s) => s.proc.pid!)
 async function tunnel(target: string): Promise<Tunnel> {
   const want = (process.env.SHARE_TUNNEL ?? 'auto').toLowerCase()
   if (want === 'ngrok') return ngrok(target)
@@ -174,7 +181,12 @@ async function tunnel(target: string): Promise<Tunnel> {
     }
   }
   try { return await ngrok(target) } catch (err) {
-    throw new PlanError(`${first ? first.message : 'This network does not let the Cloudflare tunnel connect (found earlier).'} Tried ngrok instead: ${(err as Error).message}`)
+    const why = `${first ? first.message : 'This network does not let the Cloudflare tunnel connect (found earlier).'} Tried ngrok instead: ${(err as Error).message}`
+    if (err instanceof TunnelError && err.busy) {
+      const holders = await ngrokHolders(ownNgrok()).catch(() => [])
+      throw new ShareError(holders.length ? `${why} On this computer: ${holders.map((h) => `ngrok ${h.what}${h.service ? ` (the service ${h.service})` : ''}`).join('; ')}.` : `${why} None is running on this computer, so it is on another one.`, 'ngrok_busy', holders)
+    }
+    throw new PlanError(why)
   }
 }
 
@@ -189,7 +201,7 @@ let wired = false
 function wire() { if (wired) return; wired = true; onPrototypeStopped((id) => { void unshare('prototype', id, 'engine', 'the prototype was stopped') }) }
 
 /** Make a public address for one thing. Sharing what is already shared gives the same address. */
-export async function share(kind: ShareKind, id: string, actor = 'person'): Promise<Shared> {
+export async function share(kind: ShareKind, id: string, actor = 'person', opts: { /** Stop the other ngrok tunnels on this computer first; services among them are put back when sharing ends. */ freeNgrok?: boolean } = {}): Promise<Shared> {
   if (!SHARE_KINDS.includes(kind)) throw new PlanError(`share a prototype, mockups (storybook) or sketches (sketch), not ${kind}`)
   wire()
   const key = keyOf(kind, id)
@@ -199,6 +211,7 @@ export async function share(kind: ShareKind, id: string, actor = 'person'): Prom
   if (pending) return pending
   const p = (async () => {
     const target = await targetOf(kind, id)
+    if (opts.freeNgrok) await freeNgrok(ownNgrok()).catch(() => [])
     let t: Tunnel
     try { t = await tunnel(target.url) } catch (err) { target.server?.close(); throw err }
     const now = Date.now()
@@ -226,6 +239,7 @@ export async function unshare(kind: ShareKind, id: string, actor = 'person', why
   try { s.proc.kill('SIGTERM') } catch { /* gone */ }
   s.server?.close()
   await tell(s.appId, actor, 'share.stopped', { kind, id, url: s.url, ...(why ? { why } : {}) }).catch(() => {})
+  if (pausedServices().length && ![...live.values()].some((x) => x.via === 'ngrok')) { await new Promise((r) => setTimeout(r, 500)); await restoreNgrok().catch(() => {}) } // the address is free again: what was stopped for it comes back
   return { stopped: true }
 }
 
@@ -233,4 +247,4 @@ export const shared = (kind: ShareKind, id: string): Shared | null => { const s 
 /** Everything of one app that is public right now. */
 export const sharesOf = (appId: string): (Shared & { what: string })[] => [...live.values()].filter((s) => s.appId === appId).map((s) => ({ ...view(s), what: WHAT[s.kind] }))
 /** The engine is going down: every address with it. */
-export function stopShares() { for (const s of live.values()) { clearTimeout(s.timer); try { s.proc.kill('SIGTERM') } catch { /* gone */ } s.server?.close() } live.clear() }
+export function stopShares() { for (const s of live.values()) { clearTimeout(s.timer); try { s.proc.kill('SIGTERM') } catch { /* gone */ } s.server?.close() } live.clear(); restoreNgrokNow() }
