@@ -2569,3 +2569,28 @@ project stays and goes out of sight (`engine/src/solo.ts`, column `project.solo`
 Not done: the task's own page does not answer questions or run the build itself, it links to the project page; a solo
 project's name does not follow a later rename of the task.
 
+## The build is quiet; clean-up happens after the prototype (Sandy, 2026-11-12: "why there would be questions during the build is sort of crazy to me. The build is like everything has been figured out … It should be very fast")
+
+Merman's MER-1 collected eleven backlog tasks while it was planned and built (MER-21 to MER-31). Read against its
+brief, none was work the build needed: two restated the brief, two were things the brief had already deferred, the
+rest were "consider…" suggestions, tooling trivia and two small bugs. They existed because we asked: the planner's and
+every builder's instructions ended with "if you noticed something someone should do, list it under Later", and each
+line became a numbered task that held the project open.
+
+I first built a clean-up phase after the build to triage those notes (branch `cleanup-notes`, parked, not merged).
+Sandy: that is the wrong end. The prototype exists so that everything unplanned is found before the brief; clean-up
+(is anything written twice, what should be a function, what to refactor, how is this cleaner) is a question for the
+prototype's code, not for the finished build.
+
+- **No notes from the build.** The planner no longer returns `later`, builders are no longer asked for `Later:` lines,
+  and neither adds to a project's backlog. A builder fixes a small slip in its own files, builds what the brief says,
+  and if the sub-task cannot be built as written it stops and says exactly what is wrong.
+- **Clean-up is a check after the prototype** (`cleanup`, between the prototype analysis and the ADR, on the
+  prototype's checkout): what repeats and should be one function, what could be simpler, what to refactor so this
+  fits, what to leave out. The conductor writes it into the brief as instructions to the builder. A workflow adds it
+  like any check.
+- The backlog is back to what people, the agent and ideas put there.
+
+Not changed: the planner can still ask a question when the brief leaves a choice open. By the same reasoning that
+should be rare or gone; left for Sandy to say.
+
