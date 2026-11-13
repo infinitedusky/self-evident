@@ -58,12 +58,21 @@ export const SendFeedback: Story = {
     await waitFor(() => expect(tab()!.textContent).toContain('Sent. Thank you.'))
   },
 }
-/** Hidden: a small tab in the corner, out of the way. */
+/** Folded: a small tab pinned to the bottom corner, saying how far they are; pressing it opens the guide again. Escape or the heading folds it. */
 export const Folded: Story = {
   play: async () => {
-    await waitFor(() => expect(tab()?.querySelector('button.x')).toBeTruthy())
-    await userEvent.click(tab()!.querySelector('button.x') as HTMLElement)
-    await waitFor(() => expect(tab()!.querySelector('button.tab')?.textContent).toBe('What to try'))
+    await waitFor(() => expect(tab()?.textContent).toContain('Pay with a saved card'))
+    await userEvent.click(tab()!.querySelector('input[type=checkbox]') as HTMLElement)
+    await waitFor(() => expect(tab()!.querySelector('li.done')).toBeTruthy())
+    await userEvent.click(tab()!.querySelector('button.head') as HTMLElement) // the whole heading folds it
+    await waitFor(() => expect(tab()!.querySelector('button.tab')?.textContent).toBe('What to try1/3\u25B2')) // folded: how far they are
+    await expect(tab()!.querySelector('.panel')).toBeNull()
+    const host = document.querySelector('[data-self-evident-guide]') as HTMLElement
+    await expect(getComputedStyle(host).position).toBe('fixed') // pinned to the corner, open or folded
+    const r = host.getBoundingClientRect()
+    await expect(Math.round(window.innerWidth - r.right)).toBe(16); await expect(Math.round(window.innerHeight - r.bottom)).toBe(16)
+    await userEvent.click(tab()!.querySelector('button.tab') as HTMLElement)
+    await waitFor(() => expect(tab()!.querySelector('.panel')).toBeTruthy()) // and back
   },
 }
 /** No guide written yet: it still says what this is and asks what they think. */

@@ -3055,3 +3055,14 @@ Not done: a guide on shared mockups or sketches (they are not proxied); editing 
 page that forbids scripts by its own security policy will not show the tab; pages served compressed by the
 prototype's server whatever it is asked are passed through without it. Not tried: the tab on a real prototype through
 a real link; the proxy is tested against a real local server and the tab in stories.
+
+## The guide folds, and stays pinned to the corner (Sandy, 2026-11-13: "we need the guide to be collapsible and when it is pinned to the bottom corner")
+
+Read as: it must be plain how to fold it, and folded it sits in the bottom corner. It could be folded before, but
+only by a small × that read as "close for good".
+
+- The whole heading of the open guide is the fold control, labelled "Hide ▼"; Escape folds it too. Folded, it is a
+  small pill in the bottom right: "What to try", how far they are ("1/3"), and ▲ to open it. Which it is, is
+  remembered from page to page.
+- Pinned harder: the tab is attached beside the page's body, not inside it, and its position is set so the page's
+  own styles cannot move it. A page that transforms or scrolls its body no longer carries the tab away.
