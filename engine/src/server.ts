@@ -21,7 +21,7 @@ import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { advanceChecks } from './checks.js'
 import { approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
-import { adoptTalk, answerPermission, closeTalk, closeTalks, endTalk, ensureTaskTalk, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
+import { adoptTalk, answerPermission, closeTalk, closeTalks, endTalk, ensureTaskTalk, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, setupTalk, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
 import { lastSync, myRepos, startSync, syncApp } from './github.js'
@@ -44,7 +44,7 @@ import { deleteIssue } from './delete-issue.js'
 import { addAsset, listAssets, removeAsset, updateAsset } from './assets.js'
 import { importTickets, linearTickets, type Scope } from './linear-import.js'
 import { outsidePr, pr as prRows } from './db/schema.js'
-import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, setupIntegration, statuses, type Local, type Values } from './integrations.js'
+import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, setupIntegration, statuses, type Local, type SetupResult, type Values } from './integrations.js'
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
 import { linearFor } from './linear-home.js'
 import { CATALOGUE } from './catalogue.js'
@@ -223,17 +223,33 @@ export function buildApp(bus: EventBus) {
       throw err
     }
   })
+  const settingUp = new Map<string, Promise<SetupResult & { talkId: string | null }>>() // set-ups whose engine part is running, by integration and app
   // "Set up what's missing": the engine does its part, then hands the rest to the agent in a conversation in the repo.
   api.post('/integrations/:key/setup', async (c) => {
     const body = await c.req.json<{ appId?: string }>().catch(() => ({} as { appId?: string }))
     if (!body.appId) return c.json({ error: 'appId is required: an integration is set up for an app' }, 400)
     const found = await integrationFor(c.req.param('key'), body.appId)
     if (!found) return c.json({ error: 'no such app' }, 404)
+    const key = c.req.param('key')
+    const appId = body.appId
+    const name = INTEGRATIONS.find((i) => i.key === key)?.name ?? key
     try {
-      const r = await setupIntegration(c.req.param('key'), found.values, process.env, found.local)
-      let talkId: string | null = null
-      if (r.ask) { const t = await startTalk({ appId: body.appId, actor: 'user' }); await say(t.id, r.ask); await showTalk(t.id, body.appId); talkId = t.id }
-      return c.json({ ...r, talkId })
+      // One set-up per app at a time (Sandy, 2026-11-12: two presses started two agents on the same upgrade): a press
+      // while an agent has it shows that conversation; a press while the engine's part still runs waits for the same answer.
+      const open = await setupTalk(appId, name)
+      if (open) { await showTalk(open.id, appId); return c.json({ done: false, did: [], ask: null, detail: `An agent is already setting ${name} up for this app: its conversation is open beside this.`, talkId: open.id }) }
+      const slot = `${key}:${appId}`
+      let going = settingUp.get(slot)
+      if (!going) {
+        going = (async () => {
+          const r = await setupIntegration(key, found.values, process.env, found.local)
+          let talkId: string | null = null
+          if (r.ask) { const t = await startTalk({ appId, subjectRef: { setup: name }, actor: 'user' }); await say(t.id, r.ask); await showTalk(t.id, appId); talkId = t.id }
+          return { ...r, talkId }
+        })().finally(() => settingUp.delete(slot))
+        settingUp.set(slot, going)
+      }
+      return c.json(await going)
     } catch (err) {
       if (err instanceof IntegrationError) return c.json({ error: err.message }, 400)
       return planError(c, err)
