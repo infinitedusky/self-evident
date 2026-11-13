@@ -2791,3 +2791,24 @@ stop buttons and the device widths ran into the address.
   under 1000px).
 
 Stories: PrototypePane › Narrow, Viewer › Prototype embedded (Detach is checked to sit right of the stop button).
+
+## What an agent asks shows in its conductor's column (Sandy, 2026-11-13: "these sub-agents for the different steps are managed by you. I don't think I should be waiting for those … you should be telling me how the progress is going")
+
+A prototype's agent asked to run a command above its threshold (it already acts up to moderate by itself; expensive
+always asks). The card showed only in the Prototype tab. The conductor's `agents_out` said "working" and `read_agent`
+showed nothing pending, so the conductor reported it busy while it sat until the person happened on the card.
+
+- **The card goes to the conductor's conversation too**, headed "The Prototype agent asks" (or the check's name), with
+  the same Allow / Always allow / Deny. It is answered in either place, and both conversations say how it went. This
+  covers a prototype's builder and the fresh agents on checks, on a task or an idea.
+- **The agent is never "working" while it waits.** `agents_out` and `read_agent` give its state as "waiting for the
+  person to allow Bash (expensive): <the command>", and the conductor is told to say in a line what it wants and why.
+  On the task's page the agent's tab reads "asks you" in amber and the conductor's dot turns amber.
+- **An ask nobody answers** still lapses after ten minutes, but now says so ("No answer in 10 minutes, so … was not
+  run") in both conversations, and the agent is told to say what it needs and stop, where before it read as a denial.
+
+Decided against: the conductor answering for the person. Up to the threshold the engine already allows without
+asking; above it the answer is the person's, and a model deciding it would be the threshold in name only. Also not
+done: waking the conductor with a message when an agent asks (the card in its column is the notice, and a turn costs
+money). Not tried: a real agent asking, end to end; the engine test drives the ask with a stand-in for the live
+conversation.

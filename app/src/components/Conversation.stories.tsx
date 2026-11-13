@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { expect, within } from 'storybook/test'
 import { Conversation, Message } from './Conversation'
 import { engineDown, withEngine } from '../stories/mock-engine'
 import { prototypeTranscript, talkSession, transcript } from '../stories/sample'
@@ -24,6 +25,18 @@ const t = (extra: Partial<Transcript> & { busy?: boolean; status?: string } = {}
 /** Tool calls, an automatic run, a result and an answer. */
 export const Answered: Story = { beforeEach: withEngine({ transcript: t() }) }
 /** The agent asks before an edit: Allow, allow for the conversation, or Deny. */
+/**
+ * An agent this task's agent has out (here the prototype's builder) asks for something above the threshold: its card
+ * shows here, in the conductor's conversation, named for the agent, and is answered here.
+ */
+export const AgentItHasOutAsks: Story = {
+  beforeEach: withEngine({ transcript: t({ messages: [...working, msg(8, 'engine', 'permission', 'The Prototype agent: Bash, may I?', { requestId: 'req_sample_out', of: 'talk_sample_proto', agent: 'Prototype', tool: 'Bash', risk: 'expensive', why: 'starts containers on this computer', input: { command: 'docker compose up -d db (sample)' } })], pending: ['req_sample_out'] }) }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('The Prototype agent asks')).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Always allow Bash for the Prototype agent' })).toBeInTheDocument()
+  },
+}
 export const AsksPermission: Story = { beforeEach: withEngine({ transcript: t({ messages: [...working, asking], pending: ['req_sample'], busy: true }) }) }
 export const Thinking: Story = { beforeEach: withEngine({ transcript: t({ messages: working.slice(0, 1), busy: true }) }) }
 export const Ended: Story = { beforeEach: withEngine({ transcript: t({ status: 'ended' }) }) }

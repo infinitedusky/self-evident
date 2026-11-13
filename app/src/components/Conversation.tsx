@@ -110,12 +110,13 @@ export function Message({ m, pending, sessionId }: { m: TalkMessage; pending: bo
     case 'auto': return <div className="msg tool mono faint" title={p.why}>auto · <Badge tone={RISK_TONE[p.risk as Risk] ?? 'neutral'}>{p.risk}</Badge> · {p.tool === 'Bash' ? `$ ${p.input?.command ?? ''}` : `${String(p.tool).replace('mcp__engine__', 'engine · ')} ${p.input?.file ?? ''}`}</div>
     case 'permission': return (
       <div className={`perm ${pending ? 'open' : ''}`}>
+        {p.agent && <div className="perm-from">The {p.agent} agent asks</div>}
         <div>{p.risk && <Badge tone={RISK_TONE[p.risk as Risk] ?? 'neutral'}>{p.risk}</Badge>} <strong>{p.tool}</strong> {p.tool === 'Bash' ? <code>{p.input?.command}</code> : <span className="mono">{p.input?.file}</span>}{p.why && <div className="faint" style={{ fontSize: 12 }}>{p.why}</div>}
           {p.tool === 'Edit' && <pre className="diff"><span className="del">- {p.input?.old}</span>{'\n'}<span className="add">+ {p.input?.new}</span></pre>}</div>
         {pending ? (
           <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
             <button className="btn small" onClick={() => engine.permission(sessionId, p.requestId, true)}>Allow</button>
-            <button className="btn quiet small" onClick={() => engine.permission(sessionId, p.requestId, true, true)}>Allow {p.tool} for this conversation</button>
+            <button className="btn quiet small" onClick={() => engine.permission(sessionId, p.requestId, true, true)}>{p.agent ? `Always allow ${p.tool} for the ${p.agent} agent` : `Allow ${p.tool} for this conversation`}</button>
             <button className="btn quiet small" onClick={() => engine.permission(sessionId, p.requestId, false)}>Deny</button>
           </div>
         ) : <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>answered</div>}

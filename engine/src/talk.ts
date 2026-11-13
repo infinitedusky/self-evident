@@ -66,7 +66,8 @@ What a prototype is: the actual thing, built fast so it can be used, changed in 
 - After a change, check the server still answers (the prototype tool says, with its last lines of output) and tell the person in one line what to look at. If the change needs a restart (no hot reload, new dependencies), use run_prototype with restart: it keeps the same address, and the open tab reloads by itself, so never ask the person to reload.
 Your first message is the brief: build a first version straight away, then ask what to change.`
 
-interface Pending { resolve: (v: { allow: boolean; always?: boolean }) => void; tool: string }
+type Answer = { allow: boolean; always?: boolean; timedOut?: boolean }
+interface Pending { resolve: (v: Answer) => void; tool: string; /** What it wants to do, in a line. */ what: string; risk: Risk; since: Date }
 type Rated = { risk: Risk; why: string }
 interface Live { q: Query; push: (m: SDKUserMessage) => void; close: () => void; pending: Map<string, Pending>; rated: Map<string, Rated>; lastPrompt?: string; outages: number; always: Set<string>; busy: boolean; autoApprove: Risk; cwd: string }
 const execFileP = promisify(execFile)
@@ -235,7 +236,7 @@ export async function ideaAgents(ideaId: string) {
   const rows = protos.length ? await db.select().from(session).where(inArray(session.id, protos.map((p) => p.sessionId!))) : []
   return protos.flatMap((p) => {
     const s = rows.find((r) => r.id === p.sessionId)
-    return s && s.status === 'open' ? [{ sessionId: s.id, kind: 'prototype' as const, what: 'Prototype', icon: step('prototype').icon, title: p.title, prototypeId: p.id, busy: live.get(s.id)?.busy ?? false }] : []
+    return s && s.status === 'open' ? [{ sessionId: s.id, kind: 'prototype' as const, what: 'Prototype', icon: step('prototype').icon, title: p.title, prototypeId: p.id, busy: live.get(s.id)?.busy ?? false, asking: askingOf(s.id) }] : []
   })
 }
 
@@ -265,13 +266,61 @@ export async function taskAgents(issueId: string) {
   const rows = protos.length ? await db.select().from(session).where(inArray(session.id, protos.map((p) => p.sessionId!))) : []
   const building = protos.flatMap((p) => {
     const s = rows.find((r) => r.id === p.sessionId)
-    return s && s.status === 'open' ? [{ sessionId: s.id, kind: 'prototype' as const, what: 'Prototype', icon: step('prototype').icon, title: p.title, prototypeId: p.id, busy: live.get(s.id)?.busy ?? false }] : []
+    return s && s.status === 'open' ? [{ sessionId: s.id, kind: 'prototype' as const, what: 'Prototype', icon: step('prototype').icon, title: p.title, prototypeId: p.id, busy: live.get(s.id)?.busy ?? false, asking: askingOf(s.id) }] : []
   })
   const checking = (await checkTalks(issueId)).map((s) => {
     const d = step((s.subjectRef as SubjectRef).check!)
-    return { sessionId: s.id, kind: 'check' as const, what: d.label, icon: d.icon, title: s.subject ?? d.label, check: d.key, busy: live.get(s.id)?.busy ?? false }
+    return { sessionId: s.id, kind: 'check' as const, what: d.label, icon: d.icon, title: s.subject ?? d.label, check: d.key, busy: live.get(s.id)?.busy ?? false, asking: askingOf(s.id) }
   })
   return [...building, ...checking]
+}
+
+/** What an agent is stopped on: the oldest thing it asked the person to allow and has no answer to yet. Null when it is not waiting. */
+export function askingOf(sessionId: string) {
+  const first = [...(live.get(sessionId)?.pending.entries() ?? [])][0]
+  return first ? { requestId: first[0], tool: first[1].tool, what: first[1].what, risk: first[1].risk, since: first[1].since } : null
+}
+/** An agent's state as its conductor is told it: stopped on the person is never "working" (Sandy, 2026-11-13: it sat on a permission card for minutes while its conductor reported it busy). */
+const stateOf = (a: { busy: boolean; asking: ReturnType<typeof askingOf> }) => a.asking ? `waiting for the person to allow ${a.asking.tool} (${a.asking.risk}): ${a.asking.what}. The card is in your column too; tell them what it is for.` : a.busy ? 'working' : 'idle'
+
+/** Whose agent a conversation is: the conductor of the task (or idea) a prototype's builder or a check's agent is out for. Null for a conductor, or a conversation of its own. */
+export async function conductorOf(sessionId: string): Promise<{ id: string; what: string } | null> {
+  const [s] = await db.select().from(session).where(eq(session.id, sessionId))
+  const ref = s?.subjectRef as SubjectRef | null
+  if (!ref) return null
+  if (ref.checkOf && ref.check) { const c = await taskTalk(ref.checkOf); return c && c.id !== sessionId ? { id: c.id, what: step(ref.check).label } : null }
+  const [p] = await db.select().from(prototype).where(eq(prototype.sessionId, sessionId))
+  if (!p) return null
+  const c = p.issueId ? await taskTalk(p.issueId) : p.ideaId ? await ideaTalk(p.ideaId) : null
+  return c && c.id !== sessionId ? { id: c.id, what: 'Prototype' } : null
+}
+
+/**
+ * An agent asks the person to allow something above their threshold. The card goes in its own conversation and, when
+ * it is an agent a conductor has out, in the conductor's too, named for the agent: the person talks to the conductor
+ * and should never have to find a card in another tab (Sandy, 2026-11-13: "I don't think I should be waiting for
+ * those … you should be telling me how the progress is going"). Answered in either place; both say how it went.
+ */
+export async function askPerson(sessionId: string, pending: Map<string, Pending>, tool: string, input: Record<string, unknown>, rated: Rated, timeoutMs = PERMISSION_TIMEOUT_MS): Promise<Answer> {
+  const requestId = newId('run')
+  const card = { requestId, tool, input, risk: rated.risk, why: rated.why }
+  const boss = await conductorOf(sessionId).catch(() => null)
+  const answer = new Promise<Answer>((resolveP) => {
+    pending.set(requestId, { resolve: resolveP, tool, what: clip(input.command ?? input.file ?? input.pattern ?? input.input ?? '', 200), risk: rated.risk, since: new Date() })
+    setTimeout(() => { if (pending.delete(requestId)) resolveP({ allow: false, timedOut: true }) }, timeoutMs)
+  })
+  await record(sessionId, 'engine', 'permission', `${tool}: may I?`, card)
+  if (boss) await record(boss.id, 'engine', 'permission', `The ${boss.what} agent: ${tool}, may I?`, { ...card, of: sessionId, agent: boss.what }).catch((err) => console.error('talk: could not show the conductor an agent\'s ask', err))
+  const a = await answer
+  const said = a.timedOut ? `No answer in ${Math.round(timeoutMs / 60_000)} minutes, so ${tool} was not run.` : a.allow ? `Allowed ${tool}${a.always ? ' for this conversation' : ''}.` : `Denied ${tool}.`
+  await record(sessionId, a.timedOut ? 'engine' : 'user', 'text', said, { requestId, decision: a.allow ? 'allow' : 'deny' })
+  if (boss) await record(boss.id, a.timedOut ? 'engine' : 'user', 'text', a.timedOut ? `No answer in ${Math.round(timeoutMs / 60_000)} minutes, so the ${boss.what} agent did not run ${tool}.` : `${a.allow ? 'Allowed' : 'Denied'} ${tool} for the ${boss.what} agent${a.always ? ', from now on' : ''}.`, { requestId, decision: a.allow ? 'allow' : 'deny', of: sessionId }).catch(() => {})
+  return a
+}
+/** For tests: a conversation that is live, with what it has asked. Returns how to end it. */
+export function liveForTest(sessionId: string, pending = new Map<string, Pending>()) {
+  live.set(sessionId, { pending, busy: true, always: new Set(), rated: new Map() } as unknown as Live)
+  return { pending, end: () => { live.delete(sessionId) } }
 }
 
 /** The open conversations of the fresh agents out on a task's checks, oldest first. */
@@ -316,7 +365,7 @@ export async function agentsOut(fromSessionId: string) {
   if (!issueId) throw new PlanError('only a task\'s own agent has agents out')
   return Promise.all((await taskAgents(issueId)).map(async (a) => {
     const [last] = await db.select({ body: sessionMessage.body, at: sessionMessage.sentAt }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, a.sessionId), eq(sessionMessage.author, 'agent'), eq(sessionMessage.kind, 'text'))).orderBy(desc(sessionMessage.id)).limit(1)
-    return { ...a, state: a.busy ? 'working' : 'idle', lastSaid: last ? clip(last.body, 600) : null, lastSaidAt: last?.at ?? null }
+    return { ...a, state: stateOf(a), lastSaid: last ? clip(last.body, 600) : null, lastSaidAt: last?.at ?? null }
   }))
 }
 
@@ -331,7 +380,7 @@ export async function tellAgent(fromSessionId: string, agent: string, message: s
 export async function readAgent(fromSessionId: string, agent: string, last = 20) {
   const { to } = await conducted(fromSessionId, agent)
   const rows = await db.select().from(sessionMessage).where(and(eq(sessionMessage.sessionId, to.sessionId), inArray(sessionMessage.kind, ['text', 'brief']))).orderBy(desc(sessionMessage.id)).limit(Math.min(Math.max(last, 1), 60))
-  return { agent: to.what, sessionId: to.sessionId, state: to.busy ? 'working' : 'idle', messages: rows.reverse().map((m) => ({ by: m.author === 'agent' ? 'the agent' : (m.payload as any)?.from ? 'you' : m.author === 'user' ? 'the person' : 'the engine', at: m.sentAt, text: clip(m.body, 2000) })) }
+  return { agent: to.what, sessionId: to.sessionId, state: stateOf(to), messages: rows.reverse().map((m) => ({ by: m.author === 'agent' ? 'the agent' : (m.payload as any)?.from ? 'you' : m.author === 'user' ? 'the person' : 'the engine', at: m.sentAt, text: clip(m.body, 2000) })) }
 }
 
 /**
@@ -383,7 +432,7 @@ export const PROTOTYPE_MODEL = 'claude-sonnet-5-5'
 export const modelFor = (setup: { model?: string; prototype_model?: string }, prototype: boolean) => (prototype ? setup.prototype_model || PROTOTYPE_MODEL : setup.model)
 
 const taskPrompt = (t: { id: string; number: number; title: string }, key: string) => `
-This conversation is the agent of one task, ${key}-${t.number} "${t.title}" (${t.id}), and the only one: you are its conductor from its first sketch to its merge, in this one worktree. Every step of its brief (research, sketches, mockups, the prototype, the checks) and its build is done or directed from here: record each with set_step on this task, and keep its brief current with update_task. Marking a step done says it is ready for the person; they approve it on its page, and only then does it count. The person sees this conversation on the task's page, beside the step they are looking at, and "this" means this task. open_tab with a sketch, a story or the prototype takes them to that step's page of this task, where it shows beside you; it never splits a tab off. A prototype you start gets an agent of its own, in the prototype's worktree: the person sees it as a second tab at the top of this same column, named Prototype, with a dot that pulses while it works; name the tab when you point them to it, never "the conversation beside you". You direct the agents you have out, so the person talks to you alone: agents_out lists them with what each last said; tell_agent sends one a message (when the person asks for a change to the prototype, pass it on in full, with what you know from the conversation, instead of sending them to the tab); its answer comes back to you here as a message when it finishes, so say you have passed it on and carry on, never wait or poll; read_agent reads its conversation, since the person may have talked to it directly. When an answer comes back, tell the person in a line or two what changed and what to look at. When the person approves the prototype, the engine sends a fresh agent for each check this task's workflow has, one after the other (the prototype analysis, the ADR, the blast radius), each a tab in this same column; you do not write those yourself. The engine then tells you here to bring the brief up to date, and after that the brief audit runs the same way. Keep to this task: for a new idea, another task or a look at findings, point them to the app's agent in the left column.`
+This conversation is the agent of one task, ${key}-${t.number} "${t.title}" (${t.id}), and the only one: you are its conductor from its first sketch to its merge, in this one worktree. Every step of its brief (research, sketches, mockups, the prototype, the checks) and its build is done or directed from here: record each with set_step on this task, and keep its brief current with update_task. Marking a step done says it is ready for the person; they approve it on its page, and only then does it count. The person sees this conversation on the task's page, beside the step they are looking at, and "this" means this task. open_tab with a sketch, a story or the prototype takes them to that step's page of this task, where it shows beside you; it never splits a tab off. A prototype you start gets an agent of its own, in the prototype's worktree: the person sees it as a second tab at the top of this same column, named Prototype, with a dot that pulses while it works; name the tab when you point them to it, never "the conversation beside you". You direct the agents you have out, so the person talks to you alone: agents_out lists them with what each last said and whether one is stopped waiting for the person to allow something (its card shows in this column too, named for the agent; when you see one waiting, say in a line what it wants to run and why, and never call it working); tell_agent sends one a message (when the person asks for a change to the prototype, pass it on in full, with what you know from the conversation, instead of sending them to the tab); its answer comes back to you here as a message when it finishes, so say you have passed it on and carry on, never wait or poll; read_agent reads its conversation, since the person may have talked to it directly. When an answer comes back, tell the person in a line or two what changed and what to look at. When the person approves the prototype, the engine sends a fresh agent for each check this task's workflow has, one after the other (the prototype analysis, the ADR, the blast radius), each a tab in this same column; you do not write those yourself. The engine then tells you here to bring the brief up to date, and after that the brief audit runs the same way. Keep to this task: for a new idea, another task or a look at findings, point them to the app's agent in the left column.`
 
 const ideaPrompt = (i: { id: string; number: number; title: string }) => `
 This conversation is the agent of one idea, #${i.number} "${i.title}" (${i.id}), and the only one: a task in all but name. You work it through in this one worktree without committing to anything: research, sketches, mockups, a prototype, and a rough draft of the brief (set_step on this idea, key brief). Record each with set_step on this idea (ideaId). The person sees this conversation on the idea's page, beside the step they are looking at, and "this" means this idea. open_tab with a sketch, a story or the prototype takes them to that step's page of this idea, where it shows beside you. A prototype you start gets an agent of its own, shown as a second tab at the top of this same column, named Prototype. Nothing here is planned or built: when the person says it is worth building, convert it with convert_idea. As a task, this conversation, this worktree and everything in it become the task's, and you carry on as its agent. Keep to this idea: for another idea or a task, point them to the app's agent in the left column.`
@@ -457,7 +506,9 @@ export async function talkTranscript(sessionId: string) {
   if (!s) throw new PlanError(`no session ${sessionId}`)
   const messages = await db.select().from(sessionMessage).where(eq(sessionMessage.sessionId, sessionId)).orderBy(sessionMessage.id)
   const l = live.get(sessionId)
-  return { session: { ...s, live: !!l, busy: l?.busy ?? false }, messages, pending: l ? [...l.pending.keys()] : [] }
+  // What is still waiting for an answer: its own asks, and those of the agents it has out whose cards it shows.
+  const others = [...new Set(messages.flatMap((m) => (m.kind === 'permission' && (m.payload as { of?: string } | null)?.of) || []))]
+  return { session: { ...s, live: !!l, busy: l?.busy ?? false }, messages, pending: [...(l?.pending.keys() ?? []), ...others.flatMap((id) => [...(live.get(id)?.pending.keys() ?? [])])] }
 }
 
 /** Open (or reopen, resuming the SDK session) the live conversation behind a session row. */
@@ -519,16 +570,9 @@ async function open(sessionId: string): Promise<Live> {
       canUseTool: async (toolName, toolInput) => {
         const rated = entry.rated.get(key(toolName, toolInput)) ?? riskOf(toolName, toolInput as Record<string, unknown>, { cwd: entry.cwd, branch: await branchOf(entry.cwd) })
         entry.rated.delete(key(toolName, toolInput))
-        const requestId = newId('run')
-        const summary = summariseInput(toolName, toolInput)
-        await record(sessionId, 'engine', 'permission', `${toolName}: may I?`, { requestId, tool: toolName, input: summary, risk: rated.risk, why: rated.why })
-        const answer = await new Promise<{ allow: boolean; always?: boolean }>((resolveP) => {
-          entry.pending.set(requestId, { resolve: resolveP, tool: toolName })
-          setTimeout(() => { if (entry.pending.delete(requestId)) resolveP({ allow: false }) }, PERMISSION_TIMEOUT_MS)
-        })
+        const answer = await askPerson(sessionId, entry.pending, toolName, summariseInput(toolName, toolInput), rated)
         if (answer.always) { entry.always.add(toolName); await db.update(session).set({ alwaysAllow: [...entry.always] }).where(eq(session.id, sessionId)) } // kept, so a restart doesn't ask again
-        await record(sessionId, 'user', 'text', answer.allow ? `Allowed ${toolName}${answer.always ? ' for this conversation' : ''}.` : `Denied ${toolName}.`, { requestId, decision: answer.allow ? 'allow' : 'deny' })
-        return answer.allow ? { behavior: 'allow', updatedInput: toolInput } : { behavior: 'deny', message: 'The person said no. Ask what they would prefer.' }
+        return answer.allow ? { behavior: 'allow', updatedInput: toolInput } : { behavior: 'deny', message: answer.timedOut ? 'The person did not answer in time, so this was not run. Say what you need allowed and why, and stop until they answer.' : 'The person said no. Ask what they would prefer.' }
       },
     },
   })
@@ -616,7 +660,7 @@ export async function say(sessionId: string, text: string, context?: TalkContext
 }
 
 export async function answerPermission(sessionId: string, requestId: string, allow: boolean, always = false) {
-  const l = live.get(sessionId)
+  const l = live.get(sessionId)?.pending.has(requestId) ? live.get(sessionId) : [...live.values()].find((x) => x.pending.has(requestId)) // answered from its conductor's column: the ask is the agent's own
   const p = l?.pending.get(requestId)
   if (!l || !p) throw new PlanError('nothing is waiting for that answer')
   l.pending.delete(requestId)
