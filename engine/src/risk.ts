@@ -60,6 +60,7 @@ const ENGINE: Record<string, [Risk, string]> = {
   set_prototype_database: ['moderate', "changes where this app's prototypes get their databases"],
   share: ['expensive', 'makes a public address: anyone with it can open what it shows'],
   stop_sharing: ['cheap', 'ends a public address'],
+  set_guide: ['cheap', 'writes what a visitor to a shared prototype is told; easy to change'],
   start_project: ['expensive', 'runs agents, spends money, opens a pull request'],
 }
 

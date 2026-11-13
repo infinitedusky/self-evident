@@ -641,6 +641,8 @@ Details and sources in `research/`.
 - **Sharing is built in** (2026-11-13). A prototype, a task's mockups or its sketches can be given a public address to
   send to someone for a look, from a Share button over the view: a Cloudflare quick tunnel to that one thing, never
   to the engine. Always a person's decision, always visible while it is on, and it ends by itself.
+  Whoever opens a shared prototype gets a small guide tab (where to go, what to try, written by the agent) with a box
+  for what they think, which comes back as a comment on the task, marked as from outside.
 - **What an agent asks shows in its conductor's column** (2026-11-13). What an agent the conductor has out asks the
   person to allow shows in the conductor's conversation, named for the agent, and is answered there; an agent stopped
   on the person is reported as waiting, never working. Above the threshold the answer stays the person's.

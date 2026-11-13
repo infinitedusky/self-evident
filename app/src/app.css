@@ -741,3 +741,7 @@ button.acceptance-mark { cursor: pointer; border-radius: 6px; } button.acceptanc
 .share-link { display: flex; gap: 6px; margin: 8px 0 0; }
 .share-link input { flex: 1; min-width: 0; margin: 0; font-size: 12px; }
 .share-panel .empty { margin-top: 10px; }
+.share-guide { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.share-guide ol { margin: 0 0 4px; padding-left: 20px; font-size: 13px; }
+.share-free { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--warn); background: var(--warn-wash); border-radius: 8px; }
+.share-free p { margin: 0 0 8px; font-size: 13px; }

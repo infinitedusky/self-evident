@@ -36,7 +36,7 @@ import { listSketches, readSketch } from './sketches.js'
 import { migrateStorybookSetup, startStorybook, stopStorybooks, storybookStatus, storybookValues, STORY_FLOW_CSS } from './storybook.js'
 import { prototypeCode, prototypeFile, unshowInPrototype } from './prototype-code.js'
 import { setAcceptance, type AcceptanceChange } from './acceptance.js'
-import { share, shared, sharesOf, SHARE_KINDS, stopShares, unshare, type ShareKind } from './share.js'
+import { share, shared, ShareError, sharesOf, SHARE_KINDS, stopShares, unshare, type ShareKind } from './share.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
@@ -365,7 +365,11 @@ export function buildApp(bus: EventBus) {
   const shareKind = (k: string) => { if (!(SHARE_KINDS as readonly string[]).includes(k)) throw new PlanError(`share a prototype, storybook or sketch, not ${k}`); return k as ShareKind }
   api.get('/apps/:id/shares', (c) => c.json(sharesOf(c.req.param('id'))))
   api.get('/shares/:kind/:id', (c) => { try { return c.json({ share: shared(shareKind(c.req.param('kind')), c.req.param('id')) }) } catch (err) { return planError(c, err) } })
-  api.post('/shares/:kind/:id', async (c) => { try { return c.json({ share: await share(shareKind(c.req.param('kind')), c.req.param('id'), 'user') }, 201) } catch (err) { return planError(c, err) } })
+  api.post('/shares/:kind/:id', async (c) => { // {freeNgrok?}: stop the other ngrok tunnels on this computer first
+    const body = await c.req.json<{ freeNgrok?: boolean }>().catch(() => ({} as { freeNgrok?: boolean }))
+    try { return c.json({ share: await share(shareKind(c.req.param('kind')), c.req.param('id'), 'user', { freeNgrok: !!body.freeNgrok }) }, 201) }
+    catch (err) { if (err instanceof ShareError) return c.json({ error: err.message, code: err.code, holders: err.holders }, 409); return planError(c, err) }
+  })
   api.delete('/shares/:kind/:id', async (c) => { try { return c.json(await unshare(shareKind(c.req.param('kind')), c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/talk', async (c) => { try { return c.json(await talkFor(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/stop', async (c) => { try { return c.json(await stopPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
