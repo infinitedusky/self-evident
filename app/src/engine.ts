@@ -202,7 +202,7 @@ export interface Now { hold?: Hold | null; running: RunningProject[]; needsYou: 
 export type Risk = 'free' | 'cheap' | 'moderate' | 'expensive'
 export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string; /** About the app as a whole: no worktree. */ app?: boolean }
 export interface TalkSession { id: string; appId: string | null; cwd: string | null; branch: string | null; worktreePath: string | null; subject: string | null; subjectRef: SubjectRef | null; title: string | null; status: string; createdAt: string; lastActiveAt: string | null; live: boolean; busy: boolean; messages?: number; autoApprove: Exclude<Risk, 'expensive'>
-  terminalSince?: string | null; /** Its tab was closed in the agent's column: the conversation is still there. */ closedAt?: string | null; /** The task it belongs to: its own agent, or a prototype's started on it. */ taskId?: string | null } // handed to the terminal: what's said there is copied in until a message here takes it back
+  terminalSince?: string | null; /** Its tab was closed in the agent's column: the conversation is still there. */ closedAt?: string | null; /** The task it belongs to: its own agent, or a prototype's started on it. */ taskId?: string | null; /** The idea it belongs to: its own agent, or a prototype's started on it. */ ideaId?: string | null } // handed to the terminal: what's said there is copied in until a message here takes it back
 /** An agent a task's conductor has out, with its conversation. */
 /** An agent a task's conductor has out: a prototype's builder, or a fresh agent on one check (`check`: its step). */
 export interface TaskAgentOut { sessionId: string; kind: 'prototype' | 'check'; what: string; icon?: string; title: string; prototypeId?: string; check?: string; busy: boolean }
@@ -218,6 +218,10 @@ export const engine = {
   /** A task's own agent: its one conversation, or null; `startTaskTalk` starts it if the task has none. */
   taskTalk: (issueId: string) => call<TalkSession | null>('GET', `/issues/${issueId}/talk`),
   startTaskTalk: (issueId: string) => call<TalkSession>('POST', `/issues/${issueId}/talk`),
+  /** An idea's own agent, as a task's: started (with its worktree) when the person first works on the idea. */
+  ideaTalk: (ideaId: string) => call<TalkSession | null>('GET', `/ideas/${ideaId}/talk`),
+  startIdeaTalk: (ideaId: string) => call<TalkSession>('POST', `/ideas/${ideaId}/talk`),
+  ideaAgents: (ideaId: string) => call<TaskAgentOut[]>('GET', `/ideas/${ideaId}/agents`),
   /** The agents the task's conductor has out: today, each prototype's own conversation. */
   taskAgents: (issueId: string) => call<TaskAgentOut[]>('GET', `/issues/${issueId}/agents`),
   renameTalk: (id: string, subject: string) => call<TalkSession>('POST', `/talks/${id}/rename`, { subject }),
@@ -251,7 +255,7 @@ export const engine = {
   createIdea: (body: { appId: string; title: string; body?: string }) => call<IdeaRow>('POST', '/ideas', body),
   planIdea: (id: string) => call<{ project: { id: string } }>('POST', `/ideas/${id}/project`, {}),
   convertIdea: (id: string, body: { as: 'task' | 'project'; title?: string; projectId?: string; why?: string }) => call<{ as: 'task' | 'project'; issueId?: string; projectId?: string }>('POST', `/ideas/${id}/convert`, body),
-  ask: (body: { appId: string; subjectRef?: SubjectRef; text: string }) => call<TalkSession>('POST', '/talks/ask', body),
+  ask: (body: { appId: string; subjectRef?: SubjectRef; text: string; /** For an idea: start its own agent if it has none. */ own?: boolean }) => call<TalkSession>('POST', '/talks/ask', body),
   plan: (appId: string) => call<Plan>('GET', `/plan?app=${appId}`),
   steps: (s: StepSubject) => call<StepsView>('GET', `/${s.kind}/${s.id}/steps`),
   step: (s: StepSubject, key: StepKey) => call<StepWork | null>('GET', `/${s.kind}/${s.id}/steps/${key}`),

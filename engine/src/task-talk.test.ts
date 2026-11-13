@@ -7,7 +7,10 @@ import { db, pool } from './db/client.js'
 import { app, prototype, session, sessionMessage, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createIssue } from './issues.js'
-import { agentsOut, closeTalk, closeTalks, ensureTaskTalk, listTalks, modelFor, readAgent, reopenTalk, showTalk, startCheckTalk, takeReply, taskAgents, taskTalk } from './talk.js'
+import { createIdea } from './ideas.js'
+import { convertIdea } from './work.js'
+import { eq } from 'drizzle-orm'
+import { agentsOut, closeTalk, closeTalks, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, listTalks, modelFor, readAgent, reopenTalk, showTalk, startCheckTalk, takeReply, taskAgents, taskTalk } from './talk.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -98,6 +101,37 @@ describe.skipIf(!reachable)('a task\'s own agent', () => {
     expect(modelFor({ prototype_model: 'claude-haiku-5-5' }, true)).toBe('claude-haiku-5-5')
     expect(modelFor({ model: 'claude-opus-5-5' }, false)).toBe('claude-opus-5-5')
     expect(modelFor({}, false)).toBeUndefined()
+  })
+
+  it('gives an idea an agent of its own: the conversation pinned to it that has a worktree, not one about the app that started from it', async () => {
+    const i = await createIdea({ appId, title: 'Made-up idea: themes' })
+    expect(await ideaTalk(i.id)).toBeNull()
+    await talk({ ideaId: i.id, app: true }) // a left-column conversation started on the idea's page: about the app, no worktree
+    expect(await ideaTalk(i.id)).toBeNull()
+    const own = await talk({ ideaId: i.id }, { worktreePath: '/tmp/none-worktrees/talk-idea', branch: 'talk/idea' })
+    expect(await ideaTalk(i.id)).toMatchObject({ id: own.id })
+    expect(await ensureIdeaTalk(i.id)).toMatchObject({ id: own.id }) // asked for again: the same one
+    const p = await talk({ prototypeId: 'proto_made_up' })
+    await db.insert(prototype).values({ id: newId('prototype'), appId, ideaId: i.id, title: 'Made-up prototype', branch: 'prototype/made-up-idea', path: '/tmp/none', status: 'running', sessionId: p.id })
+    expect(await ideaAgents(i.id)).toMatchObject([{ sessionId: p.id, kind: 'prototype' }])
+    const listed = await listTalks({ open: true })
+    expect(listed.find((t) => t.id === own.id)).toMatchObject({ ideaId: i.id, taskId: null }) // the app's column leaves both out
+    expect(listed.find((t) => t.id === p.id)).toMatchObject({ ideaId: i.id })
+    await expect(ensureIdeaTalk('idea_nope')).rejects.toThrow(/no idea idea_nope/)
+  })
+
+  it('hands the idea\'s agent to the task it becomes: the same conversation and worktree, pinned to the task', async () => {
+    const i = await createIdea({ appId, title: 'Made-up idea: a status page' })
+    const own = await talk({ ideaId: i.id }, { worktreePath: '/tmp/none-worktrees/talk-status', branch: 'talk/status', closedAt: new Date() })
+    const about = await talk({ ideaId: i.id, app: true })
+    const out = await convertIdea(i.id, 'task')
+    if (!('issueId' in out)) throw new Error('not a task')
+    expect(await taskTalk(out.issueId)).toMatchObject({ id: own.id, worktreePath: '/tmp/none-worktrees/talk-status', branch: 'talk/status', closedAt: null })
+    expect((await taskTalk(out.issueId))!.subject).toMatch(/Made-up idea: a status page$/)
+    expect(await ideaTalk(i.id)).toBeNull()
+    const [left] = await db.select().from(session).where(eq(session.id, about.id))
+    expect(left.subjectRef).toEqual({ ideaId: i.id, app: true }) // the one about the app stays where it was
+    await expect(ensureIdeaTalk(i.id)).rejects.toThrow(/was converted/)
   })
 
   it('is only for a top-level code task', async () => {

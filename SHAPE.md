@@ -557,7 +557,10 @@ Details and sources in `research/`.
 - **Only a task's agent has a worktree** (Sandy, 2026-11-13; LOG.md, "Only a task's agent has a worktree"). A
   conversation in the left column is about the app as a whole: it reads the app's checkout, has no worktree, no
   branch and no editing tools, and sends work that changes files to a task. An integration's set-up, which ends in a
-  pull request, is the one other thing that gets a worktree.
+  pull request, also gets a worktree.
+- **An idea is a task in all but name** (Sandy, 2026-11-13; LOG.md, "An idea has an agent of its own"). Its page is
+  the task's page without the build: steps down the side, its own agent beside them. The agent and its worktree
+  start when the person presses "Work on this idea", and go with the idea when it is converted to a task.
 - **The person talks to the conductor alone; it directs the agents it has out** (Sandy, 2026-11-11: "so that we can
   talk with one agent throughout the task lifecycle and it can manage the whole thing"). A task's agent can list
   the agents it has out with what each last said, send one a message, and read its conversation. A message it sends

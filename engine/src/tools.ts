@@ -43,6 +43,8 @@ export function engineTools(opts: ToolScope): EngineTool[] {
   const tryIt = async (fn: () => Promise<unknown>) => { try { return text(await fn()) } catch (err: any) { return { ...text(`error: ${err?.message ?? err}`), isError: true } } }
   // The wall: this conversation sees and touches only its own app. Anything addressed by id is checked against it.
   // A task's own agent (talk.ts, ensureTaskTalk): the task this conversation is the conductor of, if any.
+  /** The idea this conversation is the own agent of (it has a worktree and is not about the app as a whole), if any. */
+  const ownIdeaId = async (): Promise<string | null> => { if (!sessionId) return null; const [s] = await db.select({ ref: session.subjectRef, worktreePath: session.worktreePath }).from(session).where(eq(session.id, sessionId)); const r = s?.ref as { ideaId?: string; app?: boolean } | null; return s?.worktreePath && !r?.app ? r?.ideaId ?? null : null }
   const ownTask = async (): Promise<string | null> => { if (!sessionId) return null; const [s] = await db.select({ ref: session.subjectRef }).from(session).where(eq(session.id, sessionId)); return (s?.ref as { issueId?: string } | null)?.issueId ?? null }
   const foreign = () => new PlanError('that belongs to another app; this session is scoped to its own app')
   const ownProject = async (projectId: string) => { const g = await projectGraph(projectId); if (!g || g.project.appId !== appId) throw foreign(); return g }
@@ -146,12 +148,13 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         // A task's own agent shows a sketch, a story or the prototype on that step's page of its task, where the viewer sits beside the
         // conversation: the person is taken there, in the task's tab, and no tab is split off (Sandy, 2026-11-10: "we should go there with the agent").
         const taskId = await ownTask()
+        const ideaId = taskId ? null : await ownIdeaId() // an idea's own agent does the same, on the idea's pages
         const STEP_PAGE = { sketch: 'sketch', storybook: 'mockup', prototype: 'prototype' } as const
-        if (taskId && (kind === 'sketch' || kind === 'storybook' || kind === 'prototype')) {
+        if ((taskId || ideaId) && (kind === 'sketch' || kind === 'storybook' || kind === 'prototype')) {
           const q = kind === 'sketch' && a.file ? `?file=${encodeURIComponent(a.file.replace(/^\/?sketches\//, ''))}` : kind === 'storybook' && a.story ? `?story=${encodeURIComponent(a.story)}` : ''
-          const page = { kind: 'page', path: `/tasks/${taskId}/${STEP_PAGE[kind as keyof typeof STEP_PAGE]}${q}` }
-          await db.transaction((tx) => appendEvent(tx, { workspaceId: x?.workspaceId ?? 'ws_none', appId, sessionId: sessionId ?? null, actor, type: 'ui.open', payload: { sessionId, tab: page, split: null, issueId: taskId } }))
-          return { opened: page, note: 'shown on that step\'s page of this task, beside the conversation' }
+          const page = { kind: 'page', path: `${taskId ? `/tasks/${taskId}` : `/ideas/${ideaId}`}/${STEP_PAGE[kind as keyof typeof STEP_PAGE]}${q}` }
+          await db.transaction((tx) => appendEvent(tx, { workspaceId: x?.workspaceId ?? 'ws_none', appId, sessionId: sessionId ?? null, actor, type: 'ui.open', payload: { sessionId, tab: page, split: null, ...(taskId ? { issueId: taskId } : { ideaId }) } }))
+          return { opened: page, note: `shown on that step's page of this ${taskId ? 'task' : 'idea'}, beside the conversation` }
         }
         const tab = { kind, ...(kind === 'page' ? { path: a.path } : {}), ...(kind === 'build' ? { issueId: a.issueId } : {}), ...(kind === 'storybook' && a.story ? { story: a.story } : {}), ...(kind === 'sketch' && a.file ? { file: a.file.replace(/^\/?sketches\//, '') } : {}), ...((kind === 'storybook' || kind === 'sketch') && sessionId ? { session: sessionId } : {}), ...(kind === 'prototype' && a.prototypeId ? { prototypeId: a.prototypeId } : {}) }
         await db.transaction((tx) => appendEvent(tx, { workspaceId: x?.workspaceId ?? 'ws_none', appId, sessionId: sessionId ?? null, actor, type: 'ui.open', payload: { sessionId, tab, split: taskId ? null : a.split ?? null, ...(taskId ? { issueId: taskId } : {}) } }))

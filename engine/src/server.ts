@@ -21,7 +21,7 @@ import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { advanceChecks } from './checks.js'
 import { approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
-import { adoptTalk, answerPermission, closeTalk, closeTalks, endTalk, ensureTaskTalk, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, setupTalk, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
+import { adoptTalk, answerPermission, closeTalk, closeTalks, endTalk, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, setupTalk, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
 import { lastSync, myRepos, startSync, syncApp } from './github.js'
@@ -411,11 +411,19 @@ export function buildApp(bus: EventBus) {
   api.get('/issues/:id/talk', async (c) => c.json(await taskTalk(c.req.param('id'))))
   api.get('/issues/:id/agents', async (c) => c.json(await taskAgents(c.req.param('id')))) // the agents its conductor has out
   api.post('/issues/:id/talk', async (c) => { try { return c.json(await ensureTaskTalk(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  // An idea's own agent, as a task's: its one conversation, or null; POST starts it (and cuts its worktree) if it has none.
+  api.get('/ideas/:id/talk', async (c) => c.json(await ideaTalk(c.req.param('id'))))
+  api.get('/ideas/:id/agents', async (c) => c.json(await ideaAgents(c.req.param('id'))))
+  api.post('/ideas/:id/talk', async (c) => { try { return c.json(await ensureIdeaTalk(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/talks/ask', async (c) => { // a page hands the agent a job: a step on a task goes to the task's own agent; anything else (an idea to convert) starts a conversation, brought to the front
-    const body = await c.req.json<{ appId?: string; subjectRef?: SubjectRef; text?: string }>()
+    const body = await c.req.json<{ appId?: string; subjectRef?: SubjectRef; text?: string; own?: boolean }>()
     if (!body.appId || !body.text?.trim()) return c.json({ error: 'appId and text are required' }, 400)
     try {
       if (body.subjectRef?.issueId) { const t = await ensureTaskTalk(body.subjectRef.issueId); await say(t.id, body.text); return c.json(t, 201) } // shown on the task's page, not in the left column
+      if (body.subjectRef?.ideaId) { // an idea's step goes to the idea's own agent (own: started if it has none); anything else to it only if it has one
+        const t = body.own ? await ensureIdeaTalk(body.subjectRef.ideaId) : await ideaTalk(body.subjectRef.ideaId)
+        if (t) { await say(t.id, body.text); return c.json(t, 201) }
+      }
       const t = await startTalk({ appId: body.appId, subjectRef: body.subjectRef, actor: 'user' }); await say(t.id, body.text); await showTalk(t.id, body.appId); return c.json(t, 201)
     } catch (err) { return planError(c, err) }
   })

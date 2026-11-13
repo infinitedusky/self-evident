@@ -31,7 +31,7 @@ export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded
   /** The workflow in force and where it comes from (", the app's default"); its steps are the list. */
   workflow?: { name: string; from: string } | null
   /** The build: how many sub-tasks are done, and what it waits on, if anything. */
-  build: { done: number; total: number; waitingOn: string | null }
+  build?: { done: number; total: number; waitingOn: string | null }
   /** Folded to a strip of icons, to give the step's page the room (Sandy, 2026-11-10: "make the left nav steps collapsible too"). */
   folded?: boolean
   onToggle?: () => void
@@ -51,26 +51,26 @@ export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded
         : <NavLink key={key} to={to} end className={() => `link ${here === key ? 'active' : ''} ${done ? 'done' : ''}`} title={`${name}: ${state}`} aria-label={name}>{glyph}</NavLink>
     const said = (r: Row) => (finished(r.state, on) ? 'done' : ready(r.state, on) ? 'ready for you to approve' : r.state.status === 'none' ? 'not started' : 'started')
     return (
-      <nav className="task-nav folded" aria-label="This task" data-component="TaskNav">
+      <nav className="task-nav folded" aria-label={`This ${on}`} data-component="TaskNav">
         {toggle}
-        {icon('overview', base, '⌂', 'Overview', 'this task', null, false)}
-        {brief && icon('brief', `${base}/brief`, step('brief').icon, 'The brief', stands ?? said(brief), null, finished(brief.state, on))}
+        {icon('overview', base, '⌂', 'Overview', `this ${on}`, null, false)}
+        {brief && icon('brief', `${base}/brief`, step('brief').icon, on === 'task' ? 'The brief' : label('brief', on), stands ?? said(brief), null, finished(brief.state, on))}
         {feeds.map((r) => icon(r.key, `${base}/${r.key}`, step(r.key).icon, label(r.key, on), said(r), after(r, rows, on), finished(r.state, on)))}
-        {icon('build', `${base}/build`, '🏗️', 'Sub-tasks', build.total ? `${build.done}/${build.total}` : 'not planned', build.waitingOn, !!build.total && build.done === build.total)}
+        {build && icon('build', `${base}/build`, '🏗️', 'Sub-tasks', build.total ? `${build.done}/${build.total}` : 'not planned', build.waitingOn, !!build.total && build.done === build.total)}
       </nav>
     )
   }
   return (
-    <nav className="task-nav" aria-label="This task" data-component="TaskNav">
+    <nav className="task-nav" aria-label={`This ${on}`} data-component="TaskNav">
       {toggle}
       {item('overview', base, <span className="task-nav-row"><span className="task-nav-mark">⌂</span>Overview</span>, null)}
       <div className="task-nav-label faint">Brief</div>
-      {workflow && <div className="task-nav-workflow faint" title={`The workflow this task follows${workflow.from}`}>Workflow: <b>{workflow.name}</b>{workflow.from}</div>}
+      {workflow && <div className="task-nav-workflow faint" title={`The workflow this ${on} follows${workflow.from}`}>Workflow: <b>{workflow.name}</b>{workflow.from}</div>}
       {brief && item('brief', `${base}/brief`,
         <>
           <span className="task-nav-row">
             <span className={`task-nav-mark ${finished(brief.state, on) ? 'ok' : ''}`}>{mark(brief, on)}</span>
-            <span className="task-nav-text">{step('brief').icon} The brief</span>
+            <span className="task-nav-text">{step('brief').icon} {on === 'task' ? 'The brief' : label('brief', on)}</span>
           </span>
           {stands && <span className="task-nav-after">{stands}</span>}
         </>, null, brief.state.status)}
@@ -83,8 +83,8 @@ export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded
         </span>
         {ready(r.state, on) && <span className="task-nav-after task-nav-ready" title="The agent says it is done: yours to approve">ready for you</span>}
         </>, after(r, rows, on), `${r.state.status} task-nav-feed`))}
-      <div className="task-nav-label faint">Build</div>
-      {item('build', `${base}/build`,
+      {build && <div className="task-nav-label faint">Build</div>}
+      {build && item('build', `${base}/build`,
         <span className="task-nav-row">
           <span className={`task-nav-mark ${build.total && build.done === build.total ? 'ok' : ''}`}>{build.total ? (build.done === build.total ? '✓' : '◐') : '○'}</span>
           <span className="task-nav-text">🏗️ Sub-tasks</span>
