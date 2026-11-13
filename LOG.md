@@ -2777,3 +2777,17 @@ Now:
 Not done: a decision row does not say whether it has a record; that is read from the sub-task's files. The planner
 is told the skill only when its session has it (the app repo's own skills and plugins on for the planner). Not tried:
 a real planning run on a task with a draft.
+
+## A prototype's bar is two rows (Sandy, 2026-11-13: "The header is too crowded, the address bar doesn't need to be so wide. As you narrow it it gets worse. We need a second row I think")
+
+On a task's Prototype step the bar held everything in one row (reload, address, device widths, made-up data, open in
+a tab, talk, restart, stop) and Detach was laid over its right end, so in a narrow column it covered the restart and
+stop buttons and the device widths ran into the address.
+
+- Row one is where it is and its server: reload, the address (no wider than 460px), then open in a tab, talk, restart
+  and stop at the right. On a step's page the row leaves room for Detach after them.
+- Row two is how it is shown: the device widths and the made-up data. It wraps when the column is very narrow.
+- Nothing is hidden at narrow widths any more (the device widths used to go under 760px, the "Made-up data" label
+  under 1000px).
+
+Stories: PrototypePane › Narrow, Viewer › Prototype embedded (Detach is checked to sit right of the stop button).

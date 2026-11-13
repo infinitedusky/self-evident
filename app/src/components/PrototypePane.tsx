@@ -95,20 +95,25 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Pr
   const width = DEVICES.find((d) => d.id === device)?.width
   return (
     <div className="preview" data-component="PrototypePane">
+      {/* Two rows (Sandy, 2026-11-13: "the header is too crowded… we need a second row"): where it is and its server, then how it is shown. */}
       <div className="preview-bar">
         <button className="icon-btn" onClick={() => setReloads((n) => n + 1)} title="Reload" aria-label="Reload">↻</button>
         <form className="preview-address" onSubmit={(e) => { e.preventDefault(); go(typed) }}>
           <span className="faint mono">{base}</span>
           <input className="mono" value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Path" />
         </form>
+        <div className="preview-actions">
+          <a className="icon-btn" href={base + at} target="_blank" rel="noreferrer" title="Open in a browser tab" aria-label="Open in a browser tab">↗</a>
+          <button className="icon-btn" onClick={onTalk} title="Its conversation, in the agent's column" aria-label="Talk about it">💬</button>
+          <button className="icon-btn" onClick={onRestart} title="Restart its server" aria-label="Restart its server">⟲</button>
+          <button className="icon-btn" onClick={onStop} title="Stop its server" aria-label="Stop its server">■</button>
+        </div>
+      </div>
+      <div className="preview-bar second">
         <div className="seg" role="group" aria-label="Device">
           {DEVICES.map((d) => <button key={d.id} className={device === d.id ? 'on' : ''} onClick={() => setDevice(d.id)} title={d.width ? `${d.width}px wide` : 'Full width'}>{d.label}</button>)}
         </div>
         {data}
-        <a className="icon-btn" href={base + at} target="_blank" rel="noreferrer" title="Open in a browser tab" aria-label="Open in a browser tab">↗</a>
-        <button className="icon-btn" onClick={onTalk} title="Its conversation, in the agent's column" aria-label="Talk about it">💬</button>
-        <button className="icon-btn" onClick={onRestart} title="Restart its server" aria-label="Restart its server">⟲</button>
-        <button className="icon-btn" onClick={onStop} title="Stop its server" aria-label="Stop its server">■</button>
       </div>
       <div className="preview-stage">
         <iframe key={`${at}#${reloads}#${p.updatedAt ?? ''}`} /* a restart reloads it */ src={base + at} title={p.title} style={width ? { width, maxWidth: '100%' } : undefined} />

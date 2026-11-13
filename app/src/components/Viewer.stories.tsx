@@ -1,5 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { expect, within } from 'storybook/test'
 import { Viewer } from './Viewer'
+import { withEngine } from '../stories/mock-engine'
+import { prototypes } from '../stories/sample'
 
 // The viewer for sketches, mockups and a prototype, with its way out to a browser tab. Made up: the sample engine's
 // sketches (two files) and a Storybook that is not running.
@@ -18,3 +21,15 @@ export const Detached: Story = { args: { detached: true } }
 export const MockupsNotRunning: Story = { args: { tab: { kind: 'storybook', session: 'sess_sample' } } }
 /** A prototype, detached. */
 export const PrototypeDetached: Story = { args: { tab: { kind: 'prototype', id: 'proto_sample' }, detached: true } }
+/** A running prototype on a step's page (the "prototype" is one of these stories): Detach sits after the server's buttons, over none of them. */
+const running = { ...prototypes[0], url: window.location.origin }
+export const PrototypeEmbedded: Story = {
+  args: { tab: { kind: 'prototype', id: running.id, path: '/iframe.html?id=pages-now--quiet&viewMode=story' }, embedded: true },
+  beforeEach: withEngine({ prototypes: [running] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const stop = await c.findByRole('button', { name: 'Stop its server' })
+    const detach = c.getByRole('button', { name: /Detach/ })
+    await expect(detach.getBoundingClientRect().left).toBeGreaterThanOrEqual(stop.getBoundingClientRect().right)
+  },
+}
