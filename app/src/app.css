@@ -778,6 +778,16 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .task-branches-kind.now { color: var(--ok); } .task-branches-now { margin-left: 6px; font-size: 12px; color: var(--ok); }
 .task-branches-row.current:hover { background: none; }
 
+/* A report's summary, for the person; the full report folded under it. */
+.step-summary { margin: 10px 0; padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; background: var(--surface); }
+.step-summary h3 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); }
+.step-summary .md > :first-child { margin-top: 0; } .step-summary .md > :last-child { margin-bottom: 0; }
+.step-full { margin: 10px 0; } .step-full > summary { cursor: pointer; font-weight: 600; padding: 6px 0; } .step-full > summary .faint { font-weight: 400; font-size: 13px; margin-left: 6px; }
+.step-nosummary { margin: 8px 0; font-size: 13px; }
+/* The merge guide on a task's build page: what its pull request opens with. */
+.merge-guide h2 { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; } .merge-guide h2 .faint { font-size: 13px; font-weight: 400; }
+.merge-guide .md-text h2 { display: none; } /* the panel has the heading */
+.merge-guide-copy { margin-left: auto; }
 /* The tab of an agent that is a run (the planner): what it read and said, read only. */
 .task-agent .dot.failed { background: var(--bad); }
 .run-log { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; font-size: 13px; }

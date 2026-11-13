@@ -3,7 +3,7 @@ import { rows } from '@self-evident/engine/steps'
 import { StepSection } from './StepSection'
 import { withEngine } from '../stories/mock-engine'
 import { expect, within } from 'storybook/test'
-import { prototypes, sampleApp, taskStepsView } from '../stories/sample'
+import { prototypes, riskWork, sampleApp, taskStepsView } from '../stories/sample'
 
 // One step of a task as its own page. Made up: the sample task's steps under "UI change (sample)".
 const all = rows('task', taskStepsView.states, taskStepsView.resolved.workflow)
@@ -33,3 +33,20 @@ export const PrototypeCodeView: Story = {
 export const Waiting: Story = { args: { row: row('risk'), waitingState: row('brief').state }, beforeEach: withEngine({ stepWork: null }) }
 /** Started from an idea. */
 export const FromAnIdea: Story = { args: { row: row('idea') } }
+
+/** A check's report: what the person needs to know first, in a few bullets; the full report, written for the next agent, folded under it. */
+export const ReportWithASummary: Story = {
+  args: { row: { ...row('risk'), waitingOn: null, state: { key: 'risk', status: 'done', detail: riskWork.detail ?? undefined } } }, beforeEach: withEngine({ stepWork: riskWork }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('heading', { name: 'What you need to know' })).toBeInTheDocument()
+    await expect(c.getByText(/I would add an index before the build/)).toBeVisible()
+    await expect(c.getByText(/The full report/)).toBeInTheDocument()
+    await expect(c.getByText(/Files and modules/)).not.toBeVisible() // folded until asked for
+  },
+}
+/** A long report from before summaries: shown whole, with how to get one. */
+export const LongReportNoSummary: Story = {
+  args: { row: { ...row('risk'), waitingOn: null, state: { key: 'risk', status: 'done' } } }, beforeEach: withEngine({ stepWork: { ...riskWork, summary: null, body: `${riskWork.body}\n\n${'More detail for the next agent (sample). '.repeat(90)}` } }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/has no summary\. Ask the task's agent/)).toBeInTheDocument() },
+}

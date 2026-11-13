@@ -19,7 +19,7 @@ export interface RiskContext { cwd: string; branch?: string | null } // branch: 
 
 const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']) // Skill loads instructions; what they lead to is rated on its own
 export const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
-const ENGINE_FREE = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'show_code', 'task_branches', 'shares'])
+const ENGINE_FREE = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'show_code', 'task_branches', 'merge_guide', 'shares'])
 const ENGINE: Record<string, [Risk, string]> = {
   create_idea: ['cheap', 'keeps an idea; easy to drop'],
   create_project: ['cheap', 'a draft project; nothing runs'],

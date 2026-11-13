@@ -16,6 +16,7 @@ import { askStep, useSteps } from '../components/StepsPanel'
 import { StepSection } from '../components/StepSection'
 import { Acceptance } from '../components/Acceptance'
 import { TaskBranches } from '../components/TaskBranches'
+import { MergeGuide } from '../components/MergeGuide'
 import { mark, TaskNav } from '../components/TaskNav'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
 import { finished, label, ready, step, type Row, type StepKey } from '@self-evident/engine/steps'
@@ -168,6 +169,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
           : <>
               <SubTasks i={i} plan={!i.subIssues.length && i.state === 'todo' ? <button className="btn" disabled={busy} onClick={() => act(() => engine.planIssue(i.id))}>Plan it</button> : null} />
               <Planner i={i} />
+              {i.subIssues.length > 0 && <MergeGuide issueId={i.id} stamp={i.updatedAt} />}
             </>)}
       </div>
       {agent.session !== undefined && (

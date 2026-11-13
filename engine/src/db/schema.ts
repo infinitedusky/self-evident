@@ -415,6 +415,7 @@ export const stepWork = pgTable('step_work', {
   ideaId: text('idea_id').references(() => idea.id), issueId: text('issue_id').references(() => issue.id), projectId: text('project_id').references(() => project.id),
   key: text('key').notNull(), status: text('status').notNull().default('started'),
   detail: text('detail'), body: text('body'), refs: jsonb('refs').notNull().default([]), // refs: story ids for mockups
+  summary: text('summary'), // for the person, who will not read the body: a few bullets on what they need to know (Sandy, 2026-11-13)
   updatedBy: text('updated_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
   approvedBy: text('approved_by'), approvedAt: at('approved_at'), // a person's approval of a step on a task (steps.ts, needsApproval); cleared when the step's work changes
 }, (t) => [index('step_work_app').on(t.appId), inList('step_work_status', t.status, STEP_STATUSES),

@@ -15,7 +15,7 @@ import { DATABASE_URL, db, pool } from './db/client.js'
 import { ensureDatabase } from './db/ensure.js'
 import { registerMachine } from './machine.js'
 import { cleanReferences } from './references.js'
-import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, workspace, type BuildStatus, type IssueState } from './db/schema.js'
+import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, workspace, type BuildStatus, type IssueState, issue as issueTable } from './db/schema.js'
 import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
 import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
@@ -29,13 +29,14 @@ import { prepareCheckout } from './checkout.js'
 import { addChecklist, draftChecklist, completeTodo, createTodo, dropTodo, getTodo, itemToTodo, listTodos, removeChecklistItem, reopenTodo, setChecklistItem, updateTodo } from './todos.js'
 import { addIdea, addItems, dropItem, listBacklog, markDuplicate, promote, reopenItem } from './backlog.js'
 import { createCycle, createInitiative, listCycles, listInitiatives, updateInitiative } from './goals.js'
-import { changeState, commentOnIssue, createIssue, listComments, listIssues, reorder, resolveIssue, updateIssue } from './issues.js'
+import { changeState, commentOnIssue, createIssue, listComments, identifier, listIssues, reorder, resolveIssue, updateIssue } from './issues.js'
 import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
 import { listSketches, readSketch } from './sketches.js'
 import { migrateStorybookSetup, startStorybook, stopStorybooks, storybookStatus, storybookValues, STORY_FLOW_CSS } from './storybook.js'
 import { prototypeCode, prototypeFile, unshowInPrototype } from './prototype-code.js'
 import { setAcceptance, type AcceptanceChange } from './acceptance.js'
+import { mergeGuideOf } from './merge-guide.js'
 import { autoSave, clearTaskBranches, deleteSavePoint, deleteTaskBranch, goBack, saveHere, switchTo, taskBranches } from './task-branches.js'
 import { restoreAfterRestart, share, shared, ShareError, sharesOf, SHARE_KINDS, stopShares, unshare, type ShareKind } from './share.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
@@ -527,6 +528,15 @@ export function buildApp(bus: EventBus) {
     for (const id of r.sessions) await say(id, r.note, undefined, { author: 'engine', kind: 'brief', payload: { label: 'The task moved to another task branch' } }).catch(() => {})
     return settle(r)
   }
+  api.get('/issues/:id/merge-guide', async (c) => { // what the pull request will open with, for whoever approves it
+    try {
+      const t = await resolveIssue(db, c.req.param('id'))
+      const [a] = await db.select().from(appTable).where(eq(appTable.id, t.appId))
+      const subs = await db.select().from(issueTable).where(eq(issueTable.parentId, t.id))
+      const pending = subs.filter((x) => !['done', 'canceled', 'duplicate'].includes(x.state)).map((x) => identifier(a.key, x.number))
+      return c.json({ guide: await mergeGuideOf(t.id, identifier(a.key, t.number), t.title, pending), subTasks: subs.length })
+    } catch (err) { return planError(c, err) }
+  })
   api.get('/issues/:id/branches', async (c) => { try { return c.json(await taskBranches(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/save-points', async (c) => { // {name}
     const { name = '' } = await c.req.json<{ name?: string }>().catch(() => ({ name: '' }))
