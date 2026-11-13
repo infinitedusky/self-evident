@@ -2549,3 +2549,23 @@ worktree.
   Storybook"). A press while it is open shows it and starts nothing; a press while the engine's own part still runs
   waits for the same answer. tkt's set-up goes through the same door.
 
+## A task can be planned and built on its own (Sandy, 2026-11-12: "stand alone tasks should be possible. Maybe we create a throwaway project for each solo task, deleting it if the task is moved to an actual project?")
+
+An agent in Merman said "The planner only plans tasks that are in a project, so I'm making a 'Marketing site' project
+for MER-1". Sandy: that isn't right.
+
+Planning is the small part; the runner, landing, the branch and the pull request are all keyed to a project, so the
+project stays and goes out of sight (`engine/src/solo.ts`, column `project.solo`):
+
+- **Made on first plan.** Planning a task in no project makes a project named after it, marked solo, and plans it
+  there. Refusals (no approved brief, not taken on) come before anything is made.
+- **Never a project to the person.** It is not in Projects, Plan's projects or the agents' `projects` tool. The task
+  stays under "In no project" on Tasks and Plan, and `tasks` with project "none" returns it. Its plan and build are
+  the project page, reached from the task ("Its plan and build"), with "Run it", back to Tasks, and no Add task(s).
+- **Joining a real project.** Before building starts: the task and its sub-tasks move, the planner's questions and
+  decisions go with them, and its own project is put away as superseded, not deleted (its events stay). Once building
+  has started (running, paused, landed, stopped) the move is refused: the branch and the pull request are its own.
+
+Not done: the task's own page does not answer questions or run the build itself, it links to the project page; a solo
+project's name does not follow a later rename of the task.
+
