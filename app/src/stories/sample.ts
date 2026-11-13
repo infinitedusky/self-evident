@@ -502,3 +502,18 @@ export const waitingTaskStepsView: StepsView = { ...taskStepsView, states: taskS
 export const researchWork: StepWork = { id: 'step_sample1', key: 'research', status: 'done', detail: '3 comps, one case against', refs: [], updatedBy: 'agent', updatedAt: T0,
   body: '### Who does it best (sample)\n- Shop A: one page, address autocompleted.\n- Shop B: wallet buttons first.\n\n### The case against\nOne page is long on a phone.' }
 export const workflowRows: WorkflowRow[] = [{ ...uiWorkflow, appDefault: true, projects: 1, tasks: 0 }, { ...quickWorkflow, appDefault: false, projects: 0, tasks: 1 }]
+
+// A task's save points and task branches (made up): the person saved before the review, the engine saved at the
+// prototype's approval, and one earlier try was set aside when they went back.
+export const taskBranches: import('../engine').TaskBranches = {
+  issueId: 'iss_sample20',
+  worktrees: [{ key: 'prototype:proto_sample', label: 'the prototype "One-page checkout"', branch: 'prototype/one-page-checkout-ab12' }, { key: 'talk:sess_sample', label: "the task's own worktree", branch: 'talk/checkout-ab12' }],
+  branches: [
+    { id: 'tb_main', name: 'Main', current: true, fromSave: null, createdAt: '2026-11-12T15:00:00Z', gitBranches: ['prototype/one-page-checkout-ab12', 'talk/checkout-ab12'], work: null },
+    { id: 'tb_wallet', name: 'Wallet first (sample)', current: false, fromSave: 'Before the wallet idea (sample)', createdAt: '2026-11-12T17:20:00Z', gitBranches: ['prototype/one-page-checkout-ab12--wallet-first-sample', 'talk/checkout-ab12--wallet-first-sample'], work: { commits: 3, comments: 1 } },
+  ],
+  saves: [
+    { id: 'save_review', name: 'Proto before review (sample)', auto: null, branchId: 'tb_main', branchName: 'Main', onCurrent: true, changesSince: 4, createdBy: 'user', createdAt: '2026-11-13T10:05:00Z', gitBranches: ['prototype/one-page-checkout-ab12--proto-before-review-sample'] },
+    { id: 'save_approved', name: 'Prototype approved', auto: 'prototype_approved', branchId: 'tb_main', branchName: 'Main', onCurrent: true, changesSince: 0, createdBy: 'engine', createdAt: '2026-11-13T14:40:00Z', gitBranches: ['prototype/one-page-checkout-ab12--prototype-approved'] },
+  ],
+}

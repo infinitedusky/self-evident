@@ -15,6 +15,7 @@ import { Brief } from '../components/Brief'
 import { askStep, useSteps } from '../components/StepsPanel'
 import { StepSection } from '../components/StepSection'
 import { Acceptance } from '../components/Acceptance'
+import { TaskBranches } from '../components/TaskBranches'
 import { mark, TaskNav } from '../components/TaskNav'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
 import { finished, label, ready, step, type Row, type StepKey } from '@self-evident/engine/steps'
@@ -145,6 +146,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
                 <Link to={`/settings/apps/${i.appId}/workflows`}>Configure the rules</Link>
               </p>
             </section>
+            <TaskBranches issueId={i.id} onMoved={() => void act(async () => {})} />
             <Comments i={i} />
             <Planner i={i} />
           </>

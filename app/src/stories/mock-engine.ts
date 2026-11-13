@@ -13,6 +13,7 @@ export interface MockData {
   summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript; /** A task's own agent, or null when it has none. */ taskTalk: typeof s.talkSession | null; /** The agents it has out. */ taskAgents?: import('../engine').TaskAgentOut[]; /** An idea's own agent, or null when it has none. */ ideaTalk?: typeof s.talkSession | null
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[] }
+  /** A task's save points and task branches; none when left out. */ taskBranches?: import('../engine').TaskBranches; /** Why a move fails, when it should. */ moveError?: string
   /** What is public right now, by "kind:id". */ shares?: Record<string, import('../engine').Shared>; /** Why making a link fails, when it should. */ shareError?: string; /** ngrok's one address is held by these, until the person frees it. */ ngrokHolders?: import('../engine').NgrokHolder[]; /** What the guide tab of a shared prototype is given. */ visitorGuide?: { title: string; guide: import('../engine').Guide | null }
   prototypes: typeof s.prototypes; /** A prototype's changed files and what the agent shows. */ prototypeCode: typeof s.prototypeCode
   claudeSessions: typeof s.claudeSessions
@@ -131,6 +132,32 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       const all = Object.values(d.issueDetails)
       return reply(all.filter((i) => (!q.get('kind') || i.kind === q.get('kind')) && (!q.get('project') || i.projectId === q.get('project')) && (!q.get('top') || !i.parentId)))
     }),
+    // Task branches and save points: the engine's rules, roughly.
+    http.get('/api/issues/:id/branches', ({ params }) => reply(d.taskBranches ?? { issueId: params.id as string, worktrees: [], branches: [], saves: [] })),
+    http.post('/api/issues/:id/save-points', async ({ params, request }) => {
+      const { name } = await request.json() as { name: string }
+      const t = d.taskBranches ?? { issueId: params.id as string, worktrees: [], branches: [{ id: 'tb_main', name: 'Main', current: true, fromSave: null, createdAt: new Date().toISOString(), gitBranches: [], work: null }], saves: [] }
+      const cur = t.branches.find((b) => b.current)!
+      const save = { id: `save_${t.saves.length + 1}`, name: name.trim() || 'Saved just now', auto: null, branchId: cur.id, branchName: cur.name, onCurrent: true, changesSince: 0, createdBy: 'user', createdAt: new Date().toISOString(), gitBranches: [] }
+      d.taskBranches = { ...t, saves: [...t.saves, save] }
+      return reply({ id: save.id, name: save.name })
+    }),
+    http.post('/api/save-points/:id/go-back', async ({ params, request }) => {
+      if (d.moveError) return HttpResponse.json({ error: d.moveError }, { status: 400 })
+      const t = d.taskBranches!; const s = t.saves.find((x) => x.id === params.id)!; const cur = t.branches.find((b) => b.current)!
+      const { name } = await request.json() as { name?: string }
+      const to = { id: `tb_${t.branches.length + 1}`, name: name?.trim() || `From ${s.name}`, current: true, fromSave: s.name, createdAt: new Date().toISOString(), gitBranches: [], work: null }
+      d.taskBranches = { ...t, branches: [...t.branches.map((b) => (b.current ? { ...b, current: false, work: { commits: s.changesSince ?? 0, comments: 0 } } : b)), to], saves: t.saves.map((x) => ({ ...x, onCurrent: false, changesSince: null })) }
+      return reply({ now: { id: to.id, name: to.name }, setAside: { id: cur.id, name: cur.name, commits: s.changesSince ?? 0 }, switched: [], leftAlone: [], restarted: 1, problems: [] })
+    }),
+    http.post('/api/task-branches/:id/switch', ({ params }) => {
+      const t = d.taskBranches!; const cur = t.branches.find((b) => b.current)!; const to = t.branches.find((b) => b.id === params.id)!
+      d.taskBranches = { ...t, branches: t.branches.map((b) => (b.id === to.id ? { ...b, current: true, work: null } : b.current ? { ...b, current: false, work: { commits: 0, comments: 0 } } : b)), saves: t.saves.map((x) => ({ ...x, onCurrent: x.branchId === to.id, changesSince: x.branchId === to.id ? 0 : null })) }
+      return reply({ now: { id: to.id, name: to.name }, setAside: { id: cur.id, name: cur.name, commits: 0 }, switched: [], leftAlone: [], restarted: 0, problems: [] })
+    }),
+    http.delete('/api/save-points/:id', ({ params }) => { const t = d.taskBranches!; d.taskBranches = { ...t, saves: t.saves.filter((x) => x.id !== params.id) }; return reply({ deleted: params.id }) }),
+    http.delete('/api/task-branches/:id', ({ params }) => { const t = d.taskBranches!; d.taskBranches = { ...t, branches: t.branches.filter((b) => b.id !== params.id), saves: t.saves.filter((x) => x.branchId !== params.id) }; return reply({ deleted: params.id }) }),
+    http.delete('/api/issues/:id/branches', () => { const t = d.taskBranches!; d.taskBranches = { ...t, branches: t.branches.filter((b) => b.current), saves: [] }; return reply({ taskBranches: 0, savePoints: 0 }) }),
     http.put('/api/issues/:id/acceptance', async ({ params, request }) => { // the engine's rules, roughly: add, change, remove
       const i = d.issueDetails[params.id as string]; if (!i) return missing('issue')
       const c = await request.json() as import('../engine').AcceptanceChange

@@ -9,7 +9,7 @@
  */
 import { and, eq, inArray, ne, or, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, build, decision, fileClaim, issue, issueComment, issueRelation, pr, prototype, question, run, session, step, stepWork, verification } from './db/schema.js'
+import { app, build, decision, fileClaim, issue, issueComment, issueRelation, pr, prototype, question, run, savePoint, session, step, stepWork, taskBranch, verification } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { identifier, PlanError, resolveIssue } from './issues.js'
 
@@ -37,6 +37,8 @@ export async function deleteIssue(ref: string, actor = 'user', endTalk?: EndTalk
     await tx.delete(fileClaim).where(inArray(fileClaim.issueId, ids))
     await tx.delete(build).where(inArray(build.issueId, ids))
     await tx.delete(stepWork).where(inArray(stepWork.issueId, ids))
+    await tx.delete(savePoint).where(inArray(savePoint.issueId, ids))
+    await tx.delete(taskBranch).where(inArray(taskBranch.issueId, ids))
     await tx.delete(decision).where(inArray(decision.issueId, ids))
     await tx.delete(question).where(inArray(question.issueId, ids))
     await tx.update(prototype).set({ issueId: null }).where(inArray(prototype.issueId, ids)) // discarded ones: kept, no longer a step of anything

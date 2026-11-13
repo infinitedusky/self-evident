@@ -8,7 +8,7 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from './db/client.js'
-import { app, idea as ideaTable, initiative, ISSUE_STATES, issue, prototype, question, session } from './db/schema.js'
+import { app, idea as ideaTable, initiative, ISSUE_STATES, issue, prototype, question, savePoint, session, taskBranch } from './db/schema.js'
 import { appendEvent, eventsSince } from './events.js'
 import { addIdea, addItems, dropItem, markDuplicate, promote } from './backlog.js'
 import { createCycle, createInitiative, listCycles, listInitiatives, updateInitiative } from './goals.js'
@@ -24,10 +24,11 @@ import { runner } from './runner.js'
 import { listStories } from './storybook.js'
 import { prototypeCode, showInPrototype, unshowInPrototype } from './prototype-code.js'
 import { setAcceptance } from './acceptance.js'
+import { deleteSavePoint, deleteTaskBranch, goBack, saveHere, switchTo, taskBranches } from './task-branches.js'
 import { share, sharesOf, unshare } from './share.js'
 import { setGuide } from './share-guide.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, setPrototypeCleanup, setPrototypeCommand, setPrototypeDatabase, startPrototype, stopPrototype } from './prototype.js'
-import { agentsOut, readAgent, tellAgent } from './talk.js'
+import { agentsOut, readAgent, say, tellAgent } from './talk.js'
 import { syncApp } from './github.js'
 import { FOLLOWED, follow } from './follow.js'
 import { addChecklist, completeTodo, createTodo, dropTodo, itemToTodo, listTodos, setChecklistItem, updateTodo } from './todos.js'
@@ -37,7 +38,7 @@ export interface EngineTool { name: string; description: string; shape: z.ZodRaw
 export interface ToolScope { appId: string; sessionId?: string; actor?: string; waitForPlanner?: boolean }
 
 /** Tools that only read: safe to run without asking. */
-export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'shares'])
+export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'shares', 'task_branches'])
 
 export function engineTools(opts: ToolScope): EngineTool[] {
   const { appId, sessionId } = opts
@@ -61,6 +62,7 @@ export function engineTools(opts: ToolScope): EngineTool[] {
     if (a.issueId) { await ownIssue(a.issueId); return { issueId: a.issueId } }
     await ownProject(a.projectId!); return { projectId: a.projectId! }
   }
+  const ownSaved = async (saveId?: string, branchId?: string) => { const [r] = saveId ? await db.select().from(savePoint).where(eq(savePoint.id, saveId)) : await db.select().from(taskBranch).where(eq(taskBranch.id, branchId!)); if (!r || r.appId !== appId) throw foreign(); return r.id }
   const ownPrototype = async (id: string) => { const [p] = await db.select().from(prototype).where(eq(prototype.id, id)); if (!p || p.appId !== appId) throw foreign(); return p }
   const ownInitiative = async (id: string) => { const [i] = await db.select().from(initiative).where(eq(initiative.id, id)); if (!i || (i.appId && i.appId !== appId)) throw foreign(); return i }
   const line = z.object({ text: z.string(), waitingOn: z.string().optional() })
@@ -227,6 +229,26 @@ export function engineTools(opts: ToolScope): EngineTool[] {
       def('set_guide', 'What someone opening a prototype\'s shared link is told, in a small tab at the bottom right of every page: intro, one or two lines on what this is and what you want to know from them; steps, in the order to try them, each with a title, the path to go to (a path of the prototype, like /checkout; "Go there" takes them) and what to try there in a sentence a stranger could follow. Write it for someone who has never seen the app and has no account of what was built: no file names, no criteria ids, sample sign-ins spelled out. At most 12 steps; fewer is better. The tab also has a box for what they think, which comes back as a comment on the task. It shows at once, with no need to share again. Write one before or when a prototype is shared.', {
         prototypeId: z.string(), intro: z.string().optional(), steps: z.array(z.object({ title: z.string(), path: z.string().optional(), try: z.string().optional() })),
       }, async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return setGuide(a.prototypeId, a, actor) })),
+      def('task_branches', 'A task\'s save points and task branches (issueId: the task\'s id): which task branch is being worked on, the ones set aside (and how much work is on each), each save point with its name and what changed since, and the git branch each of the task\'s worktrees is on.', { issueId: z.string() },
+        async (a) => tryIt(async () => { await ownIssue(a.issueId); return taskBranches(a.issueId) })),
+      def('save_point', 'Make a save point on a task (issueId: the task\'s id), named by the person ("Proto before review") or by you for the moment it marks: a point the whole task can be taken back to. It commits what is uncommitted in each of the task\'s worktrees (the prototype\'s, this one), marks each with a git branch named after it, and copies the task (brief, acceptance criteria and marks, approvals, steps, comments, sub-tasks). The work carries on where it was. Make one when the person asks, and before a change they are unsure of. The engine makes its own at "Prototype approved" and "Brief approved".', { issueId: z.string(), name: z.string().describe('a few words the person will recognise it by') },
+        async (a) => tryIt(async () => { await ownIssue(a.issueId); return saveHere(a.issueId, a.name, actor) })),
+      def('go_back', 'Take a task back to a save point (savePointId, from task_branches), or to a task branch that was set aside (taskBranchId). To a save point: a new task branch starts there and becomes the one worked on (name it with name, else "From <save point>"). Either way every worktree of the task switches to that task branch\'s git branches, the task is put back as it was there (brief, criteria, approvals, steps, comments, sub-tasks), a running prototype restarts on that code, and the task branch you were on is set aside whole, uncommitted work committed with it: nothing is deleted, and it can be gone back to. The prototype\'s data is left as it is unless resetData, which rebuilds it from its scenario (use it when the code moved to has a different database layout). Only when the person asks. Afterwards read the task again: what you remember from the task branch you left is not in effect.', {
+        savePointId: z.string().optional(), taskBranchId: z.string().optional(), name: z.string().optional(), resetData: z.boolean().optional(),
+      }, async (a) => tryIt(async () => {
+        if (!a.savePointId === !a.taskBranchId) throw new PlanError('give savePointId or taskBranchId, one of them')
+        const mine = await ownSaved(a.savePointId, a.taskBranchId)
+        const { sessions, note, ...r } = a.savePointId ? await goBack(a.savePointId, { name: a.name, resetData: a.resetData, by: actor }) : await switchTo(mine, { resetData: a.resetData, by: actor })
+        for (const id of sessions) if (id !== sessionId) await say(id, note, undefined, { author: 'engine', kind: 'brief', payload: { label: 'The task moved to another task branch' } }).catch(() => {})
+        void runner.dispatch()
+        return { ...r, note }
+      })),
+      def('delete_saved', 'Remove a save point (savePointId) or a set-aside task branch (taskBranchId) of a task, with its git branches. Removing a save point loses nothing but the way back to it. Removing a task branch removes the work that is only on it (its commits, its comments, its save points): only when the person says so. The task branch being worked on cannot be removed.', { savePointId: z.string().optional(), taskBranchId: z.string().optional() },
+        async (a) => tryIt(async () => {
+          if (!a.savePointId === !a.taskBranchId) throw new PlanError('give savePointId or taskBranchId, one of them')
+          await ownSaved(a.savePointId, a.taskBranchId)
+          return a.savePointId ? deleteSavePoint(a.savePointId, actor) : deleteTaskBranch(a.taskBranchId!, actor)
+        })),
       def('stop_sharing', 'End a public address made with share: it stops answering at once. what and prototypeId as for share.', { what: z.enum(['prototype', 'mockups', 'sketches']), prototypeId: z.string().optional() },
         async (a) => tryIt(async () => {
           if (a.what === 'prototype') { if (!a.prototypeId) throw new PlanError('needs prototypeId'); await ownPrototype(a.prototypeId); return unshare('prototype', a.prototypeId, actor) }

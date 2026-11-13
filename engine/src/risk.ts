@@ -19,7 +19,7 @@ export interface RiskContext { cwd: string; branch?: string | null } // branch: 
 
 const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']) // Skill loads instructions; what they lead to is rated on its own
 export const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
-const ENGINE_FREE = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'show_code', 'shares'])
+const ENGINE_FREE = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'show_code', 'task_branches', 'shares'])
 const ENGINE: Record<string, [Risk, string]> = {
   create_idea: ['cheap', 'keeps an idea; easy to drop'],
   create_project: ['cheap', 'a draft project; nothing runs'],
@@ -60,6 +60,9 @@ const ENGINE: Record<string, [Risk, string]> = {
   set_prototype_database: ['moderate', "changes where this app's prototypes get their databases"],
   share: ['expensive', 'makes a public address: anyone with it can open what it shows'],
   stop_sharing: ['cheap', 'ends a public address'],
+  save_point: ['cheap', 'commits what is uncommitted in the task\'s worktrees and marks the point; the work carries on'],
+  go_back: ['expensive', 'moves every worktree of the task and the task itself to another task branch'],
+  delete_saved: ['expensive', 'removes a save point or a set-aside task branch, with the work that is only there'],
   set_guide: ['cheap', 'writes what a visitor to a shared prototype is told; easy to change'],
   start_project: ['expensive', 'runs agents, spends money, opens a pull request'],
 }

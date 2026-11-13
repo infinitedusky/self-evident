@@ -9,7 +9,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { and, desc, eq, ne } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, prototype, repo } from './db/schema.js'
@@ -33,7 +33,8 @@ async function setupOf(appId: string) {
   return { a, repoPath: r?.localPath ?? null, cmd: s.prototype_cmd?.trim() || null, stopCmd: s.prototype_stop_cmd?.trim() || null, discardCmd: s.prototype_discard_cmd?.trim() || null, dbCfg: s.prototype_db?.url ? s.prototype_db : null }
 }
 
-const slugOf = (p: typeof prototype.$inferSelect) => p.branch.slice('prototype/'.length)
+// From its folder, not its git branch: the branch changes when the task moves to another task branch, its database does not.
+const slugOf = (p: typeof prototype.$inferSelect) => { const b = basename(p.path); return b.startsWith('prototype--') ? b.slice('prototype--'.length) : p.branch.slice('prototype/'.length) }
 
 /** What the prototype's server and its conversation are given: the app's database variable, at its own database. */
 export async function prototypeEnv(p: typeof prototype.$inferSelect): Promise<Record<string, string>> {

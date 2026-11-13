@@ -36,6 +36,7 @@ import { listSketches, readSketch } from './sketches.js'
 import { migrateStorybookSetup, startStorybook, stopStorybooks, storybookStatus, storybookValues, STORY_FLOW_CSS } from './storybook.js'
 import { prototypeCode, prototypeFile, unshowInPrototype } from './prototype-code.js'
 import { setAcceptance, type AcceptanceChange } from './acceptance.js'
+import { autoSave, clearTaskBranches, deleteSavePoint, deleteTaskBranch, goBack, saveHere, switchTo, taskBranches } from './task-branches.js'
 import { restoreAfterRestart, share, shared, ShareError, sharesOf, SHARE_KINDS, stopShares, unshare, type ShareKind } from './share.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
@@ -504,6 +505,7 @@ export function buildApp(bus: EventBus) {
     const { approve = true } = await c.req.json<{ approve?: boolean }>().catch(() => ({ approve: true }))
     try {
       const row = await approveStep(c.req.param('id'), c.req.param('key') as never, 'user', approve)
+      if (approve && c.req.param('key') === 'prototype') await autoSave(c.req.param('id'), 'prototype_approved') // a point to come back to, before the checks and the brief move on
       if (approve && c.req.param('key') === 'prototype') void advanceChecks(c.req.param('id')).catch((err) => console.error('checks: could not start', err)) // the checks run by themselves from here
       return c.json(row)
     } catch (err) { return planError(c, err) }
@@ -513,8 +515,33 @@ export function buildApp(bus: EventBus) {
   })
   api.post('/issues/:id/brief/approve', async (c) => {
     const { approve = true } = await c.req.json<{ approve?: boolean }>().catch(() => ({ approve: true }))
-    try { return c.json(settle(await approveBrief(c.req.param('id'), 'user', approve))) } catch (err) { return planError(c, err) }
+    try {
+      const row = await approveBrief(c.req.param('id'), 'user', approve)
+      if (approve) await autoSave(c.req.param('id'), 'brief_approved') // before the plan and the build: "scrap the build" is going back to here
+      return c.json(settle(row))
+    } catch (err) { return planError(c, err) }
   })
+  // Task branches and save points (task-branches.ts). A move tells the task's open conversations what happened.
+  const moved = async <T extends { sessions: string[]; note: string }>(r: T) => {
+    for (const id of r.sessions) await say(id, r.note, undefined, { author: 'engine', kind: 'brief', payload: { label: 'The task moved to another task branch' } }).catch(() => {})
+    return settle(r)
+  }
+  api.get('/issues/:id/branches', async (c) => { try { return c.json(await taskBranches(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  api.post('/issues/:id/save-points', async (c) => { // {name}
+    const { name = '' } = await c.req.json<{ name?: string }>().catch(() => ({ name: '' }))
+    try { return c.json(await saveHere(c.req.param('id'), name, 'user')) } catch (err) { return planError(c, err) }
+  })
+  api.delete('/issues/:id/branches', async (c) => { try { return c.json(await clearTaskBranches(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
+  api.post('/save-points/:id/go-back', async (c) => { // {name?, resetData?}: a new task branch from it, made current
+    const body = await c.req.json<{ name?: string; resetData?: boolean }>().catch(() => ({} as { name?: string; resetData?: boolean }))
+    try { return c.json(await moved(await goBack(c.req.param('id'), { ...body, by: 'user' }))) } catch (err) { return planError(c, err) }
+  })
+  api.delete('/save-points/:id', async (c) => { try { return c.json(await deleteSavePoint(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
+  api.post('/task-branches/:id/switch', async (c) => { // {resetData?}: a set-aside one made current again
+    const body = await c.req.json<{ resetData?: boolean }>().catch(() => ({} as { resetData?: boolean }))
+    try { return c.json(await moved(await switchTo(c.req.param('id'), { ...body, by: 'user' }))) } catch (err) { return planError(c, err) }
+  })
+  api.delete('/task-branches/:id', async (c) => { try { return c.json(await deleteTaskBranch(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
   api.post('/ideas/:id/convert', async (c) => {
     const body = await c.req.json<{ as: 'task' | 'project'; title?: string; projectId?: string; why?: string }>()
     if (body.as !== 'task' && body.as !== 'project') return c.json({ error: 'as must be task or project' }, 400)

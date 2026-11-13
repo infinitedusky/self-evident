@@ -3076,3 +3076,41 @@ only in memory, and the engine's restart-on-change does not run its shutdown.
 The list is now also written to `~/.self-evident/ngrok-paused.json`, before a service is stopped, and a starting
 engine puts back whatever is in it (no share outlives the engine, so nothing still needs the address). The service
 was started again by hand that day.
+
+
+## Save points and task branches (Sandy, 2026-11-13: "I get to a point and I don't know if it's right to move forward yet … but I also don't want to stop")
+
+Talked through at length before building; what was decided, and why the other shapes were dropped.
+
+- **A save point** is a name ("Proto before review"). Saving commits what is uncommitted in each of the task's
+  worktrees, puts a git branch `<its branch>--<name>` at that commit in each, and copies the task: brief, acceptance
+  criteria and marks, approvals, steps, comments, sub-tasks, the prototype's guide and shown files. Work carries on
+  where it was. The engine makes its own at "Prototype approved" and "Brief approved", keeping the latest of each.
+- **A task branch** is a version of the task ("essentially we're talking about allowing for task branches"). Going
+  back to a save point starts a new one there: every worktree switches to a new git branch cut from the save point,
+  the task is put back as saved, a running prototype restarts, and the task branch that was current is set aside
+  whole (uncommitted work committed with it, its comments with it). A set-aside one can be made current again.
+- **Which worktrees**: the prototype's, the task's own conversation's, and that worktree's companions in the app's
+  other repositories. A worktree the task did not have at the save point is left as it is, and said.
+- **Deleting is easy** ("it should be very easy to get rid of one of these"): one flat list on the task's overview.
+  A save point goes at once (only the way back is lost). A set-aside task branch asks once and says what is only on
+  it. The one being worked on cannot be deleted. Clear all removes the lot. Marking the task done clears them too:
+  the task branch being worked on is the one that counts.
+- **Comments belong to the task branch** they were made on: they are part of the copy, so going back hides the ones
+  made since and switching back returns them.
+- **The prototype's database is not forked.** One per prototype; a move leaves it as it is unless "also rebuild from
+  its sample data" is ticked. Its name now comes from the prototype's folder, not its git branch, so it survives.
+- **Refused**: a move while a sub-task is being built, or to before a pull request that has merged. Sub-tasks made
+  since the point moved to are canceled, never deleted, and come back when their task branch does.
+- **The agents**: `save_point` (cheap), `task_branches` (free), `go_back` and `delete_saved` (always ask). A move
+  puts a message in the task's open conversations saying what was done before it is no longer in effect.
+
+Dropped on the way: checkpoints restored in place (a reset, and a force push once pushed); a new set of worktrees per
+version (minutes per move and a database each, for running two at once, which is not wanted); a copy of the task as
+its own task (it makes you stop and move into the copy); renaming the plain git branch on going back (the force push
+again). Git tags were dropped for branches, which are visible and delete the same way.
+
+Not done: a save point at "build started" (the one at "Brief approved" is before the plan and the build); deleting a
+pushed git branch's remote copy; a fresh conversation for the agent on a move (it gets a message instead); the
+prototype's data per task branch; sizes on disk. Not tried: any of it on a real task with a real prototype; the
+engine is tested against real git worktrees, the list in stories.
