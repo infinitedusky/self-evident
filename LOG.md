@@ -2585,10 +2585,11 @@ prototype's code, not for the finished build.
 - **No notes from the build.** The planner no longer returns `later`, builders are no longer asked for `Later:` lines,
   and neither adds to a project's backlog. A builder fixes a small slip in its own files, builds what the brief says,
   and if the sub-task cannot be built as written it stops and says exactly what is wrong.
-- **Clean-up is a check after the prototype** (`cleanup`, between the prototype analysis and the ADR, on the
-  prototype's checkout): what repeats and should be one function, what could be simpler, what to refactor so this
-  fits, what to leave out. The conductor writes it into the brief as instructions to the builder. A workflow adds it
-  like any check.
+- **Clean-up is part of the prototype analysis** (first shipped as a check of its own, `cleanup`, in PR #155; Sandy
+  the same evening: "Clean up should just be part of the analysis, right?"). The analysis has a section, Cleaner: what
+  repeats and should be one function, what could be simpler or more efficient, what to refactor so this fits, what
+  to leave out. The conductor writes it into the brief as instructions to the builder. Nothing to switch on: every
+  workflow with the analysis has it.
 - The backlog is back to what people, the agent and ideas put there.
 
 Not changed: the planner can still ask a question when the brief leaves a choice open. By the same reasoning that
