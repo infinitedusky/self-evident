@@ -2705,3 +2705,46 @@ sketch or mockup, its standard for a decision record.
 Not done: the skills are read from the app's first repository only, as before, so a skill kept in a second repository
 of a workbench isn't offered. The builder and the planner get no step skills: the steps are done in conversations.
 "Skills by job" stays below it, unchanged.
+
+## Your own skills, outside every repo (Sandy, 2026-11-13: "can we then add skills somewhere that sit outside the repo we are using that become available for any app?")
+
+Skills came from two places: an app repo's own `.claude/skills/` (that app only, and it means putting files in the
+repo) and installed plugins. Nothing held a skill you write yourself for every app, without touching a repo.
+
+Now there is a folder on this computer, `~/.self-evident/shared/skills/` (`SHARED_SKILLS_HOME` moves it), one folder
+per skill with a `SKILL.md`. The engine loads it as a built-in plugin named `shared`, so nothing else had to change:
+
+- it is listed in Settings › All apps › Plugins, with a **Write a skill** form (name, when to use it, what it says)
+  that writes the file, there to edit by hand afterwards; the same name again replaces it;
+- its skills are filed under jobs in All apps like any plugin's, and offered for a step in every app's Skills, where
+  a session names one `shared:<name>`;
+- it switches off, for all apps or one, and does not uninstall.
+
+Checked against the real Claude Code: a skill written there is loaded by a session as `shared:<name>`.
+
+This is the third home for the decision-record skill discussed on 2026-11-12, and the one that puts nothing in the
+code repos or the docs repo: write it here, then choose it for the ADR step of the app it is the standard for.
+
+Not done: the folder is on one computer. It is not carried by the state repository, so on a second computer the
+skills are copied by hand. There is no delete or edit in Settings: remove or change the folder.
+
+Added the same day (Sandy: "can we also point to a repo and pull all the skills of that repo, or update if we already
+have them and the repo has changed?"): **skills from a repository** (`engine/src/skill-sources.ts`). In the `shared`
+block, give a git URL or a folder on this computer that is a git repository. The engine clones it (shallow) under
+`~/.self-evident/shared/sources/`, finds every folder holding a `SKILL.md`, and copies each into the shared skills
+with its files. **Update** fetches the repository again: changed skills are replaced, new ones added, ones the
+repository dropped are removed, and it says which. What was pulled, and at which commit, is in
+`~/.self-evident/shared/sources.json`.
+
+Decided:
+
+- **A skill from somewhere else is never overwritten or removed.** Each copy carries a marker naming its source; a
+  name already held by a hand-written skill, or one from another repository, is left alone and reported as skipped.
+- **Nothing in the repository is run.** Files are copied. Git uses this computer's own access (SSH aliases work).
+- **Update is by hand.** A button per source; nothing fetches on a timer.
+- This is also how a second repository's skills reach a workbench app: pull that repository's folder, and its skills
+  are offered for a step like any other shared skill.
+
+Not done: only folders with their own `SKILL.md` are copied, so a skill that leans on a sibling folder of shared files
+arrives without it. A pulled skill edited here by hand is replaced at the next update that finds it different.
+Tried on two real repositories on this computer: 4 and 8 skills pulled, and a second pull reported nothing changed.

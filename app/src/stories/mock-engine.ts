@@ -20,6 +20,7 @@ export interface MockData {
   trackerGuide: string
   githubRepos: typeof s.githubRepos; repoNote: string | null; folder: typeof s.folder
   /** Why a task can't be deleted, as the engine says it; null when it can. */ deleteProblem: string | null
+  /** Repositories skills were pulled from (made up). */ skillSources: { url: string; commit: string; pulledAt: string; skills: string[] }[]
   /** Which Claude account the app's agents run on, as the engine finds it. */ account: { kind: 'default' | 'key' | 'login'; ok: boolean; note: string }
   assets: typeof s.assets
   linearTickets: typeof s.linearTickets; /** Why Linear can't be read, as the engine says it; null when it can. */ linearProblem: string | null
@@ -37,7 +38,7 @@ export const sampleData: MockData = {
   check: { ok: true, detail: 'Signed in as Sample Owner; team SHOP (Sample Shop) found.' },
   setup: { done: false, did: ['Wrote docs/agents/issue-tracker.md, pointing at SS here.', 'Wrote docs/agents/forge.md, docs/agents/workflow.md, docs/agents/domain.md, docs/agents/pull-request.md and the Ticket lifecycle block in CLAUDE.md, from the app, the repo and the house profile.', 'Committed to main and pushed (abc1234).'], ask: 'Self Evident\'s tkt check for Sample Shop (SS) says: tkt doctor: fail herdr herdr is not installed. (sample)', detail: 'tkt doctor: fail  herdr  herdr is not installed. Get tkt working: https://gitlab.com/rogs/tkt', talkId: 'sess_sample_setup' },
   trackerGuide: s.trackerGuideSample,
-  githubRepos: s.githubRepos, repoNote: s.repoNote, folder: s.folder, assets: s.assets, linearTickets: s.linearTickets, linearProblem: null, deleteProblem: null,
+  githubRepos: s.githubRepos, repoNote: s.repoNote, folder: s.folder, assets: s.assets, linearTickets: s.linearTickets, linearProblem: null, deleteProblem: null, skillSources: [],
   account: { kind: 'default', ok: true, note: "The engine's default, the Claude Code login on this machine: owner@sample.example · max." },
   plan: s.plan, workflows: s.workflowRows, steps: { ideas: s.ideaStepsView, issues: s.taskStepsView, projects: s.projectStepsView }, stepWork: s.researchWork,
 }
@@ -58,6 +59,16 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/apps', () => reply(d.apps)),
     http.get('/api/workspaces', () => reply([s.workspace])),
     http.get('/api/settings', () => reply(d.settings)),
+    http.get('/api/skills/sources', () => reply(d.skillSources)),
+    http.post('/api/skills/sources', async ({ request }) => {
+      const { url } = (await request.json()) as { url: string }
+      const had = d.skillSources.find((x) => x.url === url)
+      const source = { url, commit: had ? 'b2c3d4e5f6a7b8c9' : 'a1b2c3d4e5f6a7b8', pulledAt: '2026-11-13T10:00:00.000Z', skills: had?.skills ?? ['shop-design', 'shop-voice'] }
+      d.skillSources = [...d.skillSources.filter((x) => x.url !== url), source]
+      return reply(had ? { source, added: [], updated: [had.skills[0]], unchanged: had.skills.slice(1), removed: [], skipped: [] } : { source, added: source.skills, updated: [], unchanged: [], removed: [], skipped: [] })
+    }),
+    http.delete('/api/skills/sources', ({ request }) => { const url = new URL(request.url).searchParams.get('url'); const had = d.skillSources.find((x) => x.url === url); d.skillSources = d.skillSources.filter((x) => x.url !== url); return reply({ removed: had?.skills ?? [] }) }),
+    http.post('/api/skills/shared', async ({ request }) => { const b = (await request.json()) as { name: string }; return reply({ key: `shared/${b.name}`, name: b.name, file: `/Users/sample/.self-evident/shared/skills/${b.name}/SKILL.md` }) }),
     http.get('/api/apps/:id/settings', () => reply(d.appSettings)),
     http.get('/api/apps/:id/account', () => reply(d.account)),
     http.post('/api/integrations/:key/check', () => reply(d.check)),

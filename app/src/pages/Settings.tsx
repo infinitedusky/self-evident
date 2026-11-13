@@ -10,7 +10,7 @@ import { Badge } from '../components/Badge'
 import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
 import { STEPS } from '@self-evident/engine/steps'
-import { engine, type AccountStatus, type AgentRole, type AppJob, type UsableSkill, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
+import { engine, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type AppJob, type UsableSkill, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
@@ -185,8 +185,10 @@ function PluginBlock({ p, catalogue, act }: { p: PluginInfo; catalogue: Category
               </li>
             ))}
           </ul>
-        ) : <span className="faint">None yet{p.builtIn ? <>: a skill is a folder under <span className="mono">engine/plugin/skills/</span></> : ''}.</span>}
+        ) : <span className="faint">None yet{p.builtIn ? <>: a skill is a folder under <span className="mono">{p.skillsDir ?? 'engine/plugin/skills/'}</span></> : ''}.</span>}
       </div>
+      {p.id === 'shared' && <AddSharedSkill dir={p.skillsDir ?? null} onAdded={act(async () => {})} />}
+      {p.id === 'shared' && <SkillSources onChanged={act(async () => {})} />}
       {p.tools && (
         <div className="plugin-row top"><span className="label-text">Tools</span>
           <div>
@@ -211,6 +213,101 @@ function SkillList({ skills }: { skills: { name: string; description: string }[]
 }
 
 /** Adding is a form only once asked for: a marketplace and a plugin name, installed by Claude Code's installer. */
+/**
+ * Write one of your own skills (Sandy, 2026-11-13: "skills … outside the repo we are using that become available for
+ * any app"): a name, when to use it, what it says. It becomes a SKILL.md in the shared folder on this computer, there
+ * to edit by hand afterwards; the same name again replaces it.
+ */
+function AddSharedSkill({ dir, onAdded }: { dir: string | null; onAdded: () => unknown }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [body, setBody] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [wrote, setWrote] = useState<string | null>(null)
+  const add = async () => {
+    setBusy(true); setError(null)
+    try { const r = await engine.addSharedSkill({ name, description, body }); setWrote(r.file); setOpen(false); setName(''); setDescription(''); setBody(''); await onAdded() } catch (e) { { const m = err(e); try { setError(JSON.parse(m).error ?? m) } catch { setError(m) } } } finally { setBusy(false) }
+  }
+  return (
+    <div className="plugin-row top" data-component="AddSharedSkill"><span className="label-text">Add</span>
+      <div style={{ display: 'grid', gap: 8 }}>
+        <div className="faint settings-desc">Skills kept on this computer, outside every repo{dir ? <>, in <span className="mono">{dir}</span></> : ''}. Every app gets them: file one under a job here, or choose it for a step in an app's Skills.</div>
+        {wrote && <p className="settings-note" style={{ margin: 0 }}><Badge tone="ok">Written</Badge><span className="mono">{wrote}</span></p>}
+        {!open ? <div><button className="btn quiet" onClick={() => { setOpen(true); setWrote(null) }}>Write a skill</button></div> : <>
+          <label>Name<input className="mono" aria-label="Skill name" value={name} onChange={(e) => setName(e.target.value)} placeholder="decision-record" /></label>
+          <label>When to use it<input aria-label="When to use it" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="One or two sentences. An agent picks a skill by this." /></label>
+          <label>What it says<textarea aria-label="What it says" rows={8} value={body} onChange={(e) => setBody(e.target.value)} placeholder="The instructions, in Markdown: what to do, in what order, what the result looks like." /></label>
+          {error && <div className="empty bad">{error}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn" disabled={busy || !name.trim() || !description.trim() || !body.trim()} onClick={() => void add()}>{busy ? 'Writing…' : 'Write the skill'}</button>
+            <button className="btn quiet" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
+          </div>
+        </>}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Skills from a repository (Sandy, 2026-11-13: "point to a repo and pull all the skills of that repo, or update if we
+ * already have them and the repo has changed"). Give a git URL or a folder on this computer: every skill in it is
+ * copied into the shared skills. Update fetches it again and says what changed. A name a skill from somewhere else
+ * already holds is left alone and named.
+ */
+function SkillSources({ onChanged }: { onChanged: () => unknown }) {
+  const [rows, setRows] = useState<SkillSource[] | null>(null)
+  const [url, setUrl] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [did, setDid] = useState<PulledSkills | null>(null)
+  const load = () => engine.skillSources().then(setRows).catch(() => setRows([]))
+  useEffect(() => { void load() }, [])
+  const words = (e: unknown) => { const m = err(e); try { return JSON.parse(m).error ?? m } catch { return m } }
+  const pull = async (from: string) => {
+    setBusy(from); setError(null); setDid(null)
+    try { setDid(await engine.pullSkills(from)); setUrl(''); await load(); await onChanged() } catch (e) { setError(words(e)) } finally { setBusy(null) }
+  }
+  const remove = async (from: string, n: number) => {
+    if (!window.confirm(`Stop pulling from ${from}? Its ${n} skill${n === 1 ? '' : 's'} here ${n === 1 ? 'is' : 'are'} removed.`)) return
+    setBusy(from); setError(null); setDid(null)
+    try { await engine.removeSkillSource(from); await load(); await onChanged() } catch (e) { setError(words(e)) } finally { setBusy(null) }
+  }
+  const part = (label: string, names: string[]) => (names.length ? `${label} ${names.join(', ')}. ` : '')
+  const changed = did && (did.added.length || did.updated.length || did.removed.length)
+  return (
+    <div className="plugin-row top" data-component="SkillSources"><span className="label-text">From a repo</span>
+      <div style={{ display: 'grid', gap: 8 }}>
+        <div className="faint settings-desc">Pull every skill in a repository into the shared skills. Update fetches it again and brings them up to date: changed ones are replaced, new ones added, dropped ones removed.</div>
+        {(rows ?? []).length > 0 && <ul className="list">
+          {rows!.map((r) => (
+            <li key={r.url} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center' }}>
+              <div style={{ minWidth: 0 }}>
+                <div className="mono" style={{ overflowWrap: 'anywhere' }}>{r.url}</div>
+                <div className="faint" style={{ fontSize: 13 }}>{r.skills.length} skill{r.skills.length === 1 ? '' : 's'}: {r.skills.join(', ')} · at <span className="mono">{r.commit.slice(0, 7)}</span>, pulled {r.pulledAt.slice(0, 10)}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn quiet small" disabled={!!busy} aria-label={`Update ${r.url}`} onClick={() => void pull(r.url)}>{busy === r.url ? 'Updating…' : 'Update'}</button>
+                <button className="btn quiet small" disabled={!!busy} aria-label={`Remove ${r.url}`} onClick={() => void remove(r.url, r.skills.length)}>Remove</button>
+              </div>
+            </li>
+          ))}
+        </ul>}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input className="mono" aria-label="Repository" style={{ flex: 1, minWidth: 0 }} value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && url.trim() && !busy) void pull(url) }} placeholder="git@github.com:owner/skills.git, an https URL, or a folder on this computer" />
+          <button className="btn" disabled={!!busy || !url.trim()} onClick={() => void pull(url)}>{busy && busy === url ? 'Pulling…' : 'Pull skills'}</button>
+        </div>
+        {error && <div className="empty bad">{error}</div>}
+        {did && <p className="settings-note" style={{ margin: 0 }}><Badge tone={changed ? 'ok' : 'neutral'}>{changed ? 'Pulled' : 'Up to date'}</Badge><span>
+          {part('Added', did.added)}{part('Updated', did.updated)}{part('Removed', did.removed)}{!changed && `Nothing has changed in ${did.unchanged.length} skill${did.unchanged.length === 1 ? '' : 's'}. `}
+          {did.skipped.length > 0 && `Left alone, because a skill of that name here came from somewhere else: ${did.skipped.join(', ')}.`}
+        </span></p>}
+      </div>
+    </div>
+  )
+}
+
 function AddPlugin({ onAdded }: { onAdded: () => Promise<unknown> }) {
   const [open, setOpen] = useState(false)
   const [market, setMarket] = useState('')

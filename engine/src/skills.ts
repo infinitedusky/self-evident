@@ -11,7 +11,7 @@
  */
 import type { McpServerConfig, SdkPluginConfig } from '@anthropic-ai/claude-agent-sdk'
 import { execFile } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
@@ -39,6 +39,43 @@ export type AppJobs = Record<string, string | null>
 /** The factory's Claude Code config dir: the installer's marketplaces, cache and record of what is installed. */
 export const PLUGINS_HOME = process.env.PLUGINS_HOME ?? join(homedir(), '.self-evident', 'claude')
 const OWN_PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
+/**
+ * Your own skills, outside every repo (Sandy, 2026-11-13: "add skills somewhere that sit outside the repo we are
+ * using that become available for any app"). A folder on this computer, one folder per skill with a SKILL.md, loaded
+ * as a plugin named `shared`, so every app's conversations and planner get them like any plugin's skills: filed by
+ * job in All apps, chosen for a step in an app. Read at call time so a test can point it elsewhere.
+ */
+export const sharedHome = () => process.env.SHARED_SKILLS_HOME ?? join(homedir(), '.self-evident', 'shared')
+export const SHARED_ID = 'shared'
+
+/** The shared folder as a plugin Claude Code will load: made on first use, with the manifest that names it. */
+function sharedPlugin(): string {
+  const root = sharedHome()
+  const manifest = join(root, '.claude-plugin', 'plugin.json')
+  if (!existsSync(manifest)) {
+    mkdirSync(join(root, '.claude-plugin'), { recursive: true }); mkdirSync(join(root, 'skills'), { recursive: true })
+    writeFileSync(manifest, JSON.stringify({ name: SHARED_ID, description: 'Your own skills, for every app. One folder per skill under skills/.', skills: './skills' }, null, 2) + '\n')
+  }
+  return root
+}
+
+/**
+ * Write one of your own skills: `<shared>/skills/<name>/SKILL.md`, with the description agents choose it by and the
+ * instructions it gives. The same name again replaces it. The file is plain, to edit by hand afterwards.
+ */
+export function writeSharedSkill(input: { name?: string; description?: string; body?: string }) {
+  const name = (input.name ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-')
+  if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(name)) throw new PlanError('a skill\'s name is lowercase letters, digits and hyphens, like decision-record')
+  const description = (input.description ?? '').trim().replace(/\s+/g, ' ')
+  if (!description) throw new PlanError('a skill needs a description: one or two sentences saying when to use it, since that is how an agent picks it')
+  const body = (input.body ?? '').trim()
+  if (!body) throw new PlanError('a skill needs its instructions: what the agent should do when it uses it')
+  const dir = join(sharedPlugin(), 'skills', name)
+  mkdirSync(dir, { recursive: true })
+  const file = join(dir, 'SKILL.md')
+  writeFileSync(file, `---\nname: ${name}\ndescription: ${JSON.stringify(description)}\n---\n\n${body}\n`)
+  return { key: `${SHARED_ID}/${name}`, name, file }
+}
 const REA_ROOT = dirname(createRequire(import.meta.url).resolve('rea-agents/package.json'))
 
 /** Skills a known plugin brings, filed until someone files them otherwise. */
@@ -93,7 +130,7 @@ function describe(id: string, path: string, extra: { builtIn: boolean; version?:
 
 /** What is installed: Self Evident's own plugin, then what the installer's record lists. */
 export function installed(): Installed[] {
-  const out = [describe('self-evident', OWN_PLUGIN, { builtIn: true, description: "Self Evident's own skills" })]
+  const out = [describe('self-evident', OWN_PLUGIN, { builtIn: true, description: "Self Evident's own skills" }), describe(SHARED_ID, sharedPlugin(), { builtIn: true })]
   const record = readJson(join(PLUGINS_HOME, 'plugins', 'installed_plugins.json'))?.plugins ?? {}
   const markets = readJson(join(PLUGINS_HOME, 'plugins', 'known_marketplaces.json')) ?? {}
   for (const [id, entries] of Object.entries(record as Record<string, { installPath: string; version?: string }[]>)) {
@@ -233,7 +270,7 @@ export const appSkills = (repoPath: string) => readSkills(join(repoPath, '.claud
 /** The factory's plugins for Settings: each with its switches, its skills filed, and REA's tools by rating. */
 export function describePlugins(f: FactorySettings) {
   return installed().map((p) => ({
-    id: p.id, name: p.name, version: p.version, description: p.description, source: p.source, builtIn: p.builtIn,
+    id: p.id, name: p.name, version: p.version, description: p.description, source: p.source, builtIn: p.builtIn, skillsDir: p.builtIn ? join(p.path, 'skills') : null,
     on: pluginOn(p.id, f), roles: pluginRoles(p.id, f), mcpServers: p.mcpServers, note: p.shim,
     skills: p.skills.map((s) => ({ ...s, category: skillCategory(s.key, f), on: skillOn(s.key, f) })),
     tools: p.id === 'rea@rea' && p.shim ? reaTools() : null,
@@ -263,7 +300,7 @@ export async function installPlugin(marketplace: string, name: string) {
 }
 
 export async function removePlugin(id: string) {
-  if (id === 'self-evident') throw new PlanError("Self Evident's own plugin is built in; switch it off instead")
+  if (id === 'self-evident' || id === SHARED_ID) throw new PlanError(`${id === SHARED_ID ? 'Your own skills are' : "Self Evident's own plugin is"} built in; switch it off instead`)
   const r = await plugin(['uninstall', id])
   if (r.outcome !== 'ok') throw new PlanError(r.message ?? `could not uninstall ${id}`)
 }

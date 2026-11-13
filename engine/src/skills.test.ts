@@ -1,6 +1,9 @@
 /** Plugins: switched for the factory and overridden per app; skills filed by the job they cover, one per job. */
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { cleanStepSkills, stepSkillPrompt, cleanJobs, describeJobs, fileSkill, forgetPlugin, pluginOn, resolvePlugins, skillCategory, type Installed } from './skills.js'
+import { installed, removePlugin, writeSharedSkill, cleanStepSkills, stepSkillPrompt, cleanJobs, describeJobs, fileSkill, forgetPlugin, pluginOn, resolvePlugins, skillCategory, type Installed } from './skills.js'
 
 const plugin = (id: string, sdkName: string, skills: string[]): Installed => ({
   id, name: id.split('@')[0], sdkName, path: `/p/${id}`, version: null, description: '', source: null, builtIn: false, mcpServers: [], shim: null,
@@ -103,5 +106,25 @@ describe('an app\'s skills for the steps of its workflow', () => {
     expect(said).toContain('wins')
     expect(said).not.toContain('shop-design')
     expect(stepSkillPrompt(chosen, ['shop-design', 'decision-record'], 'risk')).toBe('')
+  })
+})
+
+describe('your own skills, outside every repo', () => {
+  it('writes a SKILL.md in the shared folder, which is then a plugin every app gets; the same name replaces it', async () => {
+    process.env.SHARED_SKILLS_HOME = mkdtempSync(join(tmpdir(), 'shared-skills-'))
+    expect(installed().find((p) => p.id === 'shared')).toMatchObject({ sdkName: 'shared', builtIn: true, skills: [] })
+    const made = writeSharedSkill({ name: 'Decision Record', description: 'How we write\na decision: "dated", in docs/decisions.', body: '# Steps\n\n1. Read the others first.' })
+    expect(made).toMatchObject({ key: 'shared/decision-record', name: 'decision-record' })
+    expect(readFileSync(made.file, 'utf8')).toBe('---\nname: decision-record\ndescription: "How we write a decision: \\"dated\\", in docs/decisions."\n---\n\n# Steps\n\n1. Read the others first.\n')
+    expect(installed().find((p) => p.id === 'shared')!.skills).toEqual([{ key: 'shared/decision-record', name: 'decision-record', description: 'How we write a decision: "dated", in docs/decisions.' }])
+    writeSharedSkill({ name: 'decision-record', description: 'Reworded.', body: 'New.' })
+    expect(installed().find((p) => p.id === 'shared')!.skills.map((k) => k.description)).toEqual(['Reworded.'])
+    await expect(removePlugin('shared')).rejects.toThrow('built in')
+  })
+  it('refuses a skill with no name, no description or nothing to say', () => {
+    process.env.SHARED_SKILLS_HOME = mkdtempSync(join(tmpdir(), 'shared-skills-'))
+    expect(() => writeSharedSkill({ name: '../escape', description: 'x', body: 'y' })).toThrow('lowercase letters')
+    expect(() => writeSharedSkill({ name: 'ok', description: ' ', body: 'y' })).toThrow('needs a description')
+    expect(() => writeSharedSkill({ name: 'ok', description: 'x', body: '' })).toThrow('needs its instructions')
   })
 })
