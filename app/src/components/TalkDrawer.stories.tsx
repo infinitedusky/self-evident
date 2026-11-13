@@ -30,7 +30,7 @@ export const FromClaudeCode: Story = { beforeEach: [stored(open), withEngine()],
 export const TwoConversations: Story = { beforeEach: [stored(open), withEngine({ talks: [talkSession, second] })] }
 const closedOne = { ...talkSession, id: 'talk_sample3', subject: 'Sample: tidy the footer', branch: 'talk/sample3', closedAt: '2026-11-11T09:00:00.000Z' }
 const wait = async (what: () => boolean, why: string) => { for (let i = 0; i < 60; i++) { if (what()) return; await new Promise((r) => setTimeout(r, 50)) } throw new Error(why) }
-/** The × closes a tab and nothing else: the conversation and its worktree stay, behind the ▾ that appears after the tabs. */
+/** The × closes a tab and nothing else: the conversation stays, behind the ▾ that appears after the tabs. */
 export const ClosesWithAnX: Story = { beforeEach: [stored(open), withEngine({ talks: [talkSession, second] })],
   play: async ({ canvas, canvasElement }) => {
     (await canvas.findByRole('button', { name: 'Close Draft the release note' })).click()

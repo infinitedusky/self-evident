@@ -2595,3 +2595,21 @@ prototype's code, not for the finished build.
 Not changed: the planner can still ask a question when the brief leaves a choice open. By the same reasoning that
 should be rare or gone; left for Sandy to say.
 
+
+## Only a task's agent has a worktree (Sandy, 2026-11-13: "They shouldn't be doing that anymore, only tasks should … They are now just different conversations about the app as a whole")
+
+Every conversation started in the left column was cut a worktree and a branch the moment it opened, before a word was
+said. Most never touch a file (a question, an idea, a new task), an empty one kept its worktree until someone ended
+it, and Merman had seven.
+
+- **A conversation in the left column is about the app as a whole.** It starts in the app's checkout with no worktree
+  and no branch (`subjectRef.app`), whatever page, idea or project it was started from. It has the reading tools and
+  the shell, no editing tools, and a shell command that leaves a mark asks first whatever the auto-approve level.
+  It is told that anything that changes files is a task's work: create the task, send the person to it.
+- **A worktree is cut for a task's agent** (`ensureTaskTalk`), as before, and for an integration's set-up handed to the
+  agent, because that ends in a pull request. Prototypes keep their own.
+- Ending a conversation without a worktree removes nothing. The column's wording no longer promises a worktree.
+
+Not changed: conversations that already have a worktree keep it until they are ended. Left open: the Sketch and
+Mockup steps on an idea or a project still hand the step to a left-column conversation, which can no longer write the
+files; those steps belong on a task now. And two conversations sometimes start a second apart from one press.

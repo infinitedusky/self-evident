@@ -552,8 +552,12 @@ Details and sources in `research/`.
   the worktree"). In the app's agent column each tab has an ×, after Chrome and VS Code: it puts the tab away and
   changes nothing else. The conversation stays open, its agent carries on if it is working, its worktree and branch
   stay. Closed conversations are behind a ▾ after the tabs, to reopen or to end. End is the only thing that removes
-  a worktree. A tab the engine brings to the front is reopened. Unchanged and still true: a new conversation gets
-  its own worktree and branch, and the column shows only the conversations of the app in the nav.
+  a worktree. A tab the engine brings to the front is reopened. The column shows only the conversations of the app in
+  the nav.
+- **Only a task's agent has a worktree** (Sandy, 2026-11-13; LOG.md, "Only a task's agent has a worktree"). A
+  conversation in the left column is about the app as a whole: it reads the app's checkout, has no worktree, no
+  branch and no editing tools, and sends work that changes files to a task. An integration's set-up, which ends in a
+  pull request, is the one other thing that gets a worktree.
 - **The person talks to the conductor alone; it directs the agents it has out** (Sandy, 2026-11-11: "so that we can
   talk with one agent throughout the task lifecycle and it can manage the whole thing"). A task's agent can list
   the agents it has out with what each last said, send one a message, and read its conversation. A message it sends
