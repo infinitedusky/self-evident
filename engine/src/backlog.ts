@@ -1,7 +1,7 @@
 /**
  * A project's backlog: everything the project has to cover, so nothing has to be remembered by a person (Sandy,
- * 2026-10-23). Linear's way: an issue in the project's Backlog state. It comes from a person, the agent, an idea, the
- * planner (what it noticed but left out of an issue) or a builder (the same, from a sub-issue that landed). Every one
+ * 2026-10-23). Linear's way: an issue in the project's Backlog state. It comes from a person, the agent or an idea;
+ * planners and builders no longer add to it (2026-11-12: the build is quiet, what there is to find is found after the prototype). Every one
  * leaves the backlog one of three ways: it becomes work (Todo, at the end of the project; or a to-do, work outside the
  * code), it is a duplicate of an issue that already covers it, or it is canceled with a reason. Nothing disappears
  * silently, and a project lands only when nothing is left in its backlog (the runner checks).
@@ -109,22 +109,4 @@ export async function reopenItem(issueId: string, actor = 'user') {
     }
     return setState(tx, i, 'backlog', { actor })
   })
-}
-
-/**
- * A builder's "left for later": the bullet lines under a `Later:` line at the end of its summary. The builder is
- * asked to write it that way (executor.ts); anything else in the summary is ignored.
- */
-export function laterFrom(summary: string | null | undefined): string[] {
-  if (!summary) return []
-  const lines = summary.split('\n')
-  const at = lines.map((l) => /^\s*(#+\s*)?(\*\*|__)?(left for )?later:?(\*\*|__)?:?\s*$/i.test(l)).lastIndexOf(true)
-  if (at < 0) return []
-  const out: string[] = []
-  for (const l of lines.slice(at + 1)) {
-    const m = l.match(/^\s*(?:[-*•]|\d+[.)])\s+(.*\S)\s*$/)
-    if (m) out.push(m[1].replace(/^\[ \]\s*/, ''))
-    else if (l.trim() && out.length) break
-  }
-  return out.filter((t) => !/^(none|nothing|n\/a)\.?$/i.test(t))
 }

@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { Badge } from './Badge'
 import { CHECKS, addCheck, canMakeOptional, canRemove, canTurnOff, normalize, removeCheck, step, validOrder, type StepKey, type Workflow, type WorkflowStep } from '@self-evident/engine/steps'
 
-const NOTE: Partial<Record<StepKey, string>> = { idea: 'always first', brief: 'the parent: every step feeds it, and it is approved last', analysis: 'a check, first once the prototype is approved', adr: 'a check, after the other steps', risk: 'a check, after the other steps', audit: 'a check, after the other steps' }
+const NOTE: Partial<Record<StepKey, string>> = { idea: 'always first', brief: 'the parent: every step feeds it, and it is approved last', analysis: 'a check, first once the prototype is approved', cleanup: 'a check on the prototype\'s code, so the build is the clean version', adr: 'a check, after the other steps', risk: 'a check, after the other steps', audit: 'a check, after the other steps' }
 
 export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, onSave }: { workflow: Workflow; usedBy?: string; editing?: boolean; onSave?: (w: Workflow) => void }) {
   const [editing, setEditing] = useState(startEditing)
