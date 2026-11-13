@@ -246,6 +246,8 @@ select, input { color-scheme: light dark; }
 .viewer.embedded { flex: 1; min-height: 0; margin-top: 10px; }
 .viewer.embedded > .viewer-bar { position: absolute; top: 0; right: 0; padding: 0; z-index: 1; } /* Detach shares a row with the view's own controls */
 .viewer.embedded .page-head { margin: 0 96px 8px 0 !important; min-height: 28px; }
+.viewer.embedded:has(> .preview) > .viewer-bar { top: 9px; right: 8px; }
+.viewer.embedded > .preview > .preview-bar:first-child { padding-right: 104px; } /* room for Detach, after the server's buttons */
 /* A step's page showing its view: the panel takes the height of the tab, so the view is all in sight. */
 .step-section.viewing { display: flex; flex-direction: column; height: calc(100vh - 250px); min-height: 520px; }
 .step-section .card-head .step-tabs { margin-left: auto; margin-right: 10px; }
@@ -491,7 +493,9 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 /* Preview: the app running, after Replit's */
 .preview { height: 100%; display: flex; flex-direction: column; background: var(--ground); }
 .preview-bar { display: flex; gap: 6px; align-items: center; padding: 6px 8px; background: var(--surface); border-bottom: 1px solid var(--line); }
-.preview-address { flex: 1; min-width: 0; display: flex; align-items: center; gap: 0; border: 1px solid var(--line); border-radius: 8px; padding: 0 0 0 8px; background: var(--ground); }
+.preview-bar.second { flex-wrap: wrap; gap: 6px 14px; padding-top: 5px; padding-bottom: 5px; }
+.preview-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; flex: none; }
+.preview-address { flex: 1; min-width: 0; max-width: 460px; display: flex; align-items: center; gap: 0; border: 1px solid var(--line); border-radius: 8px; padding: 0 0 0 8px; background: var(--ground); }
 .preview-address span { white-space: nowrap; }
 .preview-address input { flex: 1; min-width: 60px; border: 0; background: none; margin: 0; padding: 5px 8px 5px 0; color: var(--ink); outline: none; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
@@ -500,7 +504,6 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .preview-stage { flex: 1; min-height: 0; display: flex; justify-content: center; padding: 0; }
 .preview-stage iframe { width: 100%; height: 100%; border: 0; background: #fff; }
 .preview-stage iframe[style] { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
-@media (max-width: 760px) { .preview-bar .seg { display: none; } }
 
 /* A build's log, after Replit's action feed: one line per action, output folded */
 .build-log-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
@@ -557,7 +560,6 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .msg.brief .brief-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }
 .proto-data { display: flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
 .proto-data select, .proto-data input { font-size: 12px; padding: 3px 6px; margin: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--ground); color: var(--ink); max-width: 150px; }
-@media (max-width: 1000px) { .proto-data > .faint:first-child { display: none; } }
 
 /* Steps on an idea, task or project; workflows; Plan's page */
 .steps-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }

@@ -26,6 +26,20 @@ export const NoneYet: Story = { beforeEach: withEngine({ prototypes: [] }) }
 export const NoCommand: Story = { beforeEach: withEngine({ prototypes: [], apps: apps.map((a) => a.id === sampleApp.id ? { ...a, setup: { ...a.setup, prototype_cmd: undefined } } : a) }) }
 /** Running and answering: the app in a frame with an address bar and device widths. */
 export const Running: Story = { args: { id: running.id, path: at }, beforeEach: withEngine({ prototypes: [running] }) }
+/** In a narrow column: the address and the server's buttons on one row, the device widths and the data on the next. Nothing hides or overlaps. */
+export const Narrow: Story = {
+  args: { id: running.id, path: at }, beforeEach: withEngine({ prototypes: [running] }),
+  decorators: [(Story) => <div style={{ width: 420 }}><Story /></div>],
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const stop = await c.findByRole('button', { name: 'Stop its server' })
+    const phone = c.getByRole('button', { name: 'Phone' })
+    await expect(phone).toBeVisible()
+    await expect(phone.getBoundingClientRect().top).toBeGreaterThanOrEqual(stop.getBoundingClientRect().bottom)
+    const bar = canvasElement.querySelector('.preview-bar')!
+    await expect(bar.scrollWidth).toBeLessThanOrEqual(bar.clientWidth)
+  },
+}
 /** At a phone's width. */
 export const Phone: Story = {
   args: { id: running.id, path: at }, beforeEach: withEngine({ prototypes: [running] }),
