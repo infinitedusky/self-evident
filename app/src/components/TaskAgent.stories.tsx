@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import Markdown from 'react-markdown'
-import { expect, within } from 'storybook/test'
+import { expect, userEvent, within } from 'storybook/test'
 import { rows } from '@self-evident/engine/steps'
 import { TaskAgent } from './TaskAgent'
 import { TaskNav } from './TaskNav'
 import { withEngine } from '../stories/mock-engine'
-import { taskStepsView, talkSession, transcript } from '../stories/sample'
+import { plannerLog, plannerLogDone, taskStepsView, talkSession, transcript } from '../stories/sample'
 import type { TalkMessage } from '../engine'
 
 // A task's own agent, in a column of the task's page. Everything here is made up: the sample engine's transcript,
@@ -81,3 +81,38 @@ function Page({ here }: { here: string }) {
 }
 /** The whole task page with its agent: the nav on the left, the step in the middle, the agent on the right, staying put as the step changes. Its fold button works. */
 export const OnTheTaskPage: Story = { beforeEach: sketching, parameters: { layout: 'fullscreen' }, render: () => <Page here="brief" /> }
+
+// The planner at work on the sample task (made up): a tab like the checks, showing what its run reads and says.
+const planning = withEngine({ runLog: plannerLog, transcript: { ...transcript, pending: [], session: { ...talkSession, subject: 'Address and payment on one page (sample)' }, messages: [] } })
+/** The planner is working: a tab of its own with a pulsing dot; pressed, it shows what it is reading and saying. */
+export const PlannerWorking: Story = {
+  beforeEach: planning, args: { stage: 'Build', deployed: [{ what: 'Planner', icon: '🗺️', title: 'The planner', runId: 'run_sample_plan', state: 'out' }] },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const tab = c.getByRole('tab', { name: /Planner · working/ })
+    await userEvent.click(tab)
+    await expect(await c.findByText(/one form model for both \(sample\)/)).toBeInTheDocument()
+    await expect(c.getByText('src/checkout/pay.ts')).toBeInTheDocument()
+    await expect(c.getByText(/Working out the sub-tasks/)).toBeInTheDocument()
+  },
+}
+/** The planner is back: its tab says what came of it, and still shows what it did. */
+export const PlannerBack: Story = {
+  beforeEach: withEngine({ runLog: plannerLogDone, transcript: { ...transcript, pending: [], session: { ...talkSession, subject: 'Address and payment on one page (sample)' }, messages: [] } }),
+  args: { stage: 'Build', deployed: [{ what: 'Planner', icon: '🗺️', title: 'The planner', runId: 'run_sample_plan', state: 'back', detail: 'planned: 3 sub-tasks' }] },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(c.getByRole('tab', { name: /Planner · planned: 3 sub-tasks/ }))
+    await expect(await c.findByText(/Planned 3 sub-tasks/)).toBeInTheDocument()
+  },
+}
+/** The planner failed: the tab says so in a word, and the reason is in it. */
+export const PlannerFailed: Story = {
+  beforeEach: withEngine({ runLog: { ...plannerLog, working: false, status: 'failed', lines: [...plannerLog.lines, { seq: 9, at: '2026-11-13T15:02:00Z', type: 'issue.plan_failed', error: 'the brief names a file that is not there (sample)' }] }, transcript: { ...transcript, pending: [], session: talkSession, messages: [] } }),
+  args: { stage: 'Build', deployed: [{ what: 'Planner', icon: '🗺️', title: 'The planner', runId: 'run_sample_plan', state: 'back', failed: true, detail: 'failed: the brief names a file that is not there (sample)' }] },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(c.getByRole('tab', { name: /Planner · failed/ }))
+    await expect(await c.findByText(/Planning failed: the brief names a file that is not there/)).toBeInTheDocument()
+  },
+}

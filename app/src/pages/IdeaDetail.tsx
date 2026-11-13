@@ -97,7 +97,7 @@ function Work({ idea, section, open }: { idea: IdeaRow; section?: string; open: 
       </div>
       {hasAgent && agent.session !== undefined && (
         <TaskAgent sessionId={agent.session?.id ?? null} taskId={idea.id} of="idea" stage={row ? label(row.key, 'idea') : 'Idea'} state={agent.out.some((a) => a.asking) ? 'waiting' : agent.session?.busy ? 'working' : 'idle'}
-          deployed={agent.out.map((a) => ({ what: a.what, icon: a.icon ?? '🛠️', title: a.title, sessionId: a.sessionId, state: a.busy ? 'out' as const : 'back' as const, asking: a.asking ? `${a.asking.tool}: ${a.asking.what}` : undefined }))}
+          deployed={agent.out.map((a) => ({ what: a.what, icon: a.icon ?? '🛠️', title: a.title, sessionId: a.sessionId, runId: a.runId, detail: a.detail, failed: a.failed, state: a.busy ? 'out' as const : 'back' as const, asking: a.asking ? `${a.asking.tool}: ${a.asking.what}` : undefined }))}
           open={agent.open} onToggle={agent.toggle} onStart={open ? agent.start : undefined} starting={agent.starting} error={agent.error} />
       )}
     </div>

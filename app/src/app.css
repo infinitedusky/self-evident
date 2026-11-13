@@ -788,3 +788,13 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .merge-guide h2 { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; } .merge-guide h2 .faint { font-size: 13px; font-weight: 400; }
 .merge-guide .md-text h2 { display: none; } /* the panel has the heading */
 .merge-guide-copy { margin-left: auto; }
+/* The tab of an agent that is a run (the planner): what it read and said, read only. */
+.task-agent .dot.failed { background: var(--bad); }
+.run-log { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; font-size: 13px; }
+.run-log-note { margin: 0 0 10px; font-size: 12px; }
+.run-log-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.run-log-lines .did { color: var(--ink-soft); overflow-wrap: anywhere; } .run-log-lines .did code { font-size: 12px; }
+.run-log-lines .said { padding: 8px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); }
+.run-log-lines .said .md-text > :first-child { margin-top: 0; } .run-log-lines .said .md-text > :last-child { margin-bottom: 0; }
+.run-log-lines .mark { font-weight: 600; } .run-log-lines .mark.ok { color: var(--ok); } .run-log-lines .mark.bad { color: var(--bad); } .run-log-lines .mark.warn { color: var(--warn); }
+.run-log-working { display: flex; gap: 8px; align-items: center; margin: 10px 0 0; color: var(--ink-soft); }

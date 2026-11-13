@@ -3169,3 +3169,15 @@ correctly once the shape is known, so the build starts from the default branch a
 Settled. What may still carry over as files, not as code to fix: the sample data and scenarios, the recorded stubs
 and seams, and the checks behind the acceptance criteria. Not built; to look at after a real run shows whether
 builders redo that work.
+## The planner shows as an agent the task has out (Sandy, 2026-11-13: "the planner should show up as a sub agent just like blast radius … I can't see if the planner is running or not")
+
+The checks are conversations, so each had a tab in the task's agent column. The planner is a single run that returns
+the sub-tasks in one go, so it had none: while it worked, the page showed nothing. Now the task's latest planning run
+is one of its agents out, a tab like the others: a pulsing dot and "working" while it runs; once back, what came of
+it ("planned: 3 sub-tasks", "waiting to try again", or "failed" in the warning colour). The tab shows what the run
+read, searched and said, oldest first, following it live, and the outcome with the run's cost. It is read only and
+says why: there is nothing to say to a planner; change the brief and plan again. The conductor sees it too
+(`agents_out`, `read_agent`); telling it something is refused with that same reason.
+
+It is still a run, not a conversation. Not done: making the planner a conversation one can answer in; the same tab
+for a sub-task's builder, which is also a run.

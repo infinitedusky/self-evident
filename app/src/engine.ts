@@ -233,7 +233,10 @@ export interface TalkSession { id: string; appId: string | null; cwd: string | n
   terminalSince?: string | null; /** Its tab was closed in the agent's column: the conversation is still there. */ closedAt?: string | null; /** The task it belongs to: its own agent, or a prototype's started on it. */ taskId?: string | null; /** The idea it belongs to: its own agent, or a prototype's started on it. */ ideaId?: string | null } // handed to the terminal: what's said there is copied in until a message here takes it back
 /** An agent a task's conductor has out, with its conversation. */
 /** An agent a task's conductor has out: a prototype's builder, or a fresh agent on one check (`check`: its step). */
-export interface TaskAgentOut { sessionId: string; kind: 'prototype' | 'check'; what: string; icon?: string; title: string; prototypeId?: string; check?: string; busy: boolean; /** Stopped on the person: what it asked to be allowed and has no answer to. */ asking?: { requestId: string; tool: string; what: string; risk: string; since: string } | null }
+/** One line of what a run read, did or said. */
+export interface RunLine { seq: number; at: string; type: string; text?: string; tool?: string; input?: Record<string, unknown>; error?: string; subIssues?: unknown[]; minutes?: number }
+export interface RunLog { runId: string; status: string | null; working: boolean; startedAt: string | null; endedAt: string | null; costUsd: number | null; lines: RunLine[] }
+export interface TaskAgentOut { /** Its conversation; none for the planner, which is a run (runId). */ sessionId: string | null; runId?: string; /** What came of it, once it is back. */ detail?: string; failed?: boolean; kind: 'prototype' | 'check' | 'planner'; what: string; icon?: string; title: string; prototypeId?: string; check?: string; busy: boolean; /** Stopped on the person: what it asked to be allowed and has no answer to. */ asking?: { requestId: string; tool: string; what: string; risk: string; since: string } | null }
 export interface TalkMessage { id: number; sessionId: string; author: 'user' | 'agent' | 'tool' | 'engine'; kind: 'text' | 'brief' | 'tool_call' | 'tool_result' | 'permission' | 'auto' | 'result' | 'error' | 'handoff'; body: string; payload: Record<string, any> | null; sentAt: string | null }
 /** A Claude Code session run on an app in a terminal or an editor; `talkId` when it's already a conversation here. */
 export interface ClaudeSession { id: string; cwd: string; branch: string | null; title: string | null; at: string; talkId: string | null }
@@ -251,6 +254,7 @@ export const engine = {
   startIdeaTalk: (ideaId: string) => call<TalkSession>('POST', `/ideas/${ideaId}/talk`),
   ideaAgents: (ideaId: string) => call<TaskAgentOut[]>('GET', `/ideas/${ideaId}/agents`),
   /** The agents the task's conductor has out: today, each prototype's own conversation. */
+  runLog: (runId: string) => call<RunLog>('GET', `/runs/${runId}/log`),
   taskAgents: (issueId: string) => call<TaskAgentOut[]>('GET', `/issues/${issueId}/agents`),
   renameTalk: (id: string, subject: string) => call<TalkSession>('POST', `/talks/${id}/rename`, { subject }),
   transcript: (id: string) => call<Transcript>('GET', `/talks/${id}`),

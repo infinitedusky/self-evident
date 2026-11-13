@@ -15,6 +15,7 @@ export interface MockData {
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[] }
   /** What a task's pull request will open with; none when left out. */ mergeGuide?: string
   /** A task's save points and task branches; none when left out. */ taskBranches?: import('../engine').TaskBranches; /** Why a move fails, when it should. */ moveError?: string
+  /** What a run read and said, for the planner's tab. */ runLog?: import('../engine').RunLog
   /** What is public right now, by "kind:id". */ shares?: Record<string, import('../engine').Shared>; /** Why making a link fails, when it should. */ shareError?: string; /** ngrok's one address is held by these, until the person frees it. */ ngrokHolders?: import('../engine').NgrokHolder[]; /** What the guide tab of a shared prototype is given. */ visitorGuide?: { title: string; guide: import('../engine').Guide | null }
   prototypes: typeof s.prototypes; /** A prototype's changed files and what the agent shows. */ prototypeCode: typeof s.prototypeCode
   claudeSessions: typeof s.claudeSessions
@@ -179,6 +180,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/ideas/:id/agents', () => reply(d.taskAgents ?? [])),
     http.get('/api/ideas/:id/talk', () => reply(d.ideaTalk ?? null)),
     http.post('/api/ideas/:id/talk', () => reply(d.ideaTalk ?? s.talkSession)),
+    http.get('/api/runs/:id/log', ({ params }) => reply(d.runLog ?? { runId: params.id as string, status: null, working: false, startedAt: null, endedAt: null, costUsd: null, lines: [] })),
     http.get('/api/issues/:id/agents', () => reply(d.taskAgents ?? [])),
     http.get('/api/issues/:id/talk', () => reply(d.taskTalk)),
     http.post('/api/issues/:id/talk', () => reply(d.taskTalk ?? s.talkSession)),
