@@ -9,6 +9,7 @@
  */
 import { AgentStrip, type AgentStripProps } from './AgentStrip'
 import { Conversation } from './Conversation'
+import { RunLogView } from './RunLogView'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { openEvents, API, engine, type TalkSession, type TaskAgentOut } from '../engine'
 import { currentTalk, talkColor } from '../workspace'
@@ -36,7 +37,7 @@ export function useTaskAgent(taskId: string, appId: string, of: 'task' | 'idea' 
     void refresh()
     const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 200) }
     const es = openEvents(`${API}/events?since=now&app=${appId}`)
-    for (const t of ['talk.message', 'talk.permission', 'talk.result', 'prototype.created', 'prototype.started', 'prototype.stopped', 'prototype.discarded', 'step.updated']) es.addEventListener(t, bump)
+    for (const t of ['issue.planning', 'issue.planned', 'issue.plan_failed', 'issue.plan_waiting', 'talk.message', 'talk.permission', 'talk.result', 'prototype.created', 'prototype.started', 'prototype.stopped', 'prototype.discarded', 'step.updated']) es.addEventListener(t, bump)
     const asked = () => { show(true); bump() }
     window.addEventListener(TASK_AGENT_ASKED, asked)
     return () => { closed = true; es.close(); window.clearTimeout(timer.current); window.removeEventListener(TASK_AGENT_ASKED, asked) }
@@ -50,7 +51,7 @@ export function useTaskAgent(taskId: string, appId: string, of: 'task' | 'idea' 
 }
 
 /** A fresh agent the conductor sent out, and what it is on; with `sessionId`, its conversation can be read here, as a tab of its own. */
-export interface Deployed { what: string; icon?: string; state: 'out' | 'back'; detail?: string; sessionId?: string; title?: string; /** Stopped on the person: what it asked to be allowed. Its card is in the conductor's conversation too. */ asking?: string }
+export interface Deployed { what: string; icon?: string; state: 'out' | 'back'; detail?: string; sessionId?: string | null; /** A run, not a conversation (the planner): its tab shows what the run read and said. */ runId?: string; failed?: boolean; title?: string; /** Stopped on the person: what it asked to be allowed. Its card is in the conductor's conversation too. */ asking?: string }
 
 export function TaskAgent({ sessionId, taskId, of = 'task', stage, state = 'idle', deployed = [], open, onToggle, onStart, starting, error }: {
   /** The task's conversation; none until its agent is started. */
@@ -74,8 +75,9 @@ export function TaskAgent({ sessionId, taskId, of = 'task', stage, state = 'idle
   const at = of === 'idea' ? { path: `/ideas/${taskId}`, ideaId: taskId } : { path: `/tasks/${taskId}`, issueId: taskId }
   // Which conversation the column shows: the conductor's, or one of the agents it has out. They are tabs, so an agent at work is never out of sight.
   const [shown, setShown] = useState<string | null>(null)
-  const tabs = deployed.filter((d) => d.sessionId)
-  const sub = tabs.find((d) => d.sessionId === shown) ?? null
+  const idOf = (d: Deployed) => d.sessionId ?? d.runId
+  const tabs = deployed.filter((d) => idOf(d))
+  const sub = tabs.find((d) => idOf(d) === shown) ?? null
   if (!open) return (
     <aside className="task-agent folded" data-component="TaskAgent" style={{ ['--talk' as string]: color }}>
       <button className="task-agent-fold" onClick={onToggle} aria-expanded="false" aria-label={`Show this ${of}'s agent`} title={`Show this ${of}'s agent`}>
@@ -93,15 +95,15 @@ export function TaskAgent({ sessionId, taskId, of = 'task', stage, state = 'idle
         <div className="task-agent-tabs" role="tablist" aria-label={`This ${of}'s agents`}>
           <button role="tab" aria-selected={!sub} className={!sub ? 'on' : ''} onClick={() => setShown(null)}><span className={`dot ${state}`} />{name}</button>
           {tabs.map((d) => (
-            <button key={d.sessionId} role="tab" aria-selected={sub === d} className={sub === d ? 'on' : ''} onClick={() => setShown(d.sessionId!)} title={`${d.title ?? d.what}: ${d.asking ? `waiting for you to allow ${d.asking}` : d.state === 'out' ? 'working' : 'idle'}`}>
-              <span className={`dot ${d.asking ? 'waiting' : d.state === 'out' ? 'working' : ''}`} />{d.icon} {d.what}{d.asking ? <span className="asks"> · asks you</span> : d.state === 'out' && <span className="faint"> · working</span>}
+            <button key={idOf(d)} role="tab" aria-selected={sub === d} className={sub === d ? 'on' : ''} onClick={() => setShown(idOf(d)!)} title={`${d.title ?? d.what}: ${d.asking ? `waiting for you to allow ${d.asking}` : d.state === 'out' ? 'working' : d.detail ?? 'idle'}`}>
+              <span className={`dot ${d.asking ? 'waiting' : d.state === 'out' ? 'working' : d.failed ? 'failed' : ''}`} />{d.icon} {d.what}{d.asking ? <span className="asks"> · asks you</span> : d.state === 'out' ? <span className="faint"> · working</span> : d.runId && d.detail ? <span className={d.failed ? 'asks' : 'faint'}> · {d.failed ? 'failed' : d.detail}</span> : null}
             </button>
           ))}
         </div>
       )}
-      {deployed.filter((d) => !d.sessionId).length > 0 && (
+      {deployed.filter((d) => !idOf(d)).length > 0 && (
         <ul className="list task-agent-out" aria-label="Agents it has out">
-          {deployed.filter((d) => !d.sessionId).map((d) => (
+          {deployed.filter((d) => !idOf(d)).map((d) => (
             <li key={d.what} className={d.state}>
               <span className={`dot ${d.state === 'out' ? 'working' : ''}`} />
               <span>{d.icon} {d.what}</span>
@@ -110,7 +112,9 @@ export function TaskAgent({ sessionId, taskId, of = 'task', stage, state = 'idle
           ))}
         </ul>
       )}
-      {sub
+      {sub && !sub.sessionId && sub.runId
+        ? <RunLogView key={sub.runId} runId={sub.runId} />
+        : sub
         ? <Conversation key={sub.sessionId} sessionId={sub.sessionId!} compact context={{ ...at, label: `the ${sub.what.toLowerCase()}` }} />
         : sessionId
         ? <Conversation key={sessionId} sessionId={sessionId} compact context={{ ...at, label: `this ${of}` }} />

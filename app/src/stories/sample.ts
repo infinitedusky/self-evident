@@ -517,3 +517,13 @@ export const taskBranches: import('../engine').TaskBranches = {
     { id: 'save_approved', name: 'Prototype approved', auto: 'prototype_approved', branchId: 'tb_main', branchName: 'Main', onCurrent: true, changesSince: 0, createdBy: 'engine', createdAt: '2026-11-13T14:40:00Z', gitBranches: ['prototype/one-page-checkout-ab12--prototype-approved'] },
   ],
 }
+
+// The planner's run on the sample task, as its tab shows it (made up): what it read, what it said, what came of it.
+export const plannerLog: import('../engine').RunLog = { runId: 'run_sample_plan', status: 'working', working: true, startedAt: '2026-11-13T15:00:00Z', endedAt: null, costUsd: null, lines: [
+  { seq: 1, at: '2026-11-13T15:00:00Z', type: 'issue.planning' },
+  { seq: 2, at: '2026-11-13T15:00:05Z', type: 'run.tool_call', tool: 'Read', input: { file: 'src/checkout/pay.ts' } },
+  { seq: 3, at: '2026-11-13T15:00:09Z', type: 'run.tool_call', tool: 'Grep', input: { pattern: 'savedCard', path: 'src' } },
+  { seq: 4, at: '2026-11-13T15:00:30Z', type: 'run.message', text: 'The address and payment forms share no state today, so the first sub-task is one form model for both (sample).' },
+  { seq: 5, at: '2026-11-13T15:00:41Z', type: 'run.tool_call', tool: 'Read', input: { file: 'src/checkout/address.ts' } },
+] }
+export const plannerLogDone: import('../engine').RunLog = { ...plannerLog, status: 'completed', working: false, endedAt: '2026-11-13T15:04:00Z', costUsd: 0.42, lines: [...plannerLog.lines, { seq: 6, at: '2026-11-13T15:04:00Z', type: 'issue.planned', subIssues: [1, 2, 3] }] }

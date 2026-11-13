@@ -10,7 +10,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, idea, issue, project, prototype, repo, session, sessionMessage, workspace } from './db/schema.js'
+import { app, event, idea, issue, project, prototype, repo, run, session, sessionMessage, workspace } from './db/schema.js'
 import { step, type StepKey } from './steps.js'
 import { addWorktree, git, removeWorktree } from './git.js'
 import { checkoutProblem } from './checkout.js'
@@ -280,7 +280,32 @@ export async function taskAgents(issueId: string) {
     const d = step((s.subjectRef as SubjectRef).check!)
     return { sessionId: s.id, kind: 'check' as const, what: d.label, icon: d.icon, title: s.subject ?? d.label, check: d.key, busy: live.get(s.id)?.busy ?? false, asking: askingOf(s.id) }
   })
-  return [...building, ...checking]
+  return [...building, ...checking, ...(await plannerOut(issueId))]
+}
+
+/**
+ * The planner, as one of the agents a task has out (Sandy, 2026-11-13: "the planner should show up as a sub agent
+ * just like blast radius … I can't see if the planner is running or not"). It is a run, not a conversation, so it has
+ * no session: it is named by its run, and what it read and said is that run's events (runLog).
+ */
+async function plannerOut(issueId: string) {
+  const [r] = await db.select().from(run).where(and(eq(run.issueId, issueId), eq(run.kind, 'plan'))).orderBy(desc(run.startedAt)).limit(1)
+  if (!r) return []
+  const [last] = await db.select().from(event).where(and(eq(event.issueId, issueId), inArray(event.type, ['issue.planning', 'issue.plan_waiting', 'issue.planned', 'issue.plan_failed']))).orderBy(desc(event.seq)).limit(1)
+  const p = (last?.payload ?? {}) as { subIssues?: unknown[]; error?: string; retryAt?: string; minutes?: number }
+  const busy = last?.type === 'issue.planning' && !r.endedAt
+  const detail = busy ? 'working out the sub-tasks' : last?.type === 'issue.planned' ? `planned${Array.isArray(p.subIssues) ? `: ${p.subIssues.length} sub-task${p.subIssues.length === 1 ? '' : 's'}` : ''}`
+    : last?.type === 'issue.plan_waiting' ? `waiting to try again${p.minutes ? ` in about ${p.minutes} min` : ''}: ${String(p.error ?? '').slice(0, 120)}`
+    : last?.type === 'issue.plan_failed' ? `failed: ${String(p.error ?? r.error ?? '').slice(0, 160)}` : r.status
+  return [{ sessionId: null, runId: r.id, kind: 'planner' as const, what: 'Planner', icon: '🗺️', title: `The planner${r.attempt > 1 ? `, try ${r.attempt}` : ''}`, busy, detail, failed: last?.type === 'issue.plan_failed', asking: null }]
+}
+
+/** What a run read, did and said, oldest first: its events, as lines a person can follow. */
+export async function runLog(runId: string) {
+  const rows = await db.select().from(event).where(and(eq(event.runId, runId), inArray(event.type, ['run.message', 'run.tool_call', 'run.steps', 'run.error', 'issue.planning', 'issue.plan_waiting', 'issue.planned', 'issue.plan_failed']))).orderBy(desc(event.seq)).limit(400)
+  const [r] = await db.select().from(run).where(eq(run.id, runId))
+  return { runId, status: r?.status ?? null, working: !!r && !r.endedAt, startedAt: r?.startedAt ?? null, endedAt: r?.endedAt ?? null, costUsd: r?.costUsd ? Number(r.costUsd) : null,
+    lines: rows.reverse().map((e) => ({ seq: e.seq, at: e.ts, type: e.type, ...(e.payload as Record<string, unknown>) })) }
 }
 
 /** What an agent is stopped on: the oldest thing it asked the person to allow and has no answer to yet. Null when it is not waiting. */
@@ -360,8 +385,8 @@ async function conducted(fromSessionId: string, agent: string) {
   if (!from || !issueId) throw new PlanError('only a task\'s own agent has agents out')
   const out = await taskAgents(issueId)
   const want = agent.trim().toLowerCase()
-  const found = out.filter((a) => a.sessionId === agent || a.kind === want || a.what.toLowerCase() === want || ('check' in a && a.check === want))
-  if (!found.length) throw new PlanError(out.length ? `no agent "${agent}" out on this task; out now: ${out.map((a) => `${a.what} (${a.sessionId})`).join(', ')}` : 'this task has no agents out')
+  const found = out.filter((a) => a.sessionId === agent || ('runId' in a && a.runId === agent) || a.kind === want || a.what.toLowerCase() === want || ('check' in a && a.check === want))
+  if (!found.length) throw new PlanError(out.length ? `no agent "${agent}" out on this task; out now: ${out.map((a) => `${a.what} (${a.sessionId ?? ('runId' in a ? a.runId : '')})`).join(', ')}` : 'this task has no agents out')
   if (found.length > 1) throw new PlanError(`more than one agent matches "${agent}": name it by its sessionId (${found.map((a) => a.sessionId).join(', ')})`)
   return { from, issueId, to: found[0] }
 }
@@ -372,6 +397,11 @@ export async function agentsOut(fromSessionId: string) {
   const issueId = (from?.subjectRef as SubjectRef | null)?.issueId
   if (!issueId) throw new PlanError('only a task\'s own agent has agents out')
   return Promise.all((await taskAgents(issueId)).map(async (a) => {
+    if (!a.sessionId) { // the planner: a run, so what it said is in its events
+      const log = 'runId' in a ? await runLog(a.runId) : null
+      const said = log?.lines.filter((l) => l.type === 'run.message').pop() as { text?: string; at?: Date } | undefined
+      return { ...a, state: a.busy ? 'working' : ('detail' in a ? a.detail : 'idle'), lastSaid: said?.text ? clip(String(said.text), 600) : null, lastSaidAt: said?.at ?? null }
+    }
     const [last] = await db.select({ body: sessionMessage.body, at: sessionMessage.sentAt }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, a.sessionId), eq(sessionMessage.author, 'agent'), eq(sessionMessage.kind, 'text'))).orderBy(desc(sessionMessage.id)).limit(1)
     return { ...a, state: stateOf(a), lastSaid: last ? clip(last.body, 600) : null, lastSaidAt: last?.at ?? null }
   }))
@@ -380,6 +410,7 @@ export async function agentsOut(fromSessionId: string) {
 /** The conductor says something to an agent it has out. The answer comes back by itself when that agent's turn ends. */
 export async function tellAgent(fromSessionId: string, agent: string, message: string) {
   const { to } = await conducted(fromSessionId, agent)
+  if (!to.sessionId) throw new PlanError('the planner is a single run with no conversation: it cannot be told anything. Change the brief and plan the task again.')
   await say(to.sessionId, message, undefined, { author: 'engine', kind: 'brief', payload: { from: fromSessionId, label: 'From this task\'s agent' } })
   return { sent: true, to: to.what, sessionId: to.sessionId, next: 'Its answer comes back to you here as a message when it finishes; do not wait or poll. The person can watch it work in its tab.' }
 }
@@ -387,6 +418,11 @@ export async function tellAgent(fromSessionId: string, agent: string, message: s
 /** The recent conversation of an agent the conductor has out: what was said to it (the person may have, directly) and what it said. */
 export async function readAgent(fromSessionId: string, agent: string, last = 20) {
   const { to } = await conducted(fromSessionId, agent)
+  if (!to.sessionId) { // the planner: its run's events, as what it said and did
+    const log = 'runId' in to ? await runLog(to.runId) : null
+    const lines = (log?.lines ?? []).filter((l) => l.type !== 'run.steps').slice(-Math.min(Math.max(last, 1), 60)) as Record<string, any>[]
+    return { agent: to.what, sessionId: null, state: to.busy ? 'working' : ('detail' in to ? to.detail : 'idle'), messages: lines.map((l) => ({ by: l.type === 'run.message' ? 'the agent' : 'the engine', at: l.at, text: clip(l.type === 'run.message' ? String(l.text ?? '') : l.type === 'run.tool_call' ? `${l.tool} ${JSON.stringify(l.input ?? {})}` : `${l.type}${l.error ? `: ${l.error}` : ''}`, 2000) })) }
+  }
   const rows = await db.select().from(sessionMessage).where(and(eq(sessionMessage.sessionId, to.sessionId), inArray(sessionMessage.kind, ['text', 'brief']))).orderBy(desc(sessionMessage.id)).limit(Math.min(Math.max(last, 1), 60))
   return { agent: to.what, sessionId: to.sessionId, state: stateOf(to), messages: rows.reverse().map((m) => ({ by: m.author === 'agent' ? 'the agent' : (m.payload as any)?.from ? 'you' : m.author === 'user' ? 'the person' : 'the engine', at: m.sentAt, text: clip(m.body, 2000) })) }
 }
