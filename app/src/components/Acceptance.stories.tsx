@@ -4,7 +4,7 @@ import { Acceptance } from './Acceptance'
 import { sampleData, withEngine } from '../stories/mock-engine'
 import { acceptance, issueDetails } from '../stories/sample'
 
-// A task's acceptance criteria, on its brief's page. All made up: four criteria of the sample checkout task.
+// A task's acceptance criteria, on its brief's page. All made up: five criteria of the sample checkout task.
 const withCriteria = withEngine({ issueDetails: { ...sampleData.issueDetails, iss_sample20: { ...issueDetails.iss_sample20, acceptance } } })
 const meta = { title: 'Components/Acceptance', component: Acceptance, parameters: { layout: 'padded' }, args: { issueId: 'iss_sample20', items: acceptance }, beforeEach: withCriteria,
   render: (a) => <div style={{ maxWidth: 760 }}><Acceptance {...a} /></div> } satisfies Meta<typeof Acceptance>
@@ -41,6 +41,20 @@ export const EditOne: Story = {
     await userEvent.click(c.getByRole('button', { name: 'Save' }))
     await expect(await c.findByText('How we will know: Signed in as two customers (sample)')).toBeInTheDocument()
     await expect(c.queryByText('No way to check it yet')).not.toBeInTheDocument()
+  },
+}
+/** One left to the final build: marked, with why, and not counted against the prototype. The person can mark one too. */
+export const FinalBuildOnly: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.getByText('1 for the final build only')).toBeInTheDocument()
+    await expect(c.getByText(/Final build only: the prototype skips it\. Copy, not behaviour/)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: /Edit: A customer sees only their own/ }))
+    await userEvent.click(c.getByRole('checkbox', { name: /For the final build only/ }))
+    await userEvent.type(c.getByLabelText('Why the prototype skips it'), 'Needs the real identity service (sample)')
+    await userEvent.click(c.getByRole('button', { name: 'Save' }))
+    await expect(await c.findByText('2 for the final build only')).toBeInTheDocument()
+    await expect(c.getByText(/Needs the real identity service \(sample\)/)).toBeInTheDocument()
   },
 }
 /** The brief is already approved: a change here asks for the approval again, and says so. */

@@ -2901,3 +2901,18 @@ Not a gate: a brief with no criteria can still be approved; the page says that a
 knowing it is done. Not done: checking the criteria again against the finished build (a sub-task's checks carry
 them, but nothing reports per criterion after landing); criteria on an idea before it is a task; showing them on the
 prototype's step. Not tried: a real conductor and prototype agent building them through a task.
+
+## A criterion can be left to the final build (Sandy, 2026-11-13: "maybe we want acceptance criteria to be marked as prototype-skip or final-build only or something, so that the prototype agent knows it can ignore it")
+
+A criterion can be marked **final build only** (`buildOnly`, with `why`). The prototype's agent is told to skip
+those: not build toward them and not list them as gaps. The analysis says "left to the build" for them; the planner
+still makes each a check of a sub-task, since they are still required.
+
+- **Who marks it.** The task's agent (told when: polish, what only real traffic or the real vendor can show, what
+  costs more to prototype than it teaches; never a hard one the prototype exists to prove) or the person, in the
+  criterion's edit form. The prototype's own agent cannot: the engine refuses it, so it cannot excuse itself from a
+  hard one. It says which it thinks should be, and why.
+- **What it costs.** A criterion left to the build is approved with no evidence. The brief's page counts them apart
+  ("N for the final build only") and the approval line says "N left to the final build, unproven". The audit checks
+  whether each reason holds.
+- Marking or unmarking one does not take the brief's approval back: what must be true is unchanged.
