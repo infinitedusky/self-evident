@@ -26,14 +26,15 @@ export const AllApps: Story = { parameters: all }
 /** A plugin with rated tools, one switched off, and a built-in with no skills yet. */
 export const AllAppsWithPlugins: Story = { parameters: all, beforeEach: withEngine({ settings: { ...factorySettings, plugins: [builtIn, ...factorySettings.plugins, toolsPlugin, { ...toolsPlugin, id: 'sample-off@sample', name: 'sample-off', on: false, tools: null, mcpServers: [] }] } }) }
 /** No workspace yet: integrations wait for the first app. */
-/** Your own skills: a built-in plugin kept in a folder outside every repo. One made-up skill there, and the form that writes another. */
+/** Your skills, a section of its own in All apps: skills kept in a folder outside every repo. One made-up skill there, and the form that writes another. */
 const shared: PluginInfo = { ...builtIn, id: 'shared', name: 'shared', description: 'Your own skills, for every app. One folder per skill under skills/.', skillsDir: '/Users/sample/.self-evident/shared/skills',
   skills: [{ key: 'shared/decision-record', name: 'decision-record', description: 'How this team writes a decision record: where it goes, its sections (sample).', category: null, on: true }] }
 export const AllAppsSharedSkills: Story = {
-  parameters: all, beforeEach: withEngine({ settings: { ...factorySettings, plugins: [shared, ...factorySettings.plugins] } }),
+  parameters: allAt('yours'), beforeEach: withEngine({ settings: { ...factorySettings, plugins: [shared, ...factorySettings.plugins] } }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await userEvent.click(await c.findByRole('button', { name: 'Write a skill' }))
+    await expect(await c.findByText('written here')).toBeVisible()
+    await userEvent.click(c.getByRole('button', { name: 'Write a skill' }))
     await expect(c.getByRole('button', { name: 'Write the skill' })).toBeDisabled()
     await userEvent.type(c.getByLabelText('Skill name'), 'shop-voice')
     await userEvent.type(c.getByLabelText('When to use it'), 'Use when writing words a shopper reads (sample).')
@@ -44,16 +45,26 @@ export const AllAppsSharedSkills: Story = {
 }
 /** Skills pulled from a repository: one source already there (made up); Update says what changed, and a new repository is pulled. */
 export const AllAppsSkillsFromARepo: Story = {
-  parameters: all,
+  parameters: allAt('yours'),
   beforeEach: withEngine({ settings: { ...factorySettings, plugins: [shared, ...factorySettings.plugins] }, skillSources: [{ url: 'git@example.com:sample/team-skills.git', commit: '0a1b2c3d4e5f6071', pulledAt: '2026-11-12T09:00:00.000Z', skills: ['decision-record', 'review-notes'] }] }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await userEvent.click(await c.findByRole('button', { name: 'Update git@example.com:sample/team-skills.git' }))
+    await expect(await c.findByText('pulled from git@example.com:sample/team-skills.git')).toBeVisible()
+    await userEvent.click(c.getByRole('button', { name: 'Update git@example.com:sample/team-skills.git' }))
     await expect(await c.findByText(/Updated decision-record\./)).toBeVisible()
     await userEvent.type(c.getByLabelText('Repository'), '/Users/sample/code/shop-skills')
     await userEvent.click(c.getByRole('button', { name: 'Pull skills' }))
     await expect(await c.findByText(/Added shop-design, shop-voice\./)).toBeVisible()
     await expect(c.getByRole('button', { name: 'Update /Users/sample/code/shop-skills' })).toBeVisible()
+  },
+}
+/** Plugins no longer lists your own skills: they have their own section. */
+export const AllAppsPluginsWithoutYours: Story = {
+  parameters: all, beforeEach: withEngine({ settings: { ...factorySettings, plugins: [shared, ...factorySettings.plugins] } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('sample-plugin')).toBeVisible()
+    await expect(c.queryByRole('button', { name: 'Write a skill' })).toBeNull()
   },
 }
 export const NoWorkspace: Story = { parameters: all, beforeEach: withEngine({ apps: [], settings: { ...factorySettings, workspace: null, plugins: [] } }) }
