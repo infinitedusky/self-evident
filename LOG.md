@@ -3198,3 +3198,29 @@ build's status over the task's state.
 
 Also: the "Go back" story of the save points list read the list before it had been read again after the move, and
 failed now and then under load; it waits for it now.
+
+## Telemetry hook points come out of the prototype (Sandy, 2026-11-13: "we need that to be part of the planning and a key part of what we learn from the prototype. With that built we can select all the hook points for telemetry"; "this should be part of the prototype analysis process")
+
+Found on a real task: asked for its telemetry plan, the conductor had only scraps, and nothing would have shown in
+production whether the feature worked or was used. Its worst case was a silent one: the vendor changes its format,
+findings quietly drop to zero, and nobody notices.
+
+- **The prototype** lists its hook points in its report and emits the cheap ones (the built-in skill now says so,
+  the same text Sandy put in the shared copy).
+- **The analysis** has a Telemetry hook points section: it finds the app's own channels first and uses only those,
+  then a table, one row a hook point: where on the path the prototype built, what it records (counts and states,
+  never personal data), the question it answers, the alert, and whether the prototype already emits it. It covers
+  data in, writes, failures, the latency of new reads and the user actions that show use, and names first the
+  failure that would otherwise be silent.
+- **The brief** gets a Telemetry section with that table when the conductor brings it up to date, and the
+  acceptance criteria get the telemetry's own, marked not shown unless the prototype emits it.
+- **The audit** checks that the section has every hook point, that a criterion holds the build to each kind, and
+  that the silent failure is covered.
+
+Also found there: **a sub-task an agent added by hand was not buildable.** Made with `create_task` and a parent, it
+had no build, no builder and no place in the graph. There is now `add_sub_task` (after: what it waits for; before:
+what waits for it), which makes it as the planner makes them; `create_task` with a code task as parent does the
+same; and the ones already there are repaired once (migration 0022).
+
+Not done: a telemetry step of its own in the workflow; checking after release that the hook points report. Not
+tried: a real analysis writing the table.

@@ -669,6 +669,12 @@ Details and sources in `research/`.
   branch with the prototype as a map, and the analysis, the ADR and the acceptance criteria in hand. Settled; not an
   open question.
 
+- **Telemetry is chosen from the prototype (Sandy, 2026-11-13).** With the real path built, the hook points can be
+  picked: where production should report that the feature works and that it is used. The prototype's report lists
+  them, the analysis checks and completes them as a table (where, what it records, the question it answers, the
+  alert), the brief carries the table, acceptance criteria hold the build to it, and the audit checks that the
+  failure that would otherwise be silent is covered. Only the app's own telemetry channels; never personal data.
+
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
 > "When I use VS Code, I can just move really quickly … I just set things to dangerously skip permissions and just
