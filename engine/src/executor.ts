@@ -4,6 +4,7 @@
  * status; it works, commits, and summarises.
  * Development runs on the operator's own Claude Code login; a product deployment sets ANTHROPIC_API_KEY.
  */
+import { accountEnv } from './account.js'
 import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import { builderGuard, guardOptions } from './guard.js'
 import { referencePrompt, type Reference } from './references.js'
@@ -19,6 +20,8 @@ export interface RunInput {
   references?: Reference[] // other apps' checkouts to read, never change (references.ts)
   previousFailure?: string
   model?: string
+  /** The app's settings, for the Claude account its agents run on (account.ts). */
+  setup?: unknown
   maxTurns?: number
   maxBudgetUsd?: number
   resumeSessionId?: string // continue an interrupted run's conversation in the same worktree
@@ -70,10 +73,12 @@ const EDIT_TOOLS = ['Edit', 'Write', 'MultiEdit']
 export async function runTask(i: RunInput): Promise<RunOutput> {
   let out: RunOutput = { status: 'failed', error: 'no result message' }
   try {
+    const account = accountEnv(i.setup)
     for await (const m of query({
       prompt: prompt(i),
       options: {
         cwd: i.worktreePath,
+        ...account,
         ...(i.references?.length ? { additionalDirectories: i.references.map((r) => r.path) } : {}), // readable; the guard keeps edits inside the worktree
         resume: i.resumeSessionId,
         abortController: i.abort,

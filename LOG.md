@@ -2614,6 +2614,58 @@ Not changed: conversations that already have a worktree keep it until they are e
 Mockup steps on an idea or a project still hand the step to a left-column conversation, which can no longer write the
 files; those steps belong on a task now. And two conversations sometimes start a second apart from one press.
 
+## An app can run on its own Claude account (Sandy, 2026-11-13: "how do we configure the claude code account or api an app will use? … it uses the default or can override")
+
+Until now every app's agents ran on whatever the engine process had: the Claude Code login on the machine, or
+`ANTHROPIC_API_KEY` when the engine's environment had one. One account for everything, which is wrong when one app is
+someone else's code and should go through their account.
+
+Now, under Settings › an app › Agents, **Claude account** is one of:
+
+- **The engine's default**: as before.
+- **This app's own API key**: the *name* of an environment variable (say `WORK_ANTHROPIC_KEY`). The key stays in the
+  engine's environment, never in the database, as with Linear's.
+- **This app's own Claude login**: a config folder (say `~/.claude-work`), logged in to once with
+  `CLAUDE_CONFIG_DIR=~/.claude-work claude auth login`.
+
+It is kept in `setup.account` (`key_env` or `config_dir`) and applied in `engine/src/account.ts` to every place the
+engine starts an agent: builder, planner, conversations, the focus summary, to-do drafting, descriptions. Settings
+shows what the engine finds for the saved choice: who the account is (it asks Claude Code), or what is wrong.
+
+Decided:
+
+- **Never a quiet fall back.** An override that can't be used (the variable unset, the folder missing) stops that
+  app's agents with a sentence saying why. The point of an override is that this app's code does not go through the
+  other account.
+- **With an override, every other credential is taken out** of what the agent is given, so the default key or token
+  can't win over the one chosen.
+- **A login's sessions live in its folder.** Claude Code keeps sessions under the config folder, so for such an app
+  the terminal side of a conversation (reading the session file, the sessions listed to bring in, the command to
+  continue in a terminal) uses that folder too, and the command is prefixed so the terminal is on the same account.
+- Not done: conversations begun on one account are not moved when the app's account changes; they stay in the folder
+  they were written in, so an open conversation should be ended before switching a login. No default override at
+  the All apps level: the default is the engine's own environment.
+
+## An app can choose its own skill for a job (Sandy, 2026-11-13: "can we also have the skills by job be app level overridable?")
+
+Skills are filed under jobs in All apps, one skill on per job. An app could switch a whole plugin for itself, never a
+skill. Now, under Settings › an app › Plugins › **Skills by job**, each job that has a skill filed follows All apps
+unless the app picks another skill filed under that job, or none.
+
+Kept in `setup.skills_by_job` (`{ <job>: <skill key> | null }`; a job left out follows All apps) and applied where a
+session's skills are resolved (`skillOnFor` in `engine/src/skills.ts`), so it reaches the planner and conversations.
+
+Decided: filing stays in All apps. An app chooses among the skills already filed under a job; it does not file a skill
+under a different job for itself. A choice whose skill is later refiled or uninstalled is dropped at the next save, and
+until then gives that job no skill in that app. The plugin switch still wins: a skill chosen from a plugin that is off
+for the app is not given. Skills in the app repo's own `.claude/skills/` are not filed under jobs and always apply.
+
+Changed the same day (Sandy: "I don't see it and it shouldn't be a plugin, it should have its own nav"): it was a list
+at the bottom of the app's Plugins section, shown only when some job had a skill filed, so on an install with none it
+was simply absent. It is now its own section of an app's settings, **Skills by job**, and lists every job, grouped as
+in All apps: a job with skills filed has the menu; a job with none says "No skill filed" and what the engine does
+there itself; and with nothing filed anywhere the page says how to get something to choose.
+
 ## An idea has an agent of its own, like a task (Sandy, 2026-11-13: "when you go to one and 'work on it' you get a dedicated agent. It should really be a task in all but name until you convert. That allows you to work through the sketches etc etc without committing to full task")
 
 With left-column conversations no longer able to write files, an idea's Sketch and Mockup steps had nowhere to go.

@@ -17,6 +17,7 @@ import { ghCli } from './github.js'
 import { NOISE, now } from './now.js'
 import { listCycles, listInitiatives } from './goals.js'
 import { identifier, PlanError } from './issues.js'
+import { accountEnv } from './account.js'
 
 type Ref = { kind: 'project' | 'issue' | 'todo' | 'idea' | 'question' | 'pr' | 'teammate_pr' | 'initiative' | 'cycle'; label: string; projectId?: string; url?: string | null }
 type Line = { text: string; refs: string[] }
@@ -135,9 +136,9 @@ function prompt(facts: { statedGoals: { initiatives: unknown[]; cycles: unknown[
 
 type Writer = (prompt: string) => Promise<{ body: Omit<FocusBody, 'links'>; costUsd?: number | null; model?: string | null }>
 
-const sdkWriter = (model?: string): Writer => async (p) => {
+const sdkWriter = (model?: string, setup?: unknown): Writer => async (p) => {
   let out: unknown, cost: number | null = null
-  for await (const m of query({ prompt: p, options: { model, maxTurns: 6, tools: [], allowedTools: [], settingSources: [], outputFormat: { type: 'json_schema', schema: SCHEMA } } })) {
+  for await (const m of query({ prompt: p, options: { ...accountEnv(setup), model, maxTurns: 6, tools: [], allowedTools: [], settingSources: [], outputFormat: { type: 'json_schema', schema: SCHEMA } } })) {
     if (m.type === 'result') { if ((m as any).subtype !== 'success') throw new PlanError(`summary failed: ${(m as any).subtype}`); out = (m as any).structured_output; cost = (m as any).total_cost_usd ?? null }
   }
   return { body: out as Omit<FocusBody, 'links'>, costUsd: cost, model: model ?? null }
@@ -161,7 +162,7 @@ export async function writeFocus(appId: string, opts: { trigger?: 'person' | 'sc
     const through = await lastSeq(appId)
     await db.transaction((tx) => appendEvent(tx, { workspaceId, appId, actor: 'engine', type: 'summary.writing', payload: { section: 'focus' } }))
     try {
-      const got = await (opts.write ?? sdkWriter(opts.model ?? setup.model))(prompt(facts))
+      const got = await (opts.write ?? sdkWriter(opts.model ?? setup.model, setup))(prompt(facts))
       const keep = (ls: Line[] = []) => ls.map((l) => ({ text: l.text.trim(), refs: [...new Set(l.refs.filter((r) => r in links))] })).filter((l) => l.text && l.refs.length)
       const body: FocusBody = {
         headline: got.body.headline?.trim() ?? '',

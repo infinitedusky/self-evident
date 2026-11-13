@@ -36,6 +36,68 @@ export const AppWithRepoSkills: Story = {
     appSettings: { ...appSettings, skills: [...appSettings.skills, { key: 'release-notes', name: 'release-notes', description: 'Writes the release note in the shop’s voice (sample).' }] },
   }),
 }
+/** Skills by job, a section of its own: every job, grouped. One with skills filed follows All apps until this app picks another filed there, or none; one with none says so (made-up skills). */
+export const AppSkillsByJob: Story = {
+  parameters: appPage(sampleApp.id, 'skills'),
+  beforeEach: withEngine({ apps: apps.map((a) => (a.id === sampleApp.id ? { ...a, setup: { ...a.setup, skills_by_job: { review: null } } } : a)) }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const testing = await c.findByLabelText('Skill for Testing')
+    await expect(testing).toHaveValue('')
+    await expect(within(testing).getByRole('option', { name: 'As All apps (write-tests)' })).toBeInTheDocument()
+    await expect(c.getByLabelText('Skill for Review')).toHaveValue('-')
+    await userEvent.selectOptions(testing, 'other-plugin/test-first')
+    await expect(c.getAllByText('override').length).toBe(2)
+      await expect(c.getByText('No skill filed.')).toBeVisible()
+  },
+}
+/** No skill filed under any job yet, as on a new install: the jobs are still listed, and it says how to get something to choose. */
+export const AppSkillsByJobNoneFiled: Story = {
+  parameters: appPage(sampleApp.id, 'skills'),
+  beforeEach: withEngine({ appSettings: { ...appSettings, jobs: (appSettings.jobs ?? []).map((j) => ({ ...j, skills: [], factory: null })) } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('Nothing to choose yet')).toBeVisible()
+    await expect(c.getAllByText('No skill filed.').length).toBe(3)
+  },
+}
+/** Agents: the Claude account this app's agents run on. Nothing chosen: the engine's default, and who that is (made up). */
+export const AppAccountDefault: Story = {
+  parameters: appPage(sampleApp.id, 'agents'),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/The engine's default, the Claude Code login on this machine/)).toBeVisible()
+    await userEvent.selectOptions(c.getByLabelText('Claude account'), 'key')
+    await userEvent.type(c.getByLabelText('Key variable'), 'WORK_ANTHROPIC_KEY')
+    await expect(c.getByText('Save to check this account.')).toBeVisible()
+  },
+}
+/** The app's own login, in a folder of its own, and who is logged in there (made up). */
+export const AppAccountLogin: Story = {
+  parameters: appPage(sampleApp.id, 'agents'),
+  beforeEach: withEngine({
+    apps: apps.map((a) => (a.id === sampleApp.id ? { ...a, setup: { ...a.setup, account: { config_dir: '~/.claude-work' } } } : a)),
+    account: { kind: 'login', ok: true, note: 'The Claude login in /Users/sample/.claude-work: owner@work.example · Sample Works · team.' },
+  }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/owner@work.example/)).toBeVisible()
+    await expect(c.getByLabelText('Login folder')).toHaveValue('~/.claude-work')
+  },
+}
+/** The app's own key, named but not set where the engine runs: said plainly, and its agents won't start on the default instead. */
+export const AppAccountKeyMissing: Story = {
+  parameters: appPage(sampleApp.id, 'agents'),
+  beforeEach: withEngine({
+    apps: apps.map((a) => (a.id === sampleApp.id ? { ...a, setup: { ...a.setup, account: { key_env: 'WORK_ANTHROPIC_KEY' } } } : a)),
+    account: { kind: 'key', ok: false, note: "This app's agents run on the API key in WORK_ANTHROPIC_KEY, and WORK_ANTHROPIC_KEY isn't set in the engine's environment. Export it where the engine starts and restart the engine, or change the account under Settings › Agents." },
+  }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('Not usable')).toBeVisible()
+    await expect(c.getByText(/never fall back to the default/)).toBeVisible()
+  },
+}
 /** An app with nothing set: no repo, no skills, every value inherited. */
 /** Made-up apps: a frontend that reads its backend. One reference on, with its note; another app offered; one with no checkout on this computer. */
 const apiApp = { ...otherApp, id: 'app_sample_api', name: 'Sample Shop API', key: 'SA', repos: [{ id: 'repo_sample_api', appId: 'app_sample_api', fullName: 'example/sample-shop-api', localPath: '/code/sample-shop-api', baseBranch: 'main' }] }

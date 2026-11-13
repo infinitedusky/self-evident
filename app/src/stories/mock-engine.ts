@@ -20,6 +20,7 @@ export interface MockData {
   trackerGuide: string
   githubRepos: typeof s.githubRepos; repoNote: string | null; folder: typeof s.folder
   /** Why a task can't be deleted, as the engine says it; null when it can. */ deleteProblem: string | null
+  /** Which Claude account the app's agents run on, as the engine finds it. */ account: { kind: 'default' | 'key' | 'login'; ok: boolean; note: string }
   assets: typeof s.assets
   linearTickets: typeof s.linearTickets; /** Why Linear can't be read, as the engine says it; null when it can. */ linearProblem: string | null
   plan: typeof s.plan; workflows: typeof s.workflowRows; steps: Record<string, typeof s.taskStepsView>; stepWork: typeof s.researchWork | null
@@ -37,6 +38,7 @@ export const sampleData: MockData = {
   setup: { done: false, did: ['Wrote docs/agents/issue-tracker.md, pointing at SS here.', 'Wrote docs/agents/forge.md, docs/agents/workflow.md, docs/agents/domain.md, docs/agents/pull-request.md and the Ticket lifecycle block in CLAUDE.md, from the app, the repo and the house profile.', 'Committed to main and pushed (abc1234).'], ask: 'Self Evident\'s tkt check for Sample Shop (SS) says: tkt doctor: fail herdr herdr is not installed. (sample)', detail: 'tkt doctor: fail  herdr  herdr is not installed. Get tkt working: https://gitlab.com/rogs/tkt', talkId: 'sess_sample_setup' },
   trackerGuide: s.trackerGuideSample,
   githubRepos: s.githubRepos, repoNote: s.repoNote, folder: s.folder, assets: s.assets, linearTickets: s.linearTickets, linearProblem: null, deleteProblem: null,
+  account: { kind: 'default', ok: true, note: "The engine's default, the Claude Code login on this machine: owner@sample.example · max." },
   plan: s.plan, workflows: s.workflowRows, steps: { ideas: s.ideaStepsView, issues: s.taskStepsView, projects: s.projectStepsView }, stepWork: s.researchWork,
 }
 
@@ -57,6 +59,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/workspaces', () => reply([s.workspace])),
     http.get('/api/settings', () => reply(d.settings)),
     http.get('/api/apps/:id/settings', () => reply(d.appSettings)),
+    http.get('/api/apps/:id/account', () => reply(d.account)),
     http.post('/api/integrations/:key/check', () => reply(d.check)),
     http.post('/api/integrations/:key/setup', () => reply(d.setup)),
     http.get('/api/github/repos', () => reply(d.githubRepos)),

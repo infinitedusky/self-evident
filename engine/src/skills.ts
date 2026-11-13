@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { eq } from 'drizzle-orm'
 import { parse } from 'yaml'
-import { CATEGORY_KEYS } from './catalogue.js'
+import { CATALOGUE, CATEGORY_KEYS } from './catalogue.js'
 import { db } from './db/client.js'
 import { app, workspace } from './db/schema.js'
 import { PlanError } from './issues.js'
@@ -32,6 +32,8 @@ export interface PluginSetting { on?: boolean; roles?: Role[] }
 export interface SkillSetting { category?: string | null; on?: boolean }
 export interface FactorySettings { plugins?: Record<string, PluginSetting>; skills?: Record<string, SkillSetting> }
 export type AppPlugins = Record<string, { on: boolean }> // an app's own switch, per plugin; absent inherits
+/** An app's own choice per job (a category key): the skill that does it there, or null for none. Absent: as All apps. */
+export type AppJobs = Record<string, string | null>
 
 /** The factory's Claude Code config dir: the installer's marketplaces, cache and record of what is installed. */
 export const PLUGINS_HOME = process.env.PLUGINS_HOME ?? join(homedir(), '.self-evident', 'claude')
@@ -110,11 +112,32 @@ export const pluginOn = (id: string, f: FactorySettings, a: AppPlugins = {}) => 
 export const pluginRoles = (id: string, f: FactorySettings) => f.plugins?.[id]?.roles ?? ROLES
 export const skillCategory = (key: string, f: FactorySettings) => f.skills?.[key] && 'category' in f.skills[key] ? f.skills[key].category ?? null : DEFAULT_CATEGORY[key] ?? null
 export const skillOn = (key: string, f: FactorySettings) => f.skills?.[key]?.on ?? true
+/** On in one app: where the app chose for the skill's job, only the one it chose; otherwise as All apps. */
+export function skillOnFor(key: string, f: FactorySettings, jobs: AppJobs = {}) {
+  const category = skillCategory(key, f)
+  return category && category in jobs ? jobs[category] === key : skillOn(key, f)
+}
+
+/** What Settings saved for an app's jobs, tidied: known jobs only, each null or a skill filed under that job. */
+export function cleanJobs(given: unknown, f: FactorySettings, list: Installed[]): AppJobs {
+  const filed = new Map(list.flatMap((p) => p.skills.map((s) => [s.key, skillCategory(s.key, f)] as const)))
+  return Object.fromEntries(Object.entries((given ?? {}) as Record<string, unknown>)
+    .filter(([job, key]) => CATEGORY_KEYS.has(job) && (key === null || (typeof key === 'string' && filed.get(key) === job)))) as AppJobs
+}
+
+/** Every job, for an app's Settings: its group, what the engine does there itself, the skills filed under it (often none), All apps' choice, the app's own. */
+export function describeJobs(f: FactorySettings, jobs: AppJobs = {}, list: Installed[] = installed()) {
+  const all = list.flatMap((p) => p.skills.map((s) => ({ key: s.key, name: s.name, plugin: p.name, category: skillCategory(s.key, f) })))
+  return CATALOGUE.flatMap((g) => g.categories.map((c) => {
+    const skills = all.filter((s) => s.category === c.key).map(({ category: _, ...s }) => s)
+    return { key: c.key, name: c.name, for: c.for, group: g.name, builtIn: c.builtIn ?? null, skills, factory: skills.find((s) => skillOn(s.key, f))?.key ?? null, overridden: c.key in jobs, own: jobs[c.key] ?? null }
+  }))
+}
 
 /** What a role gets in one app: the plugins switched on for it, and the skills switched on in them. */
-export function resolvePlugins(list: Installed[], f: FactorySettings, a: AppPlugins, role: Role) {
+export function resolvePlugins(list: Installed[], f: FactorySettings, a: AppPlugins, role: Role, jobs: AppJobs = {}) {
   const plugins = list.filter((p) => pluginOn(p.id, f, a) && pluginRoles(p.id, f).includes(role))
-  return { plugins, skills: plugins.flatMap((p) => p.skills.filter((s) => skillOn(s.key, f)).map((s) => `${p.sdkName}:${s.name}`)) }
+  return { plugins, skills: plugins.flatMap((p) => p.skills.filter((s) => skillOnFor(s.key, f, jobs)).map((s) => `${p.sdkName}:${s.name}`)) }
 }
 
 /**
@@ -136,7 +159,8 @@ export function fileSkill(f: FactorySettings, key: string, change: SkillSetting,
 async function settingsFor(appId: string) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   const [w] = a ? await db.select().from(workspace).where(eq(workspace.id, a.workspaceId)) : []
-  return { factory: ((w?.settings ?? {}) as FactorySettings), app: ((a?.setup ?? {}) as { plugins?: AppPlugins }).plugins ?? {} }
+  const setup = (a?.setup ?? {}) as { plugins?: AppPlugins; skills_by_job?: AppJobs }
+  return { factory: ((w?.settings ?? {}) as FactorySettings), app: setup.plugins ?? {}, jobs: setup.skills_by_job ?? {} }
 }
 
 /**
@@ -146,7 +170,7 @@ async function settingsFor(appId: string) {
  */
 export async function skillOptions(role: Role, cwd: string, appId: string): Promise<{ plugins: SdkPluginConfig[]; mcpServers: Record<string, McpServerConfig>; skills: string[] }> {
   const s = await settingsFor(appId)
-  const r = resolvePlugins(installed(), s.factory, s.app, role)
+  const r = resolvePlugins(installed(), s.factory, s.app, role, s.jobs)
   return {
     plugins: r.plugins.map((p) => ({ type: 'local', path: p.path })),
     mcpServers: Object.assign({}, ...r.plugins.map((p) => (p.shim ? SHIMS[p.id].mcpServers : {}))),
@@ -169,7 +193,7 @@ export function describePlugins(f: FactorySettings) {
 
 // The installer: the SDK's own Claude Code binary, pointed at the factory's config dir.
 const execFileP = promisify(execFile)
-function claudeBinary() {
+export function claudeBinary() {
   try { return createRequire(createRequire(import.meta.url).resolve('@anthropic-ai/claude-agent-sdk')).resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/claude`) } catch { return 'claude' }
 }
 

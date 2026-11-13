@@ -25,6 +25,7 @@ import { holdMinutes, isOutage } from './outage.js'
 import { engineTools } from './tools.js'
 import { prototypeEnv } from './prototype.js'
 import { skillOptions } from './skills.js'
+import { accountEnv, accountPrefix, configDirFor, configDirOf } from './account.js'
 import { issueDetail, PlanError, projectGraph } from './projects.js'
 import { onIdeaMoved } from './work.js'
 import { existsSync, statSync } from 'node:fs'
@@ -481,13 +482,14 @@ async function open(sessionId: string): Promise<Live> {
   const whole = !!(s.subjectRef as SubjectRef | null)?.app && !s.worktreePath // about the app as a whole: it reads the app's checkout
   const refs = await referencesOf(s.appId)
   const mates = await matesOf(s.appId, s.worktreePath)
+  const account = accountEnv(a?.setup) // the app's own Claude account, when it has one; throws when that can't be used
   const assets = await assetsFor(s.appId, (s.subjectRef as SubjectRef | null)?.projectId ?? ownTask?.projectId) // the app's, and the project's when it is about one
   const q = query({
     prompt: input.it,
     options: {
       cwd: s.cwd!,
       ...(refs.length || mates.length ? { additionalDirectories: [...mates.map((m) => m.path), ...refs.map((r) => r.path)] } : {}),
-      ...(proto ? { env: { ...process.env, ...(await prototypeEnv(proto)) } } : {}),
+      ...(proto ? { env: { ...(account.env ?? process.env), ...(await prototypeEnv(proto)) } } : account),
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
@@ -696,7 +698,7 @@ const ENGINE_PORT = Number(process.env.PORT ?? 4000)
 async function importTerminal(sessionId: string): Promise<number> {
   const [s] = await db.select().from(session).where(eq(session.id, sessionId))
   if (!s?.agentSessionId || !s.cwd) return 0
-  const turns = readTurns(sessionFile(s.cwd, s.agentSessionId), s.importedThrough)
+  const turns = readTurns(sessionFile(s.cwd, s.agentSessionId, await configDirFor(s.appId)), s.importedThrough)
   for (const t of turns) {
     const payload = { ...(t.kind === 'tool_call' ? { ...t.payload, input: summariseInput(t.body, t.payload?.input) } : t.payload ?? {}), via: 'terminal' }
     await record(sessionId, t.author, t.kind, t.body, payload, new Date(t.at))
@@ -723,13 +725,13 @@ function watchTerminal(sessionId: string, file: string) {
 /** On start: follow every conversation still in the terminal. */
 export async function watchTerminals() {
   const rows = await db.select().from(session).where(and(eq(session.kind, 'talk'), eq(session.status, 'open'), sql`${session.terminalSince} is not null`))
-  for (const s of rows) if (s.cwd && s.agentSessionId) watchTerminal(s.id, sessionFile(s.cwd, s.agentSessionId))
+  for (const s of rows) if (s.cwd && s.agentSessionId) watchTerminal(s.id, sessionFile(s.cwd, s.agentSessionId, await configDirFor(s.appId)))
 }
 
 /** The command that continues this conversation in a terminal, with the engine's tools for its app. */
-export function terminalCommand(s: { id: string; cwd: string | null; agentSessionId: string | null; appId: string }) {
+export function terminalCommand(s: { id: string; cwd: string | null; agentSessionId: string | null; appId: string }, setup?: unknown) {
   const mcp = JSON.stringify({ mcpServers: { 'self-evident': { type: 'http', url: `http://localhost:${ENGINE_PORT}/api/mcp/${s.appId}?session=${s.id}` } } })
-  return `cd ${JSON.stringify(s.cwd)} && claude --resume ${s.agentSessionId} --mcp-config '${mcp}'`
+  return `cd ${JSON.stringify(s.cwd)} && ${accountPrefix(setup)}claude --resume ${s.agentSessionId} --mcp-config '${mcp}'`
 }
 
 /**
@@ -744,13 +746,14 @@ export async function handOff(sessionId: string) {
   const l = live.get(sessionId)
   if (l?.busy) throw new PlanError('the agent is still working: wait for it to finish, or stop it, first')
   if (l) { l.close(); await l.q.interrupt().catch(() => {}); live.delete(sessionId) }
-  const file = sessionFile(s.cwd, s.agentSessionId)
+  const [of] = await db.select().from(app).where(eq(app.id, s.appId))
+  const file = sessionFile(s.cwd, s.agentSessionId, configDirOf(of?.setup))
   if (!s.terminalSince) {
     await db.update(session).set({ terminalSince: new Date(), importedThrough: lastUuid(file) }).where(eq(session.id, sessionId))
     await record(sessionId, 'engine', 'handoff', 'Continued in the terminal. What\'s said there shows here; send a message here to bring it back.', { to: 'terminal' })
   }
   watchTerminal(sessionId, file)
-  return { command: terminalCommand(s) }
+  return { command: terminalCommand(s, of?.setup) }
 }
 
 /** Back from the terminal: copy in the rest, stop following the file, and note it. */
@@ -782,7 +785,8 @@ export async function listClaudeSessions(appId: string, limit = 20): Promise<Cla
     }
     if (!folders.size) folders.set(r.localPath, null)
   }
-  const found = [...folders].flatMap(([cwd, branch]) => sessionsIn(cwd).map((f) => ({ ...f, cwd, branch })))
+  const home = await configDirFor(appId)
+  const found = [...folders].flatMap(([cwd, branch]) => sessionsIn(cwd, home).map((f) => ({ ...f, cwd, branch })))
     .sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, limit)
   const here = found.length ? await db.select().from(session).where(and(eq(session.appId, appId), eq(session.status, 'open'), sql`${session.agentSessionId} in (${sql.join(found.map((f) => sql`${f.id}`), sql`, `)})`)) : []
   return found.map((f) => ({
@@ -799,9 +803,10 @@ export async function listClaudeSessions(appId: string, limit = 20): Promise<Cla
 export async function adoptTalk(input: { appId: string; cwd: string; agentSessionId?: string; actor?: string }) {
   const [a] = await db.select().from(app).where(eq(app.id, input.appId))
   if (!a) throw new PlanError(`no app ${input.appId}`)
-  const id = input.agentSessionId ?? latestSession(input.cwd)
+  const home = configDirOf(a.setup)
+  const id = input.agentSessionId ?? latestSession(input.cwd, home)
   if (!id) throw new PlanError(`no Claude Code session in ${input.cwd}`)
-  const file = sessionFile(input.cwd, id)
+  const file = sessionFile(input.cwd, id, home)
   if (!existsSync(file)) throw new PlanError(`no session ${id} in ${input.cwd}`)
   const [had] = await db.select().from(session).where(and(eq(session.agentSessionId, id), eq(session.appId, a.id), eq(session.cwd, input.cwd), eq(session.status, 'open')))
   if (had) { await showTalk(had.id, had.appId); return had }

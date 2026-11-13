@@ -157,6 +157,21 @@ Git in that checkout then uses the second account without any switching. For Sel
 there too, `gh` must be signed in as that account and active (`gh auth login`, `gh auth switch -u <account>`);
 with the GitHub repo field filled and `gh` on the other account, the sync and pull requests for that app fail.
 
+## Two Claude accounts on one computer
+
+The engine's agents run on the Claude Code login of this computer, or on `ANTHROPIC_API_KEY` when that is set where
+the engine starts. That is the default for every app. An app whose code should go through another account says so
+under Settings › the app › Agents › **Claude account**:
+
+- **Its own API key.** Give the *name* of an environment variable, export the key under that name where the engine
+  starts (`export WORK_ANTHROPIC_KEY=…` in `~/.zshrc`), and restart `pnpm dev`. The key is never typed into the app.
+- **Its own Claude login.** Give a folder (say `~/.claude-work`) and log in there once:
+  `CLAUDE_CONFIG_DIR=~/.claude-work claude auth login`. That app's conversations are then kept in that folder.
+
+Save, and the same place says which account is in use, or what is wrong. An override that can't be used stops that
+app's agents; it never falls back to the default. End an app's open conversations before changing its login: they
+stay in the folder they were started in.
+
 ## A product in two repositories
 
 (LOG.md, "The workbench".) Two ways, by whether the work crosses them:
