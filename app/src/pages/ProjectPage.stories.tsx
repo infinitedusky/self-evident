@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { userEvent, within } from 'storybook/test'
+import { expect, userEvent, within } from 'storybook/test'
 import { ProjectPage } from './ProjectPage'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
 import { draftGraph, graph, run, subIssues, todos } from '../stories/sample'
@@ -46,6 +46,17 @@ export const SubTaskSelected: Story = {
 }
 /** A draft nobody has planned yet: Plan on the task, an empty graph. */
 export const DraftUnplanned: Story = { parameters: at('proj_draft'), beforeEach: withGraph(drafting) }
+/** A task planned on its own (made up): the page is its plan and build, back goes to Tasks, no tasks are added here, and the button is "Run it". */
+export const TaskOnItsOwn: Story = {
+  parameters: at('proj_solo'),
+  beforeEach: withGraph({ ...draftPlanned, project: { ...draftPlanned.project, id: 'proj_solo', name: 'Marketing site (sample)', solo: true }, issues: draftPlanned.issues.slice(0, 1), subIssues: draftPlanned.subIssues.filter((x) => x.parentId === draftPlanned.issues[0].id), backlog: [], questions: [], decisions: [] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('button', { name: 'Run it' })).toBeInTheDocument()
+    await expect(c.getByRole('link', { name: '← Tasks' })).toBeInTheDocument()
+    await expect(c.queryByText(/Add task/)).not.toBeInTheDocument()
+  },
+}
 /** A draft whose tasks are planned: reorder arrows, Plan again, and Run this project. */
 export const DraftPlanned: Story = { parameters: at('proj_draftplanned'), beforeEach: withGraph(draftPlanned) }
 /** Paused: Resume, and the sub-task that was building waits. */

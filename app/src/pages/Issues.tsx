@@ -35,13 +35,13 @@ export function Issues() {
   const open = (s: string) => !['landed', 'stopped', 'superseded'].includes(s) // an issue can be planned until its project is over
   const targets = projects.filter((p) => open(p.status))
   const linearTeam = app?.setup?.integrations?.linear?.team?.trim().toUpperCase() // set under Integrations › Linear: tickets can be brought in
-  const loose = rows?.filter((t) => !t.project && !['done', 'canceled', 'duplicate'].includes(t.state)) ?? []
-  const placed = rows?.filter((t) => t.project) ?? []
+  const loose = rows?.filter((t) => (!t.project || t.project.solo) && !['done', 'canceled', 'duplicate'].includes(t.state)) ?? [] // on its own: in no project, or planned in one of its own
+  const placed = rows?.filter((t) => t.project && !t.project.solo) ?? []
   return (
     <>
       <div className="page-head"><div>
         <h1>📋 Tasks{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
-        <p className="muted" style={{ margin: '4px 0 0', maxWidth: 760 }}>Every task of code work: what it will change, and where it stands. One in no project waits until you add it to one; a project builds its tasks in order, each planned into sub-tasks when its turn comes.</p>
+        <p className="muted" style={{ margin: '4px 0 0', maxWidth: 760 }}>Every task of code work: what it will change, and where it stands. One in no project is planned and built on its own, or added to a project; a project builds its tasks in order, each planned into sub-tasks when its turn comes.</p>
       </div></div>
       {error && <div className="empty bad">{error}</div>}
       {app && linearTeam && <LinearImport appId={app.id} team={linearTeam} onImported={reload} />}
@@ -55,8 +55,9 @@ export function Issues() {
                 <div>
                   <Link to={`/tasks/${t.id}`} style={{ fontWeight: 600, textDecoration: 'none' }}><span className="mono faint">{t.identifier}</span> {t.title}</Link>
                   {t.description && <div className="muted" style={{ fontSize: 14, margin: '2px 0' }}><Md text={t.description} clamp={3} /></div>}
+                  {t.project?.solo && <div className="faint" style={{ fontSize: 13 }}>Planned on its own · {t.project.status} · <Link to={`/projects/${t.project.id}`}>Its plan and build →</Link></div>}
                 </div>
-                {targets.length > 0 && (
+                {targets.length > 0 && (!t.project || ['drafting', 'proposed', 'approved'].includes(t.project.status)) && (
                   <select disabled={busy === t.id} value="" onChange={(e) => e.target.value && act(t.id, () => engine.updateIssue(t.id, { projectId: e.target.value }))} aria-label={`Add ${t.identifier} to a project`}>
                     <option value="">Add to a project…</option>
                     {targets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}

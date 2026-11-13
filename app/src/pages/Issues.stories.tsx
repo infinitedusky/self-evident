@@ -38,6 +38,15 @@ export const Moving: Story = {
     await userEvent.selectOptions(move, 'none')
   },
 }
+/** A task planned on its own (made up): it stays under "In no project", says where it stands and links to its plan and build; it can still join a project until it starts building. */
+export const PlannedOnItsOwn: Story = {
+  beforeEach: withEngine({ issueRows: [...issueRows, { ...issueRows[2], id: 'iss_sample30', identifier: 'SS-30', number: 30, title: 'Marketing site (sample)', state: 'todo', description: null, builds: { queued: 2 }, planning: 'issue.planned', project: { id: 'proj_solo', name: 'Marketing site (sample)', status: 'drafting', solo: true } }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('link', { name: 'Its plan and build →' })).toHaveAttribute('href', expect.stringContaining('/projects/proj_solo'))
+    await expect(await c.findByRole('combobox', { name: 'Add SS-30 to a project' })).toBeInTheDocument()
+  },
+}
 /** Only tasks in no project, and no open project to send them to. */
 export const NothingToAddTo: Story = { beforeEach: withEngine({ issueRows: [issueRows[2]], projects: [] }) }
 /** No tasks yet. */

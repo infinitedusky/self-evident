@@ -40,6 +40,7 @@ export function ProjectPage() {
   const selected = graph.subIssues.find((p) => p.id === selectedId) ?? null
   const issueOf = (p: GraphSubIssue) => graph.issues.find((t) => t.id === p.parentId)
   const draft = ['drafting', 'proposed', 'approved'].includes(graph.project.status)
+  const solo = !!graph.project.solo // one task on its own: no tasks are added here, and it is not among the projects
   const act = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn() } finally { setBusy(false) } }
   // An issue is being planned from its last planning event until the planner reports back.
   const lastPlanEvent = (issueId: string) => events.filter((e) => e.issueId === issueId && e.type.startsWith('issue.plan')).at(-1)?.type
@@ -49,7 +50,7 @@ export function ProjectPage() {
   const open = graph.questions.filter((q) => q.status === 'open')
   return (
     <>
-      <p className="mono"><Link to="/projects">← Projects</Link></p>
+      <p className="mono">{solo ? <Link to="/tasks">← Tasks</Link> : <Link to="/projects">← Projects</Link>}</p>
       <div className="page-head">
         <div>
           <h1>{graph.project.name}</h1>
@@ -60,6 +61,7 @@ export function ProjectPage() {
             {graph.pr && <a className="badge accent" href={graph.pr.url ?? '#'} target="_blank" rel="noreferrer">PR #{graph.pr.number} · {graph.pr.status}</a>}
             {error && <Badge tone="warn" dot>{error}</Badge>}
           </div>
+          {solo && <p className="muted" style={{ margin: '8px 0 0', maxWidth: 720 }} data-component="SoloNote">A task on its own: this is its plan and build. Add it to a project from Tasks, until it starts building.</p>}
           {graph.project.content && <p className="muted" style={{ margin: '8px 0 0', maxWidth: 720 }}>{graph.project.content}</p>}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -72,7 +74,7 @@ export function ProjectPage() {
             <button className="btn quiet" disabled={busy} onClick={() => { if (window.confirm('Cancel this project? Running agents are stopped; what has landed stays on its branch.')) void act(() => engine.cancelProject(graph.project.id)) }}>Cancel project</button>
           )}
           {draft && graph.subIssues.length > 0 && (
-            <button className="btn" disabled={busy} onClick={() => act(() => engine.start(graph.project.id))}>Run this project</button>
+            <button className="btn" disabled={busy} onClick={() => act(() => engine.start(graph.project.id))}>{solo ? 'Run it' : 'Run this project'}</button>
           )}
         </div>
       </div>
@@ -81,7 +83,7 @@ export function ProjectPage() {
 
       <Assets appId={graph.app.id} projectId={graph.project.id} />
 
-      {!['landed', 'stopped', 'superseded'].includes(graph.project.status) && <AddTasks appId={graph.app.id} projectId={graph.project.id} linearTeam={app?.setup?.integrations?.linear?.team?.trim().toUpperCase() || undefined}
+      {!solo && !['landed', 'stopped', 'superseded'].includes(graph.project.status) && <AddTasks appId={graph.app.id} projectId={graph.project.id} linearTeam={app?.setup?.integrations?.linear?.team?.trim().toUpperCase() || undefined}
         onAdd={(issueId) => act(() => engine.updateIssue(issueId, { projectId: graph.project.id }))}
         onCreate={(title, description) => act(() => engine.createIssue({ appId: graph.app.id, title, description, projectId: graph.project.id }))} />}
 
