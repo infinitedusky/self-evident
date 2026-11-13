@@ -3124,3 +3124,13 @@ button, and the list starts from there. Every row goes to a Save points page of 
 is the full list with go back, work on this, delete and clear all; that list left the overview. Folded, the nav
 shows one icon with the counts in its tooltip. The nav reads the list again on each page of the task and when the
 task changes, so a save point an agent made shows up.
+
+## Save points, made clearer (Sandy, 2026-11-13: "the arrow looks like you can collapse but you can't and when you click on one they all highlight"; "there is no main in this list")
+
+Three things read wrong the first time it was used. The mark beside the task branch being worked on was an arrow,
+which reads as "open this"; it is now a filled ring, with "working on" beside the name. Every row in the nav went to
+the same page, so opening it lit them all; now the section has one row of its own, "Save points", which is the only
+one that lights, and the task branch and the save points sit under it as the steps sit under the brief. A save
+point's row in the nav opens the page with that save point marked. And the page's list did not show the task branch
+being worked on, so nav and page disagreed; it is now the list's first row, saying the save points below are points
+on it.

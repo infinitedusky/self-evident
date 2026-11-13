@@ -766,9 +766,14 @@ button.acceptance-mark { cursor: pointer; border-radius: 6px; } button.acceptanc
 @media (max-width: 560px) { .task-branches-row { flex-wrap: wrap; } .task-branches-actions { margin-left: 28px; } .task-branches-ask { margin-left: 8px; } }
 
 /* Save points in a task's nav: the one worked on, then the list. */
-.task-nav .link.task-nav-save { padding: 4px 10px; font-size: 13px; }
-.task-nav .link.task-nav-save.current { color: var(--ink); font-weight: 600; }
+.task-nav-save { display: block; padding: 3px 10px 3px 26px; border-radius: 8px; font-size: 13px; color: var(--ink-soft); text-decoration: none; } /* under the Save points row, as the steps sit under the brief */
+a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
+.task-nav-save.current { color: var(--ink); font-weight: 600; }
+.task-nav-now { flex: none; font-size: 11px; font-weight: 400; color: var(--ok); } .task-nav-now.aside { color: var(--ink-faint); }
 .task-nav-mark.task-nav-point { color: var(--accent); font-size: 11px; }
-.task-nav-save-here { margin: 4px 10px 0; padding: 4px 8px; text-align: left; border: 1px dashed var(--line); border-radius: 8px; background: none; color: var(--ink-soft); font: 13px var(--sans); cursor: pointer; }
+.task-nav-save-here { margin: 4px 10px 0 26px; padding: 4px 8px; text-align: left; border: 1px dashed var(--line); border-radius: 8px; background: none; color: var(--ink-soft); font: 13px var(--sans); cursor: pointer; }
 .task-nav-save-here:hover { background: var(--accent-wash); color: var(--ink); }
-.task-nav-saving { margin: 4px 10px 0; } .task-nav-saving input { width: 100%; margin: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 13px var(--sans); }
+.task-nav-saving { margin: 4px 10px 0 26px; } .task-nav-saving input { width: 100%; margin: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 13px var(--sans); }
+.task-branches-list li.at > .task-branches-row { background: var(--accent-wash); }
+.task-branches-kind.now { color: var(--ok); } .task-branches-now { margin-left: 6px; font-size: 12px; color: var(--ok); }
+.task-branches-row.current:hover { background: none; }

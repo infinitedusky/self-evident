@@ -33,10 +33,14 @@ export const SavePoints: Story = {
     const c = within(canvasElement)
     await expect(c.getByText('Main')).toBeInTheDocument()
     await expect(c.getByText('working on')).toBeInTheDocument()
-    await expect(c.getByRole('link', { name: /Proto before review \(sample\)/ })).toHaveAttribute('href', '/tasks/iss_sample20/saves')
+    await expect(c.getByRole('link', { name: /Proto before review \(sample\)/ })).toHaveAttribute('href', '/tasks/iss_sample20/saves?at=save_review')
+    await expect(c.getByRole('link', { name: /Save points/ })).toHaveAttribute('href', '/tasks/iss_sample20/saves')
+    for (const a of c.getAllByRole('link')) if (!/Overview/.test(a.textContent ?? '')) await expect(a).not.toHaveClass('active') // on the overview, nothing down here is lit
     await expect(c.getByRole('link', { name: /Wallet first \(sample\)/ })).toBeInTheDocument()
   },
 }
+/** On the save points page only its own row is lit, not every save point. */
+export const OnTheSavePointsPage: Story = { args: { saves, onSave: fn(), here: 'saves' }, play: async ({ canvasElement }) => { const c = within(canvasElement); await expect(c.getByRole('link', { name: /Save points/ })).toHaveClass('active'); await expect(c.getByRole('link', { name: /Proto before review/ })).not.toHaveClass('active') } }
 /** Nothing saved yet: only the way to save. */
 export const NoSavePointsYet: Story = { args: { saves: { current: null, points: [], aside: [] }, onSave: fn() } }
 /** Saving from the nav: a name, Enter, and the work carries on. */

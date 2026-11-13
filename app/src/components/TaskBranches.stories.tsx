@@ -19,7 +19,7 @@ export const SavedTwice: Story = {
     await expect(c.getByText(/4 changes since/)).toBeInTheDocument()
     await expect(c.getByText(/made by Self Evident/)).toBeInTheDocument()
     await expect(c.getByText(/Set aside · started from “Before the wallet idea \(sample\)” · 3 commits and 1 comment only here/)).toBeInTheDocument()
-    await expect(c.getByText(/Working on/)).toHaveTextContent('Working on Main')
+    await expect(c.getByLabelText('Working on Main')).toBeInTheDocument() // the one you are on is the first row
   },
 }
 /** Nothing saved yet: what a save point is, and the one thing to do. */
@@ -49,7 +49,7 @@ export const GoBack: Story = {
     await expect(c.getByRole('checkbox', { name: /Also rebuild the prototype's data from its sample data/ })).not.toBeChecked()
     await userEvent.click(c.getByRole('button', { name: 'Go back' }))
     await expect(await c.findByText(/Now working on “From Proto before review \(sample\)”/)).toBeInTheDocument()
-    await expect(c.getByText(/Working on/)).toHaveTextContent('Working on From Proto before review (sample)')
+    await expect(c.getByLabelText('Working on From Proto before review (sample)')).toBeInTheDocument()
   },
 }
 /** A move the engine refuses says why, and nothing changes. */

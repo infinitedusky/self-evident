@@ -7,7 +7,7 @@
  * approved once the required steps are done, and the build waits on that approval.
  */
 import { useState } from 'react'
-import { NavLink } from 'react-router'
+import { Link, NavLink } from 'react-router'
 import { finished, label, ready, step, type On, type Row } from '@self-evident/engine/steps'
 
 /** What a step waits on, in words. */
@@ -104,22 +104,21 @@ export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded
       {saves && (
         <>
           <div className="task-nav-label faint">Save points</div>
+          {item('saves', `${base}/saves`, <span className="task-nav-row"><span className="task-nav-mark">💾</span><span className="task-nav-text">Save points</span>{saves.points.length > 0 && <span className="faint mono" style={{ fontSize: 12 }}>{saves.points.length}</span>}</span>, null)}
           {(saves.points.length > 0 || saves.aside.length > 0) && (
-            <NavLink to={`${base}/saves`} end className={() => `link task-nav-save current ${here === 'saves' ? 'active' : ''}`} title="The task branch being worked on">
-              <span className="task-nav-row"><span className="task-nav-mark ok">▸</span><span className="task-nav-text">{saves.current ?? 'Main'}</span></span>
-              <span className="task-nav-after">working on</span>
-            </NavLink>
+            <div className="task-nav-save current" title="The task branch being worked on">
+              <span className="task-nav-row"><span className="task-nav-mark ok">◉</span><span className="task-nav-text">{saves.current ?? 'Main'}</span><span className="task-nav-now">working on</span></span>
+            </div>
           )}
           {saves.points.map((p) => (
-            <NavLink key={p.id} to={`${base}/saves`} end className="link task-nav-save" title={`Save point: ${p.name}`}>
+            <Link key={p.id} to={`${base}/saves?at=${p.id}`} className="task-nav-save" title={`Save point: ${p.name}`}>
               <span className="task-nav-row"><span className="task-nav-mark task-nav-point">●</span><span className="task-nav-text">{p.name}</span></span>
-            </NavLink>
+            </Link>
           ))}
           {saves.aside.map((b) => (
-            <NavLink key={b.id} to={`${base}/saves`} end className="link task-nav-save" title={`Set aside: ${b.name}`}>
-              <span className="task-nav-row"><span className="task-nav-mark">⑂</span><span className="task-nav-text">{b.name}</span></span>
-              <span className="task-nav-after">set aside</span>
-            </NavLink>
+            <Link key={b.id} to={`${base}/saves?at=${b.id}`} className="task-nav-save" title={`Set aside: ${b.name}`}>
+              <span className="task-nav-row"><span className="task-nav-mark">⑂</span><span className="task-nav-text">{b.name}</span><span className="task-nav-now aside">set aside</span></span>
+            </Link>
           ))}
           {onSave && (naming
             ? <form className="task-nav-saving" onSubmit={async (e) => { e.preventDefault(); await onSave(name.trim()); setName(''); setNaming(false) }}>

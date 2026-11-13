@@ -23,7 +23,7 @@ const only = (w: NonNullable<TaskBranch['work']>) => [w.commits ? n(w.commits, '
 
 type Asking = { kind: 'back'; save: SavePoint } | { kind: 'switch'; branch: TaskBranch } | { kind: 'delete'; branch: TaskBranch } | { kind: 'clear' } | null
 
-export function TaskBranches({ issueId, onMoved, onChanged, stamp }: { issueId: string; /** The task changed under the page: read it again. */ onMoved?: () => void; /** The list changed (saved, deleted, moved). */ onChanged?: () => void; /** Changes when the list was changed from elsewhere (the nav): read it again. */ stamp?: number }) {
+export function TaskBranches({ issueId, onMoved, onChanged, stamp, at }: { /** The row the person came for, from the nav: marked. */ at?: string | null; issueId: string; /** The task changed under the page: read it again. */ onMoved?: () => void; /** The list changed (saved, deleted, moved). */ onChanged?: () => void; /** Changes when the list was changed from elsewhere (the nav): read it again. */ stamp?: number }) {
   const [v, setV] = useState<View | null>(null)
   const [name, setName] = useState('')
   const [asking, setAsking] = useState<Asking>(null)
@@ -52,7 +52,6 @@ export function TaskBranches({ issueId, onMoved, onChanged, stamp }: { issueId: 
         {!empty && <button className="btn quiet small task-branches-clear" disabled={busy} onClick={() => setAsking({ kind: 'clear' })}>Clear all</button>}
       </h2>
       <p className="faint task-branches-lead">
-        {cur && (cur.name !== 'Main' || aside.length > 0) ? <>Working on <b>{cur.name}</b>{cur.fromSave ? `, started from “${cur.fromSave}”` : ''}. </> : null}
         A save point marks where the task is now: its code, brief, criteria, approvals and comments. Saving does not stop anything; you can go back to one later.
       </p>
       {empty && <p className="muted">No save points yet. Save before a change you are not sure of.</p>}
@@ -63,8 +62,19 @@ export function TaskBranches({ issueId, onMoved, onChanged, stamp }: { issueId: 
         </div>
       )}
       <ul className="task-branches-list">
+        {cur && !empty && (
+          <li>
+            <div className="task-branches-row current" aria-label={`Working on ${cur.name}`}>
+              <span className="task-branches-kind now" aria-hidden="true">◉</span>
+              <div className="task-branches-body">
+                <div><b>{cur.name}</b> <span className="task-branches-now">working on</span></div>
+                <div className="faint">What you are working on now{cur.fromSave ? ` · started from “${cur.fromSave}”` : ''}. The save points below are points on it you can go back to.</div>
+              </div>
+            </div>
+          </li>
+        )}
         {v.saves.map((s) => (
-          <li key={s.id}>
+          <li key={s.id} className={at === s.id ? 'at' : undefined}>
             <div className="task-branches-row">
               <span className="task-branches-kind" aria-hidden="true">●</span>
               <div className="task-branches-body">
@@ -87,7 +97,7 @@ export function TaskBranches({ issueId, onMoved, onChanged, stamp }: { issueId: 
           </li>
         ))}
         {aside.map((b) => (
-          <li key={b.id}>
+          <li key={b.id} className={at === b.id ? 'at' : undefined}>
             <div className="task-branches-row">
               <span className="task-branches-kind aside" aria-hidden="true">⑂</span>
               <div className="task-branches-body">
