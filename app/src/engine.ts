@@ -195,9 +195,9 @@ export interface Now { hold?: Hold | null; running: RunningProject[]; needsYou: 
 
 // Talk: a conversation with the factory's agent. Messages are rows; talk.* events say when to refetch.
 export type Risk = 'free' | 'cheap' | 'moderate' | 'expensive'
-export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string }
+export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string; /** About the app as a whole: no worktree. */ app?: boolean }
 export interface TalkSession { id: string; appId: string | null; cwd: string | null; branch: string | null; worktreePath: string | null; subject: string | null; subjectRef: SubjectRef | null; title: string | null; status: string; createdAt: string; lastActiveAt: string | null; live: boolean; busy: boolean; messages?: number; autoApprove: Exclude<Risk, 'expensive'>
-  terminalSince?: string | null; /** Its tab was closed in the agent's column: the conversation, its worktree and its branch are still there. */ closedAt?: string | null; /** The task it belongs to: its own agent, or a prototype's started on it. */ taskId?: string | null } // handed to the terminal: what's said there is copied in until a message here takes it back
+  terminalSince?: string | null; /** Its tab was closed in the agent's column: the conversation is still there. */ closedAt?: string | null; /** The task it belongs to: its own agent, or a prototype's started on it. */ taskId?: string | null } // handed to the terminal: what's said there is copied in until a message here takes it back
 /** An agent a task's conductor has out, with its conversation. */
 /** An agent a task's conductor has out: a prototype's builder, or a fresh agent on one check (`check`: its step). */
 export interface TaskAgentOut { sessionId: string; kind: 'prototype' | 'check'; what: string; icon?: string; title: string; prototypeId?: string; check?: string; busy: boolean }

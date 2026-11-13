@@ -369,7 +369,7 @@ export const claudeSessions: ClaudeSession[] = [
 ]
 
 export const talkSession: TalkSession = {
-  id: 'talk_sample', appId: sampleApp.id, cwd: '/code/sample-shop', branch: 'talk/sample', worktreePath: null, subject: 'Why is SS-6 waiting?', subjectRef: { projectId: 'proj_checkout' },
+  id: 'talk_sample', appId: sampleApp.id, cwd: '/code/sample-shop', branch: null, worktreePath: null, subject: 'Why is SS-6 waiting?', subjectRef: { projectId: 'proj_checkout' },
   title: null, status: 'open', createdAt: at(40), lastActiveAt: at(41), live: true, busy: false, messages: 3, autoApprove: 'cheap',
 }
 const msg = (id: number, author: TalkMessage['author'], kind: TalkMessage['kind'], body: string, payload: TalkMessage['payload'] = null): TalkMessage => ({ id, sessionId: talkSession.id, author, kind, body, payload, sentAt: at(40 + id) })
