@@ -24,7 +24,7 @@ import { EDIT_TOOLS, rank, riskOf, type Risk } from './risk.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { engineTools } from './tools.js'
 import { prototypeEnv } from './prototype.js'
-import { skillOptions } from './skills.js'
+import { skillOptions, stepSkillPrompt, type StepSkills } from './skills.js'
 import { accountEnv, accountPrefix, configDirFor, configDirOf } from './account.js'
 import { issueDetail, PlanError, projectGraph } from './projects.js'
 import { existsSync, statSync } from 'node:fs'
@@ -433,7 +433,7 @@ async function open(sessionId: string): Promise<Live> {
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills, check) },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...(check || whole ? CHECK_TOOLS : ASK_TOOLS)],

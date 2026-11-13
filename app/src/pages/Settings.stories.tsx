@@ -36,6 +36,26 @@ export const AppWithRepoSkills: Story = {
     appSettings: { ...appSettings, skills: [...appSettings.skills, { key: 'release-notes', name: 'release-notes', description: 'Writes the release note in the shop’s voice (sample).' }] },
   }),
 }
+/** Skills: at the top, a skill for a step of the workflow. The mockup step uses the shop's design skill; the ADR names one the repo no longer has (made up). */
+export const AppStepSkills: Story = {
+  parameters: appPage(sampleApp.id, 'skills'),
+  beforeEach: withEngine({ apps: apps.map((a) => (a.id === sampleApp.id ? { ...a, setup: { ...a.setup, step_skills: { mockup: ['shop-design'], adr: ['decision-record'] } } } : a)) }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('button', { name: 'Remove shop-design from Mockups' })).toBeVisible()
+    await expect(c.getByText(/decision-record · missing/)).toBeVisible()
+    await userEvent.selectOptions(c.getByLabelText('Add a skill to Sketches'), 'shop-design')
+    await expect(c.getByRole('button', { name: 'Remove shop-design from Sketches' })).toBeVisible()
+    await userEvent.click(c.getByRole('button', { name: 'Remove shop-design from Mockups' }))
+    await expect(c.queryByRole('button', { name: 'Remove shop-design from Mockups' })).toBeNull()
+  },
+}
+/** An app whose conversations get no skills at all: the steps are listed, and it says why there is nothing to choose. */
+export const AppStepSkillsNone: Story = {
+  parameters: appPage(sampleApp.id, 'skills'),
+  beforeEach: withEngine({ appSettings: { ...appSettings, usable: [] } }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/This app's conversations get no skills/)).toBeVisible() },
+}
 /** Skills by job, a section of its own: every job, grouped. One with skills filed follows All apps until this app picks another filed there, or none; one with none says so (made-up skills). */
 export const AppSkillsByJob: Story = {
   parameters: appPage(sampleApp.id, 'skills'),

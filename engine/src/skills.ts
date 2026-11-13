@@ -24,6 +24,7 @@ import { db } from './db/client.js'
 import { app, workspace } from './db/schema.js'
 import { PlanError } from './issues.js'
 import type { Risk } from './risk.js'
+import { STEPS, step, type StepKey } from './steps.js'
 
 export type Role = 'talk' | 'planner'
 export const ROLES: Role[] = ['talk', 'planner']
@@ -176,6 +177,54 @@ export async function skillOptions(role: Role, cwd: string, appId: string): Prom
     mcpServers: Object.assign({}, ...r.plugins.map((p) => (p.shim ? SHIMS[p.id].mcpServers : {}))),
     skills: [...r.skills, ...skillDirs(join(cwd, '.claude', 'skills'))],
   }
+}
+
+/**
+ * An app's skills for the steps of its workflow (Sandy, 2026-11-13: "apply a skill to a part of the workflow … a skill
+ * that can be used in sketch, or mockup etc. This allows an app to have special context"). Kept in
+ * `setup.step_skills`: `{ <step>: [<skill, as a session names it>] }`. A skill named there is one the app's sessions
+ * already get (its repo's own, or a plugin's that is on for it); this says when to use it. "Starts as an idea" is not
+ * work an agent does, so it takes none.
+ */
+export type StepSkills = Partial<Record<StepKey, string[]>>
+export const SKILL_STEPS = STEPS.filter((s) => s.key !== 'idea').map((s) => s.key)
+
+/** What Settings saved, tidied: known steps, skill names as short strings, none twice, no empty lists. */
+export function cleanStepSkills(given: unknown): StepSkills {
+  const out: StepSkills = {}
+  for (const [k, v] of Object.entries((given ?? {}) as Record<string, unknown>)) {
+    if (!SKILL_STEPS.includes(k as StepKey) || !Array.isArray(v)) continue
+    const names = [...new Set(v.filter((n): n is string => typeof n === 'string' && /^[\w.:@/-]{1,120}$/.test(n)))]
+    if (names.length) out[k as StepKey] = names
+  }
+  return out
+}
+
+/** The skills an app's conversations get, as Settings offers them for a step: the repo's own, then the plugins' that are on for it. */
+export async function usableSkills(appId: string, repoPath: string | null | undefined) {
+  const s = await settingsFor(appId)
+  const r = resolvePlugins(installed(), s.factory, s.app, 'talk', s.jobs)
+  return [
+    ...(repoPath ? appSkills(repoPath).map((k) => ({ name: k.name, label: k.name, from: 'this repo', description: k.description })) : []),
+    ...r.plugins.flatMap((p) => p.skills.filter((k) => skillOnFor(k.key, s.factory, s.jobs)).map((k) => ({ name: `${p.sdkName}:${k.name}`, label: k.name, from: p.name, description: k.description }))),
+  ]
+}
+
+/**
+ * What a conversation is told about the app's step skills. `given` are the skills the session really has: one named
+ * for a step and not there (a skill removed from the repo, a plugin switched off) is left out, never promised.
+ * A check's fresh agent is told its own step's skills, and that they win on form and place; any other conversation
+ * gets the list for every step, to use when it does that step.
+ */
+export function stepSkillPrompt(chosen: StepSkills | undefined, given: string[], check?: StepKey): string {
+  const have = (k: StepKey) => (chosen?.[k] ?? []).filter((n) => given.includes(n))
+  const named = (ns: string[]) => ns.map((n) => `\`${n}\``).join(', ')
+  if (check) {
+    const mine = have(check)
+    return mine.length ? `\n\nThis app has ${mine.length > 1 ? 'skills' : 'a skill'} for this step: ${named(mine)}. Invoke ${mine.length > 1 ? 'each' : 'it'} with the Skill tool before you start, and follow ${mine.length > 1 ? 'them' : 'it'}. Where a skill and your instructions differ on the form of the result, its sections or where it belongs, the skill is this app's standard and wins; you still report with set_step as told.` : ''
+  }
+  const lines = SKILL_STEPS.filter((k) => have(k).length).map((k) => `- ${step(k).label}: ${named(have(k))}`)
+  return lines.length ? `\n\nThis app has skills for steps of its workflow. Before you do one of these steps, invoke its skill${lines.length > 1 ? 's' : ''} with the Skill tool and follow what it says; it is this app's own way of doing that step and wins over the general way where they differ:\n${lines.join('\n')}` : ''
 }
 
 /** The app layer: the skills in an app repo's own `.claude/skills/`. */
