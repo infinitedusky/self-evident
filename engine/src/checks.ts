@@ -22,7 +22,12 @@ import { stepsOf } from './work.js'
 
 export interface CheckFacts { identifier: string; title: string; issueId: string; base: string; prototype: { path: string; branch: string; title: string } | null; before: StepKey[] }
 
-const report = (key: StepKey, issueId: string) => `Record it with set_step: issueId ${issueId}, key ${key}, status done, body: the report in Markdown, detail: its one-line verdict. Then say in two or three lines what you found, and stop.`
+/**
+ * A report has two readers (Sandy, 2026-11-13: "really comprehensive but they're really long … great context for the
+ * next agent, but very hard for a human to read"): the body is the next agent's, the summary is the person's.
+ */
+export const SUMMARY = `summary: for the person, who will not read the report. At most eight bullets, one line each, in plain words, in this order: what they must decide, each with what you would choose; what is wrong or missing, each with what it costs to fix; what is risky and how we would know; then one line for everything that holds. Only what would change what they do: no restating the report's sections, no file paths unless they must open that file, no hedging. If nothing needs them, say so in one line`
+const report = (key: StepKey, issueId: string) => `Record it with set_step: issueId ${issueId}, key ${key}, status done, body: the report in Markdown, written for the next agent and as long as it needs; ${SUMMARY}; detail: its one-line verdict. Then say in two or three lines what you found, and stop.`
 const earlier = (f: CheckFacts) => (f.before.length ? `Read first, with get_step on this task: ${f.before.map((k) => `${k} (${step(k).label})`).join(', ')}. ` : '')
 const proto = (f: CheckFacts) => (f.prototype ? `The prototype "${f.prototype.title}" is in ${f.prototype.path} on branch ${f.prototype.branch}, cut from ${f.base}: read it there (git -C ${f.prototype.path} log ${f.base}..HEAD, git -C ${f.prototype.path} diff ${f.base}...HEAD). It was built the way we would ship it, with only what is outside the system faked through seams; it is not merged. ` : '')
 
@@ -75,7 +80,7 @@ export const finalizeBrief = (done: StepKey[], f: CheckFacts) => `The prototype 
 - the assets each step left (sketch files, story ids, the reports), named so the brief points at them.
 Then bring the acceptance criteria up to date with set_acceptance (the task tool shows them): every requirement of the brief has one, each can be checked as written and says how, what the analysis found not met or faked is recorded on its criterion (shown false, with what is missing), and anything the reports show we must guarantee that no criterion covers is added. Do not put them in the brief's text: they are kept beside it and approved with it.
 Change nothing else, and do not ask the person anything: when your turn ends the brief audit reads the result.`
-export const reportsIn = (done: StepKey[]) => `The checks are done: ${done.map((k) => step(k).label).join(', ')}. ${done.includes('audit') ? 'Read the brief audit with get_step and fix in the brief what it found (update_task); leave what it says holds. Then tell' : 'Tell'} the person in a few lines what the reports say and that the brief is ready for them to approve.`
+export const reportsIn = (done: StepKey[]) => `The checks are done: ${done.map((k) => step(k).label).join(', ')}. ${done.includes('audit') ? 'Read the brief audit with get_step and fix in the brief what it found (update_task); leave what it says holds. Then tell' : 'Tell'} the person in a few lines what the reports say, from each report's summary (a report with none: write it one now, set_step with summary alone), and that the brief is ready for them to approve.`
 
 const note = async (sessionId: string, stage: string) => (await db.select({ id: sessionMessage.id }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, sessionId), sql`${sessionMessage.payload}->>'checks' = ${stage}`)).limit(1)).length > 0
 

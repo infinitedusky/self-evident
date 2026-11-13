@@ -16,6 +16,7 @@ import { issueBranch, issueStart, landingBranch, prMode, stackBase } from './bra
 import { newId } from './ids.js'
 import { identifier, setState } from './issues.js'
 import { land, withLock } from './landing.js'
+import { guideTasks, mergeGuide } from './merge-guide.js'
 import { ensureProjectPr, prBody } from './pr.js'
 import { projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
 import { finishPlanning, preparePlanning, type Propose } from './planner.js'
@@ -406,7 +407,9 @@ export class Runner {
     const k = t ? issues.findIndex((q) => q.id === t.id) + 1 : 0
     const title = t ? `${t.identifier} ${t.title} (${p.name}, ${k} of ${issues.length})` : p.name
     const intro = t ? { ...p, name: `${p.name}, task ${k} of ${issues.length}: ${t.identifier} ${t.title}`, content: [t.description, stack.on ? `Stacked on #${stack.on}: review and merge that one first; this PR then retargets to ${a.defaultBranch}.` : null].filter(Boolean).join('\n\n') || p.content } : p
-    const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog)
+    const open = mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled')
+    const guide = mergeGuide(await guideTasks((t ? [t] : issues).map((q) => ({ id: q.id, identifier: q.identifier, title: q.title })), open.map((x) => ({ parentId: x.parentId ?? null, identifier: x.identifier }))).catch(() => []))
+    const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog, guide)
     const result = await ensureProjectPr({ repoPath: r.localPath!, fullName: r.fullName, integrationBranch: head, base: stack.base, title, body })
     const existing = prs.find((q) => (issueId ? q.issueId === issueId : !q.issueId))
     if (!existing) await db.insert(prTable).values({ id: newId('pr'), appId: a.id, projectId, issueId: issueId ?? null, repoId: r.id, number: result.number, url: result.url, headBranch: head, baseBranch: stack.base, status: 'open', openedAt: new Date() })

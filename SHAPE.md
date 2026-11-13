@@ -656,6 +656,13 @@ Details and sources in `research/`.
   current again; any save point or set-aside task branch can be deleted from one flat list; completing the task keeps
   the current one and clears the rest. The prototype's database is one per prototype, not per task branch.
 
+- **A report has two readers (Sandy, 2026-11-13).** The prototype analysis, the draft ADR, the blast radius and the
+  brief audit are long because the next agent needs them whole. The person reads each one's **summary**: at most
+  eight one-line bullets, what they must decide or what is wrong first. The page shows the summary; the report is
+  folded under it. The pull request opens with a **merge guide** for whoever approves it, put together from what the
+  task holds (its description, each acceptance criterion with the build's mark, the decisions, the risks and how we
+  would know), with the record of what landed under it.
+
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
 > "When I use VS Code, I can just move really quickly … I just set things to dangerously skip permissions and just

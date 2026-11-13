@@ -16,6 +16,8 @@ import { askStep } from './StepsPanel'
 import { engine, type Prototype, type StepSubject, type StepWork } from '../engine'
 import { useWorkspace } from '../workspace'
 
+const words = (t: string) => t.trim().split(/\s+/).length
+
 const err = (e: any) => String(e?.message ?? e)
 
 export function StepSection({ subject, appId, name, on = 'task', row, base, fromIdea, waitingState, session, children }: {
@@ -121,7 +123,18 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
           {work && work.refs.length > 0 && (
             <p style={{ margin: '8px 0' }}>{work.refs.map((story) => <button key={story} className="btn quiet small" style={{ marginRight: 6 }} onClick={() => ws?.open({ kind: 'storybook', story })}>{story}</button>)}</p>
           )}
-          {work?.body && <div className="md step-body"><Markdown remarkPlugins={[remarkGfm]}>{work.body}</Markdown></div>}
+          {work?.summary?.trim() && (
+            <div className="step-summary" data-component="StepSummary" aria-label="What you need to know">
+              <h3>What you need to know</h3>
+              <div className="md"><Markdown remarkPlugins={[remarkGfm]}>{work.summary}</Markdown></div>
+            </div>
+          )}
+          {work?.body && (work.summary?.trim()
+            ? <details className="step-full"><summary>The full report <span className="faint">{words(work.body)} words, written for the next agent</span></summary><div className="md step-body"><Markdown remarkPlugins={[remarkGfm]}>{work.body}</Markdown></div></details>
+            : <>
+                {words(work.body) > 400 && <p className="faint step-nosummary">This report is {words(work.body)} words and has no summary. Ask the task's agent: “summarize the {label(row.key, on).toLowerCase()} for me”.</p>}
+                <div className="md step-body"><Markdown remarkPlugins={[remarkGfm]}>{work.body}</Markdown></div>
+              </>)}
 
           {!row.waitingOn && (
             <div className="step-actions">

@@ -158,7 +158,7 @@ async function subjectApp(tx: Tx, s: Subject) {
  * Record work on a step: research notes, a rough draft, an ADR, the mockups' story ids. A task's brief is written
  * on the issue itself (updateIssue), and "starts as an idea" by converting one, so neither is set here.
  */
-export async function setStep(s: Subject, key: StepKey, input: { status?: 'started' | 'done' | 'none'; detail?: string | null; body?: string | null; refs?: string[] }, actor = 'user') {
+export async function setStep(s: Subject, key: StepKey, input: { status?: 'started' | 'done' | 'none'; detail?: string | null; body?: string | null; summary?: string | null; refs?: string[] }, actor = 'user') {
   const on = onOf(s)
   if (!KEYS.includes(key)) throw new PlanError(`no step "${key}"; the steps are ${KEYS.join(', ')}`)
   if (!CAN[on].includes(key)) throw new PlanError(`${step(key).label} isn't done on ${on === 'idea' ? 'an idea' : `a ${on}`}`)
@@ -170,8 +170,8 @@ export async function setStep(s: Subject, key: StepKey, input: { status?: 'start
     const [old] = await tx.select().from(stepWork).where(and(subjectCol(s), eq(stepWork.key, key)))
     const values = {
       status: input.status ?? old?.status ?? 'started', detail: input.detail !== undefined ? input.detail : old?.detail ?? null,
-      body: input.body !== undefined ? input.body : old?.body ?? null, refs: input.refs ?? (old?.refs as string[] | undefined) ?? [], updatedBy: actor, updatedAt: new Date(),
-      approvedBy: null, approvedAt: null, // the work changed: the person approves it again, as with a brief
+      body: input.body !== undefined ? input.body : old?.body ?? null, summary: input.summary !== undefined ? (input.summary?.trim() || null) : old?.summary ?? null, refs: input.refs ?? (old?.refs as string[] | undefined) ?? [], updatedBy: actor, updatedAt: new Date(),
+      ...(old && Object.keys(input).every((k) => k === 'summary' || (input as Record<string, unknown>)[k] === undefined) ? {} : { approvedBy: null, approvedAt: null }), // the work changed: the person approves it again, as with a brief; a summary added to it is not a change to the work
     }
     const [row] = old
       ? await tx.update(stepWork).set(values).where(eq(stepWork.id, old.id)).returning()

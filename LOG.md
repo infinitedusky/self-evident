@@ -3134,3 +3134,29 @@ one that lights, and the task branch and the save points sit under it as the ste
 point's row in the nav opens the page with that save point marked. And the page's list did not show the task branch
 being worked on, so nav and page disagreed; it is now the list's first row, saying the save points below are points
 on it.
+
+## Summaries on the reports, and a merge guide on the pull request (Sandy, 2026-11-13: "really comprehensive but they're really long … very hard for a human to read"; "the PR is going to need … a merge guide")
+
+Two readers were being given one text.
+
+- **A summary on each report.** A step's work has a `summary` beside its body (migration 0020). Every check (the
+  prototype analysis, the draft ADR, the blast radius, the brief audit) is now told to record both: the body for the
+  next agent, as long as it needs, and the summary for the person: at most eight one-line bullets in plain words, in
+  the order what they must decide (with what the agent would choose), what is wrong (with what it costs), what is
+  risky (with how we would know), then one line for all that holds. The step's page shows "What you need to know"
+  and folds the report under it, with its word count. A long report with no summary (those written before today)
+  says so and how to get one; the conductor is told to write a summary when one is missing (`set_step`, summary
+  alone, which changes nothing else and does not ask for an approval again).
+- **A merge guide.** The pull request now opens with it, above the sub-task record, which stays for reference. It is
+  put together by the engine from what the task holds, so it is the same every time and nothing is written for the
+  occasion: a first line on what to act on (criteria not met, sub-tasks not landed, or that all are met); what it
+  does (the task's description); how to check it (each acceptance criterion with the build's mark, not met first,
+  with the evidence or the way to check); decisions made (the ADR's summary and the planner's decisions with why);
+  risks and how we would know (the blast radius's summary); how to undo it. A project's pull request heads each task.
+  The task's build page shows it before there is a pull request, with Copy, and the conductor reads it with
+  `merge_guide` before saying a build is ready.
+
+Not done: an agent writing the guide's prose after the build (the risks are the blast radius's, written before the
+build, so what the build itself turned up is only there if a criterion or a decision records it); a summary on the
+brief itself; summaries for reports already written (ask the task's agent). Not tried: a real check writing a
+summary, or a real pull request opened with the guide.

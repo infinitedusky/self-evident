@@ -32,12 +32,13 @@ export async function ensureProjectPr(i: PrInput): Promise<{ number: number; url
 
 export interface Landed { identifier: string; title: string; summary?: string | null; costUsd?: number | null; sha?: string | null }
 
-export function prBody(project: { name: string; content?: string | null; id: string }, landed: Landed[], pending: { identifier: string; title: string }[], backlog: { title: string; state: string; reason: string | null }[] = []): string {
+export function prBody(project: { name: string; content?: string | null; id: string }, landed: Landed[], pending: { identifier: string; title: string }[], backlog: { title: string; state: string; reason: string | null }[] = [], /** The merge guide, for whoever approves it (merge-guide.ts): first, above the record of what landed. */ guide = ''): string {
   const lines = [
     `Built by Self Evident from project \`${project.id}\`: ${project.name}.`,
-    project.content ? `\n${project.content}` : '',
+    project.content && !guide ? `\n${project.content}` : '', // the guide says what it does, per task
+    guide ? `\n${guide}` : '',
     '',
-    '## Landed',
+    guide ? '## What landed, sub-task by sub-task\n\n_The record of the build, for reference. The guide above is what to read._\n' : '## Landed',
     ...landed.map((t) => [`### ${t.identifier} ${t.title}` + (t.sha ? ` (\`${t.sha.slice(0, 7)}\`)` : ''),
       t.summary?.trim() || '_No summary from the run._',
       t.costUsd != null ? `_Run cost estimate: $${Number(t.costUsd).toFixed(2)}_` : ''].join('\n\n')),

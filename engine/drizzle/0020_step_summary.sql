@@ -1,0 +1,1 @@
+ALTER TABLE "step_work" ADD COLUMN "summary" text;
