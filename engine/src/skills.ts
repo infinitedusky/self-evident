@@ -125,14 +125,13 @@ export function cleanJobs(given: unknown, f: FactorySettings, list: Installed[])
     .filter(([job, key]) => CATEGORY_KEYS.has(job) && (key === null || (typeof key === 'string' && filed.get(key) === job)))) as AppJobs
 }
 
-/** The jobs that have a skill filed, for an app's Settings: the skills that could do each, All apps' choice, the app's own. */
+/** Every job, for an app's Settings: its group, what the engine does there itself, the skills filed under it (often none), All apps' choice, the app's own. */
 export function describeJobs(f: FactorySettings, jobs: AppJobs = {}, list: Installed[] = installed()) {
   const all = list.flatMap((p) => p.skills.map((s) => ({ key: s.key, name: s.name, plugin: p.name, category: skillCategory(s.key, f) })))
-  return CATALOGUE.flatMap((g) => g.categories).flatMap((c) => {
+  return CATALOGUE.flatMap((g) => g.categories.map((c) => {
     const skills = all.filter((s) => s.category === c.key).map(({ category: _, ...s }) => s)
-    if (!skills.length) return []
-    return [{ key: c.key, name: c.name, for: c.for, skills, factory: skills.find((s) => skillOn(s.key, f))?.key ?? null, overridden: c.key in jobs, own: jobs[c.key] ?? null }]
-  })
+    return { key: c.key, name: c.name, for: c.for, group: g.name, builtIn: c.builtIn ?? null, skills, factory: skills.find((s) => skillOn(s.key, f))?.key ?? null, overridden: c.key in jobs, own: jobs[c.key] ?? null }
+  }))
 }
 
 /** What a role gets in one app: the plugins switched on for it, and the skills switched on in them. */

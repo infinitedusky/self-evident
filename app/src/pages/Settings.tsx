@@ -9,7 +9,7 @@ import { Link, NavLink, useLocation, useMatch, useNavigate, useParams } from 're
 import { Badge } from '../components/Badge'
 import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
-import { engine, type AccountStatus, type AgentRole, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
+import { engine, type AccountStatus, type AgentRole, type AppJob, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
@@ -19,7 +19,7 @@ export const FACTORY_SECTIONS = [
   { key: 'plugins', label: 'Plugins' }, { key: 'skills', label: 'Skills by job' }, { key: 'integrations', label: 'Integrations' },
 ] as const
 export const APP_SECTIONS = [
-  { key: 'repo', label: 'Repo' }, { key: 'agents', label: 'Agents' }, { key: 'plugins', label: 'Plugins' }, { key: 'landing', label: 'Landing' },
+  { key: 'repo', label: 'Repo' }, { key: 'agents', label: 'Agents' }, { key: 'plugins', label: 'Plugins' }, { key: 'skills', label: 'Skills by job' }, { key: 'landing', label: 'Landing' },
   { key: 'prototype', label: 'Prototype' }, { key: 'integrations', label: 'Integrations' }, { key: 'workflows', label: 'Workflow rules' },
 ] as const
 
@@ -378,35 +378,8 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
           })}
         </dl>
       </div>
-      {(info?.jobs?.length ?? 0) > 0 && <div className="settings-group" data-component="AppJobs">
-        <h3 className="settings-h3">Skills by job</h3>
-        <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>One skill does each job. Each follows All apps unless this app picks another skill filed under that job, or none. Skills are filed under jobs in <NavLink to="/settings">All apps</NavLink>.</p>
-        <dl className="fields">
-          {info!.jobs!.map((j) => {
-            const jobs = setup.skills_by_job ?? {}
-            const mine = j.key in jobs
-            const named = (key: string | null) => j.skills.find((s) => s.key === key)?.name ?? 'none'
-            const choose = (v: string) => {
-              const { [j.key]: _, ...rest } = jobs
-              const next = v === '' ? rest : { ...rest, [j.key]: v === '-' ? null : v }
-              set({ skills_by_job: Object.keys(next).length ? next : undefined })
-            }
-            return (
-              <div key={j.key} style={{ display: 'contents' }}>
-                <dt title={j.for}>{j.name}</dt>
-                <dd>
-                  <select aria-label={`Skill for ${j.name}`} value={!mine ? '' : jobs[j.key] ?? '-'} onChange={(e) => choose(e.target.value)}>
-                    <option value="">As All apps ({named(j.factory)})</option>
-                    {j.skills.map((s) => <option key={s.key} value={s.key}>{s.name} ({s.plugin})</option>)}
-                    <option value="-">None for this app</option>
-                  </select> {mine && <Badge tone="accent">override</Badge>}
-                </dd>
-              </div>
-            )
-          })}
-        </dl>
-      </div>}
     </>,
+    skills: <AppJobs jobs={info?.jobs ?? null} value={setup.skills_by_job ?? {}} onChange={(next) => set({ skills_by_job: Object.keys(next).length ? next : undefined })} />,
     landing: <>
       <Group title="Landing" lead="How finished work reaches the default branch.">
         <label style={{ gridColumn: '1 / -1' }}>Test command<input className="mono" value={setup.test_cmd ?? ''} onChange={(e) => set({ test_cmd: e.target.value })} placeholder="runs in the worktree on the merged commit; must exit 0 to land" /></label>
@@ -430,6 +403,54 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
       {groups[section]}
       <SaveRow dirty={dirty} busy={busy} error={error} onSave={save} />
     </section>
+  )
+}
+
+/**
+ * An app's own skill per job (Sandy, 2026-11-13: "it shouldn't be a plugin, it should have its own nav"). Every job
+ * is listed, grouped by where it sits in the loop, so the page is never empty: a job with a skill filed follows All
+ * apps unless this app picks another filed there, or none; a job with none filed says so, and what the engine does
+ * there itself. Filing a skill under a job is done in All apps.
+ */
+function AppJobs({ jobs, value, onChange }: { jobs: AppJob[] | null; value: Record<string, string | null>; onChange: (next: Record<string, string | null>) => void }) {
+  if (!jobs) return <p className="muted">Loading…</p>
+  const groups = [...new Set(jobs.map((j) => j.group ?? ''))]
+  const filed = jobs.filter((j) => j.skills.length).length
+  return (
+    <div data-component="AppJobs">
+      <div className="settings-group">
+        <h3 className="settings-h3">Skills by job</h3>
+        <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>One skill does each job. Each follows All apps unless this app picks another skill filed under that job, or none. A skill is filed under a job in <NavLink to="/settings/skills">All apps › Skills by job</NavLink>.</p>
+        {!filed && <p className="settings-note" style={{ margin: '0 0 8px' }}><Badge>Nothing to choose yet</Badge><span>No skill is filed under any job. Install a plugin that brings skills (All apps › Plugins) and file them (All apps › Skills by job); then each job here can be chosen for this app.</span></p>}
+      </div>
+      {groups.map((g) => (
+        <div className="settings-group" key={g}>
+          {g && <h3 className="settings-h3">{g}</h3>}
+          <dl className="fields">
+            {jobs.filter((j) => (j.group ?? '') === g).map((j) => {
+              const mine = j.key in value
+              const named = (key: string | null) => j.skills.find((s) => s.key === key)?.name ?? 'none'
+              const choose = (v: string) => { const { [j.key]: _, ...rest } = value; onChange(v === '' ? rest : { ...rest, [j.key]: v === '-' ? null : v }) }
+              return (
+                <div key={j.key} style={{ display: 'contents' }}>
+                  <dt>{j.name}<div className="faint" style={{ fontSize: 13, fontWeight: 400 }}>{j.for}</div></dt>
+                  <dd>
+                    {j.skills.length
+                      ? <><select aria-label={`Skill for ${j.name}`} value={!mine ? '' : value[j.key] ?? '-'} onChange={(e) => choose(e.target.value)}>
+                          <option value="">As All apps ({named(j.factory)})</option>
+                          {j.skills.map((s) => <option key={s.key} value={s.key}>{s.name} ({s.plugin})</option>)}
+                          <option value="-">None for this app</option>
+                        </select> {mine && <Badge tone="accent">override</Badge>}</>
+                      : <span className="faint">No skill filed.</span>}
+                    {j.builtIn && <div className="faint" style={{ fontSize: 13 }}>The engine itself: {j.builtIn}</div>}
+                  </dd>
+                </div>
+              )
+            })}
+          </dl>
+        </div>
+      ))}
+    </div>
   )
 }
 

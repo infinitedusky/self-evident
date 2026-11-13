@@ -150,8 +150,8 @@ export interface Category { key: string; name: string; for: string; builtIn?: st
 export interface CategoryGroup { name: string; categories: Category[] }
 export interface FactorySettings { workspace: Workspace | null; integrations: Integration[]; values: IntegrationValues; status: Record<string, IntegrationStatus>; plugins: PluginInfo[]; catalogue: CategoryGroup[] }
 export interface AppPlugin { id: string; name: string; factoryOn: boolean; own: boolean | null; on: boolean }
-/** A job that has a skill filed: the skills that could do it, the one All apps uses (`factory`), and this app's own choice when it made one (`own`: a skill, or null for none). */
-export interface AppJob { key: string; name: string; for: string; skills: { key: string; name: string; plugin: string }[]; factory: string | null; overridden: boolean; own: string | null }
+/** A job, for an app: the skills filed under it (often none), the one All apps uses (`factory`), and this app's own choice when it made one (`own`: a skill, or null for none). */
+export interface AppJob { key: string; name: string; for: string; /** Where it sits in the loop. */ group?: string; /** What the engine does there itself, when it does. */ builtIn?: string | null; skills: { key: string; name: string; plugin: string }[]; factory: string | null; overridden: boolean; own: string | null }
 export interface AppSettings { integrations: EffectiveValues; status: Record<string, IntegrationStatus>; plugins: AppPlugin[]; /** Absent from an older engine. */ jobs?: AppJob[]; skills: SkillInfo[] }
 export interface Prototype {
   id: string; appId: string; projectId: string | null; ideaId?: string | null; issueId?: string | null; title: string; brief: string | null; sessionId: string | null; branch: string; path: string; port: number | null

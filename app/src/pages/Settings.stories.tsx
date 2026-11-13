@@ -36,9 +36,9 @@ export const AppWithRepoSkills: Story = {
     appSettings: { ...appSettings, skills: [...appSettings.skills, { key: 'release-notes', name: 'release-notes', description: 'Writes the release note in the shop’s voice (sample).' }] },
   }),
 }
-/** Plugins: under the plugin switches, a skill per job. Each follows All apps until this app picks another filed there, or none (made-up skills). */
+/** Skills by job, a section of its own: every job, grouped. One with skills filed follows All apps until this app picks another filed there, or none; one with none says so (made-up skills). */
 export const AppSkillsByJob: Story = {
-  parameters: appPage(sampleApp.id, 'plugins'),
+  parameters: appPage(sampleApp.id, 'skills'),
   beforeEach: withEngine({ apps: apps.map((a) => (a.id === sampleApp.id ? { ...a, setup: { ...a.setup, skills_by_job: { review: null } } } : a)) }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
@@ -48,6 +48,17 @@ export const AppSkillsByJob: Story = {
     await expect(c.getByLabelText('Skill for Review')).toHaveValue('-')
     await userEvent.selectOptions(testing, 'other-plugin/test-first')
     await expect(c.getAllByText('override').length).toBe(2)
+      await expect(c.getByText('No skill filed.')).toBeVisible()
+  },
+}
+/** No skill filed under any job yet, as on a new install: the jobs are still listed, and it says how to get something to choose. */
+export const AppSkillsByJobNoneFiled: Story = {
+  parameters: appPage(sampleApp.id, 'skills'),
+  beforeEach: withEngine({ appSettings: { ...appSettings, jobs: (appSettings.jobs ?? []).map((j) => ({ ...j, skills: [], factory: null })) } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('Nothing to choose yet')).toBeVisible()
+    await expect(c.getAllByText('No skill filed.').length).toBe(3)
   },
 }
 /** Agents: the Claude account this app's agents run on. Nothing chosen: the engine's default, and who that is (made up). */

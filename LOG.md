@@ -2659,3 +2659,9 @@ Decided: filing stays in All apps. An app chooses among the skills already filed
 under a different job for itself. A choice whose skill is later refiled or uninstalled is dropped at the next save, and
 until then gives that job no skill in that app. The plugin switch still wins: a skill chosen from a plugin that is off
 for the app is not given. Skills in the app repo's own `.claude/skills/` are not filed under jobs and always apply.
+
+Changed the same day (Sandy: "I don't see it and it shouldn't be a plugin, it should have its own nav"): it was a list
+at the bottom of the app's Plugins section, shown only when some job had a skill filed, so on an install with none it
+was simply absent. It is now its own section of an app's settings, **Skills by job**, and lists every job, grouped as
+in All apps: a job with skills filed has the menu; a job with none says "No skill filed" and what the engine does
+there itself; and with nothing filed anywhere the page says how to get something to choose.

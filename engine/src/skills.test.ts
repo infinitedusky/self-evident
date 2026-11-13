@@ -71,8 +71,11 @@ describe('an app\'s own skill per job', () => {
     expect(cleanJobs({ debugging: 'superpowers@sp/brainstorming', 'no-such-job': null, simplify: 'superpowers@sp/brainstorming', falsify: null, 'plan-review': 'gone@x/skill' }, f, list))
       .toEqual({ debugging: 'superpowers@sp/brainstorming', falsify: null })
   })
-  it('lists the jobs that have a skill filed, with All apps\' choice and the app\'s own', () => {
-    const jobs = describeJobs(f, { debugging: null }, list)
+  it('lists every job, with the skills filed under it, All apps\' choice and the app\'s own', () => {
+    const all = describeJobs(f, { debugging: null }, list)
+    expect(all.find((j) => j.key === 'simplify')).toMatchObject({ group: 'Review', skills: [], factory: null, overridden: false })
+    expect(all.find((j) => j.key === 'interview')?.builtIn).toContain('open questions')
+    const jobs = all.filter((j) => j.skills.length)
     expect(jobs.map((j) => j.key)).toEqual(['study-a-shipped-product', 'debugging'])
     expect(jobs[1]).toMatchObject({ factory: 'superpowers@sp/systematic-debugging', overridden: true, own: null })
     expect(jobs[1].skills.map((s) => s.name)).toEqual(['systematic-debugging', 'brainstorming'])
