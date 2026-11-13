@@ -606,6 +606,9 @@ Details and sources in `research/`.
   morning's "two apps that read each other" for a product whose tickets cross repositories.
 - **A reference app is another app's checkout, read and never changed** (Sandy, 2026-11-12; LOG.md, "Reference
   apps"): for code that is looked at but is not part of this app's work.
+- **A task can stand on its own** (Sandy, 2026-11-12; LOG.md, "A task can be planned and built on its own"): a task in
+  no project is planned and built by itself. Underneath it has a project of its own, made when it is planned and never
+  shown as a project; it can join a real project until building starts.
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 

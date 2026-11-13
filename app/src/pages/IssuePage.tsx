@@ -69,7 +69,7 @@ export function IssuePage() {
       <div className="page-head">
         <div>
           <div className="faint" style={{ fontSize: 13, marginBottom: 4 }}>
-            {i.project ? <Link to={`/projects/${i.project.id}`}>{i.project.name}</Link> : <Link to="/tasks">In no project</Link>}
+            {i.project && !i.project.solo ? <Link to={`/projects/${i.project.id}`}>{i.project.name}</Link> : <Link to="/tasks">In no project</Link>}
             {i.parent && <> · sub-task of <Link to={`/tasks/${i.parent.id}`}>{i.parent.identifier} {i.parent.title}</Link></>}
           </div>
           <h1><span className="mono faint" style={{ fontWeight: 400 }}>{i.identifier}</span> {i.title}</h1>
@@ -156,7 +156,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
         {here === 'build' && (buildWaits
           ? <section className="panel"><h2>🏗️ Sub-tasks</h2><div className="empty">Planning and building wait for the brief's approval. <Link to={`${base}/brief`}>Go to the brief →</Link></div></section>
           : <>
-              <SubTasks i={i} plan={!i.subIssues.length && i.project && i.state === 'todo' ? <button className="btn" disabled={busy} onClick={() => act(() => engine.planIssue(i.id))}>Plan it</button> : null} />
+              <SubTasks i={i} plan={!i.subIssues.length && i.state === 'todo' ? <button className="btn" disabled={busy} onClick={() => act(() => engine.planIssue(i.id))}>Plan it</button> : null} />
               <Planner i={i} />
             </>)}
       </div>
@@ -284,13 +284,13 @@ function Comments({ i }: { i: IssueDetail }) {
 
 /** What the planner asked and decided about it. */
 function Planner({ i }: { i: IssueDetail }) {
-  if (!i.questions.length && !i.decisions.length) return null
+  if (!i.questions.length && !i.decisions.length && !(i.project?.solo && i.subIssues.length)) return null // a task planned on its own always has the way to its plan and build
   return (
     <section className="panel">
       <h2>The planner</h2>
       {i.questions.filter((q) => q.status === 'open').map((q) => <p key={q.id} style={{ margin: '0 0 8px' }}><Badge tone="warn">asks</Badge> <Md text={q.text} inline /></p>)}
       {i.decisions.map((d) => <p key={d.id} className="muted" style={{ margin: '0 0 6px' }}>Decided: <Md text={d.question} inline />: <Md text={d.options.find((o) => o.key === d.chosen)?.text} inline />{d.provisional ? ' (provisional)' : ''}</p>)}
-      {i.project && <Link to={`/projects/${i.project.id}`}>Answer on the project →</Link>}
+      {i.project && <Link to={`/projects/${i.project.id}`}>{i.project.solo ? 'Its plan and build: answer and run it there →' : 'Answer on the project →'}</Link>}
     </section>
   )
 }

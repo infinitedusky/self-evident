@@ -322,7 +322,8 @@ const OPEN_STATES = ['triage', 'backlog', 'todo', 'in_progress', 'in_review']
 /** Plan's page: open projects with their tasks, tasks in no project, open to-dos, and the workflows. */
 export async function planView(appId: string) {
   const a = await appOf(db, appId)
-  const projects = (await db.select().from(project).where(eq(project.appId, appId)).orderBy(project.sortOrder, project.createdAt)).filter((p) => OPEN_PROJECTS.includes(p.status))
+  const projects = (await db.select().from(project).where(eq(project.appId, appId)).orderBy(project.sortOrder, project.createdAt)).filter((p) => OPEN_PROJECTS.includes(p.status) && !p.solo)
+  const own = new Set((await db.select({ id: project.id }).from(project).where(and(eq(project.appId, appId), eq(project.solo, true)))).map((p) => p.id)) // tasks' own projects (solo.ts): those tasks are loose
   const tops = await db.select().from(issue).where(and(eq(issue.appId, appId), isNull(issue.parentId))).orderBy(issue.sortOrder, issue.number)
   const wfs = await db.select().from(workflow).where(eq(workflow.appId, appId))
   const name = (id: string | null) => wfs.find((w) => w.id === id)?.name
@@ -337,7 +338,7 @@ export async function planView(appId: string) {
       return { id: p.id, name: p.name, status: p.status, workflow: name(p.workflowId), steps: v.states.filter((s) => s.key !== 'idea'), keys: v.rows.map((r) => r.key).filter((k) => k !== 'idea'),
         tasks: await Promise.all(code.filter((i) => i.projectId === p.id).map(task)) }
     })),
-    loose: await Promise.all(code.filter((i) => !i.projectId).map(task)),
+    loose: await Promise.all(code.filter((i) => !i.projectId || own.has(i.projectId)).map(task)),
     todosOpen: tops.filter((i) => i.kind === 'todo' && OPEN_STATES.includes(i.state)).length,
     workflows: wfs.map(asWorkflow), appWorkflow: name(a.workflowId),
     ideaFirst: await ideaFirst(db, appId), // tasks and projects are made only by converting an idea

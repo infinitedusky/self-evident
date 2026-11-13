@@ -154,6 +154,7 @@ export const project = pgTable('project', { // issues in order (an InDusk master
   lead: text('lead'), priority: integer('priority').notNull().default(0), startDate: date('start_date'), targetDate: date('target_date'),
   sortOrder: integer('sort_order').notNull().default(0), createdAt: createdAt(), updatedAt: at('updated_at'),
   workflowId: text('workflow_id').references((): AnyPgColumn => workflow.id), // its tasks' unless they have their own
+  solo: boolean('solo').notNull().default(false), // one task on its own: made when the task is planned, never listed as a project (solo.ts)
 }, (t) => [uniqueIndex('project_id_app').on(t.id, t.appId), index('project_app').on(t.appId),
   inList('project_status', t.status, PROJECT_STATUSES), check('project_priority', sql`${t.priority} between 0 and 4`),
   foreignKey({ name: 'project_idea_app_fk', columns: [t.ideaId, t.appId], foreignColumns: [idea.id, idea.appId] })])

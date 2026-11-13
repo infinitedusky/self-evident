@@ -47,6 +47,23 @@ export const ChecksRunning: Story = { parameters: at('iss_sample20', 'prototype'
 export const NoAgentYet: Story = { parameters: at('iss_sample20'), beforeEach: withEngine({ taskTalk: null }) }
 /** A task in no project yet. */
 export const InNoProject: Story = { parameters: at('iss_sample16') }
+/** A task in no project, brief approved: it can be planned where it is, on its own. */
+export const InNoProjectReadyToPlan: Story = {
+  parameters: at('iss_sample16', 'build'),
+  beforeEach: withEngine({ steps: { ...sampleData.steps, issues: approvedTaskStepsView }, issueDetails: { ...sampleData.issueDetails, iss_sample16: { ...issueDetails.iss_sample16, state: 'todo', briefApprovedBy: 'Sam (sample)', briefApprovedAt: '2026-10-28T10:00:00Z' } } }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('button', { name: 'Plan it' })).toBeInTheDocument() },
+}
+/** The same task once planned on its own: still "In no project" at the top, with the way to its plan and build. */
+export const PlannedOnItsOwn: Story = {
+  parameters: at('iss_sample16', 'build'),
+  beforeEach: withEngine({ steps: { ...sampleData.steps, issues: approvedTaskStepsView }, issueDetails: { ...sampleData.issueDetails, iss_sample16: { ...issueDetails.iss_sample16, state: 'todo', briefApprovedBy: 'Sam (sample)', briefApprovedAt: '2026-10-28T10:00:00Z',
+    project: { id: 'proj_solo', name: 'Search results load too slowly', status: 'drafting', solo: true }, subIssues: issueDetails.iss_sample1.subIssues } } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('link', { name: /Its plan and build/ })).toBeInTheDocument()
+    await expect(c.getByRole('link', { name: 'In no project' })).toBeInTheDocument()
+  },
+}
 /** A ticket tkt built, done: what the skills wrote on it as it moved (the plan, the handoff, the completion), one per heading. */
 export const Commented: Story = { parameters: at('iss_sample22') }
 /** A failed build, with Retry. */

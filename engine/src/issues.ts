@@ -9,6 +9,7 @@ import { db, type Tx } from './db/client.js'
 import { app, build, CLOSED_STATES, issue, issueComment, issueRelation, project, STATE_TYPE, type IssueKind, type IssueState } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
+import { foldSolo, guardLeavingSolo } from './solo.js'
 
 export class PlanError extends Error {}
 
@@ -139,6 +140,7 @@ export async function updateIssue(issueId: string, input: Partial<Pick<NewIssue,
     }
     if (input.projectId !== undefined && (input.projectId ?? null) !== i.projectId && i.projectId) { // leaving a project: not while it is being built
       const [from] = await tx.select().from(project).where(eq(project.id, i.projectId))
+      if (from) guardLeavingSolo(from)
       if (from?.status === 'running') throw new PlanError(`${from.name} is running, and its tasks are built in order: stop it before moving a task out.`)
     }
     const set: Partial<Issue> = {}
@@ -152,6 +154,10 @@ export async function updateIssue(issueId: string, input: Partial<Pick<NewIssue,
     if (!Object.keys(set).length) return i
     const [row] = await tx.update(issue).set({ ...set, updatedAt: new Date() }).where(eq(issue.id, issueId)).returning()
     if (input.projectId !== undefined && !i.parentId) await tx.update(issue).set({ projectId: input.projectId ?? null }).where(eq(issue.parentId, issueId)) // sub-issues follow
+    if (input.projectId !== undefined && (input.projectId ?? null) !== i.projectId && i.projectId && !i.parentId) { // out of a project of its own: that one is put away
+      const [from] = await tx.select().from(project).where(eq(project.id, i.projectId))
+      if (from) await foldSolo(tx, from, issueId, input.projectId ?? null)
+    }
     const base = await baseOf(tx, row)
     await appendEvent(tx, { ...base, actor, type: 'issue.updated', payload: { identifier: identifier(base.key, i.number), number: i.number, changed: Object.keys(set), ...(set.projectId !== undefined ? { from: i.projectId } : {}) } })
     return row
@@ -203,7 +209,7 @@ export async function listIssues(appId: string, f: { kind?: IssueKind; projectId
   const where = [eq(issue.appId, appId)]
   if (f.kind) where.push(eq(issue.kind, f.kind))
   if (f.projectId) where.push(eq(issue.projectId, f.projectId))
-  if (f.projectId === null) where.push(isNull(issue.projectId))
+  if (f.projectId === null) where.push(sql`(${issue.projectId} is null or ${issue.projectId} in (select id from project where solo))`) // a project of its own counts as none (solo.ts)
   if (f.topLevel) where.push(isNull(issue.parentId))
   if (f.open) where.push(sql`${issue.state} not in ('done', 'canceled', 'duplicate')`)
   if (f.states?.length) where.push(inArray(issue.state, f.states))

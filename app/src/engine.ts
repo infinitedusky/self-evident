@@ -67,7 +67,7 @@ export interface ChecklistLine extends Issue { text: string; done: boolean; posi
 export interface Todo extends Issue { notes: string | null; owner: 'person' | 'agent'; status: 'open' | 'done' | 'dropped'; checklist: ChecklistLine[]; project?: { id: string; name: string; status: string } | null }
 export interface Pr { id: string; issueId: string | null; number: number | null; url: string | null; status: string }
 export interface Graph {
-  project: { id: string; name: string; description: string | null; content: string | null; status: string; integrationBranch: string | null; createdAt: string }
+  project: { id: string; name: string; description: string | null; content: string | null; status: string; integrationBranch: string | null; createdAt: string; solo?: boolean } // solo: one task on its own, never listed as a project
   app: { id: string; name: string; key: string; defaultBranch: string }
   pr: Pr | null; prs: Pr[]
   issues: GraphIssue[] // in order: the order they are built in
@@ -82,13 +82,13 @@ export interface Graph {
 /** A file on the graph: who claims it, and who has it right now (the sub-issue being built with it). */
 export interface GraphFile { path: string; subIssues: string[]; heldBy: string | null }
 export interface ProjectSummary { id: string; name: string; status: string; createdAt: string; ideaId?: string | null; app: { id: string; name: string } | null; issueCount: number; backlogOpen?: number; builds: Record<string, number> }
-export interface IssueRow { id: string; identifier: string; number: number; title: string; description: string | null; state: IssueState; sortOrder: number; priority: number; project: { id: string; name: string; status: string } | null; builds: Record<string, number>; planning: string | null }
+export interface IssueRow { id: string; identifier: string; number: number; title: string; description: string | null; state: IssueState; sortOrder: number; priority: number; project: { id: string; name: string; status: string; solo?: boolean } | null; builds: Record<string, number>; planning: string | null }
 /** What was written on a ticket as it moved: one comment per heading (the plan, the handoff, the review), the latest write of each. */
 export interface IssueComment { id: string; issueId: string; heading: string; body: string; author: string; createdAt: string; updatedAt: string }
 export interface IssueDetail extends Issue {
   comments: IssueComment[]
   runner: 'tkt' | null // who builds it once the brief is approved: tkt, or Self Evident's own agents
-  project: { id: string; name: string; status: string } | null; parent: { id: string; identifier: string; title: string } | null
+  project: { id: string; name: string; status: string; solo?: boolean } | null; parent: { id: string; identifier: string; title: string } | null
   build: { status: BuildStatus; attempt: number; heldReason: string | null } | null; questions: Question[]; decisions: Decision[]
   relations: { issueId: string; relatedIssueId: string; type: 'blocks' | 'related' | 'duplicate' }[]
   subIssues: (Issue & { build: { status: BuildStatus; attempt: number; heldReason: string | null } | null })[]
