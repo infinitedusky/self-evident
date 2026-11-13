@@ -103,9 +103,9 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     const t = await createIssue(appId, { title: 'Ordered', kind: 'code', brief: 'Build it.' })
     await useWorkflow({ issueId: t.id }, wf.id)
     await expect(approveBrief(t.id, 'sam')).rejects.toThrow(/still to do: Mockups/)
-    await expect(setStep({ issueId: t.id }, 'adr', { status: 'started' })).rejects.toThrow(/ADR waits for Mockups first/)
+    await expect(setStep({ issueId: t.id }, 'adr', { status: 'started' })).rejects.toThrow(/Draft ADR waits for Mockups first/)
     await setStep({ issueId: t.id }, 'mockup', { status: 'done', refs: ['pages-x--y'] })
-    await expect(setStep({ issueId: t.id }, 'adr', { status: 'started' })).rejects.toThrow(/ADR waits for Mockups first/) // done, not yet approved
+    await expect(setStep({ issueId: t.id }, 'adr', { status: 'started' })).rejects.toThrow(/Draft ADR waits for Mockups first/) // done, not yet approved
     await approveStep(t.id, 'mockup', 'sam')
     await expect(setStep({ issueId: t.id }, 'adr', { status: 'done' })).resolves.toMatchObject({ key: 'adr' }) // a check no longer waits for the brief's approval
     await approveBrief(t.id, 'sam')

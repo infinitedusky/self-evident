@@ -44,14 +44,15 @@ Report, with file paths:
   - *Refactor*: what in the existing code should change shape so this fits cleanly, and only that; no refactoring for its own sake.
   - *Leave out*: dead code, leftovers, debug hooks and stray files the build must not copy.
   One line each that a builder can act on. Say plainly when a part is already as simple as it should be.
-Describe; do not decide the architecture: that is the ADR's, which reads this.
+Describe; do not decide the architecture: that is the draft ADR's, which reads this.
 ${report(key, f.issueId)}`
-    case 'adr': return `**ADR.** ${task}
-${earlier(f)}${proto(f)}Decide the architecture for the real build, which starts from ${f.base}, from scratch, with the prototype as a map to follow and improve on, never as code to carry over. Read the code on ${f.base} where the build would land.
-Write the decision record: the context in a few lines; the options (the prototype's way among them, and at least one other); the choice; why, against what the analysis found and how the code is built today; what follows from it (what the build must do, what it must not copy from the prototype).
+    case 'adr': return `**Draft ADR.** ${task}
+${earlier(f)}${proto(f)}Propose the architecture for the real build, which starts from ${f.base}, from scratch, with the prototype as a map to follow and improve on, never as code to carry over. Read the code on ${f.base} where the build would land.
+Write it as a draft decision record: the context in a few lines; the options (the prototype's way among them, and at least one other); the choice you propose; why, against what the analysis found and how the code is built today; what follows from it (what the build must do, what it must not copy from the prototype); and what you are unsure of, with what would change the choice.
+It is a draft. The planner settles it when it cuts the task into sub-tasks, and the final record is a file the build writes, so do not write any file and do not polish: be clear about the choice and honest about the doubts.
 ${report(key, f.issueId)}`
     case 'risk': return `**Blast radius.** ${task}
-${earlier(f)}${proto(f)}Work out what the real build touches on ${f.base}, built the way the ADR says (or, with no ADR, the way the brief says). Read the code it would change and what depends on that code.
+${earlier(f)}${proto(f)}Work out what the real build touches on ${f.base}, built the way the draft ADR proposes (or, with none, the way the brief says). Read the code it would change and what depends on that code.
 Report: the files and modules it changes; what else uses them and could break; data and migrations; anything shared or outward-facing (APIs, jobs, other apps); and for each risk, how we would know it broke (the test, the log line, the page).
 ${report(key, f.issueId)}`
     case 'audit': return `**Brief audit.** ${task}
@@ -66,7 +67,7 @@ ${report(key, f.issueId)}`
 export const finalizeBrief = (done: StepKey[], f: CheckFacts) => `The prototype is approved and the reports are in: ${done.map((k) => step(k).label).join(', ')}. Read each with get_step on this task, then bring the brief up to date with update_task so the build can start from it alone:
 - a **Prototype** section: the branch ${f.prototype?.branch ?? '(none)'}, what the analysis found, what to keep and what to change, and that the build starts from ${f.base} with the prototype as a map, never as code to carry over;
 - what the analysis says under Cleaner, as instructions to the builder: what to write once instead of twice, what to do the simpler way, what to refactor first, what to leave out;
-- the ADR's decision, in the brief's own words, and what the blast radius says to watch;
+- the draft ADR's proposed decision, in the brief's own words and marked as proposed (the planner settles it), and what the blast radius says to watch;
 - the assets each step left (sketch files, story ids, the reports), named so the brief points at them.
 Change nothing else, and do not ask the person anything: when your turn ends the brief audit reads the result.`
 export const reportsIn = (done: StepKey[]) => `The checks are done: ${done.map((k) => step(k).label).join(', ')}. ${done.includes('audit') ? 'Read the brief audit with get_step and fix in the brief what it found (update_task); leave what it says holds. Then tell' : 'Tell'} the person in a few lines what the reports say and that the brief is ready for them to approve.`

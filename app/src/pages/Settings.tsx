@@ -556,6 +556,7 @@ function StepSkills({ usable, value, onChange }: { usable: UsableSkill[] | null;
                     {rest.map((u) => <option key={u.name} value={u.name}>{u.label} ({u.from})</option>)}
                   </select>}
                   {!chosen.length && !rest.length && <span className="faint">None.</span>}
+                  {s.key === 'adr' && <div className="faint" style={{ flexBasis: '100%', fontSize: 13 }}>This app's standard for a decision record. The planner gets it too: it settles the draft and plans the final record, written with the build.</div>}
                 </dd>
               </div>
             )

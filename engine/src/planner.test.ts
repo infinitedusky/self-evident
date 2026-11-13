@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
 import { app, event, project, repo, run, workspace } from './db/schema.js'
 import { newId } from './ids.js'
-import { planIssue, questionCost, subIssueBrief, validateProposal, type Proposal, type Propose } from './planner.js'
+import { planIssue, questionCost, subIssueBrief, validateProposal, type Proposal, type Propose, prompt as plannerPrompt } from './planner.js'
 import { addItems } from './backlog.js'
 import { createIssue, getIssue } from './issues.js'
 import { createProject, PlanError, projectGraph } from './projects.js'
@@ -152,5 +152,28 @@ describe.skipIf(!reachable)('planner', () => {
     expect(subIssueBrief({ key: 'k', title: 't', description: 'For a person.', summary: 'Just this.', depends_on: [], files: [], steps: [], checks: [], done_when: '' })).toBe('Just this.')
     expect(questionCost({ ...proposal.questions[1], cost: 'moderate' })).toBe('moderate')
     expect(questionCost({ ...proposal.questions[1], cost: 'cheap', options: [{ label: 'a', description: '', changes: ['gate'] }, { label: 'b', description: '', changes: [] }] })).toBe('expensive')
+  })
+})
+
+describe('the planner and decision records', () => {
+  const base = { repoPath: '/tmp/none', issue: { identifier: 'SS-1', title: 'Made-up task', brief: 'A made-up brief.' }, project: { name: 'Made up', content: null }, earlier: [], onEvent: async () => {} }
+  it('settles a draft ADR as a decision, and has the build write the record the way the repository keeps them', () => {
+    const said = plannerPrompt({ ...base, draftAdr: 'Proposed: one table, not two (made up).' })
+    expect(said).toContain('This task has a draft ADR')
+    expect(said).toContain('the settled draft ADR always is')
+    expect(said).toContain('`docs/decisions/`')
+    expect(said.endsWith('The draft ADR:\n\nProposed: one table, not two (made up).')).toBe(true)
+  })
+  it('with no draft, settles the architecture itself, and records only what is worth a record', () => {
+    const said = plannerPrompt({ ...base, draftAdr: null })
+    expect(said).toContain('This task has no draft ADR')
+    expect(said).toContain('A decision not worth a record stays a decision here and nothing more.')
+    expect(said).not.toContain('The draft ADR:')
+  })
+  it('names the app\'s skill for decision records, and that it wins on place and form', () => {
+    const said = plannerPrompt(base, ['shared:decision-record'])
+    expect(said).toContain('`shared:decision-record`')
+    expect(said).toContain("the skill is this app's standard and wins")
+    expect(plannerPrompt(base)).not.toContain('for decision records:')
   })
 })
