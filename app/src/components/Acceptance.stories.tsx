@@ -32,6 +32,16 @@ export const BuildMark: Story = {
 }
 /** None yet: says what approving the brief would then mean. */
 export const NoneYet: Story = { args: { items: [] } }
+/** The task has no prototype (the step was skipped): no prototype column, one mark each, for the final build. */
+export const NoPrototype: Story = {
+  args: { prototype: false },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/This task has no prototype/)).toBeInTheDocument()
+    await expect(c.queryByText('Prototype', { selector: '.acceptance-heads span' })).toBeNull()
+    await expect(c.queryByLabelText(/^Prototype:/)).toBeNull()
+  },
+}
 /** The person adds one of their own. */
 export const AddOne: Story = {
   play: async ({ canvasElement }) => {

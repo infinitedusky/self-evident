@@ -22,7 +22,7 @@ import { WorkflowChoice } from '../components/WorkflowChoice'
 import { Handover } from '../components/Handover'
 import { PlanCovers } from '../components/Requirements'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
-import { finished, label, ready, step, type Row, type StepKey } from '@self-evident/engine/steps'
+import { canSkip, finished, label, ready, settled, skipped, step, type Row, type StepKey } from '@self-evident/engine/steps'
 import { STATUS_TONE } from '../components/PlanGraphView'
 import { openEvents, type Events, API, engine, useWorkflows, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
 import { Md } from '../components/Md'
@@ -209,7 +209,7 @@ function StandsOn({ feeds, base }: { feeds: Row[]; base: string }) {
           <li key={r.key} className="brief-stands-row">
             <span className={`task-nav-mark ${finished(r.state, 'task') ? 'ok' : ''}`}>{mark(r, 'task')}</span>
             <Link to={`${base}/${r.key}`}>{step(r.key).icon} {label(r.key, 'task')}</Link>
-            <span className="faint">{r.state.status === 'none' ? 'not started' : r.state.detail ?? (r.state.status === 'done' ? 'done' : 'started')}</span>
+            <span className="faint">{skipped(r.state) ? 'skipped' : r.state.status === 'none' ? 'not started' : r.state.detail ?? (r.state.status === 'done' ? 'done' : 'started')}</span>
             {ready(r.state, 'task') && <Badge tone="warn">ready for you</Badge>}
             {r.required && !finished(r.state, 'task') && <Badge tone="warn">required</Badge>}
           </li>
@@ -223,6 +223,9 @@ function StandsOn({ feeds, base }: { feeds: Row[]; base: string }) {
 function BriefStep({ i, busy, act, feeds, base }: { i: IssueDetail; busy: boolean; act: (fn: () => Promise<unknown>) => Promise<void>; feeds: Row[]; base: string }) {
   const [asked, setAsked] = useState(false)
   const owed = feeds.filter((r) => r.required && !finished(r.state, 'task'))
+  const open = feeds.filter((r) => canSkip(r) && !settled(r.state, 'task')) // optional, and neither done nor skipped
+  const proto = feeds.find((r) => r.key === 'prototype')
+  const hasPrototype = !!proto && !skipped(proto.state) // no prototype step, or it is skipped: the criteria have nothing to say about one
   const criteria = i.acceptance?.length ?? 0
   const unshown = (i.acceptance ?? []).filter((c) => !c.buildOnly && c.shown === false).length
   const left = (i.acceptance ?? []).filter((c) => c.buildOnly).length
@@ -233,14 +236,14 @@ function BriefStep({ i, busy, act, feeds, base }: { i: IssueDetail; busy: boolea
         <button className="btn" disabled={busy || asked} onClick={() => act(async () => { await askStep({ kind: 'issues', id: i.id }, i.appId, i.title, 'brief', 'task'); window.dispatchEvent(new Event(TASK_AGENT_ASKED)); setAsked(true) })}>Write it with the agent</button>
         {asked && <span className="faint">Handed to this task's agent, on the right.</span>}
       </div>
-      <Acceptance issueId={i.id} items={i.acceptance ?? []} onChanged={() => void act(async () => {})} />
+      <Acceptance issueId={i.id} items={i.acceptance ?? []} prototype={hasPrototype} onChanged={() => void act(async () => {})} />
       <StandsOn feeds={feeds} base={base} />
     </div>
   )
   return (
     <>
       <div className="md step-body"><Markdown remarkPlugins={[remarkGfm]}>{i.brief}</Markdown></div>
-      <Acceptance issueId={i.id} items={i.acceptance ?? []} approved={!!i.briefApprovedBy} onChanged={() => void act(async () => {})} />
+      <Acceptance issueId={i.id} items={i.acceptance ?? []} approved={!!i.briefApprovedBy} prototype={hasPrototype} onChanged={() => void act(async () => {})} />
       <StandsOn feeds={feeds} base={base} />
       <div className="brief-approval">
         {i.briefApprovedBy
@@ -248,6 +251,8 @@ function BriefStep({ i, busy, act, feeds, base }: { i: IssueDetail; busy: boolea
             <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.approveBrief(i.id, false))}>Withdraw</button></>
           : owed.length
           ? <span className="faint">It can be approved once {owed.map((r, n) => <span key={r.key}>{n ? ', ' : ''}<Link to={`${base}/${r.key}`}>{label(r.key, 'task')}</Link></span>)} {owed.length === 1 ? 'is' : 'are'} done.</span>
+          : open.length
+          ? <span className="faint">It can be approved once each optional step is done or skipped. Still to do or skip: {open.map((r, n) => <span key={r.key}>{n ? ', ' : ''}<Link to={`${base}/${r.key}`}>{label(r.key, 'task')}</Link></span>)}.</span>
           : <><Badge tone="warn">waiting for your approval</Badge><span className="faint">Planning and building wait for it. {criteria ? `Approving it approves its ${criteria === 1 ? 'acceptance criterion' : `${criteria} acceptance criteria`} as enough${unshown ? `; ${unshown} ${unshown === 1 ? 'was' : 'were'} not shown in the prototype` : ''}${left ? `; ${left} ${left === 1 ? 'is' : 'are'} left to the final build, unproven` : ''}.` : 'It has no acceptance criteria yet.'}</span>
             <button className="btn small" disabled={busy} onClick={() => act(() => engine.approveBrief(i.id))}>{criteria ? `Approve the brief and its ${criteria === 1 ? 'criterion' : `${criteria} criteria`}` : 'Approve the brief'}</button></>}
       </div>

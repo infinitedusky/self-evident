@@ -18,6 +18,25 @@ type Story = StoryObj<typeof meta>
 export const Done: Story = {}
 /** Not started: hand it to the agent. */
 export const NotStarted: Story = { args: { row: { ...row('research'), state: { key: 'research', status: 'none' } } }, beforeEach: withEngine({ stepWork: null }) }
+/** An optional step, not started: do it or skip it; the brief waits until one is said. */
+export const OptionalToDoOrSkip: Story = {
+  args: { row: { ...row('research'), required: false, state: { key: 'research', status: 'none' } } }, beforeEach: withEngine({ stepWork: null }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('button', { name: 'Skip this step' })).toBeInTheDocument() },
+}
+/** Skipped by a person: it says so, and can be taken back. */
+export const Skipped: Story = {
+  args: { row: { ...row('research'), required: false, state: { key: 'research', status: 'skipped' } } }, beforeEach: withEngine({ stepWork: null }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/Skipped: not being done on this task/)).toBeInTheDocument()
+    await expect(await c.findByRole('button', { name: 'Do it after all' })).toBeInTheDocument()
+  },
+}
+/** A required step has no way to skip it. */
+export const RequiredCannotBeSkipped: Story = {
+  args: { row: { ...row('research'), required: true, state: { key: 'research', status: 'none' } } }, beforeEach: withEngine({ stepWork: null }),
+  play: async ({ canvasElement }) => { const c = within(canvasElement); await c.findByRole('button', { name: /Start with the agent/ }); await expect(c.queryByRole('button', { name: 'Skip this step' })).toBeNull() },
+}
 /** The prototype's step: the thing running (View), every file it changed and what the agent shows (Code), and what it wrote for the brief. Here the agent has just shown a file. */
 export const PrototypeCodeView: Story = {
   args: { row: { ...row('research'), key: 'prototype', state: { key: 'prototype', status: 'started', detail: 'A first version is up (sample)' }, waitingOn: undefined } as typeof all[number] },
