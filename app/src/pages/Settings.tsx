@@ -500,9 +500,13 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
     landing: <>
       <Group title="Landing" lead="How finished work reaches the default branch.">
         <label style={{ gridColumn: '1 / -1' }}>Test command<input className="mono" value={setup.test_cmd ?? ''} onChange={(e) => set({ test_cmd: e.target.value })} placeholder="runs in the worktree on the merged commit; must exit 0 to land" /></label>
-        <label style={{ gridColumn: '1 / -1' }}>Pull requests<select value={setup.pr_mode ?? 'project'} onChange={(e) => set({ pr_mode: e.target.value as 'project' | 'issue' })}>
+        <label style={{ gridColumn: '1 / -1' }}>Pull requests<select value={setup.pr_mode ?? 'issue'} onChange={(e) => set({ pr_mode: e.target.value as 'project' | 'issue' })}>
+          <option value="issue">One per task: each task builds on its own branch and merges on its own</option>
           <option value="project">One per project: every task lands on the project's branch</option>
-          <option value="issue">One per task, stacked: small PRs for a team; each merges on its own</option>
+        </select></label>
+        <label style={{ gridColumn: '1 / -1' }}>Once a task's brief is approved<select value={setup.auto_build === false ? 'wait' : 'auto'} onChange={(e) => set({ auto_build: e.target.value !== 'wait' })}>
+          <option value="auto">It is planned and built by itself, and its pull request opens</option>
+          <option value="wait">It waits: I press Plan it and Run</option>
         </select></label>
       </Group>
     </>,
