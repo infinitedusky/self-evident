@@ -3260,3 +3260,14 @@ again (a label you press to change, as a property on a Linear issue). A workflow
 is greyed out for a task that was made directly. The steps in the task's nav follow the new workflow straight away.
 
 Not done: the same for a project (the engine route exists); a tool for agents to change it.
+
+## Tab area: clean corners, and a task page laid out by its tab's width (Sandy, 2026-11-14: "you can see the pointed corner coming out from behind it … the center column is overlapping the left column")
+
+Three fixes in `app.css`. Dockview painted its own white rectangle behind the tab groups, so square white corners
+showed outside each group's rounded stroke: that background is now clear. The task and idea pages chose their
+columns from the window's width, but a page lives in a tab that is narrower than the window, so in a narrow tab
+the agent column sat on top of the middle one: `.tab-page` is now a container and those two breakpoints are
+container queries (the agent goes under the page below 960px of tab, one column below 620px). The steps nav is one
+grid track that cannot grow past its column, so a long step name is cut short and not pushed under the panels
+beside it. That last one showed on Sandy's screen and not in headless Chromium, so it is fixed by reading the CSS,
+not by seeing it go away.
