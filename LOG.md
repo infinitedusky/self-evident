@@ -3249,3 +3249,14 @@ it, send it yourself. Nothing is sent from here. Earlier ones are kept and liste
 Not done: sending it (Slack, email); writing it by itself at a set hour; a custom range in the page (the engine takes
 from and to); work done outside the app's repositories and tasks, except what the person adds. Not tried: a real
 report written by the model from a real day.
+
+## A task's workflow can be changed on its page (Sandy, 2026-11-13: "we need a picker on the page that you can change")
+
+A workflow could only be chosen when the task or project was made, or by changing the app's default; the engine
+could already change one task's (`POST /issues/:id/workflow`) and no screen called it. Now the task's overview, under
+"Where it stands", reads "Workflow **name**, from its project. Change". Change turns the sentence into a list of the
+app's workflows with "Follow its project or the app" on top; choosing saves at once and it reads as a sentence
+again (a label you press to change, as a property on a Linear issue). A workflow that starts everything as an idea
+is greyed out for a task that was made directly. The steps in the task's nav follow the new workflow straight away.
+
+Not done: the same for a project (the engine route exists); a tool for agents to change it.
