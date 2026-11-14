@@ -3325,3 +3325,19 @@ person. `createProject` now takes `madeIn` and marks each task. Past tasks: MER-
 `create_project` call in the conversation "Cloud Playground" and are marked by hand in the live data. A first
 attempt to trace others by "the first conversation whose tool result names the task" was wrong (a later
 conversation that merely looked the task up matched) and was undone for RG-1 and RG-2, which stay unmarked.
+
+## Planned work shows in Build, with the button that runs it (Sandy, 2026-11-14: "after the plan is done, we need the planned task to show up in the build tab, otherwise I don't know how to trigger it to build")
+
+Build listed only projects that were running or had landed, so a task that was planned and waiting to be run was
+nowhere on it; "Run this project" existed only on the project's own page. On Merman, MER-50 was planned in four
+sub-tasks inside the draft project "Library foundation" and nothing said how to start it.
+
+- **Build's page** has "Ready to build" on top: every draft with at least one planned task, naming the planned
+  tasks and their sub-task counts, with "Run this project" on the row. A task planned on its own (its hidden
+  project of one) is listed there as the task, with "Run it"; `GET /projects?solo=1` includes those and each
+  project now carries `plannedTasks`.
+- **The task's Build section** says "Planned in N sub-tasks. Nothing is built until its project is run", with the
+  same button.
+
+Running a project with one task planned out of several is what the engine already does: the others are planned in
+turn as it runs, once their briefs are approved.
