@@ -62,7 +62,10 @@ export interface Workflow { id: string; name: string; steps: WorkflowStep[]; ord
 /** What a workflow may switch: research, sketches, mockups and the prototype on or off; the idea and the brief are always on. */
 export const canTurnOff = (key: StepKey) => key === 'research' || step(key).place === 'either'
 export const canMakeOptional = (key: StepKey) => key !== 'brief'
-export const canRemove = (key: StepKey) => step(key).place === 'check'
+/** Nothing is removed from a workflow: the checks are not its to choose (they follow the prototype). Kept for callers written when they were. */
+export const canRemove = (_key: StepKey) => false
+/** The steps a workflow chooses: every one but the checks, which follow the prototype by themselves. */
+export const chosen = (key: StepKey) => step(key).place !== 'check'
 
 /** Whether steps in this order keep the fixed rules: the idea first, every check after the other steps. Where the brief sits means nothing. */
 export function validOrder(steps: { key: StepKey }[]): boolean {
@@ -100,7 +103,12 @@ export function normalize(w: Workflow): Workflow {
     steps = steps.filter((s) => s.key !== 'sketch')
     steps.splice(steps.findIndex((s) => s.key === 'mockup'), 0, sketch)
   }
-  steps = steps.map((s) => (s.key === 'brief' ? { ...s, on: true, required: true } : s.key === 'idea' ? { ...s, on: true } : canRemove(s.key) ? { ...s, on: true } : s))
+  steps = steps.map((s) => (s.key === 'brief' ? { ...s, on: true, required: true } : s.key === 'idea' ? { ...s, on: true } : s))
+  // What happens after the prototype is not a workflow's choice (Sandy, 2026-11-14: "some of these things I don't think
+  // we want to be deciding anymore"): a workflow with a prototype has every check, required, in their order; one
+  // without has none. Whatever was saved about them is dropped.
+  steps = steps.filter((s) => chosen(s.key))
+  if (steps.some((s) => s.key === 'prototype' && s.on)) steps.push(...CHECKS.map((key) => ({ key, on: true, required: true })))
   if (!validOrder(steps)) {
     const rank = (k: StepKey) => ['first', 'before', 'either', 'check', 'brief'].indexOf(step(k).place)
     steps = [...steps].sort((a, b) => rank(a.key) - rank(b.key))
@@ -109,9 +117,9 @@ export function normalize(w: Workflow): Workflow {
   return { ...w, steps }
 }
 
-/** Puts a check after the other steps (the brief stays last), or takes it out. */
-export const addCheck = (w: Workflow, key: StepKey): Workflow => (w.steps.some((s) => s.key === key) ? w : normalize({ ...w, steps: [...w.steps, { key, on: true, required: false }] }))
-export const removeCheck = (w: Workflow, key: StepKey): Workflow => ({ ...w, steps: w.steps.filter((s) => s.key !== key) })
+/** Once put a check in a workflow or took it out. The checks follow the prototype now; both only tidy the workflow. */
+export const addCheck = (w: Workflow, _key: StepKey): Workflow => normalize(w) // the checks are fixed: nothing to add
+export const removeCheck = (w: Workflow, _key: StepKey): Workflow => normalize(w) // nor to remove
 
 /** What a step on one thing has so far. */
 export interface StepState {
@@ -162,8 +170,14 @@ export const ready = (s: StepState, on: On) => s.status === 'done' && needsAppro
  */
 export function rows(on: On, states: StepState[], workflow: Workflow | null): Row[] {
   const can = CAN[on]
-  const list = (workflow ? normalize(workflow).steps : DEFAULT_STEPS).filter((s) => s.on && can.includes(s.key))
+  const all = (workflow ? normalize(workflow).steps : DEFAULT_STEPS).filter((s) => s.on && can.includes(s.key))
   const stateOf = (key: StepKey): StepState => states.find((s) => s.key === key) ?? { key, status: 'none' }
+  // The checks belong to a prototype. They are on a task only while it has one in play: required by its workflow, or
+  // begun; never when it is skipped, and not for an optional one nobody has touched (so a task that never prototypes
+  // owes them nothing).
+  const proto = all.find((s) => s.key === 'prototype')
+  const inPlay = !!proto && stateOf('prototype').status !== 'skipped' && (proto.required || stateOf('prototype').status !== 'none')
+  const list = all.filter((s) => step(s.key).place !== 'check' || inPlay)
   return list.map((s, i) => {
     const parent = s.key === 'brief'
     const before = workflow?.ordered && !parent ? list.slice(0, i).find((b) => b.required && !finished(stateOf(b.key), on)) : undefined
@@ -173,7 +187,12 @@ export function rows(on: On, states: StepState[], workflow: Workflow | null): Ro
 
 /** What a task's brief still waits on before it can be approved: the required steps that feed it and aren't finished. */
 export function owed(states: StepState[], workflow: Workflow | null): StepKey[] {
-  return rows('task', states, workflow).filter((r) => r.key !== 'brief' && r.required && !finished(r.state, 'task')).map((r) => r.key)
+  return rows('task', states, workflow).filter((r) => r.key !== 'brief' && step(r.key).place !== 'check' && r.required && !finished(r.state, 'task')).map((r) => r.key) // not the checks: they come after the prototype, and the build waits for them, not the brief
+}
+
+/** The checks a task still has to get through before it is built: the ones in play and not done. */
+export function checksOwed(states: StepState[], workflow: Workflow | null): StepKey[] {
+  return rows('task', states, workflow).filter((r) => step(r.key).place === 'check' && r.state.status !== 'done').map((r) => r.key)
 }
 
 /**

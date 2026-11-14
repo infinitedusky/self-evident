@@ -82,12 +82,18 @@ export const finalizeBrief = (done: StepKey[], f: CheckFacts) => `The prototype 
 - the assets each step left (sketch files, story ids, the reports), named so the brief points at them.
 Then bring the acceptance criteria up to date with set_acceptance (the task tool shows them): every requirement of the brief has one, each can be checked as written and says how, what the analysis found not met or faked is recorded on its criterion (shown false, with what is missing), anything the reports show we must guarantee that no criterion covers is added, and the telemetry has criteria of its own (one per kind of hook point: the logs or metrics, the monitors, the product events and that they carry no personal data), each marked not shown unless the prototype emits it. Do not put them in the brief's text: they are kept beside it and approved with it.
 Change nothing else, and do not ask the person anything: when your turn ends the brief audit reads the result.`
-export const reportsIn = (done: StepKey[]) => `The checks are done: ${done.map((k) => step(k).label).join(', ')}. ${done.includes('audit') ? 'Read the brief audit with get_step and fix in the brief what it found (update_task); leave what it says holds. Then tell' : 'Tell'} the person in a few lines what the reports say, from each report's summary (a report with none: write it one now, set_step with summary alone), and that the brief is ready for them to approve.`
+export const reportsIn = (done: StepKey[], briefApproved = false) => (briefApproved
+  ? `The checks are done: ${done.map((k) => step(k).label).join(', ')}. The brief is approved, so do not change it: the task is being planned and built from it now. Read the reports with get_step. If one of them found something that would change what is built, say so to the person now, plainly and first; otherwise tell them in two lines what the checks found.`
+  : `The checks are done: ${done.map((k) => step(k).label).join(', ')}. ${done.includes('audit') ? 'Read the brief audit with get_step and fix in the brief what it found (update_task); leave what it says holds. Then tell' : 'Tell'} the person in a few lines what the reports say, from each report's summary (a report with none: write it one now, set_step with summary alone), and that the brief is ready for them to approve.`)
 
 const note = async (sessionId: string, stage: string) => (await db.select({ id: sessionMessage.id }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, sessionId), sql`${sessionMessage.payload}->>'checks' = ${stage}`)).limit(1)).length > 0
 
+/** Told when a task's checks are all done: the build can go on from there. */
+const whenDone = new Set<(issueId: string) => void>()
+export function onChecksDone(fn: (issueId: string) => void) { whenDone.add(fn); return () => { whenDone.delete(fn) } }
+
 /** What to do next on a task's checks, from what is stored; pure, so it is tested without agents. */
-export function nextMove(i: { approved: boolean; checks: { key: StepKey; done: boolean; out: boolean }[]; hasPrototype: boolean; conductor: { busy: boolean; askedToFinalize: boolean; toldDone: boolean } | null }):
+export function nextMove(i: { approved: boolean; checks: { key: StepKey; done: boolean; out: boolean }[]; hasPrototype: boolean; conductor: { busy: boolean; askedToFinalize: boolean; toldDone: boolean } | null; /** The brief is already approved: it is not rewritten from the reports. */ briefApproved?: boolean }):
   { do: 'nothing' } | { do: 'run'; key: StepKey } | { do: 'finalize' } | { do: 'tell' } {
   if (!i.approved) return { do: 'nothing' }
   const list = i.checks.filter((c) => c.key !== 'analysis' || i.hasPrototype) // nothing to analyse without a prototype
@@ -98,6 +104,7 @@ export function nextMove(i: { approved: boolean; checks: { key: StepKey; done: b
   if (audit && !audit.done) {
     if (audit.out) return { do: 'nothing' }
     if (!i.conductor) return { do: 'run', key: 'audit' } // no conductor to write the brief: audit it as it stands
+    if (i.briefApproved) return { do: 'run', key: 'audit' } // an approved brief stays as the person approved it
     if (!i.conductor.askedToFinalize) return list.length > 1 ? { do: 'finalize' } : { do: 'run', key: 'audit' }
     return i.conductor.busy ? { do: 'nothing' } : { do: 'run', key: 'audit' }
   }
@@ -120,7 +127,10 @@ export async function advanceChecks(issueId: string): Promise<ReturnType<typeof 
       checks: rows.map((r) => ({ key: r.key, done: r.state.status === 'done', out: out.some((s) => (s.subjectRef as SubjectRef).check === r.key) })),
       hasPrototype: !!p,
       conductor: conductor ? { busy: conductor.busy, askedToFinalize: await note(conductor.id, 'finalize'), toldDone: await note(conductor.id, 'done') } : null,
+      briefApproved: !!t.briefApprovedBy,
     })
+    // Every check in: the task can be built, if its brief is approved (server.ts decides; it knows the runner).
+    if (rows.every((r) => r.state.status === 'done')) for (const fn of whenDone) fn(issueId)
     if (move.do === 'nothing') return move
     const [a] = await db.select().from(app).where(eq(app.id, t.appId))
     const r = await homeRepo(t.appId)
@@ -134,7 +144,7 @@ export async function advanceChecks(issueId: string): Promise<ReturnType<typeof 
     } else if (move.do === 'finalize') {
       await say(conductor!.id, finalizeBrief(done, facts), undefined, { author: 'engine', kind: 'brief', payload: { checks: 'finalize', label: 'The reports are in' } })
     } else {
-      await say(conductor!.id, reportsIn(done), undefined, { author: 'engine', kind: 'brief', payload: { checks: 'done', label: 'The checks are done' } })
+      await say(conductor!.id, reportsIn(done, !!t.briefApprovedBy), undefined, { author: 'engine', kind: 'brief', payload: { checks: 'done', label: 'The checks are done' } })
     }
     return move
   })
