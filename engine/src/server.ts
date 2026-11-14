@@ -19,7 +19,7 @@ import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, works
 import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
 import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
-import { advanceChecks, onChecksDone } from './checks.js'
+import { advanceChecks, onChecksDone, onPlanWanted } from './checks.js'
 import { checksOwed } from './steps.js'
 import { writeHandover } from './handover.js'
 import { approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
@@ -537,12 +537,21 @@ export function buildApp(bus: EventBus) {
     } catch (err) { console.error(`[engine] building ${issueId} by itself: ${err instanceof Error ? err.message : err}`) }
   }
   onChecksDone((issueId) => void maybeBuild(issueId))
+  // After a prototype the plan comes before the blast radius and the audit, which read it: when the line reaches that
+  // point the task is planned, and the line is carried on once the sub-tasks are in. An app that waits plans by hand.
+  onPlanWanted((issueId) => void (async () => {
+    const [t] = await db.select().from(issueTable).where(eq(issueTable.id, issueId))
+    if (!t) return
+    const [a] = await db.select().from(appTable).where(eq(appTable.id, t.appId))
+    if (!autoBuild(a?.setup)) return
+    await runner.planTask(issueId, () => void advanceChecks(issueId).catch(() => {}))
+  })().catch((err) => console.error(`[engine] planning ${issueId} after its prototype: ${err instanceof Error ? err.message : err}`)))
   api.post('/issues/:id/brief/approve', async (c) => {
     const { approve = true } = await c.req.json<{ approve?: boolean }>().catch(() => ({ approve: true }))
     try {
       const row = await approveBrief(c.req.param('id'), 'user', approve)
       if (approve) await autoSave(c.req.param('id'), 'brief_approved') // before the plan and the build: "scrap the build" is going back to here
-      if (approve) void maybeBuild(row.id) // then it plans and builds by itself, once its prototype's checks are in
+      if (approve) { void maybeBuild(row.id); void advanceChecks(row.id).catch(() => {}) } // no prototype: planned and built now. With one: the line after it carries on from here (the plan, its audit, the build)
       return c.json(settle(row))
     } catch (err) { return planError(c, err) }
   })
@@ -685,7 +694,7 @@ export function buildApp(bus: EventBus) {
   api.post('/issues/:id/plan', async (c) => {
     let ctx
     try { ctx = await preparePlanning(c.req.param('id'), { actor: 'user' }) } catch (err) { return planError(c, err) }
-    const onPlanned = () => void runner.dispatch() // sub-issues planned into a running project start right away
+    const onPlanned = () => { void runner.dispatch(); void advanceChecks(c.req.param('id')).catch(() => {}) } // sub-issues planned into a running project start right away; after a prototype, the blast radius and the audit read the plan next
     if (c.req.query('wait') === '1') { const out = await finishPlanning(ctx, { onPlanned }); return c.json(out, out.status === 'completed' ? 200 : 500) }
     void finishPlanning(ctx, { onPlanned })
     return c.json({ runId: ctx.runId }, 202)
