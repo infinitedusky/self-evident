@@ -515,8 +515,19 @@ export function buildApp(bus: EventBus) {
     try {
       const row = await approveStep(c.req.param('id'), c.req.param('key') as never, 'user', approve)
       if (approve && c.req.param('key') === 'prototype') await autoSave(c.req.param('id'), 'prototype_approved') // a point to come back to, before the checks and the brief move on
+      // One approval, not two (Sandy, 2026-11-14: "I approve the brief, which basically ends with the prototype"): approving the
+      // prototype approves the brief with it when the brief is ready for that. Where it is not (not written, a step still
+      // owed or undecided), the prototype stands approved and the brief stays the person's, as before.
+      let brief: { approved: boolean; why?: string } | undefined
+      if (approve && c.req.param('key') === 'prototype') {
+        const [t] = await db.select().from(issueTable).where(eq(issueTable.id, c.req.param('id')))
+        if (t && !t.briefApprovedBy) {
+          try { await approveBrief(t.id, 'user'); await autoSave(t.id, 'brief_approved'); brief = { approved: true }; void maybeBuild(t.id) }
+          catch (err) { brief = { approved: false, why: err instanceof Error ? err.message : String(err) } }
+        }
+      }
       if (approve && c.req.param('key') === 'prototype') void advanceChecks(c.req.param('id')).catch((err) => console.error('checks: could not start', err)) // the checks run by themselves from here
-      return c.json(row)
+      return c.json(brief ? { ...row, brief } : row)
     } catch (err) { return planError(c, err) }
   })
   api.put('/issues/:id/acceptance', async (c) => { // {add?, update?, remove?}: the task's acceptance criteria

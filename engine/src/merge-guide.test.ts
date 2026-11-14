@@ -53,3 +53,12 @@ describe('the merge guide', () => {
     expect(checkBrief('audit', f)).toMatch(/telemetry: whether the brief's Telemetry section has every hook point/)
   })
 })
+
+describe('the merge checklist', () => {
+  it('is on the pull request first, as boxes to tick, from what the last step before the build wrote', () => {
+    const guide = taskGuide({ identifier: 'SS-1', title: 'T', acceptance: [], decisions: [], pending: [], checklist: '- Open /checkout and pay with a saved card: one page\n2. `pnpm test` passes\n* [ ] The declined-card span shows in the trace' })
+    expect(guide).toContain('**Before you merge**\n\n- [ ] Open /checkout and pay with a saved card: one page\n- [ ] `pnpm test` passes\n- [ ] The declined-card span shows in the trace')
+    expect(guide.indexOf('**Before you merge**')).toBeLessThan(guide.indexOf('**How to check it**'))
+    expect(taskGuide({ identifier: 'SS-1', title: 'T', acceptance: [], decisions: [], pending: [] })).not.toContain('Before you merge')
+  })
+})

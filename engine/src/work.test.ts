@@ -41,7 +41,7 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     })
     const [w] = await listWorkflows(other)
     expect(w).toMatchObject({ name: 'Default', appDefault: true, ordered: false })
-    expect(w.steps.filter((s) => s.required).map((s) => s.key)).toEqual(['analysis', 'adr', 'risk', 'audit', 'brief']) // of the steps a person chooses, only the brief; the prototype's checks are fixed
+    expect(w.steps.filter((s) => s.required).map((s) => s.key)).toEqual(['analysis', 'adr', 'risk', 'audit', 'final', 'brief']) // of the steps a person chooses, only the brief; the prototype's checks are fixed
   })
 
   it('keeps a workflow to the fixed rules and refuses an order that breaks them', async () => {
@@ -109,7 +109,7 @@ describe.skipIf(!reachable)('steps and workflows', () => {
 
   it('in an enforced order, a step waits for the required steps before it; the brief\'s approval waits for every required step, and nothing waits for the brief', async () => {
     const wf = await saveWorkflow({ appId, name: 'Mockup first', ordered: true, steps: [{ key: 'idea', on: true, required: false }, { key: 'mockup', on: true, required: true }, { key: 'prototype', on: true, required: true }, { key: 'brief', on: true, required: true }, { key: 'adr', on: true, required: false }] })
-    expect(wf.steps.filter((x) => ['analysis', 'adr', 'risk', 'audit'].includes(x.key)).map((x) => [x.key, x.required])).toEqual([['analysis', true], ['adr', true], ['risk', true], ['audit', true]]) // saved with one optional check: it has all four, required
+    expect(wf.steps.filter((x) => ['analysis', 'adr', 'risk', 'audit', 'final'].includes(x.key)).map((x) => [x.key, x.required])).toEqual([['analysis', true], ['adr', true], ['risk', true], ['audit', true], ['final', true]]) // saved with one optional check: it has all four, required
     const t = await createIssue(appId, { title: 'Ordered', kind: 'code', brief: 'Build it.' })
     await useWorkflow({ issueId: t.id }, wf.id)
     await expect(approveBrief(t.id, 'sam')).rejects.toThrow(/still to do: Mockups, Prototype/)
@@ -124,7 +124,7 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     await skipTheRest(t.id)
     await approveBrief(t.id, 'sam') // the brief does not wait for the checks: the build does
     const v = await stepsOf({ issueId: t.id })
-    expect(checksOwed(v.states, v.resolved.workflow)).toEqual(['analysis', 'adr', 'risk', 'audit'])
+    expect(checksOwed(v.states, v.resolved.workflow)).toEqual(['analysis', 'adr', 'risk', 'audit', 'final'])
     await expect(setStep({ issueId: t.id }, 'analysis', { status: 'done' })).resolves.toMatchObject({ key: 'analysis' })
   })
 

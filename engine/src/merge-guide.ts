@@ -25,6 +25,8 @@ export interface GuideTask {
   pending: string[]
   /** How the plan covers what the app requires of every plan (requirements.ts). */
   requirements?: Covered[]
+  /** The merge checklist, written by the last step before the build (checks.ts, final): one item per line. */
+  checklist?: string | null
 }
 
 const one = (s: string) => s.replace(/\s+/g, ' ').trim()
@@ -49,6 +51,7 @@ export function taskGuide(t: GuideTask, opts: { heading?: boolean } = {}): strin
   return [
     opts.heading ? `### ${t.identifier} ${t.title}` : '',
     act.length ? act.join(' ') : '',
+    t.checklist?.trim() ? `**Before you merge**\n\n${t.checklist.trim().split('\n').map((l) => l.trim()).filter(Boolean).map((l) => `- [ ] ${l.replace(/^([-*]|\d+\.)\s+(\[.\]\s*)?/, '')}`).join('\n')}` : '',
     t.description?.trim() ? `**What it does**\n\n${t.description.trim()}` : '',
     t.acceptance.length ? `**How to check it**\n\n${[...unmet, ...open, ...met].map(row).join('\n')}` : '**How to check it**\n\nThis task has no acceptance criteria, so there is no list to check it against.',
     t.adr?.trim() || t.decisions.length ? `**Decisions made**\n\n${[t.adr?.trim() ? bullets(t.adr) : '', ...t.decisions.map((d) => `- ${one(d.question)} → **${one(d.chosen)}**${d.why?.trim() ? `. ${one(d.why)}` : ''}`)].filter(Boolean).join('\n')}` : '',
@@ -69,7 +72,7 @@ export async function guideTasks(tasks: { id: string; identifier: string; title:
   const ids = tasks.map((t) => t.id)
   const rows = await db.select().from(issue).where(inArray(issue.id, ids))
   const subs = await db.select({ id: issue.id, parentId: issue.parentId }).from(issue).where(inArray(issue.parentId, ids))
-  const steps = await db.select().from(stepWork).where(and(inArray(stepWork.issueId, ids), inArray(stepWork.key, ['adr', 'risk'])))
+  const steps = await db.select().from(stepWork).where(and(inArray(stepWork.issueId, ids), inArray(stepWork.key, ['adr', 'risk', 'final'])))
   const decided = await db.select().from(decision).where(and(inArray(decision.issueId, [...ids, ...subs.map((s) => s.id)]), isNotNull(decision.chosen)))
   return tasks.map((t) => {
     const i = rows.find((r) => r.id === t.id)
@@ -80,6 +83,7 @@ export async function guideTasks(tasks: { id: string; identifier: string; title:
       decisions: decided.filter((d) => d.issueId && mine.has(d.issueId)).map((d) => ({ question: d.question, chosen: (d.options as { key: string; text: string }[] | null)?.find((o) => o.key === d.chosen)?.text ?? d.chosen!, why: d.rationale })),
       pending: pending.filter((p) => p.parentId === t.id).map((p) => p.identifier),
       requirements: i?.requirements ?? undefined,
+      checklist: steps.find((x) => x.issueId === t.id && x.key === 'final' && x.status === 'done')?.summary ?? null,
     }
   })
 }

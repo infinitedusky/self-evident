@@ -25,7 +25,7 @@
  * The app imports this module too (`@self-evident/engine/steps`), so the rules live in one place.
  */
 
-export type StepKey = 'idea' | 'research' | 'brief' | 'sketch' | 'mockup' | 'prototype' | 'analysis' | 'adr' | 'risk' | 'audit'
+export type StepKey = 'idea' | 'research' | 'brief' | 'sketch' | 'mockup' | 'prototype' | 'analysis' | 'adr' | 'risk' | 'audit' | 'final'
 export type On = 'idea' | 'task' | 'project'
 /** What kind of step it is: the idea, first; research; the brief, the parent of the rest; a way of looking (sketch, mockup, prototype); a check, after those, added or removed. */
 export type Place = 'first' | 'before' | 'brief' | 'either' | 'check'
@@ -42,6 +42,7 @@ export const STEPS: StepDef[] = [
   { key: 'adr', label: 'Draft ADR', icon: '🏛️', what: 'A first pass at the architecture decision, from the analysis and the code: the options, a proposed choice, why. A draft: the planner settles it, and the record is written with the build.', place: 'check' },
   { key: 'risk', label: 'Blast radius', icon: '💥', what: 'What the plan touches, what could break, and how we\'d know. It is the risks on the pull request\'s merge guide.', place: 'check' },
   { key: 'audit', label: 'Audit', icon: '🧐', what: 'The plan read against the brief, the ADR, the code and the prototype by a fresh agent, last before the build: gaps, wrong guesses, what could go wrong.', place: 'check' },
+  { key: 'final', label: 'Final ADR and plan', icon: '📌', what: 'The ADR and the plan put right from what the blast radius and the audit found, and the merge checklist for the pull request. The only step after the prototype that changes anything, and the last before the build.', place: 'check' },
 ]
 export const step = (key: StepKey) => STEPS.find((s) => s.key === key)!
 /** The checks, in the order they run. */
