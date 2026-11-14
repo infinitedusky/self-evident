@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_WORKFLOW, addCheck, blocking, finished, needsApproval, normalize, owed, ready, removeCheck, resolve, rows, validOrder, type Workflow, type WorkflowStep } from './steps.js'
+import { DEFAULT_WORKFLOW, addCheck, blocking, canSkip, settled, undecided, finished, needsApproval, normalize, owed, ready, removeCheck, resolve, rows, validOrder, type Workflow, type WorkflowStep } from './steps.js'
 
 const w = (steps: WorkflowStep[], ordered = true): Workflow => ({ id: 'wf', name: 'wf', ordered, steps })
 const s = (key: WorkflowStep['key'], required = false, on = true): WorkflowStep => ({ key, on, required })
@@ -60,6 +60,18 @@ describe('steps', () => {
 })
 
 describe('the fixed rules', () => {
+  it('an optional step is done or skipped, never just left: the brief waits on the undecided ones', () => {
+    const wf = w([s('idea'), s('research'), s('sketch', false, false), s('mockup', true), s('prototype'), s('brief', true)], false)
+    expect(undecided([], wf)).toEqual(['research', 'prototype']) // the idea is a fact, not work; sketches are switched off; mockups are required
+    expect(undecided([{ key: 'research', status: 'skipped' }, { key: 'prototype', status: 'started' }], wf)).toEqual(['prototype']) // started is not decided
+    expect(undecided([{ key: 'research', status: 'skipped' }, { key: 'prototype', status: 'done', approved: { by: 'sam', at: 'now' } }], wf)).toEqual([])
+    expect(settled({ key: 'research', status: 'skipped' }, 'task')).toBe(true)
+    expect(finished({ key: 'research', status: 'skipped' }, 'task')).toBe(false) // skipped is not done
+    expect(canSkip({ key: 'mockup', required: true })).toBe(false)
+    expect(canSkip({ key: 'brief', required: false })).toBe(false)
+    expect(owed([{ key: 'research', status: 'skipped' }], wf)).toEqual(['mockup']) // what is required is still owed
+  })
+
   it('keeps the idea first and the checks after the other steps; where the brief sits means nothing', () => {
     expect(validOrder([s('idea'), s('research'), s('brief'), s('mockup'), s('adr')])).toBe(true)
     expect(validOrder([s('idea'), s('mockup'), s('prototype'), s('risk'), s('audit'), s('brief')])).toBe(true)

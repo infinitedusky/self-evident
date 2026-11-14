@@ -1,4 +1,5 @@
 /** A task's acceptance criteria: built one at a time, approved with the brief, and a change to what was approved asks again. */
+import { skipTheRest } from './test-briefs.js'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
@@ -68,6 +69,7 @@ describe.skipIf(!reachable)('acceptance criteria, on a task', () => {
     await updateIssue(t.id, { brief: 'One page (sample).' })
     const made = await setAcceptance(t.id, { add: [{ text: 'Pays in one tap (sample)' }] }, 'agent')
     const id = made.acceptance[0].id
+    await skipTheRest(t.id)
     await approveBrief(t.id, 'sandy')
     expect(await setAcceptance(t.id, { update: [{ id, shown: true, evidence: '/checkout (sample)' }] }, 'agent')).not.toHaveProperty('note')
     expect((await db.select().from(issue).where(eq(issue.id, t.id)))[0].briefApprovedBy).toBe('sandy')

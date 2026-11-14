@@ -12,7 +12,7 @@ import { app, idea, issue, project, prototype, session, stepWork, workflow } fro
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { getIssue, insertIssues, PlanError } from './issues.js'
-import { blocking, needsApproval, owed, CAN, DEFAULT_NAME, DEFAULT_STEPS, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
+import { blocking, canSkip, needsApproval, owed, undecided, CAN, DEFAULT_NAME, DEFAULT_STEPS, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
 
 export type Subject = { ideaId: string } | { issueId: string } | { projectId: string }
 const onOf = (s: Subject): On => ('ideaId' in s ? 'idea' : 'issueId' in s ? 'task' : 'project')
@@ -114,7 +114,7 @@ export async function workflowFor(tx: Tx | typeof db, s: { issueId: string } | {
 async function statesOf(tx: Tx | typeof db, s: Subject): Promise<{ states: StepState[]; fromIdea: { id: string; number: number; title: string } | null }> {
   const work = await tx.select().from(stepWork).where(subjectCol(s))
   const states: StepState[] = work.map((w) => ({ key: w.key as StepKey, status: w.status as StepState['status'], detail: w.detail ?? undefined, ...(w.approvedBy ? { approved: { by: w.approvedBy, at: (w.approvedAt ?? w.createdAt).toISOString() } } : {}) }))
-  const set = (st: StepState) => { const i = states.findIndex((x) => x.key === st.key); if (i >= 0) states[i] = { ...states[i], ...st, status: states[i].status === 'done' ? 'done' : st.status }; else states.push(st) }
+  const set = (st: StepState) => { const i = states.findIndex((x) => x.key === st.key); if (i >= 0) states[i] = { ...states[i], ...st, status: states[i].status === 'done' || states[i].status === 'skipped' ? states[i].status : st.status }; else states.push(st) }
   const protos = await tx.select().from(prototype).where(and(
     'ideaId' in s ? eq(prototype.ideaId, s.ideaId) : 'issueId' in s ? eq(prototype.issueId, s.issueId) : eq(prototype.projectId, s.projectId),
     inArray(prototype.status, ['running', 'stopped']))).orderBy(desc(prototype.createdAt))
@@ -158,7 +158,7 @@ async function subjectApp(tx: Tx, s: Subject) {
  * Record work on a step: research notes, a rough draft, an ADR, the mockups' story ids. A task's brief is written
  * on the issue itself (updateIssue), and "starts as an idea" by converting one, so neither is set here.
  */
-export async function setStep(s: Subject, key: StepKey, input: { status?: 'started' | 'done' | 'none'; detail?: string | null; body?: string | null; summary?: string | null; refs?: string[] }, actor = 'user') {
+export async function setStep(s: Subject, key: StepKey, input: { status?: 'started' | 'done' | 'none' | 'skipped'; detail?: string | null; body?: string | null; summary?: string | null; refs?: string[] }, actor = 'user') {
   const on = onOf(s)
   if (!KEYS.includes(key)) throw new PlanError(`no step "${key}"; the steps are ${KEYS.join(', ')}`)
   if (!CAN[on].includes(key)) throw new PlanError(`${step(key).label} isn't done on ${on === 'idea' ? 'an idea' : `a ${on}`}`)
@@ -166,7 +166,14 @@ export async function setStep(s: Subject, key: StepKey, input: { status?: 'start
   if (key === 'brief' && on === 'task') throw new PlanError('a task\'s brief is written on the task itself')
   return db.transaction(async (tx) => {
     const a = await subjectApp(tx, s)
-    if (input.status !== 'none') await guardOrder(tx, s, key)
+    if (input.status === 'skipped') { // a person's word that this optional step is not being done here
+      if (on !== 'task') throw new PlanError('only a task\'s steps are skipped')
+      const v = await stepsOf(s, tx)
+      const row = v.rows.find((r) => r.key === key)
+      if (!row) throw new PlanError(`${step(key).label} is not one of this task's steps`)
+      if (!canSkip(row)) throw new PlanError(`${step(key).label} is required by this task's workflow and cannot be skipped`)
+    }
+    if (input.status !== 'none' && input.status !== 'skipped') await guardOrder(tx, s, key)
     const [old] = await tx.select().from(stepWork).where(and(subjectCol(s), eq(stepWork.key, key)))
     const values = {
       status: input.status ?? old?.status ?? 'started', detail: input.detail !== undefined ? input.detail : old?.detail ?? null,
@@ -195,7 +202,7 @@ export async function approveStep(issueId: string, key: StepKey, by: string, app
     if (i.parentId || i.kind !== 'code') throw new PlanError('only a top-level code task has steps to approve')
     const a = await appOf(tx, i.appId)
     const state = (await stepsOf(s, tx)).states.find((x) => x.key === key)
-    if (approve && (!state || state.status === 'none')) throw new PlanError(`${step(key).label} hasn't been started: there is nothing to approve yet`)
+    if (approve && (!state || state.status === 'none' || state.status === 'skipped')) throw new PlanError(state?.status === 'skipped' ? `${step(key).label} was skipped: there is nothing to approve` : `${step(key).label} hasn't been started: there is nothing to approve yet`)
     if (approve) await guardOrder(tx, s, key)
     const [old] = await tx.select().from(stepWork).where(and(subjectCol(s), eq(stepWork.key, key)))
     const values = approve ? { status: 'done', approvedBy: by, approvedAt: new Date() } : { approvedBy: null, approvedAt: null }
@@ -229,6 +236,8 @@ export async function approveBrief(issueId: string, by: string, approve = true) 
       const v = await stepsOf({ issueId }, tx)
       const waits = owed(v.states, v.resolved.workflow)
       if (waits.length) throw new PlanError(`the brief can be approved once this workflow's required steps are done; still to do: ${waits.map((k) => step(k).label).join(', ')}`)
+      const open = undecided(v.states, v.resolved.workflow)
+      if (open.length) throw new PlanError(`the brief can be approved once each optional step is done or skipped; still to do or skip: ${open.map((k) => step(k).label).join(', ')}`)
     }
     const [row] = await tx.update(issue).set({ briefApprovedBy: approve ? by : null, briefApprovedAt: approve ? new Date() : null, updatedAt: new Date() }).where(eq(issue.id, issueId)).returning()
     const a = await appOf(tx, i.appId)

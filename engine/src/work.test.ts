@@ -13,6 +13,7 @@ import { newId } from './ids.js'
 import { createIssue, updateIssue } from './issues.js'
 import { preparePlanning } from './planner.js'
 import { createProject } from './projects.js'
+import { skipTheRest } from './test-briefs.js'
 import { approveBrief, convertIdea, createDefaultWorkflow, guardComplete, guardDirect, ideaFirst, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, approveStep } from './work.js'
 
 let reachable = true
@@ -92,6 +93,13 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     await approveStep(t.id, 'research', 'sam')
     await expect(approveStep(t.id, 'sketch', 'sam')).rejects.toThrow(/hasn't been started/)
     await expect(approveStep(t.id, 'risk', 'sam')).rejects.toThrow(/approved with the brief/)
+    // An optional step is done or skipped, never just left: the brief waits on the undecided ones too.
+    await expect(approveBrief(t.id, 'sam')).rejects.toThrow(/each optional step is done or skipped; still to do or skip: /)
+    await expect(setStep({ issueId: t.id }, 'research', { status: 'skipped' })).rejects.toThrow(/required by this task's workflow and cannot be skipped/)
+    const skippedNow = await skipTheRest(t.id)
+    expect(skippedNow.length).toBeGreaterThan(0)
+    expect((await stepsOf({ issueId: t.id })).states.filter((x) => x.status === 'skipped').map((x) => x.key).sort()).toEqual([...skippedNow].sort())
+    await expect(approveStep(t.id, skippedNow[0], 'sam')).rejects.toThrow(/was skipped: there is nothing to approve/)
     await approveBrief(t.id, 'sam')
     await expect(guardComplete(db, t.id)).resolves.toBeUndefined()
     await updateIssue(t.id, { brief: 'Do the other thing.' })
@@ -108,6 +116,7 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     await expect(setStep({ issueId: t.id }, 'adr', { status: 'started' })).rejects.toThrow(/Draft ADR waits for Mockups first/) // done, not yet approved
     await approveStep(t.id, 'mockup', 'sam')
     await expect(setStep({ issueId: t.id }, 'adr', { status: 'done' })).resolves.toMatchObject({ key: 'adr' }) // a check no longer waits for the brief's approval
+    await skipTheRest(t.id)
     await approveBrief(t.id, 'sam')
   })
 

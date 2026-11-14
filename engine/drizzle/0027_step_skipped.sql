@@ -1,0 +1,2 @@
+ALTER TABLE "step_work" DROP CONSTRAINT "step_work_status";--> statement-breakpoint
+ALTER TABLE "step_work" ADD CONSTRAINT "step_work_status" CHECK ("step_work"."status" in ('none', 'started', 'done', 'skipped'));

@@ -423,7 +423,7 @@ export const workflow = pgTable('workflow', {
   createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [index('workflow_app').on(t.appId)])
 
-export const STEP_STATUSES = ['none', 'started', 'done'] as const
+export const STEP_STATUSES = ['none', 'started', 'done', 'skipped'] as const // skipped: an optional step a person is not doing on this task
 export const stepWork = pgTable('step_work', {
   id: id(), appId: appId(),
   ideaId: text('idea_id').references(() => idea.id), issueId: text('issue_id').references(() => issue.id), projectId: text('project_id').references(() => project.id),
