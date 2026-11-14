@@ -3318,3 +3318,10 @@ it costs more when that conversation has gone cold), and one brought in from the
 Not done: the task's agent asking that conversation a question later (the second half Sandy and I talked about;
 wait and see how many questions are left); editing the hand-over by hand; a hand-over for a project's tasks made by
 the planner, or for an idea.
+
+Found on the first look at a real task (MER-50 showed no creator): only `create_task` recorded the conversation.
+A project made by an agent with its tasks in one call (`create_project`) did not, so those tasks read as made by a
+person. `createProject` now takes `madeIn` and marks each task. Past tasks: MER-50 to MER-54 were made by one
+`create_project` call in the conversation "Cloud Playground" and are marked by hand in the live data. A first
+attempt to trace others by "the first conversation whose tool result names the task" was wrong (a later
+conversation that merely looked the task up matched) and was undone for RG-1 and RG-2, which stay unmarked.
