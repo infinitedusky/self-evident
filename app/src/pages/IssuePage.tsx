@@ -18,10 +18,11 @@ import { Acceptance } from '../components/Acceptance'
 import { TaskBranches } from '../components/TaskBranches'
 import { MergeGuide } from '../components/MergeGuide'
 import { mark, TaskNav } from '../components/TaskNav'
+import { WorkflowChoice } from '../components/WorkflowChoice'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
 import { finished, label, ready, step, type Row, type StepKey } from '@self-evident/engine/steps'
 import { STATUS_TONE } from '../components/PlanGraphView'
-import { openEvents, type Events, API, engine, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
+import { openEvents, type Events, API, engine, useWorkflows, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
 import { Md } from '../components/Md'
 
 /** Where a task's workflow comes from, after its name. */
@@ -114,6 +115,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   const subject = { kind: 'issues' as const, id: i.id }
   const { v, error } = useSteps(subject, i.appId)
   const agent = useTaskAgent(i.id, i.appId)
+  const { workflows } = useWorkflows(i.appId)
   const [navOpen, setNavOpen] = useState(() => { try { return localStorage.getItem('se.task-nav.open') !== '0' } catch { return true } })
   const toggleNav = () => setNavOpen((o) => { try { localStorage.setItem('se.task-nav.open', o ? '0' : '1') } catch { /* fine */ } return !o })
   const base = `/tasks/${i.id}`
@@ -151,7 +153,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
               </p>
               {next && <p style={{ margin: '0 0 8px' }}>Next: <Link to={`${base}/${next.key}`}>{label(next.key, 'task')}</Link>{next.required ? '' : ' (optional)'}.</p>}
               <p className="faint" style={{ margin: 0, fontSize: 13 }}>
-                {wf && <>Workflow <b>{wf.name}</b>{FROM[v.resolved.from!]}{wf.ordered ? ', in order' : ''}. </>}
+                <WorkflowChoice workflow={wf} from={v.resolved.from} workflows={workflows} fromIdea={!!v.fromIdea} onChange={(w) => engine.useWorkflow({ kind: 'issues', id: i.id }, w)} />{' · '}
                 <Link to={`/settings/apps/${i.appId}/workflows`}>Configure the rules</Link>
               </p>
             </section>
