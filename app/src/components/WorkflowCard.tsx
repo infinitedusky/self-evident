@@ -9,6 +9,8 @@ import { useState } from 'react'
 import { Badge } from './Badge'
 import { CHECKS, canTurnOff, normalize, step, validOrder, type StepKey, type Workflow, type WorkflowStep } from '@self-evident/engine/steps'
 
+/** What follows an approved prototype, in order: the plan sits between what it is made from and what reads it. */
+const AFTER: (StepKey | 'plan' | 'build')[] = [...CHECKS.slice(0, 2), 'plan', ...CHECKS.slice(2), 'build']
 const NOTE: Partial<Record<StepKey, string>> = { idea: 'always first', brief: 'the parent: every step feeds it, and it is approved last', analysis: 'a check, first once the prototype is approved', adr: 'a check, after the other steps', risk: 'a check, after the other steps', audit: 'a check, after the other steps' }
 
 export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, onSave }: { workflow: Workflow; usedBy?: string; editing?: boolean; onSave?: (w: Workflow) => void }) {
@@ -41,9 +43,9 @@ export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, 
           </div>
           <h4 className="wf-h">After the prototype is approved <span className="faint">always, by itself, in this order</span></h4>
           {hasPrototype
-            ? <ol className="wf-steps">{CHECKS.map((k) => <li key={k} title={step(k).what}>{step(k).icon} {step(k).label}</li>)}<li>🏗️ The plan (sub-tasks), then the build</li></ol>
+            ? <ol className="wf-steps">{AFTER.map((k) => (k === 'plan' ? <li key={k}>🗂️ The plan: the task cut into sub-tasks</li> : k === 'build' ? <li key={k}>🏗️ The build</li> : <li key={k} title={step(k).what}>{step(k).icon} {step(k).label}</li>))}</ol>
             : <div className="faint" style={{ fontSize: 13 }}>This workflow has no prototype, so there is nothing to read first: once the brief is approved, the plan (sub-tasks), then the build.</div>}
-          {hasPrototype && <div className="faint" style={{ fontSize: 13 }}>Not a choice: a task that makes a prototype gets all four; one that skips its prototype gets none. The build waits for them, the brief does not.</div>}
+          {hasPrototype && <div className="faint" style={{ fontSize: 13 }}>Not a choice: a task that makes a prototype gets all of it; one that skips its prototype is planned and built from its brief. The plan is made from an approved brief.</div>}
           <h4 className="wf-h">The brief <span className="faint">always, and approved by you</span></h4>
           <div className="faint" style={{ fontSize: 13 }}>What to build and why. It can be approved once every step above it is done, or skipped where it is optional. What every plan must cover (telemetry, tests and the rest) is the app's: Settings › Landing.</div>
         </>
@@ -66,7 +68,7 @@ export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, 
           <h4 className="wf-h">After the prototype is approved <span className="faint">always, by itself, in this order</span></h4>
           <div className="faint" style={{ fontSize: 13, marginBottom: 6 }}>
             {w.steps.some((x) => x.key === 'prototype' && x.on)
-              ? <>{CHECKS.map((k) => step(k).label).join(', ')}, then the plan and the build. Nothing to set here: they come with the prototype.</>
+              ? <>{AFTER.map((k) => (k === 'plan' ? 'the plan' : k === 'build' ? 'the build' : step(k).label)).join(', ')}. Nothing to set here: they come with the prototype.</>
               : <>Nothing but the plan and the build: this workflow has no prototype.</>}
           </div>
           <h4 className="wf-h">The brief <span className="faint">always, and approved by you</span></h4>
