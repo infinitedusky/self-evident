@@ -579,6 +579,7 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .step-foot { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: auto; font-size: 13px; }
 .wf-steps { margin: 4px 0 8px; padding-left: 22px; display: grid; gap: 4px; }
 .wf-steps.free { list-style: disc; }
+.wf-h { margin: 14px 0 4px; font-size: 13px; font-weight: 600; } .wf-h:first-of-type { margin-top: 4px; } .wf-h .faint { font-weight: 400; margin-left: 6px; }
 .wf-edit-row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 12px; align-items: center; }
 .wf-arrows { display: flex; gap: 4px; }
 .home-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 16px; }
