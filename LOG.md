@@ -3376,3 +3376,12 @@ the merge guide); a pull request per task or per project; and how a task that ne
 (wait for the merge, or branch from the earlier task's branch). #193's "Ready to build" on the Build page and the
 "Run this project" button on a task's Build section stay until this is built; they are the wrong level but they
 are the only visible way to start a build today.
+
+Later the same day Sandy settled who starts the build: nobody. "Once we've approved the prototype … it should all
+just be automated from that point forward. Because once you have a prototype … there's nothing that's unclear about
+what we're trying to do here." A prototype is required ("I think a prototype should be required for this whole
+thing"). Trade-offs that turn up are rated cheap, medium, expensive; "those should stop things and they should send
+an alert to the person who approved the brief … hey, you have a question … but then it should just do the whole
+thing." So the person's presses are the brief and the prototype; the merge guide is read on the pull request, not
+as a gate before the build. Still open: which ratings stop, where the alert goes outside the app, a pull request
+per task or per project, and a task that needs an earlier task's work.
