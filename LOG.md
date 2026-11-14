@@ -3611,3 +3611,30 @@ anything that would change what is built. Making an audit finding hold the build
 is the "expensive trade-offs stop and alert" piece. A task with no prototype is still planned and built from its
 brief with no ADR and no audit. The merge guide takes the blast radius and the ADR as before; the audit's own
 summary is not on it yet. Not tried with real agents: the first prototype approved from here is the live test.
+
+## One approval, and the ADR and the plan are put right before the build (Sandy, 2026-11-14: "the audit and the blast radius should … make any changes they need to make to the ADR and the plan … and set out the … merge checklist. Only then do we build")
+
+Asked to say the order back, Sandy gave it with two things the tool did not have: "I approve the brief, which
+basically ends with the prototype", and a "final ADR" between the audit and the build.
+
+- **One approval.** Approving the prototype approves the brief with it when the brief is ready for that
+  (`server.ts`, the step-approval route). Where it is not (no brief written, a required step owed, an optional one
+  neither done nor skipped), the prototype stands approved and the answer says why the brief was not; the brief
+  stays the person's to approve, and the line waits for it after the ADR as before.
+- **A fifth step after the prototype: "Final ADR and plan"** (`final`, last of the checks). Until now the blast
+  radius and the audit only reported, and the build started whatever they found. This step's agent reads both and
+  changes things, through the task tools: it writes the final ADR over the draft, brings sub-tasks' briefs up to
+  date, adds one where no sub-task can hold a finding, cancels one nobody asked for, and writes the merge
+  checklist. It is told not to re-plan and to leave alone what no finding touches.
+- **It can hold the build.** A finding that changes what is built, not how, is not its to decide: it records the
+  step as started with "NEEDS YOU:" and the question, and stops. The step is not done, so the build does not
+  start; the person answers in that agent's tab on the task and it carries on.
+- **The merge checklist** is that step's summary and goes at the top of the pull request's merge guide as "Before
+  you merge", boxes to tick.
+
+So after the one press: prototype analysis → draft ADR → the plan → blast radius → audit → final ADR and plan →
+the build.
+
+Not done: the held question does not show under "Waiting for you" on Build (it is in the task's agent column, on
+the step); the same line for a task with no prototype; nothing outside the app tells the person the build is held.
+Not tried with real agents.
