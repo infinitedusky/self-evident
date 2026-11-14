@@ -793,6 +793,7 @@ export function buildApp(bus: EventBus) {
           if (rows.length < PAGE) break
         }
       }))
+      await stream.writeSSE({ id: String(since), event: 'ping', data: String(Date.now()) }) // where this stream starts: a page that loses it before any event still knows where to resume
       bus.on('event', send)
       let open = true
       stream.onAbort(() => { open = false; bus.off('event', send) })

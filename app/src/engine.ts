@@ -7,7 +7,9 @@ export const API = '/api'
 
 /** What a view holds of the event stream: its own listeners on a shared connection. */
 export interface Events { addEventListener(type: string, fn: EventListener): void; onerror: EventListener | null; onopen: EventListener | null; close(): void }
-interface Stream { es: EventSource; n: number; listeners: Set<readonly [string, EventListener]>; last: string | null; retry: number | undefined; down: boolean }
+interface Stream { es: EventSource; n: number; listeners: Set<readonly [string, EventListener]>; last: string | null; retry: number | undefined; down: boolean; heard: number; watch: number | undefined }
+/** The engine pings every stream each 15 s. One that has said nothing for this long is dead, whatever the browser thinks. */
+const QUIET_MS = 35_000
 const streams = new Map<string, Stream>()
 
 /**
@@ -22,20 +24,34 @@ const tellLink = () => { const d = engineDown(); for (const fn of linkListeners)
 /** Where to pick the stream up again: after the last event this page saw, so nothing said in the gap is lost. */
 export const resumeUrl = (url: string, last: string | null) => (last ? url.replace(/([?&])since=[^&]*/, `$1since=${last}`) : url)
 
-/** One connection, re-made when the browser gives up on it, with every listener carried over. */
+/**
+ * One connection, re-made when it dies, with every listener carried over. It dies two ways. The browser gives up on
+ * it (refused with an error page): an error event, and the stream is closed. Or nobody says so: the engine restarts
+ * behind the dev proxy, which keeps the browser's side open, so no error ever fires and the page just stops hearing.
+ * The second is caught by listening for the engine's ping: silence for QUIET_MS means dead.
+ */
 function connect(url: string, s: Stream) {
   const es = new EventSource(resumeUrl(url, s.last))
   s.es = es
+  s.heard = Date.now()
   for (const [type, fn] of s.listeners) es.addEventListener(type, fn)
-  es.addEventListener('open', () => { if (s.down) { s.down = false; tellLink() } })
+  const alive = () => { s.heard = Date.now(); if (s.down) { s.down = false; tellLink() } }
+  es.addEventListener('open', alive)
+  es.addEventListener('ping', (e) => { const id = (e as MessageEvent).lastEventId; if (id && id !== '0' && !s.last) s.last = id; alive() }) // the first ping says where the stream started
+  const again = (after: number) => {
+    if (streams.get(url) !== s || s.retry !== undefined) return
+    es.close()
+    s.retry = window.setTimeout(() => { s.retry = undefined; if (streams.get(url) === s) connect(url, s) }, after)
+  }
   es.addEventListener('error', () => {
     if (!s.down) { s.down = true; tellLink() }
-    // The browser retries a dropped connection by itself, but not one refused with an error page (what the proxy
-    // answers while the engine restarts): that one is closed for good, and every view on it went silent.
-    if (es.readyState === EventSource.CLOSED && streams.get(url) === s && s.retry === undefined) {
-      s.retry = window.setTimeout(() => { s.retry = undefined; if (streams.get(url) === s) connect(url, s) }, 1500)
-    }
+    if (es.readyState === EventSource.CLOSED) again(1500) // the browser retries a dropped connection by itself, but not one refused with an error page
   })
+  window.clearInterval(s.watch)
+  s.watch = window.setInterval(() => {
+    if (streams.get(url) !== s) { window.clearInterval(s.watch); return }
+    if (s.es === es && Date.now() - s.heard > QUIET_MS) { if (!s.down) { s.down = true; tellLink() } again(0) }
+  }, 5000)
 }
 
 /**
@@ -48,12 +64,12 @@ function connect(url: string, s: Stream) {
  */
 export function openEvents(url: string): Events {
   let s = streams.get(url)
-  if (!s) { s = { es: null as never, n: 0, listeners: new Set(), last: null, retry: undefined, down: false }; streams.set(url, s); connect(url, s) }
+  if (!s) { s = { es: null as never, n: 0, listeners: new Set(), last: null, retry: undefined, down: false, heard: Date.now(), watch: undefined }; streams.set(url, s); connect(url, s) }
   const shared = s
   shared.n++
   const mine: (readonly [string, EventListener])[] = []
   const add = (type: string, fn: EventListener) => {
-    const seen: EventListener = (e) => { const id = (e as MessageEvent).lastEventId; if (id) shared.last = id; fn(e) }
+    const seen: EventListener = (e) => { const id = (e as MessageEvent).lastEventId; if (id) shared.last = id; shared.heard = Date.now(); fn(e) }
     const entry = [type, type === 'error' || type === 'open' ? fn : seen] as const
     mine.push(entry); shared.listeners.add(entry); shared.es.addEventListener(entry[0], entry[1])
   }
@@ -67,7 +83,7 @@ export function openEvents(url: string): Events {
       if (closed) return
       closed = true
       for (const entry of mine) { shared.listeners.delete(entry); shared.es.removeEventListener(entry[0], entry[1]) }
-      if (--shared.n === 0) { window.clearTimeout(shared.retry); shared.es.close(); streams.delete(url); tellLink() }
+      if (--shared.n === 0) { window.clearTimeout(shared.retry); window.clearInterval(shared.watch); shared.es.close(); streams.delete(url); tellLink() }
     },
   }
 }

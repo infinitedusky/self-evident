@@ -3519,3 +3519,12 @@ workspace went quiet until a reload. Eight engine merges that day did it eight t
 
 Checked by watching a page on the fixed UI through the engine restart of this very merge. Still true: a restart
 cuts off an agent that is mid-turn; this fix is about hearing it afterwards.
+
+That fix did not work, and watching a page through the next restart showed why: no error event ever fired. The dev
+proxy keeps the browser's side of the stream open after the engine dies, so the page hears nothing and is told
+nothing. The stream is now judged by the engine's own ping (every 15 s): one that has been silent for 35 s is
+closed and made again, from the last event seen; the first ping of a stream carries the place it started, so a
+stream that had seen no event yet resumes from there too. Watched for real through a deliberate restart with
+nothing running: restart at 18:00:34, the bar up at 18:01:00, both streams re-made (one at `since=15645`), the bar
+down at 18:01:12. So an open page is deaf for up to about 35 seconds after a restart, says so, and then catches up.
+Lesson: the first fix was merged on a guess about how the stream fails; it should have been watched failing first.
