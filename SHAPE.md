@@ -578,9 +578,14 @@ Details and sources in `research/`.
      project.
   A **project** is a way of grouping tasks so an agent understands the overall goal; it has no Run button. The
   **Build** item leaves the rail. After an approved brief there should be no questions; when the plan or the build
-  does need one, the task's own agent stops and asks the person. **Open:** whether the build starts by itself once
-  the audit is done, or the person reads the merge guide and presses Build (Sandy said both; Claude suggests the
-  press); a pull request per task or per project; how a task that needs an earlier task's work gets it.
+  does need one, the task's own agent stops and asks the person. **After the prototype is approved it all runs by itself**
+  (Sandy, 2026-11-14, later the same day: "once we've approved the prototype … it should all just be automated from
+  that point forward"): plan, audit and build, with no press in between, and a prototype is required. What can
+  still stop it is a trade-off that turns up on the way, rated cheap, medium or expensive like an agent's actions;
+  one that stops sends an alert to the person who approved the brief ("hey, you have a question"), and the work
+  carries on once it is answered. **Open:** which ratings stop (Claude's reading: as for actions, up to the
+  person's threshold it is decided and recorded, above it it stops); where the alert goes outside the app; a pull
+  request per task or per project; how a task that needs an earlier task's work gets it.
 - **A task starts with a hand-over** (Sandy, 2026-11-14: "I'm finding myself copying questions from the task agent
   into the global agent"). A task made by an agent remembers the conversation that made it, and its page names that
   conversation (there can be several about the app). When the task's own agent starts, a copy of that conversation
