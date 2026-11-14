@@ -379,11 +379,11 @@ export async function clearSubIssues(issueId: string, actor = 'user') {
 }
 
 /** Every project, newest first, with its app and counts: the Projects page. Superseded projects are hidden unless asked. */
-export async function listProjects(opts: { all?: boolean; appId?: string } = {}) {
-  const projects = (await db.select().from(project).orderBy(sql`${project.createdAt} desc`)).filter((p) => !p.solo && (opts.all || p.status !== 'superseded') && (!opts.appId || p.appId === opts.appId)) // a task's own project is not one to list (solo.ts)
+export async function listProjects(opts: { all?: boolean; appId?: string; solo?: boolean } = {}) {
+  const projects = (await db.select().from(project).orderBy(sql`${project.createdAt} desc`)).filter((p) => (opts.solo || !p.solo) && (opts.all || p.status !== 'superseded') && (!opts.appId || p.appId === opts.appId)) // a task's own project is not one to list (solo.ts)
   const apps = await db.select().from(app)
   const ids = projects.map((p) => p.id)
-  const issues = ids.length ? await db.select({ id: issue.id, projectId: issue.projectId, parentId: issue.parentId, kind: issue.kind, state: issue.state }).from(issue).where(inArray(issue.projectId, ids)) : []
+  const issues = ids.length ? await db.select({ id: issue.id, projectId: issue.projectId, parentId: issue.parentId, kind: issue.kind, state: issue.state, number: issue.number, title: issue.title }).from(issue).where(inArray(issue.projectId, ids)) : []
   const subIds = issues.filter((i) => i.parentId && i.kind === 'code').map((i) => i.id)
   const builds = subIds.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, subIds)) : []
   return projects.map((p) => {
@@ -392,6 +392,8 @@ export async function listProjects(opts: { all?: boolean; appId?: string } = {})
       ...p, app: apps.find((a) => a.id === p.appId) ?? null,
       issueCount: mine.filter((i) => !i.parentId && i.kind === 'code' && !BACKLOG.includes(i.state)).length,
       backlogOpen: mine.filter((i) => !i.parentId && BACKLOG.includes(i.state)).length,
+      // Its tasks that are planned (they have sub-tasks still in the plan): what there is to build. Build's page lists a draft once it has one.
+      plannedTasks: mine.filter((t) => !t.parentId && t.kind === 'code' && !DROPPED.includes(t.state)).map((t) => ({ id: t.id, identifier: identifier(apps.find((a) => a.id === p.appId)?.key ?? '', t.number), title: t.title, subTasks: mine.filter((x) => x.parentId === t.id && x.kind === 'code' && !DROPPED.includes(x.state)).length })).filter((t) => t.subTasks > 0),
       builds: builds.filter((b) => mine.some((i) => i.id === b.issueId)).reduce<Record<string, number>>((acc, x) => ({ ...acc, [x.status]: (acc[x.status] ?? 0) + 1 }), {}),
     }
   })

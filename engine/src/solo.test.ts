@@ -52,6 +52,8 @@ describe.skipIf(!reachable)('a task on its own', () => {
     expect(p).toMatchObject({ solo: true, name: 'Marketing site', status: 'drafting', integrationBranch: `project/${p.id}` })
     expect((await projectGraph(p.id))!.subIssues.map((s) => s.title)).toEqual(['Build the page'])
     expect((await listProjects({ appId, all: true })).map((x) => x.id)).not.toContain(p.id)
+    // Build's page asks for it by name: there it is listed, with the planned task and its sub-tasks, to be run.
+    expect((await listProjects({ appId, solo: true })).find((x) => x.id === p.id)).toMatchObject({ solo: true, status: 'drafting', plannedTasks: [{ id: t.id, title: 'Marketing site', subTasks: 1 }] })
     const view = await planView(appId)
     expect(view.projects.map((x) => x.id)).not.toContain(p.id)
     expect(view.loose.map((x) => x.id)).toContain(t.id)

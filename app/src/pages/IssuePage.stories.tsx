@@ -41,6 +41,13 @@ export const LockedStep: Story = { parameters: at('iss_sample20', 'risk'), befor
 export const BuildReady: Story = { parameters: at('iss_sample20', 'build'), beforeEach: approved }
 /** A task planned: its sub-tasks, and what the planner decided. */
 export const Planned: Story = { parameters: at('iss_sample1', 'build'), beforeEach: approved }
+/** Planned, and its project has not been run: "Ready to build" with the button that runs it. */
+export const PlannedNotRun: Story = {
+  parameters: at('iss_sample1', 'build'),
+  beforeEach: withEngine({ steps: { ...sampleData.steps, issues: approvedTaskStepsView }, issueDetails: { ...sampleData.issueDetails,
+    iss_sample1: { ...issueDetails.iss_sample1, briefApprovedBy: 'Sam (sample)', briefApprovedAt: '2026-10-28T10:00:00Z', project: { ...issueDetails.iss_sample1.project!, status: 'drafting' } } } }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('button', { name: 'Run this project' })).toBeInTheDocument() },
+}
 // Made up: the planner ran twice on the sample task, and the first run's two sub-tasks were canceled as duplicates.
 const s1 = issueDetails.iss_sample1
 const dropped = s1.subIssues.map((s, n) => ({ ...s, id: `iss_dropped${n}`, identifier: `SH-9${n}`, title: `${s.title} (first plan, sample)`, state: 'canceled' as const, reason: 'Duplicate plan: the planner ran twice (sample)', build: { status: 'queued' as const, attempt: 0, heldReason: null } }))
