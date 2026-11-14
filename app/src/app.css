@@ -6,7 +6,7 @@ h1 { font-size: 26px; } h2 { font-size: 18px; } h3 { font-size: 15px; }
 .muted { color: var(--ink-soft); } .faint { color: var(--ink-faint); }
 .mono { font-family: var(--mono); font-size: 12px; }
 
-.tab-page { height: 100%; overflow: auto; padding: 24px 28px 40px; background: var(--ground); }
+.tab-page { height: 100%; overflow: auto; padding: 24px 28px 40px; background: var(--ground); container: tab / inline-size; } /* a tab is as wide as its group, not the window: pages lay out by the tab's width */
 /* A tab's page is as wide as its tab (Sandy, 2026-11-10: "the tabs should have no width limit"); running text keeps a readable line. */
 .task-main .md { max-width: 100ch; }
 .page-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 20px; gap: 16px; }
@@ -483,7 +483,7 @@ div.rail-fly-head { padding: 4px 10px 2px; }
   font-family: var(--sans);
 }
 .dockview-theme-se { box-sizing: border-box; padding: 8px; background: var(--ground); --dv-tabs-and-actions-container-height: 40px; --dv-tab-margin: 6px 2px; --dv-tab-border-radius: 8px; --dv-sash-border-radius: 4px; --dv-tab-close-icon-size: 9px; }
-.dockview-theme-se .dv-dockview { padding: 0; }
+.dockview-theme-se .dv-dockview { padding: 0; background: transparent; } /* dockview paints this white: square corners behind each group's rounded stroke */
 .dockview-theme-se .dv-groupview { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
 .dockview-theme-se .dv-tabs-and-actions-container { border-bottom: 1px solid var(--line); padding-left: 4px; }
 .dockview-theme-se .dv-tab { padding: 0 10px; border-radius: var(--dv-tab-border-radius); }
@@ -593,7 +593,7 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 
 /* A task's own nav and its sections, laid out like Settings (TaskNav, StepSection). */
 .task-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: start; }
-.task-nav { position: sticky; top: 20px; display: grid; gap: 2px; }
+.task-nav { position: sticky; top: 20px; display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 2px; } /* one track that never grows past its column: a long step name is cut short, not pushed under the page beside it */
 .task-nav .link { display: block; padding: 7px 10px; border-radius: 8px; text-decoration: none; color: var(--ink-soft); }
 .task-nav .link.active { background: var(--accent-wash); color: var(--ink); font-weight: 600; }
 .task-nav .link.locked { color: var(--ink-faint); cursor: not-allowed; }
@@ -645,8 +645,8 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .task-agent-fold .dot { background: var(--talk); }
 .task-agent-fold-text { writing-mode: vertical-rl; }
 .talk-tab.hide { color: var(--ink-faint); font-size: 14px; padding: 4px 8px; }
-@media (max-width: 1100px) { .task-layout.with-agent { grid-template-columns: var(--task-nav, 220px) minmax(0, 1fr); } .task-agent { grid-column: 1 / -1; position: static; height: 520px; } .task-agent.folded { height: auto; } .task-agent-fold { flex-direction: row; width: auto; padding: 8px 12px; } .task-agent-fold-text { writing-mode: horizontal-tb; } }
-@media (max-width: 760px) { .task-layout, .task-layout.with-agent { grid-template-columns: 1fr; } .task-nav { position: static; } }
+@container tab (max-width: 960px) { .task-layout.with-agent { grid-template-columns: var(--task-nav, 220px) minmax(0, 1fr); } .task-agent { grid-column: 1 / -1; position: static; height: 520px; } .task-agent.folded { height: auto; } .task-agent-fold { flex-direction: row; width: auto; padding: 8px 12px; } .task-agent-fold-text { writing-mode: horizontal-tb; } }
+@container tab (max-width: 620px) { .task-layout, .task-layout.with-agent { grid-template-columns: 1fr; } .task-nav { position: static; } }
 
 /* One conversation in the terminal and the UI */
 .terminal-note { margin: 0 12px 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--idle-wash); font-size: 13px; display: grid; gap: 6px; }
