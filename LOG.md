@@ -3638,3 +3638,22 @@ the build.
 Not done: the held question does not show under "Waiting for you" on Build (it is in the task's agent column, on
 the step); the same line for a task with no prototype; nothing outside the app tells the person the build is held.
 Not tried with real agents.
+
+## A build held for the person shows on Build, and nothing builds around the reading (Sandy, 2026-11-14: "go ahead")
+
+Three things, the last two found while doing the first.
+
+- **Held builds show where the person looks.** `now().tasks` gives a planned task two more states: `checking`
+  (planned after a prototype, with steps still to come before the build) and, when the last step recorded "NEEDS
+  YOU:", `stopped` with the question and that step's conversation. Build lists the first under "Planned, being read
+  before it is built" and the second under "Waiting for you", with the question and a box whose answer goes to
+  that step's agent, which carries on and lets the build start.
+- **No "Build it" around the reading.** A planned task whose steps after the prototype are not all in showed as
+  "Planned, not started" with a Build it button, on Build and on the task. The button is gone there and the engine
+  refuses it (`POST /issues/:id/build`).
+- **A hole in the reorder, closed.** In a project that is already running, sub-tasks start the moment they are
+  planned, so a task planned mid-line would have been built before its blast radius, audit and final step. The
+  dispatch pass now holds a task's sub-tasks while those steps are owed ("its plan is read before it is built;
+  still to come: …"), only for a task whose build has not begun, so nothing under way is stalled.
+
+Tested through a real dispatch in a running project and through `now()`. Not tried with real agents.
