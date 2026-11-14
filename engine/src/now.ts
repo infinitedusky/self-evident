@@ -24,6 +24,17 @@ export type Attention =
   | { kind: 'review'; appName: string; prNumber: number; title: string; author: string | null; url: string | null }
   | ({ kind: 'overlap'; prNumber: number; title: string; author: string | null; url: string | null; files: string[] } & Where)
 
+/** A task past its plan, for Build's page: ready (planned, not started), building, stopped (asking, failed, held or paused) or landed. */
+export interface BuildTask {
+  id: string; identifier: string; title: string; projectId: string; projectName: string | null; projectStatus: string
+  phase: 'ready' | 'building' | 'stopped' | 'landed'; done: number; total: number
+  live: { id: string; identifier: string; title: string; status: string; step: string | null }[]
+  held: { id: string; identifier: string; title: string; reason: string }[]
+  failed: { id: string; identifier: string; title: string; error: string | null }[]
+  questions: { id: string; text: string; cost: string | null; reason: string | null; options: { label: string; description: string; changes: string[]; recommended: boolean }[] }[]
+  pr: { number: number | null; url: string | null; status: string } | null
+}
+
 export async function now(appId?: string) {
   const projects = await db.select().from(project).where(appId ? and(ne(project.status, 'superseded'), eq(project.appId, appId)) : ne(project.status, 'superseded')).orderBy(desc(project.createdAt))
   const apps = await db.select().from(app)
@@ -65,6 +76,28 @@ export async function now(appId?: string) {
       pr: thePr ? { number: thePr.number, url: thePr.url, status: thePr.status } : null,
     }
   })
+
+  // Build's page: every task that is past its plan (it has sub-tasks), with what is being built, what stopped it and
+  // what it asks. A task is what is built; its project is only where the engine keeps the build.
+  const tasks: BuildTask[] = projects.flatMap((p) => work(p).map((t): BuildTask | null => {
+    const mine = subs.filter((x) => x.parentId === t.id && !['canceled', 'duplicate'].includes(x.state) && status(x.id) !== 'cancelled')
+    if (!mine.length) return null
+    const asked = questions.filter((q) => q.issueId === t.id || mine.some((x) => x.id === q.issueId))
+    const failed = mine.filter((x) => status(x.id) === 'failed').map((x) => ({ id: x.id, identifier: name(x), title: x.title, error: lastRun(x.id)?.error ?? b(x.id)?.heldReason ?? null }))
+    const held = mine.filter((x) => status(x.id) === 'queued' && b(x.id)?.heldReason).map((x) => ({ id: x.id, identifier: name(x), title: x.title, reason: b(x.id)!.heldReason! }))
+    const done = mine.filter((x) => status(x.id) === 'done').length
+    const thePr = prs.find((q) => q.issueId === t.id) ?? prs.find((q) => q.projectId === p.id && !q.issueId) ?? null
+    const phase: BuildTask['phase'] = done === mine.length ? 'landed'
+      : ['drafting', 'proposed', 'approved'].includes(p.status) ? 'ready'
+      : asked.length || failed.length || held.length || p.status !== 'running' ? 'stopped' : 'building'
+    return {
+      id: t.id, identifier: name(t), title: t.title, projectId: p.id, projectName: p.solo ? null : p.name, projectStatus: p.status, phase, done, total: mine.length,
+      live: mine.filter((x) => LIVE.includes(status(x.id))).map((x) => ({ id: x.id, identifier: name(x), title: x.title, status: status(x.id), step: currentStep(x.id) })),
+      held, failed,
+      questions: asked.map((q) => ({ id: q.id, text: q.text, cost: q.cost, reason: q.reason, options: (q.options ?? []) as BuildTask['questions'][number]['options'] })),
+      pr: thePr ? { number: thePr.number, url: thePr.url, status: thePr.status } : null,
+    }
+  }).filter((x): x is BuildTask => x !== null))
 
   const needsYou: Attention[] = []
   for (const p of projects) {
@@ -135,5 +168,5 @@ export async function now(appId?: string) {
   const byNumber = (x: typeof todoRows[number], y: typeof todoRows[number]) => todos.find((t) => t.id === x.todoId)!.number - todos.find((t) => t.id === y.todoId)!.number
   needsYou.push(...todoRows.filter((r) => !stalled(r)).sort(byNumber), ...todoRows.filter(stalled).sort(byNumber))
 
-  return { running, needsYou, recent: recent.reverse(), counts: { projects: projects.length, running: running.length, needsYou: needsYou.length } }
+  return { running, tasks, needsYou, recent: recent.reverse(), counts: { projects: projects.length, running: running.length, needsYou: needsYou.length } }
 }

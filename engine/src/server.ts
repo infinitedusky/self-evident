@@ -649,6 +649,8 @@ export function buildApp(bus: EventBus) {
 
   // The planner takes minutes: by default the request returns at once and the outcome arrives on the event stream
   // (issue.planned or issue.plan_failed, then the graph has the sub-issues); ?wait=1 holds the request until it is done.
+  // Build one task: planned if it is not, then started. What approving its brief does by itself; here for a task approved before that, or an app that waits.
+  api.post('/issues/:id/build', async (c) => { try { return c.json(await runner.buildTask((await resolveIssue(db, c.req.param('id'))).id, 'user')) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/plan', async (c) => {
     let ctx
     try { ctx = await preparePlanning(c.req.param('id'), { actor: 'user' }) } catch (err) { return planError(c, err) }
