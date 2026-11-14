@@ -563,8 +563,9 @@ Details and sources in `research/`.
   conversation; **built so far** (2026-11-14): a branch and a pull request per task by default, and approving the
   brief plans and builds the task with nothing more to press (LOG.md, "A task builds itself, on its own branch");
   and the four checks after a prototype are fixed, not a workflow's choice, with the build starting by itself once
-  the brief is approved and they are in (LOG.md, "What follows the prototype is fixed"); the rest is not built
-  yet. Where this and an older bullet disagree (the order after the mockup below, the
+  the brief is approved and they are in (LOG.md, "What follows the prototype is fixed"); and the order after a
+  prototype is analysis, ADR, the plan, blast radius, audit, build (LOG.md, "The plan comes before the audit"). The
+  rest is not built yet. Where this and an older bullet disagree (the order after the mockup below, the
   project's Run button, Build in the rail), this is the direction. Details and what exists already: LOG.md, "A task
   is brief, plan, audit, build".
   1. **Brief**: what we want and why, and literally brief ("a brief used to be literally brief … the thing that we

@@ -3582,3 +3582,32 @@ Not done, and what the shape still asks for: the order analysis, ADR, **plan, th
 the brief and runs before the plan is made; it should read the plan); the brief shrunk to what and why (today's
 brief still carries the builder's instructions when the conductor finalizes an unapproved one); the audit's output
 as the merge guide; stopping on an expensive trade-off and alerting whoever approved.
+
+## The plan comes before the audit, which reads it (Sandy, 2026-11-14: "lets do the reorder")
+
+After an approved prototype the line was analysis, ADR, blast radius, the brief brought up to date, a brief audit,
+and only then the plan and the build, so the last read before agents started was of the brief, not of what they
+were about to do. Now (`checks.ts`, `nextMove`):
+
+    prototype analysis → draft ADR → the plan (sub-tasks) → blast radius → audit → the build
+
+- **The plan** is the planner's run, started by the line itself when the ADR is in (`onPlanWanted`, `runner.planTask`:
+  plans and stops, where `buildTask` plans and builds). It is made from an approved brief. If the brief is not
+  approved when the ADR is in, the conductor brings it up to date once from the analysis and the ADR and tells the
+  person it is ready; the line waits, and approving the brief carries it on.
+- **The blast radius** reads the plan's sub-tasks, not the ADR's intention: what that plan touches and how we would
+  know it broke. It is still what the merge guide's risks are made from.
+- **The audit** (it was "Brief audit") reads the plan against the brief, the ADR, the code, the prototype and the
+  reports, and against what the app requires of every plan: what the brief asks that no sub-task does, sub-tasks
+  nobody asked for, wrong order, two changing the same thing, a requirement the plan claims and the sub-tasks do
+  not do. It leads with whatever should stop the build.
+- When the audit is in, the task is built (`onChecksDone`, as before). An app set to wait plans by hand and the
+  readers follow the plan once it is there.
+- The task's own agent is told the new order, that an approved brief is the person's word, and that it cannot skip
+  a step.
+
+Not done: the audit does not stop the build. It reports, the build starts, and the conductor is told to raise
+anything that would change what is built. Making an audit finding hold the build (a question with a cost, on Build)
+is the "expensive trade-offs stop and alert" piece. A task with no prototype is still planned and built from its
+brief with no ADR and no audit. The merge guide takes the blast radius and the ADR as before; the audit's own
+summary is not on it yet. Not tried with real agents: the first prototype approved from here is the live test.
