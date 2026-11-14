@@ -15,6 +15,7 @@ import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
 import { createProject, projectGraph } from './projects.js'
 import { createIssue } from './issues.js'
+import { approveStep, setStep } from './work.js'
 import { now } from './now.js'
 import { Runner } from './runner.js'
 import { addItems, dropItem, promote } from './backlog.js'
@@ -319,6 +320,50 @@ describe.skipIf(!reachable)('runner', () => {
     expect(g.subIssues.map((x) => x.status)).not.toContain('running')
     expect(await runner.buildTask(t.id)).toEqual({ planning: false, started: true }) // the readers are done: now it is built
     await until(cleaned(p.id))
+  })
+
+  it('in a running project, a task planned after its prototype is not built until its plan has been read', async () => {
+    const own = newId('app')
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'read-first app', key: own.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md' } })
+    await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: repoPath })
+    const { project: p, issues: [first, second] } = await createProject({ appId: own, name: 'two tasks', issues: [one('First', [{ key: 'f', title: 'F', files: ['rf-f.txt'] }]), one('Second', [{ key: 's', title: 'S', files: ['rf-s.txt'] }])] })
+    await approveBriefs(own)
+    // The second task has a prototype in play, so it owes the steps that follow one.
+    await setStep({ issueId: second.id }, 'prototype', { status: 'done' })
+    await approveStep(second.id, 'prototype', 'sam')
+    const runner = new Runner({ execute: commits('rf'), sessionsMax: 2 })
+    await runner.startProject(p.id)
+    const subOf = async (taskId: string) => (await projectGraph(p.id))!.subIssues.find((x) => x.parentId === taskId)!
+    await until(async () => (await subOf(first.id)).status === 'done')
+    await sleep(600); await runner.dispatch()
+    const held = await subOf(second.id)
+    expect(held.status).toBe('queued')
+    expect(held.heldReason).toMatch(/its plan is read before it is built; still to come: Prototype analysis, Draft ADR, Blast radius, Audit, Final ADR and plan/)
+    const listed = (await now(own)).tasks.find((x) => x.id === second.id)
+    expect(listed).toMatchObject({ phase: 'stopped' }) // held, in a running project
+    for (const key of ['analysis', 'adr', 'risk', 'audit', 'final'] as const) await setStep({ issueId: second.id }, key, { status: 'done' })
+    await runner.dispatch()
+    await until(cleaned(p.id))
+    expect((await subOf(second.id)).status).toBe('done')
+  })
+
+  it('a planned task that is still being read says so, and says when its last step is waiting for the person', async () => {
+    const own = newId('app')
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'being-read app', key: own.slice(-6).toUpperCase() })
+    await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: repoPath })
+    const { issues: [t] } = await createProject({ appId: own, name: 'being read', issues: [one('Read first', [{ key: 'r', title: 'R', files: ['br.txt'] }])] })
+    const of = async () => (await now(own)).tasks.find((x) => x.id === t.id)!
+    expect(await of()).toMatchObject({ phase: 'ready' }) // no prototype in play: planned, and just not started
+    await setStep({ issueId: t.id }, 'prototype', { status: 'done' })
+    await approveStep(t.id, 'prototype', 'sam')
+    for (const key of ['analysis', 'adr'] as const) await setStep({ issueId: t.id }, key, { status: 'done' })
+    expect(await of()).toMatchObject({ phase: 'checking', checks: { left: ['Blast radius', 'Audit', 'Final ADR and plan'], needsYou: null } })
+    for (const key of ['risk', 'audit'] as const) await setStep({ issueId: t.id }, key, { status: 'done' })
+    await setStep({ issueId: t.id }, 'final', { status: 'started', summary: 'NEEDS YOU: the audit found the brief asks for offline use and no sub-task does it. Add it, or drop it? I would drop it.' })
+    expect(await of()).toMatchObject({ phase: 'stopped', checks: { left: ['Final ADR and plan'], needsYou: expect.stringMatching(/^the audit found the brief asks for offline use/) } })
+    await setStep({ issueId: t.id }, 'final', { status: 'done', summary: '- Open the page' })
+    expect(await of()).toMatchObject({ phase: 'ready' }) // read: now it only waits to be started
+    expect((await of()).checks).toBeUndefined()
   })
 
   it('stores the builder\'s todo list as the sub-issue\'s steps, latest list wins', async () => {

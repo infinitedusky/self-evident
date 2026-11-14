@@ -13,6 +13,7 @@ import { newId } from './ids.js'
 import { getIssue, identifier, insertIssues, listComments, nextSort, PlanError, rollUp, setState, type Issue, type Source } from './issues.js'
 import { tktOn } from './tkt.js'
 import { claimsOverlap, findCycle, pickTasksToStart, type SchedTask } from './scheduler.js'
+import { checksOwed, step as stepDef0 } from './steps.js'
 
 export { PlanError } from './issues.js'
 
@@ -299,6 +300,20 @@ export async function tickAll(room: number, opts: { projectId?: string } = {}) {
       for (const [k, v] of impliedDeps(subs.filter((x) => x.projectId === pid), parents.filter((t) => t.projectId === pid))) implied.set(k, v)
     }
     const statusOf = (id: string) => builds.find((b) => b.issueId === id)?.status as BuildStatus
+    // After a prototype a task's plan is read before it is built (the blast radius, the audit, the final ADR and plan:
+    // checks.ts). In a project that is already running, its sub-tasks would otherwise start the moment they were
+    // planned. Held until those steps are in; only a task whose build has not begun (one under way is never stalled).
+    const holds = new Map<string, string>()
+    {
+      const { stepsOf } = await import('./work.js')
+      for (const t of parents) {
+        const mine = subs.filter((x) => x.parentId === t.id && !DROPPED.includes(x.state))
+        if (!mine.length || !mine.every((x) => { const b = builds.find((q) => q.issueId === x.id); return !b || (['queued', 'ready'].includes(b.status) && b.attempt === 0) })) continue
+        const v = await stepsOf({ issueId: t.id }, tx)
+        const left = checksOwed(v.states, v.resolved.workflow)
+        if (left.length) holds.set(t.id, `its plan is read before it is built; still to come: ${left.map((k) => stepDef0(k).label).join(', ')}`)
+      }
+    }
     // Linear's priority: 1 urgent … 4 low, 0 none. The scheduler wants bigger first.
     const rank = (p: number) => (p === 0 ? 0 : 5 - p)
     const sched: SchedTask[] = subs.map((x) => {
@@ -308,6 +323,7 @@ export async function tickAll(room: number, opts: { projectId?: string } = {}) {
         dependsOn: [...new Set([...deps.filter((d) => d.relatedIssueId === x.id).map((d) => d.issueId), ...(implied.get(x.id) ?? [])])],
         files: files.length ? files : [x.appId], // no claims = the whole app, never another app
         priority: rank(x.priority), position: projectIndex.get(x.projectId!)! * 10_000 + x.sortOrder, // older projects first
+        hold: holds.get(x.parentId!),
       }
     })
     const pick = pickTasksToStart(sched, room)

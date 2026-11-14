@@ -12,6 +12,8 @@ export interface SchedTask {
   files: string[] // paths or directory prefixes this task will touch; empty = shares with everyone
   priority?: number
   position?: number
+  /** Not to be started yet, whatever else is true, and why (its task's plan is still being read). */
+  hold?: string
 }
 
 export interface Held { id: string; reason: string }
@@ -46,6 +48,7 @@ export function pickTasksToStart(tasks: SchedTask[], room: number): Pick {
   const start: SchedTask[] = []
   const held: Held[] = []
   for (const t of candidates) {
+    if (t.hold) { held.push({ id: t.id, reason: t.hold }); continue }
     const deps = t.dependsOn.map((id) => byId.get(id))
     const missing = t.dependsOn.find((id) => !byId.has(id))
     if (missing) { held.push({ id: t.id, reason: `depends on unknown task ${missing}` }); continue }
