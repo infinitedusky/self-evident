@@ -224,7 +224,8 @@ function StandsOn({ feeds, base }: { feeds: Row[]; base: string }) {
 /** The brief's page: the brief, what it stands on, and its approval, which waits for the required steps. */
 function BriefStep({ i, busy, act, feeds, base }: { i: IssueDetail; busy: boolean; act: (fn: () => Promise<unknown>) => Promise<void>; feeds: Row[]; base: string }) {
   const [asked, setAsked] = useState(false)
-  const owed = feeds.filter((r) => r.required && !finished(r.state, 'task'))
+  const owed = feeds.filter((r) => r.required && step(r.key).place !== 'check' && !finished(r.state, 'task')) // not the prototype's checks: the build waits for those, the brief does not
+  const checksLeft = feeds.filter((r) => step(r.key).place === 'check' && r.state.status !== 'done')
   const open = feeds.filter((r) => canSkip(r) && !settled(r.state, 'task')) // optional, and neither done nor skipped
   const proto = feeds.find((r) => r.key === 'prototype')
   const hasPrototype = !!proto && !skipped(proto.state) // no prototype step, or it is skipped: the criteria have nothing to say about one
@@ -250,7 +251,8 @@ function BriefStep({ i, busy, act, feeds, base }: { i: IssueDetail; busy: boolea
       <div className="brief-approval">
         {i.briefApprovedBy
           ? <><Badge tone="ok">brief approved</Badge><span className="faint">by {i.briefApprovedBy}{i.briefApprovedAt ? `, ${new Date(i.briefApprovedAt).toLocaleDateString()}` : ''}</span>
-            <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.approveBrief(i.id, false))}>Withdraw</button></>
+            <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.approveBrief(i.id, false))}>Withdraw</button>
+            {checksLeft.length > 0 && <div className="faint" style={{ flexBasis: '100%', fontSize: 13 }}>It is planned and built by itself once the prototype's checks are in. Still to come: {checksLeft.map((r, n) => <span key={r.key}>{n ? ', ' : ''}<Link to={`${base}/${r.key}`}>{label(r.key, 'task')}</Link></span>)}.{feeds.find((r) => r.key === 'prototype')?.state.approved ? '' : ' They start when you approve the prototype.'}</div>}</>
           : owed.length
           ? <span className="faint">It can be approved once {owed.map((r, n) => <span key={r.key}>{n ? ', ' : ''}<Link to={`${base}/${r.key}`}>{label(r.key, 'task')}</Link></span>)} {owed.length === 1 ? 'is' : 'are'} done.</span>
           : open.length

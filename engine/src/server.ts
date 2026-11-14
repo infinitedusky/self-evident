@@ -19,7 +19,8 @@ import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, works
 import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
 import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
-import { advanceChecks } from './checks.js'
+import { advanceChecks, onChecksDone } from './checks.js'
+import { checksOwed } from './steps.js'
 import { writeHandover } from './handover.js'
 import { approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
 import { adoptTalk, answerPermission, closeTalk, closeTalks, endTalk, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, runLog, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, setupTalk, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
@@ -521,15 +522,27 @@ export function buildApp(bus: EventBus) {
   api.put('/issues/:id/acceptance', async (c) => { // {add?, update?, remove?}: the task's acceptance criteria
     try { return c.json(await setAcceptance(c.req.param('id'), await c.req.json<AcceptanceChange>(), 'user')) } catch (err) { return planError(c, err) }
   })
+  // A task builds by itself once two things are true, whichever comes last: its brief is approved, and the checks that
+  // follow its prototype are done (Sandy, 2026-11-14: "once we've approved the prototype … it should all just be
+  // automated from that point forward"). No prototype in play: there are no checks, and the brief's approval is enough.
+  const maybeBuild = async (issueId: string) => {
+    try {
+      const [t] = await db.select().from(issueTable).where(eq(issueTable.id, issueId))
+      if (!t?.briefApprovedBy || t.parentId || t.kind !== 'code') return
+      const [a] = await db.select().from(appTable).where(eq(appTable.id, t.appId))
+      if (!autoBuild(a?.setup)) return
+      const v = await stepsOf({ issueId })
+      if (checksOwed(v.states, v.resolved.workflow).length) return // the prototype's checks first; they call back here when they are in
+      await runner.buildTask(issueId, 'engine')
+    } catch (err) { console.error(`[engine] building ${issueId} by itself: ${err instanceof Error ? err.message : err}`) }
+  }
+  onChecksDone((issueId) => void maybeBuild(issueId))
   api.post('/issues/:id/brief/approve', async (c) => {
     const { approve = true } = await c.req.json<{ approve?: boolean }>().catch(() => ({ approve: true }))
     try {
       const row = await approveBrief(c.req.param('id'), 'user', approve)
       if (approve) await autoSave(c.req.param('id'), 'brief_approved') // before the plan and the build: "scrap the build" is going back to here
-      if (approve) { // then it plans and builds by itself, unless the app says no (branches.ts, autoBuild)
-        const [a] = await db.select().from(appTable).where(eq(appTable.id, row.appId))
-        if (autoBuild(a?.setup)) void runner.buildTask(row.id, 'engine').catch((err) => console.error(`[engine] building ${row.id} after its approval: ${err instanceof Error ? err.message : err}`))
-      }
+      if (approve) void maybeBuild(row.id) // then it plans and builds by itself, once its prototype's checks are in
       return c.json(settle(row))
     } catch (err) { return planError(c, err) }
   })

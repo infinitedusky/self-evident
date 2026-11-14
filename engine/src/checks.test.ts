@@ -18,6 +18,10 @@ describe('the checks after the prototype is approved', () => {
     expect(at(['analysis'], ['analysis'])).toEqual({ do: 'run', key: 'adr' })
     expect(at(['analysis', 'adr'])).toEqual({ do: 'run', key: 'risk' })
     expect(at(['analysis', 'adr', 'risk'])).toEqual({ do: 'finalize' })
+    // A brief the person has already approved is not rewritten from the reports: straight to the audit.
+    expect(nextMove({ approved: true, checks: all(['analysis', 'adr', 'risk'], []), hasPrototype: true, conductor: idle, briefApproved: true })).toEqual({ do: 'run', key: 'audit' })
+    expect(reportsIn(['analysis', 'adr', 'risk', 'audit'], true)).toMatch(/The brief is approved, so do not change it/)
+    expect(reportsIn(['analysis', 'adr', 'risk', 'audit'])).not.toMatch(/do not change it/)
     expect(at(['analysis', 'adr', 'risk'], [], { ...idle, askedToFinalize: true, busy: true })).toEqual({ do: 'nothing' }) // the conductor is writing the brief
     expect(at(['analysis', 'adr', 'risk'], [], { ...idle, askedToFinalize: true })).toEqual({ do: 'run', key: 'audit' })
     expect(at(['analysis', 'adr', 'risk'], ['audit'], { ...idle, askedToFinalize: true })).toEqual({ do: 'nothing' })

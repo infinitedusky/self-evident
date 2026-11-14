@@ -3552,3 +3552,33 @@ workflow: …" for the ones a workflow lacks, and Edit still lets them be put in
 every workflow whenever there is a prototype, gone when it is skipped) changes what the brief waits on for tasks
 under way and what a task needs before it can complete, so it is its own change, with the move of the trigger to
 the prototype's approval.
+
+## What follows the prototype is fixed, and the build starts by itself after it (Sandy, 2026-11-14: "okay lets do 1")
+
+The first of the open items: the four checks stop being a workflow's choice, and the trigger moves.
+
+- **The checks are fixed** (`steps.ts`, `normalize`): a workflow with a prototype has prototype analysis, draft ADR,
+  blast radius and brief audit, all required, in that order; a workflow without one has none. Whatever a workflow
+  had saved about them is dropped when it is read, and nothing puts one in or takes one out. On a task they are
+  there only while the prototype is in play: required by the workflow, or begun; gone when it is skipped; absent for
+  an optional prototype nobody has touched, so a task that never prototypes owes nothing.
+- **The brief does not wait for them** (`owed`); the build does (`checksOwed`). They still block completing the
+  task (`blocking`).
+- **The trigger** (`server.ts`, `maybeBuild`): a task is planned and built by itself once two things are true,
+  whichever comes last: its brief is approved, and the checks that follow its prototype are done. So with the
+  brief approved first, approving the prototype is the last press: the checks run, and when the last one is in the
+  task is planned and built (`onChecksDone`). With no prototype in play, the brief's approval is enough, as before.
+- **An approved brief is not rewritten.** The conductor was asked to bring the brief up to date from the reports
+  before the audit; when the brief is already approved that step is skipped, and at the end it is told the brief
+  stands and to raise anything that would change what is built with the person.
+- **Settings**: the workflow card's "After the prototype is approved" is a fixed list with nothing to set.
+
+On the live data one open task has a prototype in play, RG-1 (Ragdoll Golf): its prototype is approved, its brief
+is not, and its old workflow had only the audit. It now owes the analysis, the ADR and the blast radius too; they
+start the next time a turn ends on that task. That is the new rule reaching Ragdoll Golf, not a change to its
+workflow's own steps.
+
+Not done, and what the shape still asks for: the order analysis, ADR, **plan, then audit** (the audit still reads
+the brief and runs before the plan is made; it should read the plan); the brief shrunk to what and why (today's
+brief still carries the builder's instructions when the conductor finalizes an unapproved one); the audit's output
+as the merge guide; stopping on an expensive trade-off and alerting whoever approved.
