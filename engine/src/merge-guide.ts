@@ -13,6 +13,7 @@ import { and, eq, inArray, isNotNull } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { decision, issue, stepWork } from './db/schema.js'
 import { acceptanceOf, type Criterion } from './acceptance.js'
+import { coveredLines, type Covered } from './requirements.js'
 
 export interface GuideTask {
   identifier: string; title: string; description?: string | null
@@ -22,6 +23,8 @@ export interface GuideTask {
   decisions: { question: string; chosen: string; why?: string | null }[]
   /** Sub-tasks not landed yet. */
   pending: string[]
+  /** How the plan covers what the app requires of every plan (requirements.ts). */
+  requirements?: Covered[]
 }
 
 const one = (s: string) => s.replace(/\s+/g, ' ').trim()
@@ -50,6 +53,7 @@ export function taskGuide(t: GuideTask, opts: { heading?: boolean } = {}): strin
     t.acceptance.length ? `**How to check it**\n\n${[...unmet, ...open, ...met].map(row).join('\n')}` : '**How to check it**\n\nThis task has no acceptance criteria, so there is no list to check it against.',
     t.adr?.trim() || t.decisions.length ? `**Decisions made**\n\n${[t.adr?.trim() ? bullets(t.adr) : '', ...t.decisions.map((d) => `- ${one(d.question)} → **${one(d.chosen)}**${d.why?.trim() ? `. ${one(d.why)}` : ''}`)].filter(Boolean).join('\n')}` : '',
     t.risk?.trim() ? `**Risks, and how we would know**\n\n${bullets(t.risk)}` : '',
+    t.requirements?.length ? `**What this app requires of every change**\n\n${coveredLines(t.requirements)}` : '',
   ].filter(Boolean).join('\n\n')
 }
 
@@ -75,6 +79,7 @@ export async function guideTasks(tasks: { id: string; identifier: string; title:
       identifier: t.identifier, title: t.title, description: i?.description, acceptance: i ? acceptanceOf(i) : [], adr: said('adr'), risk: said('risk'),
       decisions: decided.filter((d) => d.issueId && mine.has(d.issueId)).map((d) => ({ question: d.question, chosen: (d.options as { key: string; text: string }[] | null)?.find((o) => o.key === d.chosen)?.text ?? d.chosen!, why: d.rationale })),
       pending: pending.filter((p) => p.parentId === t.id).map((p) => p.identifier),
+      requirements: i?.requirements ?? undefined,
     }
   })
 }

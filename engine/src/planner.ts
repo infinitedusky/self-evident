@@ -5,6 +5,7 @@
  * brief and the code is a decision (provisional until a person approves); one it cannot settle is a question. The
  * server sets the cost of every question, never the agent.
  */
+import { covered, inForce, requirementLines, type Requirement } from './requirements.js'
 import { acceptanceLines, acceptanceOf } from './acceptance.js'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { and, eq, sql } from 'drizzle-orm'
@@ -38,6 +39,8 @@ export interface ProposeInput {
   testCmd?: string
   storybook?: boolean // the app keeps a Storybook: stories lead its UI
   references?: Reference[] // other apps' checkouts to read (references.ts)
+  /** What every plan in this app must cover (requirements.ts): the planner answers each. */
+  requirements?: Requirement[]
   model?: string
   /** The app's settings, for the Claude account its agents run on (account.ts). */
   setup?: unknown
@@ -59,6 +62,8 @@ export interface Proposal {
   decisions: { title: string; chosen: string; rejected: string[]; reason: string }[]
   questions: { question: string; options: { label: string; description: string; changes: Changes[] }[]; recommended: string; reason: string; cost: Cost }[]
   notes: string
+  /** How the plan covers each requirement in force: applies false with the reason when one does not apply. */
+  requirements?: { key: string; applies: boolean; how: string }[]
 }
 export interface ProposeOutput { status: 'completed' | 'failed'; proposal?: Proposal; agentSessionId?: string; costUsd?: number; numTurns?: number; error?: string }
 export type Propose = (i: ProposeInput) => Promise<ProposeOutput>
@@ -82,6 +87,7 @@ export const PROPOSAL_SCHEMA = obj({
     recommended: str, reason: str, cost: { type: 'string', enum: ['cheap', 'moderate', 'expensive'] },
   })),
   notes: str,
+  requirements: arr(obj({ key: str, applies: { type: 'boolean' }, how: str })),
 })
 
 /** What the planner is told. `recordSkills`: the app's skills for decision records that this session has. */
@@ -121,6 +127,13 @@ export function prompt(i: ProposeInput, recordSkills: string[] = []): string {
     '- A choice you can settle from the brief and the code: settle it, and record it as a decision with the alternatives you rejected and the reason. Never settle such a choice silently.',
     '- A choice the brief does not settle, where the person might reasonably want it either way: ask it as a question. Give at least two options, say which you recommend and why, and for each option say what it changes (brief, promise, look, gate) when it changes what was agreed. Rate the cost of getting it wrong: cheap (easy to undo), moderate, expensive. Plan the phases as if your recommendation were chosen.',
     '- notes: what you assumed, and anything in the brief you could not place in the code.',
+    ...(i.requirements?.length ? [
+      '',
+      'Requirements (this app asks every plan to cover these; they are not optional and not for the builder to remember):',
+      requirementLines(i.requirements),
+      '- Plan for each one: put its work into the steps and checks of the sub-task where it belongs, not into a sub-task of leftovers at the end.',
+      '- requirements: one entry per requirement above, by its key. applies true and how: one or two sentences naming the sub-tasks that do it and what they do. applies false and how: why it does not apply to this task (say it plainly; "not needed" is not a reason).',
+    ] : ['', '- requirements: an empty list; this app asks for none.']),
     '',
     'Decision records:',
     i.draftAdr?.trim()
@@ -247,7 +260,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
     runId, issueId, projectId: t.projectId, appId: a.id, attempt, base,
     input: {
       repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, acceptance: acceptanceOf(t).length ? acceptanceLines(acceptanceOf(t)) : null, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
-      testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
+      testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), requirements: inForce(setup, g.project.requirements), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }
 }
@@ -308,6 +321,7 @@ export async function finishPlanning(ctx: PlanningContext, opts: { propose?: Pro
         options: q.options.map((o) => ({ ...o, recommended: o.label === q.recommended })), reason: q.reason, cost: questionCost(q), status: 'open',
       }))).returning() : []
       for (const q of questions) await appendEvent(tx, { ...ctx.base, type: 'question.asked', payload: { questionId: q.id, text: q.text, cost: q.cost } })
+      if (ctx.input.requirements?.length) await tx.update(issue).set({ requirements: covered(ctx.input.requirements, proposal.requirements) }).where(eq(issue.id, ctx.issueId)) // how the plan covers what the app requires
       await tx.update(run).set({
         status: 'completed', endedAt: new Date(), costUsd: out.costUsd?.toString() ?? null, agentSessionId: out.agentSessionId ?? null,
         summary: [proposal.notes?.trim(), `${subs.length} sub-task(s), ${decisions.length} decision(s), ${questions.length} question(s)`].filter(Boolean).join('\n\n'),
