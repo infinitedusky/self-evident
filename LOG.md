@@ -3482,3 +3482,22 @@ prototype column and everything that speaks of one: one mark each, for the final
 
 Not done: the prototype's checks (analysis, draft ADR) skipping themselves when the prototype is skipped: they are
 each skipped by hand if they are optional, and if a workflow requires them the prototype has to be done.
+
+## An unanswered question is in the graph (Sandy, 2026-11-14: "could we put a question, an unanswered question, into the graph? … there should be a question there. It's like a different type of icon")
+
+The graph drew sub-tasks and the files they share; a question holding work up was only a line of text elsewhere.
+Now an open question is a node of its own in the project's graph and the app's (`PlanGraphView`, `QuestionNode`): a
+note with a "?", red when answering it is expensive, with a dashed arrow to each sub-task it stands over: the
+sub-task that asked, or every sub-task of the task whose planner asked. It sits before them in the layout, as a
+shared file sits between its claimants. Pressing it goes to Build, where it is answered. The app's graph now
+carries its open questions (`appGraph().questions`).
+
+Not done: the engine does not hold a sub-task because its task has an open question (the scheduler does not read
+questions), so the arrow says "this is unanswered and concerns these", not "these are stopped by it".
+
+Two more in the same change, both Sandy's, the same day. "They should have the interface where I can answer a
+question in the task as well": one component, `QuestionAsk` (the cost, the options as buttons with the recommended
+one marked, and "Answer in your own words" for anything else), is what Build and the task's page both show, so a
+question is answered where it is read; the task's planner panel no longer sends you to the project to answer. And
+"the task should also have a graph when you're in the build area": the task's Build section draws its own
+sub-tasks, the files they share and any unanswered question (`TaskGraph`, the project's graph cut to this task).
