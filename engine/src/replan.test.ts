@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
 import { app, decision, project, question, repo, workspace } from './db/schema.js'
 import { newId } from './ids.js'
-import { getIssue } from './issues.js'
+import { changeState, getIssue } from './issues.js'
 import { planIssue, type Propose } from './planner.js'
 import { clearSubIssues, createProject, PlanError, projectGraph } from './projects.js'
 import { approveBriefs } from './test-briefs.js'
@@ -47,6 +47,23 @@ describe.skipIf(!reachable)('clearSubIssues', () => {
     await approveBriefs(appId)
     const again = await planIssue(tasks[0].id, { propose }) // plannable again
     expect(again.status).toBe('completed')
+  })
+
+  it('a plan made again after its sub-tasks were canceled replaces the first plan\'s decisions and open questions', async () => {
+    const plan = (word: string): Propose => async () => ({ status: 'completed', costUsd: 0, proposal: {
+      phases: [{ key: 'a', title: `A ${word}`, description: 'For a person.', summary: 's', depends_on: [], files: [`${word}.py`], steps: [], checks: [], done_when: '' }],
+      decisions: [{ title: 'Package name', chosen: word, rejected: [], reason: 'r' }],
+      questions: [{ question: `ship ${word}?`, options: [{ label: 'yes', description: '', changes: [] }, { label: 'no', description: '', changes: [] }], recommended: 'yes', reason: 'r', cost: 'cheap' }],
+      notes: '',
+    } })
+    const { project: p, issues: [t] } = await createProject({ appId, name: 'renamed halfway', issues: [{ title: 'T', brief: 'b' }] })
+    await approveBriefs(appId)
+    await planIssue(t.id, { propose: plan('old-name') })
+    for (const x of (await projectGraph(p.id))!.subIssues) await changeState(x.id, 'canceled', { reason: 'the name changed' }) // the way an agent re-plans: cancel, then plan again
+    expect((await planIssue(t.id, { propose: plan('new-name') })).status).toBe('completed')
+    const chosen = async () => (await db.select().from(decision).where(eq(decision.issueId, t.id))).map((d) => (d.options as { key: string; text: string }[]).find((o) => o.key === d.chosen)?.text)
+    expect(await chosen()).toEqual(['new-name']) // not both, one contradicting the other
+    expect((await db.select().from(question).where(eq(question.issueId, t.id))).map((q) => q.text)).toEqual(['ship new-name?'])
   })
 
   it('refuses when another issue\'s sub-issues depend on these, and when the project is not a draft', async () => {

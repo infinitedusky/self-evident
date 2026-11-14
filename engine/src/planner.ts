@@ -8,7 +8,7 @@
 import { covered, inForce, requirementLines, type Requirement } from './requirements.js'
 import { acceptanceLines, acceptanceOf } from './acceptance.js'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, isNull, ne, or, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, decision, issue, question, repo, run } from './db/schema.js'
 import { homeRepo } from './workbench.js'
@@ -308,6 +308,11 @@ export async function finishPlanning(ctx: PlanningContext, opts: { propose?: Pro
 
   try {
     const written = await db.transaction(async (tx) => {
+      // A plan replaces the one before it: what an earlier planning run of this task decided or asked, and nobody has
+      // confirmed or answered, goes with it. (Left behind, the task's page showed both runs' decisions side by side,
+      // the old ones contradicting the new: Sandy, 2026-11-14, "decided items that don't match".)
+      await tx.delete(decision).where(and(eq(decision.issueId, ctx.issueId), eq(decision.provisional, true), or(isNull(decision.runId), ne(decision.runId, ctx.runId))))
+      await tx.delete(question).where(and(eq(question.issueId, ctx.issueId), eq(question.status, 'open'), or(isNull(question.runId), ne(question.runId, ctx.runId))))
       const subs = await addSubIssues(ctx.issueId, proposal.phases.map((p): NewSubIssue => ({
         key: p.key, title: p.title, description: p.description?.trim() || undefined, brief: subIssueBrief(p), dependsOn: p.depends_on ?? [], files: p.files ?? [],
       })), 'planner', tx)

@@ -3528,3 +3528,12 @@ stream that had seen no event yet resumes from there too. Watched for real throu
 nothing running: restart at 18:00:34, the bar up at 18:01:00, both streams re-made (one at `since=15645`), the bar
 down at 18:01:12. So an open page is deaf for up to about 35 seconds after a restart, says so, and then catches up.
 Lesson: the first fix was merged on a guess about how the stream fails; it should have been watched failing first.
+
+## A plan made again replaces the plan before it (Sandy, 2026-11-14: "decided items that don't match … it says like Merman/Core, Merman/Playground are decided on, but then below that it says it should be Bonkai")
+
+MER-50 had been planned twice: at 14:28 with the packages named `@merman/core`, and at 17:26 after the rename to
+Bonkei. "Clear the plan" deletes a plan's decisions and questions, but the task's agent re-planned the other way,
+by canceling the first plan's sub-tasks and planning again, and that path left the first run's nine decisions on
+the task beside the second run's twelve. The page showed both. Now a planning run that succeeds removes what
+earlier runs of the same task decided and nobody confirmed, and what they asked and nobody answered
+(`finishPlanning`). MER-50's nine stale decisions were deleted from the live data by hand.
