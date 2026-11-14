@@ -152,6 +152,7 @@ export const project = pgTable('project', { // issues in order (an InDusk master
   status: text('status').notNull().default('drafting'),
   integrationBranch: text('integration_branch'), // [ID] the project's branch; issues land here, only it reaches trunk
   prMode: text('pr_mode'), // 'issue' (a branch and a pull request per task) or 'project' (one for the project): fixed when its build starts, so a change of the default never moves work that is under way
+  requirements: jsonb('requirements').$type<Record<string, boolean>>(), // the app's requirements this project switches on or off for its own tasks (requirements.ts); null: the app's as they are
   lead: text('lead'), priority: integer('priority').notNull().default(0), startDate: date('start_date'), targetDate: date('target_date'),
   sortOrder: integer('sort_order').notNull().default(0), createdAt: createdAt(), updatedAt: at('updated_at'),
   workflowId: text('workflow_id').references((): AnyPgColumn => workflow.id), // its tasks' unless they have their own
@@ -185,6 +186,7 @@ export const issue = pgTable('issue', {
   source: text('source').notNull().default('person'), sourceRef: jsonb('source_ref'), // {sessionId} | {issueId, runId}
   reason: text('reason'), // canceled or duplicate: why
   handover: jsonb('handover').$type<{ text: string | null; sessionId: string; at: string }>(), // what the conversation that made it said about it, written once when its agent starts (handover.ts); text null: it said nothing more
+  requirements: jsonb('requirements').$type<{ key: string; name: string; applies: boolean; how: string }[]>(), // how its plan covers each requirement in force, as the planner said (requirements.ts)
   createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
   startedAt: at('started_at'), completedAt: at('completed_at'), canceledAt: at('canceled_at'), closedBy: text('closed_by'),
 }, (t) => [uniqueIndex('issue_app_number').on(t.appId, t.number), uniqueIndex('issue_id_app').on(t.id, t.appId),

@@ -3443,3 +3443,27 @@ the "Ready to build" list of projects from #193 is gone. My Stuff still offers "
 Not done: answering a question in free text on Build (the options are there; anything else is on the project's
 page as before); the alert to whoever approved; the trigger moving to the prototype's approval; the steps moving
 under Plan and Audit.
+
+## Requirements: what every plan must cover (Sandy, 2026-11-14: "there's also the need to say what exactly are the requirements that we're planning for … is OpenTelemetry a requirement … a test plan, all the things that need to get taken care of after the prototype needs to be known")
+
+A workflow said which steps a task goes through and nothing said what every plan has to contain. Now an app has a
+list of requirements (`setup.requirements`; `requirements.ts`), each a name and a sentence saying what it means for
+this app. An app with none of its own starts from four to edit: telemetry (OpenTelemetry), tests, a test plan,
+docs. "Configured at a project or at an app level": a project can switch one off or on for its own tasks
+(`project.requirements`, `PUT /projects/:id/requirements`).
+
+- **The planner** is given the ones in force and must answer each by its key: how the plan meets it (naming the
+  sub-tasks), or that it does not apply and why. It is told to put the work into the sub-task where it belongs,
+  not into a sub-task of leftovers. The answers are kept on the task (`issue.requirements`); one the planner did
+  not speak to is kept as "the plan does not say", never dropped.
+- **The task's Build section** shows "What the plan covers".
+- **The merge guide** on the pull request has "What this app requires of every change", each one met, not
+  applicable (with the reason) or not addressed.
+- **Settings › Landing** has the list: read by default, "Edit the list" to change, add or take out.
+
+Not done: the audit checking that the build really did what the plan said for each requirement (today it is the
+planner's word); a project's switches on the project's page (the engine has them, no screen yet); "what it means
+to land" beyond the test command already in Settings › Landing; and the other half of what Sandy raised in the
+same breath, the workflow still being one flat list: the steps after the prototype (prototype analysis, draft ADR,
+blast radius, brief audit) are still switches in a workflow and should be fixed and out of it ("some of these
+things I don't think we want to be deciding anymore").

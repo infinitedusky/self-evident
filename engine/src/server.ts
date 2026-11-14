@@ -15,7 +15,7 @@ import { DATABASE_URL, db, pool } from './db/client.js'
 import { ensureDatabase } from './db/ensure.js'
 import { registerMachine } from './machine.js'
 import { cleanReferences } from './references.js'
-import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, workspace, type BuildStatus, type IssueState, issue as issueTable } from './db/schema.js'
+import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, workspace, type BuildStatus, type IssueState, issue as issueTable, project as projectTable } from './db/schema.js'
 import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
 import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
@@ -44,6 +44,7 @@ import { restoreAfterRestart, share, shared, ShareError, sharesOf, SHARE_KINDS, 
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
+import { requirementsOf } from './requirements.js'
 import { autoBuild } from './branches.js'
 import { runner } from './runner.js'
 import { homeRepo, inOrder } from './workbench.js'
@@ -642,6 +643,23 @@ export function buildApp(bus: EventBus) {
   })
   api.post('/projects/:id/describe', async (c) => { // plain descriptions for issues and sub-issues that have none
     try { return c.json(await describeProject(c.req.param('id'))) } catch (err) { return planError(c, err) }
+  })
+  // Requirements (requirements.ts): the app's list is in its settings (setup.requirements); a project switches one on or off for its own tasks.
+  api.get('/apps/:id/requirements', async (c) => { const [a] = await db.select().from(appTable).where(eq(appTable.id, c.req.param('id'))); return a ? c.json(requirementsOf(a.setup)) : c.json({ error: 'no such app' }, 404) })
+  api.get('/projects/:id/requirements', async (c) => {
+    const [p] = await db.select().from(projectTable).where(eq(projectTable.id, c.req.param('id')))
+    if (!p) return c.json({ error: 'no such project' }, 404)
+    const [a] = await db.select().from(appTable).where(eq(appTable.id, p.appId))
+    return c.json({ requirements: requirementsOf(a.setup, p.requirements), own: p.requirements ?? {} })
+  })
+  api.put('/projects/:id/requirements', async (c) => { // {key: true | false | null}: null goes back to the app's
+    const [p] = await db.select().from(projectTable).where(eq(projectTable.id, c.req.param('id')))
+    if (!p) return c.json({ error: 'no such project' }, 404)
+    const next: Record<string, boolean> = { ...(p.requirements ?? {}) }
+    for (const [k, v] of Object.entries(await c.req.json<Record<string, boolean | null>>())) { if (typeof v === 'boolean') next[k] = v; else delete next[k] }
+    await db.update(projectTable).set({ requirements: Object.keys(next).length ? next : null, updatedAt: new Date() }).where(eq(projectTable.id, p.id))
+    const [a] = await db.select().from(appTable).where(eq(appTable.id, p.appId))
+    return c.json({ requirements: requirementsOf(a.setup, next), own: next })
   })
   api.post('/projects/:id/cancel', async (c) => {
     try { return c.json(await runner.cancelProject(c.req.param('id'))) } catch (err) { return planError(c, err, 404) }

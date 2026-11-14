@@ -183,6 +183,13 @@
       "when": 1794693548614,
       "tag": "0025_project_pr_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794694648324,
+      "tag": "0026_requirements",
+      "breakpoints": true
     }
   ]
 }
