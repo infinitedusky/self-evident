@@ -3276,3 +3276,11 @@ The right edge was still cut (Sandy, same day: "the top right corner and bottom 
 dockview sizes the tab area a pixel or two wider than the frame holding it, and the frame clips and can scroll, so
 one side of each group lost its stroke and corners (the right for Sandy, the left in Playwright, where the frame had
 scrolled). The frame no longer clips; the shell's 8px padding has the room.
+
+That was the wrong cause, and Sandy still saw it ("now the left edge is gone, the right corners are still not
+curved"). The real one was ours: the rule that draws the one divider beside the conversation column
+(`.ws-split .dv-split-view-container > … > .dv-view:first-child`) was a descendant selector, so it also gave every
+nested frame inside the tab area a 1px right border. Three of those made the tab area 2px wider than its frame and
+drew straight lines over the groups' rounded right corners. The rule now names the split's own child (`.ws-split >`),
+every frame measures the same width, and the no-clip rule from the paragraph above is taken out again. Lesson: when
+a fix checks out in Playwright and not on Sandy's screen, measure every box in the chain before patching.
