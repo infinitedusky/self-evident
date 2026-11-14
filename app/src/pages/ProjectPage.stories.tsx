@@ -52,12 +52,12 @@ export const TaskOnItsOwn: Story = {
   beforeEach: withGraph({ ...draftPlanned, project: { ...draftPlanned.project, id: 'proj_solo', name: 'Marketing site (sample)', solo: true }, issues: draftPlanned.issues.slice(0, 1), subIssues: draftPlanned.subIssues.filter((x) => x.parentId === draftPlanned.issues[0].id), backlog: [], questions: [], decisions: [] }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByRole('button', { name: 'Run it' })).toBeInTheDocument()
+    await expect(await c.findByRole('button', { name: 'Build it' })).toBeInTheDocument()
     await expect(c.getByRole('link', { name: '← Tasks' })).toBeInTheDocument()
     await expect(c.queryByText(/Add task/)).not.toBeInTheDocument()
   },
 }
-/** A draft whose tasks are planned: reorder arrows, Plan again, and Run this project. */
+/** A draft whose tasks are planned: reorder arrows and Plan again. No button runs a project: each task is built from its own page or from Build. */
 export const DraftPlanned: Story = { parameters: at('proj_draftplanned'), beforeEach: withGraph(draftPlanned) }
 /** Paused: Resume, and the sub-task that was building waits. */
 export const Paused: Story = { parameters: at('proj_paused'), beforeEach: withGraph(paused) }

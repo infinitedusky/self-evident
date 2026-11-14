@@ -8,6 +8,7 @@ import { IdeaDetail } from './pages/IdeaDetail'
 import { Plan } from './pages/Plan'
 import { Settings } from './pages/Settings'
 import { Projects } from './pages/Projects'
+import { Build } from './pages/Build'
 import { ProjectPage } from './pages/ProjectPage'
 import { NewProject } from './pages/NewProject'
 import { AppGraph } from './pages/AppGraph'
@@ -61,7 +62,7 @@ export function PageRoutes() {
       <Route path="/todos" element={<Todos />} />
       <Route path="/validate" element={<Navigate to="/mockups" replace />} />
       <Route path="/mockups" element={<Mockups />} />
-      <Route path="/build" element={<Projects mode="build" />} />
+      <Route path="/build" element={<Build />} />
       <Route path="/ideas" element={<Board ideas={ideas} />} />
       <Route path="/ideas/:slug" element={<IdeaRoute />} />
       <Route path="/ideas/:slug/:section" element={<IdeaRoute />} />

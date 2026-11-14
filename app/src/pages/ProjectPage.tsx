@@ -73,8 +73,9 @@ export function ProjectPage() {
           {['running', 'paused'].includes(graph.project.status) && (
             <button className="btn quiet" disabled={busy} onClick={() => { if (window.confirm('Cancel this project? Running agents are stopped; what has landed stays on its branch.')) void act(() => engine.cancelProject(graph.project.id)) }}>Cancel project</button>
           )}
-          {draft && graph.subIssues.length > 0 && (
-            <button className="btn" disabled={busy} onClick={() => act(() => engine.start(graph.project.id))}>{solo ? 'Run it' : 'Run this project'}</button>
+          {/* A task is what is built, so a project has no button to run it (Sandy, 2026-11-14); a task on its own, whose page this also is, has its own. */}
+          {draft && solo && graph.subIssues.length > 0 && (
+            <button className="btn" disabled={busy} onClick={() => act(() => engine.start(graph.project.id))}>Build it</button>
           )}
         </div>
       </div>

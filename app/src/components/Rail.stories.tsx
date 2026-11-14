@@ -11,6 +11,8 @@ type Story = StoryObj<typeof meta>
 export const OnMyStuff: Story = {}
 /** Deep in Plan: a task in front lights Plan. */
 export const OnATask: Story = { args: { here: '/tasks/iss_sample5' } }
+/** A task's Build section lights Build, not Plan: after the plan, it is the build phase. */
+export const OnATasksBuild: Story = { args: { here: '/tasks/iss_sample5/build' } }
 /** A prototype in front lights Plan too: it's a step on a task, inside Plan. */
 export const OnAPrototype: Story = { args: { here: 'prototype:proto_sample1' } }
 export const AgentFolded: Story = { args: { agentOpen: false } }

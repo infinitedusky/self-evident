@@ -175,8 +175,8 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
               {live.length > 0 && i.project && ['drafting', 'proposed', 'approved'].includes(i.project.status) && (
                 <section className="panel" data-component="RunIt">
                   <h2>Ready to build</h2>
-                  <p style={{ margin: '0 0 10px' }}>Planned in {live.length} sub-task{live.length === 1 ? '' : 's'}. Nothing is built until {i.project.solo ? 'it is run' : <>its project, <Link to={`/projects/${i.project.id}`}>{i.project.name}</Link>, is run</>}.</p>
-                  <button className="btn" disabled={busy} onClick={() => act(() => engine.start(i.project!.id))}>{i.project.solo ? 'Run it' : 'Run this project'}</button>
+                  <p style={{ margin: '0 0 10px' }}>Planned in {live.length} sub-task{live.length === 1 ? '' : 's'} and not started. A task approved from now on starts by itself; this one was planned before that.</p>
+                  <button className="btn" disabled={busy} onClick={() => act(() => engine.buildTask(i.id))}>Build it</button>
                 </section>
               )}
               <SubTasks i={i} plan={!live.length && i.state === 'todo' ? <button className="btn" disabled={busy} onClick={() => act(() => engine.planIssue(i.id))}>Plan it</button> : null} />

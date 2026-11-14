@@ -816,3 +816,9 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .report-pick:hover { background: var(--idle-wash); } .report-pick.on { background: var(--accent-wash); color: var(--ink); font-weight: 600; }
 .report-format > summary { cursor: pointer; font-weight: 600; } .report-format label { display: grid; gap: 4px; margin: 10px 0; font-size: 13px; }
 @media (max-width: 800px) { .report-layout { grid-template-columns: 1fr; } }
+
+/* Build: tasks past their plan, what needs the person first (Build.tsx). */
+.build-h { font-size: 15px; margin: 0 0 6px; }
+.build-list { padding: 4px 18px; margin-bottom: 20px; }
+.build-ask { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--ground); }
+.build-ask .opts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
