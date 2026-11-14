@@ -29,7 +29,7 @@ describe('steps', () => {
     const by = { by: 'sam', at: 'now' }
     const idea = { key: 'idea' as const, status: 'done' as const }
     const at = (states: Parameters<typeof rows>[1], key: string) => rows('task', states, proto).find((x) => x.key === key)
-    expect(rows('task', [idea], proto).map((x) => x.key)).toEqual(['idea', 'mockup', 'prototype', 'analysis', 'adr', 'risk', 'audit', 'brief']) // a required prototype brings its checks
+    expect(rows('task', [idea], proto).map((x) => x.key)).toEqual(['idea', 'mockup', 'prototype', 'analysis', 'adr', 'risk', 'audit', 'final', 'brief']) // a required prototype brings its checks
     expect(at([idea], 'risk')).toMatchObject({ required: true, waitingOn: 'mockup' })
     expect(at([idea, { key: 'mockup', status: 'done' }], 'risk')?.waitingOn).toBe('mockup') // done by the agent's word: still the person's to approve
     expect(at([idea, { key: 'mockup', status: 'done', approved: by }], 'analysis')?.waitingOn).toBe('prototype')
@@ -41,9 +41,9 @@ describe('steps', () => {
     const optional = w([s('idea'), s('research', false, false), s('sketch', false, false), s('mockup', false, false), s('prototype'), s('brief', true)], false)
     const keys = (states: Parameters<typeof rows>[1]) => rows('task', states, optional).map((x) => x.key)
     expect(keys([])).toEqual(['idea', 'prototype', 'brief']) // optional and untouched: nothing is owed for it
-    expect(keys([{ key: 'prototype', status: 'started' }])).toEqual(['idea', 'prototype', 'analysis', 'adr', 'risk', 'audit', 'brief']) // begun: its checks come with it
+    expect(keys([{ key: 'prototype', status: 'started' }])).toEqual(['idea', 'prototype', 'analysis', 'adr', 'risk', 'audit', 'final', 'brief']) // begun: its checks come with it
     expect(keys([{ key: 'prototype', status: 'skipped' }])).toEqual(['idea', 'prototype', 'brief']) // skipped: they go
-    expect(rows('task', [{ key: 'prototype', status: 'started' }], optional).filter((x) => x.required).map((x) => x.key)).toEqual(['analysis', 'adr', 'risk', 'audit', 'brief'])
+    expect(rows('task', [{ key: 'prototype', status: 'started' }], optional).filter((x) => x.required).map((x) => x.key)).toEqual(['analysis', 'adr', 'risk', 'audit', 'final', 'brief'])
     expect(rows('project', [{ key: 'prototype', status: 'done' }], optional).map((x) => x.key)).toEqual(['idea', 'prototype']) // a project's prototype has no checks
   })
 
@@ -64,8 +64,8 @@ describe('steps', () => {
     expect(owed([{ key: 'brief', status: 'done' }], proto)).toEqual(['idea', 'mockup', 'prototype'])
     const shown = [{ key: 'idea' as const, status: 'done' as const }, { key: 'mockup' as const, status: 'done' as const, approved: by }, { key: 'prototype' as const, status: 'done' as const, approved: by }]
     expect(owed(shown, proto)).toEqual([]) // the brief can be approved before the checks are in
-    expect(checksOwed(shown, proto)).toEqual(['analysis', 'adr', 'risk', 'audit']) // the build waits for them instead
-    expect(checksOwed([...shown, ...(['analysis', 'adr', 'risk', 'audit'] as const).map((key) => ({ key, status: 'done' as const }))], proto)).toEqual([])
+    expect(checksOwed(shown, proto)).toEqual(['analysis', 'adr', 'risk', 'audit', 'final']) // the build waits for them instead
+    expect(checksOwed([...shown, ...(['analysis', 'adr', 'risk', 'audit', 'final'] as const).map((key) => ({ key, status: 'done' as const }))], proto)).toEqual([])
     expect(checksOwed([], ui)).toEqual([]) // no prototype: nothing to wait for
     expect(owed([], null)).toEqual([])
   })
@@ -76,7 +76,7 @@ describe('steps', () => {
     expect(blocking([{ key: 'brief', status: 'done', approved: by }], null)).toEqual([])
     const optional = w([s('idea'), s('research', false, false), s('sketch', false, false), s('mockup', false, false), s('prototype'), s('brief', true)], false)
     expect(blocking([{ key: 'brief', status: 'done', approved: by }], optional)).toEqual([]) // never prototyped: nothing more
-    expect(blocking([{ key: 'brief', status: 'done', approved: by }, { key: 'prototype', status: 'done', approved: by }], optional)).toEqual(['analysis', 'adr', 'risk', 'audit'])
+    expect(blocking([{ key: 'brief', status: 'done', approved: by }, { key: 'prototype', status: 'done', approved: by }], optional)).toEqual(['analysis', 'adr', 'risk', 'audit', 'final'])
   })
 })
 
@@ -112,16 +112,16 @@ describe('the fixed rules', () => {
 
   it('gives a workflow saved before sketches its sketches, on, right before its mockups, wherever those sit', () => {
     const old = normalize(w([s('idea'), s('research'), s('brief', true), s('mockup', true), s('prototype')]))
-    expect(old.steps.map((x) => x.key)).toEqual(['idea', 'research', 'sketch', 'mockup', 'prototype', 'analysis', 'adr', 'risk', 'audit', 'brief']) // the brief, wherever it was saved, goes last; the prototype brings its checks
+    expect(old.steps.map((x) => x.key)).toEqual(['idea', 'research', 'sketch', 'mockup', 'prototype', 'analysis', 'adr', 'risk', 'audit', 'final', 'brief']) // the brief, wherever it was saved, goes last; the prototype brings its checks
     const off = normalize(w([s('idea'), s('sketch', false, false), s('mockup'), s('prototype'), s('brief', true)]))
     expect(off.steps.find((x) => x.key === 'sketch')).toMatchObject({ on: false }) // switched off by the person: stays off
     expect(validOrder([s('idea'), s('sketch'), s('mockup'), s('brief'), s('prototype')])).toBe(true)
   })
 
   it('the checks are not a workflow\'s to choose: all four after a prototype, none without, whatever was saved', () => {
-    expect(normalize(ui).steps.some((x) => ['analysis', 'adr', 'risk', 'audit'].includes(x.key))).toBe(false) // its prototype is off
+    expect(normalize(ui).steps.some((x) => ['analysis', 'adr', 'risk', 'audit', 'final'].includes(x.key))).toBe(false) // its prototype is off
     const saved = normalize(w([s('idea'), s('research'), s('sketch'), s('mockup'), s('risk', false), s('prototype'), s('brief', true), s('audit', true)])) // saved when they were choices: one optional, one missing
-    expect(saved.steps.map((x) => [x.key, x.required])).toEqual([['idea', false], ['research', false], ['sketch', false], ['mockup', false], ['prototype', false], ['analysis', true], ['adr', true], ['risk', true], ['audit', true], ['brief', true]])
+    expect(saved.steps.map((x) => [x.key, x.required])).toEqual([['idea', false], ['research', false], ['sketch', false], ['mockup', false], ['prototype', false], ['analysis', true], ['adr', true], ['risk', true], ['audit', true], ['final', true], ['brief', true]])
     expect(validOrder(saved.steps)).toBe(true)
     expect(normalize(w([s('idea'), s('adr', true), s('brief', true)])).steps.some((x) => x.key === 'adr')).toBe(false) // a check saved without a prototype is dropped
     expect(removeCheck(saved, 'adr').steps.some((x) => x.key === 'adr')).toBe(true) // nothing takes one out

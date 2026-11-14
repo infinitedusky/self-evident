@@ -11,7 +11,7 @@ const idle = { busy: false, askedToFinalize: false, toldDone: false }
 
 describe('the checks after the prototype is approved', () => {
   it('run in order: analysis, ADR, the plan, the blast radius, the audit, then the conductor is told', () => {
-    expect(CHECKS).toEqual(['analysis', 'adr', 'risk', 'audit'])
+    expect(CHECKS).toEqual(['analysis', 'adr', 'risk', 'audit', 'final'])
     expect(BEFORE_PLAN).toEqual(['analysis', 'adr']) // what the plan is made from; the other two read it
     const at = (done: StepKey[], out: StepKey[] = [], extra: object = {}) => nextMove({ approved: true, checks: all(done, out), hasPrototype: true, conductor: idle, briefApproved: true, planned: false, ...extra })
     expect(at([])).toEqual({ do: 'run', key: 'analysis' })
@@ -21,10 +21,13 @@ describe('the checks after the prototype is approved', () => {
     expect(at(['analysis', 'adr'], [], { planned: true })).toEqual({ do: 'run', key: 'risk' })
     expect(at(['analysis', 'adr', 'risk'], [], { planned: true })).toEqual({ do: 'run', key: 'audit' }) // an approved brief is not rewritten on the way
     expect(at(['analysis', 'adr', 'risk'], ['audit'], { planned: true })).toEqual({ do: 'nothing' })
+    // Last, the one step that changes anything: the ADR and the plan put right from what the two readers found.
+    expect(at(['analysis', 'adr', 'risk', 'audit'], [], { planned: true })).toEqual({ do: 'run', key: 'final' })
+    expect(at(['analysis', 'adr', 'risk', 'audit'], ['final'], { planned: true })).toEqual({ do: 'nothing' }) // at work, or holding the build on a question for the person
     expect(at(CHECKS, [], { planned: true })).toEqual({ do: 'tell' })
     expect(at(CHECKS, [], { planned: true, conductor: { busy: false, askedToFinalize: false, toldDone: true } })).toEqual({ do: 'nothing' }) // said once
-    expect(reportsIn(['analysis', 'adr', 'risk', 'audit'], true)).toMatch(/The brief is approved, so do not change it/)
-    expect(reportsIn(['analysis', 'adr', 'risk', 'audit'])).not.toMatch(/do not change it/)
+    expect(reportsIn(['analysis', 'adr', 'risk', 'audit', 'final'], true)).toMatch(/The brief is approved, so do not change it/)
+    expect(reportsIn(['analysis', 'adr', 'risk', 'audit', 'final'])).not.toMatch(/do not change it/)
   })
 
   it('the plan is made from an approved brief: until then the conductor brings it up to date once, and the line waits for the person', () => {
@@ -53,6 +56,16 @@ describe('the checks after the prototype is approved', () => {
   it('carry on without a conductor: the readers read the plan, and no one is told', () => {
     expect(nextMove({ approved: true, checks: all(['analysis', 'adr', 'risk']), hasPrototype: true, conductor: null, briefApproved: true, planned: true })).toEqual({ do: 'run', key: 'audit' })
     expect(nextMove({ approved: true, checks: all(CHECKS), hasPrototype: true, conductor: null, briefApproved: true, planned: true })).toEqual({ do: 'nothing' })
+  })
+
+  it('the last step puts the ADR and the plan right, writes the merge checklist, and can hold the build for the person', () => {
+    const f: CheckFacts = { identifier: 'XX-1', title: 'Swing lab (sample)', issueId: 'iss_sample', base: 'main', prototype: null, before: ['analysis', 'adr', 'risk', 'audit'] }
+    const text = checkBrief('final', f)
+    expect(text).toMatch(/key adr, status done/) // the final ADR replaces the draft
+    expect(text).toMatch(/update_task with that sub-task's id[\s\S]*add_sub_task[\s\S]*set_task_state canceled/)
+    expect(text).toMatch(/\*\*The merge checklist\.\*\*/)
+    expect(text).toMatch(/do not record this step as done[\s\S]*NEEDS YOU:[\s\S]*The build waits/)
+    expect(text).toMatch(/key final, status done/)
   })
 
   it('tell each fresh agent where the prototype is, what came before, and how to hand its report back', () => {
