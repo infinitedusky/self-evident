@@ -3,49 +3,56 @@
  * No agent runs here; `nextMove` is the whole order.
  */
 import { describe, expect, it } from 'vitest'
-import { checkBrief, finalizeBrief, nextMove, reportsIn, type CheckFacts } from './checks.js'
+import { BEFORE_PLAN, checkBrief, finalizeBrief, nextMove, reportsIn, type CheckFacts } from './checks.js'
 import { CHECKS, type StepKey } from './steps.js'
 
 const all = (done: StepKey[] = [], out: StepKey[] = []) => CHECKS.map((key) => ({ key, done: done.includes(key), out: out.includes(key) }))
 const idle = { busy: false, askedToFinalize: false, toldDone: false }
 
 describe('the checks after the prototype is approved', () => {
-  it('run in order: analysis, ADR, blast radius, the brief brought up to date, the audit, then the conductor is told', () => {
+  it('run in order: analysis, ADR, the plan, the blast radius, the audit, then the conductor is told', () => {
     expect(CHECKS).toEqual(['analysis', 'adr', 'risk', 'audit'])
-    const at = (done: StepKey[], out: StepKey[] = [], conductor = idle) => nextMove({ approved: true, checks: all(done, out), hasPrototype: true, conductor })
+    expect(BEFORE_PLAN).toEqual(['analysis', 'adr']) // what the plan is made from; the other two read it
+    const at = (done: StepKey[], out: StepKey[] = [], extra: object = {}) => nextMove({ approved: true, checks: all(done, out), hasPrototype: true, conductor: idle, briefApproved: true, planned: false, ...extra })
     expect(at([])).toEqual({ do: 'run', key: 'analysis' })
     expect(at([], ['analysis'])).toEqual({ do: 'nothing' }) // its agent is on it
     expect(at(['analysis'], ['analysis'])).toEqual({ do: 'run', key: 'adr' })
-    expect(at(['analysis', 'adr'])).toEqual({ do: 'run', key: 'risk' })
-    expect(at(['analysis', 'adr', 'risk'])).toEqual({ do: 'finalize' })
-    // A brief the person has already approved is not rewritten from the reports: straight to the audit.
-    expect(nextMove({ approved: true, checks: all(['analysis', 'adr', 'risk'], []), hasPrototype: true, conductor: idle, briefApproved: true })).toEqual({ do: 'run', key: 'audit' })
+    expect(at(['analysis', 'adr'])).toEqual({ do: 'plan' }) // the plan before anything reads it
+    expect(at(['analysis', 'adr'], [], { planned: true })).toEqual({ do: 'run', key: 'risk' })
+    expect(at(['analysis', 'adr', 'risk'], [], { planned: true })).toEqual({ do: 'run', key: 'audit' }) // an approved brief is not rewritten on the way
+    expect(at(['analysis', 'adr', 'risk'], ['audit'], { planned: true })).toEqual({ do: 'nothing' })
+    expect(at(CHECKS, [], { planned: true })).toEqual({ do: 'tell' })
+    expect(at(CHECKS, [], { planned: true, conductor: { busy: false, askedToFinalize: false, toldDone: true } })).toEqual({ do: 'nothing' }) // said once
     expect(reportsIn(['analysis', 'adr', 'risk', 'audit'], true)).toMatch(/The brief is approved, so do not change it/)
     expect(reportsIn(['analysis', 'adr', 'risk', 'audit'])).not.toMatch(/do not change it/)
-    expect(at(['analysis', 'adr', 'risk'], [], { ...idle, askedToFinalize: true, busy: true })).toEqual({ do: 'nothing' }) // the conductor is writing the brief
-    expect(at(['analysis', 'adr', 'risk'], [], { ...idle, askedToFinalize: true })).toEqual({ do: 'run', key: 'audit' })
-    expect(at(['analysis', 'adr', 'risk'], ['audit'], { ...idle, askedToFinalize: true })).toEqual({ do: 'nothing' })
-    expect(at(CHECKS, [], { ...idle, askedToFinalize: true })).toEqual({ do: 'tell' })
-    expect(at(CHECKS, [], { busy: false, askedToFinalize: true, toldDone: true })).toEqual({ do: 'nothing' }) // said once
+  })
+
+  it('the plan is made from an approved brief: until then the conductor brings it up to date once, and the line waits for the person', () => {
+    const at = (extra: object = {}) => nextMove({ approved: true, checks: all(['analysis', 'adr']), hasPrototype: true, conductor: idle, briefApproved: false, planned: false, ...extra })
+    expect(at()).toEqual({ do: 'finalize' })
+    expect(at({ conductor: { ...idle, askedToFinalize: true } })).toEqual({ do: 'nothing' }) // asked once; now it is the person's to approve
+    expect(at({ conductor: null })).toEqual({ do: 'nothing' }) // nobody to write it: still the person's
+    expect(at({ briefApproved: true })).toEqual({ do: 'plan' }) // approved: on it goes
+    expect(at({ planned: true })).toEqual({ do: 'run', key: 'risk' }) // planned by hand meanwhile: the readers read it
   })
 
   it('wait for the person: nothing runs before the prototype is approved', () => {
     expect(nextMove({ approved: false, checks: all(), hasPrototype: true, conductor: idle })).toEqual({ do: 'nothing' })
   })
 
-  it('run only what the workflow has, and skip the analysis when there is no prototype to read', () => {
+  it('skip the analysis when there is no prototype to read, and handle a task that has only some of them', () => {
     const only = (keys: StepKey[], done: StepKey[] = []) => keys.map((key) => ({ key, done: done.includes(key), out: false }))
-    expect(nextMove({ approved: true, checks: [], hasPrototype: true, conductor: idle })).toEqual({ do: 'nothing' })
-    expect(nextMove({ approved: true, checks: only(['risk']), hasPrototype: true, conductor: idle })).toEqual({ do: 'run', key: 'risk' })
-    expect(nextMove({ approved: true, checks: only(['risk'], ['risk']), hasPrototype: true, conductor: idle })).toEqual({ do: 'tell' })
-    expect(nextMove({ approved: true, checks: only(['audit']), hasPrototype: true, conductor: idle })).toEqual({ do: 'run', key: 'audit' }) // no reports to write in first
-    expect(nextMove({ approved: true, checks: all(), hasPrototype: false, conductor: idle })).toEqual({ do: 'run', key: 'adr' })
-    expect(nextMove({ approved: true, checks: only(['analysis']), hasPrototype: false, conductor: idle })).toEqual({ do: 'nothing' })
+    const go = { hasPrototype: true, conductor: idle, briefApproved: true, planned: true }
+    expect(nextMove({ approved: true, checks: [], ...go })).toEqual({ do: 'nothing' })
+    expect(nextMove({ approved: true, checks: only(['risk']), ...go })).toEqual({ do: 'run', key: 'risk' })
+    expect(nextMove({ approved: true, checks: only(['risk'], ['risk']), ...go })).toEqual({ do: 'tell' })
+    expect(nextMove({ approved: true, checks: all(), ...go, hasPrototype: false })).toEqual({ do: 'run', key: 'adr' })
+    expect(nextMove({ approved: true, checks: only(['analysis']), ...go, hasPrototype: false })).toEqual({ do: 'nothing' })
   })
 
-  it('carry on without a conductor: the audit reads the brief as it stands, and no one is told', () => {
-    expect(nextMove({ approved: true, checks: all(['analysis', 'adr', 'risk']), hasPrototype: true, conductor: null })).toEqual({ do: 'run', key: 'audit' })
-    expect(nextMove({ approved: true, checks: all(CHECKS), hasPrototype: true, conductor: null })).toEqual({ do: 'nothing' })
+  it('carry on without a conductor: the readers read the plan, and no one is told', () => {
+    expect(nextMove({ approved: true, checks: all(['analysis', 'adr', 'risk']), hasPrototype: true, conductor: null, briefApproved: true, planned: true })).toEqual({ do: 'run', key: 'audit' })
+    expect(nextMove({ approved: true, checks: all(CHECKS), hasPrototype: true, conductor: null, briefApproved: true, planned: true })).toEqual({ do: 'nothing' })
   })
 
   it('tell each fresh agent where the prototype is, what came before, and how to hand its report back', () => {

@@ -85,6 +85,29 @@ export class Runner {
     } catch (err) { this.planningIssues.delete(issueId); throw err }
   }
 
+  /**
+   * Plan one task and stop there: cut it into sub-tasks without starting its build. For the line after a prototype,
+   * where the plan is read (the blast radius, the audit) before anything is built. Once only: not while it is being
+   * planned, not if it is planned, and not again by itself after a planning that failed (a person plans it again).
+   */
+  async planTask(issueId: string, after?: () => void, actor = 'engine'): Promise<'planning' | 'planned' | 'failed' | 'waiting'> {
+    const [t] = await db.select().from(issue).where(eq(issue.id, issueId))
+    if (!t) throw new PlanError(`no task ${issueId}`)
+    if (!t.briefApprovedBy) return 'waiting'
+    if ((await db.select({ id: issue.id }).from(issue).where(and(eq(issue.parentId, issueId), eq(issue.kind, 'code'), notInArray(issue.state, ['canceled', 'duplicate'])))).length > 0) return 'planned'
+    if (this.planningIssues.has(issueId)) return 'planning'
+    const [last] = await db.select().from(event).where(and(eq(event.issueId, issueId), inArray(event.type, PLANNING))).orderBy(desc(event.seq)).limit(1)
+    const restarted = last?.type === 'issue.plan_failed' && String((last.payload as any)?.error ?? '').includes('engine restarted')
+    if (last && ['issue.planning', 'issue.plan_waiting'].includes(last.type)) return 'planning'
+    if (last?.type === 'issue.plan_failed' && !restarted) return 'failed'
+    this.planningIssues.add(issueId)
+    try {
+      const ctx = await preparePlanning(issueId, { actor })
+      void finishPlanning(ctx, { propose: this.propose, onPlanned: () => { after?.() } }).finally(() => this.planningIssues.delete(issueId))
+      return 'planning'
+    } catch (err) { this.planningIssues.delete(issueId); throw err }
+  }
+
   /** Start a project's build if it is planned and nobody has started it; a running one just gets a dispatch pass. */
   private async startIfWaiting(projectId: string | null): Promise<boolean> {
     if (!projectId) return false

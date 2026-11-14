@@ -12,7 +12,7 @@
  * Fixed in every workflow:
  * - "starts as an idea" is always there and always first; a workflow makes it required or not;
  * - research, sketches, mockups and the prototype come next, in the workflow's order, each on or off;
- * - the checks (the prototype analysis, a draft ADR, the blast radius, a brief audit) come after those, added or removed:
+ * - the checks (the prototype analysis, a draft ADR, the blast radius, an audit) come after those, fixed, with a prototype:
  *   they read what the others produced, and run in that order, each a fresh agent, once the person approves the
  *   prototype (checks.ts; Sandy, 2026-11-11);
  * - the brief is always there and always required. It is kept last in the stored list, and its place there means
@@ -40,8 +40,8 @@ export const STEPS: StepDef[] = [
   { key: 'prototype', label: 'Prototype', icon: '🛠️', what: 'The thing built the way we would ship it, with only what is outside the system faked, to show with evidence that it works.', place: 'either' },
   { key: 'analysis', label: 'Prototype analysis', icon: '🔬', what: 'The prototype read by a fresh agent: how it was built, what was faked, what to keep, and how the real build should be cleaner: what repeats, what to refactor, the simpler way.', place: 'check' },
   { key: 'adr', label: 'Draft ADR', icon: '🏛️', what: 'A first pass at the architecture decision, from the analysis and the code: the options, a proposed choice, why. A draft: the planner settles it, and the record is written with the build.', place: 'check' },
-  { key: 'risk', label: 'Blast radius', icon: '💥', what: 'What the change touches, what could break, and how we\'d know.', place: 'check' },
-  { key: 'audit', label: 'Brief audit', icon: '🧐', what: 'The brief read against the code and the prototype by a fresh agent: gaps, wrong guesses.', place: 'check' },
+  { key: 'risk', label: 'Blast radius', icon: '💥', what: 'What the plan touches, what could break, and how we\'d know. It is the risks on the pull request\'s merge guide.', place: 'check' },
+  { key: 'audit', label: 'Audit', icon: '🧐', what: 'The plan read against the brief, the ADR, the code and the prototype by a fresh agent, last before the build: gaps, wrong guesses, what could go wrong.', place: 'check' },
 ]
 export const step = (key: StepKey) => STEPS.find((s) => s.key === key)!
 /** The checks, in the order they run. */
@@ -146,7 +146,7 @@ export interface Row { key: StepKey; required: boolean; position: number | null;
  * Whether a person approves this step (Sandy, 2026-11-10: "there should be an approve button for each step … I see the
  * check mark but not sure how that is decided"). On a task: the brief, and the steps the person is part of (research,
  * sketches, mockups, the prototype). The agent can say one is done, which makes it ready for the person; only their
- * approval finishes it. The checks (prototype analysis, ADR, blast radius, brief audit) are reports read with the brief, so they are
+ * approval finishes it. The checks (prototype analysis, ADR, blast radius, audit) are reports, so they are
  * finished when done and stand approved with the brief. An idea's and a project's steps keep done as finished.
  */
 export const needsApproval = (key: StepKey, on: On) => on === 'task' && key !== 'idea' && step(key).place !== 'check'

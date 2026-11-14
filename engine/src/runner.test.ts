@@ -296,6 +296,31 @@ describe.skipIf(!reachable)('runner', () => {
     expect((await projectGraph((await soloId())!))!.subIssues.map((x) => x.status)).toEqual(['done'])
   })
 
+  it('plans a task and stops there, so the plan can be read before anything is built; the build is a separate word', async () => {
+    const own = newId('app')
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'plan-first app', key: own.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md' } })
+    await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: repoPath })
+    const { project: p, issues: [t] } = await createProject({ appId: own, name: 'read before built', issues: [{ title: 'Planned, then read', brief: 'build it' }] })
+    const propose: Propose = async () => ({ status: 'completed', costUsd: 0, proposal: {
+      phases: [{ key: 'a', title: 'A', description: 'a', summary: 'a', depends_on: [], files: [`${newId('issue')}.txt`], steps: [], checks: [], done_when: '' }],
+      decisions: [], questions: [], notes: '' } })
+    const runner = new Runner({ execute: commits('pf'), sessionsMax: 2, propose })
+    expect(await runner.planTask(t.id)).toBe('waiting') // its brief is not approved: the plan is made from an approved brief
+    await approveBriefs(own)
+    let told = 0
+    expect(await runner.planTask(t.id, () => { told++ })).toBe('planning')
+    expect(await runner.planTask(t.id, () => { told++ })).toBe('planning') // asked again meanwhile: planned once
+    await until(async () => (await projectGraph(p.id))!.subIssues.length === 1)
+    await until(async () => told === 1)
+    expect(await runner.planTask(t.id)).toBe('planned')
+    await sleep(300)
+    const g = (await projectGraph(p.id))!
+    expect(g.project.status).toBe('drafting') // nothing started: the plan is there to be read
+    expect(g.subIssues.map((x) => x.status)).not.toContain('running')
+    expect(await runner.buildTask(t.id)).toEqual({ planning: false, started: true }) // the readers are done: now it is built
+    await until(cleaned(p.id))
+  })
+
   it('stores the builder\'s todo list as the sub-issue\'s steps, latest list wins', async () => {
     const { project: p, subIssues: phases } = await createProject({ appId, name: 'steps', issues: [one('T', [{ key: 's', title: 'S', files: ['s.txt'] }])] })
     const runner = new Runner({ execute: async (i) => {

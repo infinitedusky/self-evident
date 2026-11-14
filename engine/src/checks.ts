@@ -3,15 +3,20 @@
  * anything is decided from it"; Sandy, 2026-11-11). In order, each a fresh agent in a conversation of its own, read
  * only, shown as a tab in the task's agent column:
  *
- *   prototype analysis → ADR → blast radius → the conductor brings the brief up to date → brief audit → the conductor
- *   is told the reports are in, and the person approves the brief.
+ *   prototype analysis → ADR → the plan (the task cut into sub-tasks) → blast radius → audit → the conductor is told,
+ *   and the task is built.
+ *
+ * The analysis and the ADR are what the plan is made from; the blast radius and the audit read the plan (Sandy,
+ * 2026-11-14: "it analyzes the prototype and compares it to the brief, and then it creates an ADR and a plan …
+ * then we do an audit on the whole thing"). The plan is made from an approved brief: if it is not approved when the
+ * ADR is in, the conductor brings it up to date once and the line waits for the person.
  *
  * Only the checks the task's workflow has are run. Where the line stands is worked out from what is stored each time
  * (the steps' states, the open check conversations, two notes in the conductor's transcript), so an engine restart
  * loses nothing: the next turn that ends on the task carries it on. A check whose agent stopped without recording its
  * report waits; the person opens its tab and says so.
  */
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, notInArray, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, issue, prototype, repo, session, sessionMessage } from './db/schema.js'
 import { homeRepo } from './workbench.js'
@@ -61,12 +66,12 @@ Write it as a draft decision record: the context in a few lines; the options (th
 It is a draft. The planner settles it when it cuts the task into sub-tasks, and the final record is a file the build writes, so do not write any file and do not polish: be clear about the choice and honest about the doubts.
 ${report(key, f.issueId)}`
     case 'risk': return `**Blast radius.** ${task}
-${earlier(f)}${proto(f)}Work out what the real build touches on ${f.base}, built the way the draft ADR proposes (or, with none, the way the brief says). Read the code it would change and what depends on that code.
+${earlier(f)}${proto(f)}The task is planned: the task tool shows its sub-tasks, each with its brief, its files and what it waits on. Work out what that plan touches on ${f.base} when it is built. Read the code it would change and what depends on that code.
 Report: the files and modules it changes; what else uses them and could break; data and migrations; anything shared or outward-facing (APIs, jobs, other apps); and for each risk, how we would know it broke (the test, the log line, the page).
 ${report(key, f.issueId)}`
-    case 'audit': return `**Brief audit.** ${task}
-${earlier(f)}${proto(f)}The brief has just been brought up to date and is about to be approved; the build starts from it and from nothing else. Read it against the code on ${f.base}, the prototype and the reports above.
-Report: gaps (what a builder would have to guess); wrong guesses (where the brief says something the code, the prototype or a report contradicts, with the file); things it asks for that nothing so far supports; references that do not resolve (a sketch file, a story id, a branch, a path). Say plainly when a section holds.
+    case 'audit': return `**Audit.** ${task}
+${earlier(f)}${proto(f)}The task is planned and about to be built, with nobody pressing anything in between: this is the last read before agents start. Read the plan (the task tool shows the sub-tasks, each with its brief, its files and what it waits on) against the brief, the draft ADR, the code on ${f.base}, the prototype and the reports above.
+Report: what the brief asks for that no sub-task does; sub-tasks that do something nobody asked for; wrong guesses (where a sub-task says something the code, the prototype or a report contradicts, with the file); sub-tasks in the wrong order, or two that change the same thing; where the plan departs from the draft ADR without saying why; what the blast radius says could break that no sub-task guards against; and what this app requires of every plan (the task tool shows the list and the plan's answer to each) that the plan claims and the sub-tasks do not actually do. Lead with whatever should stop the build.
 Then the **acceptance criteria** (the task tool shows them; the person approves them with the brief, and the build is done when they hold): are they sufficient? Report: requirements of the brief that no criterion covers; criteria nobody could check as written, or with no way given to check them; cases that are missing (empty, many, repeated, the wrong person, failure of something outside); guarantees the blast radius says matter that none states; telemetry: whether the brief's Telemetry section has every hook point the analysis found, whether a criterion holds the build to each kind, and whether the failure that would otherwise be silent is one of them; criteria the prototype did not show, and whether that is a gap in the prototype or in the criterion; criteria left to the final build only whose reason does not hold (a risk the prototype should have proved), since those are approved with no evidence. For each, the criterion you would add or the wording you would change. Say plainly when they are enough.
 ${report(key, f.issueId)}`
     default: throw new Error(`${key} is not a check`)
@@ -77,36 +82,48 @@ ${report(key, f.issueId)}`
 export const finalizeBrief = (done: StepKey[], f: CheckFacts) => `The prototype is approved and the reports are in: ${done.map((k) => step(k).label).join(', ')}. Read each with get_step on this task, then bring the brief up to date with update_task so the build can start from it alone:
 - a **Prototype** section: the branch ${f.prototype?.branch ?? '(none)'}, what the analysis found, what to keep and what to change, and that the build starts from ${f.base} with the prototype as a map, never as code to carry over;
 - what the analysis says under Cleaner, as instructions to the builder: what to write once instead of twice, what to do the simpler way, what to refactor first, what to leave out;
-- the draft ADR's proposed decision, in the brief's own words and marked as proposed (the planner settles it), and what the blast radius says to watch;
+- the draft ADR's proposed decision, in the brief's own words and marked as proposed (the planner settles it);
 - a **Telemetry** section: the analysis's hook points as its table (where, what it records, the question it answers, the alert), so the build puts them in; leave none out without saying why;
 - the assets each step left (sketch files, story ids, the reports), named so the brief points at them.
 Then bring the acceptance criteria up to date with set_acceptance (the task tool shows them): every requirement of the brief has one, each can be checked as written and says how, what the analysis found not met or faked is recorded on its criterion (shown false, with what is missing), anything the reports show we must guarantee that no criterion covers is added, and the telemetry has criteria of its own (one per kind of hook point: the logs or metrics, the monitors, the product events and that they carry no personal data), each marked not shown unless the prototype emits it. Do not put them in the brief's text: they are kept beside it and approved with it.
-Change nothing else, and do not ask the person anything: when your turn ends the brief audit reads the result.`
+Change nothing else. When your turn ends, tell the person in two lines that the brief is ready for their approval: the plan, its audit and the build all follow from that approval by themselves.`
 export const reportsIn = (done: StepKey[], briefApproved = false) => (briefApproved
   ? `The checks are done: ${done.map((k) => step(k).label).join(', ')}. The brief is approved, so do not change it: the task is being planned and built from it now. Read the reports with get_step. If one of them found something that would change what is built, say so to the person now, plainly and first; otherwise tell them in two lines what the checks found.`
-  : `The checks are done: ${done.map((k) => step(k).label).join(', ')}. ${done.includes('audit') ? 'Read the brief audit with get_step and fix in the brief what it found (update_task); leave what it says holds. Then tell' : 'Tell'} the person in a few lines what the reports say, from each report's summary (a report with none: write it one now, set_step with summary alone), and that the brief is ready for them to approve.`)
+  : `The checks are done: ${done.map((k) => step(k).label).join(', ')}. ${done.includes('audit') ? 'Read the audit with get_step and fix in the brief what it found (update_task); leave what it says holds. Then tell' : 'Tell'} the person in a few lines what the reports say, from each report's summary (a report with none: write it one now, set_step with summary alone), and that the brief is ready for them to approve.`)
 
 const note = async (sessionId: string, stage: string) => (await db.select({ id: sessionMessage.id }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, sessionId), sql`${sessionMessage.payload}->>'checks' = ${stage}`)).limit(1)).length > 0
+
+/** The checks the plan is made from; the others (the blast radius, the audit) read the plan. */
+export const BEFORE_PLAN: StepKey[] = ['analysis', 'adr']
+/** Asked to plan a task (cut it into sub-tasks) when the line reaches that point; server.ts answers, since it knows the runner. */
+const wantPlan = new Set<(issueId: string) => void>()
+export function onPlanWanted(fn: (issueId: string) => void) { wantPlan.add(fn); return () => { wantPlan.delete(fn) } }
 
 /** Told when a task's checks are all done: the build can go on from there. */
 const whenDone = new Set<(issueId: string) => void>()
 export function onChecksDone(fn: (issueId: string) => void) { whenDone.add(fn); return () => { whenDone.delete(fn) } }
 
 /** What to do next on a task's checks, from what is stored; pure, so it is tested without agents. */
-export function nextMove(i: { approved: boolean; checks: { key: StepKey; done: boolean; out: boolean }[]; hasPrototype: boolean; conductor: { busy: boolean; askedToFinalize: boolean; toldDone: boolean } | null; /** The brief is already approved: it is not rewritten from the reports. */ briefApproved?: boolean }):
-  { do: 'nothing' } | { do: 'run'; key: StepKey } | { do: 'finalize' } | { do: 'tell' } {
+export function nextMove(i: { approved: boolean; checks: { key: StepKey; done: boolean; out: boolean }[]; hasPrototype: boolean; conductor: { busy: boolean; askedToFinalize: boolean; toldDone: boolean } | null; /** The brief is approved: the plan is made from it, and it is not rewritten from the reports. */ briefApproved?: boolean; /** The task has its sub-tasks. */ planned?: boolean }):
+  { do: 'nothing' } | { do: 'run'; key: StepKey } | { do: 'finalize' } | { do: 'plan' } | { do: 'tell' } {
   if (!i.approved) return { do: 'nothing' }
   const list = i.checks.filter((c) => c.key !== 'analysis' || i.hasPrototype) // nothing to analyse without a prototype
   if (!list.length) return { do: 'nothing' }
-  const first = list.filter((c) => c.key !== 'audit').find((c) => !c.done)
+  // What the plan is made from: the analysis, then the ADR.
+  const before = list.filter((c) => BEFORE_PLAN.includes(c.key))
+  const first = before.find((c) => !c.done)
   if (first) return first.out ? { do: 'nothing' } : { do: 'run', key: first.key }
-  const audit = list.find((c) => c.key === 'audit')
-  if (audit && !audit.done) {
-    if (audit.out) return { do: 'nothing' }
-    if (!i.conductor) return { do: 'run', key: 'audit' } // no conductor to write the brief: audit it as it stands
-    if (i.briefApproved) return { do: 'run', key: 'audit' } // an approved brief stays as the person approved it
-    if (!i.conductor.askedToFinalize) return list.length > 1 ? { do: 'finalize' } : { do: 'run', key: 'audit' }
-    return i.conductor.busy ? { do: 'nothing' } : { do: 'run', key: 'audit' }
+  // What reads the plan: the blast radius, then the audit.
+  const after = list.filter((c) => !BEFORE_PLAN.includes(c.key))
+  const next = after.find((c) => !c.done)
+  if (next) {
+    if (!i.planned) {
+      if (i.briefApproved) return { do: 'plan' }
+      // The plan is made from an approved brief. Not approved yet: the conductor brings it up to date from the
+      // reports so far, once, and then it is the person's to approve; the line carries on from their approval.
+      return i.conductor && !i.conductor.askedToFinalize && before.length ? { do: 'finalize' } : { do: 'nothing' }
+    }
+    return next.out ? { do: 'nothing' } : { do: 'run', key: next.key }
   }
   return i.conductor && !i.conductor.toldDone ? { do: 'tell' } : { do: 'nothing' }
 }
@@ -128,10 +145,12 @@ export async function advanceChecks(issueId: string): Promise<ReturnType<typeof 
       hasPrototype: !!p,
       conductor: conductor ? { busy: conductor.busy, askedToFinalize: await note(conductor.id, 'finalize'), toldDone: await note(conductor.id, 'done') } : null,
       briefApproved: !!t.briefApprovedBy,
+      planned: (await db.select({ id: issue.id }).from(issue).where(and(eq(issue.parentId, issueId), eq(issue.kind, 'code'), notInArray(issue.state, ['canceled', 'duplicate'])))).length > 0,
     })
     // Every check in: the task can be built, if its brief is approved (server.ts decides; it knows the runner).
     if (rows.every((r) => r.state.status === 'done')) for (const fn of whenDone) fn(issueId)
     if (move.do === 'nothing') return move
+    if (move.do === 'plan') { for (const fn of wantPlan) fn(issueId); return move } // the planner's turn; it comes back here when the sub-tasks are in
     const [a] = await db.select().from(app).where(eq(app.id, t.appId))
     const r = await homeRepo(t.appId)
     const done = rows.filter((x) => x.state.status === 'done').map((x) => x.key)
