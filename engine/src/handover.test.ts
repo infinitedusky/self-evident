@@ -9,7 +9,7 @@ import { db, pool } from './db/client.js'
 import { app, issue, session, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createIssue } from './issues.js'
-import { issueDetail } from './projects.js'
+import { createProject, issueDetail } from './projects.js'
 import { handoverNote, handoverPrompt, writeHandover, type AskFork } from './handover.js'
 
 let reachable = true
@@ -61,6 +61,14 @@ describe.skipIf(!reachable)('a task\'s hand-over', () => {
     expect(n).toBe(1)
     const [row] = await db.select().from(issue).where(eq(issue.id, t3.id))
     expect(handoverNote(row.handover, 'Launch plans (test)')).toBe('')
+  })
+
+  it('a project made in a conversation marks each of its tasks with that conversation', async () => {
+    const s = await talk()
+    const p = await createProject({ appId, name: 'Made in a conversation (test)', issues: [{ title: 'First' }, { title: 'Second' }], madeIn: s.id }, 'agent')
+    for (const t of p.issues) expect((await issueDetail(t.id)).madeBy).toMatchObject({ sessionId: s.id })
+    const byHand = await createProject({ appId, name: 'Made on the page (test)', issues: [{ title: 'Third' }] }, 'user')
+    expect((await issueDetail(byHand.issues[0].id)).madeBy).toBeNull()
   })
 
   it('two starts at once write it once', async () => {

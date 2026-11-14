@@ -18,7 +18,7 @@ export { PlanError } from './issues.js'
 
 export interface NewSubIssue { key: string; title: string; description?: string; brief?: string; dependsOn?: string[]; files?: string[]; priority?: number }
 export interface NewProjectIssue { title: string; description?: string; brief?: string; subIssues?: NewSubIssue[] }
-export interface NewProject { appId: string; name: string; content?: string; description?: string; ideaId?: string; workflowId?: string | null; issues?: NewProjectIssue[] } // no issues: an empty project, filled later
+export interface NewProject { appId: string; name: string; content?: string; description?: string; ideaId?: string; workflowId?: string | null; issues?: NewProjectIssue[]; madeIn?: string } // no issues: an empty project, filled later. madeIn: the conversation whose agent made it, kept on each task for its hand-over
 
 const BACKLOG = ['triage', 'backlog']
 const DROPPED = ['canceled', 'duplicate'] // a sub-task in one of these is out of the plan
@@ -70,6 +70,7 @@ export async function createProject(given: NewProject, actor = 'engine') {
     await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId, actor, type: 'project.created', payload: { name: p.name, issues: input.issues.length, subIssues: all.length } })
     const issues = await insertIssues(tx, a.id, input.issues.map((t, i) => ({
       kind: 'code' as const, projectId, ideaId: input.ideaId ?? null, title: t.title, description: t.description, brief: t.brief, sortOrder: i, delegate: 'planner' as const,
+      ...(input.madeIn ? { source: 'agent' as const, sourceRef: { sessionId: input.madeIn } } : {}),
     })), actor)
     const subs: Issue[] = []
     let sort = 0
