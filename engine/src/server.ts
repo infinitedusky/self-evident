@@ -611,7 +611,7 @@ export function buildApp(bus: EventBus) {
     const author = typeof body.author === 'string' && body.author.trim() ? body.author.trim().slice(0, 60) : 'user'
     try { return c.json(await commentOnIssue((await resolveIssue(db, c.req.param('id'))).id, { heading: body.heading, body: body.body }, author), 201) } catch (err) { return planError(c, err) }
   })
-  api.get('/projects', async (c) => { const a = c.req.query('app'); return a ? c.json(await listProjects({ all: c.req.query('all') === '1', appId: a })) : c.json({ error: 'app is required: one app at a time' }, 400) })
+  api.get('/projects', async (c) => { const a = c.req.query('app'); return a ? c.json(await listProjects({ all: c.req.query('all') === '1', solo: c.req.query('solo') === '1', appId: a })) : c.json({ error: 'app is required: one app at a time' }, 400) })
   api.post('/projects', async (c) => {
     try { const body = await c.req.json(); if (!body.ideaId) await guardDirect(db, body.appId, null, body.workflowId); return c.json(await createProject(body), 201) } catch (err) { return planError(c, err) }
   })
