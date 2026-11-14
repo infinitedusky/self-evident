@@ -3537,3 +3537,18 @@ by canceling the first plan's sub-tasks and planning again, and that path left t
 the task beside the second run's twelve. The page showed both. Now a planning run that succeeds removes what
 earlier runs of the same task decided and nobody confirmed, and what they asked and nobody answered
 (`finishPlanning`). MER-50's nine stale decisions were deleted from the live data by hand.
+
+## Workflow settings read in three parts (Sandy, 2026-11-14: "in the settings, we haven't changed the workflow rules to match the change that we made in terms of like different sections")
+
+A workflow in Settings was one flat list of up to ten steps with the same switches on each. The card now has the
+three parts a task has: **On the way to an approved prototype** (the idea, research, sketches, mockups and the
+prototype: on or off, required or optional, in order; an optional one is "done or skipped on each task"),
+**After the prototype is approved** (prototype analysis, draft ADR, blast radius, brief audit, then the plan and
+the build: "runs by itself, in this order"), and **The brief** (always, approved by the person), with a pointer to
+the app's requirements under Settings › Landing. Editing follows the same three parts.
+
+This is the page only. The engine still treats the four checks as a workflow's choice: the card says "Not in this
+workflow: …" for the ones a workflow lacks, and Edit still lets them be put in or left out. Making them fixed (in
+every workflow whenever there is a prototype, gone when it is skipped) changes what the brief waits on for tasks
+under way and what a task needs before it can complete, so it is its own change, with the move of the trigger to
+the prototype's approval.
