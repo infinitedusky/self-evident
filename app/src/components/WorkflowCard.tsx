@@ -7,7 +7,7 @@
  */
 import { useState } from 'react'
 import { Badge } from './Badge'
-import { CHECKS, addCheck, canTurnOff, normalize, removeCheck, step, validOrder, type StepKey, type Workflow, type WorkflowStep } from '@self-evident/engine/steps'
+import { CHECKS, canTurnOff, normalize, step, validOrder, type StepKey, type Workflow, type WorkflowStep } from '@self-evident/engine/steps'
 
 const NOTE: Partial<Record<StepKey, string>> = { idea: 'always first', brief: 'the parent: every step feeds it, and it is approved last', analysis: 'a check, first once the prototype is approved', adr: 'a check, after the other steps', risk: 'a check, after the other steps', audit: 'a check, after the other steps' }
 
@@ -21,8 +21,7 @@ export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, 
   const on = w.steps.filter((s) => s.on)
   const off = w.steps.filter((s) => !s.on)
   const lead = (s: WorkflowStep) => s.key !== 'brief' && step(s.key).place !== 'check' // the steps a person chooses, on the way to the prototype
-  const check = (s: WorkflowStep) => step(s.key).place === 'check' // what runs by itself once the prototype is approved
-  const missing = CHECKS.filter((k) => !w.steps.some((s) => s.key === k))
+  const hasPrototype = w.steps.some((s) => s.key === 'prototype' && s.on)
   return (
     <div className="panel workflow" data-component="WorkflowCard">
       <div className="card-head">
@@ -40,12 +39,11 @@ export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, 
             {w.ordered ? 'In this order: a step waits for the required ones before it.' : 'In any order.'}
             {off.length > 0 && <> Off: {off.map((s) => step(s.key).label).join(', ')}.</>}
           </div>
-          <h4 className="wf-h">After the prototype is approved <span className="faint">runs by itself, in this order</span></h4>
-          <ol className="wf-steps">
-            {on.filter(check).map((s) => <li key={s.key}>{step(s.key).icon} {step(s.key).label}</li>)}
-            <li className="faint">🏗️ The plan (sub-tasks), then the build</li>
-          </ol>
-          {missing.length > 0 && <div className="faint" style={{ fontSize: 13 }}>Not in this workflow: {missing.map((k) => step(k).label).join(', ')}.</div>}
+          <h4 className="wf-h">After the prototype is approved <span className="faint">always, by itself, in this order</span></h4>
+          {hasPrototype
+            ? <ol className="wf-steps">{CHECKS.map((k) => <li key={k} title={step(k).what}>{step(k).icon} {step(k).label}</li>)}<li>🏗️ The plan (sub-tasks), then the build</li></ol>
+            : <div className="faint" style={{ fontSize: 13 }}>This workflow has no prototype, so there is nothing to read first: once the brief is approved, the plan (sub-tasks), then the build.</div>}
+          {hasPrototype && <div className="faint" style={{ fontSize: 13 }}>Not a choice: a task that makes a prototype gets all four; one that skips its prototype gets none. The build waits for them, the brief does not.</div>}
           <h4 className="wf-h">The brief <span className="faint">always, and approved by you</span></h4>
           <div className="faint" style={{ fontSize: 13 }}>What to build and why. It can be approved once every step above it is done, or skipped where it is optional. What every plan must cover (telemetry, tests and the rest) is the app's: Settings › Landing.</div>
         </>
@@ -65,22 +63,12 @@ export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, 
               </li>
             ))}
           </ul>
-          <h4 className="wf-h">After the prototype is approved <span className="faint">runs by itself, in this order</span></h4>
-          <ul className="list">
-            {CHECKS.map((k) => {
-              const i = w.steps.findIndex((s) => s.key === k)
-              const has = i >= 0
-              return (
-                <li key={k} className="wf-edit-row">
-                  <span />
-                  <span className={has ? '' : 'faint'} title={step(k).what}>{step(k).icon} {step(k).label}</span>
-                  <label><input type="checkbox" checked={has} onChange={(e) => setW(e.target.checked ? addCheck(w, k) : removeCheck(w, k))} /> In this workflow</label>
-                  <label className={has ? '' : 'faint'}><input type="checkbox" disabled={!has} checked={has && w.steps[i].required} onChange={(e) => set(i, { required: e.target.checked })} /> The brief waits for it</label>
-                </li>
-              )
-            })}
-            <li className="wf-edit-row faint"><span /><span>🏗️ The plan (sub-tasks), then the build</span><span>always</span><span /></li>
-          </ul>
+          <h4 className="wf-h">After the prototype is approved <span className="faint">always, by itself, in this order</span></h4>
+          <div className="faint" style={{ fontSize: 13, marginBottom: 6 }}>
+            {w.steps.some((x) => x.key === 'prototype' && x.on)
+              ? <>{CHECKS.map((k) => step(k).label).join(', ')}, then the plan and the build. Nothing to set here: they come with the prototype.</>
+              : <>Nothing but the plan and the build: this workflow has no prototype.</>}
+          </div>
           <h4 className="wf-h">The brief <span className="faint">always, and approved by you</span></h4>
           <label style={{ display: 'block', margin: '10px 0' }}><input type="checkbox" checked={w.ordered} onChange={(e) => setW({ ...w, ordered: e.target.checked })} /> Enforce this order</label>
           <div style={{ display: 'flex', gap: 8 }}>
