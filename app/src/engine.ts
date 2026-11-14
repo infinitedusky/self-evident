@@ -83,7 +83,7 @@ export interface Graph {
 }
 /** A file on the graph: who claims it, and who has it right now (the sub-issue being built with it). */
 export interface GraphFile { path: string; subIssues: string[]; heldBy: string | null }
-export interface ProjectSummary { id: string; name: string; status: string; createdAt: string; ideaId?: string | null; app: { id: string; name: string } | null; issueCount: number; backlogOpen?: number; builds: Record<string, number> }
+export interface ProjectSummary { id: string; name: string; status: string; createdAt: string; ideaId?: string | null; app: { id: string; name: string } | null; issueCount: number; backlogOpen?: number; builds: Record<string, number>; solo?: boolean; plannedTasks?: { id: string; identifier: string; title: string; subTasks: number }[] } // solo: a task's own project (only listed when asked for); plannedTasks: its tasks that have sub-tasks
 export interface IssueRow { id: string; identifier: string; number: number; title: string; description: string | null; state: IssueState; sortOrder: number; priority: number; project: { id: string; name: string; status: string; solo?: boolean } | null; builds: Record<string, number>; planning: string | null }
 /** What was written on a ticket as it moved: one comment per heading (the plan, the handoff, the review), the latest write of each. */
 export interface IssueComment { id: string; issueId: string; heading: string; body: string; author: string; createdAt: string; updatedAt: string }
@@ -368,7 +368,7 @@ export const engine = {
   /** Opens the folder dialog on the engine's computer (or scans `path`) and says which repositories are there. */
   chooseFolder: (path?: string) => call<Folder>('POST', '/folders/choose', path ? { path } : {}),
   updateRepo: (id: string, body: { fullName?: string; localPath?: string | null; baseBranch?: string | null }) => call<Repo & { note: string | null }>('PATCH', `/repos/${id}`, body),
-  projects: (appId?: string) => call<ProjectSummary[]>('GET', `/projects${appId ? `?app=${appId}` : ''}`),
+  projects: (appId?: string, opts: { solo?: boolean } = {}) => call<ProjectSummary[]>('GET', `/projects${appId ? `?app=${appId}${opts.solo ? '&solo=1' : ''}` : ''}`), // solo: tasks planned on their own too (Build's page)
   graph: (id: string) => call<Graph>('GET', `/projects/${id}/graph`),
   createProject: (body: { appId: string; name: string; content?: string; description?: string; ideaId?: string; workflowId?: string; issues?: NewProjectIssue[] }) => call<{ project: { id: string } }>('POST', '/projects', body),
   cancelProject: (projectId: string) => call<{ cancelled: number; landed: number }>('POST', `/projects/${projectId}/cancel`),
