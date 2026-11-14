@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { Badge, type Tone } from '../components/Badge'
-import { PlanGraphView } from '../components/PlanGraphView'
+import { asked, PlanGraphView } from '../components/PlanGraphView'
 import { openEvents, API, EVENT_TYPES, type App, type GraphFile, type GraphIssue, type GraphSubIssue } from '../engine'
 import { useCurrentApp } from '../current-app'
 
@@ -69,7 +69,7 @@ export function AppGraph() {
             {error && <Badge tone="warn" dot>{error}</Badge>}
           </div>
           {data.subIssues.length
-            ? <PlanGraphView subIssues={data.subIssues} files={data.files} storageKey={data.app.id} labels={Object.fromEntries(data.subIssues.map((p) => [p.id, short(issueOf(p)?.title ?? projectOf(p)?.name ?? '')]))} selectedId={selectedId} onSelect={(p) => setSelectedId(p.id)} tall />
+            ? <PlanGraphView subIssues={data.subIssues} files={data.files} questions={asked(data.questions ?? [], data.subIssues)} storageKey={data.app.id} labels={Object.fromEntries(data.subIssues.map((p) => [p.id, short(issueOf(p)?.title ?? projectOf(p)?.name ?? '')]))} selectedId={selectedId} onSelect={(p) => setSelectedId(p.id)} tall />
             : <div className="empty">Nothing planned in {data.app.name} yet.</div>}
           {selected && (
             <section className="panel">

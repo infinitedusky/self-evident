@@ -8,7 +8,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { Assets } from '../components/Assets'
 import { AddTasks } from '../components/AddTasks'
 import { Badge, type Tone } from '../components/Badge'
-import { PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
+import { asked, PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
 import { Brief } from '../components/Brief'
 import { StepsPanel } from '../components/StepsPanel'
 import { engine, STATE_LABEL, useLiveProject, type BacklogIssue, type Graph, type IdeaRow, type Decision, type Event, type GraphSubIssue, type GraphIssue, type Question } from '../engine'
@@ -109,7 +109,7 @@ export function ProjectPage() {
       </ol>
 
       {graph.subIssues.length
-        ? <PlanGraphView subIssues={graph.subIssues} files={graph.files} storageKey={graph.project.id} labels={Object.fromEntries(graph.subIssues.map((p) => [p.id, short(issueOf(p)?.title ?? '')]))} selectedId={selectedId} onSelect={(p) => setSelectedId(p.id)} />
+        ? <PlanGraphView subIssues={graph.subIssues} files={graph.files} questions={asked(graph.questions ?? [], graph.subIssues)} storageKey={graph.project.id} labels={Object.fromEntries(graph.subIssues.map((p) => [p.id, short(issueOf(p)?.title ?? '')]))} selectedId={selectedId} onSelect={(p) => setSelectedId(p.id)} />
         : <div className="empty">Nothing planned yet. <strong>Plan</strong> a task above: the planner reads the repo and the task's brief and proposes sub-tasks, decisions and questions. Or write them by hand with <code>pnpm se issue sub-issues</code>.</div>}
 
       {(graph.questions.length > 0 || graph.decisions.length > 0) && (

@@ -7,12 +7,11 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { Badge, type Tone } from '../components/Badge'
-import { Md } from '../components/Md'
+import { Badge } from '../components/Badge'
+import { QuestionAsk } from '../components/QuestionAsk'
 import { API, engine, EVENT_TYPES, openEvents, type BuildTask } from '../engine'
 import { useCurrentApp } from '../current-app'
 
-const COST_TONE: Record<string, Tone> = { cheap: 'neutral', moderate: 'warn', expensive: 'bad' }
 const PR_WORD: Record<string, string> = { open: 'open', draft: 'draft', merged: 'merged', closed: 'closed' }
 
 export function Build() {
@@ -71,18 +70,7 @@ export function Build() {
           <h2 className="build-h">Waiting for you</h2>
           <ul className="list panel build-list">
             {stopped.map((t) => row(t, <>
-              {t.questions.map((q) => {
-                const rec = q.options.find((o) => o.recommended)
-                return (
-                  <div key={q.id} className="build-ask" data-component="BuildQuestion">
-                    <div><Badge tone={COST_TONE[q.cost ?? ''] ?? 'neutral'}>{q.cost ?? 'question'}</Badge> <strong><Md text={q.text} inline /></strong></div>
-                    <div className="opts">
-                      {q.options.map((o) => <button key={o.label} className={`btn quiet small ${o.recommended ? 'rec' : ''}`} disabled={busy !== null} title={o.description} onClick={() => void act(t.id, () => engine.answer(q.id, o.label))}>{o.label}{o.recommended ? ' · recommended' : ''}</button>)}
-                    </div>
-                    {rec && q.reason && <div className="faint" style={{ fontSize: 13 }}>Why {rec.label}: <Md text={q.reason} inline /></div>}
-                  </div>
-                )
-              })}
+              {t.questions.map((q) => <QuestionAsk key={q.id} q={q} busy={busy !== null} onAnswer={(answer) => act(t.id, () => engine.answer(q.id, answer))} />)}
               {t.failed.map((x) => (
                 <div key={x.id} className="build-ask">
                   <div><Badge tone="bad">failed</Badge> <strong>{x.identifier} {x.title}</strong></div>
