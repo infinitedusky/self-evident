@@ -46,10 +46,23 @@ export const Planned: Story = {
     await waitFor(() => expect(canvasElement.querySelector('[data-component="TaskGraph"] [data-component="PlanGraphView"]')).not.toBeNull())
   },
 }
+// Made up: the same task with every step after its prototype in, so nothing stands between its plan and its build.
+const readTaskStepsView = { ...approvedTaskStepsView, states: [...approvedTaskStepsView.states.filter((x) => !['analysis', 'adr', 'risk', 'audit', 'final'].includes(x.key)), ...(['analysis', 'adr', 'risk', 'audit', 'final'] as const).map((key) => ({ key, status: 'done' as const }))] }
+/** Planned after a prototype, with the steps that read the plan still to come: no button, it says what is coming. */
+export const PlannedBeingRead: Story = {
+  parameters: at('iss_sample1', 'build'),
+  beforeEach: withEngine({ steps: { ...sampleData.steps, issues: approvedTaskStepsView }, issueDetails: { ...sampleData.issueDetails,
+    iss_sample1: { ...issueDetails.iss_sample1, briefApprovedBy: 'Sam (sample)', briefApprovedAt: '2026-10-28T10:00:00Z', project: { ...issueDetails.iss_sample1.project!, status: 'drafting' } } } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('Being read before it is built')).toBeInTheDocument()
+    await expect(c.queryByRole('button', { name: 'Build it' })).toBeNull()
+  },
+}
 /** Planned, and its project has not been run: "Ready to build" with Build it. */
 export const PlannedNotRun: Story = {
   parameters: at('iss_sample1', 'build'),
-  beforeEach: withEngine({ steps: { ...sampleData.steps, issues: approvedTaskStepsView }, issueDetails: { ...sampleData.issueDetails,
+  beforeEach: withEngine({ steps: { ...sampleData.steps, issues: readTaskStepsView }, issueDetails: { ...sampleData.issueDetails,
     iss_sample1: { ...issueDetails.iss_sample1, briefApprovedBy: 'Sam (sample)', briefApprovedAt: '2026-10-28T10:00:00Z', project: { ...issueDetails.iss_sample1.project!, status: 'drafting' } } } }),
   play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('button', { name: 'Build it' })).toBeInTheDocument() },
 }

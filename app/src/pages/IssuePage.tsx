@@ -140,6 +140,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   const row = rows.find((r) => r.key === here)
   const next = rows.find((r) => !r.waitingOn && r.state.status !== 'done' && r.key !== 'idea')
   const wf = v.resolved.workflow
+  const reading = rows.filter((r) => step(r.key).place === 'check' && r.state.status !== 'done') // after a prototype the plan is read before it is built
   return (
     <div className={`task-layout with-agent ${agent.open ? '' : 'agent-folded'} ${navOpen ? '' : 'nav-folded'}`}>
       <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} rows={rows} saves={navSaves} onSave={saveHere} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: live.length, waitingOn: buildWaits }} />
@@ -176,9 +177,13 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
           : <>
               {live.length > 0 && i.project && ['drafting', 'proposed', 'approved'].includes(i.project.status) && (
                 <section className="panel" data-component="RunIt">
-                  <h2>Ready to build</h2>
-                  <p style={{ margin: '0 0 10px' }}>Planned in {live.length} sub-task{live.length === 1 ? '' : 's'} and not started. A task approved from now on starts by itself; this one was planned before that.</p>
-                  <button className="btn" disabled={busy} onClick={() => act(() => engine.buildTask(i.id))}>Build it</button>
+                  <h2>{reading.length ? 'Being read before it is built' : 'Ready to build'}</h2>
+                  {reading.length > 0
+                    ? <p style={{ margin: 0 }}>Planned in {live.length} sub-task{live.length === 1 ? '' : 's'}, and being read before it is built. Still to come, by themselves: {reading.map((r, n) => <span key={r.key}>{n ? ', ' : ''}<Link to={`${base}/${r.key}`}>{label(r.key, 'task')}</Link></span>)}. Then the build starts.</p>
+                    : <>
+                        <p style={{ margin: '0 0 10px' }}>Planned in {live.length} sub-task{live.length === 1 ? '' : 's'} and not started. A task approved from now on starts by itself; this one was planned before that.</p>
+                        <button className="btn" disabled={busy} onClick={() => act(() => engine.buildTask(i.id))}>Build it</button>
+                      </>}
                 </section>
               )}
               <SubTasks i={i} plan={!live.length && i.state === 'todo' ? <button className="btn" disabled={busy} onClick={() => act(() => engine.planIssue(i.id))}>Plan it</button> : null} />

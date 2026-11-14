@@ -284,10 +284,12 @@ export interface FocusLine { text: string; refs: string[] }
 export interface FocusBody { headline: string; people: { who: string; doing: FocusLine[] }[]; goals: { near: FocusLine[]; mid: FocusLine[]; long: FocusLine[] }; stated?: boolean; links: Record<string, FocusRef> }
 export interface SummaryState { focus: { id: number; body: FocusBody; createdAt: string; trigger: 'person' | 'schedule'; costUsd: string | null } | null; writing: boolean; stale: boolean }
 export interface Hold { until: string; reason: string; level: number }
-/** A task past its plan, for Build's page: ready (planned, not started), building, stopped (asking, failed, held or paused) or landed. */
+/** A task past its plan, for Build's page: ready (planned, not started), checking (being read before it is built), building, stopped (asking, failed, held or paused) or landed. */
 export interface BuildTask {
   id: string; identifier: string; title: string; projectId: string; projectName: string | null; projectStatus: string
-  phase: 'ready' | 'building' | 'stopped' | 'landed'; done: number; total: number
+  phase: 'ready' | 'checking' | 'building' | 'stopped' | 'landed'; done: number; total: number
+  /** Planned after a prototype and still being read before the build: the steps left; and, when the last one stopped for the person, its question and the conversation to answer it in. */
+  checks?: { left: string[]; needsYou: string | null; sessionId: string | null }
   live: { id: string; identifier: string; title: string; status: string; step: string | null }[]
   held: { id: string; identifier: string; title: string; reason: string }[]
   failed: { id: string; identifier: string; title: string; error: string | null }[]

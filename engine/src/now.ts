@@ -2,9 +2,9 @@
  * The front door: what is running, what needs a person, what just happened. Nothing here has state of its own;
  * it is all read from the project, issue, build, question, pr, run, step and event tables, so it is always true.
  */
-import { and, asc, desc, eq, inArray, isNull, ne, notInArray } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, build, event, fileClaim, issue, outsidePr, project, pr, question, run, step } from './db/schema.js'
+import { app, build, event, fileClaim, issue, outsidePr, project, pr, question, run, session, step, stepWork } from './db/schema.js'
 import { identifier } from './issues.js'
 
 const LIVE = ['running', 'merging', 'testing', 'awaiting_answer']
@@ -24,10 +24,12 @@ export type Attention =
   | { kind: 'review'; appName: string; prNumber: number; title: string; author: string | null; url: string | null }
   | ({ kind: 'overlap'; prNumber: number; title: string; author: string | null; url: string | null; files: string[] } & Where)
 
-/** A task past its plan, for Build's page: ready (planned, not started), building, stopped (asking, failed, held or paused) or landed. */
+/** A task past its plan, for Build's page: ready (planned, not started), checking (planned after a prototype, being read before it is built), building, stopped (asking, failed, held or paused) or landed. */
 export interface BuildTask {
   id: string; identifier: string; title: string; projectId: string; projectName: string | null; projectStatus: string
-  phase: 'ready' | 'building' | 'stopped' | 'landed'; done: number; total: number
+  phase: 'ready' | 'checking' | 'building' | 'stopped' | 'landed'; done: number; total: number; appId: string
+  /** Planned after a prototype and still being read before the build: the steps left; and, when the last one stopped for the person, its question and the conversation to answer it in. */
+  checks?: { left: string[]; needsYou: string | null; sessionId: string | null }
   live: { id: string; identifier: string; title: string; status: string; step: string | null }[]
   held: { id: string; identifier: string; title: string; reason: string }[]
   failed: { id: string; identifier: string; title: string; error: string | null }[]
@@ -91,13 +93,30 @@ export async function now(appId?: string) {
       : ['drafting', 'proposed', 'approved'].includes(p.status) ? 'ready'
       : asked.length || failed.length || held.length || p.status !== 'running' ? 'stopped' : 'building'
     return {
-      id: t.id, identifier: name(t), title: t.title, projectId: p.id, projectName: p.solo ? null : p.name, projectStatus: p.status, phase, done, total: mine.length,
+      id: t.id, appId: t.appId, identifier: name(t), title: t.title, projectId: p.id, projectName: p.solo ? null : p.name, projectStatus: p.status, phase, done, total: mine.length,
       live: mine.filter((x) => LIVE.includes(status(x.id))).map((x) => ({ id: x.id, identifier: name(x), title: x.title, status: status(x.id), step: currentStep(x.id) })),
       held, failed,
       questions: asked.map((q) => ({ id: q.id, text: q.text, cost: q.cost, reason: q.reason, options: (q.options ?? []) as BuildTask['questions'][number]['options'] })),
       pr: thePr ? { number: thePr.number, url: thePr.url, status: thePr.status } : null,
     }
   }).filter((x): x is BuildTask => x !== null))
+  // After a prototype a planned task is read before it is built (the blast radius, the audit, the final ADR and
+  // plan). Until those are in it is not ready: it is being checked, or it is stopped because the last step has a
+  // question for the person ("NEEDS YOU:", checks.ts).
+  {
+    const { stepsOf } = await import('./work.js')
+    const { checksOwed, step: stepDef } = await import('./steps.js')
+    for (const t of tasks.filter((x) => x.phase === 'ready')) {
+      const v = await stepsOf({ issueId: t.id })
+      const left = checksOwed(v.states, v.resolved.workflow)
+      if (!left.length) continue
+      const [held] = await db.select().from(stepWork).where(and(eq(stepWork.issueId, t.id), eq(stepWork.key, 'final'), eq(stepWork.status, 'started')))
+      const asks = held?.summary?.trim().match(/^NEEDS YOU:?\s*([\s\S]*)/i)?.[1]?.trim() ?? null
+      const [talk] = asks ? await db.select({ id: session.id }).from(session).where(and(eq(session.appId, t.appId), eq(session.status, 'open'), sql`${session.subjectRef}->>'checkOf' = ${t.id}`, sql`${session.subjectRef}->>'check' = 'final'`)).orderBy(desc(session.createdAt)).limit(1) : []
+      t.checks = { left: left.map((k) => stepDef(k).label), needsYou: asks, sessionId: talk?.id ?? null }
+      t.phase = asks ? 'stopped' : 'checking'
+    }
+  }
 
   const needsYou: Attention[] = []
   for (const p of projects) {

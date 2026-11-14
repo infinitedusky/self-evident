@@ -11,6 +11,12 @@ describe('pickTasksToStart', () => {
     expect(pick.held).toEqual([{ id: 'c', reason: 'at the session cap' }])
   })
 
+  it('never starts a task that is held, whatever else is free, and says why', () => {
+    const pick = pickTasksToStart([t('a', { hold: 'its plan is read before it is built' }), t('b')], 5)
+    expect(pick.start).toEqual(['b'])
+    expect(pick.held).toEqual([{ id: 'a', reason: 'its plan is read before it is built' }])
+  })
+
   it('holds a task until its dependency is done, and says so', () => {
     const tasks = [t('a', { status: 'running' }), t('b', { dependsOn: ['a'] })]
     expect(pickTasksToStart(tasks, 4)).toEqual({ start: [], held: [{ id: 'b', reason: 'waiting on a' }] })
