@@ -588,6 +588,12 @@ Details and sources in `research/`.
   carries on once it is answered. **Open:** which ratings stop (Claude's reading: as for actions, up to the
   person's threshold it is decided and recorded, above it it stops); where the alert goes outside the app; a pull
   request per task or per project; how a task that needs an earlier task's work gets it.
+- **Requirements are the app's, not the workflow's** (Sandy, 2026-11-14; LOG.md, "Requirements: what every plan
+  must cover"). A workflow is the steps a person chooses on the way to an approved prototype. What every plan must
+  cover (telemetry, tests, a test plan, docs, and what else the app asks) is a list on the app that a project can
+  switch for its own tasks; the planner answers each one and the pull request reports it. What happens after the
+  prototype (analysis, ADR, plan, audit, build) is fixed and is not a choice in a workflow: that last part is
+  decided and **not built yet**; those steps are still switches in a workflow.
 - **A task starts with a hand-over** (Sandy, 2026-11-14: "I'm finding myself copying questions from the task agent
   into the global agent"). A task made by an agent remembers the conversation that made it, and its page names that
   conversation (there can be several about the app). When the task's own agent starts, a copy of that conversation
