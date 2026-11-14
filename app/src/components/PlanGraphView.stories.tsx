@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
+import { expect, within } from 'storybook/test'
 import { PlanGraphView } from './PlanGraphView'
 import type { GraphSubIssue } from '../engine'
 
@@ -33,6 +34,14 @@ export const WithAFailure: Story = { args: { subIssues: [
   ph(5, 'README: settings are validated', 'queued', { heldReason: 'blocked: HG-2 failed' }),
 ] } }
 export const NotStarted: Story = { args: { subIssues: midRun.map((x) => ({ ...x, status: 'queued' as const, attempt: 0, branch: null, heldReason: null, lastRun: null, steps: undefined })) } }
+/** An unanswered question stands over the sub-tasks of the task that asked it: its own node, with a "?" (made up). */
+export const WithAQuestion: Story = {
+  args: { subIssues: midRun, questions: [{ id: 'q_sample1', text: 'The saved address can be shown before or after the card form. Which? (sample)', cost: 'expensive', subIssues: [midRun[1].id, midRun[2].id] }] },
+  play: async ({ canvasElement }) => {
+    const node = await within(canvasElement).findByTitle(/The saved address can be shown before or after the card form/)
+    await expect(node).toHaveAttribute('href', '/build') // it is answered on Build
+  },
+}
 export const TakingTurns: Story = { args: {
   subIssues: midRun.slice(0, 3).map((x) => ({ ...x, status: x.number === 1 ? 'running' as const : 'queued' as const, lastRun: x.number === 1 ? run('working', '0.05') : null, steps: undefined,
     files: x.number === 2 ? ['.github/workflows/ci.yml'] : ['poc/hg/db.py'], heldReason: x.number === 3 ? 'waiting on HG-1 (poc/hg/db.py)' : null })),

@@ -20,11 +20,12 @@ import { MergeGuide } from '../components/MergeGuide'
 import { mark, TaskNav } from '../components/TaskNav'
 import { WorkflowChoice } from '../components/WorkflowChoice'
 import { Handover } from '../components/Handover'
+import { QuestionAsk } from '../components/QuestionAsk'
 import { PlanCovers } from '../components/Requirements'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
 import { canSkip, finished, label, ready, settled, skipped, step, type Row, type StepKey } from '@self-evident/engine/steps'
-import { STATUS_TONE } from '../components/PlanGraphView'
-import { openEvents, type Events, API, engine, useWorkflows, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
+import { asked, PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
+import { openEvents, type Events, API, engine, useWorkflows, EVENT_TYPES, STATE_LABEL, type Graph, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
 import { Md } from '../components/Md'
 
 /** Where a task's workflow comes from, after its name. */
@@ -105,7 +106,7 @@ export function IssuePage() {
           {code && <Steps i={i} />}
           <SubTasks i={i} />
           <Comments i={i} />
-          <Planner i={i} />
+          <Planner i={i} busy={busy} act={act} />
         </>
       )}
     </>
@@ -161,7 +162,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
               </p>
             </section>
             <Comments i={i} />
-            <Planner i={i} />
+            <Planner i={i} busy={busy} act={act} />
           </>
         )}
         {row && (
@@ -181,7 +182,8 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
                 </section>
               )}
               <SubTasks i={i} plan={!live.length && i.state === 'todo' ? <button className="btn" disabled={busy} onClick={() => act(() => engine.planIssue(i.id))}>Plan it</button> : null} />
-              <Planner i={i} />
+              <Planner i={i} busy={busy} act={act} />
+              {live.length > 0 && <TaskGraph i={i} />}
               {live.length > 0 && <PlanCovers list={i.requirements ?? []} />}
               {live.length > 0 && <MergeGuide issueId={i.id} stamp={i.updatedAt} />}
             </>)}
@@ -341,14 +343,37 @@ function Comments({ i }: { i: IssueDetail }) {
 }
 
 /** What the planner asked and decided about it. */
-function Planner({ i }: { i: IssueDetail }) {
+/**
+ * The task's own graph, in its Build section (Sandy, 2026-11-14: "the task should also have a graph when you're in
+ * the build area"): its sub-tasks, what each waits on, the files they share and any unanswered question, the same
+ * drawing as the project's graph but only this task's part of it.
+ */
+function TaskGraph({ i }: { i: IssueDetail }) {
+  const [g, setG] = useState<Graph | null>(null)
+  const stamp = i.subIssues.map((s) => `${s.id}:${s.build?.status ?? ''}:${s.state}`).join('|') // read again as its sub-tasks move
+  useEffect(() => { if (i.project) engine.graph(i.project.id).then(setG).catch(() => {}) }, [i.project?.id, stamp, i.questions.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const subs = g?.subIssues.filter((x) => x.parentId === i.id) ?? []
+  if (!g || !subs.length) return null
+  const mine = new Set(subs.map((x) => x.id))
+  return (
+    <section className="panel" data-component="TaskGraph">
+      <h2>Graph</h2>
+      <PlanGraphView subIssues={subs} files={(g.files ?? []).map((f) => ({ ...f, subIssues: f.subIssues.filter((id) => mine.has(id)) }))} questions={asked(g.questions ?? [], subs)} storageKey={`task:${i.id}`} />
+    </section>
+  )
+}
+
+function Planner({ i, busy, act }: { i: IssueDetail; busy?: boolean; act?: (fn: () => Promise<unknown>) => Promise<void> }) {
   if (!i.questions.length && !i.decisions.length && !(i.project?.solo && i.subIssues.length)) return null // a task planned on its own always has the way to its plan and build
   return (
     <section className="panel">
       <h2>The planner</h2>
-      {i.questions.filter((q) => q.status === 'open').map((q) => <p key={q.id} style={{ margin: '0 0 8px' }}><Badge tone="warn">asks</Badge> <Md text={q.text} inline /></p>)}
+      {/* A question is answered where it is read. */}
+      {i.questions.filter((q) => q.status === 'open').map((q) => act
+        ? <QuestionAsk key={q.id} q={q} busy={busy} onAnswer={(answer) => act(() => engine.answer(q.id, answer))} />
+        : <p key={q.id} style={{ margin: '0 0 8px' }}><Badge tone="warn">asks</Badge> <Md text={q.text} inline /></p>)}
       {i.decisions.map((d) => <p key={d.id} className="muted" style={{ margin: '0 0 6px' }}>Decided: <Md text={d.question} inline />: <Md text={d.options.find((o) => o.key === d.chosen)?.text} inline />{d.provisional ? ' (provisional)' : ''}</p>)}
-      {i.project && <Link to={`/projects/${i.project.id}`}>{i.project.solo ? 'Its plan and build: answer and run it there →' : 'Answer on the project →'}</Link>}
+      {i.project && <p style={{ margin: '8px 0 0' }}><Link to={`/projects/${i.project.id}`}>{i.project.solo ? 'Its plan and build →' : 'The project →'}</Link></p>}
     </section>
   )
 }

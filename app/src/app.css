@@ -91,6 +91,12 @@ a.badge { text-decoration: none; }
 .file-node.held { border-style: solid; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash); }
 .file-node > .mono { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .file-node-who { font-size: 11px; white-space: nowrap; }
+/* An unanswered question in the graph: its own shape (a note with a "?"), tinted by what answering it costs. */
+.question-node { width: 190px; display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--warn); border-radius: 10px 10px 10px 2px; padding: 6px 10px; font-size: 12px; color: var(--ink); text-decoration: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 14%, transparent); }
+.question-node.expensive { border-color: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 14%, transparent); }
+.question-node-mark { flex: none; width: 20px; height: 20px; border-radius: 999px; background: var(--warn); color: var(--surface); font-weight: 700; display: grid; place-items: center; }
+.question-node.expensive .question-node-mark { background: var(--bad); }
+.question-node-text { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.25; }
 .graph-tidy { font: 12px var(--sans); color: var(--ink-soft); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
 .graph-tidy:hover { color: var(--ink); }
 .react-flow__node { cursor: grab; } .react-flow__node.dragging { cursor: grabbing; }

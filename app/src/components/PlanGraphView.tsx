@@ -63,7 +63,35 @@ function FileNode({ data }: NodeProps<Node<FileNodeData>>) {
   )
 }
 
-const nodeTypes = { phase: PhaseNode, file: FileNode }
+/** An unanswered question, and the sub-issues of the task that asked it. */
+export interface GraphQuestion { id: string; text: string; cost: string | null; subIssues: string[] }
+type QuestionNodeData = { question: GraphQuestion }
+
+/**
+ * An open question: a node of its own, like a shared file, pointing at the work it stands over (Sandy, 2026-11-14:
+ * "could we put … an unanswered question into the graph … a different type of icon"). It leads to Build, where it
+ * is answered.
+ */
+function QuestionNode({ data }: NodeProps<Node<QuestionNodeData>>) {
+  const { question: q } = data
+  return (
+    <a className={`question-node ${q.cost ?? ''}`} href="/build" title={`${q.text}${q.cost ? ` (${q.cost})` : ''}. Answer it on Build.`} data-component="QuestionNode">
+      <span className="question-node-mark" aria-hidden="true">?</span>
+      <span className="question-node-text">{q.text}</span>
+      <Handle type="source" position={Position.Right} />
+    </a>
+  )
+}
+
+/** The open questions, each with the sub-issues it stands over: its own when a sub-issue asked, else every sub-issue of the task that did. */
+export function asked(questions: { id: string; issueId: string | null; text: string; cost: string | null; status: string }[], subIssues: { id: string; parentId?: string | null }[]): GraphQuestion[] {
+  return questions.filter((q) => q.status === 'open' && q.issueId).map((q) => ({
+    id: q.id, text: q.text, cost: q.cost,
+    subIssues: subIssues.filter((x) => x.id === q.issueId || x.parentId === q.issueId).map((x) => x.id),
+  }))
+}
+
+const nodeTypes = { phase: PhaseNode, file: FileNode, question: QuestionNode }
 
 /** An arrow that says why on hover: the dependency or issue order, and any files the two sub-issues share. */
 function WhyEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, style, data }: EdgeProps) {
@@ -89,11 +117,13 @@ const edgeTypes = { why: WhyEdge }
 const W = 240, H = 132 // tall enough for a two-line title, a held reason and the run line
 const FW = 170, FH = 40
 const fileId = (f: GraphFile) => `file:${f.path}`
+const questionId = (q: GraphQuestion) => `question:${q.id}`
+const QW = 190, QH = 44
 
 /** Everything a sub-issue waits on: its explicit dependencies and issue order. Both are edges, so it sits to their right. */
 const waitsOn = (p: GraphSubIssue) => [...p.dependsOn, ...(p.orderedAfter ?? []).filter((d) => !p.dependsOn.includes(d))]
 
-function layout(phases: GraphSubIssue[], files: GraphFile[]): Map<string, { x: number; y: number }> {
+function layout(phases: GraphSubIssue[], files: GraphFile[], questions: GraphQuestion[] = []): Map<string, { x: number; y: number }> {
   const g = new dagre.graphlib.Graph()
   // A sub-issue sits as far left as its prerequisites allow: column = longest chain of things it waits on. Dagre's
   // longest-path ranker counts from the sinks, so feed it the edges reversed and lay out right-to-left; the
@@ -110,9 +140,14 @@ function layout(phases: GraphSubIssue[], files: GraphFile[]): Map<string, { x: n
       else g.setEdge(id, fileId(f)) // and before the ones waiting on it
     }
   }
+  // An open question sits before the work it stands over.
+  for (const q of questions) {
+    g.setNode(questionId(q), { width: QW, height: QH })
+    for (const id of q.subIssues) if (phases.some((x) => x.id === id)) g.setEdge(id, questionId(q))
+  }
   dagre.layout(g)
   const at = (id: string, w: number, h: number) => { const n = g.node(id); return { x: n.x - w / 2, y: n.y - h / 2 } }
-  return new Map([...phases.map((p) => [p.id, at(p.id, W, H)] as const), ...files.map((f) => [fileId(f), at(fileId(f), FW, FH)] as const)])
+  return new Map([...phases.map((p) => [p.id, at(p.id, W, H)] as const), ...files.map((f) => [fileId(f), at(fileId(f), FW, FH)] as const), ...questions.map((q) => [questionId(q), at(questionId(q), QW, QH)] as const)])
 }
 
 type Pos = { x: number; y: number }
@@ -123,6 +158,7 @@ const saveMoved = (key: string | undefined, moved: Record<string, Pos>) => { try
 export interface PlanGraphViewProps {
   subIssues: GraphSubIssue[]
   files?: GraphFile[] // shared files, drawn as nodes between the sub-issues that claim them
+  questions?: GraphQuestion[] // unanswered questions, drawn as nodes before the sub-issues of the task that asked
   storageKey?: string // the project or app: dragged positions are remembered per key, in this browser
   onSelect?: (p: GraphSubIssue) => void
   selectedId?: string
@@ -131,8 +167,9 @@ export interface PlanGraphViewProps {
 }
 
 const NO_FILES: GraphFile[] = [] // one array, not a new one each render: the layout effect keys on it
+const NO_QUESTIONS: GraphQuestion[] = []
 
-export function PlanGraphView({ subIssues: phases, files = NO_FILES, onSelect, selectedId, labels, tall, storageKey }: PlanGraphViewProps) {
+export function PlanGraphView({ subIssues: phases, files = NO_FILES, questions = NO_QUESTIONS, onSelect, selectedId, labels, tall, storageKey }: PlanGraphViewProps) {
   // A shared file is drawn only where it is what keeps sub-issues from building side by side: between claimants that no
   // path of arrows already orders. Where an arrow already connects them, the file is part of that arrow's why.
   const ancestors = useMemo(() => {
@@ -154,22 +191,26 @@ export function PlanGraphView({ subIssues: phases, files = NO_FILES, onSelect, s
     return { ...f, subIssues: free, heldBy: f.heldBy && free.includes(f.heldBy) ? f.heldBy : null }
   }).filter((f) => f.subIssues.length > 1), [files, phases, ancestors]) // eslint-disable-line react-hooks/exhaustive-deps
   const filesBetween = (a: string, b: string) => files.filter((f) => f.subIssues.includes(a) && f.subIssues.includes(b)).map((f) => f.path.split('/').pop()!)
-  const topology = [...phases.map((p) => `${p.id}:${waitsOn(p).join(',')}`), ...shared.map((f) => `${f.path}:${f.heldBy ?? ''}:${f.subIssues.join(',')}`)].join('|')
-  const positions = useMemo(() => layout(phases, shared), [topology]) // eslint-disable-line react-hooks/exhaustive-deps
+  const asked = useMemo(() => questions.map((q) => ({ ...q, subIssues: q.subIssues.filter((id) => phases.some((x) => x.id === id)) })).filter((q) => q.subIssues.length > 0), [questions, phases])
+  const topology = [...phases.map((p) => `${p.id}:${waitsOn(p).join(',')}`), ...shared.map((f) => `${f.path}:${f.heldBy ?? ''}:${f.subIssues.join(',')}`), ...asked.map((q) => `q:${q.id}:${q.subIssues.join(',')}`)].join('|')
+  const positions = useMemo(() => layout(phases, shared, asked), [topology]) // eslint-disable-line react-hooks/exhaustive-deps
   // Nodes can be dragged; a dragged node keeps its place through live updates and re-layouts until "Tidy up".
   // React Flow owns the node state (so a drag never waits on a React round-trip, which showed as flicker); every
   // live update is merged into it, keeping the place of anything dragged or mid-drag.
   const [moved, setMoved] = useState<Record<string, Pos>>(() => loadMoved(storageKey))
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node<PhaseNodeData | FileNodeData>>([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<PhaseNodeData | FileNodeData | QuestionNodeData>>([])
   const tidy = () => { setMoved({}); saveMoved(storageKey, {}) }
-  const built = useMemo((): Node<PhaseNodeData | FileNodeData>[] => [
+  const built = useMemo((): Node<PhaseNodeData | FileNodeData | QuestionNodeData>[] => [
     ...phases.map((p): Node<PhaseNodeData> => ({
       id: p.id, type: 'phase', position: positions.get(p.id) ?? { x: 0, y: 0 }, data: { phase: p, label: labels?.[p.id] }, selected: p.id === selectedId,
     })),
     ...shared.map((f): Node<FileNodeData> => ({
       id: fileId(f), type: 'file', position: positions.get(fileId(f)) ?? { x: 0, y: 0 }, data: { file: f, holder: phases.find((x) => x.id === f.heldBy) }, selectable: false,
     })),
-  ], [phases, shared, positions, labels, selectedId])
+    ...asked.map((q): Node<QuestionNodeData> => ({
+      id: questionId(q), type: 'question', position: positions.get(questionId(q)) ?? { x: 0, y: 0 }, data: { question: q }, selectable: false,
+    })),
+  ], [phases, shared, asked, positions, labels, selectedId])
   useEffect(() => {
     setNodes((prev) => {
       const was = new Map(prev.map((n) => [n.id, n]))
@@ -190,6 +231,8 @@ export function PlanGraphView({ subIssues: phases, files = NO_FILES, onSelect, s
       data: { why: whyEdge(phases.find((x) => x.id === d)!, p, filesBetween(d, p.id)) },
       markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: 'var(--ink-faint)' },
     }))),
+    // A question points at the work it stands over.
+    ...asked.flatMap((q) => q.subIssues.map((id): Edge => ({ id: `${questionId(q)}->${id}`, source: questionId(q), target: id, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: 'var(--warn)', strokeDasharray: '4 3' } }))),
     // The holder points at the file; the file points at everyone waiting on it. Nobody holding it: claimants hang off it, undecided.
     ...shared.flatMap((f) => f.subIssues.filter((id) => phases.some((x) => x.id === id)).map((id): Edge => id === f.heldBy
       ? { id: `${id}->${fileId(f)}`, source: id, target: fileId(f), animated: true, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: 'var(--accent)' } }

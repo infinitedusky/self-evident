@@ -477,5 +477,6 @@ export async function appGraph(appId: string) {
     app: { id: a.id, name: a.name, key: a.key, defaultBranch: a.defaultBranch },
     projects: graphs.map((g) => ({ ...g.project, pr: g.pr })),
     issues: graphs.flatMap((g) => g.issues), subIssues, conflicts: fileConflicts(subIssues), files: sharedFiles(subIssues),
+    questions: graphs.flatMap((g) => g.questions.filter((q) => q.status === 'open')), // unanswered: drawn in the graph before the work they stand over
   }
 }

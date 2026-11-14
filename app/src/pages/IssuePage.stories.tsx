@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, spyOn, userEvent, within } from 'storybook/test'
+import { expect, spyOn, userEvent, within, waitFor } from 'storybook/test'
 import { IssuePage } from './IssuePage'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
 import { acceptance, approvedTaskStepsView, issueDetails, waitingTaskStepsView } from '../stories/sample'
@@ -40,7 +40,12 @@ export const LockedStep: Story = { parameters: at('iss_sample20', 'risk'), befor
 /** Every required step done and the brief approved: the build opens, with a Plan button. */
 export const BuildReady: Story = { parameters: at('iss_sample20', 'build'), beforeEach: approved }
 /** A task planned: its sub-tasks, and what the planner decided. */
-export const Planned: Story = { parameters: at('iss_sample1', 'build'), beforeEach: approved }
+export const Planned: Story = {
+  parameters: at('iss_sample1', 'build'), beforeEach: approved,
+  play: async ({ canvasElement }) => { // its own graph is in its Build section
+    await waitFor(() => expect(canvasElement.querySelector('[data-component="TaskGraph"] [data-component="PlanGraphView"]')).not.toBeNull())
+  },
+}
 /** Planned, and its project has not been run: "Ready to build" with Build it. */
 export const PlannedNotRun: Story = {
   parameters: at('iss_sample1', 'build'),
