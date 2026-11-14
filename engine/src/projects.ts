@@ -7,7 +7,7 @@
  */
 import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm'
 import { db, type Tx } from './db/client.js'
-import { app, build, BUILD_STATE, decision, event, fileClaim, idea, issue, issueRelation, project, pr, question, run, step, type BuildStatus } from './db/schema.js'
+import { app, build, BUILD_STATE, decision, event, fileClaim, idea, issue, issueRelation, project, pr, question, run, session, step, type BuildStatus } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { getIssue, identifier, insertIssues, listComments, nextSort, PlanError, rollUp, setState, type Issue, type Source } from './issues.js'
@@ -427,6 +427,14 @@ export async function listCodeIssues(appId: string) {
 }
 
 /** One issue in full: its sub-issues as a list (with their builds or checklist state), relations, and runs. */
+/** The conversation that created a task (an agent's create_task records it), by its name: there can be several about the app. */
+export async function madeBy(i: { sourceRef: unknown }) {
+  const sid = (i.sourceRef as { sessionId?: string } | null)?.sessionId
+  if (!sid) return null
+  const [s] = await db.select().from(session).where(eq(session.id, sid))
+  return s ? { sessionId: s.id, title: s.title ?? s.subject ?? 'A conversation', open: s.status === 'open' } : null
+}
+
 export async function issueDetail(issueId: string) {
   const i = await getIssue(db, issueId)
   const [a] = await db.select().from(app).where(eq(app.id, i.appId))
@@ -443,6 +451,7 @@ export async function issueDetail(issueId: string) {
   const steps = last ? await db.select().from(step).where(and(eq(step.issueId, issueId), eq(step.runId, last.id))).orderBy(asc(step.position)) : []
   const comments = await listComments(db, issueId)
   return {
+    madeBy: await madeBy(i), // the conversation that created it, when one did
     ...i, identifier: identifier(a.key, i.number), project: p ? { id: p.id, name: p.name, status: p.status, solo: p.solo } : null, comments,
     runner: tktOn(a.setup) ? 'tkt' as const : null, // who builds it once the brief is approved: tkt, or Self Evident's own agents
     parent: parent ? { id: parent.id, identifier: identifier(a.key, parent.number), title: parent.title } : null,

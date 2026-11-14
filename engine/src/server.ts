@@ -20,6 +20,7 @@ import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
 import { appKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { advanceChecks } from './checks.js'
+import { writeHandover } from './handover.js'
 import { approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
 import { adoptTalk, answerPermission, closeTalk, closeTalks, endTalk, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, runLog, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, setupTalk, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
@@ -90,7 +91,7 @@ export function buildApp(bus: EventBus) {
       'GET /{ideas|issues|projects}/:id/steps': 'the workflow in force, each step\'s state, the order, what blocks completing', 'PUT /{ideas|issues|projects}/:id/steps/:key': '{status?, detail?, body?, refs?}', 'POST /issues/:id/steps/:key/approve': '{approve?} — a person approves a step of a task (research, sketches, mockups, the prototype), or takes it back',
       'POST /issues/:id/brief/approve': '{approve?} — a person approves the brief; a task completes only once it is', 'POST /ideas/:id/convert': '{as: task|project, title?, projectId?, why?}',
       'GET /workflows?app=': 'the app\'s workflows', 'POST /workflows': '{appId, name, steps: [{key, on, required}], ordered?}', 'PUT /workflows/:id': 'the same',
-      'GET /apps/:id/claude-sessions': 'the Claude Code sessions run on this app in a terminal or an editor, newest first', 'POST /talks/ask': '{appId, subjectRef?, text} — said to the task\'s own agent when subjectRef names a task (issueId), else to a new conversation brought to the front', 'GET /issues/:id/talk': 'the task\'s own agent: its one conversation, or null', 'POST /issues/:id/talk': 'the same, started if the task has none', 'GET /issues/:id/agents': 'the agents the task\'s conductor has out (a prototype\'s conversation): sessionId, what, title, busy', 'POST /{apps|projects|issues}/:id/workflow': '{workflowId | null} — attach one, or inherit again',
+      'GET /apps/:id/claude-sessions': 'the Claude Code sessions run on this app in a terminal or an editor, newest first', 'POST /talks/ask': '{appId, subjectRef?, text} — said to the task\'s own agent when subjectRef names a task (issueId), else to a new conversation brought to the front', 'GET /issues/:id/talk': 'the task\'s own agent: its one conversation, or null', 'POST /issues/:id/handover': '{again?} — what the conversation that made the task said about it, written from a copy of that conversation (once; again: true writes it anew); null when it was not made from one', 'POST /issues/:id/talk': 'the same, started if the task has none', 'GET /issues/:id/agents': 'the agents the task\'s conductor has out (a prototype\'s conversation): sessionId, what, title, busy', 'POST /{apps|projects|issues}/:id/workflow': '{workflowId | null} — attach one, or inherit again',
       'GET /projects/:id/backlog': 'what the project has to cover', 'POST /projects/:id/backlog': '{text, body?} | {items: [{text, body?}]} | {ideaId}',
       'POST /backlog/:id/take': '{title?, brief?} — becomes Todo at the end', 'POST /backlog/:id/duplicate': '{of, reason?}', 'POST /backlog/:id/drop': '{reason}', 'POST /backlog/:id/reopen': '', 'POST /backlog/:id/todo': '{title?, checklist?} — work outside the code',
       'GET /todos?app=': 'the app\'s to-dos with their checklists', 'POST /todos': '{appId, title, notes?, owner?, projectId?, checklist?: [text | {text, waitingOn?}]}',
@@ -437,6 +438,8 @@ export function buildApp(bus: EventBus) {
   api.get('/issues/:id/talk', async (c) => c.json(await taskTalk(c.req.param('id'))))
   api.get('/runs/:id/log', async (c) => c.json(await runLog(c.req.param('id')))) // what a run read, did and said: the planner's tab
   api.get('/issues/:id/agents', async (c) => c.json(await taskAgents(c.req.param('id')))) // the agents its conductor has out
+  // A task's hand-over from the conversation that made it: written if there is none, or again with {again: true}.
+  api.post('/issues/:id/handover', async (c) => { try { const { again } = await c.req.json<{ again?: boolean }>().catch(() => ({ again: false })); return c.json(await writeHandover(c.req.param('id'), { again })) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/talk', async (c) => { try { return c.json(await ensureTaskTalk(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   // An idea's own agent, as a task's: its one conversation, or null; POST starts it (and cuts its worktree) if it has none.
   api.get('/ideas/:id/talk', async (c) => c.json(await ideaTalk(c.req.param('id'))))
