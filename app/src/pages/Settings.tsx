@@ -4,6 +4,7 @@
  * All apps: plugins, the jobs their skills cover, the integrations (a list, then a page each). An app: its repo, agents, plugins,
  * landing, prototype, Storybook, integration values, and its workflow rules.
  */
+import { Requirements, type RequirementRow } from '../components/Requirements'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useMatch, useNavigate, useParams } from 'react-router'
 import { Badge } from '../components/Badge'
@@ -419,6 +420,9 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
     || repos.map((r) => r.key).join() !== was.map((r) => r.key).join() || (repos.length > 1 && homeOf(repos, home) !== was[0]?.key)
   const num = (v: string) => (v.trim() === '' ? undefined : Number(v))
   const set = (patch: Partial<AppSetup>) => setSetup({ ...setup, ...patch })
+  // Until the app has a list of its own, the engine's starting one is shown; editing it makes it the app's.
+  const [startingRequirements, setStartingRequirements] = useState<RequirementRow[] | null>(null)
+  useEffect(() => { engine.appRequirements(app.id).then(setStartingRequirements).catch(() => {}) }, [app.id])
   const save = async () => {
     setBusy(true); setError(null)
     try {
@@ -498,6 +502,9 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
     skills: <><StepSkills usable={info?.usable ?? null} value={setup.step_skills ?? {}} onChange={(next) => set({ step_skills: Object.keys(next).length ? next : undefined })} />
       <AppJobs jobs={info?.jobs ?? null} value={setup.skills_by_job ?? {}} onChange={(next) => set({ skills_by_job: Object.keys(next).length ? next : undefined })} /></>,
     landing: <>
+      <Group title="What every plan must cover" lead="Asked of every task's plan, whatever the task. The planner says how the plan meets each one, or why it does not apply, and the pull request reports it.">
+        <Requirements value={setup.requirements ?? startingRequirements ?? []} onChange={(next) => set({ requirements: next })} />
+      </Group>
       <Group title="Landing" lead="How finished work reaches the default branch.">
         <label style={{ gridColumn: '1 / -1' }}>Test command<input className="mono" value={setup.test_cmd ?? ''} onChange={(e) => set({ test_cmd: e.target.value })} placeholder="runs in the worktree on the merged commit; must exit 0 to land" /></label>
         <label style={{ gridColumn: '1 / -1' }}>Pull requests<select value={setup.pr_mode ?? 'issue'} onChange={(e) => set({ pr_mode: e.target.value as 'project' | 'issue' })}>
