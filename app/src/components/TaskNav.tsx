@@ -8,7 +8,7 @@
  */
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router'
-import { finished, label, ready, step, type On, type Row } from '@self-evident/engine/steps'
+import { canSkip, finished, label, ready, settled, skipped, step, type On, type Row } from '@self-evident/engine/steps'
 
 /** What a step waits on, in words. */
 export function after(r: Row, _rows: Row[], on: On) {
@@ -21,11 +21,13 @@ export function briefStands(rows: Row[], on: On) {
   if (!b || finished(b.state, on)) return null
   const owed = rows.filter((r) => r.key !== 'brief' && r.required && !finished(r.state, on))
   if (owed.length) return `waits on ${owed.map((r) => label(r.key, on)).join(', ')}`
+  const open = on === 'task' ? rows.filter((r) => canSkip(r) && !settled(r.state, on)) : [] // an optional step is done or skipped, never just left
+  if (open.length) return `do or skip ${open.map((r) => label(r.key, on)).join(', ')}`
   return b.state.status === 'done' && on === 'task' ? 'waiting for your approval' : b.state.status === 'none' ? 'not written yet' : 'a draft'
 }
 
 /** ✓ finished (approved, where a person approves it), ◐ started or ready for the person, ○ not started. */
-export const mark = (r: Row, on: On) => (finished(r.state, on) ? '✓' : r.state.status === 'none' ? '○' : '◐')
+export const mark = (r: Row, on: On) => (finished(r.state, on) ? '✓' : skipped(r.state) ? '–' : r.state.status === 'none' ? '○' : '◐') // – skipped by a person
 
 export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded, onToggle, saves, onSave }: {
   base: string; here: string; on?: On; rows: Row[]
@@ -59,7 +61,7 @@ export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded
       waitingOn
         ? <span key={key} className="link locked" title={`${name}: after ${waitingOn}`} aria-disabled="true">{glyph}</span>
         : <NavLink key={key} to={to} end className={() => `link ${here === key ? 'active' : ''} ${done ? 'done' : ''}`} title={`${name}: ${state}`} aria-label={name}>{glyph}</NavLink>
-    const said = (r: Row) => (finished(r.state, on) ? 'done' : ready(r.state, on) ? 'ready for you to approve' : r.state.status === 'none' ? 'not started' : 'started')
+    const said = (r: Row) => (finished(r.state, on) ? 'done' : skipped(r.state) ? 'skipped' : ready(r.state, on) ? 'ready for you to approve' : r.state.status === 'none' ? 'not started' : 'started')
     return (
       <nav className="task-nav folded" aria-label={`This ${on}`} data-component="TaskNav">
         {toggle}

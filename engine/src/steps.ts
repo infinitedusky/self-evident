@@ -116,7 +116,7 @@ export const removeCheck = (w: Workflow, key: StepKey): Workflow => ({ ...w, ste
 /** What a step on one thing has so far. */
 export interface StepState {
   key: StepKey
-  status: 'none' | 'started' | 'done'
+  status: 'none' | 'started' | 'done' | 'skipped' // skipped: a person said this optional step is not being done here
   detail?: string // "2 stories", "running", "draft"
   approved?: { by: string; at: string } // on a task: the brief, and each step a person approves (needsApproval)
 }
@@ -144,6 +144,14 @@ export interface Row { key: StepKey; required: boolean; position: number | null;
 export const needsApproval = (key: StepKey, on: On) => on === 'task' && key !== 'idea' && step(key).place !== 'check'
 /** Finished: done, and approved where a person approves it. */
 export const finished = (s: StepState, on: On) => s.status === 'done' && (!needsApproval(s.key, on) || !!s.approved)
+/**
+ * Skipped: an optional step a person has said they are not doing on this task (Sandy, 2026-11-14: "if you aren't going
+ * to use it, you have to mark it as being skipped"). A required step cannot be skipped, nor the idea or the brief.
+ */
+export const skipped = (s: StepState) => s.status === 'skipped'
+export const canSkip = (r: { key: StepKey; required: boolean }) => !r.required && r.key !== 'brief' && r.key !== 'idea'
+/** Settled: finished, or skipped. An optional step left untouched is neither. */
+export const settled = (s: StepState, on: On) => finished(s, on) || skipped(s)
 /** Done by the agent's word and waiting on the person. */
 export const ready = (s: StepState, on: On) => s.status === 'done' && needsApproval(s.key, on) && !s.approved
 
@@ -166,6 +174,14 @@ export function rows(on: On, states: StepState[], workflow: Workflow | null): Ro
 /** What a task's brief still waits on before it can be approved: the required steps that feed it and aren't finished. */
 export function owed(states: StepState[], workflow: Workflow | null): StepKey[] {
   return rows('task', states, workflow).filter((r) => r.key !== 'brief' && r.required && !finished(r.state, 'task')).map((r) => r.key)
+}
+
+/**
+ * The optional steps a task has neither finished nor skipped. The brief waits on these too: an optional step is
+ * done or it is skipped by a person, never just left. (Starting as an idea is a fact about the task, not work.)
+ */
+export function undecided(states: StepState[], workflow: Workflow | null): StepKey[] {
+  return rows('task', states, workflow).filter((r) => canSkip(r) && !settled(r.state, 'task')).map((r) => r.key)
 }
 
 /** What still stops a task being completed: its required steps that aren't finished, the brief always among them. */

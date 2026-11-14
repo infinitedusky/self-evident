@@ -3467,3 +3467,18 @@ to land" beyond the test command already in Settings › Landing; and the other 
 same breath, the workflow still being one flat list: the steps after the prototype (prototype analysis, draft ADR,
 blast radius, brief audit) are still switches in a workflow and should be fixed and out of it ("some of these
 things I don't think we want to be deciding anymore").
+
+## An optional step is done or skipped, never just left (Sandy, 2026-11-14: "if you aren't going to use it, you have to mark it as being skipped … you have to basically check it off as skipping it. If you skip the prototype, then the acceptance criteria doesn't have a prototype column")
+
+An optional step could be left untouched and the brief approved around it, so nothing said whether it was passed
+over on purpose. Now a step has a fourth state, **skipped** (`step_work.status`, migration 0027), set by a person
+on a task's optional step ("Skip this step" on the step's page; "Do it after all" takes it back). A required step
+cannot be skipped, nor the idea or the brief. The brief's approval waits on every optional step being finished or
+skipped ("still to do or skip: Research, Prototype"); the nav shows a skipped step with a dash and the brief's row
+says "do or skip …". An agent cannot skip a step: its tool has no such state.
+
+When the task has no prototype (the step is skipped, or its workflow has none), the acceptance criteria lose the
+prototype column and everything that speaks of one: one mark each, for the final build.
+
+Not done: the prototype's checks (analysis, draft ADR) skipping themselves when the prototype is skipped: they are
+each skipped by hand if they are optional, and if a workflow requires them the prototype has to be done.

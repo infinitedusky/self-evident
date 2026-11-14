@@ -190,6 +190,13 @@
       "when": 1794694648324,
       "tag": "0026_requirements",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794695269860,
+      "tag": "0027_step_skipped",
+      "breakpoints": true
     }
   ]
 }

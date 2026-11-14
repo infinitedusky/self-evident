@@ -15,7 +15,7 @@ const NEXT = { open: true, met: false, not: null } as const // a click moves the
 const MARK = { shown: ['✓', 'The prototype showed it'], not: ['✗', 'The prototype did not show it'], open: ['○', 'Not tried in a prototype'], build: ['–', 'Skipped by the prototype: for the final build only'] } as const
 const stateOf = (c: Criterion) => (c.buildOnly ? 'build' : c.shown === true ? 'shown' : c.shown === false ? 'not' : 'open')
 
-export function Acceptance({ issueId, items, approved, onChanged }: { issueId: string; items: Criterion[]; /** The brief is approved: a change here asks for approval again. */ approved?: boolean; onChanged?: () => void }) {
+export function Acceptance({ issueId, items, approved, prototype = true, onChanged }: { issueId: string; items: Criterion[]; /** The brief is approved: a change here asks for approval again. */ approved?: boolean; /** false: the task has no prototype (the step is skipped or not in its workflow), so there is no prototype column. */ prototype?: boolean; onChanged?: () => void }) {
   const [list, setList] = useState(items)
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState({ text: '', check: '', buildOnly: false, why: '' })
@@ -36,34 +36,34 @@ export function Acceptance({ issueId, items, approved, onChanged }: { issueId: s
   return (
     <section className="acceptance" data-component="Acceptance" aria-label="Acceptance criteria">
       <h3>Acceptance criteria <span className="faint">{list.length ? `${list.length}` : 'none yet'}</span>
-        {notShown > 0 && <span className="acceptance-warn">{notShown} not shown in the prototype</span>}
-        {list.length > 0 && notShown === 0 && untried > 0 && <span className="faint">{untried} not tried</span>}
-        {left > 0 && <span className="faint">{left} for the final build only</span>}
+        {prototype && notShown > 0 && <span className="acceptance-warn">{notShown} not shown in the prototype</span>}
+        {prototype && list.length > 0 && notShown === 0 && untried > 0 && <span className="faint">{untried} not tried</span>}
+        {prototype && left > 0 && <span className="faint">{left} for the final build only</span>}
       </h3>
-      <p className="faint acceptance-lead">How we will know it is done. The agent builds these as the task goes and the prototype is made; you approve them with the brief. Each has two marks: what the prototype showed, and whether the final build meets it.{approved ? ' The brief is approved: changing one asks for your approval again.' : ''}</p>
+      <p className="faint acceptance-lead">How we will know it is done. {prototype ? 'The agent builds these as the task goes and the prototype is made; you approve them with the brief. Each has two marks: what the prototype showed, and whether the final build meets it.' : 'The agent builds these as the task goes; you approve them with the brief. This task has no prototype, so each has one mark: whether the final build meets it.'}{approved ? ' The brief is approved: changing one asks for your approval again.' : ''}</p>
       {list.length === 0 && <p className="muted">No acceptance criteria yet. Without them, approving the brief approves no way of knowing it is done.</p>}
-      {list.length > 0 && <div className="acceptance-heads" aria-hidden="true"><span title={`The prototype showed ${proto.filter((c) => c.shown).length} of ${proto.length}`}>Prototype <span className="faint">{proto.filter((c) => c.shown).length}/{proto.length}</span></span><span title={`The final build meets ${met} of ${list.length}`}>Build <span className={unmet ? 'acceptance-warn' : 'faint'}>{met}/{list.length}</span></span></div>}
+      {list.length > 0 && <div className={`acceptance-heads ${prototype ? '' : 'no-prototype'}`} aria-hidden="true">{prototype && <span title={`The prototype showed ${proto.filter((c) => c.shown).length} of ${proto.length}`}>Prototype <span className="faint">{proto.filter((c) => c.shown).length}/{proto.length}</span></span>}<span title={`The final build meets ${met} of ${list.length}`}>Build <span className={unmet ? 'acceptance-warn' : 'faint'}>{met}/{list.length}</span></span></div>}
       <ul className="acceptance-list">
         {list.map((c) => {
           const s = stateOf(c)
           return (
-            <li key={c.id} className={s}>
-              <span className={`acceptance-mark ${s}`} title={MARK[s][1]} aria-label={`Prototype: ${MARK[s][1]}`}>{MARK[s][0]}</span>
+            <li key={c.id} className={`${prototype ? s : ''} ${prototype ? '' : 'no-prototype'}`}>
+              {prototype && <span className={`acceptance-mark ${s}`} title={MARK[s][1]} aria-label={`Prototype: ${MARK[s][1]}`}>{MARK[s][0]}</span>}
               <button className={`acceptance-mark ${builtOf(c)}`} disabled={busy} onClick={() => void change({ update: [{ id: c.id, built: NEXT[builtOf(c)] }] })} title={`${BUILT[builtOf(c)][1]}${c.builtEvidence ? `: ${c.builtEvidence}` : ''}. Click to change.`} aria-label={`Final build: ${BUILT[builtOf(c)][1]} (${c.text})`}>{BUILT[builtOf(c)][0]}</button>
               {editing === c.id ? (
                 <form className="acceptance-edit" onSubmit={async (e) => { e.preventDefault(); if (await change({ update: [{ id: c.id, text: draft.text, check: draft.check || null, buildOnly: draft.buildOnly, why: draft.buildOnly ? draft.why || null : null }] })) setEditing(null) }}>
                   <input autoFocus value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })} aria-label="Criterion" />
                   <input value={draft.check} onChange={(e) => setDraft({ ...draft, check: e.target.value })} aria-label="How we will know" placeholder="How we will know: a page, a scenario, a test" />
-                  <label className="acceptance-skip"><input type="checkbox" checked={draft.buildOnly} onChange={(e) => setDraft({ ...draft, buildOnly: e.target.checked })} /> For the final build only: the prototype skips it</label>
-                  {draft.buildOnly && <input value={draft.why} onChange={(e) => setDraft({ ...draft, why: e.target.value })} aria-label="Why the prototype skips it" placeholder="Why the prototype skips it" />}
+                  {prototype && <label className="acceptance-skip"><input type="checkbox" checked={draft.buildOnly} onChange={(e) => setDraft({ ...draft, buildOnly: e.target.checked })} /> For the final build only: the prototype skips it</label>}
+                  {prototype && draft.buildOnly && <input value={draft.why} onChange={(e) => setDraft({ ...draft, why: e.target.value })} aria-label="Why the prototype skips it" placeholder="Why the prototype skips it" />}
                   <div><button className="btn small" disabled={busy || !draft.text.trim()}>Save</button> <button type="button" className="btn quiet small" onClick={() => setEditing(null)}>Cancel</button></div>
                 </form>
               ) : (
                 <div className="acceptance-body">
                   <div>{c.text}</div>
                   {c.check ? <div className="faint">How we will know: {c.check}</div> : <div className="acceptance-warn">No way to check it yet</div>}
-                  {c.buildOnly && <div className="acceptance-build">Final build only: the prototype skips it{c.why ? `. ${c.why}` : ''}</div>}
-                  {c.evidence && !c.buildOnly && <div className="faint">Prototype, {s === 'not' ? 'missing' : 'seen'}: {c.evidence}</div>}
+                  {prototype && c.buildOnly && <div className="acceptance-build">Final build only: the prototype skips it{c.why ? `. ${c.why}` : ''}</div>}
+                  {prototype && c.evidence && !c.buildOnly && <div className="faint">Prototype, {s === 'not' ? 'missing' : 'seen'}: {c.evidence}</div>}
                   {c.builtEvidence && <div className="faint">Build, {c.built === false ? 'missing' : 'seen'}: {c.builtEvidence}</div>}
                 </div>
               )}

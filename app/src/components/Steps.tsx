@@ -37,6 +37,8 @@ export function Steps({ on, states, resolved, fromIdea, onStart }: { on: On; sta
               <div className="step-foot">
                 {r.key === 'idea' && !fromIdea
                   ? <span className={r.required ? '' : 'faint'}>{r.required ? 'Made directly, but this workflow wants an idea first' : 'Made directly'}</span>
+                  : s.status === 'skipped'
+                  ? <span className="faint">– Skipped</span>
                   : s.status === 'none'
                   ? <span className="faint">Not started</span>
                   : <span>{s.status === 'done' ? '✓ ' : '◐ '}{s.detail ?? (s.status === 'done' ? 'Done' : 'Started')}</span>}
