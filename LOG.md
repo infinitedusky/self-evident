@@ -3385,3 +3385,39 @@ an alert to the person who approved the brief … hey, you have a question … b
 thing." So the person's presses are the brief and the prototype; the merge guide is read on the pull request, not
 as a gate before the build. Still open: which ratings stop, where the alert goes outside the app, a pull request
 per task or per project, and a task that needs an earlier task's work.
+
+## A task builds itself, on its own branch (Sandy, 2026-11-14: "let's make this work the way it should be working")
+
+Sandy asked for the history to be checked first: "what is now called a project is what used to be called a plan,
+and what's now called a task used to be a project … we put project stuff in the plan." Checked against InDusk
+(`~/code/sandbox/dusk`) and this log. InDusk had a master plan (plans in order), plans (a brief and an
+implementation document each, and "worktree-per-plan, the project default"), phases and checklist items. Sandy
+remembered the middle level as "projects"; InDusk's word was "plan"; the structure is as Sandy said. Carried over:
+master plan → project, plan → task, phase → sub-task, item → step. The slip is in this log on 2026-10-21: "Branch
+and PR stay per plan", written when "plan" here meant the top level. So the branch, the pull request and the start
+button that belonged to InDusk's plan (the task) were left on the master plan's successor (the project).
+
+First step of the fix (the shape is above, "A task is brief, plan, audit, build"):
+
+- **A branch and a pull request per task is the default.** The engine already had it as an app setting for teams
+  (`pr_mode: issue`, branches.ts): each task's sub-tasks land on the task's own branch, cut from the task before
+  it, with its own pull request stacked on the previous one until that merges. It is now what an app gets unless
+  it asks for one per project. A project keeps the mode it started with (`project.pr_mode`, migration 0025, which
+  marks every project already started as it was), so nothing under way moves. That also answers "how does a task
+  get an earlier task's work": it starts from the earlier task's branch.
+- **Approving the brief builds the task.** `runner.buildTask`: plan it if it has no sub-tasks, then start the
+  build; a task that is already planned just starts. No "Plan it", no "Run this project". The project (a hidden
+  one of its own for a task in none) is only where the engine keeps the build. An app can say no
+  (`auto_build: false`, Settings › Landing: "It waits: I press Plan it and Run").
+
+Tested: a task with only a brief, in a project, is planned, built and landed on its own branch and the project's
+branch carries nothing; a task in no project the same. Not tried on a real app: the first approved brief is the
+live test.
+
+Mind: on an app whose repositories belong to someone else, approving a brief now ends in a pull request on their
+GitHub with no further press. Turn it off there in Settings › Landing.
+
+Not done, next: the trigger moving from the brief's approval to the prototype's (the brief approved first and
+short, then the prototype, then analysis, ADR, plan, audit and build with no press); the technical steps moving
+from "feeds the brief" to Plan and Audit on the task's page; Build leaving the rail and the Run button leaving the
+project; stopping on an expensive trade-off and alerting the person who approved.

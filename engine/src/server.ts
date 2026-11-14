@@ -44,6 +44,7 @@ import { restoreAfterRestart, share, shared, ShareError, sharesOf, SHARE_KINDS, 
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
+import { autoBuild } from './branches.js'
 import { runner } from './runner.js'
 import { homeRepo, inOrder } from './workbench.js'
 import { chooseFolder } from './folders.js'
@@ -524,6 +525,10 @@ export function buildApp(bus: EventBus) {
     try {
       const row = await approveBrief(c.req.param('id'), 'user', approve)
       if (approve) await autoSave(c.req.param('id'), 'brief_approved') // before the plan and the build: "scrap the build" is going back to here
+      if (approve) { // then it plans and builds by itself, unless the app says no (branches.ts, autoBuild)
+        const [a] = await db.select().from(appTable).where(eq(appTable.id, row.appId))
+        if (autoBuild(a?.setup)) void runner.buildTask(row.id, 'engine').catch((err) => console.error(`[engine] building ${row.id} after its approval: ${err instanceof Error ? err.message : err}`))
+      }
       return c.json(settle(row))
     } catch (err) { return planError(c, err) }
   })

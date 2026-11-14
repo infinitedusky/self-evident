@@ -3,7 +3,7 @@
  * across every running project), lands what finishes one at a time per project, retries what doesn't, keeps each
  * project's PR current, cleans up when a project lands, and recovers after a restart. One process; all state in Postgres.
  */
-import { and, asc, desc, eq, inArray } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, notInArray } from 'drizzle-orm'
 import { join } from 'node:path'
 import { db } from './db/client.js'
 import { app, build, event, issue, project, pr as prTable, repo, run, step } from './db/schema.js'
@@ -12,7 +12,7 @@ import { appendEvent, type NewEvent } from './events.js'
 import { runTask, type Execute } from './executor.js'
 import { addWorktree, branchExists, ensureBranch, git, headSha, removeWorktree } from './git.js'
 import { hasStorybook } from './storybook.js'
-import { issueBranch, issueStart, landingBranch, prMode, stackBase } from './branches.js'
+import { issueBranch, issueStart, landingBranch, modeOf, stackBase } from './branches.js'
 import { newId } from './ids.js'
 import { identifier, setState } from './issues.js'
 import { land, withLock } from './landing.js'
@@ -59,10 +59,45 @@ export class Runner {
     // From main as it is on GitHub when there is a remote (a teammate may have merged since the local main was pulled).
     const fetched = (await git(r.localPath!, ['fetch', '-q', 'origin', a.defaultBranch], { allowFail: true })).code === 0
     const sha = await ensureBranch(r.localPath!, p.integrationBranch!, fetched ? `origin/${a.defaultBranch}` : a.defaultBranch)
-    await db.update(project).set({ status: 'running', startDate: p.startDate ?? new Date().toISOString().slice(0, 10), updatedAt: new Date() }).where(eq(project.id, projectId))
+    await db.update(project).set({ status: 'running', prMode: modeOf(p, a.setup), startDate: p.startDate ?? new Date().toISOString().slice(0, 10), updatedAt: new Date() }).where(eq(project.id, projectId))
     await this.emit({ ...ctx.base, type: 'project.started', payload: { integrationBranch: p.integrationBranch, from: a.defaultBranch, sha } })
     void this.dispatch()
     return { integrationBranch: p.integrationBranch, sha }
+  }
+
+  /**
+   * Build one task, with nothing more to press (Sandy, 2026-11-14: "it should all just be automated from that point
+   * forward"): plan it if it has no sub-tasks, then start its build. Called when the task's brief is approved. The
+   * task's project (its own hidden one when it is in none) is only where the engine keeps the build; nobody runs it.
+   * A task that is already planned just starts. Planning that fails or asks a question says so on the task as before.
+   */
+  async buildTask(issueId: string, actor = 'engine'): Promise<{ planning: boolean; started: boolean }> {
+    const [t] = await db.select().from(issue).where(eq(issue.id, issueId))
+    if (!t) throw new PlanError(`no task ${issueId}`)
+    const planned = (await db.select({ id: issue.id }).from(issue).where(and(eq(issue.parentId, issueId), eq(issue.kind, 'code'), notInArray(issue.state, ['canceled', 'duplicate'])))).length > 0
+    if (planned) return { planning: false, started: await this.startIfWaiting(t.projectId) }
+    if (this.planningIssues.has(issueId)) return { planning: true, started: false }
+    this.planningIssues.add(issueId)
+    try {
+      const ctx = await preparePlanning(issueId, { actor })
+      void finishPlanning(ctx, { propose: this.propose, onPlanned: () => void this.startIfWaiting(ctx.projectId).catch(() => {}) }).finally(() => this.planningIssues.delete(issueId))
+      return { planning: true, started: false }
+    } catch (err) { this.planningIssues.delete(issueId); throw err }
+  }
+
+  /** Start a project's build if it is planned and nobody has started it; a running one just gets a dispatch pass. */
+  private async startIfWaiting(projectId: string | null): Promise<boolean> {
+    if (!projectId) return false
+    const [p] = await db.select().from(project).where(eq(project.id, projectId))
+    if (!p) return false
+    if (['drafting', 'proposed', 'approved'].includes(p.status)) {
+      const g = await projectGraph(projectId)
+      if (!g?.subIssues.length) return false
+      await this.startProject(projectId)
+      return true
+    }
+    void this.dispatch()
+    return false
   }
 
   /**
@@ -121,7 +156,7 @@ export class Runner {
     const branch = x.branch ?? `sub/${p.id}/${x.identifier.toLowerCase()}`
     const worktreePath = x.worktreePath ?? join(`${r!.localPath}-worktrees`, `${p.id}--${x.identifier.toLowerCase()}`)
     const pb = { ...base, issueId: subId }
-    const mode = prMode(a.setup)
+    const mode = modeOf(p, a.setup)
     const onto = landingBranch(mode, p.integrationBranch!, t) // the project's branch, or the issue's own (stacked PRs)
     // Worktree and branch creation touch the repo's refs: one at a time per repo. A failure here is an attempt too.
     let baseSha: string
