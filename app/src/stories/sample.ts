@@ -165,7 +165,7 @@ export const issueRows: IssueRow[] = [
 function pick(i: Issue) { return { id: i.id, identifier: i.identifier, number: i.number, title: i.title, description: i.description, state: i.state, sortOrder: i.sortOrder, priority: i.priority } }
 
 const detailOf = (i: Issue, extra: Partial<IssueDetail> = {}): IssueDetail => ({
-  ...i, project: { id: 'proj_checkout', name: 'One-page checkout (sample)', status: 'running' }, parent: null, build: null, questions: [], decisions: [], relations: [], subIssues: [], steps: [], stepsAttempt: null, comments: [], runner: null, ...extra,
+  ...i, project: { id: 'proj_checkout', name: 'One-page checkout (sample)', status: 'running' }, parent: null, build: null, questions: [], decisions: [], relations: [], subIssues: [], steps: [], stepsAttempt: null, comments: [], runner: null, madeBy: null, handover: null, ...extra,
 })
 /** Comments as the tkt skills write them on a ticket they built (sample): one per heading, the latest of each. */
 const commentsOnTicket = [
@@ -182,7 +182,7 @@ export const issueDetails: Record<string, IssueDetail> = {
   iss_sample6: detailOf(subIssues[2], { parent: { id: 'iss_sample2', identifier: 'SS-2', title: 'Totals and analytics' }, brief: plannedBrief, build: { status: 'queued', attempt: 0, heldReason: 'waiting on SS-5 (web/checkout/submit.ts)' } }),
   iss_sample16: detailOf(issue(16, 'Search results load too slowly', { projectId: null, description: 'Reported twice this week.' }), { project: null }),
   iss_sample22: detailOf(issue(22, 'Add slugify to the string helpers (sample)', { projectId: null, state: 'done', description: 'Page titles need URL slugs and every caller writes its own loop.', briefApprovedBy: 'Sam (sample)', briefApprovedAt: '2026-11-07T23:30:00Z', completedAt: '2026-11-08T00:05:00Z' }), { project: null, comments: commentsOnTicket, runner: 'tkt' }),
-  iss_sample20: detailOf(issue(20, 'Address and payment on one page (sample)', { description: 'Fewer steps between the cart and a paid order.', brief: '### What (sample)\nAddress and payment on one page.\n\n### Done when\n- A paid order takes one page.' })),
+  iss_sample20: detailOf(issue(20, 'Address and payment on one page (sample)', { description: 'Fewer steps between the cart and a paid order.', brief: '### What (sample)\nAddress and payment on one page.\n\n### Done when\n- A paid order takes one page.' }), { madeBy: { sessionId: 'sess_sample_plans', title: 'Checkout plans (sample)', open: true }, handover: { sessionId: 'sess_sample_plans', at: '2026-11-14T10:00:00Z', text: '## What was decided\n- One page, not three (sample).\n- Wallet buttons go first.\n\n## Still open\n- Whether tax shows before or after the address.' } }),
 }
 
 export const ideaRows: IdeaRow[] = [

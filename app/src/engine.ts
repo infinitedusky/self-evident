@@ -88,6 +88,8 @@ export interface IssueRow { id: string; identifier: string; number: number; titl
 /** What was written on a ticket as it moved: one comment per heading (the plan, the handoff, the review), the latest write of each. */
 export interface IssueComment { id: string; issueId: string; heading: string; body: string; author: string; createdAt: string; updatedAt: string }
 export interface IssueDetail extends Issue {
+  madeBy: { sessionId: string; title: string; open: boolean } | null // the conversation that created it, when an agent did
+  handover: { text: string | null; sessionId: string; at: string } | null // what that conversation said about it, written when the task's agent starts
   comments: IssueComment[]
   runner: 'tkt' | null // who builds it once the brief is approved: tkt, or Self Evident's own agents
   project: { id: string; name: string; status: string; solo?: boolean } | null; parent: { id: string; identifier: string; title: string } | null
@@ -321,6 +323,7 @@ export const engine = {
   approveBrief: (issueId: string, approve = true) => call<Issue>('POST', `/issues/${issueId}/brief/approve`, { approve }),
   workflows: (appId: string) => call<WorkflowRow[]>('GET', `/workflows?app=${appId}`),
   saveWorkflow: (body: { id?: string; appId: string; name: string; steps: WorkflowStep[]; ordered: boolean }) => call<Workflow>(body.id ? 'PUT' : 'POST', body.id ? `/workflows/${body.id}` : '/workflows', body),
+  writeHandover: (issueId: string, again = false) => call<{ handover: IssueDetail['handover']; why?: string }>('POST', `/issues/${issueId}/handover`, { again }),
   useWorkflow: (target: { kind: 'apps' | 'projects' | 'issues'; id: string }, workflowId: string | null) => call<{ ok: true }>('POST', `/${target.kind}/${target.id}/workflow`, { workflowId }),
   apps: () => call<App[]>('GET', '/apps'),
   workspaces: () => call<Workspace[]>('GET', '/workspaces'),

@@ -19,6 +19,7 @@ import { TaskBranches } from '../components/TaskBranches'
 import { MergeGuide } from '../components/MergeGuide'
 import { mark, TaskNav } from '../components/TaskNav'
 import { WorkflowChoice } from '../components/WorkflowChoice'
+import { Handover } from '../components/Handover'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
 import { finished, label, ready, step, type Row, type StepKey } from '@self-evident/engine/steps'
 import { STATUS_TONE } from '../components/PlanGraphView'
@@ -144,6 +145,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
         {here === 'overview' && (
           <>
             <section className="panel"><Brief description={i.description} brief={null} /></section>
+            <Handover madeBy={i.madeBy} handover={i.handover} onWrite={(again) => engine.writeHandover(i.id, again)} />
             <section className="panel">
               <h2>Where it stands</h2>
               <p style={{ margin: '0 0 8px' }}>
