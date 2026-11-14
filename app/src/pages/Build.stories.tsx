@@ -21,7 +21,10 @@ const ready: BuildTask = { ...base, id: 'iss_sample16', identifier: 'SS-16', tit
 const building: BuildTask = { ...base, id: 'iss_sample22', identifier: 'SS-22', title: 'Gift cards at checkout (sample)', phase: 'building', done: 1, total: 3,
   live: [{ id: 'iss_sample7', identifier: 'SS-7', title: 'A gift card takes off the total', status: 'running', step: 'Writing the totals test' }], pr: { number: 41, url: 'https://example.com/sample/pull/41', status: 'open' } }
 const landed: BuildTask = { ...base, id: 'iss_sample3', identifier: 'SS-3', title: 'Wallet buttons first (sample)', phase: 'landed', done: 2, total: 2, pr: { number: 38, url: 'https://example.com/sample/pull/38', status: 'open' } }
-const tasks = [asking, failed, ready, building, landed]
+const reading: BuildTask = { ...base, id: 'iss_sample23', identifier: 'SS-23', title: 'Saved cards (sample)', projectStatus: 'drafting', phase: 'checking', done: 0, total: 3, checks: { left: ['Blast radius', 'Audit', 'Final ADR and plan'], needsYou: null, sessionId: null } }
+const heldForYou: BuildTask = { ...base, id: 'iss_sample24', identifier: 'SS-24', title: 'Order history (sample)', projectStatus: 'drafting', phase: 'stopped', done: 0, total: 4,
+  checks: { left: ['Final ADR and plan'], needsYou: 'The audit found the brief asks for **export to CSV** and no sub-task does it. Add a sub-task for it, or drop it from this task? I would drop it: nothing in the prototype shows it (sample).', sessionId: 'talk_sample_final' } }
+const tasks = [asking, heldForYou, failed, ready, reading, building, landed]
 
 /** One of each: a question to answer here, a build that failed, a planned task to start, one building, one landed. */
 export const EveryPhase: Story = {
@@ -33,6 +36,17 @@ export const EveryPhase: Story = {
     await expect(await c.findByRole('button', { name: 'Try it again' })).toBeInTheDocument()
     await expect(await c.findByRole('button', { name: 'Build it' })).toBeInTheDocument()
     await expect(await c.findByRole('link', { name: 'SS-22 Gift cards at checkout (sample)' })).toHaveAttribute('href', '/tasks/iss_sample22/build') // a row leads to the task, not its project
+  },
+}
+/** A planned task whose last step before the build stopped for the person: the question, answered here. */
+export const HeldBeforeTheBuild: Story = {
+  beforeEach: withEngine({ now: { ...now, tasks: [heldForYou, reading] } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('the build is waiting for you')).toBeInTheDocument()
+    await expect(await c.findByLabelText('Your answer')).toBeInTheDocument()
+    await expect(await c.findByText('Planned, being read before it is built')).toBeInTheDocument()
+    await expect(c.queryByRole('button', { name: 'Build it' })).toBeNull() // nobody builds around the reading
   },
 }
 /** Only work going well: nothing waits for the person. */

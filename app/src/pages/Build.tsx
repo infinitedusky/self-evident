@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge } from '../components/Badge'
 import { QuestionAsk } from '../components/QuestionAsk'
+import { Md } from '../components/Md'
 import { API, engine, EVENT_TYPES, openEvents, type BuildTask } from '../engine'
 import { useCurrentApp } from '../current-app'
 
@@ -37,7 +38,7 @@ export function Build() {
     try { await fn(); if (app) setTasks((await engine.now(app.id)).tasks ?? []) } catch (e) { setRefused({ key, why: e instanceof Error ? e.message : String(e) }) } finally { setBusy(null) }
   }
   const of = (phase: BuildTask['phase']) => tasks?.filter((t) => t.phase === phase) ?? []
-  const stopped = of('stopped'), ready = of('ready'), building = of('building'), landed = of('landed')
+  const stopped = of('stopped'), ready = of('ready'), checking = of('checking'), building = of('building'), landed = of('landed')
   const row = (t: BuildTask, extra?: React.ReactNode, action?: React.ReactNode) => (
     <li key={t.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start' }}>
       <div style={{ minWidth: 0 }}>
@@ -71,6 +72,7 @@ export function Build() {
           <ul className="list panel build-list">
             {stopped.map((t) => row(t, <>
               {t.questions.map((q) => <QuestionAsk key={q.id} q={q} busy={busy !== null} onAnswer={(answer) => act(t.id, () => engine.answer(q.id, answer))} />)}
+              {t.checks?.needsYou && <HeldAsk task={t} busy={busy !== null} onAnswer={(answer) => act(t.id, () => engine.say(t.checks!.sessionId!, answer))} />}
               {t.failed.map((x) => (
                 <div key={x.id} className="build-ask">
                   <div><Badge tone="bad">failed</Badge> <strong>{x.identifier} {x.title}</strong></div>
@@ -79,7 +81,7 @@ export function Build() {
                 </div>
               ))}
               {t.held.map((x) => <div key={x.id} className="build-ask"><Badge tone="warn">held</Badge> <strong>{x.identifier} {x.title}</strong> <span className="muted" style={{ fontSize: 13 }}>{x.reason}</span></div>)}
-              {!t.questions.length && !t.failed.length && !t.held.length && <div className="build-ask"><Badge tone="warn">{t.projectStatus}</Badge> <span className="muted" style={{ fontSize: 13 }}>Its build is {t.projectStatus}. <Link to={`/projects/${t.projectId}`}>Look →</Link></span></div>}
+              {!t.questions.length && !t.failed.length && !t.held.length && !t.checks?.needsYou && <div className="build-ask"><Badge tone="warn">{t.projectStatus}</Badge> <span className="muted" style={{ fontSize: 13 }}>Its build is {t.projectStatus}. <Link to={`/projects/${t.projectId}`}>Look →</Link></span></div>}
             </>))}
           </ul>
         </section>
@@ -90,6 +92,15 @@ export function Build() {
           <h2 className="build-h">Planned, not started</h2>
           <ul className="list panel build-list">
             {ready.map((t) => row(t, null, <button className="btn" disabled={busy !== null} onClick={() => void act(t.id, () => engine.buildTask(t.id))}>{busy === t.id ? 'Starting…' : 'Build it'}</button>))}
+          </ul>
+        </section>
+      )}
+
+      {checking.length > 0 && (
+        <section data-component="BuildChecking">
+          <h2 className="build-h">Planned, being read before it is built</h2>
+          <ul className="list panel build-list">
+            {checking.map((t) => row(t, <div className="muted" style={{ fontSize: 13 }}>Still to come, by themselves: {t.checks?.left.join(', ')}. Then it is built.</div>, <Badge tone="accent" dot>reading</Badge>))}
           </ul>
         </section>
       )}
@@ -112,5 +123,25 @@ export function Build() {
         </section>
       )}
     </>
+  )
+}
+
+/**
+ * The last step before the build stopped for the person: its question, and a box to answer it in (the answer goes to
+ * that step's agent, which carries on and lets the build start).
+ */
+function HeldAsk({ task, busy, onAnswer }: { task: BuildTask; busy: boolean; onAnswer: (answer: string) => Promise<unknown> | void }) {
+  const [own, setOwn] = useState('')
+  return (
+    <div className="build-ask" data-component="HeldAsk">
+      <div><Badge tone="bad">the build is waiting for you</Badge> <strong>Before it is built, the final ADR and plan needs a decision:</strong></div>
+      <div style={{ margin: '6px 0' }}><Md text={task.checks!.needsYou!} /></div>
+      {task.checks!.sessionId
+        ? <form className="opts" onSubmit={(e) => { e.preventDefault(); if (own.trim()) void onAnswer(own.trim()) }}>
+            <input value={own} onChange={(e) => setOwn(e.target.value)} aria-label="Your answer" placeholder="Your answer" style={{ flex: 1, minWidth: 200 }} />
+            <button className="btn small" disabled={busy || !own.trim()}>Answer</button>
+          </form>
+        : <div className="faint" style={{ fontSize: 13 }}>Its agent's conversation is closed. <Link to={`/tasks/${task.id}/final`}>Open the step on the task →</Link></div>}
+    </div>
   )
 }
