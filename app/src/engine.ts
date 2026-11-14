@@ -7,19 +7,56 @@ export const API = '/api'
 
 /** What a view holds of the event stream: its own listeners on a shared connection. */
 export interface Events { addEventListener(type: string, fn: EventListener): void; onerror: EventListener | null; onopen: EventListener | null; close(): void }
-const streams = new Map<string, { es: EventSource; n: number }>()
+interface Stream { es: EventSource; n: number; listeners: Set<readonly [string, EventListener]>; last: string | null; retry: number | undefined; down: boolean }
+const streams = new Map<string, Stream>()
+
+/**
+ * Whether the pages can hear the engine. A page that cannot looks exactly like an agent that is not answering, so it
+ * is said out loud (EngineLink): 'down' from the moment any stream fails until every one is open again.
+ */
+const linkListeners = new Set<(down: boolean) => void>()
+export const engineDown = () => [...streams.values()].some((s) => s.down)
+export function onEngineLink(fn: (down: boolean) => void) { linkListeners.add(fn); return () => { linkListeners.delete(fn) } }
+const tellLink = () => { const d = engineDown(); for (const fn of linkListeners) fn(d) }
+
+/** Where to pick the stream up again: after the last event this page saw, so nothing said in the gap is lost. */
+export const resumeUrl = (url: string, last: string | null) => (last ? url.replace(/([?&])since=[^&]*/, `$1since=${last}`) : url)
+
+/** One connection, re-made when the browser gives up on it, with every listener carried over. */
+function connect(url: string, s: Stream) {
+  const es = new EventSource(resumeUrl(url, s.last))
+  s.es = es
+  for (const [type, fn] of s.listeners) es.addEventListener(type, fn)
+  es.addEventListener('open', () => { if (s.down) { s.down = false; tellLink() } })
+  es.addEventListener('error', () => {
+    if (!s.down) { s.down = true; tellLink() }
+    // The browser retries a dropped connection by itself, but not one refused with an error page (what the proxy
+    // answers while the engine restarts): that one is closed for good, and every view on it went silent.
+    if (es.readyState === EventSource.CLOSED && streams.get(url) === s && s.retry === undefined) {
+      s.retry = window.setTimeout(() => { s.retry = undefined; if (streams.get(url) === s) connect(url, s) }, 1500)
+    }
+  })
+}
+
 /**
  * The engine's events at one address, one connection per address however many views listen: Chrome allows six
  * connections per host over HTTP/1.1, and a workspace of tabs, each opening its own streams, ran out, leaving the next
  * page stuck on Loading. Each view adds its own listeners and takes them off on close; the last to close ends it.
+ * The connection survives the engine restarting: it is made again, from the last event seen (Sandy, 2026-11-14:
+ * "none of the agents are responding to prompts … there's no error or anything telling me what's going on"; they
+ * were answering, and the page had stopped listening).
  */
 export function openEvents(url: string): Events {
   let s = streams.get(url)
-  if (!s) { s = { es: new EventSource(url), n: 0 }; streams.set(url, s) }
+  if (!s) { s = { es: null as never, n: 0, listeners: new Set(), last: null, retry: undefined, down: false }; streams.set(url, s); connect(url, s) }
   const shared = s
   shared.n++
-  const mine: [string, EventListener][] = []
-  const add = (type: string, fn: EventListener) => { mine.push([type, fn]); shared.es.addEventListener(type, fn) }
+  const mine: (readonly [string, EventListener])[] = []
+  const add = (type: string, fn: EventListener) => {
+    const seen: EventListener = (e) => { const id = (e as MessageEvent).lastEventId; if (id) shared.last = id; fn(e) }
+    const entry = [type, type === 'error' || type === 'open' ? fn : seen] as const
+    mine.push(entry); shared.listeners.add(entry); shared.es.addEventListener(entry[0], entry[1])
+  }
   let closed = false
   return {
     addEventListener: add,
@@ -29,8 +66,8 @@ export function openEvents(url: string): Events {
     close() {
       if (closed) return
       closed = true
-      for (const [type, fn] of mine) shared.es.removeEventListener(type, fn)
-      if (--shared.n === 0) { shared.es.close(); streams.delete(url) }
+      for (const entry of mine) { shared.listeners.delete(entry); shared.es.removeEventListener(entry[0], entry[1]) }
+      if (--shared.n === 0) { window.clearTimeout(shared.retry); shared.es.close(); streams.delete(url); tellLink() }
     },
   }
 }

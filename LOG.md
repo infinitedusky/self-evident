@@ -3501,3 +3501,21 @@ one marked, and "Answer in your own words" for anything else), is what Build and
 question is answered where it is read; the task's planner panel no longer sends you to the project to answer. And
 "the task should also have a graph when you're in the build area": the task's Build section draws its own
 sub-tasks, the files they share and any unanswered question (`TaskGraph`, the project's graph cut to this task).
+
+## A page that lost the engine said nothing and never came back (Sandy, 2026-11-14: "none of the agents are responding to prompts … there's no error or anything telling me what's going on")
+
+They were responding: MER-50's agent had answered three prompts within seconds each. The page had stopped
+listening. Every merge of an engine change restarts the engine (`tsx watch`), and while it is down the UI's proxy
+answers the open event streams with an error page. A browser retries a stream whose connection drops, but one
+refused with an error status it closes for good, and `openEvents` shares one stream among every view, so the whole
+workspace went quiet until a reload. Eight engine merges that day did it eight times.
+
+- `openEvents` re-makes a stream the browser has given up on, every 1.5 s until it opens, carrying every view's
+  listeners over, and resumes from the last event the page saw (`since=<seq>` in place of `since=now`), so what
+  was said in the gap arrives. The engine also honours `Last-Event-ID` for the browser's own retries.
+- `EngineLink`: once any stream has been down for 2.5 s, a bar over the workspace says "Not connected to the
+  engine. What agents say will not show until it is back. Reconnecting by itself…" with "Reload now". It goes when
+  the streams are open again.
+
+Checked by watching a page on the fixed UI through the engine restart of this very merge. Still true: a restart
+cuts off an agent that is mid-turn; this fix is about hearing it afterwards.
