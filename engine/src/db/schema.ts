@@ -183,6 +183,7 @@ export const issue = pgTable('issue', {
   waitingOn: text('waiting_on'), // someone outside has it: "Apple's review"
   source: text('source').notNull().default('person'), sourceRef: jsonb('source_ref'), // {sessionId} | {issueId, runId}
   reason: text('reason'), // canceled or duplicate: why
+  handover: jsonb('handover').$type<{ text: string | null; sessionId: string; at: string }>(), // what the conversation that made it said about it, written once when its agent starts (handover.ts); text null: it said nothing more
   createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
   startedAt: at('started_at'), completedAt: at('completed_at'), canceledAt: at('canceled_at'), closedBy: text('closed_by'),
 }, (t) => [uniqueIndex('issue_app_number').on(t.appId, t.number), uniqueIndex('issue_id_app').on(t.id, t.appId),

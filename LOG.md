@@ -3284,3 +3284,37 @@ nested frame inside the tab area a 1px right border. Three of those made the tab
 drew straight lines over the groups' rounded right corners. The rule now names the split's own child (`.ws-split >`),
 every frame measures the same width, and the no-clip rule from the paragraph above is taken out again. Lesson: when
 a fix checks out in Playwright and not on Sandy's screen, measure every box in the chain before patching.
+
+## A task starts with a hand-over (Sandy, 2026-11-14: "there's a little bit too much of a disconnect between the global agent and the task sub-agents … I'm finding myself copying questions from the task agent into the global agent")
+
+The conversations about the app create the tasks, and a task's own agent then started from a title and a short
+description, so its first act was to ask for what the other conversation already knew. Sandy: "the global agent is
+creating the tasks, which is why the task agent wants to first get as much information as it can before it starts
+working"; and "there can be more than one global agent … the agent should identify itself … I created this".
+
+- **Who made it.** `create_task` already recorded the conversation (`source_ref.sessionId`). The task's detail now
+  resolves it (`madeBy`: the conversation's name, and whether it is still open) and the overview shows it.
+- **The hand-over.** When the task's agent is started (`ensureTaskTalk`), and at the latest when it opens, the
+  engine forks the conversation that made the task (the Agent SDK's `resume` with `forkSession`, and
+  `persistSession: false` so the fork leaves no file), asks the fork once for everything said about the task under
+  five headings (what it is for, decided, ruled out and why, constraints, still open), and keeps the answer in
+  `issue.handover`. It goes into the task agent's instructions, marked as that conversation's account, with "where
+  it and the person disagree, the person is right". The conversation gets no turn and is not changed.
+- **Nothing is fine.** A task a person made has no conversation; a conversation that never started has nothing to
+  read; and a conversation that said nothing more than the title answers NOTHING, which is kept as an answer so it
+  is not asked again. A failure to write it never stops the task's agent from starting.
+- **On the page.** A "Hand-over" panel on the task's overview: the conversation's name, what it said, and "Write it
+  again" (`POST /issues/:id/handover {again}`), for when more was said after the task was made.
+
+Why not fork the task's agent from that conversation: it would carry the whole history (other tasks, other
+topics) on every turn, go stale with the next thing said, and a task made on the Plan page has nothing to fork.
+Why not one shared context: two agents cannot write one conversation; what is shared is a document.
+
+Tried for real on a scratch conversation and the local test database: the fork answered from the conversation,
+the conversation's file was unchanged, no file was left, and the hand-over held the four things said about the task
+and left out an unrelated one (4.7 s on Haiku). Not tried: a long real conversation (each hand-over re-reads it, so
+it costs more when that conversation has gone cold), and one brought in from the terminal.
+
+Not done: the task's agent asking that conversation a question later (the second half Sandy and I talked about;
+wait and see how many questions are left); editing the hand-over by hand; a hand-over for a project's tasks made by
+the planner, or for an idea.

@@ -558,6 +558,12 @@ Details and sources in `research/`.
   conversation in the left column is about the app as a whole: it reads the app's checkout, has no worktree, no
   branch and no editing tools, and sends work that changes files to a task. An integration's set-up, which ends in a
   pull request, also gets a worktree.
+- **A task starts with a hand-over** (Sandy, 2026-11-14: "I'm finding myself copying questions from the task agent
+  into the global agent"). A task made by an agent remembers the conversation that made it, and its page names that
+  conversation (there can be several about the app). When the task's own agent starts, a copy of that conversation
+  is asked once for everything it said about the task; the answer is kept on the task, shown on its page and given
+  to the task's agent. The conversation itself is not touched and never runs the workflow. A task a person made has
+  none. Details: LOG.md, "A task starts with a hand-over".
 - **An idea is a task in all but name** (Sandy, 2026-11-13; LOG.md, "An idea has an agent of its own"). Its page is
   the task's page without the build: steps down the side, its own agent beside them. The agent and its worktree
   start when the person presses "Work on this idea", and go with the idea when it is converted to a task.

@@ -15,6 +15,7 @@ import { step, type StepKey } from './steps.js'
 import { addWorktree, git, removeWorktree } from './git.js'
 import { checkoutProblem } from './checkout.js'
 import { withLock } from './landing.js'
+import { handoverNote, writeHandover } from './handover.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { referenceHolding, referencePrompt, referencesOf, refusal } from './references.js'
@@ -463,6 +464,7 @@ export async function ensureTaskTalk(issueId: string, actor = 'user') {
     if (!t) throw new PlanError(`no task ${issueId}`)
     if (t.parentId || t.kind !== 'code') throw new PlanError('only a top-level code task has an agent of its own')
     const row = await startTalk({ appId: t.appId, subjectRef: { issueId }, actor })
+    void writeHandover(issueId).catch((err) => console.error(`[engine] hand-over for ${issueId}: ${err instanceof Error ? err.message : err}`)) // written while the person reads the page; open() waits for it
     return { ...row, live: false, busy: false }
   })
 }
@@ -571,6 +573,9 @@ async function open(sessionId: string): Promise<Live> {
   const [proto] = await db.select().from(prototype).where(eq(prototype.sessionId, sessionId))
   const ownTaskId = (s.subjectRef as SubjectRef | null)?.issueId
   const [ownTask] = ownTaskId ? await db.select().from(issue).where(eq(issue.id, ownTaskId)) : []
+  // Its hand-over, from the conversation that made the task: written now if it is not there yet; none is fine, and so is failing.
+  const handover = ownTask ? await writeHandover(ownTask.id).then((r) => r.handover, () => ownTask.handover ?? null) : null
+  const [madeIn] = handover?.text ? await db.select().from(session).where(eq(session.id, handover.sessionId)) : []
   const check = (s.subjectRef as SubjectRef | null)?.check
   const ownIdeaId = s.worktreePath && !(s.subjectRef as SubjectRef | null)?.app ? (s.subjectRef as SubjectRef | null)?.ideaId : undefined
   const [ownIdeaRow] = ownIdeaId ? await db.select().from(idea).where(eq(idea.id, ownIdeaId)) : []
@@ -588,7 +593,7 @@ async function open(sessionId: string): Promise<Live> {
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...(check || whole ? CHECK_TOOLS : ASK_TOOLS)],
