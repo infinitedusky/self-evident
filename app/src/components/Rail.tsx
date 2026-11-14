@@ -13,8 +13,8 @@ const LOOP: Item[] = [
   { icon: '🔭', label: 'Observe', tab: page('/observe') },
   { icon: '🧠', label: 'Learn', tab: page('/learn') },
   { icon: '💡', label: 'Ideate', tab: page('/ideas'), also: /^\/ideas/ },
-  { icon: '📋', label: 'Plan', tab: page('/plan'), also: /^\/(plan|projects|tasks|todos|mockups)|^(storybook|sketch|prototype)/ },
-  { icon: '🔨', label: 'Build', tab: page('/build'), also: /^\/(build|graph)|^build:/ },
+  { icon: '📋', label: 'Plan', tab: page('/plan'), also: /^\/(plan|projects|todos|mockups)|^\/tasks(?!\/[^/]+\/build)|^(storybook|sketch|prototype)/ }, // a task's Build section belongs to Build
+  { icon: '🔨', label: 'Build', tab: page('/build'), also: /^\/(build|graph)|^\/tasks\/[^/]+\/build|^build:/ },
 ]
 const OUTSIDE: Item[] = [
   { icon: '📰', label: 'Summary', tab: page('/summary') },

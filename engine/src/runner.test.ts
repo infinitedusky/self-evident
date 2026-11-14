@@ -15,6 +15,7 @@ import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
 import { createProject, projectGraph } from './projects.js'
 import { createIssue } from './issues.js'
+import { now } from './now.js'
 import { Runner } from './runner.js'
 import { addItems, dropItem, promote } from './backlog.js'
 import type { Propose } from './planner.js'
@@ -283,6 +284,11 @@ describe.skipIf(!reachable)('runner', () => {
     const branch = `${p.integrationBranch}--${key.toLowerCase()}-${t.number}`
     expect((await git(repoPath, ['ls-tree', '--name-only', branch])).stdout).toContain(`own-${g.subIssues[0].identifier}.txt`)
     expect((await git(repoPath, ['ls-tree', '--name-only', p.integrationBranch!])).stdout).not.toContain('own-') // the project's branch carries nothing
+    // Build's page lists tasks past their plan: this one landed; one planned and never started is ready, under its project's name.
+    const { issues: [waiting] } = await createProject({ appId: own, name: 'planned by hand', issues: [one('Planned, not started', [{ key: 'w', title: 'W', files: ['w.txt'] }])] })
+    const listed = (await now(own)).tasks
+    expect(listed.find((x) => x.id === t.id)).toMatchObject({ phase: 'landed', done: 1, total: 1, projectName: 'a group of tasks' })
+    expect(listed.find((x) => x.id === waiting.id)).toMatchObject({ phase: 'ready', done: 0, total: 1, questions: [], failed: [] })
     await runner.buildTask(lone.id) // in no project: built in a project of its own that nobody sees
     const soloId = async () => (await db.select().from(issue).where(eq(issue.id, lone.id)))[0].projectId
     await until(async () => !!(await soloId()))

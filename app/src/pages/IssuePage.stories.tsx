@@ -41,12 +41,12 @@ export const LockedStep: Story = { parameters: at('iss_sample20', 'risk'), befor
 export const BuildReady: Story = { parameters: at('iss_sample20', 'build'), beforeEach: approved }
 /** A task planned: its sub-tasks, and what the planner decided. */
 export const Planned: Story = { parameters: at('iss_sample1', 'build'), beforeEach: approved }
-/** Planned, and its project has not been run: "Ready to build" with the button that runs it. */
+/** Planned, and its project has not been run: "Ready to build" with Build it. */
 export const PlannedNotRun: Story = {
   parameters: at('iss_sample1', 'build'),
   beforeEach: withEngine({ steps: { ...sampleData.steps, issues: approvedTaskStepsView }, issueDetails: { ...sampleData.issueDetails,
     iss_sample1: { ...issueDetails.iss_sample1, briefApprovedBy: 'Sam (sample)', briefApprovedAt: '2026-10-28T10:00:00Z', project: { ...issueDetails.iss_sample1.project!, status: 'drafting' } } } }),
-  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('button', { name: 'Run this project' })).toBeInTheDocument() },
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('button', { name: 'Build it' })).toBeInTheDocument() },
 }
 // Made up: the planner ran twice on the sample task, and the first run's two sub-tasks were canceled as duplicates.
 const s1 = issueDetails.iss_sample1

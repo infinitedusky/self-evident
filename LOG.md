@@ -3421,3 +3421,25 @@ Not done, next: the trigger moving from the brief's approval to the prototype's 
 short, then the prototype, then analysis, ADR, plan, audit and build with no press); the technical steps moving
 from "feeds the brief" to Plan and Audit on the task's page; Build leaving the rail and the Run button leaving the
 project; stopping on an expensive trade-off and alerting the person who approved.
+
+## Build is the phase after the plan, and it lists tasks (Sandy, 2026-11-14: "we can leave build … it also needs to be the place where questions are asked or anything that stops. Everything needs to happen in there. After the plan is done, it's done. Now we're in the build phase")
+
+Build stays in the rail and stops being a list of projects. `Build.tsx` at /build lists every task past its plan
+(`now().tasks`, one row per task with sub-tasks), what needs the person first, after Linear's My Issues:
+
+- **Waiting for you**: a task that is asking (the question with its cost and its options, answered there with one
+  press), has a failed sub-task ("Try it again") or a held one, or whose build is paused.
+- **Planned, not started**: "Build it" (`POST /issues/:id/build`, `runner.buildTask`): for a task approved before
+  tasks built themselves, or an app set to wait.
+- **Building**: progress, the sub-tasks at work and what each is doing, the pull request.
+- **Landed**: with its pull request.
+
+A row leads to the task's own Build section, and that section now lights Build in the rail, not Plan (it used to
+look like being sent back to planning). The start button left the project: a project's page has none ("you don't
+hit build at the project level"), a task's Build section has "Build it" when it is planned and not started, and
+the "Ready to build" list of projects from #193 is gone. My Stuff still offers "Run it" on a planned project
+(`run_project`); that one is left for the next pass.
+
+Not done: answering a question in free text on Build (the options are there; anything else is on the project's
+page as before); the alert to whoever approved; the trigger moving to the prototype's approval; the steps moving
+under Plan and Audit.

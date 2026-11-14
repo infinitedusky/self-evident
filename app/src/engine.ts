@@ -230,7 +230,17 @@ export interface FocusLine { text: string; refs: string[] }
 export interface FocusBody { headline: string; people: { who: string; doing: FocusLine[] }[]; goals: { near: FocusLine[]; mid: FocusLine[]; long: FocusLine[] }; stated?: boolean; links: Record<string, FocusRef> }
 export interface SummaryState { focus: { id: number; body: FocusBody; createdAt: string; trigger: 'person' | 'schedule'; costUsd: string | null } | null; writing: boolean; stale: boolean }
 export interface Hold { until: string; reason: string; level: number }
-export interface Now { hold?: Hold | null; running: RunningProject[]; needsYou: Attention[]; recent: Event[]; counts: { projects: number; running: number; needsYou: number } }
+/** A task past its plan, for Build's page: ready (planned, not started), building, stopped (asking, failed, held or paused) or landed. */
+export interface BuildTask {
+  id: string; identifier: string; title: string; projectId: string; projectName: string | null; projectStatus: string
+  phase: 'ready' | 'building' | 'stopped' | 'landed'; done: number; total: number
+  live: { id: string; identifier: string; title: string; status: string; step: string | null }[]
+  held: { id: string; identifier: string; title: string; reason: string }[]
+  failed: { id: string; identifier: string; title: string; error: string | null }[]
+  questions: { id: string; text: string; cost: string | null; reason: string | null; options: { label: string; description: string; changes: string[]; recommended: boolean }[] }[]
+  pr: { number: number | null; url: string | null; status: string } | null
+}
+export interface Now { hold?: Hold | null; running: RunningProject[]; tasks?: BuildTask[]; needsYou: Attention[]; recent: Event[]; counts: { projects: number; running: number; needsYou: number } }
 
 // Talk: a conversation with the factory's agent. Messages are rows; talk.* events say when to refetch.
 export type Risk = 'free' | 'cheap' | 'moderate' | 'expensive'
@@ -373,6 +383,7 @@ export const engine = {
   createProject: (body: { appId: string; name: string; content?: string; description?: string; ideaId?: string; workflowId?: string; issues?: NewProjectIssue[] }) => call<{ project: { id: string } }>('POST', '/projects', body),
   cancelProject: (projectId: string) => call<{ cancelled: number; landed: number }>('POST', `/projects/${projectId}/cancel`),
   start: (id: string) => call<unknown>('POST', `/projects/${id}/start`),
+  buildTask: (issueId: string) => call<{ planning: boolean; started: boolean }>('POST', `/issues/${issueId}/build`), // plan it if it is not, then build it: the task is what is built
   tick: (id: string) => call<unknown>('POST', `/projects/${id}/tick`),
   addIssueToProject: (projectId: string, body: { title: string; brief?: string; description?: string }) => call<Issue>('POST', `/projects/${projectId}/issues`, body),
   // Issues: code or to-do, in a project or not, in order.
