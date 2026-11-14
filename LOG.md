@@ -3341,3 +3341,38 @@ sub-tasks inside the draft project "Library foundation" and nothing said how to 
 
 Running a project with one task planned out of several is what the engine already does: the others are planned in
 turn as it runs, once their briefs are approved.
+
+## A task is brief, plan, audit, build (Sandy, 2026-11-14: "I just don't understand what I'm supposed to do here … why are we building at the project level?")
+
+Decided in conversation, not built. It started from the Build tab: after #193 it listed the project, not the task
+Sandy had planned, and the project's page lit Plan in the rail. Walking through it showed the real mismatch: a new
+project cannot run until something is planned (the engine refuses), the first task needs approve, then Plan it,
+then Run this project, and every later task of a running project plans and builds by itself. Sandy's diagnosis:
+"we built the thing at the wrong level, and then we fixed it by … making it so that the sub-task, not the tasks,
+would be nodes in the graph. But we never uncoupled the building with the project itself … projects are just a way
+of organizing things into a group where the agent is able to … understand the overall goal."
+
+What ties building to the project in the engine today: the integration branch (`project/<id>`), the one pull
+request per project, and the runner walking the project's task list and planning the next task when the ones before
+have landed. A task on its own is wrapped in a hidden project of one (solo.ts) because the project is the only
+thing the runner can build; that wrapper is most of the machinery a task-level build needs.
+
+The shape (SHAPE.md has it in order): **brief** (what and why, short, the person approves) → **plan** (prototype
+analysis, then the ADR, then the sub-tasks with telemetry, tests and a test plan) → **audit** (with the blast
+radius; its output is the merge guide: what and why, and the risks) → **build**. On the word: "a brief used to be
+literally brief, and it was the thing … we want to build. How to build it … is a question for the architecture and
+the planner." On questions: "the whole reason for adding a prototype is so we would figure everything out, but
+there should be zero questions after that"; when one is needed, "the task agent, the parent, should stop and say, I
+have a question for you."
+
+What exists already and only moves: the prototype analysis, the draft ADR, the blast radius, the brief audit, the
+merge guide and the planner. Today the first four are steps that feed the brief, before its approval, and the
+brief is "brought up to date" with them, which is how it stopped being brief. The change is to run them after the
+approval, under Plan and Audit; to make the ADR final there (today the planner may settle a draft ADR, PR #165);
+to take the Run button off the project and Build out of the rail; and to build a task as a task.
+
+Open, to be answered before building: who starts the build (by itself after the audit, or the person after reading
+the merge guide); a pull request per task or per project; and how a task that needs an earlier task's work gets it
+(wait for the merge, or branch from the earlier task's branch). #193's "Ready to build" on the Build page and the
+"Run this project" button on a task's Build section stay until this is built; they are the wrong level but they
+are the only visible way to start a build today.

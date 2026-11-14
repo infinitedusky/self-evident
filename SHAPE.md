@@ -558,6 +558,29 @@ Details and sources in `research/`.
   conversation in the left column is about the app as a whole: it reads the app's checkout, has no worktree, no
   branch and no editing tools, and sends work that changes files to a task. An integration's set-up, which ends in a
   pull request, also gets a worktree.
+- **A task is brief, plan, audit, build; nothing is built at the project level** (Sandy, 2026-11-14: "why are we
+  building at the project level?"; "we never uncoupled the building with the project itself"). Decided in
+  conversation, **not built yet**; where this and an older bullet disagree (the order after the mockup below, the
+  project's Run button, Build in the rail), this is the direction. Details and what exists already: LOG.md, "A task
+  is brief, plan, audit, build".
+  1. **Brief**: what we want and why, and literally brief ("a brief used to be literally brief … the thing that we
+     want to build"). Research, sketches, mockups and the prototype are how the person gets to it. The person
+     approves it. How to build it is not in the brief.
+  2. **Plan**, written by the engine once the brief is approved, in this order: the **prototype analysis** (the
+     prototype read against the brief: what was learned, what was a shortcut, what must be cleaner, where telemetry
+     goes); the **ADR** (the technical decisions, driven by the analysis); the **sub-tasks** (what we used to call
+     the implementation document), which carry everything a plan must have: telemetry, tests, a test plan. With no
+     prototype the analysis is skipped and the ADR comes from the brief and the code.
+  3. **Audit**: a fresh read of the whole plan: is it sound, what could go wrong. The blast radius is part of it,
+     and its output is the **merge guide**, in two parts: what is being built and why ("what is this PR I'm about
+     to look at"), and, with special attention, the risks.
+  4. **Build**: agents do the sub-tasks. It is a section of the task, seen on the task and rolled up on its
+     project.
+  A **project** is a way of grouping tasks so an agent understands the overall goal; it has no Run button. The
+  **Build** item leaves the rail. After an approved brief there should be no questions; when the plan or the build
+  does need one, the task's own agent stops and asks the person. **Open:** whether the build starts by itself once
+  the audit is done, or the person reads the merge guide and presses Build (Sandy said both; Claude suggests the
+  press); a pull request per task or per project; how a task that needs an earlier task's work gets it.
 - **A task starts with a hand-over** (Sandy, 2026-11-14: "I'm finding myself copying questions from the task agent
   into the global agent"). A task made by an agent remembers the conversation that made it, and its page names that
   conversation (there can be several about the app). When the task's own agent starts, a copy of that conversation
