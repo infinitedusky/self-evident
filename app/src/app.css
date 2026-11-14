@@ -484,6 +484,9 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 }
 .dockview-theme-se { box-sizing: border-box; padding: 8px; background: var(--ground); --dv-tabs-and-actions-container-height: 40px; --dv-tab-margin: 6px 2px; --dv-tab-border-radius: 8px; --dv-sash-border-radius: 4px; --dv-tab-close-icon-size: 9px; }
 .dockview-theme-se .dv-dockview { padding: 0; background: transparent; } /* dockview paints this white: square corners behind each group's rounded stroke */
+/* Dockview sizes the tab area a pixel or two wider than the frame it sits in, and that frame clips (and can scroll):
+   one side of every group lost its stroke and its corners. The frame lets it show; the shell's padding has the room. */
+.dockview-theme-se .dv-shell-middle-column > .dv-split-view-container, .dockview-theme-se .dv-shell-middle-column > .dv-split-view-container > .dv-view-container > .dv-view { overflow: visible; }
 .dockview-theme-se .dv-groupview { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
 .dockview-theme-se .dv-tabs-and-actions-container { border-bottom: 1px solid var(--line); padding-left: 4px; }
 .dockview-theme-se .dv-tab { padding: 0 10px; border-radius: var(--dv-tab-border-radius); }

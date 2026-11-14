@@ -3271,3 +3271,8 @@ container queries (the agent goes under the page below 960px of tab, one column 
 grid track that cannot grow past its column, so a long step name is cut short and not pushed under the panels
 beside it. That last one showed on Sandy's screen and not in headless Chromium, so it is fixed by reading the CSS,
 not by seeing it go away.
+
+The right edge was still cut (Sandy, same day: "the top right corner and bottom right corner are still square"):
+dockview sizes the tab area a pixel or two wider than the frame holding it, and the frame clips and can scroll, so
+one side of each group lost its stroke and corners (the right for Sandy, the left in Playwright, where the frame had
+scrolled). The frame no longer clips; the shell's 8px padding has the room.
