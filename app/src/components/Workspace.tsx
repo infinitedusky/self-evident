@@ -7,6 +7,7 @@
  * the conversation's colour marks it. The layout
  * is kept per app in this browser; the tab in front is the address bar's page, so a link or a reload lands on it.
  */
+import { EngineLink } from './EngineLink'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { DockviewDefaultTab, DockviewReact, Orientation, SplitviewReact, type DockviewApi, type DockviewTheme, type IDockviewHeaderActionsProps, type IDockviewPanel, type IDockviewPanelHeaderProps, type IDockviewPanelProps, type SplitviewApi } from 'dockview-react'
 import 'dockview-react/dist/styles/dockview.css'
@@ -300,6 +301,7 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
     <WorkspaceContext.Provider value={value}>
       <Changed.Provider value={sync}>
         <div className={`workspace ${appsOpen ? '' : 'no-apps'}`} data-component="Workspace">
+          <EngineLink />
           {appsOpen && <AppPicker onOpen={(tab) => add(tab)} />}
           <Rail here={focused?.key ?? null} onOpen={(tab) => add(tab)} agentOpen={agentOpen} onToggleAgent={toggleAgent} appsOpen={appsOpen} onToggleApps={toggleApps} />
           <div className="ws-main">

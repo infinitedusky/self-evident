@@ -828,3 +828,6 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .build-list { padding: 4px 18px; margin-bottom: 20px; }
 .build-ask { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--ground); }
 .build-ask .opts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+
+/* The page cannot hear the engine (EngineLink): a bar over the top of everything, out of the layout's way. */
+.engine-link { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 2000; margin-top: 8px; padding: 8px 14px; border: 1px solid var(--bad); border-radius: 999px; background: var(--surface); color: var(--ink); font-size: 13px; box-shadow: 0 6px 24px rgba(0,0,0,.14); max-width: calc(100vw - 32px); }
