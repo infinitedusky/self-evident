@@ -775,7 +775,10 @@ export function buildApp(bus: EventBus) {
 
   // The live feed: replay from ?since=<seq>, then stream as events are committed.
   api.get('/events', async (c) => {
-    const since = c.req.query('since') === 'now' ? await latestSeq() : Number(c.req.query('since') ?? 0) // now: only what happens from here on
+    // A browser that lost the stream and came back says what it last saw (Last-Event-ID): carry on from there, so
+    // nothing committed in the gap is missed. Otherwise ?since: a number, or now for only what happens from here on.
+    const seen = Number(c.req.header('last-event-id'))
+    const since = Number.isFinite(seen) && seen > 0 ? seen : c.req.query('since') === 'now' ? await latestSeq() : Number(c.req.query('since') ?? 0)
     const filter = { workspaceId: c.req.query('workspace'), appId: c.req.query('app'), projectId: c.req.query('project'), issueId: c.req.query('issue') }
     return streamSSE(c, async (stream) => {
       let last = since
