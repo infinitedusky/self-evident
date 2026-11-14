@@ -176,6 +176,13 @@
       "when": 1794685584823,
       "tag": "0024_task_handover",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794693548614,
+      "tag": "0025_project_pr_mode",
+      "breakpoints": true
     }
   ]
 }

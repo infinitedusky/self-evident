@@ -151,6 +151,7 @@ export const project = pgTable('project', { // issues in order (an InDusk master
   content: text('content'), // why it exists and what it must do, Markdown
   status: text('status').notNull().default('drafting'),
   integrationBranch: text('integration_branch'), // [ID] the project's branch; issues land here, only it reaches trunk
+  prMode: text('pr_mode'), // 'issue' (a branch and a pull request per task) or 'project' (one for the project): fixed when its build starts, so a change of the default never moves work that is under way
   lead: text('lead'), priority: integer('priority').notNull().default(0), startDate: date('start_date'), targetDate: date('target_date'),
   sortOrder: integer('sort_order').notNull().default(0), createdAt: createdAt(), updatedAt: at('updated_at'),
   workflowId: text('workflow_id').references((): AnyPgColumn => workflow.id), // its tasks' unless they have their own

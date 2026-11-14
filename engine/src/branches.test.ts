@@ -1,12 +1,14 @@
 /** Stacked PRs: where an issue's branch starts and what its PR is against. */
 import { describe, expect, it } from 'vitest'
-import { issueStart, landingBranch, prMode, stackBase } from './branches.js'
+import { issueStart, landingBranch, prMode, stackBase, modeOf, autoBuild } from './branches.js'
 
 const issues = [{ id: 'a', identifier: 'HG-4', sortOrder: 0 }, { id: 'b', identifier: 'HG-5', sortOrder: 1 }, { id: 'c', identifier: 'HG-6', sortOrder: 2 }]
 
 describe('stacked PRs', () => {
-  it('lands on the project branch by default, on the issue branch (named for Linear) in issue mode', () => {
-    expect(prMode({})).toBe('project'); expect(prMode({ pr_mode: 'issue' })).toBe('issue'); expect(prMode({ pr_mode: 'task' })).toBe('issue')
+  it('lands on the task\'s own branch by default (named for Linear), on the project\'s when the app asks; a started project keeps its mode', () => {
+    expect(prMode({})).toBe('issue'); expect(prMode(null)).toBe('issue'); expect(prMode({ pr_mode: 'issue' })).toBe('issue'); expect(prMode({ pr_mode: 'task' })).toBe('issue'); expect(prMode({ pr_mode: 'project' })).toBe('project')
+    expect(modeOf({ prMode: 'project' }, {})).toBe('project'); expect(modeOf({ prMode: null }, {})).toBe('issue'); expect(modeOf({ prMode: 'issue' }, { pr_mode: 'project' })).toBe('issue')
+    expect(autoBuild({})).toBe(true); expect(autoBuild(null)).toBe(true); expect(autoBuild({ auto_build: false })).toBe(false)
     expect(landingBranch('project', 'project/p1', issues[1])).toBe('project/p1')
     expect(landingBranch('issue', 'project/p1', issues[1])).toBe('project/p1--hg-5')
   })

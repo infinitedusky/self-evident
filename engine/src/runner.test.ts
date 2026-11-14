@@ -9,11 +9,12 @@ import { join } from 'node:path'
 import { eq, inArray } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, build, event, project, repo, run, step, workspace } from './db/schema.js'
+import { app, build, event, issue, project, repo, run, step, workspace } from './db/schema.js'
 import type { Execute } from './executor.js'
 import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
 import { createProject, projectGraph } from './projects.js'
+import { createIssue } from './issues.js'
 import { Runner } from './runner.js'
 import { addItems, dropItem, promote } from './backlog.js'
 import type { Propose } from './planner.js'
@@ -41,7 +42,7 @@ describe.skipIf(!reachable)('runner', () => {
     await writeFile(join(repoPath, 'README.md'), 'hi\n'); await commitAll(repoPath, 'init')
     appId = newId('app')
     await db.insert(workspace).values({ id: wsId, name: 'runner test' })
-    await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'fake app', key: appId.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md' } })
+    await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'fake app', key: appId.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md', pr_mode: 'project' } }) // these tests are of one branch for the project; a task's own branch is tested below
     await db.insert(repo).values({ id: newId('repo'), appId, fullName: '', localPath: repoPath }) // no fullName: no PR step
   })
   afterAll(async () => {
@@ -260,6 +261,33 @@ describe.skipIf(!reachable)('runner', () => {
     expect((await files(b2)).sort()).toEqual([x, y].sort()) // issue two started where issue one ended
     expect(await files(p.integrationBranch!)).toEqual([]) // the project's branch is only the starting point
     await db.update(project).set({ status: 'superseded' }).where(eq(project.id, p.id))
+  })
+
+  it('a task builds by itself: planned, started and landed on its own branch, with nobody running its project', async () => {
+    const own = newId('app'), key = own.slice(-6)
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'task-level app', key: key.toUpperCase(), setup: { test_cmd: 'test -f README.md' } }) // no pr_mode: the default
+    await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: repoPath })
+    const { project: p, issues: [t] } = await createProject({ appId: own, name: 'a group of tasks', issues: [{ title: 'Only a brief', brief: 'build it' }] })
+    const lone = await createIssue(own, { title: 'On its own', kind: 'code', brief: 'build it too' })
+    const propose: Propose = async () => ({ status: 'completed', costUsd: 0, proposal: {
+      phases: [{ key: 'a', title: 'A', description: 'a', summary: 'a', depends_on: [], files: [`${newId('issue')}.txt`], steps: [], checks: [], done_when: '' }],
+      decisions: [], questions: [], notes: '' } })
+    const runner = new Runner({ execute: commits('own'), sessionsMax: 2, propose })
+    await approveBriefs(own)
+    expect(await runner.buildTask(t.id)).toEqual({ planning: true, started: false }) // no Plan it, no Run
+    expect(await runner.buildTask(t.id)).toEqual({ planning: true, started: false }) // asked twice while it plans: planned once
+    await until(cleaned(p.id))
+    const g = (await projectGraph(p.id))!
+    expect(g.subIssues.map((x) => x.status)).toEqual(['done'])
+    expect(g.project.prMode).toBe('issue') // fixed when its build started
+    const branch = `${p.integrationBranch}--${key.toLowerCase()}-${t.number}`
+    expect((await git(repoPath, ['ls-tree', '--name-only', branch])).stdout).toContain(`own-${g.subIssues[0].identifier}.txt`)
+    expect((await git(repoPath, ['ls-tree', '--name-only', p.integrationBranch!])).stdout).not.toContain('own-') // the project's branch carries nothing
+    await runner.buildTask(lone.id) // in no project: built in a project of its own that nobody sees
+    const soloId = async () => (await db.select().from(issue).where(eq(issue.id, lone.id)))[0].projectId
+    await until(async () => !!(await soloId()))
+    await until(cleaned((await soloId())!))
+    expect((await projectGraph((await soloId())!))!.subIssues.map((x) => x.status)).toEqual(['done'])
   })
 
   it('stores the builder\'s todo list as the sub-issue\'s steps, latest list wins', async () => {
