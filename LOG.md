@@ -3913,3 +3913,19 @@ idea: it looked lost. It was not, but nothing led to it.
 Also found: the app's type-check is `pnpm --filter app typecheck`; plain `tsc --noEmit` in `app/` checks nothing
 (the root tsconfig has no files). Checks run that way through 2026-11-15 were empty, and main carries 11 type errors
 the tests do not catch. Fixed next.
+
+## The engine's own Doppler scope is not handed on (Sandy, 2026-11-15: "HG-259 still not working when I start the prototype")
+
+A Homework Gate prototype's API died with "HG_SECRET is not set" though its command runs under `doppler run --`.
+The engine is itself started with `doppler run`, which puts DOPPLER_PROJECT, DOPPLER_CONFIG and DOPPLER_ENVIRONMENT
+in its environment. Everything it starts inherited them, and the Doppler CLI obeys them over the folder it is in,
+so an app's own `doppler run --` read Self Evident's secrets in place of the app's. Shown both ways in that
+prototype's worktree: project `homework-gate` from a terminal, `self-evident` with the engine's two variables set.
+
+- **Now** (`own-scope.ts`, imported first by the server): the three names are removed from the engine's environment
+  at start, so a prototype, a guide's command, a Storybook, an agent and what it runs all resolve Doppler by their
+  own folder. The engine never calls Doppler itself.
+
+Not done, and it matters: the engine's own secrets (its database address, its Linear key) are still in the
+environment of everything it starts, because they are in the engine's. That is a separate change: read them once,
+then take them out too.
