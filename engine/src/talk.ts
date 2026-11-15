@@ -31,7 +31,7 @@ import { prototypeSkill, skillOptions, stepSkillPrompt, withStepDefaults, type S
 import { accountEnv, accountPrefix, configDirFor, configDirOf } from './account.js'
 import { issueDetail, PlanError, projectGraph } from './projects.js'
 import { putAwayIds } from './apps.js'
-import { onIdeaMoved } from './work.js'
+import { onIdeaMoved, splitPrompt } from './work.js'
 import { existsSync, statSync } from 'node:fs'
 import { stopStorybookAt } from './storybook.js'
 import { lastUuid, latestSession, readTurns, sessionFile, sessionLabel, sessionsIn, sessionTitle } from './terminal.js'
@@ -258,13 +258,13 @@ export async function ideaAgents(ideaId: string) {
  * turn ends (it may be the one that converted the idea).
  */
 const repinned = new Set<string>()
-onIdeaMoved((m) => { void ideaTalkMoved(m.talkId, m.task) })
-export async function ideaTalkMoved(sessionId: string, task: string) {
-  await record(sessionId, 'engine', 'handoff', `This idea is now the task ${task}. This conversation, its worktree and what it made are the task's.`).catch(() => {})
+onIdeaMoved((m) => { void ideaTalkMoved(m.talkId, m.task, m.project) })
+export async function ideaTalkMoved(sessionId: string, task: string, project?: string) {
+  await record(sessionId, 'engine', 'handoff', `This idea is now the task ${task}${project ? `, the first task of the project "${project}"` : ''}. This conversation, its worktree and what it made are the task's.`).catch(() => {})
   const l = live.get(sessionId)
-  if (!l) return
-  if (l.busy) { repinned.add(sessionId); return }
-  l.close(); live.delete(sessionId)
+  if (l) { if (l.busy) repinned.add(sessionId); else { l.close(); live.delete(sessionId) } }
+  // Converted to a project: one task was made. Whether the idea is several is asked of the agent that knows it.
+  if (project) await say(sessionId, splitPrompt(project, task), undefined, { author: 'engine', kind: 'handoff' }).catch((err) => console.error(`[talk] could not ask ${sessionId} to split the idea: ${String(err?.message ?? err).slice(0, 200)}`))
 }
 
 /**

@@ -3895,3 +3895,21 @@ and the way to try it was a list of commands in the chat.
 
 Not changed: writing a guide is still rated a cheap action for an agent, though it can now carry a command. The
 person sees the command before pressing. Output is kept in memory only and is gone when the engine restarts.
+
+## An idea converted to a project starts with a task (Sandy, 2026-11-15: "it needs to generate at least one task, but more if it makes sense … I've lost the task. I've lost the prototype")
+
+Converting an idea to a project made an empty project and hung the idea's research and prototype on the project
+itself. With the project's own steps folded at the bottom of its page, the page showed no tasks and nothing of the
+idea: it looked lost. It was not, but nothing led to it.
+
+- **Now** (`work.ts`, `convertIdeaTx`): the project is made with one task, named after the idea. The idea's
+  research, mockups, prototype, rough draft (as the task's brief) and its own agent go to that task, exactly as when
+  an idea becomes a task. A project only groups.
+- **More tasks when it makes sense**: the idea's agent, now the task's, is asked at once whether the idea is one
+  task or several, and to add the others to the project and trim the first (`splitPrompt`). An idea with no agent
+  of its own gets the one task.
+- The person lands on the project's page, its task leading.
+
+Also found: the app's type-check is `pnpm --filter app typecheck`; plain `tsc --noEmit` in `app/` checks nothing
+(the root tsconfig has no files). Checks run that way through 2026-11-15 were empty, and main carries 11 type errors
+the tests do not catch. Fixed next.
