@@ -6,7 +6,7 @@
 import { asc, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, build, event, project, workspace } from './db/schema.js'
+import { app, build, event, pr, project, workspace } from './db/schema.js'
 import { changeState, createIssue, getIssue, listIssues, reorder, updateIssue } from './issues.js'
 import { addSubIssues, createProject, issueDetail, listCodeIssues, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { newId } from './ids.js'
@@ -129,5 +129,18 @@ describe.skipIf(!reachable)('projects in Postgres', () => {
     expect((await getIssue(db, subIssues[1].id)).state).toBe('canceled')
     expect((await getIssue(db, subIssues[0].id)).state).toBe('done') // what landed stays landed
     expect((await db.select().from(build).where(eq(build.issueId, subIssues[1].id)))[0].status).toBe('cancelled')
+  })
+
+  it('a task knows its pull request: its own, and a sub-task shows its task\'s; a project\'s one pull request otherwise', async () => {
+    const { project: p, issues, subIssues } = await createProject({ appId, name: 'linked (sample)', issues: [{ title: 'First (sample)', subIssues: [{ key: 'a', title: 'A (sample)' }] }, { title: 'Second (sample)' }] })
+    expect((await issueDetail(issues[0].id)).pr).toBeNull()
+    await db.insert(pr).values({ id: newId('pr'), appId, projectId: p.id, issueId: issues[0].id, number: 12, status: 'open', url: 'https://example.com/sample/pull/12' })
+    expect((await issueDetail(issues[0].id)).pr).toEqual({ number: 12, url: 'https://example.com/sample/pull/12', status: 'open' })
+    expect((await issueDetail(subIssues[0].id)).pr).toMatchObject({ number: 12 })
+    expect((await issueDetail(issues[1].id)).pr).toBeNull() // another task's pull request is not this one's
+    expect((await listCodeIssues(appId)).find((t) => t.id === issues[0].id)!.pr).toMatchObject({ number: 12, status: 'open' })
+    await db.insert(pr).values({ id: newId('pr'), appId, projectId: p.id, number: 13, status: 'merged', url: 'https://example.com/sample/pull/13' })
+    expect((await issueDetail(issues[1].id)).pr).toMatchObject({ number: 13, status: 'merged' }) // the project's one pull request
+    expect((await issueDetail(issues[0].id)).pr).toMatchObject({ number: 12 }) // its own still wins
   })
 })

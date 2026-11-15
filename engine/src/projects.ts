@@ -420,6 +420,15 @@ export async function listProjects(opts: { all?: boolean; appId?: string; solo?:
  * Every top-level code issue of an app (in a project or not; superseded projects aside), with its project, its
  * sub-issues' builds by status, and where planning stands: the Issues page.
  */
+/**
+ * The pull request a task's work is in: its own (a pull request per task), else its project's one pull request (an app
+ * that lands a project in one). A sub-task has no pull request of its own: it shows its task's.
+ */
+export function prOf(prs: (typeof pr.$inferSelect)[], t: { id: string; parentId: string | null; projectId: string | null }) {
+  const q = prs.find((x) => x.issueId === (t.parentId ?? t.id)) ?? prs.find((x) => !x.issueId && !!t.projectId && x.projectId === t.projectId)
+  return q ? { number: q.number, url: q.url, status: q.status } : null
+}
+
 export async function listCodeIssues(appId: string) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError(`no app ${appId}`)
@@ -430,6 +439,7 @@ export async function listCodeIssues(appId: string) {
   const builds = subs.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, subs.map((s) => s.id))) : []
   const planning = rows.length ? await db.select({ issueId: event.issueId, type: event.type, seq: event.seq }).from(event)
     .where(and(inArray(event.issueId, rows.map((r) => r.id)), sql`${event.type} like 'issue.plan%'`)).orderBy(desc(event.seq)) : []
+  const prs = await db.select().from(pr).where(eq(pr.appId, appId))
   const order = new Map(projects.map((p) => [p.id, p.createdAt.getTime()]))
   const loose = (t: { projectId: string | null }) => !t.projectId || !!projects.find((p) => p.id === t.projectId)?.solo // in no project, or in one of its own
   return rows
@@ -442,6 +452,7 @@ export async function listCodeIssues(appId: string) {
         project: p ? { id: p.id, name: p.name, status: p.status, solo: p.solo } : null,
         builds: mine.reduce<Record<string, number>>((acc, s) => ({ ...acc, [s]: (acc[s] ?? 0) + 1 }), {}),
         planning: planning.find((e) => e.issueId === t.id)?.type ?? null, // issue.planning | issue.plan_waiting | issue.planned | issue.plan_failed
+        pr: prOf(prs, t), // where its work is waiting, once it has one
       }
     })
 }
@@ -470,7 +481,9 @@ export async function issueDetail(issueId: string) {
   const [last] = await db.select().from(run).where(eq(run.issueId, issueId)).orderBy(desc(run.attempt)).limit(1)
   const steps = last ? await db.select().from(step).where(and(eq(step.issueId, issueId), eq(step.runId, last.id))).orderBy(asc(step.position)) : []
   const comments = await listComments(db, issueId)
+  const prs = i.projectId ? await db.select().from(pr).where(eq(pr.projectId, i.projectId)) : []
   return {
+    pr: prOf(prs, i), // the pull request its work is in, once it has one
     madeBy: await madeBy(i), // the conversation that created it, when one did
     ...i, identifier: identifier(a.key, i.number), project: p ? { id: p.id, name: p.name, status: p.status, solo: p.solo } : null, comments,
     runner: tktOn(a.setup) ? 'tkt' as const : null, // who builds it once the brief is approved: tkt, or Self Evident's own agents
