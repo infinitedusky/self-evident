@@ -3929,3 +3929,21 @@ prototype's worktree: project `homework-gate` from a terminal, `self-evident` wi
 Not done, and it matters: the engine's own secrets (its database address, its Linear key) are still in the
 environment of everything it starts, because they are in the engine's. That is a separate change: read them once,
 then take them out too.
+
+## A task's checks carry on after its plan, however it was planned (Sandy, 2026-11-15: "the blast radius, audit and final ADR aren't running even though they've all been answered … is that supposed to happen automatically")
+
+BON-51, a task in a running project: prototype approved, analysis done, then its plan was started while the draft
+ADR was still being written, and after the plan nothing more ran.
+
+- **Cause 1**: a running project plans its next task by itself (`runner.planNext`, from before a task was what is
+  built). It did not know about the checks, so it planned ahead of the analysis and the ADR the plan is made from.
+  Now it leaves a task alone while either is owed; the checks' line plans it when they are in.
+- **Cause 2**: only a plan asked for by the checks' line handed back to it. A plan started any other way ended
+  without a word, and the blast radius, the audit and the final step never started. Now every finished plan tells
+  the checks (`planner.onAnyPlanned`).
+- **An answer nudges the line too**, and **a restart carries a line on**: at start, tasks with a check written in
+  the last day and checks still owed are moved on by one (`checks.resumeChecks`). Only those, so a restart does not
+  start the checks of a task nobody has touched.
+
+Left as it is: BON-51's plan was made before its ADR was finished. Its final step exists to put the ADR and the plan
+right against each other, so it is not planned again.
