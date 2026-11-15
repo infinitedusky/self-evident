@@ -52,7 +52,8 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   useEffect(() => { if (shown) setPane('code') }, [shown])
   const code = viewed?.kind === 'prototype' ? viewed.id : null // a prototype's step also has its code to read
   const waitsOnApproval = row.waitingOn === 'brief' && on === 'task' && waitingState?.status === 'done'
-  const own = row.key !== 'idea' && row.key !== 'brief' // the steps whose work is kept as a step
+  // The steps whose work is kept as a step. A task's brief is on the task itself (its page passes it in); an idea's rough draft is a step like the others.
+  const own = row.key !== 'idea' && !(row.key === 'brief' && on === 'task')
   const approves = own && subject.kind === 'issues' && needsApproval(row.key, on) // a person approves it, here
   useEffect(() => {
     setAsked(false)
@@ -142,6 +143,9 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
           {/* A prototype that exists is the content: with nothing written yet, say so and where the prototype is. */}
           {row.key === 'prototype' && proto && !work?.body && !work?.summary?.trim() && <p className="muted" data-component="NothingForTheBrief">Nothing is written for the brief yet. The prototype itself is under <button type="button" className="linkish" onClick={() => setPane('view')}>View</button>.</p>}
 
+          {/* Under way, and nothing written here yet: say so, so an empty page is not mistaken for a broken one. */}
+          {own && row.key !== 'prototype' && s.status !== 'none' && !skipped(s) && work && !work.body && !work.summary?.trim() && !work.refs.length && <p className="muted" data-component="NothingWrittenYet">Its agent has {s.status === 'done' ? 'marked this done' : 'started this'}, and nothing is written here yet. Ask it in the conversation beside this page.</p>}
+
           {skipped(s) && (
             <div className="step-actions">
               <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: work?.body || work?.refs.length ? 'started' : 'none' }))}>Do it after all</button>
@@ -151,7 +155,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
             <div className="step-actions">
               {s.status === 'none'
                 ? <button className="btn" disabled={busy || asked} onClick={ask}>{row.key === 'prototype' ? 'Start a prototype with the agent' : 'Start with the agent'}</button>
-                : !(row.key === 'prototype' && proto) && <button className="btn quiet" disabled={busy || asked} onClick={ask}>Ask the agent to carry on</button>}{/* a prototype that is there is talked about with its agent, not started again from here */}
+                : null}{/* once a step is under way there is nothing to press: its agent is beside the page, and what it wrote is above (Sandy, 2026-11-15: "we don't need to push a button that says ask the agent to carry on … what we need is the content") */}
               {own && !approves && s.status === 'started' && row.key !== 'prototype' && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'done' }))}>Mark done</button>}
               {on === 'task' && canSkip(row) && !finished(s, on) && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'skipped' }))} title="Say this optional step is not being done on this task">Skip this step</button>}
               {asked && <span className="faint">{ownAgent ? 'Handed to this task\'s agent, on the right.' : 'Handed to the agent: it\'s in the agent panel.'}</span>}
