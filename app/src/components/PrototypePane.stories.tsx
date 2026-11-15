@@ -26,6 +26,18 @@ export const NoneYet: Story = { beforeEach: withEngine({ prototypes: [] }) }
 export const NoCommand: Story = { beforeEach: withEngine({ prototypes: [], apps: apps.map((a) => a.id === sampleApp.id ? { ...a, setup: { ...a.setup, prototype_cmd: undefined } } : a) }) }
 /** Running and answering: the app in a frame with an address bar and device widths. */
 export const Running: Story = { args: { id: running.id, path: at }, beforeEach: withEngine({ prototypes: [running] }) }
+/** With a guide written (made up): the same "What to try" tab a shared link shows, in the corner of the prototype; open, its steps move this view. */
+export const WithAGuide: Story = {
+  args: { id: running.id, path: at },
+  beforeEach: withEngine({ prototypes: [{ ...running, guide: { intro: 'The quiet front page (sample).', steps: [{ title: 'See the quiet page', path: at, try: 'Nothing should need you.' }, { title: 'See a busy one', path: '/iframe.html?id=pages-now--busy&viewMode=story', try: 'What needs you is at the top.' }] } }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: /What to try · 0\/2/ }, { timeout: 5000 }))
+    await expect(await c.findByText('You are here')).toBeInTheDocument()
+    await userEvent.click(await c.findByRole('button', { name: 'Go there →' }))
+    await expect(await c.findByLabelText('Path')).toHaveValue('/iframe.html?id=pages-now--busy&viewMode=story')
+  },
+}
 /** In a narrow column: the address and the server's buttons on one row, the device widths and the data on the next. Nothing hides or overlaps. */
 export const Narrow: Story = {
   args: { id: running.id, path: at }, beforeEach: withEngine({ prototypes: [running] }),
