@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { rows } from '@self-evident/engine/steps'
 import { StepSection } from './StepSection'
 import { withEngine } from '../stories/mock-engine'
-import { expect, within } from 'storybook/test'
+import { expect, userEvent, within } from 'storybook/test'
 import { prototypes, riskWork, sampleApp, taskStepsView } from '../stories/sample'
 
 // One step of a task as its own page. Made up: the sample task's steps under "UI change (sample)".
@@ -46,6 +46,43 @@ export const PrototypeCodeView: Story = {
     const c = within(canvasElement)
     await expect(await c.findByRole('tab', { name: 'Code' })).toHaveAttribute('aria-selected', 'true')
     await expect(await c.findByText(/the saved card is read here/)).toBeInTheDocument()
+  },
+}
+const protoRow = { ...row('research'), key: 'prototype', state: { key: 'prototype', status: 'started', detail: 'A first version is up (sample)' }, waitingOn: undefined } as typeof all[number]
+const withProto = { prototypes: prototypes.map((p, i) => i === 0 ? { ...p, issueId: 'iss_sample20' } : p) }
+/** A prototype that is built, on "For the brief": what it wrote for the brief shows, and there is no button asking the agent to carry on. */
+export const PrototypeForTheBrief: Story = {
+  args: { row: protoRow },
+  beforeEach: withEngine({ ...withProto, stepWork: { ...riskWork, key: 'prototype', summary: null, body: 'The one-page form works with a saved card (sample). A declined card is shown in place.' } }),
+  parameters: { route: { path: '/tasks/:id/prototype', url: '/tasks/iss_sample20/prototype' } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('tab', { name: 'For the brief' }))
+    await expect(await c.findByText(/works with a saved card \(sample\)/)).toBeInTheDocument()
+    await expect(c.queryByRole('button', { name: 'Ask the agent to carry on' })).toBeNull()
+  },
+}
+/** The same with nothing written yet: it says so and points at the prototype, still with no carry-on button. */
+export const PrototypeNothingWritten: Story = {
+  args: { row: protoRow },
+  beforeEach: withEngine({ ...withProto, stepWork: null }),
+  parameters: { route: { path: '/tasks/:id/prototype', url: '/tasks/iss_sample20/prototype' } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('tab', { name: 'For the brief' }))
+    await expect(await c.findByText(/Nothing is written for the brief yet/)).toBeInTheDocument()
+    await expect(c.queryByRole('button', { name: 'Ask the agent to carry on' })).toBeNull()
+  },
+}
+/** An idea's prototype (made up): found by the idea, so the idea's step shows it too. */
+export const IdeaPrototype: Story = {
+  args: { subject: { kind: 'ideas', id: 'idea_sample1' }, on: 'idea', base: '/ideas/idea_sample1', row: protoRow },
+  beforeEach: withEngine({ prototypes: prototypes.map((p, i) => i === 0 ? { ...p, issueId: null, ideaId: 'idea_sample1' } : p), stepWork: null }),
+  parameters: { route: { path: '/ideas/:id/prototype', url: '/ideas/idea_sample1/prototype' } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('tab', { name: 'For the brief' }))
+    await expect(c.queryByRole('button', { name: 'Ask the agent to carry on' })).toBeNull()
   },
 }
 /** Waiting on a step before it: says which, and links there. */

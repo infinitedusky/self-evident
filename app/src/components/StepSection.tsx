@@ -56,9 +56,11 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   const approves = own && subject.kind === 'issues' && needsApproval(row.key, on) // a person approves it, here
   useEffect(() => {
     setAsked(false)
-    if (own && row.key !== 'prototype' && s.status !== 'none') engine.step(subject, row.key).then(setWork).catch((e) => setError(err(e)))
+    if (own && s.status !== 'none') engine.step(subject, row.key).then(setWork).catch((e) => { if (row.key === 'prototype') setWork(null); else setError(err(e)) }) // a prototype's step has notes for the brief too
     else setWork(null)
-    if (row.key === 'prototype') engine.prototypes(appId).then((all) => setProtos(all.filter((p) => p.issueId === subject.id && p.status !== 'discarded'))).catch(() => {})
+    // The prototypes started on this thing: a task's by the task, an idea's by the idea.
+    const mine = (p: Prototype) => (subject.kind === 'ideas' ? p.ideaId === subject.id : p.issueId === subject.id)
+    if (row.key === 'prototype') engine.prototypes(appId).then((all) => setProtos(all.filter((p) => mine(p) && p.status !== 'discarded'))).catch(() => {})
   }, [subject.id, row.key, s.status, s.detail]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const act = async (fn: () => Promise<unknown>) => { setBusy(true); setError(null); try { await fn() } catch (e) { setError(err(e)) } finally { setBusy(false) } }
@@ -137,6 +139,9 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
                 <div className="md step-body"><Markdown remarkPlugins={[remarkGfm]}>{work.body}</Markdown></div>
               </>)}
 
+          {/* A prototype that exists is the content: with nothing written yet, say so and where the prototype is. */}
+          {row.key === 'prototype' && proto && !work?.body && !work?.summary?.trim() && <p className="muted" data-component="NothingForTheBrief">Nothing is written for the brief yet. The prototype itself is under <button type="button" className="linkish" onClick={() => setPane('view')}>View</button>.</p>}
+
           {skipped(s) && (
             <div className="step-actions">
               <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: work?.body || work?.refs.length ? 'started' : 'none' }))}>Do it after all</button>
@@ -146,7 +151,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
             <div className="step-actions">
               {s.status === 'none'
                 ? <button className="btn" disabled={busy || asked} onClick={ask}>{row.key === 'prototype' ? 'Start a prototype with the agent' : 'Start with the agent'}</button>
-                : <button className="btn quiet" disabled={busy || asked} onClick={ask}>Ask the agent to carry on</button>}
+                : !(row.key === 'prototype' && proto) && <button className="btn quiet" disabled={busy || asked} onClick={ask}>Ask the agent to carry on</button>}{/* a prototype that is there is talked about with its agent, not started again from here */}
               {own && !approves && s.status === 'started' && row.key !== 'prototype' && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'done' }))}>Mark done</button>}
               {on === 'task' && canSkip(row) && !finished(s, on) && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'skipped' }))} title="Say this optional step is not being done on this task">Skip this step</button>}
               {asked && <span className="faint">{ownAgent ? 'Handed to this task\'s agent, on the right.' : 'Handed to the agent: it\'s in the agent panel.'}</span>}
