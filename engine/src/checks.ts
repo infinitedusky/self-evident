@@ -22,7 +22,7 @@ import { app, issue, prototype, repo, session, sessionMessage, stepWork } from '
 import { homeRepo } from './workbench.js'
 import { withLock } from './landing.js'
 import { BEFORE_PLAN, CHECKS, checksOwed, step, type StepKey } from './steps.js'
-import { checkTalks, onTurnEnd, say, startCheckTalk, taskTalk, type SubjectRef } from './talk.js'
+import { checkTalks, cutOff, onTurnEnd, say, startCheckTalk, taskTalk, type SubjectRef } from './talk.js'
 import { stepsOf } from './work.js'
 import { onAnyPlanned } from './planner.js'
 import { BRIEF_FORM } from './brief.js'
@@ -186,6 +186,9 @@ onAnyPlanned((issueId) => { void advanceChecks(issueId).catch((err) => console.e
  * The engine has started: a line that was under way is carried on. Only tasks with a check written in the last day
  * and checks still owed, so a restart does not start, by surprise, the checks of a task nobody has touched.
  */
+/** What a check's agent is told when the engine restarted under it. */
+export const CUT_OFF = 'The engine restarted while you were in the middle of this. Nothing you had already saved is lost. Carry on from where you were: check what you have written so far, finish the step, and hand your report back as you were told to.'
+
 export async function resumeChecks(now = new Date()) {
   const since = new Date(now.getTime() - 24 * 3_600_000)
   const recent = await db.selectDistinct({ issueId: stepWork.issueId }).from(stepWork).where(and(inArray(stepWork.key, CHECKS), sql`${stepWork.issueId} is not null`, sql`${stepWork.updatedAt} > ${since}`))
@@ -196,6 +199,14 @@ export async function resumeChecks(now = new Date()) {
     if (!t || t.parentId || ['done', 'canceled', 'duplicate'].includes(t.state)) continue
     const v = await stepsOf({ issueId })
     if (!checksOwed(v.states, v.resolved.workflow).length) continue
+    // A check whose agent was cut off mid-turn by the restart: its conversation is still open, so the line would
+    // wait on it for good. It is told to carry on; when its turn ends the line moves as usual.
+    const steps = new Map(v.states.map((x) => [x.key, x.status]))
+    for (const s of await checkTalks(issueId)) {
+      const key = (s.subjectRef as SubjectRef).check
+      if (!key || steps.get(key) === 'done' || !(await cutOff(s.id))) continue
+      await say(s.id, CUT_OFF, undefined, { author: 'engine', kind: 'brief', payload: { resumed: true, label: 'Carry on' } }).then(() => carried.push(`${issueId}: resumed ${key}`), (err) => console.error(`checks: could not resume ${key} of ${issueId}`, err))
+    }
     const move = await advanceChecks(issueId).catch(() => ({ do: 'nothing' as const }))
     if (move.do !== 'nothing') carried.push(`${issueId}: ${move.do}${'key' in move ? ` ${move.key}` : ''}`)
   }

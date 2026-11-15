@@ -362,6 +362,18 @@ export function liveForTest(sessionId: string, pending = new Map<string, Pending
 }
 
 /** The open conversations of the fresh agents out on a task's checks, oldest first. */
+/**
+ * Whether a conversation's agent was cut off in the middle of a turn: it was given something to do, or had begun
+ * doing it, after the last time a turn of its ended. An agent that ended its turn (finished, or stopped to wait for
+ * the person) was not cut off, however long ago.
+ */
+export async function cutOff(sessionId: string): Promise<boolean> {
+  if (live.get(sessionId)?.busy) return false // it is working right now
+  const [lastEnd] = await db.select({ id: sessionMessage.id }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, sessionId), eq(sessionMessage.kind, 'result'))).orderBy(desc(sessionMessage.id)).limit(1)
+  const after = await db.select({ id: sessionMessage.id }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, sessionId), sql`${sessionMessage.id} > ${lastEnd?.id ?? 0}`, sql`(${sessionMessage.author} in ('agent', 'tool') or ${sessionMessage.kind} = 'brief')`)).limit(1)
+  return after.length > 0
+}
+
 export const checkTalks = (issueId: string) => db.select().from(session)
   .where(and(eq(session.kind, 'talk'), eq(session.status, 'open'), sql`${session.subjectRef}->>'checkOf' = ${issueId}`)).orderBy(session.createdAt)
 
