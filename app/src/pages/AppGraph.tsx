@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { Badge, type Tone } from '../components/Badge'
 import { asked, PlanGraphView } from '../components/PlanGraphView'
-import { openEvents, API, EVENT_TYPES, type App, type GraphFile, type GraphIssue, type GraphSubIssue } from '../engine'
+import { openEvents, API, EVENT_TYPES, type App, type GraphFile, type GraphIssue, type GraphSubIssue, type Question } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 interface AppGraphData {
@@ -16,6 +16,7 @@ interface AppGraphData {
   subIssues: GraphSubIssue[]
   conflicts: [string, string][]
   files?: GraphFile[]
+  questions?: Question[] // the unanswered ones, drawn before the work they stand over
 }
 const PROJECT_TONE: Record<string, Tone> = { running: 'accent', landed: 'ok' }
 const short = (t: string) => (t.length > 28 ? t.slice(0, 26).trimEnd() + '…' : t)

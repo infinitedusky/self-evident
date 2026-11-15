@@ -16,4 +16,4 @@ built from that log. Keep it light: no plan ceremony, no gates. When something
 is decided, write it into LOG.md or SHAPE.md before moving on.
 
 UI starts as a story: a new page, component or state is written as a Storybook story first (made-up sample data,
-labelled; see `app/src/stories/`), then built to match. `pnpm --filter app test` fails on a screen without one.
+labelled; see `app/src/stories/`), then built to match. `pnpm --filter app test` fails on a screen without one, and on a type error (it type-checks first; plain `tsc --noEmit` in `app/` checks nothing).

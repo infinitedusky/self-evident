@@ -3868,6 +3868,14 @@ server, and nothing asked that server.
 Not done: a step that points at a story, opened in the Storybook view. That is what the guessed paths were reaching
 for. On a shared link it needs the Storybook shared too.
 
+## The app's tests type-check first (2026-11-15)
+
+`pnpm --filter app test` ran the story tests only, and Vite does not type-check, so type errors reached main unseen:
+eleven of them. One was a real bug: Plan's step marks filtered on a place, 'after', that no longer exists, so the
+checks after a prototype showed as marks. The rest were types behind the code (a step's `skipped` and `none`, a
+task's `updatedAt`, the app graph's questions) and sample data. All fixed, and the test command now runs
+`tsc -p tsconfig.app.json --noEmit` before the stories.
+
 ## A prototype with no screen is tried by Run buttons (Sandy, 2026-11-15: "can we add a command line window if that is the prototype access point"; asked which, "Run buttons")
 
 Homework Gate's OpenTelemetry collector has no screens. Its Prototype tab started the app's web server, which failed,
