@@ -61,6 +61,10 @@ describe.skipIf(!reachable)('todos', () => {
     expect((await listBacklog(p.id)).filter((b) => b.state === 'backlog')).toEqual([]) // it left the backlog: it is a to-do now
     const g = (await projectGraph(p.id))!
     expect(g.todos.map((x) => [x.title, x.checklist.length])).toEqual([['Get Naya set up', 2]])
+    // The project's page draws them with the same card as the to-dos page, so they come in the same shape: each line
+    // with its text and whether it is done, who has it, and open or not (they came as bare rows: boxes with no words).
+    expect(g.todos[0]).toMatchObject({ status: 'open', owner: 'person', notes: 'she tests it first', project: { id: p.id } })
+    expect(g.todos[0].checklist.map((l) => [l.text, l.done])).toEqual([['Call Naya', false], ['Install it on her phone', false]])
 
     const { project: foreign } = await createProject({ appId: otherApp, name: 'elsewhere', issues: [{ title: 'x' }] })
     await expect(createTodo({ appId, title: 'x', projectId: foreign.id })).rejects.toThrow(/not in this app/)

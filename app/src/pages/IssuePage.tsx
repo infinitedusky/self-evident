@@ -20,6 +20,7 @@ import { MergeGuide } from '../components/MergeGuide'
 import { mark, TaskNav } from '../components/TaskNav'
 import { WorkflowChoice } from '../components/WorkflowChoice'
 import { Handover } from '../components/Handover'
+import { plannedSteps } from '../planned-steps'
 import { BRIEF_WORDS, briefWords } from '@self-evident/engine/brief'
 import { QuestionAsk } from '../components/QuestionAsk'
 import { PlanCovers } from '../components/Requirements'
@@ -401,18 +402,6 @@ function Planner({ i, busy, act }: { i: IssueDetail; busy?: boolean; act?: (fn: 
       {i.project && <p style={{ margin: '8px 0 0' }}><Link to={`/projects/${i.project.id}`}>{i.project.solo ? 'Its plan and build →' : 'The project →'}</Link></p>}
     </section>
   )
-}
-
-/** The steps in a sub-issue's brief, as the planner wrote them: "### Steps", numbered, each with its technical note under it. */
-function plannedSteps(brief: string | null): { text: string; technical: string }[] {
-  const section = brief?.split(/^### Steps\s*$/m)[1]?.split(/^(?:### |\*\*Done when)/m)[0] ?? ''
-  const steps: { text: string; technical: string }[] = []
-  for (const line of section.split('\n')) {
-    const item = line.match(/^\d+\.\s+(.*)/)
-    if (item) steps.push({ text: item[1], technical: '' })
-    else if (steps.length && /^\s+-\s+/.test(line)) steps[steps.length - 1].technical = line.replace(/^\s+-\s+/, '')
-  }
-  return steps
 }
 
 /** A sub-issue's steps: the planner's, until the builder starts and keeps its own list; then the builder's, live, with the plan folded under it. */

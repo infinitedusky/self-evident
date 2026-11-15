@@ -12,6 +12,7 @@ import '@xyflow/react/dist/style.css'
 import { useEffect, useMemo, useState } from 'react'
 import type { BuildStatus, GraphFile, GraphSubIssue } from '../engine'
 import { Badge, type Tone } from './Badge'
+import { plannedSteps } from '../planned-steps'
 
 export const STATUS_TONE: Record<BuildStatus, Tone> = {
   queued: 'neutral', ready: 'accent', running: 'accent', awaiting_answer: 'warn', merging: 'accent', testing: 'accent',
@@ -21,12 +22,27 @@ const LIVE: BuildStatus[] = ['running', 'merging', 'testing', 'awaiting_answer']
 
 type PhaseNodeData = { phase: GraphSubIssue; label?: string }
 
+/**
+ * A sub-task's progress through its steps, on its node: one segment per step, how many are done of how many, and the
+ * one it is on (Sandy, 2026-11-14: "can we add the step count to the subtask nodes … what it's working on and how many
+ * there are total"). While it builds, the steps are the builder's own list as it keeps it. Before that they are the
+ * ones the planner wrote in its brief, so the total is known from the start.
+ */
+export function stepProgress(phase: { steps?: { text: string; status: string }[]; brief?: string | null; status: string }) {
+  const own = phase.steps ?? []
+  const planned = own.length ? [] : plannedSteps(phase.brief)
+  const total = own.length || planned.length
+  const landed = phase.status === 'done'
+  const done = own.length ? own.filter((s) => s.status === 'completed').length : landed ? total : 0
+  const at = own.findIndex((s) => s.status === 'in_progress')
+  const marks = Array.from({ length: total }, (_, i) => (own.length ? (own[i].status === 'completed' ? 'done' : own[i].status === 'in_progress' ? 'now' : 'todo') : landed ? 'done' : 'todo'))
+  return { total, done, marks, current: at >= 0 ? { n: at + 1, text: own[at].text } : null, planned: !own.length && total > 0 && !landed }
+}
+
 function PhaseNode({ data }: NodeProps<Node<PhaseNodeData>>) {
   const { phase } = data
   const live = LIVE.includes(phase.status)
-  const steps = phase.steps ?? []
-  const doneSteps = steps.filter((s) => s.status === 'completed').length
-  const current = steps.find((s) => s.status === 'in_progress')
+  const p = stepProgress(phase)
   return (
     <div className={`task-node ${live ? 'live' : ''} ${phase.status}`} data-component="PhaseNode">
       <Handle type="target" position={Position.Left} />
@@ -36,11 +52,16 @@ function PhaseNode({ data }: NodeProps<Node<PhaseNodeData>>) {
       </div>
       <div className="task-node-title">{phase.title}</div>
       {phase.heldReason && phase.status !== 'done' && <div className="task-node-note">{phase.heldReason}</div>}
-      {live && current && <div className="task-node-note">→ {current.text}</div>}
-      {(phase.lastRun || steps.length > 0) && (
+      {p.total > 0 && (
+        <div className="task-node-steps" data-component="StepProgress" title={p.planned ? `${p.total} steps planned` : `${p.done} of ${p.total} steps done`}>
+          <span className="task-node-bar" aria-hidden="true">{p.marks.map((m, i) => <i key={i} className={m} />)}</span>
+          <span className="mono">{p.planned ? `${p.total} step${p.total === 1 ? '' : 's'}` : `${p.done}/${p.total}`}</span>
+        </div>
+      )}
+      {live && p.current && <div className="task-node-note task-node-now">Step {p.current.n} of {p.total}: {p.current.text}</div>}
+      {phase.lastRun && (
         <div className="task-node-run mono">
-          {phase.lastRun ? `attempt ${phase.lastRun.attempt}${phase.lastRun.model ? ` · ${phase.lastRun.model.replace('claude-', '')}` : ''}${phase.lastRun.costUsd ? ` · $${Number(phase.lastRun.costUsd).toFixed(2)}` : ''}` : ''}
-          {steps.length > 0 ? `${phase.lastRun ? ' · ' : ''}steps ${doneSteps}/${steps.length}` : ''}
+          {`attempt ${phase.lastRun.attempt}${phase.lastRun.model ? ` · ${phase.lastRun.model.replace('claude-', '')}` : ''}${phase.lastRun.costUsd ? ` · $${Number(phase.lastRun.costUsd).toFixed(2)}` : ''}`}
         </div>
       )}
       <Handle type="source" position={Position.Right} />
@@ -114,7 +135,7 @@ function WhyEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targe
   )
 }
 const edgeTypes = { why: WhyEdge }
-const W = 240, H = 132 // tall enough for a two-line title, a held reason and the run line
+const W = 240, H = 156 // tall enough for a two-line title, a held reason, the step bar and the run line
 const FW = 170, FH = 40
 const fileId = (f: GraphFile) => `file:${f.path}`
 const questionId = (q: GraphQuestion) => `question:${q.id}`

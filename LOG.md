@@ -3713,3 +3713,16 @@ second copy of a task already open elsewhere.
 
 Not done: tabs already doubled in a saved layout stay until closed; a page that moves by itself in code (a button
 that navigates, not a link) is not caught.
+
+## Steps on the graph's nodes, and a project's to-dos with their words (Sandy, 2026-11-14)
+
+"Can we add the step count to the subtask nodes in the graph? … what it's working on and how many there are total."
+A node carried "steps 1/3" in small type at the end of its last line, and only once its agent had started. Now each
+sub-task's node has a row of its own: a bar with one segment per step (done, the one it is on, to come) and the
+count, with "Step 2 of 3: …" under it while it builds. Before it starts the steps are the ones the planner wrote in
+its brief, so the node says "6 steps" from the moment it is planned; landed, they are all done (`stepProgress`).
+
+"On the project page the todos are not rendering": each card showed its boxes with no text, an empty badge and
+"Reopen" on an open to-do. The project's graph sent its to-dos as bare rows, and the card it shares with the to-dos
+page reads each line's `text` and `done`, and the to-do's `status` and `owner`. The graph now sends them in that
+shape (`todos.ts`, `view`), with a test.
