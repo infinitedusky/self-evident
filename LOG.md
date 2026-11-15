@@ -4037,3 +4037,18 @@ The drawing was wrong. A sub-task that is building showed an empty bar, which re
   step it is on" and its bar is outlines with "N planned"; one that is landing says "Built. Landing now: the tests
   run before it merges" with every step done.
 - Not done here: getting the steps reported again (the engine has to listen for the task tools agents use now).
+
+## A builder's steps are reported again (2026-11-15)
+
+The cause of the graph's empty bars: the engine read a builder's steps only from `TodoWrite`, and since 2026-11-01
+builders keep their list with `TaskCreate` and `TaskUpdate`, or not at all. No `run.steps` event in two weeks.
+
+- **Both are read now** (`step-track.ts`): `TodoWrite` gives the whole list; `TaskCreate` adds a step and
+  `TaskUpdate` changes one, found by the id the tool's result gives it.
+- **The builder is told to keep the list**, plainly: list the steps before changing anything, mark each in progress
+  and completed, because nothing else tells the people watching where it is.
+- The task tools are in the builder's tool set and need no approval.
+
+Not seen with a real builder yet: whether the model keeps the list when told this way, and what the task tools'
+results look like in this SDK version (the tracker reads an id from JSON or from "Task #N", and counts from one
+when it finds neither).
