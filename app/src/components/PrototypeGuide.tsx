@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from 'react'
 import type { Guide } from '../engine'
+import { GuideRun, useGuideRuns } from './GuideRun'
 
 const read = (key: string): { open?: boolean; done?: Record<string, boolean> } => { try { return JSON.parse(localStorage.getItem(key) ?? '{}') ?? {} } catch { return {} } }
 const norm = (p: string) => { const [path, query] = p.split('#')[0].split('?'); return `${path.replace(/\/$/, '') || '/'}${query ? `?${query}` : ''}` }
@@ -25,6 +26,7 @@ export function PrototypeGuide({ id, guide, at, onGo }: {
   const [open, setOpen] = useState(() => read(key).open ?? false)
   const [done, setDone] = useState<Record<string, boolean>>(() => read(key).done ?? {})
   useEffect(() => { try { localStorage.setItem(key, JSON.stringify({ open, done })) } catch { /* fine without it */ } }, [key, open, done])
+  const { runs, problem, run, stop } = useGuideRuns(id) // steps that are commands: run from here too
   const steps = guide?.steps ?? []
   if (!steps.length && !guide?.intro) return null
   const tried = steps.filter((_, i) => done[i]).length
@@ -33,6 +35,7 @@ export function PrototypeGuide({ id, guide, at, onGo }: {
     <aside className="guide-panel" data-component="PrototypeGuide" aria-label="What to try">
       <button type="button" className="guide-head" aria-expanded onClick={() => setOpen(false)} title="Hide (it stays in this corner)"><span>What to try</span><span aria-hidden>×</span></button>
       {guide?.intro && <p className="guide-intro">{guide.intro}</p>}
+      {problem && <p className="guide-intro bad">{problem}</p>}
       <ol className="guide-steps">
         {steps.map((s, i) => {
           const here = !!s.path && same(s.path, at)
@@ -40,6 +43,7 @@ export function PrototypeGuide({ id, guide, at, onGo }: {
             <li key={i} className={`${here ? 'here' : ''} ${done[i] ? 'done' : ''}`}>
               <label><input type="checkbox" checked={!!done[i]} onChange={(e) => setDone({ ...done, [i]: e.target.checked })} aria-label={`Tried: ${s.title}`} /> <b>{s.title}</b></label>
               {s.try && <div className="guide-try">{s.try}</div>}
+              {s.run && <div className="guide-try"><GuideRun compact command={s.run} run={runs.find((r) => r.step === i)} onRun={() => run(i)} onStop={() => stop(i)} /></div>}
               {s.path && (here ? <span className="faint guide-at">You are here</span> : <button type="button" className="linkish" onClick={() => onGo(s.path!)}>Go there →</button>)}
             </li>
           )

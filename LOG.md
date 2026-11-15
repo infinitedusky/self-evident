@@ -3876,6 +3876,26 @@ checks after a prototype showed as marks. The rest were types behind the code (a
 task's `updatedAt`, the app graph's questions) and sample data. All fixed, and the test command now runs
 `tsc -p tsconfig.app.json --noEmit` before the stories.
 
+## A prototype with no screen is tried by Run buttons (Sandy, 2026-11-15: "can we add a command line window if that is the prototype access point"; asked which, "Run buttons")
+
+Homework Gate's OpenTelemetry collector has no screens. Its Prototype tab started the app's web server, which failed,
+and the way to try it was a list of commands in the chat.
+
+- **A guide step can be a command** (`run`) in place of a path: one line, written by the agent, with what it should
+  print in `try`. Refused: two lines, a path beside it, anything that stops other processes.
+- **Run** (`prototype-run.ts`): the person presses Run beside the command; the engine runs exactly that, in the
+  prototype's worktree with its environment, and the tab shows what it printed and how it ended. One at a time per
+  prototype, Stop ends it and what it started, twenty minutes at most. Each run is an event on the prototype's task.
+- **Not a terminal** (considered, not built): nothing can be typed and only a step's own command runs. A shell behind
+  Self Evident's address, which tunnels and shared links pass through, is a bigger thing to lock down.
+- **In the tab**: a prototype whose server is not running and whose guide has commands shows them as its page. With
+  its server running, command steps run from the "What to try" panel too.
+- **No server for it**: `start_prototype` takes `server: false`, so nothing is started that is bound to fail.
+- **On a shared link** a command step shows the command as text; a visitor cannot run anything.
+
+Not changed: writing a guide is still rated a cheap action for an agent, though it can now carry a command. The
+person sees the command before pressing. Output is kept in memory only and is gone when the engine restarts.
+
 ## An idea converted to a project starts with a task (Sandy, 2026-11-15: "it needs to generate at least one task, but more if it makes sense … I've lost the task. I've lost the prototype")
 
 Converting an idea to a project made an empty project and hung the idea's research and prototype on the project

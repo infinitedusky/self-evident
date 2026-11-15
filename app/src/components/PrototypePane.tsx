@@ -6,6 +6,7 @@
  * of its own that builds it, which 💬 brings to the agent's column.
  */
 import { PrototypeGuide } from './PrototypeGuide'
+import { GuideRuns } from './GuideRun'
 import { useCallback, useEffect, useState } from 'react'
 import { Badge } from './Badge'
 import { openEvents, API, engine, type Prototype } from '../engine'
@@ -72,6 +73,20 @@ function OnePrototype({ id, path, onNavigate }: { id: string; path: string; onNa
 
   if (!p) return <div className="tab-page" data-component="PrototypePane">{error ? <div className="empty bad">{error}</div> : <p className="muted">Loading…</p>}</div>
   if (p.status === 'running' && p.up && p.url) return <Frame p={p} path={path} onNavigate={onNavigate} onStop={act(engine.stopPrototype)} onRestart={act(engine.restartPrototype)} onTalk={talk} data={<Data p={p} onDone={refresh} />} />
+  // Nothing to open, but its guide has commands: it is tried by running them, so they are the page.
+  if (p.status !== 'discarded' && p.guide?.steps.some((s) => s.run)) return (
+    <div className="tab-page preview-runs" data-component="PrototypePane">
+      <div className="card-head">
+        <h2 style={{ margin: 0 }}>{p.title}</h2>
+        <span className="mono faint">{p.branch}</span>
+        <button className="btn quiet small" style={{ marginLeft: 'auto' }} onClick={talk}>Talk about it</button>
+        {p.status === 'stopped' && p.guide.steps.some((s) => s.path) && <button className="btn quiet small" onClick={act(engine.runPrototype)} title="Some steps are pages: they need its server">Start its server</button>}
+      </div>
+      <p className="faint" style={{ margin: '4px 0 14px' }}>{p.status === 'running' ? 'Starting its server…' : 'It has no screen to open: it is tried by running these.'}</p>
+      {error && <div className="empty bad">{error}</div>}
+      <GuideRuns id={p.id} guide={p.guide} />
+    </div>
+  )
   return (
     <div className="preview-empty" data-component="PrototypePane">
       <h3>{p.title}</h3>

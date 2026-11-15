@@ -9,7 +9,8 @@
  * root, so the prototype's styles and ours never meet), reads the guide from the proxy and posts feedback to it. The
  * prototype's own code is not touched, and the person looking at it locally never sees the tab.
  *
- * The guide is kept on the prototype (`guide`): a line of introduction and steps, each a title, where to go (a path)
+ * The guide is kept on the prototype (`guide`): a line of introduction and steps, each a title, where to go (a path;
+ * or, for something with no screen, a command to run: prototype-run.ts)
  * and what to try. An agent writes it (set_guide). Feedback becomes a comment on the prototype's task, marked as
  * coming from outside.
  *
@@ -23,10 +24,11 @@ import { db } from './db/client.js'
 import { app, prototype } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { commentOnIssue } from './issues.js'
+import { stopsOthers, STOP_ONLY_YOURS } from './guard.js'
 import { OWN, WIDGET } from './guide-widget.js'
 import { PlanError } from './projects.js'
 
-export interface GuideStep { title: string; /** Where to go: a path of the prototype, like /checkout. */ path?: string; /** What to try there. */ try?: string }
+export interface GuideStep { title: string; /** Where to go: a path of the prototype, like /checkout. */ path?: string; /** What to try there, or what the command should print. */ try?: string; /** For something with no screen: a command to run in the prototype's worktree (prototype-run.ts). A step has a path or a command, not both. */ run?: string }
 export interface Guide { intro?: string; steps: GuideStep[]; by?: string; at?: string }
 export interface Feedback { text: string; name?: string; path?: string }
 
@@ -40,7 +42,11 @@ export function cleanGuide(g: { intro?: string; steps?: GuideStep[] }, by = 'age
     const path = line(s.path, 300)
     if (!title) throw new PlanError('each step of the guide needs a title')
     if (path && (!path.startsWith('/') || path.startsWith('//'))) throw new PlanError(`a step's path is a path of the prototype, starting with / (got ${path})`)
-    return { title, ...(path ? { path } : {}), ...(line(s.try, 400) ? { try: line(s.try, 400) } : {}) }
+    const run = String(s.run ?? '').trim()
+    if (run && path) throw new PlanError(`a step has a path to go to or a command to run, not both (${title})`)
+    if (run && (run.includes('\n') || run.length > 600)) throw new PlanError(`a step's command is one line, 600 characters at most: put anything longer in a script in the worktree and run that (${title})`)
+    if (run && stopsOthers(run)) throw new PlanError(`a step's command may not stop other processes (${title}). ${STOP_ONLY_YOURS}`)
+    return { title, ...(path ? { path } : {}), ...(run ? { run } : {}), ...(line(s.try, 400) ? { try: line(s.try, 400) } : {}) }
   }).slice(0, 12)
   return { ...(line(g.intro, 400) ? { intro: line(g.intro, 400) } : {}), steps, by, at: now.toISOString() }
 }
