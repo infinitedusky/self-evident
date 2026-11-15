@@ -3947,3 +3947,23 @@ ADR was still being written, and after the plan nothing more ran.
 
 Left as it is: BON-51's plan was made before its ADR was finished. Its final step exists to put the ADR and the plan
 right against each other, so it is not planned again.
+
+## Two speeds: careful and fast (Sandy, 2026-11-15: "it's moving very slow … very good for a group project where there's a lot of stakeholders" … "let's build the two speeds")
+
+After an approved prototype a task went through the analysis, the draft ADR, the plan, the blast radius, the audit
+and the final ADR and plan before anything was built: about an hour of agents reading and writing, one after
+another, for every task. That is what lets other people trust a change, and too much for one person building.
+This takes back part of 2026-11-14's "the checks are fixed, not a workflow's choice": they are fixed when a task
+goes carefully, and absent when it goes fast.
+
+- **Careful** (as it was, and still what an app does unless told): every check, then the build.
+- **Fast**: approving the prototype approves the brief, and the task is planned and built. No checks. The scrutiny
+  is on the pull request, which still opens with its merge guide.
+- **Where**: per app in Settings › Landing ("After a prototype is approved"), `setup.speed`. A task can have its
+  own, on its overview beside its workflow (`issue.speed`, migration 0029); a sub-task goes at its task's.
+- **How** (`steps.ts`): the speed rides on the workflow resolved for the task (`fast`), so everything that asks
+  which checks are in play gets the same answer: the page, the brief's approval, the build's gate, the scheduler's
+  hold. Changing a task's speed carries it on at once.
+
+Not done: nothing reads the plan on a fast task's pull request beyond the merge guide. An audit of the pull request
+after the build is the natural place for it.
