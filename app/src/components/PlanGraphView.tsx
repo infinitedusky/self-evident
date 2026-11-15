@@ -32,11 +32,15 @@ export function stepProgress(phase: { steps?: { text: string; status: string }[]
   const own = phase.steps ?? []
   const planned = own.length ? [] : plannedSteps(phase.brief)
   const total = own.length || planned.length
-  const landed = phase.status === 'done'
+  // Built: its agent has finished and it is landing, or it has landed. With no steps reported, that is all that is
+  // known, and it is enough to say every planned step is behind it.
+  const landed = ['done', 'merging', 'testing'].includes(phase.status)
   const done = own.length ? own.filter((s) => s.status === 'completed').length : landed ? total : 0
   const at = own.findIndex((s) => s.status === 'in_progress')
   const marks = Array.from({ length: total }, (_, i) => (own.length ? (own[i].status === 'completed' ? 'done' : own[i].status === 'in_progress' ? 'now' : 'todo') : landed ? 'done' : 'todo'))
-  return { total, done, marks, current: at >= 0 ? { n: at + 1, text: own[at].text } : null, planned: !own.length && total > 0 && !landed }
+  // What it is doing when its agent has reported no steps: said in words, so an empty bar is not read as "stuck on step one".
+  const doing = own.length ? null : phase.status === 'running' ? 'Building. Its agent has not said which step it is on.' : phase.status === 'merging' || phase.status === 'testing' ? 'Built. Landing now: the tests run before it merges.' : null
+  return { total, done, marks, current: at >= 0 ? { n: at + 1, text: own[at].text } : null, planned: !own.length && total > 0 && !landed, doing }
 }
 
 function PhaseNode({ data }: NodeProps<Node<PhaseNodeData>>) {
@@ -53,12 +57,13 @@ function PhaseNode({ data }: NodeProps<Node<PhaseNodeData>>) {
       <div className="task-node-title">{phase.title}</div>
       {phase.heldReason && phase.status !== 'done' && <div className="task-node-note">{phase.heldReason}</div>}
       {p.total > 0 && (
-        <div className="task-node-steps" data-component="StepProgress" title={p.planned ? `${p.total} steps planned` : `${p.done} of ${p.total} steps done`}>
+        <div className={`task-node-steps ${p.planned ? 'planned' : ''}`} data-component="StepProgress" title={p.planned ? `${p.total} steps planned; progress is not known` : `${p.done} of ${p.total} steps done`}>
           <span className="task-node-bar" aria-hidden="true">{p.marks.map((m, i) => <i key={i} className={m} />)}</span>
-          <span className="mono">{p.planned ? `${p.total} step${p.total === 1 ? '' : 's'}` : `${p.done}/${p.total}`}</span>
+          <span className="mono">{p.planned ? `${p.total} planned` : `${p.done}/${p.total}`}</span>
         </div>
       )}
       {live && p.current && <div className="task-node-note task-node-now">Step {p.current.n} of {p.total}: {p.current.text}</div>}
+      {live && !p.current && p.doing && <div className="task-node-note task-node-now">{p.doing}</div>}
       {phase.lastRun && (
         <div className="task-node-run mono">
           {`attempt ${phase.lastRun.attempt}${phase.lastRun.model ? ` · ${phase.lastRun.model.replace('claude-', '')}` : ''}${phase.lastRun.costUsd ? ` · $${Number(phase.lastRun.costUsd).toFixed(2)}` : ''}`}

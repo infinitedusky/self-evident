@@ -39,11 +39,15 @@ export const StepProgress: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await expect(await c.findByText('4/4')).toBeInTheDocument() // landed: all of its planned steps
-    await expect(await c.findByText('6 steps')).toBeInTheDocument() // not started: how many there will be
+    await expect(await c.findByText('6 planned')).toBeInTheDocument() // not started: how many there will be, and not a count of progress
     await expect(await c.findByText('Step 2 of 3: Add the checks')).toBeInTheDocument() // building: where it is
     await expect(stepProgress({ status: 'queued', brief: briefWith(3) })).toMatchObject({ total: 3, done: 0, planned: true, current: null })
     await expect(stepProgress({ status: 'running', steps: [{ text: 'a', status: 'completed' }, { text: 'b', status: 'in_progress' }, { text: 'c', status: 'pending' }] })).toMatchObject({ total: 3, done: 1, marks: ['done', 'now', 'todo'], current: { n: 2, text: 'b' }, planned: false })
     await expect(stepProgress({ status: 'queued' })).toMatchObject({ total: 0 })
+    // No steps reported by its agent: said in words what it is doing, and never an empty bar that reads as stuck on step one.
+    await expect(stepProgress({ status: 'running', brief: briefWith(3) })).toMatchObject({ total: 3, done: 0, planned: true, doing: 'Building. Its agent has not said which step it is on.' })
+    await expect(stepProgress({ status: 'merging', brief: briefWith(3) })).toMatchObject({ total: 3, done: 3, planned: false, marks: ['done', 'done', 'done'], doing: 'Built. Landing now: the tests run before it merges.' })
+    await expect(stepProgress({ status: 'running', steps: [{ text: 'a', status: 'in_progress' }] }).doing).toBeNull()
   },
 }
 export const AllLanded: Story = { args: { subIssues: midRun.map((x) => ({ ...x, status: 'done' as const, heldReason: null, lastRun: run('completed', '0.20'), steps: undefined })) } }
