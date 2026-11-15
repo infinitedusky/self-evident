@@ -103,7 +103,7 @@ export function tabTitle(t: Tab): string {
   if (t.kind === 'build') return 'Build log'
   const path = t.path.split('?')[0]
   const idea = path.match(/^\/ideas\/([^/]+)/)?.[1]
-  if (idea) return idea.startsWith('idea_') ? 'Idea' : findIdea(idea)?.title ?? 'Idea'
+  if (idea) { const title = idea.startsWith('idea_') ? null : findIdea(idea)?.title; return title ? `Idea: ${title}` : 'Idea' } // an engine idea's name comes from the engine (Workspace's nameFor)
   return PAGES.find(([re]) => re.test(path))?.[1] ?? path
 }
 

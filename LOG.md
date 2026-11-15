@@ -3812,3 +3812,9 @@ tasks a row of chips far below.
 Also fixed: `ideas/review-access.md` had a colon inside a front-matter value, which broke the pages and stories that
 read idea files. It went in with a docs-only merge that did not run the app's tests; a file under `ideas/` is read
 by the app, so it needs them.
+
+## An idea's tab says which idea (Sandy, 2026-11-15: "it just says idea … like idea: ReactFlow adapter")
+
+A tab on an idea read "Idea" whichever idea it was; a task's read its name. Now "Idea: ReactFlow adapter", clipped
+like a task's. The workspace asks the engine for the one idea (`GET /ideas/:id`, new: ideas were only listed per
+app). An idea kept as a file in `ideas/` is named the same way.

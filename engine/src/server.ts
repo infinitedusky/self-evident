@@ -18,7 +18,7 @@ import { cleanReferences } from './references.js'
 import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, workspace, type BuildStatus, type IssueState, issue as issueTable, project as projectTable } from './db/schema.js'
 import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
 import { appKey, cleanKey, newId } from './ids.js'
-import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
+import { createIdea, getIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { advanceChecks, onChecksDone, onPlanWanted } from './checks.js'
 import { checksOwed, step } from './steps.js'
 import { writeHandover } from './handover.js'
@@ -512,6 +512,7 @@ export function buildApp(bus: EventBus) {
   })
 
   // The inbox: capture an idea in a moment; make it a project when its time comes.
+  api.get('/ideas/:id', async (c) => { const i = await getIdea(c.req.param('id')); return i ? c.json(i) : c.json({ error: 'no such idea' }, 404) }) // one idea: what a tab on it is named after
   api.get('/ideas', async (c) => { const a = c.req.query('app'); return a ? c.json(await listIdeas(a)) : c.json({ error: 'app is required: one app at a time' }, 400) })
   api.post('/ideas', async (c) => {
     try { return c.json(await createIdea({ ...(await c.req.json()), actor: 'user' }), 201) } catch (err) { return planError(c, err) }

@@ -50,6 +50,8 @@ async function nameFor(tab: Tab): Promise<string | null> {
   if (tab.kind !== 'page') return null
   const project = tab.path.match(/^\/projects\/((?:plan|proj)_[A-Za-z0-9_-]+)/)?.[1]
   if (project) return engine.graph(project).then((g) => clip(g.project.name)).catch(() => null)
+  const idea = tab.path.match(/^\/ideas\/(idea_[A-Za-z0-9_-]+)/)?.[1]
+  if (idea) return engine.idea(idea).then((i) => clip(`Idea: ${i.title}`)).catch(() => null) // which idea, as a task's tab says which task
   const issue = tab.path.match(TASK_PATH)?.[1]
   if (issue) return engine.issue(issue).then((i) => clip(`${i.identifier} ${i.title}`)).catch(() => null)
   return null
