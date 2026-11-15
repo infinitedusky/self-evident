@@ -89,6 +89,7 @@ export function IssuePage() {
             {i.runner === 'tkt' && <Badge tone="accent">run by tkt</Badge>}
             {i.build && <Badge tone={STATUS_TONE[i.build.status]}>build: {i.build.status.replace('_', ' ')}{i.build.attempt ? ` · attempt ${i.build.attempt}` : ''}</Badge>}
             {i.waitingOn && <Badge tone="warn">waiting on {i.waitingOn}</Badge>}
+            {i.pr?.url && <a className="badge accent" href={i.pr.url} target="_blank" rel="noreferrer">Pull request #{i.pr.number} · {i.pr.status}</a>}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>

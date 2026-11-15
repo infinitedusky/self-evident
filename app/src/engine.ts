@@ -137,10 +137,13 @@ export interface Graph {
 /** A file on the graph: who claims it, and who has it right now (the sub-issue being built with it). */
 export interface GraphFile { path: string; subIssues: string[]; heldBy: string | null }
 export interface ProjectSummary { id: string; name: string; status: string; createdAt: string; ideaId?: string | null; app: { id: string; name: string } | null; issueCount: number; backlogOpen?: number; builds: Record<string, number>; solo?: boolean; plannedTasks?: { id: string; identifier: string; title: string; subTasks: number }[] } // solo: a task's own project (only listed when asked for); plannedTasks: its tasks that have sub-tasks
-export interface IssueRow { id: string; identifier: string; number: number; title: string; description: string | null; state: IssueState; sortOrder: number; priority: number; project: { id: string; name: string; status: string; solo?: boolean } | null; builds: Record<string, number>; planning: string | null }
+/** The pull request a task's work is in. */
+export interface TaskPr { number: number | null; url: string | null; status: string }
+export interface IssueRow { id: string; identifier: string; number: number; title: string; description: string | null; state: IssueState; sortOrder: number; priority: number; project: { id: string; name: string; status: string; solo?: boolean } | null; builds: Record<string, number>; planning: string | null; pr?: TaskPr | null }
 /** What was written on a ticket as it moved: one comment per heading (the plan, the handoff, the review), the latest write of each. */
 export interface IssueComment { id: string; issueId: string; heading: string; body: string; author: string; createdAt: string; updatedAt: string }
 export interface IssueDetail extends Issue {
+  pr?: TaskPr | null // the pull request its work is in (a sub-task shows its task's)
   requirements?: { key: string; name: string; applies: boolean; how: string }[] | null // how its plan covers what the app requires of every plan
   madeBy: { sessionId: string; title: string; open: boolean } | null // the conversation that created it, when an agent did
   handover: { text: string | null; sessionId: string; at: string } | null // what that conversation said about it, written when the task's agent starts
