@@ -35,5 +35,13 @@ function Page({ path, onNavigate, children }: { /** Where the tab was sent from 
     if ((e.metaKey || e.ctrlKey) && ws) { e.preventDefault(); ws.open({ kind: 'page', path: href }); return }
     if (!e.defaultPrevented && !e.metaKey && !e.ctrlKey && !e.shiftKey) { e.preventDefault(); navigate(href) } // a plain <a>: stay in the tab
   }
-  return <div className="tab-page" ref={scroller} onClick={onClick} data-component="PagePane">{children}</div>
+  // Before the link acts: if another tab already shows what it leads to, go to that tab and leave this one as it is.
+  const onClickCapture = (e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+    const a = (e.target as HTMLElement).closest('a')
+    const href = a?.getAttribute('href')
+    if (!a || !href?.startsWith('/') || a.target || href.startsWith('/api')) return
+    if (ws?.claim?.(href, loc.pathname)) { e.preventDefault(); e.stopPropagation() }
+  }
+  return <div className="tab-page" ref={scroller} onClickCapture={onClickCapture} onClick={onClick} data-component="PagePane">{children}</div>
 }
