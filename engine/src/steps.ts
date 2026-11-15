@@ -34,7 +34,7 @@ export interface StepDef { key: StepKey; label: string; icon: string; what: stri
 export const STEPS: StepDef[] = [
   { key: 'idea', label: 'Starts as an idea', icon: '💡', what: 'Explored as an idea first, then converted.', place: 'first' },
   { key: 'research', label: 'Research', icon: '🔎', what: 'Who does this best, what exists already, our numbers, the case against.', place: 'before' },
-  { key: 'brief', label: 'Brief', icon: '📝', what: 'What to build, for the builder: the parent of every step here. Approved last; the build starts from it.', place: 'brief' },
+  { key: 'brief', label: 'Brief', icon: '📝', what: 'What to build and why, in at most 200 words, for the person who approves it. How it is built is the ADR\'s and the plan\'s, which are made from it.', place: 'brief' },
   { key: 'sketch', label: 'Sketches', icon: '✏️', what: 'The first look, fast: plain HTML screens to react to and change in moments, before a real story.', place: 'either' },
   { key: 'mockup', label: 'Mockups', icon: '🎨', what: 'How it looks, done properly: stories with made-up data, variants side by side. The brief points at the agreed one.', place: 'either' },
   { key: 'prototype', label: 'Prototype', icon: '🛠️', what: 'The thing built the way we would ship it, with only what is outside the system faked, to show with evidence that it works.', place: 'either' },

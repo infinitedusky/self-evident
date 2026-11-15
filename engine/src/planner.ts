@@ -34,6 +34,8 @@ export interface ProposeInput {
   acceptance?: string | null
   /** The task's draft ADR, when its workflow has that step and it was done: the planner settles it. */
   draftAdr?: string | null
+  /** The prototype analysis, whole: what the prototype taught. The brief no longer carries it (brief.ts). */
+  analysis?: string | null
   project: { name: string; content: string | null }
   earlier: { identifier: string; title: string; subIssues: { identifier: string; title: string }[] }[] // issues before this one in the project
   testCmd?: string
@@ -143,6 +145,7 @@ export function prompt(i: ProposeInput, recordSkills: string[] = []): string {
     recordSkills.length ? `- This app has ${recordSkills.length > 1 ? 'skills' : 'a skill'} for decision records: ${recordSkills.map((n) => `\`${n}\``).join(', ')}. Invoke ${recordSkills.length > 1 ? 'each' : 'it'} with the Skill tool before you plan a record; where it and the line above differ, the skill is this app's standard and wins. The builder cannot use skills, so put what the skill says about place and form into the step's technical note.` : '',
     '',
     'Before you answer, review your own plan once: does it build what the brief asks and nothing it does not? What else would have to change for it to hold? What would the sub-tasks do that the brief never asked for? Fix what you find, then answer.',
+    i.analysis?.trim() ? `\nThe prototype analysis (the brief says what and why; this is what building it once taught, and you build on it). Its **Cleaner** list is instructions to the builder: put each into the sub-task it belongs to. Its **Telemetry hook points** go into the sub-tasks that build those paths, every one, or say in notes why one is left out. Its **Keep or leave** says which of the prototype's choices to follow. The build starts from the default branch with the prototype as a map, never as code to carry over:\n\n${i.analysis.trim()}` : '',
     i.draftAdr?.trim() ? `\nThe draft ADR:\n\n${i.draftAdr.trim()}` : '',
   ].join('\n')
 }
@@ -259,7 +262,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
   return {
     runId, issueId, projectId: t.projectId, appId: a.id, attempt, base,
     input: {
-      repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, acceptance: acceptanceOf(t).length ? acceptanceLines(acceptanceOf(t)) : null, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
+      repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, acceptance: acceptanceOf(t).length ? acceptanceLines(acceptanceOf(t)) : null, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, analysis: (await getStep({ issueId }, 'analysis'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
       testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), requirements: inForce(setup, g.project.requirements), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }
