@@ -3726,3 +3726,25 @@ its brief, so the node says "6 steps" from the moment it is planned; landed, the
 "Reopen" on an open to-do. The project's graph sent its to-dos as bare rows, and the card it shares with the to-dos
 page reads each line's `text` and `done`, and the to-do's `status` and `owner`. The graph now sends them in that
 shape (`todos.ts`, `view`), with a test.
+
+## An agent may not stop processes by name or by port (Sandy, 2026-11-14: "it says attempt four. So it's tried it four times and it's failed")
+
+BON-71 had not failed at its work. Its builder, tidying up the dev servers it had started for a screenshot check,
+ran `pkill -f "pnpm dev"; pkill -f "vite"`, and on later attempts `pkill -f "vite --port 5180"` and
+`pkill -f "pnpm --parallel"`. Those match Self Evident's own processes (5180 is its UI). The whole `pnpm dev` was
+killed, launchd started it again, the engine saw an interrupted build and started BON-71 from the top, and about
+four minutes later the new attempt did the same. Three times, plus once from a merge of mine made while a build
+was running. Each loop also restarted the engine under every other open conversation. The project was paused by
+hand to stop it.
+
+- **The rule** (`guard.ts`, `stopsOthers`): `pkill`, `killall`, `fkill`, `kill-port` run as commands, and `kill`
+  fed from `pgrep`, `lsof`, `ps`, `pidof` or `fuser` (by substitution or through a pipe) are refused. `kill 4321`,
+  `kill $!`, `kill %1` and `kill $(cat x.pid)` are not: an agent stops what it started, by the pid it kept.
+- **Where**: the builder's guard, and every conversation's hook (a task's agent, a prototype's, a check's), where
+  it is refused outright and not put to the person, since saying yes takes the engine down.
+- **What the agent is told** when refused, and in the builder's instructions from the start: stop only what you
+  started, by its pid; pick a port of your own above 6200; if a port is taken, pick another, do not free it.
+
+Tested against the three commands the builder really ran. Not done: an attempt is still used up, and the work
+started again from the top, when the interruption was the engine restarting; and my own merges must wait for a
+running build, which the wait I had did not enforce (it timed out and went on).

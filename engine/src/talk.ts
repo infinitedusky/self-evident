@@ -4,6 +4,7 @@
  * page); the engine's own API is the agent's MCP tools; an edit or a shell command waits for the person's yes in
  * the UI, Claude Code's default mode. Development runs on the operator's login, the product on an API key.
  */
+import { STOP_ONLY_YOURS, stopsOthers } from './guard.js'
 import { BRIEF_FORM } from './brief.js'
 import { fileURLToPath } from 'node:url'
 import { createSdkMcpServer, query, tool, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
@@ -606,6 +607,7 @@ async function open(sessionId: string): Promise<Live> {
         const input = (h.tool_input ?? {}) as Record<string, unknown>
         const ref = EDIT_TOOLS.has(h.tool_name) ? referenceHolding(refs, entry.cwd, input.file_path ?? input.notebook_path) : null
         if (ref) return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: refusal(ref) } } // not asked: a reference is never changed from here
+        if (h.tool_name === 'Bash' && stopsOthers(String(input.command ?? ''))) return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: STOP_ONLY_YOURS } } // not asked either: it would take the engine down with it (guard.ts)
         const at = (EDIT_TOOLS.has(h.tool_name) ? mateHolding(mates, entry.cwd, input.file_path ?? input.notebook_path)?.path : null) ?? entry.cwd // an edit in another of the app's repos is rated by that worktree and its branch
         const branch = ASK_TOOLS.includes(h.tool_name) ? await branchOf(at) : undefined
         const { risk, why } = riskOf(h.tool_name, input, { cwd: at, branch })

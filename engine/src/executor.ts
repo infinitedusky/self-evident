@@ -6,7 +6,7 @@
  */
 import { accountEnv } from './account.js'
 import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
-import { builderGuard, guardOptions } from './guard.js'
+import { builderGuard, guardOptions, STOP_ONLY_YOURS } from './guard.js'
 import { referencePrompt, type Reference } from './references.js'
 
 export interface RunInput {
@@ -57,6 +57,7 @@ function prompt(i: RunInput): string {
     '  Touch other files only if the sub-task cannot be done without it, and say so in your summary.',
     i.storybook ? '- Stories lead the UI: this app keeps a Storybook. Every new or changed page, component and state gets its story first, with made-up sample data labelled as such, and the screen is built to match it. A screen without a story is not done.' : '',
     '- Keep your todo list current as you work; it is shown live to the people watching this sub-task.',
+    `- ${STOP_ONLY_YOURS}`,
     i.testCmd ? `- Run the tests with: ${i.testCmd}\n  They must pass before you finish. Add or adjust tests for what you change.` : '- There is no test command configured; verify your change by running it.',
     '- Commit your work with a clear message when it is done (git add -A && git commit). Leave nothing uncommitted.',
     '- Finish with a short summary for the reviewer: what changed, why, how you verified it, and anything you were unsure of.',
