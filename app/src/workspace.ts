@@ -19,6 +19,8 @@ export interface OpenTab { id: string; title: string; key: string; tab: Tab; foc
 export interface WorkspaceApi {
   /** Focus the tab if it is open, else open it: in the group in front, or split beside or under it. */
   open: (tab: Tab, opts?: { split?: Split }) => void
+  /** A link in one tab leads to something another tab already shows: go to that tab (true), instead of turning this one into a second copy. */
+  claim?: (path: string, from: string) => boolean
   tabs: OpenTab[]
   focused: OpenTab | null
   /** Whether a tab follows what the agent changes (follow.ts in the engine), and the switch for it. */
@@ -69,6 +71,22 @@ export const useWorkspace = () => useContext(WorkspaceContext)
 
 /** Two tabs are the same tab when their keys match: a page by its path (without the query), a build or a prototype by its id, the rest by kind. */
 export const tabKey = (t: Tab) => t.kind === 'page' ? t.path.split('?')[0] : t.kind === 'build' ? `build:${t.issueId}` : t.kind === 'prototype' && t.id ? `prototype:${t.id}` : t.kind
+
+/**
+ * The thing a tab is about, for "is it already open?" (Sandy, 2026-11-14: "if you click on settings or a task …
+ * and there is a tab open, it takes you to the tab instead of creating a new one"). Coarser than its key: Settings is
+ * one thing whatever page of it is showing; a task, an idea or a project is one thing whatever section; anything else
+ * is itself. A second tab on the same thing is only ever made on purpose (Duplicate).
+ */
+export function tabThing(t: Tab): string {
+  if (t.kind !== 'page') return tabKey(t)
+  const p = t.path.split('?')[0]
+  if (/^\/settings(\/|$)/.test(p)) return '/settings'
+  const m = p.match(/^\/(tasks|ideas|projects)\/([^/]+)/)
+  return m && m[2] !== 'new' ? `/${m[1]}/${m[2]}` : p
+}
+/** Whether a path names a place inside its thing (a task's Build section) and not only the thing: then an open tab goes there; otherwise it is left where the person had it. */
+export const specific = (path: string) => path.includes('?') || path.split('?')[0].replace(/\/$/, '') !== tabThing({ kind: 'page', path })
 
 const PAGES: [RegExp, string][] = [
   [/^\/$/, 'My Stuff'], [/^\/summary/, 'Summary'], [/^\/observe/, 'Observe'], [/^\/learn/, 'Learn'],

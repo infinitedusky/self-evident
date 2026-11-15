@@ -3694,3 +3694,22 @@ Changing it renames every task at once, since a task's name is the abbreviation 
 BON-50), and the field says so before it is saved. What was already written keeps the old one: branch names, pull
 request titles, text in comments and briefs. If Sandy meant an abbreviation for a project (a group of tasks), that
 does not exist: a project has no prefix of its own.
+
+## One tab per thing (Sandy, 2026-11-14: "if you click on settings or a task or something, and there is a tab open, it takes you to the tab … instead of creating a new one? The exception would be if you right click a tab and say duplicate")
+
+A tab was matched to an open one by its exact address, so Settings pressed in the rail made a second Settings tab
+whenever the first had moved to another of its pages, and a link to a task turned the tab it was pressed in into a
+second copy of a task already open elsewhere.
+
+- **A tab is about a thing** (`tabThing`): Settings is one thing whatever page of it is showing; a task, an idea
+  or a project is one thing whatever section; anything else is its own address. Opening a thing that has a tab goes
+  to that tab. Asked for the thing alone (Settings, a task from a list), the tab stays where the person left it;
+  asked for a place inside it (a task's Build section), the tab goes there.
+- **Links inside a tab too.** A link to something another tab already shows brings that tab forward and leaves the
+  tab it was pressed in as it is (`claim`, caught before the link acts). Moving about inside one thing is still
+  that tab's own business.
+- **Duplicate.** Right-click on a tab: Duplicate (a second tab on the same thing, beside the first) and Close. That
+  is the only way two tabs come to show one thing.
+
+Not done: tabs already doubled in a saved layout stay until closed; a page that moves by itself in code (a button
+that navigates, not a link) is not caught.

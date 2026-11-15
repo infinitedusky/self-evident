@@ -13,7 +13,7 @@ import { DockviewDefaultTab, DockviewReact, Orientation, SplitviewReact, type Do
 import 'dockview-react/dist/styles/dockview.css'
 import { openEvents, API, engine } from '../engine'
 import { useCurrentApp } from '../current-app'
-import { landing, pendingOpen, tabContext, tabKey, tabTitle, talkColor, useWorkspace, WorkspaceContext, type OpenTab, type Split, type Tab, type WorkspaceApi } from '../workspace'
+import { landing, pendingOpen, specific, tabContext, tabKey, tabThing, tabTitle, talkColor, useWorkspace, WorkspaceContext, type OpenTab, type Split, type Tab, type WorkspaceApi } from '../workspace'
 import { BuildLog } from './BuildLog'
 import { PagePane } from './PagePane'
 import { PrototypePane } from './PrototypePane'
@@ -73,10 +73,20 @@ type Follow = { sessionId: string | null; landed: number }
 type Params = { tab: Tab; follow?: Follow }
 
 /** The following tab's name, after a dot in its conversation's colour that pulses. */
+/** Right-click on a tab: its menu (Duplicate, Close). Given by the workspace. */
+const TabMenu = createContext<(e: React.MouseEvent, panelId: string) => void>(() => {})
+
+/** A tab in the strip: dockview's own, with the menu on right-click. */
+function WsTab(props: IDockviewPanelHeaderProps<Params>) {
+  const menu = useContext(TabMenu)
+  return <DockviewDefaultTab {...props} onContextMenu={(e: React.MouseEvent) => menu(e, props.api.id)} />
+}
+
 function FollowTab(props: IDockviewPanelHeaderProps<Params>) {
+  const menu = useContext(TabMenu)
   const [follow, setFollow] = useState(props.params.follow)
   useEffect(() => { const d = props.api.onDidParametersChange((p) => setFollow((p as Params).follow)); return () => d.dispose() }, [props.api])
-  return <DockviewDefaultTab {...props} {...(follow ? { 'data-follow': '', title: 'Following the agent: what it changes shows here', style: { ['--talk' as string]: talkColor(follow.sessionId) } } : {})} />
+  return <DockviewDefaultTab {...props} onContextMenu={(e: React.MouseEvent) => menu(e, props.api.id)} {...(follow ? { 'data-follow': '', title: 'Following the agent: what it changes shows here', style: { ['--talk' as string]: talkColor(follow.sessionId) } } : {})} />
 }
 
 function TabBody({ params, api }: IDockviewPanelProps<Params>) {
@@ -146,7 +156,7 @@ function AgentColumn() {
 
 function Tabs({ params }: { params: { onReady: (api: DockviewApi) => void } }) {
   return (
-    <DockviewReact className="ws-dock" theme={THEME} components={{ tab: TabBody }} tabComponents={{ follow: FollowTab }} rightHeaderActionsComponent={GroupActions}
+    <DockviewReact className="ws-dock" theme={THEME} components={{ tab: TabBody }} tabComponents={{ follow: FollowTab }} defaultTabComponent={WsTab} rightHeaderActionsComponent={GroupActions}
       watermarkComponent={Nothing} onReady={(e) => params.onReady(e.api)} />
   )
 }
@@ -196,11 +206,18 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
     if (follow.current && url && url !== window.location.pathname + window.location.search) window.history.replaceState(null, '', url)
   }, [])
 
-  const add = useCallback((tab: Tab, where: { split?: Split; groupId?: string } = {}) => {
+  const add = useCallback((tab: Tab, where: { split?: Split; groupId?: string; /** Make another tab even though one shows this already (the tab's Duplicate). */ duplicate?: boolean } = {}) => {
     const api = dock.current
     if (!api) return
-    const there = api.panels.find((p) => tabKey((p.params as { tab: Tab }).tab) === tabKey(tab))
-    if (there) { // one Storybook tab: asked for another story, it goes there
+    const there = where.duplicate ? undefined : api.panels.find((p) => tabThing((p.params as { tab: Tab }).tab) === tabThing(tab))
+    if (there) { // already open: go to it. One Storybook tab: asked for another story, it goes there
+      const at = (there.params as { tab: Tab }).tab
+      if (tab.kind === 'page' && at.kind === 'page' && tab.path !== at.path && specific(tab.path)) { // asked for a place inside it: the tab goes there; asked for the thing alone, it stays where the person left it
+        there.api.updateParameters({ ...(there.params as object), tab })
+        there.api.setTitle(tabTitle(tab))
+        void nameFor(tab).then((n) => { if (n) { there.api.setTitle(n); sync() } })
+        sync()
+      }
       const was = (there.params as { tab: Tab }).tab as { story?: string; file?: string; session?: string }
       if (tab.kind === 'storybook' && ((tab.story && tab.story !== was.story) || (tab.session && tab.session !== was.session))) { there.api.updateParameters({ tab: { ...was, ...tab } }); sync() }
       if (tab.kind === 'sketch' && ((tab.file && tab.file !== was.file) || (tab.session && tab.session !== was.session))) { there.api.updateParameters({ tab: { ...was, ...tab } }); sync() } // one Sketches tab too
@@ -296,11 +313,37 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
   }, [toggleAgent])
 
   const focused = tabs.find((t) => t.focused) ?? null
-  const value = useMemo(() => ({ open: (tab: Tab, opts?: { split?: Split }) => add(tab, opts), openIn: (tab: Tab, groupId: string) => add(tab, { groupId }), tabs, focused, following, setFollowing, hideAgent: toggleAgent }), [add, tabs, focused, following, setFollowing, toggleAgent])
+  /** A link inside one tab to something another tab shows: that tab comes forward and this one stays as it is. */
+  const claim = useCallback((path: string, from: string) => {
+    const api = dock.current
+    const want: Tab = { kind: 'page', path }
+    if (!api || tabThing(want) === tabThing({ kind: 'page', path: from })) return false // moving about inside one thing is this tab's own business
+    if (!api.panels.some((p) => tabThing((p.params as { tab: Tab }).tab) === tabThing(want))) return false
+    add(want)
+    return true
+  }, [add])
+  const [menu, setMenu] = useState<{ x: number; y: number; panelId: string } | null>(null)
+  const tabMenu = useCallback((e: React.MouseEvent, panelId: string) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, panelId }) }, [])
+  useEffect(() => {
+    if (!menu) return
+    const close = () => setMenu(null)
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
+    window.addEventListener('click', close); window.addEventListener('keydown', key)
+    return () => { window.removeEventListener('click', close); window.removeEventListener('keydown', key) }
+  }, [menu])
+  const duplicate = (panelId: string) => { const p = dock.current?.panels.find((x) => x.id === panelId); if (p) add((p.params as { tab: Tab }).tab, { duplicate: true, groupId: p.group.id }) }
+  const value = useMemo(() => ({ claim, open: (tab: Tab, opts?: { split?: Split }) => add(tab, opts), openIn: (tab: Tab, groupId: string) => add(tab, { groupId }), tabs, focused, following, setFollowing, hideAgent: toggleAgent }), [add, claim, tabs, focused, following, setFollowing, toggleAgent])
   return (
     <WorkspaceContext.Provider value={value}>
       <Changed.Provider value={sync}>
+      <TabMenu.Provider value={tabMenu}>
         <div className={`workspace ${appsOpen ? '' : 'no-apps'}`} data-component="Workspace">
+          {menu && (
+            <div className="tab-menu" role="menu" style={{ left: menu.x, top: menu.y }} data-component="TabMenu">
+              <button role="menuitem" onClick={() => duplicate(menu.panelId)}>Duplicate</button>
+              <button role="menuitem" onClick={() => dock.current?.panels.find((x) => x.id === menu.panelId)?.api.close()}>Close</button>
+            </div>
+          )}
           <EngineLink />
           {appsOpen && <AppPicker onOpen={(tab) => add(tab)} />}
           <Rail here={focused?.key ?? null} onOpen={(tab) => add(tab)} agentOpen={agentOpen} onToggleAgent={toggleAgent} appsOpen={appsOpen} onToggleApps={toggleApps} />
@@ -320,6 +363,7 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
             }} />
           </div>
         </div>
+      </TabMenu.Provider>
       </Changed.Provider>
     </WorkspaceContext.Provider>
   )
