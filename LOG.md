@@ -3818,3 +3818,15 @@ by the app, so it needs them.
 A tab on an idea read "Idea" whichever idea it was; a task's read its name. Now "Idea: ReactFlow adapter", clipped
 like a task's. The workspace asks the engine for the one idea (`GET /ideas/:id`, new: ideas were only listed per
 app). An idea kept as a file in `ideas/` is named the same way.
+
+## A built prototype shows what it wrote, not a button (Sandy, 2026-11-15: "if prototype is started this shouldn't show up, we should see the content")
+
+On a prototype's step, "For the brief" showed only "Ask the agent to carry on", even with the prototype built, on
+tasks and on ideas. Two causes, both in `StepSection`:
+
+- **The notes were never fetched for a prototype's step.** Every other step's were. They are now, so what the
+  prototype wrote for the brief shows. With nothing written, the page says so and points at View.
+- **An idea's prototype was looked for by task.** It is found by the idea now, so an idea's step has View and Code
+  like a task's.
+
+The carry-on button is gone once a prototype exists: it is talked about with its agent, not started again.
