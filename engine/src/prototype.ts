@@ -110,11 +110,11 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
  * A new prototype: its branch and worktree off the app's default branch, its server, and its conversation, shown in
  * every open Self Evident with the prototype beside it. With a brief, the conversation starts building at once.
  */
-export async function startPrototype(i: { appId: string; title: string; brief?: string; projectId?: string | null; ideaId?: string | null; issueId?: string | null; actor?: string }) {
+export async function startPrototype(i: { appId: string; title: string; brief?: string; projectId?: string | null; ideaId?: string | null; issueId?: string | null; actor?: string; /** false for something with no screen (a collector, a library, a command): no server is started, and it is tried by the commands of its guide. */ server?: boolean }) {
   if ([i.projectId, i.ideaId, i.issueId].filter(Boolean).length > 1) throw new PlanError('a prototype is a step of one thing: an idea, a task or a project')
   const { a, repoPath, cmd } = await setupOf(i.appId)
   if (!repoPath) throw new PlanError(`${a.name} has no local checkout to prototype in`)
-  if (!cmd) throw new PlanError(`${a.name} has no prototype command yet: set it in Settings, or work it out from the app and set it with set_prototype_command`)
+  if (!cmd && i.server !== false) throw new PlanError(`${a.name} has no prototype command yet: set it in Settings, or work it out from the app and set it with set_prototype_command`)
   const id = newId('prototype')
   const slug = `${slugify(i.title)}-${id.slice(-4).toLowerCase()}`
   const branch = `prototype/${slug}`
@@ -122,7 +122,7 @@ export async function startPrototype(i: { appId: string; title: string; brief?: 
   await addWorktree(repoPath, path, branch, a.defaultBranch)
   const [row] = await db.insert(prototype).values({ id, appId: i.appId, projectId: i.projectId ?? null, ideaId: i.ideaId ?? null, issueId: i.issueId ?? null, title: i.title, brief: i.brief?.trim() || null, branch, path, createdBy: i.actor ?? 'person' }).returning()
   await emit(row, 'prototype.created', i.actor ?? 'person', { branch })
-  const status = await runPrototype(id, i.actor)
+  const status = i.server === false ? await prototypeStatus(id) : await runPrototype(id, i.actor)
   const talk = await talkFor(id)
   if (row.brief) await say(talk.id, row.brief, undefined, { author: 'engine', kind: 'brief' })
   await openTab(row)

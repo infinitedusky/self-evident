@@ -23,7 +23,7 @@ export const WIDGET = `(() => {
     '.note{color:#6b7280;font-size:12px;margin:0 0 8px} p{margin:0 0 10px}',
     'ol{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:8px}',
     'li{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start;padding:8px;border:1px solid #e6e8ee;border-radius:10px} li.done{opacity:.6}',
-    'li input{margin:3px 0 0;width:16px;height:16px} .t{font-weight:600} .try{color:#4b5563;font-size:13px;margin-top:2px}',
+    'li input{margin:3px 0 0;width:16px;height:16px} .t{font-weight:600} .try{color:#4b5563;font-size:13px;margin-top:2px} code.run{display:block;font:12px ui-monospace,Menlo,monospace;background:#f0f1f4;border-radius:6px;padding:4px 6px;margin-top:4px;white-space:pre-wrap;word-break:break-all}',
     '.go{display:inline-block;margin-top:6px;font-size:13px;font-weight:600;color:#b45309;text-decoration:none} .go:hover{text-decoration:underline} .here{color:#6b7280;font-weight:400}',
     'label.f{display:block;font-weight:600;margin:4px 0} textarea,input[type=text]{width:100%;border:1px solid #cfd3dc;border-radius:8px;padding:8px;font-size:14px;font-family:inherit;color:inherit;background:#fff} textarea{min-height:76px;resize:vertical}',
     '.row{display:flex;gap:8px;align-items:center;margin-top:8px} .row input{flex:1} .send{border:0;border-radius:8px;padding:8px 14px;background:#b45309;color:#fff;font-weight:600;cursor:pointer} .send:disabled{opacity:.5;cursor:default}',
@@ -54,7 +54,7 @@ export const WIDGET = `(() => {
       g.steps.forEach((s, i) => {
         const id = i + ':' + s.title; const li = el('li', state.done[id] ? 'done' : '');
         const c = el('input'); c.type = 'checkbox'; c.checked = !!state.done[id]; c.setAttribute('aria-label', 'Tried: ' + s.title); c.onchange = () => { state.done[id] = c.checked; save(); draw() };
-        const d = el('div'); d.appendChild(el('div', 't', s.title)); if (s.try) d.appendChild(el('div', 'try', s.try));
+        const d = el('div'); d.appendChild(el('div', 't', s.title)); if (s.run) d.appendChild(el('code', 'run', s.run)); if (s.try) d.appendChild(el('div', 'try', s.try));
         if (s.path && s.path.charAt(0) === '/' && s.path.charAt(1) !== '/') {
           if (here() === s.path || location.pathname === s.path) d.appendChild(el('span', 'go here', 'You are here'));
           else { const a = el('a', 'go', 'Go there \\u2192'); a.href = s.path; d.appendChild(a) }
