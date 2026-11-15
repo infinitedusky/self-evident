@@ -5,6 +5,7 @@
  * app's prototypes. The agent starts them (start_prototype); the engine runs their servers; each has a conversation
  * of its own that builds it, which 💬 brings to the agent's column.
  */
+import { PrototypeGuide } from './PrototypeGuide'
 import { useCallback, useEffect, useState } from 'react'
 import { Badge } from './Badge'
 import { openEvents, API, engine, type Prototype } from '../engine'
@@ -117,6 +118,7 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Pr
       </div>
       <div className="preview-stage">
         <iframe key={`${at}#${reloads}#${p.updatedAt ?? ''}`} /* a restart reloads it */ src={base + at} title={p.title} style={width ? { width, maxWidth: '100%' } : undefined} />
+        <PrototypeGuide id={p.id} guide={p.guide} at={at} onGo={go} />
       </div>
     </div>
   )

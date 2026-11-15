@@ -3830,3 +3830,17 @@ tasks and on ideas. Two causes, both in `StepSection`:
   like a task's.
 
 The carry-on button is gone once a prototype exists: it is talked about with its agent, not started again.
+
+## A prototype's guide shows inside Self Evident too (Sandy, 2026-11-15: "is that only share or should it be included in the embedded prototype viewer as well?" … "yes")
+
+The guide an agent writes for a prototype (where to go, what to try) showed only to whoever opened the shared link.
+The person judging the prototype here saw one line about it in the Share panel.
+
+- **Now**: the same "What to try" tab sits in the bottom right corner of the embedded prototype, folded, with how
+  many steps were tried. Open, it lists the introduction and the steps; the step the view is on is marked, and
+  "Go there" moves the embedded view to a step's page.
+- **Self Evident's own panel** over the stage (`PrototypeGuide.tsx`), not put into the prototype's page as the
+  shared one is, so the prototype is untouched and a step can drive the view.
+- **No feedback box**: the person here has the agent beside them. What was tried and whether it is open are kept
+  per prototype in the browser.
+- No guide written: nothing is shown.
