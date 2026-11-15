@@ -3997,3 +3997,14 @@ goes carefully, and absent when it goes fast.
 
 Not done: nothing reads the plan on a fast task's pull request beyond the merge guide. An audit of the pull request
 after the build is the natural place for it.
+
+## A check cut off by a restart is picked back up (2026-11-15)
+
+Found while waiting to merge: a check's line treats any open conversation for a check as "out", working or not. An
+engine restart in the middle of a check left its conversation open and silent, so the line waited on it for good,
+with nothing to say so. That made every restart during a line a way to strand a task.
+
+- **At start** (`checks.resumeChecks`): for a task whose line is under way, a check that is not done and whose
+  agent was cut off mid-turn is told to carry on from what it has saved. When its turn ends the line moves as usual.
+- **Cut off** (`talk.cutOff`) means: it was given something to do, or had begun doing it, after the last time a
+  turn of its ended. An agent that ended its turn, finished or waiting for the person, is left alone.
