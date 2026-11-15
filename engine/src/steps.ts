@@ -58,7 +58,20 @@ export const label = (key: StepKey, on: On) => (key === 'brief' && on === 'idea'
 
 /** A step in a workflow. A check is in the list only when added; the others are always listed. */
 export interface WorkflowStep { key: StepKey; on: boolean; required: boolean }
-export interface Workflow { id: string; name: string; steps: WorkflowStep[]; ordered: boolean } // steps in its order
+/**
+ * How much stands between an approved prototype and the build (Sandy, 2026-11-15: "it's moving very slow … very good
+ * for a group project where there's a lot of stakeholders" … "let's build the two speeds").
+ * - careful: the analysis, the draft ADR, the plan, the blast radius, the audit and the final ADR and plan, then the
+ *   build. For shared code, client work and risky changes: the documents are what let other people trust it.
+ * - fast: the plan, then the build. The scrutiny is on the pull request. For one person building their own thing.
+ * Set per app (setup.speed; careful when unset) and, when a task says so, per task.
+ */
+export type Speed = 'careful' | 'fast'
+export const SPEEDS: Speed[] = ['careful', 'fast']
+export const speedOf = (own: unknown, appSetup: unknown): { value: Speed; from: 'task' | 'app' } =>
+  own === 'careful' || own === 'fast' ? { value: own, from: 'task' } : { value: (appSetup as { speed?: string } | null)?.speed === 'fast' ? 'fast' : 'careful', from: 'app' }
+
+export interface Workflow { id: string; name: string; steps: WorkflowStep[]; ordered: boolean; /** Resolved for one task: it goes fast, so no checks stand between its prototype and its build. */ fast?: boolean } // steps in its order
 
 /** What a workflow may switch: research, sketches, mockups and the prototype on or off; the idea and the brief are always on. */
 export const canTurnOff = (key: StepKey) => key === 'research' || step(key).place === 'either'
@@ -132,7 +145,7 @@ export interface StepState {
 
 export type Source = 'task' | 'project' | 'app'
 /** On a task or project, always a workflow; on an idea, none (an idea has no workflow). */
-export interface Resolved { workflow: Workflow | null; from: Source | null }
+export interface Resolved { workflow: Workflow | null; from: Source | null; /** A task's speed, and whether it is its own or the app's. */ speed?: { value: Speed; from: 'task' | 'app' } }
 
 /** The workflow in force: the task's own, or else its project's, or else the app's default; never none. */
 export function resolve(own?: Workflow | null, project?: Workflow | null, app?: Workflow | null): Resolved {
@@ -177,7 +190,7 @@ export function rows(on: On, states: StepState[], workflow: Workflow | null): Ro
   // begun; never when it is skipped, and not for an optional one nobody has touched (so a task that never prototypes
   // owes them nothing).
   const proto = all.find((s) => s.key === 'prototype')
-  const inPlay = !!proto && stateOf('prototype').status !== 'skipped' && (proto.required || stateOf('prototype').status !== 'none')
+  const inPlay = !!proto && !workflow?.fast && stateOf('prototype').status !== 'skipped' && (proto.required || stateOf('prototype').status !== 'none') // a fast task has none: it is planned and built straight after its prototype
   const list = all.filter((s) => step(s.key).place !== 'check' || inPlay)
   return list.map((s, i) => {
     const parent = s.key === 'brief'

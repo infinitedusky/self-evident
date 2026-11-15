@@ -3959,3 +3959,41 @@ button. The agent had written the draft; the page never loaded it.
 - **"Ask the agent to carry on" is gone**, on every step. Once a step is under way its agent is beside the page.
   "Start with the agent" stays on a step nobody has started.
 - **Under way with nothing written** says so, so an empty page is not taken for a broken one.
+
+## An agent in a worktree is not asked below expensive (Sandy, 2026-11-15: "we can't have this thing stopping to ask us if I can do bash … I got caught three times now waiting for a really long time, not realizing something was stuck … if they're questions, stop")
+
+A check's agent started at "runs cheap things", and the engine rated any command it did not recognise as moderate,
+so read-only lines (a grep with an alternation, a variable set first, `git -C`, `jq`) stopped it on a yes that nobody
+was there to give. Sandy sent four of them.
+
+- **The rule** (`gate.ts`): expensive (hard to undo, or outward-facing) is always put to the person. In a worktree
+  everything below it runs, whatever the conversation's level, unless a person set that conversation to ask for
+  everything. A check's agent never waits on a yes below expensive: in a worktree it runs; in the app's own checkout
+  a command that leaves a mark is refused with the reason, so it carries on. A conversation about the app as a
+  whole, in its own checkout, is as before.
+- **The rating** (`risk.ts`): a line is cut at `;`, `&&`, `|` outside quotes only; `NAME=value` in front and
+  `git -C <dir>` are read through. The four commands are free now. The same reading closed a gap: `git -C <dir> push
+  … main` was rated moderate, not expensive.
+- A check's agent starts at "runs up to moderate".
+
+Not done: when an agent is waiting on an expensive yes, nothing outside its conversation says so. Build should.
+
+## Two speeds: careful and fast (Sandy, 2026-11-15: "it's moving very slow … very good for a group project where there's a lot of stakeholders" … "let's build the two speeds")
+
+After an approved prototype a task went through the analysis, the draft ADR, the plan, the blast radius, the audit
+and the final ADR and plan before anything was built: about an hour of agents reading and writing, one after
+another, for every task. That is what lets other people trust a change, and too much for one person building.
+This takes back part of 2026-11-14's "the checks are fixed, not a workflow's choice": they are fixed when a task
+goes carefully, and absent when it goes fast.
+
+- **Careful** (as it was, and still what an app does unless told): every check, then the build.
+- **Fast**: approving the prototype approves the brief, and the task is planned and built. No checks. The scrutiny
+  is on the pull request, which still opens with its merge guide.
+- **Where**: per app in Settings › Landing ("After a prototype is approved"), `setup.speed`. A task can have its
+  own, on its overview beside its workflow (`issue.speed`, migration 0029); a sub-task goes at its task's.
+- **How** (`steps.ts`): the speed rides on the workflow resolved for the task (`fast`), so everything that asks
+  which checks are in play gets the same answer: the page, the brief's approval, the build's gate, the scheduler's
+  hold. Changing a task's speed carries it on at once.
+
+Not done: nothing reads the plan on a fast task's pull request beyond the merge guide. An audit of the pull request
+after the build is the natural place for it.

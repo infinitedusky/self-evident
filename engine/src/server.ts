@@ -4,6 +4,7 @@
  */
 import './own-scope.js' // first: the engine's own Doppler scope is not handed to what it starts
 import { serve } from '@hono/node-server'
+import { appendEvent } from './events.js'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { eq } from 'drizzle-orm'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
@@ -21,7 +22,7 @@ import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
 import { appKey, cleanKey, newId } from './ids.js'
 import { createIdea, getIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { advanceChecks, onChecksDone, onPlanWanted, resumeChecks } from './checks.js'
-import { checksOwed, step } from './steps.js'
+import { checksOwed, step, SPEEDS, type Speed } from './steps.js'
 import { writeHandover } from './handover.js'
 import { approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
 import { adoptTalk, answerPermission, busyAmong, releaseTalks, closeTalk, closeTalks, endTalk, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, runLog, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, setupTalk, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
@@ -575,6 +576,21 @@ export function buildApp(bus: EventBus) {
     } catch (err) { console.error(`[engine] building ${issueId} by itself: ${err instanceof Error ? err.message : err}`) }
   }
   onChecksDone((issueId) => void maybeBuild(issueId))
+  // A task's speed (steps.ts, Speed): careful, fast, or null to follow its app. Changing it carries the task on at
+  // once: fast drops the checks it still owed, so an approved task is planned and built; careful picks them up.
+  api.put('/issues/:id/speed', async (c) => {
+    const { speed } = await c.req.json<{ speed: string | null }>().catch(() => ({ speed: undefined as unknown as string | null }))
+    if (speed !== null && !SPEEDS.includes(speed as Speed)) return c.json({ error: `speed is ${SPEEDS.join(' or ')}, or null to follow the app` }, 400)
+    try {
+      const t = await resolveIssue(db, c.req.param('id'))
+      if (t.parentId) return c.json({ error: 'a sub-task goes at its task\'s speed' }, 400)
+      await db.update(issueTable).set({ speed, updatedAt: new Date() }).where(eq(issueTable.id, t.id))
+      const [a] = await db.select().from(appTable).where(eq(appTable.id, t.appId))
+      await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, issueId: t.id, projectId: t.projectId, actor: 'user', type: 'issue.updated', payload: { number: t.number, changed: ['speed'], speed } }))
+      void maybeBuild(t.id); void advanceChecks(t.id).catch(() => {})
+      return c.json((await stepsOf({ issueId: t.id })).resolved.speed)
+    } catch (err) { return planError(c, err, 404) }
+  })
   // After a prototype the plan comes before the blast radius and the audit, which read it: when the line reaches that
   // point the task is planned, and the line is carried on once the sub-tasks are in. An app that waits plans by hand.
   onPlanWanted((issueId) => void (async () => {

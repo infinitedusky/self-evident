@@ -184,6 +184,25 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     expect(splitPrompt('Saved carts', 'SS-9 Saved carts')).toMatch(/one task or several.*create_task.*If it is one task, say so/s)
   })
 
+  it('a task goes at its app\'s speed unless it has its own: fast owes no checks after its prototype', async () => {
+    const { issues: [t] } = await createProject({ appId, name: 'Speeds (sample)', issues: [{ title: 'Quick one (sample)', brief: 'Build it.' }] })
+    await setStep({ issueId: t.id }, 'prototype', { status: 'done', detail: 'the whole flow (sample)' })
+    const keys = async () => (await stepsOf({ issueId: t.id })).rows.map((r) => r.key)
+    expect((await stepsOf({ issueId: t.id })).resolved.speed).toEqual({ value: 'careful', from: 'app' })
+    expect(await keys()).toContain('audit')
+    await db.update(issue).set({ speed: 'fast' }).where(eq(issue.id, t.id))
+    expect((await stepsOf({ issueId: t.id })).resolved.speed).toEqual({ value: 'fast', from: 'task' })
+    expect(await keys()).not.toContain('audit')
+    expect(await keys()).toContain('prototype')
+    await db.update(issue).set({ speed: null }).where(eq(issue.id, t.id))
+    await db.update(app).set({ setup: { speed: 'fast' } }).where(eq(app.id, appId))
+    expect((await stepsOf({ issueId: t.id })).resolved.speed).toEqual({ value: 'fast', from: 'app' })
+    expect(await keys()).not.toContain('analysis')
+    await db.update(issue).set({ speed: 'careful' }).where(eq(issue.id, t.id)) // this one, carefully
+    expect(await keys()).toContain('final')
+    await db.update(app).set({ setup: {} }).where(eq(app.id, appId))
+  })
+
   it('plans a task only once its brief is approved', async () => {
     const { issues: [t] } = await createProject({ appId, name: 'Plan gate', issues: [{ title: 'Needs approval', brief: 'Build it.' }] })
     await expect(preparePlanning(t.id)).rejects.toThrow(/approve its brief before planning/)

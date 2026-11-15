@@ -187,6 +187,7 @@ export const issue = pgTable('issue', {
   source: text('source').notNull().default('person'), sourceRef: jsonb('source_ref'), // {sessionId} | {issueId, runId}
   reason: text('reason'), // canceled or duplicate: why
   handover: jsonb('handover').$type<{ text: string | null; sessionId: string; at: string }>(), // what the conversation that made it said about it, written once when its agent starts (handover.ts); text null: it said nothing more
+  speed: text('speed'), // careful | fast, when the task says so; null: the app's (steps.ts, Speed)
   requirements: jsonb('requirements').$type<{ key: string; name: string; applies: boolean; how: string }[]>(), // how its plan covers each requirement in force, as the planner said (requirements.ts)
   createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
   startedAt: at('started_at'), completedAt: at('completed_at'), canceledAt: at('canceled_at'), closedBy: text('closed_by'),
