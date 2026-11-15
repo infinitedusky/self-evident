@@ -42,6 +42,7 @@ import { setAcceptance, type AcceptanceChange } from './acceptance.js'
 import { mergeGuideOf } from './merge-guide.js'
 import { autoSave, clearTaskBranches, deleteSavePoint, deleteTaskBranch, goBack, saveHere, switchTo, taskBranches } from './task-branches.js'
 import { restoreAfterRestart, share, shared, ShareError, sharesOf, SHARE_KINDS, stopShares, unshare, type ShareKind } from './share.js'
+import { runsOf, runStep, stopStep, stopStepRuns } from './prototype-run.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { activeApps, appHolds, bringBack, deleteForGood, putAway, putAwayApps } from './apps.js'
@@ -398,6 +399,10 @@ export function buildApp(bus: EventBus) {
     catch (err) { if (err instanceof ShareError) return c.json({ error: err.message, code: err.code, holders: err.holders }, 409); return planError(c, err) }
   })
   api.delete('/shares/:kind/:id', async (c) => { try { return c.json(await unshare(shareKind(c.req.param('kind')), c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
+  // A step of its guide that is a command (prototype-run.ts): run it, stop it, and what each step last printed.
+  api.get('/prototypes/:id/runs', (c) => c.json(runsOf(c.req.param('id'))))
+  api.post('/prototypes/:id/guide/:step/run', async (c) => { try { return c.json(await runStep(c.req.param('id'), Number(c.req.param('step')))) } catch (err) { return planError(c, err) } })
+  api.post('/prototypes/:id/guide/:step/stop', (c) => { try { return c.json(stopStep(c.req.param('id'), Number(c.req.param('step')))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/talk', async (c) => { try { return c.json(await talkFor(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/stop', async (c) => { try { return c.json(await stopPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/discard', async (c) => { try { return c.json(await discardPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
@@ -906,7 +911,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   void watchTerminals().catch(() => {}) // conversations still in a terminal: keep copying what's said there
   const stopSync = process.env.GITHUB_SYNC === '0' ? () => undefined : startSync(Number(process.env.GITHUB_SYNC_MINUTES ?? 2)) // GitHub: reviews, checks, merges, main moving
   const stopSummaries = process.env.SUMMARY === '0' ? () => undefined : startSummaries(Number(process.env.SUMMARY_HOURS ?? 24)) // the summary page, rewritten when a day old and something moved
-  const shutdown = async () => { stopSync(); stopSummaries(); stopStorybooks(); stopShares(); stopPrototypes(); closeTalks(); await runner.shutdown(); await bus.stop(); await pool.end(); process.exit(0) }
+  const shutdown = async () => { stopSync(); stopSummaries(); stopStorybooks(); stopShares(); stopPrototypes(); stopStepRuns(); closeTalks(); await runner.shutdown(); await bus.stop(); await pool.end(); process.exit(0) }
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
 }
