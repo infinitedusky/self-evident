@@ -54,7 +54,7 @@ function Work({ idea, section, open }: { idea: IdeaRow; section?: string; open: 
   const base = `/ideas/${idea.id}`
   const convert = async (as: 'task' | 'project') => {
     setBusy(true)
-    try { const out = await engine.convertIdea(idea.id, { as }); nav(out.issueId ? `/tasks/${out.issueId}` : `/projects/${out.projectId}`) } catch (e: any) { setError(String(e.message ?? e)); setBusy(false) }
+    try { const out = await engine.convertIdea(idea.id, { as }); nav(out.projectId ? `/projects/${out.projectId}` : `/tasks/${out.issueId}`) } catch (e: any) { setError(String(e.message ?? e)); setBusy(false) }
   }
   const ask = async () => {
     setBusy(true)
