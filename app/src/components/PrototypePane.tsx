@@ -40,7 +40,7 @@ function Prototypes() {
         {list.map((p) => (
           <li key={p.id}>
             <button className="proto-row" onClick={() => ws?.open({ kind: 'prototype', id: p.id })}>
-              <span className="proto-title">{p.title}</span>
+              <span className="proto-title">{p.title}</span>{p.depth === 'rough' && <Badge>rough</Badge>}
               <Badge tone={p.status === 'running' ? 'ok' : 'neutral'} dot={p.status === 'running'}>{p.status === 'running' ? 'Running' : 'Stopped'}</Badge>
               <span className="faint mono">{p.branch}</span>
             </button>

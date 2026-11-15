@@ -1,0 +1,1 @@
+ALTER TABLE "prototype" ADD COLUMN "depth" text;

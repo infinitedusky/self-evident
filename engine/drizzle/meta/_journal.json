@@ -211,6 +211,13 @@
       "when": 1794778076978,
       "tag": "0029_task_speed",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1794780339131,
+      "tag": "0030_prototype_depth",
+      "breakpoints": true
     }
   ]
 }

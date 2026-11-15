@@ -380,9 +380,9 @@ export function buildApp(bus: EventBus) {
   api.get('/storybook/story-flow.css', (c) => c.text(STORY_FLOW_CSS, 200, { 'content-type': 'text/css; charset=utf-8' })) // step 4 of "Set up the screen map"
   api.get('/apps/:id/prototypes', async (c) => c.json(await listPrototypes(c.req.param('id'))))
   api.post('/apps/:id/prototypes', async (c) => {
-    const body = await c.req.json<{ title?: string; brief?: string; projectId?: string }>()
+    const body = await c.req.json<{ title?: string; brief?: string; projectId?: string; depth?: 'full' | 'rough' }>()
     if (!body.title?.trim()) return c.json({ error: 'a prototype needs a title' }, 400)
-    try { return c.json(await startPrototype({ appId: c.req.param('id'), title: body.title.trim(), brief: body.brief, projectId: body.projectId }), 201) } catch (err) { return planError(c, err) }
+    try { return c.json(await startPrototype({ appId: c.req.param('id'), title: body.title.trim(), brief: body.brief, projectId: body.projectId, depth: body.depth }), 201) } catch (err) { return planError(c, err) }
   })
   api.get('/prototypes/:id', async (c) => { try { return c.json(await prototypeStatus(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/prototypes/:id/start', async (c) => { try { return c.json(await runPrototype(c.req.param('id'), 'person', { restart: c.req.query('restart') === '1' })) } catch (err) { return planError(c, err) } })
