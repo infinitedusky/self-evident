@@ -3781,3 +3781,16 @@ Two steps, so a mistake costs nothing and a real deletion is deliberate.
 
 Not done: a removed app's pages still open by their address, and a write to one is not refused everywhere. Nothing on
 disk is cleaned: the worktrees of a deleted app stay until removed by hand.
+
+## The checkout follows main (Sandy, 2026-11-15: "there should be a pull system in the SE right?" … "yes")
+
+The sync fetched main every two minutes and brought open project and task branches up to date, but never moved the
+`main` in the app's own folder, so the folder a person opens fell behind (Bonkei's was 16 commits back).
+
+- **Now** (`github.ts`, `pullCheckout`, in the same pass): after the fetch, the checkout's default branch is
+  fast-forwarded to the fetched one. On that branch with no changed tracked files, the files move too. On another
+  branch, only the branch's pointer moves.
+- **Left as it is** when a tracked file has changes, when the branch has commits of its own, or when it is open in
+  another worktree. Never a merge, never a switch of branch.
+- **Not Self Evident's own checkout** (`ownCheckout`): new engine code restarts the engine and cuts off what is
+  building, so that one still moves only when someone chooses the moment.
