@@ -15,7 +15,7 @@ import { createIssue, updateIssue } from './issues.js'
 import { preparePlanning } from './planner.js'
 import { createProject } from './projects.js'
 import { skipTheRest } from './test-briefs.js'
-import { approveBrief, convertIdea, createDefaultWorkflow, guardComplete, guardDirect, ideaFirst, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, approveStep } from './work.js'
+import { approveBrief, convertIdea, createDefaultWorkflow, guardComplete, guardDirect, ideaFirst, listWorkflows, planView, saveWorkflow, setStep, splitPrompt, stepsOf, useWorkflow, approveStep } from './work.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -166,15 +166,22 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     expect((await db.select().from(prototype).where(eq(prototype.id, protoId)))[0]).toMatchObject({ ideaId: null, issueId })
   })
 
-  it('converts an idea into a project with no tasks yet, and Plan lists it', async () => {
-    const i = await createIdea({ appId, title: 'Saved carts' })
+  it('converts an idea into a project with its first task, which takes the idea\'s work with it', async () => {
+    const i = await createIdea({ appId, title: 'Saved carts', body: 'Come back to a cart later.' })
     await setStep({ ideaId: i.id }, 'prototype', { status: 'done', detail: 'the whole flow' })
-    const out = await convertIdea(i.id, 'project', {})
-    const projectId = (out as { projectId: string }).projectId
-    expect((await stepsOf({ projectId })).states.map((s) => s.key).sort()).toEqual(['idea', 'prototype'])
+    await setStep({ ideaId: i.id }, 'brief', { body: 'Rough: keep the cart for a week.' })
+    const protoId = newId('prototype')
+    await db.insert(prototype).values({ id: protoId, appId, ideaId: i.id, title: 'saved carts', branch: 'prototype/y', path: '/tmp/y', status: 'stopped' })
+    const out = await convertIdea(i.id, 'project', {}) as { as: string; projectId: string; issueId: string }
+    expect(out).toMatchObject({ as: 'project', projectId: expect.stringMatching(/^proj/), issueId: expect.stringMatching(/^iss/) })
+    const [t] = await db.select().from(issue).where(eq(issue.id, out.issueId))
+    expect(t).toMatchObject({ projectId: out.projectId, ideaId: i.id, title: 'Saved carts', description: 'Come back to a cart later.', brief: 'Rough: keep the cart for a week.' })
+    // What the idea had is the task's, not the project's: a project only groups.
+    expect((await db.select().from(prototype).where(eq(prototype.id, protoId)))[0]).toMatchObject({ ideaId: null, issueId: out.issueId, projectId: null })
+    expect(Object.fromEntries((await stepsOf({ issueId: out.issueId })).states.map((s) => [s.key, s.status]))).toMatchObject({ idea: 'done', prototype: 'done', brief: 'done' })
     const plan = await planView(appId)
-    expect(plan.projects.find((p) => p.id === projectId)).toMatchObject({ name: 'Saved carts', tasks: [], steps: [{ key: 'prototype', status: 'done' }] })
-    expect(plan.workflows.length).toBeGreaterThan(0)
+    expect(plan.projects.find((p) => p.id === out.projectId)).toMatchObject({ name: 'Saved carts', tasks: [{ id: out.issueId }] })
+    expect(splitPrompt('Saved carts', 'SS-9 Saved carts')).toMatch(/one task or several.*create_task.*If it is one task, say so/s)
   })
 
   it('plans a task only once its brief is approved', async () => {

@@ -288,9 +288,14 @@ export async function guardDirect(tx: Tx | typeof db, appId: string, projectId?:
  * An idea becomes a task or a project, and its steps come with it: research, mockups and the rest move over, its
  * prototypes point at the new thing, and its rough draft becomes the task's brief, unapproved.
  */
-const ideaMoved: ((m: { talkId: string; task: string }) => void)[] = []
+const ideaMoved: ((m: { talkId: string; task: string; project?: string }) => void)[] = []
 /** Called when an idea's own agent became a task's (talk.ts tells the agent). */
-export const onIdeaMoved = (fn: (m: { talkId: string; task: string }) => void) => { ideaMoved.push(fn) }
+export const onIdeaMoved = (fn: (m: { talkId: string; task: string; project?: string }) => void) => { ideaMoved.push(fn) }
+/**
+ * What the idea's agent is asked when its idea became a project: one task was made; whether the idea is more than
+ * one is its call, since it knows what the idea holds.
+ */
+export const splitPrompt = (project: string, task: string) => `This idea was converted to the project "${project}". Its first task is ${task}: it has the idea's research, mockups, prototype and rough draft, and this conversation is now that task's.\n\nDecide whether the idea is one task or several. A task is one thing that can be built, reviewed and merged by itself. If it is several, add the others to this project now with create_task (projectId: the project's id), each with a title and two or three sentences on its part, in the order they should be built, and say in one line what each is. Then trim ${task}'s title and description to its own part. If it is one task, say so in a sentence and add nothing.`
 
 export async function convertIdea(ideaId: string, as: 'task' | 'project', opts: { title?: string; projectId?: string; why?: string } = {}, actor = 'user') {
   const out = await convertIdeaTx(ideaId, as, opts, actor)
@@ -306,38 +311,40 @@ async function convertIdeaTx(ideaId: string, as: 'task' | 'project', opts: { tit
     const work = await tx.select().from(stepWork).where(eq(stepWork.ideaId, ideaId))
     const draft = work.find((w) => w.key === 'brief')
     const title = opts.title?.trim() || i.title
-    let target: { issueId: string } | { projectId: string }
-    let moved: { talkId: string; task: string } | null = null // the idea's own agent, now the task's
-    if (as === 'task') {
-      if (opts.projectId) {
-        const [p] = await tx.select().from(project).where(eq(project.id, opts.projectId))
-        if (!p || p.appId !== a.id) throw new PlanError(`no project ${opts.projectId} in this app`)
-      }
-      const [row] = await insertIssues(tx, a.id, [{ kind: 'code', projectId: opts.projectId ?? null, ideaId: i.id, title, description: i.body ?? undefined, brief: draft?.body ?? undefined, delegate: 'planner', source: 'idea' }], actor)
-      target = { issueId: row.id }
-      // The idea's own agent goes with it: one conversation and one worktree from the first sketch on (talk.ts, ideaTalk).
-      const [own] = await tx.select().from(session).where(and(eq(session.kind, 'talk'), eq(session.status, 'open'), sql`${session.subjectRef}->>'ideaId' = ${ideaId}`, sql`${session.worktreePath} is not null and ${session.subjectRef}->>'app' is null`)).orderBy(session.createdAt).limit(1)
-      if (own) {
-        const task = `${a.key}-${row.number} ${title}`
-        await tx.update(session).set({ subject: task, subjectRef: { issueId: row.id }, closedAt: null }).where(eq(session.id, own.id))
-        moved = { talkId: own.id, task }
-      }
-    } else {
+    // A project is a grouping: what is built is a task (Sandy, 2026-11-15: "when an idea is converted to a project, it
+    // needs to generate at least one task"). So a project made from an idea starts with one task, and the idea's
+    // research, mockups, prototype, rough draft and its own agent go to that task, as they do when it becomes a task.
+    let projectId = opts.projectId ?? null
+    let made: { id: string; name: string } | null = null
+    if (as === 'project') {
       const id = newId('project')
       await tx.insert(project).values({ id, appId: a.id, ideaId: i.id, name: title, content: i.body ?? null, integrationBranch: `project/${id}` })
-      await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: id, actor, type: 'project.created', payload: { name: title, issues: 0, subIssues: 0, fromIdea: i.number } })
-      target = { projectId: id }
+      await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: id, actor, type: 'project.created', payload: { name: title, issues: 1, subIssues: 0, fromIdea: i.number } })
+      projectId = id; made = { id, name: title }
+    } else if (projectId) {
+      const [p] = await tx.select().from(project).where(eq(project.id, projectId))
+      if (!p || p.appId !== a.id) throw new PlanError(`no project ${projectId} in this app`)
     }
-    const can = CAN[as === 'task' ? 'task' : 'project']
+    const [row] = await insertIssues(tx, a.id, [{ kind: 'code', projectId, ideaId: i.id, title, description: i.body ?? undefined, brief: draft?.body ?? undefined, delegate: 'planner', source: 'idea' }], actor)
+    const target = { issueId: row.id }
+    // The idea's own agent goes with it: one conversation and one worktree from the first sketch on (talk.ts, ideaTalk).
+    let moved: { talkId: string; task: string; project?: string } | null = null
+    const [own] = await tx.select().from(session).where(and(eq(session.kind, 'talk'), eq(session.status, 'open'), sql`${session.subjectRef}->>'ideaId' = ${ideaId}`, sql`${session.worktreePath} is not null and ${session.subjectRef}->>'app' is null`)).orderBy(session.createdAt).limit(1)
+    if (own) {
+      const task = `${a.key}-${row.number} ${title}`
+      await tx.update(session).set({ subject: task, subjectRef: { issueId: row.id }, closedAt: null }).where(eq(session.id, own.id))
+      moved = { talkId: own.id, task, ...(made ? { project: made.name } : {}) }
+    }
+    const can = CAN.task
     for (const w of work) {
-      if (w.key === 'brief' || !can.includes(w.key as StepKey)) continue // the draft became the brief; a project has none
+      if (w.key === 'brief' || !can.includes(w.key as StepKey)) continue // the draft became the task's brief
       await tx.update(stepWork).set({ ideaId: null, ...target, updatedAt: new Date() }).where(eq(stepWork.id, w.id))
     }
-    if (draft && as === 'task') await tx.delete(stepWork).where(eq(stepWork.id, draft.id))
+    if (draft) await tx.delete(stepWork).where(eq(stepWork.id, draft.id))
     await tx.update(prototype).set({ ideaId: null, ...target, updatedAt: new Date() }).where(eq(prototype.ideaId, ideaId))
     await tx.update(idea).set({ lane: 'build', updatedAt: new Date() }).where(eq(idea.id, ideaId))
-    await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, ideaId, ...target, actor, type: 'idea.converted', payload: { as, title, ...(opts.why ? { why: opts.why } : {}) } })
-    return { as, ...target, ...(moved ? { moved } : {}) }
+    await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, ideaId, ...target, ...(projectId ? { projectId } : {}), actor, type: 'idea.converted', payload: { as, title, ...(opts.why ? { why: opts.why } : {}) } })
+    return { as, ...target, ...(made ? { projectId: made.id } : {}), ...(moved ? { moved } : {}) }
   })
 }
 
