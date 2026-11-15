@@ -36,7 +36,7 @@ async function checkProject(tx: Tx | typeof db, appId: string, projectId?: strin
 }
 
 /** A to-do as the page shows it: the issue, who has it, its checklist, and the project it unblocks. */
-function view(t: Issue, key: string, lines: Issue[], projects: { id: string; name: string; status: string }[]) {
+export function view(t: Issue, key: string, lines: Issue[], projects: { id: string; name: string; status: string }[]) {
   return {
     ...t, identifier: identifier(key, t.number), notes: t.description, owner: (t.delegate === 'agent' ? 'agent' : 'person') as TodoOwner,
     status: t.state === 'done' ? 'done' : t.state === 'canceled' ? 'dropped' : 'open',

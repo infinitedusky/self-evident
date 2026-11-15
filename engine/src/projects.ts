@@ -12,6 +12,7 @@ import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { getIssue, identifier, insertIssues, listComments, nextSort, PlanError, rollUp, setState, type Issue, type Source } from './issues.js'
 import { tktOn } from './tkt.js'
+import { view as todoView } from './todos.js'
 import { claimsOverlap, findCycle, pickTasksToStart, type SchedTask } from './scheduler.js'
 import { checksOwed, step as stepDef0 } from './steps.js'
 
@@ -175,7 +176,7 @@ async function loadProject(tx: Tx | typeof db, projectId: string) {
   return {
     project: p, app: { id: a.id, name: a.name, key: a.key, defaultBranch: a.defaultBranch, workspaceId: a.workspaceId },
     pr: prs.find((q) => !q.issueId) ?? prs[0] ?? null, prs,
-    todos: todos.map((t) => ({ ...id(t), checklist: lines.filter((l) => l.parentId === t.id).map(id) })), // work outside the code that unblocks this project
+    todos: todos.map((t) => todoView(t, a.key, lines, [{ id: p.id, name: p.name, status: p.status }])), // work outside the code that unblocks this project, as a to-do is shown everywhere: each line with its text and whether it is done, who has it, open or not
     // everything the project has to cover: open (backlog), or closed without being built (a duplicate of what covers it, or canceled with why)
     backlog: code.filter((i) => backlogIds.has(i.id)).map((i) => ({ ...id(i), duplicateOf: rels.find((r) => r.relatedIssueId === i.id && r.type === 'duplicate')?.issueId ?? null })),
     decisions, questions, // the planner's: what it settled (provisional until approved) and what it could not
