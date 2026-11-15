@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
 import { app, event, project, repo, run, workspace } from './db/schema.js'
 import { newId } from './ids.js'
-import { planIssue, questionCost, subIssueBrief, validateProposal, type Proposal, type Propose, prompt as plannerPrompt } from './planner.js'
+import { planIssue, questionCost, subIssueBrief, validateProposal, type Proposal, type Propose, prompt as plannerPrompt, onAnyPlanned } from './planner.js'
 import { addItems } from './backlog.js'
 import { createIssue, getIssue } from './issues.js'
 import { createProject, PlanError, projectGraph } from './projects.js'
@@ -101,6 +101,22 @@ describe.skipIf(!reachable)('planner', () => {
     const types = (await db.select().from(event).where(eq(event.issueId, tasks[1].id)).orderBy(asc(event.seq))).map((e) => e.type)
     expect(types).toContain('issue.planning'); expect(types).toContain('run.message')
     expect(types.filter((t) => t === 'question.asked')).toHaveLength(2); expect(types.at(-1)).toBe('issue.planned')
+  })
+
+  it('tells whoever is listening that a plan is in, whoever asked for it: the checks that read the plan carry on from there', async () => {
+    const { issues: tasks } = await createProject({ appId, name: 'heard (sample)', issues: [{ title: 'Heard (sample)', brief: 'b' }] })
+    await approveBriefs(appId)
+    const heard: string[] = []
+    const off = onAnyPlanned((id) => heard.push(id))
+    await planIssue(tasks[0].id, { propose: fake(proposal) }) // no callback of its own
+    off()
+    expect(heard).toEqual([tasks[0].id])
+    const failing = await createProject({ appId, name: 'not heard (sample)', issues: [{ title: 'Not heard (sample)', brief: 'b' }] })
+    await approveBriefs(appId)
+    const off2 = onAnyPlanned((id) => heard.push(id))
+    await planIssue(failing.issues[0].id, { propose: fake(new Error('error_max_turns')) })
+    off2()
+    expect(heard).toEqual([tasks[0].id]) // a plan that failed is not a plan
   })
 
   it('a failed proposal is a failed run: no sub-issues, an issue.plan_failed event, and the issue can be planned again', async () => {

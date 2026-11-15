@@ -16,11 +16,11 @@ import { DATABASE_URL, db, pool } from './db/client.js'
 import { ensureDatabase } from './db/ensure.js'
 import { registerMachine } from './machine.js'
 import { cleanReferences } from './references.js'
-import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, workspace, type BuildStatus, type IssueState, issue as issueTable, project as projectTable } from './db/schema.js'
+import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, workspace, type BuildStatus, type IssueState, issue as issueTable, project as projectTable, question as questionTable } from './db/schema.js'
 import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
 import { appKey, cleanKey, newId } from './ids.js'
 import { createIdea, getIdea, listIdeas, projectFromIdea } from './ideas.js'
-import { advanceChecks, onChecksDone, onPlanWanted } from './checks.js'
+import { advanceChecks, onChecksDone, onPlanWanted, resumeChecks } from './checks.js'
 import { checksOwed, step } from './steps.js'
 import { writeHandover } from './handover.js'
 import { approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
@@ -798,7 +798,12 @@ export function buildApp(bus: EventBus) {
 
   api.post('/questions/:id/answer', async (c) => {
     const { answer } = await c.req.json<{ answer: string }>()
-    try { return c.json(await answerQuestion(c.req.param('id'), answer, 'user')) } catch (err) { return planError(c, err, 404) }
+    try {
+      const out = await answerQuestion(c.req.param('id'), answer, 'user')
+      const [q] = await db.select({ issueId: questionTable.issueId }).from(questionTable).where(eq(questionTable.id, c.req.param('id')))
+      if (q?.issueId) void advanceChecks(q.issueId).catch(() => {}) // the last answer may be all the line was waiting to be reminded of
+      return c.json(out)
+    } catch (err) { return planError(c, err, 404) }
   })
 
   // By-hand transitions: how a person drives a draft's graph. The executor owns running projects.
@@ -909,6 +914,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   if (recovered.projects || recovered.builds || recovered.reaped) console.log('recovered:', JSON.stringify(recovered))
   const port = Number(process.env.PORT ?? 4000)
   serve({ fetch: buildApp(bus).fetch, port }, (info) => console.log(`engine listening on http://localhost:${info.port}  (API under /api; UI at / when built)`))
+  setTimeout(() => void resumeChecks().catch((err) => console.error('checks: could not resume after the restart', err)), 8_000) // a task's checks that were under way carry on
   void watchTerminals().catch(() => {}) // conversations still in a terminal: keep copying what's said there
   const stopSync = process.env.GITHUB_SYNC === '0' ? () => undefined : startSync(Number(process.env.GITHUB_SYNC_MINUTES ?? 2)) // GitHub: reviews, checks, merges, main moving
   const stopSummaries = process.env.SUMMARY === '0' ? () => undefined : startSummaries(Number(process.env.SUMMARY_HOURS ?? 24)) // the summary page, rewritten when a day old and something moved

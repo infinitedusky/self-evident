@@ -278,6 +278,10 @@ export interface PlanningResult {
 /** Runs the planner and writes what it proposed. Never throws: a failure is a failed run and an issue.plan_failed event. */
 const outagesByIssue = new Map<string, number>() // planner outages in a row, per issue: the backoff level
 
+/** Told when any task's plan is in, whoever asked for it. */
+const whenPlanned = new Set<(issueId: string) => void>()
+export function onAnyPlanned(fn: (issueId: string) => void) { whenPlanned.add(fn); return () => { whenPlanned.delete(fn) } }
+
 export async function finishPlanning(ctx: PlanningContext, opts: { propose?: Propose; abort?: AbortController; retryAfterMs?: (minutes: number) => number; onPlanned?: () => void } = {}): Promise<PlanningResult> {
   const propose = opts.propose ?? proposeWithAgent
   const onEvent: ProposeInput['onEvent'] = async (type, payload) => { await emit({ ...ctx.base, actor: `agent:${ctx.runId}`, type, payload }) }
@@ -341,6 +345,7 @@ export async function finishPlanning(ctx: PlanningContext, opts: { propose?: Pro
       return { subs, decisions, questions }
     })
     opts.onPlanned?.() // e.g. the runner: the new sub-issues can be built now
+    for (const fn of whenPlanned) fn(ctx.issueId) // whoever asked for the plan: what waits on it carries on (checks.ts)
     return { status: 'completed', runId: ctx.runId, costUsd: out.costUsd, subIssues: written.subs.map((p) => ({ id: p.id, number: p.number, title: p.title })), decisions: written.decisions, questions: written.questions }
   } catch (err: any) {
     return failed(`the proposal could not be saved: ${err?.message ?? err}`, out)
