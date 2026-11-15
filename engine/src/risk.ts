@@ -99,9 +99,10 @@ export function riskOf(tool: string, input: Record<string, unknown>, ctx: RiskCo
  * are free, so `cd engine && pnpm test` is cheap, and `cd x && rm -rf y` is expensive. A redirect that writes is
  * moderate unless it only discards.
  */
-export function rateShell(cmd: string): { risk: Risk; why: string } {
+export function rateShell(raw: string): { risk: Risk; why: string } {
+  const cmd = raw.replace(/\bgit\s+-C\s+\S+/g, 'git') // `git -C <dir> push` is `git push`: the folder does not change what it does
   if (EXPENSIVE.test(cmd)) return { risk: 'expensive', why: 'hard to undo, or outward-facing' }
-  const parts = cmd.replace(/2>&1/g, '').split(/\|\||&&|;|\|/).map((p) => p.trim()).filter(Boolean)
+  const parts = splitShell(cmd.replace(/2>&1/g, '')).map((p) => p.trim()).filter(Boolean)
   let worst: { risk: Risk; why: string } = { risk: 'free', why: 'a read-only command' }
   for (const part of parts) {
     const r = ratePart(part)
@@ -110,7 +111,31 @@ export function rateShell(cmd: string): { risk: Risk; why: string } {
   return worst
 }
 
-function ratePart(part: string): { risk: Risk; why: string } {
+/**
+ * A shell line cut at && ; || | and newlines, but not inside quotes: `grep "a\\|b" f | head` is two parts, not three
+ * (Sandy, 2026-11-15: a grep with an alternation in its pattern was "a command the engine does not recognise").
+ */
+export function splitShell(cmd: string): string[] {
+  const parts: string[] = []
+  let cur = '', quote: string | null = null
+  for (let i = 0; i < cmd.length; i++) {
+    const c = cmd[i]
+    if (quote) { if (c === '\\' && quote === '"') { cur += c + (cmd[i + 1] ?? ''); i++; continue } if (c === quote) quote = null; cur += c; continue }
+    if (c === '"' || c === "'") { quote = c; cur += c; continue }
+    if (c === '\\') { cur += c + (cmd[i + 1] ?? ''); i++; continue }
+    if (c === ';' || c === '\n' || c === '|' || (c === '&' && cmd[i + 1] === '&')) { parts.push(cur); cur = ''; if ((c === '|' && cmd[i + 1] === '|') || c === '&') i++; continue }
+    cur += c
+  }
+  parts.push(cur)
+  return parts
+}
+
+/** A part as it is rated: leading `NAME=value` settings dropped (they set a variable, nothing more), and `git -C <dir>` read as `git`. */
+const bare = (part: string) => part.replace(/^(\s*[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*)\s*)+/, '').replace(/^(\s*git)\s+-C\s+\S+/, '$1')
+
+function ratePart(whole: string): { risk: Risk; why: string } {
+  const part = bare(whole)
+  if (!part.trim()) return { risk: 'free', why: 'sets a variable' }
   if (/^(cd|pushd|popd|true|false|exit|set|export)\b/.test(part) || /^\s*\$\?\s*$/.test(part)) return { risk: 'free', why: 'shell plumbing' }
   if (/(^|[^2&])>(?!\s*\/dev\/null)/.test(part)) return { risk: 'moderate', why: 'writes a file through a redirect' }
   if (RO.test(part)) return { risk: 'free', why: 'a read-only command' }

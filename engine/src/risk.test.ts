@@ -1,6 +1,6 @@
 /** The risk classes the engine assigns to an agent's tool calls; the person's threshold decides what asks. */
 import { describe, expect, it } from 'vitest'
-import { riskOf } from './risk.js'
+import { riskOf, splitShell, rateShell } from './risk.js'
 
 const onBranch = { cwd: '/repo', branch: 'fix/thing' }
 const onMain = { cwd: '/repo', branch: 'main' }
@@ -14,6 +14,22 @@ describe('riskOf', () => {
     expect(r('Bash', { command: 'git log --oneline | head -5' })).toBe('free')
     expect(r('Bash', { command: 'curl -s localhost:4000/api/health' })).toBe('free')
   })
+  it('the read-only commands that were being asked about are free: a variable set first, git -C, an alternation in a quoted pattern', () => {
+    // The four a check's agent stopped on (Sandy, 2026-11-15), paths shortened.
+    for (const cmd of [
+      'cd /tmp/tool-results/; grep -n -i "onWarning\\|severity\\|question\\|q_\\|dec_\\|answer" mcp-engine-task.txt | head -80',
+      "F=/tmp/tool-results/graph.txt; jq -c '.. | objects | select(.identifier? and (.identifier|test(\"BON-8[0-4]\"))) | {identifier, files}' $F 2>/dev/null | head; grep -n '\"BON-8[0-4]\"' $F | head",
+      'P=/code/shop-worktrees/prototype--x; git -C $P log --oneline main..HEAD; git -C $P diff --stat main...HEAD | tail -5; cat $P/packages/core/src/index.ts; sed -n 1,80p $P/packages/core/src/options.ts',
+      'F=/tmp/a.txt; wc -c $F; head -c 300 $F; echo',
+    ]) expect([cmd.slice(0, 30), rateShell(cmd).risk]).toEqual([cmd.slice(0, 30), 'free'])
+    expect(splitShell('grep "a\\|b; c" f | head; echo \'x && y\'')).toEqual(['grep "a\\|b; c" f ', ' head', " echo 'x && y'"])
+    // Still what they were: a variable in front does not hide what follows it.
+    expect(rateShell('X=1 rm -rf build').risk).toBe('expensive')
+    expect(rateShell('P=/x; git -C $P commit -m wip').risk).toBe('moderate')
+    expect(rateShell('git -C /x push origin main').risk).toBe('expensive')
+    expect(rateShell('F=/tmp/a; python3 -c "open(\'$F\')"').risk).toBe('moderate') // a program is not known to only read
+  })
+
   it('edits are cheap on a branch, moderate on main, expensive outside the checkout', () => {
     expect(r('Edit', { file_path: '/repo/src/a.ts' })).toBe('cheap')
     expect(r('Write', { file_path: '/repo/src/a.ts' }, onMain)).toBe('moderate')
