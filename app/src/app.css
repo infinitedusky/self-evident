@@ -52,6 +52,10 @@ a.card:hover { border-color: var(--accent); }
 .btn { display: inline-block; background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: 600 14px var(--sans); cursor: pointer; text-decoration: none; }
 .btn.quiet { background: transparent; color: var(--ink); border: 1px solid var(--line); font-weight: 500; }
 .btn:disabled { opacity: .5; cursor: default; }
+.btn.bad { background: var(--bad); }
+/* Deleting an app for good: what goes, what stays, and its name typed (RemoveApp.tsx). */
+.remove-app-ask { display: grid; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid var(--bad); border-radius: var(--radius); }
+.remove-app-ask label { display: grid; gap: 4px; font-size: 14px; max-width: 360px; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
 .form-grid label, .label-text { display: block; font: 12px/1.6 var(--mono); text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); }
 .form-grid input, .form-grid select, .form-grid textarea { display: block; width: 100%; margin-top: 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 14px var(--sans); }

@@ -11,18 +11,19 @@ import { Badge } from '../components/Badge'
 import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
 import { STEPS } from '@self-evident/engine/steps'
-import { engine, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type AppJob, type UsableSkill, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
+import { engine, type AppHolds, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type AppJob, type UsableSkill, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
 import { useCurrentApp } from '../current-app'
+import { RemoveApp, RemovedApps } from '../components/RemoveApp'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
 const err = (e: any) => String(e?.message ?? e)
 
 export const FACTORY_SECTIONS = [
-  { key: 'plugins', label: 'Plugins' }, { key: 'yours', label: 'Your skills' }, { key: 'skills', label: 'Skills by job' }, { key: 'integrations', label: 'Integrations' },
+  { key: 'plugins', label: 'Plugins' }, { key: 'yours', label: 'Your skills' }, { key: 'skills', label: 'Skills by job' }, { key: 'integrations', label: 'Integrations' }, { key: 'removed', label: 'Removed apps' },
 ] as const
 export const APP_SECTIONS = [
   { key: 'repo', label: 'Repo' }, { key: 'agents', label: 'Agents' }, { key: 'plugins', label: 'Plugins' }, { key: 'skills', label: 'Skills' }, { key: 'landing', label: 'Landing' },
-  { key: 'prototype', label: 'Prototype' }, { key: 'integrations', label: 'Integrations' }, { key: 'workflows', label: 'Workflow rules' },
+  { key: 'prototype', label: 'Prototype' }, { key: 'integrations', label: 'Integrations' }, { key: 'workflows', label: 'Workflow rules' }, { key: 'remove', label: 'Remove' },
 ] as const
 
 export function Settings() {
@@ -33,6 +34,7 @@ export function Settings() {
   const sections = id ? APP_SECTIONS : FACTORY_SECTIONS
   const here = sections.find((x) => x.key === section)?.key ?? sections[0].key
   const base = id ? `/settings/apps/${id}` : '/settings'
+  const go = useNavigate()
 
   return (
     <>
@@ -49,11 +51,23 @@ export function Settings() {
             : sections.map((x) => <NavLink key={x.key} to={`${base}/${x.key}`} className={() => `link ${here === x.key ? 'active' : ''}`}>{x.label}</NavLink>)}
         </aside>
         <div>
-          {making ? <NewApp onMade={reloadNav} /> : !id ? <FactoryPage section={here} item={item} /> : app ? <AppPage key={app.id} app={app} section={here} item={item} onSaved={reloadNav} /> : <p className="muted">No such app.</p>}
+          {making ? <NewApp onMade={reloadNav} />
+            : !id && here === 'removed' ? <Removed onChanged={reloadNav} />
+            : !id ? <FactoryPage section={here} item={item} />
+            : app && here === 'remove' ? <section className="panel"><RemoveApp name={app.name} onRemove={async () => { await engine.removeApp(app.id); await reloadNav(); go('/settings/removed') }} /></section>
+            : app ? <AppPage key={app.id} app={app} section={here} item={item} onSaved={reloadNav} /> : <p className="muted">No such app.</p>}
         </div>
       </div>
     </>
   )
+}
+
+/** The apps put away: each brought back, or deleted for good with its name typed. */
+function Removed({ onChanged }: { onChanged: () => Promise<unknown> }) {
+  const [apps, setApps] = useState<AppHolds[] | null>(null)
+  const load = () => engine.removedApps().then(setApps).catch(() => setApps([]))
+  useEffect(() => { void load() }, [])
+  return <RemovedApps apps={apps} onRestore={async (id) => { await engine.restoreApp(id); await Promise.all([load(), onChanged()]) }} onDelete={async (id, name) => { await engine.deleteApp(id, name); await load() }} />
 }
 
 /**
