@@ -278,3 +278,19 @@ export const AppPrototype: Story = {
 }
 /** An app's workflow rules: configuration, not something that runs. */
 export const AppWorkflowRules: Story = { parameters: appPage(sampleApp.id, 'workflows') }
+
+/** An app's last section: removing it. One press; it can be brought back from All apps. */
+export const RemoveAnApp: Story = {
+  parameters: appPage(sampleApp.id, 'remove'),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('button', { name: `Remove ${sampleApp.name}` })).toBeEnabled() },
+}
+/** All apps › Removed apps (made up: one sample app put away): bring it back, or delete it for good. */
+export const RemovedApps: Story = {
+  parameters: allAt('removed'),
+  beforeEach: withEngine({ removedApps: [{ id: 'app_sample_old', name: 'Old Sample Shop', key: 'OSS', removedAt: '2026-11-12T10:00:00Z', tasks: 14, projects: 3, ideas: 5, conversations: 22, kept: ['sample/old-shop on GitHub', '~/code/sample-old-shop', '~/code/sample-old-shop-worktrees'] }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Bring back' }))
+    await expect(await c.findByText(/No app is removed/)).toBeInTheDocument()
+  },
+}

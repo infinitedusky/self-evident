@@ -3759,3 +3759,25 @@ gave no way to what is being reviewed.
 - **The task list**: the same link on each row that has one.
 - **Which pull request** (`projects.ts`, `prOf`): the task's own; else its project's one pull request, for an app
   that lands a project in one.
+
+## An app can be removed (Sandy, 2026-11-15: "we need to be able to remove apps"; asked which, "Both")
+
+Two steps, so a mistake costs nothing and a real deletion is deliberate.
+
+- **Removed (put away)**: Settings › the app › Remove, one press, nothing asked, since it can be undone (Things does
+  not confirm what can be put back). The app leaves the rail and every list; its running projects are paused, its
+  running prototypes and Storybooks stopped, its agents let go; GitHub is no longer read for it. Its rows stay. Its
+  abbreviation is free for another app meanwhile (the unique index now covers only apps in use, migration 0028).
+  Refused while it is building or an agent of it is replying: the person stops those, not this.
+- **Brought back**: Settings › All apps › Removed apps. Its projects stay paused for the person to resume. Refused
+  when another app took its abbreviation meanwhile, saying which.
+- **Deleted for good**: the same list, only for a removed app, and only with its name typed (GitHub's way before
+  deleting a repository). The confirmation says what goes (its tasks, projects, ideas, conversations, history) and
+  what stays where it is (the repo on GitHub, the folder, the worktrees folder). One transaction: all or nothing.
+- **How the delete finds everything** (`apps.ts`, `deleteForGood`): it reads the tables from the database, not from
+  a list in the code. Every table with an `app_id` is the app's, emptied children first; what points at its rows
+  from outside is cleared when it may be empty and deleted when it may not. So a table added later is covered, and
+  the test checks no table with an `app_id` keeps a row of a deleted app while its neighbour is whole.
+
+Not done: a removed app's pages still open by their address, and a write to one is not refused everywhere. Nothing on
+disk is cleaned: the worktrees of a deleted app stay until removed by hand.

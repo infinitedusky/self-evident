@@ -5,6 +5,7 @@
 import { and, asc, desc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, build, event, fileClaim, issue, outsidePr, project, pr, question, run, session, step, stepWork } from './db/schema.js'
+import { putAwayIds } from './apps.js'
 import { identifier } from './issues.js'
 
 const LIVE = ['running', 'merging', 'testing', 'awaiting_answer']
@@ -38,8 +39,9 @@ export interface BuildTask {
 }
 
 export async function now(appId?: string) {
-  const projects = await db.select().from(project).where(appId ? and(ne(project.status, 'superseded'), eq(project.appId, appId)) : ne(project.status, 'superseded')).orderBy(desc(project.createdAt))
-  const apps = await db.select().from(app)
+  const away = await putAwayIds() // put-away apps are out of every list
+  const projects = (await db.select().from(project).where(appId ? and(ne(project.status, 'superseded'), eq(project.appId, appId)) : ne(project.status, 'superseded')).orderBy(desc(project.createdAt))).filter((p) => !away.has(p.appId))
+  const apps = (await db.select().from(app)).filter((a) => !away.has(a.id))
   const appOf = (id: string) => apps.find((a) => a.id === id)
   const appName = (id: string) => appOf(id)?.name ?? '?'
   const name = (i: { appId: string; number: number }) => identifier(appOf(i.appId)?.key ?? '?', i.number)

@@ -14,6 +14,7 @@ export interface MockData {
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[] }
   /** What a task's pull request will open with; none when left out. */ mergeGuide?: string
+  /** The apps put away; none when left out. */ removedApps?: import('../engine').AppHolds[]; /** Why an app can't be removed yet, as the engine says it. */ removeProblem?: string
   /** The app's reports; none when left out. */ reports?: import('../engine').Reports
   /** A task's save points and task branches; none when left out. */ taskBranches?: import('../engine').TaskBranches; /** Why a move fails, when it should. */ moveError?: string
   /** What a run read and said, for the planner's tab. */ runLog?: import('../engine').RunLog
@@ -61,7 +62,10 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
   }
   return [
     http.get('/api/events', () => silentStream()),
-    http.get('/api/apps', () => reply(d.apps)),
+    http.get('/api/apps', ({ request }) => reply(new URL(request.url).searchParams.get('removed') === '1' ? d.removedApps ?? [] : d.apps)),
+    http.post('/api/apps/:id/remove', () => d.removeProblem ? HttpResponse.json({ error: d.removeProblem }, { status: 400 }) : reply({})),
+    http.post('/api/apps/:id/restore', ({ params }) => { d.removedApps = (d.removedApps ?? []).filter((a) => a.id !== params.id); return reply({}) }),
+    http.delete('/api/apps/:id', ({ params }) => { d.removedApps = (d.removedApps ?? []).filter((a) => a.id !== params.id); return reply({ deleted: params.id }) }),
     http.get('/api/workspaces', () => reply([s.workspace])),
     http.get('/api/settings', () => reply(d.settings)),
     http.get('/api/skills/sources', () => reply(d.skillSources)),

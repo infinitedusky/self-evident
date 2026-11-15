@@ -184,6 +184,8 @@ export interface LinearImported { made: { id: string; identifier: string; title:
 /** A folder on the engine's computer and the git repositories in it (itself, or the ones directly inside); `path` null: the folder dialog was closed. */
 export interface FoundRepo { name: string; path: string; fullName: string | null; branch: string | null }
 export interface Folder { path: string | null; repos: FoundRepo[] }
+/** A put-away app and what it holds (Settings › Removed apps). */
+export interface AppHolds { id: string; name: string; key: string; removedAt: string | null; tasks: number; projects: number; ideas: number; conversations: number; kept: string[] }
 export interface App { id: string; workspaceId?: string; name: string; key: string; defaultBranch: string; setup?: AppSetup; repos?: Repo[] }
 export interface Workspace { id: string; name: string; settings?: { integrations?: IntegrationValues } }
 
@@ -395,6 +397,13 @@ export const engine = {
   writeHandover: (issueId: string, again = false) => call<{ handover: IssueDetail['handover']; why?: string }>('POST', `/issues/${issueId}/handover`, { again }),
   useWorkflow: (target: { kind: 'apps' | 'projects' | 'issues'; id: string }, workflowId: string | null) => call<{ ok: true }>('POST', `/${target.kind}/${target.id}/workflow`, { workflowId }),
   apps: () => call<App[]>('GET', '/apps'),
+  /** The apps put away, latest first, with what each holds. */
+  removedApps: () => call<AppHolds[]>('GET', '/apps?removed=1'),
+  /** Puts an app away: out of every list, nothing of it runs; it can be brought back. */
+  removeApp: (id: string) => call<App>('POST', `/apps/${id}/remove`),
+  restoreApp: (id: string) => call<App>('POST', `/apps/${id}/restore`),
+  /** Deletes a put-away app and everything in it, for good; `name` is its name as the person typed it. */
+  deleteApp: (id: string, name: string) => call<{ deleted: string }>('DELETE', `/apps/${id}`, { name }),
   workspaces: () => call<Workspace[]>('GET', '/workspaces'),
   settings: () => call<FactorySettings>('GET', '/settings'),
   updateWorkspace: (id: string, body: { name?: string; integrations?: IntegrationValues }) => call<Workspace>('PATCH', `/workspaces/${id}`, body),

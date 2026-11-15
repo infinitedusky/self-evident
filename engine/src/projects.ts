@@ -397,8 +397,8 @@ export async function clearSubIssues(issueId: string, actor = 'user') {
 
 /** Every project, newest first, with its app and counts: the Projects page. Superseded projects are hidden unless asked. */
 export async function listProjects(opts: { all?: boolean; appId?: string; solo?: boolean } = {}) {
-  const projects = (await db.select().from(project).orderBy(sql`${project.createdAt} desc`)).filter((p) => (opts.solo || !p.solo) && (opts.all || p.status !== 'superseded') && (!opts.appId || p.appId === opts.appId)) // a task's own project is not one to list (solo.ts)
-  const apps = await db.select().from(app)
+  const apps = (await db.select().from(app)).filter((a) => !a.removedAt) // put-away apps, and their projects, are out of every list
+  const projects = (await db.select().from(project).orderBy(sql`${project.createdAt} desc`)).filter((p) => apps.some((a) => a.id === p.appId) && (opts.solo || !p.solo) && (opts.all || p.status !== 'superseded') && (!opts.appId || p.appId === opts.appId)) // a task's own project is not one to list (solo.ts)
   const ids = projects.map((p) => p.id)
   const issues = ids.length ? await db.select({ id: issue.id, projectId: issue.projectId, parentId: issue.parentId, kind: issue.kind, state: issue.state, number: issue.number, title: issue.title }).from(issue).where(inArray(issue.projectId, ids)) : []
   const subIds = issues.filter((i) => i.parentId && i.kind === 'code').map((i) => i.id)
