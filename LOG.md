@@ -4024,3 +4024,22 @@ not two" only held when the brief could be approved in the same moment as the pr
 - **When it does wait on the person** (a started step left open, a required one owed), "its brief is ready; nothing
   more happens until you approve it" is listed under what needs you on My Stuff, with the way to it
   (`now`, `approve_brief`).
+
+## A prototype is full or rough (Sandy, 2026-11-15: "the HG 260 prototype is taking way too long" … "prototypes can be set as being full or rough")
+
+HG-260's prototype had been building for a quarter of an hour: a migration, the lookup module, the API, a set-up
+step, a settings card, tests, and a three-minute run of the whole suite. That is what a prototype's agent is told
+to do since 2026-11-13: build it the way we would ship it. And after approval the task is built again.
+
+- **Full** (as it was, and the usual one unless an app says otherwise): every layer real, so an analysis and an ADR
+  can be read out of it.
+- **Rough**: quick, to learn. The agent names the one thing in doubt and builds that for real; everything around it
+  is the fastest way. No migration discipline, no new tests, no full test run, no polish. If the only doubt is how
+  it looks, it says so and stops: that is a mockup's job. It is thrown away; the build does it properly, once.
+- **Where**: Settings › Prototype, "How thoroughly a prototype is built" (`setup.prototype_depth`). A prototype can
+  be started as either whatever the app's usual one is (`start_prototype`, `depth`; kept on the prototype,
+  migration 0030), so "make a rough prototype" works when said to an agent.
+- **The prototype analysis is told** when it reads a rough one: not to fault what was left rough, not to treat the
+  code as a base, and to list what the real build has to do that the prototype did not.
+
+The rule that keeps rough from being a slow mockup: real on the one thing in doubt, rough everywhere else.
