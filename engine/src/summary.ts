@@ -187,7 +187,7 @@ export async function latestFocus(appId: string) {
 
 /** Stale: none yet (and there is something to write about), or older than `hours` with events since. */
 export async function dueApps(hours: number) {
-  const apps = await db.select({ id: app.id }).from(app)
+  const apps = await db.select({ id: app.id }).from(app).where(isNull(app.removedAt)) // not the ones put away
   const due: string[] = []
   for (const { id } of apps) {
     const [row] = await db.select().from(summary).where(and(eq(summary.appId, id), eq(summary.section, 'focus'))).orderBy(desc(summary.id)).limit(1)

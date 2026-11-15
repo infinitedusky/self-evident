@@ -88,8 +88,9 @@ export const app = pgTable('app', { // [LS] "stack"; Linear's team
   defaultBranch: text('default_branch').notNull().default('main'),
   setup: jsonb('setup').notNull().default({}), // setup_cmd, test_cmd, services[], env_ref, sandbox_size
   workflowId: text('workflow_id').references((): AnyPgColumn => workflow.id), // the default for its projects and tasks
+  removedAt: at('removed_at'), // put away: out of every list and nothing of it runs; its rows stay until it is deleted for good (apps.ts)
   createdAt: createdAt(),
-}, (t) => [uniqueIndex('app_workspace_key').on(t.workspaceId, t.key)])
+}, (t) => [uniqueIndex('app_workspace_key').on(t.workspaceId, t.key).where(sql`${t.removedAt} is null`)]) // a put-away app's abbreviation is free to use
 
 const appId = () => text('app_id').notNull().references(() => app.id)
 

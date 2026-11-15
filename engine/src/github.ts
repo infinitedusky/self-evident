@@ -215,7 +215,8 @@ export const lastSync = new Map<string, { at: Date; error: string | null }>()
 /** Every app with a GitHub repo, every `minutes`. Returns a stop function. */
 export function startSync(minutes = 2, api: GitHubApi = ghCli) {
   const pass = async () => {
-    const apps = await db.select({ appId: repo.appId }).from(repo).where(isNotNull(repo.localPath))
+    const away = new Set((await db.select({ id: app.id }).from(app).where(isNotNull(app.removedAt))).map((a) => a.id)) // put away: not read
+    const apps = (await db.select({ appId: repo.appId }).from(repo).where(isNotNull(repo.localPath))).filter((r) => !away.has(r.appId))
     for (const { appId } of apps) { const r = await syncApp(appId, api); if (r.error) console.log(`[github] ${appId}: ${r.error}`) }
   }
   // The database read can fail (the connection to Fly drops); a pass that throws waits for the next one, like a sync does.

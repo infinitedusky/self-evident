@@ -30,6 +30,7 @@ import { prototypeEnv } from './prototype.js'
 import { prototypeSkill, skillOptions, stepSkillPrompt, withStepDefaults, type StepSkills } from './skills.js'
 import { accountEnv, accountPrefix, configDirFor, configDirOf } from './account.js'
 import { issueDetail, PlanError, projectGraph } from './projects.js'
+import { putAwayIds } from './apps.js'
 import { onIdeaMoved } from './work.js'
 import { existsSync, statSync } from 'node:fs'
 import { stopStorybookAt } from './storybook.js'
@@ -539,7 +540,8 @@ export async function renameTalk(sessionId: string, subject: string) {
 
 /** `taskId` on a conversation that belongs to a task: its own agent, a prototype's started on it, or a check's; `ideaId` on one that belongs to an idea: its own agent, or a prototype's. The app's column leaves those out. */
 export const listTalks = async (opts: { open?: boolean } = {}) => {
-  const rows = await db.select().from(session).where(opts.open ? and(eq(session.kind, 'talk'), eq(session.status, 'open')) : eq(session.kind, 'talk')).orderBy(desc(session.lastActiveAt))
+  const away = await putAwayIds() // a put-away app's conversations are kept, and not listed
+  const rows = (await db.select().from(session).where(opts.open ? and(eq(session.kind, 'talk'), eq(session.status, 'open')) : eq(session.kind, 'talk')).orderBy(desc(session.lastActiveAt))).filter((s) => !s.appId || !away.has(s.appId))
   const counts = await db.select({ sessionId: sessionMessage.sessionId, n: sql<number>`count(*)` }).from(sessionMessage).groupBy(sessionMessage.sessionId)
   const n = new Map(counts.map((c) => [c.sessionId, Number(c.n)]))
   const protos = await db.select({ sessionId: prototype.sessionId, issueId: prototype.issueId, ideaId: prototype.ideaId }).from(prototype).where(isNotNull(prototype.sessionId))
@@ -754,6 +756,13 @@ export async function interruptTalk(sessionId: string) {
   await l.q.interrupt().catch(() => {})
   l.busy = false
   return { interrupted: true }
+}
+
+/** Of these conversations, the ones with an agent replying now. */
+export const busyAmong = (sessionIds: string[]) => sessionIds.filter((id) => live.get(id)?.busy)
+/** Lets go of these conversations' agents; the conversations stay as they are, and start again when next spoken to. */
+export async function releaseTalks(sessionIds: string[]) {
+  for (const id of sessionIds) { const l = live.get(id); if (!l) continue; l.close(); await l.q.interrupt().catch(() => {}); live.delete(id) }
 }
 
 export async function endTalk(sessionId: string) {

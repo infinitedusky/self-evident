@@ -23,7 +23,7 @@ import { advanceChecks, onChecksDone, onPlanWanted } from './checks.js'
 import { checksOwed, step } from './steps.js'
 import { writeHandover } from './handover.js'
 import { approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
-import { adoptTalk, answerPermission, closeTalk, closeTalks, endTalk, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, runLog, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, setupTalk, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
+import { adoptTalk, answerPermission, busyAmong, releaseTalks, closeTalk, closeTalks, endTalk, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, runLog, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, setupTalk, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
 import { lastSync, myRepos, startSync, syncApp } from './github.js'
@@ -36,7 +36,7 @@ import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
 import { deleteReport, editReport, getReport, isWritingReport, listReports, setReportFormat, writeReport, type Period } from './reports.js'
 import { listSketches, readSketch } from './sketches.js'
-import { migrateStorybookSetup, startStorybook, stopStorybooks, storybookStatus, storybookValues, STORY_FLOW_CSS } from './storybook.js'
+import { migrateStorybookSetup, startStorybook, stopStorybookAt, stopStorybooks, storybookStatus, storybookValues, STORY_FLOW_CSS } from './storybook.js'
 import { prototypeCode, prototypeFile, unshowInPrototype } from './prototype-code.js'
 import { setAcceptance, type AcceptanceChange } from './acceptance.js'
 import { mergeGuideOf } from './merge-guide.js'
@@ -44,6 +44,7 @@ import { autoSave, clearTaskBranches, deleteSavePoint, deleteTaskBranch, goBack,
 import { restoreAfterRestart, share, shared, ShareError, sharesOf, SHARE_KINDS, stopShares, unshare, type ShareKind } from './share.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
+import { activeApps, appHolds, bringBack, deleteForGood, putAway, putAwayApps } from './apps.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { requirementsOf } from './requirements.js'
 import { autoBuild } from './branches.js'
@@ -78,7 +79,7 @@ export function buildApp(bus: EventBus) {
     routes: {
       'GET /health': 'database reachable?',
       'POST /workspaces': '{name}', 'POST /apps': '{workspaceId, name, key?, defaultBranch?, setup?}', 'POST /repos': '{appId, fullName, localPath?, baseBranch?}',
-      'GET /apps': 'all apps, each with its repos', 'PATCH /apps/:id': '{name?, defaultBranch?, setup?}', 'PATCH /repos/:id': '{fullName?, localPath?, baseBranch?}', 'DELETE /repos/:id': 'the repository leaves the app', 'GET /skills/sources': 'the repositories skills were pulled from', 'POST /skills/sources': '{url} → pulls that repository\'s skills into the shared skills, or brings them up to date: {source, added, updated, unchanged, removed, skipped}', 'DELETE /skills/sources?url=': 'stops pulling from it and removes its skills', 'POST /skills/shared': '{name, description, body} → one of your own skills, for every app (a SKILL.md outside every repo)', 'GET /apps/:id/account': 'which Claude account the app\'s agents run on: {kind: default|key|login, ok, note}', 'GET /apps/:id/linear/tickets?scope=mine|unassigned|all': 'the Linear team\'s open tickets, each with the task it already is here', 'POST /apps/:id/linear/import': '{identifiers: ["ENG-12"]} → {made, updated, missing}', 'GET /apps/:id/assets?project=': 'the app\'s assets, or one project\'s own', 'POST /assets': '{appId, projectId?, name, location, note?}', 'PATCH /assets/:id': '{name?, location?, note?}', 'DELETE /assets/:id': 'removes it',  'POST /folders/choose': '{path?} → {path, repos: [{name, path, fullName, branch}]}; no path opens the folder dialog', 'GET /workspaces': 'all workspaces',
+      'GET /apps': 'the apps in use, each with its repos; ?removed=1: the ones put away, with what each holds', 'POST /apps/:id/remove': 'put it away: out of every list, nothing of it runs, can be brought back', 'POST /apps/:id/restore': 'bring a put-away app back', 'DELETE /apps/:id': '{name}: delete a put-away app and every row of it, for good', 'PATCH /apps/:id': '{name?, defaultBranch?, setup?}', 'PATCH /repos/:id': '{fullName?, localPath?, baseBranch?}', 'DELETE /repos/:id': 'the repository leaves the app', 'GET /skills/sources': 'the repositories skills were pulled from', 'POST /skills/sources': '{url} → pulls that repository\'s skills into the shared skills, or brings them up to date: {source, added, updated, unchanged, removed, skipped}', 'DELETE /skills/sources?url=': 'stops pulling from it and removes its skills', 'POST /skills/shared': '{name, description, body} → one of your own skills, for every app (a SKILL.md outside every repo)', 'GET /apps/:id/account': 'which Claude account the app\'s agents run on: {kind: default|key|login, ok, note}', 'GET /apps/:id/linear/tickets?scope=mine|unassigned|all': 'the Linear team\'s open tickets, each with the task it already is here', 'POST /apps/:id/linear/import': '{identifiers: ["ENG-12"]} → {made, updated, missing}', 'GET /apps/:id/assets?project=': 'the app\'s assets, or one project\'s own', 'POST /assets': '{appId, projectId?, name, location, note?}', 'PATCH /assets/:id': '{name?, location?, note?}', 'DELETE /assets/:id': 'removes it',  'POST /folders/choose': '{path?} → {path, repos: [{name, path, fullName, branch}]}; no path opens the folder dialog', 'GET /workspaces': 'all workspaces',
       'GET /apps/:id/graph': 'the top-level graph: every sub-task of every project in the app', 'GET /now': 'the front door: running, needs you, recent',
       'POST /projects': '{appId, name, content?, description?, ideaId?, issues: [{title, description?, brief?, subIssues?: [{key, title, brief?, dependsOn?, files?}]}]}',
       'GET /projects?app=': 'the app\'s projects with counts', 'GET /projects/:id/graph': 'tasks in order, sub-tasks with builds, edges, claims, held reasons, last run, steps, the PR, backlog, to-dos',
@@ -126,9 +127,16 @@ export function buildApp(bus: EventBus) {
 
   // Apps carry their repos; setup is the whole object (test_cmd, model, max_budget_usd, max_turns, …).
   api.get('/apps', async (c) => {
-    const [apps, repos] = await Promise.all([db.select().from(appTable), db.select().from(repoTable)])
+    if (c.req.query('removed') === '1') return c.json(await Promise.all((await putAwayApps()).map((a) => appHolds(a.id)))) // Settings: the ones put away, with what each holds
+    const [apps, repos] = await Promise.all([activeApps(), db.select().from(repoTable)])
     return c.json(apps.map((a) => ({ ...a, repos: inOrder(repos.filter((r) => r.appId === a.id), a.setup) }))) // home first (workbench.ts)
   })
+  // Removing an app (apps.ts): put away first, which can be undone; a put-away app can be deleted for good with its name typed.
+  const putAwayDeps = { busy: busyAmong, release: releaseTalks, pauseProject: (id: string) => runner.pauseProject(id), stopPrototype: (id: string) => stopPrototype(id, 'engine'), stopStorybookAt }
+  api.get('/apps/:id/holds', async (c) => { try { return c.json(await appHolds(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
+  api.post('/apps/:id/remove', async (c) => { try { return c.json(await putAway(c.req.param('id'), putAwayDeps)) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/restore', async (c) => { try { return c.json(await bringBack(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  api.delete('/apps/:id', async (c) => { try { return c.json(await deleteForGood(c.req.param('id'), (await c.req.json<{ name?: string }>().catch(() => ({} as { name?: string }))).name ?? '')) } catch (err) { return planError(c, err) } })
   // Settings: the workspace's integrations, plugins and the jobs their skills cover; an app's own view is the merge,
   // plus its repo's skills.
   api.get('/settings', async (c) => {
@@ -291,7 +299,7 @@ export function buildApp(bus: EventBus) {
       try { key = cleanKey(body.key) } catch (err) { return c.json({ error: (err as Error).message }, 400) }
       const [me] = await db.select().from(appTable).where(eq(appTable.id, c.req.param('id')))
       if (!me) return c.json({ error: 'no such app' }, 404)
-      const taken = (await db.select({ id: appTable.id, key: appTable.key }).from(appTable).where(eq(appTable.workspaceId, me.workspaceId))).filter((r) => r.id !== me.id).map((r) => r.key)
+      const taken = (await activeApps()).filter((r) => r.workspaceId === me.workspaceId && r.id !== me.id).map((r) => r.key) // a put-away app's abbreviation is free
       if (taken.includes(key)) return c.json({ error: `the abbreviation ${key} is another app's` }, 400)
     }
     if (body.setup && 'integrations' in body.setup) body.setup.integrations = cleanValues(body.setup.integrations)
@@ -338,7 +346,7 @@ export function buildApp(bus: EventBus) {
   api.get('/github/repos', async (c) => c.json(await myRepos()))
   api.post('/apps', async (c) => {
     const body = await c.req.json<{ workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: Record<string, unknown>; repo?: { fullName?: string; localPath?: string } }>()
-    const taken = (await db.select({ key: appTable.key }).from(appTable).where(eq(appTable.workspaceId, body.workspaceId))).map((r) => r.key)
+    const taken = (await activeApps()).filter((r) => r.workspaceId === body.workspaceId).map((r) => r.key) // a put-away app's abbreviation is free
     let key: string
     try { key = body.key?.trim() ? cleanKey(body.key) : appKey(body.name, taken) } catch (err) { return c.json({ error: (err as Error).message }, 400) }
     if (taken.includes(key)) return c.json({ error: `the abbreviation ${key} is another app's` }, 400)

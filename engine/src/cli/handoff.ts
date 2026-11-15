@@ -106,7 +106,7 @@ async function readPlan(): Promise<Plan> {
     const { registerMachine, machines } = await import('../machine.js')
     await registerMachine()
     known = await machines()
-    const apps = await db.select().from(app)
+    const apps = (await db.select().from(app)).filter((a) => !a.removedAt) // not the ones put away
     const repos = (await db.select().from(repo)).filter((r) => r.localPath)
     const protos = await db.select().from(prototype)
     const sessions = await db.select().from(session).where(eq(session.status, 'open'))
