@@ -20,6 +20,7 @@ import { MergeGuide } from '../components/MergeGuide'
 import { mark, TaskNav } from '../components/TaskNav'
 import { WorkflowChoice } from '../components/WorkflowChoice'
 import { Handover } from '../components/Handover'
+import { BRIEF_WORDS, briefWords } from '@self-evident/engine/brief'
 import { QuestionAsk } from '../components/QuestionAsk'
 import { PlanCovers } from '../components/Requirements'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
@@ -226,6 +227,22 @@ function StandsOn({ feeds, base }: { feeds: Row[]; base: string }) {
   )
 }
 
+/**
+ * How long the brief is, against the size a brief is held to (Sandy, 2026-11-14: "we need less text so that people can
+ * actually consume it"). Within it: a quiet count. Over it: said plainly, with one press that asks the task's agent
+ * to cut it back (not once it is approved: then it is the person's word, and they withdraw it first).
+ */
+export function BriefSize({ text, approved, busy, onShorten }: { text: string; approved?: boolean; busy?: boolean; onShorten?: () => void }) {
+  const n = briefWords(text)
+  if (n <= BRIEF_WORDS) return <p className="faint" style={{ margin: '0 0 6px', fontSize: 12 }} data-component="BriefSize">{n} words</p>
+  return (
+    <div className="empty" style={{ marginBottom: 12, textAlign: 'left' }} data-component="BriefSize">
+      <strong>This brief is {n} words.</strong> A brief says what to build and why in at most {BRIEF_WORDS}, so that it gets read; how it is built belongs to the ADR and the plan.{' '}
+      {approved ? 'It is approved as it stands.' : onShorten && <button type="button" className="linkish" disabled={busy} onClick={onShorten}>Ask the agent to cut it back</button>}
+    </div>
+  )
+}
+
 /** The brief's page: the brief, what it stands on, and its approval, which waits for the required steps. */
 function BriefStep({ i, busy, act, feeds, base }: { i: IssueDetail; busy: boolean; act: (fn: () => Promise<unknown>) => Promise<void>; feeds: Row[]; base: string }) {
   const [asked, setAsked] = useState(false)
@@ -250,6 +267,7 @@ function BriefStep({ i, busy, act, feeds, base }: { i: IssueDetail; busy: boolea
   )
   return (
     <>
+      <BriefSize text={i.brief} approved={!!i.briefApprovedBy} onShorten={() => act(async () => { await engine.ask({ appId: i.appId, subjectRef: { issueId: i.id }, text: `Cut the brief of this task back to what and why, in at most ${BRIEF_WORDS} words, with update_task. Move nothing into it; what you take out is already in the steps and the reports.` }); window.dispatchEvent(new Event(TASK_AGENT_ASKED)) })} busy={busy} />
       <div className="md step-body"><Markdown remarkPlugins={[remarkGfm]}>{i.brief}</Markdown></div>
       <Acceptance issueId={i.id} items={i.acceptance ?? []} approved={!!i.briefApprovedBy} prototype={hasPrototype} onChanged={() => void act(async () => {})} />
       <StandsOn feeds={feeds} base={base} />

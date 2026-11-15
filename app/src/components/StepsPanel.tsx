@@ -39,7 +39,7 @@ export function askStep(subject: StepSubject, appId: string, name: string, key: 
     : key === 'sketch'
     ? `Sketch ${WHAT[subject.kind]} "${name}" (${subject.id}): the screens as plain HTML files under sketches/, fast, for me to react to; record them with set_step (key sketch).`
     : key === 'brief' && subject.kind === 'issues'
-    ? `Write the brief for ${WHAT[subject.kind]} "${name}" (${subject.id}) with update_task, from its steps so far.`
+    ? `Write the brief for ${WHAT[subject.kind]} "${name}" (${subject.id}) with update_task: what and why, in at most 200 words, for me to read and approve. Nothing about how to build it.`
     : `Do the ${label(key, on)} step for ${WHAT[subject.kind]} "${name}" (${subject.id}), and record it with set_step.` })
 }
 
