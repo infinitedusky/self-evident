@@ -4008,3 +4008,19 @@ with nothing to say so. That made every restart during a line a way to strand a 
   agent was cut off mid-turn is told to carry on from what it has saved. When its turn ends the line moves as usual.
 - **Cut off** (`talk.cutOff`) means: it was given something to do, or had begun doing it, after the last time a
   turn of its ended. An agent that ended its turn, finished or waiting for the person, is left alone.
+
+## Approving the prototype is the last press (Sandy, 2026-11-15: "I approved the prototype. Like, that ends the brief, right? Then we move forward to the plan")
+
+HG-259: prototype approved, analysis and draft ADR done, then nothing. Its agent had brought the brief up to date
+and written "the brief is ready for your approval" in its own conversation, the only place that said so. And
+approving would have been refused: sketches and mockups were neither done nor skipped. 2026-11-14's "one approval,
+not two" only held when the brief could be approved in the same moment as the prototype.
+
+- **The approval carries** (`checks.approvalCarries`, in `advanceChecks`): once the analysis and the ADR are in and
+  the conductor has brought the brief up to date, the brief stands approved by whoever approved the prototype, and
+  the plan follows. No second press.
+- **Optional steps nobody touched are skipped** when the prototype is approved (`work.skipUntouched`). A step that
+  was started is left for the person: that one is a choice.
+- **When it does wait on the person** (a started step left open, a required one owed), "its brief is ready; nothing
+  more happens until you approve it" is listed under what needs you on My Stuff, with the way to it
+  (`now`, `approve_brief`).

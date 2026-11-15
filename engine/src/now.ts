@@ -4,6 +4,7 @@
  */
 import { and, asc, desc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
+import { speedOf } from './steps.js'
 import { app, build, event, fileClaim, issue, outsidePr, project, pr, question, run, session, step, stepWork } from './db/schema.js'
 import { putAwayIds } from './apps.js'
 import { identifier } from './issues.js'
@@ -17,6 +18,7 @@ export type Attention =
   | ({ kind: 'question'; questionId: string; issueIdentifier: string | null; text: string; cost: string | null; askedAt: Date } & Where)
   | ({ kind: 'run_project'; subIssues: number } & Where)
   | ({ kind: 'plan_issue'; issueId: string; identifier: string; issueTitle: string } & Where)
+  | ({ kind: 'approve_brief'; issueId: string; identifier: string; issueTitle: string } & Where)
   | ({ kind: 'backlog'; open: number; items: string[] } & Where)
   | { kind: 'todo'; todoId: string; identifier: string; title: string; owner: string; projectId: string | null; projectName: string | null; appName: string; done: number; total: number; next: string | null; waitingOn: string[] }
   | ({ kind: 'merge_pr'; prNumber: number | null; url: string | null; review: string | null; checks: string; failing: string[] } & Where)
@@ -130,6 +132,18 @@ export async function now(appId?: string) {
     const p = projects.find((x) => x.id === q.projectId)!
     const t = top.find((x) => x.id === q.issueId)
     needsYou.push({ kind: 'question', ...tag(p), questionId: q.id, issueIdentifier: t ? name(t) : null, text: q.text, cost: q.cost, askedAt: q.askedAt })
+  }
+  // A task whose prototype is approved and whose brief is written, waiting on the person's approval of the brief: the
+  // line after the prototype stops here until they give it, and it said so only in the task's own conversation.
+  const waiting = top.filter((t) => !t.briefApprovedBy && t.brief?.trim() && !['done', 'canceled', 'duplicate', 'backlog'].includes(t.state))
+  const marks = waiting.length ? await db.select().from(stepWork).where(and(inArray(stepWork.issueId, waiting.map((t) => t.id)), inArray(stepWork.key, ['prototype', 'analysis', 'adr']))) : []
+  for (const t of waiting) {
+    const of = (key: string) => marks.find((m) => m.issueId === t.id && m.key === key)
+    if (!of('prototype')?.approvedBy) continue
+    const fast = speedOf(t.speed, appOf(t.appId)?.setup).value === 'fast'
+    if (!fast && !(of('analysis')?.status === 'done' && of('adr')?.status === 'done')) continue // carefully: the brief is brought up to date from the analysis and the ADR first
+    const p = projects.find((x) => x.id === t.projectId)
+    if (p) needsYou.push({ kind: 'approve_brief', ...tag(p), issueId: t.id, identifier: name(t), issueTitle: t.title })
   }
   for (const p of projects.filter((x) => ['drafting', 'proposed', 'approved'].includes(x.status))) {
     const mine = work(p)
