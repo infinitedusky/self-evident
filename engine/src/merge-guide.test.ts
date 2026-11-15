@@ -49,8 +49,8 @@ describe('the merge guide', () => {
     for (const key of ['analysis', 'adr', 'risk', 'audit'] as const) { expect(checkBrief(key, f)).toContain(SUMMARY); expect(checkBrief(key, f)).toContain('written for the next agent') }
     expect(SUMMARY).toMatch(/At most eight bullets/)
     expect(checkBrief('analysis', f)).toMatch(/\*\*Telemetry hook points\*\*[\s\S]*never names, links or other personal data[\s\S]*which failure would otherwise be silent/)
-    expect(finalizeBrief(['analysis'], f)).toMatch(/a \*\*Telemetry\*\* section[\s\S]*the telemetry has criteria of its own/)
-    expect(checkBrief('audit', f)).toMatch(/telemetry: whether the brief's Telemetry section has every hook point/)
+    expect(finalizeBrief(['analysis'], f)).toMatch(/the telemetry has criteria of its own/)
+    expect(checkBrief('audit', f)).toMatch(/telemetry: whether the plan's sub-tasks put in every hook point/)
   })
 })
 

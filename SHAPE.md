@@ -566,7 +566,9 @@ Details and sources in `research/`.
   the brief is approved and they are in (LOG.md, "What follows the prototype is fixed"); and the order after a
   prototype is analysis, ADR, the plan, blast radius, audit, final ADR and plan, build, after one approval (the
   prototype's, which approves the brief with it), with the merge checklist on the pull request (LOG.md, "One
-  approval, and the ADR and the plan are put right before the build"). The rest is not built yet. Where this and an older bullet disagree (the order after the mockup below, the
+  approval, and the ADR and the plan are put right before the build"); and a brief is what and why in at most 200
+  words, held for agents, with the planner reading the analysis and the ADR itself (LOG.md, "A brief is what and
+  why, in 200 words"). Where this and an older bullet disagree (the order after the mockup below, the
   project's Run button, Build in the rail), this is the direction. Details and what exists already: LOG.md, "A task
   is brief, plan, audit, build".
   1. **Brief**: what we want and why, and literally brief ("a brief used to be literally brief … the thing that we

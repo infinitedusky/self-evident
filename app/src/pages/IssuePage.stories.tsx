@@ -35,6 +35,18 @@ export const BriefWithAcceptanceCriteria: Story = {
     await expect(c.getByText(/Approving it approves its 5 acceptance criteria as enough; 1 was not shown in the prototype; 1 is left to the final build, unproven/)).toBeInTheDocument()
   },
 }
+// Made up: a brief that has grown into the builder's instructions, the thing a brief is not.
+const longBrief = `### What (sample)\nAddress and payment on one page.\n\n### How\n${Array.from({ length: 60 }, (_, n) => `Step ${n + 1}: change the form component and its totals hook.`).join(' ')}`
+/** A brief over its size says so, with one press to have the task's agent cut it back to what and why. */
+export const BriefTooLong: Story = {
+  parameters: at('iss_sample20', 'brief'),
+  beforeEach: withEngine({ issueDetails: { ...sampleData.issueDetails, iss_sample20: { ...issueDetails.iss_sample20, brief: longBrief } } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/This brief is \d+ words\./)).toBeInTheDocument()
+    await expect(await c.findByRole('button', { name: 'Ask the agent to cut it back' })).toBeInTheDocument()
+  },
+}
 /** A step the workflow puts after one not finished (the mockups): greyed in the nav, and its page says where to go first. */
 export const LockedStep: Story = { parameters: at('iss_sample20', 'risk'), beforeEach: withEngine({ steps: { ...sampleData.steps, issues: waitingTaskStepsView } }) }
 /** Every required step done and the brief approved: the build opens, with a Plan button. */

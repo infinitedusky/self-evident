@@ -3657,3 +3657,28 @@ Three things, the last two found while doing the first.
   still to come: …"), only for a task whose build has not begun, so nothing under way is stalled.
 
 Tested through a real dispatch in a running project and through `now()`. Not tried with real agents.
+
+## A brief is what and why, in 200 words (Sandy, 2026-11-14: "lets do the shrinking, I am going to harp on that we need less text so that people can actually consume it")
+
+A task's brief had become the builder's instructions: after a prototype the task's agent was told to fold into it
+a Prototype section, the analysis's Cleaner list, the ADR's decision, a telemetry table and the assets of every
+step, and the person was then asked to approve that. Nobody reads eight hundred words of it.
+
+- **The form** (`brief.ts`): at most 200 words, three parts: What, Why, Not in this task. No file names, functions,
+  libraries, steps or instructions to a builder. How it is built is the ADR's and the plan's; how we will know it
+  is done is the acceptance criteria.
+- **Held, not asked for.** An agent cannot save a task's brief of more than 250 words (`update_task`,
+  `create_task`, `create_project`): it is refused with the form. A person can write what they like. A sub-task's
+  brief is the builder's instructions and has no limit.
+- **Nothing is folded into it.** After a prototype, if the brief is not yet approved, the task's agent only
+  corrects what the prototype changed about what is being built, cuts the brief back if it has grown, and brings
+  the acceptance criteria up to date.
+- **The planner reads the reports itself.** What the brief used to carry for it now goes to the planner directly:
+  the prototype analysis, whole, beside the draft ADR, with what to do with its Cleaner list, its telemetry hook
+  points and its keep-or-leave. The audit checks the plan's sub-tasks for the hook points, not a section of the
+  brief.
+- **On the page** the brief shows its word count; over 200 it says so, with one press that asks the task's agent to
+  cut it back (not once it is approved).
+
+Briefs already written are not touched: a long one shows its count and the offer. Not tried with real agents: the
+next brief an agent writes is the test of whether 200 words is the right number.

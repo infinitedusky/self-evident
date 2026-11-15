@@ -83,8 +83,10 @@ describe('the checks after the prototype is approved', () => {
     expect(checkBrief('adr', f)).toMatch(/the reference for the build[\s\S]*its branch is not merged/)
     expect(checkBrief('risk', { ...f, prototype: null })).not.toContain('/tmp/proto')
     expect(() => checkBrief('sketch', f)).toThrow(/not a check/)
-    expect(finalizeBrief(['analysis', 'adr', 'risk'], f)).toMatch(/\*\*Prototype\*\* section: the branch prototype\/swing/)
-    expect(finalizeBrief(['analysis', 'adr', 'risk'], f)).toMatch(/what the analysis says under Cleaner, as instructions to the builder/)
+    // The brief stays short: nothing about how goes into it; the planner reads the reports itself.
+    expect(finalizeBrief(['analysis', 'adr'], f)).toMatch(/at most 200 words/)
+    expect(finalizeBrief(['analysis', 'adr'], f)).toMatch(/Nothing the reports found about how to build it goes into the brief/)
+    expect(finalizeBrief(['analysis', 'adr'], f)).not.toMatch(/Prototype\*\* section|Telemetry\*\* section/)
     expect(reportsIn(['analysis', 'audit'])).toMatch(/fix in the brief what it found/)
     expect(reportsIn(['risk'])).not.toMatch(/brief audit/)
   })
