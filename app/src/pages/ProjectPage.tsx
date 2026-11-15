@@ -1,7 +1,8 @@
 /**
  * One project, live: its issues in order (plan one with a click; a draft's can be reordered), the graph of their
  * sub-issues, the planner's questions and decisions, the selected sub-issue's detail and steps, the event ticker, the PR.
- * Its own steps (research, mockups, a prototype; no brief) sit at the top.
+ * The tasks lead (Sandy, 2026-11-15: "the tasks are what is important"): they are what is built and what gets a pull
+ * request. The project's own steps and its assets are below everything, folded.
  */
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
@@ -11,7 +12,7 @@ import { Badge, type Tone } from '../components/Badge'
 import { asked, PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
 import { Brief } from '../components/Brief'
 import { StepsPanel } from '../components/StepsPanel'
-import { engine, STATE_LABEL, useLiveProject, type BacklogIssue, type Graph, type IdeaRow, type Decision, type Event, type GraphSubIssue, type GraphIssue, type Question } from '../engine'
+import { engine, STATE_LABEL, useLiveProject, type BacklogIssue, type Graph, type IdeaRow, type Decision, type Event, type GraphSubIssue, type GraphIssue, type Pr, type Question } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { pendingOpen } from '../workspace'
 import { TodoCard } from './Todos'
@@ -58,11 +59,11 @@ export function ProjectPage() {
             <Badge tone={PROJECT_TONE[graph.project.status] ?? 'neutral'} dot={graph.project.status === 'running'}>{graph.project.status}</Badge>
             <Badge>{graph.app.name}</Badge>
             {graph.project.integrationBranch && <Badge><span className="mono">{graph.project.integrationBranch}</span></Badge>}
-            {graph.pr && <a className="badge accent" href={graph.pr.url ?? '#'} target="_blank" rel="noreferrer">PR #{graph.pr.number} · {graph.pr.status}</a>}
+            {graph.pr && !graph.pr.issueId && <a className="badge accent" href={graph.pr.url ?? '#'} target="_blank" rel="noreferrer">PR #{graph.pr.number} · {graph.pr.status}</a>}{/* the project's one pull request; a task's own is on its row */}
             {error && <Badge tone="warn" dot>{error}</Badge>}
           </div>
           {solo && <p className="muted" style={{ margin: '8px 0 0', maxWidth: 720 }} data-component="SoloNote">A task on its own: this is its plan and build. Add it to a project from Tasks, until it starts building.</p>}
-          {graph.project.content && <p className="muted" style={{ margin: '8px 0 0', maxWidth: 720 }}>{graph.project.content}</p>}
+          <About text={graph.project.content} />
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {draft && (
@@ -80,33 +81,23 @@ export function ProjectPage() {
         </div>
       </div>
 
-      <StepsPanel subject={{ kind: 'projects', id: graph.project.id }} appId={graph.app.id} name={graph.project.name} />
-
-      <Assets appId={graph.app.id} projectId={graph.project.id} />
-
-      {!solo && !['landed', 'stopped', 'superseded'].includes(graph.project.status) && <AddTasks appId={graph.app.id} projectId={graph.project.id} linearTeam={app?.setup?.integrations?.linear?.team?.trim().toUpperCase() || undefined}
-        onAdd={(issueId) => act(() => engine.updateIssue(issueId, { projectId: graph.project.id }))}
-        onCreate={(title, description) => act(() => engine.createIssue({ appId: graph.app.id, title, description, projectId: graph.project.id }))} />}
-
-      <BacklogPanel graph={graph} busy={busy} act={act} />
-
-      {graph.todos?.length > 0 && (
-        <section className="panel" data-component="ProjectTodos">
-          <h2>To-dos it waits on {graph.todos.filter((t) => t.status === 'open').length > 0 && <Badge tone="warn">{graph.todos.filter((t) => t.status === 'open').length} open</Badge>}</h2>
-          <p className="muted" style={{ margin: '0 0 10px', fontSize: 14 }}>Work outside the code this project needs. They belong to the app; <Link to="/todos">all to-dos</Link>.</p>
-          <div className="todo-list">{graph.todos.map((t) => <TodoCard key={t.id} todo={t} compact onChange={() => undefined} onError={(e) => window.alert(e)} />)}</div>
-        </section>
-      )}
-
-      <ol className="task-strip">
+      <section className="panel" data-component="ProjectTasks">
+        <h2>Tasks <Badge>{graph.issues.length}</Badge></h2>
+        {graph.issues.length === 0 && <p className="muted" style={{ margin: 0 }}>No tasks yet. Add one below.</p>}
+        <ol className="task-list">
         {graph.issues.map((t, n) => (
-          <IssueChip key={t.id} issue={t} subIssues={graph.subIssues.filter((p) => p.parentId === t.id)} planning={planning(t.id)} waiting={waitingForModel(t.id)}
+          <IssueChip key={t.id} issue={t} subIssues={graph.subIssues.filter((p) => p.parentId === t.id)} pr={graph.prs?.find((q) => q.issueId === t.id) ?? null} planning={planning(t.id)} waiting={waitingForModel(t.id)}
             onPlan={!['landed', 'stopped', 'superseded'].includes(graph.project.status) && !planning(t.id) && t.state === 'todo' ? () => act(() => engine.planIssue(t.id)) : undefined}
             onReplan={draft && !planning(t.id) ? () => { if (window.confirm('Remove this task\'s sub-tasks, decisions and questions and plan it again?')) void act(async () => { await engine.clearSubIssues(t.id); await engine.planIssue(t.id) }) } : undefined}
             onEarlier={draft && n > 0 ? () => move(n, n - 1) : undefined} onLater={draft && n < graph.issues.length - 1 ? () => move(n, n + 1) : undefined}
             busy={busy} />
         ))}
-      </ol>
+        </ol>
+      </section>
+
+      {!solo && !['landed', 'stopped', 'superseded'].includes(graph.project.status) && <AddTasks appId={graph.app.id} projectId={graph.project.id} linearTeam={app?.setup?.integrations?.linear?.team?.trim().toUpperCase() || undefined}
+        onAdd={(issueId) => act(() => engine.updateIssue(issueId, { projectId: graph.project.id }))}
+        onCreate={(title, description) => act(() => engine.createIssue({ appId: graph.app.id, title, description, projectId: graph.project.id }))} />}
 
       {graph.subIssues.length
         ? <PlanGraphView subIssues={graph.subIssues} files={graph.files} questions={asked(graph.questions ?? [], graph.subIssues)} storageKey={graph.project.id} labels={Object.fromEntries(graph.subIssues.map((p) => [p.id, short(issueOf(p)?.title ?? '')]))} selectedId={selectedId} onSelect={(p) => setSelectedId(p.id)} />
@@ -137,6 +128,24 @@ export function ProjectPage() {
           <Ticker events={events} subIssues={graph.subIssues} />
         </section>
       </div>
+
+      {graph.todos?.length > 0 && (
+        <section className="panel" data-component="ProjectTodos">
+          <h2>To-dos it waits on {graph.todos.filter((t) => t.status === 'open').length > 0 && <Badge tone="warn">{graph.todos.filter((t) => t.status === 'open').length} open</Badge>}</h2>
+          <p className="muted" style={{ margin: '0 0 10px', fontSize: 14 }}>Work outside the code this project needs. They belong to the app; <Link to="/todos">all to-dos</Link>.</p>
+          <div className="todo-list">{graph.todos.map((t) => <TodoCard key={t.id} todo={t} compact onChange={() => undefined} onError={(e) => window.alert(e)} />)}</div>
+        </section>
+      )}
+
+      <BacklogPanel graph={graph} busy={busy} act={act} />
+
+      <Assets appId={graph.app.id} projectId={graph.project.id} />
+
+      <details className="project-fold" data-component="ProjectSteps">
+        <summary>Steps for the project as a whole</summary>
+        <p className="muted" style={{ margin: '8px 0 12px', fontSize: 14 }}>Research, sketches or a prototype that cover every task here. Each task has its own steps on its page; these are optional.</p>
+        <StepsPanel subject={{ kind: 'projects', id: graph.project.id }} appId={graph.app.id} name={graph.project.name} />
+      </details>
     </>
   )
 }
@@ -205,15 +214,30 @@ function BacklogPanel({ graph, busy, act }: { graph: Graph; busy: boolean; act: 
   )
 }
 
-function IssueChip({ issue: task, subIssues: phases, planning, waiting, onPlan, onReplan, onEarlier, onLater, busy }: { issue: GraphIssue; subIssues: GraphSubIssue[]; planning: boolean; waiting?: boolean; onPlan?: () => void; onReplan?: () => void; onEarlier?: () => void; onLater?: () => void; busy: boolean }) {
+/** What the project is for, as written: formatted, its first lines only until asked for (a long one buried the tasks). */
+function About({ text }: { text?: string | null }) {
+  const [all, setAll] = useState(false)
+  if (!text?.trim()) return null
+  const long = text.length > 280 || text.split('\n').length > 4
+  return (
+    <div className="project-about muted" data-component="ProjectAbout">
+      <Md text={text} clamp={long && !all ? 3 : undefined} />
+      {long && <button type="button" className="linkish" onClick={() => setAll(!all)}>{all ? 'Show less' : 'Show all'}</button>}
+    </div>
+  )
+}
+
+function IssueChip({ issue: task, subIssues: phases, pr, planning, waiting, onPlan, onReplan, onEarlier, onLater, busy }: { issue: GraphIssue; subIssues: GraphSubIssue[]; pr?: Pr | null; planning: boolean; waiting?: boolean; onPlan?: () => void; onReplan?: () => void; onEarlier?: () => void; onLater?: () => void; busy: boolean }) {
   const done = phases.filter((p) => p.status === 'done').length
   const live = phases.some((p) => ['running', 'merging', 'testing'].includes(p.status))
   const tone: Tone = phases.length && done === phases.length ? 'ok' : live ? 'accent' : 'neutral'
   return (
-    <li className="task-chip" data-component="IssueChip" title={task.description ?? task.brief?.slice(0, 300) ?? undefined}>
-      <span className="mono faint"><Link to={`/tasks/${task.id}`}>{task.identifier}</Link>{['done', 'in_review', 'canceled'].includes(task.state) ? ` · ${STATE_LABEL[task.state]}` : ''}</span>
-      <strong>{task.title}</strong>
-      {(onEarlier || onLater) && <span className="chip-order"><button className="linkish" disabled={busy || !onEarlier} onClick={onEarlier} title="Earlier">←</button><button className="linkish" disabled={busy || !onLater} onClick={onLater} title="Later">→</button></span>}
+    <li className="task-row" data-component="IssueChip">
+      <span className="mono faint">{task.identifier}</span>
+      <Link className="task-row-title" to={`/tasks/${task.id}`}>{task.title}</Link>
+      {['done', 'in_review', 'canceled'].includes(task.state) && <Badge tone={task.state === 'done' ? 'ok' : task.state === 'in_review' ? 'accent' : 'neutral'}>{STATE_LABEL[task.state]}</Badge>}
+      {pr?.url && <a className="badge" href={pr.url} target="_blank" rel="noreferrer">PR #{pr.number} · {pr.status}</a>}
+      {(onEarlier || onLater) && <span className="chip-order"><button className="linkish" disabled={busy || !onEarlier} onClick={onEarlier} title="Earlier">↑</button><button className="linkish" disabled={busy || !onLater} onClick={onLater} title="Later">↓</button></span>}
       {planning ? <Badge tone={waiting ? 'warn' : 'accent'} dot>{waiting ? 'waiting for the model' : 'planning…'}</Badge>
         : phases.length ? <><Badge tone={tone} dot={live}>{done}/{phases.length} sub-tasks</Badge>{onReplan && <button className="btn quiet small" disabled={busy} onClick={onReplan} title="Remove the sub-tasks and plan this task again">Plan again</button>}</>
         : onPlan ? <button className="btn quiet small" disabled={busy} onClick={onPlan}>Plan</button> : <Badge>not planned</Badge>}

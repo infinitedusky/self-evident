@@ -114,9 +114,15 @@ a.badge { text-decoration: none; }
 .react-flow__pane { cursor: default; } /* the wheel pans, ⌘ + wheel zooms; the background is not a handle */
 
 /* Tasks in order, above a plan's graph */
-.task-strip { list-style: none; margin: 0 0 12px; padding: 0; display: flex; gap: 8px; flex-wrap: wrap; counter-reset: task; }
-.task-chip { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px 6px 10px; font-size: 14px; }
-.task-chip::before { counter-increment: task; content: counter(task); font: 600 12px var(--mono); color: var(--accent); }
+/* A project's tasks, leading its page: one row each, in the order they are built. */
+.task-list { list-style: none; margin: 0; padding: 0; counter-reset: task; }
+.task-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 15px; flex-wrap: wrap; }
+.task-row:first-child { border-top: 0; }
+.task-row::before { counter-increment: task; content: counter(task); font: 600 12px var(--mono); color: var(--accent); min-width: 14px; }
+.task-row-title { font-weight: 600; text-decoration: none; color: var(--ink); flex: 1 1 240px; min-width: 0; }
+.task-row-title:hover { text-decoration: underline; }
+.project-about { margin: 8px 0 0; max-width: 720px; }
+.project-fold { margin: 12px 0; } .project-fold > summary { cursor: pointer; color: var(--ink-faint); font-size: 14px; }
 .steps { list-style: none; margin: 4px 0 0; padding: 0; }
 .planned-steps { margin: 4px 0 0; padding-left: 22px; } .planned-steps li { padding: 3px 0; }
 .steps li { padding: 2px 0; } .steps li.completed { color: var(--ink-faint); } .steps li.in_progress { font-weight: 600; }
