@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, within } from 'storybook/test'
-import { PlanGraphView } from './PlanGraphView'
+import { PlanGraphView, stepProgress } from './PlanGraphView'
 import type { GraphSubIssue } from '../engine'
 
 // Sample sub-tasks, made up: the hardening project's shape, in the states worth seeing.
@@ -27,6 +27,25 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const MidRun: Story = { args: { subIssues: midRun } }
+// Made up: a sub-task's brief as the planner writes it, with its numbered steps.
+const briefWith = (n: number) => `Summary (sample).\n\n### Steps\n\n${Array.from({ length: n }, (_, i) => `${i + 1}. Step ${i + 1} of the plan (sample)\n   - a technical note`).join('\n')}\n\n### Checks\n\n- It works`
+/** Every node shows its steps: the planned count before it starts, a bar and the step it is on while it builds, all done once it lands. */
+export const StepProgress: Story = {
+  args: { subIssues: [
+    ph(1, 'Validate numeric settings at startup', 'done', { lastRun: run('completed', '0.25'), brief: briefWith(4) }),
+    ph(2, 'Cache pip in the CI workflow', 'running', { lastRun: run('working', '0.05'), steps }),
+    ph(3, 'Storybook stories for the parent page', 'queued', { heldReason: 'at the session cap', brief: briefWith(6) }),
+  ] },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('4/4')).toBeInTheDocument() // landed: all of its planned steps
+    await expect(await c.findByText('6 steps')).toBeInTheDocument() // not started: how many there will be
+    await expect(await c.findByText('Step 2 of 3: Add the checks')).toBeInTheDocument() // building: where it is
+    await expect(stepProgress({ status: 'queued', brief: briefWith(3) })).toMatchObject({ total: 3, done: 0, planned: true, current: null })
+    await expect(stepProgress({ status: 'running', steps: [{ text: 'a', status: 'completed' }, { text: 'b', status: 'in_progress' }, { text: 'c', status: 'pending' }] })).toMatchObject({ total: 3, done: 1, marks: ['done', 'now', 'todo'], current: { n: 2, text: 'b' }, planned: false })
+    await expect(stepProgress({ status: 'queued' })).toMatchObject({ total: 0 })
+  },
+}
 export const AllLanded: Story = { args: { subIssues: midRun.map((x) => ({ ...x, status: 'done' as const, heldReason: null, lastRun: run('completed', '0.20'), steps: undefined })) } }
 export const WithAFailure: Story = { args: { subIssues: [
   midRun[0], ph(2, 'Cache pip in the CI workflow', 'failed', { attempt: 3, heldReason: 'landing failed at test: tests failed (exit 1)', lastRun: run('completed', '0.31') }),
