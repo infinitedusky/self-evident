@@ -225,7 +225,26 @@ export const AppReferencesNoOthers: Story = { parameters: appPage(sampleApp.id, 
 export const AppBare: Story = { parameters: appPage('app_sample2'), beforeEach: withEngine({ appSettings: { integrations: {}, status: {}, plugins: [], skills: [] } }) }
 export const NoSuchApp: Story = { parameters: appPage('app_missing') }
 // New app, with its code: a GitHub repo picked from gh's list or typed, a folder on this machine, or both (Sandy, 2026-11-09).
-export const NewApp: Story = { parameters: { route: { path: '/settings/new', url: '/settings/new' } } }
+export const NewApp: Story = {
+  parameters: { route: { path: '/settings/new', url: '/settings/new' } },
+  play: async ({ canvasElement }) => { // its abbreviation can be chosen; left empty it is made from the name, which the hint shows
+    const c = within(canvasElement)
+    await userEvent.type(await c.findByLabelText(/^Name/), 'Ragdoll Golf')
+    await expect(await c.findByText(/The prefix of its tasks \(RG-12\)/)).toBeInTheDocument()
+    await userEvent.type(await c.findByLabelText(/^Abbreviation/), 'golf')
+    await expect(await c.findByText(/The prefix of its tasks \(GOLF-12\)/)).toBeInTheDocument()
+  },
+}
+/** An app's abbreviation, changed after the fact: it says what follows before it is saved. */
+export const AppAbbreviationChanged: Story = {
+  parameters: appPage('app_sample2', 'repo'),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const field = await c.findByLabelText(/^Abbreviation/)
+    await userEvent.clear(field); await userEvent.type(field, 'bon')
+    await expect(await c.findByText(/Saving renames every task/)).toBeInTheDocument()
+  },
+}
 export const NewAppNoGh: Story = { parameters: { route: { path: '/settings/new', url: '/settings/new' } }, beforeEach: withEngine({ githubRepos: { repos: [], problem: 'To get started with GitHub CLI, please run:  gh auth login; type owner/name.' } }) }
 // Straight after New app made the folder a repository: the Repo page says what the engine did.
 export const AppRepoSetUp: Story = { parameters: { route: { path: '/settings/apps/:id', url: '/settings/apps/app_sample2', state: { note: repoNote } } } }
