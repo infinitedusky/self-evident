@@ -32,6 +32,7 @@ import { accountEnv, accountPrefix, configDirFor, configDirOf } from './account.
 import { issueDetail, PlanError, projectGraph } from './projects.js'
 import { putAwayIds } from './apps.js'
 import { onIdeaMoved, splitPrompt } from './work.js'
+import { gate, NOT_IN_THE_CHECKOUT } from './gate.js'
 import { existsSync, statSync } from 'node:fs'
 import { stopStorybookAt } from './storybook.js'
 import { lastUuid, latestSession, readTurns, sessionFile, sessionLabel, sessionsIn, sessionTitle } from './terminal.js'
@@ -371,7 +372,7 @@ export const checkTalks = (issueId: string) => db.select().from(session)
 export async function startCheckTalk(i: { appId: string; issueId: string; check: StepKey; cwd: string; branch: string | null; subject: string }) {
   const [row] = await db.insert(session).values({
     id: newId('session'), appId: i.appId, kind: 'talk', cwd: i.cwd, branch: i.branch, worktreePath: null,
-    subject: i.subject, subjectRef: { checkOf: i.issueId, check: i.check }, createdBy: 'engine', lastActiveAt: new Date(), autoApprove: 'cheap',
+    subject: i.subject, subjectRef: { checkOf: i.issueId, check: i.check }, createdBy: 'engine', lastActiveAt: new Date(), autoApprove: 'moderate',
   }).returning()
   return row
 }
@@ -584,6 +585,7 @@ async function open(sessionId: string): Promise<Live> {
   const ownIdeaId = s.worktreePath && !(s.subjectRef as SubjectRef | null)?.app ? (s.subjectRef as SubjectRef | null)?.ideaId : undefined
   const [ownIdeaRow] = ownIdeaId ? await db.select().from(idea).where(eq(idea.id, ownIdeaId)) : []
   const whole = !!(s.subjectRef as SubjectRef | null)?.app && !s.worktreePath // about the app as a whole: it reads the app's checkout
+  const unwatched = !!(s.subjectRef as SubjectRef | null)?.checkOf // a check's agent: started by the engine, nobody watching it
   const refs = await referencesOf(s.appId)
   const mates = await matesOf(s.appId, s.worktreePath)
   const account = accountEnv(a?.setup) // the app's own Claude account, when it has one; throws when that can't be used
@@ -613,7 +615,9 @@ async function open(sessionId: string): Promise<Live> {
         const at = (EDIT_TOOLS.has(h.tool_name) ? mateHolding(mates, entry.cwd, input.file_path ?? input.notebook_path)?.path : null) ?? entry.cwd // an edit in another of the app's repos is rated by that worktree and its branch
         const branch = ASK_TOOLS.includes(h.tool_name) ? await branchOf(at) : undefined
         const { risk, why } = riskOf(h.tool_name, input, { cwd: at, branch })
-        const auto = risk === 'free' || entry.always.has(h.tool_name) || ((risk !== 'expensive' && rank(risk) <= rank(entry.autoApprove)) && !(whole && h.tool_name === 'Bash' && risk === 'moderate')) // in the app's own checkout, a command that leaves a mark asks
+        const say = gate({ risk, tool: h.tool_name, always: entry.always.has(h.tool_name), level: entry.autoApprove, cwd: at, whole, check: unwatched }) // gate.ts: a worktree is not asked below expensive; a check's agent never waits on a yes
+        if (say === 'deny') return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: NOT_IN_THE_CHECKOUT } }
+        const auto = say === 'allow'
         if (auto) {
           if (risk !== 'free') await record(sessionId, 'engine', 'auto', `${h.tool_name} · ${risk}`, { tool: h.tool_name, risk, why, input: summariseInput(h.tool_name, input) })
           return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow' } }
