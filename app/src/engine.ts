@@ -228,7 +228,9 @@ export interface Prototype {
   /** What someone opening its shared link is told, in the tab at the bottom right. */
   guide?: Guide | null
 }
-export interface Guide { intro?: string; steps: { title: string; path?: string; try?: string }[]; by?: string; at?: string }
+export interface Guide { intro?: string; steps: { title: string; path?: string; /** For something with no screen: a command, run in the prototype's worktree on a press. */ run?: string; try?: string }[]; by?: string; at?: string }
+/** The last run of a guide step that is a command: how it ended and what it printed. */
+export interface StepRun { step: number; command: string; status: 'running' | 'passed' | 'failed' | 'stopped'; exitCode: number | null; startedAt: string; endedAt: string | null; lines: string[] }
 /** Another ngrok tunnel on this computer, holding the account's one address. */
 export interface NgrokHolder { pid: number; what: string; service?: string }
 /** A prototype's code: what changed since its branch left the default branch, and what the agent is showing there. */
@@ -355,6 +357,9 @@ export const engine = {
   prototype: (id: string) => call<Prototype>('GET', `/prototypes/${id}`),
   runPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/start`),
   stopPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/stop`),
+  prototypeRuns: (id: string) => call<StepRun[]>('GET', `/prototypes/${id}/runs`),
+  runGuideStep: (id: string, step: number) => call<StepRun>('POST', `/prototypes/${id}/guide/${step}/run`),
+  stopGuideStep: (id: string, step: number) => call<StepRun>('POST', `/prototypes/${id}/guide/${step}/stop`),
   restartPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/start?restart=1`),
   resetPrototypeData: (id: string, scenario: string | null) => call<unknown>('POST', `/prototypes/${id}/data/reset`, { scenario }),
   savePrototypeData: (id: string, name: string) => call<unknown>('POST', `/prototypes/${id}/data/save`, { name }),

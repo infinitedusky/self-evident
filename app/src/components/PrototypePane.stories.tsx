@@ -26,6 +26,19 @@ export const NoneYet: Story = { beforeEach: withEngine({ prototypes: [] }) }
 export const NoCommand: Story = { beforeEach: withEngine({ prototypes: [], apps: apps.map((a) => a.id === sampleApp.id ? { ...a, setup: { ...a.setup, prototype_cmd: undefined } } : a) }) }
 /** Running and answering: the app in a frame with an address bar and device widths. */
 export const Running: Story = { args: { id: running.id, path: at }, beforeEach: withEngine({ prototypes: [running] }) }
+/** Nothing to open (made up: a collector with no screens): its guide's commands are the page, each with Run and what it last printed. */
+export const NoScreenRunIt: Story = {
+  args: { id: running.id },
+  beforeEach: withEngine({ prototypes: [{ ...running, status: 'stopped', url: null, guide: { intro: 'A collector has no screens: it is tried by running it (sample).', steps: [{ title: 'The collector, end to end', run: 'python collector/test.py', try: 'It should end with OK.' }, { title: 'The config is valid', run: 'collector validate --config=collector/config.yaml' }] } }],
+    prototypeRuns: [{ step: 0, command: 'python collector/test.py', status: 'passed', exitCode: 0, startedAt: '2026-11-15T10:00:00Z', endedAt: '2026-11-15T10:00:48Z', lines: ['both write tokens accepted (sample)', 'OK'] }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/no screen to open/, {}, { timeout: 5000 })).toBeInTheDocument()
+    await expect(await c.findByLabelText('What it printed')).toHaveTextContent('OK')
+    await userEvent.click(await c.findByRole('button', { name: 'Run' })) // the second step
+    await expect(await c.findByRole('button', { name: 'Stop' })).toBeInTheDocument()
+  },
+}
 /** With a guide written (made up): the same "What to try" tab a shared link shows, in the corner of the prototype; open, its steps move this view. */
 export const WithAGuide: Story = {
   args: { id: running.id, path: at },

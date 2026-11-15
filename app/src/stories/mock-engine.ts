@@ -14,6 +14,7 @@ export interface MockData {
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[] }
   /** What a task's pull request will open with; none when left out. */ mergeGuide?: string
+  /** The last run of each command step of a prototype's guide; none when left out. */ prototypeRuns?: import('../engine').StepRun[]
   /** The apps put away; none when left out. */ removedApps?: import('../engine').AppHolds[]; /** Why an app can't be removed yet, as the engine says it. */ removeProblem?: string
   /** The app's reports; none when left out. */ reports?: import('../engine').Reports
   /** A task's save points and task branches; none when left out. */ taskBranches?: import('../engine').TaskBranches; /** Why a move fails, when it should. */ moveError?: string
@@ -126,6 +127,9 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/prototypes/:id/code', () => reply(d.prototypeCode)),
     http.get('/api/prototypes/:id/file', ({ request }) => { const f = s.prototypeFiles[new URL(request.url).searchParams.get('path') ?? '']; return f ? reply(f) : missing('file') }),
     http.delete('/api/prototypes/:id/shown/:shownId', ({ params }) => { d.prototypeCode = { ...d.prototypeCode, shown: d.prototypeCode.shown.filter((x) => x.id !== params.shownId) }; return reply({ shown: d.prototypeCode.shown }) }),
+    http.get('/api/prototypes/:id/runs', () => reply(d.prototypeRuns ?? [])),
+    http.post('/api/prototypes/:id/guide/:step/run', ({ params }) => { const run = { step: Number(params.step), command: '(sample)', status: 'running' as const, exitCode: null, startedAt: '2026-11-15T10:00:00Z', endedAt: null, lines: ['started (sample)'] }; d.prototypeRuns = [...(d.prototypeRuns ?? []).filter((r) => r.step !== run.step), run]; return reply(run) }),
+    http.post('/api/prototypes/:id/guide/:step/stop', ({ params }) => { d.prototypeRuns = (d.prototypeRuns ?? []).map((r) => r.step === Number(params.step) ? { ...r, status: 'stopped' as const } : r); return reply({}) }),
     http.get('/api/prototypes/:id', ({ params }) => { const p = d.prototypes.find((x) => x.id === params.id); return p ? reply({ log: [], ...p, up: p.up ?? p.status === 'running' }) : missing('prototype') }),
     // Reports: the engine's rules, roughly. Writing one here answers at once.
     http.get('/api/apps/:id/reports', () => reply(d.reports ?? { writing: false, format: { daily: '', weekly: '' }, reports: [] })),
