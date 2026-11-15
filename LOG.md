@@ -3947,3 +3947,21 @@ ADR was still being written, and after the plan nothing more ran.
 
 Left as it is: BON-51's plan was made before its ADR was finished. Its final step exists to put the ADR and the plan
 right against each other, so it is not planned again.
+
+## An agent in a worktree is not asked below expensive (Sandy, 2026-11-15: "we can't have this thing stopping to ask us if I can do bash … I got caught three times now waiting for a really long time, not realizing something was stuck … if they're questions, stop")
+
+A check's agent started at "runs cheap things", and the engine rated any command it did not recognise as moderate,
+so read-only lines (a grep with an alternation, a variable set first, `git -C`, `jq`) stopped it on a yes that nobody
+was there to give. Sandy sent four of them.
+
+- **The rule** (`gate.ts`): expensive (hard to undo, or outward-facing) is always put to the person. In a worktree
+  everything below it runs, whatever the conversation's level, unless a person set that conversation to ask for
+  everything. A check's agent never waits on a yes below expensive: in a worktree it runs; in the app's own checkout
+  a command that leaves a mark is refused with the reason, so it carries on. A conversation about the app as a
+  whole, in its own checkout, is as before.
+- **The rating** (`risk.ts`): a line is cut at `;`, `&&`, `|` outside quotes only; `NAME=value` in front and
+  `git -C <dir>` are read through. The four commands are free now. The same reading closed a gap: `git -C <dir> push
+  … main` was rated moderate, not expensive.
+- A check's agent starts at "runs up to moderate".
+
+Not done: when an agent is waiting on an expensive yes, nothing outside its conversation says so. Build should.
