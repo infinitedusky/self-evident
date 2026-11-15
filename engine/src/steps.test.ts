@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_WORKFLOW, addCheck, blocking, canRemove, canSkip, checksOwed, settled, undecided, finished, needsApproval, normalize, owed, ready, removeCheck, resolve, rows, validOrder, type Workflow, type WorkflowStep } from './steps.js'
+import { speedOf, DEFAULT_WORKFLOW, addCheck, blocking, canRemove, canSkip, checksOwed, settled, undecided, finished, needsApproval, normalize, owed, ready, removeCheck, resolve, rows, validOrder, type Workflow, type WorkflowStep } from './steps.js'
 
 const w = (steps: WorkflowStep[], ordered = true): Workflow => ({ id: 'wf', name: 'wf', ordered, steps })
 const s = (key: WorkflowStep['key'], required = false, on = true): WorkflowStep => ({ key, on, required })
@@ -116,6 +116,21 @@ describe('the fixed rules', () => {
     const off = normalize(w([s('idea'), s('sketch', false, false), s('mockup'), s('prototype'), s('brief', true)]))
     expect(off.steps.find((x) => x.key === 'sketch')).toMatchObject({ on: false }) // switched off by the person: stays off
     expect(validOrder([s('idea'), s('sketch'), s('mockup'), s('brief'), s('prototype')])).toBe(true)
+  })
+
+  it('two speeds: careful reads the plan before it is built, fast goes from the prototype to the plan and the build', () => {
+    const approved = [{ key: 'prototype' as const, status: 'done' as const, approved: { by: 'Sam (sample)', at: '2026-11-15' } }]
+    expect(checksOwed(approved, proto)).toEqual(['analysis', 'adr', 'risk', 'audit', 'final'])
+    const fast = { ...proto, fast: true }
+    expect(checksOwed(approved, fast)).toEqual([])
+    expect(rows('task', approved, fast).map((r) => r.key)).toEqual(rows('task', approved, proto).map((r) => r.key).filter((k) => !['analysis', 'adr', 'risk', 'audit', 'final'].includes(k)))
+    expect(owed([], fast)).toEqual(owed([], proto)) // what the brief waits on is the same: the prototype is still the person's to approve
+    // A task's own speed wins; else the app's; careful when nothing says.
+    expect(speedOf(null, {})).toEqual({ value: 'careful', from: 'app' })
+    expect(speedOf(null, { speed: 'fast' })).toEqual({ value: 'fast', from: 'app' })
+    expect(speedOf('careful', { speed: 'fast' })).toEqual({ value: 'careful', from: 'task' })
+    expect(speedOf('fast', null)).toEqual({ value: 'fast', from: 'task' })
+    expect(speedOf('quick', { speed: 'quick' })).toEqual({ value: 'careful', from: 'app' })
   })
 
   it('the checks are not a workflow\'s to choose: all four after a prototype, none without, whatever was saved', () => {

@@ -12,7 +12,7 @@ import { app, idea, issue, project, prototype, session, stepWork, workflow } fro
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { getIssue, insertIssues, PlanError } from './issues.js'
-import { blocking, canSkip, needsApproval, owed, undecided, CAN, DEFAULT_NAME, DEFAULT_STEPS, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
+import { speedOf, blocking, canSkip, needsApproval, owed, undecided, CAN, DEFAULT_NAME, DEFAULT_STEPS, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
 
 export type Subject = { ideaId: string } | { issueId: string } | { projectId: string }
 const onOf = (s: Subject): On => ('ideaId' in s ? 'idea' : 'issueId' in s ? 'task' : 'project')
@@ -100,7 +100,10 @@ export async function workflowFor(tx: Tx | typeof db, s: { issueId: string } | {
   if ('issueId' in s) {
     const i = await getIssue(tx, s.issueId)
     const p = i.projectId ? (await tx.select().from(project).where(eq(project.id, i.projectId)))[0] : null
-    return resolve(await byId(i.workflowId), await byId(p?.workflowId), await byId((await appOf(tx, i.appId)).workflowId))
+    const a = await appOf(tx, i.appId)
+    const r = resolve(await byId(i.workflowId), await byId(p?.workflowId), await byId(a.workflowId))
+    const speed = speedOf(i.speed, a.setup) // its own, else the app's
+    return { ...r, workflow: r.workflow && speed.value === 'fast' ? { ...r.workflow, fast: true } : r.workflow, speed }
   }
   const [p] = await tx.select().from(project).where(eq(project.id, s.projectId))
   if (!p) throw new PlanError(`no project ${s.projectId}`)
