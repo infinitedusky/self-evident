@@ -3844,3 +3844,9 @@ The person judging the prototype here saw one line about it in the Share panel.
 - **No feedback box**: the person here has the agent beside them. What was tried and whether it is open are kept
   per prototype in the browser.
 - No guide written: nothing is shown.
+
+## The guide covers three quarters at most, and is a little see-through (Sandy, 2026-11-15)
+
+With nine steps the "What to try" panel filled the prototype's whole height and hid it. Now it is at most three
+quarters of the height and scrolls inside, with its header staying in view, and its background lets the prototype
+show through faintly. Both versions: the one inside Self Evident and the one on a shared link.
