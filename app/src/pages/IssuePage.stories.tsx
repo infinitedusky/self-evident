@@ -130,6 +130,15 @@ export const PlannedOnItsOwn: Story = {
 }
 /** A ticket tkt built, done: what the skills wrote on it as it moved (the plan, the handoff, the completion), one per heading. */
 export const Commented: Story = { parameters: at('iss_sample22') }
+/** Built and waiting on its pull request (made up: number 12): the link sits with the task's badges and opens it on GitHub. */
+export const InReview: Story = {
+  parameters: at('iss_sample1'),
+  beforeEach: withEngine({ issueDetails: { ...sampleData.issueDetails, iss_sample1: { ...issueDetails.iss_sample1, state: 'in_review', pr: { number: 12, url: 'https://example.com/sample-shop/pull/12', status: 'open' } } } }),
+  play: async ({ canvasElement }) => {
+    const link = await within(canvasElement).findByRole('link', { name: /Pull request #12/ })
+    await expect(link).toHaveAttribute('href', 'https://example.com/sample-shop/pull/12')
+  },
+}
 /** A failed build, with Retry. */
 export const BuildFailed: Story = { parameters: at('iss_sample5'), beforeEach: withEngine({ issueDetails: { ...sampleData.issueDetails,
   iss_sample5: { ...issueDetails.iss_sample5, build: { status: 'failed', attempt: 3, heldReason: 'landing failed at test: tests failed (exit 1)' } } } }) }

@@ -19,13 +19,13 @@ const standings: IssueRow[] = [
   { ...placed, id: 'iss_sample22', identifier: 'SS-22', number: 22, title: 'Gift card emails (sample)', state: 'todo', builds: {}, planning: 'issue.plan_waiting', description: null },
   { ...placed, id: 'iss_sample23', identifier: 'SS-23', number: 23, title: 'Refunds to a gift card (sample)', state: 'todo', builds: {}, planning: 'issue.plan_failed', description: null },
   { ...placed, id: 'iss_sample24', identifier: 'SS-24', number: 24, title: 'Faster product images (sample)', state: 'in_progress', builds: { done: 1, failed: 1 }, planning: null, description: null },
-  { ...placed, id: 'iss_sample25', identifier: 'SS-25', number: 25, title: 'Product page cache (sample)', state: 'in_review', builds: { done: 3 }, planning: null, description: null },
+  { ...placed, id: 'iss_sample25', identifier: 'SS-25', number: 25, title: 'Product page cache (sample)', state: 'in_review', builds: { done: 3 }, planning: null, description: null, pr: { number: 12, url: 'https://example.com/sample-shop/pull/12', status: 'open' } },
   { ...placed, id: 'iss_sample26', identifier: 'SS-26', number: 26, title: 'Old banner removed (sample)', state: 'done', builds: { done: 1 }, planning: null, description: null },
 ]
 
 /** The sample app: one task in no project (with "Add to a project…"), two in the checkout project. */
 export const Typical: Story = {}
-/** Every standing a task can show: not planned, planning, waiting for the model, planning failed, a failed build, in review, done. */
+/** Every standing a task can show: not planned, planning, waiting for the model, planning failed, a failed build, in review (with a link to its pull request), done. */
 export const EveryStanding: Story = { beforeEach: withEngine({ issueRows: standings }) }
 /** An app whose Linear team is set (made up: SHOP): tickets can be brought in from the top of the page. */
 export const WithLinear: Story = { beforeEach: withEngine({ apps: [{ ...sampleApp, setup: { ...sampleApp.setup, integrations: { linear: { team: 'SHOP', key_env: 'LINEAR_API_KEY' } } } }] }) }
