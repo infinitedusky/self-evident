@@ -18,7 +18,7 @@ export interface Plan { projects: PlanProject[]; loose: PlanTask[]; todosOpen: n
 
 /** One mark per step its workflow shows (without one, the default steps), dim until started. */
 function Marks({ steps, keys }: { steps: StepState[]; keys?: StepKey[] }) {
-  const shown = keys ? STEPS.filter((s) => keys.includes(s.key)) : STEPS.filter((s) => s.place !== 'after')
+  const shown = keys ? STEPS.filter((s) => keys.includes(s.key)) : STEPS.filter((s) => s.place !== 'check') // the checks after a prototype are not marks of their own
   return (
     <span className="step-marks" aria-label="Steps">
       {shown.map((s) => {

@@ -39,7 +39,7 @@ export const RequiredCannotBeSkipped: Story = {
 }
 /** The prototype's step: the thing running (View), every file it changed and what the agent shows (Code), and what it wrote for the brief. Here the agent has just shown a file. */
 export const PrototypeCodeView: Story = {
-  args: { row: { ...row('research'), key: 'prototype', state: { key: 'prototype', status: 'started', detail: 'A first version is up (sample)' }, waitingOn: undefined } as typeof all[number] },
+  args: { row: { ...row('research'), key: 'prototype', state: { key: 'prototype', status: 'started', detail: 'A first version is up (sample)' }, waitingOn: null } as typeof all[number] },
   beforeEach: withEngine({ prototypes: prototypes.map((p, i) => i === 0 ? { ...p, issueId: 'iss_sample20' } : p) }),
   parameters: { route: { path: '/tasks/:id/prototype', url: '/tasks/iss_sample20/prototype?shown=shown_sample1' } },
   play: async ({ canvasElement }) => {
@@ -48,7 +48,7 @@ export const PrototypeCodeView: Story = {
     await expect(await c.findByText(/the saved card is read here/)).toBeInTheDocument()
   },
 }
-const protoRow = { ...row('research'), key: 'prototype', state: { key: 'prototype', status: 'started', detail: 'A first version is up (sample)' }, waitingOn: undefined } as typeof all[number]
+const protoRow = { ...row('research'), key: 'prototype', state: { key: 'prototype', status: 'started', detail: 'A first version is up (sample)' }, waitingOn: null } as typeof all[number]
 const withProto = { prototypes: prototypes.map((p, i) => i === 0 ? { ...p, issueId: 'iss_sample20' } : p) }
 /** A prototype that is built, on "For the brief": what it wrote for the brief shows, and there is no button asking the agent to carry on. */
 export const PrototypeForTheBrief: Story = {

@@ -5,7 +5,7 @@ import { withEngine } from '../stories/mock-engine'
 import { reports } from '../stories/sample'
 
 // Reports on an app's work: the end-of-day note and the weekly status, drafted for the person to edit and send. All made up.
-const meta = { title: 'Pages/Reports', component: Reports, parameters: { layout: 'fullscreen' }, beforeEach: withEngine({ reports }), render: () => <div className="tab-page"><Reports /></div> } satisfies Meta<typeof Reports>
+const meta = { title: 'Pages/Reports', component: Reports, parameters: { layout: 'fullscreen' }, beforeEach: (ctx) => withEngine({ reports })(ctx as never), render: () => <div className="tab-page"><Reports /></div> } satisfies Meta<typeof Reports>
 export default meta
 type Story = StoryObj<typeof meta>
 

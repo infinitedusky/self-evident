@@ -100,7 +100,7 @@ export interface Issue {
   id: string; appId: string; identifier: string; number: number; kind: 'code' | 'todo'; parentId: string | null; projectId: string | null; cycleId: string | null; ideaId: string | null
   title: string; description: string | null; brief: string | null; state: IssueState; priority: number; estimate: string | null; sortOrder: number
   assignee: string | null; delegate: 'builder' | 'planner' | 'agent' | null; waitingOn: string | null; source: 'person' | 'agent' | 'idea' | 'planner' | 'builder'; reason: string | null
-  createdBy: string | null; createdAt: string; startedAt: string | null; completedAt: string | null; canceledAt: string | null
+  createdBy: string | null; createdAt: string; updatedAt?: string | null; startedAt: string | null; completedAt: string | null; canceledAt: string | null
   briefApprovedBy?: string | null; briefApprovedAt?: string | null; workflowId?: string | null
   /** How we will know it is done: approved with the brief. */
   acceptance?: Criterion[]
@@ -375,7 +375,7 @@ export const engine = {
   plan: (appId: string) => call<Plan>('GET', `/plan?app=${appId}`),
   steps: (s: StepSubject) => call<StepsView>('GET', `/${s.kind}/${s.id}/steps`),
   step: (s: StepSubject, key: StepKey) => call<StepWork | null>('GET', `/${s.kind}/${s.id}/steps/${key}`),
-  setStep: (s: StepSubject, key: StepKey, body: { status?: 'started' | 'done'; detail?: string | null; body?: string | null; refs?: string[] }) => call<StepWork>('PUT', `/${s.kind}/${s.id}/steps/${key}`, body),
+  setStep: (s: StepSubject, key: StepKey, body: { status?: 'none' | 'started' | 'done' | 'skipped'; detail?: string | null; body?: string | null; refs?: string[] }) => call<StepWork>('PUT', `/${s.kind}/${s.id}/steps/${key}`, body),
   /** A person approves a step of a task (research, sketches, mockups, the prototype), or takes it back. */
   approveStep: (issueId: string, key: StepKey, approve = true) => call<StepWork>('POST', `/issues/${issueId}/steps/${key}/approve`, { approve }),
   setAcceptance: (issueId: string, change: AcceptanceChange) => call<{ acceptance: Criterion[]; note?: string }>('PUT', `/issues/${issueId}/acceptance`, change),
