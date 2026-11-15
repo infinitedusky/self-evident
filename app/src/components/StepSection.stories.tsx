@@ -87,6 +87,28 @@ export const IdeaPrototype: Story = {
     await expect(c.queryByRole('button', { name: 'Ask the agent to carry on' })).toBeNull()
   },
 }
+const draftRow = { ...row('research'), key: 'brief', required: false, state: { key: 'brief', status: 'done', detail: 'Rough draft: one page for address and payment; likely a task (sample)' }, waitingOn: null } as typeof all[number]
+/** An idea's rough draft (made up): what the agent wrote shows, under its one-line status, and nothing asks to start it or carry it on. */
+export const IdeaRoughDraft: Story = {
+  args: { subject: { kind: 'ideas', id: 'idea_sample1' }, on: 'idea', base: '/ideas/idea_sample1', row: draftRow },
+  beforeEach: withEngine({ stepWork: { ...riskWork, key: 'brief', summary: null, body: '### What (sample)\nAddress and payment on one page.\n\n### Why\nMost people leave on the second page.' } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('Most people leave on the second page.')).toBeInTheDocument()
+    await expect(c.queryByRole('button', { name: /carry on/ })).toBeNull()
+    await expect(c.queryByRole('button', { name: /Start with the agent/ })).toBeNull()
+  },
+}
+/** Under way with nothing written yet: it says so, and still asks for nothing to be pressed. */
+export const StartedNothingWritten: Story = {
+  args: { row: { ...row('research'), state: { key: 'research', status: 'started', detail: 'Reading the competitors (sample)' } } },
+  beforeEach: withEngine({ stepWork: { ...riskWork, key: 'research', status: 'started', summary: null, body: null, refs: [] } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/nothing is written here yet/)).toBeInTheDocument()
+    await expect(c.queryByRole('button', { name: /carry on/ })).toBeNull()
+  },
+}
 /** Waiting on a step before it: says which, and links there. */
 export const Waiting: Story = { args: { row: row('risk'), waitingState: row('brief').state }, beforeEach: withEngine({ stepWork: null }) }
 /** Started from an idea. */

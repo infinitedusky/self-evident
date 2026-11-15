@@ -3948,6 +3948,18 @@ ADR was still being written, and after the plan nothing more ran.
 Left as it is: BON-51's plan was made before its ADR was finished. Its final step exists to put the ADR and the plan
 right against each other, so it is not planned again.
 
+## A step that is under way shows what was written, and asks for nothing (Sandy, 2026-11-15: "we don't need to push a button that says ask the agent to carry on … what we need is the content of what it built")
+
+On Homework Gate's idea "The tutor has nothing to point to", the rough draft's page showed its one-line status and a
+button. The agent had written the draft; the page never loaded it.
+
+- **An idea's rough draft is loaded** (`StepSection`): a task's brief is on the task and passed in by its page, so
+  the brief was left out of the steps whose work is fetched. On an idea the rough draft is a step like the others.
+  The same gap as a prototype's notes, fixed earlier today, in the one place left.
+- **"Ask the agent to carry on" is gone**, on every step. Once a step is under way its agent is beside the page.
+  "Start with the agent" stays on a step nobody has started.
+- **Under way with nothing written** says so, so an empty page is not taken for a broken one.
+
 ## An agent in a worktree is not asked below expensive (Sandy, 2026-11-15: "we can't have this thing stopping to ask us if I can do bash … I got caught three times now waiting for a really long time, not realizing something was stuck … if they're questions, stop")
 
 A check's agent started at "runs cheap things", and the engine rated any command it did not recognise as moderate,
