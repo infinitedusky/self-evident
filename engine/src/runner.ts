@@ -20,6 +20,8 @@ import { guideTasks, mergeGuide } from './merge-guide.js'
 import { ensureProjectPr, prBody } from './pr.js'
 import { projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
 import { finishPlanning, preparePlanning, type Propose } from './planner.js'
+import { BEFORE_PLAN, checksOwed } from './steps.js'
+import { stepsOf } from './work.js'
 import { reapAgentProcesses } from './reap.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { referencesOf } from './references.js'
@@ -387,6 +389,9 @@ export class Runner {
     if (this.planningIssues.has(issueId)) return
     const [t] = await db.select({ approved: issue.briefApprovedBy }).from(issue).where(eq(issue.id, issueId))
     if (!t?.approved) return // the brief waits for a person's approval; planning starts on the next pass after it
+    // After a prototype the plan is made from the analysis and the draft ADR: until they are in, the checks' line plans it (checks.ts), not this pass.
+    const v = await stepsOf({ issueId })
+    if (checksOwed(v.states, v.resolved.workflow).some((k) => BEFORE_PLAN.includes(k))) return
     const [last] = await db.select().from(event).where(and(eq(event.issueId, issueId), inArray(event.type, PLANNING))).orderBy(desc(event.seq)).limit(1)
     const restarted = last?.type === 'issue.plan_failed' && String((last.payload as any)?.error ?? '').includes('engine restarted') // a restart is not a failure: plan it again
     if (last && ['issue.planning', 'issue.plan_waiting', 'issue.plan_failed'].includes(last.type) && !restarted) return

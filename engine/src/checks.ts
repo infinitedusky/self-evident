@@ -18,12 +18,13 @@
  */
 import { and, desc, eq, inArray, notInArray, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, issue, prototype, repo, session, sessionMessage } from './db/schema.js'
+import { app, issue, prototype, repo, session, sessionMessage, stepWork } from './db/schema.js'
 import { homeRepo } from './workbench.js'
 import { withLock } from './landing.js'
-import { CHECKS, step, type StepKey } from './steps.js'
+import { BEFORE_PLAN, CHECKS, checksOwed, step, type StepKey } from './steps.js'
 import { checkTalks, onTurnEnd, say, startCheckTalk, taskTalk, type SubjectRef } from './talk.js'
 import { stepsOf } from './work.js'
+import { onAnyPlanned } from './planner.js'
 import { BRIEF_FORM } from './brief.js'
 
 export interface CheckFacts { identifier: string; title: string; issueId: string; base: string; prototype: { path: string; branch: string; title: string } | null; before: StepKey[] }
@@ -98,8 +99,7 @@ export const reportsIn = (done: StepKey[], briefApproved = false) => (briefAppro
 
 const note = async (sessionId: string, stage: string) => (await db.select({ id: sessionMessage.id }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, sessionId), sql`${sessionMessage.payload}->>'checks' = ${stage}`)).limit(1)).length > 0
 
-/** The checks the plan is made from; the others (the blast radius, the audit) read the plan. */
-export const BEFORE_PLAN: StepKey[] = ['analysis', 'adr']
+export { BEFORE_PLAN }
 /** Asked to plan a task (cut it into sub-tasks) when the line reaches that point; server.ts answers, since it knows the runner. */
 const wantPlan = new Set<(issueId: string) => void>()
 export function onPlanWanted(fn: (issueId: string) => void) { wantPlan.add(fn); return () => { wantPlan.delete(fn) } }
@@ -172,6 +172,35 @@ export async function advanceChecks(issueId: string): Promise<ReturnType<typeof 
     }
     return move
   })
+}
+
+/**
+ * A plan is in: the checks that read it (the blast radius, the audit, the final ADR and plan) carry on, whoever
+ * started the plan. A plan started by a running project used to end without telling the checks, and the line stopped
+ * there (Sandy, 2026-11-15: "the blast radius, audit and final ADR aren't running even though they've all been
+ * answered ... is that supposed to happen automatically").
+ */
+onAnyPlanned((issueId) => { void advanceChecks(issueId).catch((err) => console.error('checks: could not carry on after the plan', err)) })
+
+/**
+ * The engine has started: a line that was under way is carried on. Only tasks with a check written in the last day
+ * and checks still owed, so a restart does not start, by surprise, the checks of a task nobody has touched.
+ */
+export async function resumeChecks(now = new Date()) {
+  const since = new Date(now.getTime() - 24 * 3_600_000)
+  const recent = await db.selectDistinct({ issueId: stepWork.issueId }).from(stepWork).where(and(inArray(stepWork.key, CHECKS), sql`${stepWork.issueId} is not null`, sql`${stepWork.updatedAt} > ${since}`))
+  const carried: string[] = []
+  for (const { issueId } of recent) {
+    if (!issueId) continue
+    const [t] = await db.select().from(issue).where(eq(issue.id, issueId))
+    if (!t || t.parentId || ['done', 'canceled', 'duplicate'].includes(t.state)) continue
+    const v = await stepsOf({ issueId })
+    if (!checksOwed(v.states, v.resolved.workflow).length) continue
+    const move = await advanceChecks(issueId).catch(() => ({ do: 'nothing' as const }))
+    if (move.do !== 'nothing') carried.push(`${issueId}: ${move.do}${'key' in move ? ` ${move.key}` : ''}`)
+  }
+  if (carried.length) console.log(`[checks] carried on after a restart: ${carried.join('; ')}`)
+  return carried
 }
 
 /** A turn ended: if it was the task's conductor or one of its checks, see what comes next. */

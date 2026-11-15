@@ -192,6 +192,9 @@ export function owed(states: StepState[], workflow: Workflow | null): StepKey[] 
 }
 
 /** The checks a task still has to get through before it is built: the ones in play and not done. */
+/** The checks the plan is made from; the others (the blast radius, the audit, the final ADR and plan) read the plan. */
+export const BEFORE_PLAN: StepKey[] = ['analysis', 'adr']
+
 export function checksOwed(states: StepState[], workflow: Workflow | null): StepKey[] {
   return rows('task', states, workflow).filter((r) => step(r.key).place === 'check' && r.state.status !== 'done').map((r) => r.key)
 }

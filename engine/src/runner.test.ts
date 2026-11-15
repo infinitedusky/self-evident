@@ -221,6 +221,28 @@ describe.skipIf(!reachable)('runner', () => {
     expect(tasks).toHaveLength(2)
   })
 
+  it('does not plan a task ahead of the checks its plan is made from: after an approved prototype, the analysis and the draft ADR come first', async () => {
+    const { project: p, issues: tasks } = await createProject({ appId, name: 'checks first (sample)', issues: [
+      one('First', [{ key: 'cf', title: 'CF', files: ['cf.txt'] }]),
+      { title: 'After a prototype (sample)', brief: 'planned from the analysis and the ADR' },
+    ] })
+    let proposed = 0
+    const propose: Propose = async () => { proposed++; return { status: 'completed', costUsd: 0, proposal: { phases: [{ key: 'x', title: 'X', description: 'x', summary: 'x', depends_on: [], files: ['x.txt'], steps: [], checks: [], done_when: '' }], decisions: [], questions: [], notes: '' } } }
+    const runner = new Runner({ execute: commits('cfp'), sessionsMax: 2, propose })
+    await approveBriefs(appId)
+    await setStep({ issueId: tasks[1].id }, 'prototype', { status: 'done', detail: 'the whole flow (sample)' })
+    await approveStep(tasks[1].id, 'prototype', 'Sam (sample)')
+    await runner.startProject(p.id)
+    await until(async () => (await projectGraph(p.id))!.subIssues.every((x) => x.status === 'done'))
+    await runner.dispatch(); await new Promise((r) => setTimeout(r, 300)); await runner.dispatch()
+    expect(proposed).toBe(0) // the analysis and the ADR are owed: the checks' line plans it when they are in
+    await setStep({ issueId: tasks[1].id }, 'analysis', { status: 'done' })
+    await setStep({ issueId: tasks[1].id }, 'adr', { status: 'done' })
+    await runner.dispatch()
+    await until(async () => proposed === 1)
+    await runner.cancelProject(p.id) // its later checks are still owed, so it would wait on them: enough has been seen
+  })
+
   it('a project with issues left in its backlog waits instead of landing; what a builder says it noticed makes no task', async () => {
     const { project: p } = await createProject({ appId, name: 'backlog gate', issues: [one('T', [{ key: 'b', title: 'B', files: ['b.txt'] }])] })
     const [kept] = await addItems(p.id, [{ text: 'Refunds' }])
