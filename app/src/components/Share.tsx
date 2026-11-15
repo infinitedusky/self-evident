@@ -17,7 +17,6 @@ const NAME: Record<ShareKind, { it: string; ends: string }> = {
 const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 type Problem = { error: string; code?: string; holders?: NgrokHolder[] }
 const problemOf = (e: any): Problem => { const m = String(e?.message ?? e); try { const j = JSON.parse(m); return { error: String(j.error ?? m), code: j.code, holders: j.holders } } catch { return { error: m } } }
-const said = (e: any) => problemOf(e).error
 
 export function Share({ kind, id, appId, open: startOpen = false }: { kind: ShareKind; /** The prototype's id, or the conversation's (or app's) whose mockups or sketches these are. */ id: string; appId?: string; /** For a story: start with the panel open. */ open?: boolean }) {
   const [share, setShare] = useState<Shared | null>(null)
