@@ -7,6 +7,7 @@
 import { accountEnv } from './account.js'
 import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import { builderGuard, guardOptions, STOP_ONLY_YOURS } from './guard.js'
+import { StepTracker } from './step-track.js'
 import { referencePrompt, type Reference } from './references.js'
 
 export interface RunInput {
@@ -56,7 +57,7 @@ function prompt(i: RunInput): string {
     '- These paths are yours to change:', files,
     '  Touch other files only if the sub-task cannot be done without it, and say so in your summary.',
     i.storybook ? '- Stories lead the UI: this app keeps a Storybook. Every new or changed page, component and state gets its story first, with made-up sample data labelled as such, and the screen is built to match it. A screen without a story is not done.' : '',
-    '- Keep your todo list current as you work; it is shown live to the people watching this sub-task.',
+    '- Before you change anything, list the steps you will take with your task tool (TaskCreate, or TodoWrite if that is the one you have), one for each step of this sub-task. Mark each in progress when you begin it and completed when it is done. The people watching this sub-task see that list live, and nothing else tells them where you are.',
     `- ${STOP_ONLY_YOURS}`,
     i.testCmd ? `- Run the tests with: ${i.testCmd}\n  They must pass before you finish. Add or adjust tests for what you change.` : '- There is no test command configured; verify your change by running it.',
     '- Commit your work with a clear message when it is done (git add -A && git commit). Leave nothing uncommitted.',
@@ -68,11 +69,12 @@ function prompt(i: RunInput): string {
   ].join('\n')
 }
 
-const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'TodoWrite']
+const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet'] // its own list of steps is kept with whichever task tool it has (step-track.ts)
 const EDIT_TOOLS = ['Edit', 'Write', 'MultiEdit']
 
 export async function runTask(i: RunInput): Promise<RunOutput> {
   let out: RunOutput = { status: 'failed', error: 'no result message' }
+  const steps = new StepTracker() // where this builder is, from its own list
   try {
     const account = accountEnv(i.setup)
     for await (const m of query({
@@ -93,7 +95,7 @@ export async function runTask(i: RunInput): Promise<RunOutput> {
         ...guardOptions(builderGuard(i.worktreePath, READ_TOOLS, EDIT_TOOLS)),
       },
     })) {
-      await handle(m, i.onEvent, (o) => { out = o })
+      await handle(m, i.onEvent, (o) => { out = o }, steps)
     }
   } catch (err: any) {
     await i.onEvent('run.error', { error: clip(err?.message ?? String(err)) })
@@ -103,7 +105,7 @@ export async function runTask(i: RunInput): Promise<RunOutput> {
 }
 
 /** One SDK message → events (and, for the result, the run's outcome). Shared with the planner. */
-export async function handle(m: SDKMessage, emit: RunInput['onEvent'], setOut: (o: RunOutput) => void) {
+export async function handle(m: SDKMessage, emit: RunInput['onEvent'], setOut: (o: RunOutput) => void, steps?: StepTracker) {
   const a = m as any
   switch (m.type) {
     case 'system':
@@ -112,9 +114,9 @@ export async function handle(m: SDKMessage, emit: RunInput['onEvent'], setOut: (
     case 'assistant':
       for (const block of a.message?.content ?? []) {
         if (block.type === 'text' && block.text?.trim()) await emit('run.message', { text: clip(block.text, 2000) })
-        else if (block.type === 'tool_use' && block.name === 'TodoWrite') {
-          const todos = Array.isArray(block.input?.todos) ? block.input.todos : []
-          await emit('run.steps', { steps: todos.map((t: any) => ({ text: String(t.content ?? t.activeForm ?? ''), status: t.status ?? 'pending' })) })
+        else if (block.type === 'tool_use' && ['TodoWrite', 'TaskCreate', 'TaskUpdate'].includes(block.name)) {
+          const list = (steps ?? new StepTracker()).use(block) // the builder's own list of steps, whichever task tool it keeps it with
+          if (list) await emit('run.steps', { steps: list })
         }
         else if (block.type === 'tool_use') await emit('run.tool_call', { tool: block.name, input: summariseInput(block.name, block.input) })
       }
@@ -123,6 +125,7 @@ export async function handle(m: SDKMessage, emit: RunInput['onEvent'], setOut: (
       for (const block of a.message?.content ?? []) {
         if (block?.type === 'tool_result') {
           const text = Array.isArray(block.content) ? block.content.map((c: any) => c.text ?? '').join('\n') : String(block.content ?? '')
+          steps?.result(block.tool_use_id, text) // a step just made learns its id
           await emit('run.tool_result', { ok: !block.is_error, preview: clip(text, 300) })
         }
       }
