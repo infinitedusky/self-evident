@@ -17,7 +17,7 @@ import { registerMachine } from './machine.js'
 import { cleanReferences } from './references.js'
 import { app as appTable, BUILD_STATUSES, ISSUE_STATES, repo as repoTable, workspace, type BuildStatus, type IssueState, issue as issueTable, project as projectTable } from './db/schema.js'
 import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
-import { appKey, newId } from './ids.js'
+import { appKey, cleanKey, newId } from './ids.js'
 import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { advanceChecks, onChecksDone, onPlanWanted } from './checks.js'
 import { checksOwed, step } from './steps.js'
@@ -282,7 +282,18 @@ export function buildApp(bus: EventBus) {
     return c.text(await trackerGuide(ctx), 200, { 'content-type': 'text/markdown; charset=utf-8' })
   })
   api.patch('/apps/:id', async (c) => {
-    const body = await c.req.json<{ name?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
+    const body = await c.req.json<{ name?: string; key?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
+    // Its abbreviation can be changed after it is made: every task's name follows at once (MER-50 becomes BON-50),
+    // since a task's name is the abbreviation and its number. What was already written elsewhere keeps the old one:
+    // branch names, pull request titles, text in comments and briefs.
+    let key: string | undefined
+    if (body.key !== undefined) {
+      try { key = cleanKey(body.key) } catch (err) { return c.json({ error: (err as Error).message }, 400) }
+      const [me] = await db.select().from(appTable).where(eq(appTable.id, c.req.param('id')))
+      if (!me) return c.json({ error: 'no such app' }, 404)
+      const taken = (await db.select({ id: appTable.id, key: appTable.key }).from(appTable).where(eq(appTable.workspaceId, me.workspaceId))).filter((r) => r.id !== me.id).map((r) => r.key)
+      if (taken.includes(key)) return c.json({ error: `the abbreviation ${key} is another app's` }, 400)
+    }
     if (body.setup && 'integrations' in body.setup) body.setup.integrations = cleanValues(body.setup.integrations)
     if (body.setup && 'account' in body.setup) { try { const acct = cleanAccount(body.setup.account); if (acct) body.setup.account = acct; else delete body.setup.account } catch (err) { return planError(c, err) } }
     if (body.setup && 'step_skills' in body.setup) { const steps = cleanStepSkills(body.setup.step_skills); if (Object.keys(steps).length) body.setup.step_skills = steps; else delete body.setup.step_skills }
@@ -298,7 +309,7 @@ export function buildApp(bus: EventBus) {
       body.setup.plugins = Object.fromEntries(Object.entries((body.setup.plugins ?? {}) as Record<string, { on?: unknown } | null>)
         .filter(([id, v]) => known.has(id) && typeof v?.on === 'boolean').map(([id, v]) => [id, { on: v!.on }]))
     }
-    const [row] = await db.update(appTable).set({ ...(body.name ? { name: body.name } : {}), ...(body.defaultBranch ? { defaultBranch: body.defaultBranch } : {}), ...(body.setup ? { setup: body.setup } : {}) })
+    const [row] = await db.update(appTable).set({ ...(body.name ? { name: body.name } : {}), ...(key ? { key } : {}), ...(body.defaultBranch ? { defaultBranch: body.defaultBranch } : {}), ...(body.setup ? { setup: body.setup } : {}) })
       .where(eq(appTable.id, c.req.param('id'))).returning()
     return row ? c.json(row) : c.json({ error: 'no such app' }, 404)
   })
@@ -328,8 +339,9 @@ export function buildApp(bus: EventBus) {
   api.post('/apps', async (c) => {
     const body = await c.req.json<{ workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: Record<string, unknown>; repo?: { fullName?: string; localPath?: string } }>()
     const taken = (await db.select({ key: appTable.key }).from(appTable).where(eq(appTable.workspaceId, body.workspaceId))).map((r) => r.key)
-    const key = body.key?.trim().toUpperCase() || appKey(body.name, taken)
-    if (taken.includes(key)) return c.json({ error: `the key ${key} is taken in this workspace` }, 400)
+    let key: string
+    try { key = body.key?.trim() ? cleanKey(body.key) : appKey(body.name, taken) } catch (err) { return c.json({ error: (err as Error).message }, 400) }
+    if (taken.includes(key)) return c.json({ error: `the abbreviation ${key} is another app's` }, 400)
     // The code, when it is given at creation: the checkout is made ready before the app exists, so a refusal leaves nothing half-made.
     const fullName = body.repo?.fullName?.trim() ?? ''
     const localPath = body.repo?.localPath?.trim() || null
