@@ -3794,3 +3794,21 @@ The sync fetched main every two minutes and brought open project and task branch
   another worktree. Never a merge, never a switch of branch.
 - **Not Self Evident's own checkout** (`ownCheckout`): new engine code restarts the engine and cuts off what is
   building, so that one still moves only when someone chooses the moment.
+
+## A project's page leads with its tasks (Sandy, 2026-11-15: "the project page is kind of burying the lead. The tasks are what is important")
+
+The page opened with the whole description as raw markdown, then the project's steps, assets and add-tasks, with the
+tasks a row of chips far below.
+
+- **Tasks first**, as a list in build order: name, state, its own pull request, sub-task progress, Plan. The title
+  opens the task. Add tasks sits under it, then the graph, questions and decisions.
+- **The description is formatted** and shows its first three lines, with Show all.
+- **The project's own steps are folded at the bottom** ("Steps for the project as a whole"), after to-dos, backlog
+  and assets. Sandy: "not sure what to do with the steps section at a project level." Not removed: a project can
+  still carry research or a prototype for all its tasks. Open whether to remove them.
+- **The header's pull request badge** shows only a project's one pull request. With a pull request per task it
+  showed the first task's as if it were the project's.
+
+Also fixed: `ideas/review-access.md` had a colon inside a front-matter value, which broke the pages and stories that
+read idea files. It went in with a docs-only merge that did not run the app's tests; a file under `ideas/` is read
+by the app, so it needs them.

@@ -4,7 +4,7 @@ app: Self Evident
 lane: shaping
 hypothesis: If a pull request comes with the way in (who may run it, the secrets, the commands for a fresh machine), a reviewer on another machine actually tries the change instead of reading the diff and approving.
 measure: review_shared (a way in was made), review_opened (the one-time link was used), pr_merged with at least one check marked by someone other than the author.
-baseline: None. Today "how to check" is a line of commands that assumes the author's machine (Sandy, 2026-11-15, on BON-50: "this isn't really clear to a reviewer. We have to assume they are on a different machine").
+baseline: None. Today "how to check" is a line of commands that assumes the author's machine. Sandy on BON-50, 2026-11-15, "this isn't really clear to a reviewer. We have to assume they are on a different machine."
 look_by:
 prs: []
 ---
