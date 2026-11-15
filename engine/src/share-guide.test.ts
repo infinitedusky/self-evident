@@ -7,7 +7,7 @@ import { desc, eq } from 'drizzle-orm'
 import { app, event, prototype, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createIssue, listComments } from './issues.js'
-import { cleanGuide, guideOf, guideProxy, inject, setGuide, takeFeedback, type Feedback } from './share-guide.js'
+import { cleanGuide, deadPaths, guideOf, guideProxy, inject, setGuide, takeFeedback, type Feedback, type Probe } from './share-guide.js'
 
 describe('the guide', () => {
   it('is tidied: steps with a title, a path only of the prototype, a dozen at most', () => {
@@ -101,5 +101,30 @@ describe.skipIf(!reachable)('a visitor\'s feedback', () => {
     const [e] = await db.select().from(event).where(eq(event.appId, appId)).orderBy(desc(event.seq)).limit(1)
     expect(e).toMatchObject({ type: 'share.feedback', actor: 'visitor', payload: { prototypeId: id, name: 'Bo', path: '/checkout' } })
     await expect(setGuide('proto_none', { steps: [] })).rejects.toThrow(/no prototype/)
+  })
+
+  it('asks the prototype for each path before a guide is kept: a path that leads nowhere refuses the whole guide', async () => {
+    const id = newId('prototype')
+    await db.insert(prototype).values({ id, appId, title: 'Viewer (sample)', branch: 'prototype/sample2', path: '/tmp/none', status: 'running', port: 61999 })
+    const asked: string[] = []
+    const site: Probe = async (url) => { asked.push(url); const path = new URL(url).pathname; return path.startsWith('/app') ? 200 : path === '/account' ? 401 : 404 }
+    await expect(setGuide(id, { steps: [{ title: 'The viewer', path: '/app/' }, { title: 'A story', path: '/storybook/?path=/story/sample--one' }, { title: 'Just look' }] }, 'agent', site))
+      .rejects.toThrow(/not saved: this path leads nowhere on the prototype: \/storybook\/\?path=\/story\/sample--one \(404\).*Storybook stories/s)
+    expect(asked).toContain('http://localhost:61999/storybook/?path=/story/sample--one')
+    expect(guideOf((await db.select().from(prototype).where(eq(prototype.id, id)))[0])).toBeNull() // nothing was kept
+    const ok = await setGuide(id, { steps: [{ title: 'The viewer', path: '/app/' }, { title: 'Your account', path: '/account' }, { title: 'A story, in words' }] }, 'agent', site)
+    expect(ok.note).toMatch(/Every path answers on the prototype \(2 checked\)/) // a page behind a sign-in is there
+    expect(guideOf((await db.select().from(prototype).where(eq(prototype.id, id)))[0])!.steps).toHaveLength(3)
+  })
+
+  it('keeps the guide and says its paths were not checked when the prototype is not answering at all', async () => {
+    const id = newId('prototype')
+    await db.insert(prototype).values({ id, appId, title: 'Asleep (sample)', branch: 'prototype/sample3', path: '/tmp/none', status: 'stopped', port: 61998 })
+    const r = await setGuide(id, { steps: [{ title: 'Pay', path: '/checkout' }] }, 'agent', async () => null)
+    expect(r.note).toMatch(/NOT checked: the prototype is not answering/)
+    expect(await deadPaths('http://localhost:1', ['/a', '/b'], async (u) => (u.endsWith('/a') ? 200 : null))).toEqual({ checked: true, dead: [{ path: '/b', status: null }], answersAnything: false })
+    // A single-page app answers every address: the guide is kept, and the agent is told an answer proves little.
+    const spa = await setGuide(id, { steps: [{ title: 'Pay', path: '/checkout' }] }, 'agent', async () => 200)
+    expect(spa.note).toMatch(/answers any address at all.*open each path yourself/)
   })
 })

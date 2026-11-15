@@ -3850,3 +3850,20 @@ The person judging the prototype here saw one line about it in the Share panel.
 With nine steps the "What to try" panel filled the prototype's whole height and hid it. Now it is at most three
 quarters of the height and scrolls inside, with its header staying in view, and its background lets the prototype
 show through faintly. Both versions: the one inside Self Evident and the one on a shared link.
+
+## A guide's links are checked before it is kept (Sandy, 2026-11-15: "is this an app wide issue" … "yes")
+
+An agent wrote a nine-step guide whose last six paths were guesses at where Storybook lived; they were saved, and
+the person found out by pressing one. The cause is not one app's: a guide step is a path on the prototype's own
+server, and nothing asked that server.
+
+- **On save** (`share-guide.ts`, `setGuide`, `deadPaths`): each path is requested from the prototype. One that does
+  not answer, or answers 404, 410 or a server error, refuses the whole guide and names the paths. The agent is told
+  that only pages the prototype itself serves can be a path, never a Storybook story or another server.
+- **A page behind a sign-in** (401, 403) counts as there.
+- **Prototype not answering at all**: the guide is kept, and the agent is told its paths were not checked.
+- **A server that answers any address** (a single-page app's does): the guide is kept, and the agent is told an
+  answer proves little there and to open each path itself. The check is a floor, not proof.
+
+Not done: a step that points at a story, opened in the Storybook view. That is what the guessed paths were reaching
+for. On a shared link it needs the Storybook shared too.

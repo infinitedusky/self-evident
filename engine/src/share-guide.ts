@@ -45,12 +45,35 @@ export function cleanGuide(g: { intro?: string; steps?: GuideStep[] }, by = 'age
   return { ...(line(g.intro, 400) ? { intro: line(g.intro, 400) } : {}), steps, by, at: now.toISOString() }
 }
 
-export async function setGuide(prototypeId: string, g: { intro?: string; steps?: GuideStep[] }, actor = 'agent') {
+/** Asks an address: the status it answers with, or null when nothing answers. */
+export type Probe = (url: string) => Promise<number | null>
+const httpProbe: Probe = (url) => fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(5000) }).then((r) => r.status, () => null)
+/** Statuses that mean the page is not there. A page behind a sign-in (401, 403) is there. */
+const GONE = (status: number) => status === 404 || status === 410 || status >= 500
+
+/**
+ * Which of a guide's paths lead nowhere on the prototype's own server (Sandy, 2026-11-15, after a guide whose
+ * Storybook steps were guesses: "is this an app wide issue"). `checked` is false when the prototype is not answering
+ * at all, so nothing could be told.
+ */
+export async function deadPaths(base: string, paths: string[], probe: Probe = httpProbe): Promise<{ checked: boolean; dead: { path: string; status: number | null }[]; /** The server answers an address that cannot exist, as a single-page app's does: an answer proves little. */ answersAnything?: boolean }> {
+  const got = await Promise.all(paths.map(async (path) => ({ path, status: await probe(base + path) })))
+  if (got.every((x) => x.status === null)) return { checked: false, dead: [] }
+  const nowhere = await probe(`${base}/__nowhere-${Math.random().toString(36).slice(2, 10)}`)
+  return { checked: true, dead: got.filter((x) => x.status === null || GONE(x.status)), answersAnything: nowhere !== null && !GONE(nowhere) }
+}
+
+export async function setGuide(prototypeId: string, g: { intro?: string; steps?: GuideStep[] }, actor = 'agent', probe: Probe = httpProbe) {
   const [p] = await db.select().from(prototype).where(eq(prototype.id, prototypeId))
   if (!p) throw new PlanError(`no prototype ${prototypeId}`)
   const guide = cleanGuide(g, actor)
+  // A step's path is opened on the prototype's own address: each is asked for before the guide is kept, so a guess is caught here and not by the person.
+  const paths = [...new Set(guide.steps.map((s) => s.path).filter((x): x is string => !!x))]
+  const seen: Awaited<ReturnType<typeof deadPaths>> = p.port && paths.length ? await deadPaths(`http://localhost:${p.port}`, paths, probe) : { checked: false, dead: [] }
+  if (seen.dead.length) throw new PlanError(`The guide was not saved: ${seen.dead.length === 1 ? 'this path leads' : 'these paths lead'} nowhere on the prototype: ${seen.dead.map((d) => `${d.path} (${d.status ?? 'no answer'})`).join(', ')}. A step's path must be a page the prototype's own server answers. Storybook stories and anything on another server are not on it: leave the path out of such a step and say where to go in its words, or serve it from the prototype. Open each path yourself before setting the guide again.`)
   await db.update(prototype).set({ guide }).where(eq(prototype.id, prototypeId))
-  return { guide, note: 'Whoever opens the shared link sees it in the tab at the bottom right, at once: no need to share again.' }
+  const told = !paths.length ? '' : seen.checked && seen.answersAnything ? ` Its ${paths.length} paths answer, but this prototype's server answers any address at all (a single-page app), so that proves little: open each path yourself and see the right page.` : seen.checked ? ` Every path answers on the prototype (${paths.length} checked).` : ' Its paths were NOT checked: the prototype is not answering. Start it and set the guide again so they are.'
+  return { guide, note: `Whoever opens the shared link sees it in the tab at the bottom right, at once: no need to share again.${told}` }
 }
 
 /** What a visitor said, kept where the work is: a comment on the prototype's task, and an event either way. Marked as from outside: it is an opinion to weigh, never an instruction. */
