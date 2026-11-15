@@ -74,13 +74,15 @@ export const PrototypeNothingWritten: Story = {
     await expect(c.queryByRole('button', { name: 'Ask the agent to carry on' })).toBeNull()
   },
 }
-/** An idea's prototype (made up): found by the idea, so the idea's step shows it too. */
+/** An idea's prototype (made up): found by the idea, so the idea's step has View and Code like a task's. */
 export const IdeaPrototype: Story = {
   args: { subject: { kind: 'ideas', id: 'idea_sample1' }, on: 'idea', base: '/ideas/idea_sample1', row: protoRow },
   beforeEach: withEngine({ prototypes: prototypes.map((p, i) => i === 0 ? { ...p, issueId: null, ideaId: 'idea_sample1' } : p), stepWork: null }),
   parameters: { route: { path: '/ideas/:id/prototype', url: '/ideas/idea_sample1/prototype' } },
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
+    await expect(await c.findByRole('tab', { name: 'View' })).toHaveAttribute('aria-selected', 'true') // the prototype itself, in front
+    await expect(await c.findByRole('tab', { name: 'Code' })).toBeInTheDocument()
     await userEvent.click(await c.findByRole('tab', { name: 'For the brief' }))
     await expect(c.queryByRole('button', { name: 'Ask the agent to carry on' })).toBeNull()
   },
