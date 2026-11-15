@@ -14,8 +14,9 @@ import { newId } from './ids.js'
 import { createIssue, updateIssue } from './issues.js'
 import { preparePlanning } from './planner.js'
 import { createProject } from './projects.js'
+import { now } from './now.js'
 import { skipTheRest } from './test-briefs.js'
-import { approveBrief, convertIdea, createDefaultWorkflow, guardComplete, guardDirect, ideaFirst, listWorkflows, planView, saveWorkflow, setStep, splitPrompt, stepsOf, useWorkflow, approveStep } from './work.js'
+import { skipUntouched, approveBrief, convertIdea, createDefaultWorkflow, guardComplete, guardDirect, ideaFirst, listWorkflows, planView, saveWorkflow, setStep, splitPrompt, stepsOf, useWorkflow, approveStep } from './work.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -201,6 +202,27 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     await db.update(issue).set({ speed: 'careful' }).where(eq(issue.id, t.id)) // this one, carefully
     expect(await keys()).toContain('final')
     await db.update(app).set({ setup: {} }).where(eq(app.id, appId))
+  })
+
+  it('after an approved prototype the optional steps nobody touched are skipped, and the brief waiting on the person is listed as needing them', async () => {
+    const { issues: [t] } = await createProject({ appId, name: 'Waiting on you (sample)', issues: [{ title: 'Ready to approve (sample)', brief: 'Build it.' }] })
+    await setStep({ issueId: t.id }, 'research', { status: 'started', detail: 'half read (sample)' }) // begun: a real choice, left for the person
+    expect(await skipUntouched(t.id)).toEqual([]) // nothing is skipped before the prototype is approved
+    await setStep({ issueId: t.id }, 'prototype', { status: 'done', detail: 'the whole flow (sample)' })
+    await approveStep(t.id, 'prototype', 'Sam (sample)')
+    const waits = async () => (await now(appId)).needsYou.filter((a) => a.kind === 'approve_brief').map((a) => (a as { issueId: string }).issueId)
+    expect(await waits()).not.toContain(t.id) // carefully: the analysis and the ADR bring the brief up to date first
+    await db.update(issue).set({ speed: 'fast' }).where(eq(issue.id, t.id))
+    expect(await waits()).toContain(t.id)
+    const skippedNow = await skipUntouched(t.id)
+    expect(skippedNow).toEqual(expect.arrayContaining(['sketch', 'mockup']))
+    expect(skippedNow).not.toContain('research')
+    const states = Object.fromEntries((await stepsOf({ issueId: t.id })).states.map((x) => [x.key, x.status]))
+    expect(states).toMatchObject({ sketch: 'skipped', mockup: 'skipped', research: 'started' })
+    await expect(approveBrief(t.id, 'Sam (sample)')).rejects.toThrow(/Research/) // the one that was begun is still the person's to finish or skip
+    await setStep({ issueId: t.id }, 'research', { status: 'skipped' })
+    await approveBrief(t.id, 'Sam (sample)')
+    expect(await waits()).not.toContain(t.id)
   })
 
   it('plans a task only once its brief is approved', async () => {

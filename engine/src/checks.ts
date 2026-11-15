@@ -23,7 +23,7 @@ import { homeRepo } from './workbench.js'
 import { withLock } from './landing.js'
 import { BEFORE_PLAN, CHECKS, checksOwed, step, type StepKey } from './steps.js'
 import { checkTalks, cutOff, onTurnEnd, say, startCheckTalk, taskTalk, type SubjectRef } from './talk.js'
-import { stepsOf } from './work.js'
+import { approveBrief, skipUntouched, stepsOf } from './work.js'
 import { onAnyPlanned } from './planner.js'
 import { BRIEF_FORM } from './brief.js'
 
@@ -133,6 +133,18 @@ export function nextMove(i: { approved: boolean; checks: { key: StepKey; done: b
   return i.conductor && !i.conductor.toldDone ? { do: 'tell' } : { do: 'nothing' }
 }
 
+/**
+ * Approving the prototype is the person's last press (Sandy, 2026-11-15: "I approved the prototype. Like, that ends
+ * the brief, right? Then we move forward to the plan"). Where the brief could not be approved in that same moment
+ * (it is brought up to date from the analysis and the ADR first), the approval carries: once those are in and the
+ * conductor has brought the brief up to date, the brief stands approved by whoever approved the prototype, and the
+ * plan follows. Without a conductor there is nobody to bring it up to date, so it carries as soon as they are in.
+ */
+export function approvalCarries(i: { prototypeApproved: boolean; briefApproved: boolean; hasBrief: boolean; beforeDone: boolean; conductor: { busy: boolean; askedToFinalize: boolean } | null }): boolean {
+  if (!i.prototypeApproved || i.briefApproved || !i.hasBrief || !i.beforeDone) return false
+  return i.conductor ? i.conductor.askedToFinalize && !i.conductor.busy : true
+}
+
 /** Carry a task's checks on by one move. Safe to call at any time, and more than once. */
 export async function advanceChecks(issueId: string): Promise<ReturnType<typeof nextMove>> {
   return withLock(`checks:${issueId}`, async () => {
@@ -144,6 +156,14 @@ export async function advanceChecks(issueId: string): Promise<ReturnType<typeof 
     const out = await checkTalks(issueId)
     const conductor = await taskTalk(issueId)
     const [p] = await db.select().from(prototype).where(and(eq(prototype.issueId, issueId), inArray(prototype.status, ['running', 'stopped']))).orderBy(desc(prototype.createdAt)).limit(1)
+    // The prototype's approval carries to the brief once the brief is up to date (approvalCarries): no second press.
+    const approver = v.states.find((s) => s.key === 'prototype')?.approved?.by
+    const state = conductor ? { busy: conductor.busy, askedToFinalize: await note(conductor.id, 'finalize') } : null
+    const beforeDone = rows.filter((r) => BEFORE_PLAN.includes(r.key)).every((r) => r.state.status === 'done')
+    if (approvalCarries({ prototypeApproved: !!approver, briefApproved: !!t.briefApprovedBy, hasBrief: !!t.brief?.trim(), beforeDone, conductor: state })) {
+      await skipUntouched(issueId).catch(() => {})
+      await approveBrief(issueId, approver!).then(() => { t.briefApprovedBy = approver! }, (err) => console.log(`[checks] ${issueId}: the brief still waits on the person: ${err instanceof Error ? err.message : err}`))
+    }
     const move = nextMove({
       approved: !!v.states.find((s) => s.key === 'prototype')?.approved,
       checks: rows.map((r) => ({ key: r.key, done: r.state.status === 'done', out: out.some((s) => (s.subjectRef as SubjectRef).check === r.key) })),

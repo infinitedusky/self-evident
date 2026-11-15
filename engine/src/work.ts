@@ -230,6 +230,20 @@ async function guardOrder(tx: Tx | typeof db, s: Subject, key: StepKey) {
 }
 
 /** A person approves a task's brief; a change to the brief afterwards asks for approval again (see updateIssue). */
+/**
+ * Once a task's prototype is approved, the optional steps nobody touched are skipped (Sandy, 2026-11-15: a task sat
+ * with its brief ready and unapprovable, because sketches and mockups had been neither done nor skipped, and nothing
+ * said so). The person went past them to the prototype, which is the stronger evidence; asking them to skip each by
+ * hand afterwards is a press with no decision in it. A step that was started is left: that one is a real choice.
+ */
+export async function skipUntouched(issueId: string, actor = 'engine'): Promise<StepKey[]> {
+  const v = await stepsOf({ issueId })
+  if (!v.states.find((s) => s.key === 'prototype')?.approved) return []
+  const untouched = undecided(v.states, v.resolved.workflow).filter((k) => (v.states.find((s) => s.key === k)?.status ?? 'none') === 'none')
+  for (const k of untouched) await setStep({ issueId }, k, { status: 'skipped' }, actor)
+  return untouched
+}
+
 export async function approveBrief(issueId: string, by: string, approve = true) {
   return db.transaction(async (tx) => {
     const i = await getIssue(tx, issueId)

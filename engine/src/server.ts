@@ -24,7 +24,7 @@ import { createIdea, getIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { advanceChecks, onChecksDone, onPlanWanted, resumeChecks } from './checks.js'
 import { checksOwed, step, SPEEDS, type Speed } from './steps.js'
 import { writeHandover } from './handover.js'
-import { approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
+import { skipUntouched, approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
 import { adoptTalk, answerPermission, busyAmong, releaseTalks, closeTalk, closeTalks, endTalk, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, runLog, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, setupTalk, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
@@ -550,6 +550,7 @@ export function buildApp(bus: EventBus) {
       if (approve && c.req.param('key') === 'prototype') {
         const [t] = await db.select().from(issueTable).where(eq(issueTable.id, c.req.param('id')))
         if (t && !t.briefApprovedBy) {
+          await skipUntouched(t.id).catch(() => {}) // the optional steps the person went past: skipped, so they do not hold the brief
           try { await approveBrief(t.id, 'user'); await autoSave(t.id, 'brief_approved'); brief = { approved: true }; void maybeBuild(t.id) }
           catch (err) { brief = { approved: false, why: err instanceof Error ? err.message : String(err) } }
         }
@@ -603,6 +604,7 @@ export function buildApp(bus: EventBus) {
   api.post('/issues/:id/brief/approve', async (c) => {
     const { approve = true } = await c.req.json<{ approve?: boolean }>().catch(() => ({ approve: true }))
     try {
+      if (approve) await skipUntouched((await resolveIssue(db, c.req.param('id'))).id).catch(() => {}) // after an approved prototype, untouched optional steps do not hold the brief
       const row = await approveBrief(c.req.param('id'), 'user', approve)
       if (approve) await autoSave(c.req.param('id'), 'brief_approved') // before the plan and the build: "scrap the build" is going back to here
       if (approve) { void maybeBuild(row.id); void advanceChecks(row.id).catch(() => {}) } // no prototype: planned and built now. With one: the line after it carries on from here (the plan, its audit, the build)

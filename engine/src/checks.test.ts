@@ -3,7 +3,7 @@
  * No agent runs here; `nextMove` is the whole order.
  */
 import { describe, expect, it } from 'vitest'
-import { BEFORE_PLAN, checkBrief, finalizeBrief, nextMove, reportsIn, type CheckFacts } from './checks.js'
+import { BEFORE_PLAN, checkBrief, finalizeBrief, nextMove, reportsIn, type CheckFacts, approvalCarries } from './checks.js'
 import { CHECKS, type StepKey } from './steps.js'
 
 const all = (done: StepKey[] = [], out: StepKey[] = []) => CHECKS.map((key) => ({ key, done: done.includes(key), out: out.includes(key) }))
@@ -37,6 +37,18 @@ describe('the checks after the prototype is approved', () => {
     expect(at({ conductor: null })).toEqual({ do: 'nothing' }) // nobody to write it: still the person's
     expect(at({ briefApproved: true })).toEqual({ do: 'plan' }) // approved: on it goes
     expect(at({ planned: true })).toEqual({ do: 'run', key: 'risk' }) // planned by hand meanwhile: the readers read it
+  })
+
+  it('approving the prototype is the last press: its approval carries to the brief once the brief is up to date', () => {
+    const base = { prototypeApproved: true, briefApproved: false, hasBrief: true, beforeDone: true, conductor: { busy: false, askedToFinalize: true } }
+    expect(approvalCarries(base)).toBe(true)
+    expect(approvalCarries({ ...base, conductor: null })).toBe(true) // nobody to bring it up to date: it carries when the reports are in
+    expect(approvalCarries({ ...base, beforeDone: false })).toBe(false) // the analysis and the ADR first
+    expect(approvalCarries({ ...base, conductor: { busy: false, askedToFinalize: false } })).toBe(false) // not brought up to date yet
+    expect(approvalCarries({ ...base, conductor: { busy: true, askedToFinalize: true } })).toBe(false) // still being written
+    expect(approvalCarries({ ...base, prototypeApproved: false })).toBe(false)
+    expect(approvalCarries({ ...base, hasBrief: false })).toBe(false)
+    expect(approvalCarries({ ...base, briefApproved: true })).toBe(false)
   })
 
   it('wait for the person: nothing runs before the prototype is approved', () => {
