@@ -38,7 +38,28 @@ const paused: Graph = { ...graph, project: { ...graph.project, id: 'proj_paused'
 const bare: Graph = { ...graph, project: { ...graph.project, id: 'proj_bare' }, backlog: [], todos: [], questions: [], decisions: [] }
 
 /** Running, mid-run: one sub-task landed, one building, two waiting; an open question, a decision, a to-do and a backlog with a duplicate. */
-export const Running: Story = { parameters: at('proj_checkout') }
+export const Running: Story = {
+  parameters: at('proj_checkout'),
+  play: async ({ canvasElement }) => { // the tasks lead: before the graph, the assets and the project's own steps
+    const c = within(canvasElement)
+    const tasks = await c.findByRole('heading', { name: /^Tasks/ }, { timeout: 5000 })
+    const steps = await c.findByText('Steps for the project as a whole')
+    await expect(tasks.compareDocumentPosition(steps) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await expect(tasks.compareDocumentPosition(await c.findByRole('heading', { name: /^Assets/ })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  },
+}
+/** A long description written in markdown (made up): shown formatted, its first lines only, with the rest a press away. */
+export const LongDescription: Story = {
+  parameters: at('proj_long'),
+  beforeEach: withGraph({ ...graph, project: { ...graph.project, id: 'proj_long', content: '## Why\nToday checkout takes three pages (sample). **Most people leave on the second.**\n\n## What it must do\n- One page for address and payment.\n- A saved card pays in one tap.\n- A declined card is shown in place.\n\n## After this project\nGift cards resume once the one-page form exists.' } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('Most people leave on the second.', {}, { timeout: 5000 })).toBeInTheDocument()
+    await expect(c.queryByText(/## Why/)).toBeNull()
+    await userEvent.click(await c.findByRole('button', { name: 'Show all' }))
+    await expect(await c.findByRole('button', { name: 'Show less' })).toBeInTheDocument()
+  },
+}
 /** The same, with a sub-task clicked on the graph: its brief, files, dependencies, steps and last run. */
 export const SubTaskSelected: Story = {
   parameters: at('proj_checkout'),
