@@ -2,6 +2,7 @@
  * The engine server: the single writer. Everything else (CLI, UI, VS Code) talks to it over HTTP, and watches
  * the event log over SSE at GET /events.
  */
+import './own-scope.js' // first: the engine's own Doppler scope is not handed to what it starts
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { eq } from 'drizzle-orm'
