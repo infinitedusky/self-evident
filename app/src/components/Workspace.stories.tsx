@@ -64,6 +64,14 @@ export const WhatIsTheSameThing: Story = {
     await expect(specific('/settings/apps/app_x/landing')).toBe(true)
   },
 }
+/** A tab on an idea says which idea (made up: the sample app's first), as a task's tab says which task. */
+export const IdeaTabIsNamed: Story = {
+  args: { address: false, initial: [{ tab: { kind: 'page', path: '/ideas/idea_sample1' } }, { tab: { kind: 'page', path: '/tasks/iss_sample5' } }] },
+  beforeEach: [forget(), withEngine()],
+  play: async ({ canvasElement }) => {
+    await waitFor(() => expect(tabsOf(canvasElement).map((t) => t.textContent)).toContain('Idea: Sample: one-page checkout'), { timeout: 5000 })
+  },
+}
 /** A project with a sub-task's build log split beside it, and the task behind it in the same group. */
 export const ProjectBesideItsBuild: Story = {
   args: { address: false, initial: [{ tab: { kind: 'page', path: '/tasks/iss_sample5' } }, { tab: { kind: 'page', path: '/projects/proj_checkout' } }, { tab: { kind: 'build', issueId: 'iss_sample5' }, split: 'right' }] },

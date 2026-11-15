@@ -145,6 +145,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/apps/:id/graph', () => reply(appGraph())),
     http.get('/api/now', () => reply(d.now)),
     http.get('/api/ideas', () => reply(d.ideas)),
+    http.get('/api/ideas/:id', ({ params }) => { const i = d.ideas.find((x) => x.id === params.id); return i ? reply(i) : missing('idea') }),
     http.get('/api/projects', () => reply(d.projects)),
     http.get('/api/projects/:id/graph', ({ params }) => { const g = d.graphs[params.id as string]; return g ? reply(g) : missing('project') }),
     http.get('/api/issues', ({ request }) => {
