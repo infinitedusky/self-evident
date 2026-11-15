@@ -8,7 +8,8 @@
  * GitHub is read through the person's own `gh` login, like the rest of the engine.
  */
 import { execFile } from 'node:child_process'
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { and, eq, inArray, isNotNull, notInArray } from 'drizzle-orm'
 import { db } from './db/client.js'
@@ -183,13 +184,46 @@ async function mergeFrom(p: typeof project.$inferSelect, a: typeof app.$inferSel
   }
 }
 
-/** Fetch the default branch, then bring every open project of the app up to date with it. */
+/**
+ * The checkout's own copy of the default branch follows the fetched one (Sandy, 2026-11-15: "there should be a pull
+ * system in the SE right?"), so the folder a person opens is not days behind. Only ever a fast-forward:
+ * - on that branch with nothing changed in tracked files: the files move with it;
+ * - on another branch: only the branch's pointer moves, the files in front of the person stay;
+ * - changed tracked files, local commits of its own, or the branch open in another worktree: left as it is.
+ */
+export async function pullCheckout(repoPath: string, branch: string): Promise<{ state: 'current' | 'pulled' | 'left'; commits?: number; why?: string }> {
+  const main = `origin/${branch}`
+  return withLock(`git:${repoPath}`, async () => {
+    if (!(await branchExists(repoPath, branch))) return { state: 'left' as const, why: `no local ${branch}` }
+    if (await isAncestor(repoPath, main, branch)) return { state: 'current' as const }
+    if (!(await isAncestor(repoPath, branch, main))) return { state: 'left' as const, why: `${branch} has commits of its own` }
+    const commits = Number((await git(repoPath, ['rev-list', '--count', `${branch}..${main}`])).stdout) || 0
+    const here = (await git(repoPath, ['symbolic-ref', '--short', '-q', 'HEAD'], { allowFail: true })).stdout.trim()
+    if (here === branch) {
+      if ((await git(repoPath, ['status', '--porcelain', '--untracked-files=no'])).stdout.trim()) return { state: 'left' as const, why: 'it has changes that are not committed' }
+      const m = await git(repoPath, ['merge', '-q', '--ff-only', main], { allowFail: true })
+      return m.code === 0 ? { state: 'pulled' as const, commits } : { state: 'left' as const, why: m.stderr.trim().split('\n')[0].slice(0, 200) }
+    }
+    const f = await git(repoPath, ['fetch', '-q', '.', `${main}:${branch}`], { allowFail: true }) // refuses anything but a fast-forward, and a branch open in a worktree
+    return f.code === 0 ? { state: 'pulled' as const, commits } : { state: 'left' as const, why: f.stderr.trim().split('\n')[0].slice(0, 200) }
+  })
+}
+
+/**
+ * The checkout this engine is running from: never pulled by the sync. New engine code restarts the engine, which
+ * cuts off whatever is building, so Self Evident's own main moves only when someone chooses the moment.
+ */
+export const ownCheckout = (repoPath: string, running = fileURLToPath(import.meta.url)) => running.startsWith(resolve(repoPath) + sep)
+
+/** Fetch the default branch, bring the checkout's own copy of it along, then bring every open project of the app up to date with it. */
 export async function catchUpApp(appId: string) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   const r = await homeRepo(appId)
   if (!a || !r?.localPath) return []
   const fetched = await git(r.localPath, ['fetch', '-q', 'origin', a.defaultBranch], { allowFail: true })
   if (fetched.code !== 0) return []
+  const pulled = ownCheckout(r.localPath) ? { state: 'left' as const, why: 'the engine runs from it' } : await pullCheckout(r.localPath, a.defaultBranch).catch((err: any) => ({ state: 'left' as const, why: String(err?.message ?? err).slice(0, 200) }))
+  if (pulled.state === 'pulled') console.log(`[github] ${a.name}: ${a.defaultBranch} in ${r.localPath} moved up ${pulled.commits} commit${pulled.commits === 1 ? '' : 's'}`)
   const live = await db.select().from(project).where(and(eq(project.appId, appId), notInArray(project.status, ['stopped', 'superseded', 'drafting', 'proposed', 'approved'])))
   const prs = live.length ? await db.select().from(prTable).where(inArray(prTable.projectId, live.map((p) => p.id))) : []
   const out = []
