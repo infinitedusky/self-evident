@@ -4024,3 +4024,16 @@ not two" only held when the brief could be approved in the same moment as the pr
 - **When it does wait on the person** (a started step left open, a required one owed), "its brief is ready; nothing
   more happens until you approve it" is listed under what needs you on My Stuff, with the way to it
   (`now`, `approve_brief`).
+
+## A build with no reported steps says what it is doing (Sandy, 2026-11-15: "they seem to be stuck on the first step of each, or the node drawing is wrong")
+
+The drawing was wrong. A sub-task that is building showed an empty bar, which reads as stuck on step one.
+
+- **Cause**: no builder has reported a step since 2026-11-01 (the last `run.steps` event), in any app. The engine
+  reads a builder's steps from its `TodoWrite` calls; the agents stopped making them. So the step count put on the
+  graph on 2026-11-14 has only ever shown the planned number, never where a build is. Not noticed then because a
+  landed sub-task shows every planned step done, which looked right.
+- **On the node now**: with no steps reported, a building sub-task says "Building. Its agent has not said which
+  step it is on" and its bar is outlines with "N planned"; one that is landing says "Built. Landing now: the tests
+  run before it merges" with every step done.
+- Not done here: getting the steps reported again (the engine has to listen for the task tools agents use now).
