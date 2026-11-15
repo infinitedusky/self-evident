@@ -272,6 +272,7 @@ export type Attention =
   | ({ kind: 'question'; questionId: string; issueIdentifier: string | null; text: string; cost: string | null; askedAt: string } & Where)
   | ({ kind: 'run_project'; subIssues: number } & Where)
   | ({ kind: 'plan_issue'; issueId: string; identifier: string; issueTitle: string } & Where)
+  | ({ kind: 'approve_brief'; issueId: string; identifier: string; issueTitle: string } & Where) // its prototype is approved and its brief is written: the line waits on the person's approval of the brief
   | ({ kind: 'backlog'; open: number; items: string[] } & Where)
   | { kind: 'todo'; todoId: string; identifier: string; title: string; owner: string; projectId: string | null; projectName: string | null; appName: string; done: number; total: number; next: string | null; waitingOn: string[] }
   | ({ kind: 'merge_pr'; prNumber: number | null; url: string | null; review: string | null; checks: string; failing: string[] } & Where)
