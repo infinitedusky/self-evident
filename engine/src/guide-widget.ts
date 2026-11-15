@@ -18,7 +18,7 @@ export const WIDGET = `(() => {
     ':host{all:initial} *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,sans-serif}',
     '.tab{display:flex;align-items:center;gap:8px;border:0;border-radius:999px;padding:10px 16px;background:#1f2430;color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.25)} .tab .n{font-weight:400;opacity:.75} .tab .c{font-size:11px}',
     '.tab:hover{background:#2c3342}',
-    '.panel{width:min(340px,calc(100vw - 32px));max-height:min(560px,calc(100vh - 32px));overflow:auto;background:#fff;color:#1f2430;border:1px solid #d9dce3;border-radius:14px;box-shadow:0 12px 36px rgba(0,0,0,.28);padding:14px 16px;font-size:14px;line-height:1.45}',
+    '.panel{width:min(340px,calc(100vw - 32px));max-height:min(560px,75vh);overflow:auto;background:rgba(255,255,255,.86);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:#1f2430;border:1px solid #d9dce3;border-radius:14px;box-shadow:0 12px 36px rgba(0,0,0,.28);padding:14px 16px;font-size:14px;line-height:1.45}',
     '.head{display:flex;align-items:center;gap:8px;width:calc(100% + 16px);margin:-6px -8px 6px;padding:6px 8px;border:0;border-radius:8px;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer} .head:hover{background:#f0f1f4} .head strong{flex:1;font-size:15px} .head .hide{color:#6b7280;font-size:12px;white-space:nowrap}',
     '.note{color:#6b7280;font-size:12px;margin:0 0 8px} p{margin:0 0 10px}',
     'ol{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:8px}',
