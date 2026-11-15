@@ -3748,3 +3748,14 @@ hand to stop it.
 Tested against the three commands the builder really ran. Not done: an attempt is still used up, and the work
 started again from the top, when the interruption was the engine restarting; and my own merges must wait for a
 running build, which the wait I had did not enforce (it timed out and went on).
+
+## A task links to its pull request (Sandy, 2026-11-15: "can we add a link to the PR in the tasks?")
+
+Build already linked a task's pull request; the task's own page and the task list did not, so a task "in review"
+gave no way to what is being reviewed.
+
+- **The task's page**: a badge beside its state, "Pull request #3 · open", opening it on GitHub. A sub-task shows its
+  task's, since sub-tasks have none of their own.
+- **The task list**: the same link on each row that has one.
+- **Which pull request** (`projects.ts`, `prOf`): the task's own; else its project's one pull request, for an app
+  that lands a project in one.
