@@ -63,6 +63,7 @@ export function Settings() {
 function NewApp({ onMade }: { onMade: () => Promise<unknown> }) {
   const navigate = useNavigate()
   const [name, setName] = useState('')
+  const [abbr, setAbbr] = useState('')
   const [fullName, setFullName] = useState('')
   const [localPath, setLocalPath] = useState('')
   const [gh, setGh] = useState<GitHubRepos | null>(null)
@@ -75,7 +76,7 @@ function NewApp({ onMade }: { onMade: () => Promise<unknown> }) {
     setBusy(true); setError(null)
     try {
       const ws = (await engine.workspaces())[0] ?? (await engine.createWorkspace('My workspace'))
-      const made = await engine.createApp({ workspaceId: ws.id, name: name.trim(), defaultBranch: picked?.defaultBranch, repo: { fullName: fullName.trim(), localPath: localPath.trim() } })
+      const made = await engine.createApp({ workspaceId: ws.id, name: name.trim(), key: abbr.trim() || undefined, defaultBranch: picked?.defaultBranch, repo: { fullName: fullName.trim(), localPath: localPath.trim() } })
       await onMade()
       navigate(`/settings/apps/${made.id}`, { state: { note: made.note } })
     } catch (e) { setError(err(e)); setBusy(false) }
@@ -84,6 +85,7 @@ function NewApp({ onMade }: { onMade: () => Promise<unknown> }) {
     <section className="panel" data-component="NewApp">
       <Group title="New app" lead="Its name, and where its code is: a GitHub repo of yours, the folder on this machine, or both. A folder that isn't a git repository yet becomes one on the default branch, with the files as found committed.">
         <label>Name<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ragdoll Golf" onKeyDown={(e) => { if (e.key === 'Enter' && ready && !busy) void add() }} /></label>
+        <label>Abbreviation<input className="mono" value={abbr} onChange={(e) => setAbbr(e.target.value.toUpperCase())} placeholder={guessKey(name) || 'RG'} maxLength={5} aria-describedby="abbr-hint" /><span id="abbr-hint" className="faint" style={{ fontSize: 12 }}>The prefix of its tasks ({(abbr || guessKey(name) || 'RG')}-12) and its square in the app strip. Left empty, it is made from the name.</span></label>
         <label>Default branch<input className="mono" value={picked?.defaultBranch ?? 'main'} readOnly title="Follows the GitHub repo picked, or the folder's own branch" /></label>
         <RepoFields fullName={fullName} localPath={localPath} gh={gh} onChange={(p) => { if (p.fullName !== undefined) setFullName(p.fullName); if (p.localPath !== undefined) setLocalPath(p.localPath) }} />
       </Group>
@@ -399,6 +401,7 @@ function asEffective(s: FactorySettings): EffectiveValues {
 function AppPage({ app, section, item, onSaved }: { app: App; section: string; item?: string; onSaved: () => Promise<unknown> }) {
   const others = useCurrentApp().apps.filter((x) => x.id !== app.id)
   const [name, setName] = useState(app.name)
+  const [abbr, setAbbr] = useState(app.key)
   const [branch, setBranch] = useState(app.defaultBranch)
   const [setup, setSetup] = useState<AppSetup>(app.setup ?? {})
   const was = (app.repos ?? []).map(rowOf) // the engine lists home first
@@ -414,9 +417,10 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   const load = () => Promise.all([engine.appSettings(app.id).then(setInfo), engine.settings().then(setFactory)]).catch((e) => setError(err(e)))
   useEffect(() => { void load() }, [app.id])
   useEffect(() => { if (section === 'repo' && gh === null) engine.githubRepos().then(setGh).catch((e) => setGh({ repos: [], problem: err(e) })) }, [section])
+  useEffect(() => { setAbbr(app.key) }, [app.key]) // saved, or changed elsewhere
   useEffect(() => { setBranch(app.defaultBranch) }, [app.defaultBranch]) // the engine may have made the checkout's branch the default
 
-  const dirty = name !== app.name || branch !== app.defaultBranch || JSON.stringify(setup) !== JSON.stringify(app.setup ?? {})
+  const dirty = name !== app.name || (abbr.trim() !== app.key && abbr.trim() !== '') || branch !== app.defaultBranch || JSON.stringify(setup) !== JSON.stringify(app.setup ?? {})
     || repos.map((r) => r.key).join() !== was.map((r) => r.key).join() || (repos.length > 1 && homeOf(repos, home) !== was[0]?.key)
   const num = (v: string) => (v.trim() === '' ? undefined : Number(v))
   const set = (patch: Partial<AppSetup>) => setSetup({ ...setup, ...patch })
@@ -428,7 +432,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
     try {
       const homeKey = homeOf(repos, home)
       const many = (id?: string) => ({ ...setup, home_repo: repos.length > 1 ? id : undefined })
-      await engine.updateApp(app.id, { name: name.trim(), defaultBranch: branch.trim() || 'main', setup: clean(many(repos.find((r) => r.key === homeKey)?.id ?? setup.home_repo)) })
+      await engine.updateApp(app.id, { name: name.trim(), ...(abbr.trim() && abbr.trim() !== app.key ? { key: abbr.trim() } : {}), defaultBranch: branch.trim() || 'main', setup: clean(many(repos.find((r) => r.key === homeKey)?.id ?? setup.home_repo)) })
       for (const r of was.filter((w) => !repos.some((x) => x.key === w.key))) await engine.deleteRepo(r.id!)
       const notes: string[] = []
       const rows: RepoRow[] = []
@@ -454,6 +458,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
     repo: <>
       <Group title="Repo" lead="What the app is called, and the branch its work is cut from.">
         <label>Name<input value={name} onChange={(e) => setName(e.target.value)} /></label>
+        <label>Abbreviation<input className="mono" value={abbr} onChange={(e) => setAbbr(e.target.value.toUpperCase())} maxLength={5} aria-describedby="abbr-note" /><span id="abbr-note" className="faint" style={{ fontSize: 12 }}>The prefix of its tasks and its square in the app strip.{abbr.trim() && abbr.trim() !== app.key ? ` Saving renames every task (${app.key}-12 becomes ${abbr.trim()}-12). Branches, pull requests and text already written keep ${app.key}.` : ''}</span></label>
         <label>Default branch<input className="mono" value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" /></label>
       </Group>
       <Repos appName={app.name} defaultBranch={branch.trim() || 'main'} rows={repos} home={homeOf(repos, home)} gh={gh} onRows={setRepos} onHome={setHome} />
@@ -659,6 +664,9 @@ function Account({ appId, value, saved, onChange }: { appId: string; value?: Acc
     </div>
   )
 }
+
+/** The abbreviation the engine would make from a name, to show as the placeholder: initials of several words, else the first three letters. */
+export const guessKey = (name: string) => { const words = name.replace(/[^A-Za-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean); return (words.length > 1 ? words.map((w) => w[0]).join('') : (words[0] ?? '').slice(0, 3)).toUpperCase().slice(0, 4) }
 
 function Group({ title, lead, children }: { title: string; lead: string; children: React.ReactNode }) {
   return (

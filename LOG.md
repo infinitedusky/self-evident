@@ -3682,3 +3682,15 @@ step, and the person was then asked to approve that. Nobody reads eight hundred 
 
 Briefs already written are not touched: a long one shows its count and the offer. Not tried with real agents: the
 next brief an agent writes is the test of whether 200 words is the right number.
+
+## An app's abbreviation can be set, and changed (Sandy, 2026-11-14: "can we have a field to set the ABBR for the project?")
+
+Read as the app's: the prefix of its tasks (MER in MER-50) and its square in the app strip. It was made from the
+name when the app was created and could not be seen or changed anywhere. Now the new-app form has an Abbreviation
+field (left empty, it is made from the name, and the hint shows which), and the app's settings have it beside the
+name. Two to five letters or digits, starting with a letter; not another app's.
+
+Changing it renames every task at once, since a task's name is the abbreviation and its number (MER-50 becomes
+BON-50), and the field says so before it is saved. What was already written keeps the old one: branch names, pull
+request titles, text in comments and briefs. If Sandy meant an abbreviation for a project (a group of tasks), that
+does not exist: a project has no prefix of its own.

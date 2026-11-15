@@ -22,6 +22,16 @@ export function kindOf(id: string): Kind | null {
 }
 
 /** An app's key, the prefix of its issues (HG in HG-12): its initials, or its first letters, unique in the workspace. */
+/**
+ * An app's abbreviation as a person sets it: the prefix of its tasks (MER in MER-50) and its square in the app strip.
+ * Two to five capital letters or digits, starting with a letter. Returns it cleaned, or throws saying what is wrong.
+ */
+export function cleanKey(given: string): string {
+  const key = given.trim().toUpperCase()
+  if (!/^[A-Z][A-Z0-9]{1,4}$/.test(key)) throw new Error('an abbreviation is two to five letters or digits, starting with a letter (MER, HG, SE2)')
+  return key
+}
+
 export function appKey(name: string, taken: string[]) {
   const words = name.replace(/[^A-Za-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean)
   const base = (words.length > 1 ? words.map((w) => w[0]).join('') : (words[0] ?? 'APP').slice(0, 3)).toUpperCase().slice(0, 4) || 'APP'
