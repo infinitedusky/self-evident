@@ -9,6 +9,8 @@ import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { createProject, PlanError } from './projects.js'
 
+/** One idea by its id, or nothing. */
+export const getIdea = async (id: string) => (await db.select().from(idea).where(eq(idea.id, id)))[0] ?? null
 export const listIdeas = (appId?: string) => (appId ? db.select().from(idea).where(eq(idea.appId, appId)) : db.select().from(idea)).orderBy(desc(idea.number))
 
 export async function createIdea(input: { appId: string; title: string; body?: string; actor?: string }) {

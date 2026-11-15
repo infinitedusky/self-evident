@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
 import { app, idea, project, workspace } from './db/schema.js'
 import { newId } from './ids.js'
-import { createIdea, listIdeas, projectFromIdea } from './ideas.js'
+import { createIdea, getIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { projectGraph } from './projects.js'
 
 let reachable = true
@@ -38,6 +38,12 @@ describe.skipIf(!reachable)('ideas', () => {
 
     const many = await projectFromIdea(b.id, [{ title: 'First part' }, { title: 'Second part', brief: 'after the first' }])
     expect((await projectGraph(many.project.id))!.issues.map((t) => t.title)).toEqual(['First part', 'Second part'])
+  })
+
+  it('is found by its id, and nothing is found for an id that is not one', async () => {
+    const made = await createIdea({ appId, title: 'ReactFlow adapter (sample)' })
+    expect(await getIdea(made.id)).toMatchObject({ id: made.id, title: 'ReactFlow adapter (sample)' })
+    expect(await getIdea('idea_none')).toBeNull()
   })
 
   it('refuses an empty title', async () => {
