@@ -4342,3 +4342,16 @@ Not done: a line in "needs you" when a task is built and waiting to be submitted
 task's page shows it); marking it ready for review from here; the same panel on a project's page for an app that
 builds one pull request per project (the endpoint is there). Not tried: submitting against a real repository; the
 engine is tested against a local remote for "nothing is pushed", and the calls to GitHub are not exercised in tests.
+
+## Auto pull request, or not, is an option (Sandy, 2026-11-16: "this should be an option, auto PR or not (but PRs are always on tasks, not subtasks)")
+
+Settings › Landing, "A task's pull request": **Waits for me** (the default: nothing is pushed until Submit pull
+request) or **Opens by itself**. By itself still means for the whole task: it opens once every sub-task of the task
+has landed and, where the app has a test command, the task's own test run has passed on what landed last. Never after
+the first sub-task, which was the fault. It opens as a draft by the app's rule, and one the person closed is still
+left closed. Only a person sets it: `set_pr_rules` does not take it. The task's panel says which it is.
+
+In the tests the GitHub command is a stand-in (`GH_BIN`), so submitting, reopening a closed one as a draft, and the
+automatic path are now exercised without talking to GitHub. Found on the way: a runner builds every running project
+in the database, so two files of runner tests run at once build each other's projects. The new ones are in
+`runner.test.ts` for that reason; one of the older tests there still fails now and then under load.

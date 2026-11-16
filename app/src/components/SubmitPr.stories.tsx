@@ -32,6 +32,16 @@ export const ReadyToSubmit: Story = {
     await expect(args.onChanged).toHaveBeenCalled()
   },
 }
+/** The app is set to open them by itself: it waits for every sub-task of the task and its test run, and says so. */
+export const OpensByItself: Story = {
+  args: { landed: 4, total: 9, auto: true },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.getByText(/It opens by itself, as a draft, once all 9 have landed and the task's test run has passed/)).toBeInTheDocument()
+    await expect(c.getByText(/Nothing has been pushed/)).toBeInTheDocument()
+    await expect(c.queryByRole('button', { name: 'Submit pull request' })).not.toBeInTheDocument()
+  },
+}
 /** Acceptance criteria nobody has checked against the build: said before it is submitted. */
 export const CriteriaNotChecked: Story = {
   args: { unchecked: 3 },
