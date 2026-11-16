@@ -152,7 +152,7 @@ export async function talkFor(id: string) {
 
 async function openTab(p: typeof prototype.$inferSelect) {
   const [a] = await db.select({ workspaceId: app.workspaceId }).from(app).where(eq(app.id, p.appId))
-  await db.transaction((tx) => appendEvent(tx, { workspaceId: a?.workspaceId ?? 'ws_none', appId: p.appId, actor: 'engine', type: 'ui.open', payload: { tab: { kind: 'prototype', id: p.id }, split: 'right' } }))
+  await db.transaction((tx) => appendEvent(tx, { workspaceId: a?.workspaceId ?? 'ws_none', appId: p.appId, actor: 'engine', type: 'ui.open', payload: p.issueId ? { tab: { kind: 'page', path: `/tasks/${p.issueId}/prototype` }, issueId: p.issueId } : p.ideaId ? { tab: { kind: 'page', path: `/ideas/${p.ideaId}/prototype` }, ideaId: p.ideaId } : { tab: { kind: 'prototype', id: p.id } } })) // a task's or an idea's prototype shows on that page, in its tab; never split
 }
 
 /** Stop its server and what it started; resolves once it has exited (or after a few seconds). */

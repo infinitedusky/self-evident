@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
 import { app, build, event, pr, project, workspace } from './db/schema.js'
 import { changeState, createIssue, getIssue, listIssues, reorder, updateIssue } from './issues.js'
-import { addSubIssues, createProject, issueDetail, listCodeIssues, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
+import { addSubIssues, createProject, impliedDeps, issueDetail, listCodeIssues, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { newId } from './ids.js'
 
 let reachable = true
@@ -142,5 +142,19 @@ describe.skipIf(!reachable)('projects in Postgres', () => {
     await db.insert(pr).values({ id: newId('pr'), appId, projectId: p.id, number: 13, status: 'merged', url: 'https://example.com/sample/pull/13' })
     expect((await issueDetail(issues[1].id)).pr).toMatchObject({ number: 13, status: 'merged' }) // the project's one pull request
     expect((await issueDetail(issues[0].id)).pr).toMatchObject({ number: 12 }) // its own still wins
+  })
+})
+
+describe('the order of a project\'s tasks as waits', () => {
+  const tasks = [{ id: 'first', sortOrder: 1, state: 'done' }, { id: 'second', sortOrder: 2, state: 'todo' }, { id: 'third', sortOrder: 3, state: 'todo' }]
+  it('a sub-task waits on the earlier tasks\' sub-tasks, not on canceled or duplicate ones, nor on a task that is done', () => {
+    const subs = [
+      { id: 'old', parentId: 'first', state: 'canceled' }, { id: 'kept', parentId: 'first', state: 'done' },
+      { id: 'a', parentId: 'second', state: 'todo' }, { id: 'dropped', parentId: 'second', state: 'duplicate' },
+      { id: 'b', parentId: 'third', state: 'todo' },
+    ]
+    const deps = impliedDeps(subs, tasks)
+    expect(deps.get('a')).toEqual([]) // the first task is done: its canceled sub-task holds nothing (it once held the next task for good)
+    expect(deps.get('b')).toEqual(['a']) // the second is not: its live sub-task is waited on, its duplicate is not
   })
 })

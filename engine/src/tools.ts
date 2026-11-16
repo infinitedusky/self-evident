@@ -33,7 +33,7 @@ import { setGuide } from './share-guide.js'
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, setPrototypeCleanup, setPrototypeCommand, setPrototypeDatabase, startPrototype, stopPrototype } from './prototype.js'
 import { agentsOut, readAgent, say, tellAgent } from './talk.js'
 import { syncApp } from './github.js'
-import { FOLLOWED, follow } from './follow.js'
+import { FOLLOWED, follow, ownerOf } from './follow.js'
 import { addChecklist, completeTodo, createTodo, dropTodo, itemToTodo, listTodos, setChecklistItem, updateTodo } from './todos.js'
 
 export type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean }
@@ -52,8 +52,6 @@ export function engineTools(opts: ToolScope): EngineTool[] {
   // The wall: this conversation sees and touches only its own app. Anything addressed by id is checked against it.
   // A task's own agent (talk.ts, ensureTaskTalk): the task this conversation is the conductor of, if any.
   /** The idea this conversation is the own agent of (it has a worktree and is not about the app as a whole), if any. */
-  const ownIdeaId = async (): Promise<string | null> => { if (!sessionId) return null; const [s] = await db.select({ ref: session.subjectRef, worktreePath: session.worktreePath }).from(session).where(eq(session.id, sessionId)); const r = s?.ref as { ideaId?: string; app?: boolean } | null; return s?.worktreePath && !r?.app ? r?.ideaId ?? null : null }
-  const ownTask = async (): Promise<string | null> => { if (!sessionId) return null; const [s] = await db.select({ ref: session.subjectRef }).from(session).where(eq(session.id, sessionId)); return (s?.ref as { issueId?: string } | null)?.issueId ?? null }
   const foreign = () => new PlanError('that belongs to another app; this session is scoped to its own app')
   const ownProject = async (projectId: string) => { const g = await projectGraph(projectId); if (!g || g.project.appId !== appId) throw foreign(); return g }
   const ownIssue = async (issueId: string) => { const [t] = await db.select().from(issue).where(eq(issue.id, issueId)); if (!t || t.appId !== appId) throw foreign(); return t }
@@ -157,28 +155,31 @@ export function engineTools(opts: ToolScope): EngineTool[] {
       def('pause_project', 'Pause a running project of this app: nothing new starts, running agents stop and keep their place.', { projectId: z.string() }, async (a) => tryIt(async () => { await ownProject(a.projectId); return runner.pauseProject(a.projectId, actor) })),
       def('resume_project', 'Resume a paused project of this app.', { projectId: z.string() }, async (a) => tryIt(async () => { await ownProject(a.projectId); return runner.resumeProject(a.projectId, actor) })),
       def('cancel_project', 'Stop a project of this app: agents aborted, unlanded sub-tasks cancelled, landed work kept.', { projectId: z.string() }, async (a) => tryIt(async () => { await ownProject(a.projectId); return runner.cancelProject(a.projectId) })),
-      def('open_tab', 'Open a tab in the person\'s workspace, beside the conversation: a page by its path (/projects/<id>, /tasks/<id>, /ideas, /todos, /settings, ...), its Storybook (storybook), or a story in it (storybook, with story: its id from the stories tool; it shows this conversation\'s worktree, so a story you just wrote is there), a sketch (sketch, with file: its path under sketches/, like home.html; it shows the file from your worktree and reloads when you change it), a sub-task\'s live build log (build, with issueId: the sub-task\'s id), a prototype (prototype, with prototypeId; without one, the list of them). An open tab is focused, not opened twice. split puts it beside (right) or under (below) the tab in front. Use it to show what you are talking about.', {
+      def('open_tab', 'Open a tab in the person\'s workspace, beside the conversation: a page by its path (/projects/<id>, /tasks/<id>, /ideas, /todos, /settings, ...), its Storybook (storybook), or a story in it (storybook, with story: its id from the stories tool; it shows this conversation\'s worktree, so a story you just wrote is there), a sketch (sketch, with file: its path under sketches/, like home.html; it shows the file from your worktree and reloads when you change it), a sub-task\'s live build log (build, with issueId: the sub-task\'s id), a prototype (prototype, with prototypeId; without one, the list of them). An open tab is focused, not opened twice. A task\'s or an idea\'s own agent shows things on the pages of that task or idea only, in its tab. Use it to show what you are talking about.', {
         kind: z.enum(['page', 'prototype', 'storybook', 'sketch', 'build']).optional().describe('default page'), path: z.string().optional().describe('for a page'), issueId: z.string().optional().describe('for a build log'), prototypeId: z.string().optional().describe('for a prototype'), story: z.string().optional().describe('for storybook: a story id, like pages-taskpage--sub-task-building'), file: z.string().optional().describe('for a sketch: its path under sketches/'),
-        split: z.enum(['right', 'below']).optional(),
       }, async (a) => tryIt(async () => {
         const kind = a.kind ?? 'page'
         if (kind === 'page' && !a.path?.startsWith('/')) throw new PlanError('a page needs a path starting with /')
         if (kind === 'build') { if (!a.issueId) throw new PlanError('a build log needs issueId'); await ownIssue(a.issueId) }
         if (kind === 'prototype' && a.prototypeId) await ownPrototype(a.prototypeId)
         const [x] = await db.select({ workspaceId: app.workspaceId }).from(app).where(eq(app.id, appId))
-        // A task's own agent shows a sketch, a story or the prototype on that step's page of its task, where the viewer sits beside the
-        // conversation: the person is taken there, in the task's tab, and no tab is split off (Sandy, 2026-11-10: "we should go there with the agent").
-        const taskId = await ownTask()
-        const ideaId = taskId ? null : await ownIdeaId() // an idea's own agent does the same, on the idea's pages
-        const STEP_PAGE = { sketch: 'sketch', storybook: 'mockup', prototype: 'prototype' } as const
-        if ((taskId || ideaId) && (kind === 'sketch' || kind === 'storybook' || kind === 'prototype')) {
+        // An agent that belongs to a task or an idea stays in that thing's tab: a sketch, a story or the prototype shows on that step's
+        // page, a build log on the task's Build page, and a page outside it is not opened (Sandy, 2026-11-10: "we should go there with
+        // the agent"; 2026-11-15: "the task agent shouldn't open new windows"). Nothing is split off by an agent.
+        const owner = await ownerOf(sessionId)
+        const root = owner?.issueId ? `/tasks/${owner.issueId}` : owner?.ideaId ? `/ideas/${owner.ideaId}` : null
+        if (root) {
+          const STEP_PAGE = { sketch: 'sketch', storybook: 'mockup', prototype: 'prototype' } as const
           const q = kind === 'sketch' && a.file ? `?file=${encodeURIComponent(a.file.replace(/^\/?sketches\//, ''))}` : kind === 'storybook' && a.story ? `?story=${encodeURIComponent(a.story)}` : ''
-          const page = { kind: 'page', path: `${taskId ? `/tasks/${taskId}` : `/ideas/${ideaId}`}/${STEP_PAGE[kind as keyof typeof STEP_PAGE]}${q}` }
-          await db.transaction((tx) => appendEvent(tx, { workspaceId: x?.workspaceId ?? 'ws_none', appId, sessionId: sessionId ?? null, actor, type: 'ui.open', payload: { sessionId, tab: page, split: null, ...(taskId ? { issueId: taskId } : { ideaId }) } }))
-          return { opened: page, note: `shown on that step's page of this ${taskId ? 'task' : 'idea'}, beside the conversation` }
+          const inside = kind === 'page' && (a.path === root || a.path!.startsWith(`${root}/`) || a.path!.startsWith(`${root}?`))
+          const path = kind in STEP_PAGE ? `${root}/${STEP_PAGE[kind as keyof typeof STEP_PAGE]}${q}` : kind === 'build' && owner?.issueId ? `${root}/build` : inside ? a.path! : null
+          if (!path) throw new PlanError(`this conversation belongs to ${owner?.issueId ? 'a task' : 'an idea'} and shows things in its tab only (${root} and its pages); say where the other page is and the person opens it`)
+          const page = { kind: 'page', path }
+          await db.transaction((tx) => appendEvent(tx, { workspaceId: x?.workspaceId ?? 'ws_none', appId, sessionId: sessionId ?? null, actor, type: 'ui.open', payload: { sessionId, tab: page, ...owner } }))
+          return { opened: page, note: `shown in this ${owner?.issueId ? 'task' : 'idea'}'s tab, beside the conversation` }
         }
-        const tab = { kind, ...(kind === 'page' ? { path: a.path } : {}), ...(kind === 'build' ? { issueId: a.issueId } : {}), ...(kind === 'storybook' && a.story ? { story: a.story } : {}), ...(kind === 'sketch' && a.file ? { file: a.file.replace(/^\/?sketches\//, '') } : {}), ...((kind === 'storybook' || kind === 'sketch') && sessionId ? { session: sessionId } : {}), ...(kind === 'prototype' && a.prototypeId ? { prototypeId: a.prototypeId } : {}) }
-        await db.transaction((tx) => appendEvent(tx, { workspaceId: x?.workspaceId ?? 'ws_none', appId, sessionId: sessionId ?? null, actor, type: 'ui.open', payload: { sessionId, tab, split: taskId ? null : a.split ?? null, ...(taskId ? { issueId: taskId } : {}) } }))
+        const tab = { kind, ...(kind === 'page' ? { path: a.path } : {}), ...(kind === 'build' ? { issueId: a.issueId } : {}), ...(kind === 'storybook' && a.story ? { story: a.story } : {}), ...(kind === 'sketch' && a.file ? { file: a.file.replace(/^\/?sketches\//, '') } : {}), ...((kind === 'storybook' || kind === 'sketch') && sessionId ? { session: sessionId } : {}), ...(kind === 'prototype' && a.prototypeId ? { id: a.prototypeId } : {}) }
+        await db.transaction((tx) => appendEvent(tx, { workspaceId: x?.workspaceId ?? 'ws_none', appId, sessionId: sessionId ?? null, actor, type: 'ui.open', payload: { sessionId, tab } }))
         return { opened: tab, note: 'shown in the person\'s workspace if Self Evident is open' }
       })),
       def('stories', 'This app\'s Storybook stories, from the Storybook of this conversation\'s worktree when it has one (so a story you just wrote is there), else the app\'s: id (open one with open_tab kind storybook), title (the page or component) and name (the state). match narrows by id, title or name.', { match: z.string().optional() },

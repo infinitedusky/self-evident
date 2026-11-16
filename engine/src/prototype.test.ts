@@ -64,7 +64,7 @@ describe.skipIf(!reachable)('prototypes', () => {
     expect((await talkFor(p.id)).id).toBe(p.sessionId)
     const shown = await db.select().from(event).where(and(eq(event.appId, appId)))
     expect(shown.map((e) => e.type)).toEqual(expect.arrayContaining(['ui.talk', 'ui.open', 'prototype.created', 'prototype.started']))
-    expect(shown.find((e) => e.type === 'ui.open')?.payload).toMatchObject({ tab: { kind: 'prototype', id: p.id }, split: 'right' })
+    expect(shown.find((e) => e.type === 'ui.open')?.payload).toEqual({ tab: { kind: 'prototype', id: p.id } }) // a tab, never a split
 
     await discardPrototype(p.id)
     expect((await db.select().from(session).where(eq(session.id, p.sessionId)))[0].status).toBe('ended')

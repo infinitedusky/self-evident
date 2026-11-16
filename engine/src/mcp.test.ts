@@ -49,7 +49,8 @@ describe.skipIf(!reachable)('mcp', () => {
     const ok = await (await handleMcp(appId, rpc(5, 'tools/call', { name: 'open_tab', arguments: { path: '/todos', split: 'right' } }), 4000)).json()
     expect(ok.result.isError).toBeFalsy()
     const [e] = await db.select().from(event).where(and(eq(event.appId, appId), eq(event.type, 'ui.open')))
-    expect(e.payload).toMatchObject({ tab: { kind: 'page', path: '/todos' }, split: 'right' })
+    expect(e.payload).toMatchObject({ tab: { kind: 'page', path: '/todos' } })
+    expect(e.payload).not.toHaveProperty('split') // asked for a split (an older habit): a tab, and the call still works
     const bad = await (await handleMcp(appId, rpc(6, 'tools/call', { name: 'open_tab', arguments: { path: 'todos' } }), 4000)).json()
     expect(bad.result.isError).toBe(true)
   })

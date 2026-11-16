@@ -4071,3 +4071,28 @@ builders keep their list with `TaskCreate` and `TaskUpdate`, or not at all. No `
 Not seen with a real builder yet: whether the model keeps the list when told this way, and what the task tools'
 results look like in this SDK version (the tracker reads an id from JSON or from "Task #N", and counts from one
 when it finds neither).
+
+## An agent stays in its own tab; nothing is split by an agent (Sandy, 2026-11-15: "the task agent shouldn't open new windows. It just should move around different areas of that task or build or idea")
+
+Three things were making tabs appear or split when an agent carried on.
+
+- **A task's or an idea's agent stays in that thing's tab.** Its own agent, a check's agent on that task and a
+  prototype's agent started on it all count (`ownerOf` in `follow.ts`). What it shows goes to a page of that task or
+  idea: a sketch, a story, the prototype on that step's page, a build log on the task's Build page. A page outside
+  it is not opened; the agent is told to say where it is. It no longer sends "follow me" at all, so building does
+  not take the person to the project.
+- **No agent splits.** `open_tab` lost `split` (an older call that passes it still works, as a tab); a new
+  prototype no longer opens split to the right, and one started on a task or idea shows on that page's Prototype
+  step. Splitting is the person's to do.
+- **Open already means go there.** When the app's agent changes something whose tab is open, that tab comes to the
+  front. The following tab is only used for things with no tab, and opens as a tab among the others.
+
+## A finished task holds nothing up (Bonkei, 2026-11-15: BON-51 approved and its build did not start)
+
+BON-80 to BON-84 sat queued on "blocked: BON-68 (BON-50, earlier in the project) cancelled". BON-50 was done and
+merged; BON-68 was a sub-task of its first plan, cancelled when it was re-planned.
+
+- **Cause**: a task's sub-tasks wait on every sub-task of the earlier tasks in the project, cancelled ones
+  included, and a cancelled dependency blocks for good.
+- **Now** (`impliedDeps`): a sub-task that is canceled or a duplicate is not waited on, and neither is any
+  sub-task of a task that is done. A dependency the plan names itself still blocks when it fails.
