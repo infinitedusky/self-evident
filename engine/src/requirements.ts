@@ -18,7 +18,13 @@ export const DEFAULT_REQUIREMENTS: Requirement[] = [
   { key: 'tests', name: 'Tests', what: 'New behaviour has automated tests that fail without the change, and the app\'s test command passes.', on: true },
   { key: 'test_plan', name: 'Test plan', what: 'How a person checks it by hand: the pages to open and what to look for, in order.', on: true },
   { key: 'docs', name: 'Docs', what: 'The documentation that describes what changed is updated in the same task.', on: true },
+  // What the stages before a build used to write, as things a build is held to (Sandy, 2026-11-16: "It needs to create
+  // an ADR"). Off for an app until a workflow switches them on; Main does.
+  { key: 'adr', name: 'Decision record', what: 'Each real design choice made in this change is written down where the repo keeps its decisions: what was chosen, what was turned down, and why.', on: false },
+  { key: 'risks', name: 'Risks', what: 'The pull request says what this change could break and how someone would notice, in a few lines.', on: false },
 ]
+/** The two added on 2026-11-16, by key: an app with a list of its own is given them once (work.ts, ensureMain). */
+export const ADDED_REQUIREMENTS = ['adr', 'risks']
 
 const clean = (r: Partial<Requirement>): Requirement | null => {
   const name = r.name?.trim()
@@ -28,17 +34,20 @@ const clean = (r: Partial<Requirement>): Requirement | null => {
 }
 
 /** The app's list (its own, else the starting one), with a project's switches applied. Every one, on or off. */
-export function requirementsOf(setup: unknown, project?: unknown): Requirement[] {
+export function requirementsOf(setup: unknown, project?: unknown, workflow?: unknown): Requirement[] {
   const own = (setup as { requirements?: unknown } | null)?.requirements
   const list = Array.isArray(own) ? own.map((r) => clean(r as Partial<Requirement>)).filter((r): r is Requirement => r !== null) : DEFAULT_REQUIREMENTS
   const seen = new Set<string>()
   const unique = list.filter((r) => !seen.has(r.key) && (seen.add(r.key), true))
+  // The app's list says what each means and whether it is on; a workflow switches some for the tasks that use it;
+  // a project has the last word for its own.
+  const wf = workflow && typeof workflow === 'object' ? workflow as Record<string, unknown> : {}
   const sw = project && typeof project === 'object' ? project as Record<string, unknown> : {}
-  return unique.map((r) => (typeof sw[r.key] === 'boolean' ? { ...r, on: sw[r.key] as boolean } : r))
+  return unique.map((r) => (typeof sw[r.key] === 'boolean' ? { ...r, on: sw[r.key] as boolean } : typeof wf[r.key] === 'boolean' ? { ...r, on: wf[r.key] as boolean } : r))
 }
 
 /** The ones in force: what a plan must cover. */
-export const inForce = (setup: unknown, project?: unknown) => requirementsOf(setup, project).filter((r) => r.on)
+export const inForce = (setup: unknown, project?: unknown, workflow?: unknown) => requirementsOf(setup, project, workflow).filter((r) => r.on)
 
 /** What the planner said, lined up with what was required: each requirement once, in the app's order. */
 export function covered(required: Requirement[], said: { key: string; applies: boolean; how: string }[] | undefined): Covered[] {

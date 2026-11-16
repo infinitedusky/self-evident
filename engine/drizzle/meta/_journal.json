@@ -232,6 +232,13 @@
       "when": 1794851068820,
       "tag": "0032_workflow_build",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1794851841297,
+      "tag": "0033_workflow_style",
+      "breakpoints": true
     }
   ]
 }

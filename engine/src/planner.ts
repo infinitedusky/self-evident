@@ -288,14 +288,15 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
   // Built in one go (steps.ts, Build): no planner reads the repo. One sub-task carries the whole task, with the list
   // it will be checked against after it is built.
   const { workflowFor } = await import('./work.js')
-  const one = buildOf((await workflowFor(db, { issueId })).workflow) === 'one'
+  const wf = (await workflowFor(db, { issueId })).workflow
+  const one = buildOf(wf) === 'one'
   const [proto] = one ? await db.select().from(prototype).where(and(eq(prototype.issueId, issueId), inArray(prototype.status, ['running', 'stopped']))).orderBy(desc(prototype.createdAt)).limit(1) : []
-  const oneGo = one ? oneGoBrief({ criteria: acceptanceOf(t), required: inForce(setup, g.project.requirements), prototype: proto ? { branch: proto.branch, path: proto.path, rough: proto.depth === 'rough' } : null, base: a.defaultBranch }) : undefined
+  const oneGo = one ? oneGoBrief({ criteria: acceptanceOf(t), required: inForce(setup, g.project.requirements, wf?.requirements), prototype: proto ? { branch: proto.branch, path: proto.path, rough: proto.depth === 'rough' } : null, base: a.defaultBranch }) : undefined
   return {
     runId, issueId, projectId: t.projectId, appId: a.id, attempt, base, oneGo,
     input: {
       repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, acceptance: acceptanceOf(t).length ? acceptanceLines(acceptanceOf(t)) : null, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, analysis: (await getStep({ issueId }, 'analysis'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
-      testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), requirements: inForce(setup, g.project.requirements), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
+      testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), requirements: inForce(setup, g.project.requirements, wf?.requirements), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }
 }

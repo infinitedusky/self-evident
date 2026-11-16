@@ -24,7 +24,7 @@ import { workflowFor } from './work.js'
 import { ensureProjectPr, prBody } from './pr.js'
 import { addSubTask, projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
 import { finishPlanning, preparePlanning, type Propose } from './planner.js'
-import { BEFORE_PLAN, buildOf, checksOwed } from './steps.js'
+import { BEFORE_PLAN, checksOwed, styleOf } from './steps.js'
 import { stepsOf } from './work.js'
 import { reapAgentProcesses } from './reap.js'
 import { holdMinutes, isOutage } from './outage.js'
@@ -283,10 +283,11 @@ export class Runner {
     const [a] = task ? await db.select().from(app).where(eq(app.id, task.appId)) : []
     const [p] = task?.projectId ? await db.select().from(project).where(eq(project.id, task.projectId)) : []
     const criteria = task ? acceptanceOf(task) : []
-    // Main (built in one go) is held to the whole list, round after round, and probed. Legacy is as it was: its
+    // A checklist workflow (Main) is held to the whole list, round after round, and probed. A staged one is as it was: its
     // acceptance criteria checked once (Sandy, 2026-11-16: "Keep this in 'legacy', create a new main").
-    const loop = !!task && buildOf((await workflowFor(db, { issueId: taskId })).workflow) === 'one'
-    const required = a && loop ? inForce(a.setup, p?.requirements) : []
+    const w = task ? (await workflowFor(db, { issueId: taskId })).workflow : null
+    const loop = styleOf(w) === 'checklist' // with sub-tasks or in one go
+    const required = a && loop ? inForce(a.setup, p?.requirements, w?.requirements) : []
     return { task, criteria, required, loop, held: (task?.requirements ?? null) as Covered[] | null, base: a?.defaultBranch ?? 'main' }
   }
 

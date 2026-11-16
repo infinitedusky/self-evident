@@ -193,7 +193,7 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     const loose = await createIssue(own, { title: 'On its own, under way (sample)', kind: 'code', brief: 'Build it.' })
     expect(await db.transaction((tx) => ensureMain({ tx, appId: own }))).toEqual({ made: 1 })
     const list = await listWorkflows(own)
-    expect(list.map((w) => [w.name, w.build, w.appDefault, afterOf(w)])).toEqual([['Legacy', 'planned', false, 'full'], ['Main', 'one', true, 'fast']])
+    expect(list.map((w) => [w.name, w.build, w.style, w.appDefault, afterOf(w)])).toEqual([['Legacy', 'planned', 'staged', false, 'full'], ['Main', 'one', 'checklist', true, 'fast']])
     const main = list[1]
     expect(main.steps.find((s) => s.key === 'prototype')).toMatchObject({ on: true, required: true }) // in Main a task goes through its prototype
     // What was under way keeps the workflow it was using; what is made from now on is Main's.
@@ -207,6 +207,15 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     expect(kept.build).toBe('planned')
     await expect(saveWorkflow({ id: main.id, appId: own, name: 'Main', steps: main.steps, build: 'yolo' })).rejects.toThrow(/build is one or planned/)
     expect((await saveWorkflow({ id: main.id, appId: own, name: 'Main', steps: main.steps })).build).toBe('planned') // saved without saying: as it was
+    // The two kinds do not mix. A checklist runs nothing before the build, with sub-tasks or without, and keeps the
+    // requirements it switches. A staged one is planned, whatever is asked, and may run checks before the build.
+    expect(kept).toMatchObject({ style: 'checklist', build: 'planned', requirements: { adr: true, risks: true } }); expect(afterOf(kept)).toBe('fast')
+    const picked = await saveWorkflow({ id: main.id, appId: own, name: 'Main', steps: withChecks(main, 'full').steps, requirements: { adr: false, telemetry: true, 'Bad Key': true } as never })
+    expect(afterOf(picked)).toBe('fast'); expect(picked.requirements).toEqual({ adr: false, telemetry: true })
+    const staged = await saveWorkflow({ id: main.id, appId: own, name: 'Main', steps: withChecks(main, 'full').steps, style: 'staged', build: 'one' })
+    expect(staged).toMatchObject({ style: 'staged', build: 'planned' }); expect(afterOf(staged)).toBe('full')
+    await expect(saveWorkflow({ id: main.id, appId: own, name: 'Main', steps: main.steps, style: 'loose' })).rejects.toThrow(/style is checklist or staged/)
+    expect((await listWorkflows(own)).find((w) => w.name === 'Legacy')).toMatchObject({ style: 'staged', requirements: null })
   })
 
   it('what follows a task\'s prototype is its workflow\'s: a fast one owes no checks, and an app once set to Fast is moved onto one', async () => {

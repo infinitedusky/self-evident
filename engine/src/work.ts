@@ -6,20 +6,21 @@
  * A task's steps are read from where they live: the brief is the issue's own, the prototype is the prototype table,
  * "starts as an idea" is the idea it came from, and the rest are step_work rows.
  */
+import { ADDED_REQUIREMENTS, DEFAULT_REQUIREMENTS } from './requirements.js'
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { db, type Tx } from './db/client.js'
 import { app, idea, issue, project, prototype, session, stepWork, workflow } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { getIssue, insertIssues, PlanError } from './issues.js'
-import { withChecks, buildOf, BUILDS, LEGACY_NAME, MAIN_NAME, type Build, blocking, canSkip, needsApproval, owed, undecided, CAN, DEFAULT_NAME, DEFAULT_STEPS, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
+import { withChecks, styleOf, STYLES, type Style, buildOf, BUILDS, LEGACY_NAME, MAIN_NAME, type Build, blocking, canSkip, needsApproval, owed, undecided, CAN, DEFAULT_NAME, DEFAULT_STEPS, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
 
 export type Subject = { ideaId: string } | { issueId: string } | { projectId: string }
 const onOf = (s: Subject): On => ('ideaId' in s ? 'idea' : 'issueId' in s ? 'task' : 'project')
 const subjectCol = (s: Subject) => ('ideaId' in s ? eq(stepWork.ideaId, s.ideaId) : 'issueId' in s ? eq(stepWork.issueId, s.issueId) : eq(stepWork.projectId, s.projectId))
 
 type WorkflowRow = typeof workflow.$inferSelect
-const asWorkflow = (w: WorkflowRow | undefined | null): Workflow | null => (w ? normalize({ id: w.id, name: w.name, steps: w.steps as WorkflowStep[], ordered: w.ordered, build: buildOf(w) }) : null)
+const asWorkflow = (w: WorkflowRow | undefined | null): Workflow | null => (w ? normalize({ id: w.id, name: w.name, steps: w.steps as WorkflowStep[], ordered: w.ordered, build: buildOf(w), style: styleOf(w), requirements: (w.requirements as Record<string, boolean> | null) ?? null }) : null)
 const KEYS = STEPS.map((s) => s.key)
 
 async function appOf(tx: Tx | typeof db, appId: string) {
@@ -41,23 +42,32 @@ export async function listWorkflows(appId: string) {
   }))
 }
 
+/**
+ * A workflow's two kinds do not mix: a checklist runs nothing before the build (its checks are all off), and a staged
+ * one is planned into sub-tasks (its checks read the plan, so there has to be one).
+ */
+export const fitStyle = (w: Workflow): Workflow => (styleOf(w) === 'checklist' ? { ...withChecks(w, 'fast'), style: 'checklist' } : { ...w, build: 'planned', style: 'staged' })
+
 /** Make or change a workflow. Its steps are checked against the fixed rules; the brief and the idea are always kept. */
-export async function saveWorkflow(input: { id?: string; appId: string; name: string; steps: WorkflowStep[]; ordered?: boolean; build?: string }, actor = 'user') {
+export async function saveWorkflow(input: { id?: string; appId: string; name: string; steps: WorkflowStep[]; ordered?: boolean; build?: string; style?: string; requirements?: Record<string, boolean> | null }, actor = 'user') {
   if (!input.name?.trim()) throw new PlanError('a workflow needs a name')
   const unknown = (input.steps ?? []).find((s) => !KEYS.includes(s.key))
   if (unknown) throw new PlanError(`no step "${unknown.key}"; the steps are ${KEYS.join(', ')}`)
   if (!validOrder(input.steps ?? [])) throw new PlanError('that order breaks the rules: the idea first, the checks after the other steps')
   if (input.build !== undefined && !BUILDS.includes(input.build as Build)) throw new PlanError(`build is ${BUILDS.join(' or ')}`)
-  const w = normalize({ id: input.id ?? newId('workflow'), name: input.name.trim(), steps: input.steps ?? [], ordered: !!input.ordered, ...(input.build ? { build: input.build as Build } : {}) })
+  if (input.style !== undefined && !STYLES.includes(input.style as Style)) throw new PlanError(`style is ${STYLES.join(' or ')}`)
+  let w = normalize({ id: input.id ?? newId('workflow'), name: input.name.trim(), steps: input.steps ?? [], ordered: !!input.ordered, ...(input.build ? { build: input.build as Build } : {}), ...(input.style ? { style: input.style as Style } : {}) })
+  const switches = input.requirements === undefined ? undefined : input.requirements && Object.fromEntries(Object.entries(input.requirements).filter(([k, v]) => /^[a-z0-9_]+$/.test(k) && typeof v === 'boolean'))
   return db.transaction(async (tx) => {
     const a = await appOf(tx, input.appId)
     if (input.id) {
       const [old] = await tx.select().from(workflow).where(eq(workflow.id, input.id))
       if (!old || old.appId !== a.id) throw new PlanError(`no workflow ${input.id} in this app`)
-      await tx.update(workflow).set({ name: w.name, steps: w.steps, ordered: w.ordered, ...(w.build ? { build: w.build } : {}), updatedAt: new Date() }).where(eq(workflow.id, w.id))
-      w.build = w.build ?? buildOf(old)
+      w = fitStyle({ ...w, build: w.build ?? buildOf(old), style: w.style ?? styleOf(old), requirements: switches === undefined ? (old.requirements as Record<string, boolean> | null) : switches })
+      await tx.update(workflow).set({ name: w.name, steps: w.steps, ordered: w.ordered, build: w.build, style: w.style, requirements: w.requirements ?? null, updatedAt: new Date() }).where(eq(workflow.id, w.id))
     } else {
-      await tx.insert(workflow).values({ id: w.id, appId: a.id, name: w.name, steps: w.steps, ordered: w.ordered, build: buildOf(w) })
+      w = fitStyle({ ...w, build: buildOf(w), style: styleOf(w), requirements: switches ?? null })
+      await tx.insert(workflow).values({ id: w.id, appId: a.id, name: w.name, steps: w.steps, ordered: w.ordered, build: w.build, style: w.style, requirements: w.requirements ?? null })
     }
     await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, actor, type: 'workflow.saved', payload: { id: w.id, name: w.name } })
     return w
@@ -99,11 +109,21 @@ export async function speedIntoWorkflows(): Promise<{ moved: number }> {
  *
  * For one app (made just now) or all of them (at each start); an app that has a one-go workflow is left alone.
  */
+/** What Main holds a build to, over the app's own switches: what the stages before a build used to write. */
+const MAIN_REQUIREMENTS: Record<string, boolean> = { adr: true, risks: true }
+
 export async function ensureMain(only?: { tx: Tx; appId: string }): Promise<{ made: number }> {
   let made = 0
   const work = async (tx: Tx, appId: string) => {
     const [a] = await tx.select().from(app).where(eq(app.id, appId))
     if (!a || a.removedAt) return
+    // An app with a list of requirements of its own is given the two added since, off, once: a workflow switches them on.
+    const setup = (a.setup ?? {}) as { requirements?: { key?: string }[]; requirements_added?: string[] }
+    const missing = Array.isArray(setup.requirements) ? ADDED_REQUIREMENTS.filter((k) => !(setup.requirements_added ?? []).includes(k) && !setup.requirements!.some((r) => r.key === k)) : []
+    if (Array.isArray(setup.requirements) && ADDED_REQUIREMENTS.some((k) => !(setup.requirements_added ?? []).includes(k)))
+      await tx.update(app).set({ setup: { ...setup, requirements: [...setup.requirements, ...DEFAULT_REQUIREMENTS.filter((r) => missing.includes(r.key))], requirements_added: ADDED_REQUIREMENTS } }).where(eq(app.id, a.id))
+    // A workflow built in one go, from before there were kinds, is a checklist: that is what it already did.
+    await tx.update(workflow).set({ style: 'checklist', requirements: MAIN_REQUIREMENTS }).where(and(eq(workflow.appId, a.id), eq(workflow.build, 'one'), eq(workflow.style, 'staged')))
     const all = await tx.select().from(workflow).where(eq(workflow.appId, a.id))
     if (all.some((w) => buildOf(w) === 'one')) return
     const old = all.find((w) => w.id === a.workflowId)
@@ -116,7 +136,7 @@ export async function ensureMain(only?: { tx: Tx; appId: string }): Promise<{ ma
     }
     const id = newId('workflow')
     const steps = withChecks({ id, name: MAIN_NAME, ordered: false, steps: DEFAULT_STEPS.map((s) => (s.key === 'prototype' ? { ...s, on: true, required: true } : s)) }, 'fast').steps
-    await tx.insert(workflow).values({ id, appId: a.id, name: MAIN_NAME, steps, ordered: false, build: 'one' })
+    await tx.insert(workflow).values({ id, appId: a.id, name: MAIN_NAME, steps, ordered: false, build: 'one', style: 'checklist', requirements: MAIN_REQUIREMENTS })
     await tx.update(app).set({ workflowId: id }).where(eq(app.id, a.id))
     await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, actor: 'engine', type: 'workflow.saved', payload: { id, name: MAIN_NAME } })
     made++

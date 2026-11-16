@@ -103,7 +103,23 @@ export const buildOf = (w: { build?: string | null } | null | undefined): Build 
 export const MAIN_NAME = 'Main'
 export const LEGACY_NAME = 'Legacy'
 
-export interface Workflow { id: string; name: string; steps: WorkflowStep[]; ordered: boolean; build?: Build } // steps in its order; its check steps say what follows the prototype (After)
+/**
+ * The two kinds of workflow (Sandy, 2026-11-16: "what we should have for our different workflows are not full, fast,
+ * or whatever. It's just a thing where you … set the requirements. It needs to create an ADR … telemetry coverage,
+ * test suite"; "These are both what's put into the instructions and what is checked at the end").
+ * - checklist: two choices. Sub-tasks or not (Build), and the requirements a build is held to. The list is in the
+ *   builder's instructions and is what the check after the build reads (verify.ts). Nothing runs before the build.
+ * - staged: what there was. Checks before the build (After: full, fast, or a pick), a plan, sub-tasks.
+ */
+export type Style = 'checklist' | 'staged'
+export const STYLES: Style[] = ['checklist', 'staged']
+export const STYLE_SAYS: Record<Style, string> = {
+  checklist: 'a list of requirements: in the builder\'s instructions, and checked when it is built',
+  staged: 'the earlier way: checks before the build, then a plan and sub-tasks',
+}
+export const styleOf = (w: { style?: string | null } | null | undefined): Style => (w?.style === 'checklist' ? 'checklist' : 'staged')
+
+export interface Workflow { id: string; name: string; steps: WorkflowStep[]; ordered: boolean; build?: Build; style?: Style; /** The app's requirements it switches on or off; the rest are as the app has them. */ requirements?: Record<string, boolean> | null } // steps in its order; its check steps say what follows the prototype (After)
 
 /** What a workflow may switch: research, sketches, mockups and the prototype on or off; the idea and the brief are always on. */
 export const canTurnOff = (key: StepKey) => key === 'research' || step(key).place === 'either'
