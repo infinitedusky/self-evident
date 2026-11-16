@@ -4299,3 +4299,17 @@ built. Full with "in one go" ran five agents before the build, three of them to 
   that caused the miss. It costs an agent run a round.
 
 Not seen on a real task yet.
+
+## A checklist task's page shows its checklist (Sandy, 2026-11-16: "does the left nav on a task page reflect the difference?" It did not)
+
+A task on Main still had one Build row, "Sub-tasks, not planned", and its list was only on the pull request.
+
+- **Under Build, a checklist task has a row for the list and a row for each stage** it goes through by itself:
+  Build, Check, Probe, Tests. Each says where it is ("built in one go", "round 1: 2 not done, sent back",
+  "the whole run passed"). A staged task keeps the Sub-tasks row it had.
+- **The list has a page of its own** (`/tasks/:id/checklist`): every acceptance criterion and every requirement
+  the workflow has on, with the check's mark and what it saw. Not done first. Reading only.
+- One read gives both (`checklist.ts`, `GET /issues/:id/checklist`); `stagesOf` works the stages out from the
+  task's sub-tasks and its last test run.
+
+Not done: the folded nav (icons only) still shows the one build icon.

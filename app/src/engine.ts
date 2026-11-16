@@ -246,6 +246,10 @@ export interface AcceptanceChange { add?: { text: string; check?: string }[]; up
 /** A report on an app's work over a period: the end-of-day note or the weekly status, a draft the person edits and sends. */
 export type ReportPeriod = 'today' | 'yesterday' | 'this_week' | 'last_week'
 export interface Report { id: string; appId: string; kind: 'daily' | 'weekly'; fromAt: string; toAt: string; label: string; body: string; notes: string | null; editedAt: string | null; createdAt: string; costUsd: string | null }
+/** Where a checklist task stands (the engine's checklist module): the stages after its prototype, and every item it is held to with the check's mark. */
+export interface ChecklistStage { key: 'build' | 'check' | 'probe' | 'test'; label: string; state: 'todo' | 'doing' | 'done' | 'failed'; detail: string }
+export interface ChecklistItem { id: string; kind: 'criterion' | 'requirement'; text: string; what?: string; mark: 'met' | 'unmet' | 'person' | 'na' | 'unchecked'; evidence?: string }
+export interface Checklist { build: 'one' | 'planned'; stages: ChecklistStage[]; items: ChecklistItem[]; met: number; unmet: number; total: number }
 /** What an agent learned from an app's code: a short document each, the part for a person and the part for agents. */
 export interface Learned { key: string; title: string; summary: string; body: string; sha: string | null; updatedAt: string }
 export interface Learning { docs: Learned[]; missing: string[]; working: { sessionId: string } | null; sessionId: string | null; stale: number }
@@ -391,6 +395,7 @@ export const engine = {
   approveStep: (issueId: string, key: StepKey, approve = true) => call<StepWork>('POST', `/issues/${issueId}/steps/${key}/approve`, { approve }),
   setAcceptance: (issueId: string, change: AcceptanceChange) => call<{ acceptance: Criterion[]; note?: string }>('PUT', `/issues/${issueId}/acceptance`, change),
   mergeGuide: (issueId: string) => call<{ guide: string; /** Everything the guide left out. */ record?: string; subTasks: number }>('GET', `/issues/${issueId}/merge-guide`),
+  checklist: (issueId: string) => call<Checklist | null>('GET', `/issues/${issueId}/checklist`),
   learning: (appId: string) => call<Learning>('GET', `/apps/${appId}/learning`),
   learn: (appId: string) => call<{ sessionId: string; started: boolean }>('POST', `/apps/${appId}/learn`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),

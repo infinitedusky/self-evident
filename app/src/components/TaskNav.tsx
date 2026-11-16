@@ -9,6 +9,8 @@
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router'
 import { canSkip, finished, label, ready, settled, skipped, step, type On, type Row } from '@self-evident/engine/steps'
+import type { Checklist } from '../engine'
+import { STAGE_MARK } from './ChecklistView'
 
 /** What a step waits on, in words. */
 export function after(r: Row, _rows: Row[], on: On) {
@@ -29,7 +31,7 @@ export function briefStands(rows: Row[], on: On) {
 /** ✓ finished (approved, where a person approves it), ◐ started or ready for the person, ○ not started. */
 export const mark = (r: Row, on: On) => (finished(r.state, on) ? '✓' : skipped(r.state) ? '–' : r.state.status === 'none' ? '○' : '◐') // – skipped by a person
 
-export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded, onToggle, saves, onSave }: {
+export function TaskNav({ checklist, base, here, on = 'task', rows, workflow, build, folded, onToggle, saves, onSave }: {
   base: string; here: string; on?: On; rows: Row[]
   /** The workflow in force and where it comes from (", the app's default"); its steps are the list. */
   workflow?: { name: string; from: string } | null
@@ -38,6 +40,11 @@ export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded
   /** Folded to a strip of icons, to give the step's page the room (Sandy, 2026-11-10: "make the left nav steps collapsible too"). */
   folded?: boolean
   onToggle?: () => void
+  /**
+   * A checklist task (its workflow holds a build to a list, verified after it): the stages it goes through by itself,
+   * each a row, and a row for the list. Left out: a staged task, with the one Sub-tasks row it always had.
+   */
+  checklist?: Checklist | null
   /**
    * The task's save points, at the bottom (Sandy, 2026-11-13: "a list could start and the one you are on could be
    * shown"): the task branch being worked on, each save point, each task branch set aside. Left out: no section.
@@ -97,7 +104,25 @@ export function TaskNav({ base, here, on = 'task', rows, workflow, build, folded
         {ready(r.state, on) && <span className="task-nav-after task-nav-ready" title="The agent says it is done: yours to approve">ready for you</span>}
         </>, after(r, rows, on), `${r.state.status} task-nav-feed`))}
       {build && <div className="task-nav-label faint">Build</div>}
-      {build && item('build', `${base}/build`,
+      {build && checklist && (
+        <>
+          {item('checklist', `${base}/checklist`,
+            <span className="task-nav-row">
+              <span className={`task-nav-mark ${checklist.total > 0 && checklist.met === checklist.total ? 'ok' : ''}`}>{checklist.unmet ? '✕' : checklist.total > 0 && checklist.met === checklist.total ? '✓' : '○'}</span>
+              <span className="task-nav-text">☑️ Checklist</span>
+              {checklist.total > 0 && <span className="faint mono" style={{ fontSize: 12 }}>{checklist.met}/{checklist.total}</span>}
+            </span>, null)}
+          {checklist.stages.map((s) => item(`stage-${s.key}`, `${base}/build`,
+            <>
+              <span className="task-nav-row">
+                <span className={`task-nav-mark ${s.state === 'done' ? 'ok' : s.state === 'failed' ? 'bad' : ''}`}>{STAGE_MARK[s.state]}</span>
+                <span className="task-nav-text">{s.label}</span>
+              </span>
+              <span className="task-nav-after">{s.detail}</span>
+            </>, s.key === 'build' ? build.waitingOn : null, `task-nav-stage ${s.state}${here === 'build' && s.key === 'build' ? ' active' : ''}`))}
+        </>
+      )}
+      {build && !checklist && item('build', `${base}/build`,
         <span className="task-nav-row">
           <span className={`task-nav-mark ${build.total && build.done === build.total ? 'ok' : ''}`}>{build.total ? (build.done === build.total ? '✓' : '◐') : '○'}</span>
           <span className="task-nav-text">🏗️ Sub-tasks</span>

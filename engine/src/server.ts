@@ -6,6 +6,7 @@ import './own-scope.js' // first: the engine's own Doppler scope is not handed t
 import { readFile } from 'node:fs/promises'
 import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
+import { checklistOf } from './checklist.js'
 import { startLearning, talkBusy } from './talk.js'
 import { serve } from '@hono/node-server'
 import { appendEvent } from './events.js'
@@ -622,6 +623,9 @@ export function buildApp(bus: EventBus) {
     for (const id of r.sessions) await say(id, r.note, undefined, { author: 'engine', kind: 'brief', payload: { label: 'The task moved to another task branch' } }).catch(() => {})
     return settle(r)
   }
+  api.get('/issues/:id/checklist', async (c) => { // where a checklist task stands: its stages and each item's mark; null for a staged task
+    try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await checklistOf(t.id)) } catch (err) { return planError(c, err, 404) }
+  })
   api.get('/issues/:id/merge-guide', async (c) => { // what the pull request will open with, for whoever approves it
     try {
       const t = await resolveIssue(db, c.req.param('id'))

@@ -27,7 +27,8 @@ import { PlanCovers } from '../components/Requirements'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
 import { canSkip, finished, label, ready, settled, skipped, step, type Row, type StepKey } from '@self-evident/engine/steps'
 import { asked, PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
-import { openEvents, useLiveProject, type Events, API, engine, useWorkflows, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
+import { ChecklistView } from '../components/ChecklistView'
+import { openEvents, useLiveProject, type Events, type Checklist, API, engine, useWorkflows, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
 import { Md } from '../components/Md'
 
 /** Where a task's workflow comes from, after its name. */
@@ -130,12 +131,16 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   const [savesStamp, setSavesStamp] = useState(0)
   const readSaves = useCallback(() => { void engine.taskBranches(i.id).then(setSaved).catch(() => {}) }, [i.id])
   useEffect(() => { readSaves() }, [readSaves, section, i.updatedAt]) // an agent may have saved or moved it: read on each page of the task and when the task changes
+  // A checklist task's stages and list: read with the task, and again whenever the task or its sub-tasks move.
+  const [checklist, setChecklist] = useState<Checklist | null>(null)
+  const subStamp = i ? i.subIssues.map((s) => `${s.id}:${s.build?.status ?? ''}:${s.state}`).join('|') : ''
+  useEffect(() => { if (i) void engine.checklist(i.id).then(setChecklist).catch(() => setChecklist(null)) }, [i?.id, i?.updatedAt, subStamp, section]) // eslint-disable-line react-hooks/exhaustive-deps
   const navSaves = saved ? { current: saved.branches.find((b) => b.current)?.name ?? null, points: saved.saves.map((s) => ({ id: s.id, name: s.name })), aside: saved.branches.filter((b) => !b.current).map((b) => ({ id: b.id, name: b.name })) } : undefined
   const saveHere = async (name: string) => { await engine.saveHere(i.id, name).catch(() => {}); readSaves(); setSavesStamp((n) => n + 1) }
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
   const rows = v.rows
-  const here = section === 'build' || section === 'saves' || rows.some((r) => r.key === section) ? section! : 'overview'
+  const here = section === 'build' || section === 'saves' || (section === 'checklist' && checklist) || rows.some((r) => r.key === section) ? section! : 'overview'
   if (section && here === 'overview') return <Navigate to={base} replace />
   const live = i.subIssues.filter((s) => !dropped(s)) // canceled sub-tasks are out of the plan
   const done = live.filter((s) => s.state === 'done').length
@@ -146,7 +151,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   const reading = rows.filter((r) => step(r.key).place === 'check' && r.state.status !== 'done') // after a prototype the plan is read before it is built
   return (
     <div className={`task-layout with-agent ${agent.open ? '' : 'agent-folded'} ${navOpen ? '' : 'nav-folded'}`}>
-      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} rows={rows} saves={navSaves} onSave={saveHere} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: live.length, waitingOn: buildWaits }} />
+      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} rows={rows} saves={navSaves} onSave={saveHere} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: live.length, waitingOn: buildWaits }} checklist={checklist} />
       <div className="task-main">
         {here === 'overview' && (
           <>
@@ -174,9 +179,10 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
             {row.key === 'brief' ? <BriefStep i={i} busy={busy} act={act} feeds={rows.filter((r) => r.key !== 'brief')} base={base} /> : undefined}
           </StepSection>
         )}
+        {here === 'checklist' && checklist && <ChecklistView checklist={checklist} base={base} />}
         {here === 'saves' && <TaskBranches issueId={i.id} at={new URLSearchParams(window.location.search).get('at')} stamp={savesStamp} onMoved={() => void act(async () => {})} onChanged={readSaves} />}
         {here === 'build' && (buildWaits
-          ? <section className="panel"><h2>🏗️ Sub-tasks</h2><div className="empty">Planning and building wait for the brief's approval. <Link to={`${base}/brief`}>Go to the brief →</Link></div></section>
+          ? <section className="panel"><h2>🏗️ {checklist ? 'Build' : 'Sub-tasks'}</h2><div className="empty">{checklist ? 'The build waits' : 'Planning and building wait'} for the brief's approval. <Link to={`${base}/brief`}>Go to the brief →</Link></div></section>
           : <>
               {live.length > 0 && i.project && ['drafting', 'proposed', 'approved'].includes(i.project.status) && (
                 <section className="panel" data-component="RunIt">
