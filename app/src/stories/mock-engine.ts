@@ -17,6 +17,7 @@ export interface MockData {
   /** The last run of each command step of a prototype's guide; none when left out. */ prototypeRuns?: import('../engine').StepRun[]
   /** The apps put away; none when left out. */ removedApps?: import('../engine').AppHolds[]; /** Why an app can't be removed yet, as the engine says it. */ removeProblem?: string
   /** The app's reports; none when left out. */ reports?: import('../engine').Reports
+  /** What was learned from the app's code; nothing yet when left out. */ learning?: import('../engine').Learning
   /** A task's save points and task branches; none when left out. */ taskBranches?: import('../engine').TaskBranches; /** Why a move fails, when it should. */ moveError?: string
   /** What a run read and said, for the planner's tab. */ runLog?: import('../engine').RunLog
   /** What is public right now, by "kind:id". */ shares?: Record<string, import('../engine').Shared>; /** Why making a link fails, when it should. */ shareError?: string; /** ngrok's one address is held by these, until the person frees it. */ ngrokHolders?: import('../engine').NgrokHolder[]; /** What the guide tab of a shared prototype is given. */ visitorGuide?: { title: string; guide: import('../engine').Guide | null }
@@ -132,6 +133,8 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/prototypes/:id/guide/:step/stop', ({ params }) => { d.prototypeRuns = (d.prototypeRuns ?? []).map((r) => r.step === Number(params.step) ? { ...r, status: 'stopped' as const } : r); return reply({}) }),
     http.get('/api/prototypes/:id', ({ params }) => { const p = d.prototypes.find((x) => x.id === params.id); return p ? reply({ log: [], ...p, up: p.up ?? p.status === 'running' }) : missing('prototype') }),
     // Reports: the engine's rules, roughly. Writing one here answers at once.
+    http.get('/api/apps/:id/learning', () => reply(d.learning ?? { docs: [], missing: ['What it is', 'The parts', 'Running and testing it', 'What is fragile'], working: null, sessionId: null, stale: 0 })),
+    http.post('/api/apps/:id/learn', () => { const now = d.learning ?? { docs: [], missing: [], working: null, sessionId: null, stale: 0 }; d.learning = { ...now, working: { sessionId: 'talk_sample_learn' }, sessionId: 'talk_sample_learn' }; return reply({ sessionId: 'talk_sample_learn', started: true }) }),
     http.get('/api/apps/:id/reports', () => reply(d.reports ?? { writing: false, format: { daily: '', weekly: '' }, reports: [] })),
     http.post('/api/apps/:id/reports', async ({ params, request }) => {
       const b = await request.json() as { period: string; notes?: string }
