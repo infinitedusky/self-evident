@@ -530,8 +530,10 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
           <option value="issue">One per task: each task builds on its own branch and merges on its own</option>
           <option value="project">One per project: every task lands on the project's branch</option>
         </select></label>
+        <label style={{ gridColumn: '1 / -1' }}>Pull request title<input className="mono" value={setup.pr_title ?? ''} onChange={(e) => set({ pr_title: e.target.value })} placeholder="the repository's convention, e.g. feat[{ticket}]: {title}   ({ticket} {id} {title} {project} {n} {of})" /></label>
+        <label style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" style={{ width: 'auto', margin: 0 }} checked={setup.pr_draft !== false} onChange={(e) => set({ pr_draft: e.target.checked })} /> Open pull requests as drafts. A pull request is only ever opened when you press Submit pull request on the task.</label>
         <label style={{ gridColumn: '1 / -1' }}>Once a task's brief is approved<select value={setup.auto_build === false ? 'wait' : 'auto'} onChange={(e) => set({ auto_build: e.target.value !== 'wait' })}>
-          <option value="auto">It is planned and built by itself, and its pull request opens</option>
+          <option value="auto">It is planned and built by itself. Its pull request waits for you to submit it</option>
           <option value="wait">It waits: I press Plan it and Run</option>
         </select></label>
       </Group>

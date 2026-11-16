@@ -15,17 +15,46 @@ export interface PrInput {
   base: string
   title: string
   body: string
+  /** Opened as a draft (the default): it opens at the first landing, long before it is ready to review. */
+  draft?: boolean
 }
 
-export async function ensureProjectPr(i: PrInput): Promise<{ number: number; url: string; created: boolean }> {
-  await push(i.repoPath, i.integrationBranch, { setUpstream: true })
+/**
+ * How an app's pull requests are opened (Sandy, 2026-11-16: one opened ready for review after the first of nine
+ * sub-tasks, titled outside the repository's convention). `setup.pr_draft`: as a draft unless set false.
+ * `setup.pr_title`: the title's template, in the repository's own convention, with {ticket} (the team's ticket id,
+ * else ours), {id} (ours), {title}, {project}, {n} and {of} (the task's place in its project).
+ */
+export const prDraft = (setup: unknown) => (setup as { pr_draft?: boolean } | null)?.pr_draft !== false
+export function prTitle(setup: unknown, v: { ticket?: string | null; id: string; title: string; project: string; n?: number; of?: number }, exact?: string | null): string | null {
+  if (exact?.trim()) return exact.trim().slice(0, 250)
+  const t = (setup as { pr_title?: string } | null)?.pr_title?.trim()
+  if (!t) return null
+  const vars: Record<string, string> = { ticket: v.ticket || v.id, id: v.id, title: v.title, project: v.project, n: String(v.n ?? ''), of: String(v.of ?? '') }
+  return t.replace(/\{(ticket|id|title|project|n|of)\}/g, (_, k: string) => vars[k]).replace(/\s+/g, ' ').trim().slice(0, 250)
+}
+
+/**
+ * The pull request for a branch: updated if it is open, opened (as a draft, unless told otherwise) if there is none.
+ * One a person closed is reopened (and made a draft again) only when `reopen` is set: that is the person submitting
+ * it again; otherwise it is left closed and said (`closed`), and no second one is opened.
+ */
+export async function ensureProjectPr(i: PrInput & { reopen?: boolean }): Promise<{ number: number; url: string; created: boolean; closed?: boolean }> {
   const gh = (args: string[]) => execFileP('gh', args, { cwd: i.repoPath }).then((r) => r.stdout.trim())
-  const existing = JSON.parse(await gh(['pr', 'list', '-R', i.fullName, '--head', i.integrationBranch, '--state', 'open', '--json', 'number,url']))
-  if (existing.length) {
-    await gh(['pr', 'edit', String(existing[0].number), '-R', i.fullName, '--title', i.title, '--body', i.body, '--base', i.base]) // a stacked PR retargets when the one below merges
-    return { number: existing[0].number, url: existing[0].url, created: false }
+  const all: { number: number; url: string; state: string }[] = JSON.parse(await gh(['pr', 'list', '-R', i.fullName, '--head', i.integrationBranch, '--state', 'all', '--json', 'number,url,state']))
+  const edit = (n: number) => gh(['pr', 'edit', String(n), '-R', i.fullName, '--title', i.title, '--body', i.body, '--base', i.base]) // a stacked PR retargets when the one below merges
+  const open = all.find((x) => x.state === 'OPEN')
+  const last = all.sort((x, y) => y.number - x.number)[0]
+  if (!open && last?.state === 'CLOSED' && !i.reopen) return { number: last.number, url: last.url, created: false, closed: true } // closed by a person, not merged: nothing is pushed
+  await push(i.repoPath, i.integrationBranch, { setUpstream: true })
+  if (open) { await edit(open.number); return { number: open.number, url: open.url, created: false } }
+  if (last?.state === 'CLOSED') {
+    await gh(['pr', 'reopen', String(last.number), '-R', i.fullName])
+    if (i.draft !== false) await gh(['pr', 'ready', String(last.number), '-R', i.fullName, '--undo']).catch(() => {}) // back to a draft, where the repository allows drafts
+    await edit(last.number)
+    return { number: last.number, url: last.url, created: false }
   }
-  const url = await gh(['pr', 'create', '-R', i.fullName, '--base', i.base, '--head', i.integrationBranch, '--title', i.title, '--body', i.body])
+  const url = await gh(['pr', 'create', '-R', i.fullName, '--base', i.base, '--head', i.integrationBranch, '--title', i.title, '--body', i.body, ...(i.draft === false ? [] : ['--draft'])])
   const number = Number(url.split('/').pop())
   return { number, url, created: true }
 }
@@ -35,6 +64,7 @@ export interface Landed { identifier: string; title: string; summary?: string | 
 export function prBody(project: { name: string; content?: string | null; id: string }, landed: Landed[], pending: { identifier: string; title: string }[], backlog: { title: string; state: string; reason: string | null }[] = [], /** The merge guide, for whoever approves it (merge-guide.ts): first, and short. */ guide = '', /** Everything the guide left out: folded away under it, with what landed. */ record = ''): string {
   const lines = [
     `Built by Self Evident from project \`${project.id}\`: ${project.name}.`,
+    landed.length + pending.length > 0 ? `\n**${landed.length} of ${landed.length + pending.length} sub-task${landed.length + pending.length === 1 ? ' has' : 's have'} landed${pending.length ? ': this pull request is still being built, and is not ready to review until they all have' : ''}.**` : '',
     project.content && !guide ? `\n${project.content}` : '', // the guide says what it does, per task
     guide ? `\n${guide}` : '',
     '',
@@ -55,4 +85,16 @@ export function prBody(project: { name: string; content?: string | null; id: str
     '🤖 Generated with [Claude Code](https://claude.com/claude-code) via Self Evident',
   ]
   return lines.filter((l) => l !== null).join('\n')
+}
+
+/** Set how an app's pull requests are opened: the title's template and whether as a draft. Undefined leaves it; an empty template clears it. */
+export async function setPrRules(appId: string, i: { titleTemplate?: string; draft?: boolean }) {
+  const { db } = await import('./db/client.js'); const { app } = await import('./db/schema.js'); const { eq } = await import('drizzle-orm')
+  const [a] = await db.select().from(app).where(eq(app.id, appId))
+  if (!a) throw new Error(`no app ${appId}`)
+  const next = { ...(a.setup as Record<string, unknown>) }
+  if (i.titleTemplate !== undefined) { if (i.titleTemplate.trim()) next.pr_title = i.titleTemplate.trim().slice(0, 250); else delete next.pr_title }
+  if (i.draft !== undefined) next.pr_draft = i.draft
+  await db.update(app).set({ setup: next }).where(eq(app.id, appId))
+  return { pr_title: (next.pr_title as string | undefined) ?? null, pr_draft: next.pr_draft !== false }
 }

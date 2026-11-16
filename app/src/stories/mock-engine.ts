@@ -19,6 +19,7 @@ export interface MockData {
   /** The apps put away; none when left out. */ removedApps?: import('../engine').AppHolds[]; /** Why an app can't be removed yet, as the engine says it. */ removeProblem?: string
   /** The app's reports; none when left out. */ reports?: import('../engine').Reports
   /** What was learned from the app's code; nothing yet when left out. */ learning?: import('../engine').Learning
+  /** Why submitting a pull request fails, when it should. */ submitPrError?: string
   /** A task's save points and task branches; none when left out. */ taskBranches?: import('../engine').TaskBranches; /** Why a move fails, when it should. */ moveError?: string
   /** What a run read and said, for the planner's tab. */ runLog?: import('../engine').RunLog
   /** What is public right now, by "kind:id". */ shares?: Record<string, import('../engine').Shared>; /** Why making a link fails, when it should. */ shareError?: string; /** ngrok's one address is held by these, until the person frees it. */ ngrokHolders?: import('../engine').NgrokHolder[]; /** What the guide tab of a shared prototype is given. */ visitorGuide?: { title: string; guide: import('../engine').Guide | null }
@@ -164,6 +165,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     }),
     // Task branches and save points: the engine's rules, roughly.
     http.get('/api/issues/:id/checklist', () => reply(d.checklist ?? null)),
+    http.post('/api/issues/:id/pr/submit', () => (d.submitPrError ? HttpResponse.json({ error: d.submitPrError }, { status: 400 }) : reply({ id: 'pr_sample', number: 412, url: 'https://example.com/pull/412', status: 'draft' }))),
     http.get('/api/issues/:id/merge-guide', () => reply({ guide: d.mergeGuide ?? '', record: d.mergeRecord ?? '', subTasks: 3 })),
     http.get('/api/issues/:id/branches', ({ params }) => reply(d.taskBranches ?? { issueId: params.id as string, worktrees: [], branches: [], saves: [] })),
     http.post('/api/issues/:id/save-points', async ({ params, request }) => {
