@@ -520,7 +520,10 @@ export const EVENT_TYPES = [
   'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted',
   'run.started', 'run.message', 'run.steps', 'run.tool_call', 'run.tool_result', 'run.result', 'run.error', 'run.rate_limit',
   'land.committed', 'land.tested', 'land.landed', 'land.conflict', 'land.retry', 'pr.opened', 'pr.updated', 'pr.error',
+  'task.tested', 'task.test_again', 'task.test_failed', 'task.test_error',
 ]
+
+const LIVE_POLL_MS = 20_000
 
 /** A project's graph, refreshed whenever the engine logs an event for it; plus the recent events themselves. */
 /** The app's workflow rules, with its default, for choosing a new task's or project's. */
@@ -557,8 +560,9 @@ export function useLiveProject(projectId: string | undefined) {
     }
     for (const type of EVENT_TYPES) es.addEventListener(type, onAny as EventListener)
     es.onerror = () => setError('event stream disconnected; retrying')
-    es.onopen = () => setError(null)
-    return () => { closed = true; es.close(); window.clearTimeout(timer.current) }
+    es.onopen = () => { setError(null); void refresh() } // back after a gap (the engine restarted): what was missed is read now
+    const poll = window.setInterval(() => { if (!document.hidden) void refresh() }, LIVE_POLL_MS) // and a slow read besides, so a missed event never leaves a node stale until the page is reloaded
+    return () => { closed = true; es.close(); window.clearTimeout(timer.current); window.clearInterval(poll) }
   }, [projectId])
   return { graph, events, error }
 }

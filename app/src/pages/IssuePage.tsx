@@ -28,7 +28,7 @@ import { PlanCovers } from '../components/Requirements'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
 import { canSkip, finished, label, ready, settled, skipped, step, type Row, type StepKey } from '@self-evident/engine/steps'
 import { asked, PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
-import { openEvents, type Events, API, engine, useWorkflows, EVENT_TYPES, STATE_LABEL, type Graph, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
+import { openEvents, useLiveProject, type Events, API, engine, useWorkflows, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
 import { Md } from '../components/Md'
 
 /** Where a task's workflow comes from, after its name. */
@@ -378,9 +378,10 @@ function Comments({ i }: { i: IssueDetail }) {
  * drawing as the project's graph but only this task's part of it.
  */
 function TaskGraph({ i }: { i: IssueDetail }) {
-  const [g, setG] = useState<Graph | null>(null)
-  const stamp = i.subIssues.map((s) => `${s.id}:${s.build?.status ?? ''}:${s.state}`).join('|') // read again as its sub-tasks move
-  useEffect(() => { if (i.project) engine.graph(i.project.id).then(setG).catch(() => {}) }, [i.project?.id, stamp, i.questions.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Live like the project's graph: every event of the project reads it again (a status, a step, a retry, a landing).
+  // It used to be read only when the task's own detail showed a sub-task in a new status, so a node could sit on an
+  // old one until the page was reloaded (Sandy, 2026-11-15: "I seem to need to refresh the page").
+  const { graph: g } = useLiveProject(i.project?.id)
   const subs = g?.subIssues.filter((x) => x.parentId === i.id) ?? []
   if (!g || !subs.length) return null
   const mine = new Set(subs.map((x) => x.id))
