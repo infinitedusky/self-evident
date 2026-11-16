@@ -4096,3 +4096,25 @@ merged; BON-68 was a sub-task of its first plan, cancelled when it was re-planne
   included, and a cancelled dependency blocks for good.
 - **Now** (`impliedDeps`): a sub-task that is canceled or a duplicate is not waited on, and neither is any
   sub-task of a task that is done. A dependency the plan names itself still blocks when it fails.
+
+## The whole test run is once per task, not per sub-task (Sandy, 2026-11-15: "running the full test suite for each subtask is dumb, we should test what we are building and then do the regression when the task is done… If it fails we analyze and create an additional subtask to fix the issue")
+
+Homework Gate's test command takes 10 to 12 minutes and ran twice for every sub-task: once by its builder, once
+to land it. HG-259 has seven sub-tasks. A web story that fails now and then sent finished Windows, Mac and iPhone
+work back to be rebuilt.
+
+- **A sub-task lands by merging.** No test command at landing. Its builder is told to test what it built and not
+  to run the whole suite.
+- **The whole run is once per task** (`testTask` in `runner.ts`, `wholeRun` in `landing.ts`): when the last
+  sub-task of a task has merged, the app's test command runs on the merged work. The project is not called landed
+  while it runs.
+- **A failure is run again before anything is blamed.** Passing the second time is recorded as flaky
+  (`task.tested` with `flaky`), and is not a failure.
+- **Failing twice adds a sub-task**, "Fix what the whole test run found": find the cause first, fix it, and run
+  the whole suite (the one sub-task that does). Two fixes at most; then a comment on the task says it needs a
+  person.
+- **The lines that failed are kept** (`failingLines`). Before, only the last 3,000 characters were, which showed
+  the suite that passed last.
+
+Not done: a setting to choose the old way per app; showing the whole run as its own node on the graph (today it
+is events on the task, and the fix sub-task when there is one). Not seen on a real task yet.
