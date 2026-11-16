@@ -260,14 +260,28 @@ export async function ensureIdeaTalk(ideaId: string, actor = 'user') {
   })
 }
 
-/** The agents an idea's agent has out: the conversation of each prototype started on the idea. */
+/**
+ * The agent an idea came from, while its conversation is open: Learn's, which read the codebase and kept the idea
+ * (Sandy, 2026-11-16: "When you create an idea it sets itself as the source agent so that the idea/task agent can get
+ * info from it"). Listed with the agents the idea, or the task it became, has out, so it can be asked and read.
+ */
+async function sourceAgents(ideaId: string | null | undefined) {
+  if (!ideaId) return []
+  const [i] = await db.select({ ref: idea.sourceRef }).from(idea).where(eq(idea.id, ideaId))
+  const from = i?.ref as { sessionId?: string; what?: string } | null
+  if (!from?.sessionId) return []
+  const [s] = await db.select().from(session).where(eq(session.id, from.sessionId))
+  return s && s.status === 'open' ? [{ sessionId: s.id, kind: 'source' as const, what: 'Learn', icon: '🧠', title: 'Learn: where this idea came from', busy: live.get(s.id)?.busy ?? false, asking: askingOf(s.id) }] : []
+}
+
+/** The agents an idea's agent has out: the conversation of each prototype started on the idea, and the agent the idea came from. */
 export async function ideaAgents(ideaId: string) {
   const protos = await db.select().from(prototype).where(and(eq(prototype.ideaId, ideaId), inArray(prototype.status, ['running', 'stopped']), isNotNull(prototype.sessionId))).orderBy(prototype.createdAt)
   const rows = protos.length ? await db.select().from(session).where(inArray(session.id, protos.map((p) => p.sessionId!))) : []
   return protos.flatMap((p) => {
     const s = rows.find((r) => r.id === p.sessionId)
     return s && s.status === 'open' ? [{ sessionId: s.id, kind: 'prototype' as const, what: 'Prototype', icon: step('prototype').icon, title: p.title, prototypeId: p.id, busy: live.get(s.id)?.busy ?? false, asking: askingOf(s.id) }] : []
-  })
+  }).concat(await sourceAgents(ideaId) as never[])
 }
 
 /**
@@ -302,7 +316,8 @@ export async function taskAgents(issueId: string) {
     const d = step((s.subjectRef as SubjectRef).check!)
     return { sessionId: s.id, kind: 'check' as const, what: d.label, icon: d.icon, title: s.subject ?? d.label, check: d.key, busy: live.get(s.id)?.busy ?? false, asking: askingOf(s.id) }
   })
-  return [...building, ...checking, ...(await plannerOut(issueId))]
+  const [t] = await db.select({ ideaId: issue.ideaId }).from(issue).where(eq(issue.id, issueId))
+  return [...building, ...checking, ...(await plannerOut(issueId)), ...(await sourceAgents(t?.ideaId))]
 }
 
 /**
@@ -415,9 +430,10 @@ export async function startCheckTalk(i: { appId: string; issueId: string; check:
  */
 async function conducted(fromSessionId: string, agent: string) {
   const [from] = await db.select().from(session).where(eq(session.id, fromSessionId))
-  const issueId = (from?.subjectRef as SubjectRef | null)?.issueId
-  if (!from || !issueId) throw new PlanError('only a task\'s own agent has agents out')
-  const out = await taskAgents(issueId)
+  const ref = from?.subjectRef as SubjectRef | null
+  const issueId = ref?.issueId, ideaId = issueId ? undefined : ref?.ideaId
+  if (!from || (!issueId && !ideaId)) throw new PlanError('only a task\'s or an idea\'s own agent has agents out')
+  const out: Awaited<ReturnType<typeof taskAgents>> = issueId ? await taskAgents(issueId) : await ideaAgents(ideaId!) as never
   const want = agent.trim().toLowerCase()
   const found = out.filter((a) => a.sessionId === agent || ('runId' in a && a.runId === agent) || a.kind === want || a.what.toLowerCase() === want || ('check' in a && a.check === want))
   if (!found.length) throw new PlanError(out.length ? `no agent "${agent}" out on this task; out now: ${out.map((a) => `${a.what} (${a.sessionId ?? ('runId' in a ? a.runId : '')})`).join(', ')}` : 'this task has no agents out')
@@ -428,9 +444,11 @@ async function conducted(fromSessionId: string, agent: string) {
 /** What a task's conductor has out, each with the last thing it said. */
 export async function agentsOut(fromSessionId: string) {
   const [from] = await db.select().from(session).where(eq(session.id, fromSessionId))
-  const issueId = (from?.subjectRef as SubjectRef | null)?.issueId
-  if (!issueId) throw new PlanError('only a task\'s own agent has agents out')
-  return Promise.all((await taskAgents(issueId)).map(async (a) => {
+  const ref = from?.subjectRef as SubjectRef | null
+  const issueId = ref?.issueId, ideaId = issueId ? undefined : ref?.ideaId
+  if (!issueId && !ideaId) throw new PlanError('only a task\'s or an idea\'s own agent has agents out')
+  const out: Awaited<ReturnType<typeof taskAgents>> = issueId ? await taskAgents(issueId) : await ideaAgents(ideaId!) as never
+  return Promise.all(out.map(async (a) => {
     if (!a.sessionId) { // the planner: a run, so what it said is in its events
       const log = 'runId' in a ? await runLog(a.runId) : null
       const said = log?.lines.filter((l) => l.type === 'run.message').pop() as { text?: string; at?: Date } | undefined
@@ -443,9 +461,9 @@ export async function agentsOut(fromSessionId: string) {
 
 /** The conductor says something to an agent it has out. The answer comes back by itself when that agent's turn ends. */
 export async function tellAgent(fromSessionId: string, agent: string, message: string) {
-  const { to } = await conducted(fromSessionId, agent)
+  const { to, from } = await conducted(fromSessionId, agent)
   if (!to.sessionId) throw new PlanError('the planner is a single run with no conversation: it cannot be told anything. Change the brief and plan the task again.')
-  await say(to.sessionId, message, undefined, { author: 'engine', kind: 'brief', payload: { from: fromSessionId, label: 'From this task\'s agent' } })
+  await say(to.sessionId, message, undefined, { author: 'engine', kind: 'brief', payload: { from: fromSessionId, label: to.kind === 'source' ? `From the agent of ${from.subject ?? 'an idea that came from here'}` : 'From this task\'s agent' } })
   return { sent: true, to: to.what, sessionId: to.sessionId, next: 'Its answer comes back to you here as a message when it finishes; do not wait or poll. The person can watch it work in its tab.' }
 }
 
@@ -473,7 +491,7 @@ export async function takeReply(sessionId: string): Promise<{ from: string; what
   const [said] = await db.select({ body: sessionMessage.body }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, sessionId), eq(sessionMessage.author, 'agent'), eq(sessionMessage.kind, 'text'), sql`${sessionMessage.id} > ${asks[0].id}`)).orderBy(desc(sessionMessage.id)).limit(1)
   const [s] = await db.select().from(session).where(eq(session.id, sessionId))
   const ref = s?.subjectRef as SubjectRef | null
-  return { from: (asks[asks.length - 1].payload as { from: string }).from, what: ref?.check ? step(ref.check).label : ref?.prototypeId ? 'Prototype' : s?.subject ?? 'An', said: said?.body ?? null }
+  return { from: (asks[asks.length - 1].payload as { from: string }).from, what: ref?.check ? step(ref.check).label : ref?.prototypeId ? 'Prototype' : ref?.learn ? 'Learn' : s?.subject ?? 'An', said: said?.body ?? null }
 }
 
 async function reportBack(sessionId: string) {
@@ -545,12 +563,11 @@ export async function startLearning(appId: string, actor = 'user') {
   const { reposOf } = await import('./workbench.js')
   const open = (await db.select().from(session).where(and(eq(session.appId, appId), eq(session.kind, 'talk'), eq(session.status, 'open'))))
     .filter((s) => (s.subjectRef as SubjectRef | null)?.learn === 'codebase').sort((a, b) => +b.createdAt - +a.createdAt)[0]
-  if (open && talkBusy(open.id)) { await showTalk(open.id, appId); return { sessionId: open.id, started: false } }
+  if (open && talkBusy(open.id)) return { sessionId: open.id, started: false }
   const { app: a, repos } = await reposOf(appId)
   if (!a) throw new PlanError(`no app ${appId}`)
   const s = open ?? await startTalk({ appId, subjectRef: { learn: 'codebase' }, actor })
   await say(s.id, learnBrief(a, repos.map((r) => r.fullName || r.localPath || '').filter(Boolean)), undefined, { author: 'engine', kind: 'brief', payload: { label: 'Learn the codebase' } })
-  await showTalk(s.id, appId)
   return { sessionId: s.id, started: true }
 }
 

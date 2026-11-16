@@ -42,6 +42,13 @@ export interface EngineTool { name: string; description: string; shape: z.ZodRaw
 export interface ToolScope { appId: string; sessionId?: string; actor?: string; waitForPlanner?: boolean }
 
 /** Tools that only read: safe to run without asking. */
+/** Learn's agent keeping an idea: the idea remembers that conversation, so its own agent (and the task's it becomes) can ask where it came from. */
+async function learnSource(sessionId: string | null | undefined): Promise<{ sessionId: string; what: string } | undefined> {
+  if (!sessionId) return undefined
+  const [s] = await db.select({ ref: session.subjectRef }).from(session).where(eq(session.id, sessionId))
+  return (s?.ref as { learn?: string } | null)?.learn ? { sessionId, what: 'learn' } : undefined
+}
+
 export const READ_ONLY_TOOLS = new Set(['learning', 'now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'shares', 'task_branches', 'merge_guide'])
 
 export function engineTools(opts: ToolScope): EngineTool[] {
@@ -85,7 +92,7 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         async () => tryIt(() => listLearning(appId))),
       def('set_learning', `Write one of the documents about this app's codebase, replacing what was there: key is one of ${LEARN_DOCS.map((d) => d.key).join(', ')}. summary is for the person (plain words, ${SUMMARY_MAX} characters at most: too long is refused); body is for the agents that work here next (exact paths, commands and names).`, { key: z.string(), summary: z.string(), body: z.string() },
         async (a) => tryIt(() => setLearning(appId, a, actor, sessionId ?? null))),
-      def('create_idea', 'Keep an idea in this app: a title and, optionally, why and what is already decided.', { title: z.string(), body: z.string().optional() }, async (a) => tryIt(() => createIdea({ ...a, appId, actor: actor }))),
+      def('create_idea', 'Keep an idea in this app: a title and, optionally, why and what is already decided.', { title: z.string(), body: z.string().optional() }, async (a) => tryIt(async () => createIdea({ ...a, appId, actor: actor, from: await learnSource(sessionId) }))),
       def('create_project', 'Create a project in this app: its tasks in order (the issues field), each a title and a brief. Sub-tasks (each task\'s subIssues) come from the planner (plan_task) or can be given.', {
         name: z.string(), content: z.string().optional().describe('why it exists and what it must do, Markdown'), description: z.string().optional().describe('one line'), ideaId: z.string().optional(), workflowId: z.string().optional().describe('its workflow rules (see workflows); without, the app\'s'),
         issues: z.array(z.object({ title: z.string(), description: z.string().optional().describe(described), brief: z.string().optional().describe(BRIEF_FORM), subIssues: z.array(subIssue).optional().describe('its sub-tasks') })).optional().describe('the tasks, in order; leave out for an empty project and add them with create_task (projectId)'),
@@ -189,9 +196,9 @@ export function engineTools(opts: ToolScope): EngineTool[] {
       })),
       def('stories', 'This app\'s Storybook stories, from the Storybook of this conversation\'s worktree when it has one (so a story you just wrote is there), else the app\'s: id (open one with open_tab kind storybook), title (the page or component) and name (the state). match narrows by id, title or name.', { match: z.string().optional() },
         async (a) => tryIt(() => listStories(appId, a.match, sessionId))),
-      def('agents_out', 'For a task\'s own agent: the agents this task has out (a prototype\'s builder, a fresh agent on each check), each with its sessionId, its state (working, idle, or waiting for the person to allow something, with what), and the last thing it said.', {},
+      def('agents_out', 'For a task\'s or an idea\'s own agent: the agents it has out (a prototype\'s builder, a fresh agent on each check) and, when the idea came from Learn, the Learn agent that kept it, each with its sessionId, its state (working, idle, or waiting for the person to allow something, with what), and the last thing it said.', {},
         async () => tryIt(() => { if (!sessionId) throw new PlanError('this needs a conversation'); return agentsOut(sessionId) })),
-      def('tell_agent', 'For a task\'s own agent: say something to an agent this task has out, like a change the person wants in the prototype. agent: its sessionId, or prototype, or a check\'s key (analysis, adr, risk, audit). It starts from your message, so write it in full. Returns at once; its answer comes back to you as a message when it finishes.', { agent: z.string(), message: z.string() },
+      def('tell_agent', 'For a task\'s own agent: say something to an agent this task has out, like a change the person wants in the prototype. agent: its sessionId, or prototype, or a check\'s key (analysis, adr, risk, audit), or learn (the agent the idea came from: it has read the codebase, so ask it before reading the code from nothing). It starts from your message, so write it in full. Returns at once; its answer comes back to you as a message when it finishes.', { agent: z.string(), message: z.string() },
         async (a) => tryIt(() => { if (!sessionId) throw new PlanError('this needs a conversation'); return tellAgent(sessionId, a.agent, a.message) })),
       def('read_agent', 'For a task\'s own agent: the recent conversation of an agent this task has out: what was said to it (by you, or by the person directly) and what it said. last: how many messages (default 20).', { agent: z.string(), last: z.number().optional() },
         async (a) => tryIt(() => { if (!sessionId) throw new PlanError('this needs a conversation'); return readAgent(sessionId, a.agent, a.last) })),
