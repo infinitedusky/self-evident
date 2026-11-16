@@ -4096,3 +4096,12 @@ merged; BON-68 was a sub-task of its first plan, cancelled when it was re-planne
   included, and a cancelled dependency blocks for good.
 - **Now** (`impliedDeps`): a sub-task that is canceled or a duplicate is not waited on, and neither is any
   sub-task of a task that is done. A dependency the plan names itself still blocks when it fails.
+
+## A task's graph is live (Sandy, 2026-11-15: "That needs to change when the status changes, I seem to need to refresh the page")
+
+The graph in a task's Build section was read again only when the task's own detail showed a sub-task in a new
+status. A step, a retry or anything missed while the engine restarted left a node on its old state.
+
+- It now uses the same live read as the project's graph: every event of the project reads it again.
+- Both graphs also read again when the event stream comes back after a gap, and every 20 seconds while the page is
+  showing, so one missed event never needs a reload.
