@@ -407,7 +407,7 @@ export const engine = {
   clearTaskBranches: (issueId: string) => call<{ taskBranches: number; savePoints: number }>('DELETE', `/issues/${issueId}/branches`),
   approveBrief: (issueId: string, approve = true) => call<Issue>('POST', `/issues/${issueId}/brief/approve`, { approve }),
   workflows: (appId: string) => call<WorkflowRow[]>('GET', `/workflows?app=${appId}`),
-  saveWorkflow: (body: { id?: string; appId: string; name: string; steps: WorkflowStep[]; ordered: boolean }) => call<Workflow>(body.id ? 'PUT' : 'POST', body.id ? `/workflows/${body.id}` : '/workflows', body),
+  saveWorkflow: (body: { id?: string; appId: string; name: string; steps: WorkflowStep[]; ordered: boolean; build?: 'one' | 'planned' }) => call<Workflow>(body.id ? 'PUT' : 'POST', body.id ? `/workflows/${body.id}` : '/workflows', body),
   writeHandover: (issueId: string, again = false) => call<{ handover: IssueDetail['handover']; why?: string }>('POST', `/issues/${issueId}/handover`, { again }),
   /** A task's speed: careful, fast, or null to follow its app. */
   useWorkflow: (target: { kind: 'apps' | 'projects' | 'issues'; id: string }, workflowId: string | null) => call<{ ok: true }>('POST', `/${target.kind}/${target.id}/workflow`, { workflowId }),

@@ -8,11 +8,14 @@
  */
 import { useState } from 'react'
 import { Badge } from './Badge'
-import { AFTERS, AFTER_SAYS, CHECKS, afterOf, canTurnOff, checksOf, normalize, step, validOrder, withChecks, type After, type StepKey, type Workflow, type WorkflowStep } from '@self-evident/engine/steps'
+import { AFTERS, AFTER_SAYS, BUILDS, BUILD_SAYS, CHECKS, afterOf, buildOf, canTurnOff, checksOf, normalize, step, validOrder, withChecks, type After, type StepKey, type Workflow, type WorkflowStep } from '@self-evident/engine/steps'
 
 /** What follows an approved prototype, in order: the plan sits between what it is made from and what reads it. Only the checks the workflow runs. */
 const afterList = (run: StepKey[]): (StepKey | 'plan' | 'build')[] => [...CHECKS.slice(0, 2).filter((k) => run.includes(k)), 'plan', ...CHECKS.slice(2).filter((k) => run.includes(k)), 'build']
 const AFTER_NAME: Record<After, string> = { full: 'Full', fast: 'Fast', custom: 'Your pick' }
+const BUILD_NAME = { one: 'In one go', planned: 'Planned into sub-tasks' } as const
+/** What follows a build in one go, by itself (the engine's verify module): the list checked, what it found done, a probe, the tests. */
+const ONE_GO = ['🏗️ Built in one go: one builder, the whole task', '✅ Checked against its list: the acceptance criteria and what the app requires', '🔁 What the check found is done, and checked again (three rounds at most)', '🧪 Probed by an agent that did not build it, which also cleans up', '🧫 The app\'s whole test run, once']
 const NOTE: Partial<Record<StepKey, string>> = { idea: 'always first', brief: 'the parent: every step feeds it, and it is approved last', analysis: 'a check, first once the prototype is approved', adr: 'a check, after the other steps', risk: 'a check, after the other steps', audit: 'a check, after the other steps' }
 
 export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, onSave }: { workflow: Workflow; usedBy?: string; editing?: boolean; onSave?: (w: Workflow) => void }) {
@@ -48,9 +51,9 @@ export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, 
             {w.ordered ? 'In this order: a step waits for the required ones before it.' : 'In any order.'}
             {off.length > 0 && <> Off: {off.map((s) => step(s.key).label).join(', ')}.</>}
           </div>
-          <h4 className="wf-h">After the prototype is approved <span className="faint">by itself, in this order</span>{hasPrototype && <> <Badge tone={afterOf(w) === 'fast' ? 'accent' : 'neutral'}>{AFTER_NAME[afterOf(w)]}</Badge></>}</h4>
+          <h4 className="wf-h">After the prototype is approved <span className="faint">by itself, in this order</span>{hasPrototype && <> <Badge tone={afterOf(w) === 'fast' ? 'accent' : 'neutral'}>{AFTER_NAME[afterOf(w)]}</Badge></>} <Badge tone={buildOf(w) === 'one' ? 'accent' : 'neutral'}>{BUILD_NAME[buildOf(w)]}</Badge></h4>
           {hasPrototype
-            ? <ol className="wf-steps">{afterList(run).map((k) => (k === 'plan' ? <li key={k}>🗂️ The plan: the task cut into sub-tasks</li> : k === 'build' ? <li key={k}>🏗️ The build</li> : <li key={k} title={step(k).what}>{step(k).icon} {step(k).label}</li>))}</ol>
+            ? <ol className="wf-steps">{afterList(run).map((k) => (k === 'plan' ? (buildOf(w) === 'one' ? null : <li key={k}>🗂️ The plan: the task cut into sub-tasks</li>) : k === 'build' ? (buildOf(w) === 'one' ? ONE_GO.map((line) => <li key={line}>{line}</li>) : <li key={k}>🏗️ The build: each sub-task built and merged, then its criteria checked and the tests run</li>) : <li key={k} title={step(k).what}>{step(k).icon} {step(k).label}</li>))}</ol>
             : <div className="faint" style={{ fontSize: 13 }}>This workflow has no prototype, so there is nothing to read first: once the brief is approved, the plan (sub-tasks), then the build.</div>}
           {hasPrototype && <div className="faint" style={{ fontSize: 13 }}>
             {afterOf(w) === 'full' ? 'Every check. For shared code, client work and risky changes.' : afterOf(w) === 'fast' ? 'No checks: planned and built straight after the prototype. The scrutiny is on the pull request.' : `Not run: ${CHECKS.filter((k) => !run.includes(k)).map((k) => step(k).label).join(', ')}.`}
@@ -89,6 +92,12 @@ export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, 
             </fieldset>
           ) : <div className="faint" style={{ fontSize: 13, marginBottom: 6 }}>Nothing but the plan and the build: this workflow has no prototype.</div>}
           <h4 className="wf-h">The brief <span className="faint">always, and approved by you</span></h4>
+          <h4 className="wf-h">How it is built</h4>
+          <fieldset className="wf-after" aria-label="How it is built">
+            {BUILDS.map((b) => (
+              <label key={b}><input type="radio" name={`build-${w.id}`} checked={buildOf(w) === b} onChange={() => setW({ ...w, build: b })} /> <strong>{BUILD_NAME[b]}</strong> <span className="faint">{BUILD_SAYS[b]}</span></label>
+            ))}
+          </fieldset>
           <label style={{ display: 'block', margin: '10px 0' }}><input type="checkbox" checked={w.ordered} onChange={(e) => setW({ ...w, ordered: e.target.checked })} /> Enforce this order</label>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn small" onClick={() => { onSave?.(w); setEditing(false) }}>Save</button>
