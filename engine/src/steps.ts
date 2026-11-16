@@ -84,7 +84,26 @@ export function withChecks(w: Workflow, keys: StepKey[] | 'full' | 'fast'): Work
   return normalize({ ...w, steps: [...w.steps.filter((s) => step(s.key)?.place !== 'check'), ...CHECKS.map((key) => ({ key, on: on.includes(key), required: true }))] })
 }
 
-export interface Workflow { id: string; name: string; steps: WorkflowStep[]; ordered: boolean } // steps in its order; its check steps say what follows the prototype (After)
+/**
+ * How a task is built (Sandy, 2026-11-16: "In main we go through prototype and then we just build it in on one step";
+ * "add planner and a yolo option to the workflow settings").
+ * - one: a single builder builds the whole task, from its brief, its acceptance criteria, the app's requirements and
+ *   its prototype. No planner, no sub-tasks to merge one by one. What it missed is found by the check after the
+ *   build and sent back (verify.ts). A task too big for one builder is two tasks.
+ * - planned: the planner cuts the task into sub-tasks, built side by side and merged one at a time. As it was.
+ */
+export type Build = 'one' | 'planned'
+export const BUILDS: Build[] = ['one', 'planned']
+export const BUILD_SAYS: Record<Build, string> = {
+  one: 'one builder builds the whole task; a check then finds what it missed',
+  planned: 'a planner cuts it into sub-tasks, built side by side and merged one at a time',
+}
+export const buildOf = (w: { build?: string | null } | null | undefined): Build => (w?.build === 'one' ? 'one' : 'planned')
+/** The two workflows every app has: how we build now, and how we built before it. */
+export const MAIN_NAME = 'Main'
+export const LEGACY_NAME = 'Legacy'
+
+export interface Workflow { id: string; name: string; steps: WorkflowStep[]; ordered: boolean; build?: Build } // steps in its order; its check steps say what follows the prototype (After)
 
 /** What a workflow may switch: research, sketches, mockups and the prototype on or off; the idea and the brief are always on. */
 export const canTurnOff = (key: StepKey) => key === 'research' || step(key).place === 'either'

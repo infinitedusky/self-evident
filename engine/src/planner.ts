@@ -6,11 +6,12 @@
  * server sets the cost of every question, never the agent.
  */
 import { covered, inForce, requirementLines, type Requirement } from './requirements.js'
-import { acceptanceLines, acceptanceOf } from './acceptance.js'
+import { acceptanceLines, acceptanceOf, type Criterion } from './acceptance.js'
+import { buildOf } from './steps.js'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import { and, eq, isNull, ne, or, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, decision, issue, question, repo, run } from './db/schema.js'
+import { app, decision, issue, prototype, question, repo, run } from './db/schema.js'
 import { homeRepo } from './workbench.js'
 import { appendEvent, type NewEvent } from './events.js'
 import { handle } from './executor.js'
@@ -199,6 +200,29 @@ export function questionCost(q: Proposal['questions'][number]): Cost {
   return q.options.some((o) => (o.changes ?? []).length > 0) ? 'expensive' : q.cost
 }
 
+/** The title of the one sub-task of a task built in one go. */
+export const ONE_GO_TITLE = 'Build it'
+
+/**
+ * What the one builder of a task is told, on top of the task's brief (which every builder gets): the list it will be
+ * checked against, and the prototype to build from. The list is in the prompt and not enforced along the way: the
+ * check after the build is what holds it (verify.ts).
+ */
+export function oneGoBrief(i: { criteria: Criterion[]; required: Requirement[]; prototype: { branch: string; path: string; rough?: boolean } | null; base: string }): string {
+  return [
+    'Build the whole task, in this one go. There are no other sub-tasks and no plan: the task\'s brief is what to build, and how is yours to work out from the code.',
+    i.prototype ? `### The prototype\n\nIt was approved, on branch \`${i.prototype.branch}\` (its worktree is at ${i.prototype.path}). Read what it changed (\`git diff ${i.base}...${i.prototype.branch}\`) and build the real thing from it: keep what works, and do properly what it faked or left rough${i.prototype.rough ? ' (it was a rough prototype: real only on the part in doubt)' : ''}. Take its code where it is good; do not merge the branch whole.` : '',
+    i.criteria.length ? `### What must be true when you finish\n\n${acceptanceLines(i.criteria)}` : '',
+    i.required.length ? `### What this app requires of every change\n\n${requirementLines(i.required)}` : '',
+    '### How it is checked\n\nWhen you say you are done, another agent checks every line above against what you built, and anything not done comes back to you. So do each one, and say in your summary where to look for it. Where one does not apply to this change, say so and why.',
+  ].filter(Boolean).join('\n\n')
+}
+
+export const oneGoProposal = (brief: string): Proposal => ({
+  phases: [{ key: 'build', title: ONE_GO_TITLE, description: 'The whole task, built in one go.', summary: brief, depends_on: [], files: [], steps: [], checks: [], done_when: 'Every acceptance criterion is met and every requirement is done or said not to apply.' }],
+  decisions: [], questions: [], notes: 'Built in one go: its workflow has no planner.',
+})
+
 /** The sub-task's brief, as Markdown: the summary, then steps (each with its technical note under it), checks and done-when. */
 export function subIssueBrief(p: Proposal['phases'][number]): string {
   const steps = p.steps.map((s, n) => `${n + 1}. ${s.text}${s.technical ? `\n   - ${s.technical}` : ''}`).join('\n')
@@ -226,6 +250,8 @@ interface AppSetup { test_cmd?: string; model?: string; max_budget_usd?: number;
 
 export interface PlanningContext {
   runId: string; issueId: string; projectId: string; appId: string; attempt: number
+  /** Its workflow builds in one go: there is no planner, and this is the one sub-task's brief. */
+  oneGo?: string
   input: Omit<ProposeInput, 'onEvent' | 'abort'>
   base: Omit<NewEvent, 'type'>
 }
@@ -259,8 +285,14 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
   const earlier = g.issues.filter((x) => x.sortOrder < t.sortOrder && x.state !== 'canceled').map((x) => ({
     identifier: x.identifier, title: x.title, subIssues: g.subIssues.filter((p) => p.parentId === x.id).map((p) => ({ identifier: p.identifier, title: p.title })),
   }))
+  // Built in one go (steps.ts, Build): no planner reads the repo. One sub-task carries the whole task, with the list
+  // it will be checked against after it is built.
+  const { workflowFor } = await import('./work.js')
+  const one = buildOf((await workflowFor(db, { issueId })).workflow) === 'one'
+  const [proto] = one ? await db.select().from(prototype).where(and(eq(prototype.issueId, issueId), inArray(prototype.status, ['running', 'stopped']))).orderBy(desc(prototype.createdAt)).limit(1) : []
+  const oneGo = one ? oneGoBrief({ criteria: acceptanceOf(t), required: inForce(setup, g.project.requirements), prototype: proto ? { branch: proto.branch, path: proto.path, rough: proto.depth === 'rough' } : null, base: a.defaultBranch }) : undefined
   return {
-    runId, issueId, projectId: t.projectId, appId: a.id, attempt, base,
+    runId, issueId, projectId: t.projectId, appId: a.id, attempt, base, oneGo,
     input: {
       repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, acceptance: acceptanceOf(t).length ? acceptanceLines(acceptanceOf(t)) : null, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, analysis: (await getStep({ issueId }, 'analysis'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
       testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), requirements: inForce(setup, g.project.requirements), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
@@ -283,7 +315,7 @@ const whenPlanned = new Set<(issueId: string) => void>()
 export function onAnyPlanned(fn: (issueId: string) => void) { whenPlanned.add(fn); return () => { whenPlanned.delete(fn) } }
 
 export async function finishPlanning(ctx: PlanningContext, opts: { propose?: Propose; abort?: AbortController; retryAfterMs?: (minutes: number) => number; onPlanned?: () => void } = {}): Promise<PlanningResult> {
-  const propose = opts.propose ?? proposeWithAgent
+  const propose: Propose = ctx.oneGo !== undefined ? async () => ({ status: 'completed', costUsd: 0, proposal: oneGoProposal(ctx.oneGo!) }) : opts.propose ?? proposeWithAgent
   const onEvent: ProposeInput['onEvent'] = async (type, payload) => { await emit({ ...ctx.base, actor: `agent:${ctx.runId}`, type, payload }) }
   const failed = async (error: string, out?: ProposeOutput): Promise<PlanningResult> => {
     await db.update(run).set({ status: 'failed', endedAt: new Date(), error, costUsd: out?.costUsd?.toString() ?? null, agentSessionId: out?.agentSessionId ?? null }).where(eq(run.id, ctx.runId))

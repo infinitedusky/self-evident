@@ -10,7 +10,7 @@
  * speak to is kept as "not addressed", never dropped.
  */
 export interface Requirement { key: string; name: string; what: string; on: boolean }
-export interface Covered { key: string; name: string; applies: boolean; how: string }
+export interface Covered { key: string; name: string; applies: boolean; how: string; /** The check after the build (verify.ts): true, the build meets it; false, it does not. Absent: not checked. */ built?: boolean }
 
 /** What an app starts with. An app's own list replaces these; they are a first draft to edit, not rules. */
 export const DEFAULT_REQUIREMENTS: Requirement[] = [
@@ -53,5 +53,5 @@ export const requirementLines = (required: Requirement[]) => required.map((r) =>
 
 /** For the merge guide: met and how, does not apply and why, or not addressed. */
 export function coveredLines(list: Covered[]): string {
-  return list.map((c) => (!c.how ? `- ⬜ **${c.name}**: the plan does not say.` : c.applies ? `- ✅ **${c.name}**: ${c.how}` : `- ➖ **${c.name}** does not apply: ${c.how}`)).join('\n')
+  return list.map((c) => (c.built === false ? `- ❌ **${c.name}**: not done. ${c.how}`.trimEnd() : !c.how ? `- ⬜ **${c.name}**: ${c.built === undefined ? 'not checked yet.' : 'met.'}` : c.applies ? `- ✅ **${c.name}**: ${c.how}` : `- ➖ **${c.name}** does not apply: ${c.how.replace(/^does not apply:?\s*/i, '')}`)).join('\n')
 }

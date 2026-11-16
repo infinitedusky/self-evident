@@ -1,0 +1,1 @@
+ALTER TABLE "workflow" ADD COLUMN "build" text DEFAULT 'planned' NOT NULL;
