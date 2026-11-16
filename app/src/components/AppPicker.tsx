@@ -6,13 +6,21 @@
 import { useCurrentApp } from '../current-app'
 import type { Tab } from '../workspace'
 
+/**
+ * ⌘-click, Ctrl-click or the middle button: the app in a new browser tab, this one left where it is (Sandy,
+ * 2026-11-16), as a link would. The new tab is told which app by its address (`?app=`, current-app.tsx).
+ */
+const inNewTab = (appId: string) => { window.open(`${window.location.origin}/?app=${encodeURIComponent(appId)}`, '_blank', 'noopener') }
+
 export function AppPicker({ onOpen }: { onOpen?: (tab: Tab) => void }) {
   const { apps, app, setAppId } = useCurrentApp()
   return (
     <nav className="app-bar" data-component="AppPicker" aria-label="Apps">
       {apps.map((a) => (
         <div className="rail-item" key={a.id}>
-          <button className={`app-bar-btn ${a.id === app?.id ? 'on' : ''}`} aria-current={a.id === app?.id ? 'true' : undefined} aria-label={a.name} onClick={() => setAppId(a.id)}>
+          <button className={`app-bar-btn ${a.id === app?.id ? 'on' : ''}`} aria-current={a.id === app?.id ? 'true' : undefined} aria-label={a.name}
+            onClick={(e) => { if (e.metaKey || e.ctrlKey) inNewTab(a.id); else setAppId(a.id) }}
+            onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); inNewTab(a.id) } }}>
             {a.key}
           </button>
           <div className="rail-fly"><span className="rail-fly-head app-bar-name">{a.name}</span></div>
