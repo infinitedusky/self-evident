@@ -4097,6 +4097,28 @@ merged; BON-68 was a sub-task of its first plan, cancelled when it was re-planne
 - **Now** (`impliedDeps`): a sub-task that is canceled or a duplicate is not waited on, and neither is any
   sub-task of a task that is done. A dependency the plan names itself still blocks when it fails.
 
+## The whole test run is once per task, not per sub-task (Sandy, 2026-11-15: "running the full test suite for each subtask is dumb, we should test what we are building and then do the regression when the task is done… If it fails we analyze and create an additional subtask to fix the issue")
+
+Homework Gate's test command takes 10 to 12 minutes and ran twice for every sub-task: once by its builder, once
+to land it. HG-259 has seven sub-tasks. A web story that fails now and then sent finished Windows, Mac and iPhone
+work back to be rebuilt.
+
+- **A sub-task lands by merging.** No test command at landing. Its builder is told to test what it built and not
+  to run the whole suite.
+- **The whole run is once per task** (`testTask` in `runner.ts`, `wholeRun` in `landing.ts`): when the last
+  sub-task of a task has merged, the app's test command runs on the merged work. The project is not called landed
+  while it runs.
+- **A failure is run again before anything is blamed.** Passing the second time is recorded as flaky
+  (`task.tested` with `flaky`), and is not a failure.
+- **Failing twice adds a sub-task**, "Fix what the whole test run found": find the cause first, fix it, and run
+  the whole suite (the one sub-task that does). Two fixes at most; then a comment on the task says it needs a
+  person.
+- **The lines that failed are kept** (`failingLines`). Before, only the last 3,000 characters were, which showed
+  the suite that passed last.
+
+Not done: a setting to choose the old way per app; showing the whole run as its own node on the graph (today it
+is events on the task, and the fix sub-task when there is one). Not seen on a real task yet.
+
 ## A task's graph is live (Sandy, 2026-11-15: "That needs to change when the status changes, I seem to need to refresh the page")
 
 The graph in a task's Build section was read again only when the task's own detail showed a sub-task in a new
@@ -4105,3 +4127,11 @@ status. A step, a retry or anything missed while the engine restarted left a nod
 - It now uses the same live read as the project's graph: every event of the project reads it again.
 - Both graphs also read again when the event stream comes back after a gap, and every 20 seconds while the page is
   showing, so one missed event never needs a reload.
+
+## Clearing its own scratch files does not stop an agent (Sandy, 2026-11-16: "this again", on `rm -f /tmp/bon85shots/*`)
+
+Any `rm -f` or `rm -rf` was rated expensive, and expensive always asks. A builder clearing a folder of screenshots
+in `/tmp` before taking new ones stopped and waited.
+
+- `rm -f`/`rm -rf` whose every target is inside a named folder of a temporary directory (`/tmp/x/…`, `$TMPDIR/x`,
+  `/var/folders/…`) is cheap now. `/tmp/*` itself, a path with `..`, or any target elsewhere is still expensive.

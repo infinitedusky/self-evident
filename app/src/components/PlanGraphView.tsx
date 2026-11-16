@@ -39,7 +39,7 @@ export function stepProgress(phase: { steps?: { text: string; status: string }[]
   const at = own.findIndex((s) => s.status === 'in_progress')
   const marks = Array.from({ length: total }, (_, i) => (own.length ? (own[i].status === 'completed' ? 'done' : own[i].status === 'in_progress' ? 'now' : 'todo') : landed ? 'done' : 'todo'))
   // What it is doing when its agent has reported no steps: said in words, so an empty bar is not read as "stuck on step one".
-  const doing = own.length ? null : phase.status === 'running' ? 'Building. Its agent has not said which step it is on.' : phase.status === 'merging' || phase.status === 'testing' ? 'Built. Landing now: the tests run before it merges.' : null
+  const doing = own.length ? null : phase.status === 'running' ? 'Building. Its agent has not said which step it is on.' : phase.status === 'merging' || phase.status === 'testing' ? 'Built. Merging it in now.' : null
   return { total, done, marks, current: at >= 0 ? { n: at + 1, text: own[at].text } : null, planned: !own.length && total > 0 && !landed, doing }
 }
 

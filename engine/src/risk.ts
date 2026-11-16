@@ -95,15 +95,25 @@ export function riskOf(tool: string, input: Record<string, unknown>, ctx: RiskCo
 }
 
 /**
+ * `rm -f` or `rm -rf` whose every target is inside a named folder of a temporary directory (/tmp/shots/*, never /tmp/*
+ * itself): an agent clearing its own scratch files, which is not "hard to undo" in any way that matters. It stopped a
+ * builder to ask (Sandy, 2026-11-16: "this again", on `rm -f /tmp/bon85shots/*` before taking screenshots).
+ */
+const TMP = String.raw`(?:\/tmp|\/private\/tmp|\/var\/folders|\/private\/var\/folders|\$TMPDIR|\$\{TMPDIR\})`
+const SCRATCH_RM = new RegExp(String.raw`\brm\s+-(?:rf?|fr?)\s+((?:["']?${TMP}\/[\w.@+-]+[^\s;&|]*["']?\s*)+)(?=$|[;&|\n])`, 'g')
+
+/**
  * A shell line is rated by its parts: split on && ; || and |, rate each, take the worst. `cd` and other readers
  * are free, so `cd engine && pnpm test` is cheap, and `cd x && rm -rf y` is expensive. A redirect that writes is
  * moderate unless it only discards.
  */
 export function rateShell(raw: string): { risk: Risk; why: string } {
+  let scratch = false
   const cmd = raw.replace(/\bgit\s+-C\s+\S+/g, 'git') // `git -C <dir> push` is `git push`: the folder does not change what it does
+    .replace(SCRATCH_RM, (m, args: string) => (args.includes('..') ? m : (scratch = true, 'true ')))
   if (EXPENSIVE.test(cmd)) return { risk: 'expensive', why: 'hard to undo, or outward-facing' }
   const parts = splitShell(cmd.replace(/2>&1/g, '')).map((p) => p.trim()).filter(Boolean)
-  let worst: { risk: Risk; why: string } = { risk: 'free', why: 'a read-only command' }
+  let worst: { risk: Risk; why: string } = scratch ? { risk: 'cheap', why: 'removes its own scratch files in a temporary folder' } : { risk: 'free', why: 'a read-only command' }
   for (const part of parts) {
     const r = ratePart(part)
     if (rank(r.risk) > rank(worst.risk)) worst = r

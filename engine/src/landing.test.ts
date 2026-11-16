@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { addWorktree, commitAll, ensureBranch, git, headSha } from './git.js'
-import { land } from './landing.js'
+import { failingLines, wholeRun, land } from './landing.js'
 
 async function repoWithPlan() {
   const dir = await mkdtemp(join(tmpdir(), 'if-land-'))
@@ -62,5 +62,24 @@ describe('land', () => {
     const bad = await land({ repoPath, worktreePath: wt3, integrationBranch: 'project/p1', onEvent })
     expect(bad).toMatchObject({ ok: false, stage: 'merge' })
     expect((bad as any).detail).toContain('a.txt')
+  })
+})
+
+describe('the whole test run, once per task', () => {
+  const seen: { type: string; payload: Record<string, unknown> }[] = []
+  const on = async (type: string, payload: Record<string, unknown>) => { seen.push({ type, payload }) }
+  it('passes at once, or on the second go as flaky; fails only when it fails twice, with the failing lines kept', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'whole-'))
+    expect(await wholeRun({ testCmd: 'true', cwd: dir, onEvent: on })).toEqual({ ok: true, flaky: false })
+    // fails the first time, passes the second: a test that fails now and then
+    expect(await wholeRun({ testCmd: 'if [ -f seen ]; then exit 0; else touch seen; echo " FAIL  stories/Cart.stories.tsx > Empty"; exit 1; fi', cwd: dir, onEvent: on })).toEqual({ ok: true, flaky: true })
+    expect(seen.map((e) => e.type)).toEqual(['task.tested', 'task.test_again', 'task.tested'])
+    const long = Array.from({ length: 400 }, (_, i) => ` ✓ passing test number ${i} with a long enough name to push the failure out of the tail`).join('\\n')
+    const bad = await wholeRun({ testCmd: `echo " FAIL  server/test_pay.py::test_refund"; printf "${long}\\n"; exit 2`, cwd: dir, onEvent: on })
+    expect(bad).toMatchObject({ ok: false, code: 2 })
+    expect((bad as { detail: string }).detail).toContain('FAIL  server/test_pay.py::test_refund') // far above the end of the output, and still kept
+  })
+  it('picks the lines that say what failed, once each, and not "0 failed"', () => {
+    expect(failingLines(['ok 1', ' FAIL  a.test.ts > x', ' FAIL  a.test.ts > x', 'Tests  3 passed, 0 failed', 'AssertionError: expected 1 to be 2', 'error TS2322: nope'].join('\n'))).toEqual([' FAIL  a.test.ts > x', 'AssertionError: expected 1 to be 2', 'error TS2322: nope'])
   })
 })

@@ -24,6 +24,9 @@ describe('riskOf', () => {
     ]) expect([cmd.slice(0, 30), rateShell(cmd).risk]).toEqual([cmd.slice(0, 30), 'free'])
     expect(splitShell('grep "a\\|b; c" f | head; echo \'x && y\'')).toEqual(['grep "a\\|b; c" f ', ' head', " echo 'x && y'"])
     // Still what they were: a variable in front does not hide what follows it.
+    expect(rateShell('rm -f /tmp/shots/*; ls /tmp/shots').risk).toBe('cheap') // its own scratch files, in a named temporary folder
+    expect(rateShell('rm -rf "$TMPDIR/out" /private/tmp/claude-501/x/y && echo ok').risk).toBe('cheap')
+    for (const c of ['rm -rf /tmp/*', 'rm -rf /tmp/', 'rm -f /tmp/a/../../etc/x', 'rm -rf /tmp/a ~/code', 'rm -rf /tmp/a && rm -rf build']) expect(rateShell(c).risk, c).toBe('expensive')
     expect(rateShell('X=1 rm -rf build').risk).toBe('expensive')
     expect(rateShell('P=/x; git -C $P commit -m wip').risk).toBe('moderate')
     expect(rateShell('git -C /x push origin main').risk).toBe('expensive')
