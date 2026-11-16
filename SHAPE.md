@@ -754,7 +754,9 @@ Details and sources in `research/`.
   built nothing leaves the computer: no push, no pull request. When every sub-task has landed the person runs the
   checks only they can run and presses Submit pull request; only then is the branch pushed and the pull request
   opened, as a draft, titled by the repository's own convention. One they close stays closed until they submit again.
-  No agent has a way to submit one.
+  No agent has a way to submit one. An app can be set, by the person, to open a task's pull request by itself, and
+  then only once every sub-task of the task has landed and its test run has passed: a pull request is for a whole
+  task, never for one sub-task.
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 

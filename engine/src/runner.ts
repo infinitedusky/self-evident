@@ -21,7 +21,7 @@ import { acceptanceOf, setAcceptance } from './acceptance.js'
 import { unchecked, afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, numbered, PROBE_TITLE, probeBrief, readVerdicts, reqId, requirementsChecked, unmetOf, verdictChange } from './verify.js'
 import { inForce, type Covered } from './requirements.js'
 import { workflowFor } from './work.js'
-import { ensureProjectPr, prDraft, prTitle, prBody } from './pr.js'
+import { ensureProjectPr, prAuto, prDraft, prTitle, prBody } from './pr.js'
 import { addSubTask, projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
 import { finishPlanning, preparePlanning, type Propose } from './planner.js'
 import { BEFORE_PLAN, checksOwed, styleOf } from './steps.js'
@@ -263,6 +263,7 @@ export class Runner {
     await this.markCriteria(subId, x.parentId!, result.summary, rb).catch((err) => this.emit({ ...rb, type: 'task.check_error', payload: { error: String(err?.message ?? err) } }))
     await withLock(`land:${projectId}`, () => this.updatePr(projectId, mode === 'issue' ? x.parentId! : undefined)).catch((err) => this.emit({ ...rb, type: 'pr.error', payload: { error: String(err?.message ?? err) } }))
     await this.testTask(projectId, x.parentId!, r!.localPath!, worktreePath, onto, setup, rb).catch((err) => this.emit({ ...rb, type: 'task.test_error', payload: { error: String(err?.message ?? err) } }))
+    if (prAuto(setup)) await withLock(`land:${projectId}`, () => this.updatePr(projectId, mode === 'issue' ? x.parentId! : undefined)).catch((err) => this.emit({ ...rb, type: 'pr.error', payload: { error: String(err?.message ?? err) } })) // set to open by itself: now that the task is built and its test run has passed
     } finally { this.testing.set(projectId, (this.testing.get(projectId) ?? 1) - 1) }
     this.active.delete(subId)
     await this.dispatch()
@@ -555,7 +556,9 @@ export class Runner {
     if (!r?.fullName) { if (submit) throw new PlanError('this app\'s repository is not on GitHub, so there is no pull request to open'); return }
     // Nothing leaves this computer until the person submits it: no push, no pull request. After that, each landing updates it.
     const [had] = (await db.select().from(prTable).where(eq(prTable.projectId, projectId))).filter((q) => (issueId ? q.issueId === issueId : !q.issueId))
-    if (!submit && (!had || had.status === 'closed' || had.status === 'merged')) return
+    const auto = prAuto(a.setup) // the app opens them by itself, once the whole task has landed
+    if (!submit && had && (had.status === 'closed' || had.status === 'merged')) return // closed by the person, or done with: never reopened or replaced on its own
+    if (!submit && !had && !auto) return
     const g: Graph = (await projectGraph(projectId))!
     const mine = issueId ? g.subIssues.filter((x) => x.parentId === issueId) : g.subIssues
     const done = mine.filter((x) => x.status === 'done')
@@ -579,6 +582,15 @@ export class Runner {
     const guided = await guideTasks((t ? [t] : issues).map((q) => ({ id: q.id, identifier: q.identifier, title: q.title })), open.map((x) => ({ parentId: x.parentId ?? null, identifier: x.identifier }))).catch(() => [])
     const guide = mergeGuide(guided)
     const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog, guide, mergeRecord(guided))
+    if (!submit && !had && open.length) return // auto: a task's pull request waits for all of its sub-tasks, never the first
+    if (!submit && !had && (a.setup as { test_cmd?: string } | null)?.test_cmd) { // auto, with a test command: only after the task's own test run passed on what landed last
+      const evs = await db.select({ seq: event.seq, type: event.type, issueId: event.issueId, payload: event.payload }).from(event).where(and(eq(event.projectId, projectId), inArray(event.type, ['land.landed', 'task.tested']))).orderBy(desc(event.seq)).limit(200)
+      const lastLanding = evs.find((e) => e.type === 'land.landed')?.seq ?? 0
+      for (const q of t ? [t] : issues.filter((q) => mine.some((x) => x.parentId === q.id))) {
+        const tested = evs.find((e) => e.type === 'task.tested' && e.issueId === q.id)
+        if (!tested || tested.seq < lastLanding || (tested.payload as { ok?: boolean }).ok !== true) return
+      }
+    }
     if (submit && open.length) throw new PlanError(`${open.length} sub-task${open.length === 1 ? ' has' : 's have'} still to land (${open.map((x) => x.identifier).join(', ')}): the pull request is submitted once they all have`)
     if (submit && !landed.length) throw new PlanError('nothing has landed yet: there is nothing to submit')
     const result = await ensureProjectPr({ repoPath: r.localPath!, fullName: r.fullName, integrationBranch: head, base: stack.base, title, body, draft: prDraft(a.setup), reopen: submit })

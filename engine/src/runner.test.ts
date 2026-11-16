@@ -3,13 +3,13 @@
  * dependents after their parents land, issue order, two projects at once, retries with the reason, recovery after a
  * restart, steps from the builder, cleanup. The fake executor writes a file and commits, like an agent would.
  */
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq, inArray } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, build, event, issue, project, repo, run, step, workspace } from './db/schema.js'
+import { app, build, event, issue, pr as prTable, project, repo, run, step, workspace } from './db/schema.js'
 import type { Execute } from './executor.js'
 import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
@@ -18,6 +18,7 @@ import { createIssue } from './issues.js'
 import { approveStep, setStep } from './work.js'
 import { now } from './now.js'
 import { FIX_TITLE, Runner } from './runner.js'
+import { setPrRules } from './pr.js'
 import { setAcceptance } from './acceptance.js'
 import { CHECK_TITLE, FINISH_TITLE, PROBE_TITLE } from './verify.js'
 import { afterOf } from './steps.js'
@@ -53,7 +54,6 @@ describe.skipIf(!reachable)('runner', () => {
   })
   afterAll(async () => {
     await db.update(project).set({ status: 'superseded' }).where(eq(project.appId, appId))
-    await pool.end()
   })
 
   const commits = (tag: string): Execute => async (i) => {
@@ -510,3 +510,108 @@ describe.skipIf(!reachable)('runner', () => {
     expect(types).toContain('build.interrupted')
   })
 })
+
+/**
+ * A pull request is never opened by the engine on its own: nothing is pushed while the build runs, and the person
+ * submits it once every sub-task has landed. Here, not in a file of its own: a runner builds every running project in
+ * the database, so two files of runner tests at once build each other's.
+ */
+describe.skipIf(!reachable)('a pull request waits for the person (sample data)', () => {
+  const wsId = newId('workspace'), appId = newId('app') // an app of its own: its repository has a GitHub name, so the pull request step is live
+  let repoPath: string, remote: string, ghLog: string, ghList: string, next: (n: number) => Promise<void>
+  const asked = async () => (await readFile(ghLog, 'utf8').catch(() => '')).split('\n').filter(Boolean)
+  beforeAll(async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'if-pr-submit-'))
+    repoPath = join(dir, 'repo'); remote = join(dir, 'remote.git')
+    await git(dir, ['init', '-q', '-b', 'main', 'repo']); await git(dir, ['init', '-q', '--bare', 'remote.git'])
+    await git(repoPath, ['config', 'user.email', 't@example.com']); await git(repoPath, ['config', 'user.name', 'test'])
+    await writeFile(join(repoPath, 'README.md'), 'hi\n'); await commitAll(repoPath, 'init')
+    await git(repoPath, ['remote', 'add', 'origin', remote]); await git(repoPath, ['push', '-q', 'origin', 'main'])
+    // A stand-in for gh, so no test talks to GitHub: it writes what it was asked to a file and answers from another.
+    ghLog = join(dir, 'gh.log'); ghList = join(dir, 'gh-list.json')
+    await writeFile(ghList, '[]'); await writeFile(join(dir, 'gh-next'), '7'); next = (n) => writeFile(join(dir, 'gh-next'), String(n))
+    await writeFile(join(dir, 'gh'), `#!/bin/sh\necho "$@" | tr '\\n' ' ' >> ${ghLog}; echo >> ${ghLog}\nif [ "$1 $2" = "pr list" ]; then cat ${ghList}; fi\nif [ "$1 $2" = "pr create" ]; then echo https://example.com/sample-org/sample-shop/pull/$(cat ${dir}/gh-next); fi\n`, { mode: 0o755 })
+    process.env.GH_BIN = join(dir, 'gh')
+    await db.insert(workspace).values({ id: wsId, name: 'pr submit test' })
+    await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'Shop', key: appId.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md', pr_mode: 'project' } })
+    await db.insert(repo).values({ id: newId('repo'), appId, fullName: 'sample-org/sample-shop', localPath: repoPath }) // on GitHub by name: the pull request step is live
+  })
+  afterAll(async () => { delete process.env.GH_BIN; await db.update(project).set({ status: 'superseded' }).where(eq(project.appId, appId)) })
+
+  it('pushes nothing and opens nothing while sub-tasks land, however many; submitting is refused until all have', async () => {
+    const { project: p, subIssues } = await createProject({ appId, name: 'Orders (sample)', issues: [{ title: 'Export (sample)', subIssues: [{ key: 'a', title: 'A', files: ['a.txt'] }, { key: 'b', title: 'B', files: ['b.txt'], dependsOn: ['a'] }] }] })
+    await approveBriefs(p.id)
+    let hold = true
+    const execute: Execute = async (i) => {
+      if (i.subIssue.id === subIssues[1].id) while (hold) await sleep(50)
+      await writeFile(join(i.worktreePath, `${i.subIssue.identifier}.txt`), 'x\n'); await commitAll(i.worktreePath, `build ${i.subIssue.identifier}`)
+      return { status: 'completed', summary: 'done', costUsd: 0 }
+    }
+    const runner = new Runner({ execute, sessionsMax: 2 })
+    await runner.startProject(p.id)
+    await until(async () => (await projectGraph(p.id))!.subIssues[0].status === 'done')
+    await sleep(400) // long enough for a pull request step to have run, had there been one
+    const types = async () => (await db.select().from(event).where(eq(event.projectId, p.id))).map((e) => e.type)
+    expect((await types()).filter((t) => t.startsWith('pr.'))).toEqual([]) // not opened, not tried, no error from trying
+    expect(await db.select().from(prTable).where(eq(prTable.projectId, p.id))).toEqual([])
+    expect((await git(remote, ['branch', '--list'])).stdout.split('\n').map((l) => l.replace(/^[* ]+/, '')).filter(Boolean)).toEqual(['main']) // the project's branch never left this computer
+    await expect(runner.submitPr(p.id)).rejects.toThrow(/1 sub-task has still to land .*the pull request is submitted once they all have/)
+    hold = false
+    await until(async () => (await projectGraph(p.id))!.subIssues.every((x) => x.status === 'done'))
+    await sleep(400)
+    expect((await types()).filter((t) => t.startsWith('pr.'))).toEqual([]) // all landed: still the person's to submit
+    expect((await git(remote, ['branch', '--list'])).stdout).not.toContain('project/')
+    expect(await asked()).toEqual([]) // GitHub was not so much as asked
+
+    const row = await runner.submitPr(p.id) // the person submits: pushed, and opened as a draft
+    expect(row).toMatchObject({ number: 7, status: 'draft' })
+    expect((await git(remote, ['branch', '--list'])).stdout).toContain('project/')
+    const create = (await asked()).find((l) => l.startsWith('pr create'))!
+    expect(create).toContain('--draft'); expect(create).toContain('--base main')
+    expect((await types()).filter((t) => t.startsWith('pr.'))).toEqual(['pr.submitted', 'pr.opened'])
+
+    // The person closes it on GitHub: a later update leaves it closed, and opens no second one. Submitting again reopens that one, as a draft.
+    await writeFile(ghList, JSON.stringify([{ number: 7, url: 'https://example.com/sample-org/sample-shop/pull/7', state: 'CLOSED' }])); await writeFile(ghLog, '')
+    await (runner as unknown as { updatePr: (p: string) => Promise<void> }).updatePr(p.id)
+    expect((await asked()).some((l) => /^pr (create|reopen|edit)/.test(l))).toBe(false)
+    expect((await db.select().from(prTable).where(eq(prTable.projectId, p.id)))[0].status).toBe('closed')
+    await (runner as unknown as { updatePr: (p: string) => Promise<void> }).updatePr(p.id) // and again: recorded as closed, GitHub is not asked at all
+    await writeFile(ghLog, '')
+    expect(await runner.submitPr(p.id)).toMatchObject({ number: 7, status: 'draft' })
+    expect((await asked()).map((l) => l.split(' ').slice(0, 2).join(' '))).toEqual(['pr list', 'pr reopen', 'pr ready', 'pr edit'])
+    await writeFile(ghList, '[]'); await writeFile(ghLog, '')
+  })
+
+  it('set to open them by itself, still waits for every sub-task of the task: none is tried after the first', async () => {
+    await db.update(app).set({ setup: { test_cmd: 'test -f README.md', pr_mode: 'project', pr_open: 'auto' } }).where(eq(app.id, appId))
+    await next(8)
+    const { project: p, subIssues } = await createProject({ appId, name: 'Auto (sample)', issues: [{ title: 'Import (sample)', subIssues: [{ key: 'a', title: 'A', files: ['c.txt'] }, { key: 'b', title: 'B', files: ['d.txt'], dependsOn: ['a'] }] }] })
+    await approveBriefs(p.id)
+    let hold = true
+    const runner = new Runner({ sessionsMax: 2, execute: async (i) => {
+      if (i.subIssue.id === subIssues[1].id) while (hold) await sleep(50)
+      await writeFile(join(i.worktreePath, `${i.subIssue.identifier}.txt`), 'x\n'); await commitAll(i.worktreePath, `build ${i.subIssue.identifier}`)
+      return { status: 'completed', summary: 'done', costUsd: 0 }
+    } })
+    await runner.startProject(p.id)
+    await until(async () => (await projectGraph(p.id))!.subIssues[0].status === 'done')
+    await sleep(400)
+    const prEvents = async () => (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => e.type.startsWith('pr.')).map((e) => e.type)
+    expect(await prEvents()).toEqual([]) // one of two landed: nothing pushed, nothing tried
+    expect((await asked()).some((l) => l.startsWith('pr create'))).toBe(false)
+    hold = false
+    await until(async () => (await prEvents()).includes('pr.opened')) // all landed: now it opens by itself, as a draft
+    expect((await asked()).filter((l) => l.startsWith('pr create'))).toHaveLength(1)
+    expect((await asked()).find((l) => l.startsWith('pr create'))).toContain('--draft')
+    const seen = (await db.select().from(event).where(eq(event.projectId, p.id)).orderBy(event.seq)).map((e) => e.type)
+    expect(seen.indexOf('task.tested')).toBeLessThan(seen.indexOf('pr.opened')) // and only after the task's own test run passed
+    await db.update(app).set({ setup: { test_cmd: 'test -f README.md', pr_mode: 'project' } }).where(eq(app.id, appId))
+  })
+
+  it('keeps the app\'s rules for its pull requests', async () => {
+    expect(await setPrRules(appId, { titleTemplate: 'feat[{ticket}]: {title}' })).toEqual({ pr_title: 'feat[{ticket}]: {title}', pr_draft: true })
+    expect(await setPrRules(appId, { titleTemplate: '', draft: false })).toEqual({ pr_title: null, pr_draft: false })
+  })
+})
+
+afterAll(async () => { await pool.end() })

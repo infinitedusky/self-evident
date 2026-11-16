@@ -25,6 +25,12 @@ export interface PrInput {
  * `setup.pr_title`: the title's template, in the repository's own convention, with {ticket} (the team's ticket id,
  * else ours), {id} (ours), {title}, {project}, {n} and {of} (the task's place in its project).
  */
+/**
+ * Who opens a task's pull request (Sandy, 2026-11-16: "this should be an option, auto PR or not (but PRs are always on
+ * tasks, not subtasks)"). `setup.pr_open`: 'manual', the default, waits for the person to submit it; 'auto' opens it
+ * by itself, but only once every sub-task of the task has landed. Never while the task is still being built.
+ */
+export const prAuto = (setup: unknown) => (setup as { pr_open?: string } | null)?.pr_open === 'auto'
 export const prDraft = (setup: unknown) => (setup as { pr_draft?: boolean } | null)?.pr_draft !== false
 export function prTitle(setup: unknown, v: { ticket?: string | null; id: string; title: string; project: string; n?: number; of?: number }, exact?: string | null): string | null {
   if (exact?.trim()) return exact.trim().slice(0, 250)
@@ -40,7 +46,7 @@ export function prTitle(setup: unknown, v: { ticket?: string | null; id: string;
  * it again; otherwise it is left closed and said (`closed`), and no second one is opened.
  */
 export async function ensureProjectPr(i: PrInput & { reopen?: boolean }): Promise<{ number: number; url: string; created: boolean; closed?: boolean }> {
-  const gh = (args: string[]) => execFileP('gh', args, { cwd: i.repoPath }).then((r) => r.stdout.trim())
+  const gh = (args: string[]) => execFileP(process.env.GH_BIN ?? 'gh', args, { cwd: i.repoPath }).then((r) => r.stdout.trim()) // GH_BIN: a stand-in, for tests
   const all: { number: number; url: string; state: string }[] = JSON.parse(await gh(['pr', 'list', '-R', i.fullName, '--head', i.integrationBranch, '--state', 'all', '--json', 'number,url,state']))
   const edit = (n: number) => gh(['pr', 'edit', String(n), '-R', i.fullName, '--title', i.title, '--body', i.body, '--base', i.base]) // a stacked PR retargets when the one below merges
   const open = all.find((x) => x.state === 'OPEN')
