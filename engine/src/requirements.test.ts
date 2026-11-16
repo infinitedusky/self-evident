@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { covered, coveredLines, DEFAULT_REQUIREMENTS, inForce, requirementLines, requirementsOf } from './requirements.js'
 import { prompt, PROPOSAL_SCHEMA } from './planner.js'
-import { taskGuide } from './merge-guide.js'
+import { taskGuide, taskRecord } from './merge-guide.js'
 
 describe('requirements', () => {
   it('an app starts with telemetry, tests, a test plan and docs; its own list replaces them', () => {
@@ -36,8 +36,9 @@ describe('requirements', () => {
   })
   it('the merge guide reports them', () => {
     const guide = taskGuide({ identifier: 'SS-1', title: 'T', acceptance: [], decisions: [], pending: [], requirements: covered(inForce({}), [{ key: 'tests', applies: true, how: 'Covered.' }]) })
-    expect(guide).toContain('**What this app requires of every change**')
-    expect(guide).toContain('✅ **Tests**: Covered.')
-    expect(taskGuide({ identifier: 'SS-1', title: 'T', acceptance: [], decisions: [], pending: [] })).not.toContain('requires of every change')
+    expect(guide).toContain('**Required of every change:** ⬜ Telemetry · ✅ Tests') // the guide: a mark each, on one line
+    const record = taskRecord({ identifier: 'SS-1', title: 'T', acceptance: [], decisions: [], pending: [], requirements: covered(inForce({}), [{ key: 'tests', applies: true, how: 'Covered.' }]) })
+    expect(record).toContain('**What this app requires of every change**'); expect(record).toContain('✅ **Tests**: Covered.') // the record: how each is covered
+    expect(taskGuide({ identifier: 'SS-1', title: 'T', acceptance: [], decisions: [], pending: [] })).not.toContain('Required of every change')
   })
 })

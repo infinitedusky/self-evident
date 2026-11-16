@@ -18,6 +18,8 @@ import { createIssue } from './issues.js'
 import { approveStep, setStep } from './work.js'
 import { now } from './now.js'
 import { FIX_TITLE, Runner } from './runner.js'
+import { setAcceptance } from './acceptance.js'
+import { CHECK_TITLE } from './verify.js'
 import { addItems, dropItem, promote } from './backlog.js'
 import type { Propose } from './planner.js'
 import { approveBriefs } from './test-briefs.js'
@@ -285,6 +287,33 @@ describe.skipIf(!reachable)('runner', () => {
     expect((await files(b2)).sort()).toEqual([x, y].sort()) // issue two started where issue one ended
     expect(await files(p.integrationBranch!)).toEqual([]) // the project's branch is only the starting point
     await db.update(project).set({ status: 'superseded' }).where(eq(project.id, p.id))
+  })
+
+  it('a built task is checked against its acceptance criteria by one more sub-task, before the whole test run; its verdicts mark them', async () => {
+    const own = newId('app')
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'checked once', key: own.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md' } })
+    await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: repoPath })
+    const { project: p, issues: [t] } = await createProject({ appId: own, name: 'checked once', issues: [one('One part', [{ key: 'a', title: 'A', files: ['a2.txt'] }])] })
+    const { acceptance } = await setAcceptance(t.id, { add: [{ text: 'The file is there (sample)', check: 'ls' }, { text: 'It looks right (sample)' }, { text: 'It is fast (sample)' }] })
+    const [there, looks, fast] = acceptance.map((c) => c.id)
+    const briefs: string[] = []
+    const execute: Execute = async (i) => {
+      briefs.push(i.subIssue.brief ?? '')
+      const r = await commits('chk')(i)
+      return i.subIssue.title === CHECK_TITLE ? { ...r, summary: `Checked.\n\n\`\`\`acceptance\n${JSON.stringify([{ id: there, met: true, evidence: 'ls shows it' }, { id: looks, met: null, evidence: 'for a person: open the page' }, { id: fast, met: false, evidence: 'took 9 s' }])}\n\`\`\`` } : r
+    }
+    const runner = new Runner({ execute, sessionsMax: 1 })
+    await approveBriefs(own)
+    await runner.startProject(p.id)
+    await until(cleaned(p.id))
+    expect((await projectGraph(p.id))!.subIssues.map((x) => [x.title, x.status])).toEqual([['A', 'done'], [CHECK_TITLE, 'done']]) // one check, and not another after it
+    expect(briefs[1]).toContain(`[${there}] The file is there (sample)`)
+    const [after] = await db.select().from(issue).where(eq(issue.id, t.id))
+    expect((after.acceptance as { built?: boolean; builtEvidence?: string }[]).map((c) => [c.built, c.builtEvidence])).toEqual([[true, 'ls shows it'], [undefined, 'for a person: open the page'], [false, 'took 9 s']])
+    expect(after.briefApprovedBy).not.toBeNull() // marking is not a change to what was approved
+    const seen = (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => e.type === 'task.checked' || e.type === 'task.tested').sort((a, b) => a.seq - b.seq)
+    expect(seen.map((e) => e.type)).toEqual(['task.checked', 'task.tested']) // checked first, then the whole run, once
+    expect(seen[0].payload).toMatchObject({ criteria: 3, read: 3, met: 1, notMet: 1, forAPerson: 1 })
   })
 
   it('the whole test run is once per task, after its sub-tasks are merged; a failure adds a sub-task that fixes it', async () => {

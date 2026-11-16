@@ -885,3 +885,8 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .tab-menu { position: fixed; z-index: 3000; min-width: 140px; padding: 4px; display: grid; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.16); }
 .tab-menu button { text-align: left; padding: 6px 10px; border: 0; border-radius: 6px; background: none; color: var(--ink); font: 13px var(--sans); cursor: pointer; }
 .tab-menu button:hover { background: var(--idle-wash); }
+
+.merge-record { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+.merge-record > summary { cursor: pointer; color: var(--muted, inherit); font-size: 13px; }
+
+.acceptance-many { margin: 0 0 10px; padding: 8px 12px; border-left: 3px solid var(--warn, #b7791f); background: color-mix(in srgb, var(--warn, #b7791f) 8%, transparent); border-radius: 6px; font-size: 13px; }

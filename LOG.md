@@ -4151,3 +4151,31 @@ a task's, an idea's, a prototype's.
 - In the transcript the pictures show under what was said, and open full size.
 
 Images only; other files are refused. Not tried with a real agent yet (no test conversations on real apps).
+
+## The merge guide is a screen, and the build is checked before the reviewer is asked (Sandy, 2026-11-16: "The merge guide is way way too long… The point is to make a reviewer faster")
+
+BON-51's pull request opened with 30,900 characters: a 13,000-character guide, then every builder's summary. Its
+first line was "18 acceptance criteria have not been checked against the build yet", followed by all 18 for the
+reviewer to check.
+
+- **A built task is checked against its criteria** (`verify.ts`). When a task's sub-tasks are all merged, the
+  engine adds one more, "Check it against its acceptance criteria". Its agent checks each criterion and does not
+  build; it ends with a verdict for each (met, not met, or left for a person, with one line of evidence). The
+  engine reads the verdicts from its summary and marks the criteria. Once per task; the whole test run comes
+  after it.
+- **The guide has a size: 1,500 characters a task** (`GUIDE_MAX`, held by the code and a test). It says what to act
+  on; what the build met is a count; only the criteria not met or left for a person are listed (five at most),
+  then three decisions without their reasons, one line of risk, and a mark for each requirement. When that is
+  still too much it cuts further, in a fixed order.
+- **Nothing is lost: the record is folded away under it** (`<details>` on the pull request, the same on the
+  task's page): every criterion with its mark, every decision with its reason, the risks, and what each builder
+  reported.
+- **Over eight criteria, the task's page says it is probably two tasks**, before the brief is approved, while it
+  can still be split.
+- The pull request no longer says each sub-task was "tested on the merged commit"; that stopped being true on
+  2026-11-15.
+
+Run against BON-51 as stored: 1,377 characters. Its criteria show as unchecked, since it was built before this.
+Not seen on a real build yet: whether the checking agent ends with the block the engine reads. When it does not,
+the criteria stay unchecked and the guide says so. Not done: telling the planner to split a task over eight
+criteria (today only the page says it).

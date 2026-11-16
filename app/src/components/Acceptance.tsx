@@ -15,6 +15,9 @@ const NEXT = { open: true, met: false, not: null } as const // a click moves the
 const MARK = { shown: ['✓', 'The prototype showed it'], not: ['✗', 'The prototype did not show it'], open: ['○', 'Not tried in a prototype'], build: ['–', 'Skipped by the prototype: for the final build only'] } as const
 const stateOf = (c: Criterion) => (c.buildOnly ? 'build' : c.shown === true ? 'shown' : c.shown === false ? 'not' : 'open')
 
+/** Over this many criteria a task is usually two (Sandy, 2026-11-16: an 18-criterion task made a pull request nobody could review quickly). Said before approval, when it can still be split. */
+const MANY = 8
+
 export function Acceptance({ issueId, items, approved, prototype = true, onChanged }: { issueId: string; items: Criterion[]; /** The brief is approved: a change here asks for approval again. */ approved?: boolean; /** false: the task has no prototype (the step is skipped or not in its workflow), so there is no prototype column. */ prototype?: boolean; onChanged?: () => void }) {
   const [list, setList] = useState(items)
   const [editing, setEditing] = useState<string | null>(null)
@@ -41,6 +44,7 @@ export function Acceptance({ issueId, items, approved, prototype = true, onChang
         {prototype && left > 0 && <span className="faint">{left} for the final build only</span>}
       </h3>
       <p className="faint acceptance-lead">How we will know it is done. {prototype ? 'The agent builds these as the task goes and the prototype is made; you approve them with the brief. Each has two marks: what the prototype showed, and whether the final build meets it.' : 'The agent builds these as the task goes; you approve them with the brief. This task has no prototype, so each has one mark: whether the final build meets it.'}{approved ? ' The brief is approved: changing one asks for your approval again.' : ''}</p>
+      {list.length > MANY && !approved && <p className="acceptance-many" role="note">{list.length} criteria is a lot for one task. Over {MANY}, it is usually two tasks, and its pull request is slow to review. Ask its agent to split it before you approve.</p>}
       {list.length === 0 && <p className="muted">No acceptance criteria yet. Without them, approving the brief approves no way of knowing it is done.</p>}
       {list.length > 0 && <div className={`acceptance-heads ${prototype ? '' : 'no-prototype'}`} aria-hidden="true">{prototype && <span title={`The prototype showed ${proto.filter((c) => c.shown).length} of ${proto.length}`}>Prototype <span className="faint">{proto.filter((c) => c.shown).length}/{proto.length}</span></span>}<span title={`The final build meets ${met} of ${list.length}`}>Build <span className={unmet ? 'acceptance-warn' : 'faint'}>{met}/{list.length}</span></span></div>}
       <ul className="acceptance-list">

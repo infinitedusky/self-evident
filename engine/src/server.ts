@@ -43,7 +43,7 @@ import { listSketches, readSketch } from './sketches.js'
 import { migrateStorybookSetup, startStorybook, stopStorybookAt, stopStorybooks, storybookStatus, storybookValues, STORY_FLOW_CSS } from './storybook.js'
 import { prototypeCode, prototypeFile, unshowInPrototype } from './prototype-code.js'
 import { setAcceptance, type AcceptanceChange } from './acceptance.js'
-import { mergeGuideOf } from './merge-guide.js'
+import { mergeGuideAndRecord } from './merge-guide.js'
 import { autoSave, clearTaskBranches, deleteSavePoint, deleteTaskBranch, goBack, saveHere, switchTo, taskBranches } from './task-branches.js'
 import { restoreAfterRestart, share, shared, ShareError, sharesOf, SHARE_KINDS, stopShares, unshare, type ShareKind } from './share.js'
 import { runsOf, runStep, stopStep, stopStepRuns } from './prototype-run.js'
@@ -629,7 +629,7 @@ export function buildApp(bus: EventBus) {
       const [a] = await db.select().from(appTable).where(eq(appTable.id, t.appId))
       const subs = await db.select().from(issueTable).where(eq(issueTable.parentId, t.id))
       const pending = subs.filter((x) => !['done', 'canceled', 'duplicate'].includes(x.state)).map((x) => identifier(a.key, x.number))
-      return c.json({ guide: await mergeGuideOf(t.id, identifier(a.key, t.number), t.title, pending), subTasks: subs.length })
+      return c.json({ ...(await mergeGuideAndRecord(t.id, identifier(a.key, t.number), t.title, pending)), subTasks: subs.length })
     } catch (err) { return planError(c, err) }
   })
   api.get('/issues/:id/branches', async (c) => { try { return c.json(await taskBranches(c.req.param('id'))) } catch (err) { return planError(c, err) } })
