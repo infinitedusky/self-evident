@@ -909,3 +909,6 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .learn-agent .conversation { flex: 1; min-height: 0; }
 .learn-agent .chat { overflow-y: auto; }
 @media (max-width: 900px) { .learn-layout.with-agent { grid-template-columns: 1fr; } .learn-agent { position: static; max-height: 70vh; } }
+
+.wf-held { margin: 0 0 6px; padding-left: 18px; display: grid; gap: 2px; }
+.wf-held li .faint { font-size: 13px; }

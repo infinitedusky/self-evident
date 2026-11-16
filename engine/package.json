@@ -41,6 +41,7 @@
   },
   "exports": {
     "./steps": "./src/steps.ts",
+    "./requirements": "./src/requirements.ts",
     "./brief": "./src/brief.ts",
     "./guide-widget": "./src/guide-widget.ts"
   }

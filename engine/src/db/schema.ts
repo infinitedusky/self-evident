@@ -432,6 +432,8 @@ export const workflow = pgTable('workflow', {
   id: id(), appId: appId(), name: text('name').notNull(),
   steps: jsonb('steps').notNull().default([]), ordered: boolean('ordered').notNull().default(false),
   build: text('build').notNull().default('planned'), // one: built in one go, no planner; planned: cut into sub-tasks by the planner (steps.ts, Build)
+  style: text('style').notNull().default('staged'), // checklist: a list in the builder's prompt, verified after the build; staged: checks before the build, as it was (steps.ts, Style)
+  requirements: jsonb('requirements').$type<Record<string, boolean>>(), // the app's requirements this workflow switches on or off (requirements.ts); null: the app's as they are
   createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [index('workflow_app').on(t.appId)])
 

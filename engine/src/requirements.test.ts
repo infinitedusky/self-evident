@@ -6,7 +6,11 @@ import { taskGuide, taskRecord } from './merge-guide.js'
 
 describe('requirements', () => {
   it('an app starts with telemetry, tests, a test plan and docs; its own list replaces them', () => {
-    expect(requirementsOf({}).map((r) => r.key)).toEqual(['telemetry', 'tests', 'test_plan', 'docs'])
+    expect(inForce({}).map((r) => r.key)).toEqual(['telemetry', 'tests', 'test_plan', 'docs'])
+    expect(requirementsOf({}).filter((r) => !r.on).map((r) => r.key)).toEqual(['adr', 'risks']) // there to be switched on: a workflow does
+    // A workflow switches some for the tasks that use it; a project has the last word for its own.
+    expect(inForce({}, undefined, { adr: true, docs: false }).map((r) => r.key)).toEqual(['telemetry', 'tests', 'test_plan', 'adr'])
+    expect(inForce({}, { adr: false, docs: true }, { adr: true, docs: false }).map((r) => r.key)).toEqual(['telemetry', 'tests', 'test_plan', 'docs'])
     expect(requirementsOf(null)).toEqual(DEFAULT_REQUIREMENTS)
     const own = { requirements: [{ name: 'Works offline', what: 'Every screen opens with no network.' }, { name: ' ', what: 'no name: dropped' }, { key: 'tests', name: 'Tests', what: 'x', on: false }, { name: 'Works offline', what: 'twice: once' }] }
     expect(requirementsOf(own)).toEqual([{ key: 'works_offline', name: 'Works offline', what: 'Every screen opens with no network.', on: true }, { key: 'tests', name: 'Tests', what: 'x', on: false }])

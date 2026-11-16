@@ -4273,3 +4273,29 @@ and a check after the build is what holds it (SHAPE.md, "The workflow is a verif
 
 Not done: the probe's "broke and left" in the merge guide itself (it is in the record under it); a way to say a
 task needs no prototype in Main (it is required there). Not seen on a real task yet.
+
+## A workflow is two choices: sub-tasks or not, and the requirements (Sandy, 2026-11-16: "what are our options? One is do or do not use subtasks… Two is… what does it need to check for… the really critical thing… you select the… requirements… It needs to create an ADR… telemetry coverage, test suite"; "These are both what's put into the instructions and what is checked at the end")
+
+Two settings stood side by side that did not fit: what follows the prototype (full, fast, a pick) and how it is
+built. Full with "in one go" ran five agents before the build, three of them to read a plan that was not there.
+
+- **A workflow is one of two kinds** (`workflow.style`, migration 0033).
+  - **Checklist**: two choices. **Sub-tasks**: in one go, or planned into sub-tasks. **What a build is held to**:
+    a box for each of the app's requirements. Nothing runs before the build. The list is in the builder's
+    instructions, and it is what the check after the build reads; then finish, check again, probe, test, as on
+    2026-11-16, now with sub-tasks or without.
+  - **Staged**: what there was, kept: checks before the build (full, fast, a pick), a plan, sub-tasks, criteria
+    checked once. The full/fast/pick question is only asked here.
+  - They do not mix (`fitStyle`): a checklist's checks before the build are all off; a staged workflow is planned.
+- **The requirements are the workflow's to switch** (`workflow.requirements`, over the app's own switches; a
+  project still has the last word). The app's list says what each one means: Settings › Landing.
+- **Two more requirements**, off for an app until a workflow switches them on: **Decision record** (each real
+  design choice written down, with what was turned down and why) and **Risks** (the pull request says what could
+  break and how someone would notice). They are what the ADR and blast radius stages wrote. Main has both on. An
+  app with a list of its own is given them once, off.
+- **Main is a checklist**: in one go, held to the app's requirements plus those two. A workflow that was "in one
+  go" before there were kinds becomes a checklist at start: it is what it already did.
+- **An independent agent checks**, not the builder: one that builds marks its own work done with the blind spots
+  that caused the miss. It costs an agent run a round.
+
+Not seen on a real task yet.

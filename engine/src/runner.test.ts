@@ -297,7 +297,7 @@ describe.skipIf(!reachable)('runner', () => {
     await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: repoPath })
     expect(await db.transaction((tx) => ensureMain({ tx, appId: own }))).toEqual({ made: 1 }) // this app only: the others in this file build the old way
     const [w] = (await listWorkflows(own)).filter((x) => x.appDefault)
-    expect(w).toMatchObject({ name: 'Main', build: 'one' }); expect(afterOf(w)).toBe('fast')
+    expect(w).toMatchObject({ name: 'Main', build: 'one', style: 'checklist', requirements: { adr: true, risks: true } }); expect(afterOf(w)).toBe('fast')
     const { project: p, issues: [t] } = await createProject({ appId: own, name: 'main flow', issues: [{ title: 'Export (sample)', brief: 'People download their orders (sample).' }] })
     const { acceptance: [ac] } = await setAcceptance(t.id, { add: [{ text: 'The file has every order (sample)', check: 'export.test' }] })
     await setStep({ issueId: t.id }, 'prototype', { status: 'done', detail: 'the whole flow (sample)' }); await approveStep(t.id, 'prototype', 'Sam (sample)')
@@ -317,12 +317,13 @@ describe.skipIf(!reachable)('runner', () => {
     await until(cleaned(p.id))
     expect(seen.map((s) => s.title)).toEqual(['Build it', CHECK_TITLE, FINISH_TITLE, `${CHECK_TITLE} (2)`, PROBE_TITLE])
     expect(seen[0].brief).toContain('in this one go'); expect(seen[0].brief).toContain(`[${ac.id}] The file has every order (sample)`); expect(seen[0].brief).toContain('- tests (Tests): New behaviour has a test (sample).')
-    expect(seen[1].brief).toContain('[req_tests] Tests:')
+    expect(seen[1].brief).toContain('[req_tests] Tests:'); expect(seen[1].brief).toContain('[req_adr] Decision record:') // Main switches the decision record on, over the app's own list
+    expect(seen[0].brief).toContain('- adr (Decision record):') // the same list is in the builder's instructions and in the check
     expect(seen[2].brief).toContain('found this not done'); expect(seen[2].brief).toContain('Missing: no test for an empty export')
     expect(seen[3].brief).toMatch(/^Check 2/); expect(seen[3].brief).not.toContain(ac.id) // only what was not done is looked at again
     expect(seen[4].brief).toContain('You did not build this')
     const [after] = await db.select().from(issue).where(eq(issue.id, t.id))
-    expect(after.requirements).toEqual([{ key: 'tests', name: 'Tests', applies: true, how: 'export-empty.test', built: true }])
+    expect((after.requirements as { key: string }[]).find((r) => r.key === 'tests')).toEqual({ key: 'tests', name: 'Tests', applies: true, how: 'export-empty.test', built: true })
     expect((after.acceptance as { built?: boolean }[])[0].built).toBe(true)
     const order = (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => ['task.checked', 'task.tested', 'issue.planned'].includes(e.type)).sort((a, b) => a.seq - b.seq).map((e) => e.type)
     expect(order).toEqual(['issue.planned', 'task.checked', 'task.checked', 'task.tested']) // the whole test run once, last
