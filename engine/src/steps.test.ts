@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { speedOf, DEFAULT_WORKFLOW, addCheck, blocking, canRemove, canSkip, checksOwed, settled, undecided, finished, needsApproval, normalize, owed, ready, removeCheck, resolve, rows, validOrder, type Workflow, type WorkflowStep } from './steps.js'
+import { afterOf, checksOf, withChecks, DEFAULT_WORKFLOW, addCheck, blocking, canRemove, canSkip, checksOwed, settled, undecided, finished, needsApproval, normalize, owed, ready, removeCheck, resolve, rows, validOrder, type Workflow, type WorkflowStep } from './steps.js'
 
 const w = (steps: WorkflowStep[], ordered = true): Workflow => ({ id: 'wf', name: 'wf', ordered, steps })
 const s = (key: WorkflowStep['key'], required = false, on = true): WorkflowStep => ({ key, on, required })
@@ -118,19 +118,23 @@ describe('the fixed rules', () => {
     expect(validOrder([s('idea'), s('sketch'), s('mockup'), s('brief'), s('prototype')])).toBe(true)
   })
 
-  it('two speeds: careful reads the plan before it is built, fast goes from the prototype to the plan and the build', () => {
+  it('what follows the prototype is the workflow\'s choice: full, fast, or the checks it picks', () => {
     const approved = [{ key: 'prototype' as const, status: 'done' as const, approved: { by: 'Sam (sample)', at: '2026-11-15' } }]
-    expect(checksOwed(approved, proto)).toEqual(['analysis', 'adr', 'risk', 'audit', 'final'])
-    const fast = { ...proto, fast: true }
-    expect(checksOwed(approved, fast)).toEqual([])
-    expect(rows('task', approved, fast).map((r) => r.key)).toEqual(rows('task', approved, proto).map((r) => r.key).filter((k) => !['analysis', 'adr', 'risk', 'audit', 'final'].includes(k)))
+    const all = ['analysis', 'adr', 'risk', 'audit', 'final']
+    expect(afterOf(proto)).toBe('full'); expect(checksOf(proto)).toEqual(all) // one never set runs them all, as before
+    expect(checksOwed(approved, proto)).toEqual(all)
+    const fast = withChecks(proto, 'fast')
+    expect(afterOf(fast)).toBe('fast'); expect(checksOwed(approved, fast)).toEqual([])
+    expect(rows('task', approved, fast).map((r) => r.key)).toEqual(rows('task', approved, proto).map((r) => r.key).filter((k) => !all.includes(k)))
     expect(owed([], fast)).toEqual(owed([], proto)) // what the brief waits on is the same: the prototype is still the person's to approve
-    // A task's own speed wins; else the app's; careful when nothing says.
-    expect(speedOf(null, {})).toEqual({ value: 'careful', from: 'app' })
-    expect(speedOf(null, { speed: 'fast' })).toEqual({ value: 'fast', from: 'app' })
-    expect(speedOf('careful', { speed: 'fast' })).toEqual({ value: 'careful', from: 'task' })
-    expect(speedOf('fast', null)).toEqual({ value: 'fast', from: 'task' })
-    expect(speedOf('quick', { speed: 'quick' })).toEqual({ value: 'careful', from: 'app' })
+    const some = withChecks(proto, ['risk', 'analysis']) // picked in any order: kept in theirs
+    expect(afterOf(some)).toBe('custom'); expect(checksOf(some)).toEqual(['analysis', 'risk']); expect(checksOwed(approved, some)).toEqual(['analysis', 'risk'])
+    expect(normalize(some).steps.filter((x) => all.includes(x.key)).map((x) => [x.key, x.on, x.required])).toEqual([['analysis', true, true], ['adr', false, true], ['risk', true, true], ['audit', false, true], ['final', false, true]]) // every check stays listed, off or on, so it survives a save
+    expect(afterOf(withChecks(some, 'full'))).toBe('full'); expect(afterOf(withChecks(fast, all as never))).toBe('full')
+    expect(normalize(normalize(some))).toEqual(normalize(some))
+    // An older workflow saved some checks as optional and left others out: every one of them runs.
+    expect(checksOf(w([s('idea'), s('prototype', true), s('adr', false), s('audit', false), s('brief', true)]))).toEqual(all)
+    expect(checksOf(w([s('idea'), s('prototype', false, false), s('brief', true)]))).toEqual([]); expect(afterOf(w([s('idea'), s('prototype', false, false), s('brief', true)]))).toBe('fast') // no prototype, nothing after it
   })
 
   it('the checks are not a workflow\'s to choose: all four after a prototype, none without, whatever was saved', () => {
