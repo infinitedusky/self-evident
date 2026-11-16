@@ -4342,3 +4342,17 @@ Not done: a line in "needs you" when a task is built and waiting to be submitted
 task's page shows it); marking it ready for review from here; the same panel on a project's page for an app that
 builds one pull request per project (the endpoint is there). Not tried: submitting against a real repository; the
 engine is tested against a local remote for "nothing is pushed", and the calls to GitHub are not exercised in tests.
+
+## The engine stays up when the database connection drops (Sandy, 2026-11-16: "engine down?")
+
+The engine's process ended, for the eleventh time by its log, and nothing started it again: under `tsx watch` a
+crashed process waits for a file to change. Every agent and page was cut off until someone noticed.
+
+- **Cause**: the live feed (`GET /events`) reads the events table each time one is committed, in a promise nobody
+  awaits. When the database connection dropped under that read (the proxy to Fly resets idle ones), the rejection
+  had nowhere to go, and an unhandled rejection ends a Node process. First seen 2026-11-15; a fix was offered then
+  and not built.
+- **The feed catches it**: the read is logged and tried again from the same place on the next event.
+- **A last resort for anything else** (`stay-up.ts`): an unhandled rejection is logged and the engine carries on,
+  quietly when it is a connection dropping, loudly ("UNHANDLED REJECTION … a bug to fix") when it is not. The log
+  is observed, so a real bug still surfaces.
