@@ -543,3 +543,23 @@ export const reports: import('../engine').Reports = { writing: false, format: { 
   { id: 'rep_week', appId: 'app_shop', kind: 'weekly', fromAt: '2026-11-02T08:00:00Z', toAt: '2026-11-09T08:00:00Z', label: 'Week of Nov 2', notes: null, editedAt: '2026-11-09T10:00:00Z', createdAt: '2026-11-09T09:00:00Z', costUsd: '0.05',
     body: 'One-page checkout: weekly status (week of Nov 2)\n\nWhere it stands\nThe saved-card work is merged. The one-page checkout is designed and its prototype starts next week (sample).\n\nDone this week\n- Merged the saved-card stack, #401 to #405 (sample)\n\nNext week\n- Prototype the one-page checkout, SHOP-20 (sample)\n\nOpen decisions and risks\n- Whether the old two-step route stays for a release (sample)' },
 ] }
+
+// A checklist task after its first check (made up): one criterion and one requirement not done and sent back.
+export const checklistSample: import('../engine').Checklist = {
+  build: 'one', met: 4, unmet: 2, total: 7,
+  stages: [
+    { key: 'build', label: 'Build', state: 'done', detail: 'built in one go' },
+    { key: 'check', label: 'Check', state: 'doing', detail: 'round 1: 2 not done, sent back' },
+    { key: 'probe', label: 'Probe', state: 'todo', detail: 'after the check' },
+    { key: 'test', label: 'Tests', state: 'todo', detail: 'the whole run, once, last' },
+  ],
+  items: [
+    { id: 'ac_s1', kind: 'criterion', text: 'A returning customer pays in one tap (sample)', mark: 'met', evidence: 'checkout.test.ts (sample)' },
+    { id: 'ac_s2', kind: 'criterion', text: 'A declined card says why and keeps what was typed (sample)', mark: 'unmet', evidence: 'the form clears on a decline (sample)' },
+    { id: 'ac_s3', kind: 'criterion', text: 'The page reads well on a phone (sample)', mark: 'person', evidence: 'For a person: open /checkout at 390px (sample)' },
+    { id: 'req_telemetry', kind: 'requirement', text: 'Telemetry', what: 'Anything new that can fail can be seen (sample).', mark: 'unmet', evidence: 'no span on a declined card (sample)' },
+    { id: 'req_tests', kind: 'requirement', text: 'Tests', what: 'New behaviour has a test (sample).', mark: 'met', evidence: 'checkout.test.ts, saved-card.test.ts (sample)' },
+    { id: 'req_adr', kind: 'requirement', text: 'Decision record', what: 'Each real design choice is written down (sample).', mark: 'met', evidence: 'docs/decisions/one-form-model.md (sample)' },
+    { id: 'req_docs', kind: 'requirement', text: 'Docs', what: 'What changed is documented (sample).', mark: 'na', evidence: 'does not apply: nothing a person reads changes (sample)' },
+  ],
+}

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, fn, userEvent, within } from 'storybook/test'
 import { rows } from '@self-evident/engine/steps'
 import { TaskNav } from './TaskNav'
-import { approvedTaskStepsView, quickWorkflow, taskStepsView, waitingTaskStepsView } from '../stories/sample'
+import { approvedTaskStepsView, quickWorkflow, taskStepsView, waitingTaskStepsView , checklistSample } from '../stories/sample'
 
 // A task's nav, from made-up step states under the sample workflows.
 const meta = { title: 'Components/TaskNav', component: TaskNav,
@@ -55,3 +55,18 @@ export const SaveFromTheNav: Story = {
 }
 /** Folded: one icon for the save points, with how many in its tooltip. */
 export const FoldedWithSavePoints: Story = { args: { folded: true, saves, onToggle: () => {} }, render: (a) => <div style={{ width: 52 }}><TaskNav {...a} /></div> }
+
+/** A checklist task (made up): under Build, a row for the list and a row for each stage it goes through by itself, with where each is. No "Sub-tasks, not planned". */
+export const ChecklistTask: Story = {
+  args: { here: 'build', rows: rows('task', approvedTaskStepsView.states, approvedTaskStepsView.resolved.workflow), build: { done: 1, total: 2, waitingOn: null }, checklist: checklistSample, workflow: { name: 'Main (sample)', from: ', the app\'s default' } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.getByRole('link', { name: /Checklist/ })).toHaveTextContent('4/7')
+    for (const stage of ['Check', 'Probe', 'Tests']) await expect(c.getByText(stage, { exact: true })).toBeInTheDocument()
+    await expect(c.getByText('built in one go')).toBeInTheDocument() // the Build row, under the Build heading
+    await expect(c.getByText('round 1: 2 not done, sent back')).toBeInTheDocument()
+    await expect(c.queryByText(/Sub-tasks/)).toBeNull()
+  },
+}
+/** A checklist task on its list's page. */
+export const OnTheChecklist: Story = { args: { ...ChecklistTask.args, here: 'checklist' }, play: async ({ canvasElement }) => { await expect(within(canvasElement).getByRole('link', { name: /Checklist/ }).className).toContain('active') } }
