@@ -64,3 +64,7 @@ export const PoppedOut: Story = { beforeEach: stored({ 'if.talk.popped': '1' }) 
 export const EngineDown: Story = { beforeEach: [stored(open), withEngine(engineDown)] }
 /** The agent in its own window, filling it. */
 export const OwnWindow: StoryObj<typeof AgentWindow> = { render: () => <AgentWindow />, beforeEach: stored({ 'if.talk.session': talkSession.id }) }
+
+/** Learn's agent is the Learn page's: its conversation is not a tab in the app's column (made up). */
+export const LearnsAgentIsNotHere: Story = { beforeEach: [stored(open), withEngine({ talks: [talkSession, { ...second, subject: 'Learn the codebase', subjectRef: { learn: 'codebase' } }] })],
+  play: async ({ canvasElement }) => { await new Promise((r) => setTimeout(r, 600)); if (canvasElement.textContent?.includes('Learn the codebase')) throw new Error('Learn\'s agent is listed in the app\'s column') } }

@@ -13,14 +13,14 @@ import { createProject, PlanError } from './projects.js'
 export const getIdea = async (id: string) => (await db.select().from(idea).where(eq(idea.id, id)))[0] ?? null
 export const listIdeas = (appId?: string) => (appId ? db.select().from(idea).where(eq(idea.appId, appId)) : db.select().from(idea)).orderBy(desc(idea.number))
 
-export async function createIdea(input: { appId: string; title: string; body?: string; actor?: string }) {
+export async function createIdea(input: { appId: string; title: string; body?: string; actor?: string; /** The conversation it came from, when an agent kept it (Learn's): its agent can then be asked about it. */ from?: { sessionId: string; what: string } }) {
   if (!input.title?.trim()) throw new PlanError('an idea needs a title')
   return db.transaction(async (tx) => {
     const [a] = await tx.select().from(app).where(eq(app.id, input.appId))
     if (!a) throw new PlanError(`no app ${input.appId}`)
     const [{ max }] = await tx.select({ max: sql<number>`coalesce(max(${idea.number}), 0)` }).from(idea).where(eq(idea.appId, a.id))
     const [row] = await tx.insert(idea).values({
-      id: newId('idea'), appId: a.id, number: Number(max) + 1, title: input.title.trim(), body: input.body?.trim() || null, source: 'person', lane: 'inbox',
+      id: newId('idea'), appId: a.id, number: Number(max) + 1, title: input.title.trim(), body: input.body?.trim() || null, source: input.from ? 'agent' : 'person', sourceRef: input.from ?? null, lane: 'inbox',
     }).returning()
     await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, ideaId: row.id, actor: input.actor ?? 'user', type: 'idea.created', payload: { number: row.number, title: row.title } })
     return row

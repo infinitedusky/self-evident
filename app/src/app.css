@@ -902,3 +902,10 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .learn-doc details { margin-top: 6px; }
 .learn-doc details > summary { cursor: pointer; font-size: 13px; }
 .learn-stale { margin: 0 0 10px; padding: 8px 12px; border-left: 3px solid var(--warn, #b7791f); border-radius: 6px; font-size: 13px; }
+
+.learn-layout.with-agent { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 38%); gap: 16px; align-items: start; }
+.learn-main { min-width: 0; }
+.learn-agent { position: sticky; top: 12px; max-height: calc(100vh - 140px); display: flex; flex-direction: column; min-height: 320px; }
+.learn-agent .conversation { flex: 1; min-height: 0; }
+.learn-agent .chat { overflow-y: auto; }
+@media (max-width: 900px) { .learn-layout.with-agent { grid-template-columns: 1fr; } .learn-agent { position: static; max-height: 70vh; } }

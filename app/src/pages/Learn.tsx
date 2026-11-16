@@ -6,6 +6,9 @@
  * Each shows the part written for a person; the part written for agents is folded under it. What the agent thinks
  * should change it keeps as ideas, so the way on from here is Ideas.
  *
+ * Learn has its own agent, beside what it wrote (Sandy, 2026-11-16: "its own agent that's broken off from the
+ * global"): its conversation is on this page and not in the app's column, as a task's agent is on the task's page.
+ *
  * The other half, the running app, is still a statement of intent: nothing reads the telemetry back yet.
  *
  * The documents after an architecture decision record and a README's "getting started": a fixed, small set with the
@@ -17,6 +20,7 @@ import { API, engine, openEvents, type Learning } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { Badge } from '../components/Badge'
 import { Md } from '../components/Md'
+import { Conversation } from '../components/Conversation'
 
 export function Learn() {
   const { app } = useCurrentApp()
@@ -46,13 +50,15 @@ export function Learn() {
         <p className="muted" style={{ margin: '4px 0 0' }}>What is true about this app, from two places: its code, and what it does when it runs. Both end in ideas.</p>
       </div></div>
 
+      <div className={`learn-layout ${l?.sessionId ? 'with-agent' : ''}`}>
+      <div className="learn-main">
       <section className="panel" data-component="LearnCodebase" aria-label="The codebase">
         <h2>The codebase {l && l.docs.length > 0 && <span className="faint">{l.docs.length} of {l.docs.length + l.missing.length} written</span>}
           {l && !l.working && app && <button className={`btn small ${none ? '' : 'quiet'}`} style={{ marginLeft: 'auto' }} disabled={busy} onClick={() => void learn()}>{none ? 'Learn this codebase' : 'Learn it again'}</button>}
         </h2>
         {!app && <p className="muted" style={{ margin: 0 }}>Add an app in Settings, and its code can be learned here.</p>}
         {error && <p className="bad" style={{ margin: '0 0 8px' }}>{error}</p>}
-        {l?.working && <p style={{ margin: '0 0 10px' }}><Badge tone="accent" dot>working</Badge> An agent is reading the code. What it writes shows here as it goes; its conversation is in the agent's column.</p>}
+        {l?.working && <p style={{ margin: '0 0 10px' }}><Badge tone="accent" dot>working</Badge> An agent is reading the code. What it writes shows here as it goes.</p>}
         {none && !l?.working && <p style={{ margin: 0 }}>An agent reads the code and writes four short documents: what the app is, its parts, how to run and test it, and what is fragile. It changes nothing. Where it sees something worth changing, it keeps an idea. Start here on a new app.</p>}
         {l && !l.working && l.stale > 0 && <p className="learn-stale" role="note">The code has changed since these were written. Learn it again to bring them up to date.</p>}
         {l?.docs.map((d) => (
@@ -70,6 +76,14 @@ export function Learn() {
         <h2>The running app <span className="faint">not built yet</span></h2>
         <p style={{ margin: 0 }}>The other half: reading what the app reports when it runs (counts, timings, outcomes) and saying what is true. A baseline when an idea is kept, what changed after it shipped, a guard after a merge. Nothing reads the telemetry back yet.</p>
       </section>
+      </div>
+      {l?.sessionId && (
+        <aside className="panel learn-agent" data-component="LearnAgent" aria-label="Learn's agent">
+          <h2>🧠 Learn's agent <span className="faint">it read the code; ask it</span></h2>
+          <Conversation sessionId={l.sessionId} compact context={{ path: '/learn', label: 'what it learned' }} onChanged={load} />
+        </aside>
+      )}
+      </div>
     </>
   )
 }

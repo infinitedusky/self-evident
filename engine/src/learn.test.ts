@@ -6,6 +6,8 @@ import { app, event, session, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { BODY_MAX, IDEAS_MAX, LEARN_DOCS, learnBrief, listLearning, setLearning, SUMMARY_MAX } from './learn.js'
 import { engineTools } from './tools.js'
+import { ideaAgents, taskAgents } from './talk.js'
+import { createIssue } from './issues.js'
 import { riskOf } from './risk.js'
 
 let reachable = true
@@ -62,5 +64,30 @@ describe.skipIf(!reachable)('learning, stored', () => {
     expect(read.sessionId).toBe(sid); expect(read.working).toBeNull()
     expect((await listLearning(appId, (id) => id === sid)).working).toEqual({ sessionId: sid })
     expect(riskOf('mcp__engine__set_learning', {}, { cwd: '/tmp' }).risk).toBe('cheap'); expect(riskOf('mcp__engine__learning', {}, { cwd: '/tmp' }).risk).toBe('free')
+  })
+
+  it('an idea Learn keeps remembers Learn\'s agent, which the idea\'s agent, and the task\'s it becomes, then has to ask', async () => {
+    const sid = newId('session')
+    await db.insert(session).values({ id: sid, appId, kind: 'talk', subject: 'Learn the codebase', subjectRef: { learn: 'codebase', app: true } })
+    const call = async (sessionId: string | undefined, name: string, args: Record<string, unknown>) => { const r = await engineTools({ appId, sessionId }).find((t) => t.name === name)!.handler(args); return r.isError ? r.content[0].text : JSON.parse(r.content[0].text) }
+    const kept = await call(sid, 'create_idea', { title: 'Run one theme locally (sample)', body: 'The suite draws every story eight times (sample).' })
+    expect(kept).toMatchObject({ source: 'agent', sourceRef: { sessionId: sid, what: 'learn' } })
+    const typed = await call(undefined, 'create_idea', { title: 'A person\'s idea (sample)' })
+    expect(typed).toMatchObject({ source: 'person', sourceRef: null }) // anybody else's idea has no source agent
+    const other = newId('session')
+    await db.insert(session).values({ id: other, appId, kind: 'talk', subject: 'the app', subjectRef: { app: true } })
+    expect(await call(other, 'create_idea', { title: 'The app agent\'s idea (sample)' })).toMatchObject({ source: 'person' })
+    // The idea's agents: Learn is among them, by name, while its conversation is open.
+    expect(await ideaAgents(kept.id)).toEqual([expect.objectContaining({ sessionId: sid, kind: 'source', what: 'Learn', busy: false })])
+    expect(await ideaAgents(typed.id)).toEqual([])
+    // It became a task: the task has the same one to ask.
+    const t = await createIssue(appId, { title: 'Run one theme locally (sample)', kind: 'code', brief: 'Do it.', ideaId: kept.id })
+    expect((await taskAgents(t.id)).filter((a) => a.kind === 'source')).toEqual([expect.objectContaining({ sessionId: sid, what: 'Learn' })])
+    const own = newId('session')
+    await db.insert(session).values({ id: own, appId, kind: 'talk', subjectRef: { ideaId: kept.id } })
+    expect((await call(own, 'agents_out', {})).map((a: { what: string; state: string }) => [a.what, a.state])).toEqual([['Learn', 'idle']])
+    expect(await call(other, 'agents_out', {})).toMatch(/only a task's or an idea's own agent/)
+    await db.update(session).set({ status: 'ended' }).where(eq(session.id, sid))
+    expect(await ideaAgents(kept.id)).toEqual([]) // its conversation ended: nobody to ask
   })
 })

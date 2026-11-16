@@ -86,8 +86,8 @@ describe.skipIf(!reachable)('a task\'s own agent', () => {
     expect((await readAgent(own.id, 'adr')).sessionId).toBe(reader.id)
     expect((await readAgent(own.id, builder.id, 1)).messages).toHaveLength(1)
     await expect(readAgent(own.id, 'audit')).rejects.toThrow(/no agent "audit" out on this task; out now: Prototype/)
-    await expect(readAgent(builder.id, 'adr')).rejects.toThrow(/only a task's own agent/)
-    await expect(agentsOut(reader.id)).rejects.toThrow(/only a task's own agent/)
+    await expect(readAgent(builder.id, 'adr')).rejects.toThrow(/only a task's or an idea's own agent/)
+    await expect(agentsOut(reader.id)).rejects.toThrow(/only a task's or an idea's own agent/)
 
     expect(await takeReply(builder.id)).toEqual({ from: own.id, what: 'Prototype', said: 'The swing is slower now; look at the downswing.' })
     expect(await takeReply(builder.id)).toBeNull() // once
