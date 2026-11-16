@@ -1,0 +1,92 @@
+/**
+ * Where a task stands against its checklist, for its own page (Sandy, 2026-11-16, asked whether the task's nav shows
+ * the difference between a checklist and the earlier way: it did not). For a task whose workflow is a checklist:
+ * the stages after its prototype (build, check, probe, tests) with how far each is, and the list itself, every
+ * acceptance criterion and requirement with the build's mark and the evidence. Null for a staged task, which keeps
+ * the nav it had.
+ *
+ * `stagesOf` is pure, from the task's sub-tasks and its test events, so it is tested without a database.
+ */
+import { and, desc, eq, inArray } from 'drizzle-orm'
+import { db } from './db/client.js'
+import { app, build, event, issue, project } from './db/schema.js'
+import { acceptanceOf, type Criterion } from './acceptance.js'
+import { getIssue } from './issues.js'
+import { inForce, type Covered } from './requirements.js'
+import { buildOf, styleOf, type Build } from './steps.js'
+import { CHECK_TITLE, FINISH_TITLE, MAX_ROUNDS, PROBE_TITLE } from './verify.js'
+import { workflowFor } from './work.js'
+
+export type StageKey = 'build' | 'check' | 'probe' | 'test'
+export type StageState = 'todo' | 'doing' | 'done' | 'failed'
+export interface Stage { key: StageKey; label: string; state: StageState; /** A few words: how far, or what is wrong. */ detail: string }
+export interface Item { id: string; kind: 'criterion' | 'requirement'; text: string; /** For a requirement, what it means here. */ what?: string; mark: 'met' | 'unmet' | 'person' | 'na' | 'unchecked'; evidence?: string }
+export interface Checklist { build: Build; stages: Stage[]; items: Item[]; met: number; unmet: number; total: number }
+
+const FIX = 'Fix what the whole test run found'
+const kindOf = (title: string) => (title.startsWith(CHECK_TITLE) ? 'check' : title.startsWith(FINISH_TITLE) ? 'finish' : title.startsWith(PROBE_TITLE) ? 'probe' : title.startsWith(FIX) ? 'fix' : 'build')
+const WORKING = ['running', 'merging', 'testing', 'awaiting_answer']
+
+/** One stage's state from the sub-tasks that make it up: failed if any did, done if all are, doing if any has begun. */
+function of(subs: { status: string }[]): StageState {
+  if (!subs.length) return 'todo'
+  if (subs.some((s) => s.status === 'failed')) return 'failed'
+  if (subs.every((s) => s.status === 'done')) return 'done'
+  return subs.some((s) => WORKING.includes(s.status) || s.status === 'done') ? 'doing' : 'todo'
+}
+
+export function stagesOf(i: { subs: { title: string; status: string }[]; build: Build; unmet: number; total: number; met: number; hasTests: boolean; /** The whole test run, last: true passed, false failed, null not run. */ tested: boolean | null }): Stage[] {
+  const by = (k: string) => i.subs.filter((s) => kindOf(s.title) === k)
+  const builders = by('build'), checks = by('check'), finishes = by('finish'), probes = by('probe'), fixes = by('fix')
+  const built = of(builders)
+  const loop = of([...checks, ...finishes])
+  const rounds = checks.length
+  const stuck = loop === 'done' && i.unmet > 0 && finishes.length >= MAX_ROUNDS
+  const stages: Stage[] = [
+    { key: 'build', label: 'Build', state: built, detail: built === 'todo' ? 'not built yet' : i.build === 'one' ? (built === 'done' ? 'built in one go' : built === 'failed' ? 'the build failed' : 'building, in one go') : `${builders.filter((s) => s.status === 'done').length} of ${builders.length} sub-tasks` },
+    { key: 'check', label: 'Check', state: stuck ? 'failed' : loop === 'done' && i.unmet > 0 ? 'doing' : loop,
+      detail: !rounds ? (i.total ? `${i.total} to check` : 'nothing on the list') : stuck ? `${i.unmet} still not done after ${MAX_ROUNDS} rounds: yours` : loop === 'done' && !i.unmet ? `${i.met} of ${i.total} met${rounds > 1 ? `, in ${rounds} rounds` : ''}` : `round ${rounds}${i.unmet ? `: ${i.unmet} not done, sent back` : ''}` },
+    { key: 'probe', label: 'Probe', state: of(probes), detail: of(probes) === 'done' ? 'tried to break it, and cleaned up' : of(probes) === 'doing' ? 'an agent that did not build it is trying it' : 'after the check' },
+  ]
+  if (i.hasTests) {
+    const fixing = of(fixes)
+    stages.push({ key: 'test', label: 'Tests', state: fixing === 'doing' || fixing === 'todo' && fixes.length ? 'doing' : i.tested === true ? 'done' : i.tested === false ? 'failed' : 'todo',
+      detail: fixes.length && fixing !== 'done' ? 'fixing what the run found' : i.tested === true ? `the whole run passed${fixes.length ? `, after ${fixes.length} fix${fixes.length === 1 ? '' : 'es'}` : ''}` : i.tested === false ? 'the whole run failed' : 'the whole run, once, last' })
+  }
+  return stages
+}
+
+const criterionItem = (c: Criterion): Item => ({
+  id: c.id, kind: 'criterion', text: c.text,
+  mark: c.built === true ? 'met' : c.built === false ? 'unmet' : c.builtEvidence ? 'person' : 'unchecked',
+  evidence: c.builtEvidence ?? (c.built === undefined ? c.check : undefined),
+})
+
+/** Where the task stands; null when its workflow is not a checklist (or it is a sub-task). */
+export async function checklistOf(issueId: string): Promise<Checklist | null> {
+  const t = await getIssue(db, issueId)
+  if (t.parentId || t.kind !== 'code') return null
+  const w = (await workflowFor(db, { issueId: t.id })).workflow
+  if (styleOf(w) !== 'checklist') return null
+  const [a] = await db.select().from(app).where(eq(app.id, t.appId))
+  const [p] = t.projectId ? await db.select().from(project).where(eq(project.id, t.projectId)) : []
+  const required = inForce(a?.setup, p?.requirements, w?.requirements)
+  const held = (t.requirements ?? []) as Covered[]
+  const items: Item[] = [
+    ...acceptanceOf(t).map(criterionItem),
+    ...required.map((r): Item => {
+      const c = held.find((x) => x.key === r.key)
+      return { id: `req_${r.key}`, kind: 'requirement', text: r.name, what: r.what, mark: c?.built === false ? 'unmet' : c?.built === true ? (c.applies ? 'met' : 'na') : 'unchecked', evidence: c?.how || undefined }
+    }),
+  ]
+  const subs = await db.select({ id: issue.id, title: issue.title, state: issue.state }).from(issue).where(eq(issue.parentId, t.id))
+  const live = subs.filter((s) => s.state !== 'canceled' && s.state !== 'duplicate')
+  const builds = live.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, live.map((s) => s.id))) : []
+  const [last] = await db.select({ payload: event.payload }).from(event).where(and(eq(event.issueId, t.id), eq(event.type, 'task.tested'))).orderBy(desc(event.seq)).limit(1)
+  const met = items.filter((x) => x.mark === 'met' || x.mark === 'na').length, unmet = items.filter((x) => x.mark === 'unmet').length
+  const b = buildOf(w)
+  return {
+    build: b, items, met, unmet, total: items.length,
+    stages: stagesOf({ subs: live.map((s) => ({ title: s.title, status: builds.find((x) => x.issueId === s.id)?.status ?? 'queued' })), build: b, unmet, met, total: items.length, hasTests: !!(a?.setup as { test_cmd?: string } | null)?.test_cmd, tested: last ? (last.payload as { ok?: boolean }).ok === true : null }),
+  }
+}
