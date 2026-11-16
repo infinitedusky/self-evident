@@ -5,6 +5,8 @@
  */
 import { useEffect, useState } from 'react'
 import { DEFAULT_STEPS } from '@self-evident/engine/steps'
+import { requirementsOf } from '@self-evident/engine/requirements'
+import { useCurrentApp } from '../current-app'
 import { WorkflowCard } from './WorkflowCard'
 import { engine, type WorkflowRow } from '../engine'
 
@@ -16,6 +18,7 @@ export function WorkflowSettings({ appId }: { appId: string }) {
   useEffect(() => { setList(null); void reload() }, [appId]) // eslint-disable-line react-hooks/exhaustive-deps
   const act = async (fn: () => Promise<unknown>) => { try { await fn(); setError(null); await reload() } catch (e: any) { setError(String(e.message ?? e)) } }
   const byDefault = list?.find((w) => w.appDefault)
+  const catalogue = requirementsOf(useCurrentApp().apps.find((a) => a.id === appId)?.setup) // what each requirement means here, and whether the app has it on
   return (
     <section className="panel" data-component="WorkflowSettings">
       <div className="task-block-head">
@@ -30,7 +33,7 @@ export function WorkflowSettings({ appId }: { appId: string }) {
       {name !== null && (
         <div className="new-task" style={{ marginBottom: 12 }}>
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="A name, like UI change or Quick fix" onKeyDown={(e) => { if (e.key === 'Escape') setName(null) }} />
-          <button className="btn small" disabled={!name.trim()} onClick={() => act(async () => { await engine.saveWorkflow({ appId, name, steps: DEFAULT_STEPS, ordered: false }); setName(null) })}>Add</button>
+          <button className="btn small" disabled={!name.trim()} onClick={() => act(async () => { await engine.saveWorkflow({ appId, name, steps: DEFAULT_STEPS, ordered: false, style: 'checklist', build: 'one' }); setName(null) })}>Add</button>
           <button className="btn quiet small" onClick={() => setName(null)}>Cancel</button>
         </div>
       )}
@@ -45,7 +48,7 @@ export function WorkflowSettings({ appId }: { appId: string }) {
           </label>
           {list.length > 0 && (
             <div className="workflow-list">
-              {list.map((w) => <WorkflowCard key={w.id} workflow={w} usedBy={w.appDefault ? 'The app\'s default' : undefined} onSave={(next) => void act(() => engine.saveWorkflow({ ...next, appId }))} />)}
+              {list.map((w) => <WorkflowCard key={w.id} workflow={w} catalogue={catalogue} usedBy={w.appDefault ? 'The app\'s default' : undefined} onSave={(next) => void act(() => engine.saveWorkflow({ ...next, appId }))} />)}
             </div>
           )}
         </>
