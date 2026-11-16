@@ -4,7 +4,8 @@
  */
 import { and, asc, desc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { speedOf } from './steps.js'
+import { BEFORE_PLAN, checksOf } from './steps.js'
+import { workflowFor } from './work.js'
 import { app, build, event, fileClaim, issue, outsidePr, project, pr, question, run, session, step, stepWork } from './db/schema.js'
 import { putAwayIds } from './apps.js'
 import { identifier } from './issues.js'
@@ -140,8 +141,9 @@ export async function now(appId?: string) {
   for (const t of waiting) {
     const of = (key: string) => marks.find((m) => m.issueId === t.id && m.key === key)
     if (!of('prototype')?.approvedBy) continue
-    const fast = speedOf(t.speed, appOf(t.appId)?.setup).value === 'fast'
-    if (!fast && !(of('analysis')?.status === 'done' && of('adr')?.status === 'done')) continue // carefully: the brief is brought up to date from the analysis and the ADR first
+    const w = (await workflowFor(db, { issueId: t.id })).workflow
+    const first = w ? checksOf(w).filter((k) => BEFORE_PLAN.includes(k)) : [] // the checks its workflow runs before the plan: none when it goes fast
+    if (!first.every((k) => of(k)?.status === 'done')) continue // the brief is brought up to date from the analysis and the ADR first
     const p = projects.find((x) => x.id === t.projectId)
     if (p) needsYou.push({ kind: 'approve_brief', ...tag(p), issueId: t.id, identifier: name(t), issueTitle: t.title })
   }

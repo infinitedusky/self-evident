@@ -8,7 +8,7 @@ import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { serve } from '@hono/node-server'
 import { appendEvent } from './events.js'
 import { serveStatic } from '@hono/node-server/serve-static'
-import { eq } from 'drizzle-orm'
+import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
@@ -24,9 +24,9 @@ import { EventBus, eventsSince, latestSeq, PAGE } from './events.js'
 import { appKey, cleanKey, newId } from './ids.js'
 import { createIdea, getIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { advanceChecks, onChecksDone, onPlanWanted, resumeChecks } from './checks.js'
-import { checksOwed, step, SPEEDS, type Speed } from './steps.js'
+import { checksOwed, step } from './steps.js'
 import { writeHandover } from './handover.js'
-import { skipUntouched, approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
+import { skipUntouched, approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, speedIntoWorkflows, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
 import { adoptTalk, answerPermission, busyAmong, releaseTalks, closeTalk, closeTalks, endTalk, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, runLog, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, setupTalk, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
@@ -584,21 +584,12 @@ export function buildApp(bus: EventBus) {
     } catch (err) { console.error(`[engine] building ${issueId} by itself: ${err instanceof Error ? err.message : err}`) }
   }
   onChecksDone((issueId) => void maybeBuild(issueId))
-  // A task's speed (steps.ts, Speed): careful, fast, or null to follow its app. Changing it carries the task on at
-  // once: fast drops the checks it still owed, so an approved task is planned and built; careful picks them up.
-  api.put('/issues/:id/speed', async (c) => {
-    const { speed } = await c.req.json<{ speed: string | null }>().catch(() => ({ speed: undefined as unknown as string | null }))
-    if (speed !== null && !SPEEDS.includes(speed as Speed)) return c.json({ error: `speed is ${SPEEDS.join(' or ')}, or null to follow the app` }, 400)
-    try {
-      const t = await resolveIssue(db, c.req.param('id'))
-      if (t.parentId) return c.json({ error: 'a sub-task goes at its task\'s speed' }, 400)
-      await db.update(issueTable).set({ speed, updatedAt: new Date() }).where(eq(issueTable.id, t.id))
-      const [a] = await db.select().from(appTable).where(eq(appTable.id, t.appId))
-      await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, issueId: t.id, projectId: t.projectId, actor: 'user', type: 'issue.updated', payload: { number: t.number, changed: ['speed'], speed } }))
-      void maybeBuild(t.id); void advanceChecks(t.id).catch(() => {})
-      return c.json((await stepsOf({ issueId: t.id })).resolved.speed)
-    } catch (err) { return planError(c, err, 404) }
-  })
+// A workflow changed, or another one chosen: what follows the prototype may be different now (fewer checks, or more),
+  // so every task of the app that is under way is carried on at once, as its own speed switch used to do.
+  const carryOn = async (appId: string) => {
+    const open = await db.select({ id: issueTable.id }).from(issueTable).where(and(eq(issueTable.appId, appId), isNull(issueTable.parentId), eq(issueTable.kind, 'code'), inArray(issueTable.state, ['todo', 'in_progress'])))
+    for (const t of open.slice(0, 100)) { void maybeBuild(t.id); void advanceChecks(t.id).catch(() => {}) }
+  }
   // After a prototype the plan comes before the blast radius and the audit, which read it: when the line reaches that
   // point the task is planned, and the line is carried on once the sub-tasks are in. An app that waits plans by hand.
   onPlanWanted((issueId) => void (async () => {
@@ -655,11 +646,17 @@ export function buildApp(bus: EventBus) {
   })
   api.get('/workflows', async (c) => { const a = c.req.query('app'); if (!a) return c.json({ error: 'app is required: one app at a time' }, 400); try { return c.json(await listWorkflows(a)) } catch (err) { return planError(c, err, 404) } })
   api.post('/workflows', async (c) => { try { return c.json(await saveWorkflow(await c.req.json(), 'user'), 201) } catch (err) { return planError(c, err) } })
-  api.put('/workflows/:id', async (c) => { try { return c.json(await saveWorkflow({ ...(await c.req.json()), id: c.req.param('id') }, 'user')) } catch (err) { return planError(c, err) } })
+  api.put('/workflows/:id', async (c) => { try { const body = await c.req.json<{ appId: string }>(); const w = await saveWorkflow({ ...(body as never as Parameters<typeof saveWorkflow>[0]), id: c.req.param('id') }, 'user'); void carryOn(body.appId).catch(() => {}); return c.json(w) } catch (err) { return planError(c, err) } })
   for (const [kind, key] of [['apps', 'appId'], ['projects', 'projectId'], ['issues', 'issueId']] as const) {
     api.post(`/${kind}/:id/workflow`, async (c) => {
       const { workflowId } = await c.req.json<{ workflowId: string | null }>()
-      try { return c.json(await useWorkflow({ [key]: c.req.param('id') } as never, workflowId ?? null, 'user')) } catch (err) { return planError(c, err) }
+      try {
+        const out = await useWorkflow({ [key]: c.req.param('id') } as never, workflowId ?? null, 'user')
+        if (kind === 'apps') void carryOn(c.req.param('id')).catch(() => {})
+        else if (kind === 'issues') { const t = await resolveIssue(db, c.req.param('id')).catch(() => null); if (t) { void maybeBuild(t.id); void advanceChecks(t.id).catch(() => {}) } }
+        else { const [p] = await db.select().from(projectTable).where(eq(projectTable.id, c.req.param('id'))); if (p) void carryOn(p.appId).catch(() => {}) }
+        return c.json(out)
+      } catch (err) { return planError(c, err) }
     })
   }
   api.get('/plan', async (c) => { const a = c.req.query('app'); if (!a) return c.json({ error: 'app is required: one app at a time' }, 400); try { return c.json(await planView(a)) } catch (err) { return planError(c, err, 404) } })
@@ -939,6 +936,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   if (recovered.projects || recovered.builds || recovered.reaped) console.log('recovered:', JSON.stringify(recovered))
   const port = Number(process.env.PORT ?? 4000)
   serve({ fetch: buildApp(bus).fetch, port }, (info) => console.log(`engine listening on http://localhost:${info.port}  (API under /api; UI at / when built)`))
+  void speedIntoWorkflows().then((r) => { if (r.moved) console.log(`[engine] ${r.moved} app${r.moved === 1 ? '' : 's'} set to Fast moved onto a fast workflow`) }).catch((err) => console.error('workflows: could not move the old speed setting', err))
   setTimeout(() => void resumeChecks().catch((err) => console.error('checks: could not resume after the restart', err)), 8_000) // a task's checks that were under way carry on
   void watchTerminals().catch(() => {}) // conversations still in a terminal: keep copying what's said there
   const stopSync = process.env.GITHUB_SYNC === '0' ? () => undefined : startSync(Number(process.env.GITHUB_SYNC_MINUTES ?? 2)) // GitHub: reviews, checks, merges, main moving

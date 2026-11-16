@@ -4,11 +4,11 @@
  * approved again; a workflow that starts tasks as ideas refuses a task made directly; an idea converts into a task or
  * a project and its steps and prototypes go with it; planning waits for the approved brief.
  */
-import { checksOwed } from './steps.js'
+import { afterOf, checksOwed, DEFAULT_STEPS, withChecks } from './steps.js'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, issue, project, prototype, workspace } from './db/schema.js'
+import { app, issue, project, prototype, workflow, workspace } from './db/schema.js'
 import { createIdea } from './ideas.js'
 import { newId } from './ids.js'
 import { createIssue, updateIssue } from './issues.js'
@@ -16,7 +16,7 @@ import { preparePlanning } from './planner.js'
 import { createProject } from './projects.js'
 import { now } from './now.js'
 import { skipTheRest } from './test-briefs.js'
-import { skipUntouched, approveBrief, convertIdea, createDefaultWorkflow, guardComplete, guardDirect, ideaFirst, listWorkflows, planView, saveWorkflow, setStep, splitPrompt, stepsOf, useWorkflow, approveStep } from './work.js'
+import { skipUntouched, approveBrief, convertIdea, createDefaultWorkflow, guardComplete, guardDirect, ideaFirst, listWorkflows, planView, saveWorkflow, setStep, speedIntoWorkflows, splitPrompt, stepsOf, useWorkflow, approveStep } from './work.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -185,23 +185,31 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     expect(splitPrompt('Saved carts', 'SS-9 Saved carts')).toMatch(/one task or several.*create_task.*If it is one task, say so/s)
   })
 
-  it('a task goes at its app\'s speed unless it has its own: fast owes no checks after its prototype', async () => {
+  it('what follows a task\'s prototype is its workflow\'s: a fast one owes no checks, and an app once set to Fast is moved onto one', async () => {
     const { issues: [t] } = await createProject({ appId, name: 'Speeds (sample)', issues: [{ title: 'Quick one (sample)', brief: 'Build it.' }] })
     await setStep({ issueId: t.id }, 'prototype', { status: 'done', detail: 'the whole flow (sample)' })
     const keys = async () => (await stepsOf({ issueId: t.id })).rows.map((r) => r.key)
-    expect((await stepsOf({ issueId: t.id })).resolved.speed).toEqual({ value: 'careful', from: 'app' })
-    expect(await keys()).toContain('audit')
-    await db.update(issue).set({ speed: 'fast' }).where(eq(issue.id, t.id))
-    expect((await stepsOf({ issueId: t.id })).resolved.speed).toEqual({ value: 'fast', from: 'task' })
-    expect(await keys()).not.toContain('audit')
-    expect(await keys()).toContain('prototype')
-    await db.update(issue).set({ speed: null }).where(eq(issue.id, t.id))
-    await db.update(app).set({ setup: { speed: 'fast' } }).where(eq(app.id, appId))
-    expect((await stepsOf({ issueId: t.id })).resolved.speed).toEqual({ value: 'fast', from: 'app' })
+    const [before] = await db.select().from(app).where(eq(app.id, appId))
+    expect(await keys()).toContain('audit') // the app's default: every check
+    // A fast workflow of its own, saved and read back: no checks, the prototype still there.
+    const quick = await saveWorkflow({ appId, name: 'Fast (sample)', steps: withChecks({ id: 'x', name: 'x', steps: DEFAULT_STEPS, ordered: false }, 'fast').steps })
+    expect(afterOf(quick)).toBe('fast')
+    await useWorkflow({ issueId: t.id }, quick.id)
+    expect(await keys()).not.toContain('audit'); expect(await keys()).toContain('prototype')
+    const picked = await saveWorkflow({ id: quick.id, appId, name: 'Some (sample)', steps: withChecks(quick, ['risk']).steps })
+    expect(afterOf(picked)).toBe('custom')
+    expect((await keys()).filter((k) => ['analysis', 'adr', 'risk', 'audit', 'final'].includes(k))).toEqual(['risk'])
+    await useWorkflow({ issueId: t.id }, null)
+    // The old switch (setup.speed) is moved into the app's default workflow, once, and removed.
+    await db.update(app).set({ setup: { ...(before.setup as object), speed: 'fast', test_cmd: 'true' } }).where(eq(app.id, appId))
+    expect(await keys()).toContain('analysis') // the old setting alone does nothing now
+    expect(await speedIntoWorkflows()).toEqual({ moved: 1 })
     expect(await keys()).not.toContain('analysis')
-    await db.update(issue).set({ speed: 'careful' }).where(eq(issue.id, t.id)) // this one, carefully
-    expect(await keys()).toContain('final')
-    await db.update(app).set({ setup: {} }).where(eq(app.id, appId))
+    const [after] = await db.select().from(app).where(eq(app.id, appId))
+    expect(after.setup).toMatchObject({ test_cmd: 'true' }); expect(after.setup).not.toHaveProperty('speed')
+    expect(await speedIntoWorkflows()).toEqual({ moved: 0 }) // again: nothing to do
+    // Put back as it was, for the tests after this one: the default workflow runs every check again.
+    await db.update(workflow).set({ steps: withChecks({ id: 'x', name: 'x', steps: DEFAULT_STEPS, ordered: false }, 'full').steps }).where(eq(workflow.id, after.workflowId!)); await db.update(app).set({ setup: before.setup }).where(eq(app.id, appId))
   })
 
   it('after an approved prototype the optional steps nobody touched are skipped, and the brief waiting on the person is listed as needing them', async () => {
@@ -212,7 +220,8 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     await approveStep(t.id, 'prototype', 'Sam (sample)')
     const waits = async () => (await now(appId)).needsYou.filter((a) => a.kind === 'approve_brief').map((a) => (a as { issueId: string }).issueId)
     expect(await waits()).not.toContain(t.id) // carefully: the analysis and the ADR bring the brief up to date first
-    await db.update(issue).set({ speed: 'fast' }).where(eq(issue.id, t.id))
+    const quick = await saveWorkflow({ appId, name: 'Fast, for waiting (sample)', steps: withChecks({ id: 'x', name: 'x', steps: DEFAULT_STEPS, ordered: false }, 'fast').steps })
+    await useWorkflow({ issueId: t.id }, quick.id) // a fast workflow: nothing to wait for
     expect(await waits()).toContain(t.id)
     const skippedNow = await skipUntouched(t.id)
     expect(skippedNow).toEqual(expect.arrayContaining(['sketch', 'mockup']))

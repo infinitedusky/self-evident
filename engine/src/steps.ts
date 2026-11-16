@@ -59,26 +59,39 @@ export const label = (key: StepKey, on: On) => (key === 'brief' && on === 'idea'
 /** A step in a workflow. A check is in the list only when added; the others are always listed. */
 export interface WorkflowStep { key: StepKey; on: boolean; required: boolean }
 /**
- * How much stands between an approved prototype and the build (Sandy, 2026-11-15: "it's moving very slow … very good
- * for a group project where there's a lot of stakeholders" … "let's build the two speeds").
- * - careful: the analysis, the draft ADR, the plan, the blast radius, the audit and the final ADR and plan, then the
+ * How much stands between an approved prototype and the build, as a workflow's own choice (Sandy, 2026-11-16: "Fast
+ * mode presumably is just changing that. So shouldn't we add fast mode to a workflow" … "three options, full, fast,
+ * fine-grain control"). Until then it was a separate switch on the app and the task, which a workflow knew nothing of.
+ * - full: every check (the analysis, the draft ADR, the blast radius, the audit, the final ADR and plan), then the
  *   build. For shared code, client work and risky changes: the documents are what let other people trust it.
  * - fast: the plan, then the build. The scrutiny is on the pull request. For one person building their own thing.
- * Set per app (setup.speed; careful when unset) and, when a task says so, per task.
+ * - custom: the checks the workflow picks.
+ * It is not stored by name: it is which of the workflow's check steps are on.
  */
-export type Speed = 'careful' | 'fast'
-export const SPEEDS: Speed[] = ['careful', 'fast']
-export const speedOf = (own: unknown, appSetup: unknown): { value: Speed; from: 'task' | 'app' } =>
-  own === 'careful' || own === 'fast' ? { value: own, from: 'task' } : { value: (appSetup as { speed?: string } | null)?.speed === 'fast' ? 'fast' : 'careful', from: 'app' }
+export type After = 'full' | 'fast' | 'custom'
+export const AFTERS: After[] = ['full', 'fast', 'custom']
+export const AFTER_SAYS: Record<After, string> = {
+  full: 'every check, then the plan and the build',
+  fast: 'planned and built straight after the prototype; the scrutiny is on the pull request',
+  custom: 'the checks you pick',
+}
+/** The checks a workflow runs after its prototype, in their order; none when it has no prototype. */
+export const checksOf = (w: Workflow): StepKey[] => normalize(w).steps.filter((s) => step(s.key).place === 'check' && s.on).map((s) => s.key)
+export const afterOf = (w: Workflow): After => { const n = checksOf(w).length; return n === CHECKS.length ? 'full' : n === 0 ? 'fast' : 'custom' }
+/** The workflow with these checks on and the rest off: all of them for full, none for fast. */
+export function withChecks(w: Workflow, keys: StepKey[] | 'full' | 'fast'): Workflow {
+  const on = keys === 'full' ? CHECKS : keys === 'fast' ? [] : keys
+  return normalize({ ...w, steps: [...w.steps.filter((s) => step(s.key)?.place !== 'check'), ...CHECKS.map((key) => ({ key, on: on.includes(key), required: true }))] })
+}
 
-export interface Workflow { id: string; name: string; steps: WorkflowStep[]; ordered: boolean; /** Resolved for one task: it goes fast, so no checks stand between its prototype and its build. */ fast?: boolean } // steps in its order
+export interface Workflow { id: string; name: string; steps: WorkflowStep[]; ordered: boolean } // steps in its order; its check steps say what follows the prototype (After)
 
 /** What a workflow may switch: research, sketches, mockups and the prototype on or off; the idea and the brief are always on. */
 export const canTurnOff = (key: StepKey) => key === 'research' || step(key).place === 'either'
 export const canMakeOptional = (key: StepKey) => key !== 'brief'
-/** Nothing is removed from a workflow: the checks are not its to choose (they follow the prototype). Kept for callers written when they were. */
+/** Nothing is removed from a workflow: a check it does not run is switched off (withChecks), not taken out. */
 export const canRemove = (_key: StepKey) => false
-/** The steps a workflow chooses: every one but the checks, which follow the prototype by themselves. */
+/** The steps on the way to an approved prototype: every one but the checks, which follow it. */
 export const chosen = (key: StepKey) => step(key).place !== 'check'
 
 /** Whether steps in this order keep the fixed rules: the idea first, every check after the other steps. Where the brief sits means nothing. */
@@ -118,11 +131,12 @@ export function normalize(w: Workflow): Workflow {
     steps.splice(steps.findIndex((s) => s.key === 'mockup'), 0, sketch)
   }
   steps = steps.map((s) => (s.key === 'brief' ? { ...s, on: true, required: true } : s.key === 'idea' ? { ...s, on: true } : s))
-  // What happens after the prototype is not a workflow's choice (Sandy, 2026-11-14: "some of these things I don't think
-  // we want to be deciding anymore"): a workflow with a prototype has every check, required, in their order; one
-  // without has none. Whatever was saved about them is dropped.
+  // What follows the prototype is the workflow's to choose, check by check (After). A workflow with a prototype lists
+  // every check in their order, each on or off; one never set runs them all, as before. A check that runs is required
+  // (it is a report, not something to skip). A workflow without a prototype has none.
+  const savedOn = new Map(steps.filter((s) => !chosen(s.key)).map((s) => [s.key, s.on !== false]))
   steps = steps.filter((s) => chosen(s.key))
-  if (steps.some((s) => s.key === 'prototype' && s.on)) steps.push(...CHECKS.map((key) => ({ key, on: true, required: true })))
+  if (steps.some((s) => s.key === 'prototype' && s.on)) steps.push(...CHECKS.map((key) => ({ key, on: savedOn.get(key) ?? true, required: true })))
   if (!validOrder(steps)) {
     const rank = (k: StepKey) => ['first', 'before', 'either', 'check', 'brief'].indexOf(step(k).place)
     steps = [...steps].sort((a, b) => rank(a.key) - rank(b.key))
@@ -145,7 +159,7 @@ export interface StepState {
 
 export type Source = 'task' | 'project' | 'app'
 /** On a task or project, always a workflow; on an idea, none (an idea has no workflow). */
-export interface Resolved { workflow: Workflow | null; from: Source | null; /** A task's speed, and whether it is its own or the app's. */ speed?: { value: Speed; from: 'task' | 'app' } }
+export interface Resolved { workflow: Workflow | null; from: Source | null }
 
 /** The workflow in force: the task's own, or else its project's, or else the app's default; never none. */
 export function resolve(own?: Workflow | null, project?: Workflow | null, app?: Workflow | null): Resolved {
@@ -190,7 +204,7 @@ export function rows(on: On, states: StepState[], workflow: Workflow | null): Ro
   // begun; never when it is skipped, and not for an optional one nobody has touched (so a task that never prototypes
   // owes them nothing).
   const proto = all.find((s) => s.key === 'prototype')
-  const inPlay = !!proto && !workflow?.fast && stateOf('prototype').status !== 'skipped' && (proto.required || stateOf('prototype').status !== 'none') // a fast task has none: it is planned and built straight after its prototype
+  const inPlay = !!proto && stateOf('prototype').status !== 'skipped' && (proto.required || stateOf('prototype').status !== 'none') // a fast workflow has every check off, so none is listed
   const list = all.filter((s) => step(s.key).place !== 'check' || inPlay)
   return list.map((s, i) => {
     const parent = s.key === 'brief'
