@@ -3,6 +3,7 @@
  * the event log over SSE at GET /events.
  */
 import './own-scope.js' // first: the engine's own Doppler scope is not handed to what it starts
+import { stayUp } from './stay-up.js'
 import { readFile } from 'node:fs/promises'
 import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
@@ -905,6 +906,11 @@ export function buildApp(bus: EventBus) {
           }
           if (rows.length < PAGE) break
         }
+      }).catch((err) => {
+        // A read that fails (the database connection dropped under it) must not end the engine: nobody awaits this
+        // when an event sets it off, so the rejection had nowhere to go and took the process down (eleven times by
+        // 2026-11-16). `last` has not moved, so the next event, or the browser's own retry, reads from the same place.
+        console.warn(`[engine] the live feed could not read events after ${last}: ${String((err as Error)?.cause ?? (err as Error)?.message ?? err).slice(0, 200)}`)
       }))
       await stream.writeSSE({ id: String(since), event: 'ping', data: String(Date.now()) }) // where this stream starts: a page that loses it before any event still knows where to resume
       bus.on('event', send)
@@ -953,6 +959,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   if (stranded) console.log(`[engine] ${stranded} planner run(s) interrupted by the restart; project those tasks again`)
   if (recovered.projects || recovered.builds || recovered.reaped) console.log('recovered:', JSON.stringify(recovered))
   const port = Number(process.env.PORT ?? 4000)
+  stayUp() // a failure nobody was waiting on is logged, and the engine carries on
   serve({ fetch: buildApp(bus).fetch, port }, (info) => console.log(`engine listening on http://localhost:${info.port}  (API under /api; UI at / when built)`))
   void ensureMain().then((r) => { if (r.made) console.log(`[engine] ${r.made} app${r.made === 1 ? '' : 's'} given a Main workflow; what they had is Legacy`) }).catch((err) => console.error('workflows: could not make Main', err))
   void speedIntoWorkflows().then((r) => { if (r.moved) console.log(`[engine] ${r.moved} app${r.moved === 1 ? '' : 's'} set to Fast moved onto a fast workflow`) }).catch((err) => console.error('workflows: could not move the old speed setting', err))
