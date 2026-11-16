@@ -232,7 +232,7 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
     void nameFor(tab).then((n) => { if (n) { panel.api.setTitle(n); sync() } })
   }, [sync])
 
-  /** The agent changed things: the following tab goes where they show (opened beside the tab in front the first time). */
+  /** The agent changed things: the tab already on that thing comes to the front, else the following tab goes there (a tab among the others the first time). */
   const land = useCallback(() => {
     const api = dock.current
     const changes = burst.current
@@ -241,15 +241,16 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
     if (!api || !path) return
     const tab: Tab = { kind: 'page', path }
     const sessionId = changes[changes.length - 1].sessionId
+    if (api.panels.some((p) => !(p.params as Params).follow && tabThing((p.params as Params).tab) === tabThing(tab))) { add(tab); return } // open already: that tab comes to the front, and no second one is made
     const there = api.panels.find((p) => (p.params as Params).follow)
     const landed = ((there?.params as Params | undefined)?.follow?.landed ?? 0) + 1
     const params: Params = { tab, follow: { sessionId, landed } }
-    const panel = there ?? api.addPanel({ id: `t_${Date.now().toString(36)}f`, component: 'tab', tabComponent: 'follow', title: tabTitle(tab), params, ...(api.activePanel ? { position: { referencePanel: api.activePanel, direction: 'right' as const } } : {}) })
+    const panel = there ?? api.addPanel({ id: `t_${Date.now().toString(36)}f`, component: 'tab', tabComponent: 'follow', title: tabTitle(tab), params }) // a tab among the others, not a split
     if (there) { there.api.updateParameters(params); there.api.setTitle(tabTitle(tab)) }
     panel.api.setActive()
     void nameFor(tab).then((n) => { if (n) { panel.api.setTitle(n); sync() } })
     sync()
-  }, [sync])
+  }, [sync, add])
 
   const onDock = useCallback((api: DockviewApi) => {
     dock.current = api
@@ -289,7 +290,7 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
       const home = root && p.tab.kind === 'page' && p.tab.path.startsWith(root)
         ? api?.panels.find((x) => { const t = (x.params as Params).tab; return t.kind === 'page' && t.path.startsWith(root) }) : undefined
       if (home) { home.api.updateParameters({ ...(home.params as Params), tab: p.tab }); home.api.setActive(); sync(); return }
-      add(p.tab, { split: p.split ?? undefined })
+      add(p.tab) // a tab, never a split: splitting is the person's to do
     }) as EventListener)
     es.addEventListener('ui.follow', ((ev: MessageEvent) => {
       const p = (JSON.parse(ev.data) as { payload?: { sessionId?: string | null; tab?: Tab; projectId?: string | null } }).payload

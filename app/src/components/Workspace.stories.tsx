@@ -87,7 +87,7 @@ export const AgentFolded: Story = { beforeEach: [forget({ 'se.agent.open': '0' }
 export const NoApps: Story = { beforeEach: [forget(), withEngine({ apps: [] })] }
 export const EngineDown: Story = { beforeEach: [forget(), withEngine(engineDown)] }
 /**
- * Following the agent: it changed two tasks of a project (made up), so a tab opens beside My Stuff on the project,
+ * Following the agent: it changed two tasks of a project (made up), so a tab opens next to My Stuff on the project (a tab, not a split),
  * with a pulsing dot in the conversation's colour. Its tab in the agent's column wears the same colour.
  */
 const follows = ['iss_sample1', 'iss_sample2'].map((id, i) => ({ seq: 900 + i, type: 'ui.follow', payload: { sessionId: talkSession.id, tool: 'update_task', tab: { kind: 'page', path: `/tasks/${id}` }, projectId: 'proj_checkout' } }))
@@ -97,6 +97,18 @@ export const FollowingTheAgent: Story = {
   play: async ({ canvasElement }) => { // two tasks of one project land once, on the project
     for (let i = 0; i < 60; i++) { const t = followTab(canvasElement); if (t?.textContent?.includes('One-page checkout')) return; await new Promise((r) => setTimeout(r, 50)) }
     throw new Error(`no following tab on the project (${followTab(canvasElement)?.textContent ?? 'none'})`)
+  },
+}
+/** The project is open already: the same changes bring that tab to the front, and no second tab is made on it. */
+export const FollowingIntoAnOpenTab: Story = {
+  args: { address: false, initial: [{ tab: { kind: 'page', path: '/projects/proj_checkout' } }, { tab: { kind: 'page', path: '/tasks' } }] },
+  beforeEach: [forget(), withEngine([eventStream(follows)])],
+  play: async ({ canvasElement }) => {
+    await new Promise((r) => setTimeout(r, 1500))
+    if (followTab(canvasElement)) throw new Error('a following tab opened on a project that was open already')
+    const tabs = tabsOf(canvasElement)
+    await expect(tabs).toHaveLength(2)
+    await expect(tabs.find((t) => t.classList.contains('dv-active-tab'))?.textContent).toContain('One-page checkout')
   },
 }
 /** Not following (switched off in the agent's column): the same changes open nothing. */
