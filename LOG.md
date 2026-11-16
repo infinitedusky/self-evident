@@ -4127,3 +4127,11 @@ status. A step, a retry or anything missed while the engine restarted left a nod
 - It now uses the same live read as the project's graph: every event of the project reads it again.
 - Both graphs also read again when the event stream comes back after a gap, and every 20 seconds while the page is
   showing, so one missed event never needs a reload.
+
+## Clearing its own scratch files does not stop an agent (Sandy, 2026-11-16: "this again", on `rm -f /tmp/bon85shots/*`)
+
+Any `rm -f` or `rm -rf` was rated expensive, and expensive always asks. A builder clearing a folder of screenshots
+in `/tmp` before taking new ones stopped and waited.
+
+- `rm -f`/`rm -rf` whose every target is inside a named folder of a temporary directory (`/tmp/x/…`, `$TMPDIR/x`,
+  `/var/folders/…`) is cheap now. `/tmp/*` itself, a path with `..`, or any target elsewhere is still expensive.
