@@ -4313,3 +4313,32 @@ A task on Main still had one Build row, "Sub-tasks, not planned", and its list w
   task's sub-tasks and its last test run.
 
 Not done: the folded nav (icons only) still shows the one build icon.
+
+## A pull request is submitted by the person, never opened by itself (Sandy, 2026-11-16: "there needs to be a way to make sure a PR never gets ahead of a manual check"; "we should move to 'submit PR' as a button that needs to be pressed so that I can't ever have this happen")
+
+What happened: on a real task of nine sub-tasks, the engine pushed the task's branch and opened its pull request
+when the first sub-task landed: ready for review, not a draft, titled the engine's way and not the repository's,
+before tests only the person could run. The repository's own rules ask for drafts and a set title. The person closed
+it; had another sub-task landed, the engine would have opened a second one, because it only looked for an open one.
+The build was paused by hand to stop that.
+
+Decided:
+
+- **Nothing leaves the computer while a task is built.** No push, no pull request, however many sub-tasks land.
+- **Submit pull request** on the task's Sub-tasks page is the only way one opens. It is refused while sub-tasks are
+  still to land. It asks once, saying it pushes the branch and that the team can see it from then on, and names the
+  acceptance criteria not marked as met by the build. After it, each landing updates the pull request as before.
+- **A draft, by default** (`setup.pr_draft`, off in Settings › Landing for a repository that wants them ready).
+- **Titled by the repository's convention.** `setup.pr_title` is a template ({ticket}, {id}, {title}, {project},
+  {n}, {of}; the team's ticket id when the task came from their tracker). A task can carry its exact title
+  (`issue.pr_title`, migration 0034) for what a template cannot say: a change type, a team code. The task's agent is
+  told to read the repository's rules and set both (`set_pr_rules`, `set_pr_title`) before the build starts.
+- **Its text says how many sub-tasks have landed**, and that it is not ready to review while some have not.
+- **Closed means closed.** A pull request the person closed is not reopened and no second one is opened; nothing more
+  is pushed. Submitting again reopens that one, as a draft.
+- **No agent can submit one.** There is no tool for it, and the task's agent is told never to push or open one itself.
+
+Not done: a line in "needs you" when a task is built and waiting to be submitted (the task's agent says so, and the
+task's page shows it); marking it ready for review from here; the same panel on a project's page for an app that
+builds one pull request per project (the endpoint is there). Not tried: submitting against a real repository; the
+engine is tested against a local remote for "nothing is pushed", and the calls to GitHub are not exercised in tests.

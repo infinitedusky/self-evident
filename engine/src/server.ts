@@ -626,6 +626,12 @@ export function buildApp(bus: EventBus) {
   api.get('/issues/:id/checklist', async (c) => { // where a checklist task stands: its stages and each item's mark; null for a staged task
     try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await checklistOf(t.id)) } catch (err) { return planError(c, err, 404) }
   })
+  // A pull request is never opened by the engine on its own (Sandy, 2026-11-16: one opened after the first of nine
+  // sub-tasks, before the person's own checks). The person submits it, once every sub-task has landed.
+  api.post('/issues/:id/pr/submit', async (c) => {
+    try { const t = await resolveIssue(db, c.req.param('id')); if (!t.projectId) throw new PlanError('this task has not been planned or built yet'); return c.json(await runner.submitPr(t.projectId, t.id)) } catch (err) { return planError(c, err) }
+  })
+  api.post('/projects/:id/pr/submit', async (c) => { try { return c.json(await runner.submitPr(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/issues/:id/merge-guide', async (c) => { // what the pull request will open with, for whoever approves it
     try {
       const t = await resolveIssue(db, c.req.param('id'))

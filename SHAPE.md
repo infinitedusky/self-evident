@@ -750,6 +750,12 @@ Details and sources in `research/`.
   alert), the brief carries the table, acceptance criteria hold the build to it, and the audit checks that the
   failure that would otherwise be silent is covered. Only the app's own telemetry channels; never personal data.
 
+- **A pull request is submitted by a person, never opened by the engine (Sandy, 2026-11-16).** While a task is
+  built nothing leaves the computer: no push, no pull request. When every sub-task has landed the person runs the
+  checks only they can run and presses Submit pull request; only then is the branch pushed and the pull request
+  opened, as a draft, titled by the repository's own convention. One they close stays closed until they submit again.
+  No agent has a way to submit one.
+
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
 > "When I use VS Code, I can just move really quickly … I just set things to dangerously skip permissions and just

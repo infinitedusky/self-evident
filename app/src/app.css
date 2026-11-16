@@ -921,3 +921,8 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .checklist-evidence { font-size: 13px; }
 .task-nav-stage { padding-left: 22px; font-size: 13px; }
 .task-nav-mark.bad { color: var(--bad, #b42318); }
+
+/* A task's pull request: submitted by the person, never by itself. */
+.submit-pr h2 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.submit-pr-warn { margin: 0 0 8px; color: var(--warn); font-size: 14px; }
+.submit-pr-ask { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }

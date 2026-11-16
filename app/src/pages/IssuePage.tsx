@@ -17,6 +17,8 @@ import { StepSection } from '../components/StepSection'
 import { Acceptance } from '../components/Acceptance'
 import { TaskBranches } from '../components/TaskBranches'
 import { MergeGuide } from '../components/MergeGuide'
+import { SubmitPr } from '../components/SubmitPr'
+import { useCurrentApp } from '../current-app'
 import { mark, TaskNav } from '../components/TaskNav'
 import { WorkflowChoice } from '../components/WorkflowChoice'
 import { Handover } from '../components/Handover'
@@ -122,6 +124,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   const subject = { kind: 'issues' as const, id: i.id }
   const { v, error } = useSteps(subject, i.appId)
   const agent = useTaskAgent(i.id, i.appId)
+  const { app } = useCurrentApp()
   const { workflows } = useWorkflows(i.appId)
   const [navOpen, setNavOpen] = useState(() => { try { return localStorage.getItem('se.task-nav.open') !== '0' } catch { return true } })
   const toggleNav = () => setNavOpen((o) => { try { localStorage.setItem('se.task-nav.open', o ? '0' : '1') } catch { /* fine */ } return !o })
@@ -200,6 +203,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
               {live.length > 0 && <TaskGraph i={i} />}
               {live.length > 0 && <PlanCovers list={i.requirements ?? []} />}
               {live.length > 0 && <MergeGuide issueId={i.id} stamp={i.updatedAt} />}
+              {live.length > 0 && <SubmitPr issueId={i.id} pr={i.pr ?? null} landed={done} total={live.length} unchecked={(i.acceptance ?? []).filter((c) => c.built !== true).length} draft={app?.setup?.pr_draft !== false} onChanged={() => void act(async () => {})} />}
             </>)}
       </div>
       {agent.session !== undefined && (

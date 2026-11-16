@@ -21,7 +21,7 @@ import { acceptanceOf, setAcceptance } from './acceptance.js'
 import { unchecked, afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, numbered, PROBE_TITLE, probeBrief, readVerdicts, reqId, requirementsChecked, unmetOf, verdictChange } from './verify.js'
 import { inForce, type Covered } from './requirements.js'
 import { workflowFor } from './work.js'
-import { ensureProjectPr, prBody } from './pr.js'
+import { ensureProjectPr, prDraft, prTitle, prBody } from './pr.js'
 import { addSubTask, projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
 import { finishPlanning, preparePlanning, type Propose } from './planner.js'
 import { BEFORE_PLAN, checksOwed, styleOf } from './steps.js'
@@ -550,9 +550,12 @@ export class Runner {
    * The project's PR (one per project), or an issue's (stacked: against the issue before it while that PR is open,
    * else main). Opened at the first landing, updated after every one.
    */
-  private async updatePr(projectId: string, issueId?: string) {
+  private async updatePr(projectId: string, issueId?: string, submit = false) {
     const { p, a, r, base } = await this.context(projectId)
-    if (!r?.fullName) return
+    if (!r?.fullName) { if (submit) throw new PlanError('this app\'s repository is not on GitHub, so there is no pull request to open'); return }
+    // Nothing leaves this computer until the person submits it: no push, no pull request. After that, each landing updates it.
+    const [had] = (await db.select().from(prTable).where(eq(prTable.projectId, projectId))).filter((q) => (issueId ? q.issueId === issueId : !q.issueId))
+    if (!submit && (!had || had.status === 'closed' || had.status === 'merged')) return
     const g: Graph = (await projectGraph(projectId))!
     const mine = issueId ? g.subIssues.filter((x) => x.parentId === issueId) : g.subIssues
     const done = mine.filter((x) => x.status === 'done')
@@ -568,17 +571,34 @@ export class Runner {
     const head = t ? issueBranch(p.integrationBranch!, t.identifier) : p.integrationBranch!
     const stack = t ? stackBase(a.defaultBranch, t, issues, prs) : { base: a.defaultBranch, on: null }
     const k = t ? issues.findIndex((q) => q.id === t.id) + 1 : 0
-    const title = t ? `${t.identifier} ${t.title} (${p.name}, ${k} of ${issues.length})` : p.name
+    const ticket = t ? ((t as { sourceRef?: { linear?: { identifier?: string } } | null }).sourceRef?.linear?.identifier ?? null) : null
+    const title = prTitle(a.setup, { ticket, id: t?.identifier ?? p.name, title: t?.title ?? p.name, project: p.name, n: k, of: issues.length }, t ? (t as { prTitle?: string | null }).prTitle : null)
+      ?? (t ? `${t.identifier} ${t.title} (${p.name}, ${k} of ${issues.length})` : p.name)
     const intro = t ? { ...p, name: `${p.name}, task ${k} of ${issues.length}: ${t.identifier} ${t.title}`, content: [t.description, stack.on ? `Stacked on #${stack.on}: review and merge that one first; this PR then retargets to ${a.defaultBranch}.` : null].filter(Boolean).join('\n\n') || p.content } : p
     const open = mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled')
     const guided = await guideTasks((t ? [t] : issues).map((q) => ({ id: q.id, identifier: q.identifier, title: q.title })), open.map((x) => ({ parentId: x.parentId ?? null, identifier: x.identifier }))).catch(() => [])
     const guide = mergeGuide(guided)
     const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog, guide, mergeRecord(guided))
-    const result = await ensureProjectPr({ repoPath: r.localPath!, fullName: r.fullName, integrationBranch: head, base: stack.base, title, body })
+    if (submit && open.length) throw new PlanError(`${open.length} sub-task${open.length === 1 ? ' has' : 's have'} still to land (${open.map((x) => x.identifier).join(', ')}): the pull request is submitted once they all have`)
+    if (submit && !landed.length) throw new PlanError('nothing has landed yet: there is nothing to submit')
+    const result = await ensureProjectPr({ repoPath: r.localPath!, fullName: r.fullName, integrationBranch: head, base: stack.base, title, body, draft: prDraft(a.setup), reopen: submit })
     const existing = prs.find((q) => (issueId ? q.issueId === issueId : !q.issueId))
-    if (!existing) await db.insert(prTable).values({ id: newId('pr'), appId: a.id, projectId, issueId: issueId ?? null, repoId: r.id, number: result.number, url: result.url, headBranch: head, baseBranch: stack.base, status: 'open', openedAt: new Date() })
-    else if (existing.baseBranch !== stack.base) await db.update(prTable).set({ baseBranch: stack.base }).where(eq(prTable.id, existing.id))
+    if (result.closed) { // the person closed it: the work goes on, on its branch; the pull request stays theirs to reopen
+      if (existing && existing.status !== 'closed') await db.update(prTable).set({ status: 'closed' }).where(eq(prTable.id, existing.id))
+      await this.emit({ ...base, ...(issueId ? { issueId } : {}), type: 'pr.left_closed', payload: { number: result.number, url: result.url, landed: landed.length, pending: open.length } })
+      return
+    }
+    if (!existing) await db.insert(prTable).values({ id: newId('pr'), appId: a.id, projectId, issueId: issueId ?? null, repoId: r.id, number: result.number, url: result.url, headBranch: head, baseBranch: stack.base, status: prDraft(a.setup) ? 'draft' : 'open', openedAt: new Date() })
+    else await db.update(prTable).set({ baseBranch: stack.base, number: result.number, url: result.url, ...(submit ? { status: prDraft(a.setup) ? 'draft' : 'open' } : {}) }).where(eq(prTable.id, existing.id))
+    if (submit) await this.emit({ ...base, ...(issueId ? { issueId } : {}), actor: 'user', type: 'pr.submitted', payload: { number: result.number, url: result.url, draft: prDraft(a.setup) } })
     await this.emit({ ...base, ...(issueId ? { issueId } : {}), type: result.created ? 'pr.opened' : 'pr.updated', payload: { number: result.number, url: result.url, landed: landed.length, base: stack.base } })
+  }
+
+  /** The person submits the pull request: the branch is pushed and it is opened (a draft, by the app's rule), or the one they closed is reopened. Refused while sub-tasks are still to land. */
+  async submitPr(projectId: string, issueId?: string) {
+    await withLock(`land:${projectId}`, () => this.updatePr(projectId, issueId, true))
+    const [row] = (await db.select().from(prTable).where(eq(prTable.projectId, projectId))).filter((q) => (issueId ? q.issueId === issueId : !q.issueId))
+    return row
   }
 
   private async context(projectId: string) {
