@@ -46,7 +46,7 @@ export const StepProgress: Story = {
     await expect(stepProgress({ status: 'queued' })).toMatchObject({ total: 0 })
     // No steps reported by its agent: said in words what it is doing, and never an empty bar that reads as stuck on step one.
     await expect(stepProgress({ status: 'running', brief: briefWith(3) })).toMatchObject({ total: 3, done: 0, planned: true, doing: 'Building. Its agent has not said which step it is on.' })
-    await expect(stepProgress({ status: 'merging', brief: briefWith(3) })).toMatchObject({ total: 3, done: 3, planned: false, marks: ['done', 'done', 'done'], doing: 'Built. Landing now: the tests run before it merges.' })
+    await expect(stepProgress({ status: 'merging', brief: briefWith(3) })).toMatchObject({ total: 3, done: 3, planned: false, marks: ['done', 'done', 'done'], doing: 'Built. Merging it in now.' })
     await expect(stepProgress({ status: 'running', steps: [{ text: 'a', status: 'in_progress' }] }).doing).toBeNull()
   },
 }
