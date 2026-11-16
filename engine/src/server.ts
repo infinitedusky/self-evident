@@ -28,7 +28,7 @@ import { createIdea, getIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { advanceChecks, onChecksDone, onPlanWanted, resumeChecks } from './checks.js'
 import { checksOwed, step } from './steps.js'
 import { writeHandover } from './handover.js'
-import { skipUntouched, approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, speedIntoWorkflows, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
+import { skipUntouched, approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, speedIntoWorkflows, ensureMain, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
 import { adoptTalk, answerPermission, busyAmong, releaseTalks, closeTalk, closeTalks, endTalk, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, runLog, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, setupTalk, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
@@ -369,7 +369,10 @@ export function buildApp(bus: EventBus) {
     const row = await db.transaction(async (tx) => { // with its default workflow: an app always has one
       const [made] = await tx.insert(appTable).values({ id: newId('app'), workspaceId: body.workspaceId, name: body.name, key, defaultBranch: branch, setup: body.setup ?? {} }).returning()
       const repos = fullName || localPath ? await tx.insert(repoTable).values({ id: newId('repo'), appId: made.id, fullName, localPath }).returning() : []
-      return { ...made, repos, workflowId: await createDefaultWorkflow(tx, made.id), note }
+      await createDefaultWorkflow(tx, made.id)
+      await ensureMain({ tx, appId: made.id }) // Main, built in one go, is its default; what createDefaultWorkflow made is its Legacy
+      const [now] = await tx.select({ workflowId: appTable.workflowId }).from(appTable).where(eq(appTable.id, made.id))
+      return { ...made, repos, workflowId: now.workflowId, note }
     })
     return c.json(row, 201)
   })
@@ -941,6 +944,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   if (recovered.projects || recovered.builds || recovered.reaped) console.log('recovered:', JSON.stringify(recovered))
   const port = Number(process.env.PORT ?? 4000)
   serve({ fetch: buildApp(bus).fetch, port }, (info) => console.log(`engine listening on http://localhost:${info.port}  (API under /api; UI at / when built)`))
+  void ensureMain().then((r) => { if (r.made) console.log(`[engine] ${r.made} app${r.made === 1 ? '' : 's'} given a Main workflow; what they had is Legacy`) }).catch((err) => console.error('workflows: could not make Main', err))
   void speedIntoWorkflows().then((r) => { if (r.moved) console.log(`[engine] ${r.moved} app${r.moved === 1 ? '' : 's'} set to Fast moved onto a fast workflow`) }).catch((err) => console.error('workflows: could not move the old speed setting', err))
   setTimeout(() => void resumeChecks().catch((err) => console.error('checks: could not resume after the restart', err)), 8_000) // a task's checks that were under way carry on
   void watchTerminals().catch(() => {}) // conversations still in a terminal: keep copying what's said there

@@ -29,7 +29,8 @@ describe('requirements', () => {
     const got = covered(inForce({}), [{ key: 'tests', applies: true, how: 'SS-2 adds the totals test.' }, { key: 'docs', applies: false, how: 'Nothing a person reads changes.' }, { key: 'made_up', applies: true, how: 'ignored' }])
     expect(got.map((c) => [c.key, c.applies, c.how])).toEqual([['telemetry', true, ''], ['tests', true, 'SS-2 adds the totals test.'], ['test_plan', true, ''], ['docs', false, 'Nothing a person reads changes.']])
     const lines = coveredLines(got)
-    expect(lines).toContain('- ⬜ **Telemetry**: the plan does not say.')
+    expect(lines).toContain('- ⬜ **Telemetry**: not checked yet.')
+    expect(coveredLines([{ key: 'tests', name: 'Tests', applies: true, how: 'no test for the refund', built: false }, { key: 'docs', name: 'Docs', applies: false, how: 'does not apply: nothing a person reads changes', built: true }])).toBe('- ❌ **Tests**: not done. no test for the refund\n- ➖ **Docs** does not apply: nothing a person reads changes') // the check after the build marks each
     expect(lines).toContain('- ✅ **Tests**: SS-2 adds the totals test.')
     expect(lines).toContain('- ➖ **Docs** does not apply: Nothing a person reads changes.')
     expect(requirementLines(inForce({}))).toContain('- docs (Docs): ')

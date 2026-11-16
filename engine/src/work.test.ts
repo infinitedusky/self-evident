@@ -16,7 +16,7 @@ import { preparePlanning } from './planner.js'
 import { createProject } from './projects.js'
 import { now } from './now.js'
 import { skipTheRest } from './test-briefs.js'
-import { skipUntouched, approveBrief, convertIdea, createDefaultWorkflow, guardComplete, guardDirect, ideaFirst, listWorkflows, planView, saveWorkflow, setStep, speedIntoWorkflows, splitPrompt, stepsOf, useWorkflow, approveStep } from './work.js'
+import { skipUntouched, approveBrief, convertIdea, createDefaultWorkflow, guardComplete, guardDirect, ideaFirst, listWorkflows, planView, saveWorkflow, setStep, speedIntoWorkflows, ensureMain, splitPrompt, stepsOf, useWorkflow, approveStep } from './work.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -183,6 +183,30 @@ describe.skipIf(!reachable)('steps and workflows', () => {
     const plan = await planView(appId)
     expect(plan.projects.find((p) => p.id === out.projectId)).toMatchObject({ name: 'Saved carts', tasks: [{ id: out.issueId }] })
     expect(splitPrompt('Saved carts', 'SS-9 Saved carts')).toMatch(/one task or several.*create_task.*If it is one task, say so/s)
+  })
+
+  it('every app gets a Main workflow, built in one go; what it had is Legacy, and work under way stays on it', async () => {
+    const own = newId('app')
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'Two workflows (sample)', key: own.slice(-6).toUpperCase() })
+    const oldId = await db.transaction((tx) => createDefaultWorkflow(tx, own))
+    const { project: running } = await createProject({ appId: own, name: 'Under way (sample)', issues: [{ title: 'Half built (sample)', brief: 'Build it.' }] })
+    const loose = await createIssue(own, { title: 'On its own, under way (sample)', kind: 'code', brief: 'Build it.' })
+    expect(await db.transaction((tx) => ensureMain({ tx, appId: own }))).toEqual({ made: 1 })
+    const list = await listWorkflows(own)
+    expect(list.map((w) => [w.name, w.build, w.appDefault, afterOf(w)])).toEqual([['Legacy', 'planned', false, 'full'], ['Main', 'one', true, 'fast']])
+    const main = list[1]
+    expect(main.steps.find((s) => s.key === 'prototype')).toMatchObject({ on: true, required: true }) // in Main a task goes through its prototype
+    // What was under way keeps the workflow it was using; what is made from now on is Main's.
+    expect((await db.select().from(project).where(eq(project.id, running.id)))[0].workflowId).toBe(oldId)
+    expect((await db.select().from(issue).where(eq(issue.id, loose.id)))[0].workflowId).toBe(oldId)
+    const { issues: [fresh] } = await createProject({ appId: own, name: 'Made after (sample)', issues: [{ title: 'New (sample)', brief: 'Build it.' }] })
+    expect((await stepsOf({ issueId: fresh.id })).resolved.workflow).toMatchObject({ name: 'Main', build: 'one' })
+    expect(await db.transaction((tx) => ensureMain({ tx, appId: own }))).toEqual({ made: 0 }) // again: it has one
+    // Changing how a workflow builds is a setting like any other; a name of the person's own is left alone.
+    const kept = await saveWorkflow({ id: main.id, appId: own, name: 'Main', steps: main.steps, build: 'planned' })
+    expect(kept.build).toBe('planned')
+    await expect(saveWorkflow({ id: main.id, appId: own, name: 'Main', steps: main.steps, build: 'yolo' })).rejects.toThrow(/build is one or planned/)
+    expect((await saveWorkflow({ id: main.id, appId: own, name: 'Main', steps: main.steps })).build).toBe('planned') // saved without saying: as it was
   })
 
   it('what follows a task\'s prototype is its workflow\'s: a fast one owes no checks, and an app once set to Fast is moved onto one', async () => {

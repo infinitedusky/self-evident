@@ -72,7 +72,7 @@ export function taskGuide(t: GuideTask, opts: { heading?: boolean } = {}): strin
     listed.length && n.rows ? `**For you to check**\n\n${listed.slice(0, n.rows).map(row).join('\n')}${listed.length > n.rows ? `\n- and ${listed.length - n.rows} more in the record below` : ''}` : '',
     t.decisions.length && n.decisions ? `**Decisions**\n\n${t.decisions.slice(0, n.decisions).map((d) => `- ${clip(d.question, 70)} → **${clip(d.chosen, 90)}**`).join('\n')}${t.decisions.length > n.decisions ? `\n- and ${t.decisions.length - n.decisions} more in the record below` : ''}` : '',
     firstLine(t.risk) && n.risk ? `**Risk:** ${clip(firstLine(t.risk), 200)}` : '',
-    t.requirements?.length && n.needs ? `**Required of every change:** ${t.requirements.map((c) => `${!c.how ? '⬜' : c.applies ? '✅' : '➖'} ${c.name}`).join(' · ')}` : '',
+    t.requirements?.length && n.needs ? `**Required of every change:** ${t.requirements.map((c) => `${c.built === false ? '❌' : c.built === true ? (c.applies ? '✅' : '➖') : !c.how ? '⬜' : c.applies ? '✅' : '➖'} ${c.name}`).join(' · ')}` : '',
   ].filter(Boolean).join('\n\n')
   // From the fullest that fits to the leanest: what is cut first is what matters least to someone about to merge.
   const tries = [

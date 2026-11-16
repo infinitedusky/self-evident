@@ -12,14 +12,14 @@ import { app, idea, issue, project, prototype, session, stepWork, workflow } fro
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { getIssue, insertIssues, PlanError } from './issues.js'
-import { withChecks, blocking, canSkip, needsApproval, owed, undecided, CAN, DEFAULT_NAME, DEFAULT_STEPS, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
+import { withChecks, buildOf, BUILDS, LEGACY_NAME, MAIN_NAME, type Build, blocking, canSkip, needsApproval, owed, undecided, CAN, DEFAULT_NAME, DEFAULT_STEPS, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
 
 export type Subject = { ideaId: string } | { issueId: string } | { projectId: string }
 const onOf = (s: Subject): On => ('ideaId' in s ? 'idea' : 'issueId' in s ? 'task' : 'project')
 const subjectCol = (s: Subject) => ('ideaId' in s ? eq(stepWork.ideaId, s.ideaId) : 'issueId' in s ? eq(stepWork.issueId, s.issueId) : eq(stepWork.projectId, s.projectId))
 
 type WorkflowRow = typeof workflow.$inferSelect
-const asWorkflow = (w: WorkflowRow | undefined | null): Workflow | null => (w ? normalize({ id: w.id, name: w.name, steps: w.steps as WorkflowStep[], ordered: w.ordered }) : null)
+const asWorkflow = (w: WorkflowRow | undefined | null): Workflow | null => (w ? normalize({ id: w.id, name: w.name, steps: w.steps as WorkflowStep[], ordered: w.ordered, build: buildOf(w) }) : null)
 const KEYS = STEPS.map((s) => s.key)
 
 async function appOf(tx: Tx | typeof db, appId: string) {
@@ -42,20 +42,22 @@ export async function listWorkflows(appId: string) {
 }
 
 /** Make or change a workflow. Its steps are checked against the fixed rules; the brief and the idea are always kept. */
-export async function saveWorkflow(input: { id?: string; appId: string; name: string; steps: WorkflowStep[]; ordered?: boolean }, actor = 'user') {
+export async function saveWorkflow(input: { id?: string; appId: string; name: string; steps: WorkflowStep[]; ordered?: boolean; build?: string }, actor = 'user') {
   if (!input.name?.trim()) throw new PlanError('a workflow needs a name')
   const unknown = (input.steps ?? []).find((s) => !KEYS.includes(s.key))
   if (unknown) throw new PlanError(`no step "${unknown.key}"; the steps are ${KEYS.join(', ')}`)
   if (!validOrder(input.steps ?? [])) throw new PlanError('that order breaks the rules: the idea first, the checks after the other steps')
-  const w = normalize({ id: input.id ?? newId('workflow'), name: input.name.trim(), steps: input.steps ?? [], ordered: !!input.ordered })
+  if (input.build !== undefined && !BUILDS.includes(input.build as Build)) throw new PlanError(`build is ${BUILDS.join(' or ')}`)
+  const w = normalize({ id: input.id ?? newId('workflow'), name: input.name.trim(), steps: input.steps ?? [], ordered: !!input.ordered, ...(input.build ? { build: input.build as Build } : {}) })
   return db.transaction(async (tx) => {
     const a = await appOf(tx, input.appId)
     if (input.id) {
       const [old] = await tx.select().from(workflow).where(eq(workflow.id, input.id))
       if (!old || old.appId !== a.id) throw new PlanError(`no workflow ${input.id} in this app`)
-      await tx.update(workflow).set({ name: w.name, steps: w.steps, ordered: w.ordered, updatedAt: new Date() }).where(eq(workflow.id, w.id))
+      await tx.update(workflow).set({ name: w.name, steps: w.steps, ordered: w.ordered, ...(w.build ? { build: w.build } : {}), updatedAt: new Date() }).where(eq(workflow.id, w.id))
+      w.build = w.build ?? buildOf(old)
     } else {
-      await tx.insert(workflow).values({ id: w.id, appId: a.id, name: w.name, steps: w.steps, ordered: w.ordered })
+      await tx.insert(workflow).values({ id: w.id, appId: a.id, name: w.name, steps: w.steps, ordered: w.ordered, build: buildOf(w) })
     }
     await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, actor, type: 'workflow.saved', payload: { id: w.id, name: w.name } })
     return w
@@ -84,6 +86,44 @@ export async function speedIntoWorkflows(): Promise<{ moved: number }> {
     })
   }
   return { moved }
+}
+
+/**
+ * Every app has a Main workflow, and what it had before is Legacy (Sandy, 2026-11-16: "Keep this in 'legacy', create a
+ * new main. In main we go through prototype and then we just build it in on one step").
+ *
+ * Main: the prototype, required; nothing between its approval and the build; built in one go; then the checklist
+ * (verify.ts). It becomes the app's default. The workflow that was the default is named Legacy when it had a stock
+ * name (Default, or Main), and is otherwise left as it is. A task or project already under way stays on what it was
+ * using: it is pinned to the old default, so nothing changes under it.
+ *
+ * For one app (made just now) or all of them (at each start); an app that has a one-go workflow is left alone.
+ */
+export async function ensureMain(only?: { tx: Tx; appId: string }): Promise<{ made: number }> {
+  let made = 0
+  const work = async (tx: Tx, appId: string) => {
+    const [a] = await tx.select().from(app).where(eq(app.id, appId))
+    if (!a || a.removedAt) return
+    const all = await tx.select().from(workflow).where(eq(workflow.appId, a.id))
+    if (all.some((w) => buildOf(w) === 'one')) return
+    const old = all.find((w) => w.id === a.workflowId)
+    if (old) {
+      // Under way: stays on what it was using. A project with no workflow of its own gets the old default; so does a
+      // task in no such project that is being worked on.
+      await tx.update(project).set({ workflowId: old.id }).where(and(eq(project.appId, a.id), isNull(project.workflowId), inArray(project.status, ['drafting', 'proposed', 'approved', 'running', 'paused'])))
+      await tx.update(issue).set({ workflowId: old.id }).where(and(eq(issue.appId, a.id), isNull(issue.parentId), isNull(issue.workflowId), isNull(issue.projectId), inArray(issue.state, ['todo', 'in_progress', 'in_review'])))
+      if ([DEFAULT_NAME, MAIN_NAME].includes(old.name) && !all.some((w) => w.name === LEGACY_NAME)) await tx.update(workflow).set({ name: LEGACY_NAME, updatedAt: new Date() }).where(eq(workflow.id, old.id))
+    }
+    const id = newId('workflow')
+    const steps = withChecks({ id, name: MAIN_NAME, ordered: false, steps: DEFAULT_STEPS.map((s) => (s.key === 'prototype' ? { ...s, on: true, required: true } : s)) }, 'fast').steps
+    await tx.insert(workflow).values({ id, appId: a.id, name: MAIN_NAME, steps, ordered: false, build: 'one' })
+    await tx.update(app).set({ workflowId: id }).where(eq(app.id, a.id))
+    await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, actor: 'engine', type: 'workflow.saved', payload: { id, name: MAIN_NAME } })
+    made++
+  }
+  if (only) { await work(only.tx, only.appId); return { made } }
+  for (const a of await db.select({ id: app.id }).from(app)) await db.transaction((tx) => work(tx, a.id))
+  return { made }
 }
 
 /** Makes an app's default workflow, "Default", with the app: an app always has one. */

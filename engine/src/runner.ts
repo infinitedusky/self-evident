@@ -18,11 +18,13 @@ import { commentOnIssue, identifier, setState } from './issues.js'
 import { land, wholeRun, withLock } from './landing.js'
 import { guideTasks, mergeGuide, mergeRecord } from './merge-guide.js'
 import { acceptanceOf, setAcceptance } from './acceptance.js'
-import { CHECK_TITLE, checkTaskBrief, readVerdicts, unchecked, verdictChange } from './verify.js'
+import { unchecked, afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, numbered, PROBE_TITLE, probeBrief, readVerdicts, reqId, requirementsChecked, unmetOf, verdictChange } from './verify.js'
+import { inForce, type Covered } from './requirements.js'
+import { workflowFor } from './work.js'
 import { ensureProjectPr, prBody } from './pr.js'
 import { addSubTask, projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
 import { finishPlanning, preparePlanning, type Propose } from './planner.js'
-import { BEFORE_PLAN, checksOwed } from './steps.js'
+import { BEFORE_PLAN, buildOf, checksOwed } from './steps.js'
 import { stepsOf } from './work.js'
 import { reapAgentProcesses } from './reap.js'
 import { holdMinutes, isOutage } from './outage.js'
@@ -267,22 +269,37 @@ export class Runner {
   }
 
   /**
-   * The whole test run, once per task: when the sub-task that just landed was the last one, the app's test command
-   * runs on the merged work. If it fails (twice: see wholeRun), one more sub-task is added to find the cause and fix
+   * After the build (verify.ts): when the sub-task that just landed was the last one, the task is checked against
+   * its list, what the check found is sent back and checked again, someone who did not build it probes it, and then
+   * the app's test command runs on the merged work, once. If it fails (twice: see wholeRun), one more sub-task is added to find the cause and fix
    * it (Sandy, 2026-11-15: "If it fails we analyze and create an additional subtask to fix the issue"). Two such
    * fixes at most; after that the task says so and waits for a person.
    */
   private testing = new Map<string, number>() // projects with a landing or a whole test run under way
 
-  /** The check sub-task landed: its verdicts become the build's mark on each criterion of the task. */
+  /** What a task is checked against: its acceptance criteria, and the app's requirements in force for its project. */
+  private async listOf(taskId: string) {
+    const [task] = await db.select().from(issue).where(eq(issue.id, taskId))
+    const [a] = task ? await db.select().from(app).where(eq(app.id, task.appId)) : []
+    const [p] = task?.projectId ? await db.select().from(project).where(eq(project.id, task.projectId)) : []
+    const criteria = task ? acceptanceOf(task) : []
+    // Main (built in one go) is held to the whole list, round after round, and probed. Legacy is as it was: its
+    // acceptance criteria checked once (Sandy, 2026-11-16: "Keep this in 'legacy', create a new main").
+    const loop = !!task && buildOf((await workflowFor(db, { issueId: taskId })).workflow) === 'one'
+    const required = a && loop ? inForce(a.setup, p?.requirements) : []
+    return { task, criteria, required, loop, held: (task?.requirements ?? null) as Covered[] | null, base: a?.defaultBranch ?? 'main' }
+  }
+
+  /** A check sub-task landed: its verdicts become the build's mark on each criterion and each requirement of the task. */
   private async markCriteria(subId: string, taskId: string, summary: string | null | undefined, pb: Omit<NewEvent, 'type'>) {
     const [sub] = await db.select({ title: issue.title }).from(issue).where(eq(issue.id, subId))
-    if (sub?.title !== CHECK_TITLE) return
-    const [task] = await db.select().from(issue).where(eq(issue.id, taskId))
-    const criteria = task ? acceptanceOf(task) : []
-    const verdicts = readVerdicts(summary, criteria.map((c) => c.id))
-    if (verdicts.length) await setAcceptance(taskId, verdictChange(verdicts), 'engine')
-    await this.emit({ ...pb, issueId: taskId, type: 'task.checked', payload: { criteria: criteria.length, read: verdicts.length, met: verdicts.filter((v) => v.met === true).length, notMet: verdicts.filter((v) => v.met === false).length, forAPerson: verdicts.filter((v) => v.met === null).length } })
+    if (!sub?.title.startsWith(CHECK_TITLE)) return
+    const { criteria, required, held } = await this.listOf(taskId)
+    const verdicts = readVerdicts(summary, [...criteria.map((c) => c.id), ...required.map((r) => reqId(r.key))])
+    const onCriteria = verdictChange(verdicts)
+    if (onCriteria.update?.length) await setAcceptance(taskId, onCriteria, 'engine')
+    if (required.length && verdicts.some((v) => v.id.startsWith('req_'))) await db.update(issue).set({ requirements: requirementsChecked(required, held, verdicts) }).where(eq(issue.id, taskId))
+    await this.emit({ ...pb, issueId: taskId, type: 'task.checked', payload: { criteria: criteria.length, requirements: required.length, read: verdicts.length, met: verdicts.filter((v) => v.met === true).length, notMet: verdicts.filter((v) => v.met === false).length, forAPerson: verdicts.filter((v) => v.met === null).length } })
   }
 
   private async testTask(projectId: string, taskId: string, repoPath: string, worktreePath: string, onto: string, setup: AppSetup, pb: Omit<NewEvent, 'type'>) {
@@ -292,18 +309,33 @@ export class Runner {
       const builds = subs.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, subs.map((s) => s.id))) : []
       if (!subs.length || !subs.every((s) => builds.find((b) => b.issueId === s.id)?.status === 'done')) return null // more to build first
       if (await headSha(worktreePath) !== await headSha(repoPath, onto)) return null // another sub-task landed after this one: the run is its
-      // Built: first it is checked against its acceptance criteria, once (verify.ts); the whole test run comes after that check.
-      const [task] = await db.select().from(issue).where(eq(issue.id, taskId))
-      const criteria = task ? acceptanceOf(task) : []
-      if (criteria.some(unchecked) && !every.some((s) => s.title === CHECK_TITLE)) return { check: criteria }
-      if (!setup.test_cmd) return null
+      // Built. What comes next is the checklist's to say (verify.ts): check, finish what it found, probe, then the whole test run.
+      const list = await this.listOf(taskId)
+      const unmet = unmetOf(list.criteria, list.held, list.required)
+      const next = afterBuild({ titles: subs.map((s) => s.title), listed: list.loop ? list.criteria.length + list.required.length > 0 : list.criteria.some(unchecked), unmet: unmet.length, testCmd: !!setup.test_cmd, loop: list.loop })
+      if (next.do !== 'test') return { next, list, unmet }
       const fixes = subs.filter((s) => s.title.startsWith(FIX_TITLE)).length
-      return { fixes, result: await wholeRun({ testCmd: setup.test_cmd!, cwd: worktreePath, onEvent: async (type, payload) => { await this.emit({ ...pb, issueId: taskId, type, payload }) } }) }
+      return { next, list, unmet, fixes, result: await wholeRun({ testCmd: setup.test_cmd!, cwd: worktreePath, onEvent: async (type, payload) => { await this.emit({ ...pb, issueId: taskId, type, payload }) } }) }
     })
     if (!outcome) return
-    if ('check' in outcome) { await addSubTask(taskId, { title: CHECK_TITLE, brief: checkTaskBrief(outcome.check!) }, 'engine'); return }
-    if (outcome.result.ok || !setup.test_cmd) return
-    const { fixes, result } = outcome
+    const { next, list, unmet } = outcome
+    if (next.do === 'check') {
+      // The first check reads the whole list; a later one, only what the last left not done.
+      const again = next.round > 1
+      const criteria = again ? list.criteria.filter((c) => c.built === false) : list.criteria
+      const required = again ? list.required.filter((r) => list.held?.find((c) => c.key === r.key)?.built === false) : list.required
+      await addSubTask(taskId, { title: numbered(CHECK_TITLE, next.round), brief: checkTaskBrief(criteria, required, again ? { round: next.round } : undefined) }, 'engine')
+      return
+    }
+    if (next.do === 'finish') { await addSubTask(taskId, { title: numbered(FINISH_TITLE, next.round), brief: finishBrief(unmet, next.round) }, 'engine'); return }
+    if (next.do === 'stuck') {
+      await commentOnIssue(taskId, { heading: 'Still not done after three rounds', body: `What the check found was sent back ${MAX_ROUNDS} times and ${unmet.length === 1 ? 'this is' : 'these are'} still not done. It needs a person.\n\n${unmet.map((u) => `- ${u.text}${u.missing ? ` Missing: ${u.missing}` : ''}`).join('\n')}` }, 'engine')
+      await this.emit({ ...pb, issueId: taskId, type: 'task.check_stuck', payload: { rounds: MAX_ROUNDS, unmet: unmet.map((u) => u.id) } })
+      return
+    }
+    if (next.do === 'probe') { await addSubTask(taskId, { title: PROBE_TITLE, brief: probeBrief(list.criteria, list.base) }, 'engine'); return }
+    if (next.do === 'done' || !('result' in outcome) || !outcome.result || outcome.result.ok || !setup.test_cmd) return
+    const { fixes, result } = outcome as { fixes: number; result: { ok: false; detail: string } }
     if (fixes >= MAX_FIXES) {
       await commentOnIssue(taskId, { heading: 'The whole test run still fails', body: `Its sub-tasks are all merged and ${fixes} fixes were tried. It needs a person.\n\n\`\`\`\n${result.detail}\n\`\`\`` }, 'engine')
       await this.emit({ ...pb, issueId: taskId, type: 'task.test_failed', payload: { fixes, tail: result.detail } })

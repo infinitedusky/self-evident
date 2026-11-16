@@ -19,7 +19,9 @@ import { approveStep, setStep } from './work.js'
 import { now } from './now.js'
 import { FIX_TITLE, Runner } from './runner.js'
 import { setAcceptance } from './acceptance.js'
-import { CHECK_TITLE } from './verify.js'
+import { CHECK_TITLE, FINISH_TITLE, PROBE_TITLE } from './verify.js'
+import { afterOf } from './steps.js'
+import { ensureMain, listWorkflows } from './work.js'
 import { addItems, dropItem, promote } from './backlog.js'
 import type { Propose } from './planner.js'
 import { approveBriefs } from './test-briefs.js'
@@ -287,6 +289,43 @@ describe.skipIf(!reachable)('runner', () => {
     expect((await files(b2)).sort()).toEqual([x, y].sort()) // issue two started where issue one ended
     expect(await files(p.integrationBranch!)).toEqual([]) // the project's branch is only the starting point
     await db.update(project).set({ status: 'superseded' }).where(eq(project.id, p.id))
+  })
+
+  it('Main: built in one go with no planner, then checked, what the check found sent back, checked again, probed, and tested once', async () => {
+    const own = newId('app')
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'main flow', key: own.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md', requirements: [{ key: 'tests', name: 'Tests', what: 'New behaviour has a test (sample).' }] } })
+    await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: repoPath })
+    expect(await db.transaction((tx) => ensureMain({ tx, appId: own }))).toEqual({ made: 1 }) // this app only: the others in this file build the old way
+    const [w] = (await listWorkflows(own)).filter((x) => x.appDefault)
+    expect(w).toMatchObject({ name: 'Main', build: 'one' }); expect(afterOf(w)).toBe('fast')
+    const { project: p, issues: [t] } = await createProject({ appId: own, name: 'main flow', issues: [{ title: 'Export (sample)', brief: 'People download their orders (sample).' }] })
+    const { acceptance: [ac] } = await setAcceptance(t.id, { add: [{ text: 'The file has every order (sample)', check: 'export.test' }] })
+    await setStep({ issueId: t.id }, 'prototype', { status: 'done', detail: 'the whole flow (sample)' }); await approveStep(t.id, 'prototype', 'Sam (sample)')
+    const seen: { title: string; brief: string }[] = []
+    const verdict = (list: object[]) => `Checked.\n\n\`\`\`acceptance\n${JSON.stringify(list)}\n\`\`\``
+    const execute: Execute = async (i) => {
+      seen.push({ title: i.subIssue.title, brief: i.subIssue.brief ?? '' })
+      const r = await commits('main')(i)
+      const checks = seen.filter((s) => s.title.startsWith(CHECK_TITLE)).length
+      if (i.subIssue.title.startsWith(CHECK_TITLE)) return { ...r, summary: checks === 1 ? verdict([{ id: ac.id, met: true, evidence: 'export.test passes' }, { id: 'req_tests', met: false, evidence: 'no test for an empty export' }]) : verdict([{ id: 'req_tests', met: true, evidence: 'export-empty.test' }]) }
+      return r
+    }
+    const propose: Propose = async () => { throw new Error('the planner was asked, and Main has none') }
+    const runner = new Runner({ execute, sessionsMax: 1, propose })
+    await approveBriefs(own)
+    await runner.buildTask(t.id)
+    await until(cleaned(p.id))
+    expect(seen.map((s) => s.title)).toEqual(['Build it', CHECK_TITLE, FINISH_TITLE, `${CHECK_TITLE} (2)`, PROBE_TITLE])
+    expect(seen[0].brief).toContain('in this one go'); expect(seen[0].brief).toContain(`[${ac.id}] The file has every order (sample)`); expect(seen[0].brief).toContain('- tests (Tests): New behaviour has a test (sample).')
+    expect(seen[1].brief).toContain('[req_tests] Tests:')
+    expect(seen[2].brief).toContain('found this not done'); expect(seen[2].brief).toContain('Missing: no test for an empty export')
+    expect(seen[3].brief).toMatch(/^Check 2/); expect(seen[3].brief).not.toContain(ac.id) // only what was not done is looked at again
+    expect(seen[4].brief).toContain('You did not build this')
+    const [after] = await db.select().from(issue).where(eq(issue.id, t.id))
+    expect(after.requirements).toEqual([{ key: 'tests', name: 'Tests', applies: true, how: 'export-empty.test', built: true }])
+    expect((after.acceptance as { built?: boolean }[])[0].built).toBe(true)
+    const order = (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => ['task.checked', 'task.tested', 'issue.planned'].includes(e.type)).sort((a, b) => a.seq - b.seq).map((e) => e.type)
+    expect(order).toEqual(['issue.planned', 'task.checked', 'task.checked', 'task.tested']) // the whole test run once, last
   })
 
   it('a built task is checked against its acceptance criteria by one more sub-task, before the whole test run; its verdicts mark them', async () => {

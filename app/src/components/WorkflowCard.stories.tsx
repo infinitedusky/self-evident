@@ -64,3 +64,27 @@ export const ChoosingFast: Story = {
     await expect(afterOf((args.onSave as ReturnType<typeof fn>).mock.calls[0][0] as Workflow)).toBe('fast')
   },
 }
+
+/** Main (made up): the prototype, then built in one go, then the checklist. No plan, no checks before the build. */
+export const MainBuiltInOneGo: Story = {
+  args: { workflow: { ...withChecks(uiWorkflow, 'fast'), name: 'Main', build: 'one' }, usedBy: 'The app\'s default (sample)' },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.getByText('In one go')).toBeInTheDocument()
+    await expect(c.getByText(/Built in one go: one builder, the whole task/)).toBeInTheDocument()
+    await expect(c.getByText(/Probed by an agent that did not build it/)).toBeInTheDocument()
+    await expect(c.queryByText(/The plan: the task cut into sub-tasks/)).toBeNull()
+  },
+}
+/** Editing how it is built: in one go, or planned into sub-tasks; what is saved is what was chosen. */
+export const ChoosingHowItIsBuilt: Story = {
+  args: { editing: true, onSave: fn() },
+  play: async ({ canvasElement, args }) => {
+    const c = within(canvasElement)
+    await expect(c.getByRole('radio', { name: /Planned into sub-tasks/ })).toBeChecked() // a workflow from before: as it was
+    await userEvent.click(c.getByRole('radio', { name: /In one go/ }))
+    await userEvent.click(c.getByRole('button', { name: 'Save' }))
+    await expect(((args.onSave as ReturnType<typeof fn>).mock.calls[0][0] as Workflow).build).toBe('one')
+    await expect(c.getByText('In one go')).toBeInTheDocument()
+  },
+}

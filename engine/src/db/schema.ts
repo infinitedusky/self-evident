@@ -188,7 +188,7 @@ export const issue = pgTable('issue', {
   reason: text('reason'), // canceled or duplicate: why
   handover: jsonb('handover').$type<{ text: string | null; sessionId: string; at: string }>(), // what the conversation that made it said about it, written once when its agent starts (handover.ts); text null: it said nothing more
   speed: text('speed'), // careful | fast, when the task says so; null: the app's (steps.ts, Speed)
-  requirements: jsonb('requirements').$type<{ key: string; name: string; applies: boolean; how: string }[]>(), // how its plan covers each requirement in force, as the planner said (requirements.ts)
+  requirements: jsonb('requirements').$type<{ key: string; name: string; applies: boolean; how: string; built?: boolean }[]>(), // how its plan covers each requirement in force, as the planner said (requirements.ts)
   createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
   startedAt: at('started_at'), completedAt: at('completed_at'), canceledAt: at('canceled_at'), closedBy: text('closed_by'),
 }, (t) => [uniqueIndex('issue_app_number').on(t.appId, t.number), uniqueIndex('issue_id_app').on(t.id, t.appId),
@@ -431,6 +431,7 @@ export const savePoint = pgTable('save_point', {
 export const workflow = pgTable('workflow', {
   id: id(), appId: appId(), name: text('name').notNull(),
   steps: jsonb('steps').notNull().default([]), ordered: boolean('ordered').notNull().default(false),
+  build: text('build').notNull().default('planned'), // one: built in one go, no planner; planned: cut into sub-tasks by the planner (steps.ts, Build)
   createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [index('workflow_app').on(t.appId)])
 
