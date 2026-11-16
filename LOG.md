@@ -4241,3 +4241,35 @@ an agent may call); the running-app half. Not run on a real app yet: the press s
 - While Learn's conversation is open. Ended, there is nobody to ask, and the documents on the Learn page stand.
 
 Ideas kept before this have no source. Not tried with real agents: an idea's agent asking Learn.
+
+## Main: built in one go, then a checklist that is verified (Sandy, 2026-11-16: "Keep this in 'legacy', create a new main. In main we go through prototype and then we just build it in on one step… then it writes the PR, and then… our falsification / cleanup step that is another agent coming in and testing it out and making sure it works and probing it"; three rounds: "yes 3 is good")
+
+The stages before a build were there to enforce things on the builder. The list goes in the builder's prompt now,
+and a check after the build is what holds it (SHAPE.md, "The workflow is a verification checklist").
+
+- **Two workflows in every app.** At start the engine gives each app a **Main** and makes it the default; what
+  was the default is named **Legacy** when it had a stock name (`ensureMain` in `work.ts`). A project or a loose
+  task already under way is pinned to the workflow it was using, so nothing changes under it. Run again, it does
+  nothing. A new app gets both.
+- **Main**: the prototype, required; no checks before the build; **built in one go**.
+- **Built in one go** (`workflow.build = 'one'`, migration 0032; a setting on any workflow, beside "planned into
+  sub-tasks"): no planner runs. The task gets one sub-task, "Build it", whose brief is the list it will be checked
+  against (its acceptance criteria, the app's requirements in force) and the prototype's branch to build from
+  (`oneGoBrief` in `planner.ts`). Do we need sub-tasks: not by default. One builder holding the whole task has no
+  merges to wait on and reads the code once; a task too big for that is two tasks.
+- **After the build** (`verify.ts`, `afterBuild`), each a sub-task built by a fresh agent, so it shows on the
+  graph and survives a restart:
+  - **Check**: every criterion and every requirement, a verdict each (met, not met with what is missing, does
+    not apply, or left for a person). The requirements' verdicts are kept on the task beside the criteria's.
+  - **Finish what the check found**, then **check again**, only what was not done. Three rounds; then a comment
+    on the task says what is still not done and it waits for a person.
+  - **Try to break it, and clean up**: an agent that did not build it runs it, tries what nobody wrote down,
+    reads the change for what a build leaves behind, fixes what is small, reports what it left.
+  - Then the whole test run, once, with its own fix sub-task when it fails (2026-11-15).
+- **Legacy is as it was**: its checks, the planner, each sub-task merged in turn, its criteria checked once. No
+  requirements check, no finish, no probe.
+- The pull request is opened at the first merge and rewritten after each, as before, so it carries the check's
+  marks and each agent's report.
+
+Not done: the probe's "broke and left" in the merge guide itself (it is in the record under it); a way to say a
+task needs no prototype in Main (it is required there). Not seen on a real task yet.

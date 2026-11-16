@@ -224,6 +224,20 @@ Details and sources in `research/`.
 - **The loop's stages** (Sandy, 2026-10-29): Observe · Learn · Ideate (ideas and their research) · Plan
   (tasks: research, brief, mockup, prototype, in any order unless a workflow sets one) · Build (including the
   checks a build is held to). The rail lists only these stages; projects, tasks and the steps are inside them.
+- **The workflow is a verification checklist** (Sandy, 2026-11-16, from feedback: the stages before a build (ADR,
+  audit, blast radius) each carrying instructions "is based on earlier models where hooks were needed to enforce
+  things a lot. What I want to do instead is have a list of things to do and just include them in the 'build it'
+  prompt, and then when it is done, do a check to make sure it did each thing, anything it doesn't it then needs
+  to do. That could happen over and over until it is done").
+  - **Main**, every app's default: the prototype, then **built in one go** by one builder that is given the whole
+    list (the task's acceptance criteria and the app's requirements). Then, each by a fresh agent: a **check** of
+    every item against what was built; a **finish** of what the check found not done, and a check again, three
+    rounds at most, then a person; a **probe** by someone who did not build it, who tries to break it and cleans
+    up; then the app's whole test run, once. No planner, no stages before the build.
+  - **Legacy**: what there was. The checks a workflow picks before the build, the planner cutting the task into
+    sub-tasks, each merged in turn, its criteria checked once. Kept, and still a workflow anyone can use.
+  - How a task is built is a workflow's setting (in one go, or planned into sub-tasks), beside what follows its
+    prototype. A task too big for one builder is two tasks.
 - **Learn has two roles, and both end in ideas** (Sandy, 2026-11-16: "1 is to analyze observations, the other is to
   analyze the codebase. The latter would be the first step when you approach a new project … the learn agent can
   create ideas … it would also be the access point to the workbench docs").
