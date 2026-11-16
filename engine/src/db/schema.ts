@@ -367,6 +367,14 @@ export const verification = pgTable('verification', { // [LS] Feature/Entry shot
   foreignKey({ name: 'verification_issue_app_fk', columns: [t.issueId, t.appId], foreignColumns: [issue.id, issue.appId] })])
 
 // The thing built the way we would ship it, in a worktree of its own, to show that it works; then analysed into the
+// What an agent learned by reading an app's code (learn.ts): one row per document per app, replaced when it is
+// learned again. summary is for the person and short; body is for agents. sha: the home repository's commit then.
+export const learning = pgTable('learning', {
+  id: id(), appId: appId(), key: text('key').notNull(),
+  summary: text('summary').notNull(), body: text('body').notNull().default(''), sha: text('sha'), sessionId: text('session_id'),
+  createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [uniqueIndex('learning_app_key').on(t.appId, t.key)])
+
 // plan. It is not merged. Its server is the engine's to start and stop; the row outlives it.
 export const PROTOTYPE_STATUSES = ['running', 'stopped', 'discarded'] as const
 export const prototype = pgTable('prototype', {
