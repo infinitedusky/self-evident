@@ -4025,6 +4025,25 @@ not two" only held when the brief could be approved in the same moment as the pr
   more happens until you approve it" is listed under what needs you on My Stuff, with the way to it
   (`now`, `approve_brief`).
 
+## A prototype is full or rough (Sandy, 2026-11-15: "the HG 260 prototype is taking way too long" … "prototypes can be set as being full or rough")
+
+HG-260's prototype had been building for a quarter of an hour: a migration, the lookup module, the API, a set-up
+step, a settings card, tests, and a three-minute run of the whole suite. That is what a prototype's agent is told
+to do since 2026-11-13: build it the way we would ship it. And after approval the task is built again.
+
+- **Full** (as it was, and the usual one unless an app says otherwise): every layer real, so an analysis and an ADR
+  can be read out of it.
+- **Rough**: quick, to learn. The agent names the one thing in doubt and builds that for real; everything around it
+  is the fastest way. No migration discipline, no new tests, no full test run, no polish. If the only doubt is how
+  it looks, it says so and stops: that is a mockup's job. It is thrown away; the build does it properly, once.
+- **Where**: Settings › Prototype, "How thoroughly a prototype is built" (`setup.prototype_depth`). A prototype can
+  be started as either whatever the app's usual one is (`start_prototype`, `depth`; kept on the prototype,
+  migration 0030), so "make a rough prototype" works when said to an agent.
+- **The prototype analysis is told** when it reads a rough one: not to fault what was left rough, not to treat the
+  code as a base, and to list what the real build has to do that the prototype did not.
+
+The rule that keeps rough from being a slow mockup: real on the one thing in doubt, rough everywhere else.
+
 ## A build with no reported steps says what it is doing (Sandy, 2026-11-15: "they seem to be stuck on the first step of each, or the node drawing is wrong")
 
 The drawing was wrong. A sub-task that is building showed an empty bar, which reads as stuck on step one.
@@ -4037,3 +4056,18 @@ The drawing was wrong. A sub-task that is building showed an empty bar, which re
   step it is on" and its bar is outlines with "N planned"; one that is landing says "Built. Landing now: the tests
   run before it merges" with every step done.
 - Not done here: getting the steps reported again (the engine has to listen for the task tools agents use now).
+
+## A builder's steps are reported again (2026-11-15)
+
+The cause of the graph's empty bars: the engine read a builder's steps only from `TodoWrite`, and since 2026-11-01
+builders keep their list with `TaskCreate` and `TaskUpdate`, or not at all. No `run.steps` event in two weeks.
+
+- **Both are read now** (`step-track.ts`): `TodoWrite` gives the whole list; `TaskCreate` adds a step and
+  `TaskUpdate` changes one, found by the id the tool's result gives it.
+- **The builder is told to keep the list**, plainly: list the steps before changing anything, mark each in progress
+  and completed, because nothing else tells the people watching where it is.
+- The task tools are in the builder's tool set and need no approval.
+
+Not seen with a real builder yet: whether the model keeps the list when told this way, and what the task tools'
+results look like in this SDK version (the tracker reads an id from JSON or from "Task #N", and counts from one
+when it finds neither).

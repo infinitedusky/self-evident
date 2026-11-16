@@ -27,7 +27,7 @@ import { approveBrief, skipUntouched, stepsOf } from './work.js'
 import { onAnyPlanned } from './planner.js'
 import { BRIEF_FORM } from './brief.js'
 
-export interface CheckFacts { identifier: string; title: string; issueId: string; base: string; prototype: { path: string; branch: string; title: string } | null; before: StepKey[] }
+export interface CheckFacts { identifier: string; title: string; issueId: string; base: string; prototype: { path: string; branch: string; title: string; rough?: boolean } | null; before: StepKey[] }
 
 /**
  * A report has two readers (Sandy, 2026-11-13: "really comprehensive but they're really long … great context for the
@@ -43,7 +43,7 @@ export function checkBrief(key: StepKey, f: CheckFacts): string {
   const task = `Task ${f.identifier} "${f.title}" (${f.issueId}). Read the task and its brief with the task tool.`
   switch (key) {
     case 'analysis': return `**Prototype analysis.** ${task}
-${proto(f)}Its agent was told to build it the way we would ship it: every requirement of the brief met end to end, by the repository's conventions, with fakes only at the system's edges and through seams. Do not take its word for that: check. Read every commit since ${f.base}, the diff, the sample data under .prototype/scenarios, the repository's conventions (AGENTS.md, CLAUDE.md, the code around it on ${f.base}), and the code it leans on.
+${proto(f)}${f.prototype?.rough ? 'It is a ROUGH prototype: its agent was told to build only the one thing in doubt for real and everything around it the quickest way, with no migrations, tests or polish. Do not fault it for what it left rough, and do not treat its code as a base: read it for what it learned. Say what it showed about the thing in doubt, and list plainly what the real build has to do that the prototype did not (each layer it faked or skipped).' : 'Its agent was told to build it the way we would ship it: every requirement of the brief met end to end, by the repository\'s conventions, with fakes only at the system\'s edges and through seams. Do not take its word for that: check.'} Read every commit since ${f.base}, the diff, the sample data under .prototype/scenarios, the repository's conventions (AGENTS.md, CLAUDE.md, the code around it on ${f.base}), and the code it leans on.
 Report, with file paths:
 - **Requirements**: each acceptance criterion of the task (the task tool lists them, with what the prototype's agent recorded as shown; check its claim, do not repeat it; one marked FINAL BUILD ONLY was not the prototype's to show, so say "left to the build" and nothing more unless the prototype contradicts it) and any requirement of the brief that has no criterion, one line: met end to end (where: the integration point, the storage, the API, the screen), partly, or not met. Not met and partly first.
 - **Against the conventions**: where the code departs from how the repository builds things (structure, naming, migrations, privacy rules), with the line and the convention it breaks. Say plainly when it holds. Duplication, clumsy structure and missing polish are expected of a prototype and are not defects here: they go under Cleaner.
@@ -179,7 +179,7 @@ export async function advanceChecks(issueId: string): Promise<ReturnType<typeof 
     const [a] = await db.select().from(app).where(eq(app.id, t.appId))
     const r = await homeRepo(t.appId)
     const done = rows.filter((x) => x.state.status === 'done').map((x) => x.key)
-    const facts: CheckFacts = { identifier: `${a.key}-${t.number}`, title: t.title, issueId, base: a.defaultBranch, prototype: p ? { path: p.path, branch: p.branch, title: p.title } : null, before: done }
+    const facts: CheckFacts = { identifier: `${a.key}-${t.number}`, title: t.title, issueId, base: a.defaultBranch, prototype: p ? { path: p.path, branch: p.branch, title: p.title, rough: p.depth === 'rough' } : null, before: done }
     if (move.do === 'run') {
       const cwd = move.key === 'analysis' && p ? p.path : conductor?.cwd ?? r?.localPath
       if (!cwd) return { do: 'nothing' as const } // nowhere to read from

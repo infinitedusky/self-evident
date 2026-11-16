@@ -110,7 +110,18 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
  * A new prototype: its branch and worktree off the app's default branch, its server, and its conversation, shown in
  * every open Self Evident with the prototype beside it. With a brief, the conversation starts building at once.
  */
-export async function startPrototype(i: { appId: string; title: string; brief?: string; projectId?: string | null; ideaId?: string | null; issueId?: string | null; actor?: string; /** false for something with no screen (a collector, a library, a command): no server is started, and it is tried by the commands of its guide. */ server?: boolean }) {
+/**
+ * How thoroughly a prototype is built (Sandy, 2026-11-15: "prototypes can be set as being full or rough").
+ * - full: the thing built the way we would ship it, every layer real, so an analysis and an ADR can be read out of it.
+ * - rough: built quickly to learn from and to see that it works. The one thing in doubt is real; everything around it
+ *   is whatever is quickest. No migration discipline, no full test run, no polish. The build does it properly, once.
+ * An app has a usual one (setup.prototype_depth; full when unset) and a prototype can be started as either.
+ */
+export type Depth = 'full' | 'rough'
+export const depthOf = (own: unknown, appSetup: unknown): Depth =>
+  own === 'full' || own === 'rough' ? own : (appSetup as { prototype_depth?: string } | null)?.prototype_depth === 'rough' ? 'rough' : 'full'
+
+export async function startPrototype(i: { depth?: Depth | null; appId: string; title: string; brief?: string; projectId?: string | null; ideaId?: string | null; issueId?: string | null; actor?: string; /** false for something with no screen (a collector, a library, a command): no server is started, and it is tried by the commands of its guide. */ server?: boolean }) {
   if ([i.projectId, i.ideaId, i.issueId].filter(Boolean).length > 1) throw new PlanError('a prototype is a step of one thing: an idea, a task or a project')
   const { a, repoPath, cmd } = await setupOf(i.appId)
   if (!repoPath) throw new PlanError(`${a.name} has no local checkout to prototype in`)
@@ -120,7 +131,7 @@ export async function startPrototype(i: { appId: string; title: string; brief?: 
   const branch = `prototype/${slug}`
   const path = join(`${repoPath}-worktrees`, `prototype--${slug}`)
   await addWorktree(repoPath, path, branch, a.defaultBranch)
-  const [row] = await db.insert(prototype).values({ id, appId: i.appId, projectId: i.projectId ?? null, ideaId: i.ideaId ?? null, issueId: i.issueId ?? null, title: i.title, brief: i.brief?.trim() || null, branch, path, createdBy: i.actor ?? 'person' }).returning()
+  const [row] = await db.insert(prototype).values({ id, appId: i.appId, projectId: i.projectId ?? null, ideaId: i.ideaId ?? null, issueId: i.issueId ?? null, title: i.title, brief: i.brief?.trim() || null, depth: depthOf(i.depth, a.setup), branch, path, createdBy: i.actor ?? 'person' }).returning()
   await emit(row, 'prototype.created', i.actor ?? 'person', { branch })
   const status = i.server === false ? await prototypeStatus(id) : await runPrototype(id, i.actor)
   const talk = await talkFor(id)
