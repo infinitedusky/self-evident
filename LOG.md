@@ -4201,3 +4201,11 @@ listed five checks "always, by itself" that a Fast task never ran. Two controls 
 
 The engine already ran whatever checks a task's steps listed, so a subset needed no change there. Not tried on a
 real task: a pick that leaves out the final ADR and plan (the merge checklist comes from it, so the guide has none).
+
+## An app opens in a new browser tab with ⌘-click (Sandy, 2026-11-16)
+
+- ⌘-click, Ctrl-click or the middle button on an app's square opens that app in a new browser tab; this tab stays
+  where it is. A plain click switches here, as before.
+- The new tab is told which app by its address (`/?app=<id>`), which is taken off the address once read.
+- Each browser tab now keeps its own app through a reload (sessionStorage). Before, the app was remembered once for
+  the whole browser, so two tabs on two apps would both come back on the last one picked.
