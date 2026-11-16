@@ -4227,3 +4227,17 @@ Learn was an empty page. It has two halves now (SHAPE.md); the codebase half is 
 
 Not done: handing the documents to the planner, the checks and the builders as they start (today they are a tool
 an agent may call); the running-app half. Not run on a real app yet: the press starts a real agent.
+
+## Learn has its own agent, and an idea remembers it (Sandy, 2026-11-16: "the learn should have its own agent that's broken off from the global… When you create an idea it sets itself as the source agent so that the idea/task agent can get info from it")
+
+- **Learn's agent is on the Learn page**, beside what it wrote, and no longer a tab in the app's column: as a
+  task's agent is on the task's page. One per app. Ask it there.
+- **An idea Learn keeps remembers Learn's conversation** (`idea.source_ref`: `{sessionId, what: 'learn'}`; the
+  source is `agent`). Anyone else's idea has none.
+- **The idea's agent, and the task's it becomes, have it to ask.** It is listed with the agents they have out
+  ("Learn: where this idea came from"), so `agents_out`, `read_agent` and `tell_agent` reach it, by `learn`. Its
+  answer comes back the way a prototype's or a check's does. `tell_agent` and the others were a task's agent's
+  only; an idea's own agent has them now.
+- While Learn's conversation is open. Ended, there is nobody to ask, and the documents on the Learn page stand.
+
+Ideas kept before this have no source. Not tried with real agents: an idea's agent asking Learn.
