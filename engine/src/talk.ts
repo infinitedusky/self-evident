@@ -4,6 +4,7 @@
  * page); the engine's own API is the agent's MCP tools; an edit or a shell command waits for the person's yes in
  * the UI, Claude Code's default mode. Development runs on the operator's login, the product on an API key.
  */
+import type { ImageSaved } from './uploads.js'
 import { STOP_ONLY_YOURS, stopsOthers } from './guard.js'
 import { BRIEF_FORM } from './brief.js'
 import { fileURLToPath } from 'node:url'
@@ -728,8 +729,8 @@ async function describeContext(c?: TalkContext): Promise<string> {
 /** What a conversation is pinned to after its first message: the project or idea in view, and still about the app as a whole if it was (that mark is what keeps it out of the app's files). */
 export const pinnedTo = (was: SubjectRef | null, from: SubjectRef | null): SubjectRef | null => (from ? { ...from, ...(was?.app ? { app: true } : {}) } : was)
 
-export async function say(sessionId: string, text: string, context?: TalkContext, as?: { author: string; kind: string; payload?: Record<string, unknown> }) {
-  if (!text.trim()) throw new PlanError('say something')
+export async function say(sessionId: string, text: string, context?: TalkContext, as?: { author: string; kind: string; payload?: Record<string, unknown> }, images: ImageSaved[] = []) {
+  if (!text.trim() && !images.length) throw new PlanError('say something')
   const [s] = await db.select().from(session).where(eq(session.id, sessionId))
   if (s && !s.subject) { // pinned by first contact: the project or idea in view, else the first thing said
     const from = await subjectFrom({ projectId: context?.projectId, ideaId: context?.ideaId })
@@ -737,10 +738,16 @@ export async function say(sessionId: string, text: string, context?: TalkContext
     await db.update(session).set({ subject: from.subject ?? said, subjectRef: pinnedTo(s.subjectRef as SubjectRef | null, from.subjectRef) }).where(eq(session.id, sessionId))
   }
   const l = await open(sessionId)
-  const row = await record(sessionId, as?.author ?? 'user', as?.kind ?? 'text', text.trim(), context || as?.payload ? { ...(context ? { context } : {}), ...as?.payload } : undefined)
+  const shown = images.map(({ id, name, mediaType }) => ({ id, name, mediaType })) // the files stay on this computer; the row says which
+  const row = await record(sessionId, as?.author ?? 'user', as?.kind ?? 'text', text.trim(), context || as?.payload || shown.length ? { ...(context ? { context } : {}), ...as?.payload, ...(shown.length ? { images: shown } : {}) } : undefined)
   l.busy = true
-  l.lastPrompt = (await describeContext(context)) + text.trim()
-  l.push({ type: 'user', message: { role: 'user', content: l.lastPrompt }, parent_tool_use_id: null })
+  // The pictures go in the message, and their paths in its words: the agent sees them, and can use the files themselves.
+  const attached = images.length ? `\n\n[${images.length === 1 ? 'An image is' : `${images.length} images are`} attached to this message, saved at: ${images.map((i) => i.path).join(', ')}]` : ''
+  l.lastPrompt = (await describeContext(context)) + text.trim() + attached
+  const content = images.length
+    ? [{ type: 'text' as const, text: l.lastPrompt }, ...images.map((i) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: i.mediaType as 'image/png', data: i.data } }))]
+    : l.lastPrompt
+  l.push({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null })
   return { messageId: row.id }
 }
 

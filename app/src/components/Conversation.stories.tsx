@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, within } from 'storybook/test'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { Conversation, Message } from './Conversation'
 import { engineDown, withEngine } from '../stories/mock-engine'
 import { prototypeTranscript, talkSession, transcript } from '../stories/sample'
@@ -22,6 +22,29 @@ const working: TalkMessage[] = [
 const asking = msg(7, 'agent', 'permission', '', { requestId: 'req_sample', tool: 'Edit', risk: 'moderate', why: 'changes a file in this checkout', input: { file: 'web/checkout/submit.ts', old: 'retries: 0', new: 'retries: 1' } })
 const t = (extra: Partial<Transcript> & { busy?: boolean; status?: string } = {}): Transcript => ({ ...transcript, messages: working, pending: [], ...extra, session: { ...talkSession, busy: extra.busy ?? false, status: extra.status ?? 'open' } })
 
+/** A message sent with pictures (made up): they show under what was said, and open full size. */
+export const WithImages: Story = { beforeEach: withEngine({ transcript: t({ messages: [msg(1, 'user', 'text', 'Sample: the pay button overlaps the total on a phone. See the two screenshots.', { images: [{ id: 'img_sample1', name: 'checkout-phone.png (sample)', mediaType: 'image/png' }, { id: 'img_sample2', name: 'checkout-total.png (sample)', mediaType: 'image/png' }] }), ...working.slice(1)] }) }) }
+/** An image dropped on the conversation waits above the box, with a way to take it off; Send works with no words. Not an image: it says so. */
+export const DroppedImage: Story = {
+  beforeEach: withEngine({ transcript: t() }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const box = await c.findByRole('textbox')
+    const root = canvasElement.querySelector<HTMLElement>('[data-component="Conversation"]')!
+    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (ch) => ch.charCodeAt(0))
+    const drop = (file: File) => { const dt = new DataTransfer(); dt.items.add(file); root.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt })) }
+    await expect(c.getByRole('button', { name: 'Send' })).toBeDisabled()
+    drop(new File([png], 'sample-screenshot.png', { type: 'image/png' }))
+    await waitFor(() => expect(c.getByAltText('sample-screenshot.png')).toBeInTheDocument())
+    await expect(c.getByRole('button', { name: 'Send' })).toBeEnabled()
+    drop(new File(['sample notes, made up'], 'notes.txt', { type: 'text/plain' }))
+    await waitFor(() => expect(c.getByText('Only images go here: PNG, JPEG, GIF or WebP.')).toBeInTheDocument())
+    await expect(c.getAllByRole('img')).toHaveLength(1)
+    await userEvent.click(c.getByRole('button', { name: 'Remove sample-screenshot.png' }))
+    await expect(c.queryByAltText('sample-screenshot.png')).toBeNull()
+    await expect(box).toBeInTheDocument()
+  },
+}
 /** Tool calls, an automatic run, a result and an answer. */
 export const Answered: Story = { beforeEach: withEngine({ transcript: t() }) }
 /** The agent asks before an edit: Allow, allow for the conversation, or Deny. */

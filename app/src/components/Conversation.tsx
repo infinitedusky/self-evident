@@ -7,7 +7,19 @@ import { useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Badge } from './Badge'
-import { openEvents, API, engine, type Risk, type TalkContext, type TalkMessage, type Transcript } from '../engine'
+import { openEvents, API, engine, type Risk, type TalkContext, type TalkImage, type TalkMessage, type Transcript } from '../engine'
+
+/** What a message takes: the model's own limits (5 MB an image), and six so a message stays a message. */
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+const MAX_IMAGES = 6
+const MAX_BYTES = 5 * 1024 * 1024
+type Picked = TalkImage & { url: string }
+const readImage = (f: File) => new Promise<Picked>((done, fail) => {
+  const r = new FileReader()
+  r.onload = () => { const url = String(r.result); done({ name: f.name || 'image', mediaType: f.type, data: url.slice(url.indexOf(',') + 1), url }) }
+  r.onerror = () => fail(r.error)
+  r.readAsDataURL(f)
+})
 
 const RISK_TONE: Record<Risk, 'neutral' | 'ok' | 'warn' | 'bad'> = { free: 'neutral', cheap: 'ok', moderate: 'warn', expensive: 'bad' }
 
@@ -15,6 +27,19 @@ export function Conversation({ sessionId, context, compact, onChanged }: { sessi
   const [t, setT] = useState<Transcript | null>(null)
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [images, setImages] = useState<Picked[]>([]) // dropped or pasted, waiting to be sent
+  const [over, setOver] = useState(false)
+  /** Pictures dropped on the conversation or pasted in the box, after Linear and Claude: they wait above the box, each with a way to take it off. */
+  const take = async (files: File[]) => {
+    const pics = files.filter((f) => IMAGE_TYPES.includes(f.type))
+    if (!pics.length) { if (files.length) setError('Only images go here: PNG, JPEG, GIF or WebP.'); return }
+    const big = pics.find((f) => f.size > MAX_BYTES)
+    if (big) { setError(`${big.name} is over 5 MB.`); return }
+    const read = await Promise.all(pics.map(readImage)).catch(() => null)
+    if (!read) { setError('That image could not be read.'); return }
+    setError(null)
+    setImages((now) => { const all = [...now, ...read]; if (all.length > MAX_IMAGES) setError(`${MAX_IMAGES} images at most in one message.`); return all.slice(0, MAX_IMAGES) })
+  }
   const timer = useRef<number | undefined>(undefined)
   const bottom = useRef<HTMLDivElement>(null)
 
@@ -35,16 +60,21 @@ export function Conversation({ sessionId, context, compact, onChanged }: { sessi
   useEffect(() => { bottom.current?.scrollIntoView({ block: 'end' }) }, [t?.messages.length])
 
   const send = async () => {
-    if (!text.trim()) return
-    const body = text; setText('')
-    try { await engine.say(sessionId, body, context) } catch (e: any) { setError(String(e.message ?? e)); setText(body) }
+    if (!text.trim() && !images.length) return
+    const body = text, pics = images; setText(''); setImages([])
+    try { await engine.say(sessionId, body, context, pics.map(({ name, mediaType, data }) => ({ name, mediaType, data }))) } catch (e: any) { setError(String(e.message ?? e)); setText(body); setImages(pics) }
   }
   if (error && !t) return <div className="empty bad">{error}</div>
   if (!t) return <p className="muted">Loading…</p>
   const busy = t.session.busy
+  const open = t.session.status !== 'ended'
   const waiting = t.messages.some((m) => m.kind === 'permission' && t.pending.includes(m.payload?.requestId))
   return (
-    <div className={`conversation ${compact ? 'compact' : ''}`} data-component="Conversation">
+    <div className={`conversation ${compact ? 'compact' : ''}${over ? ' dropping' : ''}`} data-component="Conversation"
+      onDragOver={(e) => { if (open && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setOver(true) } }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false) }}
+      onDrop={(e) => { if (!open || !e.dataTransfer.files.length) return; e.preventDefault(); setOver(false); void take([...e.dataTransfer.files]) }}>
+      {over && <div className="drop-here" aria-hidden="true">Drop the image to send it with your message</div>}
       <div className="chat">
         {t.messages.length === 0 && <div className="msg engine faint">Say what you want. It can read this checkout, has the engine as tools, and asks before it edits or runs anything.</div>}
         {grouped(t.messages).map((g) => Array.isArray(g)
@@ -54,13 +84,23 @@ export function Conversation({ sessionId, context, compact, onChanged }: { sessi
         <div ref={bottom} />
       </div>
       {error && <div className="faint" style={{ fontSize: 12 }}>{error}</div>}
-      {t.session.status !== 'ended' && (
+      {open && images.length > 0 && (
+        <div className="talk-images" aria-label="Images to send">
+          {images.map((p, n) => (
+            <span key={n} className="talk-image">
+              <img src={p.url} alt={p.name} />
+              <button className="talk-image-off" aria-label={`Remove ${p.name}`} title="Remove" onClick={() => setImages((now) => now.filter((_, k) => k !== n))}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      {open && (
         <div className="talk-input">
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={compact ? 2 : 3}
+          <textarea value={text} onPaste={(e) => { const files = [...e.clipboardData.files]; if (files.some((f) => IMAGE_TYPES.includes(f.type))) { e.preventDefault(); void take(files) } }} onChange={(e) => setText(e.target.value)} rows={compact ? 2 : 3}
             placeholder={waiting ? 'Answer the request above first, or type anyway.' : context?.label ? `Ask about ${context.label}, or anything. Enter sends.` : 'Say what you want. Enter sends; Shift+Enter for a new line.'}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() } }} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <button className="btn" disabled={!text.trim()} onClick={send}>Send</button>
+            <button className="btn" disabled={!text.trim() && !images.length} onClick={send}>Send</button>
             {busy && <button className="btn quiet small" onClick={() => engine.interrupt(sessionId)}>Stop</button>}
           </div>
         </div>
@@ -104,7 +144,7 @@ const took = (ms: number) => ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))
 export function Message({ m, pending, sessionId }: { m: TalkMessage; pending: boolean; sessionId: string }) {
   const p = m.payload ?? {}
   switch (m.kind) {
-    case 'text': return <div className={`msg ${m.author}${p.via === 'terminal' ? ' via-terminal' : ''}`}>{p.via === 'terminal' && m.author === 'user' && <span className="msg-via">in the terminal</span>}{m.author === 'agent' ? <div className="msg-body md-chat"><Markdown remarkPlugins={[remarkGfm]}>{m.body}</Markdown></div> : <div className="msg-body">{m.body}</div>}</div>
+    case 'text': return <div className={`msg ${m.author}${p.via === 'terminal' ? ' via-terminal' : ''}`}>{p.via === 'terminal' && m.author === 'user' && <span className="msg-via">in the terminal</span>}{m.author === 'agent' ? <div className="msg-body md-chat"><Markdown remarkPlugins={[remarkGfm]}>{m.body}</Markdown></div> : <div className="msg-body">{m.body}</div>}{Array.isArray(p.images) && p.images.length > 0 && <div className="msg-images">{(p.images as { id: string; name: string }[]).map((i) => <a key={i.id} href={`${API}/talks/${sessionId}/images/${i.id}`} target="_blank" rel="noreferrer"><img src={`${API}/talks/${sessionId}/images/${i.id}`} alt={i.name} loading="lazy" /></a>)}</div>}</div>
     case 'tool_call': return <div className="msg tool mono">{p.tool === 'Bash' ? `$ ${p.input?.command ?? ''}` : `${String(p.tool).replace('mcp__engine__', 'engine · ')} ${p.input?.file ?? p.input?.pattern ?? ''}`}</div>
     case 'tool_result': return <details className="msg tool-result"><summary className="mono faint">{p.ok === false ? 'error' : 'result'}</summary><pre>{m.body}</pre></details>
     case 'auto': return <div className="msg tool mono faint" title={p.why}>auto · <Badge tone={RISK_TONE[p.risk as Risk] ?? 'neutral'}>{p.risk}</Badge> · {p.tool === 'Bash' ? `$ ${p.input?.command ?? ''}` : `${String(p.tool).replace('mcp__engine__', 'engine · ')} ${p.input?.file ?? ''}`}</div>
