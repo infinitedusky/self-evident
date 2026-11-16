@@ -236,8 +236,11 @@ Details and sources in `research/`.
     up; then the app's whole test run, once. No planner, no stages before the build.
   - **Legacy**: what there was. The checks a workflow picks before the build, the planner cutting the task into
     sub-tasks, each merged in turn, its criteria checked once. Kept, and still a workflow anyone can use.
-  - How a task is built is a workflow's setting (in one go, or planned into sub-tasks), beside what follows its
-    prototype. A task too big for one builder is two tasks.
+  - **A checklist workflow is two choices**: sub-tasks or not, and the requirements a build is held to (a
+    decision record, telemetry, tests, risks …), switched per workflow. "These are both what's put into the
+    instructions and what is checked at the end." A staged workflow keeps the earlier settings. A task too big
+    for one builder is two tasks, or a checklist with sub-tasks.
+  - The check is an independent agent, never the builder.
 - **Learn has two roles, and both end in ideas** (Sandy, 2026-11-16: "1 is to analyze observations, the other is to
   analyze the codebase. The latter would be the first step when you approach a new project … the learn agent can
   create ideas … it would also be the access point to the workbench docs").
