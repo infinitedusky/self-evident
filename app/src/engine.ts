@@ -340,7 +340,7 @@ export const engine = {
   taskAgents: (issueId: string) => call<TaskAgentOut[]>('GET', `/issues/${issueId}/agents`),
   renameTalk: (id: string, subject: string) => call<TalkSession>('POST', `/talks/${id}/rename`, { subject }),
   transcript: (id: string) => call<Transcript>('GET', `/talks/${id}`),
-  say: (id: string, text: string, context?: TalkContext) => call<{ messageId: number }>('POST', `/talks/${id}/say`, { text, context }),
+  say: (id: string, text: string, context?: TalkContext, images?: TalkImage[]) => call<{ messageId: number }>('POST', `/talks/${id}/say`, { text, context, ...(images?.length ? { images } : {}) }),
   permission: (id: string, requestId: string, allow: boolean, always = false) => call<unknown>('POST', `/talks/${id}/permission`, { requestId, allow, always }),
   interrupt: (id: string) => call<unknown>('POST', `/talks/${id}/interrupt`),
   setAuto: (id: string, level: 'free' | 'cheap' | 'moderate') => call<TalkSession>('POST', `/talks/${id}/auto`, { level }),
@@ -509,6 +509,9 @@ export const engine = {
   retry: (issueId: string, fresh = false) => call<{ identifier: string; fresh: boolean; resumed: number[] }>('POST', `/issues/${issueId}/retry`, { fresh }),
   setBuild: (issueId: string, status: BuildStatus) => call<unknown>('POST', `/issues/${issueId}/build`, { status }),
 }
+
+/** A picture sent with a message: base64, without the data: prefix. */
+export interface TalkImage { name: string; mediaType: string; data: string }
 
 export const EVENT_TYPES = [
   'project.created', 'project.started', 'project.landed', 'project.cleaned', 'project.cancelled', 'project.paused', 'project.resumed', 'project.described',

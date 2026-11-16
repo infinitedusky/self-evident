@@ -217,6 +217,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/talks/:id/close', ({ params }) => { d.talks = d.talks.map((t) => (t.id === params.id ? { ...t, closedAt: '2026-11-11T10:00:00.000Z' } : t)); return reply(d.talks.find((t) => t.id === params.id) ?? null) }),
     http.post('/api/talks/:id/reopen', ({ params }) => { d.talks = d.talks.map((t) => (t.id === params.id ? { ...t, closedAt: null } : t)); return reply(d.talks.find((t) => t.id === params.id) ?? null) }),
     http.get('/api/talks/:id', () => reply(d.transcript)),
+    http.get('/api/talks/:id/images/:image', () => new HttpResponse('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="320" height="200" fill="#e9e4d8"/><rect x="24" y="24" width="272" height="36" rx="6" fill="#cfc7b4"/><rect x="24" y="76" width="180" height="100" rx="6" fill="#d9d2c1"/><text x="160" y="190" font-family="system-ui" font-size="11" text-anchor="middle" fill="#666">sample screenshot · made up</text></svg>', { headers: { 'content-type': 'image/svg+xml' } })),
     // Writes do nothing and say ok, so clicking around a story never shows an error.
     http.all('/api/*', () => HttpResponse.json({ ok: true })),
   ]
