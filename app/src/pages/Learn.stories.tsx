@@ -28,6 +28,7 @@ export const NothingLearnedYet: Story = {
     const c = within(canvasElement)
     await expect(await c.findByRole('button', { name: 'Learn this codebase' })).toBeEnabled()
     await expect(c.getByText(/reads the code and writes four short documents/)).toBeInTheDocument()
+    await expect(c.queryByRole('complementary', { name: 'Learn\'s agent' })).toBeNull() // no agent until it is started
   },
 }
 /** The agent is reading the code: the page says so and offers nothing to press twice. */
@@ -51,6 +52,8 @@ export const Learned: Story = {
     await expect(c.getByText(/no idempotency key/)).not.toBeVisible()
     await expect(c.getByRole('button', { name: 'Learn it again' })).toBeInTheDocument()
     await expect(c.getByRole('link', { name: /ideas/i })).toBeInTheDocument() // the way on: what it thought should change is in Ideas
+    const agent = within(c.getByRole('complementary', { name: 'Learn\'s agent' })) // its own agent, beside what it wrote, to ask
+    await expect(await agent.findByRole('textbox')).toBeInTheDocument()
   },
 }
 /** The code has moved on since: it says so, and learning it again is the press. */
