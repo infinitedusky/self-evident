@@ -490,7 +490,7 @@ export const plan: Plan = {
 
 // The engine's view of steps (made up): a task under its project's workflow, an idea, and a project.
 export const taskStepsView: StepsView = {
-  on: 'task', resolved: { speed: { value: 'careful', from: 'app' }, workflow: uiWorkflow, from: 'project' }, fromIdea: { id: 'idea_sample1', number: 4, title: 'Sample: checkout in one go' },
+  on: 'task', resolved: { workflow: uiWorkflow, from: 'project' }, fromIdea: { id: 'idea_sample1', number: 4, title: 'Sample: checkout in one go' },
   states: [{ key: 'idea', status: 'done', detail: '#4 Sample: checkout in one go' }, ...taskSteps], rows: [], blocking: ['mockup', 'risk', 'brief'],
 }
 export const ideaStepsView: StepsView = { on: 'idea', resolved: { workflow: null, from: null }, fromIdea: null, states: ideaSteps, rows: [], blocking: [] }

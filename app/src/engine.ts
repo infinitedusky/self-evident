@@ -405,7 +405,6 @@ export const engine = {
   saveWorkflow: (body: { id?: string; appId: string; name: string; steps: WorkflowStep[]; ordered: boolean }) => call<Workflow>(body.id ? 'PUT' : 'POST', body.id ? `/workflows/${body.id}` : '/workflows', body),
   writeHandover: (issueId: string, again = false) => call<{ handover: IssueDetail['handover']; why?: string }>('POST', `/issues/${issueId}/handover`, { again }),
   /** A task's speed: careful, fast, or null to follow its app. */
-  setSpeed: (issueId: string, speed: 'careful' | 'fast' | null) => call<{ value: 'careful' | 'fast'; from: 'task' | 'app' }>('PUT', `/issues/${issueId}/speed`, { speed }),
   useWorkflow: (target: { kind: 'apps' | 'projects' | 'issues'; id: string }, workflowId: string | null) => call<{ ok: true }>('POST', `/${target.kind}/${target.id}/workflow`, { workflowId }),
   apps: () => call<App[]>('GET', '/apps'),
   /** The apps put away, latest first, with what each holds. */

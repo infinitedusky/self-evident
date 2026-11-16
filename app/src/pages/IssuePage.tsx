@@ -19,7 +19,6 @@ import { TaskBranches } from '../components/TaskBranches'
 import { MergeGuide } from '../components/MergeGuide'
 import { mark, TaskNav } from '../components/TaskNav'
 import { WorkflowChoice } from '../components/WorkflowChoice'
-import { SpeedChoice } from '../components/SpeedChoice'
 import { Handover } from '../components/Handover'
 import { plannedSteps } from '../planned-steps'
 import { BRIEF_WORDS, briefWords } from '@self-evident/engine/brief'
@@ -164,7 +163,6 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
               <p className="faint" style={{ margin: 0, fontSize: 13 }}>
                 <WorkflowChoice workflow={wf} from={v.resolved.from} workflows={workflows} fromIdea={!!v.fromIdea} onChange={(w) => engine.useWorkflow({ kind: 'issues', id: i.id }, w)} />{' · '}
                 <Link to={`/settings/apps/${i.appId}/workflows`}>Configure the rules</Link>
-                {v.resolved.speed && <>{' · '}<SpeedChoice speed={v.resolved.speed} onChange={(s) => engine.setSpeed(i.id, s)} /></>}
               </p>
             </section>
             <Comments i={i} />

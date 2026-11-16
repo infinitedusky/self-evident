@@ -148,7 +148,6 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/apps/:id/summary', () => reply(d.summary)),
     http.get('/api/apps/:id/graph', () => reply(appGraph())),
     http.get('/api/now', () => reply(d.now)),
-    http.put('/api/issues/:id/speed', async ({ request }) => { const b = await request.json() as { speed: 'careful' | 'fast' | null }; return reply(b.speed ? { value: b.speed, from: 'task' } : { value: 'careful', from: 'app' }) }),
     http.get('/api/ideas', () => reply(d.ideas)),
     http.get('/api/ideas/:id', ({ params }) => { const i = d.ideas.find((x) => x.id === params.id); return i ? reply(i) : missing('idea') }),
     http.get('/api/projects', () => reply(d.projects)),
