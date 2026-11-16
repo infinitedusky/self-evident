@@ -17,7 +17,7 @@ import { createProject, projectGraph } from './projects.js'
 import { createIssue } from './issues.js'
 import { approveStep, setStep } from './work.js'
 import { now } from './now.js'
-import { Runner } from './runner.js'
+import { FIX_TITLE, Runner } from './runner.js'
 import { addItems, dropItem, promote } from './backlog.js'
 import type { Propose } from './planner.js'
 import { approveBriefs } from './test-briefs.js'
@@ -285,6 +285,26 @@ describe.skipIf(!reachable)('runner', () => {
     expect((await files(b2)).sort()).toEqual([x, y].sort()) // issue two started where issue one ended
     expect(await files(p.integrationBranch!)).toEqual([]) // the project's branch is only the starting point
     await db.update(project).set({ status: 'superseded' }).where(eq(project.id, p.id))
+  })
+
+  it('the whole test run is once per task, after its sub-tasks are merged; a failure adds a sub-task that fixes it', async () => {
+    const own = newId('app')
+    // Passes only when three files have landed: the task's two sub-tasks leave two, so the run fails (twice) and a third is asked for.
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'tested once', key: own.slice(-6).toUpperCase(), setup: { test_cmd: 'echo " FAIL  made-up.test > needs three"; test "$(ls | grep -c "^once-")" -ge 3' } })
+    await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: repoPath })
+    const { project: p, issues: [t] } = await createProject({ appId: own, name: 'tested once', issues: [one('Two parts', [{ key: 'a', title: 'A', files: ['a1.txt'] }, { key: 'b', title: 'B', files: ['b1.txt'] }])] })
+    const briefs: string[] = []
+    const execute: Execute = async (i) => { briefs.push(i.subIssue.brief ?? ''); return commits('once')(i) }
+    const runner = new Runner({ execute, sessionsMax: 1 })
+    await approveBriefs(own)
+    await runner.startProject(p.id)
+    await until(cleaned(p.id))
+    const g = (await projectGraph(p.id))!
+    expect(g.subIssues.map((x) => [x.title, x.status])).toEqual([['A', 'done'], ['B', 'done'], [FIX_TITLE, 'done']])
+    expect(briefs[2]).toContain('FAIL  made-up.test > needs three') // the fix is told what failed
+    const tested = (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => e.type.startsWith('task.test') || e.type === 'land.tested').sort((a, b) => a.seq - b.seq)
+    expect(tested.map((e) => [e.type, (e.payload as { ok?: boolean }).ok])).toEqual([['task.test_again', undefined], ['task.tested', false], ['task.tested', true]]) // not at A's landing, not at each sub-task's
+    expect(tested.every((e) => e.issueId === t.id)).toBe(true)
   })
 
   it('a task builds by itself: planned, started and landed on its own branch, with nobody running its project', async () => {

@@ -14,11 +14,11 @@ import { addWorktree, branchExists, ensureBranch, git, headSha, removeWorktree }
 import { hasStorybook } from './storybook.js'
 import { issueBranch, issueStart, landingBranch, modeOf, stackBase } from './branches.js'
 import { newId } from './ids.js'
-import { identifier, setState } from './issues.js'
-import { land, withLock } from './landing.js'
+import { commentOnIssue, identifier, setState } from './issues.js'
+import { land, wholeRun, withLock } from './landing.js'
 import { guideTasks, mergeGuide } from './merge-guide.js'
 import { ensureProjectPr, prBody } from './pr.js'
-import { projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
+import { addSubTask, projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
 import { finishPlanning, preparePlanning, type Propose } from './planner.js'
 import { BEFORE_PLAN, checksOwed } from './steps.js'
 import { stepsOf } from './work.js'
@@ -27,6 +27,20 @@ import { holdMinutes, isOutage } from './outage.js'
 import { referencesOf } from './references.js'
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
+
+/** The sub-task added when a task's whole test run fails; counted by its title. */
+export const FIX_TITLE = 'Fix what the whole test run found'
+const MAX_FIXES = 2
+export const fixBrief = (testCmd: string, detail: string) => [
+  'Every sub-task of this task is merged, and the app\'s whole test run then failed (twice in a row). Nothing has been blamed yet.',
+  '',
+  '1. Find the cause first. Which test fails, and which merged change broke it (git log on this branch)? Run the failing test alone.',
+  '2. Fix the cause. If the test also fails on the default branch, or passes when run alone and fails only in the whole run, it is an unreliable test: make it reliable, and say so in your summary.',
+  `3. Run the whole suite before you finish; this sub-task is the one that does: ${testCmd}`,
+  '',
+  'What the run said:',
+  '```', detail, '```',
+].join('\n')
 
 interface AppSetup { test_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number }
 
@@ -162,7 +176,7 @@ export class Runner {
           // The work is done but the backlog is not: the project waits for a person to take on or drop what is left.
           const key = `${p.id}:${openItems.map((i) => i.id).join(',')}`
           if (!this.backlogWaits.has(key)) { this.backlogWaits.add(key); await this.emit({ ...(await this.context(p.id)).base, type: 'project.backlog_open', payload: { open: openItems.length, items: openItems.map((i) => i.title).slice(0, 10) } }) }
-        } else if (allDone) {
+        } else if (allDone && !this.testing.get(p.id)) { // not while a task's whole test run is going: it may add a sub-task
           await db.update(project).set({ status: 'landed', updatedAt: new Date() }).where(eq(project.id, p.id))
           await this.emit({ ...(await this.context(p.id)).base, type: 'project.landed', payload: {} })
           await this.cleanup(p.id)
@@ -234,15 +248,47 @@ export class Runner {
 
     await db.transaction((tx) => setBuild(tx, subId, { status: 'merging' }, { runId }))
     const landed = await withLock(`land:${projectId}`, () => land({
-      repoPath: r!.localPath!, worktreePath, integrationBranch: onto, testCmd: setup.test_cmd,
+      repoPath: r!.localPath!, worktreePath, integrationBranch: onto, // merged, not tested: the whole test run is once per task (testTask)
       onEvent: async (type, payload) => { await this.emit({ ...rb, type, payload }) },
     }))
     if (!landed.ok) return this.failed(subId, attempt, x.maxAttempts, `landing failed at ${landed.stage}: ${landed.detail}`, rb)
 
+    this.testing.set(projectId, (this.testing.get(projectId) ?? 0) + 1) // from before it counts as done, so the project is not called landed under the run
+    try {
     await db.transaction((tx) => setBuild(tx, subId, { status: 'done' }, { runId, payload: { sha: landed.sha } }))
     await withLock(`land:${projectId}`, () => this.updatePr(projectId, mode === 'issue' ? x.parentId! : undefined)).catch((err) => this.emit({ ...rb, type: 'pr.error', payload: { error: String(err?.message ?? err) } }))
+    await this.testTask(projectId, x.parentId!, r!.localPath!, worktreePath, onto, setup, rb).catch((err) => this.emit({ ...rb, type: 'task.test_error', payload: { error: String(err?.message ?? err) } }))
+    } finally { this.testing.set(projectId, (this.testing.get(projectId) ?? 1) - 1) }
     this.active.delete(subId)
     await this.dispatch()
+  }
+
+  /**
+   * The whole test run, once per task: when the sub-task that just landed was the last one, the app's test command
+   * runs on the merged work. If it fails (twice: see wholeRun), one more sub-task is added to find the cause and fix
+   * it (Sandy, 2026-11-15: "If it fails we analyze and create an additional subtask to fix the issue"). Two such
+   * fixes at most; after that the task says so and waits for a person.
+   */
+  private testing = new Map<string, number>() // projects with a landing or a whole test run under way
+
+  private async testTask(projectId: string, taskId: string, repoPath: string, worktreePath: string, onto: string, setup: AppSetup, pb: Omit<NewEvent, 'type'>) {
+    if (!setup.test_cmd) return
+    const outcome = await withLock(`land:${projectId}`, async () => {
+      const subs = (await db.select({ id: issue.id, state: issue.state, title: issue.title }).from(issue).where(eq(issue.parentId, taskId))).filter((s) => s.state !== 'canceled' && s.state !== 'duplicate')
+      const builds = subs.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, subs.map((s) => s.id))) : []
+      if (!subs.length || !subs.every((s) => builds.find((b) => b.issueId === s.id)?.status === 'done')) return null // more to build first
+      if (await headSha(worktreePath) !== await headSha(repoPath, onto)) return null // another sub-task landed after this one: the run is its
+      const fixes = subs.filter((s) => s.title.startsWith(FIX_TITLE)).length
+      return { fixes, result: await wholeRun({ testCmd: setup.test_cmd!, cwd: worktreePath, onEvent: async (type, payload) => { await this.emit({ ...pb, issueId: taskId, type, payload }) } }) }
+    })
+    if (!outcome || outcome.result.ok) return
+    const { fixes, result } = outcome
+    if (fixes >= MAX_FIXES) {
+      await commentOnIssue(taskId, { heading: 'The whole test run still fails', body: `Its sub-tasks are all merged and ${fixes} fixes were tried. It needs a person.\n\n\`\`\`\n${result.detail}\n\`\`\`` }, 'engine')
+      await this.emit({ ...pb, issueId: taskId, type: 'task.test_failed', payload: { fixes, tail: result.detail } })
+      return
+    }
+    await addSubTask(taskId, { title: fixes ? `${FIX_TITLE} (${fixes + 1})` : FIX_TITLE, brief: fixBrief(setup.test_cmd, result.detail) }, 'engine')
   }
 
   /** The builder's todo list, as the sub-issue's steps: the latest list replaces the previous one for this run. */
