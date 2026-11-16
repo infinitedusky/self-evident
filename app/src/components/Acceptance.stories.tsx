@@ -32,6 +32,16 @@ export const BuildMark: Story = {
 }
 /** None yet: says what approving the brief would then mean. */
 export const NoneYet: Story = { args: { items: [] } }
+/** Ten criteria (made up), not approved yet: it says the task is probably two, while it can still be split. Approved, it says nothing. */
+const ten = Array.from({ length: 10 }, (_, n) => ({ ...acceptance[n % acceptance.length], id: `ac_many${n}`, text: `${acceptance[n % acceptance.length].text} (sample ${n + 1})` }))
+export const TooMany: Story = {
+  args: { items: ten },
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('note')).toHaveTextContent('10 criteria is a lot for one task') },
+}
+export const TooManyButApproved: Story = {
+  args: { items: ten, approved: true },
+  play: async ({ canvasElement }) => { const c = within(canvasElement); await c.findByText('Acceptance criteria'); await expect(c.queryByRole('note')).toBeNull() },
+}
 /** The task has no prototype (the step was skipped): no prototype column, one mark each, for the final build. */
 export const NoPrototype: Story = {
   args: { prototype: false },

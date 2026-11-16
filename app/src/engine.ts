@@ -387,7 +387,7 @@ export const engine = {
   /** A person approves a step of a task (research, sketches, mockups, the prototype), or takes it back. */
   approveStep: (issueId: string, key: StepKey, approve = true) => call<StepWork>('POST', `/issues/${issueId}/steps/${key}/approve`, { approve }),
   setAcceptance: (issueId: string, change: AcceptanceChange) => call<{ acceptance: Criterion[]; note?: string }>('PUT', `/issues/${issueId}/acceptance`, change),
-  mergeGuide: (issueId: string) => call<{ guide: string; subTasks: number }>('GET', `/issues/${issueId}/merge-guide`),
+  mergeGuide: (issueId: string) => call<{ guide: string; /** Everything the guide left out. */ record?: string; subTasks: number }>('GET', `/issues/${issueId}/merge-guide`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
   writeReport: (appId: string, body: { period: ReportPeriod; notes?: string }) => call<{ writing: boolean }>('POST', `/apps/${appId}/reports`, body),
   editReport: (id: string, body: string) => call<Report>('PUT', `/reports/${id}`, { body }),
@@ -523,7 +523,7 @@ export const EVENT_TYPES = [
   'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted',
   'run.started', 'run.message', 'run.steps', 'run.tool_call', 'run.tool_result', 'run.result', 'run.error', 'run.rate_limit',
   'land.committed', 'land.tested', 'land.landed', 'land.conflict', 'land.retry', 'pr.opened', 'pr.updated', 'pr.error',
-  'task.tested', 'task.test_again', 'task.test_failed', 'task.test_error',
+  'task.tested', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked',
 ]
 
 const LIVE_POLL_MS = 20_000

@@ -3,7 +3,8 @@
  * thing to be able to understand and act on"): what its pull request opens with, shown here before there is one, so
  * it can be read and put right first. The engine puts it together from what the task holds: its description, its
  * acceptance criteria with the build's mark on each, the draft ADR's and the blast radius's summaries, the planner's
- * decisions. To change it, change those.
+ * decisions. To change it, change those. It is short on purpose (a screen: the engine holds it to a size); what it
+ * leaves out is the record, folded away under it, as on the pull request.
  *
  * After a pull request template's "What / How to test / Risks".
  */
@@ -13,8 +14,9 @@ import { Md } from './Md'
 
 export function MergeGuide({ issueId, stamp }: { issueId: string; /** Changes when the task did: read it again. */ stamp?: string | number | null }) {
   const [guide, setGuide] = useState<string | null>(null)
+  const [record, setRecord] = useState('')
   const [copied, setCopied] = useState(false)
-  useEffect(() => { let on = true; void engine.mergeGuide(issueId).then((r) => { if (on) setGuide(r.guide) }).catch(() => { if (on) setGuide('') }); return () => { on = false } }, [issueId, stamp])
+  useEffect(() => { let on = true; void engine.mergeGuide(issueId).then((r) => { if (on) { setGuide(r.guide); setRecord(r.record ?? '') } }).catch(() => { if (on) setGuide('') }); return () => { on = false } }, [issueId, stamp])
   if (guide === null) return null
   const copy = async () => { try { await navigator.clipboard.writeText(guide); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* no clipboard here */ } }
   return (
@@ -23,7 +25,7 @@ export function MergeGuide({ issueId, stamp }: { issueId: string; /** Changes wh
         {guide && <button className="btn quiet small merge-guide-copy" onClick={() => void copy()}>{copied ? 'Copied' : 'Copy'}</button>}
       </h2>
       {guide
-        ? <Md text={guide} />
+        ? <><Md text={guide} />{record && <details className="merge-record"><summary>The full record: every criterion and decision</summary><Md text={record} /></details>}</>
         : <p className="muted">Nothing to put in it yet. It is put together from the task: its description, its acceptance criteria and the build's mark on each, the decisions, and the summaries of the draft ADR and the blast radius.</p>}
     </section>
   )
