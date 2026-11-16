@@ -4209,3 +4209,21 @@ real task: a pick that leaves out the final ADR and plan (the merge checklist co
 - The new tab is told which app by its address (`/?app=<id>`), which is taken off the address once read.
 - Each browser tab now keeps its own app through a reload (sessionStorage). Before, the app was remembered once for
   the whole browser, so two tabs on two apps would both come back on the last one picked.
+
+## Learn reads the codebase (Sandy, 2026-11-16: "the learn section should have two roles… analyze observations… analyze the codebase. The latter would be the first step when you approach a new project. And… the learn agent can create ideas… the access point to the workbench docs")
+
+Learn was an empty page. It has two halves now (SHAPE.md); the codebase half is built.
+
+- **One press, "Learn this codebase"**, starts an agent in the app's checkout. It reads and changes nothing, and
+  does not run the whole test suite. One at a time per app; pressing again goes back to it.
+- **It writes four documents, the same four in every app** (`LEARN_DOCS` in `learn.ts`): what it is, the parts,
+  running and testing it, what is fragile. A fixed set, so a person and an agent both know where to look.
+- **Each has two parts**: a summary for the person, refused over 700 characters, and a body for agents (paths,
+  commands, names), up to 8,000. The page shows the summary and folds the body under "For agents".
+- **Kept in the database** (table `learning`, one row per document per app, replaced when learned again), with the
+  commit it was written at. The page says when the code has moved since.
+- **It keeps up to three ideas** with `create_idea`: what it saw that should change. The page points to Ideas.
+- **Agents read them** with the `learning` tool, and write with `set_learning`.
+
+Not done: handing the documents to the planner, the checks and the builders as they start (today they are a tool
+an agent may call); the running-app half. Not run on a real app yet: the press starts a real agent.

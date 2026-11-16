@@ -224,6 +224,16 @@ Details and sources in `research/`.
 - **The loop's stages** (Sandy, 2026-10-29): Observe · Learn · Ideate (ideas and their research) · Plan
   (tasks: research, brief, mockup, prototype, in any order unless a workflow sets one) · Build (including the
   checks a build is held to). The rail lists only these stages; projects, tasks and the steps are inside them.
+- **Learn has two roles, and both end in ideas** (Sandy, 2026-11-16: "1 is to analyze observations, the other is to
+  analyze the codebase. The latter would be the first step when you approach a new project … the learn agent can
+  create ideas … it would also be the access point to the workbench docs").
+  - **The codebase**: an agent reads the app's code and writes a small fixed set of documents, the same in every
+    app (what it is, the parts, running and testing it, what is fragile). They are the workbench docs; the Learn
+    page is where they are read, and agents read them through a tool before reading the code from nothing. Each
+    has a short part for a person, held to a size, and a longer part for agents. Built first (`engine/src/learn.ts`).
+  - **The running app**: reading what it reports (Observe) and saying what is true: baselines, what changed after
+    a merge, the guard. Not built; it needs a way for the engine to read the telemetry back.
+  - What either thinks should change is kept as an idea, so Learn feeds Ideate.
 - **A prototype before the plan, then a build from scratch** (Sandy, 2026-10-29). Planning starts by building the
   actual thing quickly in its own worktree: shortcuts by default, made to demo and to change in moments, and able to
   do any kind of work, schema included. It runs on the app's real database engine, rebuilt from labelled JSON
