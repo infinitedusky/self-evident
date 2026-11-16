@@ -5,6 +5,8 @@
 import './own-scope.js' // first: the engine's own Doppler scope is not handed to what it starts
 import { readFile } from 'node:fs/promises'
 import { imageFile, saveImages, type ImageIn } from './uploads.js'
+import { listLearning } from './learn.js'
+import { startLearning, talkBusy } from './talk.js'
 import { serve } from '@hono/node-server'
 import { appendEvent } from './events.js'
 import { serveStatic } from '@hono/node-server/serve-static'
@@ -138,6 +140,9 @@ export function buildApp(bus: EventBus) {
   })
   // Removing an app (apps.ts): put away first, which can be undone; a put-away app can be deleted for good with its name typed.
   const putAwayDeps = { busy: busyAmong, release: releaseTalks, pauseProject: (id: string) => runner.pauseProject(id), stopPrototype: (id: string) => stopPrototype(id, 'engine'), stopStorybookAt }
+  // Learn, the codebase half (learn.ts): the documents an agent wrote from reading the code, and the press that starts it.
+  api.get('/apps/:id/learning', async (c) => { try { return c.json(await listLearning(c.req.param('id'), talkBusy)) } catch (err) { return planError(c, err, 404) } })
+  api.post('/apps/:id/learn', async (c) => { try { return c.json(await startLearning(c.req.param('id'), 'user'), 202) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/holds', async (c) => { try { return c.json(await appHolds(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/remove', async (c) => { try { return c.json(await putAway(c.req.param('id'), putAwayDeps)) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/restore', async (c) => { try { return c.json(await bringBack(c.req.param('id'))) } catch (err) { return planError(c, err) } })

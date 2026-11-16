@@ -246,6 +246,9 @@ export interface AcceptanceChange { add?: { text: string; check?: string }[]; up
 /** A report on an app's work over a period: the end-of-day note or the weekly status, a draft the person edits and sends. */
 export type ReportPeriod = 'today' | 'yesterday' | 'this_week' | 'last_week'
 export interface Report { id: string; appId: string; kind: 'daily' | 'weekly'; fromAt: string; toAt: string; label: string; body: string; notes: string | null; editedAt: string | null; createdAt: string; costUsd: string | null }
+/** What an agent learned from an app's code: a short document each, the part for a person and the part for agents. */
+export interface Learned { key: string; title: string; summary: string; body: string; sha: string | null; updatedAt: string }
+export interface Learning { docs: Learned[]; missing: string[]; working: { sessionId: string } | null; sessionId: string | null; stale: number }
 export interface Reports { writing: boolean; format: { daily: string; weekly: string }; reports: Report[] }
 /** A version of a task: the git branch each of its worktrees is on, and (set aside) the task as it was left. */
 export interface TaskBranch { id: string; name: string; current: boolean; fromSave: string | null; createdAt: string; gitBranches: string[]; /** Set aside: what is only on it. */ work: { commits: number; comments: number } | null }
@@ -388,6 +391,8 @@ export const engine = {
   approveStep: (issueId: string, key: StepKey, approve = true) => call<StepWork>('POST', `/issues/${issueId}/steps/${key}/approve`, { approve }),
   setAcceptance: (issueId: string, change: AcceptanceChange) => call<{ acceptance: Criterion[]; note?: string }>('PUT', `/issues/${issueId}/acceptance`, change),
   mergeGuide: (issueId: string) => call<{ guide: string; /** Everything the guide left out. */ record?: string; subTasks: number }>('GET', `/issues/${issueId}/merge-guide`),
+  learning: (appId: string) => call<Learning>('GET', `/apps/${appId}/learning`),
+  learn: (appId: string) => call<{ sessionId: string; started: boolean }>('POST', `/apps/${appId}/learn`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
   writeReport: (appId: string, body: { period: ReportPeriod; notes?: string }) => call<{ writing: boolean }>('POST', `/apps/${appId}/reports`, body),
   editReport: (id: string, body: string) => call<Report>('PUT', `/reports/${id}`, { body }),
@@ -522,7 +527,7 @@ export const EVENT_TYPES = [
   'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted',
   'run.started', 'run.message', 'run.steps', 'run.tool_call', 'run.tool_result', 'run.result', 'run.error', 'run.rate_limit',
   'land.committed', 'land.tested', 'land.landed', 'land.conflict', 'land.retry', 'pr.opened', 'pr.updated', 'pr.error',
-  'task.tested', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked',
+  'task.tested', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked', 'learn.written',
 ]
 
 const LIVE_POLL_MS = 20_000

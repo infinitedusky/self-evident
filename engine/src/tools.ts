@@ -5,6 +5,7 @@
  * Linear calls an issue we call a task (the tables and ids still say issue); connecting Linear maps tasks to issues.
  * Every set is scoped to one app: anything addressed by id is checked against it.
  */
+import { LEARN_DOCS, listLearning, setLearning, SUMMARY_MAX } from './learn.js'
 import { BRIEF_FORM, briefTooLong } from './brief.js'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
@@ -41,7 +42,7 @@ export interface EngineTool { name: string; description: string; shape: z.ZodRaw
 export interface ToolScope { appId: string; sessionId?: string; actor?: string; waitForPlanner?: boolean }
 
 /** Tools that only read: safe to run without asking. */
-export const READ_ONLY_TOOLS = new Set(['now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'shares', 'task_branches', 'merge_guide'])
+export const READ_ONLY_TOOLS = new Set(['learning', 'now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'shares', 'task_branches', 'merge_guide'])
 
 export function engineTools(opts: ToolScope): EngineTool[] {
   const { appId, sessionId } = opts
@@ -80,6 +81,10 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         kind: z.enum(['code', 'todo']).optional(), projectId: z.string().optional(), topLevel: z.boolean().optional(), open: z.boolean().optional(),
       }, async (a) => tryIt(async () => { if (a.projectId && a.projectId !== 'none') await ownProject(a.projectId); return listIssues(appId, { kind: a.kind, projectId: a.projectId === 'none' ? null : a.projectId, topLevel: a.topLevel, open: a.open }) })),
       def('ideas', 'This app\'s ideas inbox and what left it.', {}, async () => tryIt(() => listIdeas(appId))),
+      def('learning', 'What has been learned about this app\'s codebase (the Learn page): for each document its summary, written for a person, and its body, written for agents (what the app is, its parts, how to run and test it, what is fragile). Read it before reading the code from nothing. missing lists the ones not written yet.', {},
+        async () => tryIt(() => listLearning(appId))),
+      def('set_learning', `Write one of the documents about this app's codebase, replacing what was there: key is one of ${LEARN_DOCS.map((d) => d.key).join(', ')}. summary is for the person (plain words, ${SUMMARY_MAX} characters at most: too long is refused); body is for the agents that work here next (exact paths, commands and names).`, { key: z.string(), summary: z.string(), body: z.string() },
+        async (a) => tryIt(() => setLearning(appId, a, actor, sessionId ?? null))),
       def('create_idea', 'Keep an idea in this app: a title and, optionally, why and what is already decided.', { title: z.string(), body: z.string().optional() }, async (a) => tryIt(() => createIdea({ ...a, appId, actor: actor }))),
       def('create_project', 'Create a project in this app: its tasks in order (the issues field), each a title and a brief. Sub-tasks (each task\'s subIssues) come from the planner (plan_task) or can be given.', {
         name: z.string(), content: z.string().optional().describe('why it exists and what it must do, Markdown'), description: z.string().optional().describe('one line'), ideaId: z.string().optional(), workflowId: z.string().optional().describe('its workflow rules (see workflows); without, the app\'s'),

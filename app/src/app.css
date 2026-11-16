@@ -894,3 +894,11 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .wf-after { border: 0; padding: 0; margin: 0 0 10px; display: grid; gap: 6px; }
 .wf-after > label { display: block; }
 .wf-checks { margin: 4px 0 0 22px; }
+
+.learn-doc { padding: 12px 0; border-top: 1px solid var(--line); }
+.learn-doc:first-of-type { border-top: 0; }
+.learn-doc h3 { margin: 0 0 4px; font-size: 15px; display: flex; gap: 8px; align-items: baseline; }
+.learn-doc h3 .faint { font-weight: 400; font-size: 12px; }
+.learn-doc details { margin-top: 6px; }
+.learn-doc details > summary { cursor: pointer; font-size: 13px; }
+.learn-stale { margin: 0 0 10px; padding: 8px 12px; border-left: 3px solid var(--warn, #b7791f); border-radius: 6px; font-size: 13px; }

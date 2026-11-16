@@ -171,13 +171,14 @@ async function record(sessionId: string, author: string, kind: string, body: str
 }
 
 /** `issueId` pins a task's own agent; `checkOf` and `check` mark a fresh agent out on one check of that task (checks.ts). */
-export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string; checkOf?: string; check?: StepKey; setup?: string; /** About the app as a whole: in its checkout, reading, with no worktree. */ app?: boolean }
+export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string; checkOf?: string; check?: StepKey; setup?: string; /** Reading the app's code to write its documents (learn.ts); one per app at a time. */ learn?: 'codebase'; /** About the app as a whole: in its checkout, reading, with no worktree. */ app?: boolean }
 
 /** What a conversation is about, from where it started: a project's title, an idea's title, or nothing yet. */
 async function subjectFrom(ref?: SubjectRef): Promise<{ subject: string | null; subjectRef: SubjectRef | null }> {
   if (ref?.projectId) { const [p] = await db.select().from(project).where(eq(project.id, ref.projectId)); if (p) return { subject: p.name, subjectRef: { projectId: p.id } } }
   if (ref?.ideaId) { const [i] = await db.select().from(idea).where(eq(idea.id, ref.ideaId)); if (i) return { subject: i.title, subjectRef: { ideaId: i.id } } }
   if (ref?.issueId) { const [t] = await db.select().from(issue).where(eq(issue.id, ref.issueId)); const [a] = t ? await db.select().from(app).where(eq(app.id, t.appId)) : []; if (t && a) return { subject: `${a.key}-${t.number} ${t.title}`, subjectRef: { issueId: t.id } } } // a task's own agent (ensureTaskTalk)
+  if (ref?.learn) return { subject: 'Learn the codebase', subjectRef: { learn: ref.learn } } // in the checkout, reading (learn.ts)
   if (ref?.setup) return { subject: `Set up ${ref.setup}`, subjectRef: { setup: ref.setup } } // an integration's set-up, handed to the agent (one per app at a time)
   return { subject: null, subjectRef: ref?.path ? { path: ref.path } : null }
 }
@@ -532,6 +533,27 @@ export async function startPrototypeTalk(p: typeof prototype.$inferSelect, actor
 }
 
 /** Ask every open Self Evident to show this conversation in the agent's column. */
+/** Whether a conversation's agent is in the middle of a turn. */
+export const talkBusy = (sessionId: string) => live.get(sessionId)?.busy ?? false
+
+/**
+ * Start learning an app's codebase (learn.ts), or go back to the conversation that is doing it: one per app at a
+ * time. It works in the app's checkout and only reads, like the app's own agent, and writes with set_learning.
+ */
+export async function startLearning(appId: string, actor = 'user') {
+  const { learnBrief } = await import('./learn.js')
+  const { reposOf } = await import('./workbench.js')
+  const open = (await db.select().from(session).where(and(eq(session.appId, appId), eq(session.kind, 'talk'), eq(session.status, 'open'))))
+    .filter((s) => (s.subjectRef as SubjectRef | null)?.learn === 'codebase').sort((a, b) => +b.createdAt - +a.createdAt)[0]
+  if (open && talkBusy(open.id)) { await showTalk(open.id, appId); return { sessionId: open.id, started: false } }
+  const { app: a, repos } = await reposOf(appId)
+  if (!a) throw new PlanError(`no app ${appId}`)
+  const s = open ?? await startTalk({ appId, subjectRef: { learn: 'codebase' }, actor })
+  await say(s.id, learnBrief(a, repos.map((r) => r.fullName || r.localPath || '').filter(Boolean)), undefined, { author: 'engine', kind: 'brief', payload: { label: 'Learn the codebase' } })
+  await showTalk(s.id, appId)
+  return { sessionId: s.id, started: true }
+}
+
 export async function showTalk(sessionId: string, appId: string) {
   const workspaceId = await workspaceFor(appId)
   await db.update(session).set({ closedAt: null }).where(eq(session.id, sessionId)) // shown again, so its tab is back
