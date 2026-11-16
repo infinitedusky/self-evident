@@ -4179,3 +4179,25 @@ Run against BON-51 as stored: 1,377 characters. Its criteria show as unchecked, 
 Not seen on a real build yet: whether the checking agent ends with the block the engine reads. When it does not,
 the criteria stay unchecked and the guide says so. Not done: telling the planner to split a task over eight
 criteria (today only the page says it).
+
+## Fast is a workflow's choice, not a separate switch (Sandy, 2026-11-16: "Fast mode presumably is just changing that. So shouldn't we add fast mode to a workflow and then make that workflow the default" … "three options, full, fast, fine-grain control")
+
+The two speeds (2026-11-15) were a switch on the app and on the task. A workflow knew nothing of it, so its page
+listed five checks "always, by itself" that a Fast task never ran. Two controls over one thing.
+
+- **A workflow says what follows its prototype**, one of three: **Full** (every check), **Fast** (none: plan,
+  then build), or **Your pick** (a box for each check). It is not stored by name: it is which of the workflow's
+  check steps are on (`afterOf`, `checksOf`, `withChecks` in `steps.ts`). A workflow never set runs them all, as
+  before. A check that runs is required, as before.
+- **The separate switch is gone**: the select in Settings › Landing, the Careful/Fast picker on a task, the
+  `PUT /issues/:id/speed` route, `setup.speed`. To go fast, make a Fast workflow and use it: as the app's default,
+  or on one project or task.
+- **Nothing changes for an app that was Fast**: at start, the engine switches every check off in that app's
+  default workflow and removes the old setting (`speedIntoWorkflows`; a second run does nothing). Homework Gate was
+  the only one.
+- **Changing or choosing a workflow carries tasks on at once**: a task waiting on a check its workflow no longer
+  runs is planned or built, as changing its speed used to do.
+- `issue.speed` is no longer read. The column stays; no task had it set.
+
+The engine already ran whatever checks a task's steps listed, so a subset needed no change there. Not tried on a
+real task: a pick that leaves out the final ADR and plan (the merge checklist comes from it, so the guide has none).
