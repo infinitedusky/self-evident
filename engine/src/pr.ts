@@ -32,21 +32,23 @@ export async function ensureProjectPr(i: PrInput): Promise<{ number: number; url
 
 export interface Landed { identifier: string; title: string; summary?: string | null; costUsd?: number | null; sha?: string | null }
 
-export function prBody(project: { name: string; content?: string | null; id: string }, landed: Landed[], pending: { identifier: string; title: string }[], backlog: { title: string; state: string; reason: string | null }[] = [], /** The merge guide, for whoever approves it (merge-guide.ts): first, above the record of what landed. */ guide = ''): string {
+export function prBody(project: { name: string; content?: string | null; id: string }, landed: Landed[], pending: { identifier: string; title: string }[], backlog: { title: string; state: string; reason: string | null }[] = [], /** The merge guide, for whoever approves it (merge-guide.ts): first, and short. */ guide = '', /** Everything the guide left out: folded away under it, with what landed. */ record = ''): string {
   const lines = [
     `Built by Self Evident from project \`${project.id}\`: ${project.name}.`,
     project.content && !guide ? `\n${project.content}` : '', // the guide says what it does, per task
     guide ? `\n${guide}` : '',
     '',
-    guide ? '## What landed, sub-task by sub-task\n\n_The record of the build, for reference. The guide above is what to read._\n' : '## Landed',
+    // With a guide, the rest is folded away: the guide is what to read, the record is for looking something up.
+    guide ? `<details>\n<summary>The full record: every criterion and decision, and what each sub-task's builder reported</summary>\n\n${record ? `${record}\n\n` : ''}## What landed, sub-task by sub-task\n` : '## Landed',
     ...landed.map((t) => [`### ${t.identifier} ${t.title}` + (t.sha ? ` (\`${t.sha.slice(0, 7)}\`)` : ''),
-      t.summary?.trim() || '_No summary from the run._',
+      (t.summary?.trim() || '_No summary from the run._').slice(0, 4000),
       t.costUsd != null ? `_Run cost estimate: $${Number(t.costUsd).toFixed(2)}_` : ''].join('\n\n')),
+    guide ? '\n</details>' : '',
     pending.length ? `\n## Still to land\n${pending.map((t) => `- ${t.identifier} ${t.title}`).join('\n')}` : '',
     backlog.some((b) => b.state === 'backlog') ? `\n## Backlog still open\n${backlog.filter((b) => b.state === 'backlog').map((b) => `- ${b.title}`).join('\n')}` : '',
     backlog.some((b) => b.state === 'canceled') ? `\n## Left out on purpose\n${backlog.filter((b) => b.state === 'canceled').map((b) => `- ${b.title}: ${b.reason}`).join('\n')}` : '',
     '',
-    'Each sub-task was built in its own worktree, was merged with this branch, tested on the merged commit, and fast-forwarded here, one at a time.',
+    'Each sub-task was built in its own worktree and merged here one at a time. The app\'s whole test run is once per task, when its sub-tasks are all in.',
     '',
     'Rollback project: revert this PR. Off switch, guard metric and schema impact per task come in a later step.',
     '',

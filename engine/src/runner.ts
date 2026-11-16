@@ -16,7 +16,9 @@ import { issueBranch, issueStart, landingBranch, modeOf, stackBase } from './bra
 import { newId } from './ids.js'
 import { commentOnIssue, identifier, setState } from './issues.js'
 import { land, wholeRun, withLock } from './landing.js'
-import { guideTasks, mergeGuide } from './merge-guide.js'
+import { guideTasks, mergeGuide, mergeRecord } from './merge-guide.js'
+import { acceptanceOf, setAcceptance } from './acceptance.js'
+import { CHECK_TITLE, checkTaskBrief, readVerdicts, unchecked, verdictChange } from './verify.js'
 import { ensureProjectPr, prBody } from './pr.js'
 import { addSubTask, projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
 import { finishPlanning, preparePlanning, type Propose } from './planner.js'
@@ -256,6 +258,7 @@ export class Runner {
     this.testing.set(projectId, (this.testing.get(projectId) ?? 0) + 1) // from before it counts as done, so the project is not called landed under the run
     try {
     await db.transaction((tx) => setBuild(tx, subId, { status: 'done' }, { runId, payload: { sha: landed.sha } }))
+    await this.markCriteria(subId, x.parentId!, result.summary, rb).catch((err) => this.emit({ ...rb, type: 'task.check_error', payload: { error: String(err?.message ?? err) } }))
     await withLock(`land:${projectId}`, () => this.updatePr(projectId, mode === 'issue' ? x.parentId! : undefined)).catch((err) => this.emit({ ...rb, type: 'pr.error', payload: { error: String(err?.message ?? err) } }))
     await this.testTask(projectId, x.parentId!, r!.localPath!, worktreePath, onto, setup, rb).catch((err) => this.emit({ ...rb, type: 'task.test_error', payload: { error: String(err?.message ?? err) } }))
     } finally { this.testing.set(projectId, (this.testing.get(projectId) ?? 1) - 1) }
@@ -271,17 +274,35 @@ export class Runner {
    */
   private testing = new Map<string, number>() // projects with a landing or a whole test run under way
 
+  /** The check sub-task landed: its verdicts become the build's mark on each criterion of the task. */
+  private async markCriteria(subId: string, taskId: string, summary: string | null | undefined, pb: Omit<NewEvent, 'type'>) {
+    const [sub] = await db.select({ title: issue.title }).from(issue).where(eq(issue.id, subId))
+    if (sub?.title !== CHECK_TITLE) return
+    const [task] = await db.select().from(issue).where(eq(issue.id, taskId))
+    const criteria = task ? acceptanceOf(task) : []
+    const verdicts = readVerdicts(summary, criteria.map((c) => c.id))
+    if (verdicts.length) await setAcceptance(taskId, verdictChange(verdicts), 'engine')
+    await this.emit({ ...pb, issueId: taskId, type: 'task.checked', payload: { criteria: criteria.length, read: verdicts.length, met: verdicts.filter((v) => v.met === true).length, notMet: verdicts.filter((v) => v.met === false).length, forAPerson: verdicts.filter((v) => v.met === null).length } })
+  }
+
   private async testTask(projectId: string, taskId: string, repoPath: string, worktreePath: string, onto: string, setup: AppSetup, pb: Omit<NewEvent, 'type'>) {
-    if (!setup.test_cmd) return
     const outcome = await withLock(`land:${projectId}`, async () => {
-      const subs = (await db.select({ id: issue.id, state: issue.state, title: issue.title }).from(issue).where(eq(issue.parentId, taskId))).filter((s) => s.state !== 'canceled' && s.state !== 'duplicate')
+      const every = await db.select({ id: issue.id, state: issue.state, title: issue.title }).from(issue).where(eq(issue.parentId, taskId))
+      const subs = every.filter((s) => s.state !== 'canceled' && s.state !== 'duplicate')
       const builds = subs.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, subs.map((s) => s.id))) : []
       if (!subs.length || !subs.every((s) => builds.find((b) => b.issueId === s.id)?.status === 'done')) return null // more to build first
       if (await headSha(worktreePath) !== await headSha(repoPath, onto)) return null // another sub-task landed after this one: the run is its
+      // Built: first it is checked against its acceptance criteria, once (verify.ts); the whole test run comes after that check.
+      const [task] = await db.select().from(issue).where(eq(issue.id, taskId))
+      const criteria = task ? acceptanceOf(task) : []
+      if (criteria.some(unchecked) && !every.some((s) => s.title === CHECK_TITLE)) return { check: criteria }
+      if (!setup.test_cmd) return null
       const fixes = subs.filter((s) => s.title.startsWith(FIX_TITLE)).length
       return { fixes, result: await wholeRun({ testCmd: setup.test_cmd!, cwd: worktreePath, onEvent: async (type, payload) => { await this.emit({ ...pb, issueId: taskId, type, payload }) } }) }
     })
-    if (!outcome || outcome.result.ok) return
+    if (!outcome) return
+    if ('check' in outcome) { await addSubTask(taskId, { title: CHECK_TITLE, brief: checkTaskBrief(outcome.check!) }, 'engine'); return }
+    if (outcome.result.ok || !setup.test_cmd) return
     const { fixes, result } = outcome
     if (fixes >= MAX_FIXES) {
       await commentOnIssue(taskId, { heading: 'The whole test run still fails', body: `Its sub-tasks are all merged and ${fixes} fixes were tried. It needs a person.\n\n\`\`\`\n${result.detail}\n\`\`\`` }, 'engine')
@@ -517,8 +538,9 @@ export class Runner {
     const title = t ? `${t.identifier} ${t.title} (${p.name}, ${k} of ${issues.length})` : p.name
     const intro = t ? { ...p, name: `${p.name}, task ${k} of ${issues.length}: ${t.identifier} ${t.title}`, content: [t.description, stack.on ? `Stacked on #${stack.on}: review and merge that one first; this PR then retargets to ${a.defaultBranch}.` : null].filter(Boolean).join('\n\n') || p.content } : p
     const open = mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled')
-    const guide = mergeGuide(await guideTasks((t ? [t] : issues).map((q) => ({ id: q.id, identifier: q.identifier, title: q.title })), open.map((x) => ({ parentId: x.parentId ?? null, identifier: x.identifier }))).catch(() => []))
-    const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog, guide)
+    const guided = await guideTasks((t ? [t] : issues).map((q) => ({ id: q.id, identifier: q.identifier, title: q.title })), open.map((x) => ({ parentId: x.parentId ?? null, identifier: x.identifier }))).catch(() => [])
+    const guide = mergeGuide(guided)
+    const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog, guide, mergeRecord(guided))
     const result = await ensureProjectPr({ repoPath: r.localPath!, fullName: r.fullName, integrationBranch: head, base: stack.base, title, body })
     const existing = prs.find((q) => (issueId ? q.issueId === issueId : !q.issueId))
     if (!existing) await db.insert(prTable).values({ id: newId('pr'), appId: a.id, projectId, issueId: issueId ?? null, repoId: r.id, number: result.number, url: result.url, headBranch: head, baseBranch: stack.base, status: 'open', openedAt: new Date() })

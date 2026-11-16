@@ -30,30 +30,76 @@ export interface GuideTask {
 }
 
 const one = (s: string) => s.replace(/\s+/g, ' ').trim()
+const clip = (s: string, n: number) => { const t = one(s); return t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t }
 const bullets = (s: string) => s.trim().split('\n').map((l) => l.trimEnd()).filter(Boolean).map((l) => (/^\s*([-*]|\d+\.)\s/.test(l) ? l : `- ${l}`)).join('\n')
+const count = (n: number, one_: string, many: string) => `${n} ${n === 1 ? one_ : many}`
 
-/** One task's part of the guide. Pure: tested without a database. */
+/**
+ * The most one task's guide may be, in characters: about a screen (Sandy, 2026-11-16: "The merge guide is way way too
+ * long … The point is to make a reviewer faster"; one ran to 13,000). Everything it leaves out is in the record below
+ * it, folded away. Enforced here and by a test, not asked of anyone.
+ */
+export const GUIDE_MAX = 1500
+
+/**
+ * One task's part of the guide: what to act on, and no more. The criteria the build met are a count, not a list; the
+ * ones that are not met, or that only a person can judge, are listed. Three decisions, one line of risk. Pure.
+ */
 export function taskGuide(t: GuideTask, opts: { heading?: boolean } = {}): string {
   const met = t.acceptance.filter((c) => c.built === true)
   const unmet = t.acceptance.filter((c) => c.built === false)
   const open = t.acceptance.filter((c) => c.built === undefined)
+  const all = t.acceptance.length
   const act = [
-    unmet.length ? `**${unmet.length} acceptance ${unmet.length === 1 ? 'criterion is' : 'criteria are'} not met.** See "How to check it".` : '',
-    t.pending.length ? `**Not finished:** ${t.pending.length} sub-task${t.pending.length === 1 ? '' : 's'} still to land (${t.pending.join(', ')}).` : '',
-    !unmet.length && !t.pending.length && open.length ? `${open.length} acceptance ${open.length === 1 ? 'criterion has' : 'criteria have'} not been checked against the build yet.` : '',
-    !unmet.length && !t.pending.length && !open.length && t.acceptance.length ? `All ${t.acceptance.length} acceptance criteria are met.` : '',
-  ].filter(Boolean)
+    t.pending.length ? `**Not finished:** ${count(t.pending.length, 'sub-task', 'sub-tasks')} still to land (${clip(t.pending.join(', '), 80)}).` : '',
+    unmet.length ? `**${unmet.length} of ${count(all, 'acceptance criterion is', 'acceptance criteria are')} not met.**` : '',
+    !all ? 'This task has no acceptance criteria, so nothing was checked against a list.'
+      : !unmet.length && !open.length ? `All ${count(all, 'acceptance criterion was', 'acceptance criteria were')} checked against the build and met.`
+      : !met.length && !unmet.length && !open.some((c) => c.builtEvidence) ? `The ${count(all, 'acceptance criterion has', 'acceptance criteria have')} not been checked against the build yet.`
+      : `${met.length} of ${all} acceptance criteria were checked against the build and met.${open.length ? ` ${count(open.length, 'is', 'are')} left for you.` : ''}`,
+  ].filter(Boolean).join(' ')
+  const row = (c: Criterion) => c.built === false
+    ? `- ❌ ${clip(c.text, 110)}${c.builtEvidence ? ` Missing: ${clip(c.builtEvidence, 110)}` : ''}`
+    : `- ⬜ ${clip(c.text, 110)}${c.builtEvidence || c.check ? ` ${c.builtEvidence ? '' : 'How: '}${clip(c.builtEvidence ?? c.check!, 110)}` : ''}`
+  const listed = [...unmet, ...open]
+  const mine = (t.checklist ?? '').split('\n').map((l) => l.trim().replace(/^([-*]|\d+\.)\s+(\[.\]\s*)?/, '')).filter(Boolean)
+  const firstLine = (s?: string | null) => (s ?? '').split('\n').map((l) => l.replace(/^\s*([-*]|\d+\.)\s+/, '').trim()).find(Boolean) ?? ''
+  const build = (n: { rows: number; boxes: number; decisions: number; risk: boolean; needs: boolean; what: number }) => [
+    opts.heading ? `### ${t.identifier} ${clip(t.title, 90)}` : '',
+    act,
+    t.description?.trim() && n.what ? `**What it does:** ${clip(t.description, n.what)}` : '',
+    mine.length && n.boxes ? `**Before you merge**\n\n${mine.slice(0, n.boxes).map((l) => `- [ ] ${clip(l, 120)}`).join('\n')}${mine.length > n.boxes ? `\n- and ${mine.length - n.boxes} more in the record below` : ''}` : '',
+    listed.length && n.rows ? `**For you to check**\n\n${listed.slice(0, n.rows).map(row).join('\n')}${listed.length > n.rows ? `\n- and ${listed.length - n.rows} more in the record below` : ''}` : '',
+    t.decisions.length && n.decisions ? `**Decisions**\n\n${t.decisions.slice(0, n.decisions).map((d) => `- ${clip(d.question, 70)} → **${clip(d.chosen, 90)}**`).join('\n')}${t.decisions.length > n.decisions ? `\n- and ${t.decisions.length - n.decisions} more in the record below` : ''}` : '',
+    firstLine(t.risk) && n.risk ? `**Risk:** ${clip(firstLine(t.risk), 200)}` : '',
+    t.requirements?.length && n.needs ? `**Required of every change:** ${t.requirements.map((c) => `${!c.how ? '⬜' : c.applies ? '✅' : '➖'} ${c.name}`).join(' · ')}` : '',
+  ].filter(Boolean).join('\n\n')
+  // From the fullest that fits to the leanest: what is cut first is what matters least to someone about to merge.
+  const tries = [
+    { rows: 5, boxes: 4, decisions: 3, risk: true, needs: true, what: 280 }, { rows: 4, boxes: 3, decisions: 3, risk: true, needs: true, what: 240 },
+    { rows: 4, boxes: 3, decisions: 2, risk: true, needs: false, what: 200 }, { rows: 3, boxes: 2, decisions: 1, risk: true, needs: false, what: 160 },
+    { rows: 3, boxes: 2, decisions: 0, risk: true, needs: false, what: 120 }, { rows: 2, boxes: 1, decisions: 0, risk: false, needs: false, what: 100 },
+    { rows: 1, boxes: 0, decisions: 0, risk: false, needs: false, what: 0 },
+  ]
+  for (const n of tries) { const g = build(n); if (g.length <= GUIDE_MAX) return g }
+  return build(tries[tries.length - 1]).slice(0, GUIDE_MAX - 1) + '…'
+}
+
+/** Everything the guide left out, for one task: every criterion with its mark, every decision with its reason, the risks, the requirements. */
+export function taskRecord(t: GuideTask, opts: { heading?: boolean } = {}): string {
+  const met = t.acceptance.filter((c) => c.built === true)
+  const unmet = t.acceptance.filter((c) => c.built === false)
+  const open = t.acceptance.filter((c) => c.built === undefined)
   const row = (c: Criterion) => {
     const mark = c.built === true ? '✅' : c.built === false ? '❌' : '⬜'
-    const how = c.builtEvidence ? ` ${c.built === false ? 'Missing' : 'Seen'}: ${one(c.builtEvidence)}` : c.check ? ` How to check: ${one(c.check)}` : ''
+    const how = c.builtEvidence ? ` ${c.built === false ? 'Missing' : c.built === true ? 'Seen' : 'For a person'}: ${one(c.builtEvidence)}` : c.check ? ` How to check: ${one(c.check)}` : ''
     return `- ${mark} ${one(c.text)}.${how}`.replace(/\.\./g, '.')
   }
   return [
     opts.heading ? `### ${t.identifier} ${t.title}` : '',
-    act.length ? act.join(' ') : '',
     t.checklist?.trim() ? `**Before you merge**\n\n${t.checklist.trim().split('\n').map((l) => l.trim()).filter(Boolean).map((l) => `- [ ] ${l.replace(/^([-*]|\d+\.)\s+(\[.\]\s*)?/, '')}`).join('\n')}` : '',
     t.description?.trim() ? `**What it does**\n\n${t.description.trim()}` : '',
-    t.acceptance.length ? `**How to check it**\n\n${[...unmet, ...open, ...met].map(row).join('\n')}` : '**How to check it**\n\nThis task has no acceptance criteria, so there is no list to check it against.',
+    t.acceptance.length ? `**Every acceptance criterion**\n\n${[...unmet, ...open, ...met].map(row).join('\n')}` : '',
     t.adr?.trim() || t.decisions.length ? `**Decisions made**\n\n${[t.adr?.trim() ? bullets(t.adr) : '', ...t.decisions.map((d) => `- ${one(d.question)} → **${one(d.chosen)}**${d.why?.trim() ? `. ${one(d.why)}` : ''}`)].filter(Boolean).join('\n')}` : '',
     t.risk?.trim() ? `**Risks, and how we would know**\n\n${bullets(t.risk)}` : '',
     t.requirements?.length ? `**What this app requires of every change**\n\n${coveredLines(t.requirements)}` : '',
@@ -64,6 +110,11 @@ export function taskGuide(t: GuideTask, opts: { heading?: boolean } = {}): strin
 export function mergeGuide(tasks: GuideTask[]): string {
   if (!tasks.length) return ''
   return ['## Merge guide', ...tasks.map((t) => taskGuide(t, { heading: tasks.length > 1 })), '**To undo:** revert this pull request.'].join('\n\n')
+}
+
+/** The record under the guide: all of it, for whoever wants to look something up. */
+export function mergeRecord(tasks: GuideTask[]): string {
+  return tasks.map((t) => taskRecord(t, { heading: tasks.length > 1 })).filter(Boolean).join('\n\n')
 }
 
 /** What the guide is made from, for these tasks, as stored. */
@@ -88,8 +139,12 @@ export async function guideTasks(tasks: { id: string; identifier: string; title:
   })
 }
 
-/** One task's guide, as the task's page shows it before there is a pull request. */
+/** One task's guide and its record, as the task's page shows them before there is a pull request. */
 export async function mergeGuideOf(issueId: string, identifier: string, title: string, pending: string[] = []) {
   const [t] = await guideTasks([{ id: issueId, identifier, title }])
   return mergeGuide([{ ...t, pending }])
+}
+export async function mergeGuideAndRecord(issueId: string, identifier: string, title: string, pending: string[] = []) {
+  const [t] = await guideTasks([{ id: issueId, identifier, title }])
+  return { guide: mergeGuide([{ ...t, pending }]), record: mergeRecord([{ ...t, pending }]) }
 }
