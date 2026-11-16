@@ -4135,3 +4135,19 @@ in `/tmp` before taking new ones stopped and waited.
 
 - `rm -f`/`rm -rf` whose every target is inside a named folder of a temporary directory (`/tmp/x/…`, `$TMPDIR/x`,
   `/var/folders/…`) is cheap now. `/tmp/*` itself, a path with `..`, or any target elsewhere is still expensive.
+
+## Images can be dropped on an agent's prompt (Sandy, 2026-11-16: "add drag and drop files (images) to the task and project level agent prompt component")
+
+Every agent's prompt is the same component (`Conversation`), so this is everywhere: the app's agent, a project's,
+a task's, an idea's, a prototype's.
+
+- **Drop or paste.** An image dropped anywhere on the conversation, or pasted in the box, waits above the box as
+  a thumbnail with a way to take it off. Send works with pictures and no words. After Linear and Claude.
+- **Limits**: PNG, JPEG, GIF or WebP; 5 MB each (the model's own limit); six in a message. Anything else says why.
+- **Where they are kept** (`uploads.ts`): as files on this computer, `~/.self-evident/uploads/<conversation>/`.
+  Not in the database: the message's row has only the id, name and type.
+- **What the agent gets**: the pictures in the message, and their file paths in its words, so it can also use the
+  file itself (copy a screenshot into the repo).
+- In the transcript the pictures show under what was said, and open full size.
+
+Images only; other files are refused. Not tried with a real agent yet (no test conversations on real apps).
