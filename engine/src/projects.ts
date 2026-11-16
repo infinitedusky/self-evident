@@ -244,13 +244,19 @@ export function orderEdges(subs: { id: string; parentId: string | null; dependsO
   return out
 }
 
-/** Issue order as edges: a sub-issue depends on every sub-issue of the earlier issues in its project. */
-function impliedDeps(subs: { id: string; parentId: string | null }[], issues: { id: string; sortOrder: number }[]): Map<string, string[]> {
+/**
+ * Issue order as edges: a sub-issue depends on every sub-issue of the earlier issues in its project, except the ones
+ * out of the plan (canceled, or a duplicate) and those of a task that is done. A task re-planned leaves its old sub-tasks canceled, and the task after
+ * it was held for good on "blocked: … cancelled" though the earlier task was done and merged (Bonkei, 2026-11-15).
+ */
+export function impliedDeps(subs: { id: string; parentId: string | null; state?: string }[], issues: { id: string; sortOrder: number; state?: string }[]): Map<string, string[]> {
   const pos = new Map(issues.map((t) => [t.id, t.sortOrder]))
+  const finished = new Set(issues.filter((t) => t.state === 'done').map((t) => t.id)) // a task that is done holds nothing up, whatever became of its sub-tasks
+  const waitedOn = (y: { parentId: string | null; state?: string }) => !(y.state && DROPPED.includes(y.state)) && !finished.has(y.parentId!)
   const out = new Map<string, string[]>()
   for (const x of subs) {
     const mine = pos.get(x.parentId!) ?? 0
-    out.set(x.id, subs.filter((y) => (pos.get(y.parentId!) ?? 0) < mine).map((y) => y.id))
+    out.set(x.id, subs.filter((y) => (pos.get(y.parentId!) ?? 0) < mine && waitedOn(y)).map((y) => y.id))
   }
   return out
 }

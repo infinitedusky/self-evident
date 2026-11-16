@@ -64,17 +64,32 @@ describe.skipIf(!reachable)('follow', () => {
     const own = newId('session')
     await db.insert(session).values({ id: own, appId, kind: 'talk', subjectRef: { issueId: t.id } })
     const opened = async () => (await db.select().from(event).where(and(eq(event.appId, appId), eq(event.type, 'ui.open')))).sort((a, b) => a.seq - b.seq).map((e) => e.payload as { tab: { kind: string; path?: string }; split: string | null; issueId?: string }).at(-1)
-    await call('open_tab', { kind: 'sketch', file: 'sketches/home.html', split: 'right' }, own)
-    expect(await opened()).toEqual({ sessionId: own, tab: { kind: 'page', path: `/tasks/${t.id}/sketch?file=home.html` }, split: null, issueId: t.id })
+    await call('open_tab', { kind: 'sketch', file: 'sketches/home.html' }, own)
+    expect(await opened()).toEqual({ sessionId: own, tab: { kind: 'page', path: `/tasks/${t.id}/sketch?file=home.html` }, issueId: t.id })
     await call('open_tab', { kind: 'storybook', story: 'pages-cart--empty' }, own)
     expect((await opened())?.tab.path).toBe(`/tasks/${t.id}/mockup?story=pages-cart--empty`)
-    await call('open_tab', { path: '/todos', split: 'below' }, own)
-    expect(await opened()).toMatchObject({ tab: { kind: 'page', path: '/todos' }, split: null, issueId: t.id }) // any page: no split from a task's agent
-    await call('open_tab', { kind: 'sketch', file: 'home.html', split: 'right' }) // the app's agent: as before, a tab of its own, split where asked
-    expect(await opened()).toMatchObject({ tab: { kind: 'sketch', file: 'home.html' }, split: 'right' })
+    await call('open_tab', { kind: 'build', issueId: t.id }, own)
+    expect((await opened())?.tab.path).toBe(`/tasks/${t.id}/build`) // a build log: the task's Build page, in its tab
+    await call('open_tab', { path: `/tasks/${t.id}/research` }, own)
+    expect((await opened())?.tab.path).toBe(`/tasks/${t.id}/research`)
+    expect(await call('open_tab', { path: '/todos' }, own)).toBeNull() // a page outside its task: not opened
+    expect((await opened())?.tab.path).toBe(`/tasks/${t.id}/research`)
+    await call('open_tab', { kind: 'sketch', file: 'home.html' }) // the app's agent: a tab of its own, and never a split
+    const last = await opened()
+    expect(last).toMatchObject({ tab: { kind: 'sketch', file: 'home.html' } })
+    expect(last).not.toHaveProperty('split')
     const before = (await followed()).length
     await call('update_task', { issueId: t.id, brief: 'Do it.' }, own)
     expect((await followed()).length).toBe(before) // its own task: the person is there already
+    const other = await call('create_task', { title: 'Somebody else\'s', kind: 'todo' })
+    const mid = (await followed()).length
+    await call('update_task', { issueId: other.id, title: 'Changed by the task\'s agent' }, own)
+    await call('create_todo', { title: 'Made by the task\'s agent' }, own)
+    expect((await followed()).length).toBe(mid) // nor anything else: a task's agent takes the person nowhere but its own tab
+    const check = newId('session')
+    await db.insert(session).values({ id: check, appId, kind: 'talk', subjectRef: { checkOf: t.id, check: 'analysis' } })
+    await call('create_todo', { title: 'Made by a check' }, check)
+    expect((await followed()).length).toBe(mid) // a check's agent on that task: the same
     await call('update_task', { issueId: t.id, brief: 'Do it well.' })
     expect((await followed()).at(-1)).toMatchObject({ tab: { path: `/tasks/${t.id}` } }) // another conversation changing it still shows
   })

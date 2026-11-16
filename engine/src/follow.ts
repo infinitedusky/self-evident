@@ -5,7 +5,7 @@
  */
 import { and, eq, isNotNull } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, issue, session } from './db/schema.js'
+import { app, issue, prototype, session } from './db/schema.js'
 import { appendEvent } from './events.js'
 
 export interface Followed { path: string; projectId?: string | null }
@@ -49,17 +49,28 @@ export async function pageFor(tool: string, args: Record<string, any>, out: any)
   return null
 }
 
+/**
+ * The task or idea a conversation belongs to: its own agent, a check's on that task, or a prototype's started on it.
+ * Such an agent stays in that thing's tab (Sandy, 2026-11-15: "the task agent shouldn't open new windows. It just
+ * should move around different areas of that task or build or idea"). The app's own agent belongs to nothing.
+ */
+export async function ownerOf(sessionId: string | null | undefined): Promise<{ issueId?: string; ideaId?: string } | null> {
+  if (!sessionId) return null
+  const [s] = await db.select({ ref: session.subjectRef, worktreePath: session.worktreePath }).from(session).where(eq(session.id, sessionId))
+  const ref = s?.ref as { issueId?: string; checkOf?: string; ideaId?: string; app?: boolean } | null
+  const issueId = ref?.issueId ?? ref?.checkOf
+  if (issueId) return { issueId }
+  if (ref?.ideaId && s?.worktreePath && !ref.app) return { ideaId: ref.ideaId }
+  const [p] = await db.select({ issueId: prototype.issueId, ideaId: prototype.ideaId }).from(prototype).where(eq(prototype.sessionId, sessionId))
+  return p?.issueId ? { issueId: p.issueId } : p?.ideaId ? { ideaId: p.ideaId } : null
+}
+
 /** Tell the workspace the agent changed something there (a ui.follow event); never fails the tool. */
 export async function follow(appId: string, sessionId: string | null, tool: string, args: Record<string, any>, out: any): Promise<void> {
   try {
     const page = await pageFor(tool, args, out)
     if (!page) return
-    if (sessionId) { // a task's own agent changing its own task: the person is on that page already, beside the conversation
-      const [s] = await db.select({ ref: session.subjectRef }).from(session).where(eq(session.id, sessionId))
-      const ref = s?.ref as { issueId?: string; checkOf?: string } | null
-      const own = ref?.issueId ?? ref?.checkOf // and a check's agent recording its report on that task
-      if (own && page.path.startsWith(`/tasks/${own}`)) return
-    }
+    if (await ownerOf(sessionId)) return // a task's or an idea's agent: the person is in its tab, beside the conversation, and is not taken anywhere else
     const [a] = await db.select({ workspaceId: app.workspaceId }).from(app).where(eq(app.id, appId))
     await db.transaction((tx) => appendEvent(tx, { workspaceId: a?.workspaceId ?? 'ws_none', appId, sessionId, actor: 'engine', type: 'ui.follow', payload: { sessionId, tool, tab: { kind: 'page', path: page.path }, projectId: page.projectId ?? null } }))
   } catch { /* following is a nicety; the change is made */ }
