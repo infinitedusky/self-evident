@@ -3,6 +3,8 @@
  * the event log over SSE at GET /events.
  */
 import './own-scope.js' // first: the engine's own Doppler scope is not handed to what it starts
+import { readFile } from 'node:fs/promises'
+import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { serve } from '@hono/node-server'
 import { appendEvent } from './events.js'
 import { serveStatic } from '@hono/node-server/serve-static'
@@ -493,8 +495,13 @@ export function buildApp(bus: EventBus) {
   })
   api.get('/talks/:id', async (c) => { try { return c.json(await talkTranscript(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/talks/:id/say', async (c) => {
-    const { text, context } = await c.req.json<{ text: string; context?: TalkContext }>()
-    try { return c.json(await say(c.req.param('id'), text, context), 202) } catch (err) { return planError(c, err) }
+    const { text, context, images } = await c.req.json<{ text: string; context?: TalkContext; images?: ImageIn[] }>()
+    try { return c.json(await say(c.req.param('id'), text ?? '', context, undefined, await saveImages(c.req.param('id'), images)), 202) } catch (err) { return planError(c, err) }
+  })
+  api.get('/talks/:id/images/:image', async (c) => { // a picture dropped on the conversation, for its transcript
+    const f = await imageFile(c.req.param('id'), c.req.param('image'))
+    if (!f) return c.json({ error: 'no such image' }, 404)
+    return new Response(await readFile(f.path), { headers: { 'content-type': f.mediaType, 'cache-control': 'private, max-age=31536000, immutable' } })
   })
   api.post('/talks/:id/permission', async (c) => {
     const { requestId, allow, always } = await c.req.json<{ requestId: string; allow: boolean; always?: boolean }>()
