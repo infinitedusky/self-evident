@@ -2,7 +2,8 @@
  * A prototype's data: its own database on the app's server, made by the app's schema command, filled from a scenario
  * (a child table's file loads before its parent's), saved back out, built again, given to its server, dropped on discard.
  */
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -13,8 +14,8 @@ import { db, pool } from './db/client.js'
 import { app, repo, workspace } from './db/schema.js'
 import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
-import { databaseExists, databaseUrl } from './prototype-data.js'
-import { discardPrototype, prototypeStatus, resetPrototypeData, savePrototypeData, setPrototypeCommand, setPrototypeDatabase, startPrototype, stopPrototypes } from './prototype.js'
+import { databaseExists, databaseUrl, listScenarios } from './prototype-data.js'
+import { discardPrototype, prototypeStatus, resetPrototypeData, savePrototypeData, setPrototypeCommand, setPrototypeDatabase, showPrototypeScenario, startPrototype, stopPrototypes, writePrototypeScenario } from './prototype.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -68,7 +69,17 @@ describe.skipIf(!reachable)('prototype data', () => {
 
     const saved = await savePrototypeData(p.id, 'three-products')
     expect(saved.saved).toEqual({ product: 3, line_item: 1 })
-    expect(JSON.parse(await readFile(join(saved.dir, 'product.json'), 'utf8')).map((r: { name: string }) => r.name)).toContain('Sample pen')
+    // Kept in Self Evident, for this prototype: nothing is written into its worktree, so nothing of it can be committed.
+    expect(saved).toMatchObject({ scenario: 'three-products', shared: false })
+    expect(((await showPrototypeScenario(p.id, 'three-products')).tables.product as { name: string }[]).map((r) => r.name)).toContain('Sample pen')
+    expect(existsSync(join(p.path, '.prototype', 'scenarios', 'three-products'))).toBe(false)
+    expect((await git(p.path, ['status', '--porcelain'])).stdout.trim()).toBe('')
+    // One written out by hand, for the whole app: every prototype and the smoke test can load it.
+    expect(await writePrototypeScenario(p.id, 'one-tote', { product: [{ id: 1, name: 'Sample tote' }], line_item: [] }, 'agent', true)).toEqual({ scenario: 'one-tote', shared: true, saved: { product: 1 } })
+    expect(await listScenarios({ appId })).toEqual(['one-tote']) // the app's own: not this prototype's, not the one filed in its worktree
+    expect((await prototypeStatus(p.id)).scenarios).toEqual(['default', 'one-tote', 'three-products'])
+    await expect(writePrototypeScenario(p.id, 'bad name', {})).rejects.toThrow(/letters, numbers and dashes/)
+    await expect(writePrototypeScenario(p.id, 'bad-rows', { product: ['x'] as unknown as object[] })).rejects.toThrow(/product is not an array of rows/)
     await c.end()
 
     const back = await resetPrototypeData(p.id, 'default')
@@ -80,7 +91,10 @@ describe.skipIf(!reachable)('prototype data', () => {
     expect(empty.loaded).toEqual({})
     await expect(resetPrototypeData(p.id, 'nope')).rejects.toThrow(/no scenario "nope"/)
 
+    expect((await resetPrototypeData(p.id, 'one-tote')).loaded).toEqual({ product: 1 })
+
     await discardPrototype(p.id)
     expect(await databaseExists(cfg, slug)).toBe(false)
+    expect(await listScenarios({ appId, prototypeId: p.id })).toEqual(['one-tote']) // its own went with it; what was shared with the app stays
   })
 })

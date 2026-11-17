@@ -376,6 +376,14 @@ export const smokeRun = pgTable('smoke_run', {
   createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [uniqueIndex('smoke_run_issue').on(t.issueId)])
 
+// A scenario: made-up rows for an app's prototypes and smoke tests (prototype-data.ts), one row per name. Kept here
+// and never in the app's repository. scope: the prototype it belongs to, or '' for one the whole app shares.
+export const scenario = pgTable('scenario', {
+  id: id(), appId: appId(), scope: text('scope').notNull().default(''), name: text('name').notNull(),
+  tables: jsonb('tables').$type<Record<string, unknown[]>>().notNull(),
+  createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [uniqueIndex('scenario_name').on(t.appId, t.scope, t.name)])
+
 // What an agent learned by reading an app's code (learn.ts): one row per document per app, replaced when it is
 // learned again. summary is for the person and short; body is for agents. sha: the home repository's commit then.
 export const learning = pgTable('learning', {
