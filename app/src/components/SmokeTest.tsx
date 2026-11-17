@@ -16,6 +16,8 @@ import { Link } from 'react-router'
 import { Badge } from './Badge'
 import { API, engine, openEvents, type SmokeCheck, type SmokeView } from '../engine'
 
+const WHEN = { here: 'Here, on the built code', pr: 'On the pull request', after: 'After it is merged' } as const
+
 /** Where a check sends the view: a path of the app, or a story by its id. */
 /** Whether a check's "where" is somewhere the view can be sent: an address, a path, or a story's id. Anything else is a place said in words ("the pull request on GitHub"), shown as it is. */
 export const goable = (where?: string) => !!where && (/^https?:\/\/\S+$/.test(where) || /^\/\S*$/.test(where) || /^[a-z0-9][a-z0-9-]*--[a-z0-9-]+$/i.test(where))
@@ -61,7 +63,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   const behind = local && v.running && v.head && v.running !== v.head
   const src = v.url ? at ?? v.url : null
   const done = v.checks.length > 0 && v.owed === 0
-  const row = (c: SmokeCheck) => (
+  const row = (c: SmokeCheck, waits = false) => (
     <li key={c.id} className={`smoke-check ${c.mark}`}>
       <div className="smoke-check-head">
         <strong>{c.text}</strong>
@@ -84,8 +86,8 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
       ) : (
         <div className="smoke-actions">
           {v.url && goable(c.where) && <button className="btn quiet small" onClick={() => setAt(addressOf(v.url!, c.where))} title={c.where}>Go there</button>}
-          <button className="btn small" disabled={busy} onClick={() => { setMarking({ id: c.id, pass: true }); setNote('') }}>{c.mark === 'todo' ? 'Pass' : 'Pass instead'}</button>
-          <button className="btn quiet small" disabled={busy} onClick={() => { setMarking({ id: c.id, pass: false }); setNote('') }}>{c.mark === 'todo' ? 'Fail' : 'Fail instead'}</button>
+          <button className="btn small" disabled={busy || waits} onClick={() => { setMarking({ id: c.id, pass: true }); setNote('') }}>{c.mark === 'todo' ? 'Pass' : 'Pass instead'}</button>
+          <button className="btn quiet small" disabled={busy || waits} onClick={() => { setMarking({ id: c.id, pass: false }); setNote('') }}>{c.mark === 'todo' ? 'Fail' : 'Fail instead'}</button>
         </div>
       )}
     </li>
@@ -130,7 +132,23 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
               ? <div className="empty">This app is tried on a preview of its pull request, and this task has no pull request yet. It is opened once the first of its work is merged.</div>
               : <div className="empty">This app is smoke tested {v.where === 'staging' ? 'on staging' : v.where === 'preview' ? 'on a preview of its pull request' : 'behind a feature flag'}, and has not said at what address. Settings › Prototype has it.</div>)}
           </div>
-          <ol className="smoke-checks" aria-label="For you to check">{v.checks.map(row)}</ol>
+          <div className="smoke-groups">
+            {(['here', 'pr', 'after'] as const).map((when) => {
+              const mine = v.checks.filter((c) => (c.when ?? 'here') === when)
+              if (!mine.length) return null
+              const waits = when === 'pr' && !v.pr
+              return (
+                <div key={when} className="smoke-group" role="group" aria-label={WHEN[when]}>
+                  {(when !== 'here' || v.checks.some((c) => (c.when ?? 'here') !== 'here')) && <h3 className="smoke-when">{WHEN[when]}</h3>}
+                  {when === 'pr' && (v.pr
+                    ? <p className="faint smoke-when-says">{v.pr.url ? <a href={v.pr.url} target="_blank" rel="noreferrer">Pull request #{v.pr.number}</a> : <>Pull request #{v.pr.number}</>}: these can only be seen there.</p>
+                    : <p className="faint smoke-when-says">These can only be seen on the pull request, and this task has none yet. It is opened as a draft once the build is done and checked, or from <Link to={`${base}/build`}>the build page</Link>.</p>)}
+                  {when === 'after' && <p className="faint smoke-when-says">These can only be seen once it is merged. They do not hold the task; mark them when you have looked.</p>}
+                  <ol className={`smoke-checks ${waits ? 'waiting' : ''}`} aria-label={WHEN[when]}>{mine.map((c) => row(c, waits))}</ol>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </section>

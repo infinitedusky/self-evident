@@ -12,7 +12,7 @@ import { engine, type TaskPr } from '../engine'
 
 const problem = (e: any) => { const m = String(e?.message ?? e); try { return String(JSON.parse(m).error ?? m) } catch { return m } }
 
-export function SubmitPr({ issueId, pr, landed, total, unchecked = 0, draft = true, onChanged }: {
+export function SubmitPr({ issueId, pr, landed, total, unchecked = 0, draft = true, auto = false, onChanged }: {
   issueId: string; pr: TaskPr | null
   /** Sub-tasks landed, of those in the plan. */
   landed: number; total: number
@@ -20,6 +20,8 @@ export function SubmitPr({ issueId, pr, landed, total, unchecked = 0, draft = tr
   unchecked?: number
   /** The app opens its pull requests as drafts. */
   draft?: boolean
+  /** The engine opens a draft by itself once the task is built and checked (the app's setting, on unless switched off). */
+  auto?: boolean
   onChanged?: () => void
 }) {
   const [asking, setAsking] = useState(false)
@@ -46,8 +48,8 @@ export function SubmitPr({ issueId, pr, landed, total, unchecked = 0, draft = tr
             <b>{landed} of {total} sub-task{total === 1 ? ' has' : 's have'} landed.</b>
           </p>
           {ready
-            ? <p className="faint" style={{ margin: '0 0 8px' }}>Run your own checks first: the ones only you can do. Self Evident never opens a pull request by itself.</p>
-            : <p className="faint" style={{ margin: '0 0 8px' }}>It can be submitted once they all have, and you have run your own checks.</p>}
+            ? <p className="faint" style={{ margin: '0 0 8px' }}>{auto ? 'A draft is opened by itself once the build is checked and its tests pass. You can also submit it now.' : 'Run your own checks first: the ones only you can do. Self Evident never opens a pull request by itself.'}</p>
+            : <p className="faint" style={{ margin: '0 0 8px' }}>{auto ? 'A draft is opened by itself once they all have, and the build is checked.' : 'It can be submitted once they all have, and you have run your own checks.'}</p>}
           {ready && unchecked > 0 && <p className="submit-pr-warn">{unchecked} acceptance {unchecked === 1 ? 'criterion is' : 'criteria are'} not marked as met by the build.</p>}
           {asking ? (
             <div className="submit-pr-ask" role="group" aria-label="Submit the pull request">
