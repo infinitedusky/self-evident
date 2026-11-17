@@ -85,3 +85,18 @@ export const Addresses: Story = {
   render: () => <ul>{[['/checkout', 'http://localhost:6500/checkout'], ['edges-tunnel--default', 'http://localhost:6500/iframe.html?id=edges-tunnel--default&viewMode=story'], ['https://staging.example.test/x', 'https://staging.example.test/x']].map(([w, want]) => <li key={w}>{w} → {addressOf('http://localhost:6500/', w)} {addressOf('http://localhost:6500/', w) === want ? '✓' : '✕'}</li>)}</ul>,
   play: async ({ canvasElement }) => { await expect(within(canvasElement).queryByText(/✕/)).toBeNull(); await expect(addressOf('http://localhost:6500')).toBe('http://localhost:6500') },
 }
+
+/** An app tried on a preview of each pull request (a library's installable build): this task's pull request, and its address. */
+export const OnAPreview: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, where: 'preview', says: 'on a preview of its own pull request, at that pull request\'s address', url: 'https://pkg.pr.new/sample@12', up: true, running: null, canRun: false, pr: { number: 12, url: 'https://github.test/sample/pull/12' } } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('link', { name: 'Open in a new tab' })).toHaveAttribute('href', 'https://pkg.pr.new/sample@12')
+    await expect(c.getByText(/The preview of pull request #12/)).toBeInTheDocument()
+  },
+}
+/** The same, before the task has a pull request: it says so, and when one is opened. */
+export const NoPullRequestYet: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, where: 'preview', says: 'on a preview of its own pull request', url: null, up: false, running: null, canRun: false, pr: null } }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/this task has no pull request yet/)).toBeInTheDocument() },
+}

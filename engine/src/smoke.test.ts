@@ -4,10 +4,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { applyAcceptance, setAcceptance, type Criterion } from './acceptance.js'
 import { stagesOf } from './checklist.js'
 import { db, pool } from './db/client.js'
-import { app, event, issue, workspace } from './db/schema.js'
+import { app, event, issue, pr as prTable, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createProject } from './projects.js'
-import { byHand, markSmoke, smokeChecks, smokeOwed, smokeSetup, smokeView, startSmoke } from './smoke.js'
+import { byHand, markSmoke, previewUrl, smokeChecks, smokeOwed, smokeSetup, smokeView, startSmoke } from './smoke.js'
 import { checkTaskBrief, readVerdicts, verdictChange } from './verify.js'
 
 const at = '2026-11-17T00:00:00.000Z'
@@ -26,6 +26,11 @@ describe('where an app is smoke tested', () => {
     expect(smokeSetup({ smoke: { where: 'staging', url: ' https://staging.example.test ', account: 'the test parent (sample)', password: 'never kept' } })).toEqual({ where: 'staging', url: 'https://staging.example.test', account: 'the test parent (sample)' })
     expect(smokeSetup({ smoke: { where: 'flag', flag: 'new-checkout (sample)', url: 'https://app.example.test' } })).toMatchObject({ where: 'flag', flag: 'new-checkout (sample)' })
     expect(smokeSetup({ smoke: { where: 'the moon' } })).toEqual({ where: 'local' })
+    // A preview per pull request: the app gives the pattern, and each pull request's number goes in it.
+    expect(smokeSetup({ smoke: { where: 'preview', url: 'https://pkg.pr.new/sample@{pr}' } })).toEqual({ where: 'preview', url: 'https://pkg.pr.new/sample@{pr}' })
+    expect(previewUrl('https://pkg.pr.new/sample@{pr}', 12)).toBe('https://pkg.pr.new/sample@12')
+    expect(previewUrl('https://pr-{pr}.sample.test/app/{pr}', 7)).toBe('https://pr-7.sample.test/app/7')
+    expect(previewUrl('https://pkg.pr.new/sample@{pr}', null)).toBeNull(); expect(previewUrl(undefined, 12)).toBeNull() // no pull request yet, or no pattern: nowhere to send them
   })
 })
 
@@ -82,6 +87,13 @@ describe.skipIf(!reachable)('a person marks a check', () => {
     await expect(startSmoke(t.id)).rejects.toThrow(/smoke tested on staging: there is nothing to start here/)
     await expect(markSmoke(t.id, done, { pass: true })).rejects.toThrow(/not one for a person/)
     await expect(markSmoke(t.id, speed, { pass: false })).rejects.toThrow(/say what you saw/)
+    // The same app tried on a preview of each pull request: nowhere to go until there is one, then that one's address.
+    const [was] = await db.select().from(app).where(eq(app.id, appId))
+    await db.update(app).set({ setup: { smoke: { where: 'preview', url: 'https://pkg.pr.new/sample@{pr}' } } }).where(eq(app.id, appId))
+    expect(await smokeView(t.id)).toMatchObject({ where: 'preview', url: null, up: false, pr: null })
+    await db.insert(prTable).values({ id: newId('pr'), appId, projectId: t.projectId!, issueId: t.id, number: 12, url: 'https://github.test/sample/pull/12', status: 'open' })
+    expect(await smokeView(t.id)).toMatchObject({ where: 'preview', url: 'https://pkg.pr.new/sample@12', up: true, pr: { number: 12 } })
+    await db.update(app).set({ setup: was.setup }).where(eq(app.id, appId))
     const one = await markSmoke(t.id, look, { pass: true, note: 'trough visible, lip outline faint' })
     expect(one).toMatchObject({ owed: 1, failed: 0, marked: { id: look, pass: true } })
     const two = await markSmoke(t.id, speed, { pass: false, note: 'portal 22 fps vs 45 none' })
