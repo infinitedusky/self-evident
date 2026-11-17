@@ -92,7 +92,7 @@ export function taskRecord(t: GuideTask, opts: { heading?: boolean } = {}): stri
   const open = t.acceptance.filter((c) => c.built === undefined)
   const row = (c: Criterion) => {
     const mark = c.built === true ? '✅' : c.built === false ? '❌' : '⬜'
-    const how = c.builtEvidence ? ` ${c.built === false ? 'Missing' : c.built === true ? 'Seen' : 'For a person'}: ${one(c.builtEvidence)}` : c.check ? ` How to check: ${one(c.check)}` : ''
+    const how = c.builtEvidence ? ` ${c.byHand && c.built !== undefined ? (c.built ? 'Checked by hand' : 'Failed by hand') : c.built === false ? 'Missing' : c.built === true ? 'Seen' : 'For a person'}: ${one(c.builtEvidence)}` : c.check ? ` How to check: ${one(c.check)}` : ''
     return `- ${mark} ${one(c.text)}.${how}`.replace(/\.\./g, '.')
   }
   return [
