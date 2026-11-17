@@ -563,3 +563,14 @@ export const checklistSample: import('../engine').Checklist = {
     { id: 'req_docs', kind: 'requirement', text: 'Docs', what: 'What changed is documented (sample).', mark: 'na', evidence: 'does not apply: nothing a person reads changes (sample)' },
   ],
 }
+
+// A task's smoke test, running here (made up): three checks the agents left to a person on a diagram library's edges.
+export const smokeSample: import('../engine').SmokeView = {
+  where: 'local', says: 'run here, like its prototypes: the built branch, made-up data', account: null, flag: null,
+  branch: 'project/edges--ss-20 (sample)', head: 'abc1234def', running: 'abc1234def', url: 'http://localhost:6500', up: true, canRun: true, log: [], owed: 3, failed: 0,
+  checks: [
+    { id: 'ac_s1', text: 'The tunnel reads as a tunnel (sample)', where: 'edges-tunnel--default', how: 'Open the story: the edge should dip under the lip, not sit on top of it (sample)', mark: 'todo' },
+    { id: 'ac_s2', text: 'A portal shows where its edge comes out (sample)', where: 'edges-portal--pair', how: 'Hover one portal: its twin should light up (sample)', mark: 'todo' },
+    { id: 'ac_s3', text: 'Portals keep 40 frames a second (sample)', where: 'edges-portal--many', how: 'Turn portals on and watch the counter in the corner: it should stay above 40 (sample)', mark: 'todo' },
+  ],
+}

@@ -30,6 +30,7 @@ import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAge
 import { canSkip, finished, label, ready, settled, skipped, step, type Row, type StepKey } from '@self-evident/engine/steps'
 import { asked, PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
 import { ChecklistView } from '../components/ChecklistView'
+import { SmokeTest } from '../components/SmokeTest'
 import { openEvents, useLiveProject, type Events, type Checklist, API, engine, useWorkflows, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
 import { Md } from '../components/Md'
 
@@ -143,7 +144,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
   const rows = v.rows
-  const here = section === 'build' || section === 'saves' || (section === 'checklist' && checklist) || rows.some((r) => r.key === section) ? section! : 'overview'
+  const here = section === 'build' || section === 'saves' || (section === 'checklist' && checklist) || (section === 'smoke' && checklist) || rows.some((r) => r.key === section) ? section! : 'overview'
   if (section && here === 'overview') return <Navigate to={base} replace />
   const live = i.subIssues.filter((s) => !dropped(s)) // canceled sub-tasks are out of the plan
   const done = live.filter((s) => s.state === 'done').length
@@ -183,6 +184,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
           </StepSection>
         )}
         {here === 'checklist' && checklist && <ChecklistView checklist={checklist} base={base} />}
+        {here === 'smoke' && checklist && <SmokeTest issueId={i.id} appId={i.appId} base={base} />}
         {here === 'saves' && <TaskBranches issueId={i.id} at={new URLSearchParams(window.location.search).get('at')} stamp={savesStamp} onMoved={() => void act(async () => {})} onChanged={readSaves} />}
         {here === 'build' && (buildWaits
           ? <section className="panel"><h2>🏗️ {checklist ? 'Build' : 'Sub-tasks'}</h2><div className="empty">{checklist ? 'The build waits' : 'Planning and building wait'} for the brief's approval. <Link to={`${base}/brief`}>Go to the brief →</Link></div></section>
