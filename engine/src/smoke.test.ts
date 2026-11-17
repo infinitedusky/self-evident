@@ -12,7 +12,7 @@ import { app, event, issue, pr as prTable, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createProject } from './projects.js'
 import { oneGoBrief } from './planner.js'
-import { byHand, markSmoke, previewUrl, runStop, setSmokeSetup, smokeChecks, smokeEnv, smokeOwed, smokeReady, smokeSetup, smokeSetupOf, smokeView, startSmoke, whenOf, forPerson } from './smoke.js'
+import { byHand, markSmoke, previewUrl, runStop, setSmokeSetup, smokeChecks, smokeEnv, smokeOwed, smokeReady, smokeSetup, smokeSetupOf, smokeSetups, smokeView, startSmoke, whenOf, forPerson } from './smoke.js'
 import { checkTaskBrief, readVerdicts, verdictChange } from './verify.js'
 
 const at = '2026-11-17T00:00:00.000Z'
@@ -104,6 +104,26 @@ describe('how an app is brought up for one', () => {
     expect(smokeSetup({ smoke: { cmd: `${script}\n`, stop: ' docker compose -p smoke-$PORT down -v ', seed: 'insert into parent (id) values (1);' } }))
       .toEqual({ where: 'local', cmd: script, stop: 'docker compose -p smoke-$PORT down -v', seed: 'insert into parent (id) values (1);' })
   })
+  it('an app can have several, each with a name; one that lists none has the one it always had', () => {
+    expect(smokeSetups({})).toEqual([{ key: 'main', name: 'Smoke test', where: 'local' }])
+    expect(smokeSetups({ smoke: { where: 'staging', url: 'https://staging.example.test' } })).toEqual([{ key: 'main', name: 'Smoke test', where: 'staging', url: 'https://staging.example.test' }])
+    const two = { smoke: { where: 'staging', setups: [{ name: 'Docs site (sample)', what: ' the documentation (sample) ', cmd: 'pnpm docs:dev' }, { key: 'playground', name: 'Playground (sample)', cmd: script, stop: 'x' }, { name: 'Docs site (sample)' }, { name: '' }, null] } }
+    expect(smokeSetups(two)).toEqual([
+      { key: 'docs-site-sample', name: 'Docs site (sample)', what: 'the documentation (sample)', where: 'local', cmd: 'pnpm docs:dev' },
+      { key: 'playground', name: 'Playground (sample)', where: 'local', cmd: script, stop: 'x' },
+    ]) // a second of the same name, one with no name and the settings from before the list are not set-ups
+    expect(smokeSetup(two, 'playground')).toEqual({ where: 'local', cmd: script, stop: 'x' })
+    expect(smokeSetup(two, 'nope')).toEqual({ where: 'local', cmd: 'pnpm docs:dev' }) // one it does not have: its first
+  })
+  it('the check is told the set-ups when there is more than one, and says which each check needs', () => {
+    const list = [{ key: 'docs', name: 'Docs site (sample)', what: 'the documentation (sample)' }, { key: 'playground', name: 'Playground (sample)' }]
+    expect(checkTaskBrief(criteria, [], undefined, list)).toContain('add "setup": the key of the one they need. Give items that need the same thing the same one, so it is brought up once. They are: "docs" (Docs site (sample): the documentation (sample)); "playground" (Playground (sample)).')
+    expect(checkTaskBrief(criteria, [], undefined, list.slice(0, 1))).not.toContain('"setup"') // one set-up: nothing to choose
+    const v = readVerdicts('```acceptance\n[{"id":"ac_1","met":true,"setup":"docs","evidence":"ran it"},{"id":"ac_2","met":null,"setup":"playground","evidence":"drag a node"},{"id":"ac_3","met":null,"evidence":"watch the counter"}]\n```', criteria.map((c) => c.id))
+    expect(v.map((x) => x.setup)).toEqual([undefined, 'playground', undefined]) // only one left to a person has one
+    const { list: after } = applyAcceptance(criteria.map(({ built: _b, builtEvidence: _e, ...c }) => c), verdictChange(v), 'engine')
+    expect(smokeChecks(after).map((c) => [c.id, c.setup])).toEqual([['ac_2', 'playground'], ['ac_3', undefined]])
+  })
   it('the seed is put in a file outside every repository when it runs, and the script is told where; none, and the file is gone', async () => {
     const home = await mkdtemp(join(tmpdir(), 'smoke-home-'))
     process.env.SMOKE_HOME = home
@@ -115,6 +135,7 @@ describe('how an app is brought up for one', () => {
       expect(bare).toEqual({ PORT: '6511', BROWSER: 'none', CI: '1' })
       expect(existsSync(join(home, 'app_sample', 'seed.sql'))).toBe(false)
       // The stop script runs where the start one did, with what it had; one that fails is not an error.
+      expect((await smokeEnv('app_sample', { where: 'local', seed: 'select 1;' }, { port: 6512, key: 'playground' })).SMOKE_SEED).toBe(join(home, 'app_sample', 'seed-playground.sql')) // a seed per set-up
       expect(await runStop('echo "down $PORT"; exit 3', home, { PORT: '6511' })).toEqual(['down 6511'])
       expect(await runStop('echo never', join(home, 'gone'), {})).toEqual([]) // its checkout was removed: nothing to run it in
     } finally { delete process.env.SMOKE_HOME; await rm(home, { recursive: true, force: true }) }
@@ -137,12 +158,29 @@ describe.skipIf(!reachable)('a person marks a check', () => {
   it('an agent reads the set-up and changes only what it gives; empty clears; too long is refused', async () => {
     const own = newId('app')
     await db.insert(app).values({ id: own, workspaceId: wsId, name: 'Set-up (sample)', key: own.slice(-6).toUpperCase(), setup: { prototype_cmd: 'pnpm dev --port $PORT', smoke: { where: 'local', account: 'the test parent (sample)' } } })
-    expect(await smokeSetupOf(own)).toEqual({ where: 'local', script: null, stop: null, seed: null, falls_back_to: 'pnpm dev --port $PORT', database: false })
-    expect(await setSmokeSetup(own, { script: 'pnpm install\npnpm dev --port $PORT', seed: 'insert into parent (id) values (1);' })).toMatchObject({ script: 'pnpm install\npnpm dev --port $PORT', stop: null, seed: 'insert into parent (id) values (1);', falls_back_to: null })
-    expect(await setSmokeSetup(own, { stop: 'docker compose down', seed: '' })).toMatchObject({ script: 'pnpm install\npnpm dev --port $PORT', stop: 'docker compose down', seed: null })
+    expect(await smokeSetupOf(own)).toEqual({ setups: [{ key: 'main', name: 'Smoke test', what: null, where: 'local', url: null, script: null, stop: null, seed: null, falls_back_to: 'pnpm dev --port $PORT' }], database: false })
+    expect(await setSmokeSetup(own, { script: 'pnpm install\npnpm dev --port $PORT', seed: 'insert into parent (id) values (1);' })).toMatchObject({ setups: [{ key: 'main', script: 'pnpm install\npnpm dev --port $PORT', stop: null, seed: 'insert into parent (id) values (1);', falls_back_to: null }] })
+    expect(await setSmokeSetup(own, { stop: 'docker compose down', seed: '' })).toMatchObject({ setups: [{ script: 'pnpm install\npnpm dev --port $PORT', stop: 'docker compose down', seed: null }] })
     const [a] = await db.select().from(app).where(eq(app.id, own))
     expect(a.setup).toMatchObject({ prototype_cmd: 'pnpm dev --port $PORT', smoke: { where: 'local', account: 'the test parent (sample)', cmd: 'pnpm install\npnpm dev --port $PORT', stop: 'docker compose down' } }) // the rest of its settings as they were
     await expect(setSmokeSetup(own, { script: 'x'.repeat(20_001) })).rejects.toThrow(/20000 characters at most/)
+    // A second set-up: it needs a name; the one the app had becomes the first of a list, as it was.
+    await expect(setSmokeSetup(own, { setup: 'docs', script: 'pnpm docs:dev --port $PORT' })).rejects.toThrow(/no set-up "docs" \(main\): give a name to add it/)
+    const two = await setSmokeSetup(own, { setup: 'Docs site', name: 'Docs site (sample)', what: 'the documentation, to see it is accurate (sample)', script: 'pnpm docs:dev --port $PORT' })
+    expect(two.setups.map((x) => [x.key, x.name, x.script])).toEqual([['main', 'Smoke test', 'pnpm install\npnpm dev --port $PORT'], ['docs-site', 'Docs site (sample)', 'pnpm docs:dev --port $PORT']])
+    expect((await setSmokeSetup(own, { setup: 'docs-site', stop: 'pkill -f docs' })).setups[1]).toMatchObject({ script: 'pnpm docs:dev --port $PORT', stop: 'pkill -f docs' })
+    const [b] = await db.select().from(app).where(eq(app.id, own))
+    expect(smokeSetup(b.setup, 'docs-site')).toEqual({ where: 'local', cmd: 'pnpm docs:dev --port $PORT', stop: 'pkill -f docs' })
+    expect(smokeSetup(b.setup)).toMatchObject({ account: 'the test parent (sample)', stop: 'docker compose down' }) // the first, as before
+    // A task's view has both; a check goes to the one it named, and to the first when it named none or one that is gone.
+    const { issues: [t] } = await createProject({ appId: own, name: 'Two set-ups (sample)', issues: [{ title: 'Edges (sample)', brief: 'Build it.' }] })
+    const { acceptance } = await setAcceptance(t.id, { add: [{ text: 'The docs name the new prop (sample)' }, { text: 'The tunnel reads as a tunnel (sample)' }, { text: 'Portals keep 40 frames a second (sample)' }] })
+    await setAcceptance(t.id, { update: [{ id: acceptance[0].id, built: null, builtEvidence: 'open the Edges page', builtSetup: 'docs-site' }, { id: acceptance[1].id, built: null, builtEvidence: 'drag a node', builtSetup: 'gone' }, { id: acceptance[2].id, built: null, builtEvidence: 'watch the counter' }] }, 'engine')
+    const view = await smokeView(t.id)
+    expect(view.setups.map((x) => [x.key, x.name, x.canRun, x.owed])).toEqual([['main', 'Smoke test', true, 2], ['docs-site', 'Docs site (sample)', true, 1]])
+    expect(view.checks.map((c) => c.setup)).toEqual(['docs-site', 'main', 'main'])
+    expect(view).toMatchObject({ where: 'local', canRun: true, owed: 3 }) // the first set-up's, where the view had one
+    await expect(startSmoke(t.id, 'user', { setup: 'nope' })).rejects.toThrow(/no smoke test set-up "nope" \(main, docs-site\)/)
   })
 
   it('their word is the build\'s mark on that criterion, with the note; a fail needs one; what is not theirs is refused', async () => {

@@ -20,7 +20,7 @@ import { guideTasks, mergeGuide, mergeRecord } from './merge-guide.js'
 import { acceptanceOf, setAcceptance } from './acceptance.js'
 import { unchecked, afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, numbered, PROBE_TITLE, probeBrief, readVerdicts, reqId, requirementsChecked, unmetOf, verdictChange } from './verify.js'
 import { inForce, type Covered } from './requirements.js'
-import { smokeOwed } from './smoke.js'
+import { smokeOwed , smokeSetups } from './smoke.js'
 import { ONE_GO_TITLE } from './planner.js'
 import { workflowFor } from './work.js'
 import { ensureProjectPr, prDraft, prTitle, prBody , prAuto } from './pr.js'
@@ -349,7 +349,7 @@ export class Runner {
       const again = next.round > 1
       const criteria = again ? list.criteria.filter((c) => c.built === false) : list.criteria
       const required = again ? list.required.filter((r) => list.held?.find((c) => c.key === r.key)?.built === false) : list.required
-      await addSubTask(taskId, { title: numbered(CHECK_TITLE, next.round), brief: checkTaskBrief(criteria, required, again ? { round: next.round } : undefined), after }, 'engine')
+      await addSubTask(taskId, { title: numbered(CHECK_TITLE, next.round), brief: checkTaskBrief(criteria, required, again ? { round: next.round } : undefined, smokeSetups(setup)), after }, 'engine')
       return
     }
     if (next.do === 'finish') { await addSubTask(taskId, { title: numbered(FINISH_TITLE, next.round), brief: finishBrief(unmet, next.round), after }, 'engine'); return }

@@ -373,8 +373,9 @@ export const verification = pgTable('verification', { // [LS] Feature/Entry shot
 export const smokeRun = pgTable('smoke_run', {
   id: id(), appId: appId(), issueId: text('issue_id').notNull().references(() => issue.id),
   path: homePath('path').notNull(), sha: text('sha').notNull(), port: integer('port'),
+  /** Which of the app's set-ups it is a run of (smoke.ts). */ setup: text('setup').notNull().default('main'),
   createdAt: createdAt(), updatedAt: at('updated_at'),
-}, (t) => [uniqueIndex('smoke_run_issue').on(t.issueId)])
+}, (t) => [uniqueIndex('smoke_run_issue').on(t.issueId, t.setup)])
 
 // A scenario: made-up rows for an app's prototypes and smoke tests (prototype-data.ts), one row per name. Kept here
 // and never in the app's repository. scope: the prototype it belongs to, or '' for one the whole app shares.

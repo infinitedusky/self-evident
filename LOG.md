@@ -4576,3 +4576,23 @@ the engine's environment": they may now be kept on the computer.
 Not done: encrypting the file (it is a plain file only this user can read, like `~/.netrc`; the macOS Keychain would
 be the next step); the API key an app's agents run on (`setup.account.key_env`), which is still read from the
 engine's environment; refusing on a shared database (the file is on this computer either way).
+
+## An app can have several smoke test set-ups, and each check names the one it needs (Sandy, 2026-11-17: "each question should be able to reference a specific setup … if you have five questions that need the same setup, you just reference the same one … Those setups then we need to have defined in settings")
+
+The case: a library's pull request that asks for two things at once, its docs site to see it is accurate and a demo
+app to see the library works. An app had one set-up, a check could not say which it needed, and a task could have
+one thing running.
+
+- **Set-ups have names** (`setup.smoke.setups`: a key, a name, a line on what is checked there, then where, script,
+  stop script, seed as before; eight at most). An app that lists none has the one it always had, key `main`.
+  Settings › Prototype › Smoke test edits the list.
+- **The check after a build is given the list** when there is more than one, and names the set-up for each check it
+  leaves to a person (`setup` in its verdict, `builtSetup` on the criterion), the same one for checks that need the
+  same thing. None named, or one the app no longer has: the first.
+- **The smoke test page shows one set-up at a time**, with only its checks. Each is brought up once, in a checkout
+  and on a port of its own, so two can be up side by side (`smoke_run` is per task and set-up).
+- Agents: `smoke_setup` lists them; `set_smoke_setup` changes one by key or adds one with a name.
+
+Not done: a demo app that lives with Self Evident for a library whose repository must not get one (a script can only
+run what is in the checkout); the checks on a staged task have no set-up, so all go to the first.
+

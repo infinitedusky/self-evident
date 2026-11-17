@@ -307,3 +307,21 @@ export const AppSmokeTestSetUp: Story = {
     await expect(c.getByText(/never written into the app's repository/)).toBeInTheDocument()
   },
 }
+
+/** An app with two smoke test set-ups (made-up sample): each has a name and a line on what is checked there; another can be added, one removed. */
+export const AppSmokeTestTwoSetUps: Story = {
+  parameters: appPage(sampleApp.id, 'prototype'),
+  beforeEach: withEngine({ apps: [{ ...sampleApp, setup: { ...sampleApp.setup, smoke: { setups: [{ key: 'docs', name: 'Docs site (sample)', what: 'The documentation, to see it is accurate (sample)', where: 'local', cmd: 'pnpm docs:dev --port $PORT' }, { key: 'playground', name: 'Playground (sample)', what: 'The library, exercised with every setting (sample)', where: 'local', cmd: 'pnpm playground --port $PORT' }] } } }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const docs = within(await c.findByRole('group', { name: 'Docs site (sample)' }))
+    await expect(docs.getByRole('textbox', { name: 'Set-up 1 name' })).toHaveValue('Docs site (sample)')
+    await expect(docs.getByRole('textbox', { name: 'Smoke test script' })).toHaveValue('pnpm docs:dev --port $PORT')
+    const play = within(c.getByRole('group', { name: 'Playground (sample)' }))
+    await expect(play.getByRole('textbox', { name: 'Playground (sample) script' })).toHaveValue('pnpm playground --port $PORT')
+    await userEvent.click(c.getByRole('button', { name: 'Add a set-up' }))
+    await expect(await c.findByRole('textbox', { name: 'Set-up 3 name' })).toHaveValue('')
+    await userEvent.click(play.getByRole('button', { name: 'Remove Playground (sample)' }))
+    await expect(c.queryByRole('group', { name: 'Playground (sample)' })).toBeNull()
+  },
+}

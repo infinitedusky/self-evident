@@ -157,3 +157,35 @@ export const OnAStagedTask: Story = {
   beforeEach: withEngine({ smoke: { ...smokeSample, staged: true } }),
   play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/Every acceptance criterion no agent has marked/)).toBeInTheDocument() },
 }
+
+// A library with two set-ups (made up): its docs site, and a demo app that exercises it. Each check names the one it needs.
+const side = { where: 'local' as const, says: 'run here (sample)', account: null, flag: null, running: null, url: null, up: false, canRun: true, canClean: false, log: [] }
+const twoSetUps = {
+  ...smokeSample, url: null, up: false, running: null, owed: 3,
+  setups: [{ ...side, key: 'docs', name: 'Docs site (sample)', what: 'The documentation, to see it is accurate (sample)', owed: 1 }, { ...side, key: 'playground', name: 'Playground (sample)', what: 'The library, exercised with every setting (sample)', owed: 2 }],
+  checks: [
+    { id: 'ac_d1', text: 'The Edges page names the new tunnel prop (sample)', setup: 'docs', when: 'here' as const, where: '/docs/edges', how: 'Open the Edges page: the prop table lists tunnel with its default (sample)', mark: 'todo' as const },
+    { id: 'ac_p1', text: 'The tunnel reads as a tunnel (sample)', setup: 'playground', when: 'here' as const, how: 'Switch Tunnel on and drag a node across it (sample)', mark: 'todo' as const },
+    { id: 'ac_p2', text: 'Portals keep 40 frames a second (sample)', setup: 'playground', when: 'here' as const, how: 'Switch Portals on and watch the counter (sample)', mark: 'todo' as const },
+  ],
+}
+/** Two set-ups: one is shown at a time, with only the checks that need it; each is brought up once, and both can be up. */
+export const TwoSetUps: Story = {
+  beforeEach: withEngine({ smoke: twoSetUps }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const tabs = within(await c.findByRole('tablist', { name: 'Set-ups' }))
+    await expect(tabs.getByRole('tab', { name: /Docs site \(sample\) 1 to check/ })).toHaveAttribute('aria-selected', 'true') // the first with something to check
+    await expect(c.getByText('The documentation, to see it is accurate (sample)')).toBeInTheDocument()
+    await expect(c.getByText('The Edges page names the new tunnel prop (sample)')).toBeInTheDocument()
+    await expect(c.queryByText('The tunnel reads as a tunnel (sample)')).toBeNull() // the playground's, not shown here
+    await userEvent.click(c.getByRole('button', { name: 'Run it' }))
+    await expect(await c.findByRole('button', { name: 'Stop' })).toBeInTheDocument()
+    await userEvent.click(tabs.getByRole('tab', { name: /Playground \(sample\) 2 to check/ }))
+    await expect(c.getByText('The tunnel reads as a tunnel (sample)')).toBeInTheDocument()
+    await expect(c.getByText('Portals keep 40 frames a second (sample)')).toBeInTheDocument()
+    await expect(c.queryByText('The Edges page names the new tunnel prop (sample)')).toBeNull()
+    await expect(c.getByRole('button', { name: 'Run it' })).toBeEnabled() // its own, not yet up; the docs site still is
+    await expect(tabs.getByRole('tab', { name: /Docs site/ })).toHaveTextContent('●')
+  },
+}

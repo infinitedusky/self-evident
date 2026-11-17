@@ -166,8 +166,18 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     }),
     // Task branches and save points: the engine's rules, roughly.
     http.get('/api/issues/:id/smoke', () => reply(d.smoke ?? { where: 'local', says: 'run here, like its prototypes', account: null, flag: null, branch: null, head: null, running: null, url: null, up: false, canRun: false, log: [], checks: [], owed: 0, failed: 0 })),
-    http.post('/api/issues/:id/smoke/start', async ({ request }) => { const b = await request.json().catch(() => ({})) as { clean?: boolean }; if (d.smoke) d.smoke = { ...d.smoke, url: 'http://localhost:6500', up: true, running: d.smoke.head, log: b.clean ? ['started clean (sample)'] : d.smoke.log }; return reply(d.smoke) }),
-    http.post('/api/issues/:id/smoke/stop', () => { if (d.smoke) d.smoke = { ...d.smoke, url: null, up: false, running: null }; return reply(d.smoke) }),
+    http.post('/api/issues/:id/smoke/start', async ({ request }) => {
+      const b = await request.json().catch(() => ({})) as { clean?: boolean; setup?: string }
+      if (d.smoke && b.setup && d.smoke.setups) d.smoke = { ...d.smoke, setups: d.smoke.setups.map((x, n) => (x.key === b.setup ? { ...x, url: `http://localhost:${6500 + n}`, up: true, running: d.smoke!.head } : x)) }
+      else if (d.smoke) d.smoke = { ...d.smoke, url: 'http://localhost:6500', up: true, running: d.smoke.head, log: b.clean ? ['started clean (sample)'] : d.smoke.log }
+      return reply(d.smoke)
+    }),
+    http.post('/api/issues/:id/smoke/stop', async ({ request }) => {
+      const b = await request.json().catch(() => ({})) as { setup?: string }
+      if (d.smoke && b.setup && d.smoke.setups) d.smoke = { ...d.smoke, setups: d.smoke.setups.map((x) => (x.key === b.setup ? { ...x, url: null, up: false, running: null } : x)) }
+      else if (d.smoke) d.smoke = { ...d.smoke, url: null, up: false, running: null }
+      return reply(d.smoke)
+    }),
     http.post('/api/issues/:id/smoke/:criterion', async ({ params, request }) => {
       const b = await request.json() as { pass: boolean; note?: string }
       const checks = (d.smoke?.checks ?? []).map((c) => (c.id === params.criterion ? { ...c, mark: b.pass ? 'pass' as const : 'fail' as const, note: b.note ?? '' } : c))
