@@ -31,7 +31,7 @@ export function briefStands(rows: Row[], on: On) {
 /** ✓ finished (approved, where a person approves it), ◐ started or ready for the person, ○ not started. */
 export const mark = (r: Row, on: On) => (finished(r.state, on) ? '✓' : skipped(r.state) ? '–' : r.state.status === 'none' ? '○' : '◐') // – skipped by a person
 
-export function TaskNav({ checklist, base, here, on = 'task', rows, workflow, build, folded, onToggle, saves, onSave }: {
+export function TaskNav({ checklist, smoke, base, here, on = 'task', rows, workflow, build, folded, onToggle, saves, onSave }: {
   base: string; here: string; on?: On; rows: Row[]
   /** The workflow in force and where it comes from (", the app's default"); its steps are the list. */
   workflow?: { name: string; from: string } | null
@@ -45,6 +45,11 @@ export function TaskNav({ checklist, base, here, on = 'task', rows, workflow, bu
    * each a row, and a row for the list. Left out: a staged task, with the one Sub-tasks row it always had.
    */
   checklist?: Checklist | null
+  /**
+   * A staged task's smoke test (Sandy, 2026-11-17: "add it to the other ones, goes after subtask in the build
+   * section"): how many of its criteria are the person's to check by hand. A checklist task has it as a stage.
+   */
+  smoke?: { owed: number; total: number; failed: number } | null
   /**
    * The task's save points, at the bottom (Sandy, 2026-11-13: "a list could start and the one you are on could be
    * shown"): the task branch being worked on, each save point, each task branch set aside. Left out: no section.
@@ -76,6 +81,7 @@ export function TaskNav({ checklist, base, here, on = 'task', rows, workflow, bu
         {brief && icon('brief', `${base}/brief`, step('brief').icon, on === 'task' ? 'The brief' : label('brief', on), stands ?? said(brief), null, finished(brief.state, on))}
         {feeds.map((r) => icon(r.key, `${base}/${r.key}`, step(r.key).icon, label(r.key, on), said(r), after(r, rows, on), finished(r.state, on)))}
         {build && icon('build', `${base}/build`, '🏗️', 'Sub-tasks', build.total ? `${build.done}/${build.total}` : 'not planned', build.waitingOn, !!build.total && build.done === build.total)}
+        {build && !checklist && smoke && smoke.total > 0 && icon('smoke', `${base}/smoke`, '🧪', 'Smoke test', smoke.failed ? `${smoke.failed} failed by hand` : smoke.owed ? `${smoke.owed} for you to check by hand` : 'all checked by hand', build.waitingOn, !smoke.owed && !smoke.failed)}
         {saves && icon('saves', `${base}/saves`, '💾', 'Save points', saves.points.length || saves.aside.length ? `${saves.points.length} saved${saves.aside.length ? `, ${saves.aside.length} set aside` : ''}${saves.current ? `; working on ${saves.current}` : ''}` : 'none yet', null, false)}
       </nav>
     )
@@ -128,6 +134,14 @@ export function TaskNav({ checklist, base, here, on = 'task', rows, workflow, bu
           <span className="task-nav-text">🏗️ Sub-tasks</span>
           {build.total > 0 && <span className="faint mono" style={{ fontSize: 12 }}>{build.done}/{build.total}</span>}
         </span>, build.waitingOn)}
+      {build && !checklist && smoke && smoke.total > 0 && item('smoke', `${base}/smoke`,
+        <>
+          <span className="task-nav-row">
+            <span className={`task-nav-mark ${smoke.failed ? 'bad' : !smoke.owed ? 'ok' : ''}`}>{smoke.failed ? '✕' : !smoke.owed ? '✓' : smoke.owed < smoke.total ? '◐' : '○'}</span>
+            <span className="task-nav-text">🧪 Smoke test</span>
+          </span>
+          <span className="task-nav-after">{smoke.failed ? `${smoke.failed} failed by hand` : smoke.owed ? `${smoke.owed} for you to check by hand` : `${smoke.total} checked by hand`}</span>
+        </>, build.waitingOn)}
       {saves && (
         <>
           <div className="task-nav-label faint">Save points</div>

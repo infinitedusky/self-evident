@@ -32,6 +32,8 @@ import { join } from 'node:path'
 import pg from 'pg'
 import { eq } from 'drizzle-orm'
 import { acceptanceOf, setAcceptance, type Criterion } from './acceptance.js'
+import { styleOf } from './steps.js'
+import { workflowFor } from './work.js'
 import { landingBranch, modeOf } from './branches.js'
 import { db } from './db/client.js'
 import { app, pr as prTable, project, smokeRun } from './db/schema.js'
@@ -154,15 +156,21 @@ export const previewUrl = (pattern: string | undefined, pr: number | null | unde
 
 /** Whether a criterion is one for a person: the check left it to them, or they have marked it by hand already. */
 export const byHand = (c: Criterion) => !!c.byHand || (c.built === undefined && !!c.builtEvidence)
+/**
+ * On a staged task there is no check after the build to leave criteria to a person (Sandy, 2026-11-17: "can we add it
+ * to the other ones"): there, every criterion no agent has marked is the person's to check by hand, with the ones
+ * they already marked.
+ */
+export const forPerson = (c: Criterion, staged: boolean) => byHand(c) || (staged && c.built === undefined)
 
 /** The checks, from the task's criteria. Pure. `head` is the commit the branch is at, when it is known. */
-export function smokeChecks(criteria: Criterion[], head: string | null = null): SmokeCheck[] {
-  return criteria.filter(byHand).map((c) => {
+export function smokeChecks(criteria: Criterion[], head: string | null = null, staged = false): SmokeCheck[] {
+  return criteria.filter((c) => forPerson(c, staged)).map((c) => {
     const marked = c.built !== undefined && !!c.byHand
     const agent = c.built !== undefined && !c.byHand // the check verified it itself after all
     return {
       id: c.id, text: c.text, when: whenOf(c), ...(c.builtWhere ? { where: c.builtWhere } : {}),
-      ...((c.built === undefined ? c.builtEvidence : c.check) ? { how: (c.built === undefined ? c.builtEvidence : c.check)!.replace(/^(for a person|needs a person)[:,]?\s*/i, '') } : {}),
+      ...((c.built === undefined ? c.builtEvidence ?? c.check : c.check) ? { how: (c.built === undefined ? c.builtEvidence ?? c.check : c.check)!.replace(/^(for a person|needs a person)[:,]?\s*/i, '') } : {}),
       mark: c.built === undefined ? 'todo' as const : c.built ? 'pass' as const : 'fail' as const,
       ...(marked || agent ? { note: c.builtEvidence ?? '' } : {}),
       ...(marked && head && c.byHand!.sha && c.byHand!.sha !== head ? { stale: true } : {}),
@@ -197,18 +205,20 @@ async function built(issueId: string) {
   // Its pull request: the task's own when each task has one, else its project's.
   const prs = p ? await db.select().from(prTable).where(eq(prTable.projectId, p.id)) : []
   const pull = prs.find((x) => x.issueId === t.id) ?? prs.find((x) => !x.issueId) ?? null
-  return { t, a, p, repoPath: r?.localPath ?? null, name, branch, head, pr: pull?.number ? { number: pull.number, url: pull.url } : null }
+  const staged = styleOf((await workflowFor(db, { issueId: t.id })).workflow) !== 'checklist'
+  return { t, a, p, repoPath: r?.localPath ?? null, name, branch, head, staged, pr: pull?.number ? { number: pull.number, url: pull.url } : null }
 }
 
 export async function smokeView(issueId: string) {
-  const { t, a, branch, head, pr } = await built(issueId)
+  const { t, a, branch, head, pr, staged } = await built(issueId)
   const setup = smokeSetup(a.setup)
   const there = setup.where === 'preview' ? previewUrl(setup.url, pr?.number) : setup.url ?? null // where it is deployed, when it is
   const [run] = await db.select().from(smokeRun).where(eq(smokeRun.issueId, t.id))
   const on = alive(t.id)
   const local = run?.port ? `http://localhost:${run.port}` : null
-  const checks = smokeChecks(acceptanceOf(t), head)
+  const checks = smokeChecks(acceptanceOf(t), head, staged)
   return {
+    /** A staged task: the checks are every criterion no agent marked, not what a check after the build left. */ staged,
     where: setup.where, says: WHERE_SAYS[setup.where], account: setup.account ?? null, flag: setup.flag ?? null,
     branch, head, /** local: the commit its server is running; it is behind when the branch has moved on. */ running: setup.where === 'local' && on ? run?.sha ?? null : null,
     url: setup.where === 'local' ? (on ? local : null) : there,
@@ -276,10 +286,10 @@ export function stopSmokes() { for (const id of [...running.keys()]) void stopSm
 
 /** A person's word on one check: the build's mark on that criterion, by hand, with their note and the commit it was made on. */
 export async function markSmoke(issueId: string, criterionId: string, input: { pass: boolean; note?: string }, by = 'user') {
-  const { t, a, head, pr } = await built(issueId)
+  const { t, a, head, pr, staged } = await built(issueId)
   const c = acceptanceOf(t).find((x) => x.id === criterionId)
   if (!c) throw new PlanError(`no acceptance criterion ${criterionId} on this task`)
-  if (!byHand(c)) throw new PlanError('that criterion is not one for a person: the check after the build did not leave it to them')
+  if (!forPerson(c, staged)) throw new PlanError(staged ? 'that criterion is not one for a person here: an agent has already marked it. Change its mark on the brief\'s page' : 'that criterion is not one for a person: the check after the build did not leave it to them')
   if (whenOf(c) === 'pr' && !pr) throw new PlanError('that one is checked on the pull request, and this task has none yet')
   const note = (input.note ?? '').replace(/\s+/g, ' ').trim().slice(0, 600)
   if (!input.pass && !note) throw new PlanError('say what you saw: a fail is sent back to be fixed, and the note is what the fix works from')

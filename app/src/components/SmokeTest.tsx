@@ -96,7 +96,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
     <section className="panel smoke" data-component="SmokeTest" aria-label="Smoke test">
       <h2>🧪 Smoke test <span className="faint">{v.checks.length === 0 ? 'nothing for you' : done ? `${v.checks.length} checked by hand${v.failed ? `, ${v.failed} failed` : ''}` : `${v.owed} of ${v.checks.length} for you to check`}</span></h2>
       <p className="faint" style={{ margin: '0 0 10px', fontSize: 13 }}>
-        What the agents could not judge, for you to try by hand on the built code{v.head ? <> (commit <code>{v.head.slice(0, 7)}</code>{v.branch ? <>, branch <code>{v.branch}</code></> : null})</> : ''}. Not the prototype. It runs {v.says}.
+        {v.staged ? 'Every acceptance criterion no agent has marked, for you to check by hand on the built code' : 'What the agents could not judge, for you to try by hand on the built code'}{v.head ? <> (commit <code>{v.head.slice(0, 7)}</code>{v.branch ? <>, branch <code>{v.branch}</code></> : null})</> : ''}. Not the prototype. It runs {v.says}.
       </p>
       {error && <p className="bad" style={{ margin: '0 0 8px' }}>{error}</p>}
       {sent !== null && sent > 0 && <p className="smoke-sent" role="status">Sent back: {sent} that failed, with what you saw. It is fixed, checked again, and comes back to you here.</p>}

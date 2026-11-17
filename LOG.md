@@ -4542,3 +4542,14 @@ Nothing merged that branch, but nothing stopped a build copying the folder acros
 Not done: removing `.prototype/` folders already committed on old prototype branches; a place on the page to see
 and share an app's scenarios (the tool only, for now).
 
+
+## The smoke test on staged tasks too (Sandy, 2026-11-17: "can we add it to the other ones, goes after subtask in the build section")
+
+The smoke test was a stage of a checklist task only, and its checks were the criteria the check after the build left
+to a person. A staged task (the older workflow, and every task started before the checklist existed) has no such
+check, so it had no smoke test at all. Now it does: in the task's nav, in Build, after Sub-tasks. On a staged task the
+checks are every acceptance criterion no agent has marked, plus the ones the person already marked by hand; "how we
+will know" is shown as what to look for. A pass or a fail is the build's mark on that criterion, by hand, as before.
+One an agent marked is not offered here; it is changed on the brief's page. The nav shows how many are still the
+person's, or that one failed. Unmarked criteria on a staged task do not hold its project from landing, as they did
+not before: only the list and the marks are new there.

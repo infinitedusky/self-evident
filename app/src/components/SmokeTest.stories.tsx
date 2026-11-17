@@ -151,3 +151,9 @@ export const StartClean: Story = {
     await expect(c.getByRole('button', { name: 'Start clean' })).toBeEnabled() // and can be started from nothing again
   },
 }
+
+/** On a staged task there is no check after the build, so the list is every criterion no agent marked: yours to pass or fail by hand. */
+export const OnAStagedTask: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, staged: true } }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/Every acceptance criterion no agent has marked/)).toBeInTheDocument() },
+}
