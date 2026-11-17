@@ -30,7 +30,7 @@ import { createServer, type AddressInfo } from 'node:net'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import pg from 'pg'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { acceptanceOf, setAcceptance, type Criterion } from './acceptance.js'
 import { styleOf } from './steps.js'
 import { workflowFor } from './work.js'
@@ -54,12 +54,39 @@ export const WHERE_SAYS: Record<Where, string> = {
 }
 export interface SmokeSetup { where: Where; /** staging or flag: the address to test at. preview: its pattern, with {pr} for the pull request's number. */ url?: string; /** How to get in for a test, in words: which account, where its sign-in is. Never a password. */ account?: string; /** flag: its name, or how flags are named here. */ flag?: string; /** local: a script of its own, any number of lines; else the command that runs prototypes. */ cmd?: string; /** local: run when it is stopped or started again, for what the script leaves running (containers). */ stop?: string; /** local: SQL that fills its database with made-up rows. */ seed?: string }
 
-/** The app's setting; local when it has said nothing, which is where its prototypes run. */
-export function smokeSetup(setup: unknown): SmokeSetup {
-  const s = (setup as { smoke?: Partial<SmokeSetup> } | null)?.smoke ?? {}
+const text = (v: unknown, n = 400) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : undefined)
+const one = (s: Partial<SmokeSetup>): SmokeSetup => {
   const where = WHERES.includes(s.where as Where) ? s.where as Where : 'local'
-  const text = (v: unknown, n = 400) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : undefined)
   return { where, ...(text(s.url) ? { url: text(s.url) } : {}), ...(text(s.account) ? { account: text(s.account) } : {}), ...(text(s.flag) ? { flag: text(s.flag) } : {}), ...(text(s.cmd, SCRIPT_MAX) ? { cmd: text(s.cmd, SCRIPT_MAX) } : {}), ...(text(s.stop, SCRIPT_MAX) ? { stop: text(s.stop, SCRIPT_MAX) } : {}), ...(text(s.seed, SEED_MAX) ? { seed: text(s.seed, SEED_MAX) } : {}) }
+}
+
+/**
+ * An app can have several set-ups, each with a name (Sandy, 2026-11-17: "each question should be able to reference
+ * a specific setup … if you have five questions that need the same setup, you just reference the same one … Those
+ * setups then we need to have defined in settings"). A library's pull request can ask for two things at once: its
+ * docs site, to see that it is accurate, and a demo app that exercises the library. Each is a set-up; each check
+ * left to a person names the one it needs; each is brought up once, and they can be up side by side.
+ * An app that has listed none has one, from the settings it had before set-ups had names.
+ */
+export interface NamedSetup extends SmokeSetup { key: string; name: string; /** What it is for, for the agent that sends checks to it and the person who reads them. */ what?: string }
+export const MAIN = 'main'
+export const SETUPS_MAX = 8
+export const setupKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
+export function smokeSetups(setup: unknown): NamedSetup[] {
+  const s = (setup as { smoke?: Partial<SmokeSetup> & { setups?: unknown } } | null)?.smoke ?? {}
+  const out: NamedSetup[] = []
+  for (const x of (Array.isArray(s.setups) ? s.setups : []) as (Partial<NamedSetup> | null)[]) {
+    const key = setupKey(String(x?.key ?? x?.name ?? ''))
+    if (!x || !key || out.some((o) => o.key === key) || out.length >= SETUPS_MAX) continue
+    out.push({ key, name: text(x.name, 60) ?? key, ...(text(x.what, 300) ? { what: text(x.what, 300) } : {}), ...one(x) })
+  }
+  return out.length ? out : [{ key: MAIN, name: 'Smoke test', ...one(s) }]
+}
+/** One set-up: the one of that key, else the app's first. Local when the app has said nothing, which is where its prototypes run. */
+export function smokeSetup(setup: unknown, key?: string | null): SmokeSetup {
+  const all = smokeSetups(setup)
+  const { key: _k, name: _n, what: _w, ...rest } = all.find((x) => x.key === key) ?? all[0]
+  return rest
 }
 
 /**
@@ -76,9 +103,9 @@ export const SEED_MAX = 400_000
 export const smokeHome = () => process.env.SMOKE_HOME ?? join(homedir(), '.self-evident', 'smoke')
 
 /** What a script is run with, beyond the engine's own environment: its port, its database, where its seed is, and whether to start from nothing. */
-export async function smokeEnv(appId: string, setup: SmokeSetup, i: { port: number; db?: Record<string, string>; clean?: boolean }) {
+export async function smokeEnv(appId: string, setup: SmokeSetup, i: { port: number; db?: Record<string, string>; clean?: boolean; /** Which set-up, when it is not the app's first. */ key?: string }) {
   const dir = join(smokeHome(), appId)
-  const seed = join(dir, 'seed.sql')
+  const seed = join(dir, i.key && i.key !== MAIN ? `seed-${i.key}.sql` : 'seed.sql')
   if (setup.seed) { await mkdir(dir, { recursive: true }); await writeFile(seed, setup.seed.endsWith('\n') ? setup.seed : `${setup.seed}\n`) }
   else await rm(seed, { force: true })
   return { ...(i.db ?? {}), PORT: String(i.port), BROWSER: 'none', CI: '1', ...(setup.seed ? { SMOKE_SEED: seed } : {}), ...(i.clean ? { SMOKE_CLEAN: '1' } : {}) }
@@ -98,26 +125,48 @@ export function runStop(cmd: string, cwd: string, env: Record<string, string>) {
   })
 }
 
-/** The app's set-up for an agent to read or change: the scripts and the seed whole. */
+/** The app's set-ups for an agent to read or change: each with its scripts and seed whole. */
 export async function smokeSetupOf(appId: string) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError('no such app')
-  const s = smokeSetup(a.setup)
-  return { where: s.where, script: s.cmd ?? null, stop: s.stop ?? null, seed: s.seed ?? null, falls_back_to: s.cmd ? null : (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd ?? null, database: !!(a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db?.url }
+  const proto = (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd ?? null
+  return {
+    setups: smokeSetups(a.setup).map((s) => ({ key: s.key, name: s.name, what: s.what ?? null, where: s.where, url: s.url ?? null, script: s.cmd ?? null, stop: s.stop ?? null, seed: s.seed ?? null, falls_back_to: s.cmd ? null : proto })),
+    database: !!(a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db?.url,
+  }
 }
-/** Change it: each of script, stop and seed is replaced when given, cleared when given empty, left when not given. */
-export async function setSmokeSetup(appId: string, i: { script?: string; stop?: string; seed?: string }) {
+/**
+ * Change one set-up, or add one: setup is its key (none: the app's first). A key the app does not have makes a new
+ * set-up, which needs a name. Each of script, stop and seed is replaced when given, cleared when given empty, left
+ * when not given.
+ */
+export async function setSmokeSetup(appId: string, i: { setup?: string; name?: string; what?: string; script?: string; stop?: string; seed?: string }) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError('no such app')
   if ((i.script?.length ?? 0) > SCRIPT_MAX || (i.stop?.length ?? 0) > SCRIPT_MAX) throw new PlanError(`a script is ${SCRIPT_MAX} characters at most`)
   if ((i.seed?.length ?? 0) > SEED_MAX) throw new PlanError(`the seed is ${SEED_MAX} characters at most: keep it to the rows a person needs to try the app`)
-  const smoke: Record<string, unknown> = { ...((a.setup as { smoke?: object } | null)?.smoke ?? {}) }
-  const put = (k: string, v?: string) => { if (v === undefined) return; if (v.trim()) smoke[k] = v.trim(); else delete smoke[k] }
-  put('cmd', i.script); put('stop', i.stop); put('seed', i.seed)
+  const was = (a.setup as { smoke?: Record<string, unknown> } | null)?.smoke ?? {}
+  const all = smokeSetups(a.setup)
+  const key = i.setup ? setupKey(i.setup) : all[0].key
+  if (!key) throw new PlanError('a set-up\'s key is letters, numbers and dashes, like "playground"')
+  const put = (o: Record<string, unknown>, k: string, v?: string) => { if (v === undefined) return; if (v.trim()) o[k] = v.trim(); else delete o[k] }
+  const change = (o: Record<string, unknown>) => { put(o, 'cmd', i.script); put(o, 'stop', i.stop); put(o, 'seed', i.seed); put(o, 'name', i.name); put(o, 'what', i.what); return o }
+  let smoke: Record<string, unknown>
+  if (!Array.isArray(was.setups) && key === all[0].key) smoke = change({ ...was }) // an app with the one set-up it always had: its settings as they are
+  else {
+    const list = all.map((s) => ({ ...s })) as Record<string, unknown>[]
+    const mine = list.find((s) => s.key === key)
+    if (mine) change(mine)
+    else {
+      if (!i.name?.trim()) throw new PlanError(`this app has no set-up "${key}" (${all.map((s) => s.key).join(', ')}): give a name to add it`)
+      if (list.length >= SETUPS_MAX) throw new PlanError(`an app has ${SETUPS_MAX} set-ups at most`)
+      list.push(change({ key, where: 'local' }))
+    }
+    smoke = { setups: list }
+  }
   await db.update(app).set({ setup: { ...(a.setup as object), smoke } }).where(eq(app.id, appId))
   return smokeSetupOf(appId)
 }
-
 
 /**
  * When a check left to a person can be done (Bonkei's agent, passed on by Sandy, 2026-11-17: the step "assumes every
@@ -139,6 +188,8 @@ export function whenOf(c: Criterion): When {
 export interface SmokeCheck {
   id: string; text: string
   when: When
+  /** Which of the app's set-ups it needs up (its key); the view fills in the app's first when the check named none it has. */
+  setup?: string
   /** Where to go: a path of the app, or a story's id. */
   where?: string
   /** What to do there and what passing looks like. */
@@ -169,7 +220,7 @@ export function smokeChecks(criteria: Criterion[], head: string | null = null, s
     const marked = c.built !== undefined && !!c.byHand
     const agent = c.built !== undefined && !c.byHand // the check verified it itself after all
     return {
-      id: c.id, text: c.text, when: whenOf(c), ...(c.builtWhere ? { where: c.builtWhere } : {}),
+      id: c.id, text: c.text, when: whenOf(c), ...(c.builtSetup ? { setup: c.builtSetup } : {}), ...(c.builtWhere ? { where: c.builtWhere } : {}),
       ...((c.built === undefined ? c.builtEvidence ?? c.check : c.check) ? { how: (c.built === undefined ? c.builtEvidence ?? c.check : c.check)!.replace(/^(for a person|needs a person)[:,]?\s*/i, '') } : {}),
       mark: c.built === undefined ? 'todo' as const : c.built ? 'pass' as const : 'fail' as const,
       ...(marked || agent ? { note: c.builtEvidence ?? '' } : {}),
@@ -183,8 +234,9 @@ export const smokeOwed = (criteria: Criterion[]) => smokeChecks(criteria).filter
 /** Of those, how many can be done now: the ones on the pull request wait for it to exist. */
 export const smokeReady = (criteria: Criterion[], hasPr: boolean) => smokeChecks(criteria).filter((c) => c.mark === 'todo' && (c.when === 'here' || (c.when === 'pr' && hasPr))).length
 
-const running = new Map<string, { proc: ChildProcess; log: string[]; stop?: { cmd: string; cwd: string; env: Record<string, string> } }>() // by task
-const alive = (issueId: string) => { const m = running.get(issueId); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
+const running = new Map<string, { proc: ChildProcess; log: string[]; stop?: { cmd: string; cwd: string; env: Record<string, string> } }>() // by task and set-up
+const runKey = (issueId: string, key: string) => `${issueId}:${key}`
+const alive = (issueId: string, key: string) => { const m = running.get(runKey(issueId, key)); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
 const freePort = (want = 0): Promise<number> => new Promise((resolveP, reject) => {
   const s = createServer()
   s.once('error', (err) => (want ? freePort(0).then(resolveP, reject) : reject(err)))
@@ -211,42 +263,59 @@ async function built(issueId: string) {
 
 export async function smokeView(issueId: string) {
   const { t, a, branch, head, pr, staged } = await built(issueId)
-  const setup = smokeSetup(a.setup)
-  const there = setup.where === 'preview' ? previewUrl(setup.url, pr?.number) : setup.url ?? null // where it is deployed, when it is
-  const [run] = await db.select().from(smokeRun).where(eq(smokeRun.issueId, t.id))
-  const on = alive(t.id)
-  const local = run?.port ? `http://localhost:${run.port}` : null
-  const checks = smokeChecks(acceptanceOf(t), head, staged)
+  const all = smokeSetups(a.setup)
+  const runs = await db.select().from(smokeRun).where(eq(smokeRun.issueId, t.id))
+  const proto = (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd?.trim()
+  const hasDb = !!(a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db?.url
+  // A check that named no set-up, or one the app no longer has, is the first one's.
+  const checks = smokeChecks(acceptanceOf(t), head, staged).map((c) => ({ ...c, setup: all.some((s) => s.key === c.setup) ? c.setup! : all[0].key }))
+  const setups = await Promise.all(all.map(async (setup) => {
+    const there = setup.where === 'preview' ? previewUrl(setup.url, pr?.number) : setup.url ?? null // where it is deployed, when it is
+    const run = runs.find((r) => r.setup === setup.key)
+    const on = alive(t.id, setup.key)
+    const local = run?.port ? `http://localhost:${run.port}` : null
+    return {
+      key: setup.key, name: setup.name, what: setup.what ?? null,
+      where: setup.where, says: WHERE_SAYS[setup.where], account: setup.account ?? null, flag: setup.flag ?? null,
+      /** local: the commit its server is running; it is behind when the branch has moved on. */ running: setup.where === 'local' && on ? run?.sha ?? null : null,
+      url: setup.where === 'local' ? (on ? local : null) : there,
+      up: setup.where === 'local' ? (on && local ? await answers(local) : false) : !!there,
+      canRun: setup.where === 'local' && !!(setup.cmd ?? proto),
+      /** local: there is something to start from nothing: a database of its own, a seed, or a script of its own. */ canClean: setup.where === 'local' && !!(setup.cmd || setup.seed || hasDb),
+      log: running.get(runKey(t.id, setup.key))?.log.slice(-30) ?? [],
+      /** How many of its checks still wait for the person. */ owed: checks.filter((c) => c.setup === setup.key && c.mark === 'todo' && c.when !== 'after').length,
+    }
+  }))
+  const { key: _k, name: _n, what: _w, owed: _o, ...first } = setups[0]
   return {
     /** A staged task: the checks are every criterion no agent marked, not what a check after the build left. */ staged,
-    where: setup.where, says: WHERE_SAYS[setup.where], account: setup.account ?? null, flag: setup.flag ?? null,
-    branch, head, /** local: the commit its server is running; it is behind when the branch has moved on. */ running: setup.where === 'local' && on ? run?.sha ?? null : null,
-    url: setup.where === 'local' ? (on ? local : null) : there,
-    up: setup.where === 'local' ? (on && local ? await answers(local) : false) : !!there,
-    /** Its pull request, when there is one: a preview is of it. */ pr,
-    canRun: setup.where === 'local' && !!(setup.cmd ?? (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd?.trim()),
-    /** local: there is something to start from nothing: a database of its own, a seed, or a script of its own. */ canClean: setup.where === 'local' && !!(setup.cmd || setup.seed || (a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db?.url),
-    log: running.get(t.id)?.log.slice(-30) ?? [],
+    ...first, // the app's first set-up, as the view was when an app had one
+    branch, head, /** Its pull request, when there is one: a preview is of it. */ pr,
+    /** Every set-up of the app, each with where it is and whether it is up; a check names the one it needs. */ setups,
     checks, owed: checks.filter((c) => c.mark === 'todo' && c.when !== 'after').length, failed: checks.filter((c) => c.mark === 'fail').length,
   }
 }
 
 /** Local only: run the built branch, at its head, in the smoke test's own worktree. Run again, it moves to the new head. */
-export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean } = {}) {
+export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean; /** Which set-up (its key); none: the app's first. */ setup?: string } = {}) {
   const { t, a, repoPath, name, branch, head } = await built(issueId)
-  const setup = smokeSetup(a.setup)
+  const all = smokeSetups(a.setup)
+  const named = opts.setup ? all.find((x) => x.key === opts.setup) : all[0]
+  if (!named) throw new PlanError(`${a.name} has no smoke test set-up "${opts.setup}" (${all.map((x) => x.key).join(', ')})`)
+  const setup: SmokeSetup = named
+  const key = named.key, first = key === all[0].key
   if (setup.where !== 'local') throw new PlanError(`${a.name} is smoke tested ${setup.where === 'staging' ? 'on staging' : setup.where === 'preview' ? 'on a preview of its pull request' : 'behind a feature flag'}: there is nothing to start here`)
   if (!repoPath) throw new PlanError(`${a.name} has no local checkout`)
   if (!branch || !head) throw new PlanError(`${name} is not built yet: there is no branch to run`)
   const cmd = setup.cmd ?? (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd?.trim()
   if (!cmd) throw new PlanError(`${a.name} has no command to run it: set how its prototypes are started in Settings, or a command of the smoke test's own`)
-  await stopSmoke(t.id)
-  const path = join(`${repoPath}-worktrees`, `smoke--${name.toLowerCase()}`)
+  await stopSmoke(t.id, key)
+  const path = join(`${repoPath}-worktrees`, `smoke--${name.toLowerCase()}${first ? '' : `--${key}`}`) // a checkout per set-up, so two can install and run side by side
   // Its own worktree, at the commit and on no branch: the task's branch is nobody's to check out (it is moved by landing).
   if (existsSync(path)) await git(path, ['checkout', '--detach', '--force', head])
   else await git(repoPath, ['worktree', 'add', '--detach', path, head])
   const dbCfg = (a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db?.url ? (a.setup as { prototype_db: PrototypeDb }).prototype_db : null
-  const slug = `smoke-${name.toLowerCase()}`
+  const slug = `smoke-${name.toLowerCase()}${first ? '' : `-${key}`}`
   if (dbCfg && opts.clean) await dropDatabase(dbCfg, slug)
   if (dbCfg && !(await databaseExists(dbCfg, slug))) {
     const { url } = await rebuild(dbCfg, slug, path, (await listScenarios({ appId: a.id }, path)).includes('default') ? 'default' : null, { appId: a.id }) // the app's shared "default" scenario, when it has one
@@ -256,25 +325,27 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
       try { await c.query(setup.seed) } catch (err) { throw new PlanError(`the smoke test's seed failed: ${(err as Error).message}`) } finally { await c.end() }
     }
   }
-  const [old] = await db.select().from(smokeRun).where(eq(smokeRun.issueId, t.id))
+  const [old] = await db.select().from(smokeRun).where(and(eq(smokeRun.issueId, t.id), eq(smokeRun.setup, key)))
   const port = await freePort(old?.port ?? 0)
-  const env = await smokeEnv(a.id, setup, { port, db: dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : undefined, clean: opts.clean })
+  const env = await smokeEnv(a.id, setup, { port, db: dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : undefined, clean: opts.clean, key })
   if (setup.stop && old) await runStop(setup.stop, old.path, { ...env, PORT: String(old.port) }) // what the last run left up, when the engine has been started again since
   const proc = spawn('sh', ['-c', cmd], { cwd: path, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   const log: string[] = []
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
   proc.on('exit', (code) => { log.push(`exited${code === null ? '' : ` with ${code}`}`) })
-  running.set(t.id, { proc, log, ...(setup.stop ? { stop: { cmd: setup.stop, cwd: path, env } } : {}) })
+  running.set(runKey(t.id, key), { proc, log, ...(setup.stop ? { stop: { cmd: setup.stop, cwd: path, env } } : {}) })
   if (old) await db.update(smokeRun).set({ path, sha: head, port, updatedAt: new Date() }).where(eq(smokeRun.id, old.id))
-  else await db.insert(smokeRun).values({ id: newId('run').replace(/^run_/, 'smoke_'), appId: a.id, issueId: t.id, path, sha: head, port })
-  await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'smoke.started', payload: { sha: head, port } }))
+  else await db.insert(smokeRun).values({ id: newId('run').replace(/^run_/, 'smoke_'), appId: a.id, issueId: t.id, setup: key, path, sha: head, port })
+  await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'smoke.started', payload: { sha: head, port, setup: key } }))
   return smokeView(t.id)
 }
 
-export function stopSmoke(issueId: string): Promise<void> {
-  const m = running.get(issueId)
-  running.delete(issueId)
+/** Stop one set-up of a task's, or, with no key, every one of them that is up. */
+export function stopSmoke(issueId: string, key?: string): Promise<void> {
+  if (key === undefined) return Promise.all([...running.keys()].filter((k) => k.startsWith(`${issueId}:`)).map((k) => stopSmoke(issueId, k.slice(issueId.length + 1)))).then(() => {})
+  const m = running.get(runKey(issueId, key))
+  running.delete(runKey(issueId, key))
   if (!m) return Promise.resolve()
   const down = () => (m.stop ? runStop(m.stop.cmd, m.stop.cwd, m.stop.env).then(() => {}) : Promise.resolve()) // the app's stop script, after its process: for what the script left running
   if (m.proc.exitCode !== null || m.proc.signalCode !== null || !m.proc.pid) return down()
@@ -282,7 +353,7 @@ export function stopSmoke(issueId: string): Promise<void> {
   try { process.kill(-m.proc.pid, 'SIGTERM') } catch { m.proc.kill('SIGTERM') }
   return gone.then(down)
 }
-export function stopSmokes() { for (const id of [...running.keys()]) void stopSmoke(id) }
+export function stopSmokes() { for (const k of [...running.keys()]) { const at = k.lastIndexOf(':'); void stopSmoke(k.slice(0, at), k.slice(at + 1)) } }
 
 /** A person's word on one check: the build's mark on that criterion, by hand, with their note and the commit it was made on. */
 export async function markSmoke(issueId: string, criterionId: string, input: { pass: boolean; note?: string }, by = 'user') {

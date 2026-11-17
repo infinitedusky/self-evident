@@ -45,6 +45,8 @@ export interface Criterion {
   builtWhere?: string
   /** When a person can check it (smoke.ts): here on the built code, on the pull request, or only after it is merged. Absent: here. */
   builtWhen?: 'here' | 'pr' | 'after'
+  /** Which of the app's smoke test set-ups a person needs up to check it (its key). Absent: the app's first. */
+  builtSetup?: string
   /** The build's mark made by a person, by hand, in a smoke test: what they said, and the commit they said it on. */
   byHand?: { pass: boolean; note: string; sha: string | null; at: string; by: string }
   by: string
@@ -53,7 +55,7 @@ export interface Criterion {
 export interface AcceptanceChange {
   add?: { text: string; check?: string; shown?: boolean; evidence?: string; buildOnly?: boolean; why?: string }[]
   // built and builtEvidence are only ever updated: nothing is built when a criterion is written
-  update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null; built?: boolean | null; builtEvidence?: string | null; builtWhere?: string | null; builtWhen?: Criterion['builtWhen'] | null; byHand?: Criterion['byHand'] | null }[]
+  update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null; built?: boolean | null; builtEvidence?: string | null; builtWhere?: string | null; builtSetup?: string | null; builtWhen?: Criterion['builtWhen'] | null; byHand?: Criterion['byHand'] | null }[]
   remove?: string[]
 }
 
@@ -79,6 +81,7 @@ export function applyAcceptance(list: Criterion[], c: AcceptanceChange, by: stri
     if (u.built !== undefined) { if (u.built === null) { delete x.built; delete x.builtEvidence } else x.built = u.built }
     if (u.builtEvidence !== undefined) { const e = line(u.builtEvidence, 1000); if (e) x.builtEvidence = e; else delete x.builtEvidence }
     if (u.builtWhere !== undefined) { const w = line(u.builtWhere, 300); if (w) x.builtWhere = w; else delete x.builtWhere }
+    if (u.builtSetup !== undefined) { if (typeof u.builtSetup === 'string' && u.builtSetup.trim()) x.builtSetup = u.builtSetup.trim().slice(0, 40); else delete x.builtSetup }
     if (u.builtWhen !== undefined) { if (u.builtWhen === 'pr' || u.builtWhen === 'after' || u.builtWhen === 'here') x.builtWhen = u.builtWhen; else delete x.builtWhen }
     if (u.byHand !== undefined) { if (u.byHand) x.byHand = { pass: !!u.byHand.pass, note: line(u.byHand.note, 600), sha: u.byHand.sha ?? null, at: u.byHand.at, by: u.byHand.by }; else delete x.byHand }
     if (u.buildOnly !== undefined) { if (u.buildOnly) x.buildOnly = true; else { delete x.buildOnly; delete x.why } } // which half proves it, not what must be true: no new approval

@@ -30,7 +30,7 @@ export const reqId = (key: string) => `${REQ}${key}`
 /** One line per item, each with the id its verdict is reported under. */
 const requirementItems = (reqs: Requirement[]) => reqs.map((r) => `- [${reqId(r.key)}] ${r.name}: ${r.what}`).join('\n')
 
-export const checkTaskBrief = (criteria: Criterion[], requirements: Requirement[] = [], again?: { round: number }) => [
+export const checkTaskBrief = (criteria: Criterion[], requirements: Requirement[] = [], again?: { round: number }, /** The app's smoke test set-ups, when it has more than one: what a person can have brought up to check by hand. */ setups: { key: string; name: string; what?: string }[] = []) => [
   again
     ? `Check ${again.round}: the last check found these not done, and they were sent back. Check each again against what is built now.`
     : 'Every other sub-task of this task is merged. Check what was built against the list below, so the person who approves the pull request does not have to.',
@@ -40,6 +40,7 @@ export const checkTaskBrief = (criteria: Criterion[], requirements: Requirement[
   '- For each item do what it says to look at, where you can: run that test, render that story headless, read that file, run that command. Run what an item needs, not the whole suite; that runs after you.',
   '- met is true only if you saw it hold, and false if you saw it fail or it is not there.',
   '- met is null when only a person can judge it (how it looks or feels, a real device) or you could not check it. The person is then walked through it, so write it for them: add "where", the path of the app or the story\'s id to open; and make the evidence what to do there and what passing looks like, in plain words ("Drag a node across the tunnel: the edge should stay under the lip, not jump above it"). Add "when" too: "here" if it can be tried on the built code on this computer; "pr" if it needs the pull request to exist (a comment a bot posts, a check that runs in CI, a preview of the pull request); "after" if it can only be seen once it is merged (a release, a deploy, a flag switched on).',
+  ...(setups.length > 1 ? [`- This app has ${setups.length} set-ups a person can have brought up to check by hand. For each item you leave to a person add "setup": the key of the one they need. Give items that need the same thing the same one, so it is brought up once. They are: ${setups.map((s) => `"${s.key}" (${s.name}${s.what ? `: ${s.what}` : ''})`).join('; ')}.`] : []),
   '- A requirement that does not apply to this change (no new behaviour to trace, nothing a person does differently) is met: true, with "does not apply:" and why as its evidence.',
   '- evidence is one line, under 160 characters: the test, file or command that shows it; for something not done, what is missing.',
   '- Stop any server you start.',
@@ -85,7 +86,7 @@ export const probeBrief = (criteria: Criterion[], base: string) => [
   '- **Cleaned up**: what you removed or tidied.',
 ].join('\n')
 
-export interface Verdict { id: string; met: boolean | null; evidence: string; /** For one left to a person: where to go. */ where?: string; /** For one left to a person: when it can be done. */ when?: 'here' | 'pr' | 'after' }
+export interface Verdict { id: string; met: boolean | null; evidence: string; /** For one left to a person: where to go. */ where?: string; /** For one left to a person: when it can be done. */ when?: 'here' | 'pr' | 'after'; /** For one left to a person: which of the app's set-ups they need (its key). */ setup?: string }
 
 /** The verdicts in a check's summary, for the ids given; an entry for anything else is dropped. Empty when there is no block to read. */
 export function readVerdicts(summary: string | null | undefined, ids: string[]): Verdict[] {
@@ -99,10 +100,10 @@ export function readVerdicts(summary: string | null | undefined, ids: string[]):
       if (!Array.isArray(list)) continue
       const known = new Set(ids)
       const out: Verdict[] = []
-      for (const v of list as { id?: unknown; met?: unknown; evidence?: unknown; where?: unknown; when?: unknown }[]) {
+      for (const v of list as { id?: unknown; met?: unknown; evidence?: unknown; where?: unknown; when?: unknown; setup?: unknown }[]) {
         if (typeof v?.id !== 'string' || !known.has(v.id) || out.some((o) => o.id === v.id)) continue
         const where = typeof v.where === 'string' && v.where.trim() ? v.where.trim().slice(0, 300) : undefined
-        out.push({ id: v.id, met: v.met === true ? true : v.met === false ? false : null, evidence: String(v.evidence ?? '').replace(/\s+/g, ' ').trim().slice(0, 300), ...(where && v.met !== true && v.met !== false ? { where } : {}), ...((v.when === 'pr' || v.when === 'after' || v.when === 'here') && v.met !== true && v.met !== false ? { when: v.when } : {}) })
+        out.push({ id: v.id, met: v.met === true ? true : v.met === false ? false : null, evidence: String(v.evidence ?? '').replace(/\s+/g, ' ').trim().slice(0, 300), ...(where && v.met !== true && v.met !== false ? { where } : {}), ...((v.when === 'pr' || v.when === 'after' || v.when === 'here') && v.met !== true && v.met !== false ? { when: v.when } : {}), ...(typeof v.setup === 'string' && v.setup.trim() && v.met !== true && v.met !== false ? { setup: v.setup.trim().slice(0, 40) } : {}) })
       }
       if (out.length) return out
     } catch { /* not JSON: try the next */ }
@@ -113,7 +114,7 @@ export function readVerdicts(summary: string | null | undefined, ids: string[]):
 /** The verdicts on criteria as a change to them: met or not with its evidence; left for a person, the note alone. */
 export const verdictChange = (verdicts: Verdict[]): AcceptanceChange => ({
   update: verdicts.filter((v) => !v.id.startsWith(REQ)).map((v) => (v.met === null
-    ? { id: v.id, built: null, builtEvidence: v.evidence || 'Left for a person to judge.', builtWhere: v.where ?? null, builtWhen: v.when ?? null }
+    ? { id: v.id, built: null, builtEvidence: v.evidence || 'Left for a person to judge.', builtWhere: v.where ?? null, builtWhen: v.when ?? null, builtSetup: v.setup ?? null }
     : { id: v.id, built: v.met, builtEvidence: v.evidence || null })),
 })
 

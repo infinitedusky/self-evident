@@ -260,6 +260,13 @@
       "when": 1794944156757,
       "tag": "0036_scenario",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1794956858887,
+      "tag": "0037_smoke_run_setup",
+      "breakpoints": true
     }
   ]
 }
