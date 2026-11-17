@@ -385,7 +385,7 @@ describe.skipIf(!reachable)('runner', () => {
     expect((await db.select().from(project).where(eq(project.id, p.id)))[0].status).toBe('running') // built, and not landed
     expect(await cleaned(p.id)()).toBe(false)
     expect((await now(own)).needsYou.filter((a) => a.kind === 'smoke_test')).toEqual([expect.objectContaining({ issueId: t.id, owed: 1 })])
-    expect((await smokeView(t.id)).checks).toEqual([{ id: look.id, text: 'The tunnel reads as a tunnel (sample)', where: 'edges-tunnel--default', how: 'Open the story: the edge should dip under the lip', mark: 'todo' }])
+    expect((await smokeView(t.id)).checks).toEqual([{ id: look.id, text: 'The tunnel reads as a tunnel (sample)', when: 'here', where: 'edges-tunnel--default', how: 'Open the story: the edge should dip under the lip', mark: 'todo' }])
     // They try it: it does not hold. Sent back with what they saw, built, and looked at again.
     await markSmoke(t.id, look.id, { pass: false, note: 'the edge sits on top of the lip (sample)' })
     expect(await runner.afterSmoke(t.id)).toEqual({ sentBack: 1 })

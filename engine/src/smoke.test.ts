@@ -7,7 +7,7 @@ import { db, pool } from './db/client.js'
 import { app, event, issue, pr as prTable, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createProject } from './projects.js'
-import { byHand, markSmoke, previewUrl, smokeChecks, smokeOwed, smokeSetup, smokeView, startSmoke } from './smoke.js'
+import { byHand, markSmoke, previewUrl, smokeChecks, smokeOwed, smokeReady, smokeSetup, smokeView, startSmoke, whenOf } from './smoke.js'
 import { checkTaskBrief, readVerdicts, verdictChange } from './verify.js'
 
 const at = '2026-11-17T00:00:00.000Z'
@@ -42,10 +42,22 @@ describe('the checks a person has', () => {
     const { list } = applyAcceptance(criteria, verdictChange(v), 'engine')
     expect(list.map(byHand)).toEqual([false, true, true])
     expect(smokeChecks(list)).toEqual([
-      { id: 'ac_2', text: 'The tunnel reads as a tunnel (sample)', where: 'edges-tunnel--default', how: 'Open the story: the edge should dip under the lip, not sit on top of it', mark: 'todo' },
-      { id: 'ac_3', text: 'Portals keep 40 frames a second (sample)', how: 'watch the fps counter with portals on', mark: 'todo' },
+      { id: 'ac_2', text: 'The tunnel reads as a tunnel (sample)', when: 'here', where: 'edges-tunnel--default', how: 'Open the story: the edge should dip under the lip, not sit on top of it', mark: 'todo' },
+      { id: 'ac_3', text: 'Portals keep 40 frames a second (sample)', when: 'here', how: 'watch the fps counter with portals on', mark: 'todo' },
     ])
     expect(smokeOwed(list)).toBe(2); expect(smokeOwed(criteria)).toBe(0) // nothing is theirs until the check says so
+  })
+  it('each says when it can be done: here, on the pull request, or after the merge; only the first two hold the task', () => {
+    expect(checkTaskBrief(criteria)).toContain('"pr" if it needs the pull request to exist')
+    const v = readVerdicts('```acceptance\n[{"id":"ac_1","met":null,"when":"here","where":"/export","evidence":"open it"},{"id":"ac_2","met":null,"when":"pr","evidence":"the bot\'s comment has an install line that works"},{"id":"ac_3","met":null,"when":"after","evidence":"the release notes name it"}]\n```', criteria.map((c) => c.id))
+    expect(v.map((x) => x.when)).toEqual(['here', 'pr', 'after'])
+    const { list } = applyAcceptance(criteria.map(({ built: _b, builtEvidence: _e, ...c }) => c), verdictChange(v), 'engine')
+    expect(smokeChecks(list).map((c) => c.when)).toEqual(['here', 'pr', 'after'])
+    expect(smokeOwed(list)).toBe(2) // the one for after the merge holds nothing
+    expect([smokeReady(list, false), smokeReady(list, true)]).toEqual([1, 2]) // the one on the pull request waits for there to be one
+    // One written before checks said when: read from its own words.
+    const old: Criterion = { id: 'ac_9', text: 'The preview comment works (sample)', builtEvidence: 'needs a person: try the install line', builtWhere: 'the first pull request on GitHub (sample)', by: 'engine', at }
+    expect(whenOf(old)).toBe('pr'); expect(whenOf({ ...old, builtWhere: 'edges-tunnel--default' })).toBe('here'); expect(whenOf({ ...old, builtWhen: 'after' })).toBe('after')
   })
   it('a mark is theirs, with their note; it is stale once the code has moved; and it comes back to them after a fix', () => {
     const left = applyAcceptance(criteria, { update: [{ id: 'ac_2', built: null, builtEvidence: 'for a person: open the Tunnel story', builtWhere: 'edges-tunnel--default' }, { id: 'ac_3', built: null, builtEvidence: 'watch the counter' }] }, 'engine').list

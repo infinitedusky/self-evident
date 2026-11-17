@@ -39,7 +39,7 @@ export const checkTaskBrief = (criteria: Criterion[], requirements: Requirement[
   '- Check, do not build. Change no product code. If something is not done, say so; do not do it.',
   '- For each item do what it says to look at, where you can: run that test, render that story headless, read that file, run that command. Run what an item needs, not the whole suite; that runs after you.',
   '- met is true only if you saw it hold, and false if you saw it fail or it is not there.',
-  '- met is null when only a person can judge it (how it looks or feels, a real device) or you could not check it. The person is then walked through it, so write it for them: add "where", the path of the app or the story\'s id to open; and make the evidence what to do there and what passing looks like, in plain words ("Drag a node across the tunnel: the edge should stay under the lip, not jump above it").',
+  '- met is null when only a person can judge it (how it looks or feels, a real device) or you could not check it. The person is then walked through it, so write it for them: add "where", the path of the app or the story\'s id to open; and make the evidence what to do there and what passing looks like, in plain words ("Drag a node across the tunnel: the edge should stay under the lip, not jump above it"). Add "when" too: "here" if it can be tried on the built code on this computer; "pr" if it needs the pull request to exist (a comment a bot posts, a check that runs in CI, a preview of the pull request); "after" if it can only be seen once it is merged (a release, a deploy, a flag switched on).',
   '- A requirement that does not apply to this change (no new behaviour to trace, nothing a person does differently) is met: true, with "does not apply:" and why as its evidence.',
   '- evidence is one line, under 160 characters: the test, file or command that shows it; for something not done, what is missing.',
   '- Stop any server you start.',
@@ -49,7 +49,7 @@ export const checkTaskBrief = (criteria: Criterion[], requirements: Requirement[
   'End your summary with this block and nothing after it: one entry for every item above, valid JSON.',
   '',
   '```acceptance',
-  '[{"id":"ac_…","met":true,"evidence":"…"},{"id":"ac_…","met":null,"where":"/checkout","evidence":"…"}]',
+  '[{"id":"ac_…","met":true,"evidence":"…"},{"id":"ac_…","met":null,"where":"/checkout","when":"here","evidence":"…"}]',
   '```',
 ].join('\n')
 
@@ -85,7 +85,7 @@ export const probeBrief = (criteria: Criterion[], base: string) => [
   '- **Cleaned up**: what you removed or tidied.',
 ].join('\n')
 
-export interface Verdict { id: string; met: boolean | null; evidence: string; /** For one left to a person: where to go. */ where?: string }
+export interface Verdict { id: string; met: boolean | null; evidence: string; /** For one left to a person: where to go. */ where?: string; /** For one left to a person: when it can be done. */ when?: 'here' | 'pr' | 'after' }
 
 /** The verdicts in a check's summary, for the ids given; an entry for anything else is dropped. Empty when there is no block to read. */
 export function readVerdicts(summary: string | null | undefined, ids: string[]): Verdict[] {
@@ -99,10 +99,10 @@ export function readVerdicts(summary: string | null | undefined, ids: string[]):
       if (!Array.isArray(list)) continue
       const known = new Set(ids)
       const out: Verdict[] = []
-      for (const v of list as { id?: unknown; met?: unknown; evidence?: unknown; where?: unknown }[]) {
+      for (const v of list as { id?: unknown; met?: unknown; evidence?: unknown; where?: unknown; when?: unknown }[]) {
         if (typeof v?.id !== 'string' || !known.has(v.id) || out.some((o) => o.id === v.id)) continue
         const where = typeof v.where === 'string' && v.where.trim() ? v.where.trim().slice(0, 300) : undefined
-        out.push({ id: v.id, met: v.met === true ? true : v.met === false ? false : null, evidence: String(v.evidence ?? '').replace(/\s+/g, ' ').trim().slice(0, 300), ...(where && v.met !== true && v.met !== false ? { where } : {}) })
+        out.push({ id: v.id, met: v.met === true ? true : v.met === false ? false : null, evidence: String(v.evidence ?? '').replace(/\s+/g, ' ').trim().slice(0, 300), ...(where && v.met !== true && v.met !== false ? { where } : {}), ...((v.when === 'pr' || v.when === 'after' || v.when === 'here') && v.met !== true && v.met !== false ? { when: v.when } : {}) })
       }
       if (out.length) return out
     } catch { /* not JSON: try the next */ }
@@ -113,7 +113,7 @@ export function readVerdicts(summary: string | null | undefined, ids: string[]):
 /** The verdicts on criteria as a change to them: met or not with its evidence; left for a person, the note alone. */
 export const verdictChange = (verdicts: Verdict[]): AcceptanceChange => ({
   update: verdicts.filter((v) => !v.id.startsWith(REQ)).map((v) => (v.met === null
-    ? { id: v.id, built: null, builtEvidence: v.evidence || 'Left for a person to judge.', builtWhere: v.where ?? null }
+    ? { id: v.id, built: null, builtEvidence: v.evidence || 'Left for a person to judge.', builtWhere: v.where ?? null, builtWhen: v.when ?? null }
     : { id: v.id, built: v.met, builtEvidence: v.evidence || null })),
 })
 

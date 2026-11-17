@@ -2,7 +2,7 @@
  * The front door: what is running, what needs a person, what just happened. Nothing here has state of its own;
  * it is all read from the project, issue, build, question, pr, run, step and event tables, so it is always true.
  */
-import { smokeOwed } from './smoke.js'
+import { smokeOwed, smokeReady } from './smoke.js'
 import { acceptanceOf } from './acceptance.js'
 import { and, asc, desc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
@@ -22,7 +22,7 @@ export type Attention =
   | ({ kind: 'run_project'; subIssues: number } & Where)
   | ({ kind: 'plan_issue'; issueId: string; identifier: string; issueTitle: string } & Where)
   | ({ kind: 'approve_brief'; issueId: string; identifier: string; issueTitle: string } & Where)
-  | ({ kind: 'smoke_test'; issueId: string; identifier: string; issueTitle: string; /** How many checks wait for the person. */ owed: number } & Where)
+  | ({ kind: 'smoke_test'; issueId: string; identifier: string; issueTitle: string; /** How many checks wait for the person. */ owed: number; /** Of those, how many they can do now; the rest are on a pull request that is not open yet. */ ready: number } & Where)
   | ({ kind: 'backlog'; open: number; items: string[] } & Where)
   | { kind: 'todo'; todoId: string; identifier: string; title: string; owner: string; projectId: string | null; projectName: string | null; appName: string; done: number; total: number; next: string | null; waitingOn: string[] }
   | ({ kind: 'merge_pr'; prNumber: number | null; url: string | null; review: string | null; checks: string; failing: string[] } & Where)
@@ -157,7 +157,8 @@ export async function now(appId?: string) {
     const mine = subs.filter((x) => x.parentId === t.id && !['canceled', 'duplicate'].includes(x.state))
     if (!mine.length || !mine.every((x) => x.state === 'done')) continue // still being built or checked: not their turn yet
     const p = projects.find((x) => x.id === t.projectId)
-    if (p) needsYou.push({ kind: 'smoke_test', ...tag(p), issueId: t.id, identifier: name(t), issueTitle: t.title, owed })
+    const hasPr = prs.some((q) => (q.issueId === t.id || (!q.issueId && q.projectId === t.projectId)) && q.number && !['closed', 'merged'].includes(q.status))
+    if (p) needsYou.push({ kind: 'smoke_test', ...tag(p), issueId: t.id, identifier: name(t), issueTitle: t.title, owed, ready: smokeReady(acceptanceOf(t), hasPr) })
   }
   for (const p of projects.filter((x) => ['drafting', 'proposed', 'approved'].includes(x.status))) {
     const mine = work(p)
