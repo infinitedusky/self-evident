@@ -21,6 +21,7 @@ import { acceptanceOf, setAcceptance } from './acceptance.js'
 import { unchecked, afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, numbered, PROBE_TITLE, probeBrief, readVerdicts, reqId, requirementsChecked, unmetOf, verdictChange } from './verify.js'
 import { inForce, type Covered } from './requirements.js'
 import { smokeOwed } from './smoke.js'
+import { ONE_GO_TITLE } from './planner.js'
 import { workflowFor } from './work.js'
 import { ensureProjectPr, prDraft, prTitle, prBody } from './pr.js'
 import { addSubTask, projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
@@ -48,6 +49,20 @@ export const fixBrief = (testCmd: string, detail: string) => [
 ].join('\n')
 
 interface AppSetup { test_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number }
+
+/**
+ * A build that runs out of turns carries on; it is not a failure (Bonkei's agent, 2026-11-17, on BON-113: the engine
+ * "retries the same sub-task with a fresh agent, which uses up one of its 3 attempts and has to work out from
+ * scratch what was already done"). The limit was set for small sub-tasks; a task built in one go is the whole task
+ * in one run. So: the same agent is resumed, in its own conversation, with everything it had worked out; the
+ * attempt is given back; and a run that is the whole task starts with more turns. Three times at most, then it is
+ * a failure like any other.
+ */
+export const ranOutOfTurns = (error: string | null | undefined) => !!error && /maximum number of turns|max[_ ]turns/i.test(error)
+export const MAX_CARRY_ONS = 3
+const OUT_OF_TURNS = 'out of turns'
+/** How many turns a run starts with, when the app has not said: more for one that is the whole task, or that reads all of it. */
+export const turnsFor = (title: string, setup: { max_turns?: number }) => setup.max_turns ?? (title === ONE_GO_TITLE ? 200 : [CHECK_TITLE, FINISH_TITLE, PROBE_TITLE, FIX_TITLE].some((t) => title.startsWith(t)) ? 120 : undefined)
 
 const PLANNING = ['issue.planning', 'issue.plan_waiting', 'issue.planned', 'issue.plan_failed']
 
@@ -222,7 +237,7 @@ export class Runner {
       return this.failed(subId, attempt, x.maxAttempts, `could not prepare the worktree: ${err?.message ?? err}`, pb)
     }
 
-    const [interrupted] = await db.select().from(run).where(and(eq(run.issueId, subId), eq(run.status, 'interrupted'))).orderBy(desc(run.attempt)).limit(1)
+    const [interrupted] = await db.select().from(run).where(and(eq(run.issueId, subId), eq(run.status, 'interrupted'))).orderBy(desc(run.attempt), desc(run.startedAt)).limit(1) // the latest: runs carried on share an attempt
     const previousFailure = await this.lastFailure(subId)
     const attempt = x.attempt + 1
     const runId = newId('run')
@@ -232,8 +247,8 @@ export class Runner {
 
     const result = await this.execute({
       subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief },
-      worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
-      resumeSessionId: interrupted?.agentSessionId ?? undefined, abort: this.active.get(subId),
+      worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, maxTurns: turnsFor(x.title, setup), maxBudgetUsd: setup.max_budget_usd,
+      resumeSessionId: interrupted?.agentSessionId ?? undefined, ...(interrupted?.error?.startsWith(OUT_OF_TURNS) ? { resumeWhy: 'turns' as const } : {}), abort: this.active.get(subId),
       onEvent: async (type, payload) => {
         if (type === 'run.steps') await this.saveSteps(a.id, subId, runId, (payload.steps as { text: string; status: string }[]) ?? [])
         await this.emit({ ...rb, actor: `agent:${runId}`, type, payload })
@@ -251,6 +266,7 @@ export class Runner {
     }
     if (result.status !== 'completed' && isOutage(result.error)) return this.outage(subId, runId, result.error!, rb)
     if (result.status === 'completed' && this.outages) { this.outages = 0; this.hold = null; await this.emit({ ...base, type: 'engine.resumed', payload: {} }) }
+    if (result.status !== 'completed' && ranOutOfTurns(result.error) && result.agentSessionId && await this.carryOn(subId, runId, attempt, rb)) return
     if (result.status !== 'completed') return this.failed(subId, attempt, x.maxAttempts, `the run ${result.error ?? 'failed'}`, rb)
 
     await db.transaction((tx) => setBuild(tx, subId, { status: 'merging' }, { runId }))
@@ -366,6 +382,21 @@ export class Runner {
       { runId: pb.runId ?? undefined, type: again ? 'build.retry' : 'build.failed', payload: { attempt, max, why: why.slice(0, 2000) } }))
     this.active.delete(subId)
     await this.dispatch()
+  }
+
+  /**
+   * It ran out of turns: the run is set aside to be resumed, the attempt is given back, and it is queued again.
+   * False when it has carried on as often as it may: then it fails, as it used to.
+   */
+  private async carryOn(subId: string, runId: string, attempt: number, pb: Omit<NewEvent, 'type'>): Promise<boolean> {
+    const before = (await db.select({ error: run.error }).from(run).where(and(eq(run.issueId, subId), eq(run.status, 'interrupted')))).filter((r) => r.error?.startsWith(OUT_OF_TURNS)).length
+    if (before >= MAX_CARRY_ONS) return false
+    await db.update(run).set({ status: 'interrupted', error: `${OUT_OF_TURNS}: carried on from where it was (${before + 1} of ${MAX_CARRY_ONS})` }).where(eq(run.id, runId))
+    await db.transaction((tx) => setBuild(tx, subId, { status: 'queued', attempt: Math.max(0, attempt - 1), heldReason: 'ran out of turns; carrying on from where it was' },
+      { runId: pb.runId ?? undefined, type: 'build.carried_on', payload: { times: before + 1, of: MAX_CARRY_ONS } }))
+    this.active.delete(subId)
+    await this.dispatch()
+    return true
   }
 
   /** The model or account is unavailable: not the sub-issue's fault. Give the attempt back, queue it to resume, hold the engine. */

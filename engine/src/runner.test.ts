@@ -17,7 +17,7 @@ import { createProject, projectGraph } from './projects.js'
 import { createIssue } from './issues.js'
 import { approveStep, setStep } from './work.js'
 import { now } from './now.js'
-import { FIX_TITLE, Runner } from './runner.js'
+import { FIX_TITLE, MAX_CARRY_ONS, ranOutOfTurns, Runner, turnsFor } from './runner.js'
 import { setAcceptance } from './acceptance.js'
 import { CHECK_TITLE, FINISH_TITLE, PROBE_TITLE } from './verify.js'
 import { afterOf } from './steps.js'
@@ -145,6 +145,36 @@ describe.skipIf(!reachable)('runner', () => {
     const types = (await db.select().from(event).where(eq(event.issueId, phases[0].id))).map((e) => e.type)
     expect(types.filter((x) => x === 'build.retry')).toHaveLength(2)
     expect(types.filter((x) => x === 'build.failed')).toHaveLength(1)
+  })
+
+  it('a build that runs out of turns carries on in its own conversation, and keeps its attempt; three times, then it fails', async () => {
+    const { project: p } = await createProject({ appId, name: 'turns', issues: [one('T', [{ key: 'a', title: 'Long one', files: ['long.txt'] }, { key: 'b', title: 'Never ends', files: ['never.txt'] }])] })
+    const calls: { title: string; resume?: string; why?: string; turns?: number }[] = []
+    const execute: Execute = async (i) => {
+      calls.push({ title: i.subIssue.title, resume: i.resumeSessionId, why: i.resumeWhy, turns: i.maxTurns })
+      const mine = calls.filter((c) => c.title === i.subIssue.title).length
+      const out = { status: 'failed' as const, error: 'Claude Code returned an error result: Reached maximum number of turns (60)', agentSessionId: `agent-${i.subIssue.title}-${mine}`, costUsd: 0 }
+      if (i.subIssue.title === 'Never ends') return out
+      if (mine === 1) return out // ran out once; resumed, it finishes
+      return commits('turns')(i)
+    }
+    const runner = new Runner({ execute, sessionsMax: 1 })
+    await approveBriefs(appId)
+    await runner.startProject(p.id)
+    const status = async (title: string) => (await projectGraph(p.id))!.subIssues.find((x) => x.title === title)!
+    await until(async () => (await status('Long one')).status === 'done' && (await status('Never ends')).status === 'failed')
+    const long = calls.filter((c) => c.title === 'Long one')
+    expect(long).toEqual([{ title: 'Long one', resume: undefined, why: undefined, turns: undefined }, { title: 'Long one', resume: 'agent-Long one-1', why: 'turns', turns: undefined }]) // the same conversation, told why
+    expect((await status('Long one')).attempt).toBe(1) // running out of turns cost it no attempt
+    const carried = (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => e.type === 'build.carried_on')
+    expect(carried).toHaveLength(1 + MAX_CARRY_ONS) // once for the long one, three times for the one that never ends
+    // One that never finishes: carried on three times, each resuming the run before it, then it fails through its attempts as before.
+    const never = calls.filter((c) => c.title === 'Never ends')
+    expect(never.slice(0, 4).map((c) => c.resume)).toEqual([undefined, 'agent-Never ends-1', 'agent-Never ends-2', 'agent-Never ends-3'])
+    expect((await status('Never ends')).heldReason).toMatch(/maximum number of turns/)
+    expect(ranOutOfTurns('Reached maximum number of turns (60)')).toBe(true); expect(ranOutOfTurns('tests failed')).toBe(false); expect(ranOutOfTurns(null)).toBe(false)
+    expect([turnsFor('Build it', {}), turnsFor('Check it against its acceptance criteria (2)', {}), turnsFor('Cart', {}), turnsFor('Build it', { max_turns: 90 })]).toEqual([200, 120, undefined, 90]) // the whole task in one run starts with more
+    await runner.cancelProject(p.id)
   })
 
   it('a person retries a failed sub-issue: three more attempts, told why it failed, then it lands', async () => {

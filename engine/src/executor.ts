@@ -26,6 +26,8 @@ export interface RunInput {
   maxTurns?: number
   maxBudgetUsd?: number
   resumeSessionId?: string // continue an interrupted run's conversation in the same worktree
+  /** Why it is resumed: it ran out of turns (runner.ts, carryOn), or the engine restarted or was paused under it. */
+  resumeWhy?: 'turns'
   abort?: AbortController
   onEvent: (type: string, payload: Record<string, unknown>) => Promise<void>
 }
@@ -65,7 +67,9 @@ function prompt(i: RunInput): string {
     '- The brief is settled: build what it says, the way it says. Do not propose follow-ups, improvements or things to consider; nothing collects them. A small slip inside the files that are yours (a stray file, a typo) is simply fixed. If the sub-task cannot be built as written, stop and say exactly what is wrong and where, in your summary.',
     referencePrompt(i.references ?? []),
     i.previousFailure ? `\nYour previous attempt did not land. The reason:\n${i.previousFailure}\nFix that first.` : '',
-    i.resumeSessionId ? '\nThe engine restarted while you were working; your earlier conversation is resumed. Check the worktree state (git status, git log) before continuing.' : '',
+    i.resumeSessionId ? (i.resumeWhy === 'turns'
+      ? '\nYou ran out of turns in the middle of this, and your conversation is resumed with more. Nothing is lost: what you changed is in the worktree, and what you worked out is above. Carry on from where you were: look at git status and your list of steps, and do not start again.'
+      : '\nThe engine restarted while you were working; your earlier conversation is resumed. Check the worktree state (git status, git log) before continuing.') : '',
   ].join('\n')
 }
 
