@@ -4356,3 +4356,17 @@ crashed process waits for a file to change. Every agent and page was cut off unt
 - **A last resort for anything else** (`stay-up.ts`): an unhandled rejection is logged and the engine carries on,
   quietly when it is a connection dropping, loudly ("UNHANDLED REJECTION … a bug to fix") when it is not. The log
   is observed, so a real bug still surfaces.
+
+## Decided: an app says where it is smoke tested (Sandy, 2026-11-17)
+
+From an idea pasted for Self Evident's agent (kept as idea #1 of the Self Evident app): a person checks a build by
+hand for what an agent cannot judge, while Self Evident watches. Talked through, not built.
+
+- It is the built code, not the prototype. But real code sits behind sign-in and must not be tried in production
+  as its users see it, so it needs an environment.
+- A smoke test in the usual sense is on a deployed build with a test account. Two legitimate ways: a staging
+  environment, or production behind a feature flag. A third for what is never deployed (a library): run locally.
+- So an app has two settings side by side, where it is prototyped and where it is smoke tested, "and they can
+  either be the same or they can be different" (SHAPE.md).
+- Open: which Homework Gate is; how Self Evident watches a deployed build (its telemetry, filtered to the test
+  account and the time of the test, looks better than a script in the page); screenshots of a 3D canvas.
