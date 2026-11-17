@@ -4433,3 +4433,38 @@ nothing had happened yet.
 
 Not done: telling a step whose agent stopped from one still working; a step stays "started" until it is recorded
 done.
+
+## A build that runs out of turns carries on (Bonkei's agent, 2026-11-17, passed on by Sandy: "A build that runs out of turns hands off instead of retrying")
+
+BON-113, the first task built in one go, hit the limit of 60 turns ten minutes in. The engine called that a
+failure: it used an attempt and started a fresh agent, which had to find out what was already done. The limit was
+sized for a planner's small sub-tasks; in one go, one run is the whole task.
+
+Bonkei's agent proposed closing the sub-task as far as it got and making a new one for the rest. Done another way,
+for the same end with less lost: the engine can already resume a run's conversation (it does after a restart).
+
+- **Resumed, not retried** (`carryOn` in `runner.ts`): the same agent, in its own conversation, with everything
+  it had worked out, told it ran out of turns and to carry on. The attempt is given back. Three times at most;
+  then it fails as before.
+- **More turns to start with** (`turnsFor`): 200 for a build that is the whole task, 120 for the check, the
+  finish, the probe and a fix; a planner's sub-tasks as they were. An app's own limit still wins.
+- Found by its test: with several runs set aside on one attempt, the engine resumed the first again and not the
+  latest. It takes the latest now.
+
+Why not a new sub-task for the rest: it needs the agent's own account of what is left, which is the thing it has
+just run out of room to give, and the new agent starts from nothing.
+
+## A checklist task's graph shows its whole flow before it starts (Sandy, 2026-11-17: "we should always show the workflow in nodes before it starts … the build and then a line that would be going to like check or verify, and then one goes to probing … you could look at a graph or share that with someone, and it would be obvious")
+
+A task built in one go had a graph of whatever sub-tasks existed so far, unjoined: nothing until the build began,
+then a lone node, then another beside it when the check was added.
+
+- **The flow is worked out whole** (`flowOf` in `checklist.ts`): the build, the check (and each round of finish
+  and check again), the probe, the whole test run, and the smoke test when there is one. A sub-task that exists
+  is its own node; a stage still to come is a node too, drawn dashed, with where it stands.
+- **Each follows the one before**, so the graph is one line from the first look, and a node takes its stage's
+  place as it is made. Shown on the build page even while the build waits for the brief's approval.
+- **The sub-tasks themselves are joined now**: what the engine adds after the build depends on what came before
+  it (the first check on every sub-task of the build; anything later on the last one), so the project's graph
+  shows the same line.
+- A staged task's graph is as it was.

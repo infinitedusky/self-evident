@@ -10,7 +10,7 @@ import dagre from '@dagrejs/dagre'
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps, Background, Handle, type Node, type NodeProps, Panel, Position, ReactFlow, ReactFlowProvider, type Edge, MarkerType, useNodesState, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useEffect, useMemo, useState } from 'react'
-import type { BuildStatus, GraphFile, GraphSubIssue } from '../engine'
+import type { BuildStatus, FlowNode, GraphFile, GraphSubIssue } from '../engine'
 import { Badge, type Tone } from './Badge'
 import { plannedSteps } from '../planned-steps'
 
@@ -43,8 +43,45 @@ export function stepProgress(phase: { steps?: { text: string; status: string }[]
   return { total, done, marks, current: at >= 0 ? { n: at + 1, text: own[at].text } : null, planned: !own.length && total > 0 && !landed, doing }
 }
 
+const GHOST_STATUS = { todo: 'queued', doing: 'running', done: 'done', failed: 'failed' } as const
+
+/**
+ * A checklist task's flow as the nodes of its graph (Sandy, 2026-11-17: "we should always show the workflow in nodes
+ * before it starts … it would be obvious"): each sub-task that exists, joined to what it follows, and each stage
+ * still to come as a node of its own, so the whole path is drawn from the first look.
+ */
+export function flowGraph(flow: FlowNode[], subs: GraphSubIssue[]): GraphSubIssue[] {
+  const known = new Set(flow.map((n) => n.id))
+  return flow.flatMap((n): GraphSubIssue[] => {
+    const real = n.sub ? subs.find((s) => s.id === n.sub) : undefined
+    if (n.sub && !real) return [] // the graph has not caught up with the list yet: it will on its next read
+    if (real) return [{ ...real, dependsOn: (n.after ?? real.dependsOn).filter((id) => known.has(id)), orderedAfter: [] }]
+    return [{
+      id: n.id, ghost: true, title: n.title, heldReason: n.detail || null, status: GHOST_STATUS[n.state], dependsOn: n.after ?? [],
+      identifier: '', number: 0, appId: '', kind: 'code', parentId: null, projectId: null, cycleId: null, ideaId: null, description: null, brief: null, state: n.state === 'done' ? 'done' : 'todo', priority: 0, estimate: null, sortOrder: 0,
+      assignee: null, delegate: null, waitingOn: null, source: 'agent', reason: null, createdBy: null, createdAt: '', startedAt: null, completedAt: null, canceledAt: null,
+      attempt: 0, maxAttempts: 0, branch: null, files: [], lastRun: null,
+    }]
+  })
+}
+
 function PhaseNode({ data }: NodeProps<Node<PhaseNodeData>>) {
   const { phase } = data
+  if (phase.ghost) { // a stage to come (or one that is not a sub-task, like the test run): its name and where it stands
+    const live = phase.status === 'running'
+    return (
+      <div className={`task-node ghost ${live ? 'live' : ''} ${phase.status}`} data-component="PhaseNode" data-ghost>
+        <Handle type="target" position={Position.Left} />
+        <div className="task-node-head">
+          <span className="mono faint">{phase.status === 'queued' ? 'to come' : 'by itself'}</span>
+          {phase.status !== 'queued' && <Badge tone={STATUS_TONE[phase.status]} dot={live}>{phase.status === 'running' ? 'now' : phase.status}</Badge>}
+        </div>
+        <div className="task-node-title">{phase.title}</div>
+        {phase.heldReason && <div className="task-node-note">{phase.heldReason}</div>}
+        <Handle type="source" position={Position.Right} />
+      </div>
+    )
+  }
   const live = LIVE.includes(phase.status)
   const p = stepProgress(phase)
   return (

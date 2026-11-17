@@ -21,6 +21,7 @@ import { acceptanceOf, setAcceptance } from './acceptance.js'
 import { unchecked, afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, numbered, PROBE_TITLE, probeBrief, readVerdicts, reqId, requirementsChecked, unmetOf, verdictChange } from './verify.js'
 import { inForce, type Covered } from './requirements.js'
 import { smokeOwed } from './smoke.js'
+import { ONE_GO_TITLE } from './planner.js'
 import { workflowFor } from './work.js'
 import { ensureProjectPr, prDraft, prTitle, prBody } from './pr.js'
 import { addSubTask, projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
@@ -48,6 +49,20 @@ export const fixBrief = (testCmd: string, detail: string) => [
 ].join('\n')
 
 interface AppSetup { test_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number }
+
+/**
+ * A build that runs out of turns carries on; it is not a failure (Bonkei's agent, 2026-11-17, on BON-113: the engine
+ * "retries the same sub-task with a fresh agent, which uses up one of its 3 attempts and has to work out from
+ * scratch what was already done"). The limit was set for small sub-tasks; a task built in one go is the whole task
+ * in one run. So: the same agent is resumed, in its own conversation, with everything it had worked out; the
+ * attempt is given back; and a run that is the whole task starts with more turns. Three times at most, then it is
+ * a failure like any other.
+ */
+export const ranOutOfTurns = (error: string | null | undefined) => !!error && /maximum number of turns|max[_ ]turns/i.test(error)
+export const MAX_CARRY_ONS = 3
+const OUT_OF_TURNS = 'out of turns'
+/** How many turns a run starts with, when the app has not said: more for one that is the whole task, or that reads all of it. */
+export const turnsFor = (title: string, setup: { max_turns?: number }) => setup.max_turns ?? (title === ONE_GO_TITLE ? 200 : [CHECK_TITLE, FINISH_TITLE, PROBE_TITLE, FIX_TITLE].some((t) => title.startsWith(t)) ? 120 : undefined)
 
 const PLANNING = ['issue.planning', 'issue.plan_waiting', 'issue.planned', 'issue.plan_failed']
 
@@ -222,7 +237,7 @@ export class Runner {
       return this.failed(subId, attempt, x.maxAttempts, `could not prepare the worktree: ${err?.message ?? err}`, pb)
     }
 
-    const [interrupted] = await db.select().from(run).where(and(eq(run.issueId, subId), eq(run.status, 'interrupted'))).orderBy(desc(run.attempt)).limit(1)
+    const [interrupted] = await db.select().from(run).where(and(eq(run.issueId, subId), eq(run.status, 'interrupted'))).orderBy(desc(run.attempt), desc(run.startedAt)).limit(1) // the latest: runs carried on share an attempt
     const previousFailure = await this.lastFailure(subId)
     const attempt = x.attempt + 1
     const runId = newId('run')
@@ -232,8 +247,8 @@ export class Runner {
 
     const result = await this.execute({
       subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief },
-      worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
-      resumeSessionId: interrupted?.agentSessionId ?? undefined, abort: this.active.get(subId),
+      worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, maxTurns: turnsFor(x.title, setup), maxBudgetUsd: setup.max_budget_usd,
+      resumeSessionId: interrupted?.agentSessionId ?? undefined, ...(interrupted?.error?.startsWith(OUT_OF_TURNS) ? { resumeWhy: 'turns' as const } : {}), abort: this.active.get(subId),
       onEvent: async (type, payload) => {
         if (type === 'run.steps') await this.saveSteps(a.id, subId, runId, (payload.steps as { text: string; status: string }[]) ?? [])
         await this.emit({ ...rb, actor: `agent:${runId}`, type, payload })
@@ -251,6 +266,7 @@ export class Runner {
     }
     if (result.status !== 'completed' && isOutage(result.error)) return this.outage(subId, runId, result.error!, rb)
     if (result.status === 'completed' && this.outages) { this.outages = 0; this.hold = null; await this.emit({ ...base, type: 'engine.resumed', payload: {} }) }
+    if (result.status !== 'completed' && ranOutOfTurns(result.error) && result.agentSessionId && await this.carryOn(subId, runId, attempt, rb)) return
     if (result.status !== 'completed') return this.failed(subId, attempt, x.maxAttempts, `the run ${result.error ?? 'failed'}`, rb)
 
     await db.transaction((tx) => setBuild(tx, subId, { status: 'merging' }, { runId }))
@@ -308,7 +324,7 @@ export class Runner {
 
   private async testTask(projectId: string, taskId: string, repoPath: string, worktreePath: string, onto: string, setup: AppSetup, pb: Omit<NewEvent, 'type'>) {
     const outcome = await withLock(`land:${projectId}`, async () => {
-      const every = await db.select({ id: issue.id, state: issue.state, title: issue.title }).from(issue).where(eq(issue.parentId, taskId))
+      const every = (await db.select({ id: issue.id, state: issue.state, title: issue.title, sortOrder: issue.sortOrder }).from(issue).where(eq(issue.parentId, taskId))).sort((a, b) => a.sortOrder - b.sortOrder)
       const subs = every.filter((s) => s.state !== 'canceled' && s.state !== 'duplicate')
       const builds = subs.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, subs.map((s) => s.id))) : []
       if (!subs.length || !subs.every((s) => builds.find((b) => b.issueId === s.id)?.status === 'done')) return null // more to build first
@@ -317,27 +333,30 @@ export class Runner {
       const list = await this.listOf(taskId)
       const unmet = unmetOf(list.criteria, list.held, list.required)
       const next = afterBuild({ titles: subs.map((s) => s.title), listed: list.loop ? list.criteria.length + list.required.length > 0 : list.criteria.some(unchecked), unmet: unmet.length, testCmd: !!setup.test_cmd, loop: list.loop })
-      if (next.do !== 'test') return { next, list, unmet }
+      // What is added now follows what there is: the first check, every sub-task of the build; anything later, the last one.
+      const first = !subs.some((s) => [CHECK_TITLE, FINISH_TITLE, PROBE_TITLE, FIX_TITLE].some((t) => s.title.startsWith(t)))
+      const after = first ? subs.map((s) => s.id) : subs.slice(-1).map((s) => s.id)
+      if (next.do !== 'test') return { next, list, unmet, after }
       const fixes = subs.filter((s) => s.title.startsWith(FIX_TITLE)).length
-      return { next, list, unmet, fixes, result: await wholeRun({ testCmd: setup.test_cmd!, cwd: worktreePath, onEvent: async (type, payload) => { await this.emit({ ...pb, issueId: taskId, type, payload }) } }) }
+      return { next, list, unmet, after, fixes, result: await wholeRun({ testCmd: setup.test_cmd!, cwd: worktreePath, onEvent: async (type, payload) => { await this.emit({ ...pb, issueId: taskId, type, payload }) } }) }
     })
     if (!outcome) return
-    const { next, list, unmet } = outcome
+    const { next, list, unmet, after } = outcome
     if (next.do === 'check') {
       // The first check reads the whole list; a later one, only what the last left not done.
       const again = next.round > 1
       const criteria = again ? list.criteria.filter((c) => c.built === false) : list.criteria
       const required = again ? list.required.filter((r) => list.held?.find((c) => c.key === r.key)?.built === false) : list.required
-      await addSubTask(taskId, { title: numbered(CHECK_TITLE, next.round), brief: checkTaskBrief(criteria, required, again ? { round: next.round } : undefined) }, 'engine')
+      await addSubTask(taskId, { title: numbered(CHECK_TITLE, next.round), brief: checkTaskBrief(criteria, required, again ? { round: next.round } : undefined), after }, 'engine')
       return
     }
-    if (next.do === 'finish') { await addSubTask(taskId, { title: numbered(FINISH_TITLE, next.round), brief: finishBrief(unmet, next.round) }, 'engine'); return }
+    if (next.do === 'finish') { await addSubTask(taskId, { title: numbered(FINISH_TITLE, next.round), brief: finishBrief(unmet, next.round), after }, 'engine'); return }
     if (next.do === 'stuck') {
       await commentOnIssue(taskId, { heading: 'Still not done after three rounds', body: `What the check found was sent back ${MAX_ROUNDS} times and ${unmet.length === 1 ? 'this is' : 'these are'} still not done. It needs a person.\n\n${unmet.map((u) => `- ${u.text}${u.missing ? ` Missing: ${u.missing}` : ''}`).join('\n')}` }, 'engine')
       await this.emit({ ...pb, issueId: taskId, type: 'task.check_stuck', payload: { rounds: MAX_ROUNDS, unmet: unmet.map((u) => u.id) } })
       return
     }
-    if (next.do === 'probe') { await addSubTask(taskId, { title: PROBE_TITLE, brief: probeBrief(list.criteria, list.base) }, 'engine'); return }
+    if (next.do === 'probe') { await addSubTask(taskId, { title: PROBE_TITLE, brief: probeBrief(list.criteria, list.base), after }, 'engine'); return }
     if (next.do === 'done' || !('result' in outcome) || !outcome.result || outcome.result.ok || !setup.test_cmd) return
     const { fixes, result } = outcome as { fixes: number; result: { ok: false; detail: string } }
     if (fixes >= MAX_FIXES) {
@@ -345,7 +364,7 @@ export class Runner {
       await this.emit({ ...pb, issueId: taskId, type: 'task.test_failed', payload: { fixes, tail: result.detail } })
       return
     }
-    await addSubTask(taskId, { title: fixes ? `${FIX_TITLE} (${fixes + 1})` : FIX_TITLE, brief: fixBrief(setup.test_cmd, result.detail) }, 'engine')
+    await addSubTask(taskId, { title: fixes ? `${FIX_TITLE} (${fixes + 1})` : FIX_TITLE, brief: fixBrief(setup.test_cmd, result.detail), after }, 'engine')
   }
 
   /** The builder's todo list, as the sub-issue's steps: the latest list replaces the previous one for this run. */
@@ -366,6 +385,21 @@ export class Runner {
       { runId: pb.runId ?? undefined, type: again ? 'build.retry' : 'build.failed', payload: { attempt, max, why: why.slice(0, 2000) } }))
     this.active.delete(subId)
     await this.dispatch()
+  }
+
+  /**
+   * It ran out of turns: the run is set aside to be resumed, the attempt is given back, and it is queued again.
+   * False when it has carried on as often as it may: then it fails, as it used to.
+   */
+  private async carryOn(subId: string, runId: string, attempt: number, pb: Omit<NewEvent, 'type'>): Promise<boolean> {
+    const before = (await db.select({ error: run.error }).from(run).where(and(eq(run.issueId, subId), eq(run.status, 'interrupted')))).filter((r) => r.error?.startsWith(OUT_OF_TURNS)).length
+    if (before >= MAX_CARRY_ONS) return false
+    await db.update(run).set({ status: 'interrupted', error: `${OUT_OF_TURNS}: carried on from where it was (${before + 1} of ${MAX_CARRY_ONS})` }).where(eq(run.id, runId))
+    await db.transaction((tx) => setBuild(tx, subId, { status: 'queued', attempt: Math.max(0, attempt - 1), heldReason: 'ran out of turns; carrying on from where it was' },
+      { runId: pb.runId ?? undefined, type: 'build.carried_on', payload: { times: before + 1, of: MAX_CARRY_ONS } }))
+    this.active.delete(subId)
+    await this.dispatch()
+    return true
   }
 
   /** The model or account is unavailable: not the sub-issue's fault. Give the attempt back, queue it to resume, hold the engine. */
@@ -543,10 +577,10 @@ export class Runner {
     if (smokeOwed(criteria)) return { sentBack: 0 } // some still wait: one trip back, with everything that failed
     const failed = criteria.filter((c) => c.built === false && c.byHand)
     if (failed.length) {
-      const subs = (await db.select({ title: issue.title, state: issue.state }).from(issue).where(eq(issue.parentId, issueId))).filter((s) => s.state !== 'canceled' && s.state !== 'duplicate')
+      const subs = (await db.select({ id: issue.id, title: issue.title, state: issue.state, sortOrder: issue.sortOrder }).from(issue).where(eq(issue.parentId, issueId))).filter((s) => s.state !== 'canceled' && s.state !== 'duplicate').sort((a, b) => a.sortOrder - b.sortOrder)
       const round = subs.filter((s) => s.title.startsWith(FINISH_TITLE)).length + 1
       const brief = `${finishBrief(failed.map((c) => ({ id: c.id, text: c.text, missing: c.byHand!.note || c.builtEvidence })), round)}\n\nA person found ${failed.length === 1 ? 'this' : 'these'} by trying the build by hand. What is under "Missing" is what they saw.`
-      await addSubTask(issueId, { title: numbered(FINISH_TITLE, round), brief }, 'engine')
+      await addSubTask(issueId, { title: numbered(FINISH_TITLE, round), brief, after: subs.slice(-1).map((x) => x.id) }, 'engine')
     }
     void this.dispatch()
     return { sentBack: failed.length }

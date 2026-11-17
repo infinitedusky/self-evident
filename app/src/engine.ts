@@ -110,6 +110,8 @@ export interface GraphSubIssue extends Issue {
   status: BuildStatus; attempt: number; maxAttempts: number; branch: string | null; heldReason: string | null
   dependsOn: string[]; orderedAfter?: string[] // explicit dependencies; and issue order, drawn (finishers of the issue before)
   files: string[]; lastRun: Run | null; steps?: Step[]
+  /** A stage of a checklist task's flow that is still to come: drawn so the graph is whole before it starts; there is no sub-task behind it. */
+  ghost?: boolean
 }
 export interface GraphIssue extends Issue { subIssueIds: string[] }
 /** What a project has to cover: in its Backlog, or left without being built (a duplicate of what covers it, or canceled with why). */
@@ -249,7 +251,9 @@ export interface Report { id: string; appId: string; kind: 'daily' | 'weekly'; f
 /** Where a checklist task stands (the engine's checklist module): the stages after its prototype, and every item it is held to with the check's mark. */
 export interface ChecklistStage { key: 'build' | 'check' | 'probe' | 'test' | 'smoke'; label: string; state: 'todo' | 'doing' | 'done' | 'failed'; detail: string }
 export interface ChecklistItem { id: string; kind: 'criterion' | 'requirement'; text: string; what?: string; mark: 'met' | 'unmet' | 'person' | 'na' | 'unchecked'; evidence?: string }
-export interface Checklist { build: 'one' | 'planned'; stages: ChecklistStage[]; items: ChecklistItem[]; met: number; unmet: number; total: number }
+/** One node of a checklist task's flow: a sub-task that exists (`sub`), or a stage still to come. `after`: what it follows; null keeps the sub-task's own dependencies. */
+export interface FlowNode { id: string; sub?: string; title: string; state: ChecklistStage['state']; detail: string; after: string[] | null }
+export interface Checklist { build: 'one' | 'planned'; stages: ChecklistStage[]; items: ChecklistItem[]; met: number; unmet: number; total: number; flow?: FlowNode[] }
 /** A task's smoke test (the engine's smoke module): where the built code runs, and the checks left to a person with their marks. */
 export interface SmokeCheck { id: string; text: string; where?: string; how?: string; mark: 'todo' | 'pass' | 'fail'; note?: string; stale?: boolean; before?: { pass: boolean; note: string } }
 export interface SmokeView { /** Its pull request, when there is one: a preview is of it. */ pr?: { number: number; url: string | null } | null; where: 'local' | 'preview' | 'staging' | 'flag'; says: string; account: string | null; flag: string | null; branch: string | null; head: string | null; running: string | null; url: string | null; up: boolean; canRun: boolean; log: string[]; checks: SmokeCheck[]; owed: number; failed: number; /** After a mark: how many that failed were sent back. */ sentBack?: number }
@@ -538,7 +542,7 @@ export const EVENT_TYPES = [
   'talk.message', 'talk.permission', 'talk.result', 'prototype.shown', 'share.started', 'share.stopped', 'idea.created', 'idea.converted', 'step.updated', 'brief.approved', 'brief.unapproved', 'workflow.saved', 'workflow.used', 'engine.hold', 'engine.resumed',
   'pr.merged', 'pr.closed', 'pr.retargeted', 'pr.review', 'pr.checks', 'review.requested', 'project.caught_up', 'project.behind_main',
   'backlog.error', 'project.backlog_open',
-  'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted',
+  'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted', 'build.carried_on',
   'run.started', 'run.message', 'run.steps', 'run.tool_call', 'run.tool_result', 'run.result', 'run.error', 'run.rate_limit',
   'land.committed', 'land.tested', 'land.landed', 'land.conflict', 'land.retry', 'pr.opened', 'pr.updated', 'pr.error',
   'task.tested', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked', 'learn.written', 'smoke.started', 'smoke.marked', 'task.smoke_waiting',
