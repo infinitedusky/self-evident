@@ -4503,3 +4503,24 @@ since 2026-11-16 one is only opened when the person presses Submit.
   only holds the second.
 
 Not done: a check for after the merge becoming a to-do when the pull request merges.
+
+## The smoke test's set-up is ours, kept out of the app's repository (Sandy, 2026-11-17: "we should be able to define a script, a smoke test script that gets run when you launch it … spin up an environment and then run a SQL file or something to populate a database"; "one main reason for doing this is to keep any of this stuff out of the code base because we don't want this stuff to be versioned or part of a code base that we're working with for a client … This is about us being able to test"; "stored in our env and could be in the db for cloud, local for local setup")
+
+I first proposed a script file in the app's repo, versioned with the code. Sandy said no: the point is that none of
+it is in the code.
+
+- **Three things, in the app's settings** (Settings › Prototype › Smoke test, local kind): a **script** (any number
+  of lines; else the prototype's command), a **stop script** (for what the script leaves running), and a **seed**
+  (SQL of made-up rows). They are in the app's row, so in whichever database holds the app: the shared one, or this
+  computer's for an app kept local. Nothing is written into a worktree or committed.
+- **When it runs**: the seed is run on the smoke test's new database after its schema, and also put in a file under
+  `~/.self-evident/smoke/<app>/` whose path the script gets as `$SMOKE_SEED`. The stop script runs on Stop and
+  before a restart. **Start clean** on the smoke test page makes the database again and tells the script
+  (`$SMOKE_CLEAN=1`).
+- **Agents** read it with `smoke_setup` and change it with `set_smoke_setup` (asks first, like the prototype
+  command). A build's brief says the set-up is not the repository's and to change it there, never on the branch.
+- Secrets stay in the engine's environment and are read by name; none go in a script.
+
+Not done: prototype scenarios are still JSON files in the repo (`.prototype/scenarios/`), which breaks the same
+rule for a client's code; a history of the script so a bad edit can be undone; a one-press job that has an agent
+write an app's first script; a requirement the check verifies ("the set-up still brings up what this change needs").
