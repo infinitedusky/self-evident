@@ -20,6 +20,7 @@ import { guideTasks, mergeGuide, mergeRecord } from './merge-guide.js'
 import { acceptanceOf, setAcceptance } from './acceptance.js'
 import { unchecked, afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, numbered, PROBE_TITLE, probeBrief, readVerdicts, reqId, requirementsChecked, unmetOf, verdictChange } from './verify.js'
 import { inForce, type Covered } from './requirements.js'
+import { smokeOwed } from './smoke.js'
 import { workflowFor } from './work.js'
 import { ensureProjectPr, prDraft, prTitle, prBody } from './pr.js'
 import { addSubTask, projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
@@ -161,7 +162,9 @@ export class Runner {
             this.active.set(x.id, new AbortController())
             this.launch(x.id, p.id).catch(async (err) => {
               this.active.delete(x.id)
-              await this.emit({ ...(await this.context(p.id)).base, issueId: x.id, type: 'build.error', payload: { error: String(err?.message ?? err) } })
+              // Saying so must not fail in its turn: nobody awaits this, so a second failure here (the database gone) had nowhere to go.
+              try { await this.emit({ ...(await this.context(p.id)).base, issueId: x.id, type: 'build.error', payload: { error: String(err?.message ?? err) } }) }
+              catch (again) { console.error(`[engine] a build of ${x.id} failed to start, and that could not be recorded: ${String(err?.message ?? err).slice(0, 200)} (${String((again as Error)?.message ?? again).slice(0, 120)})`) }
             })
           }
         }
@@ -180,7 +183,7 @@ export class Runner {
           // The work is done but the backlog is not: the project waits for a person to take on or drop what is left.
           const key = `${p.id}:${openItems.map((i) => i.id).join(',')}`
           if (!this.backlogWaits.has(key)) { this.backlogWaits.add(key); await this.emit({ ...(await this.context(p.id)).base, type: 'project.backlog_open', payload: { open: openItems.length, items: openItems.map((i) => i.title).slice(0, 10) } }) }
-        } else if (allDone && !this.testing.get(p.id)) { // not while a task's whole test run is going: it may add a sub-task
+        } else if (allDone && !this.testing.get(p.id) && !(await this.heldForSmoke(p.id))) { // not while a task's whole test run is going (it may add a sub-task), nor while a person has checks of theirs to do by hand
           await db.update(project).set({ status: 'landed', updatedAt: new Date() }).where(eq(project.id, p.id))
           await this.emit({ ...(await this.context(p.id)).base, type: 'project.landed', payload: {} })
           await this.cleanup(p.id)
@@ -510,6 +513,45 @@ export class Runner {
    * failed. By default it continues in the same worktree with what the last attempt left; fresh starts over from
    * the project's branch. A stopped project resumes: it runs again, with its other cancelled builds queued too.
    */
+  /**
+   * A task with checks left to a person (smoke.ts) is built but not finished: its project is not called landed, and
+   * its worktrees are kept, until they have marked each one. Said once for each change in how many wait. Only a
+   * checklist task: a staged one lands as it always did.
+   */
+  private smokeWaits = new Set<string>()
+  private async heldForSmoke(projectId: string): Promise<boolean> {
+    const tasks = (await db.select().from(issue).where(and(eq(issue.projectId, projectId), eq(issue.kind, 'code')))).filter((t) => !t.parentId && !['canceled', 'duplicate'].includes(t.state))
+    let held = false
+    for (const t of tasks) {
+      const owed = smokeOwed(acceptanceOf(t))
+      if (!owed || styleOf((await workflowFor(db, { issueId: t.id })).workflow) !== 'checklist') continue
+      held = true
+      const key = `${t.id}:${owed}`
+      if (!this.smokeWaits.has(key)) { this.smokeWaits.add(key); await this.emit({ ...(await this.context(projectId)).base, issueId: t.id, type: 'task.smoke_waiting', payload: { owed } }) }
+    }
+    return held
+  }
+
+  /**
+   * A person has marked every check of theirs (smoke.ts). What they failed is sent back to be done, with their notes,
+   * and looked at again when it is; with nothing failed, the task carries on to its end.
+   */
+  async afterSmoke(issueId: string): Promise<{ sentBack: number }> {
+    const [t] = await db.select().from(issue).where(eq(issue.id, issueId))
+    if (!t) throw new PlanError(`no task ${issueId}`)
+    const criteria = acceptanceOf(t)
+    if (smokeOwed(criteria)) return { sentBack: 0 } // some still wait: one trip back, with everything that failed
+    const failed = criteria.filter((c) => c.built === false && c.byHand)
+    if (failed.length) {
+      const subs = (await db.select({ title: issue.title, state: issue.state }).from(issue).where(eq(issue.parentId, issueId))).filter((s) => s.state !== 'canceled' && s.state !== 'duplicate')
+      const round = subs.filter((s) => s.title.startsWith(FINISH_TITLE)).length + 1
+      const brief = `${finishBrief(failed.map((c) => ({ id: c.id, text: c.text, missing: c.byHand!.note || c.builtEvidence })), round)}\n\nA person found ${failed.length === 1 ? 'this' : 'these'} by trying the build by hand. What is under "Missing" is what they saw.`
+      await addSubTask(issueId, { title: numbered(FINISH_TITLE, round), brief }, 'engine')
+    }
+    void this.dispatch()
+    return { sentBack: failed.length }
+  }
+
   async retry(subId: string, opts: { fresh?: boolean; actor?: string } = {}) {
     const [b] = await db.select().from(build).where(eq(build.issueId, subId))
     const [x] = await db.select().from(issue).where(eq(issue.id, subId))

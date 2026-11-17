@@ -15,9 +15,10 @@ import { getIssue } from './issues.js'
 import { inForce, type Covered } from './requirements.js'
 import { buildOf, styleOf, type Build } from './steps.js'
 import { CHECK_TITLE, FINISH_TITLE, MAX_ROUNDS, PROBE_TITLE } from './verify.js'
+import { smokeChecks } from './smoke.js'
 import { workflowFor } from './work.js'
 
-export type StageKey = 'build' | 'check' | 'probe' | 'test'
+export type StageKey = 'build' | 'check' | 'probe' | 'test' | 'smoke'
 export type StageState = 'todo' | 'doing' | 'done' | 'failed'
 export interface Stage { key: StageKey; label: string; state: StageState; /** A few words: how far, or what is wrong. */ detail: string }
 export interface Item { id: string; kind: 'criterion' | 'requirement'; text: string; /** For a requirement, what it means here. */ what?: string; mark: 'met' | 'unmet' | 'person' | 'na' | 'unchecked'; evidence?: string }
@@ -35,7 +36,7 @@ function of(subs: { status: string }[]): StageState {
   return subs.some((s) => WORKING.includes(s.status) || s.status === 'done') ? 'doing' : 'todo'
 }
 
-export function stagesOf(i: { subs: { title: string; status: string }[]; build: Build; unmet: number; total: number; met: number; hasTests: boolean; /** The whole test run, last: true passed, false failed, null not run. */ tested: boolean | null }): Stage[] {
+export function stagesOf(i: { subs: { title: string; status: string }[]; build: Build; unmet: number; total: number; met: number; hasTests: boolean; /** The whole test run, last: true passed, false failed, null not run. */ tested: boolean | null; /** The checks left to a person (smoke.ts): how many wait, how many they failed, of how many. */ byHand?: { todo: number; failed: number; total: number } }): Stage[] {
   const by = (k: string) => i.subs.filter((s) => kindOf(s.title) === k)
   const builders = by('build'), checks = by('check'), finishes = by('finish'), probes = by('probe'), fixes = by('fix')
   const built = of(builders)
@@ -52,6 +53,12 @@ export function stagesOf(i: { subs: { title: string; status: string }[]; build: 
     const fixing = of(fixes)
     stages.push({ key: 'test', label: 'Tests', state: fixing === 'doing' || fixing === 'todo' && fixes.length ? 'doing' : i.tested === true ? 'done' : i.tested === false ? 'failed' : 'todo',
       detail: fixes.length && fixing !== 'done' ? 'fixing what the run found' : i.tested === true ? `the whole run passed${fixes.length ? `, after ${fixes.length} fix${fixes.length === 1 ? '' : 'es'}` : ''}` : i.tested === false ? 'the whole run failed' : 'the whole run, once, last' })
+  }
+  const h = i.byHand
+  if (h?.total) {
+    const ready = of(i.subs) === 'done' // nothing is building: it is the person's turn
+    stages.push({ key: 'smoke', label: 'Smoke test', state: h.failed ? 'failed' : !h.todo ? 'done' : ready ? 'doing' : 'todo',
+      detail: h.failed ? `${h.failed} failed by hand, sent back` : !h.todo ? `${h.total} checked by hand` : ready ? `${h.todo} for you to check by hand` : `${h.todo} for you, once it is built and checked` })
   }
   return stages
 }
@@ -87,6 +94,7 @@ export async function checklistOf(issueId: string): Promise<Checklist | null> {
   const b = buildOf(w)
   return {
     build: b, items, met, unmet, total: items.length,
-    stages: stagesOf({ subs: live.map((s) => ({ title: s.title, status: builds.find((x) => x.issueId === s.id)?.status ?? 'queued' })), build: b, unmet, met, total: items.length, hasTests: !!(a?.setup as { test_cmd?: string } | null)?.test_cmd, tested: last ? (last.payload as { ok?: boolean }).ok === true : null }),
+    stages: stagesOf({ subs: live.map((s) => ({ title: s.title, status: builds.find((x) => x.issueId === s.id)?.status ?? 'queued' })), build: b, unmet, met, total: items.length, hasTests: !!(a?.setup as { test_cmd?: string } | null)?.test_cmd, tested: last ? (last.payload as { ok?: boolean }).ok === true : null,
+      byHand: (() => { const h = smokeChecks(acceptanceOf(t)); return { todo: h.filter((x) => x.mark === 'todo').length, failed: h.filter((x) => x.mark === 'fail').length, total: h.length } })() }),
   }
 }

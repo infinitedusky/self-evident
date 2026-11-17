@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises'
 import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
 import { checklistOf } from './checklist.js'
+import { markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes } from './smoke.js'
 import { startLearning, talkBusy } from './talk.js'
 import { serve } from '@hono/node-server'
 import { appendEvent } from './events.js'
@@ -624,6 +625,20 @@ export function buildApp(bus: EventBus) {
     for (const id of r.sessions) await say(id, r.note, undefined, { author: 'engine', kind: 'brief', payload: { label: 'The task moved to another task branch' } }).catch(() => {})
     return settle(r)
   }
+  // The smoke test (smoke.ts): the checks left to a person on a built task, where it runs, and their marks.
+  api.get('/issues/:id/smoke', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err, 404) } })
+  api.post('/issues/:id/smoke/start', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await startSmoke(t.id, 'user'), 202) } catch (err) { return planError(c, err) } })
+  api.post('/issues/:id/smoke/stop', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); await stopSmoke(t.id); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err) } })
+  api.post('/issues/:id/smoke/:criterion', async (c) => {
+    const body = await c.req.json<{ pass?: boolean; note?: string }>().catch(() => ({} as { pass?: boolean; note?: string }))
+    if (typeof body.pass !== 'boolean') return c.json({ error: 'pass is true or false' }, 400)
+    try {
+      const t = await resolveIssue(db, c.req.param('id'))
+      const view = await markSmoke(t.id, c.req.param('criterion'), { pass: body.pass, note: body.note }, 'user')
+      const { sentBack } = await runner.afterSmoke(t.id) // every check marked: what failed goes back, or the task carries on
+      return c.json({ ...view, sentBack })
+    } catch (err) { return planError(c, err) }
+  })
   api.get('/issues/:id/checklist', async (c) => { // where a checklist task stands: its stages and each item's mark; null for a staged task
     try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await checklistOf(t.id)) } catch (err) { return planError(c, err, 404) }
   })
@@ -967,7 +982,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   void watchTerminals().catch(() => {}) // conversations still in a terminal: keep copying what's said there
   const stopSync = process.env.GITHUB_SYNC === '0' ? () => undefined : startSync(Number(process.env.GITHUB_SYNC_MINUTES ?? 2)) // GitHub: reviews, checks, merges, main moving
   const stopSummaries = process.env.SUMMARY === '0' ? () => undefined : startSummaries(Number(process.env.SUMMARY_HOURS ?? 24)) // the summary page, rewritten when a day old and something moved
-  const shutdown = async () => { stopSync(); stopSummaries(); stopStorybooks(); stopShares(); stopPrototypes(); stopStepRuns(); closeTalks(); await runner.shutdown(); await bus.stop(); await pool.end(); process.exit(0) }
+  const shutdown = async () => { stopSync(); stopSummaries(); stopStorybooks(); stopShares(); stopPrototypes(); stopSmokes(); stopStepRuns(); closeTalks(); await runner.shutdown(); await bus.stop(); await pool.end(); process.exit(0) }
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
 }

@@ -13,6 +13,7 @@ export interface MockData {
   summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript; /** A task's own agent, or null when it has none. */ taskTalk: typeof s.talkSession | null; /** The agents it has out. */ taskAgents?: import('../engine').TaskAgentOut[]; /** An idea's own agent, or null when it has none. */ ideaTalk?: typeof s.talkSession | null
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[] }
+  /** A task's smoke test; left out, there is nothing for a person on it. */ smoke?: import('../engine').SmokeView
   /** Where a checklist task stands; left out, the task's workflow is staged and it has none. */ checklist?: import('../engine').Checklist
   /** What a task's pull request will open with; none when left out. */ mergeGuide?: string; /** The record folded away under it. */ mergeRecord?: string
   /** The last run of each command step of a prototype's guide; none when left out. */ prototypeRuns?: import('../engine').StepRun[]
@@ -164,6 +165,16 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       return reply(all.filter((i) => (!q.get('kind') || i.kind === q.get('kind')) && (!q.get('project') || i.projectId === q.get('project')) && (!q.get('top') || !i.parentId)))
     }),
     // Task branches and save points: the engine's rules, roughly.
+    http.get('/api/issues/:id/smoke', () => reply(d.smoke ?? { where: 'local', says: 'run here, like its prototypes', account: null, flag: null, branch: null, head: null, running: null, url: null, up: false, canRun: false, log: [], checks: [], owed: 0, failed: 0 })),
+    http.post('/api/issues/:id/smoke/start', () => { if (d.smoke) d.smoke = { ...d.smoke, url: 'http://localhost:6500', up: true, running: d.smoke.head }; return reply(d.smoke) }),
+    http.post('/api/issues/:id/smoke/stop', () => { if (d.smoke) d.smoke = { ...d.smoke, url: null, up: false, running: null }; return reply(d.smoke) }),
+    http.post('/api/issues/:id/smoke/:criterion', async ({ params, request }) => {
+      const b = await request.json() as { pass: boolean; note?: string }
+      const checks = (d.smoke?.checks ?? []).map((c) => (c.id === params.criterion ? { ...c, mark: b.pass ? 'pass' as const : 'fail' as const, note: b.note ?? '' } : c))
+      const owed = checks.filter((c) => c.mark === 'todo').length, failed = checks.filter((c) => c.mark === 'fail').length
+      d.smoke = { ...d.smoke!, checks, owed, failed }
+      return reply({ ...d.smoke, sentBack: owed === 0 ? failed : 0 })
+    }),
     http.get('/api/issues/:id/checklist', () => reply(d.checklist ?? null)),
     http.post('/api/issues/:id/pr/submit', () => (d.submitPrError ? HttpResponse.json({ error: d.submitPrError }, { status: 400 }) : reply({ id: 'pr_sample', number: 412, url: 'https://example.com/pull/412', status: 'draft' }))),
     http.get('/api/issues/:id/merge-guide', () => reply({ guide: d.mergeGuide ?? '', record: d.mergeRecord ?? '', subTasks: 3 })),

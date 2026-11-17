@@ -926,3 +926,23 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .submit-pr h2 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .submit-pr-warn { margin: 0 0 8px; color: var(--warn); font-size: 14px; }
 .submit-pr-ask { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+
+.smoke-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 14px; align-items: start; }
+@media (max-width: 1000px) { .smoke-layout { grid-template-columns: 1fr; } }
+.smoke-view { min-width: 0; }
+.smoke-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.smoke-address { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.smoke-frame { width: 100%; height: min(70vh, 640px); border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.smoke-log { text-align: left; font-size: 12px; margin: 8px 0 0; white-space: pre-wrap; }
+.smoke-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.smoke-check { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
+.smoke-check.pass { border-color: color-mix(in srgb, var(--ok, #15803d) 45%, var(--line)); }
+.smoke-check.fail { border-color: color-mix(in srgb, var(--bad, #b42318) 55%, var(--line)); }
+.smoke-check-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.smoke-how { font-size: 14px; }
+.smoke-before { font-size: 13px; }
+.smoke-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.smoke-note label { display: grid; gap: 4px; font-size: 13px; }
+.smoke-note textarea { width: 100%; }
+.smoke-sent, .smoke-stale { margin: 0 0 10px; padding: 8px 12px; border-left: 3px solid var(--warn, #b7791f); border-radius: 6px; font-size: 13px; }
+.smoke-sent.ok { border-left-color: var(--ok, #15803d); }

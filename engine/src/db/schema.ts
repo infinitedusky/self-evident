@@ -368,6 +368,14 @@ export const verification = pgTable('verification', { // [LS] Feature/Entry shot
   foreignKey({ name: 'verification_issue_app_fk', columns: [t.issueId, t.appId], foreignColumns: [issue.id, issue.appId] })])
 
 // The thing built the way we would ship it, in a worktree of its own, to show that it works; then analysed into the
+// A task's smoke test, when it runs here (smoke.ts): the worktree at the built branch's head, the commit, the port.
+// One per task; the row outlives the process, so after an engine restart it reads as stopped until started again.
+export const smokeRun = pgTable('smoke_run', {
+  id: id(), appId: appId(), issueId: text('issue_id').notNull().references(() => issue.id),
+  path: homePath('path').notNull(), sha: text('sha').notNull(), port: integer('port'),
+  createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [uniqueIndex('smoke_run_issue').on(t.issueId)])
+
 // What an agent learned by reading an app's code (learn.ts): one row per document per app, replaced when it is
 // learned again. summary is for the person and short; body is for agents. sha: the home repository's commit then.
 export const learning = pgTable('learning', {

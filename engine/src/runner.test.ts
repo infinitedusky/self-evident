@@ -22,6 +22,8 @@ import { setAcceptance } from './acceptance.js'
 import { CHECK_TITLE, FINISH_TITLE, PROBE_TITLE } from './verify.js'
 import { afterOf } from './steps.js'
 import { ensureMain, listWorkflows } from './work.js'
+import { markSmoke, smokeOwed, smokeView } from './smoke.js'
+import { acceptanceOf } from './acceptance.js'
 import { addItems, dropItem, promote } from './backlog.js'
 import type { Propose } from './planner.js'
 import { approveBriefs } from './test-briefs.js'
@@ -327,6 +329,48 @@ describe.skipIf(!reachable)('runner', () => {
     expect((after.acceptance as { built?: boolean }[])[0].built).toBe(true)
     const order = (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => ['task.checked', 'task.tested', 'issue.planned'].includes(e.type)).sort((a, b) => a.seq - b.seq).map((e) => e.type)
     expect(order).toEqual(['issue.planned', 'task.checked', 'task.checked', 'task.tested']) // the whole test run once, last
+  })
+
+  it('a check left to a person holds the task: it is not landed until they mark it by hand; a fail is sent back, and comes back to them', async () => {
+    const own = newId('app')
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'smoke flow', key: own.slice(-6).toUpperCase(), setup: { requirements: [] } })
+    await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: repoPath })
+    await db.transaction((tx) => ensureMain({ tx, appId: own }))
+    const { project: p, issues: [t] } = await createProject({ appId: own, name: 'smoke flow', issues: [{ title: 'Edges (sample)', brief: 'Draw the tunnel (sample).' }] })
+    const { acceptance: [look] } = await setAcceptance(t.id, { add: [{ text: 'The tunnel reads as a tunnel (sample)', check: 'look at it' }] })
+    await setStep({ issueId: t.id }, 'prototype', { status: 'done', detail: 'the whole flow (sample)' }); await approveStep(t.id, 'prototype', 'Sam (sample)')
+    const seen: { title: string; brief: string }[] = []
+    const execute: Execute = async (i) => {
+      seen.push({ title: i.subIssue.title, brief: i.subIssue.brief ?? '' })
+      const r = await commits('smoke')(i)
+      // The check cannot judge how it looks: it leaves it to a person, and says where to look.
+      return i.subIssue.title.startsWith(CHECK_TITLE) ? { ...r, summary: `\`\`\`acceptance\n${JSON.stringify([{ id: look.id, met: null, where: 'edges-tunnel--default', evidence: 'Open the story: the edge should dip under the lip' }])}\n\`\`\`` } : r
+    }
+    const runner = new Runner({ execute, sessionsMax: 1 })
+    await approveBriefs(own)
+    await runner.buildTask(t.id)
+    const events = async (type: string) => (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => e.type === type)
+    await until(async () => (await events('task.smoke_waiting')).length === 1)
+    expect(seen.map((s) => s.title)).toEqual(['Build it', CHECK_TITLE, PROBE_TITLE]) // nothing was "not done", so no finish: it is the person's
+    expect((await db.select().from(project).where(eq(project.id, p.id)))[0].status).toBe('running') // built, and not landed
+    expect(await cleaned(p.id)()).toBe(false)
+    expect((await now(own)).needsYou.filter((a) => a.kind === 'smoke_test')).toEqual([expect.objectContaining({ issueId: t.id, owed: 1 })])
+    expect((await smokeView(t.id)).checks).toEqual([{ id: look.id, text: 'The tunnel reads as a tunnel (sample)', where: 'edges-tunnel--default', how: 'Open the story: the edge should dip under the lip', mark: 'todo' }])
+    // They try it: it does not hold. Sent back with what they saw, built, and looked at again.
+    await markSmoke(t.id, look.id, { pass: false, note: 'the edge sits on top of the lip (sample)' })
+    expect(await runner.afterSmoke(t.id)).toEqual({ sentBack: 1 })
+    await until(async () => (await events('task.smoke_waiting')).length === 2 || seen.length >= 5)
+    await until(async () => seen.length >= 5 && smokeOwed(acceptanceOf((await db.select().from(issue).where(eq(issue.id, t.id)))[0])) === 1)
+    expect(seen.slice(3).map((s) => s.title)).toEqual([FINISH_TITLE, `${CHECK_TITLE} (2)`])
+    expect(seen[3].brief).toContain('Missing: the edge sits on top of the lip (sample)'); expect(seen[3].brief).toContain('by trying the build by hand')
+    expect((await smokeView(t.id)).checks[0]).toMatchObject({ mark: 'todo', before: { pass: false, note: 'the edge sits on top of the lip (sample)' } })
+    expect(await cleaned(p.id)()).toBe(false)
+    // They try it again: it holds. The task carries on to its end.
+    await markSmoke(t.id, look.id, { pass: true, note: 'dips under the lip now (sample)' })
+    expect(await runner.afterSmoke(t.id)).toEqual({ sentBack: 0 })
+    await until(cleaned(p.id))
+    const [after] = await db.select().from(issue).where(eq(issue.id, t.id))
+    expect((after.acceptance as { built?: boolean; builtEvidence?: string; byHand?: { pass: boolean } }[])[0]).toMatchObject({ built: true, builtEvidence: 'dips under the lip now (sample)', byHand: { pass: true } })
   })
 
   it('a built task is checked against its acceptance criteria by one more sub-task, before the whole test run; its verdicts mark them', async () => {

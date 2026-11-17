@@ -99,6 +99,9 @@ function AttentionRow({ a, busy, act }: { a: Attention; busy: string | null; act
     case 'run_project': return (
       <li><Badge tone="ok">ready</Badge><div><strong>{a.projectName}</strong> <span className="faint">{a.appName} · {a.subIssues} sub-task{a.subIssues === 1 ? '' : 's'} planned, nothing open</span></div>
         <button className="btn small" disabled={busy === a.projectId} onClick={() => act(a.projectId, () => engine.start(a.projectId))}>Run it</button></li>)
+    case 'smoke_test': return (
+      <li><Badge tone="warn">waiting on you</Badge><div><strong><Link to={`/tasks/${a.issueId}/smoke`}>{a.identifier}</Link> {a.issueTitle}</strong> {where} <span className="faint">· built; {a.owed} check{a.owed === 1 ? '' : 's'} only you can do, by trying it</span></div>
+        <Link className="btn small" to={`/tasks/${a.issueId}/smoke`}>Try it</Link></li>)
     case 'approve_brief': return (
       <li><Badge tone="warn">waiting on you</Badge><div><strong><Link to={`/tasks/${a.issueId}/brief`}>{a.identifier}</Link> {a.issueTitle}</strong> {where} <span className="faint">· its brief is ready; nothing more happens until you approve it</span></div>
         <Link className="btn small" to={`/tasks/${a.issueId}/brief`}>Read and approve</Link></li>)

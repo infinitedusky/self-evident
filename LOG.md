@@ -4371,6 +4371,51 @@ hand for what an agent cannot judge, while Self Evident watches. Talked through,
 - Open: which Homework Gate is; how Self Evident watches a deployed build (its telemetry, filtered to the test
   account and the time of the test, looks better than a script in the page); screenshots of a 3D canvas.
 
+## The smoke test, first slice: the step and a person's marks (Sandy, 2026-11-17: "lets build it")
+
+Idea #1 of the Self Evident app; the shape is in SHAPE.md ("An app says where it is smoke tested"). Built: the
+setting, the step for a task, and the marks. Not built: watching while they test, and testers through a link.
+
+- **The app's setting** (`setup.smoke`, Settings › Prototype, under the prototype's own): here like its
+  prototypes, staging, or behind a feature flag; for the last two an address, who to sign in as (in words, never
+  a password) and the flag.
+- **The checks are what the check after the build left to a person** (`smoke.ts`). The checking agent is now told
+  to write those for the person: where to go (a path, or a story's id) and what to do there and what passing
+  looks like. They become the step's instructions.
+- **The step is a page of the task** (`/tasks/:id/smoke`), and a row in its nav under Build. Here: the built
+  code beside the checks, started with one press, in a worktree of its own at the branch's head (a commit, on no
+  branch) with the prototype's command and a database of its own. Staging or a flag: the address to open, and
+  the same checks. It says which commit; a mark made before the branch moved says so.
+- **Pass or Fail, then a note** (a fail needs one). It goes straight onto the criterion as the build's mark, by
+  hand, with the note as its evidence and the commit. No conversation in between.
+- **A task with a check waiting is built but not landed** (`heldForSmoke` in `runner.ts`): its project stays
+  running, and it is on My Stuff as waiting on you. Only a checklist task.
+- **When every check is marked**: what failed is sent back in one "Finish what the check found", with what they
+  saw; it is built, checked again, and comes back to them with what they said last time beside it. Nothing
+  failed: the task carries on to its end.
+- The merge guide's record says "Checked by hand" or "Failed by hand" with the note.
+
+Found while testing: a build that failed to start, whose failure could not be recorded (the database gone), threw
+where nobody was waiting. It is caught and logged now.
+
+Not seen on a real task. Not done: the smoke worktree is not removed when the task ends; a feature flag's test
+comes after the merge, and the step does not yet wait there.
+
+## A smoke test can be on a preview of the pull request (Sandy, 2026-11-17: "yes", on Bonkei's per-PR installable previews)
+
+Bonkei's agent proposed pkg.pr.new: an installable build of the library for every pull request, and a link to a
+fresh app running it. That is staging with an address of the pull request's own, which the setting could not say:
+it took one fixed address.
+
+- **A fourth place an app is smoke tested**: a preview of each pull request (`setup.smoke.where = 'preview'`). The
+  app gives the address as a pattern with `{pr}` where the number goes; the task's page fills in its own pull
+  request's (`previewUrl`). The same fits a site's preview deployments.
+- Before a task has a pull request, its page says so, and that one is opened once the first of its work is merged.
+- Nothing else changes: the checks, the marks, the hold. A check can already point at any address.
+
+For Bonkei both are worth having: its Storybook, run here, shows how a diagram looks; the preview shows that it
+installs and runs in someone else's app. Its agent's "smoke-test app" is an install test, not this.
+
 ## A step says it is under way before its work starts (Sandy, 2026-11-17: "if it is going to do research it should first mark that in the db … and then do it")
 
 A step's page said "Not started" while its agent was working on it: the task's agent did the research and recorded it
