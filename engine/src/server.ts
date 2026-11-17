@@ -67,6 +67,7 @@ import { importTickets, linearTickets, type Scope } from './linear-import.js'
 import { accountStatus, cleanAccount } from './account.js'
 import { pullSkills, removeSkillSource, skillSources } from './skill-sources.js'
 import { outsidePr, pr as prRows } from './db/schema.js'
+import { dropSecret, envFor, keepSecret, keptAs, moveSecrets, SecretError } from './secrets.js'
 import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError, INTEGRATIONS, setupIntegration, statuses, type Local, type SetupResult, type Values } from './integrations.js'
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
 import { linearFor } from './linear-home.js'
@@ -152,10 +153,27 @@ export function buildApp(bus: EventBus) {
   api.delete('/apps/:id', async (c) => { try { return c.json(await deleteForGood(c.req.param('id'), (await c.req.json<{ name?: string }>().catch(() => ({} as { name?: string }))).name ?? '')) } catch (err) { return planError(c, err) } })
   // Settings: the workspace's integrations, plugins and the jobs their skills cover; an app's own view is the merge,
   // plus its repo's skills.
+  // For each integration with a key: whether it is set and where from (the app's file, the shared one, the environment), never the key (secrets.ts).
+  const keysOf = async (values: (key: string) => Record<string, string | { value: string | null } | null | undefined> | undefined, appKey?: string) => Object.fromEntries((await Promise.all(INTEGRATIONS.map(async (i) => {
+    const field = i.fields.find((x) => x.secret); const v = field ? values(i.key)?.[field.key] : null
+    return [i.key, await keptAs(typeof v === 'string' ? v : v?.value, appKey)] as const
+  }))).filter(([, k]) => k))
+  api.put('/secrets/:name', async (c) => { // {value, appId?}: keep a key in the app's file, or the shared one with no app. Never read back.
+    const body = await c.req.json<{ value?: string; appId?: string }>().catch(() => ({} as { value?: string; appId?: string }))
+    const [a] = body.appId ? await db.select().from(appTable).where(eq(appTable.id, body.appId)) : []
+    if (body.appId && !a) return c.json({ error: 'no such app' }, 404)
+    try { return c.json(await keepSecret(c.req.param('name'), body.value ?? '', a?.key)) } catch (err) { if (err instanceof SecretError) return c.json({ error: err.message }, 400); throw err }
+  })
+  api.delete('/secrets/:name', async (c) => {
+    const appId = c.req.query('app')
+    const [a] = appId ? await db.select().from(appTable).where(eq(appTable.id, appId)) : []
+    if (appId && !a) return c.json({ error: 'no such app' }, 404)
+    return c.json(await dropSecret(c.req.param('name'), a?.key))
+  })
   api.get('/settings', async (c) => {
     const [w] = await db.select().from(workspace).limit(1)
     const f = (w?.settings ?? {}) as FactorySettings & { integrations?: Values }
-    return c.json({ workspace: w ?? null, integrations: INTEGRATIONS, values: f.integrations ?? {}, status: statuses(f.integrations ?? {}), plugins: describePlugins(f), catalogue: CATALOGUE })
+    return c.json({ workspace: w ?? null, integrations: INTEGRATIONS, values: f.integrations ?? {}, status: statuses(f.integrations ?? {}, await envFor()), keys: await keysOf((k) => f.integrations?.[k]), plugins: describePlugins(f), catalogue: CATALOGUE })
   })
   // Plugins: installed by Claude Code's installer into the factory's own config dir (skills.ts); the switches and the
   // filing are workspace settings.
@@ -221,7 +239,7 @@ export function buildApp(bus: EventBus) {
     const setup = a.setup as { integrations?: Values; plugins?: AppPlugins; skills_by_job?: AppJobs }
     const plugins = installed().map((p) => ({ id: p.id, name: p.name, factoryOn: pluginOn(p.id, f), own: setup.plugins?.[p.id]?.on ?? null, on: pluginOn(p.id, f, setup.plugins) }))
     const integrations = effectiveIntegrations(f.integrations, setup.integrations)
-    return c.json({ integrations, status: statuses(integrations), plugins, jobs: describeJobs(f, setup.skills_by_job), usable: await usableSkills(a.id, r?.localPath), skills: r?.localPath ? appSkills(r.localPath) : [] })
+    return c.json({ integrations, status: statuses(integrations, await envFor(a.key)), keys: await keysOf((k) => integrations[k], a.key), plugins, jobs: describeJobs(f, setup.skills_by_job), usable: await usableSkills(a.id, r?.localPath), skills: r?.localPath ? appSkills(r.localPath) : [] })
   })
   // Tries an integration's saved connection: the workspace's values, or an app's with its overrides.
   // An integration's effective values for an app (or the workspace's), and what its per-app check needs from the app.
@@ -231,9 +249,10 @@ export function buildApp(bus: EventBus) {
     if (!ctx) return null
     const eff = effectiveIntegrations(shared, own)
     if (eff.tkt?.linear?.value !== 'true') return ctx
-    return { ...ctx, ...(await linearFor({ team: eff.linear?.team?.value, key_env: eff.linear?.key_env?.value })) }
+    const [own_] = await db.select({ key: appTable.key }).from(appTable).where(eq(appTable.id, appId))
+    return { ...ctx, ...(await linearFor({ team: eff.linear?.team?.value, key_env: eff.linear?.key_env?.value }, await envFor(own_?.key))) }
   }
-  const integrationFor = async (key: string, appId?: string): Promise<{ values: Record<string, string | null>; local?: Local } | null> => {
+  const integrationFor = async (key: string, appId?: string): Promise<{ values: Record<string, string | null>; local?: Local; env: Record<string, string | undefined> } | null> => {
     const [w] = await db.select().from(workspace).limit(1)
     const shared = ((w?.settings ?? {}) as { integrations?: Values }).integrations ?? {}
     let own: Values = {}
@@ -244,6 +263,7 @@ export function buildApp(bus: EventBus) {
       own = (a.setup as { integrations?: Values }).integrations ?? {}
     }
     const values = Object.fromEntries(Object.entries(effectiveIntegrations(shared, own)[key] ?? {}).map(([k, v]) => [k, v.value]))
+    const env = await envFor(a?.key) // the keys kept for this app, over the shared ones, over the engine's environment
     let local: Local | undefined
     if (key === 'tkt' && appId) { const ctx = await tktContext(appId, shared, own); if (ctx) local = { tkt: { ctx } } }
     if (key === 'storybook' && a) {
@@ -251,13 +271,13 @@ export function buildApp(bus: EventBus) {
       const v = await storybookValues({ integrations: { storybook: Object.fromEntries(Object.entries(values).filter(([, x]) => x != null)) } }, r?.localPath ?? null) // the app's values, else the repo's defaults
       local = { storybook: { ctx: { app: { id: a.id, name: a.name, defaultBranch: a.defaultBranch ?? undefined }, repoPath: r?.localPath ?? null, url: v.url, cmd: v.cmd } } }
     }
-    return { values, local }
+    return { values, local, env }
   }
   api.post('/integrations/:key/check', async (c) => {
     const body = await c.req.json<{ appId?: string }>().catch(() => ({} as { appId?: string }))
     const found = await integrationFor(c.req.param('key'), body.appId)
     if (!found) return c.json({ error: 'no such app' }, 404)
-    try { return c.json(await checkIntegration(c.req.param('key'), found.values, process.env, fetch, found.local)) } catch (err) {
+    try { return c.json(await checkIntegration(c.req.param('key'), found.values, found.env, fetch, found.local)) } catch (err) {
       if (err instanceof IntegrationError) return c.json({ error: err.message }, 400)
       throw err
     }
@@ -281,7 +301,7 @@ export function buildApp(bus: EventBus) {
       let going = settingUp.get(slot)
       if (!going) {
         going = (async () => {
-          const r = await setupIntegration(key, found.values, process.env, found.local)
+          const r = await setupIntegration(key, found.values, found.env, found.local)
           let talkId: string | null = null
           if (r.ask) { const t = await startTalk({ appId, subjectRef: { setup: name }, actor: 'user' }); await say(t.id, r.ask); await showTalk(t.id, appId); talkId = t.id }
           return { ...r, talkId }
@@ -330,8 +350,10 @@ export function buildApp(bus: EventBus) {
       body.setup.plugins = Object.fromEntries(Object.entries((body.setup.plugins ?? {}) as Record<string, { on?: unknown } | null>)
         .filter(([id, v]) => known.has(id) && typeof v?.on === 'boolean').map(([id, v]) => [id, { on: v!.on }]))
     }
+    const [was] = key ? await db.select({ key: appTable.key }).from(appTable).where(eq(appTable.id, c.req.param('id'))) : []
     const [row] = await db.update(appTable).set({ ...(body.name ? { name: body.name } : {}), ...(key ? { key } : {}), ...(body.defaultBranch ? { defaultBranch: body.defaultBranch } : {}), ...(body.setup ? { setup: body.setup } : {}) })
       .where(eq(appTable.id, c.req.param('id'))).returning()
+    if (key && was && was.key !== key) await moveSecrets(was.key, key).catch((err) => console.error(`secrets: could not follow ${was.key} to ${key}`, err)) // its kept keys go with its key
     return row ? c.json(row) : c.json({ error: 'no such app' }, 404)
   })
   // A local checkout is made ready as it is set (a folder becomes a repository; the branch follows); the row comes back with a `note` saying what was done.
@@ -445,6 +467,7 @@ export function buildApp(bus: EventBus) {
     })
     return c.json({ removed: was.id })
   })
+  const envOfApp = async (appId: string) => { const [a] = await db.select({ key: appTable.key }).from(appTable).where(eq(appTable.id, appId)); return envFor(a?.key) }
   // Tasks from Linear tickets (linear-import.ts): the team's open tickets for the app, and bringing the ticked ones in. Reads Linear, never writes.
   // Which Claude account this app's agents run on (account.ts): the engine's default, or the app's own key or login.
   api.get('/apps/:id/account', async (c) => {
@@ -453,11 +476,11 @@ export function buildApp(bus: EventBus) {
   })
   api.get('/apps/:id/linear/tickets', async (c) => {
     const scope = (['mine', 'unassigned', 'all'] as Scope[]).find((s) => s === c.req.query('scope')) ?? 'mine'
-    try { return c.json(await linearTickets(c.req.param('id'), scope)) } catch (err) { return planError(c, err) }
+    try { return c.json(await linearTickets(c.req.param('id'), scope, await envOfApp(c.req.param('id')))) } catch (err) { return planError(c, err) }
   })
   api.post('/apps/:id/linear/import', async (c) => {
     const body = await c.req.json<{ identifiers?: string[] }>().catch(() => ({} as { identifiers?: string[] }))
-    try { return c.json(await importTickets(c.req.param('id'), body.identifiers ?? []), 201) } catch (err) { return planError(c, err) }
+    try { return c.json(await importTickets(c.req.param('id'), body.identifiers ?? [], 'user', await envOfApp(c.req.param('id'))), 201) } catch (err) { return planError(c, err) }
   })
   // Assets (assets.ts): what an app or a project is worked from. A name, a link or path, a note.
   api.get('/apps/:id/assets', async (c) => c.json(await listAssets(c.req.param('id'), c.req.query('project') || null)))

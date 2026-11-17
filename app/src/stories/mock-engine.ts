@@ -177,6 +177,9 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     }),
     http.get('/api/issues/:id/checklist', () => reply(d.checklist ?? null)),
     http.post('/api/issues/:id/pr/submit', () => (d.submitPrError ? HttpResponse.json({ error: d.submitPrError }, { status: 400 }) : reply({ id: 'pr_sample', number: 412, url: 'https://example.com/pull/412', status: 'draft' }))),
+    // Kept keys: the engine's rules, roughly. The key is taken and never given back.
+    http.put('/api/secrets/:name', async ({ params, request }) => { const b = await request.json() as { value?: string; appId?: string }; if (!b.value?.trim()) return HttpResponse.json({ error: 'paste the key; to take one away, remove it' }, { status: 400 }); return reply({ name: params.name, set: true, from: b.appId ? 'app' : 'shared', last4: b.value.trim().slice(-4) }) }),
+    http.delete('/api/secrets/:name', ({ params }) => reply({ name: params.name, set: false, from: null, last4: null })),
     http.get('/api/issues/:id/merge-guide', () => reply({ guide: d.mergeGuide ?? '', record: d.mergeRecord ?? '', subTasks: 3 })),
     http.get('/api/issues/:id/branches', ({ params }) => reply(d.taskBranches ?? { issueId: params.id as string, worktrees: [], branches: [], saves: [] })),
     http.post('/api/issues/:id/save-points', async ({ params, request }) => {

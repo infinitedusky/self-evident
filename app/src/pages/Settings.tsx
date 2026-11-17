@@ -161,7 +161,7 @@ function FactoryPage({ section, item }: { section: string; item?: string }) {
       </section>}
 
       {section === 'integrations' && (s.workspace
-        ? <Integrations base="/settings/integrations" item={item} integrations={s.integrations} values={asEffective(s)} status={s.status} scope="workspace"
+        ? <Integrations base="/settings/integrations" item={item} integrations={s.integrations} values={asEffective(s)} status={s.status} keys={s.keys} onKeys={() => void load()} scope="workspace"
             onSave={async (v) => { await engine.updateWorkspace(s.workspace!.id, { integrations: v }); await load() }} />
         : <section className="panel"><h2>Integrations</h2><div className="empty">Add an app first; it creates the workspace.</div></section>)}
     </>
@@ -465,7 +465,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   }
   if (section === 'workflows') return <WorkflowSettings appId={app.id} />
   if (section === 'integrations') return info && factory
-    ? <Integrations base={`/settings/apps/${app.id}/integrations`} item={item} integrations={factory.integrations} values={info.integrations} status={info.status} scope="app" appId={app.id}
+    ? <Integrations base={`/settings/apps/${app.id}/integrations`} item={item} integrations={factory.integrations} values={info.integrations} status={info.status} keys={info.keys} onKeys={() => void load()} scope="app" appId={app.id}
         onSave={async (v) => { await engine.updateApp(app.id, { setup: { ...(app.setup ?? {}), integrations: v } }); await onSaved(); await load() }} />
     : error ? <div className="empty bad">{error}</div> : <p className="muted">Loading…</p>
   const groups: Record<string, React.ReactNode> = {

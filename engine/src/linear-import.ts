@@ -60,7 +60,7 @@ async function connection(appId: string, env: Record<string, string | undefined>
   const keyVar = eff.linear?.key_env?.value?.trim()
   if (!team || !keyVar) throw new PlanError(`Linear isn't set for ${a.name}: give it the team key and the key variable under Settings › ${a.name} › Integrations › Linear.`)
   const key = env[keyVar]
-  if (!key) throw new PlanError(`${keyVar} isn't set in the engine's environment. Create a personal API key in Linear (Settings › Account › Security & access), export it as ${keyVar} where the engine starts, and restart the engine.`)
+  if (!key) throw new PlanError(`${keyVar} has no key. Create a personal API key in Linear (Settings › Account › Security & access) and paste it under Settings › Integrations › Linear: it is kept on this computer, so you do it once.`)
   return { team, key }
 }
 

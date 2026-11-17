@@ -47,7 +47,7 @@ describe('checkIntegration', () => {
   const env = { CONFLUENCE_API_TOKEN: 'secret' }
   it('says what is missing before calling anything', async () => {
     expect(await checkIntegration('confluence', { site: 'x' }, env)).toEqual({ ok: false, detail: 'Missing: Account email, Space key, Key variable.' })
-    expect((await checkIntegration('confluence', values, {})).detail).toMatch(/CONFLUENCE_API_TOKEN isn't set/)
+    expect((await checkIntegration('confluence', values, {})).detail).toMatch(/CONFLUENCE_API_TOKEN has no key/)
   })
   it('finds the Confluence space with the account\'s email and key', async () => {
     let asked: { url: string; auth: string } | null = null
