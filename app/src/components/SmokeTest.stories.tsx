@@ -140,3 +140,14 @@ export const PullRequestOpen: Story = {
     await expect(onPr.getByRole('button', { name: 'Pass' })).toBeEnabled()
   },
 }
+
+/** An app with a set-up of its own (a script, a seed): it can be started from nothing, before it runs and while it does. */
+export const StartClean: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, url: null, up: false, running: null, canClean: true } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Start clean' }))
+    await expect(await c.findByRole('button', { name: 'Stop' })).toBeInTheDocument() // it is up
+    await expect(c.getByRole('button', { name: 'Start clean' })).toBeEnabled() // and can be started from nothing again
+  },
+}

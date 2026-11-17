@@ -108,7 +108,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
             {local && !v.url && (
               <div className="empty">
                 {v.head ? (v.canRun
-                  ? <>The built code is not running. <button className="btn small" disabled={busy} onClick={() => void act(() => engine.startSmoke(issueId))}>Run it</button></>
+                  ? <>The built code is not running. <button className="btn small" disabled={busy} onClick={() => void act(() => engine.startSmoke(issueId))}>Run it</button>{v.canClean && <> <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true))}>Start clean</button></>}</>
                   : <>This app has no command to run it yet. Say how its prototypes are started, in Settings › Prototype, and the smoke test uses the same.</>)
                   : <>Nothing is built yet: the smoke test runs the task's branch once there is one.</>}
               </div>
@@ -120,6 +120,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
                   <code className="smoke-address">{src}</code>
                   <a className="btn quiet small" href={src} target="_blank" rel="noreferrer">Open in a new tab</a>
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.startSmoke(issueId))}>{behind ? 'Run the new commit' : 'Restart'}</button>}
+                  {local && v.canClean && <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true))}>Start clean</button>}
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.stopSmoke(issueId))}>Stop</button>}
                 </div>
                 {behind && <p className="smoke-stale" role="note">The branch has moved on since this was started. Run the new commit to test what will be reviewed.</p>}
