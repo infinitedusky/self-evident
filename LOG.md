@@ -4468,3 +4468,16 @@ then a lone node, then another beside it when the check was added.
   it (the first check on every sub-task of the build; anything later on the last one), so the project's graph
   shows the same line.
 - A staged task's graph is as it was.
+
+## The first real smoke test, on BON-52 (Sandy, 2026-11-17: "Failed to resolve entry for package bonkei … and then a blank screen")
+
+- **Cause**: BON-52 makes Bonkei a real package, entered at its built output (`dist/`); a fresh checkout has none,
+  and the command that runs Bonkei did not build first. On main the package is entered at its source, so this
+  had never come up.
+- **Set right in Bonkei's settings**: its run command builds the package first (`run --if-present build`, so a
+  branch without the script is unharmed). BON-52's smoke test was started again and its page loads.
+- **A finding for BON-52**, not only a setting: after it merges, the playground will not run from a fresh clone
+  without a build. The smoke test did what it is for.
+- **Fixed here**: a check's "where" can be a place said in words ("the first pull request on GitHub"). "Go there"
+  took it for a story's id and made an address that goes nowhere. It is shown as text now, and the button is only
+  there for an address, a path or a story's id (`goable`).

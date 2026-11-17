@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
-import { addressOf, SmokeTest } from './SmokeTest'
+import { addressOf, goable, SmokeTest } from './SmokeTest'
 import { withEngine } from '../stories/mock-engine'
 import { smokeSample } from '../stories/sample'
 
@@ -99,4 +99,16 @@ export const OnAPreview: Story = {
 export const NoPullRequestYet: Story = {
   beforeEach: withEngine({ smoke: { ...smokeSample, where: 'preview', says: 'on a preview of its own pull request', url: null, up: false, running: null, canRun: false, pr: null } }),
   play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/this task has no pull request yet/)).toBeInTheDocument() },
+}
+
+/** A check whose place is said in words, not an address (made up): it is shown as it is, and there is no "Go there" to a broken page. */
+export const WhereInWords: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, owed: 1, checks: [{ id: 'ac_s9', text: 'The install line in the pull request works (sample)', where: 'the first pull request on GitHub, once the app is installed (sample)', how: 'Copy the line from the bot\'s comment into a fresh app: it should install and draw a diagram (sample)', mark: 'todo' }] } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/the first pull request on GitHub, once the app is installed/)).toBeInTheDocument()
+    await expect(c.queryByRole('button', { name: 'Go there' })).toBeNull()
+    await expect([goable('/checkout'), goable('edges-tunnel--default'), goable('https://pkg.pr.new/sample@12'), goable('the first pull request on GitHub'), goable('Diagram/Edges in 3D'), goable(undefined)]).toEqual([true, true, true, false, false, false])
+    await expect(addressOf('http://localhost:6500', 'the first pull request')).toBe('http://localhost:6500')
+  },
 }
