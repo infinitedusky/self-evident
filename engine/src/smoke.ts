@@ -9,6 +9,9 @@
  * - local: the engine runs the built branch here, in a worktree of its own at the branch's head, with the command
  *   that runs the app's prototypes (or one of the smoke test's own) and a database of its own. For a library and
  *   its Storybook this is the whole environment.
+ * - preview: a preview made for each pull request (a preview deployment of a site; an installable build of a
+ *   library, like pkg.pr.new's). Staging, with an address of the pull request's own: the app gives the pattern,
+ *   with {pr} where the number goes (Sandy, 2026-11-17, on Bonkei's per-PR previews: "yes").
  * - staging: a deployed build at an address, with a test account. The engine starts nothing; the person is sent there.
  * - flag: production, behind a feature flag on for a test account only. The same, and it comes after the merge.
  *
@@ -28,7 +31,7 @@ import { eq } from 'drizzle-orm'
 import { acceptanceOf, setAcceptance, type Criterion } from './acceptance.js'
 import { landingBranch, modeOf } from './branches.js'
 import { db } from './db/client.js'
-import { app, project, smokeRun } from './db/schema.js'
+import { app, pr as prTable, project, smokeRun } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { git, headSha } from './git.js'
 import { newId } from './ids.js'
@@ -36,14 +39,15 @@ import { getIssue, identifier, PlanError } from './issues.js'
 import { databaseExists, databaseUrl, listScenarios, rebuild, type PrototypeDb } from './prototype-data.js'
 import { homeRepo } from './workbench.js'
 
-export type Where = 'local' | 'staging' | 'flag'
-export const WHERES: Where[] = ['local', 'staging', 'flag']
+export type Where = 'local' | 'preview' | 'staging' | 'flag'
+export const WHERES: Where[] = ['local', 'preview', 'staging', 'flag']
 export const WHERE_SAYS: Record<Where, string> = {
   local: 'run here, like its prototypes: the built branch, made-up data',
+  preview: 'on a preview of its own pull request, at that pull request\'s address',
   staging: 'a deployed build at an address, with a test account',
   flag: 'in production, behind a feature flag that is on for a test account only',
 }
-export interface SmokeSetup { where: Where; /** staging or flag: the address to test at. */ url?: string; /** How to get in for a test, in words: which account, where its sign-in is. Never a password. */ account?: string; /** flag: its name, or how flags are named here. */ flag?: string; /** local: a command of its own; else the one that runs prototypes. */ cmd?: string }
+export interface SmokeSetup { where: Where; /** staging or flag: the address to test at. preview: its pattern, with {pr} for the pull request's number. */ url?: string; /** How to get in for a test, in words: which account, where its sign-in is. Never a password. */ account?: string; /** flag: its name, or how flags are named here. */ flag?: string; /** local: a command of its own; else the one that runs prototypes. */ cmd?: string }
 
 /** The app's setting; local when it has said nothing, which is where its prototypes run. */
 export function smokeSetup(setup: unknown): SmokeSetup {
@@ -66,6 +70,9 @@ export interface SmokeCheck {
   /** What they said last time, when it has come back to them after a fix. */
   before?: { pass: boolean; note: string }
 }
+
+/** A preview's address for one pull request: the pattern with its number in place of {pr}. Null without a pattern or a number. */
+export const previewUrl = (pattern: string | undefined, pr: number | null | undefined) => (pattern && pr ? pattern.replace(/\{pr\}/g, String(pr)) : null)
 
 /** Whether a criterion is one for a person: the check left it to them, or they have marked it by hand already. */
 export const byHand = (c: Criterion) => !!c.byHand || (c.built === undefined && !!c.builtEvidence)
@@ -107,12 +114,16 @@ async function built(issueId: string) {
   const name = identifier(a.key, t.number)
   const branch = p?.integrationBranch ? landingBranch(modeOf(p, a.setup), p.integrationBranch, { identifier: name }) : null
   const head = branch && r?.localPath ? await headSha(r.localPath, branch).catch(() => null) : null
-  return { t, a, p, repoPath: r?.localPath ?? null, name, branch, head }
+  // Its pull request: the task's own when each task has one, else its project's.
+  const prs = p ? await db.select().from(prTable).where(eq(prTable.projectId, p.id)) : []
+  const pull = prs.find((x) => x.issueId === t.id) ?? prs.find((x) => !x.issueId) ?? null
+  return { t, a, p, repoPath: r?.localPath ?? null, name, branch, head, pr: pull?.number ? { number: pull.number, url: pull.url } : null }
 }
 
 export async function smokeView(issueId: string) {
-  const { t, a, branch, head } = await built(issueId)
+  const { t, a, branch, head, pr } = await built(issueId)
   const setup = smokeSetup(a.setup)
+  const there = setup.where === 'preview' ? previewUrl(setup.url, pr?.number) : setup.url ?? null // where it is deployed, when it is
   const [run] = await db.select().from(smokeRun).where(eq(smokeRun.issueId, t.id))
   const on = alive(t.id)
   const local = run?.port ? `http://localhost:${run.port}` : null
@@ -120,8 +131,9 @@ export async function smokeView(issueId: string) {
   return {
     where: setup.where, says: WHERE_SAYS[setup.where], account: setup.account ?? null, flag: setup.flag ?? null,
     branch, head, /** local: the commit its server is running; it is behind when the branch has moved on. */ running: setup.where === 'local' && on ? run?.sha ?? null : null,
-    url: setup.where === 'local' ? (on ? local : null) : setup.url ?? null,
-    up: setup.where === 'local' ? (on && local ? await answers(local) : false) : !!setup.url,
+    url: setup.where === 'local' ? (on ? local : null) : there,
+    up: setup.where === 'local' ? (on && local ? await answers(local) : false) : !!there,
+    /** Its pull request, when there is one: a preview is of it. */ pr,
     canRun: setup.where === 'local' && !!(setup.cmd ?? (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd?.trim()),
     log: running.get(t.id)?.log.slice(-30) ?? [],
     checks, owed: checks.filter((c) => c.mark === 'todo').length, failed: checks.filter((c) => c.mark === 'fail').length,
@@ -132,7 +144,7 @@ export async function smokeView(issueId: string) {
 export async function startSmoke(issueId: string, actor = 'user') {
   const { t, a, repoPath, name, branch, head } = await built(issueId)
   const setup = smokeSetup(a.setup)
-  if (setup.where !== 'local') throw new PlanError(`${a.name} is smoke tested ${setup.where === 'staging' ? 'on staging' : 'behind a feature flag'}: there is nothing to start here${setup.url ? `; it is at ${setup.url}` : ''}`)
+  if (setup.where !== 'local') throw new PlanError(`${a.name} is smoke tested ${setup.where === 'staging' ? 'on staging' : setup.where === 'preview' ? 'on a preview of its pull request' : 'behind a feature flag'}: there is nothing to start here`)
   if (!repoPath) throw new PlanError(`${a.name} has no local checkout`)
   if (!branch || !head) throw new PlanError(`${name} is not built yet: there is no branch to run`)
   const cmd = setup.cmd ?? (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd?.trim()
