@@ -547,6 +547,12 @@ export const reports: import('../engine').Reports = { writing: false, format: { 
 // A checklist task after its first check (made up): one criterion and one requirement not done and sent back.
 export const checklistSample: import('../engine').Checklist = {
   build: 'one', met: 4, unmet: 2, total: 7,
+  flow: [
+    { id: 'iss_sample5', sub: 'iss_sample5', title: 'Build it', state: 'done', detail: '', after: null },
+    { id: 'flow:check', title: 'Check it against its list', state: 'doing', detail: 'round 1: 2 not done, sent back', after: ['iss_sample5'] },
+    { id: 'flow:probe', title: 'Try to break it, and clean up', state: 'todo', detail: 'after the check', after: ['flow:check'] },
+    { id: 'flow:test', title: 'The whole test run', state: 'todo', detail: 'the whole run, once, last', after: ['flow:probe'] },
+  ],
   stages: [
     { key: 'build', label: 'Build', state: 'done', detail: 'built in one go' },
     { key: 'check', label: 'Check', state: 'doing', detail: 'round 1: 2 not done, sent back' },

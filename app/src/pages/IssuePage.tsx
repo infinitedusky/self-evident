@@ -28,7 +28,7 @@ import { QuestionAsk } from '../components/QuestionAsk'
 import { PlanCovers } from '../components/Requirements'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
 import { canSkip, finished, label, ready, settled, skipped, step, type Row, type StepKey } from '@self-evident/engine/steps'
-import { asked, PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
+import { asked, flowGraph, PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
 import { ChecklistView } from '../components/ChecklistView'
 import { SmokeTest } from '../components/SmokeTest'
 import { openEvents, useLiveProject, type Events, type Checklist, API, engine, useWorkflows, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
@@ -187,7 +187,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
         {here === 'smoke' && checklist && <SmokeTest issueId={i.id} appId={i.appId} base={base} />}
         {here === 'saves' && <TaskBranches issueId={i.id} at={new URLSearchParams(window.location.search).get('at')} stamp={savesStamp} onMoved={() => void act(async () => {})} onChanged={readSaves} />}
         {here === 'build' && (buildWaits
-          ? <section className="panel"><h2>🏗️ {checklist ? 'Build' : 'Sub-tasks'}</h2><div className="empty">{checklist ? 'The build waits' : 'Planning and building wait'} for the brief's approval. <Link to={`${base}/brief`}>Go to the brief →</Link></div></section>
+          ? <section className="panel"><h2>🏗️ {checklist ? 'Build' : 'Sub-tasks'}</h2><div className="empty">{checklist ? 'The build waits' : 'Planning and building wait'} for the brief's approval. <Link to={`${base}/brief`}>Go to the brief →</Link></div>{checklist?.flow && <TaskGraph i={i} checklist={checklist} />}</section>
           : <>
               {live.length > 0 && i.project && ['drafting', 'proposed', 'approved'].includes(i.project.status) && (
                 <section className="panel" data-component="RunIt">
@@ -202,7 +202,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
               )}
               <SubTasks i={i} plan={!live.length && i.state === 'todo' ? <button className="btn" disabled={busy} onClick={() => act(() => engine.planIssue(i.id))}>Plan it</button> : null} />
               <Planner i={i} busy={busy} act={act} />
-              {live.length > 0 && <TaskGraph i={i} />}
+              {(live.length > 0 || checklist?.flow) && <TaskGraph i={i} checklist={checklist} />}
               {live.length > 0 && <PlanCovers list={i.requirements ?? []} />}
               {live.length > 0 && <MergeGuide issueId={i.id} stamp={i.updatedAt} />}
               {live.length > 0 && <SubmitPr issueId={i.id} pr={i.pr ?? null} landed={done} total={live.length} unchecked={(i.acceptance ?? []).filter((c) => c.built !== true).length} draft={app?.setup?.pr_draft !== false} onChanged={() => void act(async () => {})} />}
@@ -387,18 +387,20 @@ function Comments({ i }: { i: IssueDetail }) {
  * the build area"): its sub-tasks, what each waits on, the files they share and any unanswered question, the same
  * drawing as the project's graph but only this task's part of it.
  */
-function TaskGraph({ i }: { i: IssueDetail }) {
+function TaskGraph({ i, checklist }: { i: IssueDetail; /** A checklist task: its whole flow is drawn, what is to come included. */ checklist?: Checklist | null }) {
   // Live like the project's graph: every event of the project reads it again (a status, a step, a retry, a landing).
   // It used to be read only when the task's own detail showed a sub-task in a new status, so a node could sit on an
   // old one until the page was reloaded (Sandy, 2026-11-15: "I seem to need to refresh the page").
   const { graph: g } = useLiveProject(i.project?.id)
   const subs = g?.subIssues.filter((x) => x.parentId === i.id) ?? []
-  if (!g || !subs.length) return null
+  const flow = checklist?.flow
+  if (!flow && (!g || !subs.length)) return null
+  const nodes = flow ? flowGraph(flow, subs) : subs
   const mine = new Set(subs.map((x) => x.id))
   return (
     <section className="panel" data-component="TaskGraph">
-      <h2>Graph</h2>
-      <PlanGraphView subIssues={subs} files={(g.files ?? []).map((f) => ({ ...f, subIssues: f.subIssues.filter((id) => mine.has(id)) }))} questions={asked(g.questions ?? [], subs)} storageKey={`task:${i.id}`} />
+      <h2>Graph {flow && !subs.length && <span className="faint">how it will go; nothing has started</span>}</h2>
+      <PlanGraphView subIssues={nodes} files={(g?.files ?? []).map((f) => ({ ...f, subIssues: f.subIssues.filter((id) => mine.has(id)) }))} questions={asked(g?.questions ?? [], subs)} storageKey={`task:${i.id}`} />
     </section>
   )
 }

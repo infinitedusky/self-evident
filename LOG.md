@@ -4453,3 +4453,18 @@ for the same end with less lost: the engine can already resume a run's conversat
 
 Why not a new sub-task for the rest: it needs the agent's own account of what is left, which is the thing it has
 just run out of room to give, and the new agent starts from nothing.
+
+## A checklist task's graph shows its whole flow before it starts (Sandy, 2026-11-17: "we should always show the workflow in nodes before it starts … the build and then a line that would be going to like check or verify, and then one goes to probing … you could look at a graph or share that with someone, and it would be obvious")
+
+A task built in one go had a graph of whatever sub-tasks existed so far, unjoined: nothing until the build began,
+then a lone node, then another beside it when the check was added.
+
+- **The flow is worked out whole** (`flowOf` in `checklist.ts`): the build, the check (and each round of finish
+  and check again), the probe, the whole test run, and the smoke test when there is one. A sub-task that exists
+  is its own node; a stage still to come is a node too, drawn dashed, with where it stands.
+- **Each follows the one before**, so the graph is one line from the first look, and a node takes its stage's
+  place as it is made. Shown on the build page even while the build waits for the brief's approval.
+- **The sub-tasks themselves are joined now**: what the engine adds after the build depends on what came before
+  it (the first check on every sub-task of the build; anything later on the last one), so the project's graph
+  shows the same line.
+- A staged task's graph is as it was.

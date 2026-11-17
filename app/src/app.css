@@ -946,3 +946,7 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .smoke-note textarea { width: 100%; }
 .smoke-sent, .smoke-stale { margin: 0 0 10px; padding: 8px 12px; border-left: 3px solid var(--warn, #b7791f); border-radius: 6px; font-size: 13px; }
 .smoke-sent.ok { border-left-color: var(--ok, #15803d); }
+
+.task-node.ghost { border-style: dashed; background: transparent; box-shadow: none; }
+.task-node.ghost.queued .task-node-title { color: var(--muted, inherit); }
+.task-node.ghost.done { border-style: solid; }
