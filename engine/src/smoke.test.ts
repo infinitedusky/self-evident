@@ -1,4 +1,8 @@
 /** The smoke test: the app's setting, the checks a person has from a task's criteria, and their marks. Pure, with one stored test of marking. */
+import { existsSync } from 'node:fs'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { applyAcceptance, setAcceptance, type Criterion } from './acceptance.js'
@@ -7,7 +11,8 @@ import { db, pool } from './db/client.js'
 import { app, event, issue, pr as prTable, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createProject } from './projects.js'
-import { byHand, markSmoke, previewUrl, smokeChecks, smokeOwed, smokeReady, smokeSetup, smokeView, startSmoke, whenOf } from './smoke.js'
+import { oneGoBrief } from './planner.js'
+import { byHand, markSmoke, previewUrl, runStop, setSmokeSetup, smokeChecks, smokeEnv, smokeOwed, smokeReady, smokeSetup, smokeSetupOf, smokeView, startSmoke, whenOf } from './smoke.js'
 import { checkTaskBrief, readVerdicts, verdictChange } from './verify.js'
 
 const at = '2026-11-17T00:00:00.000Z'
@@ -81,6 +86,34 @@ describe('the checks a person has', () => {
   })
 })
 
+describe('how an app is brought up for one', () => {
+  const script = 'docker compose -p smoke-$PORT up -d db\npnpm install && pnpm dev --port $PORT'
+  it('is a script, a stop script and a seed of Self Evident\'s own, kept whole in the app\'s settings', () => {
+    expect(smokeSetup({ smoke: { cmd: `${script}\n`, stop: ' docker compose -p smoke-$PORT down -v ', seed: 'insert into parent (id) values (1);' } }))
+      .toEqual({ where: 'local', cmd: script, stop: 'docker compose -p smoke-$PORT down -v', seed: 'insert into parent (id) values (1);' })
+  })
+  it('the seed is put in a file outside every repository when it runs, and the script is told where; none, and the file is gone', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'smoke-home-'))
+    process.env.SMOKE_HOME = home
+    try {
+      const env = await smokeEnv('app_sample', { where: 'local', seed: 'insert into parent (id) values (1);' }, { port: 6511, db: { DATABASE_URL: 'postgres://sample.test/smoke' }, clean: true })
+      expect(env).toEqual({ DATABASE_URL: 'postgres://sample.test/smoke', PORT: '6511', BROWSER: 'none', CI: '1', SMOKE_SEED: join(home, 'app_sample', 'seed.sql'), SMOKE_CLEAN: '1' })
+      expect(await readFile(env.SMOKE_SEED!, 'utf8')).toBe('insert into parent (id) values (1);\n')
+      const bare = await smokeEnv('app_sample', { where: 'local' }, { port: 6511 })
+      expect(bare).toEqual({ PORT: '6511', BROWSER: 'none', CI: '1' })
+      expect(existsSync(join(home, 'app_sample', 'seed.sql'))).toBe(false)
+      // The stop script runs where the start one did, with what it had; one that fails is not an error.
+      expect(await runStop('echo "down $PORT"; exit 3', home, { PORT: '6511' })).toEqual(['down 6511'])
+      expect(await runStop('echo never', join(home, 'gone'), {})).toEqual([]) // its checkout was removed: nothing to run it in
+    } finally { delete process.env.SMOKE_HOME; await rm(home, { recursive: true, force: true }) }
+  })
+  it('a build is told the set-up is not the repository\'s, and to change it here', () => {
+    const brief = oneGoBrief({ criteria: [], required: [], prototype: null, base: 'main' })
+    expect(brief).toContain('set_smoke_setup')
+    expect(brief).toContain('Never add smoke test scripts, seed data or test environment files to the branch')
+  })
+})
+
 describe.skipIf(!reachable)('a person marks a check', () => {
   const wsId = newId('workspace'), appId = newId('app')
   beforeAll(async () => {
@@ -88,6 +121,17 @@ describe.skipIf(!reachable)('a person marks a check', () => {
     await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'Shop (sample)', key: appId.slice(-6).toUpperCase(), setup: { smoke: { where: 'staging', url: 'https://staging.example.test', account: 'the test parent (sample)' } } })
   })
   afterAll(async () => { await pool.end() })
+
+  it('an agent reads the set-up and changes only what it gives; empty clears; too long is refused', async () => {
+    const own = newId('app')
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'Set-up (sample)', key: own.slice(-6).toUpperCase(), setup: { prototype_cmd: 'pnpm dev --port $PORT', smoke: { where: 'local', account: 'the test parent (sample)' } } })
+    expect(await smokeSetupOf(own)).toEqual({ where: 'local', script: null, stop: null, seed: null, falls_back_to: 'pnpm dev --port $PORT', database: false })
+    expect(await setSmokeSetup(own, { script: 'pnpm install\npnpm dev --port $PORT', seed: 'insert into parent (id) values (1);' })).toMatchObject({ script: 'pnpm install\npnpm dev --port $PORT', stop: null, seed: 'insert into parent (id) values (1);', falls_back_to: null })
+    expect(await setSmokeSetup(own, { stop: 'docker compose down', seed: '' })).toMatchObject({ script: 'pnpm install\npnpm dev --port $PORT', stop: 'docker compose down', seed: null })
+    const [a] = await db.select().from(app).where(eq(app.id, own))
+    expect(a.setup).toMatchObject({ prototype_cmd: 'pnpm dev --port $PORT', smoke: { where: 'local', account: 'the test parent (sample)', cmd: 'pnpm install\npnpm dev --port $PORT', stop: 'docker compose down' } }) // the rest of its settings as they were
+    await expect(setSmokeSetup(own, { script: 'x'.repeat(20_001) })).rejects.toThrow(/20000 characters at most/)
+  })
 
   it('their word is the build\'s mark on that criterion, with the note; a fail needs one; what is not theirs is refused', async () => {
     const { issues: [t] } = await createProject({ appId, name: 'Smoke (sample)', issues: [{ title: 'Edges (sample)', brief: 'Build it.' }] })

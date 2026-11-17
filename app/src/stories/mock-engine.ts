@@ -166,7 +166,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     }),
     // Task branches and save points: the engine's rules, roughly.
     http.get('/api/issues/:id/smoke', () => reply(d.smoke ?? { where: 'local', says: 'run here, like its prototypes', account: null, flag: null, branch: null, head: null, running: null, url: null, up: false, canRun: false, log: [], checks: [], owed: 0, failed: 0 })),
-    http.post('/api/issues/:id/smoke/start', () => { if (d.smoke) d.smoke = { ...d.smoke, url: 'http://localhost:6500', up: true, running: d.smoke.head }; return reply(d.smoke) }),
+    http.post('/api/issues/:id/smoke/start', async ({ request }) => { const b = await request.json().catch(() => ({})) as { clean?: boolean }; if (d.smoke) d.smoke = { ...d.smoke, url: 'http://localhost:6500', up: true, running: d.smoke.head, log: b.clean ? ['started clean (sample)'] : d.smoke.log }; return reply(d.smoke) }),
     http.post('/api/issues/:id/smoke/stop', () => { if (d.smoke) d.smoke = { ...d.smoke, url: null, up: false, running: null }; return reply(d.smoke) }),
     http.post('/api/issues/:id/smoke/:criterion', async ({ params, request }) => {
       const b = await request.json() as { pass: boolean; note?: string }

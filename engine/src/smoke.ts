@@ -25,8 +25,11 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { createServer, type AddressInfo } from 'node:net'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
+import pg from 'pg'
 import { eq } from 'drizzle-orm'
 import { acceptanceOf, setAcceptance, type Criterion } from './acceptance.js'
 import { landingBranch, modeOf } from './branches.js'
@@ -36,7 +39,7 @@ import { appendEvent } from './events.js'
 import { git, headSha } from './git.js'
 import { newId } from './ids.js'
 import { getIssue, identifier, PlanError } from './issues.js'
-import { databaseExists, databaseUrl, listScenarios, rebuild, type PrototypeDb } from './prototype-data.js'
+import { databaseExists, databaseUrl, dropDatabase, listScenarios, rebuild, type PrototypeDb } from './prototype-data.js'
 import { homeRepo } from './workbench.js'
 
 export type Where = 'local' | 'preview' | 'staging' | 'flag'
@@ -47,15 +50,72 @@ export const WHERE_SAYS: Record<Where, string> = {
   staging: 'a deployed build at an address, with a test account',
   flag: 'in production, behind a feature flag that is on for a test account only',
 }
-export interface SmokeSetup { where: Where; /** staging or flag: the address to test at. preview: its pattern, with {pr} for the pull request's number. */ url?: string; /** How to get in for a test, in words: which account, where its sign-in is. Never a password. */ account?: string; /** flag: its name, or how flags are named here. */ flag?: string; /** local: a command of its own; else the one that runs prototypes. */ cmd?: string }
+export interface SmokeSetup { where: Where; /** staging or flag: the address to test at. preview: its pattern, with {pr} for the pull request's number. */ url?: string; /** How to get in for a test, in words: which account, where its sign-in is. Never a password. */ account?: string; /** flag: its name, or how flags are named here. */ flag?: string; /** local: a script of its own, any number of lines; else the command that runs prototypes. */ cmd?: string; /** local: run when it is stopped or started again, for what the script leaves running (containers). */ stop?: string; /** local: SQL that fills its database with made-up rows. */ seed?: string }
 
 /** The app's setting; local when it has said nothing, which is where its prototypes run. */
 export function smokeSetup(setup: unknown): SmokeSetup {
   const s = (setup as { smoke?: Partial<SmokeSetup> } | null)?.smoke ?? {}
   const where = WHERES.includes(s.where as Where) ? s.where as Where : 'local'
   const text = (v: unknown, n = 400) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : undefined)
-  return { where, ...(text(s.url) ? { url: text(s.url) } : {}), ...(text(s.account) ? { account: text(s.account) } : {}), ...(text(s.flag) ? { flag: text(s.flag) } : {}), ...(text(s.cmd, 2000) ? { cmd: text(s.cmd, 2000) } : {}) }
+  return { where, ...(text(s.url) ? { url: text(s.url) } : {}), ...(text(s.account) ? { account: text(s.account) } : {}), ...(text(s.flag) ? { flag: text(s.flag) } : {}), ...(text(s.cmd, SCRIPT_MAX) ? { cmd: text(s.cmd, SCRIPT_MAX) } : {}), ...(text(s.stop, SCRIPT_MAX) ? { stop: text(s.stop, SCRIPT_MAX) } : {}), ...(text(s.seed, SEED_MAX) ? { seed: text(s.seed, SEED_MAX) } : {}) }
 }
+
+/**
+ * The smoke test's set-up is Self Evident's own, never the app's repository's (Sandy, 2026-11-17: "one main reason
+ * for doing this is to keep any of this stuff out of the code base because we don't want this stuff to be versioned
+ * or part of a code base that we're working with for a client … This is about us being able to test"). So the
+ * script that brings the environment up, the one that takes it down and the SQL that fills its database are kept in
+ * the app's settings, which is to say in whichever database holds the app: the shared one for an app that lives
+ * there, this computer's for one that is kept local. Nothing of it is written into a worktree or committed.
+ * When it runs, the seed is put in a file outside every repository and the script is told where ($SMOKE_SEED).
+ */
+export const SCRIPT_MAX = 20_000
+export const SEED_MAX = 400_000
+export const smokeHome = () => process.env.SMOKE_HOME ?? join(homedir(), '.self-evident', 'smoke')
+
+/** What a script is run with, beyond the engine's own environment: its port, its database, where its seed is, and whether to start from nothing. */
+export async function smokeEnv(appId: string, setup: SmokeSetup, i: { port: number; db?: Record<string, string>; clean?: boolean }) {
+  const dir = join(smokeHome(), appId)
+  const seed = join(dir, 'seed.sql')
+  if (setup.seed) { await mkdir(dir, { recursive: true }); await writeFile(seed, setup.seed.endsWith('\n') ? setup.seed : `${setup.seed}\n`) }
+  else await rm(seed, { force: true })
+  return { ...(i.db ?? {}), PORT: String(i.port), BROWSER: 'none', CI: '1', ...(setup.seed ? { SMOKE_SEED: seed } : {}), ...(i.clean ? { SMOKE_CLEAN: '1' } : {}) }
+}
+
+/** The app's stop script, run where the start one was, with what it had; what it prints is kept, a failure is not an error. */
+export function runStop(cmd: string, cwd: string, env: Record<string, string>) {
+  return new Promise<string[]>((done) => {
+    if (!existsSync(cwd)) return done([])
+    const out: string[] = []
+    const proc = spawn('sh', ['-c', cmd], { cwd, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
+    const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim() && out.length < 100) out.push(line.slice(0, 300)) }
+    proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
+    const end = setTimeout(() => { proc.kill('SIGKILL'); done(out) }, 60_000)
+    proc.on('error', () => { clearTimeout(end); done(out) })
+    proc.on('exit', () => { clearTimeout(end); done(out) })
+  })
+}
+
+/** The app's set-up for an agent to read or change: the scripts and the seed whole. */
+export async function smokeSetupOf(appId: string) {
+  const [a] = await db.select().from(app).where(eq(app.id, appId))
+  if (!a) throw new PlanError('no such app')
+  const s = smokeSetup(a.setup)
+  return { where: s.where, script: s.cmd ?? null, stop: s.stop ?? null, seed: s.seed ?? null, falls_back_to: s.cmd ? null : (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd ?? null, database: !!(a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db?.url }
+}
+/** Change it: each of script, stop and seed is replaced when given, cleared when given empty, left when not given. */
+export async function setSmokeSetup(appId: string, i: { script?: string; stop?: string; seed?: string }) {
+  const [a] = await db.select().from(app).where(eq(app.id, appId))
+  if (!a) throw new PlanError('no such app')
+  if ((i.script?.length ?? 0) > SCRIPT_MAX || (i.stop?.length ?? 0) > SCRIPT_MAX) throw new PlanError(`a script is ${SCRIPT_MAX} characters at most`)
+  if ((i.seed?.length ?? 0) > SEED_MAX) throw new PlanError(`the seed is ${SEED_MAX} characters at most: keep it to the rows a person needs to try the app`)
+  const smoke: Record<string, unknown> = { ...((a.setup as { smoke?: object } | null)?.smoke ?? {}) }
+  const put = (k: string, v?: string) => { if (v === undefined) return; if (v.trim()) smoke[k] = v.trim(); else delete smoke[k] }
+  put('cmd', i.script); put('stop', i.stop); put('seed', i.seed)
+  await db.update(app).set({ setup: { ...(a.setup as object), smoke } }).where(eq(app.id, appId))
+  return smokeSetupOf(appId)
+}
+
 
 /**
  * When a check left to a person can be done (Bonkei's agent, passed on by Sandy, 2026-11-17: the step "assumes every
@@ -115,7 +175,7 @@ export const smokeOwed = (criteria: Criterion[]) => smokeChecks(criteria).filter
 /** Of those, how many can be done now: the ones on the pull request wait for it to exist. */
 export const smokeReady = (criteria: Criterion[], hasPr: boolean) => smokeChecks(criteria).filter((c) => c.mark === 'todo' && (c.when === 'here' || (c.when === 'pr' && hasPr))).length
 
-const running = new Map<string, { proc: ChildProcess; log: string[] }>() // by task
+const running = new Map<string, { proc: ChildProcess; log: string[]; stop?: { cmd: string; cwd: string; env: Record<string, string> } }>() // by task
 const alive = (issueId: string) => { const m = running.get(issueId); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
 const freePort = (want = 0): Promise<number> => new Promise((resolveP, reject) => {
   const s = createServer()
@@ -155,13 +215,14 @@ export async function smokeView(issueId: string) {
     up: setup.where === 'local' ? (on && local ? await answers(local) : false) : !!there,
     /** Its pull request, when there is one: a preview is of it. */ pr,
     canRun: setup.where === 'local' && !!(setup.cmd ?? (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd?.trim()),
+    /** local: there is something to start from nothing: a database of its own, a seed, or a script of its own. */ canClean: setup.where === 'local' && !!(setup.cmd || setup.seed || (a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db?.url),
     log: running.get(t.id)?.log.slice(-30) ?? [],
     checks, owed: checks.filter((c) => c.mark === 'todo' && c.when !== 'after').length, failed: checks.filter((c) => c.mark === 'fail').length,
   }
 }
 
 /** Local only: run the built branch, at its head, in the smoke test's own worktree. Run again, it moves to the new head. */
-export async function startSmoke(issueId: string, actor = 'user') {
+export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean } = {}) {
   const { t, a, repoPath, name, branch, head } = await built(issueId)
   const setup = smokeSetup(a.setup)
   if (setup.where !== 'local') throw new PlanError(`${a.name} is smoke tested ${setup.where === 'staging' ? 'on staging' : setup.where === 'preview' ? 'on a preview of its pull request' : 'behind a feature flag'}: there is nothing to start here`)
@@ -176,15 +237,25 @@ export async function startSmoke(issueId: string, actor = 'user') {
   else await git(repoPath, ['worktree', 'add', '--detach', path, head])
   const dbCfg = (a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db?.url ? (a.setup as { prototype_db: PrototypeDb }).prototype_db : null
   const slug = `smoke-${name.toLowerCase()}`
-  if (dbCfg && !(await databaseExists(dbCfg, slug))) await rebuild(dbCfg, slug, path, (await listScenarios(path)).includes('default') ? 'default' : null)
+  if (dbCfg && opts.clean) await dropDatabase(dbCfg, slug)
+  if (dbCfg && !(await databaseExists(dbCfg, slug))) {
+    const { url } = await rebuild(dbCfg, slug, path, (await listScenarios(path)).includes('default') ? 'default' : null)
+    if (setup.seed) { // the app's own seed, from its settings: after the schema, and after a scenario if the code has one
+      const c = new pg.Client({ connectionString: url })
+      await c.connect()
+      try { await c.query(setup.seed) } catch (err) { throw new PlanError(`the smoke test's seed failed: ${(err as Error).message}`) } finally { await c.end() }
+    }
+  }
   const [old] = await db.select().from(smokeRun).where(eq(smokeRun.issueId, t.id))
   const port = await freePort(old?.port ?? 0)
-  const proc = spawn('sh', ['-c', cmd], { cwd: path, env: { ...process.env, ...(dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : {}), PORT: String(port), BROWSER: 'none', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+  const env = await smokeEnv(a.id, setup, { port, db: dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : undefined, clean: opts.clean })
+  if (setup.stop && old) await runStop(setup.stop, old.path, { ...env, PORT: String(old.port) }) // what the last run left up, when the engine has been started again since
+  const proc = spawn('sh', ['-c', cmd], { cwd: path, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   const log: string[] = []
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
   proc.on('exit', (code) => { log.push(`exited${code === null ? '' : ` with ${code}`}`) })
-  running.set(t.id, { proc, log })
+  running.set(t.id, { proc, log, ...(setup.stop ? { stop: { cmd: setup.stop, cwd: path, env } } : {}) })
   if (old) await db.update(smokeRun).set({ path, sha: head, port, updatedAt: new Date() }).where(eq(smokeRun.id, old.id))
   else await db.insert(smokeRun).values({ id: newId('run').replace(/^run_/, 'smoke_'), appId: a.id, issueId: t.id, path, sha: head, port })
   await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'smoke.started', payload: { sha: head, port } }))
@@ -194,10 +265,12 @@ export async function startSmoke(issueId: string, actor = 'user') {
 export function stopSmoke(issueId: string): Promise<void> {
   const m = running.get(issueId)
   running.delete(issueId)
-  if (!m || m.proc.exitCode !== null || m.proc.signalCode !== null || !m.proc.pid) return Promise.resolve()
+  if (!m) return Promise.resolve()
+  const down = () => (m.stop ? runStop(m.stop.cmd, m.stop.cwd, m.stop.env).then(() => {}) : Promise.resolve()) // the app's stop script, after its process: for what the script left running
+  if (m.proc.exitCode !== null || m.proc.signalCode !== null || !m.proc.pid) return down()
   const gone = new Promise<void>((r) => { m.proc.once('exit', () => r()); setTimeout(r, 3000) })
   try { process.kill(-m.proc.pid, 'SIGTERM') } catch { m.proc.kill('SIGTERM') }
-  return gone
+  return gone.then(down)
 }
 export function stopSmokes() { for (const id of [...running.keys()]) void stopSmoke(id) }
 

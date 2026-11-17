@@ -19,7 +19,7 @@ export interface RiskContext { cwd: string; branch?: string | null } // branch: 
 
 const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']) // Skill loads instructions; what they lead to is rated on its own
 export const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
-const ENGINE_FREE = new Set(['learning', 'now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'show_code', 'task_branches', 'merge_guide', 'shares'])
+const ENGINE_FREE = new Set(['smoke_setup', 'learning', 'now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'show_code', 'task_branches', 'merge_guide', 'shares'])
 const ENGINE: Record<string, [Risk, string]> = {
   create_idea: ['cheap', 'keeps an idea; easy to drop'],
   create_project: ['cheap', 'a draft project; nothing runs'],
@@ -58,6 +58,7 @@ const ENGINE: Record<string, [Risk, string]> = {
   run_prototype: ['cheap', "starts a prototype's dev server again; stop undoes it"],
   stop_prototype: ['cheap', "stops a prototype's dev server; run starts it again"],
   discard_prototype: ['moderate', "removes a prototype's worktree and branch; what it changed is gone"],
+  set_smoke_setup: ['moderate', 'changes the scripts and made-up data this app is smoke tested with; they run on this computer when a smoke test is started'],
   set_prototype_command: ['moderate', 'changes how this app\'s prototypes start'],
   set_prototype_cleanup: ['moderate', 'changes the commands run when this app\'s prototypes are stopped or discarded'],
   prototype_data: ['cheap', "rebuilds a prototype's made-up data, or saves it as a scenario"],

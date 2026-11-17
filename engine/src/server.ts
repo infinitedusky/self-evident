@@ -627,7 +627,7 @@ export function buildApp(bus: EventBus) {
   }
   // The smoke test (smoke.ts): the checks left to a person on a built task, where it runs, and their marks.
   api.get('/issues/:id/smoke', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err, 404) } })
-  api.post('/issues/:id/smoke/start', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await startSmoke(t.id, 'user'), 202) } catch (err) { return planError(c, err) } })
+  api.post('/issues/:id/smoke/start', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { clean?: boolean }; return c.json(await startSmoke(t.id, 'user', { clean: body.clean === true }), 202) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/smoke/stop', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); await stopSmoke(t.id); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/smoke/:criterion', async (c) => {
     const body = await c.req.json<{ pass?: boolean; note?: string }>().catch(() => ({} as { pass?: boolean; note?: string }))
