@@ -226,7 +226,8 @@ Details and sources in `research/`.
   checks a build is held to). The rail lists only these stages; projects, tasks and the steps are inside them.
 - **An app says where it is smoke tested, beside where it is prototyped** (Sandy, 2026-11-17: "apps get a smoke
   test configuration setting, and it's like there's a prototype and a smoke test, and they can either be the same
-  or they can be different"). Decided; not built (idea #1 of the Self Evident app, "A smoke-test step").
+  or they can be different"). The setting, the step and a person's marks are built (`engine/src/smoke.ts`,
+  2026-11-17); watching while they test and testers through a link are not (idea #1 of the Self Evident app).
   - A smoke test is a person checking the built code by hand, for what an agent cannot judge (how it looks, how
     it feels, speed on a real machine), while Self Evident watches. It is the code about to be reviewed, never the
     prototype's branch, and never production as its users see it.
