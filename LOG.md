@@ -4524,3 +4524,21 @@ it is in the code.
 Not done: prototype scenarios are still JSON files in the repo (`.prototype/scenarios/`), which breaks the same
 rule for a client's code; a history of the script so a bad edit can be undone; a one-press job that has an agent
 write an app's first script; a requirement the check verifies ("the set-up still brings up what this change needs").
+
+## A prototype's made-up data is ours too, kept out of the app's repository (Sandy, 2026-11-17: "we don't want that to be part of the repo. The purpose of the prototype is for us to test to make sure it's working, and then we have a way to share it … The prototype then is essentially getting thrown away, and then we're building the actual thing that's going to be in the PR")
+
+Scenarios were JSON files committed on the prototype's branch (`.prototype/scenarios/<name>/<table>.json`).
+Nothing merged that branch, but nothing stopped a build copying the folder across either.
+
+- **Scenarios are rows in Self Evident's database** (table `scenario`: the app, a name, its tables of rows), so in
+  whichever database holds the app. Saving one writes nothing into the worktree.
+- **A scenario is a prototype's own, or shared with the app.** Its own go when the prototype is thrown away. A
+  shared one can be loaded by every prototype and by the smoke test, which loads the app's shared `default`
+  first, then the seed.
+- **The agent** writes one with `prototype_data` (write: a name and its tables), keeps the current data (save),
+  loads one (reset) and reads one (show). It is told not to put sample data or a `.prototype` folder on the branch.
+- One still filed in a worktree from before is read; none is written.
+
+Not done: removing `.prototype/` folders already committed on old prototype branches; a place on the page to see
+and share an app's scenarios (the tool only, for now).
+
