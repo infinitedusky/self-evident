@@ -31,16 +31,26 @@ export function useSteps(subject: StepSubject, appId: string) {
   return { v, error }
 }
 
-/** Hands a step to the agent: a task's goes to the task's own agent and an idea's to the idea's (the engine sees to it); a project's gets a conversation about the app. */
-export function askStep(subject: StepSubject, appId: string, name: string, key: StepKey, on: On) {
+/**
+ * Hands a step to the agent: a task's goes to the task's own agent and an idea's to the idea's (the engine sees to it); a project's gets a conversation about the app.
+ * The step is marked started as it is handed over, so its page says so at once and after a reload, not "Not started"
+ * until the agent writes something (Sandy, 2026-11-17). The prototype's step follows its prototype, and a task's brief is on the task.
+ */
+export async function askStep(subject: StepSubject, appId: string, name: string, key: StepKey, on: On) {
+  const out = await ask(subject, appId, name, key, on)
+  if (key !== 'prototype' && !(key === 'brief' && subject.kind === 'issues')) await engine.setStep(subject, key, { status: 'started', detail: 'Handed to the agent' }).catch(() => {}) // the agent has it either way
+  return out
+}
+
+function ask(subject: StepSubject, appId: string, name: string, key: StepKey, on: On) {
   const ref = subject.kind === 'ideas' ? { ideaId: subject.id } : subject.kind === 'issues' ? { issueId: subject.id } : { projectId: subject.id }
   return engine.ask({ appId, subjectRef: ref, own: subject.kind === 'ideas', text: key === 'prototype'
     ? `Start a prototype for ${WHAT[subject.kind]} "${name}" (${subject.id}), as a step of it.`
     : key === 'sketch'
-    ? `Sketch ${WHAT[subject.kind]} "${name}" (${subject.id}): the screens as plain HTML files under sketches/, fast, for me to react to; record them with set_step (key sketch).`
+    ? `Sketch ${WHAT[subject.kind]} "${name}" (${subject.id}): the screens as plain HTML files under sketches/, fast, for me to react to; mark it started with set_step (key sketch) before you begin, and record them there.`
     : key === 'brief' && subject.kind === 'issues'
     ? `Write the brief for ${WHAT[subject.kind]} "${name}" (${subject.id}) with update_task: what and why, in at most 200 words, for me to read and approve. Nothing about how to build it.`
-    : `Do the ${label(key, on)} step for ${WHAT[subject.kind]} "${name}" (${subject.id}), and record it with set_step.` })
+    : `Do the ${label(key, on)} step for ${WHAT[subject.kind]} "${name}" (${subject.id}): mark it started with set_step before you begin, then record it there.` })
 }
 
 export function StepsPanel({ subject, appId, name, onBrief }: { subject: StepSubject; appId: string; name: string; onBrief?: () => void }) {

@@ -144,7 +144,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
           {row.key === 'prototype' && proto && !work?.body && !work?.summary?.trim() && <p className="muted" data-component="NothingForTheBrief">Nothing is written for the brief yet. The prototype itself is under <button type="button" className="linkish" onClick={() => setPane('view')}>View</button>.</p>}
 
           {/* Under way, and nothing written here yet: say so, so an empty page is not mistaken for a broken one. */}
-          {own && row.key !== 'prototype' && s.status !== 'none' && !skipped(s) && work && !work.body && !work.summary?.trim() && !work.refs.length && <p className="muted" data-component="NothingWrittenYet">Its agent has {s.status === 'done' ? 'marked this done' : 'started this'}, and nothing is written here yet. Ask it in the conversation beside this page.</p>}
+          {own && row.key !== 'prototype' && s.status !== 'none' && !skipped(s) && work && !work.body && !work.summary?.trim() && !work.refs.length && <p className="muted" data-component="NothingWrittenYet">{s.status === 'done' ? 'Its agent has marked this done, and nothing is written here yet. Ask it in the conversation beside this page.' : 'Its agent is on this, and nothing is written here yet. What it finds shows here as it records it; it is in the conversation beside this page.'}</p>}
 
           {skipped(s) && (
             <div className="step-actions">

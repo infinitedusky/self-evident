@@ -4370,3 +4370,21 @@ hand for what an agent cannot judge, while Self Evident watches. Talked through,
   either be the same or they can be different" (SHAPE.md).
 - Open: which Homework Gate is; how Self Evident watches a deployed build (its telemetry, filtered to the test
   account and the time of the test, looks better than a script in the page); screenshots of a 3D canvas.
+
+## A step says it is under way before its work starts (Sandy, 2026-11-17: "if it is going to do research it should first mark that in the db … and then do it")
+
+A step's page said "Not started" while its agent was working on it: the task's agent did the research and recorded it
+once, at the end, and the engine sent the checks' agents out without touching their steps. The page looked like
+nothing had happened yet.
+
+- **The agents mark it first**: the task's and the idea's agents are told to mark a step started with `set_step`
+  before any search, read or file, with a detail line saying what they are doing, and to change it as they go
+  (`STARTED_FIRST` in `talk.ts`; the tool's description says the same).
+- **The button marks it**: "Start with the agent" marks the step started ("Handed to the agent") as it hands it over,
+  so the page says so at once and after a reload. Not the prototype's step, which follows its prototype.
+- **The engine marks the checks**: each check is marked started ("Its agent is on it") as its agent is sent out. A
+  check sent just before a restart now counts as recent, so it is carried on.
+- **The page says it plainly**: started with nothing written reads "Its agent is on this", not "ask it".
+
+Not done: telling a step whose agent stopped from one still working; a step stays "started" until it is recorded
+done.

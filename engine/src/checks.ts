@@ -23,7 +23,7 @@ import { homeRepo } from './workbench.js'
 import { withLock } from './landing.js'
 import { BEFORE_PLAN, CHECKS, checksOwed, step, type StepKey } from './steps.js'
 import { checkTalks, cutOff, onTurnEnd, say, startCheckTalk, taskTalk, type SubjectRef } from './talk.js'
-import { approveBrief, skipUntouched, stepsOf } from './work.js'
+import { approveBrief, setStep, skipUntouched, stepsOf } from './work.js'
 import { onAnyPlanned } from './planner.js'
 import { BRIEF_FORM } from './brief.js'
 
@@ -183,6 +183,8 @@ export async function advanceChecks(issueId: string): Promise<ReturnType<typeof 
     if (move.do === 'run') {
       const cwd = move.key === 'analysis' && p ? p.path : conductor?.cwd ?? r?.localPath
       if (!cwd) return { do: 'nothing' as const } // nowhere to read from
+      // Its page says it is under way from the moment its agent is sent, not "Not started" until the report lands (Sandy, 2026-11-17).
+      await setStep({ issueId }, move.key, { status: 'started', detail: 'Its agent is on it' }, 'engine').catch((err) => console.log(`[checks] ${issueId}: could not mark ${move.key} started: ${err instanceof Error ? err.message : err}`))
       const s = await startCheckTalk({ appId: t.appId, issueId, check: move.key, cwd, branch: move.key === 'analysis' && p ? p.branch : conductor?.branch ?? null, subject: `${step(move.key).label}: ${facts.identifier} ${t.title}` })
       await say(s.id, checkBrief(move.key, facts), undefined, { author: 'engine', kind: 'brief' })
     } else if (move.do === 'finalize') {

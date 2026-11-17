@@ -210,6 +210,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/issues/:id/handover', ({ params }) => reply({ handover: d.issueDetails[params.id as string]?.handover ?? null })),
     http.get('/api/:kind/:id/steps', ({ params }) => { const v = d.steps[params.kind as string]; return v ? reply({ ...v, rows: rows(v.on, v.states, v.resolved.workflow) }) : missing('steps') }),
     http.get('/api/:kind/:id/steps/:key', () => reply(d.stepWork)),
+    http.put('/api/:kind/:id/steps/:key', () => reply(d.stepWork)),
     http.get('/api/initiatives', () => reply(d.initiatives)),
     http.get('/api/cycles', () => reply(d.cycles)),
     http.get('/api/ideas/:id/agents', () => reply(d.taskAgents ?? [])),
