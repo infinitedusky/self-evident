@@ -308,7 +308,7 @@ export class Runner {
 
   private async testTask(projectId: string, taskId: string, repoPath: string, worktreePath: string, onto: string, setup: AppSetup, pb: Omit<NewEvent, 'type'>) {
     const outcome = await withLock(`land:${projectId}`, async () => {
-      const every = await db.select({ id: issue.id, state: issue.state, title: issue.title }).from(issue).where(eq(issue.parentId, taskId))
+      const every = (await db.select({ id: issue.id, state: issue.state, title: issue.title, sortOrder: issue.sortOrder }).from(issue).where(eq(issue.parentId, taskId))).sort((a, b) => a.sortOrder - b.sortOrder)
       const subs = every.filter((s) => s.state !== 'canceled' && s.state !== 'duplicate')
       const builds = subs.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, subs.map((s) => s.id))) : []
       if (!subs.length || !subs.every((s) => builds.find((b) => b.issueId === s.id)?.status === 'done')) return null // more to build first
@@ -317,27 +317,30 @@ export class Runner {
       const list = await this.listOf(taskId)
       const unmet = unmetOf(list.criteria, list.held, list.required)
       const next = afterBuild({ titles: subs.map((s) => s.title), listed: list.loop ? list.criteria.length + list.required.length > 0 : list.criteria.some(unchecked), unmet: unmet.length, testCmd: !!setup.test_cmd, loop: list.loop })
-      if (next.do !== 'test') return { next, list, unmet }
+      // What is added now follows what there is: the first check, every sub-task of the build; anything later, the last one.
+      const first = !subs.some((s) => [CHECK_TITLE, FINISH_TITLE, PROBE_TITLE, FIX_TITLE].some((t) => s.title.startsWith(t)))
+      const after = first ? subs.map((s) => s.id) : subs.slice(-1).map((s) => s.id)
+      if (next.do !== 'test') return { next, list, unmet, after }
       const fixes = subs.filter((s) => s.title.startsWith(FIX_TITLE)).length
-      return { next, list, unmet, fixes, result: await wholeRun({ testCmd: setup.test_cmd!, cwd: worktreePath, onEvent: async (type, payload) => { await this.emit({ ...pb, issueId: taskId, type, payload }) } }) }
+      return { next, list, unmet, after, fixes, result: await wholeRun({ testCmd: setup.test_cmd!, cwd: worktreePath, onEvent: async (type, payload) => { await this.emit({ ...pb, issueId: taskId, type, payload }) } }) }
     })
     if (!outcome) return
-    const { next, list, unmet } = outcome
+    const { next, list, unmet, after } = outcome
     if (next.do === 'check') {
       // The first check reads the whole list; a later one, only what the last left not done.
       const again = next.round > 1
       const criteria = again ? list.criteria.filter((c) => c.built === false) : list.criteria
       const required = again ? list.required.filter((r) => list.held?.find((c) => c.key === r.key)?.built === false) : list.required
-      await addSubTask(taskId, { title: numbered(CHECK_TITLE, next.round), brief: checkTaskBrief(criteria, required, again ? { round: next.round } : undefined) }, 'engine')
+      await addSubTask(taskId, { title: numbered(CHECK_TITLE, next.round), brief: checkTaskBrief(criteria, required, again ? { round: next.round } : undefined), after }, 'engine')
       return
     }
-    if (next.do === 'finish') { await addSubTask(taskId, { title: numbered(FINISH_TITLE, next.round), brief: finishBrief(unmet, next.round) }, 'engine'); return }
+    if (next.do === 'finish') { await addSubTask(taskId, { title: numbered(FINISH_TITLE, next.round), brief: finishBrief(unmet, next.round), after }, 'engine'); return }
     if (next.do === 'stuck') {
       await commentOnIssue(taskId, { heading: 'Still not done after three rounds', body: `What the check found was sent back ${MAX_ROUNDS} times and ${unmet.length === 1 ? 'this is' : 'these are'} still not done. It needs a person.\n\n${unmet.map((u) => `- ${u.text}${u.missing ? ` Missing: ${u.missing}` : ''}`).join('\n')}` }, 'engine')
       await this.emit({ ...pb, issueId: taskId, type: 'task.check_stuck', payload: { rounds: MAX_ROUNDS, unmet: unmet.map((u) => u.id) } })
       return
     }
-    if (next.do === 'probe') { await addSubTask(taskId, { title: PROBE_TITLE, brief: probeBrief(list.criteria, list.base) }, 'engine'); return }
+    if (next.do === 'probe') { await addSubTask(taskId, { title: PROBE_TITLE, brief: probeBrief(list.criteria, list.base), after }, 'engine'); return }
     if (next.do === 'done' || !('result' in outcome) || !outcome.result || outcome.result.ok || !setup.test_cmd) return
     const { fixes, result } = outcome as { fixes: number; result: { ok: false; detail: string } }
     if (fixes >= MAX_FIXES) {
@@ -345,7 +348,7 @@ export class Runner {
       await this.emit({ ...pb, issueId: taskId, type: 'task.test_failed', payload: { fixes, tail: result.detail } })
       return
     }
-    await addSubTask(taskId, { title: fixes ? `${FIX_TITLE} (${fixes + 1})` : FIX_TITLE, brief: fixBrief(setup.test_cmd, result.detail) }, 'engine')
+    await addSubTask(taskId, { title: fixes ? `${FIX_TITLE} (${fixes + 1})` : FIX_TITLE, brief: fixBrief(setup.test_cmd, result.detail), after }, 'engine')
   }
 
   /** The builder's todo list, as the sub-issue's steps: the latest list replaces the previous one for this run. */
@@ -543,10 +546,10 @@ export class Runner {
     if (smokeOwed(criteria)) return { sentBack: 0 } // some still wait: one trip back, with everything that failed
     const failed = criteria.filter((c) => c.built === false && c.byHand)
     if (failed.length) {
-      const subs = (await db.select({ title: issue.title, state: issue.state }).from(issue).where(eq(issue.parentId, issueId))).filter((s) => s.state !== 'canceled' && s.state !== 'duplicate')
+      const subs = (await db.select({ id: issue.id, title: issue.title, state: issue.state, sortOrder: issue.sortOrder }).from(issue).where(eq(issue.parentId, issueId))).filter((s) => s.state !== 'canceled' && s.state !== 'duplicate').sort((a, b) => a.sortOrder - b.sortOrder)
       const round = subs.filter((s) => s.title.startsWith(FINISH_TITLE)).length + 1
       const brief = `${finishBrief(failed.map((c) => ({ id: c.id, text: c.text, missing: c.byHand!.note || c.builtEvidence })), round)}\n\nA person found ${failed.length === 1 ? 'this' : 'these'} by trying the build by hand. What is under "Missing" is what they saw.`
-      await addSubTask(issueId, { title: numbered(FINISH_TITLE, round), brief }, 'engine')
+      await addSubTask(issueId, { title: numbered(FINISH_TITLE, round), brief, after: subs.slice(-1).map((x) => x.id) }, 'engine')
     }
     void this.dispatch()
     return { sentBack: failed.length }

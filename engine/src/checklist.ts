@@ -22,7 +22,23 @@ export type StageKey = 'build' | 'check' | 'probe' | 'test' | 'smoke'
 export type StageState = 'todo' | 'doing' | 'done' | 'failed'
 export interface Stage { key: StageKey; label: string; state: StageState; /** A few words: how far, or what is wrong. */ detail: string }
 export interface Item { id: string; kind: 'criterion' | 'requirement'; text: string; /** For a requirement, what it means here. */ what?: string; mark: 'met' | 'unmet' | 'person' | 'na' | 'unchecked'; evidence?: string }
-export interface Checklist { build: Build; stages: Stage[]; items: Item[]; met: number; unmet: number; total: number }
+/**
+ * One node of a checklist task's flow, for its graph: a sub-task that exists, or a stage still to come (Sandy,
+ * 2026-11-17: "we should always show the workflow in nodes before it starts … the build and then a line that would
+ * be going to like check or verify, and then one goes to probing … you could look at a graph or share that with
+ * someone, and it would be obvious").
+ */
+export interface FlowNode {
+  id: string
+  /** The sub-task it is, when there is one; a stage to come has none. */
+  sub?: string
+  title: string
+  state: StageState
+  detail: string
+  /** What it follows. Null: a sub-task of the build, which keeps the dependencies its plan gave it. */
+  after: string[] | null
+}
+export interface Checklist { build: Build; stages: Stage[]; items: Item[]; met: number; unmet: number; total: number; flow: FlowNode[] }
 
 const FIX = 'Fix what the whole test run found'
 const kindOf = (title: string) => (title.startsWith(CHECK_TITLE) ? 'check' : title.startsWith(FINISH_TITLE) ? 'finish' : title.startsWith(PROBE_TITLE) ? 'probe' : title.startsWith(FIX) ? 'fix' : 'build')
@@ -63,6 +79,38 @@ export function stagesOf(i: { subs: { title: string; status: string }[]; build: 
   return stages
 }
 
+const stateOfSub = (status: string): StageState => (status === 'failed' ? 'failed' : status === 'done' ? 'done' : WORKING.includes(status) ? 'doing' : 'todo')
+
+/**
+ * The whole flow as nodes, each after what it follows: what is built or being built, and what is still to come, so
+ * the graph says how the task will go before any of it has started. Pure.
+ */
+export function flowOf(i: { subs: { id: string; title: string; status: string; sortOrder: number }[]; stages: Stage[]; build: Build }): FlowNode[] {
+  const subs = [...i.subs].sort((a, b) => a.sortOrder - b.sortOrder)
+  const stage = (k: StageKey) => i.stages.find((s) => s.key === k)
+  const by = (k: string) => subs.filter((s) => kindOf(s.title) === k)
+  const real = (s: { id: string; title: string; status: string }, after: string[] | null): FlowNode => ({ id: s.id, sub: s.id, title: s.title, state: stateOfSub(s.status), detail: '', after })
+  const ghost = (id: string, title: string, k: StageKey, after: string[]): FlowNode => ({ id, title, state: stage(k)?.state ?? 'todo', detail: stage(k)?.detail ?? '', after })
+  const out: FlowNode[] = []
+  let last: string[]
+  // The build: its sub-tasks as planned, or the one that will be made.
+  const builders = by('build')
+  if (builders.length) { out.push(...builders.map((s) => real(s, null))); last = builders.map((s) => s.id) }
+  else { out.push(ghost('flow:build', i.build === 'one' ? 'Build it' : 'Planned into sub-tasks, and built', 'build', [])); last = ['flow:build'] }
+  // The check, and each round of finishing what it found and checking again, one after the other.
+  const loop = subs.filter((s) => ['check', 'finish'].includes(kindOf(s.title)))
+  if (loop.length) for (const s of loop) { out.push(real(s, last)); last = [s.id] }
+  else { out.push(ghost('flow:check', 'Check it against its list', 'check', last)); last = ['flow:check'] }
+  const probes = by('probe')
+  if (probes.length) for (const s of probes) { out.push(real(s, last)); last = [s.id] }
+  else { out.push(ghost('flow:probe', 'Try to break it, and clean up', 'probe', last)); last = ['flow:probe'] }
+  // The whole test run is not a sub-task; what fixes it is. Each fix leads to the run again.
+  for (const s of by('fix')) { out.push(real(s, last)); last = [s.id] }
+  if (stage('test')) { out.push(ghost('flow:test', 'The whole test run', 'test', last)); last = ['flow:test'] }
+  if (stage('smoke')) out.push(ghost('flow:smoke', 'Smoke test: yours, by hand', 'smoke', last))
+  return out
+}
+
 const criterionItem = (c: Criterion): Item => ({
   id: c.id, kind: 'criterion', text: c.text,
   mark: c.built === true ? 'met' : c.built === false ? 'unmet' : c.builtEvidence ? 'person' : 'unchecked',
@@ -86,15 +134,14 @@ export async function checklistOf(issueId: string): Promise<Checklist | null> {
       return { id: `req_${r.key}`, kind: 'requirement', text: r.name, what: r.what, mark: c?.built === false ? 'unmet' : c?.built === true ? (c.applies ? 'met' : 'na') : 'unchecked', evidence: c?.how || undefined }
     }),
   ]
-  const subs = await db.select({ id: issue.id, title: issue.title, state: issue.state }).from(issue).where(eq(issue.parentId, t.id))
+  const subs = await db.select({ id: issue.id, title: issue.title, state: issue.state, sortOrder: issue.sortOrder }).from(issue).where(eq(issue.parentId, t.id))
   const live = subs.filter((s) => s.state !== 'canceled' && s.state !== 'duplicate')
   const builds = live.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, live.map((s) => s.id))) : []
   const [last] = await db.select({ payload: event.payload }).from(event).where(and(eq(event.issueId, t.id), eq(event.type, 'task.tested'))).orderBy(desc(event.seq)).limit(1)
   const met = items.filter((x) => x.mark === 'met' || x.mark === 'na').length, unmet = items.filter((x) => x.mark === 'unmet').length
   const b = buildOf(w)
-  return {
-    build: b, items, met, unmet, total: items.length,
-    stages: stagesOf({ subs: live.map((s) => ({ title: s.title, status: builds.find((x) => x.issueId === s.id)?.status ?? 'queued' })), build: b, unmet, met, total: items.length, hasTests: !!(a?.setup as { test_cmd?: string } | null)?.test_cmd, tested: last ? (last.payload as { ok?: boolean }).ok === true : null,
-      byHand: (() => { const h = smokeChecks(acceptanceOf(t)); return { todo: h.filter((x) => x.mark === 'todo').length, failed: h.filter((x) => x.mark === 'fail').length, total: h.length } })() }),
-  }
+  const statusOf = (id: string) => builds.find((x) => x.issueId === id)?.status ?? 'queued'
+  const stages = stagesOf({ subs: live.map((s) => ({ title: s.title, status: builds.find((x) => x.issueId === s.id)?.status ?? 'queued' })), build: b, unmet, met, total: items.length, hasTests: !!(a?.setup as { test_cmd?: string } | null)?.test_cmd, tested: last ? (last.payload as { ok?: boolean }).ok === true : null,
+      byHand: (() => { const h = smokeChecks(acceptanceOf(t)); return { todo: h.filter((x) => x.mark === 'todo').length, failed: h.filter((x) => x.mark === 'fail').length, total: h.length } })() })
+  return { build: b, items, met, unmet, total: items.length, stages, flow: flowOf({ subs: live.map((x) => ({ id: x.id, title: x.title, status: statusOf(x.id), sortOrder: x.sortOrder })), stages, build: b }) }
 }
