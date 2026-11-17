@@ -240,6 +240,8 @@ Details and sources in `research/`.
     app's settings, so in the database that holds the app (the shared one, or this computer's for an app kept
     local). Agents change it there, not on a branch. The same goes for a prototype's made-up data: its scenarios are rows in
     that database, a prototype's own or shared with the app, and never files on its branch.
+  - **An app can have several set-ups, each with a name**, and each check left to a person names the one it needs
+    (Sandy, 2026-11-17). A library: its docs site, and a demo app that exercises it. Each is brought up once.
   - Where it sits in a task follows from that: staging and local gate the merge; a feature flag gates the
     release, after the merge.
   - An app that releases behind flags holds its builds to "this change is behind a flag", on its checklist.
