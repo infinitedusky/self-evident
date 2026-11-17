@@ -554,13 +554,14 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
       <Group title="Smoke test" lead="Where a person tries the built code by hand, for what an agent cannot judge: how it looks, how it feels, speed on a real machine. It is the code about to be reviewed, not the prototype. The same place as the prototypes, or somewhere of its own.">
         <label style={{ gridColumn: '1 / -1' }}>Where<select aria-label="Where it is smoke tested" value={setup.smoke?.where ?? 'local'} onChange={(e) => set({ smoke: { ...setup.smoke, where: e.target.value as 'local' | 'staging' | 'flag' } })}>
           <option value="local">Here, like its prototypes: the built branch, run with the command above, on made-up data</option>
+          <option value="preview">A preview of each pull request: a preview deployment, or an installable build of a library. It is tried before the merge</option>
           <option value="staging">Staging: a deployed build, with a test account. It is tried before the merge</option>
           <option value="flag">Behind a feature flag: in production, on for a test account only. It is tried after the merge, before the release</option>
         </select></label>
         {(setup.smoke?.where ?? 'local') === 'local'
           ? <label style={{ gridColumn: '1 / -1' }}>Its own command <span className="faint">(optional: else the prototype's)</span><input className="mono" value={setup.smoke?.cmd ?? ''} onChange={(e) => set({ smoke: { ...setup.smoke, cmd: e.target.value } })} placeholder="pnpm storybook --port $PORT" /></label>
           : <>
-              <label style={{ gridColumn: '1 / -1' }}>Address<input className="mono" value={setup.smoke?.url ?? ''} onChange={(e) => set({ smoke: { ...setup.smoke, url: e.target.value } })} placeholder={setup.smoke?.where === 'flag' ? 'https://app.example.com' : 'https://staging.example.com'} /></label>
+              <label style={{ gridColumn: '1 / -1' }}>{setup.smoke?.where === 'preview' ? <>Address of a pull request's preview <span className="faint">(with {'{pr}'} where its number goes)</span></> : 'Address'}<input className="mono" value={setup.smoke?.url ?? ''} onChange={(e) => set({ smoke: { ...setup.smoke, url: e.target.value } })} placeholder={setup.smoke?.where === 'flag' ? 'https://app.example.com' : setup.smoke?.where === 'preview' ? 'https://pkg.pr.new/your-package@{pr}' : 'https://staging.example.com'} /></label>
               <label style={{ gridColumn: '1 / -1' }}>Who to sign in as <span className="faint">(which test account, in words; never a password)</span><input value={setup.smoke?.account ?? ''} onChange={(e) => set({ smoke: { ...setup.smoke, account: e.target.value } })} placeholder="the test parent, in the password manager under Staging" /></label>
               {setup.smoke?.where === 'flag' && <label style={{ gridColumn: '1 / -1' }}>The flag<input className="mono" value={setup.smoke?.flag ?? ''} onChange={(e) => set({ smoke: { ...setup.smoke, flag: e.target.value } })} placeholder="how flags are named here, or this change's" /></label>}
             </>}

@@ -119,10 +119,12 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
                 {behind && <p className="smoke-stale" role="note">The branch has moved on since this was started. Run the new commit to test what will be reviewed.</p>}
                 {local
                   ? <iframe className="smoke-frame" title="The built code" src={src} />
-                  : <div className="empty">It is deployed, so it opens in its own tab. {v.account && <>Sign in as: {v.account}. </>}{v.flag && <>Flag: <code>{v.flag}</code>. </>}</div>}
+                  : <div className="empty">{v.where === 'preview' && v.pr ? <>The preview of pull request #{v.pr.number}. It opens in its own tab, and is rebuilt on each new commit. </> : <>It is deployed, so it opens in its own tab. </>}{v.account && <>Sign in as: {v.account}. </>}{v.flag && <>Flag: <code>{v.flag}</code>. </>}</div>}
               </>
             )}
-            {!local && !v.url && <div className="empty">This app is smoke tested {v.where === 'staging' ? 'on staging' : 'behind a feature flag'}, and has not said at what address. Settings › Prototype has it.</div>}
+            {!local && !v.url && (v.where === 'preview' && !v.pr
+              ? <div className="empty">This app is tried on a preview of its pull request, and this task has no pull request yet. It is opened once the first of its work is merged.</div>
+              : <div className="empty">This app is smoke tested {v.where === 'staging' ? 'on staging' : v.where === 'preview' ? 'on a preview of its pull request' : 'behind a feature flag'}, and has not said at what address. Settings › Prototype has it.</div>)}
           </div>
           <ol className="smoke-checks" aria-label="For you to check">{v.checks.map(row)}</ol>
         </div>
