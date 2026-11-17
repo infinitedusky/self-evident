@@ -4400,3 +4400,18 @@ where nobody was waiting. It is caught and logged now.
 
 Not seen on a real task. Not done: the smoke worktree is not removed when the task ends; a feature flag's test
 comes after the merge, and the step does not yet wait there.
+
+## A smoke test can be on a preview of the pull request (Sandy, 2026-11-17: "yes", on Bonkei's per-PR installable previews)
+
+Bonkei's agent proposed pkg.pr.new: an installable build of the library for every pull request, and a link to a
+fresh app running it. That is staging with an address of the pull request's own, which the setting could not say:
+it took one fixed address.
+
+- **A fourth place an app is smoke tested**: a preview of each pull request (`setup.smoke.where = 'preview'`). The
+  app gives the address as a pattern with `{pr}` where the number goes; the task's page fills in its own pull
+  request's (`previewUrl`). The same fits a site's preview deployments.
+- Before a task has a pull request, its page says so, and that one is opened once the first of its work is merged.
+- Nothing else changes: the checks, the marks, the hold. A check can already point at any address.
+
+For Bonkei both are worth having: its Storybook, run here, shows how a diagram looks; the preview shows that it
+installs and runs in someone else's app. Its agent's "smoke-test app" is an install test, not this.
