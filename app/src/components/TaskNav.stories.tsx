@@ -70,3 +70,17 @@ export const ChecklistTask: Story = {
 }
 /** A checklist task on its list's page. */
 export const OnTheChecklist: Story = { args: { ...ChecklistTask.args, here: 'checklist' }, play: async ({ canvasElement }) => { await expect(within(canvasElement).getByRole('link', { name: /Checklist/ }).className).toContain('active') } }
+
+/** A staged task (no checklist): the smoke test sits in Build, after Sub-tasks, with how many criteria are yours to check by hand. */
+export const SmokeTestAfterSubTasks: Story = {
+  args: { here: 'build', rows: rows('task', approvedTaskStepsView.states, approvedTaskStepsView.resolved.workflow), build: { done: 4, total: 9, waitingOn: null }, smoke: { owed: 6, total: 8, failed: 0 } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const link = c.getByRole('link', { name: /Smoke test/ })
+    await expect(link).toHaveAttribute('href', '/tasks/iss_sample20/smoke'); await expect(link).toHaveTextContent('6 for you')
+    const names = c.getAllByRole('link').map((a) => a.textContent ?? '')
+    await expect(names.findIndex((n) => n.includes('Sub-tasks'))).toBeLessThan(names.findIndex((n) => n.includes('Smoke test')))
+  },
+}
+/** Every one checked by hand, and one you failed: said on the row. */
+export const SmokeTestMarked: Story = { args: { here: 'smoke', rows: rows('task', approvedTaskStepsView.states, approvedTaskStepsView.resolved.workflow), build: { done: 9, total: 9, waitingOn: null }, smoke: { owed: 0, total: 8, failed: 1 } } }

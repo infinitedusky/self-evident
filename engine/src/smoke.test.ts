@@ -12,7 +12,7 @@ import { app, event, issue, pr as prTable, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createProject } from './projects.js'
 import { oneGoBrief } from './planner.js'
-import { byHand, markSmoke, previewUrl, runStop, setSmokeSetup, smokeChecks, smokeEnv, smokeOwed, smokeReady, smokeSetup, smokeSetupOf, smokeView, startSmoke, whenOf } from './smoke.js'
+import { byHand, markSmoke, previewUrl, runStop, setSmokeSetup, smokeChecks, smokeEnv, smokeOwed, smokeReady, smokeSetup, smokeSetupOf, smokeView, startSmoke, whenOf, forPerson } from './smoke.js'
 import { checkTaskBrief, readVerdicts, verdictChange } from './verify.js'
 
 const at = '2026-11-17T00:00:00.000Z'
@@ -52,6 +52,18 @@ describe('the checks a person has', () => {
     ])
     expect(smokeOwed(list)).toBe(2); expect(smokeOwed(criteria)).toBe(0) // nothing is theirs until the check says so
   })
+  it('on a staged task, with no check after the build, are every criterion no agent marked, with how we will know as what to look for', () => {
+    const at = '2026-11-17T00:00:00.000Z'
+    const list = [
+      { id: 'ac_1', text: 'The page loads (sample)', check: 'open /employees', by: 'agent', at },
+      { id: 'ac_2', text: 'An agent checked this one (sample)', built: true, builtEvidence: 'employees.test.ts passes', by: 'agent', at },
+      { id: 'ac_3', text: 'The person passed this one (sample)', built: true, builtEvidence: 'looked right', byHand: { pass: true, note: 'looked right', sha: 'abc', at, by: 'user' }, by: 'agent', at },
+    ] as Parameters<typeof smokeChecks>[0]
+    expect(smokeChecks(list)).toMatchObject([{ id: 'ac_3', mark: 'pass' }]) // a checklist task: only what was left to them
+    expect(smokeChecks(list, null, true)).toMatchObject([{ id: 'ac_1', mark: 'todo', how: 'open /employees' }, { id: 'ac_3', mark: 'pass' }])
+    expect(forPerson(list[1], true)).toBe(false) // an agent's mark is not theirs to overwrite from here
+  })
+
   it('each says when it can be done: here, on the pull request, or after the merge; only the first two hold the task', () => {
     expect(checkTaskBrief(criteria)).toContain('"pr" if it needs the pull request to exist')
     const v = readVerdicts('```acceptance\n[{"id":"ac_1","met":null,"when":"here","where":"/export","evidence":"open it"},{"id":"ac_2","met":null,"when":"pr","evidence":"the bot\'s comment has an install line that works"},{"id":"ac_3","met":null,"when":"after","evidence":"the release notes name it"}]\n```', criteria.map((c) => c.id))
