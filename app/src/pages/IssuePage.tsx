@@ -205,7 +205,7 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
               {(live.length > 0 || checklist?.flow) && <TaskGraph i={i} checklist={checklist} />}
               {live.length > 0 && <PlanCovers list={i.requirements ?? []} />}
               {live.length > 0 && <MergeGuide issueId={i.id} stamp={i.updatedAt} />}
-              {live.length > 0 && <SubmitPr issueId={i.id} pr={i.pr ?? null} landed={done} total={live.length} unchecked={(i.acceptance ?? []).filter((c) => c.built !== true).length} draft={app?.setup?.pr_draft !== false} onChanged={() => void act(async () => {})} />}
+              {live.length > 0 && <SubmitPr issueId={i.id} pr={i.pr ?? null} landed={done} total={live.length} unchecked={(i.acceptance ?? []).filter((c) => c.built !== true).length} draft={app?.setup?.pr_draft !== false} auto={app?.setup?.pr_auto !== false} onChanged={() => void act(async () => {})} />}
             </>)}
       </div>
       {agent.session !== undefined && (

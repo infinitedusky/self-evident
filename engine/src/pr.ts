@@ -25,6 +25,14 @@ export interface PrInput {
  * `setup.pr_title`: the title's template, in the repository's own convention, with {ticket} (the team's ticket id,
  * else ours), {id} (ours), {title}, {project}, {n} and {of} (the task's place in its project).
  */
+/**
+ * Whether a task's pull request is opened by the engine, as a draft, once the task is built and checked (Sandy,
+ * 2026-11-17: "have the option added … and have it the default, to do draft PRs automatically so that we can do
+ * proper smoke tests"). The day before, a pull request opened after the first of nine sub-tasks, so opening one
+ * became a press. This is neither: not before the build is whole and checked, and only ever a draft. Marking it
+ * ready for review stays the person's. Off (setup.pr_auto false): the press, as it was.
+ */
+export const prAuto = (setup: unknown) => (setup as { pr_auto?: boolean } | null)?.pr_auto !== false
 export const prDraft = (setup: unknown) => (setup as { pr_draft?: boolean } | null)?.pr_draft !== false
 export function prTitle(setup: unknown, v: { ticket?: string | null; id: string; title: string; project: string; n?: number; of?: number }, exact?: string | null): string | null {
   if (exact?.trim()) return exact.trim().slice(0, 250)

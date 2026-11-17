@@ -4481,3 +4481,25 @@ then a lone node, then another beside it when the check was added.
 - **Fixed here**: a check's "where" can be a place said in words ("the first pull request on GitHub"). "Go there"
   took it for a story's id and made an address that goes nowhere. It is shown as text now, and the button is only
   there for an address, a path or a story's id (`goable`).
+
+## A check says when it can be done, and a draft pull request is opened by itself (Sandy, 2026-11-17: "have the option added … and have it the default, to do draft PRs automatically so that we can do proper smoke tests"; and Bonkei's agent, passed on: "each check should say when it can be done")
+
+BON-52's one check for a person was "the preview comment's install line works". It was listed with the checks to
+do here, on the built code, where it cannot be done: it needs the pull request, and there was none, because
+since 2026-11-16 one is only opened when the person presses Submit.
+
+- **Each check left to a person says when** (`builtWhen` on the criterion; the checking agent sets it): **here**,
+  on the built code; **on the pull request** (a bot's comment, CI, a preview); **after it is merged** (a release,
+  a deploy, a flag). The smoke test page groups them. One on the pull request cannot be marked until there is
+  one; one for after the merge holds nothing. A check written before this is read from its own words (`whenOf`).
+- **A draft pull request is opened by the engine, by default** (`setup.pr_auto`, on unless switched off; Settings
+  › Landing), once the task is built, checked, probed and its tests pass: never on half a build (what went wrong
+  on 2026-11-16), always a draft whatever the app's own rule for the ones it submits, and never reopening one the
+  person closed. Marking it ready for review stays theirs. Off: the press, as it was.
+- So the order is: build, check, probe, tests, **draft pull request**, then the person's checks, here and on it.
+- My Stuff says which: "try it", or, with the automatic draft off and only pull-request checks left, "submit its
+  pull request".
+- No deadlock was there: Submit needs every sub-task landed, not the project called landed, and a waiting check
+  only holds the second.
+
+Not done: a check for after the merge becoming a to-do when the pull request merges.

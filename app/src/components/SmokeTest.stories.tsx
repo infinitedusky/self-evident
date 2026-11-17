@@ -112,3 +112,31 @@ export const WhereInWords: Story = {
     await expect(addressOf('http://localhost:6500', 'the first pull request')).toBe('http://localhost:6500')
   },
 }
+
+const mixed = [
+  { ...smokeSample.checks[0], when: 'here' as const },
+  { id: 'ac_s8', text: 'The preview comment has an install line that works (sample)', when: 'pr' as const, where: 'the pull request on GitHub (sample)', how: 'Copy the line from the bot\'s comment into a fresh app: it should install and draw a diagram (sample)', mark: 'todo' as const },
+  { id: 'ac_s9', text: 'The release notes name it (sample)', when: 'after' as const, how: 'Open the next release on GitHub: this change is in its list (sample)', mark: 'todo' as const },
+]
+/** Checks that can be done at different times: here now; on the pull request, which is not open yet, so those wait; after the merge, which hold nothing. */
+export const AtDifferentTimes: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, checks: mixed, owed: 2, pr: null } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('group', { name: 'Here, on the built code' })).toBeInTheDocument()
+    const onPr = within(c.getByRole('group', { name: 'On the pull request' }))
+    await expect(onPr.getByText(/this task has none yet/)).toBeInTheDocument()
+    await expect(onPr.getByRole('button', { name: 'Pass' })).toBeDisabled() // nothing to look at until there is one
+    await expect(within(c.getByRole('group', { name: 'After it is merged' })).getByText(/do not hold the task/)).toBeInTheDocument()
+    await expect(within(c.getByRole('group', { name: 'Here, on the built code' })).getByRole('button', { name: 'Pass' })).toBeEnabled()
+  },
+}
+/** The same once the pull request is open: its checks can be done, with a link to it. */
+export const PullRequestOpen: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, checks: mixed, owed: 2, pr: { number: 12, url: 'https://github.test/sample/pull/12' } } }),
+  play: async ({ canvasElement }) => {
+    const onPr = within(await within(canvasElement).findByRole('group', { name: 'On the pull request' }))
+    await expect(onPr.getByRole('link', { name: 'Pull request #12' })).toHaveAttribute('href', 'https://github.test/sample/pull/12')
+    await expect(onPr.getByRole('button', { name: 'Pass' })).toBeEnabled()
+  },
+}

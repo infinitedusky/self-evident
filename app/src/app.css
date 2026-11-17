@@ -950,3 +950,8 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .task-node.ghost { border-style: dashed; background: transparent; box-shadow: none; }
 .task-node.ghost.queued .task-node-title { color: var(--muted, inherit); }
 .task-node.ghost.done { border-style: solid; }
+
+.smoke-groups { display: grid; gap: 14px; }
+.smoke-when { margin: 0 0 4px; font-size: 14px; }
+.smoke-when-says { margin: 0 0 8px; font-size: 13px; }
+.smoke-checks.waiting { opacity: .6; }

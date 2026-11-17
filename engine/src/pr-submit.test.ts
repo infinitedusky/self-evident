@@ -12,7 +12,7 @@ import { app, event, pr as prTable, project, repo, workspace } from './db/schema
 import type { Execute } from './executor.js'
 import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
-import { prBody, prDraft, prTitle, setPrRules } from './pr.js'
+import { prBody, prDraft, prTitle, setPrRules , prAuto } from './pr.js'
 import { createProject, projectGraph } from './projects.js'
 import { Runner } from './runner.js'
 import { approveBriefs } from './test-briefs.js'
@@ -50,7 +50,7 @@ describe.skipIf(!reachable)('a pull request waits for the person (sample data)',
     await writeFile(join(repoPath, 'README.md'), 'hi\n'); await commitAll(repoPath, 'init')
     await git(repoPath, ['remote', 'add', 'origin', remote]); await git(repoPath, ['push', '-q', 'origin', 'main'])
     await db.insert(workspace).values({ id: wsId, name: 'pr submit test' })
-    await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'Shop', key: appId.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md', pr_mode: 'project' } })
+    await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'Shop', key: appId.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md', pr_mode: 'project', pr_auto: false } }) // the press: an app that has switched the automatic draft off
     await db.insert(repo).values({ id: newId('repo'), appId, fullName: 'sample-org/sample-shop', localPath: repoPath }) // on GitHub by name: the pull request step is live
   })
   afterAll(async () => { await db.update(project).set({ status: 'superseded' }).where(eq(project.appId, appId)); await pool.end() })
@@ -78,6 +78,40 @@ describe.skipIf(!reachable)('a pull request waits for the person (sample data)',
     await sleep(400)
     expect((await types()).filter((t) => t.startsWith('pr.'))).toEqual([]) // all landed: still the person's to submit
     expect((await git(remote, ['branch', '--list'])).stdout).not.toContain('project/')
+  })
+
+  it('by default the engine opens it itself, as a draft, once the task is built and checked; not before, and never one the person closed', async () => {
+    const own = newId('app')
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'Auto (sample)', key: own.slice(-6).toUpperCase(), setup: { pr_mode: 'project', pr_draft: false } }) // says "ready for review" for its own submits; an automatic one is a draft all the same
+    await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: 'sample-org/sample-auto', localPath: repoPath })
+    expect(prAuto({})).toBe(true); expect(prAuto(null)).toBe(true); expect(prAuto({ pr_auto: false })).toBe(false)
+    const { project: p, subIssues } = await createProject({ appId: own, name: 'Auto (sample)', issues: [{ title: 'Export (sample)', subIssues: [{ key: 'a', title: 'A', files: ['a3.txt'] }, { key: 'b', title: 'B', files: ['b3.txt'], dependsOn: ['a'] }] }] })
+    await approveBriefs(p.id)
+    let hold = true
+    const execute: Execute = async (i) => {
+      if (i.subIssue.id === subIssues[1].id) while (hold) await sleep(50)
+      await writeFile(join(i.worktreePath, `${i.subIssue.identifier}.txt`), 'x\n'); await commitAll(i.worktreePath, `build ${i.subIssue.identifier}`)
+      return { status: 'completed', summary: 'done', costUsd: 0 }
+    }
+    const opened: { draft?: boolean; reopen?: boolean; title: string }[] = []
+    const runner = new Runner({ execute, sessionsMax: 2, openPr: async (i) => { opened.push({ draft: i.draft, reopen: i.reopen, title: i.title }); return { number: 41, url: 'https://github.test/sample-org/sample-auto/pull/41', created: opened.length === 1 } } })
+    await runner.startProject(p.id)
+    await until(async () => (await projectGraph(p.id))!.subIssues[0].status === 'done')
+    await sleep(300)
+    expect(opened).toEqual([]) // one of two has landed: nothing is opened on half a build
+    hold = false
+    await until(async () => opened.length === 1 && (await db.select().from(prTable).where(eq(prTable.projectId, p.id))).length === 1)
+    expect(opened[0]).toMatchObject({ draft: true, reopen: false })
+    const [row] = await db.select().from(prTable).where(eq(prTable.projectId, p.id))
+    expect(row).toMatchObject({ number: 41, status: 'draft' })
+    const said = async () => (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => e.type === 'pr.submitted')
+    await until(async () => (await said()).length === 1)
+    const submitted = await said()
+    expect(submitted.map((e) => [e.actor, (e.payload as { auto?: boolean; draft?: boolean }).auto, (e.payload as { draft?: boolean }).draft])).toEqual([['engine', true, true]])
+    // One the person closed stays closed: the engine does not open it again by itself.
+    await db.update(prTable).set({ status: 'closed' }).where(eq(prTable.id, row.id))
+    await (runner as unknown as { updatePr: (p: string, i: string | undefined, s: 'auto') => Promise<void> }).updatePr(p.id, undefined, 'auto')
+    expect(opened).toHaveLength(1)
   })
 
   it('keeps the app\'s rules for its pull requests', async () => {

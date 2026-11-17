@@ -23,7 +23,7 @@ import { inForce, type Covered } from './requirements.js'
 import { smokeOwed } from './smoke.js'
 import { ONE_GO_TITLE } from './planner.js'
 import { workflowFor } from './work.js'
-import { ensureProjectPr, prDraft, prTitle, prBody } from './pr.js'
+import { ensureProjectPr, prDraft, prTitle, prBody , prAuto } from './pr.js'
 import { addSubTask, projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
 import { finishPlanning, preparePlanning, type Propose } from './planner.js'
 import { BEFORE_PLAN, checksOwed, styleOf } from './steps.js'
@@ -80,7 +80,9 @@ export class Runner {
   private planningIssues = new Set<string>()
   private backlogWaits = new Set<string>() // project.backlog_open said once per set of open issues
 
-  constructor(opts: { execute?: Execute; sessionsMax?: number; propose?: Propose } = {}) {
+  private openPr: typeof ensureProjectPr
+  constructor(opts: { execute?: Execute; sessionsMax?: number; propose?: Propose; /** What opens or updates a pull request: GitHub's, unless a test stands in for it. */ openPr?: typeof ensureProjectPr } = {}) {
+    this.openPr = opts.openPr ?? ensureProjectPr
     this.execute = opts.execute ?? runTask
     this.sessionsMax = opts.sessionsMax ?? SESSIONS_MAX
     this.propose = opts.propose
@@ -281,7 +283,7 @@ export class Runner {
     await db.transaction((tx) => setBuild(tx, subId, { status: 'done' }, { runId, payload: { sha: landed.sha } }))
     await this.markCriteria(subId, x.parentId!, result.summary, rb).catch((err) => this.emit({ ...rb, type: 'task.check_error', payload: { error: String(err?.message ?? err) } }))
     await withLock(`land:${projectId}`, () => this.updatePr(projectId, mode === 'issue' ? x.parentId! : undefined)).catch((err) => this.emit({ ...rb, type: 'pr.error', payload: { error: String(err?.message ?? err) } }))
-    await this.testTask(projectId, x.parentId!, r!.localPath!, worktreePath, onto, setup, rb).catch((err) => this.emit({ ...rb, type: 'task.test_error', payload: { error: String(err?.message ?? err) } }))
+    await this.testTask(projectId, x.parentId!, r!.localPath!, worktreePath, onto, setup, rb, mode).catch((err) => this.emit({ ...rb, type: 'task.test_error', payload: { error: String(err?.message ?? err) } }))
     } finally { this.testing.set(projectId, (this.testing.get(projectId) ?? 1) - 1) }
     this.active.delete(subId)
     await this.dispatch()
@@ -322,7 +324,7 @@ export class Runner {
     await this.emit({ ...pb, issueId: taskId, type: 'task.checked', payload: { criteria: criteria.length, requirements: required.length, read: verdicts.length, met: verdicts.filter((v) => v.met === true).length, notMet: verdicts.filter((v) => v.met === false).length, forAPerson: verdicts.filter((v) => v.met === null).length } })
   }
 
-  private async testTask(projectId: string, taskId: string, repoPath: string, worktreePath: string, onto: string, setup: AppSetup, pb: Omit<NewEvent, 'type'>) {
+  private async testTask(projectId: string, taskId: string, repoPath: string, worktreePath: string, onto: string, setup: AppSetup, pb: Omit<NewEvent, 'type'>, mode: 'project' | 'issue' = 'issue') {
     const outcome = await withLock(`land:${projectId}`, async () => {
       const every = (await db.select({ id: issue.id, state: issue.state, title: issue.title, sortOrder: issue.sortOrder }).from(issue).where(eq(issue.parentId, taskId))).sort((a, b) => a.sortOrder - b.sortOrder)
       const subs = every.filter((s) => s.state !== 'canceled' && s.state !== 'duplicate')
@@ -357,7 +359,11 @@ export class Runner {
       return
     }
     if (next.do === 'probe') { await addSubTask(taskId, { title: PROBE_TITLE, brief: probeBrief(list.criteria, list.base), after }, 'engine'); return }
-    if (next.do === 'done' || !('result' in outcome) || !outcome.result || outcome.result.ok || !setup.test_cmd) return
+    if (next.do === 'done' || !('result' in outcome) || !outcome.result || outcome.result.ok || !setup.test_cmd) {
+      // Built, checked, probed and tested: its draft pull request is opened, so what can only be seen on one can be (smoke.ts, when: pr).
+      if (prAuto(setup)) await withLock(`land:${projectId}`, () => this.updatePr(projectId, mode === 'issue' ? taskId : undefined, 'auto')).catch((err) => this.emit({ ...pb, issueId: taskId, type: 'pr.error', payload: { error: String(err?.message ?? err) } }))
+      return
+    }
     const { fixes, result } = outcome as { fixes: number; result: { ok: false; detail: string } }
     if (fixes >= MAX_FIXES) {
       await commentOnIssue(taskId, { heading: 'The whole test run still fails', body: `Its sub-tasks are all merged and ${fixes} fixes were tried. It needs a person.\n\n\`\`\`\n${result.detail}\n\`\`\`` }, 'engine')
@@ -626,12 +632,15 @@ export class Runner {
    * The project's PR (one per project), or an issue's (stacked: against the issue before it while that PR is open,
    * else main). Opened at the first landing, updated after every one.
    */
-  private async updatePr(projectId: string, issueId?: string, submit = false) {
+  private async updatePr(projectId: string, issueId?: string, submit: boolean | 'auto' = false) {
     const { p, a, r, base } = await this.context(projectId)
-    if (!r?.fullName) { if (submit) throw new PlanError('this app\'s repository is not on GitHub, so there is no pull request to open'); return }
+    const auto = submit === 'auto' // the engine opening a draft once the task is built and checked (pr.ts, prAuto): never a reopening, never an error
+    if (!r?.fullName) { if (submit === true) throw new PlanError('this app\'s repository is not on GitHub, so there is no pull request to open'); return }
     // Nothing leaves this computer until the person submits it: no push, no pull request. After that, each landing updates it.
     const [had] = (await db.select().from(prTable).where(eq(prTable.projectId, projectId))).filter((q) => (issueId ? q.issueId === issueId : !q.issueId))
     if (!submit && (!had || had.status === 'closed' || had.status === 'merged')) return
+    if (auto && had && (had.status === 'closed' || had.status === 'merged')) return // one the person closed stays closed
+    if (auto && had) submit = false // it is open already: this is an update like any other
     const g: Graph = (await projectGraph(projectId))!
     const mine = issueId ? g.subIssues.filter((x) => x.parentId === issueId) : g.subIssues
     const done = mine.filter((x) => x.status === 'done')
@@ -655,18 +664,19 @@ export class Runner {
     const guided = await guideTasks((t ? [t] : issues).map((q) => ({ id: q.id, identifier: q.identifier, title: q.title })), open.map((x) => ({ parentId: x.parentId ?? null, identifier: x.identifier }))).catch(() => [])
     const guide = mergeGuide(guided)
     const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog, guide, mergeRecord(guided))
+    if (auto && submit && (open.length || !mine.some((x) => x.status === 'done'))) return // not whole yet: nothing is opened
     if (submit && open.length) throw new PlanError(`${open.length} sub-task${open.length === 1 ? ' has' : 's have'} still to land (${open.map((x) => x.identifier).join(', ')}): the pull request is submitted once they all have`)
     if (submit && !landed.length) throw new PlanError('nothing has landed yet: there is nothing to submit')
-    const result = await ensureProjectPr({ repoPath: r.localPath!, fullName: r.fullName, integrationBranch: head, base: stack.base, title, body, draft: prDraft(a.setup), reopen: submit })
+    const result = await this.openPr({ repoPath: r.localPath!, fullName: r.fullName, integrationBranch: head, base: stack.base, title, body, draft: submit === 'auto' ? true : prDraft(a.setup), reopen: submit === true })
     const existing = prs.find((q) => (issueId ? q.issueId === issueId : !q.issueId))
     if (result.closed) { // the person closed it: the work goes on, on its branch; the pull request stays theirs to reopen
       if (existing && existing.status !== 'closed') await db.update(prTable).set({ status: 'closed' }).where(eq(prTable.id, existing.id))
       await this.emit({ ...base, ...(issueId ? { issueId } : {}), type: 'pr.left_closed', payload: { number: result.number, url: result.url, landed: landed.length, pending: open.length } })
       return
     }
-    if (!existing) await db.insert(prTable).values({ id: newId('pr'), appId: a.id, projectId, issueId: issueId ?? null, repoId: r.id, number: result.number, url: result.url, headBranch: head, baseBranch: stack.base, status: prDraft(a.setup) ? 'draft' : 'open', openedAt: new Date() })
-    else await db.update(prTable).set({ baseBranch: stack.base, number: result.number, url: result.url, ...(submit ? { status: prDraft(a.setup) ? 'draft' : 'open' } : {}) }).where(eq(prTable.id, existing.id))
-    if (submit) await this.emit({ ...base, ...(issueId ? { issueId } : {}), actor: 'user', type: 'pr.submitted', payload: { number: result.number, url: result.url, draft: prDraft(a.setup) } })
+    if (!existing) await db.insert(prTable).values({ id: newId('pr'), appId: a.id, projectId, issueId: issueId ?? null, repoId: r.id, number: result.number, url: result.url, headBranch: head, baseBranch: stack.base, status: submit === 'auto' || prDraft(a.setup) ? 'draft' : 'open', openedAt: new Date() })
+    else await db.update(prTable).set({ baseBranch: stack.base, number: result.number, url: result.url, ...(submit ? { status: submit === 'auto' || prDraft(a.setup) ? 'draft' : 'open' } : {}) }).where(eq(prTable.id, existing.id))
+    if (submit) await this.emit({ ...base, ...(issueId ? { issueId } : {}), actor: submit === 'auto' ? 'engine' : 'user', type: 'pr.submitted', payload: { number: result.number, url: result.url, draft: submit === 'auto' || prDraft(a.setup), ...(submit === 'auto' ? { auto: true } : {}) } })
     await this.emit({ ...base, ...(issueId ? { issueId } : {}), type: result.created ? 'pr.opened' : 'pr.updated', payload: { number: result.number, url: result.url, landed: landed.length, base: stack.base } })
   }
 

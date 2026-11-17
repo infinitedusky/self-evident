@@ -57,8 +57,26 @@ export function smokeSetup(setup: unknown): SmokeSetup {
   return { where, ...(text(s.url) ? { url: text(s.url) } : {}), ...(text(s.account) ? { account: text(s.account) } : {}), ...(text(s.flag) ? { flag: text(s.flag) } : {}), ...(text(s.cmd, 2000) ? { cmd: text(s.cmd, 2000) } : {}) }
 }
 
+/**
+ * When a check left to a person can be done (Bonkei's agent, passed on by Sandy, 2026-11-17: the step "assumes every
+ * check a person does happens on this machine, before the PR … each check should say when it can be done").
+ * - here: on the built code, on this computer. Before the pull request.
+ * - pr: only once the pull request exists: a bot's comment on it, a check that runs in CI, a preview of it.
+ * - after: only once it is merged: a release, a deploy, a flag switched on.
+ * A task waits for its here and pr checks; one for after the merge is listed and holds nothing.
+ */
+export type When = 'here' | 'pr' | 'after'
+export const WHENS: When[] = ['here', 'pr', 'after']
+/** When, from what the check said; for one written before checks said when, from its own words. */
+export function whenOf(c: Criterion): When {
+  if (c.builtWhen) return c.builtWhen
+  const said = `${c.builtWhere ?? ''} ${c.built === undefined ? c.builtEvidence ?? '' : ''}`
+  return /\b(pull request|PR)\b|pkg\.pr\.new|\bCI\b/.test(said) ? 'pr' : 'here'
+}
+
 export interface SmokeCheck {
   id: string; text: string
+  when: When
   /** Where to go: a path of the app, or a story's id. */
   where?: string
   /** What to do there and what passing looks like. */
@@ -83,7 +101,7 @@ export function smokeChecks(criteria: Criterion[], head: string | null = null): 
     const marked = c.built !== undefined && !!c.byHand
     const agent = c.built !== undefined && !c.byHand // the check verified it itself after all
     return {
-      id: c.id, text: c.text, ...(c.builtWhere ? { where: c.builtWhere } : {}),
+      id: c.id, text: c.text, when: whenOf(c), ...(c.builtWhere ? { where: c.builtWhere } : {}),
       ...((c.built === undefined ? c.builtEvidence : c.check) ? { how: (c.built === undefined ? c.builtEvidence : c.check)!.replace(/^(for a person|needs a person)[:,]?\s*/i, '') } : {}),
       mark: c.built === undefined ? 'todo' as const : c.built ? 'pass' as const : 'fail' as const,
       ...(marked || agent ? { note: c.builtEvidence ?? '' } : {}),
@@ -92,8 +110,10 @@ export function smokeChecks(criteria: Criterion[], head: string | null = null): 
     }
   })
 }
-/** How many still wait for the person. */
-export const smokeOwed = (criteria: Criterion[]) => smokeChecks(criteria).filter((c) => c.mark === 'todo').length
+/** How many still wait for the person and hold the task: not the ones for after the merge. */
+export const smokeOwed = (criteria: Criterion[]) => smokeChecks(criteria).filter((c) => c.mark === 'todo' && c.when !== 'after').length
+/** Of those, how many can be done now: the ones on the pull request wait for it to exist. */
+export const smokeReady = (criteria: Criterion[], hasPr: boolean) => smokeChecks(criteria).filter((c) => c.mark === 'todo' && (c.when === 'here' || (c.when === 'pr' && hasPr))).length
 
 const running = new Map<string, { proc: ChildProcess; log: string[] }>() // by task
 const alive = (issueId: string) => { const m = running.get(issueId); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
@@ -136,7 +156,7 @@ export async function smokeView(issueId: string) {
     /** Its pull request, when there is one: a preview is of it. */ pr,
     canRun: setup.where === 'local' && !!(setup.cmd ?? (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd?.trim()),
     log: running.get(t.id)?.log.slice(-30) ?? [],
-    checks, owed: checks.filter((c) => c.mark === 'todo').length, failed: checks.filter((c) => c.mark === 'fail').length,
+    checks, owed: checks.filter((c) => c.mark === 'todo' && c.when !== 'after').length, failed: checks.filter((c) => c.mark === 'fail').length,
   }
 }
 
@@ -183,10 +203,11 @@ export function stopSmokes() { for (const id of [...running.keys()]) void stopSm
 
 /** A person's word on one check: the build's mark on that criterion, by hand, with their note and the commit it was made on. */
 export async function markSmoke(issueId: string, criterionId: string, input: { pass: boolean; note?: string }, by = 'user') {
-  const { t, a, head } = await built(issueId)
+  const { t, a, head, pr } = await built(issueId)
   const c = acceptanceOf(t).find((x) => x.id === criterionId)
   if (!c) throw new PlanError(`no acceptance criterion ${criterionId} on this task`)
   if (!byHand(c)) throw new PlanError('that criterion is not one for a person: the check after the build did not leave it to them')
+  if (whenOf(c) === 'pr' && !pr) throw new PlanError('that one is checked on the pull request, and this task has none yet')
   const note = (input.note ?? '').replace(/\s+/g, ' ').trim().slice(0, 600)
   if (!input.pass && !note) throw new PlanError('say what you saw: a fail is sent back to be fixed, and the note is what the fix works from')
   await setAcceptance(t.id, { update: [{ id: c.id, built: input.pass, builtEvidence: note || 'Checked by hand: it holds.', byHand: { pass: input.pass, note, sha: head, at: new Date().toISOString(), by } }] }, by)
