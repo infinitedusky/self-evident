@@ -238,7 +238,8 @@ Details and sources in `research/`.
   - **How it is brought up is Self Evident's, never the app's repository's** (Sandy, 2026-11-17: "keep any of this
     stuff out of the code base … This is about us being able to test"): a script, a stop script and a seed, in the
     app's settings, so in the database that holds the app (the shared one, or this computer's for an app kept
-    local). Agents change it there, not on a branch.
+    local). Agents change it there, not on a branch. The same goes for a prototype's made-up data: its scenarios are rows in
+    that database, a prototype's own or shared with the app, and never files on its branch.
   - Where it sits in a task follows from that: staging and local gate the merge; a feature flag gates the
     release, after the merge.
   - An app that releases behind flags holds its builds to "this change is behind a flag", on its checklist.

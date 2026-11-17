@@ -239,8 +239,8 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   const slug = `smoke-${name.toLowerCase()}`
   if (dbCfg && opts.clean) await dropDatabase(dbCfg, slug)
   if (dbCfg && !(await databaseExists(dbCfg, slug))) {
-    const { url } = await rebuild(dbCfg, slug, path, (await listScenarios(path)).includes('default') ? 'default' : null)
-    if (setup.seed) { // the app's own seed, from its settings: after the schema, and after a scenario if the code has one
+    const { url } = await rebuild(dbCfg, slug, path, (await listScenarios({ appId: a.id }, path)).includes('default') ? 'default' : null, { appId: a.id }) // the app's shared "default" scenario, when it has one
+    if (setup.seed) { // the app's own seed, from its settings: after the schema, and after the app's shared scenario when it has one
       const c = new pg.Client({ connectionString: url })
       await c.connect()
       try { await c.query(setup.seed) } catch (err) { throw new PlanError(`the smoke test's seed failed: ${(err as Error).message}`) } finally { await c.end() }

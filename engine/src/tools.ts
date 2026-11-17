@@ -33,7 +33,7 @@ import { writeReport } from './reports.js'
 import { deleteSavePoint, deleteTaskBranch, goBack, saveHere, switchTo, taskBranches } from './task-branches.js'
 import { share, sharesOf, unshare } from './share.js'
 import { setGuide } from './share-guide.js'
-import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, setPrototypeCleanup, setPrototypeCommand, setPrototypeDatabase, startPrototype, stopPrototype } from './prototype.js'
+import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, showPrototypeScenario, writePrototypeScenario, setPrototypeCleanup, setPrototypeCommand, setPrototypeDatabase, startPrototype, stopPrototype } from './prototype.js'
 import { agentsOut, readAgent, say, tellAgent } from './talk.js'
 import { syncApp } from './github.js'
 import { FOLLOWED, follow, ownerOf } from './follow.js'
@@ -235,10 +235,12 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return stopPrototype(a.prototypeId, actor) })),
       def('discard_prototype', 'Done with a prototype: its server stopped, its worktree and branch removed. Only when the person says so.', { prototypeId: z.string() },
         async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return discardPrototype(a.prototypeId, actor) })),
-      def('prototype_data', 'A prototype\'s sample data, in a database of its own. reset builds the database again from a scenario (.prototype/scenarios/<name>/<table>.json; none: empty tables) and restarts its server; save writes the data as it is now into a scenario of that name (commit it).', { prototypeId: z.string(), action: z.enum(['reset', 'save']), scenario: z.string().optional().describe('reset: which scenario; save: its name, like teacher-three-overdue') },
+      def('prototype_data', 'A prototype\'s sample data, in a database of its own, filled from scenarios: made-up rows by table, by name. Scenarios are kept in Self Evident, never in the repository: do not write sample data files or a .prototype folder on the branch. write keeps a scenario you give (tables: each table\'s name to an array of rows); save keeps the data as it is now under a name; reset builds the database again from a scenario (none: empty tables) and restarts its server; show returns a scenario\'s rows. shared: true keeps it for the whole app, so other prototypes and the smoke test can load it ("default" is loaded first); else it is this prototype\'s and goes when the prototype is thrown away.', { prototypeId: z.string(), action: z.enum(['reset', 'save', 'write', 'show']), scenario: z.string().optional().describe('its name, like teacher-three-overdue'), tables: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))).optional().describe('write: {"product": [{"id": 1, "name": "Sample mug"}]}'), shared: z.boolean().optional() },
         async (a) => tryIt(async () => {
           await ownPrototype(a.prototypeId)
-          if (a.action === 'save') { if (!a.scenario) throw new PlanError('save needs a scenario name'); return savePrototypeData(a.prototypeId, a.scenario, actor) }
+          if (a.action === 'save') { if (!a.scenario) throw new PlanError('save needs a scenario name'); return savePrototypeData(a.prototypeId, a.scenario, actor, a.shared === true) }
+          if (a.action === 'write') { if (!a.scenario || !a.tables) throw new PlanError('write needs a scenario name and its tables'); return writePrototypeScenario(a.prototypeId, a.scenario, a.tables, actor, a.shared === true) }
+          if (a.action === 'show') { if (!a.scenario) throw new PlanError('show needs a scenario name'); return showPrototypeScenario(a.prototypeId, a.scenario) }
           return resetPrototypeData(a.prototypeId, a.scenario ?? null, actor)
         })),
       def('set_prototype_database', 'Where this app\'s prototypes get their throwaway databases: url, the app\'s development Postgres (any database on that server; each prototype gets its own beside it); env, the variable the app reads (default DATABASE_URL); schema_cmd, a shell command run in the prototype\'s worktree that makes the schema in the database that variable names (the app\'s migrations, or its ORM\'s create/push). Work these out from the app and confirm them with the person first.', { url: z.string(), env: z.string().optional(), schema_cmd: z.string().optional() },

@@ -18,7 +18,7 @@ import { appendEvent } from './events.js'
 import { addWorktree, git, removeWorktree } from './git.js'
 import { newId } from './ids.js'
 import { PlanError } from './projects.js'
-import { databaseExists, databaseName, databaseUrl, dropDatabase, listScenarios, rebuild, save, type PrototypeDb } from './prototype-data.js'
+import { databaseExists, databaseName, databaseUrl, dropDatabase, dropScenarios, listScenarios, rebuild, save, scenarioTables, writeScenario, type PrototypeDb, type Tables } from './prototype-data.js'
 import { endTalk, say, showTalk, startPrototypeTalk } from './talk.js'
 
 const STOP_TIMEOUT_MS = Number(process.env.PROTOTYPE_STOP_TIMEOUT_MS ?? 120_000)
@@ -71,7 +71,7 @@ export async function prototypeStatus(id: string) {
   const url = p.port ? `http://localhost:${p.port}` : null
   const { dbCfg } = await setupOf(p.appId)
   const { stopCmd, discardCmd } = await setupOf(p.appId)
-  const data = dbCfg ? { database: databaseName(slugOf(p)), scenarios: await listScenarios(p.path).catch(() => []) } : { database: null, scenarios: [] }
+  const data = dbCfg ? { database: databaseName(slugOf(p)), scenarios: await listScenarios({ appId: p.appId, prototypeId: p.id }, p.path).catch(() => []) } : { database: null, scenarios: [] }
   return { ...p, ...data, cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up: on && url ? await answers(url) : false, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [] }
 }
 
@@ -89,8 +89,8 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
   const { a, cmd, dbCfg } = await setupOf(p.appId)
   if (!cmd) throw new PlanError(`${a.name} has no prototype command yet: set it in Settings, or work it out from the app and set it with set_prototype_command`)
   if (dbCfg && !(await databaseExists(dbCfg, slugOf(p)))) { // first start: its database, from the scenario it had, else "default" if there is one
-    const scenario = p.scenario ?? ((await listScenarios(p.path)).includes('default') ? 'default' : null)
-    await rebuild(dbCfg, slugOf(p), p.path, scenario)
+    const scenario = p.scenario ?? ((await listScenarios({ appId: p.appId, prototypeId: p.id }, p.path)).includes('default') ? 'default' : null)
+    await rebuild(dbCfg, slugOf(p), p.path, scenario, { appId: p.appId, prototypeId: p.id })
     await db.update(prototype).set({ scenario }).where(eq(prototype.id, id))
   }
   const port = await freePort(p.port ?? 0)
@@ -213,6 +213,7 @@ export async function discardPrototype(id: string, actor = 'person') {
   if (p.sessionId) await endTalk(p.sessionId)
   const { repoPath, dbCfg } = await setupOf(p.appId)
   if (dbCfg) await dropDatabase(dbCfg, slugOf(p)).catch(() => {})
+  await dropScenarios(p.appId, p.id) // its own made-up data goes with it; what was shared with the app stays
   if (repoPath) { await removeWorktree(repoPath, p.path); await git(repoPath, ['branch', '-D', p.branch], { allowFail: true }) }
   await db.update(prototype).set({ status: 'discarded', updatedAt: new Date() }).where(eq(prototype.id, id))
   await emit(p, 'prototype.discarded', actor)
@@ -229,22 +230,38 @@ export async function resetPrototypeData(id: string, scenario: string | null, ac
   if (!dbCfg) throw new PlanError(`${a.name}'s prototypes have no database set: work out the app's development database and schema command and set them with set_prototype_database`)
   const wasRunning = alive(id)
   await kill(id)
-  const { loaded } = await rebuild(dbCfg, slugOf(p), p.path, scenario)
+  const { loaded } = await rebuild(dbCfg, slugOf(p), p.path, scenario, { appId: p.appId, prototypeId: p.id })
   await db.update(prototype).set({ scenario, updatedAt: new Date() }).where(eq(prototype.id, id))
   await emit(p, 'prototype.data_reset', actor, { scenario, loaded })
   if (wasRunning) await runPrototype(id, actor)
   return { scenario, loaded, status: await prototypeStatus(id) }
 }
 
-/** The data as it is now, kept as a scenario in the prototype's worktree (commit it with the prototype). */
-export async function savePrototypeData(id: string, name: string, actor = 'person') {
+/** The data as it is now, kept as a scenario: in Self Evident, for this prototype or shared with the app. Never in its worktree. */
+export async function savePrototypeData(id: string, name: string, actor = 'person', shared = false) {
   const p = await rowOf(id)
   const { a, dbCfg } = await setupOf(p.appId)
   if (!dbCfg) throw new PlanError(`${a.name}'s prototypes have no database set`)
-  const saved = await save(dbCfg, slugOf(p), p.path, name)
+  const saved = await save(dbCfg, slugOf(p), { appId: p.appId, prototypeId: p.id }, name, shared)
   await db.update(prototype).set({ scenario: name, updatedAt: new Date() }).where(eq(prototype.id, id))
-  await emit(p, 'prototype.data_saved', actor, { scenario: name, saved: saved.saved })
+  await emit(p, 'prototype.data_saved', actor, { scenario: name, saved: saved.saved, shared })
   return saved
+}
+
+/** A scenario written out by hand: its tables, each an array of rows. Loaded with a reset. */
+export async function writePrototypeScenario(id: string, name: string, tables: Tables, actor = 'person', shared = false) {
+  const p = await rowOf(id)
+  const saved = await writeScenario({ appId: p.appId, prototypeId: p.id }, name, tables, shared)
+  await emit(p, 'prototype.data_saved', actor, { scenario: name, saved: saved.saved, shared, written: true })
+  return saved
+}
+
+/** A scenario's rows, to read. */
+export async function showPrototypeScenario(id: string, name: string) {
+  const p = await rowOf(id)
+  const tables = await scenarioTables({ appId: p.appId, prototypeId: p.id }, name, p.path)
+  if (!tables) throw new PlanError(`no scenario "${name}" for this prototype`)
+  return { scenario: name, tables }
 }
 
 /** Where this app's prototypes get their databases: its development database server, the variable it reads, its schema command. */
