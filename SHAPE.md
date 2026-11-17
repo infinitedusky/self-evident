@@ -224,6 +224,19 @@ Details and sources in `research/`.
 - **The loop's stages** (Sandy, 2026-10-29): Observe · Learn · Ideate (ideas and their research) · Plan
   (tasks: research, brief, mockup, prototype, in any order unless a workflow sets one) · Build (including the
   checks a build is held to). The rail lists only these stages; projects, tasks and the steps are inside them.
+- **An app says where it is smoke tested, beside where it is prototyped** (Sandy, 2026-11-17: "apps get a smoke
+  test configuration setting, and it's like there's a prototype and a smoke test, and they can either be the same
+  or they can be different"). Decided; not built (idea #1 of the Self Evident app, "A smoke-test step").
+  - A smoke test is a person checking the built code by hand, for what an agent cannot judge (how it looks, how
+    it feels, speed on a real machine), while Self Evident watches. It is the code about to be reviewed, never the
+    prototype's branch, and never production as its users see it.
+  - **Where it runs is the app's setting**, one of: the **same as its prototypes** (run locally, made-up data: a
+    library and its Storybook); a **staging** environment (a deployed build, a test account, real services in test
+    mode; "a fake account in a staging environment"); or **behind a feature flag** in production, on for a test
+    account only ("some don't but operate with feature flags").
+  - Where it sits in a task follows from that: staging and local gate the merge; a feature flag gates the
+    release, after the merge.
+  - An app that releases behind flags holds its builds to "this change is behind a flag", on its checklist.
 - **The workflow is a verification checklist** (Sandy, 2026-11-16, from feedback: the stages before a build (ADR,
   audit, blast radius) each carrying instructions "is based on earlier models where hooks were needed to enforce
   things a lot. What I want to do instead is have a list of things to do and just include them in the 'build it'
