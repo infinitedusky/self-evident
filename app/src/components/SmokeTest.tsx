@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge } from './Badge'
-import { API, engine, openEvents, type SmokeCheck, type SmokeView } from '../engine'
+import { API, engine, openEvents, type SmokeCheck, type SmokeSetupView, type SmokeView } from '../engine'
 
 const WHEN = { here: 'Here, on the built code', pr: 'On the pull request', after: 'After it is merged' } as const
 
@@ -37,6 +37,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   const [marking, setMarking] = useState<{ id: string; pass: boolean } | null>(null)
   const [note, setNote] = useState('')
   const [sent, setSent] = useState<number | null>(null)
+  const [picked, setPicked] = useState<string | null>(null) // which set-up is shown, once they have chosen
   const timer = useRef<number | undefined>(undefined)
   const load = useCallback(() => engine.smoke(issueId).then((x) => { setV(x); setError(null) }).catch((e) => setError(String(e.message ?? e))), [issueId])
   useEffect(() => {
@@ -47,7 +48,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
     return () => { es.close(); window.clearTimeout(timer.current) }
   }, [issueId, appId, load])
   useEffect(() => { // a server that was just started takes a moment to answer: look again until it does
-    if (!v || v.where !== 'local' || !v.url || v.up) return
+    if (!v || !(v.setups ?? [v]).some((x) => x.where === 'local' && x.url && !x.up)) return
     const t = window.setTimeout(() => void load(), 1500)
     return () => window.clearTimeout(t)
   }, [v, load])
@@ -59,9 +60,14 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   }
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
-  const local = v.where === 'local'
-  const behind = local && v.running && v.head && v.running !== v.head
-  const src = v.url ? at ?? v.url : null
+  const all: SmokeSetupView[] = v.setups?.length ? v.setups : [{ key: 'main', name: 'Smoke test', what: null, where: v.where, says: v.says, account: v.account, flag: v.flag, running: v.running, url: v.url, up: v.up, canRun: v.canRun, canClean: v.canClean, log: v.log, owed: v.owed }]
+  const many = all.length > 1
+  // The one they chose; else the first with something still to check; else the first.
+  const su = all.find((x) => x.key === picked) ?? all.find((x) => x.owed > 0) ?? all[0]
+  const shown = many ? v.checks.filter((c) => (c.setup ?? all[0].key) === su.key) : v.checks
+  const local = su.where === 'local'
+  const behind = local && su.running && v.head && su.running !== v.head
+  const src = su.url ? at ?? su.url : null
   const done = v.checks.length > 0 && v.owed === 0
   const row = (c: SmokeCheck, waits = false) => (
     <li key={c.id} className={`smoke-check ${c.mark}`}>
@@ -85,7 +91,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
         </div>
       ) : (
         <div className="smoke-actions">
-          {v.url && goable(c.where) && <button className="btn quiet small" onClick={() => setAt(addressOf(v.url!, c.where))} title={c.where}>Go there</button>}
+          {su.url && goable(c.where) && <button className="btn quiet small" onClick={() => setAt(addressOf(su.url!, c.where))} title={c.where}>Go there</button>}
           <button className="btn small" disabled={busy || waits} onClick={() => { setMarking({ id: c.id, pass: true }); setNote('') }}>{c.mark === 'todo' ? 'Pass' : 'Pass instead'}</button>
           <button className="btn quiet small" disabled={busy || waits} onClick={() => { setMarking({ id: c.id, pass: false }); setNote('') }}>{c.mark === 'todo' ? 'Fail' : 'Fail instead'}</button>
         </div>
@@ -96,51 +102,63 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
     <section className="panel smoke" data-component="SmokeTest" aria-label="Smoke test">
       <h2>🧪 Smoke test <span className="faint">{v.checks.length === 0 ? 'nothing for you' : done ? `${v.checks.length} checked by hand${v.failed ? `, ${v.failed} failed` : ''}` : `${v.owed} of ${v.checks.length} for you to check`}</span></h2>
       <p className="faint" style={{ margin: '0 0 10px', fontSize: 13 }}>
-        {v.staged ? 'Every acceptance criterion no agent has marked, for you to check by hand on the built code' : 'What the agents could not judge, for you to try by hand on the built code'}{v.head ? <> (commit <code>{v.head.slice(0, 7)}</code>{v.branch ? <>, branch <code>{v.branch}</code></> : null})</> : ''}. Not the prototype. It runs {v.says}.
+        {v.staged ? 'Every acceptance criterion no agent has marked, for you to check by hand on the built code' : 'What the agents could not judge, for you to try by hand on the built code'}{v.head ? <> (commit <code>{v.head.slice(0, 7)}</code>{v.branch ? <>, branch <code>{v.branch}</code></> : null})</> : ''}. Not the prototype. {many ? <>This app has {all.length} set-ups; each check is under the one it needs.</> : <>It runs {su.says}.</>}
       </p>
       {error && <p className="bad" style={{ margin: '0 0 8px' }}>{error}</p>}
       {sent !== null && sent > 0 && <p className="smoke-sent" role="status">Sent back: {sent} that failed, with what you saw. It is fixed, checked again, and comes back to you here.</p>}
       {sent === 0 && done && !v.failed && <p className="smoke-sent ok" role="status">All of it holds. The task carries on to its pull request.</p>}
       {v.checks.length === 0 && <p className="muted" style={{ margin: 0 }}>The check after the build left nothing to a person on this task. Its list is on <Link to={`${base}/checklist`}>the checklist</Link>.</p>}
+      {v.checks.length > 0 && many && (
+        <>
+          <div className="smoke-setups" role="tablist" aria-label="Set-ups">
+            {all.map((x) => {
+              const n = v.checks.filter((c) => (c.setup ?? all[0].key) === x.key).length
+              return <button key={x.key} role="tab" aria-selected={x.key === su.key} className={`btn small ${x.key === su.key ? '' : 'quiet'}`} onClick={() => { setPicked(x.key); setAt(null); setMarking(null) }}>{x.name} <span className="faint">{n === 0 ? 'nothing' : x.owed ? `${x.owed} to check` : 'done'}</span>{x.where === 'local' && x.url ? <span className="smoke-on" title="Running" aria-label="running"> ●</span> : null}</button>
+            })}
+          </div>
+          {su.what && <p className="faint smoke-what">{su.what}</p>}
+        </>
+      )}
       {v.checks.length > 0 && (
         <div className="smoke-layout">
           <div className="smoke-view">
-            {local && !v.url && (
+            {local && !su.url && (
               <div className="empty">
-                {v.head ? (v.canRun
-                  ? <>The built code is not running. <button className="btn small" disabled={busy} onClick={() => void act(() => engine.startSmoke(issueId))}>Run it</button>{v.canClean && <> <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true))}>Start clean</button></>}</>
+                {v.head ? (su.canRun
+                  ? <>The built code is not running. <button className="btn small" disabled={busy} onClick={() => void act(() => engine.startSmoke(issueId, false, many ? su.key : undefined))}>Run it</button>{su.canClean && <> <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true, many ? su.key : undefined))}>Start clean</button></>}</>
                   : <>This app has no command to run it yet. Say how its prototypes are started, in Settings › Prototype, and the smoke test uses the same.</>)
                   : <>Nothing is built yet: the smoke test runs the task's branch once there is one.</>}
               </div>
             )}
-            {local && v.url && !v.up && <div className="empty">Starting… {v.log.length > 0 && <pre className="smoke-log">{v.log.slice(-6).join('\n')}</pre>}</div>}
-            {src && (local ? v.up : true) && (
+            {local && su.url && !su.up && <div className="empty">Starting… {su.log.length > 0 && <pre className="smoke-log">{su.log.slice(-6).join('\n')}</pre>}</div>}
+            {src && (local ? su.up : true) && (
               <>
                 <div className="smoke-bar">
                   <code className="smoke-address">{src}</code>
                   <a className="btn quiet small" href={src} target="_blank" rel="noreferrer">Open in a new tab</a>
-                  {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.startSmoke(issueId))}>{behind ? 'Run the new commit' : 'Restart'}</button>}
-                  {local && v.canClean && <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true))}>Start clean</button>}
-                  {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.stopSmoke(issueId))}>Stop</button>}
+                  {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.startSmoke(issueId, false, many ? su.key : undefined))}>{behind ? 'Run the new commit' : 'Restart'}</button>}
+                  {local && su.canClean && <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true, many ? su.key : undefined))}>Start clean</button>}
+                  {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.stopSmoke(issueId, many ? su.key : undefined))}>Stop</button>}
                 </div>
                 {behind && <p className="smoke-stale" role="note">The branch has moved on since this was started. Run the new commit to test what will be reviewed.</p>}
                 {local
                   ? <iframe className="smoke-frame" title="The built code" src={src} />
-                  : <div className="empty">{v.where === 'preview' && v.pr ? <>The preview of pull request #{v.pr.number}. It opens in its own tab, and is rebuilt on each new commit. </> : <>It is deployed, so it opens in its own tab. </>}{v.account && <>Sign in as: {v.account}. </>}{v.flag && <>Flag: <code>{v.flag}</code>. </>}</div>}
+                  : <div className="empty">{su.where === 'preview' && v.pr ? <>The preview of pull request #{v.pr.number}. It opens in its own tab, and is rebuilt on each new commit. </> : <>It is deployed, so it opens in its own tab. </>}{su.account && <>Sign in as: {su.account}. </>}{su.flag && <>Flag: <code>{su.flag}</code>. </>}</div>}
               </>
             )}
-            {!local && !v.url && (v.where === 'preview' && !v.pr
+            {!local && !su.url && (su.where === 'preview' && !v.pr
               ? <div className="empty">This app is tried on a preview of its pull request, and this task has no pull request yet. It is opened once the first of its work is merged.</div>
-              : <div className="empty">This app is smoke tested {v.where === 'staging' ? 'on staging' : v.where === 'preview' ? 'on a preview of its pull request' : 'behind a feature flag'}, and has not said at what address. Settings › Prototype has it.</div>)}
+              : <div className="empty">This app is smoke tested {su.where === 'staging' ? 'on staging' : su.where === 'preview' ? 'on a preview of its pull request' : 'behind a feature flag'}, and has not said at what address. Settings › Prototype has it.</div>)}
           </div>
           <div className="smoke-groups">
+            {many && shown.length === 0 && <p className="muted" style={{ margin: 0 }}>No check on this task needs {su.name}.</p>}
             {(['here', 'pr', 'after'] as const).map((when) => {
-              const mine = v.checks.filter((c) => (c.when ?? 'here') === when)
+              const mine = shown.filter((c) => (c.when ?? 'here') === when)
               if (!mine.length) return null
               const waits = when === 'pr' && !v.pr
               return (
                 <div key={when} className="smoke-group" role="group" aria-label={WHEN[when]}>
-                  {(when !== 'here' || v.checks.some((c) => (c.when ?? 'here') !== 'here')) && <h3 className="smoke-when">{WHEN[when]}</h3>}
+                  {(when !== 'here' || shown.some((c) => (c.when ?? 'here') !== 'here')) && <h3 className="smoke-when">{WHEN[when]}</h3>}
                   {when === 'pr' && (v.pr
                     ? <p className="faint smoke-when-says">{v.pr.url ? <a href={v.pr.url} target="_blank" rel="noreferrer">Pull request #{v.pr.number}</a> : <>Pull request #{v.pr.number}</>}: these can only be seen there.</p>
                     : <p className="faint smoke-when-says">These can only be seen on the pull request, and this task has none yet. It is opened as a draft once the build is done and checked, or from <Link to={`${base}/build`}>the build page</Link>.</p>)}

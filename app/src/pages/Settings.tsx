@@ -11,7 +11,7 @@ import { Badge } from '../components/Badge'
 import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
 import { STEPS } from '@self-evident/engine/steps'
-import { engine, type AppHolds, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type AppJob, type UsableSkill, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
+import { engine, type AppHolds, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type AppJob, type UsableSkill, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type SmokeSetupSetting, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { RemoveApp, RemovedApps } from '../components/RemoveApp'
 
@@ -21,6 +21,14 @@ const err = (e: any) => String(e?.message ?? e)
 export const FACTORY_SECTIONS = [
   { key: 'plugins', label: 'Plugins' }, { key: 'yours', label: 'Your skills' }, { key: 'skills', label: 'Skills by job' }, { key: 'integrations', label: 'Integrations' }, { key: 'removed', label: 'Removed apps' },
 ] as const
+/** An app's smoke test set-ups as Settings edits them: its list, or the one it had before set-ups had names. */
+export function smokeSetupsOf(smoke: AppSetup['smoke']): SmokeSetupSetting[] {
+  if (smoke?.setups?.length) return smoke.setups
+  const { setups: _s, ...one } = smoke ?? {}
+  return [{ key: 'main', name: '', ...one }]
+}
+const newSmokeKey = (list: SmokeSetupSetting[]) => { let n = list.length + 1; while (list.some((x) => x.key === `setup-${n}`)) n++; return `setup-${n}` }
+
 export const APP_SECTIONS = [
   { key: 'repo', label: 'Repo' }, { key: 'agents', label: 'Agents' }, { key: 'plugins', label: 'Plugins' }, { key: 'skills', label: 'Skills' }, { key: 'landing', label: 'Landing' },
   { key: 'prototype', label: 'Prototype' }, { key: 'integrations', label: 'Integrations' }, { key: 'workflows', label: 'Workflow rules' }, { key: 'remove', label: 'Remove' },
@@ -438,6 +446,9 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
     || repos.map((r) => r.key).join() !== was.map((r) => r.key).join() || (repos.length > 1 && homeOf(repos, home) !== was[0]?.key)
   const num = (v: string) => (v.trim() === '' ? undefined : Number(v))
   const set = (patch: Partial<AppSetup>) => setSetup({ ...setup, ...patch })
+  const smokes = smokeSetupsOf(setup.smoke)
+  // One set-up, never listed: its settings stay as they were. More than one, or a list already: the list.
+  const putSmoke = (n: number, patch: Partial<SmokeSetupSetting>) => (setup.smoke?.setups?.length ? set({ smoke: { setups: smokes.map((x, k) => (k === n ? { ...x, ...patch } : x)) } }) : set({ smoke: { ...setup.smoke, ...patch } }))
   // Until the app has a list of its own, the engine's starting one is shown; editing it makes it the app's.
   const [startingRequirements, setStartingRequirements] = useState<RequirementRow[] | null>(null)
   useEffect(() => { engine.appRequirements(app.id).then(setStartingRequirements).catch(() => {}) }, [app.id])
@@ -552,25 +563,35 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         <label>Its variable<input className="mono" value={setup.prototype_db?.env ?? ''} onChange={(e) => set({ prototype_db: { url: '', ...setup.prototype_db, env: e.target.value } })} placeholder="DATABASE_URL" /></label>
         <label style={{ gridColumn: '1 / -1' }}>Schema command<input className="mono" value={setup.prototype_db?.schema_cmd ?? ''} onChange={(e) => set({ prototype_db: { url: '', ...setup.prototype_db, schema_cmd: e.target.value } })} placeholder="makes the schema in the database its variable names, like: alembic upgrade head" /></label>
       </Group>
-      <Group title="Smoke test" lead="Where a person tries the built code by hand, for what an agent cannot judge: how it looks, how it feels, speed on a real machine. It is the code about to be reviewed, not the prototype. The same place as the prototypes, or somewhere of its own.">
-        <label style={{ gridColumn: '1 / -1' }}>Where<select aria-label="Where it is smoke tested" value={setup.smoke?.where ?? 'local'} onChange={(e) => set({ smoke: { ...setup.smoke, where: e.target.value as 'local' | 'staging' | 'flag' } })}>
+      <Group title="Smoke test" lead="Where a person tries the built code by hand, for what an agent cannot judge: how it looks, how it feels, speed on a real machine. It is the code about to be reviewed, not the prototype. An app can have more than one set-up (a library: its docs site, and a demo app that exercises it); each check names the one it needs.">
+        {smokes.map((su, n) => (
+          <div key={su.key} className="smoke-setting" role="group" aria-label={su.name || 'Set-up'}>
+            {smokes.length > 1 && <>
+              <label>Name<input aria-label={`Set-up ${n + 1} name`} value={su.name} onChange={(e) => putSmoke(n, { name: e.target.value })} placeholder="Playground" /></label>
+              <label>What is checked there <span className="faint">(one line; the agent sends checks by it)</span><input aria-label={`Set-up ${n + 1}: what is checked there`} value={su.what ?? ''} onChange={(e) => putSmoke(n, { what: e.target.value })} placeholder="the library, exercised with every setting" /></label>
+            </>}
+        <label style={{ gridColumn: '1 / -1' }}>Where<select aria-label={`Where ${su.name || "it"} is smoke tested`} value={su.where ?? 'local'} onChange={(e) => putSmoke(n, { where: e.target.value as 'local' | 'staging' | 'flag' })}>
           <option value="local">Here, on this computer: the built branch, brought up by the script below, on made-up data</option>
           <option value="preview">A preview of each pull request: a preview deployment, or an installable build of a library. It is tried before the merge</option>
           <option value="staging">Staging: a deployed build, with a test account. It is tried before the merge</option>
           <option value="flag">Behind a feature flag: in production, on for a test account only. It is tried after the merge, before the release</option>
         </select></label>
-        {(setup.smoke?.where ?? 'local') === 'local'
+        {(su.where ?? 'local') === 'local'
           ? <>
               <p className="faint" style={{ gridColumn: '1 / -1', margin: 0 }}>These are kept here, in Self Evident, and never written into the app's repository. An agent can change them; a build is told to change them here and not on its branch.</p>
-              <label style={{ gridColumn: '1 / -1' }}>Script <span className="faint">(optional: else the prototype's command)</span><textarea className="mono" aria-label="Smoke test script" rows={Math.min(14, Math.max(3, (setup.smoke?.cmd ?? '').split('\n').length + 1))} value={setup.smoke?.cmd ?? ''} onChange={(e) => set({ smoke: { ...setup.smoke, cmd: e.target.value } })} placeholder={'docker compose -p smoke-$PORT up -d db\npsql "$DATABASE_URL" -f "$SMOKE_SEED"\npnpm install && pnpm dev --port $PORT'} /></label>
-              <label style={{ gridColumn: '1 / -1' }}>Stop script <span className="faint">(optional: for what the script leaves running)</span><textarea className="mono" aria-label="Smoke test stop script" rows={2} value={setup.smoke?.stop ?? ''} onChange={(e) => set({ smoke: { ...setup.smoke, stop: e.target.value } })} placeholder="docker compose -p smoke-$PORT down -v" /></label>
-              <label style={{ gridColumn: '1 / -1' }}>Seed <span className="faint">(optional: SQL of made-up rows. Run on a new database of the app's own; a script finds it at $SMOKE_SEED)</span><textarea className="mono" aria-label="Smoke test seed" rows={Math.min(14, Math.max(3, (setup.smoke?.seed ?? '').split('\n').length + 1))} value={setup.smoke?.seed ?? ''} onChange={(e) => set({ smoke: { ...setup.smoke, seed: e.target.value } })} placeholder={"insert into parent (id, name) values (1, 'Sample Parent');"} /></label>
+              <label style={{ gridColumn: '1 / -1' }}>Script <span className="faint">(optional: else the prototype's command)</span><textarea className="mono" aria-label={n ? `${su.name || "Set-up"} script` : "Smoke test script"} rows={Math.min(14, Math.max(3, (su.cmd ?? '').split('\n').length + 1))} value={su.cmd ?? ''} onChange={(e) => putSmoke(n, { cmd: e.target.value })} placeholder={'docker compose -p smoke-$PORT up -d db\npsql "$DATABASE_URL" -f "$SMOKE_SEED"\npnpm install && pnpm dev --port $PORT'} /></label>
+              <label style={{ gridColumn: '1 / -1' }}>Stop script <span className="faint">(optional: for what the script leaves running)</span><textarea className="mono" aria-label={n ? `${su.name || "Set-up"} stop script` : "Smoke test stop script"} rows={2} value={su.stop ?? ''} onChange={(e) => putSmoke(n, { stop: e.target.value })} placeholder="docker compose -p smoke-$PORT down -v" /></label>
+              <label style={{ gridColumn: '1 / -1' }}>Seed <span className="faint">(optional: SQL of made-up rows. Run on a new database of the app's own; a script finds it at $SMOKE_SEED)</span><textarea className="mono" aria-label={n ? `${su.name || "Set-up"} seed` : "Smoke test seed"} rows={Math.min(14, Math.max(3, (su.seed ?? '').split('\n').length + 1))} value={su.seed ?? ''} onChange={(e) => putSmoke(n, { seed: e.target.value })} placeholder={"insert into parent (id, name) values (1, 'Sample Parent');"} /></label>
             </>
           : <>
-              <label style={{ gridColumn: '1 / -1' }}>{setup.smoke?.where === 'preview' ? <>Address of a pull request's preview <span className="faint">(with {'{pr}'} where its number goes)</span></> : 'Address'}<input className="mono" value={setup.smoke?.url ?? ''} onChange={(e) => set({ smoke: { ...setup.smoke, url: e.target.value } })} placeholder={setup.smoke?.where === 'flag' ? 'https://app.example.com' : setup.smoke?.where === 'preview' ? 'https://pkg.pr.new/your-package@{pr}' : 'https://staging.example.com'} /></label>
-              <label style={{ gridColumn: '1 / -1' }}>Who to sign in as <span className="faint">(which test account, in words; never a password)</span><input value={setup.smoke?.account ?? ''} onChange={(e) => set({ smoke: { ...setup.smoke, account: e.target.value } })} placeholder="the test parent, in the password manager under Staging" /></label>
-              {setup.smoke?.where === 'flag' && <label style={{ gridColumn: '1 / -1' }}>The flag<input className="mono" value={setup.smoke?.flag ?? ''} onChange={(e) => set({ smoke: { ...setup.smoke, flag: e.target.value } })} placeholder="how flags are named here, or this change's" /></label>}
+              <label style={{ gridColumn: '1 / -1' }}>{su.where === 'preview' ? <>Address of a pull request's preview <span className="faint">(with {'{pr}'} where its number goes)</span></> : 'Address'}<input className="mono" value={su.url ?? ''} onChange={(e) => putSmoke(n, { url: e.target.value })} placeholder={su.where === 'flag' ? 'https://app.example.com' : su.where === 'preview' ? 'https://pkg.pr.new/your-package@{pr}' : 'https://staging.example.com'} /></label>
+              <label style={{ gridColumn: '1 / -1' }}>Who to sign in as <span className="faint">(which test account, in words; never a password)</span><input value={su.account ?? ''} onChange={(e) => putSmoke(n, { account: e.target.value })} placeholder="the test parent, in the password manager under Staging" /></label>
+              {su.where === 'flag' && <label style={{ gridColumn: '1 / -1' }}>The flag<input className="mono" value={su.flag ?? ''} onChange={(e) => putSmoke(n, { flag: e.target.value })} placeholder="how flags are named here, or this change's" /></label>}
             </>}
+            {smokes.length > 1 && <div style={{ gridColumn: '1 / -1' }}><button type="button" className="btn quiet small" onClick={() => set({ smoke: { setups: smokes.filter((_, k) => k !== n) } })}>Remove {su.name || 'this set-up'}</button></div>}
+          </div>
+        ))}
+        <div style={{ gridColumn: '1 / -1' }}><button type="button" className="btn quiet small" disabled={smokes.length >= 8} onClick={() => set({ smoke: { setups: [...smokes.map((x, k) => (k === 0 && !x.name ? { ...x, name: 'Smoke test' } : x)), { key: newSmokeKey(smokes), name: '', where: 'local' as const }] } })}>Add a set-up</button></div>
       </Group>
     </>,
   }
