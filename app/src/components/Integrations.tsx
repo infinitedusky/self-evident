@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge, type Tone } from './Badge'
-import { engine, type EffectiveValues, type Integration, type IntegrationStatus, type IntegrationValues } from '../engine'
+import { engine, type EffectiveValues, type Integration, type IntegrationStatus, type IntegrationValues, type KeptKey } from '../engine'
 
 const err = (e: any) => String(e?.message ?? e)
 /** Backticks in a sentence as code. */
@@ -35,12 +35,16 @@ interface Props {
   integrations: Integration[]
   values: EffectiveValues
   status: Record<string, IntegrationStatus>
+  /** Whether each integration's key is set and where from; never the key. */
+  keys?: Record<string, KeptKey>
+  /** A key was kept or removed: read the settings again. */
+  onKeys?: () => void
   scope: 'workspace' | 'app'
   appId?: string
   onSave: (values: IntegrationValues) => Promise<void>
 }
 
-export function Integrations({ base, item, integrations, values, status, scope, appId, onSave }: Props) {
+export function Integrations({ base, item, integrations, values, status, keys, onKeys, scope, appId, onSave }: Props) {
   if (!item) return (
     <section className="panel" data-component="Integrations">
       <h2>Integrations</h2>
@@ -68,14 +72,60 @@ export function Integrations({ base, item, integrations, values, status, scope, 
   )
   const i = integrations.find((x) => x.key === item)
   if (!i) return <section className="panel"><Back base={base} /><div className="empty">No integration called {item}.</div></section>
-  return <Page key={i.key} i={i} base={base} values={values[i.key] ?? {}} status={status[i.key]} scope={scope} appId={appId} all={values} onSave={onSave} />
+  return <Page key={i.key} i={i} base={base} values={values[i.key] ?? {}} status={status[i.key]} kept={keys?.[i.key]} onKeys={onKeys} scope={scope} appId={appId} all={values} onSave={onSave} />
 }
 
 function Back({ base }: { base: string }) {
   return <Link to={base} className="faint integration-back">← Integrations</Link>
 }
 
-function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integration; base: string; values: EffectiveValues[string]; status?: IntegrationStatus; scope: 'workspace' | 'app'; appId?: string; all: EffectiveValues; onSave: Props['onSave'] }) {
+/**
+ * An integration's key, kept on this computer (Sandy, 2026-11-17: "We can't have them having to keep readding them
+ * over and over again … the key needs to be somewhere that persists in a dot file"). Settings hold only the name of
+ * its variable. The key is pasted here once and kept in a file under ~/.self-evident for this app (or for every app,
+ * from the workspace's settings). It is never shown again: only that it is set, where from, and its last four.
+ *
+ * After a password manager's entry (set, replace, remove; never revealed) and GitHub's repository secrets.
+ */
+function KeptKeyBox({ kept: given, scope, appId, onChanged }: { kept: KeptKey; scope: 'workspace' | 'app'; appId?: string; onChanged?: () => void }) {
+  const [kept, setKept] = useState(given)
+  const [value, setValue] = useState('')
+  const [entering, setEntering] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => { setKept(given) }, [given])
+  const own = scope === 'app' ? 'app' : 'shared' // what a key kept from this page is kept as
+  const mine = kept.from === own
+  const act = async (fn: () => Promise<KeptKey>) => { setBusy(true); setError(null); try { setKept(await fn()); setValue(''); setEntering(false); onChanged?.() } catch (e) { setError(err(e)) } finally { setBusy(false) } }
+  const where = scope === 'app' ? 'for this app' : 'for every app'
+  const tail = kept.last4 ? <> (ending <span className="mono">{kept.last4}</span>)</> : null
+  return (
+    <div className="kept-key" data-component="KeptKey">
+      <p className="settings-desc">
+        {kept.from === 'app' && <>Set, and kept for this app on this computer{tail}. It stays across restarts and new terminals.</>}
+        {kept.from === 'shared' && <>Set, and kept for every app on this computer{tail}.{scope === 'app' ? ' Keep one here to use a different key for this app.' : ' It stays across restarts and new terminals.'}</>}
+        {kept.from === 'environment' && <span className="warn-text">Set{tail}, but only in the terminal the engine was started from: it is gone the next time. Keep it here and it stays.</span>}
+        {!kept.set && <span className="warn-text">Not set. Paste the key and it is kept on this computer; you will not be asked again.</span>}
+      </p>
+      {(entering || !mine) ? (
+        <form className="kept-key-form" onSubmit={(e) => { e.preventDefault(); void act(() => engine.keepSecret(kept.name, value, scope === 'app' ? appId : undefined)) }}>
+          <input type="password" autoComplete="off" spellCheck={false} value={value} onChange={(e) => setValue(e.target.value)} aria-label={`The key for ${kept.name}`} placeholder={`Paste the key for ${kept.name}`} />
+          <button className="btn small" disabled={busy || !value.trim()}>Keep it</button>
+          {entering && <button type="button" className="btn quiet small" onClick={() => { setEntering(false); setValue('') }}>Cancel</button>}
+        </form>
+      ) : (
+        <div className="kept-key-form">
+          <button className="btn quiet small" disabled={busy} onClick={() => setEntering(true)}>Replace</button>
+          <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.dropSecret(kept.name, scope === 'app' ? appId : undefined))}>Remove</button>
+        </div>
+      )}
+      <p className="faint" style={{ fontSize: 12, margin: '6px 0 0' }}>Kept {where} in a file under <span className="mono">~/.self-evident</span> that only you can read. Settings hold only the variable's name; the key is never shown again, and is not given to agents.</p>
+      {error && <div className="empty bad">{error}</div>}
+    </div>
+  )
+}
+
+function Page({ i, base, values, status, kept, onKeys, scope, appId, all, onSave }: { i: Integration; base: string; values: EffectiveValues[string]; status?: IntegrationStatus; kept?: KeptKey; onKeys?: () => void; scope: 'workspace' | 'app'; appId?: string; all: EffectiveValues; onSave: Props['onSave'] }) {
   const [editing, setEditing] = useState(false)
   const [check, setCheck] = useState<{ ok: boolean; detail: string; links?: { label: string; href: string }[] } | 'busy' | null>(null)
   const [acted, setActed] = useState<string | null>(null)
@@ -177,11 +227,12 @@ function Page({ i, base, values, status, scope, appId, all, onSave }: { i: Integ
           {keyField && (
             <p className="settings-desc">
               {keyVar
-                ? <>Kept in <span className="mono">{keyVar}</span>{i.calls ? <> in the engine's environment{status?.state === 'no-key' ? <span className="warn-text">, where it isn't set yet. Add it and restart the engine.</span> : '.'}</> : <> in each app's <span className="mono">.env</span>.</>}</>
+                ? <>Kept in <span className="mono">{keyVar}</span>{i.calls ? <> in the engine's environment{status?.state === 'no-key' ? <span className="warn-text">, where it isn't set yet.</span> : '.'}</> : <> in each app's <span className="mono">.env</span>.</>}</>
                 : <>No variable named yet. Edit to name the one that will hold the key; the key itself never goes in Settings.</>}
               {i.docs && <> <a href={i.docs} target="_blank" rel="noreferrer">Make a key ↗</a></>}
             </p>
           )}
+          {keyField && keyVar && i.calls && kept && <KeptKeyBox kept={kept} scope={scope} appId={appId} onChanged={onKeys} />}
           {!keyField && i.perApp && (
             <p className="settings-desc">
               {!on ? <>Nothing to check while it is off. </>

@@ -4553,3 +4553,26 @@ will know" is shown as what to look for. A pass or a fail is the build's mark on
 One an agent marked is not offered here; it is changed on the brief's page. The nav shows how many are still the
 person's, or that one failed. Unmarked criteria on a staged task do not hold its project from landing, as they did
 not before: only the list and the marks are new there.
+
+## Keys persist, in a file on this computer (Sandy, 2026-11-17: "We need a way to store integration settings persistently. We can't have them having to keep readding them over and over again. I'm fine with only saving the name of the key, but the key needs to be somewhere that persists in a dot file within .self-evident, the name of the app")
+
+Until now an integration kept only the name of its key's variable and read the key from the engine's environment,
+so the key had to be exported in whichever terminal started the engine, every time. This changes "keys live only in
+the engine's environment": they may now be kept on the computer.
+
+- **Settings and the database still hold only the name** (`key_env`).
+- **The key is kept in a file**: `~/.self-evident/apps/<the app's key, lower case>/secrets.env` for one app,
+  `~/.self-evident/secrets.env` for every app (set from the workspace's integrations). Plain `NAME=value` lines,
+  readable by this user only (0600, the folder 0700). It can be written by hand too.
+- **Where a key is looked for**: the app's file, then the shared one, then the engine's environment, which still
+  works. Linear (the tracker and the import), Confluence, and every integration's status and check read it this way.
+- **Pasted once, never shown again.** Settings › Integrations has a box under Key: paste, Keep it. After that it says
+  only that it is set, where from (this app, every app, or only the terminal) and its last four characters, with
+  Replace and Remove. A key that is only in the terminal is said to be gone the next time.
+- **Where it does not go**: not the database, not an event, not anything an agent is given, and not the environment
+  of what the engine starts (prototypes, agents). It is outside the folder a handoff copies. An app's file follows
+  the app when its key changes.
+
+Not done: encrypting the file (it is a plain file only this user can read, like `~/.netrc`; the macOS Keychain would
+be the next step); the API key an app's agents run on (`setup.account.key_env`), which is still read from the
+engine's environment; refusing on a shared database (the file is on this computer either way).

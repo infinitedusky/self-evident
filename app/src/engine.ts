@@ -201,6 +201,8 @@ export interface Integration {
   perApp?: boolean // switched on under each app (a runner like tkt), nothing to set for all apps
 }
 /** Where an integration stands: nothing set, missing fields, its key not in the engine's environment, or ready. */
+/** Whether an integration's key is set and where from, never the key: its last four characters, to tell two apart. */
+export interface KeptKey { name: string; set: boolean; from: 'app' | 'shared' | 'environment' | null; last4: string | null }
 export interface IntegrationStatus { state: 'off' | 'incomplete' | 'no-key' | 'ready'; missing: string[]; keyVar: string | null }
 export type EffectiveValues = Record<string, Record<string, { value: string | null; from: 'app' | 'workspace' | null }>>
 export type AgentRole = 'talk' | 'planner'
@@ -217,11 +219,11 @@ export interface SkillSource { url: string; commit: string; pulledAt: string; sk
 export interface PulledSkills { source: SkillSource; added: string[]; updated: string[]; unchanged: string[]; removed: string[]; skipped: string[] }
 export interface Category { key: string; name: string; for: string; builtIn?: string }
 export interface CategoryGroup { name: string; categories: Category[] }
-export interface FactorySettings { workspace: Workspace | null; integrations: Integration[]; values: IntegrationValues; status: Record<string, IntegrationStatus>; plugins: PluginInfo[]; catalogue: CategoryGroup[] }
+export interface FactorySettings { workspace: Workspace | null; integrations: Integration[]; values: IntegrationValues; status: Record<string, IntegrationStatus>; /** Absent from an older engine. */ keys?: Record<string, KeptKey>; plugins: PluginInfo[]; catalogue: CategoryGroup[] }
 export interface AppPlugin { id: string; name: string; factoryOn: boolean; own: boolean | null; on: boolean }
 /** A job, for an app: the skills filed under it (often none), the one All apps uses (`factory`), and this app's own choice when it made one (`own`: a skill, or null for none). */
 export interface AppJob { key: string; name: string; for: string; /** Where it sits in the loop. */ group?: string; /** What the engine does there itself, when it does. */ builtIn?: string | null; skills: { key: string; name: string; plugin: string }[]; factory: string | null; overridden: boolean; own: string | null }
-export interface AppSettings { integrations: EffectiveValues; status: Record<string, IntegrationStatus>; plugins: AppPlugin[]; /** Absent from an older engine. */ jobs?: AppJob[]; /** The skills this app's conversations get, to choose from for a step: `name` is how a session names it. */ usable?: UsableSkill[]; skills: SkillInfo[] }
+export interface AppSettings { integrations: EffectiveValues; status: Record<string, IntegrationStatus>; /** Absent from an older engine. */ keys?: Record<string, KeptKey>; plugins: AppPlugin[]; /** Absent from an older engine. */ jobs?: AppJob[]; /** The skills this app's conversations get, to choose from for a step: `name` is how a session names it. */ usable?: UsableSkill[]; skills: SkillInfo[] }
 export interface UsableSkill { name: string; label: string; from: string; description: string }
 export interface Prototype {
   id: string; appId: string; projectId: string | null; ideaId?: string | null; issueId?: string | null; title: string; brief: string | null; sessionId: string | null; branch: string; path: string; port: number | null
@@ -416,6 +418,8 @@ export const engine = {
   deleteReport: (id: string) => call<{ deleted: string }>('DELETE', `/reports/${id}`),
   setReportFormat: (appId: string, f: { daily?: string; weekly?: string }) => call<{ daily: string; weekly: string }>('PUT', `/apps/${appId}/report-format`, f),
   submitPr: (issueId: string) => call<{ id: string; number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/submit`),
+  keepSecret: (name: string, value: string, appId?: string) => call<KeptKey>('PUT', `/secrets/${encodeURIComponent(name)}`, { value, ...(appId ? { appId } : {}) }),
+  dropSecret: (name: string, appId?: string) => call<KeptKey>('DELETE', `/secrets/${encodeURIComponent(name)}${appId ? `?app=${appId}` : ''}`),
   taskBranches: (issueId: string) => call<TaskBranches>('GET', `/issues/${issueId}/branches`),
   saveHere: (issueId: string, name: string) => call<{ id: string; name: string }>('POST', `/issues/${issueId}/save-points`, { name }),
   goBack: (savePointId: string, body: { name?: string; resetData?: boolean }) => call<TaskMoved>('POST', `/save-points/${savePointId}/go-back`, body),

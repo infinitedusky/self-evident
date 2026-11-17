@@ -27,7 +27,7 @@ export interface Field { key: string; label: string; placeholder?: string; requi
 export interface Action { key: string; name: string; does: string; kind?: 'start' | 'link' | 'ask'; ask?: string }
 export interface Integration {
   key: string; name: string; role: string; does: string; fields: Field[]
-  calls: boolean // the engine calls it, so its key must be in the engine's environment
+  calls: boolean // the engine calls it, so it needs the key: kept on this computer (secrets.ts), or in the engine's environment
   actions: Action[]
   docs?: string // where to make a key
   perApp?: boolean // set under each app, nothing to set for all apps: a tool that runs an app's work or shows its screens, not a service
@@ -90,7 +90,7 @@ export const INTEGRATIONS: Integration[] = [
     key: 'linear', name: 'Linear', role: 'Planning', does: 'Tasks as Linear issues: made from an approved brief, commented on, moved as the build goes',
     fields: [
       { key: 'team', label: 'Team key', placeholder: 'HG', required: true },
-      { key: 'key_env', label: 'Key variable', placeholder: 'LINEAR_API_KEY (in the engine\'s environment)', required: true, secret: true },
+      { key: 'key_env', label: 'Key variable', placeholder: 'LINEAR_API_KEY (the name only; the key is pasted below)', required: true, secret: true },
     ],
     calls: true, docs: 'https://linear.app/settings/account/security',
     actions: [
@@ -106,7 +106,7 @@ export const INTEGRATIONS: Integration[] = [
       { key: 'email', label: 'Account email', placeholder: 'the account the key belongs to', required: true },
       { key: 'space', label: 'Space key', placeholder: 'ENG', required: true },
       { key: 'parent', label: 'Parent page id', placeholder: 'optional: new pages go under it' },
-      { key: 'key_env', label: 'Key variable', placeholder: 'CONFLUENCE_API_TOKEN (in the engine\'s environment)', required: true, secret: true },
+      { key: 'key_env', label: 'Key variable', placeholder: 'CONFLUENCE_API_TOKEN (the name only; the key is pasted below)', required: true, secret: true },
     ],
     calls: true, docs: 'https://id.atlassian.com/manage-profile/security/api-tokens',
     actions: [
@@ -188,7 +188,7 @@ export async function checkIntegration(key: string, values: Record<string, strin
     return checkStorybook(local.storybook.ctx, local.storybook.deps)
   }
   if (st.state === 'off' || st.state === 'incomplete') return { ok: false, detail: `Missing: ${st.missing.join(', ')}.` }
-  if (st.state === 'no-key') return { ok: false, detail: `${st.keyVar} isn't set in the engine's environment. Add it there and restart the engine.` }
+  if (st.state === 'no-key') return { ok: false, detail: `${st.keyVar} has no key. Paste it here, under Key, and it is kept on this computer.` }
   const token = env[st.keyVar!]!
   const v = (k: string) => values[k]!.trim()
   try {

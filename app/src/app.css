@@ -955,3 +955,8 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .smoke-when { margin: 0 0 4px; font-size: 14px; }
 .smoke-when-says { margin: 0 0 8px; font-size: 13px; }
 .smoke-checks.waiting { opacity: .6; }
+
+/* An integration's key, kept on this computer: set, replace, remove; never shown. */
+.kept-key { margin-top: 6px; }
+.kept-key-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.kept-key-form input { flex: 1; min-width: 220px; margin: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 13px var(--mono); }

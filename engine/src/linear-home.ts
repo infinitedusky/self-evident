@@ -58,7 +58,7 @@ export async function linearFor(values: { team?: string | null; key_env?: string
   const keyVar = values.key_env?.trim()
   if (!team || !keyVar) return { trackerProblem: 'Tickets are set to live in Linear, but Linear isn\'t set for this app: give it the team key and the key variable under Integrations › Linear.' }
   const key = env[keyVar]
-  if (!key) return { trackerProblem: `Tickets are set to live in Linear, but ${keyVar} isn't set in the engine's environment. Add it there and restart the engine.` }
+  if (!key) return { trackerProblem: `Tickets are set to live in Linear, but ${keyVar} has no key. Paste it under Settings › Integrations › Linear and it is kept on this computer.` }
   try {
     const found = await fetch(key, team)
     if (!found) return { trackerProblem: `Tickets are set to live in Linear, but the key ${keyVar} sees no team with key ${team}.` }

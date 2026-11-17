@@ -116,6 +116,14 @@ messages and events.
 The name `https://idea.dawn` and an app's Storybook shown inside the page need Caddy and dnsmasq, which none of
 this sets up. Without them, use `http://localhost:5180`.
 
+## Keys for integrations
+
+An integration that the engine calls (Linear, Confluence) needs a key. Settings hold only the name of its variable.
+Paste the key once under Settings › Integrations › (the integration) › Key and it is kept on this computer, in
+`~/.self-evident/apps/<the app's key>/secrets.env` (one app) or `~/.self-evident/secrets.env` (every app), readable
+only by you. It stays across restarts and new terminals. A variable exported where the engine starts still works; a
+kept key wins. On another computer, paste it again there: the file is not copied by a handoff.
+
 ## Adding an app
 
 Settings › + App. An app is one repository, or several that are worked on together ("A product in two

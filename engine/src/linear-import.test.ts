@@ -38,7 +38,7 @@ describe.skipIf(!reachable)('tasks from Linear tickets', () => {
 
   it('says what is missing: Linear not set for the app, or the key not in the environment', async () => {
     await expect(linearTickets(bare, 'mine', env, fake)).rejects.toThrow("Linear isn't set for Blog")
-    await expect(linearTickets(appId, 'mine', {}, fake)).rejects.toThrow("SHOP_LINEAR_KEY isn't set")
+    await expect(linearTickets(appId, 'mine', {}, fake)).rejects.toThrow("SHOP_LINEAR_KEY has no key")
   })
 
   it('lists the team\'s tickets in the scope asked, none of them a task yet, without their descriptions', async () => {

@@ -22,7 +22,7 @@ describe('finding the team', () => {
   it('says in words what is missing, and never guesses', async () => {
     const problem = async (...a: Parameters<typeof linearFor>) => ((await linearFor(...a)) as { trackerProblem: string }).trackerProblem
     expect(await problem({}, {}, fetchShop)).toMatch(/Linear isn't set for this app/)
-    expect(await problem({ team: 'SHOP', key_env: 'LINEAR_API_KEY' }, {}, fetchShop)).toMatch(/LINEAR_API_KEY isn't set in the engine's environment/)
+    expect(await problem({ team: 'SHOP', key_env: 'LINEAR_API_KEY' }, {}, fetchShop)).toMatch(/LINEAR_API_KEY has no key\. Paste it under Settings › Integrations › Linear/)
     expect(await problem({ team: 'NOPE', key_env: 'K' }, { K: 'k' }, fetchShop)).toMatch(/sees no team with key NOPE/)
     expect(await problem({ team: 'SHOP', key_env: 'K' }, { K: 'k' }, async () => { throw new Error('Authentication required\nmore') })).toBe('Linear refused the lookup of team SHOP: Authentication required')
   })
