@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, within } from 'storybook/test'
-import { PlanGraphView, stepProgress } from './PlanGraphView'
-import type { GraphSubIssue } from '../engine'
+import { expect, waitFor, within } from 'storybook/test'
+import { flowGraph, PlanGraphView, stepProgress } from './PlanGraphView'
+import type { FlowNode, GraphSubIssue } from '../engine'
 
 // Sample sub-tasks, made up: the hardening project's shape, in the states worth seeing.
 const ph = (number: number, title: string, status: GraphSubIssue['status'], extra: Partial<GraphSubIssue> = {}): GraphSubIssue => ({
@@ -93,3 +93,31 @@ export const SharedFileHeld: Story = { args: {
   labels: { ph_sample1: 'Data and API', ph_sample2: 'Data and API', ph_sample3: 'Data and API', ph_sample4: 'Data and API' },
 } }
 export const SinglePhase: Story = { args: { subIssues: [ph(1, 'Add a GET /health endpoint to the POC', 'done', { lastRun: run('completed', '0.40') })], labels: { ph_sample1: 'A health endpoint' } } }
+
+const before: FlowNode[] = [
+  { id: 'flow:build', title: 'Build it', state: 'todo', detail: 'not built yet', after: [] },
+  { id: 'flow:check', title: 'Check it against its list', state: 'todo', detail: '7 to check', after: ['flow:build'] },
+  { id: 'flow:probe', title: 'Try to break it, and clean up', state: 'todo', detail: 'after the check', after: ['flow:check'] },
+  { id: 'flow:test', title: 'The whole test run', state: 'todo', detail: 'the whole run, once, last', after: ['flow:probe'] },
+  { id: 'flow:smoke', title: 'Smoke test: yours, by hand', state: 'todo', detail: '2 for you, once it is built and checked', after: ['flow:test'] },
+]
+/** A checklist task before anything has started (made up): its whole flow, each stage a node, joined in order. Nothing appears later that was not here. */
+export const FlowBeforeItStarts: Story = {
+  args: { subIssues: flowGraph(before, []) },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    for (const t of ['Build it', 'Check it against its list', 'Try to break it, and clean up', 'The whole test run', 'Smoke test: yours, by hand']) await expect(await c.findByText(t)).toBeInTheDocument()
+    await expect(canvasElement.querySelectorAll('[data-ghost]')).toHaveLength(5)
+    await waitFor(() => expect(canvasElement.querySelectorAll('.react-flow__edge')).toHaveLength(4)) // joined, one after the other
+  },
+}
+const built = ph(9, 'Build it', 'done', { lastRun: run('completed', '2.10') })
+/** The same once it is under way: the build is a real sub-task and done, the check is working, the rest still to come. */
+export const FlowUnderWay: Story = {
+  args: { subIssues: flowGraph([{ id: built.id, sub: built.id, title: 'Build it', state: 'done', detail: '', after: null }, { ...before[1], state: 'doing', detail: 'round 1', after: [built.id] }, ...before.slice(2)], [built]) },
+  play: async ({ canvasElement }) => {
+    await expect(await within(canvasElement).findByText('round 1')).toBeInTheDocument()
+    await expect(canvasElement.querySelectorAll('[data-ghost]')).toHaveLength(4)
+    await waitFor(() => expect(canvasElement.querySelectorAll('.react-flow__edge')).toHaveLength(4))
+  },
+}
