@@ -2,6 +2,8 @@
  * The front door: what is running, what needs a person, what just happened. Nothing here has state of its own;
  * it is all read from the project, issue, build, question, pr, run, step and event tables, so it is always true.
  */
+import { smokeOwed } from './smoke.js'
+import { acceptanceOf } from './acceptance.js'
 import { and, asc, desc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { BEFORE_PLAN, checksOf } from './steps.js'
@@ -20,6 +22,7 @@ export type Attention =
   | ({ kind: 'run_project'; subIssues: number } & Where)
   | ({ kind: 'plan_issue'; issueId: string; identifier: string; issueTitle: string } & Where)
   | ({ kind: 'approve_brief'; issueId: string; identifier: string; issueTitle: string } & Where)
+  | ({ kind: 'smoke_test'; issueId: string; identifier: string; issueTitle: string; /** How many checks wait for the person. */ owed: number } & Where)
   | ({ kind: 'backlog'; open: number; items: string[] } & Where)
   | { kind: 'todo'; todoId: string; identifier: string; title: string; owner: string; projectId: string | null; projectName: string | null; appName: string; done: number; total: number; next: string | null; waitingOn: string[] }
   | ({ kind: 'merge_pr'; prNumber: number | null; url: string | null; review: string | null; checks: string; failing: string[] } & Where)
@@ -146,6 +149,15 @@ export async function now(appId?: string) {
     if (!first.every((k) => of(k)?.status === 'done')) continue // the brief is brought up to date from the analysis and the ADR first
     const p = projects.find((x) => x.id === t.projectId)
     if (p) needsYou.push({ kind: 'approve_brief', ...tag(p), issueId: t.id, identifier: name(t), issueTitle: t.title })
+  }
+  // A built task with checks left to a person (smoke.ts): nothing more happens on it until they try it by hand.
+  for (const t of top.filter((x) => !['done', 'canceled', 'duplicate', 'backlog'].includes(x.state))) {
+    const owed = smokeOwed(acceptanceOf(t))
+    if (!owed) continue
+    const mine = subs.filter((x) => x.parentId === t.id && !['canceled', 'duplicate'].includes(x.state))
+    if (!mine.length || !mine.every((x) => x.state === 'done')) continue // still being built or checked: not their turn yet
+    const p = projects.find((x) => x.id === t.projectId)
+    if (p) needsYou.push({ kind: 'smoke_test', ...tag(p), issueId: t.id, identifier: name(t), issueTitle: t.title, owed })
   }
   for (const p of projects.filter((x) => ['drafting', 'proposed', 'approved'].includes(x.status))) {
     const mine = work(p)

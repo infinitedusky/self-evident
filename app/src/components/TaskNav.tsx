@@ -112,7 +112,7 @@ export function TaskNav({ checklist, base, here, on = 'task', rows, workflow, bu
               <span className="task-nav-text">☑️ Checklist</span>
               {checklist.total > 0 && <span className="faint mono" style={{ fontSize: 12 }}>{checklist.met}/{checklist.total}</span>}
             </span>, null)}
-          {checklist.stages.map((s) => item(`stage-${s.key}`, `${base}/build`,
+          {checklist.stages.map((s) => item(s.key === 'smoke' ? 'smoke' : `stage-${s.key}`, s.key === 'smoke' ? `${base}/smoke` : `${base}/build`,
             <>
               <span className="task-nav-row">
                 <span className={`task-nav-mark ${s.state === 'done' ? 'ok' : s.state === 'failed' ? 'bad' : ''}`}>{STAGE_MARK[s.state]}</span>
