@@ -176,6 +176,7 @@ export const issue = pgTable('issue', {
   description: text('description'), // for a person: what will be different, plain words; no file names or code
   brief: text('brief'), // for the builder: its instructions, Markdown
   briefApprovedBy: text('brief_approved_by'), briefApprovedAt: at('brief_approved_at'), // a task completes only once its brief is approved
+  branch: text('branch'), // the branch its work lands on, when the app's template named it (conventions.ts); null: the engine's own name (branches.ts)
   prTitle: text('pr_title'), // its pull request's title, exactly, when the repository's convention needs more than the app's template can say (pr.ts)
   acceptance: jsonb('acceptance').notNull().default([]), // how we will know it is done: [{id, text, check?, shown?, evidence?}], approved with the brief (acceptance.ts)
   workflowId: text('workflow_id').references((): AnyPgColumn => workflow.id), // its own, over its project's and the app's
@@ -189,6 +190,7 @@ export const issue = pgTable('issue', {
   reason: text('reason'), // canceled or duplicate: why
   handover: jsonb('handover').$type<{ text: string | null; sessionId: string; at: string }>(), // what the conversation that made it said about it, written once when its agent starts (handover.ts); text null: it said nothing more
   speed: text('speed'), // careful | fast, when the task says so; null: the app's (steps.ts, Speed)
+  probes: jsonb('probes').$type<{ key: string; name: string; kind: 'command' | 'skill' | 'built-in'; pass: boolean | null; evidence: string; findings: string[]; blocks: boolean; fixes: number; at: string }[]>(), // what each probe of its build found, the latest for each (probes.ts)
   requirements: jsonb('requirements').$type<{ key: string; name: string; applies: boolean; how: string; built?: boolean }[]>(), // how its plan covers each requirement in force, as the planner said (requirements.ts)
   createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
   startedAt: at('started_at'), completedAt: at('completed_at'), canceledAt: at('canceled_at'), closedBy: text('closed_by'),

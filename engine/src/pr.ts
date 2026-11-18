@@ -95,14 +95,18 @@ export function prBody(project: { name: string; content?: string | null; id: str
   return lines.filter((l) => l !== null).join('\n')
 }
 
-/** Set how an app's pull requests are opened: the title's template and whether as a draft. Undefined leaves it; an empty template clears it. */
-export async function setPrRules(appId: string, i: { titleTemplate?: string; draft?: boolean }) {
+/** Set how an app's work is named on GitHub: the pull request's title and whether it opens as a draft, and the branch and commit conventions (conventions.ts). Undefined leaves one; empty clears it. */
+export async function setPrRules(appId: string, i: { titleTemplate?: string; draft?: boolean; branchTemplate?: string; commitFormat?: string }) {
   const { db } = await import('./db/client.js'); const { app } = await import('./db/schema.js'); const { eq } = await import('drizzle-orm')
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new Error(`no app ${appId}`)
   const next = { ...(a.setup as Record<string, unknown>) }
   if (i.titleTemplate !== undefined) { if (i.titleTemplate.trim()) next.pr_title = i.titleTemplate.trim().slice(0, 250); else delete next.pr_title }
   if (i.draft !== undefined) next.pr_draft = i.draft
+  for (const [given, key] of [[i.branchTemplate, 'branch_name'], [i.commitFormat, 'commit_format']] as const) {
+    if (given === undefined) continue
+    if (given.trim()) next[key] = given.trim().slice(0, 250); else delete next[key]
+  }
   await db.update(app).set({ setup: next }).where(eq(app.id, appId))
-  return { pr_title: (next.pr_title as string | undefined) ?? null, pr_draft: next.pr_draft !== false }
+  return { pr_title: (next.pr_title as string | undefined) ?? null, pr_draft: next.pr_draft !== false, branch_name: (next.branch_name as string | undefined) ?? null, commit_format: (next.commit_format as string | undefined) ?? null }
 }

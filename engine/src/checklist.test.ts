@@ -1,7 +1,8 @@
 /** Where a checklist task stands: its stages from its sub-tasks, pure. */
 import { describe, expect, it } from 'vitest'
 import { flowOf, stagesOf } from './checklist.js'
-import { CHECK_TITLE, FINISH_TITLE, PROBE_TITLE } from './verify.js'
+import { CHECK_TITLE, FINISH_TITLE } from './verify.js'
+const PROBE_TITLE = 'Probe: Try to break it'
 
 const B = 'Build it'
 const at = (subs: [string, string][], more: Partial<Parameters<typeof stagesOf>[0]> = {}) =>
@@ -31,8 +32,11 @@ describe('the stages of a checklist task', () => {
   })
   it('the probe, then the whole test run and its fixes', () => {
     const done: [string, string][] = [[B, 'done'], [CHECK_TITLE, 'done']]
-    expect(at([...done, [PROBE_TITLE, 'running']], { met: 5 })[2]).toEqual(['probe', 'doing', 'an agent that did not build it is trying it'])
-    expect(at([...done, [PROBE_TITLE, 'done']], { met: 5, tested: true }).slice(2)).toEqual([['probe', 'done', 'tried to break it, and cleaned up'], ['test', 'done', 'the whole run passed']])
+    expect(at([...done, [PROBE_TITLE, 'done'], ['Fix what the probes found', 'running']], { met: 5 })[2]).toEqual(['probe', 'doing', 'fixing what the probes found'])
+    expect(at([...done, [PROBE_TITLE, 'done'], ['Fix what the probes found', 'done'], ['Probe: Try to break it (2)', 'done']], { met: 5 })[2]).toEqual(['probe', 'done', 'probed, and what the probes found was fixed'])
+    expect(at([...done, ['Try to break it, and clean up', 'done']], { met: 5 })[2][1]).toBe('done') // one probed the old way still reads as probed
+    expect(at([...done, [PROBE_TITLE, 'running']], { met: 5 })[2]).toEqual(['probe', 'doing', 'agents that did not build it are trying it'])
+    expect(at([...done, [PROBE_TITLE, 'done']], { met: 5, tested: true }).slice(2)).toEqual([['probe', 'done', 'probed: nothing to send back'], ['test', 'done', 'the whole run passed']])
     expect(at([...done, [PROBE_TITLE, 'done']], { met: 5, tested: false })[3]).toEqual(['test', 'failed', 'the whole run failed'])
     expect(at([...done, [PROBE_TITLE, 'done'], ['Fix what the whole test run found', 'running']], { met: 5, tested: false })[3]).toEqual(['test', 'doing', 'fixing what the run found'])
     expect(at([...done, [PROBE_TITLE, 'done'], ['Fix what the whole test run found', 'done']], { met: 5, tested: true })[3]).toEqual(['test', 'done', 'the whole run passed, after 1 fix'])
@@ -45,7 +49,7 @@ describe('the flow of a checklist task, as nodes', () => {
     flowOf({ subs: subs.map(([title, status], n) => ({ id: `s${n}`, title, status, sortOrder: n })), stages: stages(subs, more), build: more.build ?? 'one' }).map((n) => [n.id, n.after, n.state])
   it('is whole before anything has started: the build, the check, the probe and the tests, each after the one before', () => {
     expect(flow([])).toEqual([['flow:build', [], 'todo'], ['flow:check', ['flow:build'], 'todo'], ['flow:probe', ['flow:check'], 'todo'], ['flow:test', ['flow:probe'], 'todo']])
-    expect(flowOf({ subs: [], stages: stages([]), build: 'one' }).map((n) => n.title)).toEqual(['Build it', 'Check it against its list', 'Try to break it, and clean up', 'The whole test run'])
+    expect(flowOf({ subs: [], stages: stages([]), build: 'one' }).map((n) => n.title)).toEqual(['Build it', 'Check it against its list', 'Probes', 'The whole test run'])
     expect(flowOf({ subs: [], stages: stages([], { build: 'planned' }), build: 'planned' })[0].title).toBe('Planned into sub-tasks, and built')
     expect(flow([], { hasTests: false }).map((n) => n[0])).toEqual(['flow:build', 'flow:check', 'flow:probe']) // an app with no test command
   })

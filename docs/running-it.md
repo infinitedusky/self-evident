@@ -126,6 +126,10 @@ only your own devices are on:
 3. On this computer: `tailscale serve --bg 5180`. It prints the address, `https://<computer>.<network>.ts.net`.
 4. Open that address on the phone. `tailscale serve status` shows it again; `tailscale serve reset` turns it off.
 
+Once it is served, the rail's 📱 shows a code to scan with the phone's camera, and a green dot with the device's
+name while a phone (or another computer) has the page open. Checking the address from this computer itself fails:
+Caddy has the secure port here and does not know the name. Try it from the phone.
+
 What does not work from the phone: the smoke test's and prototype's views and an app's Storybook (they are addresses
 on this computer), and the smoke terminal (it answers only to the page's own address, `UI_URL`). Links the engine
 writes still say `UI_URL`.

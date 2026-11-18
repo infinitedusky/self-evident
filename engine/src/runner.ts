@@ -12,13 +12,15 @@ import { appendEvent, type NewEvent } from './events.js'
 import { runTask, type Execute } from './executor.js'
 import { addWorktree, branchExists, ensureBranch, git, headSha, removeWorktree } from './git.js'
 import { hasStorybook } from './storybook.js'
-import { issueBranch, issueStart, landingBranch, modeOf, stackBase } from './branches.js'
+import { branchOf, issueBranch, issueStart, landingBranch, modeOf, stackBase } from './branches.js'
 import { newId } from './ids.js'
 import { commentOnIssue, identifier, setState } from './issues.js'
-import { land, wholeRun, withLock } from './landing.js'
+import { commandRun, land, wholeRun, withLock } from './landing.js'
+import { agentProbes, commandFixBrief, commandProbes, nextProbe, PROBE_FIX_TITLE, PROBE_PREFIX, probeBrief, probeFixBrief, probeOfTitle, probesOf, probeTitle, resultOf, TESTS_KEY, withResult, BUILT_IN, type ProbeResult } from './probes.js'
+import { skillOptions } from './skills.js'
 import { guideTasks, mergeGuide, mergeRecord } from './merge-guide.js'
 import { acceptanceOf, setAcceptance } from './acceptance.js'
-import { unchecked, afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, numbered, PROBE_TITLE, probeBrief, readVerdicts, reqId, requirementsChecked, unmetOf, verdictChange } from './verify.js'
+import { unchecked, afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, numbered, OLD_PROBE_TITLE, readVerdicts, reqId, requirementsChecked, unmetOf, verdictChange } from './verify.js'
 import { inForce, type Covered } from './requirements.js'
 import { smokeOwed , smokeSetups } from './smoke.js'
 import { ONE_GO_TITLE } from './planner.js'
@@ -31,11 +33,17 @@ import { stepsOf } from './work.js'
 import { reapAgentProcesses } from './reap.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { referencesOf } from './references.js'
+import { branchName, commitRule, installCommitCheck, ticketOf } from './conventions.js'
+
+/** The team's own ticket id for a task, when it came from their tracker; null when it is only ours. */
+const teamTicket = (t: { sourceRef?: unknown }) => (t.sourceRef as { linear?: { identifier?: string } } | null | undefined)?.linear?.identifier ?? null
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
 
 /** The sub-task added when a task's whole test run fails; counted by its title. */
 export const FIX_TITLE = 'Fix what the whole test run found'
+/** A check or a probe: it only looks, so it has no tool that edits and what it leaves is thrown away. */
+export const onlyLooks = (title: string) => title.startsWith(CHECK_TITLE) || title.startsWith(PROBE_PREFIX)
 const MAX_FIXES = 2
 export const fixBrief = (testCmd: string, detail: string) => [
   'Every sub-task of this task is merged, and the app\'s whole test run then failed (twice in a row). Nothing has been blamed yet.',
@@ -48,7 +56,7 @@ export const fixBrief = (testCmd: string, detail: string) => [
   '```', detail, '```',
 ].join('\n')
 
-interface AppSetup { test_cmd?: string; model?: string; max_budget_usd?: number; max_turns?: number }
+interface AppSetup { test_cmd?: string; probes?: unknown; model?: string; max_budget_usd?: number; max_turns?: number }
 
 /**
  * A build that runs out of turns carries on; it is not a failure (Bonkei's agent, 2026-11-17, on BON-113: the engine
@@ -62,7 +70,7 @@ export const ranOutOfTurns = (error: string | null | undefined) => !!error && /m
 export const MAX_CARRY_ONS = 3
 const OUT_OF_TURNS = 'out of turns'
 /** How many turns a run starts with, when the app has not said: more for one that is the whole task, or that reads all of it. */
-export const turnsFor = (title: string, setup: { max_turns?: number }) => setup.max_turns ?? (title === ONE_GO_TITLE ? 200 : [CHECK_TITLE, FINISH_TITLE, PROBE_TITLE, FIX_TITLE].some((t) => title.startsWith(t)) ? 120 : undefined)
+export const turnsFor = (title: string, setup: { max_turns?: number }) => setup.max_turns ?? (title === ONE_GO_TITLE ? 200 : [CHECK_TITLE, FINISH_TITLE, OLD_PROBE_TITLE, PROBE_PREFIX, PROBE_FIX_TITLE, FIX_TITLE].some((t) => title.startsWith(t)) ? 120 : undefined)
 
 const PLANNING = ['issue.planning', 'issue.plan_waiting', 'issue.planned', 'issue.plan_failed']
 
@@ -220,6 +228,11 @@ export class Runner {
     const worktreePath = x.worktreePath ?? join(`${r!.localPath}-worktrees`, `${p.id}--${x.identifier.toLowerCase()}`)
     const pb = { ...base, issueId: subId }
     const mode = modeOf(p, a.setup)
+    const named = { ticket: teamTicket(t), id: t.identifier, title: t.title, project: p.name }
+    // A task's branch is named once, when it is first cut: by the app's template when it has one and the name is free,
+    // else the engine's own. One already building keeps the name it had.
+    const wanted = mode === 'issue' && !t.branch && !(await branchExists(r!.localPath!, issueBranch(p.integrationBranch!, t.identifier))) ? branchName(a.setup, named) : null
+    if (wanted && !(await branchExists(r!.localPath!, wanted))) { await db.update(issue).set({ branch: wanted }).where(eq(issue.id, t.id)); t.branch = wanted }
     const onto = landingBranch(mode, p.integrationBranch!, t) // the project's branch, or the issue's own (stacked PRs)
     // Worktree and branch creation touch the repo's refs: one at a time per repo. A failure here is an attempt too.
     let baseSha: string
@@ -227,7 +240,7 @@ export class Runner {
       baseSha = await withLock(`git:${r!.localPath}`, async () => {
         if (mode === 'issue' && !(await branchExists(r!.localPath!, onto))) { // an issue's branch starts where the issue before it ended
           const existing = new Set<string>()
-          for (const q of g.issues) { const b = issueBranch(p.integrationBranch!, q.identifier); if (await branchExists(r!.localPath!, b)) existing.add(b) }
+          for (const q of g.issues) { const b = branchOf(p.integrationBranch!, q); if (await branchExists(r!.localPath!, b)) existing.add(b) }
           await git(r!.localPath!, ['branch', onto, issueStart(p.integrationBranch!, t, g.issues, existing)])
         }
         await addWorktree(r!.localPath!, worktreePath, branch, onto)
@@ -247,8 +260,16 @@ export class Runner {
     await db.transaction((tx) => setBuild(tx, subId, { status: 'running', attempt, branch, worktreePath, baseSha, heldReason: null }, { runId, payload: { attempt, branch, worktreePath, resumes: interrupted?.agentSessionId ?? null } }))
     const rb = { ...pb, runId }
 
-    const result = await this.execute({
+    const commits = commitRule(a.setup, named)
+    const hooksPath = commits.pattern ? await installCommitCheck(worktreePath, { pattern: commits.pattern, format: commits.format }).catch(() => undefined) : undefined
+    // A probe that is a skill run as a reviewer gets that skill, and only if this app's sessions have it.
+    const probe = probeOfTitle(x.title, probesOf(a.setup))
+    const has = probe?.kind === 'skill' ? await skillOptions('talk', worktreePath, a.id).catch(() => null) : null
+    const skill = probe?.kind === 'skill' && has?.skills.includes(probe.runs) ? { name: probe.runs, plugins: has.plugins, mcpServers: has.mcpServers } : undefined
+    const result = probe?.kind === 'skill' && !skill ? { status: 'completed' as const, summary: `The skill \`${probe.runs}\` is not one this app's agents have, so this probe was not run.` } : await this.execute({
       subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief },
+      readOnly: onlyLooks(x.title), skill,
+      ticket: ticketOf(t), commitFormat: commits.format ?? undefined, hooksPath,
       worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, maxTurns: turnsFor(x.title, setup), maxBudgetUsd: setup.max_budget_usd,
       resumeSessionId: interrupted?.agentSessionId ?? undefined, ...(interrupted?.error?.startsWith(OUT_OF_TURNS) ? { resumeWhy: 'turns' as const } : {}), abort: this.active.get(subId),
       onEvent: async (type, payload) => {
@@ -273,7 +294,7 @@ export class Runner {
 
     await db.transaction((tx) => setBuild(tx, subId, { status: 'merging' }, { runId }))
     const landed = await withLock(`land:${projectId}`, () => land({
-      repoPath: r!.localPath!, worktreePath, integrationBranch: onto, // merged, not tested: the whole test run is once per task (testTask)
+      repoPath: r!.localPath!, worktreePath, integrationBranch: onto, discard: onlyLooks(x.title), // merged, not tested: the whole test run is once per task (testTask)
       onEvent: async (type, payload) => { await this.emit({ ...rb, type, payload }) },
     }))
     if (!landed.ok) return this.failed(subId, attempt, x.maxAttempts, `landing failed at ${landed.stage}: ${landed.detail}`, rb)
@@ -282,6 +303,7 @@ export class Runner {
     try {
     await db.transaction((tx) => setBuild(tx, subId, { status: 'done' }, { runId, payload: { sha: landed.sha } }))
     await this.markCriteria(subId, x.parentId!, result.summary, rb).catch((err) => this.emit({ ...rb, type: 'task.check_error', payload: { error: String(err?.message ?? err) } }))
+    await this.markProbe(x.title, x.parentId!, a.setup, result.summary, rb).catch((err) => this.emit({ ...rb, type: 'task.probe_error', payload: { error: String(err?.message ?? err) } }))
     await withLock(`land:${projectId}`, () => this.updatePr(projectId, mode === 'issue' ? x.parentId! : undefined)).catch((err) => this.emit({ ...rb, type: 'pr.error', payload: { error: String(err?.message ?? err) } }))
     await this.testTask(projectId, x.parentId!, r!.localPath!, worktreePath, onto, setup, rb, mode).catch((err) => this.emit({ ...rb, type: 'task.test_error', payload: { error: String(err?.message ?? err) } }))
     } finally { this.testing.set(projectId, (this.testing.get(projectId) ?? 1) - 1) }
@@ -309,7 +331,7 @@ export class Runner {
     const w = task ? (await workflowFor(db, { issueId: taskId })).workflow : null
     const loop = styleOf(w) === 'checklist' // with sub-tasks or in one go
     const required = a && loop ? inForce(a.setup, p?.requirements, w?.requirements) : []
-    return { task, criteria, required, loop, held: (task?.requirements ?? null) as Covered[] | null, base: a?.defaultBranch ?? 'main' }
+    return { task, criteria, required, loop, held: (task?.requirements ?? null) as Covered[] | null, base: a?.defaultBranch ?? 'main', probed: (task?.probes ?? []) as ProbeResult[] }
   }
 
   /** A check sub-task landed: its verdicts become the build's mark on each criterion and each requirement of the task. */
@@ -324,6 +346,18 @@ export class Runner {
     await this.emit({ ...pb, issueId: taskId, type: 'task.checked', payload: { criteria: criteria.length, requirements: required.length, read: verdicts.length, met: verdicts.filter((v) => v.met === true).length, notMet: verdicts.filter((v) => v.met === false).length, forAPerson: verdicts.filter((v) => v.met === null).length } })
   }
 
+  /** A probe's sub-task landed: its verdict is kept on the task, the latest for that probe. */
+  private async markProbe(title: string, taskId: string, setup: unknown, summary: string | null | undefined, pb: Omit<NewEvent, 'type'>) {
+    const p = probeOfTitle(title, probesOf(setup))
+    if (!p) return
+    const subs = await db.select({ title: issue.title, state: issue.state }).from(issue).where(eq(issue.parentId, taskId))
+    const fixes = subs.filter((s) => s.state !== 'canceled' && s.title.startsWith(PROBE_FIX_TITLE)).length
+    const [task] = await db.select({ probes: issue.probes }).from(issue).where(eq(issue.id, taskId))
+    const result = resultOf(p, summary, fixes)
+    await db.update(issue).set({ probes: withResult(task?.probes as ProbeResult[] | null, result) }).where(eq(issue.id, taskId))
+    await this.emit({ ...pb, issueId: taskId, type: 'task.probed', payload: { key: p.key, name: p.name, kind: p.kind, pass: result.pass, blocks: p.blocks, evidence: result.evidence, findings: result.findings.length } })
+  }
+
   private async testTask(projectId: string, taskId: string, repoPath: string, worktreePath: string, onto: string, setup: AppSetup, pb: Omit<NewEvent, 'type'>, mode: 'project' | 'issue' = 'issue') {
     const outcome = await withLock(`land:${projectId}`, async () => {
       const every = (await db.select({ id: issue.id, state: issue.state, title: issue.title, sortOrder: issue.sortOrder }).from(issue).where(eq(issue.parentId, taskId))).sort((a, b) => a.sortOrder - b.sortOrder)
@@ -334,16 +368,34 @@ export class Runner {
       // Built. What comes next is the checklist's to say (verify.ts): check, finish what it found, probe, then the whole test run.
       const list = await this.listOf(taskId)
       const unmet = unmetOf(list.criteria, list.held, list.required)
-      const next = afterBuild({ titles: subs.map((s) => s.title), listed: list.loop ? list.criteria.length + list.required.length > 0 : list.criteria.some(unchecked), unmet: unmet.length, testCmd: !!setup.test_cmd, loop: list.loop })
+      // The agents' probes (probes.ts), for a task on Main. One that had the old single probe is not probed again by the engine's own.
+      const old = subs.some((s) => s.title.startsWith(OLD_PROBE_TITLE))
+      const agents = list.loop ? agentProbes(setup).filter((p) => !(old && BUILT_IN.some((b) => b.key === p.key))) : []
+      const probeFixes = subs.filter((s) => s.title.startsWith(PROBE_FIX_TITLE)).length
+      const probing = nextProbe(agents, list.probed, probeFixes)
+      const commands = list.loop ? commandProbes(setup) : setup.test_cmd ? commandProbes({ test_cmd: setup.test_cmd }) : []
+      const next = afterBuild({ titles: subs.map((s) => s.title), listed: list.loop ? list.criteria.length + list.required.length > 0 : list.criteria.some(unchecked), unmet: unmet.length, commands: commands.length > 0, probe: probing.do, loop: list.loop })
       // What is added now follows what there is: the first check, every sub-task of the build; anything later, the last one.
-      const first = !subs.some((s) => [CHECK_TITLE, FINISH_TITLE, PROBE_TITLE, FIX_TITLE].some((t) => s.title.startsWith(t)))
+      const first = !subs.some((s) => [CHECK_TITLE, FINISH_TITLE, OLD_PROBE_TITLE, PROBE_PREFIX, PROBE_FIX_TITLE, FIX_TITLE].some((t) => s.title.startsWith(t)))
       const after = first ? subs.map((s) => s.id) : subs.slice(-1).map((s) => s.id)
-      if (next.do !== 'test') return { next, list, unmet, after }
+      if (next.do !== 'test') return { next, list, unmet, after, probing }
       const fixes = subs.filter((s) => s.title.startsWith(FIX_TITLE)).length
-      return { next, list, unmet, after, fixes, result: await wholeRun({ testCmd: setup.test_cmd!, cwd: worktreePath, onEvent: async (type, payload) => { await this.emit({ ...pb, issueId: taskId, type, payload }) } }) }
+      // The commands, the engine's own to run: each once on the merged work (the test run twice before it is called failed).
+      const emit = async (type: string, payload: Record<string, unknown>) => { await this.emit({ ...pb, issueId: taskId, type, payload }) }
+      const failed: { name: string; runs: string; detail: string }[] = []
+      let probed = list.probed
+      for (const c of commands) {
+        const ran = c.key === TESTS_KEY ? await wholeRun({ testCmd: c.runs, cwd: worktreePath, onEvent: emit }) : await commandRun({ cmd: c.runs, cwd: worktreePath })
+        const detail = ran.ok ? '' : (ran as { detail: string }).detail
+        probed = withResult(probed, { key: c.key, name: c.name, kind: 'command', pass: ran.ok, evidence: ran.ok ? `\`${c.runs}\` passed` : `\`${c.runs}\` failed`, findings: [], blocks: c.blocks, fixes, at: new Date().toISOString() })
+        if (c.key !== TESTS_KEY) await emit('task.probed', { key: c.key, name: c.name, kind: 'command', pass: ran.ok, blocks: c.blocks, evidence: ran.ok ? '' : detail.slice(-600), findings: 0 })
+        if (!ran.ok && c.blocks) failed.push({ name: c.name, runs: c.runs, detail })
+      }
+      if (list.loop) await db.update(issue).set({ probes: probed }).where(eq(issue.id, taskId))
+      return { next, list, unmet, after, probing, fixes, failed }
     })
     if (!outcome) return
-    const { next, list, unmet, after } = outcome
+    const { next, list, unmet, after, probing } = outcome
     if (next.do === 'check') {
       // The first check reads the whole list; a later one, only what the last left not done.
       const again = next.round > 1
@@ -358,19 +410,27 @@ export class Runner {
       await this.emit({ ...pb, issueId: taskId, type: 'task.check_stuck', payload: { rounds: MAX_ROUNDS, unmet: unmet.map((u) => u.id) } })
       return
     }
-    if (next.do === 'probe') { await addSubTask(taskId, { title: PROBE_TITLE, brief: probeBrief(list.criteria, list.base), after }, 'engine'); return }
-    if (next.do === 'done' || !('result' in outcome) || !outcome.result || outcome.result.ok || !setup.test_cmd) {
+    if (next.do === 'probe' && probing.do === 'run') { await addSubTask(taskId, { title: probeTitle(probing.probe, probing.run), brief: probeBrief(probing.probe, list.criteria, list.base), after }, 'engine'); return }
+    if (next.do === 'probe_fix' && probing.do === 'fix') { await addSubTask(taskId, { title: numbered(PROBE_FIX_TITLE, probing.round), brief: probeFixBrief(probing.failing, probing.round), after }, 'engine'); return }
+    if (next.do === 'probe_stuck' && probing.do === 'stuck') {
+      await commentOnIssue(taskId, { heading: 'Probes still fail after three rounds', body: `What the probes found was sent back ${MAX_ROUNDS} times and ${probing.failing.length === 1 ? 'this one still fails' : 'these still fail'}. It needs a person.\n\n${probing.failing.map((f) => `- ${f.name}: ${f.findings.join('; ') || f.evidence}`).join('\n')}` }, 'engine')
+      await this.emit({ ...pb, issueId: taskId, type: 'task.probe_stuck', payload: { rounds: MAX_ROUNDS, failing: probing.failing.map((f) => f.key) } })
+      return
+    }
+    const failed = 'failed' in outcome ? outcome.failed ?? [] : []
+    if (next.do === 'done' || !failed.length) {
       // Built, checked, probed and tested: its draft pull request is opened, so what can only be seen on one can be (smoke.ts, when: pr).
       if (prAuto(setup)) await withLock(`land:${projectId}`, () => this.updatePr(projectId, mode === 'issue' ? taskId : undefined, 'auto')).catch((err) => this.emit({ ...pb, issueId: taskId, type: 'pr.error', payload: { error: String(err?.message ?? err) } }))
       return
     }
-    const { fixes, result } = outcome as { fixes: number; result: { ok: false; detail: string } }
+    const fixes = (outcome as { fixes: number }).fixes
+    const tests = failed.find((f) => f.runs === setup.test_cmd)
     if (fixes >= MAX_FIXES) {
-      await commentOnIssue(taskId, { heading: 'The whole test run still fails', body: `Its sub-tasks are all merged and ${fixes} fixes were tried. It needs a person.\n\n\`\`\`\n${result.detail}\n\`\`\`` }, 'engine')
-      await this.emit({ ...pb, issueId: taskId, type: 'task.test_failed', payload: { fixes, tail: result.detail } })
+      await commentOnIssue(taskId, { heading: tests && failed.length === 1 ? 'The whole test run still fails' : 'Its commands still fail', body: `Its sub-tasks are all merged and ${fixes} fixes were tried. It needs a person.\n\n${failed.map((f) => `\`${f.runs}\`\n\n\`\`\`\n${f.detail}\n\`\`\``).join('\n\n')}` }, 'engine')
+      await this.emit({ ...pb, issueId: taskId, type: 'task.test_failed', payload: { fixes, tail: failed[0].detail, failed: failed.map((f) => f.name) } })
       return
     }
-    await addSubTask(taskId, { title: fixes ? `${FIX_TITLE} (${fixes + 1})` : FIX_TITLE, brief: fixBrief(setup.test_cmd, result.detail), after }, 'engine')
+    await addSubTask(taskId, { title: fixes ? `${FIX_TITLE} (${fixes + 1})` : FIX_TITLE, brief: tests && failed.length === 1 ? fixBrief(tests.runs, tests.detail) : commandFixBrief(failed), after }, 'engine')
   }
 
   /** The builder's todo list, as the sub-issue's steps: the latest list replaces the previous one for this run. */
@@ -653,10 +713,10 @@ export class Runner {
     const prs = await db.select().from(prTable).where(eq(prTable.projectId, projectId))
     const issues = g.issues.filter((q) => q.state !== 'canceled')
     const t = issueId ? issues.find((q) => q.id === issueId)! : null
-    const head = t ? issueBranch(p.integrationBranch!, t.identifier) : p.integrationBranch!
+    const head = t ? branchOf(p.integrationBranch!, t) : p.integrationBranch!
     const stack = t ? stackBase(a.defaultBranch, t, issues, prs) : { base: a.defaultBranch, on: null }
     const k = t ? issues.findIndex((q) => q.id === t.id) + 1 : 0
-    const ticket = t ? ((t as { sourceRef?: { linear?: { identifier?: string } } | null }).sourceRef?.linear?.identifier ?? null) : null
+    const ticket = t ? teamTicket(t) : null
     const title = prTitle(a.setup, { ticket, id: t?.identifier ?? p.name, title: t?.title ?? p.name, project: p.name, n: k, of: issues.length }, t ? (t as { prTitle?: string | null }).prTitle : null)
       ?? (t ? `${t.identifier} ${t.title} (${p.name}, ${k} of ${issues.length})` : p.name)
     const intro = t ? { ...p, name: `${p.name}, task ${k} of ${issues.length}: ${t.identifier} ${t.title}`, content: [t.description, stack.on ? `Stacked on #${stack.on}: review and merge that one first; this PR then retargets to ${a.defaultBranch}.` : null].filter(Boolean).join('\n\n') || p.content } : p

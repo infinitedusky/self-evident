@@ -18,6 +18,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { deviceJoined, devicesHere, phoneAddress, remoteIp } from './devices.js'
 import { existsSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -89,7 +90,7 @@ export function buildApp(bus: EventBus) {
     engine: 'Self Evident',
     model: 'Shaped like Linear: initiative (a goal) → project (tasks in order, one branch, one PR) → task (Linear\'s issue: the routes and ids say issue; code, or a to-do; HG-12) → sub-task (under code: one agent, one worktree, one commit, its build; under a to-do: a checklist line) → step (the builder\'s todo list). Cycles hold the tasks of a stretch of time.',
     routes: {
-      'GET /health': 'database reachable?',
+      'GET /health': 'database reachable?', 'GET /devices': '{address, remote, devices} — the page\'s address on the Tailscale network (null when not served), whether the one asking came over it, and the other devices with the page open: ip, name, kind (phone | computer), since',
       'POST /workspaces': '{name}', 'POST /apps': '{workspaceId, name, key?, defaultBranch?, setup?}', 'POST /repos': '{appId, fullName, localPath?, baseBranch?}',
       'GET /apps': 'the apps in use, each with its repos; ?removed=1: the ones put away, with what each holds', 'POST /apps/:id/remove': 'put it away: out of every list, nothing of it runs, can be brought back', 'POST /apps/:id/restore': 'bring a put-away app back', 'DELETE /apps/:id': '{name}: delete a put-away app and every row of it, for good', 'PATCH /apps/:id': '{name?, defaultBranch?, setup?}', 'PATCH /repos/:id': '{fullName?, localPath?, baseBranch?}', 'DELETE /repos/:id': 'the repository leaves the app', 'GET /skills/sources': 'the repositories skills were pulled from', 'POST /skills/sources': '{url} → pulls that repository\'s skills into the shared skills, or brings them up to date: {source, added, updated, unchanged, removed, skipped}', 'DELETE /skills/sources?url=': 'stops pulling from it and removes its skills', 'POST /skills/shared': '{name, description, body} → one of your own skills, for every app (a SKILL.md outside every repo)', 'GET /apps/:id/account': 'which Claude account the app\'s agents run on: {kind: default|key|login, ok, note}', 'GET /apps/:id/linear/tickets?scope=mine|unassigned|all': 'the Linear team\'s open tickets, each with the task it already is here', 'POST /apps/:id/linear/import': '{identifiers: ["ENG-12"]} → {made, updated, missing}', 'GET /apps/:id/assets?project=': 'the app\'s assets, or one project\'s own', 'POST /assets': '{appId, projectId?, name, location, note?}', 'PATCH /assets/:id': '{name?, location?, note?}', 'DELETE /assets/:id': 'removes it',  'POST /folders/choose': '{path?} → {path, repos: [{name, path, fullName, branch}]}; no path opens the folder dialog', 'GET /workspaces': 'all workspaces',
       'GET /apps/:id/graph': 'the top-level graph: every sub-task of every project in the app', 'GET /now': 'the front door: running, needs you, recent',
@@ -127,6 +128,8 @@ export function buildApp(bus: EventBus) {
 
   const settle = <T>(v: T) => { void runner.dispatch(); return v } // a change to the plan can free work: one dispatch pass after it
   api.get('/health', async (c) => { await db.execute('select 1'); return c.json({ ok: true }) })
+  // The other devices with the page open (a phone, over Tailscale); the one asking is left out.
+  api.get('/devices', async (c) => { const from = remoteIp((n) => c.req.header(n)); return c.json({ address: await phoneAddress(), remote: !!from, devices: devicesHere(from) }) })
   api.get('/now', async (c) => { const a = c.req.query('app'); return a ? c.json({ ...(await now(a)), hold: runner.hold }) : c.json({ error: 'app is required: one app at a time' }, 400) }) // the front door: running, needs you, recent
 
   api.post('/workspaces', async (c) => {
@@ -981,7 +984,9 @@ export function buildApp(bus: EventBus) {
       await stream.writeSSE({ id: String(since), event: 'ping', data: String(Date.now()) }) // where this stream starts: a page that loses it before any event still knows where to resume
       bus.on('event', send)
       let open = true
-      stream.onAbort(() => { open = false; bus.off('event', send) })
+      const from = remoteIp((n) => c.req.header(n)) // a phone over Tailscale: here while it holds this feed
+      const left = from ? deviceJoined(from) : null
+      stream.onAbort(() => { open = false; bus.off('event', send); left?.() })
       await send()
       while (open) {
         await stream.sleep(15000)
