@@ -189,3 +189,9 @@ export const TwoSetUps: Story = {
     await expect(tabs.getByRole('tab', { name: /Docs site/ })).toHaveTextContent('●')
   },
 }
+
+/** A smoke test that is up and listening on a port it was not given (made up): said beside it. */
+export const StrayPort: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, setups: [{ key: 'main', name: 'Smoke test', what: null, where: 'local', says: 'run here (sample)', account: null, flag: null, running: smokeSample.head, url: smokeSample.url, up: true, canRun: true, log: [], owed: smokeSample.owed, strayPorts: [5174], strayNote: 'It also listens on port 5174, which it chose itself. A second copy running beside it would share or fight over it. Make it follow $PORT_2 or $PORT_3, which are free and handed out with $PORT.' }] } }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/port 5174, which it chose itself/)).toBeInTheDocument() },
+}
