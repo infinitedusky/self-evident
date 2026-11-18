@@ -4646,3 +4646,16 @@ On a task whose every criterion the check verified itself, the smoke test row le
 finished (it was shown only with at least one check for a person), which read as something breaking. Now it stays
 once the task is built: "nothing left to you; look anyway". The page says an agent checked everything and where
 its evidence is, and the built code can still be brought up, each set-up as usual.
+
+## A project's graph links tasks in the order they were built (Sandy, 2026-11-17: "they should be hooked up in the order in which they were built … I have a running one in the project and then there's a bunch of already completed nodes coming from it")
+
+The links between tasks were drawn by the order tasks are listed in. A task listed late but built early had its
+finished nodes hanging off a task listed before it that was only now running.
+
+- **Between tasks** (`orderEdges`): tasks that have started come first, by when their first sub-task started; the
+  ones not started follow in their listed order, which is what they will wait on. Scheduling is unchanged
+  (`impliedDeps`); this is only what is drawn.
+- **Inside a task**: a sub-task added after the task was under way, with nothing recorded about what it follows, is
+  drawn after the one added just before it. The check, finish and probe sub-tasks made before 2026-11-17 recorded
+  nothing, so each was drawn as starting the task: five lines out of one node. Now a check comes from what it
+  checked.
