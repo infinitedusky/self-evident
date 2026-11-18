@@ -4810,6 +4810,16 @@ Sandy's devices can open. The page's server now answers to `.ts.net` names. How:
 Not done: screens made for a phone (what needs you, conversations, approvals, smoke marks); the views and the
 terminal, which stay on the computer.
 
+### Who has it open, and a code to scan (Sandy, 2026-11-18: "it works, we need some indicator that shows that a phone is connected" and "a button to send the link to the phone")
+
+The rail has a 📱 above Settings, shown only when the page is served over Tailscale or a device is here. Hover: a
+code to scan with the phone's camera (WhatsApp Web's way), the address, and Copy. A green dot and the device's name
+while another device has the page open (Figma's "who else is here"). A device is here while it holds a live feed;
+the engine tells it from the address `tailscale serve` adds to the request and names it from Tailscale's own list.
+In memory only. `GET /api/devices`. The code is drawn by `qrcode.react`.
+
+Not done: sending the link by message; a notice when a device joins; the smoke terminal from the phone.
+
 ## Steps, stages and probes: what was decided (Sandy, 2026-11-18, from CEB-79: "Builders … have no Skill tool and no step skills … every commit still came out as `feat(CEB-84): ...`"; then "let's do it. Probes and checks don't change code. They can create additional subtasks … or steps")
 
 Found on CEB-79 (enterprise-dashboard, Main): the repository had a naming skill and no builder could use it; branch
