@@ -240,6 +240,10 @@ Details and sources in `research/`.
     prototype's is not built.
   - **A check can be handed to an agent to try** (Sandy, 2026-11-18): it says what it saw beside the check and
     marks nothing; the mark stays the person's.
+  - **Some checks are commands, so a set-up can be a terminal** (Sandy, 2026-11-18: "a temp folder on the machine
+    and a terminal where it runs commands and you see it working"): a real shell in the page, in the build's
+    checkout or a new empty folder; a check's command runs there with a press. Reachable from Self Evident's own
+    page only.
   - **Where it runs is the app's setting**, one of: the **same as its prototypes** (run locally, made-up data: a
     library and its Storybook); a **staging** environment (a deployed build, a test account, real services in test
     mode; "a fake account in a staging environment"); or **behind a feature flag** in production, on for a test
