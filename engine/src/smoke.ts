@@ -47,7 +47,7 @@ import { getIssue, identifier, PlanError } from './issues.js'
 import { morePorts, straySays, straysOf } from './ports.js'
 import { databaseExists, databaseUrl, dropDatabase, listScenarios, rebuild, type PrototypeDb } from './prototype-data.js'
 import { homeRepo } from './workbench.js'
-import { terminalOpen } from './smoke-terminal.js'
+import { scratchKey, terminalOpen } from './smoke-terminal.js'
 
 export type Where = 'local' | 'preview' | 'staging' | 'flag' | 'terminal'
 export const WHERES: Where[] = ['local', 'preview', 'staging', 'flag', 'terminal']
@@ -343,6 +343,7 @@ export async function smokeView(issueId: string) {
     const cUrl = cOn && cRun?.port ? `http://localhost:${cRun.port}` : null
     const compare = cUrl ? { url: cUrl, up: await answers(cUrl), /** The commit of main it runs. */ sha: cRun?.sha ?? null, log: running.get(runKey(t.id, ck))?.log.slice(-30) ?? [] } : null
     return {
+      /** The throwaway terminal every set-up has (Sandy, 2026-11-18: "we always want access to a terminal pointed at a temp throwaway folder"): a new empty folder. Left out where the set-up's own terminal is already that. */ ...(setup.where === 'terminal' && setup.folder === 'temp' ? {} : { scratch: { open: terminalOpen(t.id, scratchKey(setup.key)) } }),
       /** A terminal can be opened on it (smoke-terminal.ts), and where it would open; open: one is. */ ...(setup.where === 'local' || setup.where === 'terminal' ? { terminal: { folder: setup.where === 'terminal' ? setup.folder ?? 'build' : 'build' as const, open: terminalOpen(t.id, setup.key) } } : {}),
       key: setup.key, name: setup.name, what: setup.what ?? null,
       where: setup.where, says: WHERE_SAYS[setup.where], account: setup.account ?? null, flag: setup.flag ?? null,
@@ -381,13 +382,13 @@ const checkoutPath = (repoPath: string, name: string, key: string, first: boolea
  * folder instead; the script typed in at the start (a terminal set-up's own); and the address of the build, when a
  * set-up tested here is up, for commands that ask it.
  */
-export async function smokePlace(issueId: string, setupKey?: string) {
+export async function smokePlace(issueId: string, setupKey?: string, /** Not the set-up's own terminal: the throwaway one every set-up has, in a new empty folder. */ scratch = false) {
   const { t, a, repoPath, name, head } = await built(issueId)
   const all = smokeSetups(a.setup)
   const named = setupKey ? all.find((x) => x.key === setupKey) : all[0]
   if (!named) throw new PlanError(`${a.name} has no smoke test set-up "${setupKey}" (${all.map((x) => x.key).join(', ')})`)
-  if (named.where !== 'local' && named.where !== 'terminal') throw new PlanError(`${named.name} is deployed: there is no folder here to open a terminal in`)
-  const folder = named.where === 'terminal' ? named.folder ?? 'build' : 'build'
+  if (!scratch && named.where !== 'local' && named.where !== 'terminal') throw new PlanError(`${named.name} is deployed: there is no folder here to open a terminal in`)
+  const folder = scratch ? 'temp' as const : named.where === 'terminal' ? named.folder ?? 'build' : 'build'
   let checkout: string | null = null
   if (repoPath && head) {
     checkout = checkoutPath(repoPath, name, named.key, named.key === all[0].key)
@@ -396,7 +397,7 @@ export async function smokePlace(issueId: string, setupKey?: string) {
   if (folder === 'build' && !checkout) throw new PlanError(`${name} is not built yet: there is no checkout to open a terminal in`)
   const runs = await db.select().from(smokeRun).where(eq(smokeRun.issueId, t.id))
   const up = all.filter((x) => x.where === 'local').map((x) => ({ x, run: runs.find((r) => r.setup === x.key) })).find(({ x, run }) => run?.port && alive(t.id, x.key))
-  return { key: named.key, task: name, folder, checkout, script: named.where === 'terminal' ? named.cmd ?? null : null, url: up?.run?.port ? `http://localhost:${up.run.port}` : null }
+  return { key: scratch ? scratchKey(named.key) : named.key, task: name, folder, checkout, script: !scratch && named.where === 'terminal' ? named.cmd ?? null : null, url: up?.run?.port ? `http://localhost:${up.run.port}` : null }
 }
 
 /** Local only: run the built branch, at its head, in the smoke test's own worktree. Run again, it moves to the new head. */

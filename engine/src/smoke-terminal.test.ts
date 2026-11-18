@@ -10,7 +10,7 @@ import { newId } from './ids.js'
 import { buildApp } from './server.js'
 import { createProject } from './projects.js'
 import { setSmokeSetup, smokeSetups, smokeView, startSmoke } from './smoke.js'
-import { closeTerminal, openTerminal, ownPage, shellEnv, terminalOpen, typeInTerminal, watchTerminal } from './smoke-terminal.js'
+import { closeTerminal, openTerminal, ownPage, scratchKey, shellEnv, terminalOpen, typeInTerminal, watchTerminal } from './smoke-terminal.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -59,6 +59,7 @@ describe.skipIf(!reachable)('a real one', () => {
     expect((await setSmokeSetup(appId, { where: 'terminal', folder: 'temp', script: 'echo made-up-$((20 + 22))' })).setups[0]).toMatchObject({ where: 'terminal', folder: 'temp', script: 'echo made-up-$((20 + 22))', falls_back_to: null })
     const { issues: [t] } = await createProject({ appId, name: 'Install (sample)', issues: [{ title: 'Install it (sample)', brief: 'Build it.' }] })
     expect((await smokeView(t.id)).setups[0]).toMatchObject({ where: 'terminal', up: false, canRun: false, terminal: { folder: 'temp', open: false } })
+    expect((await smokeView(t.id)).setups[0].scratch).toBeUndefined() // its own is already a new folder
     await expect(startSmoke(t.id)).rejects.toThrow(/is a terminal: open it/)
     const opened = await openTerminal(t.id)
     expect(opened).toMatchObject({ setup: 'main', folder: 'temp', fresh: true })
@@ -101,5 +102,15 @@ describe.skipIf(!reachable)('a real one', () => {
     expect(() => typeInTerminal(t.id, 'main', 'ls\r')).toThrow(/not open/)
     await db.update(app).set({ setup: { smoke: { where: 'staging', url: 'https://staging.example.test' } } }).where(eq(app.id, appId))
     await expect(openTerminal(t.id)).rejects.toThrow(/is deployed: there is no folder here/)
+    // Every set-up has a throwaway one, in a new empty folder: a deployed one too, and one that is not built yet.
+    expect((await smokeView(t.id)).setups[0]).toMatchObject({ where: 'staging', scratch: { open: false } })
+    const scratch = await openTerminal(t.id, undefined, {}, true)
+    expect(scratch).toMatchObject({ setup: 'main@temp', folder: 'temp', fresh: true })
+    expect(existsSync(scratch.cwd)).toBe(true)
+    expect((await smokeView(t.id)).setups[0].scratch).toEqual({ open: true })
+    const through = await buildApp(new EventBus()).request(`/api/issues/${t.id}/smoke/terminal`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scratch: true }) })
+    expect(await through.json()).toMatchObject({ cwd: scratch.cwd, fresh: false })
+    await closeTerminal(t.id, scratchKey('main'))
+    expect(existsSync(scratch.cwd)).toBe(false)
   }, 30_000)
 })

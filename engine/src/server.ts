@@ -9,7 +9,7 @@ import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
 import { checklistOf } from './checklist.js'
 import { compareKey, markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
-import { closeTerminal, closeTerminals, openTerminal, ownPage, resizeTerminal, typeInTerminal, watchTerminal } from './smoke-terminal.js'
+import { closeTerminal, closeTerminals, openTerminal, ownPage, resizeTerminal, scratchKey, typeInTerminal, watchTerminal } from './smoke-terminal.js'
 import { startLearning, talkBusy } from './talk.js'
 import { serve } from '@hono/node-server'
 import { appendEvent } from './events.js'
@@ -652,16 +652,17 @@ export function buildApp(bus: EventBus) {
   // The smoke test (smoke.ts): the checks left to a person on a built task, where it runs, and their marks.
   api.get('/issues/:id/smoke', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err, 404) } })
   // The smoke test's terminal (smoke-terminal.ts): a shell on this computer, so only Self Evident's own page may reach it.
-  const term = async (c: any, fn: (issueId: string, setup: string, body: Record<string, unknown>) => unknown) => {
+  const term = async (c: any, fn: (issueId: string, /** The terminal: a set-up's own, or its throwaway one. */ key: string, body: Record<string, unknown>, which: { setup: string; scratch: boolean }) => unknown) => {
     if (!ownPage({ origin: c.req.header('origin'), site: c.req.header('sec-fetch-site'), contentType: c.req.header('content-type'), method: c.req.method })) return c.json({ error: 'the terminal takes requests from Self Evident\'s own page only' }, 403)
     try {
       const t = await resolveIssue(db, c.req.param('id'))
       const body = c.req.method === 'GET' ? {} : await c.req.json().catch(() => ({})) as Record<string, unknown>
       const setup = typeof body.setup === 'string' ? body.setup : c.req.query('setup') ?? (await smokeView(t.id)).setups[0].key
-      return await fn(t.id, setup, body)
+      const scratch = body.scratch === true || c.req.query('scratch') === '1'
+      return await fn(t.id, scratch ? scratchKey(setup) : setup, body, { setup, scratch })
     } catch (err) { return planError(c, err, 400) }
   }
-  api.post('/issues/:id/smoke/terminal', (c) => term(c, async (id, setup, b) => c.json(await openTerminal(id, setup, { cols: Number(b.cols) || undefined, rows: Number(b.rows) || undefined }))))
+  api.post('/issues/:id/smoke/terminal', (c) => term(c, async (id, _key, b, which) => c.json(await openTerminal(id, which.setup, { cols: Number(b.cols) || undefined, rows: Number(b.rows) || undefined }, which.scratch))))
   api.post('/issues/:id/smoke/terminal/input', (c) => term(c, (id, setup, b) => { typeInTerminal(id, setup, String(b.data ?? '').slice(0, 20_000)); return c.json({ ok: true }) }))
   api.post('/issues/:id/smoke/terminal/resize', (c) => term(c, (id, setup, b) => { resizeTerminal(id, setup, Number(b.cols), Number(b.rows)); return c.json({ ok: true }) }))
   api.post('/issues/:id/smoke/terminal/close', (c) => term(c, async (id, setup) => { await closeTerminal(id, setup); return c.json(await smokeView(id)) }))
