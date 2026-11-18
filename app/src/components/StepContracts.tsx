@@ -1,39 +1,34 @@
 /**
- * An app's steps, as Settings › Skills will show them (LOG.md, "Steps, stages and probes: what was decided"): each
- * step in the order it happens, what it needs, what it leaves and what done means, then its stages. A stage says who
- * runs it (the engine, an agent, a person) and what is attached there: skills where an agent works, probes where the
- * engine verifies. Closed, a step is one line with what is attached; opened, the whole contract.
+ * An app's steps, as Settings › Skills shows them (LOG.md, 2026-11-18, "Steps, stages and probes"): each step in the
+ * order it happens, what it needs, what it leaves and when it is done, then its stages. A stage says who runs it (the
+ * engine, an agent, you) and what is attached there: skills where an agent works, probes where the engine verifies.
+ * Closed, a step is one line with what is attached; opened, the whole contract. The contracts are the engine's
+ * (`@self-evident/engine/contracts`); this draws them.
  * After GitHub Actions' run view (jobs in order, each opening to its steps) and Linear's workflow settings (one calm
- * row per state). It takes the place of "Skills by workflow step", the skills by job and the requirements list.
- * A reading view: Add and Remove appear only where something can be attached, and only when handlers are given.
+ * row per state). It took the place of "Skills by workflow step", the skills by job and the requirements list.
+ * A reading view until handlers are given: then skills are added and removed where an agent works, and probes are
+ * switched, added and removed where the engine verifies, and nowhere else.
  */
+import { useState } from 'react'
+import type { ProbeChange, ProbeView, StageKey, StepGroup } from '@self-evident/engine/contracts'
 import { Badge } from './Badge'
 
-export type StageKey = 'prepare' | 'do' | 'verify' | 'report'
-export type By = 'engine' | 'agent' | 'person'
-/** How a probe reaches its verdict: a command's exit code, the check's agent judging a sentence, a skill run by a fresh read-only agent, or one the engine brings. */
-export type ProbeKind = 'command' | 'judged' | 'skill' | 'built-in'
-export interface AttachedSkill { name: string; from: string; missing?: boolean }
-export interface Probe { key: string; name: string; kind: ProbeKind; /** The command, the sentence judged, or the skill. */ runs: string; /** false: reported, and the pull request is not held. */ blocks: boolean }
-export interface Stage { key: StageKey; by: By; what: string; skills?: AttachedSkill[]; probes?: Probe[] }
-export interface StepContract { key: string; icon: string; label: string; needs: string[]; leaves: string[]; done: string; stages: Stage[] }
-export interface StepGroup { title: string; steps: StepContract[] }
-
 const STAGE: Record<StageKey, string> = { prepare: 'Prepare', do: 'Do', verify: 'Verify', report: 'Report' }
-const BY: Record<By, string> = { engine: 'the engine', agent: 'an agent', person: 'you' }
-const KIND: Record<ProbeKind, string> = { command: 'command', judged: 'judged', skill: 'skill as reviewer', 'built-in': 'built in' }
+const BY = { engine: 'the engine', agent: 'an agent', person: 'you' }
+const KIND: Record<ProbeView['kind'], string> = { command: 'command', judged: 'judged', skill: 'skill as reviewer', 'built-in': 'built in' }
 
 export interface StepContractsProps {
   groups: StepGroup[]
   /** Steps shown open; the rest are one line each. */
   open?: string[]
-  onAddSkill?: (step: string, stage: StageKey) => void
-  onRemoveSkill?: (step: string, stage: StageKey, name: string) => void
-  onAddProbe?: (step: string) => void
-  onRemoveProbe?: (step: string, key: string) => void
+  /** The skills that can be attached, when the page is being changed. */
+  usable?: { name: string; label: string; from: string }[]
+  /** A step's skills, as they are after a change. */
+  onSkills?: (step: string, names: string[]) => void
+  onProbe?: (change: ProbeChange) => void
 }
 
-export function StepContracts({ groups, open = [], onAddSkill, onRemoveSkill, onAddProbe, onRemoveProbe }: StepContractsProps) {
+export function StepContracts({ groups, open = [], usable = [], onSkills, onProbe }: StepContractsProps) {
   return (
     <div className="step-contracts" data-component="StepContracts">
       {groups.map((g) => (
@@ -41,13 +36,13 @@ export function StepContracts({ groups, open = [], onAddSkill, onRemoveSkill, on
           <h3 className="settings-h3">{g.title}</h3>
           {g.steps.map((s) => {
             const skills = s.stages.flatMap((t) => (t.skills ?? []).map((k) => ({ ...k, stage: t.key })))
-            const probes = s.stages.flatMap((t) => t.probes ?? [])
+            const probes = s.stages.flatMap((t) => t.probes ?? []).filter((p) => p.on)
             return (
-              <details key={s.key} className="step-contract" open={open.includes(s.key)}>
+              <details key={s.key} className="step-contract" open={open.includes(s.key) || undefined}>
                 <summary aria-label={s.label}>
                   <span className="step-contract-name">{s.icon} {s.label}</span>
                   <span className="step-contract-attached">
-                    {skills.map((k) => <span key={`${k.stage}:${k.name}`} className={`badge ${k.missing ? 'warn' : 'accent'}`} title={`${STAGE[k.stage]}: from ${k.from}`}>{STAGE[k.stage]} · {k.name}{k.missing ? ' · missing' : ''}</span>)}
+                    {skills.map((k) => <span key={`${k.stage}:${k.name}`} className={`badge ${k.missing ? 'warn' : 'accent'}`} title={`${STAGE[k.stage]}${k.from ? `: from ${k.from}` : ''}`}>{STAGE[k.stage]} · {k.label}{k.missing ? ' · missing' : ''}</span>)}
                     {probes.length > 0 && <Badge>{probes.length} probe{probes.length === 1 ? '' : 's'}</Badge>}
                     {!skills.length && !probes.length && <span className="faint">nothing attached</span>}
                   </span>
@@ -58,41 +53,33 @@ export function StepContracts({ groups, open = [], onAddSkill, onRemoveSkill, on
                   <dt>Done when</dt><dd>{s.done}</dd>
                 </dl>
                 <ol className="step-stages">
-                  {s.stages.map((t) => (
-                    <li key={t.key} aria-label={`${s.label}, ${STAGE[t.key]}`}>
-                      <div className="step-stage-head"><strong>{STAGE[t.key]}</strong><span className="faint">{BY[t.by]}</span></div>
-                      <div className="step-stage-what">
-                        <span>{t.what}</span>
-                        {t.by === 'agent' && (t.skills?.length || onAddSkill) ? (
-                          <div className="step-stage-attached">
-                            {(t.skills ?? []).map((k) => (
-                              <span key={k.name} className={`badge ${k.missing ? 'warn' : 'accent'}`} title={k.missing ? 'This skill is no longer there, so it is not used.' : `From ${k.from}. The agent is told to use it here, and the run records that it did.`}>
-                                {k.name}{k.missing ? ' · missing' : ''}
-                                {onRemoveSkill && <button type="button" className="linkish" aria-label={`Remove ${k.name} from ${s.label}, ${STAGE[t.key]}`} onClick={() => onRemoveSkill(s.key, t.key, k.name)}>✕</button>}
-                              </span>
-                            ))}
-                            {onAddSkill && <button type="button" className="linkish small" aria-label={`Add a skill to ${s.label}, ${STAGE[t.key]}`} onClick={() => onAddSkill(s.key, t.key)}>Add a skill</button>}
-                          </div>
-                        ) : null}
-                        {t.key === 'verify' && (t.probes?.length || onAddProbe) ? (
-                          <table className="step-probes">
-                            <tbody>
-                              {(t.probes ?? []).map((p) => (
-                                <tr key={p.key}>
-                                  <td>{p.name}</td>
-                                  <td className="faint">{KIND[p.kind]}</td>
-                                  <td className={p.kind === 'command' || p.kind === 'skill' ? 'mono' : undefined}>{p.runs}</td>
-                                  <td><Badge tone={p.blocks ? 'warn' : undefined}>{p.blocks ? 'blocks' : 'reports'}</Badge></td>
-                                  {onRemoveProbe && <td><button type="button" className="linkish" aria-label={`Remove the probe ${p.name}`} onClick={() => onRemoveProbe(s.key, p.key)}>✕</button></td>}
-                                </tr>
+                  {s.stages.map((t) => {
+                    const chosen = (t.skills ?? []).filter((k) => !k.fixed).map((k) => k.name)
+                    const rest = usable.filter((u) => !(t.skills ?? []).some((k) => k.name === u.name))
+                    return (
+                      <li key={t.key} aria-label={`${s.label}, ${STAGE[t.key]}`}>
+                        <div className="step-stage-head"><strong>{STAGE[t.key]}</strong><span className="faint">{BY[t.by]}</span></div>
+                        <div className="step-stage-what">
+                          <span>{t.what}</span>
+                          {t.skills && (t.skills.length > 0 || (onSkills && rest.length > 0)) ? (
+                            <div className="step-stage-attached">
+                              {t.skills.map((k) => (
+                                <span key={k.name} className={`badge ${k.missing ? 'warn' : 'accent'}`} title={k.missing ? 'This app\'s agents no longer have this skill, so it is not used.' : `${k.from ? `From ${k.from}. ` : ''}The agent is told to use it here, and the run records whether it did.`}>
+                                  {k.label}{k.missing ? ' · missing' : ''}
+                                  {onSkills && !k.fixed && <button type="button" className="linkish" aria-label={`Remove ${k.label} from ${s.label}, ${STAGE[t.key]}`} onClick={() => onSkills(s.key, chosen.filter((n) => n !== k.name))}>✕</button>}
+                                </span>
                               ))}
-                            </tbody>
-                          </table>
-                        ) : null}
-                        {t.key === 'verify' && onAddProbe && <button type="button" className="linkish small" aria-label={`Add a probe to ${s.label}`} onClick={() => onAddProbe(s.key)}>Add a probe</button>}
-                      </div>
-                    </li>
-                  ))}
+                              {onSkills && rest.length > 0 && <select className="small" aria-label={`Add a skill to ${s.label}, ${STAGE[t.key]}`} value="" onChange={(e) => { if (e.target.value) onSkills(s.key, [...chosen, e.target.value]) }}>
+                                <option value="">Add a skill…</option>
+                                {rest.map((u) => <option key={u.name} value={u.name}>{u.label} ({u.from})</option>)}
+                              </select>}
+                            </div>
+                          ) : null}
+                          {t.probes ? <Probes step={s.label} probes={t.probes} onProbe={onProbe} /> : null}
+                        </div>
+                      </li>
+                    )
+                  })}
                 </ol>
               </details>
             )
@@ -100,5 +87,45 @@ export function StepContracts({ groups, open = [], onAddSkill, onRemoveSkill, on
         </section>
       ))}
     </div>
+  )
+}
+
+/** What a build is held to: one row each, in the order it is verified. Being changed: switched, set to report only, removed, added to. */
+function Probes({ step, probes, onProbe }: { step: string; probes: ProbeView[]; onProbe?: (change: ProbeChange) => void }) {
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState<{ name: string; kind: 'command' | 'skill' | 'judged'; runs: string }>({ name: '', kind: 'command', runs: '' })
+  const ready = draft.name.trim() && draft.runs.trim()
+  const hint = { command: 'a shell command; exit 0 passes, e.g. pnpm lint', skill: 'a skill this app\'s agents have, e.g. security-review', judged: 'a sentence the check\'s agent can judge' }[draft.kind]
+  return (
+    <>
+      <table className="step-probes">
+        <tbody>
+          {probes.map((p) => (
+            <tr key={p.key} className={p.on ? undefined : 'off'} title={p.fixed}>
+              {onProbe && <td><input type="checkbox" aria-label={`Run ${p.name}`} checked={p.on} disabled={!!p.fixed} onChange={(e) => onProbe({ op: 'on', key: p.key, on: e.target.checked })} /></td>}
+              <td>{p.name}</td>
+              <td className="faint">{KIND[p.kind]}</td>
+              <td className={p.kind === 'command' || p.kind === 'skill' ? 'mono' : undefined}>{p.runs}</td>
+              <td>{!p.on ? <Badge>off</Badge> : onProbe && p.kind !== 'judged' && p.key !== 'criteria'
+                ? <button type="button" className={`badge ${p.blocks ? 'warn' : ''}`} aria-label={`${p.name} ${p.blocks ? 'blocks: make it report only' : 'reports: make it block'}`} onClick={() => onProbe({ op: 'blocks', key: p.key, blocks: !p.blocks })}>{p.blocks ? 'blocks' : 'reports'}</button>
+                : <Badge tone={p.blocks ? 'warn' : undefined}>{p.blocks ? 'blocks' : 'reports'}</Badge>}</td>
+              {onProbe && <td>{p.own && !p.fixed && <button type="button" className="linkish" aria-label={`Remove the probe ${p.name}`} onClick={() => onProbe({ op: 'remove', key: p.key })}>✕</button>}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {onProbe && !adding && <button type="button" className="linkish small" aria-label={`Add a probe to ${step}`} onClick={() => setAdding(true)}>Add a probe</button>}
+      {onProbe && adding && (
+        <form className="step-probe-add" onSubmit={(e) => { e.preventDefault(); if (!ready) return; onProbe({ op: 'add', ...draft }); setDraft({ name: '', kind: 'command', runs: '' }); setAdding(false) }}>
+          <input aria-label="Probe name" placeholder="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+          <select aria-label="Probe kind" value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as typeof draft.kind })}>
+            <option value="command">Command</option><option value="skill">Skill as reviewer</option><option value="judged">Judged</option>
+          </select>
+          <input aria-label="What it runs" className={draft.kind === 'judged' ? undefined : 'mono'} placeholder={hint} value={draft.runs} onChange={(e) => setDraft({ ...draft, runs: e.target.value })} />
+          <button type="submit" className="small" disabled={!ready}>Add</button>
+          <button type="button" className="linkish small" onClick={() => setAdding(false)}>Cancel</button>
+        </form>
+      )}
+    </>
   )
 }

@@ -1,0 +1,128 @@
+/**
+ * Each step's contract, owned by the engine and the same for every app (LOG.md, 2026-11-18, "Steps, stages and
+ * probes"): what the step needs, what it leaves, when it is done, and its stages in order. A stage says who runs it:
+ * the engine, an agent, or a person. An app attaches skills to a stage an agent does, and probes to the build's
+ * Verify; nothing else about a step is an app's to change.
+ *
+ * `contractsOf` lays an app's own choices over the contracts, for Settings › Skills: only the steps its workflow
+ * uses, the skills chosen for each, and one list of what a build is held to (the engine's probes, the app's
+ * commands and reviewer skills, and its requirements, which the check's agent judges). `applyProbeChange` is the
+ * other way: a change made on that page, as a change to the app's settings.
+ *
+ * Nothing here needs the database: the web UI imports it (`@self-evident/engine/contracts`).
+ */
+import { cleanProbes, keyOf, probesOf, TESTS_KEY, type Probe } from './probe-list.js'
+import { requirementsOf, type Requirement } from './requirements.js'
+import { normalize, step, STEPS, styleOf, type StepKey, type Workflow } from './steps.js'
+
+export type StageKey = 'prepare' | 'do' | 'verify' | 'report'
+export type By = 'engine' | 'agent' | 'person'
+export type ContractKey = Exclude<StepKey, 'idea'> | 'build' | 'smoke'
+/** How a probe reaches its verdict: a command's exit code, the check's agent judging a sentence, a skill run by a fresh agent that edits nothing, or one the engine brings. */
+export type ProbeViewKind = 'command' | 'judged' | 'skill' | 'built-in'
+export interface AttachedSkill { name: string; label: string; from: string; missing?: boolean; /** Every app has it here; it is not the app's to remove. */ fixed?: boolean }
+export interface ProbeView { key: string; name: string; kind: ProbeViewKind; runs: string; blocks: boolean; on: boolean; /** The app's own: it can be removed. */ own: boolean; /** Why it cannot be switched here, when it cannot. */ fixed?: string }
+export interface Stage { key: StageKey; by: By; what: string; skills?: AttachedSkill[]; probes?: ProbeView[] }
+export interface StepContract { key: ContractKey; icon: string; label: string; needs: string[]; leaves: string[]; done: string; stages: Stage[] }
+export interface StepGroup { title: string; steps: StepContract[] }
+
+type Fixed = { needs: string[]; leaves: string[]; done: string; stages: Stage[] }
+const agent = (what: string): Stage => ({ key: 'do', by: 'agent', what })
+const report = (what: string): Stage => ({ key: 'report', by: 'agent', what })
+const READ = 'Its summary for you, the full report for the next agent.'
+
+/** The contracts. Words for a person: short. */
+export const CONTRACTS: Record<ContractKey, Fixed> = {
+  research: { needs: ['The idea or task'], leaves: ['A research note'], done: 'The note says who does this best, what exists already, and the case against.', stages: [agent('Reads the code and the web.'), report(READ)] },
+  brief: { needs: ['What the other steps left'], leaves: ['The brief, in at most 200 words', 'Its acceptance criteria'], done: 'You approved it.', stages: [agent('Writes what to build and why, and how we will know it is done.')] },
+  sketch: { needs: ['The idea or task'], leaves: ['Plain HTML screens'], done: 'You like a screen.', stages: [agent('Draws the screens, fast, and changes them as you react.')] },
+  mockup: { needs: ['The brief so far'], leaves: ['Stories with made-up data'], done: 'You picked one.', stages: [agent('Writes the stories, variants side by side.'), report('Which stories to open.')] },
+  prototype: { needs: ['The brief', 'The agreed mockup'], leaves: ['A branch that runs', 'A guide to try it'], done: 'You approved it.', stages: [{ key: 'prepare', by: 'engine', what: 'A worktree and a port of its own.' }, agent('Builds it the way we would ship it, faking only what is outside the system.'), report('One line per requirement, what is not met first.')] },
+  analysis: { needs: ['The approved prototype'], leaves: ['A report on how it was built'], done: 'The report is recorded.', stages: [agent('Reads the prototype: what was faked, what to keep, the simpler way.'), report(READ)] },
+  adr: { needs: ['The prototype analysis'], leaves: ['A draft decision record'], done: 'The draft is recorded.', stages: [agent('Sets out the options, a proposed choice and why.'), report(READ)] },
+  risk: { needs: ['The plan'], leaves: ['The blast radius'], done: 'The report is recorded.', stages: [agent('Reads what the plan touches, what could break, and how we would know.'), report(READ)] },
+  audit: { needs: ['The plan', 'The brief', 'The draft ADR'], leaves: ['An audit'], done: 'The report is recorded.', stages: [agent('Reads the plan against the brief, the ADR, the code and the prototype.'), report(READ)] },
+  final: { needs: ['The blast radius', 'The audit'], leaves: ['The final ADR and plan', 'The merge checklist'], done: 'The plan is put right.', stages: [agent('Puts the ADR and the plan right from what the checks found.'), report(READ)] },
+  build: { needs: ['The approved brief', 'Its acceptance criteria', 'The ticket'], leaves: ['Commits on the task\'s branch', 'A draft pull request'], done: 'Every blocking probe passes, in at most three rounds.', stages: [
+    { key: 'prepare', by: 'engine', what: 'Cuts the branch by the app\'s naming, and holds commits to its format.' },
+    agent('Writes the code and its tests, and commits.'),
+    { key: 'verify', by: 'engine', what: 'Runs each probe on what was built. A probe changes nothing: what one finds goes back to a builder.' },
+    report('What changed, why, and how it was verified.'),
+  ] },
+  smoke: { needs: ['The built branch', 'A set-up to try it in'], leaves: ['Your mark on each check'], done: 'You marked every check.', stages: [{ key: 'prepare', by: 'engine', what: 'Brings up the set-up each check needs.' }, { key: 'do', by: 'person', what: 'You try what only a person can judge.' }] },
+}
+/** The steps that take skills: every one an agent does. */
+export const TAKES_SKILLS = (Object.keys(CONTRACTS) as ContractKey[]).filter((k) => CONTRACTS[k].stages.some((s) => s.key === 'do' && s.by === 'agent'))
+
+const CRITERIA: ProbeView = { key: 'criteria', name: 'Acceptance criteria', kind: 'built-in', runs: 'each one checked, with evidence', blocks: true, on: true, own: false, fixed: 'Always checked.' }
+const REQ = 'req:'
+const PROTOTYPE_SKILLS = ['shared:prototype', 'self-evident:prototype']
+
+export interface Usable { name: string; label: string; from: string }
+export interface ContractsInput { setup: unknown; /** The app's default workflow; none, every step it could have is shown. */ workflow?: Workflow | null; /** The skills the app's agents have. */ usable?: Usable[] }
+
+/** What a build of this app is held to, in the order it is verified: the list first, then the agents' probes, then the commands. */
+export function heldTo(setup: unknown, workflow?: Workflow | null): ProbeView[] {
+  const checklist = !workflow || styleOf(workflow) === 'checklist'
+  const switched = (workflow?.requirements ?? {}) as Record<string, boolean>
+  const judged: ProbeView[] = checklist ? requirementsOf(setup, null, workflow?.requirements).map((r) => ({ key: `${REQ}${r.key}`, name: r.name, kind: 'judged', runs: r.what, blocks: true, on: r.on, own: true, ...(typeof switched[r.key] === 'boolean' ? { fixed: `Switched ${switched[r.key] ? 'on' : 'off'} by the ${workflow!.name} workflow.` } : {}) })) : []
+  const view = (p: Probe): ProbeView => ({ key: p.key, name: p.name, kind: p.kind, runs: p.runs, blocks: p.blocks, on: p.on, own: p.kind !== 'built-in' && p.key !== TESTS_KEY, ...(p.key === TESTS_KEY ? { fixed: 'The app\'s test command (Landing).' } : {}) })
+  const all = probesOf(setup).filter((p) => checklist || p.key === TESTS_KEY).map(view)
+  return [CRITERIA, ...judged, ...all.filter((p) => p.kind !== 'command'), ...all.filter((p) => p.kind === 'command')]
+}
+
+/** An app's steps as Settings › Skills shows them: the ones its workflow uses, in order, each with what is attached. */
+export function contractsOf(i: ContractsInput): StepGroup[] {
+  const usable = i.usable ?? []
+  const chosen = ((i.setup as { step_skills?: Record<string, string[]> } | null)?.step_skills ?? {})
+  const on = i.workflow ? new Set(normalize(i.workflow).steps.filter((s) => s.on).map((s) => s.key)) : null
+  const skillsOf = (key: ContractKey): AttachedSkill[] => {
+    const given = key === 'prototype' ? PROTOTYPE_SKILLS.find((n) => usable.some((u) => u.name === n)) : undefined
+    const one = (n: string, fixed?: boolean): AttachedSkill => { const u = usable.find((x) => x.name === n); return { name: n, label: u?.label ?? n, from: u?.from ?? '', ...(u ? {} : { missing: true }), ...(fixed ? { fixed } : {}) } }
+    return [...(given ? [one(given, true)] : []), ...(chosen[key] ?? []).filter((n) => !PROTOTYPE_SKILLS.includes(n) || !given).map((n) => one(n))]
+  }
+  const contract = (key: ContractKey, icon: string, label: string): StepContract => {
+    const c = CONTRACTS[key]
+    return { key, icon, label, needs: c.needs, leaves: c.leaves, done: c.done, stages: c.stages.map((s) => ({
+      ...s,
+      ...(s.key === 'do' && s.by === 'agent' ? { skills: skillsOf(key) } : {}),
+      ...(key === 'build' && s.key === 'verify' ? { probes: heldTo(i.setup, i.workflow) } : {}),
+    })) }
+  }
+  const before = STEPS.filter((s) => s.key !== 'idea' && (!on || on.has(s.key))).map((s) => contract(s.key as ContractKey, step(s.key).icon, step(s.key).label))
+  return [
+    { title: 'Before the build', steps: before },
+    { title: 'The build', steps: [contract('build', '🧱', 'Build'), contract('smoke', '👀', 'Smoke test')] },
+  ]
+}
+
+export type ProbeChange =
+  | { op: 'on'; key: string; on: boolean } | { op: 'blocks'; key: string; blocks: boolean } | { op: 'remove'; key: string }
+  | { op: 'add'; name: string; kind: 'command' | 'skill' | 'judged'; runs: string }
+
+/**
+ * A change to what a build is held to, as a change to the app's settings: a requirement (judged) is kept in
+ * `requirements`, everything else in `probes`. `starting` is the list an app without one of its own starts from.
+ * Returns only the settings that change; null when the change cannot be made (nothing to run, a name already there).
+ */
+export function applyProbeChange(setup: unknown, change: ProbeChange, starting?: Requirement[]): { requirements?: Requirement[]; probes?: Partial<Probe>[] } | null {
+  const s = (setup ?? {}) as { requirements?: Requirement[]; probes?: unknown }
+  const reqs = (): Requirement[] => (Array.isArray(s.requirements) ? s.requirements : starting ?? requirementsOf(setup))
+  const probes = cleanProbes(s.probes)
+  const put = (key: string, patch: Partial<Probe>) => ({ probes: cleanProbes([...probes.filter((p) => p.key !== key), { ...probes.find((p) => p.key === key), ...patch, key }]) })
+  if (change.op === 'add') {
+    const name = change.name.trim(), runs = change.runs.trim(), key = keyOf(name)
+    if (!name || !runs || !key) return null
+    if (change.kind === 'judged') return reqs().some((r) => r.key === key) ? null : { requirements: [...reqs(), { key, name, what: runs, on: true }] }
+    return probesOf(setup).some((p) => p.key === key) ? null : { probes: cleanProbes([...probes, { key, name, kind: change.kind, runs }]) }
+  }
+  if (change.key.startsWith(REQ)) {
+    const key = change.key.slice(REQ.length)
+    if (change.op === 'remove') return { requirements: reqs().filter((r) => r.key !== key) }
+    if (change.op === 'on') return { requirements: reqs().map((r) => (r.key === key ? { ...r, on: change.on } : r)) }
+    return null // a requirement is on the list or it is not: it always blocks
+  }
+  if (change.op === 'remove') return { probes: probes.filter((p) => p.key !== change.key) }
+  if (change.op === 'on') return put(change.key, { on: change.on })
+  return put(change.key, { blocks: change.blocks })
+}

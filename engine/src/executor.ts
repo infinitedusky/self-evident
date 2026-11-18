@@ -23,8 +23,8 @@ export interface RunInput {
   hooksPath?: string
   /** A check or a probe: it reads and runs, and has no tool that edits. */
   readOnly?: boolean
-  /** A skill this run must use (a probe that is a skill run as a reviewer), with what its session needs to have it. */
-  skill?: { name: string; plugins?: unknown[]; mcpServers?: Record<string, unknown> }
+  /** The skills this run must use, with what its session needs to have them: the app's skills for the build (Settings › Skills, Build › Do), or the one a probe runs as a reviewer. It gets these and no other. */
+  skills?: { names: string[]; plugins?: unknown[]; mcpServers?: Record<string, unknown> }
   worktreePath: string
   branch: string
   files: string[]
@@ -75,6 +75,7 @@ function prompt(i: RunInput): string {
     `- ${STOP_ONLY_YOURS}`,
     i.testCmd ? `- Test what you built: add or adjust tests for what you change, and run the tests of the parts you touched. They must pass before you finish. Do not run the whole suite unless your brief says to: it runs once, when every sub-task of this task is merged. For reference, the whole suite is: ${i.testCmd}` : '- There is no test command configured; verify your change by running it.',
     `- ${LEAVE_LONG_RUNS}`,
+    !i.readOnly && i.skills?.names.length ? `- This app has ${i.skills.names.length > 1 ? 'skills' : 'a skill'} for building: ${i.skills.names.map((n) => `\`${n}\``).join(', ')}. Invoke ${i.skills.names.length > 1 ? 'each' : 'it'} with the Skill tool before you change anything, and follow ${i.skills.names.length > 1 ? 'them' : 'it'}: it is this app's own way of working, and wins over the general way where they differ.` : '',
     i.readOnly ? '- You change nothing: you have no tool that edits, and anything you leave in this directory is thrown away. Commit nothing.' : commitLine(i),
     '- Finish with a short summary for the reviewer: what changed, why, how you verified it, and anything you were unsure of.',
     '- The brief is settled: build what it says, the way it says. Do not propose follow-ups, improvements or things to consider; nothing collects them. A small slip inside the files that are yours (a stray file, a typo) is simply fixed. If the sub-task cannot be built as written, stop and say exactly what is wrong and where, in your summary.',
@@ -101,6 +102,8 @@ const EDIT_TOOLS = ['Edit', 'Write', 'MultiEdit']
 export async function runTask(i: RunInput): Promise<RunOutput> {
   let out: RunOutput = { status: 'failed', error: 'no result message' }
   const steps = new StepTracker() // where this builder is, from its own list
+  const used = new Set<string>()
+  const has = (set: Set<string>, name: string) => set.has(name) || set.has(name.split(':').pop()!) // a session may call a plugin's skill by its short name
   try {
     const account = accountEnv(i.setup)
     for await (const m of query({
@@ -115,15 +118,17 @@ export async function runTask(i: RunInput): Promise<RunOutput> {
         maxTurns: i.maxTurns ?? 60,
         maxBudgetUsd: i.maxBudgetUsd,
         settingSources: ['project'], // the repo's CLAUDE.md, not the operator's personal settings
-        tools: [...READ_TOOLS, ...(i.readOnly ? [] : EDIT_TOOLS), 'Bash', ...(i.skill ? ['Skill'] : [])], // the whole tool set
-        ...(i.skill ? { skills: [i.skill.name], plugins: i.skill.plugins as never, mcpServers: i.skill.mcpServers as never } : {}), // that one skill, and no other
-        allowedTools: i.skill ? [...READ_TOOLS, 'Skill'] : READ_TOOLS, // auto-approved; the guard decides the rest (see guard.ts for why both hook and callback)
+        tools: [...READ_TOOLS, ...(i.readOnly ? [] : EDIT_TOOLS), 'Bash', ...(i.skills ? ['Skill'] : [])], // the whole tool set
+        ...(i.skills ? { skills: i.skills.names, plugins: i.skills.plugins as never, mcpServers: i.skills.mcpServers as never } : {}), // those skills, and no other
+        allowedTools: i.skills ? [...READ_TOOLS, 'Skill'] : READ_TOOLS, // auto-approved; the guard decides the rest (see guard.ts for why both hook and callback)
         permissionMode: 'default',
-        ...guardOptions(builderGuard(i.worktreePath, i.skill ? [...READ_TOOLS, 'Skill'] : READ_TOOLS, i.readOnly ? [] : EDIT_TOOLS)),
+        ...guardOptions(builderGuard(i.worktreePath, i.skills ? [...READ_TOOLS, 'Skill'] : READ_TOOLS, i.readOnly ? [] : EDIT_TOOLS)),
       },
     })) {
-      await handle(m, i.onEvent, (o) => { out = o }, steps)
+      await handle(m, async (type, payload) => { if (type === 'run.tool_call' && payload.tool === 'Skill') used.add(String((payload.input as { skill?: unknown } | undefined)?.skill ?? '')); await i.onEvent(type, payload) }, (o) => { out = o }, steps)
     }
+    // The run's record of the skills it was given: which it used, and which it did not.
+    if (i.skills?.names.length) await i.onEvent('run.skills', { attached: i.skills.names, used: i.skills.names.filter((n) => has(used, n)), unused: i.skills.names.filter((n) => !has(used, n)) })
   } catch (err: any) {
     await i.onEvent('run.error', { error: clip(err?.message ?? String(err)) })
     return { ...out, status: 'failed', error: clip(err?.message ?? String(err), 1000) }

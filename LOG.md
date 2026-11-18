@@ -4919,3 +4919,25 @@ data). After GitHub Actions' run view and Linear's workflow settings.
 It is the proposal for the page, to be agreed before the engine is built to it. Not done: it is not in Settings yet,
 and nothing reads or saves it; when it goes in, "Skills by workflow step", the skills by job and the requirements
 list under Landing come out.
+
+### Slice 4: Settings › Skills is the steps page, and builders get skills (Sandy, 2026-11-18: "The skills page … hasn't changed at all. It still says like blast radius")
+
+- **The page is in Settings.** An app's Skills section is its steps (`StepContracts`), drawn from the engine's
+  contracts (`engine/src/contracts.ts`, which the web UI imports): only the steps the app's default workflow uses, so
+  an app on Main lists no blast radius or audit; then the build and the smoke test. Read until **Change** is pressed.
+- **Taken out**: "Skills by workflow step", the skills by job, and the requirements list under Landing, with the
+  components that drew them. What an app chose for a job (`setup.skills_by_job`) is still honoured by the engine;
+  there is no longer a place to set it per app (All apps › Jobs remains).
+- **One list of what a build is held to**, on Build › Verify, in the order it is verified: the acceptance criteria,
+  the app's requirements (judged by the check's agent), the agents' probes, then the commands. Each is switched on or
+  off; a probe blocks or only reports; the app's own are removed; one is added as a command, a skill run as a
+  reviewer, or a sentence to judge. A requirement the workflow switches says so and is not switched here.
+- **The build takes skills** (`setup.step_skills.build`, Build › Do). Every builder of the app gets the Skill tool
+  with those skills and no other, and is told to invoke each before it changes anything. The run records which it
+  used and which it did not (event `run.skills`). Only skills the app's agents have are given.
+- A skill is attached to a step's Do stage, which is the one stage of a step an agent's skills apply to; the other
+  stages are the engine's or the report's fixed form.
+
+Not done: a builder that does not use an attached skill is recorded, not stopped (no Stop hook yet); a requirement
+cannot be reworded in place (remove it and add it again); the page follows the app's default workflow only, not a
+second one; a second repository's skills are still not offered; builders' skills have not run on a real build.
