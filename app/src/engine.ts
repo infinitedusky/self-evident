@@ -228,6 +228,10 @@ export interface AppJob { key: string; name: string; for: string; /** Where it s
 export interface AppSettings { integrations: EffectiveValues; status: Record<string, IntegrationStatus>; /** Absent from an older engine. */ keys?: Record<string, KeptKey>; plugins: AppPlugin[]; /** Absent from an older engine. */ jobs?: AppJob[]; /** The skills this app's conversations get, to choose from for a step: `name` is how a session names it. */ usable?: UsableSkill[]; skills: SkillInfo[] }
 export interface UsableSkill { name: string; label: string; from: string; description: string }
 export interface Prototype {
+  /** Its guide has steps that no longer open since its data was rebuilt: what to do about it. */
+  guideNote?: string
+  /** It has no guide yet, so it cannot be approved: why, in a line. */
+  needsGuide?: string
   /** Ports it listens on that it was not given: a second copy would share them. With what to do about it. */
   strayPorts?: number[]; strayNote?: string
   id: string; appId: string; projectId: string | null; ideaId?: string | null; issueId?: string | null; title: string; brief: string | null; sessionId: string | null; branch: string; path: string; port: number | null

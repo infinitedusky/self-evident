@@ -18,6 +18,7 @@ import { appendEvent } from './events.js'
 import { addWorktree, git, removeWorktree } from './git.js'
 import { newId } from './ids.js'
 import { PlanError } from './projects.js'
+import { guideOf, hasGuide, NO_GUIDE, recheckGuide, staleSays } from './share-guide.js'
 import { morePorts, straySays, straysOf } from './ports.js'
 import { databaseExists, databaseName, databaseUrl, dropDatabase, dropScenarios, listScenarios, rebuild, save, scenarioTables, writeScenario, type PrototypeDb, type Tables } from './prototype-data.js'
 import { endTalk, say, showTalk, startPrototypeTalk } from './talk.js'
@@ -76,7 +77,8 @@ export async function prototypeStatus(id: string) {
   const up = on && url ? await answers(url) : false
   // Once it answers: does it listen anywhere it was not told to?
   const stray = up ? await straysOf(running.get(id), (ports) => emit(p, 'prototype.stray_port', 'engine', { ports, note: straySays(ports) })) : []
-  return { ...p, ...data, cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
+  const staleGuide = guideOf(p)?.stale ?? []
+  return { ...p, ...data, ...(staleGuide.length ? { guideNote: staleSays(staleGuide) } : {}), ...(hasGuide(p) ? {} : { needsGuide: NO_GUIDE }), cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
 }
 
 export async function listPrototypes(appId: string) {
@@ -239,7 +241,21 @@ export async function resetPrototypeData(id: string, scenario: string | null, ac
   await db.update(prototype).set({ scenario, updatedAt: new Date() }).where(eq(prototype.id, id))
   await emit(p, 'prototype.data_reset', actor, { scenario, loaded })
   if (wasRunning) await runPrototype(id, actor)
-  return { scenario, loaded, status: await prototypeStatus(id) }
+  // Its guide's paths may name rows that are gone: asked for again once the server answers, and said if any no longer open.
+  const guided = hasGuide(p) && wasRunning
+  if (guided) void guideAfterReset(id).catch(() => {})
+  return { scenario, loaded, status: await prototypeStatus(id), ...(guided ? { note: 'Its guide\'s paths are being checked again against the new data: prototype (status) says which no longer open, if any.' } : {}) }
+}
+
+/** Once the prototype answers again (a minute at most), its guide's paths are asked for. */
+export async function guideAfterReset(id: string, tries = 60) {
+  for (let i = 0; i < tries; i++) {
+    const s = await prototypeStatus(id).catch(() => null)
+    if (!s || s.status !== 'running') return null
+    if (s.up) return recheckGuide(id)
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  return null
 }
 
 /** The data as it is now, kept as a scenario: in Self Evident, for this prototype or shared with the app. Never in its worktree. */

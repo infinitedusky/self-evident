@@ -111,6 +111,7 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Pr
   const width = DEVICES.find((d) => d.id === device)?.width
   return (
     <div className="preview" data-component="PrototypePane">
+      {p.guideNote ? <p className="smoke-stale" role="note" style={{ margin: '0 0 8px' }}>{p.guideNote}</p> : null}
       {p.strayPorts?.length ? <p className="smoke-stale" role="note" style={{ margin: '0 0 8px' }}>{p.strayNote ?? `It also listens on ${p.strayPorts.join(', ')}, which it chose itself.`}</p> : null}
       {/* Two rows (Sandy, 2026-11-13: "the header is too crowded… we need a second row"): where it is and its server, then how it is shown. */}
       <div className="preview-bar">
@@ -151,6 +152,8 @@ function Data({ p, onDone }: { p: Prototype; onDone: () => void }) {
   if (!p.database) return null
   const run = (label: string, fn: () => Promise<unknown>) => { setBusy(label); setProblem(null); fn().then(onDone).catch((e) => setProblem(String(e.message ?? e))).finally(() => setBusy(null)) }
   const reset = (scenario: string | null) => run('Rebuilding…', () => engine.resetPrototypeData(p.id, scenario))
+  // What ↺ builds from: the scenario it is on; with none, one that was kept ("default" first), since an empty rebuild makes new ids and the guide's links stop opening.
+  const again = p.scenario ?? ((p.scenarios ?? []).includes('default') ? 'default' : (p.scenarios ?? [])[0]) ?? null
   const save = (name: string) => { setNaming(false); if (name.trim()) run('Saving…', () => engine.savePrototypeData(p.id, name.trim())) }
   return (
     <div className="proto-data" title={problem ?? `Its own database, ${p.database}, with made-up data`}>
@@ -161,7 +164,7 @@ function Data({ p, onDone }: { p: Prototype; onDone: () => void }) {
             {(p.scenarios ?? []).map((s) => <option key={s} value={s}>{s}</option>)}
             <option value="">empty</option>
           </select>}
-      <button className="icon-btn" disabled={!!busy} onClick={() => reset(p.scenario)} title="Build it again from this scenario" aria-label="Reset the data">↺</button>
+      <button className="icon-btn" disabled={!!busy} onClick={() => reset(again)} title={again ? `Build it again from the scenario "${again}"` : 'Build it again, empty: nothing has been kept as a scenario yet. Keep the data first (⤓) and its ids stay the same'} aria-label="Reset the data">↺</button>
       <button className="icon-btn" disabled={!!busy} onClick={() => setNaming(true)} title="Keep the data as it is now, as a scenario" aria-label="Save the data">⤓</button>
       {busy && <span className="faint">{busy}</span>}
       {problem && <span className="bad" role="alert">!</span>}

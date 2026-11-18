@@ -7,7 +7,8 @@ import { desc, eq } from 'drizzle-orm'
 import { app, event, prototype, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createIssue, listComments } from './issues.js'
-import { cleanGuide, deadPaths, guideOf, guideProxy, inject, setGuide, takeFeedback, type Feedback, type Probe } from './share-guide.js'
+import { cleanGuide, deadPaths, guideOf, guideProxy, hasGuide, inject, NO_GUIDE, recheckGuide, setGuide, staleSays, takeFeedback, type Feedback, type Probe } from './share-guide.js'
+import { approveStep, setStep, stepsOf } from './work.js'
 
 describe('the guide', () => {
   it('is tidied: steps with a title, a path only of the prototype, a dozen at most', () => {
@@ -115,6 +116,46 @@ describe.skipIf(!reachable)('a visitor\'s feedback', () => {
     const ok = await setGuide(id, { steps: [{ title: 'The viewer', path: '/app/' }, { title: 'Your account', path: '/account' }, { title: 'A story, in words' }] }, 'agent', site)
     expect(ok.note).toMatch(/Every path answers on the prototype \(2 checked\)/) // a page behind a sign-in is there
     expect(guideOf((await db.select().from(prototype).where(eq(prototype.id, id)))[0])!.steps).toHaveLength(3)
+  })
+
+  it('every prototype has one: without it the prototype cannot be said done or approved, and its step says why', async () => {
+    const t = await createIssue(appId, { title: 'Staff page (sample)', kind: 'code' })
+    const id = newId('prototype')
+    await db.insert(prototype).values({ id, appId, issueId: t.id, title: 'Staff page (sample)', branch: 'prototype/sample-g', path: '/tmp/none', status: 'stopped' })
+    const state = async () => (await stepsOf({ issueId: t.id })).states.find((x) => x.key === 'prototype')
+    expect(await state()).toMatchObject({ status: 'started', needs: NO_GUIDE })
+    await expect(setStep({ issueId: t.id }, 'prototype', { status: 'done' }, 'agent')).rejects.toThrow(/has no guide yet/)
+    await expect(approveStep(t.id, 'prototype', 'Sam (sample)')).rejects.toThrow(/has no guide yet/)
+    await setStep({ issueId: t.id }, 'prototype', { detail: 'the list is up (sample)' }, 'agent') // work on it is still recorded
+    await setGuide(id, { intro: 'A staff page on made-up people (sample).', steps: [{ title: 'Open someone', path: '/staff/12', try: 'Their name and role show (sample)' }] })
+    expect((await state())?.needs).toBeUndefined()
+    await setStep({ issueId: t.id }, 'prototype', { status: 'done' }, 'agent')
+    expect(await approveStep(t.id, 'prototype', 'Sam (sample)')).toMatchObject({ status: 'done', approvedBy: 'Sam (sample)' })
+    // A guide with no steps is no guide.
+    const bare = newId('prototype')
+    await db.insert(prototype).values({ id: bare, appId, title: 'Bare (sample)', branch: 'prototype/sample-b', path: '/tmp/none', status: 'stopped', guide: { steps: [] } })
+    expect(hasGuide({ guide: { steps: [] } })).toBe(false); expect(hasGuide({ guide: null })).toBe(false)
+  })
+
+  it('after the data is rebuilt its paths are asked for again: the ones that no longer open are kept on it and said, until it is written again', async () => {
+    const id = newId('prototype')
+    await db.insert(prototype).values({ id, appId, title: 'Staff (sample)', branch: 'prototype/sample-s', path: '/tmp/none', status: 'running', port: 61997 })
+    let people = ['/staff/12', '/staff/13']
+    const site: Probe = async (url) => { const path = new URL(url).pathname; return path === '/staff' || people.includes(path) ? 200 : 404 }
+    await setGuide(id, { steps: [{ title: 'The list', path: '/staff' }, { title: 'Open someone', path: '/staff/12' }, { title: 'Just look' }] }, 'agent', site)
+    expect(await recheckGuide(id, 'engine', site)).toEqual({ checked: true, stale: [] })
+    people = ['/staff/31', '/staff/32'] // the seed ran again: everyone has a new id
+    expect(await recheckGuide(id, 'engine', site)).toEqual({ checked: true, stale: [{ path: '/staff/12', status: 404 }] })
+    const [p] = await db.select().from(prototype).where(eq(prototype.id, id))
+    expect(guideOf(p)?.stale).toEqual([{ path: '/staff/12', status: 404 }])
+    expect(staleSays(guideOf(p)!.stale!)).toContain('a step that no longer opens since the data was rebuilt: /staff/12')
+    await recheckGuide(id, 'engine', site)
+    const said = (await db.select().from(event).where(eq(event.appId, appId))).filter((e) => e.type === 'prototype.guide_stale' && (e.payload as { prototypeId?: string }).prototypeId === id)
+    expect(said.map((e) => (e.payload as { paths: string[] }).paths)).toEqual([['/staff/12']]) // said once, not each time it is looked at
+    expect(await recheckGuide(id, 'engine', async () => null)).toEqual({ checked: false, stale: [] }) // not answering: nothing is told, and what was known stays
+    expect(guideOf((await db.select().from(prototype).where(eq(prototype.id, id)))[0])?.stale).toHaveLength(1)
+    await setGuide(id, { steps: [{ title: 'Open someone', path: '/staff/31' }] }, 'agent', site) // written again with the ids the data has now
+    expect(guideOf((await db.select().from(prototype).where(eq(prototype.id, id)))[0])?.stale).toBeUndefined()
   })
 
   it('keeps the guide and says its paths were not checked when the prototype is not answering at all', async () => {

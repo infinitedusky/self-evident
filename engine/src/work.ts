@@ -12,6 +12,7 @@ import { db, type Tx } from './db/client.js'
 import { app, idea, issue, project, prototype, session, stepWork, workflow } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
+import { hasGuide, NO_GUIDE } from './share-guide.js'
 import { getIssue, insertIssues, PlanError } from './issues.js'
 import { withChecks, styleOf, STYLES, type Style, buildOf, BUILDS, LEGACY_NAME, MAIN_NAME, type Build, blocking, canSkip, needsApproval, owed, undecided, CAN, DEFAULT_NAME, DEFAULT_STEPS, normalize, resolve, rows, step, STEPS, validOrder, type On, type Resolved, type Row, type StepKey, type StepState, type Workflow, type WorkflowStep } from './steps.js'
 
@@ -203,7 +204,7 @@ async function statesOf(tx: Tx | typeof db, s: Subject): Promise<{ states: StepS
   const protos = await tx.select().from(prototype).where(and(
     'ideaId' in s ? eq(prototype.ideaId, s.ideaId) : 'issueId' in s ? eq(prototype.issueId, s.issueId) : eq(prototype.projectId, s.projectId),
     inArray(prototype.status, ['running', 'stopped']))).orderBy(desc(prototype.createdAt))
-  if (protos.length) set({ key: 'prototype', status: 'started', detail: `${protos[0].title}: ${protos[0].status}` })
+  if (protos.length) set({ key: 'prototype', status: 'started', detail: `${protos[0].title}: ${protos[0].status}`, ...(hasGuide(protos[0]) ? {} : { needs: NO_GUIDE }) })
   let ideaId: string | null = null
   if ('issueId' in s) {
     const i = await getIssue(tx, s.issueId)
@@ -259,6 +260,7 @@ export async function setStep(s: Subject, key: StepKey, input: { status?: 'start
       if (!canSkip(row)) throw new PlanError(`${step(key).label} is required by this task's workflow and cannot be skipped`)
     }
     if (input.status !== 'none' && input.status !== 'skipped') await guardOrder(tx, s, key)
+    if (key === 'prototype' && input.status === 'done') { const needs = (await statesOf(tx, s)).states.find((x) => x.key === 'prototype')?.needs; if (needs) throw new PlanError(needs) } // not done without a guide
     const [old] = await tx.select().from(stepWork).where(and(subjectCol(s), eq(stepWork.key, key)))
     const values = {
       status: input.status ?? old?.status ?? 'started', detail: input.detail !== undefined ? input.detail : old?.detail ?? null,
@@ -288,6 +290,7 @@ export async function approveStep(issueId: string, key: StepKey, by: string, app
     const a = await appOf(tx, i.appId)
     const state = (await stepsOf(s, tx)).states.find((x) => x.key === key)
     if (approve && (!state || state.status === 'none' || state.status === 'skipped')) throw new PlanError(state?.status === 'skipped' ? `${step(key).label} was skipped: there is nothing to approve` : `${step(key).label} hasn't been started: there is nothing to approve yet`)
+    if (approve && state?.needs) throw new PlanError(state.needs)
     if (approve) await guardOrder(tx, s, key)
     const [old] = await tx.select().from(stepWork).where(and(subjectCol(s), eq(stepWork.key, key)))
     const values = approve ? { status: 'done', approvedBy: by, approvedAt: new Date() } : { approvedBy: null, approvedAt: null }

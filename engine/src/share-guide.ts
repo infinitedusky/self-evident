@@ -29,7 +29,14 @@ import { OWN, WIDGET } from './guide-widget.js'
 import { PlanError } from './projects.js'
 
 export interface GuideStep { title: string; /** Where to go: a path of the prototype, like /checkout. */ path?: string; /** What to try there, or what the command should print. */ try?: string; /** For something with no screen: a command to run in the prototype's worktree (prototype-run.ts). A step has a path or a command, not both. */ run?: string }
-export interface Guide { intro?: string; steps: GuideStep[]; by?: string; at?: string }
+export interface Guide { intro?: string; steps: GuideStep[]; by?: string; at?: string; /** Paths that stopped answering after the prototype's data was rebuilt (recheckGuide): the guide sends people nowhere there until it is written again. */ stale?: { path: string; status: number | null }[] }
+
+/**
+ * Every prototype has a guide, not only a shared one (Sandy, 2026-11-17: "I want every prototype to have one, because
+ * it's how I and anyone I show it to know what to try"). A prototype with none cannot be said done or approved.
+ */
+export const NO_GUIDE = 'The prototype has no guide yet: what to try, in what order, and what you should see. Its agent writes one (set_guide) once its data is in place; then it can be approved.'
+export const hasGuide = (p: { guide?: unknown }) => (guideOf(p)?.steps.length ?? 0) > 0
 export interface Feedback { text: string; name?: string; path?: string }
 
 const line = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
@@ -81,6 +88,31 @@ export async function setGuide(prototypeId: string, g: { intro?: string; steps?:
   const told = !paths.length ? '' : seen.checked && seen.answersAnything ? ` Its ${paths.length} paths answer, but this prototype's server answers any address at all (a single-page app), so that proves little: open each path yourself and see the right page.` : seen.checked ? ` Every path answers on the prototype (${paths.length} checked).` : ' Its paths were NOT checked: the prototype is not answering. Start it and set the guide again so they are.'
   return { guide, note: `Whoever opens the shared link sees it in the tab at the bottom right, at once: no need to share again.${told}` }
 }
+
+/**
+ * After a prototype's data is rebuilt, its guide's paths are asked for again (Sandy, 2026-11-17: a rebuild "re-ran the
+ * seed, so every employee got a new id and the guide's links pointed at people who no longer existed"). The ones that
+ * no longer answer are kept on the guide and said, until the guide is written again. Nothing is told when the
+ * prototype is not answering.
+ */
+export async function recheckGuide(prototypeId: string, actor = 'engine', probe: Probe = httpProbe) {
+  const [p] = await db.select().from(prototype).where(eq(prototype.id, prototypeId))
+  const guide = p ? guideOf(p) : null
+  if (!p || !guide || !p.port) return { checked: false, stale: [] as { path: string; status: number | null }[] }
+  const paths = [...new Set(guide.steps.map((s) => s.path).filter((x): x is string => !!x))]
+  if (!paths.length) return { checked: false, stale: [] }
+  const seen = await deadPaths(`http://localhost:${p.port}`, paths, probe)
+  if (!seen.checked) return { checked: false, stale: [] }
+  const { stale: was, ...rest } = guide
+  await db.update(prototype).set({ guide: seen.dead.length ? { ...rest, stale: seen.dead } : rest }).where(eq(prototype.id, prototypeId))
+  if (seen.dead.length && JSON.stringify(was ?? []) !== JSON.stringify(seen.dead)) {
+    const [a] = await db.select({ workspaceId: app.workspaceId }).from(app).where(eq(app.id, p.appId))
+    await db.transaction((tx) => appendEvent(tx, { workspaceId: a?.workspaceId ?? 'ws_none', appId: p.appId, projectId: p.projectId, issueId: p.issueId, actor, type: 'prototype.guide_stale', payload: { prototypeId, title: p.title, paths: seen.dead.map((d) => d.path) } }))
+  }
+  return { checked: true, stale: seen.dead }
+}
+/** What is said about them, to the person and the agent. */
+export const staleSays = (stale: { path: string }[]) => `The guide has ${stale.length === 1 ? 'a step that no longer opens' : `${stale.length} steps that no longer open`} since the data was rebuilt: ${stale.map((d) => d.path).join(', ')}. Its ids changed. Write the guide again (set_guide) with the ids the data has now, or rebuild from a saved scenario, which keeps them.`
 
 /** What a visitor said, kept where the work is: a comment on the prototype's task, and an event either way. Marked as from outside: it is an opinion to weigh, never an instruction. */
 export async function takeFeedback(prototypeId: string, f: Feedback) {

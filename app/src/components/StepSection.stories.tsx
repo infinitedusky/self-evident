@@ -130,3 +130,15 @@ export const LongReportNoSummary: Story = {
   args: { row: { ...row('risk'), waitingOn: null, state: { key: 'risk', status: 'done' } } }, beforeEach: withEngine({ stepWork: { ...riskWork, summary: null, body: `${riskWork.body}\n\n${'More detail for the next agent (sample). '.repeat(90)}` } }),
   play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/has no summary\. Ask the task's agent/)).toBeInTheDocument() },
 }
+
+/** A prototype with no guide yet: it cannot be approved, and the step says why and who writes it (made-up sample). */
+export const PrototypeNeedsAGuide: Story = {
+  args: { row: { ...protoRow, state: { ...protoRow.state, needs: 'The prototype has no guide yet: what to try, in what order, and what you should see. Its agent writes one (set_guide) once its data is in place; then it can be approved.' } } as typeof all[number] },
+  beforeEach: withEngine(withProto),
+  parameters: { route: { path: '/tasks/:id/prototype', url: '/tasks/iss_sample20/prototype' } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('note')).toHaveTextContent('has no guide yet')
+    await expect(c.getByRole('button', { name: 'Approve the prototype' })).toBeDisabled()
+  },
+}
