@@ -90,9 +90,9 @@ function OnePrototype({ id, path, onNavigate }: { id: string; path: string; onNa
   return (
     <div className="preview-empty" data-component="PrototypePane">
       <h3>{p.title}</h3>
-      <p className="muted">{p.status === 'discarded' ? 'Discarded.' : p.status === 'running' ? 'Starting its server…' : 'Stopped.'} <span className="mono faint">{p.branch}</span></p>
+      <p className="muted">{p.status === 'discarded' ? 'Discarded.' : p.status === 'running' ? 'Starting its server…' : p.notStarted ? 'Its agent is setting it up, and starts it when there is something to see.' : 'Stopped.'} <span className="mono faint">{p.branch}</span></p>
       <div style={{ display: 'flex', gap: 6 }}>
-        {p.status === 'stopped' && <button className="btn" onClick={act(engine.runPrototype)}>Start it</button>}
+        {p.status === 'stopped' && <button className={p.notStarted ? 'btn quiet' : 'btn'} onClick={act(engine.runPrototype)}>{p.notStarted ? 'Start it now' : 'Start it'}</button>}
         {p.status !== 'discarded' && <button className="btn quiet" onClick={talk}>Talk about it</button>}
       </div>
       {error && <p className="bad">{error}</p>}
