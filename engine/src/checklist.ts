@@ -14,7 +14,8 @@ import { acceptanceOf, type Criterion } from './acceptance.js'
 import { getIssue } from './issues.js'
 import { inForce, type Covered } from './requirements.js'
 import { buildOf, styleOf, type Build } from './steps.js'
-import { CHECK_TITLE, FINISH_TITLE, MAX_ROUNDS, PROBE_TITLE } from './verify.js'
+import { CHECK_TITLE, FINISH_TITLE, MAX_ROUNDS, OLD_PROBE_TITLE } from './verify.js'
+import { PROBE_FIX_TITLE, PROBE_PREFIX } from './probes.js'
 import { smokeChecks } from './smoke.js'
 import { workflowFor } from './work.js'
 
@@ -41,7 +42,7 @@ export interface FlowNode {
 export interface Checklist { build: Build; stages: Stage[]; items: Item[]; met: number; unmet: number; total: number; flow: FlowNode[] }
 
 const FIX = 'Fix what the whole test run found'
-const kindOf = (title: string) => (title.startsWith(CHECK_TITLE) ? 'check' : title.startsWith(FINISH_TITLE) ? 'finish' : title.startsWith(PROBE_TITLE) ? 'probe' : title.startsWith(FIX) ? 'fix' : 'build')
+const kindOf = (title: string) => (title.startsWith(CHECK_TITLE) ? 'check' : title.startsWith(FINISH_TITLE) ? 'finish' : [OLD_PROBE_TITLE, PROBE_PREFIX, PROBE_FIX_TITLE].some((t) => title.startsWith(t)) ? 'probe' : title.startsWith(FIX) ? 'fix' : 'build')
 const WORKING = ['running', 'merging', 'testing', 'awaiting_answer']
 
 /** One stage's state from the sub-tasks that make it up: failed if any did, done if all are, doing if any has begun. */
@@ -63,7 +64,7 @@ export function stagesOf(i: { subs: { title: string; status: string }[]; build: 
     { key: 'build', label: 'Build', state: built, detail: built === 'todo' ? 'not built yet' : i.build === 'one' ? (built === 'done' ? 'built in one go' : built === 'failed' ? 'the build failed' : 'building, in one go') : `${builders.filter((s) => s.status === 'done').length} of ${builders.length} sub-tasks` },
     { key: 'check', label: 'Check', state: stuck ? 'failed' : loop === 'done' && i.unmet > 0 ? 'doing' : loop,
       detail: !rounds ? (i.total ? `${i.total} to check` : 'nothing on the list') : stuck ? `${i.unmet} still not done after ${MAX_ROUNDS} rounds: yours` : loop === 'done' && !i.unmet ? `${i.met} of ${i.total} met${rounds > 1 ? `, in ${rounds} rounds` : ''}` : `round ${rounds}${i.unmet ? `: ${i.unmet} not done, sent back` : ''}` },
-    { key: 'probe', label: 'Probe', state: of(probes), detail: of(probes) === 'done' ? 'tried to break it, and cleaned up' : of(probes) === 'doing' ? 'an agent that did not build it is trying it' : 'after the check' },
+    { key: 'probe', label: 'Probe', state: of(probes), detail: of(probes) === 'done' ? `probed${probes.some((s) => s.title.startsWith(PROBE_FIX_TITLE)) ? ', and what the probes found was fixed' : ': nothing to send back'}` : of(probes) === 'failed' ? 'a probe could not be run' : of(probes) === 'doing' ? (probes.some((s) => s.title.startsWith(PROBE_FIX_TITLE) && s.status !== 'done') ? 'fixing what the probes found' : 'agents that did not build it are trying it') : 'after the check' },
   ]
   if (i.hasTests) {
     const fixing = of(fixes)
@@ -106,7 +107,7 @@ export function flowOf(i: { subs: { id: string; title: string; status: string; s
   else { out.push(ghost('flow:check', 'Check it against its list', 'check', last)); last = ['flow:check'] }
   const probes = by('probe')
   if (probes.length) for (const s of probes) { out.push(real(s, last)); last = [s.id] }
-  else { out.push(ghost('flow:probe', 'Try to break it, and clean up', 'probe', last)); last = ['flow:probe'] }
+  else { out.push(ghost('flow:probe', 'Probes', 'probe', last)); last = ['flow:probe'] }
   // The whole test run is not a sub-task; what fixes it is. Each fix leads to the run again.
   for (const s of by('fix')) { out.push(real(s, last)); last = [s.id] }
   if (stage('test')) { out.push(ghost('flow:test', 'The whole test run', 'test', last)); last = ['flow:test'] }

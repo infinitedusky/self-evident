@@ -4863,3 +4863,32 @@ pull request.
 Not done: the engine's own "Commit remaining work (engine)", made when an agent leaves changes uncommitted, is not in
 the format; merge commits are let through as they are; a branch template applies to one pull request per task, not
 to a project's single branch; no way yet to give one task an exact branch name, as `set_pr_title` does for a title.
+
+### Slice 3: probes (`engine/src/probes.ts`; Sandy, 2026-11-18: "Yeah, we'll do main only"; "Probes and checks don't change code. They can create additional subtasks")
+
+For a task on Main, what follows the check is no longer one agent that tries to break it and cleans up. It is the
+app's probes, one shape for all: a name, what it runs, whether a failure blocks, and a result of pass or fail with
+evidence, kept on the task (`issue.probes`, migration 0039; event `task.probed`).
+
+- **Three kinds.** A command the engine runs itself on the merged work (exit 0 passes): the app's test command is
+  one, and an app adds its own (lint, a type check). A skill run as a reviewer: a fresh agent that invokes that one
+  skill and reviews the change by it. Built in: **Try to break it** (blocks) and **Comment discipline** (reports).
+- **A check and a probe change nothing.** Their agents have no tool that edits, and anything left in the worktree is
+  thrown away at landing, never committed. "Try to break it" used to fix small things and commit; it no longer does.
+- **What they find goes back in one sub-task.** Each agents' probe runs once ("Probe: …"); when all have, what the
+  blocking ones found is sent to a builder together ("Fix what the probes found"), and only the probes that failed
+  run again. Three rounds, then a person. One that only reports, or could not be run, holds nothing.
+- **Commands run last**, each once (the test run twice before it is called failed, as before), and a blocking failure
+  is sent back as before ("Fix what the whole test run found", two at most), now with every command that failed.
+- **An app's probes** are `setup.probes`; its agent sets them with `set_probe` (a command or a skill added, a built-in
+  switched off or to report only). A client's own requirement is a probe, not a step.
+- **The record says which skill was used**: a run's `Skill` call is logged with the skill's name (it kept only the
+  input's keys before).
+- **Removed**: `probeBrief` and the "Try to break it, and clean up" sub-task (`verify.ts`). A task that already had
+  one is not probed again by the built-in two. Legacy is untouched: its criteria checked once, then the test run.
+
+Not done: probes are not in Settings yet (the Skills page, slice 2's story, is where they go; until then `set_probe`
+or the setup JSON); a task's page shows them only as sub-tasks, not as results; requirements are still a separate
+list, judged by the check; a skill probe works for a skill the app's conversations already have, so a second
+repository's skills are not reachable yet; a probe whose agent gives no verdict is recorded as not run and holds
+nothing; no naming probe (names are checked where they are made, slice 1); nothing here has run on a real build.

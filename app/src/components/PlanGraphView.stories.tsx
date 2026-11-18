@@ -98,7 +98,7 @@ export const SinglePhase: Story = { args: { subIssues: [ph(1, 'Add a GET /health
 const before: FlowNode[] = [
   { id: 'flow:build', title: 'Build it', state: 'todo', detail: 'not built yet', after: [] },
   { id: 'flow:check', title: 'Check it against its list', state: 'todo', detail: '7 to check', after: ['flow:build'] },
-  { id: 'flow:probe', title: 'Try to break it, and clean up', state: 'todo', detail: 'after the check', after: ['flow:check'] },
+  { id: 'flow:probe', title: 'Probes', state: 'todo', detail: 'after the check', after: ['flow:check'] },
   { id: 'flow:test', title: 'The whole test run', state: 'todo', detail: 'the whole run, once, last', after: ['flow:probe'] },
   { id: 'flow:smoke', title: 'Smoke test: yours, by hand', state: 'todo', detail: '2 for you, once it is built and checked', after: ['flow:test'] },
 ]
@@ -107,7 +107,7 @@ export const FlowBeforeItStarts: Story = {
   args: { subIssues: flowGraph(before, []) },
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    for (const t of ['Build it', 'Check it against its list', 'Try to break it, and clean up', 'The whole test run', 'Smoke test: yours, by hand']) await expect(await c.findByText(t)).toBeInTheDocument()
+    for (const t of ['Build it', 'Check it against its list', 'Probes', 'The whole test run', 'Smoke test: yours, by hand']) await expect(await c.findByText(t)).toBeInTheDocument()
     await expect(canvasElement.querySelectorAll('[data-ghost]')).toHaveLength(5)
     await waitFor(() => expect(canvasElement.querySelectorAll('.react-flow__edge')).toHaveLength(4)) // joined, one after the other
   },

@@ -19,7 +19,7 @@ import { approveStep, setStep } from './work.js'
 import { now } from './now.js'
 import { FIX_TITLE, MAX_CARRY_ONS, ranOutOfTurns, Runner, turnsFor } from './runner.js'
 import { setAcceptance } from './acceptance.js'
-import { CHECK_TITLE, FINISH_TITLE, PROBE_TITLE } from './verify.js'
+import { CHECK_TITLE, FINISH_TITLE } from './verify.js'
 import { afterOf } from './steps.js'
 import { ensureMain, listWorkflows } from './work.js'
 import { markSmoke, smokeOwed, smokeView } from './smoke.js'
@@ -325,7 +325,7 @@ describe.skipIf(!reachable)('runner', () => {
 
   it('Main: built in one go with no planner, then checked, what the check found sent back, checked again, probed, and tested once', async () => {
     const own = newId('app')
-    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'main flow', key: own.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md', requirements: [{ key: 'tests', name: 'Tests', what: 'New behaviour has a test (sample).' }] } })
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'main flow', key: own.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md', probes: [{ name: 'Lint (sample)', kind: 'command', runs: 'test -d .git || test -f .git' }, { name: 'Security review (sample)', kind: 'skill', runs: 'nowhere:security-review' }], requirements: [{ key: 'tests', name: 'Tests', what: 'New behaviour has a test (sample).' }] } })
     await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: repoPath })
     expect(await db.transaction((tx) => ensureMain({ tx, appId: own }))).toEqual({ made: 1 }) // this app only: the others in this file build the old way
     const [w] = (await listWorkflows(own)).filter((x) => x.appDefault)
@@ -333,11 +333,15 @@ describe.skipIf(!reachable)('runner', () => {
     const { project: p, issues: [t] } = await createProject({ appId: own, name: 'main flow', issues: [{ title: 'Export (sample)', brief: 'People download their orders (sample).' }] })
     const { acceptance: [ac] } = await setAcceptance(t.id, { add: [{ text: 'The file has every order (sample)', check: 'export.test' }] })
     await setStep({ issueId: t.id }, 'prototype', { status: 'done', detail: 'the whole flow (sample)' }); await approveStep(t.id, 'prototype', 'Sam (sample)')
-    const seen: { title: string; brief: string }[] = []
+    const seen: { title: string; brief: string; readOnly?: boolean }[] = []
+    const probed = (v: object) => `Probed.\n\n\`\`\`probe\n${JSON.stringify(v)}\n\`\`\``
     const verdict = (list: object[]) => `Checked.\n\n\`\`\`acceptance\n${JSON.stringify(list)}\n\`\`\``
     const execute: Execute = async (i) => {
-      seen.push({ title: i.subIssue.title, brief: i.subIssue.brief ?? '' })
+      seen.push({ title: i.subIssue.title, brief: i.subIssue.brief ?? '', readOnly: i.readOnly })
       const r = await commits('main')(i)
+      // The first try to break it finds something; once that is fixed it finds nothing. The other probe passes.
+      if (i.subIssue.title === 'Probe: Try to break it') return { ...r, summary: probed({ pass: false, evidence: 'an empty export crashes', findings: ['GET /export with no orders returns 500 (sample)'] }) }
+      if (i.subIssue.title.startsWith('Probe: ')) return { ...r, summary: probed({ pass: true, evidence: 'nothing found', findings: [] }) }
       const checks = seen.filter((s) => s.title.startsWith(CHECK_TITLE)).length
       if (i.subIssue.title.startsWith(CHECK_TITLE)) return { ...r, summary: checks === 1 ? verdict([{ id: ac.id, met: true, evidence: 'export.test passes' }, { id: 'req_tests', met: false, evidence: 'no test for an empty export' }]) : verdict([{ id: 'req_tests', met: true, evidence: 'export-empty.test' }]) }
       return r
@@ -347,14 +351,19 @@ describe.skipIf(!reachable)('runner', () => {
     await approveBriefs(own)
     await runner.buildTask(t.id)
     await until(cleaned(p.id))
-    expect(seen.map((s) => s.title)).toEqual(['Build it', CHECK_TITLE, FINISH_TITLE, `${CHECK_TITLE} (2)`, PROBE_TITLE])
+    // Checked, then probed: each agents' probe once, what they found sent back in one sub-task, and only the one that failed run again.
+    // The skill named by the third probe is not one this app has: it is recorded as not run, and no agent is started for it.
+    expect(seen.map((s) => s.title)).toEqual(['Build it', CHECK_TITLE, FINISH_TITLE, `${CHECK_TITLE} (2)`, 'Probe: Try to break it', 'Probe: Comment discipline', 'Fix what the probes found', 'Probe: Try to break it (2)'])
+    expect(seen.map((s) => !!s.readOnly)).toEqual([false, true, false, true, true, true, false, true]) // a check and a probe have no tool that edits
+    expect(seen[6].brief).toContain('GET /export with no orders returns 500 (sample)'); expect(seen[6].brief).toContain('Try to break it:')
     expect(seen[0].brief).toContain('in this one go'); expect(seen[0].brief).toContain(`[${ac.id}] The file has every order (sample)`); expect(seen[0].brief).toContain('- tests (Tests): New behaviour has a test (sample).')
     expect(seen[1].brief).toContain('[req_tests] Tests:'); expect(seen[1].brief).toContain('[req_adr] Decision record:') // Main switches the decision record on, over the app's own list
     expect(seen[0].brief).toContain('- adr (Decision record):') // the same list is in the builder's instructions and in the check
     expect(seen[2].brief).toContain('found this not done'); expect(seen[2].brief).toContain('Missing: no test for an empty export')
     expect(seen[3].brief).toMatch(/^Check 2/); expect(seen[3].brief).not.toContain(ac.id) // only what was not done is looked at again
-    expect(seen[4].brief).toContain('You did not build this')
+    expect(seen[4].brief).toContain('You did not build this'); expect(seen[4].brief).toContain('You change nothing')
     const [after] = await db.select().from(issue).where(eq(issue.id, t.id))
+    expect((after.probes as { key: string; pass: boolean | null; fixes: number }[]).map((x) => [x.key, x.pass, x.fixes]).sort()).toEqual([['break', true, 1], ['comments', true, 0], ['lint_sample', true, 0], ['security_review_sample', null, 0], ['tests', true, 0]])
     expect((after.requirements as { key: string }[]).find((r) => r.key === 'tests')).toEqual({ key: 'tests', name: 'Tests', applies: true, how: 'export-empty.test', built: true })
     expect((after.acceptance as { built?: boolean }[])[0].built).toBe(true)
     const order = (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => ['task.checked', 'task.tested', 'issue.planned'].includes(e.type)).sort((a, b) => a.seq - b.seq).map((e) => e.type)
@@ -381,7 +390,7 @@ describe.skipIf(!reachable)('runner', () => {
     await runner.buildTask(t.id)
     const events = async (type: string) => (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => e.type === type)
     await until(async () => (await events('task.smoke_waiting')).length === 1)
-    expect(seen.map((s) => s.title)).toEqual(['Build it', CHECK_TITLE, PROBE_TITLE]) // nothing was "not done", so no finish: it is the person's
+    expect(seen.map((s) => s.title)).toEqual(['Build it', CHECK_TITLE, 'Probe: Try to break it', 'Probe: Comment discipline']) // nothing was "not done", so no finish: it is the person's
     expect((await db.select().from(project).where(eq(project.id, p.id)))[0].status).toBe('running') // built, and not landed
     expect(await cleaned(p.id)()).toBe(false)
     expect((await now(own)).needsYou.filter((a) => a.kind === 'smoke_test')).toEqual([expect.objectContaining({ issueId: t.id, owed: 1 })])
@@ -389,10 +398,10 @@ describe.skipIf(!reachable)('runner', () => {
     // They try it: it does not hold. Sent back with what they saw, built, and looked at again.
     await markSmoke(t.id, look.id, { pass: false, note: 'the edge sits on top of the lip (sample)' })
     expect(await runner.afterSmoke(t.id)).toEqual({ sentBack: 1 })
-    await until(async () => (await events('task.smoke_waiting')).length === 2 || seen.length >= 5)
-    await until(async () => seen.length >= 5 && smokeOwed(acceptanceOf((await db.select().from(issue).where(eq(issue.id, t.id)))[0])) === 1)
-    expect(seen.slice(3).map((s) => s.title)).toEqual([FINISH_TITLE, `${CHECK_TITLE} (2)`])
-    expect(seen[3].brief).toContain('Missing: the edge sits on top of the lip (sample)'); expect(seen[3].brief).toContain('by trying the build by hand')
+    await until(async () => (await events('task.smoke_waiting')).length === 2 || seen.length >= 6)
+    await until(async () => seen.length >= 6 && smokeOwed(acceptanceOf((await db.select().from(issue).where(eq(issue.id, t.id)))[0])) === 1)
+    expect(seen.slice(4).map((s) => s.title)).toEqual([FINISH_TITLE, `${CHECK_TITLE} (2)`]) // sent back and looked at again; it is not probed a second time
+    expect(seen[4].brief).toContain('Missing: the edge sits on top of the lip (sample)'); expect(seen[4].brief).toContain('by trying the build by hand')
     expect((await smokeView(t.id)).checks[0]).toMatchObject({ mark: 'todo', before: { pass: false, note: 'the edge sits on top of the lip (sample)' } })
     expect(await cleaned(p.id)()).toBe(false)
     // They try it again: it holds. The task carries on to its end.

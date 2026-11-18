@@ -114,6 +114,15 @@ describe.skipIf(!reachable)('a pull request waits for the person (sample data)',
     expect(opened).toHaveLength(1)
   })
 
+  it('keeps the app\'s probes: one added, a built-in switched, one removed', async () => {
+    const { setProbe } = await import('./probes.js')
+    await expect(setProbe(appId, { name: 'Lint (sample)' })).rejects.toThrow('needs a name, a kind')
+    expect((await setProbe(appId, { name: 'Lint (sample)', kind: 'command', runs: 'pnpm lint' })).probes.map((p) => p.key)).toEqual(['break', 'comments', 'tests', 'lint_sample'])
+    expect((await setProbe(appId, { key: 'comments', on: false })).probes.find((p) => p.key === 'comments')).toMatchObject({ on: false, blocks: false })
+    expect((await setProbe(appId, { key: 'lint_sample', blocks: false })).probes.find((p) => p.key === 'lint_sample')).toMatchObject({ runs: 'pnpm lint', blocks: false })
+    expect((await setProbe(appId, { key: 'lint_sample', remove: true })).probes.map((p) => p.key)).toEqual(['break', 'comments', 'tests'])
+    await setProbe(appId, { key: 'comments', on: true })
+  })
   it('keeps the app\'s rules for its pull requests', async () => {
     expect(await setPrRules(appId, { titleTemplate: 'feat[{ticket}]: {title}' })).toEqual({ pr_title: 'feat[{ticket}]: {title}', pr_draft: true, branch_name: null, commit_format: null })
     expect(await setPrRules(appId, { titleTemplate: '', draft: false })).toEqual({ pr_title: null, pr_draft: false, branch_name: null, commit_format: null })

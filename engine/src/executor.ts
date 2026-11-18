@@ -21,6 +21,10 @@ export interface RunInput {
   commitFormat?: string
   /** A hooks folder for this agent's git: its commits are held to the app's pattern as they are made. */
   hooksPath?: string
+  /** A check or a probe: it reads and runs, and has no tool that edits. */
+  readOnly?: boolean
+  /** A skill this run must use (a probe that is a skill run as a reviewer), with what its session needs to have it. */
+  skill?: { name: string; plugins?: unknown[]; mcpServers?: Record<string, unknown> }
   worktreePath: string
   branch: string
   files: string[]
@@ -71,7 +75,7 @@ function prompt(i: RunInput): string {
     `- ${STOP_ONLY_YOURS}`,
     i.testCmd ? `- Test what you built: add or adjust tests for what you change, and run the tests of the parts you touched. They must pass before you finish. Do not run the whole suite unless your brief says to: it runs once, when every sub-task of this task is merged. For reference, the whole suite is: ${i.testCmd}` : '- There is no test command configured; verify your change by running it.',
     `- ${LEAVE_LONG_RUNS}`,
-    commitLine(i),
+    i.readOnly ? '- You change nothing: you have no tool that edits, and anything you leave in this directory is thrown away. Commit nothing.' : commitLine(i),
     '- Finish with a short summary for the reviewer: what changed, why, how you verified it, and anything you were unsure of.',
     '- The brief is settled: build what it says, the way it says. Do not propose follow-ups, improvements or things to consider; nothing collects them. A small slip inside the files that are yours (a stray file, a typo) is simply fixed. If the sub-task cannot be built as written, stop and say exactly what is wrong and where, in your summary.',
     referencePrompt(i.references ?? []),
@@ -111,10 +115,11 @@ export async function runTask(i: RunInput): Promise<RunOutput> {
         maxTurns: i.maxTurns ?? 60,
         maxBudgetUsd: i.maxBudgetUsd,
         settingSources: ['project'], // the repo's CLAUDE.md, not the operator's personal settings
-        tools: [...READ_TOOLS, ...EDIT_TOOLS, 'Bash'], // the whole tool set
-        allowedTools: READ_TOOLS, // auto-approved; the guard decides the rest (see guard.ts for why both hook and callback)
+        tools: [...READ_TOOLS, ...(i.readOnly ? [] : EDIT_TOOLS), 'Bash', ...(i.skill ? ['Skill'] : [])], // the whole tool set
+        ...(i.skill ? { skills: [i.skill.name], plugins: i.skill.plugins as never, mcpServers: i.skill.mcpServers as never } : {}), // that one skill, and no other
+        allowedTools: i.skill ? [...READ_TOOLS, 'Skill'] : READ_TOOLS, // auto-approved; the guard decides the rest (see guard.ts for why both hook and callback)
         permissionMode: 'default',
-        ...guardOptions(builderGuard(i.worktreePath, READ_TOOLS, EDIT_TOOLS)),
+        ...guardOptions(builderGuard(i.worktreePath, i.skill ? [...READ_TOOLS, 'Skill'] : READ_TOOLS, i.readOnly ? [] : EDIT_TOOLS)),
       },
     })) {
       await handle(m, i.onEvent, (o) => { out = o }, steps)
@@ -170,6 +175,7 @@ function summariseInput(tool: string, input: any): Record<string, unknown> {
   switch (tool) {
     case 'Bash': return { command: clip(input?.command, 300) }
     case 'Read': case 'Write': case 'Edit': case 'MultiEdit': return { file: input?.file_path }
+    case 'Skill': return { skill: input?.skill } // which one: the run's record that it was used
     case 'Glob': case 'Grep': return { pattern: input?.pattern, path: input?.path }
     default: return { keys: Object.keys(input ?? {}) }
   }
