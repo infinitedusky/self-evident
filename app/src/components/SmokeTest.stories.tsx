@@ -75,10 +75,16 @@ export const OnStaging: Story = {
     await expect(c.queryByTitle('The built code')).toBeNull(); await expect(c.queryByRole('button', { name: 'Stop' })).toBeNull()
   },
 }
-/** Nothing was left to a person: it says so, and points to the checklist. */
+/** Nothing was left to a person: it says so and points to the checklist, and the built code can still be brought up to look anyway. */
 export const NothingForYou: Story = {
-  beforeEach: withEngine({ smoke: { ...smokeSample, checks: [], owed: 0 } }),
-  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('link', { name: 'the checklist' })).toBeInTheDocument() },
+  beforeEach: withEngine({ smoke: { ...smokeSample, checks: [], owed: 0, url: null, up: false, running: null } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('link', { name: 'the checklist' })).toBeInTheDocument()
+    await expect(c.getByText(/You can still bring it up and look for yourself/)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Run it' }))
+    await expect(await c.findByRole('button', { name: 'Stop' })).toBeInTheDocument()
+  },
 }
 /** Where "Go there" goes: a path, a story's id, or a whole address. */
 export const Addresses: Story = {

@@ -140,14 +140,14 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
   const subStamp = i ? i.subIssues.map((s) => `${s.id}:${s.build?.status ?? ''}:${s.state}`).join('|') : ''
   useEffect(() => { if (i) void engine.checklist(i.id).then(setChecklist).catch(() => setChecklist(null)) }, [i?.id, i?.updatedAt, subStamp, section]) // eslint-disable-line react-hooks/exhaustive-deps
   // A staged task's smoke test: every criterion no agent marked is the person's to check by hand. Read with the task, for the nav.
-  const [smoke, setSmoke] = useState<{ owed: number; total: number; failed: number } | null>(null)
-  useEffect(() => { if (i && !i.parentId && i.kind === 'code') void engine.smoke(i.id).then((s) => setSmoke(s.staged ? { owed: s.owed, total: s.checks.length, failed: s.failed } : null)).catch(() => setSmoke(null)) }, [i?.id, i?.updatedAt, subStamp, section]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [smoke, setSmoke] = useState<{ owed: number; total: number; failed: number; built?: boolean } | null>(null)
+  useEffect(() => { if (i && !i.parentId && i.kind === 'code') void engine.smoke(i.id).then((s) => setSmoke(s.staged ? { owed: s.owed, total: s.checks.length, failed: s.failed, built: !!s.head } : null)).catch(() => setSmoke(null)) }, [i?.id, i?.updatedAt, subStamp, section]) // eslint-disable-line react-hooks/exhaustive-deps
   const navSaves = saved ? { current: saved.branches.find((b) => b.current)?.name ?? null, points: saved.saves.map((s) => ({ id: s.id, name: s.name })), aside: saved.branches.filter((b) => !b.current).map((b) => ({ id: b.id, name: b.name })) } : undefined
   const saveHere = async (name: string) => { await engine.saveHere(i.id, name).catch(() => {}); readSaves(); setSavesStamp((n) => n + 1) }
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
   const rows = v.rows
-  const staged = !checklist && !!smoke && smoke.total > 0
+  const staged = !checklist && !!smoke && (smoke.total > 0 || !!smoke.built) // it stays once the task is built, with nothing left to check too: they may want to look anyway
   const here = section === 'build' || section === 'saves' || (section === 'checklist' && checklist) || (section === 'smoke' && (checklist || staged)) || rows.some((r) => r.key === section) ? section! : 'overview'
   if (section && here === 'overview') return <Navigate to={base} replace />
   const live = i.subIssues.filter((s) => !dropped(s)) // canceled sub-tasks are out of the plan

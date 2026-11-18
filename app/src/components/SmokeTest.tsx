@@ -107,8 +107,8 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
       {error && <p className="bad" style={{ margin: '0 0 8px' }}>{error}</p>}
       {sent !== null && sent > 0 && <p className="smoke-sent" role="status">Sent back: {sent} that failed, with what you saw. It is fixed, checked again, and comes back to you here.</p>}
       {sent === 0 && done && !v.failed && <p className="smoke-sent ok" role="status">All of it holds. The task carries on to its pull request.</p>}
-      {v.checks.length === 0 && <p className="muted" style={{ margin: 0 }}>The check after the build left nothing to a person on this task. Its list is on <Link to={`${base}/checklist`}>the checklist</Link>.</p>}
-      {v.checks.length > 0 && many && (
+      {v.checks.length === 0 && <p className="muted" style={{ margin: '0 0 10px' }}>Nothing is left to you on this task: an agent checked every criterion, and what it saw is on {v.staged ? <Link to={`${base}/brief`}>the brief</Link> : <Link to={`${base}/checklist`}>the checklist</Link>}.{v.head ? ' You can still bring it up and look for yourself.' : ''}</p>}
+      {(v.checks.length > 0 || !!v.head) && many && (
         <>
           <div className="smoke-setups" role="tablist" aria-label="Set-ups">
             {all.map((x) => {
@@ -118,8 +118,8 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
           </div>
         </>
       )}
-      {v.checks.length > 0 && su.what && <p className="faint smoke-what">{su.what}</p>}
-      {v.checks.length > 0 && (
+      {(v.checks.length > 0 || !!v.head) && su.what && <p className="faint smoke-what">{su.what}</p>}
+      {(v.checks.length > 0 || !!v.head) && (
         <div className="smoke-layout">
           <div className="smoke-view">
             {local && !su.url && (
@@ -152,7 +152,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
               : <div className="empty">This app is smoke tested {su.where === 'staging' ? 'on staging' : su.where === 'preview' ? 'on a preview of its pull request' : 'behind a feature flag'}, and has not said at what address. Settings › Prototype has it.</div>)}
           </div>
           <div className="smoke-groups">
-            {many && shown.length === 0 && <p className="muted" style={{ margin: 0 }}>No check on this task needs {su.name}.</p>}
+            {many && shown.length === 0 && v.checks.length > 0 && <p className="muted" style={{ margin: 0 }}>No check on this task needs {su.name}.</p>}
             {(['here', 'pr', 'after'] as const).map((when) => {
               const mine = shown.filter((c) => (c.when ?? 'here') === when)
               if (!mine.length) return null

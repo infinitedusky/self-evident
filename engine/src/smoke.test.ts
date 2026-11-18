@@ -90,7 +90,7 @@ describe('the checks a person has', () => {
   it('is a stage of the task once there is one: theirs when nothing is building, done when each is marked, failed when one was', () => {
     const subs = [{ title: 'Build it', status: 'done' }, { title: 'Check it against its acceptance criteria', status: 'done' }, { title: 'Try to break it, and clean up', status: 'done' }]
     const stage = (byHandCount: { todo: number; failed: number; total: number }, s = subs) => stagesOf({ subs: s, build: 'one', unmet: 0, met: 3, total: 5, hasTests: false, tested: null, byHand: byHandCount }).find((x) => x.key === 'smoke')
-    expect(stage({ todo: 0, failed: 0, total: 0 })).toBeUndefined() // nothing for a person: no such stage
+    expect(stage({ todo: 0, failed: 0, total: 0 })).toMatchObject({ state: 'done', detail: 'nothing left to you; look anyway' }) // nothing for a person: it stays, to open and try anyway
     expect(stage({ todo: 2, failed: 0, total: 2 })).toMatchObject({ state: 'doing', detail: '2 for you to check by hand' })
     expect(stage({ todo: 2, failed: 0, total: 2 }, [...subs.slice(0, 2), { title: 'Try to break it, and clean up', status: 'running' }])).toMatchObject({ state: 'todo', detail: '2 for you, once it is built and checked' })
     expect(stage({ todo: 0, failed: 1, total: 2 })).toMatchObject({ state: 'failed', detail: '1 failed by hand, sent back' })
