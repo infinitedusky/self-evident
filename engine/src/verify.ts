@@ -27,6 +27,15 @@ export const MAX_ROUNDS = 3
 const REQ = 'req_'
 export const reqId = (key: string) => `${REQ}${key}`
 
+/**
+ * What takes an agent a long run to show is the person's, in the smoke test (Sandy, 2026-11-18: "Certain smoke tests
+ * are asking for things that probably take a long time for an agent to do. If that's the case, we don't have the
+ * agent do it, right? That's the whole reason for having the smoke test"). Said to every builder, the check and the
+ * probe: a builder had written a sweep of 45 pages in a browser and run it twice, 12 minutes each.
+ */
+export const LONG_RUN = 'more than about two minutes of running (every page opened in a browser, a whole journey end to end, every size or device)'
+export const LEAVE_LONG_RUNS = `Leave long runs to the person. After the checks a person tries what is built by hand (the smoke test), and what is slow to show belongs there. If showing that one thing holds would take ${LONG_RUN}, do not run it and do not write a script that does: show it on one or two cases, and say in your summary what you left to the person and where they look. Do not run a command that takes minutes a second time to see a fix: run only the part you changed.`
+
 /** One line per item, each with the id its verdict is reported under. */
 const requirementItems = (reqs: Requirement[]) => reqs.map((r) => `- [${reqId(r.key)}] ${r.name}: ${r.what}`).join('\n')
 
@@ -39,7 +48,7 @@ export const checkTaskBrief = (criteria: Criterion[], requirements: Requirement[
   '- Check, do not build. Change no product code. If something is not done, say so; do not do it.',
   '- For each item do what it says to look at, where you can: run that test, render that story headless, read that file, run that command. Run what an item needs, not the whole suite; that runs after you.',
   '- met is true only if you saw it hold, and false if you saw it fail or it is not there.',
-  '- met is null when only a person can judge it (how it looks or feels, a real device) or you could not check it. The person is then walked through it, so write it for them: add "where", the path of the app or the story\'s id to open; and make the evidence what to do there and what passing looks like, in plain words ("Drag a node across the tunnel: the edge should stay under the lip, not jump above it"). Add "when" too: "here" if it can be tried on the built code on this computer; "pr" if it needs the pull request to exist (a comment a bot posts, a check that runs in CI, a preview of the pull request); "after" if it can only be seen once it is merged (a release, a deploy, a flag switched on).',
+  `- met is null when only a person can judge it (how it looks or feels, a real device), when checking it would take you ${LONG_RUN}, or when you could not check it. For a long one look at one or two cases, do not run or write a sweep, and leave it to the person with what you saw. ` + 'The person is then walked through it, so write it for them: add "where", the path of the app or the story\'s id to open; and make the evidence what to do there and what passing looks like, in plain words ("Drag a node across the tunnel: the edge should stay under the lip, not jump above it"). Add "when" too: "here" if it can be tried on the built code on this computer; "pr" if it needs the pull request to exist (a comment a bot posts, a check that runs in CI, a preview of the pull request); "after" if it can only be seen once it is merged (a release, a deploy, a flag switched on).',
   ...(setups.length > 1 ? [`- This app has ${setups.length} set-ups a person can have brought up to check by hand. For each item you leave to a person add "setup": the key of the one they need. Give items that need the same thing the same one, so it is brought up once. They are: ${setups.map((s) => `"${s.key}" (${s.name}${s.what ? `: ${s.what}` : ''})`).join('; ')}.`] : []),
   '- A requirement that does not apply to this change (no new behaviour to trace, nothing a person does differently) is met: true, with "does not apply:" and why as its evidence.',
   '- evidence is one line, under 160 characters: the test, file or command that shows it; for something not done, what is missing.',
@@ -70,7 +79,7 @@ export const finishBrief = (unmet: Unmet[], round: number) => [
 export const probeBrief = (criteria: Criterion[], base: string) => [
   'You did not build this. It is built, merged on this branch and checked against its list. Your job is to find out whether it really works, and to clean up after the build.',
   '',
-  '1. Try to break it. Run it and use it the way a person would.',
+  '1. Try to break it. Run it and use it the way a person would. Keep each try short: a scenario of a minute or two, never a sweep of every page or every case; a person tries it by hand after you.',
   '   - Each acceptance criterion as a scenario, start to finish.',
   '   - Then what nobody wrote down: nothing entered, far too much, the same thing twice, steps out of order, the wrong kind of input, a failure halfway (a service down, a slow answer).',
   '   - What it sits next to: the pages and calls that share code with it still do what they did.',
