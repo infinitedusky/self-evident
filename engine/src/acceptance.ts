@@ -53,7 +53,7 @@ export interface Criterion {
   at: string
 }
 export interface AcceptanceChange {
-  add?: { text: string; check?: string; shown?: boolean; evidence?: string; buildOnly?: boolean; why?: string }[]
+  add?: { text: string; check?: string; shown?: boolean; evidence?: string; buildOnly?: boolean; why?: string; /** Where a person goes to see it in the built code: a path of the app, or a story's id (builtWhere). */ where?: string }[]
   // built and builtEvidence are only ever updated: nothing is built when a criterion is written
   update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null; built?: boolean | null; builtEvidence?: string | null; builtWhere?: string | null; builtSetup?: string | null; builtWhen?: Criterion['builtWhen'] | null; byHand?: Criterion['byHand'] | null }[]
   remove?: string[]
@@ -92,7 +92,7 @@ export function applyAcceptance(list: Criterion[], c: AcceptanceChange, by: stri
     const text = line(a.text)
     if (!text) throw new PlanError('a criterion needs its statement')
     if (out.some((x) => x.text.toLowerCase() === text.toLowerCase())) continue // said already
-    out.push({ id: newId('run').replace(/^run_/, 'ac_'), text, ...(line(a.check) ? { check: line(a.check) } : {}), ...(a.shown !== undefined ? { shown: a.shown } : {}), ...(line(a.evidence, 1000) ? { evidence: line(a.evidence, 1000) } : {}), ...(a.buildOnly ? { buildOnly: true, ...(line(a.why) ? { why: line(a.why) } : {}) } : {}), by, at: now.toISOString() })
+    out.push({ id: newId('run').replace(/^run_/, 'ac_'), text, ...(line(a.check) ? { check: line(a.check) } : {}), ...(a.shown !== undefined ? { shown: a.shown } : {}), ...(line(a.evidence, 1000) ? { evidence: line(a.evidence, 1000) } : {}), ...(a.buildOnly ? { buildOnly: true, ...(line(a.why) ? { why: line(a.why) } : {}) } : {}), ...(line(a.where, 300) ? { builtWhere: line(a.where, 300) } : {}), by, at: now.toISOString() })
     changed = true
   }
   if (out.length > MAX) throw new PlanError(`${MAX} acceptance criteria at most: merge the ones that say the same thing`)

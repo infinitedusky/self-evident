@@ -4646,3 +4646,24 @@ On a task whose every criterion the check verified itself, the smoke test row le
 finished (it was shown only with at least one check for a person), which read as something breaking. Now it stays
 once the task is built: "nothing left to you; look anyway". The page says an agent checked everything and where
 its evidence is, and the built code can still be brought up, each set-up as usual.
+
+
+## Smoke test checks link to where they are tried (Sandy, 2026-11-17: "smoke tests should have links to test like the prototype guides")
+
+A conductor had to hand the person three addresses with the run's port typed in, because the checks on a staged
+task named no place: only a check after the build recorded one, and a staged task has no such check. Now:
+
+- A check with no recorded place takes the first path its own words name (`placeIn` in `engine/src/smoke.ts`:
+  what was left for the person, how it is checked, the prototype's evidence, the statement). An address on this
+  computer gives its path, since its port was another run's. File names and fractions are not places. A recorded
+  place always wins.
+- The view gives each check a `link`: that place on the address of the set-up it needs, while that is up or
+  deployed. The page shows it on the check as a link that opens in its own tab ("/import ↗"), beside "Go there",
+  which sends the view next to it. Before it is running the path is shown as words.
+- `set_acceptance` takes `where` when a criterion is written and `builtWhere` when it is updated, and says to give
+  one for anything a person checks by hand. Neither asks for the brief's approval again.
+
+Not done: a criterion whose words name no path still has no link (an agent or the person has to say where); the
+place cannot be edited on the smoke test page itself. Seen while testing, and failing on main as well: the
+stacked pull requests test in `github.test.ts`.
+

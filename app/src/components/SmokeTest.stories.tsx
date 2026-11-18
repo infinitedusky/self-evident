@@ -201,3 +201,33 @@ export const StrayPort: Story = {
   beforeEach: withEngine({ smoke: { ...smokeSample, setups: [{ key: 'main', name: 'Smoke test', what: null, where: 'local', says: 'run here (sample)', account: null, flag: null, running: smokeSample.head, url: smokeSample.url, up: true, canRun: true, log: [], owed: smokeSample.owed, strayPorts: [5174], strayNote: 'It also listens on port 5174, which it chose itself. A second copy running beside it would share or fight over it. Make it follow $PORT_2 or $PORT_3, which are free and handed out with $PORT.' }] } }),
   play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/port 5174, which it chose itself/)).toBeInTheDocument() },
 }
+
+const pathChecks = [
+  { id: 'ac_p1', text: 'An employee can import themselves (sample)', where: '/import', how: 'Press Import and wait for the scan (sample)', mark: 'todo' as const },
+  { id: 'ac_p2', text: 'Their row shows once the scan is done (sample)', where: '/employees', how: 'Your row is in the table (sample)', mark: 'todo' as const },
+  { id: 'ac_p3', text: 'It feels quick (sample)', how: 'No place for this one: judge it as you go (sample)', mark: 'todo' as const },
+]
+/** Each check that names a place has a link to it on this run's port (made up), as a prototype's guide does; one with no place has none. */
+export const LinksToEachCheck: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, staged: true, url: 'http://localhost:65487', checks: pathChecks.map((c) => (c.where ? { ...c, link: `http://localhost:65487${c.where}` } : c)) } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const link = await c.findByRole('link', { name: '/import ↗' })
+    await expect(link).toHaveAttribute('href', 'http://localhost:65487/import'); await expect(link).toHaveAttribute('target', '_blank')
+    await expect(c.getByRole('link', { name: '/employees ↗' })).toHaveAttribute('href', 'http://localhost:65487/employees')
+    await expect(c.getAllByRole('link', { name: /↗$/ })).toHaveLength(2)
+    await userEvent.click(c.getAllByRole('button', { name: 'Go there' })[0])
+    await expect(await c.findByText('you are here')).toBeInTheDocument()
+  },
+}
+
+/** Before it is running there is no port to link to: the path is still shown, as words (made up). */
+export const PlacesBeforeItRuns: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, url: null, up: false, running: null, checks: pathChecks } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('/import')).toBeInTheDocument()
+    await expect(c.getAllByText('a link once it is running')).toHaveLength(2)
+    await expect(c.queryByRole('link', { name: /↗$/ })).toBeNull()
+  },
+}

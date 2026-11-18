@@ -193,8 +193,10 @@ export interface SmokeCheck {
   when: When
   /** Which of the app's set-ups it needs up (its key); the view fills in the app's first when the check named none it has. */
   setup?: string
-  /** Where to go: a path of the app, or a story's id. */
+  /** Where to go: a path of the app, or a story's id. When nobody said, the path its own words name (placeIn). */
   where?: string
+  /** That place as an address to open, on the set-up it needs, while that is up or deployed (the view fills it in). */
+  link?: string
   /** What to do there and what passing looks like. */
   how?: string
   mark: 'todo' | 'pass' | 'fail'
@@ -203,6 +205,34 @@ export interface SmokeCheck {
   stale?: boolean
   /** What they said last time, when it has come back to them after a fix. */
   before?: { pass: boolean; note: string }
+}
+
+/** Whether a check's "where" is somewhere to be sent: an address, a path, or a story's id. Anything else is a place said in words ("the pull request on GitHub"). */
+export const goable = (where?: string | null) => !!where && (/^https?:\/\/\S+$/.test(where) || /^\/\S*$/.test(where) || /^[a-z0-9][a-z0-9-]*--[a-z0-9-]+$/i.test(where))
+/** A place on a set-up's address: a path after it, a story alone as Storybook serves it, an address as it is. Null when it is only words. */
+export function addressOf(base: string, where?: string | null): string | null {
+  if (!where || !goable(where)) return null
+  if (/^https?:\/\//.test(where)) return where
+  const b = base.replace(/\/$/, '')
+  return where.startsWith('/') ? `${b}${where}` : `${b}/iframe.html?id=${encodeURIComponent(where)}&viewMode=story`
+}
+/**
+ * The path a criterion's own words name, when no one recorded where to go (Sandy, 2026-11-17: "smoke tests should
+ * have links to test like the prototype guides"; on a staged task no check after the build fills it in, and the
+ * person was working addresses out from a port). The first path of the app in what it says: "/import", or the path
+ * of an address on this computer, whose port was another run's. Not a file in the repository, not a fraction.
+ */
+export function placeIn(...said: (string | undefined | null)[]): string | undefined {
+  for (const text of said) {
+    if (!text) continue
+    const plain = text.replace(/https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?=\/)/gi, ' ') // an address on this computer: its path, on whatever port this run has
+    for (const m of plain.matchAll(/(?<![\w:/.<~-])(\/[a-z0-9_[][\w\-./?=&%:[\]@~+]*)/gi)) {
+      const path = m[1].replace(/[.,;:)\]]+$/, '')
+      if (path.length < 2 || /\.(tsx?|jsx?|mjs|cjs|json|md|sql|css|html|ya?ml|sh|py|env|lock|png|svg)$/i.test(path) || /^\/(src|node_modules|engine|tests?|dist|build|usr|tmp|etc|var|bin|Users|home)\//.test(path)) continue
+      return path
+    }
+  }
+  return undefined
 }
 
 /** A preview's address for one pull request: the pattern with its number in place of {pr}. Null without a pattern or a number. */
@@ -223,7 +253,8 @@ export function smokeChecks(criteria: Criterion[], head: string | null = null, s
     const marked = c.built !== undefined && !!c.byHand
     const agent = c.built !== undefined && !c.byHand // the check verified it itself after all
     return {
-      id: c.id, text: c.text, when: whenOf(c), ...(c.builtSetup ? { setup: c.builtSetup } : {}), ...(c.builtWhere ? { where: c.builtWhere } : {}),
+      id: c.id, text: c.text, when: whenOf(c), ...(c.builtSetup ? { setup: c.builtSetup } : {}),
+      ...((c.builtWhere ?? placeIn(c.built === undefined ? c.builtEvidence : null, c.check, c.evidence, c.text)) ? { where: c.builtWhere ?? placeIn(c.built === undefined ? c.builtEvidence : null, c.check, c.evidence, c.text) } : {}),
       ...((c.built === undefined ? c.builtEvidence ?? c.check : c.check) ? { how: (c.built === undefined ? c.builtEvidence ?? c.check : c.check)!.replace(/^(for a person|needs a person)[:,]?\s*/i, '') } : {}),
       mark: c.built === undefined ? 'todo' as const : c.built ? 'pass' as const : 'fail' as const,
       ...(marked || agent ? { note: c.builtEvidence ?? '' } : {}),
@@ -293,12 +324,18 @@ export async function smokeView(issueId: string) {
     }
   }))
   const { key: _k, name: _n, what: _w, owed: _o, ...first } = setups[0]
+  // Each check's place as an address on the set-up it needs, while that has one: a link to press, never a port to work out.
+  const linked = checks.map((c) => {
+    const base = setups.find((s) => s.key === c.setup)?.url
+    const link = /^https?:\/\//.test(c.where ?? '') ? c.where! : base ? addressOf(base, c.where) : null
+    return link ? { ...c, link } : c
+  })
   return {
     /** A staged task: the checks are every criterion no agent marked, not what a check after the build left. */ staged,
     ...first, // the app's first set-up, as the view was when an app had one
     branch, head, /** Its pull request, when there is one: a preview is of it. */ pr,
     /** Every set-up of the app, each with where it is and whether it is up; a check names the one it needs. */ setups,
-    checks, owed: checks.filter((c) => c.mark === 'todo' && c.when !== 'after').length, failed: checks.filter((c) => c.mark === 'fail').length,
+    checks: linked, owed: checks.filter((c) => c.mark === 'todo' && c.when !== 'after').length, failed: checks.filter((c) => c.mark === 'fail').length,
   }
 }
 

@@ -7,6 +7,10 @@
  * earlier commit says so. Where it runs is the app's setting: here (the engine starts it, shown beside the checks),
  * on staging, or behind a feature flag (an address to open; the checks and marks are the same).
  *
+ * Every check that names a place has a link to it, as a prototype's guide does (Sandy, 2026-11-17: "smoke tests
+ * should have links to test like the prototype guides"): the path, on whatever port this run has, opening in its own
+ * tab, with "Go there" to send the view beside it. Before it is running the path is still shown, as words.
+ *
  * Reading first: a check shows Pass and Fail, and a note is asked for only once one is pressed (a fail needs one:
  * it is what the fix works from). After a QA test run in TestRail and a GitHub deployment's "View deployment":
  * the thing under test and the list to tick off, side by side.
@@ -76,7 +80,13 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
         {c.mark === 'pass' && <Badge tone="ok">pass</Badge>}{c.mark === 'fail' && <Badge tone="bad">fail</Badge>}
         {c.stale && <Badge tone="warn">marked on an earlier commit</Badge>}
       </div>
-      {c.where && !goable(c.where) && c.mark === 'todo' && <div className="smoke-how"><span className="faint">Where:</span> {c.where}</div>}
+      {c.where && (() => {
+        const to = c.link ?? (su.url && goable(c.where) ? addressOf(su.url, c.where) : null)
+        if (!to && c.mark !== 'todo') return null
+        return <div className="smoke-how smoke-where"><span className="faint">Where:</span> {to
+          ? <><a href={to} target="_blank" rel="noreferrer" title={`${to} (opens in its own tab)`}>{/^https?:/.test(c.where) ? c.where : goable(c.where) && !c.where.startsWith('/') ? `story ${c.where}` : c.where} ↗</a>{src === to && <span className="faint"> you are here</span>}</>
+          : goable(c.where) ? <><code>{c.where}</code> <span className="faint">a link once it is running</span></> : c.where}</div>
+      })()}
       {c.how && c.mark === 'todo' && <div className="smoke-how">{c.how}</div>}
       {c.before && <div className="faint smoke-before">Last time you {c.before.pass ? 'passed' : 'failed'} it{c.before.note ? `: ${c.before.note}` : ''}. It was sent back, and is yours to try again.</div>}
       {c.note && c.mark !== 'todo' && <div className="faint smoke-before">{c.note}</div>}
@@ -91,7 +101,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
         </div>
       ) : (
         <div className="smoke-actions">
-          {su.url && goable(c.where) && <button className="btn quiet small" onClick={() => setAt(addressOf(su.url!, c.where))} title={c.where}>Go there</button>}
+          {su.url && local && goable(c.where) && <button className="btn quiet small" onClick={() => setAt(c.link ?? addressOf(su.url!, c.where))} title={`Show ${c.where} in the view beside this`}>Go there</button>}
           <button className="btn small" disabled={busy || waits} onClick={() => { setMarking({ id: c.id, pass: true }); setNote('') }}>{c.mark === 'todo' ? 'Pass' : 'Pass instead'}</button>
           <button className="btn quiet small" disabled={busy || waits} onClick={() => { setMarking({ id: c.id, pass: false }); setNote('') }}>{c.mark === 'todo' ? 'Fail' : 'Fail instead'}</button>
         </div>

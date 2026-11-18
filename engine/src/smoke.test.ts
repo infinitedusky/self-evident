@@ -12,7 +12,7 @@ import { app, event, issue, pr as prTable, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createProject } from './projects.js'
 import { oneGoBrief } from './planner.js'
-import { byHand, markSmoke, previewUrl, runStop, setSmokeSetup, smokeChecks, smokeEnv, smokeOwed, smokeReady, smokeSetup, smokeSetupOf, smokeSetups, smokeView, startSmoke, whenOf, forPerson } from './smoke.js'
+import { addressOf, placeIn, byHand, markSmoke, previewUrl, runStop, setSmokeSetup, smokeChecks, smokeEnv, smokeOwed, smokeReady, smokeSetup, smokeSetupOf, smokeSetups, smokeView, startSmoke, whenOf, forPerson } from './smoke.js'
 import { checkTaskBrief, readVerdicts, verdictChange } from './verify.js'
 
 const at = '2026-11-17T00:00:00.000Z'
@@ -212,5 +212,26 @@ describe.skipIf(!reachable)('a person marks a check', () => {
     expect(stored.find((c) => c.id === speed)).toMatchObject({ built: false, builtEvidence: 'portal 22 fps vs 45 none', byHand: { pass: false, by: 'user' }, by: 'user' })
     expect(after.briefApprovedBy ?? null).toBeNull()
     expect((await db.select().from(event).where(eq(event.issueId, t.id))).filter((e) => e.type === 'smoke.marked').sort((a, b) => a.seq - b.seq).map((e) => (e.payload as { pass: boolean }).pass)).toEqual([true, false])
+  })
+})
+
+describe('where a check sends a person', () => {
+  it('is the path its own words name, when nobody recorded one', () => {
+    expect(placeIn('Open /import and import yourself (sample)')).toBe('/import')
+    expect(placeIn(null, 'See your row at http://localhost:65487/employees?tab=all once the scan is done.')).toBe('/employees?tab=all')
+    expect(placeIn('Covered by src/import/import.test.ts and /engine/src/x.ts; pass and/or fail, 40/50 frames')).toBeUndefined()
+    expect(placeIn('Read https://example.test/docs first', 'then the overview (/attack-surface).')).toBe('/attack-surface')
+    const at = new Date().toISOString()
+    const list: Criterion[] = [
+      { id: 'ac_1', text: 'An employee can import themselves (sample)', check: 'On /import, press Import', by: 'agent', at },
+      { id: 'ac_2', text: 'The overview counts them (sample)', check: 'On /overview', builtWhere: '/attack-surface', by: 'agent', at },
+      { id: 'ac_3', text: 'It feels quick (sample)', by: 'agent', at },
+    ]
+    expect(smokeChecks(list, null, true).map((c) => c.where)).toEqual(['/import', '/attack-surface', undefined]) // what was recorded wins
+  })
+  it('becomes an address on the set-up that is up', () => {
+    expect(addressOf('http://localhost:65487/', '/import')).toBe('http://localhost:65487/import')
+    expect(addressOf('http://localhost:6006', 'edges-tunnel--default')).toBe('http://localhost:6006/iframe.html?id=edges-tunnel--default&viewMode=story')
+    expect(addressOf('http://localhost:6006', 'the pull request on GitHub (sample)')).toBeNull()
   })
 })
