@@ -116,6 +116,20 @@ messages and events.
 The name `https://idea.dawn` and an app's Storybook shown inside the page need Caddy and dnsmasq, which none of
 this sets up. Without them, use `http://localhost:5180`.
 
+## From a phone
+
+The page has no sign-in, so it is never given a public address. A phone reaches it over Tailscale, a private network
+only your own devices are on:
+
+1. Install Tailscale on this computer and on the phone, signed in to the same account.
+2. In Tailscale's admin console, under DNS, turn on MagicDNS and HTTPS certificates.
+3. On this computer: `tailscale serve --bg 5180`. It prints the address, `https://<computer>.<network>.ts.net`.
+4. Open that address on the phone. `tailscale serve status` shows it again; `tailscale serve reset` turns it off.
+
+What does not work from the phone: the smoke test's and prototype's views and an app's Storybook (they are addresses
+on this computer), and the smoke terminal (it answers only to the page's own address, `UI_URL`). Links the engine
+writes still say `UI_URL`.
+
 ## Keys for integrations
 
 An integration that the engine calls (Linear, Confluence) needs a key. Settings hold only the name of its variable.

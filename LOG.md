@@ -4801,6 +4801,15 @@ setting it up, with "Start it now" for the person. One made with no brief starts
 Not done: a prototype with no screen and a brief shows the same "setting it up" line until it has a guide.
 
 
+## The page from a phone, over Tailscale (Sandy, 2026-11-18: "could we have a mobile version that works not on the machine where this is running" … "So let's set up Tailscale then.")
+
+Decided: a private network, never a public address. The page has no sign-in and can start agents and open a
+terminal on the computer. Tailscale's Personal plan is free; `tailscale serve` gives the page an https name only
+Sandy's devices can open. The page's server now answers to `.ts.net` names. How: docs/running-it.md, "From a phone".
+
+Not done: screens made for a phone (what needs you, conversations, approvals, smoke marks); the views and the
+terminal, which stay on the computer.
+
 ## Steps, stages and probes: what was decided (Sandy, 2026-11-18, from CEB-79: "Builders … have no Skill tool and no step skills … every commit still came out as `feat(CEB-84): ...`"; then "let's do it. Probes and checks don't change code. They can create additional subtasks … or steps")
 
 Found on CEB-79 (enterprise-dashboard, Main): the repository had a naming skill and no builder could use it; branch
