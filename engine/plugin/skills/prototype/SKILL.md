@@ -92,6 +92,8 @@ Duplicated or clumsy code is fine; a skipped or faked layer is not.
 - Never commit real personal data. Recorded real runs stay local and gitignored.
 - Never push to, rebase or change a branch you were given as a starting point; copy it into your own and build there.
 - Follow the repository's own conventions (AGENTS.md / CLAUDE.md): structure, naming, migrations, privacy rules.
+- The server is not started when the prototype is made. Start it yourself (`run_prototype`) once the worktree is set
+  up and there is something to see, and check it answers.
 - Restart the server yourself (`run_prototype`) after a change that needs it.
 
 ## Reporting

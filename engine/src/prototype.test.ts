@@ -36,6 +36,17 @@ describe.skipIf(!reachable)('prototypes', () => {
     await expect(startPrototype({ appId, title: 'Checkout' })).rejects.toThrow(/no prototype command/)
   })
 
+  it('one an agent is about to build waits: its server starts when the agent says, not when it is made', async () => {
+    await setPrototypeCommand(appId, SERVER)
+    const p = await startPrototype({ appId, title: 'Waits (sample)', wait: true })
+    expect(p).toMatchObject({ status: 'stopped', url: null, up: false, notStarted: true })
+    expect(existsSync(join(p.path, 'a.txt'))).toBe(true) // the worktree is there to set up
+    const started = await runPrototype(p.id, 'agent')
+    expect(started.status).toBe('running')
+    expect(started.notStarted).toBeUndefined()
+    expect(await until(async () => (await prototypeStatus(p.id)).up)).toBe(true)
+    await discardPrototype(p.id)
+  })
   it('starts in a worktree of its own, serves on its port, stops, starts again and is discarded', async () => {
     await setPrototypeCommand(appId, SERVER)
     const p = await startPrototype({ appId, title: 'One-tap checkout!' })
@@ -64,7 +75,7 @@ describe.skipIf(!reachable)('prototypes', () => {
     expect((await talkFor(p.id)).id).toBe(p.sessionId)
     const shown = await db.select().from(event).where(and(eq(event.appId, appId)))
     expect(shown.map((e) => e.type)).toEqual(expect.arrayContaining(['ui.talk', 'ui.open', 'prototype.created', 'prototype.started']))
-    expect(shown.find((e) => e.type === 'ui.open')?.payload).toEqual({ tab: { kind: 'prototype', id: p.id } }) // a tab, never a split
+    expect(shown.filter((e) => e.type === 'ui.open').map((e) => e.payload)).toContainEqual({ tab: { kind: 'prototype', id: p.id } }) // a tab, never a split
 
     await discardPrototype(p.id)
     expect((await db.select().from(session).where(eq(session.id, p.sessionId)))[0].status).toBe('ended')

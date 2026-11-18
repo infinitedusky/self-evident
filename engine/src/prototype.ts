@@ -72,13 +72,13 @@ export async function prototypeStatus(id: string) {
   const on = alive(id)
   const url = p.port ? `http://localhost:${p.port}` : null
   const { dbCfg } = await setupOf(p.appId)
-  const { stopCmd, discardCmd } = await setupOf(p.appId)
+  const { stopCmd, discardCmd, cmd } = await setupOf(p.appId)
   const data = dbCfg ? { database: databaseName(slugOf(p)), scenarios: await listScenarios({ appId: p.appId, prototypeId: p.id }, p.path).catch(() => []) } : { database: null, scenarios: [] }
   const up = on && url ? await answers(url) : false
   // Once it answers: does it listen anywhere it was not told to?
   const stray = up ? await straysOf(running.get(id), (ports) => emit(p, 'prototype.stray_port', 'engine', { ports, note: straySays(ports) })) : []
   const staleGuide = guideOf(p)?.stale ?? []
-  return { ...p, ...data, ...(staleGuide.length ? { guideNote: staleSays(staleGuide) } : {}), ...(hasGuide(p) ? {} : { needsGuide: NO_GUIDE }), cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
+  return { ...p, ...data, ...(staleGuide.length ? { guideNote: staleSays(staleGuide) } : {}), ...(hasGuide(p) ? {} : { needsGuide: NO_GUIDE }), /** Its server has never been started: its agent starts it once it is set up. */ ...(p.status === 'stopped' && p.port === null && cmd ? { notStarted: true } : {}), cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
 }
 
 export async function listPrototypes(appId: string) {
@@ -128,7 +128,7 @@ export type Depth = 'full' | 'rough'
 export const depthOf = (own: unknown, appSetup: unknown): Depth =>
   own === 'full' || own === 'rough' ? own : (appSetup as { prototype_depth?: string } | null)?.prototype_depth === 'rough' ? 'rough' : 'full'
 
-export async function startPrototype(i: { depth?: Depth | null; appId: string; title: string; brief?: string; projectId?: string | null; ideaId?: string | null; issueId?: string | null; actor?: string; /** false for something with no screen (a collector, a library, a command): no server is started, and it is tried by the commands of its guide. */ server?: boolean }) {
+export async function startPrototype(i: { depth?: Depth | null; appId: string; title: string; brief?: string; projectId?: string | null; ideaId?: string | null; issueId?: string | null; actor?: string; /** false for something with no screen (a collector, a library, a command): no server is started, and it is tried by the commands of its guide. */ server?: boolean; /** Its server is not started with it: its agent starts it once the worktree is set up. Unset: when it has a brief, so an agent builds it at once. */ wait?: boolean }) {
   if ([i.projectId, i.ideaId, i.issueId].filter(Boolean).length > 1) throw new PlanError('a prototype is a step of one thing: an idea, a task or a project')
   const { a, repoPath, cmd } = await setupOf(i.appId)
   if (!repoPath) throw new PlanError(`${a.name} has no local checkout to prototype in`)
@@ -140,7 +140,11 @@ export async function startPrototype(i: { depth?: Depth | null; appId: string; t
   await addWorktree(repoPath, path, branch, a.defaultBranch)
   const [row] = await db.insert(prototype).values({ id, appId: i.appId, projectId: i.projectId ?? null, ideaId: i.ideaId ?? null, issueId: i.issueId ?? null, title: i.title, brief: i.brief?.trim() || null, depth: depthOf(i.depth, a.setup), branch, path, createdBy: i.actor ?? 'person' }).returning()
   await emit(row, 'prototype.created', i.actor ?? 'person', { branch })
-  const status = i.server === false ? await prototypeStatus(id) : await runPrototype(id, i.actor)
+  // With an agent about to build it, the server waits for the agent (Sandy, 2026-11-18: "it seems to want to open the prototype right
+  // away, before the agent has had a chance to actually set up the work tree, and it ends up failing"): the worktree is the default
+  // branch as it stands, with nothing installed. The agent starts it (run_prototype) when there is something to run.
+  const waits = i.wait ?? !!row.brief
+  const status = i.server === false || waits ? await prototypeStatus(id) : await runPrototype(id, i.actor)
   const talk = await talkFor(id)
   if (row.brief) await say(talk.id, row.brief, undefined, { author: 'engine', kind: 'brief' })
   await openTab(row)

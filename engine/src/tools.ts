@@ -229,7 +229,7 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         if (a.remove) return unshowInPrototype(a.prototypeId, a.file ?? a.url, actor)
         return showInPrototype(a.prototypeId, a, actor)
       })),
-      def('run_prototype', 'Start a stopped prototype\'s server again, on a fresh port; restart=true stops it first (after a change that needs a restart).', { prototypeId: z.string(), restart: z.boolean().optional() },
+      def('run_prototype', 'Start a prototype\'s server: the first time, once its worktree is set up and there is something to see (it is not started when the prototype is made); or again when it is stopped, on a fresh port; restart=true stops it first (after a change that needs a restart).', { prototypeId: z.string(), restart: z.boolean().optional() },
         async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return runPrototype(a.prototypeId, actor, { restart: a.restart }) })),
       def('stop_prototype', 'Stop a prototype\'s server; its worktree stays.', { prototypeId: z.string() },
         async (a) => tryIt(async () => { await ownPrototype(a.prototypeId); return stopPrototype(a.prototypeId, actor) })),

@@ -118,3 +118,15 @@ export const RebuildOffersAKeptScenario: Story = {
   beforeEach: withEngine({ prototypes: [{ ...running, database: 'proto_sample', scenario: null, scenarios: ['three-overdue', 'default'] }] }),
   play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('button', { name: 'Reset the data' })).toHaveAttribute('title', 'Build it again from the scenario "default"') },
 }
+
+/** Just made, with an agent about to build it (made up): nothing is started, so nothing fails; it says who starts it. */
+export const AgentSettingItUp: Story = {
+  args: { id: running.id, path: at },
+  beforeEach: withEngine({ prototypes: [{ ...running, status: 'stopped', url: null, up: false, notStarted: true }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/Its agent is setting it up, and starts it when there is something to see/)).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Start it now' })).toBeInTheDocument()
+  },
+}
+
