@@ -11,6 +11,11 @@
  * should have links to test like the prototype guides"): the path, on whatever port this run has, opening in its own
  * tab, with "Go there" to send the view beside it. Before it is running the path is still shown, as words.
  *
+ * The view is a small browser (Sandy, 2026-11-17: "back buttons and an address bar … so I can type in an address or
+ * go back"): back, forward, reload and an address to type in, as the prototype's view has. Back and forward step
+ * through where this page sent the view (an address typed, a check's "Go there"); the built code is another origin,
+ * so links pressed inside it are not seen here.
+ *
  * Reading first: a check shows Pass and Fail, and a note is asked for only once one is pressed (a fail needs one:
  * it is what the fix works from). After a QA test run in TestRail and a GitHub deployment's "View deployment":
  * the thing under test and the list to tick off, side by side.
@@ -37,7 +42,12 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   const [v, setV] = useState<SmokeView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [at, setAt] = useState<string | null>(null) // where the view is, when a check sent it somewhere
+  const [trail, setTrail] = useState<{ list: string[]; i: number }>({ list: [], i: -1 }) // where the view was sent, in order, and which of them it is at
+  const [typed, setTyped] = useState<string | null>(null) // what is in the address bar while it is being typed
+  const [reloads, setReloads] = useState(0)
+  const at = trail.list[trail.i] ?? null
+  const setAt = (to: string | null) => { setTyped(null); setTrail((t) => (to === null ? { list: [], i: -1 } : t.list[t.i] === to ? t : { list: [...t.list.slice(0, t.i + 1), to], i: t.i + 1 })) }
+  const step = (by: number) => { setTyped(null); setTrail((t) => ({ ...t, i: Math.max(-1, Math.min(t.list.length - 1, t.i + by)) })) }
   const [marking, setMarking] = useState<{ id: string; pass: boolean } | null>(null)
   const [note, setNote] = useState('')
   const [sent, setSent] = useState<number | null>(null)
@@ -144,7 +154,22 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
             {src && (local ? su.up : true) && (
               <>
                 <div className="smoke-bar">
-                  <code className="smoke-address">{src}</code>
+                  {local ? (() => {
+                    const home = su.url!.replace(/\/$/, '')
+                    const path = src.startsWith(home) ? src.slice(home.length) || '/' : src // somewhere else entirely: the whole address
+                    const go = (to: string) => { const x = to.trim(); if (x) setAt(/^https?:\/\//.test(x) ? x : `${home}${x.startsWith('/') ? x : `/${x}`}`) }
+                    return (
+                      <>
+                        <button className="icon-btn" disabled={trail.i < 0} onClick={() => step(-1)} title="Back" aria-label="Back">←</button>
+                        <button className="icon-btn" disabled={trail.i >= trail.list.length - 1} onClick={() => step(1)} title="Forward" aria-label="Forward">→</button>
+                        <button className="icon-btn" onClick={() => setReloads((n) => n + 1)} title="Reload" aria-label="Reload">↻</button>
+                        <form className="preview-address smoke-address" onSubmit={(e) => { e.preventDefault(); go(typed ?? path) }}>
+                          {src.startsWith(home) && <span className="faint mono">{home}</span>}
+                          <input className="mono" value={typed ?? path} onChange={(e) => setTyped(e.target.value)} aria-label="Address" title="A path of the built code, or a whole address. Enter goes there." />
+                        </form>
+                      </>
+                    )
+                  })() : <code className="smoke-address">{src}</code>}
                   <a className="btn quiet small" href={src} target="_blank" rel="noreferrer">Open in a new tab</a>
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.startSmoke(issueId, false, many ? su.key : undefined))}>{behind ? 'Run the new commit' : 'Restart'}</button>}
                   {local && su.canClean && <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true, many ? su.key : undefined))}>Start clean</button>}
@@ -153,7 +178,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
                 {local && su.strayPorts?.length ? <p className="smoke-stale" role="note">{su.strayNote ?? `It also listens on ${su.strayPorts.join(', ')}, which it chose itself.`}</p> : null}
                 {behind && <p className="smoke-stale" role="note">The branch has moved on since this was started. Run the new commit to test what will be reviewed.</p>}
                 {local
-                  ? <iframe className="smoke-frame" title="The built code" src={src} />
+                  ? <iframe key={`${src}#${reloads}`} className="smoke-frame" title="The built code" src={src} />
                   : <div className="empty">{su.where === 'preview' && v.pr ? <>The preview of pull request #{v.pr.number}. It opens in its own tab, and is rebuilt on each new commit. </> : <>It is deployed, so it opens in its own tab. </>}{su.account && <>Sign in as: {su.account}. </>}{su.flag && <>Flag: <code>{su.flag}</code>. </>}</div>}
               </>
             )}

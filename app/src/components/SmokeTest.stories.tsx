@@ -18,7 +18,7 @@ export const ForYouToCheck: Story = {
     await expect(c.getByText(/Not the prototype/)).toBeInTheDocument()
     await expect(c.getByTitle('The built code')).toBeInTheDocument()
     await expect(c.getAllByRole('button', { name: 'Pass' })).toHaveLength(3)
-    await expect(c.queryByRole('textbox')).toBeNull() // no form until one is pressed
+    await expect(c.queryByRole('textbox', { name: /What you saw/ })).toBeNull() // no form until one is pressed
   },
 }
 /** Go there sends the view to that check's story; Fail asks what you saw and will not send without it. */
@@ -29,7 +29,7 @@ export const FailingOne: Story = {
     await expect(c.getByTitle('The built code')).toHaveAttribute('src', expect.stringContaining('iframe.html?id=edges-tunnel--default'))
     await userEvent.click(c.getAllByRole('button', { name: 'Fail' })[2])
     await expect(c.getByRole('button', { name: 'Mark it failed' })).toBeDisabled()
-    await userEvent.type(c.getByRole('textbox'), 'portal 22 fps, 45 without (sample)')
+    await userEvent.type(c.getByRole('textbox', { name: /What you saw/ }), 'portal 22 fps, 45 without (sample)')
     await userEvent.click(c.getByRole('button', { name: 'Mark it failed' }))
     await waitFor(() => expect(c.getByText('fail')).toBeInTheDocument())
     await expect(c.getByText(/2 of 3 for you to check/)).toBeInTheDocument()
@@ -41,7 +41,7 @@ export const SentBack: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Fail' }))
-    await userEvent.type(c.getByRole('textbox'), 'portal 22 fps, 45 without (sample)')
+    await userEvent.type(c.getByRole('textbox', { name: /What you saw/ }), 'portal 22 fps, 45 without (sample)')
     await userEvent.click(c.getByRole('button', { name: 'Mark it failed' }))
     await waitFor(() => expect(c.getByRole('status')).toHaveTextContent('Sent back: 1 that failed'))
   },
@@ -229,5 +229,28 @@ export const PlacesBeforeItRuns: Story = {
     await expect(await c.findByText('/import')).toBeInTheDocument()
     await expect(c.getAllByText('a link once it is running')).toHaveLength(2)
     await expect(c.queryByRole('link', { name: /↗$/ })).toBeNull()
+  },
+}
+
+/** The view as a small browser: type an address, go back, go forward (made up). Back and forward step through where this page sent it. */
+export const AddressBar: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, url: 'http://localhost:65487', checks: pathChecks } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const bar = await c.findByRole('textbox', { name: 'Address' })
+    const frame = () => c.getByTitle('The built code') as HTMLIFrameElement
+    await expect(bar).toHaveValue('/'); await expect(c.getByRole('button', { name: 'Back' })).toBeDisabled()
+    await userEvent.clear(bar); await userEvent.type(bar, 'employees{Enter}')
+    await waitFor(() => expect(frame().getAttribute('src')).toBe('http://localhost:65487/employees'))
+    await userEvent.click(c.getAllByRole('button', { name: 'Go there' })[0])
+    await waitFor(() => expect(c.getByRole('textbox', { name: 'Address' })).toHaveValue('/import'))
+    await userEvent.click(c.getByRole('button', { name: 'Back' }))
+    await waitFor(() => expect(frame().getAttribute('src')).toBe('http://localhost:65487/employees'))
+    await userEvent.click(c.getByRole('button', { name: 'Back' }))
+    await waitFor(() => expect(frame().getAttribute('src')).toBe('http://localhost:65487'))
+    await expect(c.getByRole('button', { name: 'Back' })).toBeDisabled()
+    await userEvent.click(c.getByRole('button', { name: 'Forward' }))
+    await waitFor(() => expect(c.getByRole('textbox', { name: 'Address' })).toHaveValue('/employees'))
+    await expect(c.getByRole('button', { name: 'Reload' })).toBeEnabled()
   },
 }

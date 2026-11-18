@@ -4667,3 +4667,13 @@ Not done: a criterion whose words name no path still has no link (an agent or th
 place cannot be edited on the smoke test page itself. Seen while testing, and failing on main as well: the
 stacked pull requests test in `github.test.ts`.
 
+### The view is a small browser (Sandy, 2026-11-17: "back buttons and an address bar … so I can type in an address or I can go back")
+
+Where the built code runs here, the bar above it now has back, forward, reload and an address to type in (a path
+of the build, or a whole address), as the prototype's view has. Back and forward step through where this page
+sent the view: an address typed, a check's "Go there".
+
+Not done: links pressed inside the built code are not seen (it is another origin), so the address bar does not
+follow them and Back does not undo them. Following them needs the build served through a proxy of ours that
+reports its address, as a shared prototype's guide is.
+
