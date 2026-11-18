@@ -69,7 +69,7 @@ const ENGINE: Record<string, [Risk, string]> = {
   go_back: ['expensive', 'moves every worktree of the task and the task itself to another task branch'],
   delete_saved: ['expensive', 'removes a save point or a set-aside task branch, with the work that is only there'],
   set_learning: ['cheap', 'writes a document about the codebase on the Learn page; writing it again replaces it'],
-  set_guide: ['cheap', 'writes what a visitor to a shared prototype is told; easy to change'],
+  set_guide: ['cheap', 'writes the prototype\'s guide: what to try and in what order; easy to change'],
   start_project: ['expensive', 'runs agents, spends money, opens a pull request'],
 }
 

@@ -190,6 +190,8 @@ export interface StepState {
   status: 'none' | 'started' | 'done' | 'skipped' // skipped: a person said this optional step is not being done here
   detail?: string // "2 stories", "running", "draft"
   approved?: { by: string; at: string } // on a task: the brief, and each step a person approves (needsApproval)
+  /** What it still needs before it can be said done or approved, in a line for the person (a prototype with no guide). */
+  needs?: string
 }
 
 export type Source = 'task' | 'project' | 'app'

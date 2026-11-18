@@ -49,8 +49,10 @@ approach altogether) is the prototype analysis's job, and the build follows what
    shape is identical). When nothing real can be had, write the stand-in from the best reference and say plainly that
    the shape is assumed.
 3. **It runs as the app runs.** Started by the app's prototype command, on the app's real database engine, with the
-   app's own services; rebuilt from a labelled scenario (`.prototype/scenarios/<name>/`). Save scenarios that show
-   each requirement, including empty and edge cases (nothing found, many found, re-run).
+   app's own services; rebuilt from a named scenario. Scenarios are made-up rows kept in Self Evident, never files
+   on the branch: write one with `prototype_data` (write), keep the current data with it (save), load one with it
+   (reset). Keep scenarios that show each requirement, including empty and edge cases (nothing found, many found,
+   re-run). Do not add sample data files or a `.prototype` folder to the repository.
 4. **It answers the hard questions by trying them.** Where the brief leaves a design choice open (one record per scan
    or per finding, where a field is stored, how duplicates are avoided), pick one, build it properly, and note what it
    showed.
@@ -63,6 +65,13 @@ approach altogether) is the prototype analysis's job, and the build follows what
    Cover at least: data coming in (found, skipped, absent), writes (inserted, updated, pruned), failures, latency of
    the new reads, and the user actions that show the feature is used. Emit them in the prototype where it is cheap, so
    the analysis can see them work; the full list goes in the report either way.
+
+7. **It has a guide** (`set_guide`). A one-line intro saying what this is and that the data is made up, then steps
+   in the order to try them. Each step has a path that opens on the prototype (or a run command, for something with
+   no screen) and, in a sentence a stranger could follow, what to try and what they should see. Together the steps
+   cover every acceptance criterion the prototype shows. Self Evident checks every path, so write it after the data
+   is in place, using that data's real ids; after a data rebuild that changes ids, write it again. The prototype
+   cannot be said done or approved without one.
 
 ## Where fakes go, and where they don't
 
@@ -91,6 +100,8 @@ When you say you are done, report against the checklist, one line per requiremen
 
 - **Not met**: why, and what it would take. Plainly, before anything else.
 - **Met**: how to see it in the running prototype (page, record, scenario, script).
+
+Then the guide: that it is set, and how many steps.
 
 Then: each seam and stub used (existing or added), what is assumed rather than recorded from the real service, and
 what was hard or surprising; the analysis reads it.
