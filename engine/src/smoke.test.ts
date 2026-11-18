@@ -164,6 +164,9 @@ describe.skipIf(!reachable)('a person marks a check', () => {
     const [a] = await db.select().from(app).where(eq(app.id, own))
     expect(a.setup).toMatchObject({ prototype_cmd: 'pnpm dev --port $PORT', smoke: { where: 'local', account: 'the test parent (sample)', cmd: 'pnpm install\npnpm dev --port $PORT', stop: 'docker compose down' } }) // the rest of its settings as they were
     await expect(setSmokeSetup(own, { script: 'x'.repeat(20_001) })).rejects.toThrow(/20000 characters at most/)
+    // What is checked there, on the one set-up an app always had: it is kept and comes back (it was written and never read, 2026-11-17).
+    expect((await setSmokeSetup(own, { what: 'The dashboard, signed in as the test admin (sample)' })).setups[0]).toMatchObject({ key: 'main', name: 'Smoke test', what: 'The dashboard, signed in as the test admin (sample)', script: 'pnpm install\npnpm dev --port $PORT' })
+    expect((await smokeSetupOf(own)).setups[0].what).toBe('The dashboard, signed in as the test admin (sample)')
     // A second set-up: it needs a name; the one the app had becomes the first of a list, as it was.
     await expect(setSmokeSetup(own, { setup: 'docs', script: 'pnpm docs:dev --port $PORT' })).rejects.toThrow(/no set-up "docs" \(main\): give a name to add it/)
     const two = await setSmokeSetup(own, { setup: 'Docs site', name: 'Docs site (sample)', what: 'the documentation, to see it is accurate (sample)', script: 'pnpm docs:dev --port $PORT' })

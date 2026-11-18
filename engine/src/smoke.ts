@@ -81,7 +81,9 @@ export function smokeSetups(setup: unknown): NamedSetup[] {
     if (!x || !key || out.some((o) => o.key === key) || out.length >= SETUPS_MAX) continue
     out.push({ key, name: text(x.name, 60) ?? key, ...(text(x.what, 300) ? { what: text(x.what, 300) } : {}), ...one(x) })
   }
-  return out.length ? out : [{ key: MAIN, name: 'Smoke test', ...one(s) }]
+  // The one it always had: its name and what is checked there are kept beside its other settings.
+  const own = s as { name?: unknown; what?: unknown }
+  return out.length ? out : [{ key: MAIN, name: text(own.name, 60) ?? 'Smoke test', ...(text(own.what, 300) ? { what: text(own.what, 300) } : {}), ...one(s) }]
 }
 /** One set-up: the one of that key, else the app's first. Local when the app has said nothing, which is where its prototypes run. */
 export function smokeSetup(setup: unknown, key?: string | null): SmokeSetup {
