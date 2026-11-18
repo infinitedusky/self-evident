@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Criterion } from './acceptance.js'
 import { DEFAULT_REQUIREMENTS } from './requirements.js'
-import { afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, LEAVE_LONG_RUNS, numbered, PROBE_TITLE, probeBrief, readVerdicts, reqId, requirementsChecked, unmetOf } from './verify.js'
+import { afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, LEAVE_LONG_RUNS, numbered, readVerdicts, reqId, requirementsChecked, unmetOf } from './verify.js'
 import { ONE_GO_TITLE, oneGoBrief, oneGoProposal, validateProposal } from './planner.js'
 
 const at = '2026-11-16T00:00:00.000Z'
@@ -12,8 +12,8 @@ const criteria: Criterion[] = [
 ]
 
 describe('what comes next once a task is built', () => {
-  const on = (titles: string[], unmet = 0, more: { listed?: boolean; testCmd?: boolean; loop?: boolean } = {}) => afterBuild({ titles, listed: more.listed ?? true, unmet, testCmd: more.testCmd ?? true, loop: more.loop })
-  const B = ONE_GO_TITLE, C = CHECK_TITLE, F = FINISH_TITLE, P = PROBE_TITLE
+  const on = (titles: string[], unmet = 0, more: { listed?: boolean; testCmd?: boolean; loop?: boolean; probe?: 'run' | 'fix' | 'stuck' | 'done' } = {}) => afterBuild({ titles, listed: more.listed ?? true, unmet, commands: more.testCmd ?? true, loop: more.loop, probe: more.probe ?? (titles.some((t) => t.startsWith('Probe: ')) ? 'done' : 'run') })
+  const B = ONE_GO_TITLE, C = CHECK_TITLE, F = FINISH_TITLE, P = 'Probe: Try to break it'
   it('check, then the probe, then the whole test run, when the check finds everything done', () => {
     expect(on([B])).toEqual({ do: 'check', round: 1 })
     expect(on([B, C])).toEqual({ do: 'probe' })
@@ -33,6 +33,9 @@ describe('what comes next once a task is built', () => {
   it('with nothing to check it goes to the probe; a fix after the test run is not probed again', () => {
     expect(on([B], 0, { listed: false })).toEqual({ do: 'probe' })
     expect(on([B, C, P, 'Fix what the whole test run found'])).toEqual({ do: 'test' })
+    // What the probes found is sent back, and after three rounds it is a person's.
+    expect(on([B, C, P], 0, { probe: 'fix' })).toEqual({ do: 'probe_fix' }); expect(on([B, C, P], 0, { probe: 'stuck' })).toEqual({ do: 'probe_stuck' })
+    expect(on([B, C], 2, { probe: 'run' })).toEqual({ do: 'finish', round: 1 }) // never before the list is done
   })
   it('Legacy is as it was: its criteria checked once, then the test run; no finish, no probe', () => {
     expect(on(['A', 'B'], 0, { loop: false })).toEqual({ do: 'check', round: 1 })
@@ -68,10 +71,6 @@ describe('the list a build is checked against', () => {
     const f = finishBrief(unmet, 2)
     expect(f).toContain('these 2 not done (round 2 of 3)'); expect(f).toContain('[ac_2] Running it twice makes no duplicates (sample)\n  Missing: the second run adds a row'); expect(f).toContain('[req_telemetry] Telemetry:')
     expect(finishBrief([unmet[0]], 1)).toMatch(/^A check of what was built found this not done\. Do it, and nothing else/)
-  })
-  it('the probe is told it did not build it, to try to break it, to clean up, and how to report', () => {
-    const p = probeBrief(criteria, 'main')
-    for (const s of ['You did not build this', 'Try to break it', 'git diff main...HEAD', 'debug output', '**Broke and left**', '[ac_1]', 'never a sweep of every page']) expect(p).toContain(s)
   })
 })
 

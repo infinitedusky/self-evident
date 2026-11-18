@@ -190,6 +190,7 @@ export const issue = pgTable('issue', {
   reason: text('reason'), // canceled or duplicate: why
   handover: jsonb('handover').$type<{ text: string | null; sessionId: string; at: string }>(), // what the conversation that made it said about it, written once when its agent starts (handover.ts); text null: it said nothing more
   speed: text('speed'), // careful | fast, when the task says so; null: the app's (steps.ts, Speed)
+  probes: jsonb('probes').$type<{ key: string; name: string; kind: 'command' | 'skill' | 'built-in'; pass: boolean | null; evidence: string; findings: string[]; blocks: boolean; fixes: number; at: string }[]>(), // what each probe of its build found, the latest for each (probes.ts)
   requirements: jsonb('requirements').$type<{ key: string; name: string; applies: boolean; how: string; built?: boolean }[]>(), // how its plan covers each requirement in force, as the planner said (requirements.ts)
   createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
   startedAt: at('started_at'), completedAt: at('completed_at'), canceledAt: at('canceled_at'), closedBy: text('closed_by'),

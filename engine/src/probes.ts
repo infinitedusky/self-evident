@@ -1,0 +1,183 @@
+/**
+ * Probes: what the engine runs on a build to find out whether it holds (LOG.md, 2026-11-18, "Steps, stages and
+ * probes"). One shape for every kind: a name, what it runs, whether a failure holds the pull request, and a result
+ * of pass or fail with evidence. They are the Verify stage of the build, for a task on the Main workflow.
+ *
+ *   command   a shell command the engine runs itself in the task's worktree: the exit code is the verdict, the end
+ *             of the output the evidence. The app's test command is one (key `tests`).
+ *   skill     a fresh agent that invokes one skill and reviews the change by it (a security review, say).
+ *   built-in  one the engine brings: "Try to break it", "Comment discipline".
+ *
+ * A probe changes nothing (Sandy, 2026-11-18: "Probes and checks don't change code. They can create additional
+ * subtasks"). What the agents' probes find is sent back to a builder as one sub-task for the round, and only the
+ * probes that failed are run again; three rounds at most, then a person. A client's own requirement is a probe added
+ * to the app (`setup.probes`, set_probe), never a new step.
+ *
+ * Results are kept on the task (issue.probes), the latest for each probe.
+ */
+import { acceptanceLines, type Criterion } from './acceptance.js'
+import { LONG_RUN, MAX_ROUNDS } from './verify.js'
+
+export type ProbeKind = 'command' | 'skill' | 'built-in'
+export interface Probe { key: string; name: string; kind: ProbeKind; /** The command, the skill as a session names it, or what a built-in does. */ runs: string; /** false: reported, and nothing is held or sent back. */ blocks: boolean; on: boolean }
+export interface ProbeResult { key: string; name: string; kind: ProbeKind; /** null: it could not be run (its skill is not there, its agent gave no verdict). */ pass: boolean | null; evidence: string; findings: string[]; blocks: boolean; /** How many rounds of fixes had landed when it ran: a failure older than the last fix is run again. */ fixes: number; at: string }
+
+export const TESTS_KEY = 'tests'
+/** What the engine brings to every app; an app switches one off, or to report only, by its key. */
+export const BUILT_IN: Probe[] = [
+  { key: 'break', name: 'Try to break it', kind: 'built-in', runs: 'used the way a person would, then the cases nobody wrote down', blocks: true, on: true },
+  { key: 'comments', name: 'Comment discipline', kind: 'built-in', runs: 'no debug output, dead code, commented-out code or stray TODOs in the change', blocks: false, on: true },
+]
+
+const keyOf = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40)
+
+/** What Settings or an agent saved, tidied: a built-in's switches by its key; the app's own, a command or a skill with something to run. */
+export function cleanProbes(given: unknown): Partial<Probe>[] {
+  if (!Array.isArray(given)) return []
+  const seen = new Set<string>()
+  const out: Partial<Probe>[] = []
+  for (const g of given as Partial<Probe>[]) {
+    const key = keyOf(String(g?.key || g?.name || ''))
+    if (!key || seen.has(key)) continue
+    const builtIn = BUILT_IN.some((b) => b.key === key) || key === TESTS_KEY
+    const switches = { ...(typeof g.on === 'boolean' ? { on: g.on } : {}), ...(typeof g.blocks === 'boolean' ? { blocks: g.blocks } : {}) }
+    if (builtIn) { seen.add(key); out.push({ key, ...switches }); continue }
+    const runs = String(g.runs ?? '').trim().slice(0, 500), name = String(g.name ?? '').trim().slice(0, 80)
+    if (!runs || !name || (g.kind !== 'command' && g.kind !== 'skill')) continue
+    seen.add(key); out.push({ key, name, kind: g.kind, runs, ...switches })
+  }
+  return out
+}
+
+/** An app's probes, in the order they are shown: the engine's own, the app's test command, then the app's. Every one, on or off. */
+export function probesOf(setup: unknown): Probe[] {
+  const s = (setup ?? {}) as { probes?: unknown; test_cmd?: string }
+  const own = cleanProbes(s.probes)
+  const over = (p: Probe): Probe => { const o = own.find((x) => x.key === p.key); return { ...p, on: o?.on ?? p.on, blocks: o?.blocks ?? p.blocks } }
+  const tests: Probe[] = s.test_cmd?.trim() ? [{ key: TESTS_KEY, name: 'Tests', kind: 'command', runs: s.test_cmd.trim(), blocks: true, on: true }] : []
+  return [...BUILT_IN.map(over), ...tests.map(over), ...own.filter((p): p is Probe & Partial<Probe> => !!p.kind).map((p) => ({ key: p.key!, name: p.name!, kind: p.kind!, runs: p.runs!, blocks: p.blocks ?? true, on: p.on ?? true }))]
+}
+export const inForce = (setup: unknown) => probesOf(setup).filter((p) => p.on)
+/** The ones an agent runs, each a sub-task of its own. */
+export const agentProbes = (setup: unknown) => inForce(setup).filter((p) => p.kind !== 'command')
+/** The ones the engine runs itself, last, on the merged work. */
+export const commandProbes = (setup: unknown) => inForce(setup).filter((p) => p.kind === 'command')
+
+/** The sub-tasks' titles: how the engine knows them (as verify.ts does for the check). */
+export const PROBE_PREFIX = 'Probe: '
+export const PROBE_FIX_TITLE = 'Fix what the probes found'
+export const probeTitle = (p: { name: string }, run = 1) => `${PROBE_PREFIX}${p.name}${run > 1 ? ` (${run})` : ''}`
+/** The probe a sub-task ran, from its title. */
+export const probeOfTitle = (title: string, probes: Probe[]) => (title.startsWith(PROBE_PREFIX) ? probes.find((p) => title === probeTitle(p) || title.startsWith(`${PROBE_PREFIX}${p.name} (`)) ?? null : null)
+
+export type NextProbe = { do: 'run'; probe: Probe; run: number } | { do: 'fix'; round: number; failing: ProbeResult[] } | { do: 'stuck'; failing: ProbeResult[] } | { do: 'done' }
+
+/**
+ * What the agents' probes do next. Pure. Each is run once; when all have a result, what the blocking ones found is
+ * sent back together; then the ones that failed are run again. `fixes` is how many of those rounds have landed.
+ */
+export function nextProbe(probes: Probe[], results: ProbeResult[], fixes: number): NextProbe {
+  const of = (p: Probe) => results.find((r) => r.key === p.key)
+  const stale = (p: Probe) => { const r = of(p); return !r || (r.pass === false && r.blocks && r.fixes < fixes) }
+  const first = probes.find(stale)
+  if (first) return { do: 'run', probe: first, run: of(first) ? fixes + 1 : 1 }
+  const failing = probes.map(of).filter((r): r is ProbeResult => !!r && r.pass === false && r.blocks)
+  if (!failing.length) return { do: 'done' }
+  return fixes < MAX_ROUNDS ? { do: 'fix', round: fixes + 1, failing } : { do: 'stuck', failing }
+}
+
+const VERDICT = [
+  'You change nothing: no file, no commit. What you find is sent to a builder, so say exactly where and how to see each thing.',
+  '',
+  'End your summary with this block and nothing after it, valid JSON. pass is false if you found anything a builder must fix; evidence is one line, under 160 characters, on what you did and saw; findings is one entry for each thing to fix, each with where it is and how to see it (empty when pass is true).',
+  '',
+  '```probe',
+  '{"pass":false,"evidence":"…","findings":["…"]}',
+  '```',
+]
+
+/** A probe's instructions for its agent: the engine's own two, or a skill run as a reviewer. */
+export function probeBrief(p: Probe, criteria: Criterion[], base: string): string {
+  const head = 'You did not build this. It is built, merged on this branch and checked against its list.'
+  if (p.key === 'break') return [
+    `${head} Find out whether it really works.`,
+    '',
+    `Run it and use it the way a person would. Keep each try short: a scenario of a minute or two, never a sweep of every page or every case; what would take ${LONG_RUN} is a person's, after you.`,
+    '- Each acceptance criterion as a scenario, start to finish.',
+    '- Then what nobody wrote down: nothing entered, far too much, the same thing twice, steps out of order, the wrong kind of input, a failure halfway (a service down, a slow answer).',
+    '- What it sits next to: the pages and calls that share code with it still do what they did.',
+    '- Stop any server you start.',
+    ...(criteria.length ? ['', 'The acceptance criteria:', acceptanceLines(criteria)] : []),
+    '', ...VERDICT,
+  ].join('\n')
+  if (p.key === 'comments') return [
+    `${head} Read the change for what a build leaves behind.`,
+    '',
+    `Read it (git diff ${base}...HEAD): debug output, dead code, commented-out code, TODOs with nobody to do them, files that do not belong, a test that asserts nothing, a comment that says what the code says or that is no longer true, a name that says the wrong thing.`,
+    '', ...VERDICT,
+  ].join('\n')
+  return [
+    `${head} Review it by this app's skill \`${p.runs}\`.`,
+    '',
+    `Invoke \`${p.runs}\` with the Skill tool before anything else, and review the change (git diff ${base}...HEAD) the way it says. Where the skill says how to report, its findings still go in the block below.`,
+    '', ...VERDICT,
+  ].join('\n')
+}
+
+/** The verdict at the end of a probe's summary; null when there is none to read. */
+export function readProbe(summary: string | null | undefined): { pass: boolean; evidence: string; findings: string[] } | null {
+  const raw = [...(summary ?? '').matchAll(/```probe\s*([\s\S]*?)```/g)].pop()?.[1]
+  if (!raw?.trim()) return null
+  try {
+    const v = JSON.parse(raw) as { pass?: unknown; evidence?: unknown; findings?: unknown }
+    if (typeof v?.pass !== 'boolean') return null
+    const findings = Array.isArray(v.findings) ? v.findings.filter((f): f is string => typeof f === 'string' && !!f.trim()).map((f) => f.trim().slice(0, 600)).slice(0, 30) : []
+    return { pass: v.pass && !findings.length, evidence: String(v.evidence ?? '').replace(/\s+/g, ' ').trim().slice(0, 300), findings }
+  } catch { return null }
+}
+
+/** A result for the task, from what a probe's agent said (or did not). */
+export function resultOf(p: Probe, summary: string | null | undefined, fixes: number, at = new Date().toISOString()): ProbeResult {
+  const v = readProbe(summary)
+  return { key: p.key, name: p.name, kind: p.kind, pass: v?.pass ?? null, evidence: v?.evidence || (v ? '' : 'Its agent gave no verdict.'), findings: v?.findings ?? [], blocks: p.blocks, fixes, at }
+}
+
+/** The latest result for each probe: `r` over what was held. */
+export const withResult = (held: ProbeResult[] | null | undefined, r: ProbeResult): ProbeResult[] => [...(held ?? []).filter((x) => x.key !== r.key), r]
+
+/** What the probes found, sent back to a builder: every finding of the round in one sub-task. */
+export const probeFixBrief = (failing: ProbeResult[], round: number) => [
+  `Probes of what was built found ${failing.reduce((n, r) => n + Math.max(1, r.findings.length), 0) === 1 ? 'this' : 'these'}${round > 1 ? ` (round ${round} of ${MAX_ROUNDS})` : ''}. Fix each one, with a test where it is behaviour, and nothing else: what works stays as it is.`,
+  '',
+  ...failing.flatMap((r) => [`${r.name}:`, ...(r.findings.length ? r.findings : [r.evidence || 'it failed, and did not say what']).map((f) => `- ${f}`), '']),
+  'Each probe that failed is run again when you finish, by an agent that only looks. Say in your summary where to look for each fix.',
+  'If one cannot be fixed as written, do not work around it: say exactly what stands in the way.',
+].join('\n')
+
+/** What a command probe that failed is sent back with. */
+export const commandFixBrief = (failed: { name: string; runs: string; detail: string }[]) => [
+  `Every sub-task of this task is merged, and ${failed.length === 1 ? 'this command then failed' : 'these commands then failed'} on the merged work. Nothing has been blamed yet.`,
+  '',
+  '1. Find the cause first: what fails, and which merged change broke it (git log on this branch)? Run the failing part alone.',
+  '2. Fix the cause. If it also fails on the default branch, or passes alone and fails only in the whole run, it is unreliable: make it reliable, and say so in your summary.',
+  `3. Run ${failed.length === 1 ? 'it' : 'each'} before you finish; this sub-task is the one that does: ${failed.map((f) => `\`${f.runs}\``).join(', ')}`,
+  ...failed.flatMap((f) => ['', `What \`${f.runs}\` said (${f.name}):`, '```', f.detail, '```']),
+].join('\n')
+
+/** Add, change or remove one probe of an app (set_probe): a built-in is switched by its key; the app's own is added or replaced by its key or name. */
+export async function setProbe(appId: string, i: { key?: string; name?: string; kind?: 'command' | 'skill'; runs?: string; blocks?: boolean; on?: boolean; remove?: boolean }) {
+  const { db } = await import('./db/client.js'); const { app } = await import('./db/schema.js'); const { eq } = await import('drizzle-orm')
+  const [a] = await db.select().from(app).where(eq(app.id, appId))
+  if (!a) throw new Error(`no app ${appId}`)
+  const key = keyOf(i.key || i.name || '')
+  if (!key) throw new Error('a probe needs a key or a name')
+  const held = cleanProbes((a.setup as { probes?: unknown } | null)?.probes)
+  const was = held.find((p) => p.key === key)
+  const builtIn = BUILT_IN.some((b) => b.key === key) || key === TESTS_KEY
+  if (!builtIn && !i.remove && !was && !(i.name?.trim() && i.kind && i.runs?.trim())) throw new Error('a new probe needs a name, a kind (command or skill) and what it runs')
+  const next = i.remove ? held.filter((p) => p.key !== key) : cleanProbes([...held.filter((p) => p.key !== key), { ...was, ...Object.fromEntries(Object.entries({ name: i.name, kind: i.kind, runs: i.runs, blocks: i.blocks, on: i.on }).filter(([, v]) => v !== undefined)), key }])
+  const setup = { ...(a.setup as Record<string, unknown>) }
+  if (next.length) setup.probes = next; else delete setup.probes
+  await db.update(app).set({ setup }).where(eq(app.id, appId))
+  return { probes: probesOf(setup) }
+}

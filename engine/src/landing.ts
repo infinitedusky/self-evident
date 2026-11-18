@@ -8,7 +8,7 @@
  * builder tests what it built; `wholeRun` runs the app's test command once, when every sub-task of the task is in.
  */
 import { spawn } from 'node:child_process'
-import { commitAll, fastForward, hasUncommitted, headSha, mergeInto } from './git.js'
+import { commitAll, fastForward, git, hasUncommitted, headSha, mergeInto } from './git.js'
 
 export interface LandInput {
   repoPath: string // the main checkout: owns the refs
@@ -16,6 +16,8 @@ export interface LandInput {
   integrationBranch: string
   testCmd?: string
   testTimeoutMs?: number
+  /** A check or a probe: it changes nothing, so what it left in its worktree is thrown away, never committed. */
+  discard?: boolean
   onEvent: (type: string, payload: Record<string, unknown>) => Promise<void>
 }
 
@@ -32,6 +34,10 @@ export function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 }
 
 export async function land(i: LandInput): Promise<LandResult> {
+  if (i.discard && await hasUncommitted(i.worktreePath)) {
+    await git(i.worktreePath, ['reset', '-q', '--hard']); await git(i.worktreePath, ['clean', '-qfd'])
+    await i.onEvent('land.discarded', { note: 'a check or a probe left changes: thrown away' })
+  }
   if (await hasUncommitted(i.worktreePath)) {
     const sha = await commitAll(i.worktreePath, 'Commit remaining work (engine)')
     await i.onEvent('land.committed', { sha, note: 'the agent left uncommitted changes' })
@@ -92,6 +98,12 @@ export type WholeRun = { ok: true; flaky: boolean } | { ok: false; code: number;
  * before anything is blamed: a test that fails now and then (a browser test on a busy machine) passes the second
  * time, and is reported as flaky and not as a failure.
  */
+/** One command on the merged work, once: a probe of the app's own (probes.ts). */
+export async function commandRun(i: { cmd: string; cwd: string; timeoutMs?: number }): Promise<{ ok: boolean; code: number; detail: string }> {
+  const r = await run(i.cmd, i.cwd, i.timeoutMs ?? 20 * 60_000)
+  return { ok: r.code === 0, code: r.code, detail: r.tail }
+}
+
 export async function wholeRun(i: { testCmd: string; cwd: string; timeoutMs?: number; onEvent: (type: string, payload: Record<string, unknown>) => Promise<void> }): Promise<WholeRun> {
   const timeout = i.timeoutMs ?? 20 * 60_000
   const first = await run(i.testCmd, i.cwd, timeout)
