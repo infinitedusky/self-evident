@@ -11,6 +11,7 @@ import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps, Background,
 import '@xyflow/react/dist/style.css'
 import { useEffect, useMemo, useState } from 'react'
 import type { BuildStatus, FlowNode, GraphFile, GraphSubIssue } from '../engine'
+import { useWorkspace } from '../workspace'
 import { Badge, type Tone } from './Badge'
 import { plannedSteps } from '../planned-steps'
 
@@ -233,6 +234,7 @@ const NO_FILES: GraphFile[] = [] // one array, not a new one each render: the la
 const NO_QUESTIONS: GraphQuestion[] = []
 
 export function PlanGraphView({ subIssues: phases, files = NO_FILES, questions = NO_QUESTIONS, onSelect, selectedId, labels, tall, storageKey }: PlanGraphViewProps) {
+  const ws = useWorkspace()
   // A shared file is drawn only where it is what keeps sub-issues from building side by side: between claimants that no
   // path of arrows already orders. Where an arrow already connects them, the file is part of that arrow's why.
   const ancestors = useMemo(() => {
@@ -308,7 +310,13 @@ export function PlanGraphView({ subIssues: phases, files = NO_FILES, questions =
       <ReactFlowProvider>
         <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: 0.2, maxZoom: 1 }} onNodesChange={onNodesChange}
           onNodeDragStop={(_, n) => { const next = { ...moved, [n.id]: n.position }; setMoved(next); saveMoved(storageKey, next) }}
-          onNodeClick={(_, n) => { if (n.type === 'phase') onSelect?.((n.data as PhaseNodeData).phase) }} nodesConnectable={false} proOptions={{ hideAttribution: true }}
+          onNodeClick={(_, n) => {
+            if (n.type !== 'phase') return
+            const p = (n.data as PhaseNodeData).phase
+            onSelect?.(p)
+            // A node is a sub-task's build: pressing it opens that build beside the graph, with its status, its steps and what its agent is saying and doing, live (Sandy, 2026-11-17: "click on a node and … see what the agent is doing … like I would if I was building something directly within VS Code"). A step drawn before it exists has nothing to open.
+            if (ws && !p.id.startsWith('flow:')) ws.open({ kind: 'build', issueId: p.id }, { split: 'right' })
+          }} nodesConnectable={false} proOptions={{ hideAttribution: true }}
           panOnScroll zoomOnScroll={false} zoomActivationKeyCode="Meta" panOnDrag={false} selectionOnDrag={false} zoomOnPinch zoomOnDoubleClick={false}>
           <Background gap={20} color="var(--line)" />
           {Object.keys(moved).length > 0 && <Panel position="top-right"><button type="button" className="graph-tidy" onClick={tidy}>Tidy up</button></Panel>}
