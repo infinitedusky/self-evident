@@ -566,9 +566,9 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
       <Group title="Smoke test" lead="Where a person tries the built code by hand, for what an agent cannot judge: how it looks, how it feels, speed on a real machine. It is the code about to be reviewed, not the prototype. An app can have more than one set-up (a library: its docs site, and a demo app that exercises it); each check names the one it needs.">
         {smokes.map((su, n) => (
           <div key={su.key} className="smoke-setting" role="group" aria-label={su.name || 'Set-up'}>
-            {smokes.length > 1 && <>
-              <label>Name<input aria-label={`Set-up ${n + 1} name`} value={su.name} onChange={(e) => putSmoke(n, { name: e.target.value })} placeholder="Playground" /></label>
-              <label>What is checked there <span className="faint">(one line; the agent sends checks by it)</span><input aria-label={`Set-up ${n + 1}: what is checked there`} value={su.what ?? ''} onChange={(e) => putSmoke(n, { what: e.target.value })} placeholder="the library, exercised with every setting" /></label>
+            {smokes.length > 1 && <label>Name<input aria-label={`Set-up ${n + 1} name`} value={su.name} onChange={(e) => putSmoke(n, { name: e.target.value })} placeholder="Playground" /></label>}
+            {<>
+              <label style={smokes.length > 1 ? undefined : { gridColumn: '1 / -1' }}>What is checked there <span className="faint">(one line; the agent sends checks by it)</span><input aria-label={`Set-up ${n + 1}: what is checked there`} value={su.what ?? ''} onChange={(e) => putSmoke(n, { what: e.target.value })} placeholder="the library, exercised with every setting" /></label>
             </>}
         <label style={{ gridColumn: '1 / -1' }}>Where<select aria-label={`Where ${su.name || "it"} is smoke tested`} value={su.where ?? 'local'} onChange={(e) => putSmoke(n, { where: e.target.value as 'local' | 'staging' | 'flag' })}>
           <option value="local">Here, on this computer: the built branch, brought up by the script below, on made-up data</option>

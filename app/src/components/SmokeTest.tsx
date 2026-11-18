@@ -116,9 +116,9 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
               return <button key={x.key} role="tab" aria-selected={x.key === su.key} className={`btn small ${x.key === su.key ? '' : 'quiet'}`} onClick={() => { setPicked(x.key); setAt(null); setMarking(null) }}>{x.name} <span className="faint">{n === 0 ? 'nothing' : x.owed ? `${x.owed} to check` : 'done'}</span>{x.where === 'local' && x.url ? <span className="smoke-on" title="Running" aria-label="running"> ●</span> : null}</button>
             })}
           </div>
-          {su.what && <p className="faint smoke-what">{su.what}</p>}
         </>
       )}
+      {v.checks.length > 0 && su.what && <p className="faint smoke-what">{su.what}</p>}
       {v.checks.length > 0 && (
         <div className="smoke-layout">
           <div className="smoke-view">

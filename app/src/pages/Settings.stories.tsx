@@ -298,10 +298,11 @@ export const RemovedApps: Story = {
 /** How an app is brought up for a smoke test: a script, a stop script and a seed, kept in Self Evident and never in the app's repository (made-up sample). */
 export const AppSmokeTestSetUp: Story = {
   parameters: appPage(sampleApp.id, 'prototype'),
-  beforeEach: withEngine({ apps: [{ ...sampleApp, setup: { ...sampleApp.setup, smoke: { where: 'local', cmd: 'docker compose -p smoke-$PORT up -d db\npnpm install && pnpm dev --port $PORT', stop: 'docker compose -p smoke-$PORT down -v', seed: "insert into parent (id, name) values (1, 'Sample Parent');" } } }] }),
+  beforeEach: withEngine({ apps: [{ ...sampleApp, setup: { ...sampleApp.setup, smoke: { where: 'local', what: 'The dashboard, signed in as the test admin (sample)', cmd: 'docker compose -p smoke-$PORT up -d db\npnpm install && pnpm dev --port $PORT', stop: 'docker compose -p smoke-$PORT down -v', seed: "insert into parent (id, name) values (1, 'Sample Parent');" } } }] }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await expect(await c.findByRole('textbox', { name: 'Smoke test script' })).toHaveValue('docker compose -p smoke-$PORT up -d db\npnpm install && pnpm dev --port $PORT')
+    await expect(c.getByRole('textbox', { name: 'Set-up 1: what is checked there' })).toHaveValue('The dashboard, signed in as the test admin (sample)') // with one set-up too
     await expect(c.getByRole('textbox', { name: 'Smoke test stop script' })).toHaveValue('docker compose -p smoke-$PORT down -v')
     await expect(c.getByRole('textbox', { name: 'Smoke test seed' })).toHaveValue("insert into parent (id, name) values (1, 'Sample Parent');")
     await expect(c.getByText(/never written into the app's repository/)).toBeInTheDocument()

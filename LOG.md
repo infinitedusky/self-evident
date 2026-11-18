@@ -4610,3 +4610,9 @@ run what is in the checkout); the checks on a staged task have no set-up, so all
 Not done: running two copies side by side and comparing; a server that leaves its process group (a container) is
 not seen; nothing stops the start, it only says.
 
+## Fix: a single smoke test set-up's "what is checked there" was written and never read (2026-11-17, found by an app's agent on another computer)
+
+`set_smoke_setup` with `what` on an app with the one set-up it always had saved the line beside its other settings,
+but reading the set-up back built it without that line, so it came back empty. Now it is read (and a name, when
+given). Settings shows the field with one set-up too, and the smoke test page says it.
+
