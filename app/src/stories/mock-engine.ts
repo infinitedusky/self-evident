@@ -70,6 +70,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
   }
   return [
     http.get('/api/events', () => silentStream()),
+    http.get('/api/devices', () => reply({ address: null, remote: false, devices: [] })),
     http.get('/api/apps', ({ request }) => reply(new URL(request.url).searchParams.get('removed') === '1' ? d.removedApps ?? [] : d.apps)),
     http.post('/api/apps/:id/remove', () => d.removeProblem ? HttpResponse.json({ error: d.removeProblem }, { status: 400 }) : reply({})),
     http.post('/api/apps/:id/restore', ({ params }) => { d.removedApps = (d.removedApps ?? []).filter((a) => a.id !== params.id); return reply({}) }),
