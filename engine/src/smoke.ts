@@ -41,6 +41,7 @@ import { appendEvent } from './events.js'
 import { git, headSha } from './git.js'
 import { newId } from './ids.js'
 import { getIssue, identifier, PlanError } from './issues.js'
+import { morePorts, straySays, straysOf } from './ports.js'
 import { databaseExists, databaseUrl, dropDatabase, listScenarios, rebuild, type PrototypeDb } from './prototype-data.js'
 import { homeRepo } from './workbench.js'
 
@@ -234,7 +235,7 @@ export const smokeOwed = (criteria: Criterion[]) => smokeChecks(criteria).filter
 /** Of those, how many can be done now: the ones on the pull request wait for it to exist. */
 export const smokeReady = (criteria: Criterion[], hasPr: boolean) => smokeChecks(criteria).filter((c) => c.mark === 'todo' && (c.when === 'here' || (c.when === 'pr' && hasPr))).length
 
-const running = new Map<string, { proc: ChildProcess; log: string[]; stop?: { cmd: string; cwd: string; env: Record<string, string> } }>() // by task and set-up
+const running = new Map<string, { proc: ChildProcess; log: string[]; given?: number[]; stray?: { at: number; ports: number[] }; stop?: { cmd: string; cwd: string; env: Record<string, string> } }>() // by task and set-up
 const runKey = (issueId: string, key: string) => `${issueId}:${key}`
 const alive = (issueId: string, key: string) => { const m = running.get(runKey(issueId, key)); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
 const freePort = (want = 0): Promise<number> => new Promise((resolveP, reject) => {
@@ -274,12 +275,15 @@ export async function smokeView(issueId: string) {
     const run = runs.find((r) => r.setup === setup.key)
     const on = alive(t.id, setup.key)
     const local = run?.port ? `http://localhost:${run.port}` : null
+    const up = setup.where === 'local' ? (on && local ? await answers(local) : false) : !!there
+    // Once it answers: does it listen anywhere it was not told to (ports.ts)?
+    const stray = setup.where === 'local' && up ? await straysOf(running.get(runKey(t.id, setup.key)), (ports) => db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor: 'engine', type: 'smoke.stray_port', payload: { setup: setup.key, ports, note: straySays(ports) } }))) : []
     return {
       key: setup.key, name: setup.name, what: setup.what ?? null,
       where: setup.where, says: WHERE_SAYS[setup.where], account: setup.account ?? null, flag: setup.flag ?? null,
       /** local: the commit its server is running; it is behind when the branch has moved on. */ running: setup.where === 'local' && on ? run?.sha ?? null : null,
       url: setup.where === 'local' ? (on ? local : null) : there,
-      up: setup.where === 'local' ? (on && local ? await answers(local) : false) : !!there,
+      up, ...(stray.length ? { /** Ports it listens on that it was not given: a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}),
       canRun: setup.where === 'local' && !!(setup.cmd ?? proto),
       /** local: there is something to start from nothing: a database of its own, a seed, or a script of its own. */ canClean: setup.where === 'local' && !!(setup.cmd || setup.seed || hasDb),
       log: running.get(runKey(t.id, setup.key))?.log.slice(-30) ?? [],
@@ -327,14 +331,15 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   }
   const [old] = await db.select().from(smokeRun).where(and(eq(smokeRun.issueId, t.id), eq(smokeRun.setup, key)))
   const port = await freePort(old?.port ?? 0)
-  const env = await smokeEnv(a.id, setup, { port, db: dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : undefined, clean: opts.clean, key })
+  const more = await morePorts()
+  const env = { ...more.env, ...await smokeEnv(a.id, setup, { port, db: dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : undefined, clean: opts.clean, key }) }
   if (setup.stop && old) await runStop(setup.stop, old.path, { ...env, PORT: String(old.port) }) // what the last run left up, when the engine has been started again since
   const proc = spawn('sh', ['-c', cmd], { cwd: path, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   const log: string[] = []
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
   proc.on('exit', (code) => { log.push(`exited${code === null ? '' : ` with ${code}`}`) })
-  running.set(runKey(t.id, key), { proc, log, ...(setup.stop ? { stop: { cmd: setup.stop, cwd: path, env } } : {}) })
+  running.set(runKey(t.id, key), { proc, log, given: [port, ...more.ports], ...(setup.stop ? { stop: { cmd: setup.stop, cwd: path, env } } : {}) })
   if (old) await db.update(smokeRun).set({ path, sha: head, port, updatedAt: new Date() }).where(eq(smokeRun.id, old.id))
   else await db.insert(smokeRun).values({ id: newId('run').replace(/^run_/, 'smoke_'), appId: a.id, issueId: t.id, setup: key, path, sha: head, port })
   await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'smoke.started', payload: { sha: head, port, setup: key } }))
