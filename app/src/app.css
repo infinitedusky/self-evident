@@ -454,6 +454,16 @@ html, body, #root { height: 100%; }
 .rail-end { margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .rail-fly { display: none; position: absolute; left: calc(100% + 6px); top: 0; min-width: 150px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.14); z-index: 50; }
 .rail-end .rail-fly { top: auto; bottom: 0; }
+.rail-btn.phone-here { filter: none; opacity: 1; position: relative; }
+.phone-dot { position: absolute; right: 5px; top: 5px; width: 9px; height: 9px; border-radius: 50%; background: #2fa84f; border: 2px solid var(--surface); }
+.phone-fly { padding: 10px; gap: 10px; min-width: 190px; }
+.phone-here-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font: 13px var(--sans); color: var(--ink-soft); white-space: nowrap; }
+.phone-here-list strong { color: var(--ink); }
+.phone-scan { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.phone-scan svg { border-radius: 8px; }
+.phone-scan p { margin: 0; font: 12px var(--sans); color: var(--ink-soft); text-align: center; max-width: 170px; }
+.phone-scan code { font: 11px var(--mono); color: var(--ink-soft); max-width: 190px; overflow-wrap: anywhere; text-align: center; }
+.rail-fly .phone-scan button { text-align: center; border: 1px solid var(--line); }
 .rail-item:hover .rail-fly, .rail-fly.open { display: flex; flex-direction: column; }
 .rail-fly::before { content: ''; position: absolute; left: -8px; top: 0; bottom: 0; width: 8px; } /* a bridge, so the pointer can cross */
 .rail-fly button { text-align: left; background: none; border: 0; border-radius: 6px; padding: 5px 10px; font: 13px var(--sans); color: var(--ink-soft); cursor: pointer; white-space: nowrap; }

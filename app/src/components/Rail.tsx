@@ -6,6 +6,7 @@
  * tiny chevron at the top shows or hides that strip.
  */
 import type { Tab } from '../workspace'
+import { PhoneLink } from './PhoneLink'
 
 interface Item { icon: string; label: string; tab: Tab; also?: RegExp }
 const page = (path: string): Tab => ({ kind: 'page', path })
@@ -41,6 +42,7 @@ export function Rail({ here, onOpen, agentOpen, onToggleAgent, appsOpen, onToggl
       <div className="rail-rule" />
       {OUTSIDE.map(button)}
       <div className="rail-end">
+        <PhoneLink />
         {button({ icon: '⚙️', label: 'Settings', tab: page('/settings') })}
       </div>
     </nav>
