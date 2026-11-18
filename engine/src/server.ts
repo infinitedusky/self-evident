@@ -9,6 +9,7 @@ import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
 import { checklistOf } from './checklist.js'
 import { compareKey, markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
+import { closeTerminal, closeTerminals, openTerminal, ownPage, resizeTerminal, typeInTerminal, watchTerminal } from './smoke-terminal.js'
 import { startLearning, talkBusy } from './talk.js'
 import { serve } from '@hono/node-server'
 import { appendEvent } from './events.js'
@@ -650,6 +651,30 @@ export function buildApp(bus: EventBus) {
   }
   // The smoke test (smoke.ts): the checks left to a person on a built task, where it runs, and their marks.
   api.get('/issues/:id/smoke', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err, 404) } })
+  // The smoke test's terminal (smoke-terminal.ts): a shell on this computer, so only Self Evident's own page may reach it.
+  const term = async (c: any, fn: (issueId: string, setup: string, body: Record<string, unknown>) => unknown) => {
+    if (!ownPage({ origin: c.req.header('origin'), site: c.req.header('sec-fetch-site'), contentType: c.req.header('content-type'), method: c.req.method })) return c.json({ error: 'the terminal takes requests from Self Evident\'s own page only' }, 403)
+    try {
+      const t = await resolveIssue(db, c.req.param('id'))
+      const body = c.req.method === 'GET' ? {} : await c.req.json().catch(() => ({})) as Record<string, unknown>
+      const setup = typeof body.setup === 'string' ? body.setup : c.req.query('setup') ?? (await smokeView(t.id)).setups[0].key
+      return await fn(t.id, setup, body)
+    } catch (err) { return planError(c, err, 400) }
+  }
+  api.post('/issues/:id/smoke/terminal', (c) => term(c, async (id, setup, b) => c.json(await openTerminal(id, setup, { cols: Number(b.cols) || undefined, rows: Number(b.rows) || undefined }))))
+  api.post('/issues/:id/smoke/terminal/input', (c) => term(c, (id, setup, b) => { typeInTerminal(id, setup, String(b.data ?? '').slice(0, 20_000)); return c.json({ ok: true }) }))
+  api.post('/issues/:id/smoke/terminal/resize', (c) => term(c, (id, setup, b) => { resizeTerminal(id, setup, Number(b.cols), Number(b.rows)); return c.json({ ok: true }) }))
+  api.post('/issues/:id/smoke/terminal/close', (c) => term(c, async (id, setup) => { await closeTerminal(id, setup); return c.json(await smokeView(id)) }))
+  api.get('/issues/:id/smoke/terminal/stream', (c) => term(c, (id, setup) => streamSSE(c, async (stream) => {
+    let stop = () => {}
+    await new Promise<void>((done) => {
+      let sending: Promise<unknown> = Promise.resolve()
+      const say = (event: string, data: string) => { sending = sending.then(() => stream.writeSSE({ event, data })).catch(() => done()) }
+      try { stop = watchTerminal(id, setup, (d) => say('data', JSON.stringify(d)), (code) => { say('exit', String(code)); void sending.then(() => done()) }) } catch (err) { say('gone', String((err as Error).message)); void sending.then(() => done()) }
+      stream.onAbort(() => done())
+    })
+    stop()
+  })))
   api.post('/issues/:id/smoke/start', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { clean?: boolean; setup?: string; compare?: boolean }; return c.json(await startSmoke(t.id, 'user', { clean: body.clean === true, compare: body.compare === true, setup: typeof body.setup === 'string' ? body.setup : undefined }), 202) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/smoke/stop', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { setup?: string; compare?: boolean }; if (body.compare === true) { const v = await smokeView(t.id); await stopSmoke(t.id, compareKey(typeof body.setup === 'string' ? body.setup : v.setups[0].key)) } else await stopSmoke(t.id, typeof body.setup === 'string' ? body.setup : undefined); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err) } })
   // An agent tries one check and says what it saw; it marks nothing (smoke.ts, trySmoke).
@@ -1007,7 +1032,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   void watchTerminals().catch(() => {}) // conversations still in a terminal: keep copying what's said there
   const stopSync = process.env.GITHUB_SYNC === '0' ? () => undefined : startSync(Number(process.env.GITHUB_SYNC_MINUTES ?? 2)) // GitHub: reviews, checks, merges, main moving
   const stopSummaries = process.env.SUMMARY === '0' ? () => undefined : startSummaries(Number(process.env.SUMMARY_HOURS ?? 24)) // the summary page, rewritten when a day old and something moved
-  const shutdown = async () => { stopSync(); stopSummaries(); stopStorybooks(); stopShares(); stopPrototypes(); stopSmokes(); stopStepRuns(); closeTalks(); await runner.shutdown(); await bus.stop(); await pool.end(); process.exit(0) }
+  const shutdown = async () => { stopSync(); stopSummaries(); stopStorybooks(); stopShares(); stopPrototypes(); stopSmokes(); void closeTerminals(); stopStepRuns(); closeTalks(); await runner.shutdown(); await bus.stop(); await pool.end(); process.exit(0) }
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
 }

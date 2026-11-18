@@ -980,3 +980,11 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .smoke-tried { font-size: 13px; margin: 6px 0 0; padding: 6px 8px; border-left: 3px solid var(--line, #ddd); background: color-mix(in srgb, var(--line, #ddd) 25%, transparent); border-radius: 4px; }
 .smoke-tried.holds { border-left-color: var(--ok, #2a8f5a); }
 .smoke-tried.fails { border-left-color: var(--bad, #c0392b); }
+
+/* Smoke test: a terminal, and a check's command as a button that runs there. */
+.smoke-term { margin-top: 10px; }
+.smoke-term-where { font-size: 12px; margin: 0 0 4px; }
+.smoke-term-box { height: 240px; padding: 6px; background: #000; border-radius: 8px; overflow: hidden; }
+.smoke-term.tall .smoke-term-box { height: min(60vh, 520px); }
+.smoke-cmd { font: inherit; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 0 6px; cursor: pointer; }
+.smoke-cmd:hover { border-color: var(--accent); }

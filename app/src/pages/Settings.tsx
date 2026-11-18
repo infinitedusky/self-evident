@@ -570,13 +570,22 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
             {<>
               <label style={smokes.length > 1 ? undefined : { gridColumn: '1 / -1' }}>What is checked there <span className="faint">(one line; the agent sends checks by it)</span><input aria-label={`Set-up ${n + 1}: what is checked there`} value={su.what ?? ''} onChange={(e) => putSmoke(n, { what: e.target.value })} placeholder="the library, exercised with every setting" /></label>
             </>}
-        <label style={{ gridColumn: '1 / -1' }}>Where<select aria-label={`Where ${su.name || "it"} is smoke tested`} value={su.where ?? 'local'} onChange={(e) => putSmoke(n, { where: e.target.value as 'local' | 'staging' | 'flag' })}>
+        <label style={{ gridColumn: '1 / -1' }}>Where<select aria-label={`Where ${su.name || "it"} is smoke tested`} value={su.where ?? 'local'} onChange={(e) => putSmoke(n, { where: e.target.value as NonNullable<SmokeSetupSetting['where']> })}>
           <option value="local">Here, on this computer: the built branch, brought up by the script below, on made-up data</option>
           <option value="preview">A preview of each pull request: a preview deployment, or an installable build of a library. It is tried before the merge</option>
           <option value="staging">Staging: a deployed build, with a test account. It is tried before the merge</option>
+          <option value="terminal">In a terminal, on this computer: commands you run and watch (an install, what a build produced)</option>
           <option value="flag">Behind a feature flag: in production, on for a test account only. It is tried after the merge, before the release</option>
         </select></label>
-        {(su.where ?? 'local') === 'local'
+        {su.where === 'terminal'
+          ? <>
+              <label style={{ gridColumn: '1 / -1' }}>Folder<select aria-label={`Where ${su.name || 'the'} terminal opens`} value={su.folder ?? 'build'} onChange={(e) => putSmoke(n, { folder: e.target.value as 'build' | 'temp' })}>
+                <option value="build">The build's checkout: to look at what was built</option>
+                <option value="temp">A new empty folder, thrown away after: to install it the way a user would</option>
+              </select></label>
+              <label style={{ gridColumn: '1 / -1' }}>Script <span className="faint">(optional: typed in when the terminal opens, so you see it run. $SMOKE_BUILD is the build's checkout)</span><textarea className="mono" aria-label={n ? `${su.name || "Set-up"} script` : "Smoke test script"} rows={Math.min(14, Math.max(3, (su.cmd ?? '').split('\n').length + 1))} value={su.cmd ?? ''} onChange={(e) => putSmoke(n, { cmd: e.target.value })} placeholder={'npm init -y\nnpm i "$SMOKE_BUILD"/packages/core/*.tgz'} /></label>
+            </>
+          : (su.where ?? 'local') === 'local'
           ? <>
               <p className="faint" style={{ gridColumn: '1 / -1', margin: 0 }}>These are kept here, in Self Evident, and never written into the app's repository. An agent can change them; a build is told to change them here and not on its branch.</p>
               <label style={{ gridColumn: '1 / -1' }}>Script <span className="faint">(optional: else the prototype's command)</span><textarea className="mono" aria-label={n ? `${su.name || "Set-up"} script` : "Smoke test script"} rows={Math.min(14, Math.max(3, (su.cmd ?? '').split('\n').length + 1))} value={su.cmd ?? ''} onChange={(e) => putSmoke(n, { cmd: e.target.value })} placeholder={'docker compose -p smoke-$PORT up -d db\npsql "$DATABASE_URL" -f "$SMOKE_SEED"\npnpm install && pnpm dev --port $PORT'} /></label>

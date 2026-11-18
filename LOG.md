@@ -4748,3 +4748,35 @@ lost to an engine restart is forgotten, not resumed.
 With main beside the build, each view has its own back, forward, reload and address, and goes its own way. A
 check's "Go there" still sends both to the same place. With no comparison the one bar is as it was.
 
+## Smoke test: a terminal, for checks that are commands (Sandy, 2026-11-18: "we need to have a way to do tests of things like installing etc. for that the smoke env would be a temp folder on the machine and a terminal where it runs commands and you see it working")
+
+Some checks are commands, not pages: that the docs install the packed package and not the source, that the library
+installs in a new app. Asked which, Sandy chose a **real terminal** (not run-and-watch) and **both folders, set per
+set-up**.
+
+- **A set-up can be a terminal** (Settings › Smoke test › Where: "In a terminal"; an agent sets it with
+  `set_smoke_setup`, `where: terminal`). Its folder is the build's checkout, or a new empty folder outside every
+  repository that is thrown away when the terminal is closed. Its script, when it has one, is typed in at the start,
+  so it is seen working. `$SMOKE_BUILD` is the build's checkout; `$SMOKE_URL` the build's address when one is up.
+- **A set-up tested here has one too**: "Terminal" in its bar opens a shell in its checkout, under the view.
+- **A check's command is a button.** A command in backticks in what a check says to do runs in the terminal with a
+  press, once one is open. The check after a build is told to write commands that way.
+- It opens when asked, never by itself. Coming back to the page shows what was said before.
+
+How: `node-pty` for the shell and `xterm.js` for the page (what VS Code uses for both); `engine/src/smoke-terminal.ts`,
+`app/src/components/SmokeTerminal.tsx`. What is said goes to the page as an event stream and what is typed comes
+back as posts, like everything else here; no web socket.
+
+It is a shell on this computer that a browser can reach, so:
+
+- its routes take requests from Self Evident's own page only (the request's origin must be this computer or
+  `UI_URL`; anything that types must be sent as JSON, which another site cannot do unasked). An app's Storybook,
+  framed under `sb-<port>.idea.dawn`, is refused;
+- it starts without the engine's own secrets (the database address, Linear, PostHog, Doppler, Anthropic).
+
+`node-pty`'s helper comes without its execute bit when pnpm does not run install scripts; the engine sets it before
+the first shell.
+
+Not done: an agent's try ("Ask an agent") using the terminal; a record of what was run; a terminal on a prototype;
+terminals are lost when the engine is started again.
+
