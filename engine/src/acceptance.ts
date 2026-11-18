@@ -49,13 +49,16 @@ export interface Criterion {
   builtSetup?: string
   /** The build's mark made by a person, by hand, in a smoke test: what they said, and the commit they said it on. */
   byHand?: { pass: boolean; note: string; sha: string | null; at: string; by: string }
+  /** What an agent saw when a person asked it to try this one (smoke.ts, trySmoke). Its word only: it marks nothing. */
+  tried?: Tried
   by: string
   at: string
 }
+export interface Tried { verdict: 'holds' | 'fails' | 'unsure'; note: string; sha: string | null; at: string }
 export interface AcceptanceChange {
   add?: { text: string; check?: string; shown?: boolean; evidence?: string; buildOnly?: boolean; why?: string; /** Where a person goes to see it in the built code: a path of the app, or a story's id (builtWhere). */ where?: string }[]
   // built and builtEvidence are only ever updated: nothing is built when a criterion is written
-  update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null; built?: boolean | null; builtEvidence?: string | null; builtWhere?: string | null; builtSetup?: string | null; builtWhen?: Criterion['builtWhen'] | null; byHand?: Criterion['byHand'] | null }[]
+  update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null; built?: boolean | null; builtEvidence?: string | null; builtWhere?: string | null; builtSetup?: string | null; builtWhen?: Criterion['builtWhen'] | null; tried?: Tried | null; byHand?: Criterion['byHand'] | null }[]
   remove?: string[]
 }
 
@@ -83,6 +86,7 @@ export function applyAcceptance(list: Criterion[], c: AcceptanceChange, by: stri
     if (u.builtWhere !== undefined) { const w = line(u.builtWhere, 300); if (w) x.builtWhere = w; else delete x.builtWhere }
     if (u.builtSetup !== undefined) { if (typeof u.builtSetup === 'string' && u.builtSetup.trim()) x.builtSetup = u.builtSetup.trim().slice(0, 40); else delete x.builtSetup }
     if (u.builtWhen !== undefined) { if (u.builtWhen === 'pr' || u.builtWhen === 'after' || u.builtWhen === 'here') x.builtWhen = u.builtWhen; else delete x.builtWhen }
+    if (u.tried !== undefined) { if (u.tried) x.tried = { verdict: u.tried.verdict, note: line(u.tried.note, 600), sha: u.tried.sha ?? null, at: u.tried.at }; else delete x.tried }
     if (u.byHand !== undefined) { if (u.byHand) x.byHand = { pass: !!u.byHand.pass, note: line(u.byHand.note, 600), sha: u.byHand.sha ?? null, at: u.byHand.at, by: u.byHand.by }; else delete x.byHand }
     if (u.buildOnly !== undefined) { if (u.buildOnly) x.buildOnly = true; else { delete x.buildOnly; delete x.why } } // which half proves it, not what must be true: no new approval
     if (u.why !== undefined) { const w = line(u.why); if (w && x.buildOnly) x.why = w; else delete x.why }

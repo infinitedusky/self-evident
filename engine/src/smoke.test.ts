@@ -1,6 +1,7 @@
 /** The smoke test: the app's setting, the checks a person has from a task's criteria, and their marks. Pure, with one stored test of marking. */
 import { existsSync } from 'node:fs'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -8,11 +9,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { applyAcceptance, setAcceptance, type Criterion } from './acceptance.js'
 import { stagesOf } from './checklist.js'
 import { db, pool } from './db/client.js'
-import { app, event, issue, pr as prTable, workspace } from './db/schema.js'
+import { app, event, issue, pr as prTable, project, repo, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createProject } from './projects.js'
 import { oneGoBrief } from './planner.js'
-import { addressOf, placeIn, byHand, markSmoke, previewUrl, runStop, setSmokeSetup, smokeChecks, smokeEnv, smokeOwed, smokeReady, smokeSetup, smokeSetupOf, smokeSetups, smokeView, startSmoke, whenOf, forPerson } from './smoke.js'
+import { addressOf, placeIn, byHand, markSmoke, previewUrl, runStop, setSmokeSetup, smokeChecks, smokeEnv, smokeOwed, smokeReady, smokeSetup, smokeSetupOf, smokeSetups, smokeView, startSmoke, stopSmoke, trySmoke, compareKey, whenOf, forPerson } from './smoke.js'
 import { checkTaskBrief, readVerdicts, verdictChange } from './verify.js'
 
 const at = '2026-11-17T00:00:00.000Z'
@@ -212,6 +213,66 @@ describe.skipIf(!reachable)('a person marks a check', () => {
     expect(stored.find((c) => c.id === speed)).toMatchObject({ built: false, builtEvidence: 'portal 22 fps vs 45 none', byHand: { pass: false, by: 'user' }, by: 'user' })
     expect(after.briefApprovedBy ?? null).toBeNull()
     expect((await db.select().from(event).where(eq(event.issueId, t.id))).filter((e) => e.type === 'smoke.marked').sort((a, b) => a.seq - b.seq).map((e) => (e.payload as { pass: boolean }).pass)).toEqual([true, false])
+  })
+  it('an agent tries one when asked: what it saw is beside the check, and the mark stays the person\'s', async () => {
+    const { issues: [t] } = await createProject({ appId, name: 'Tried (sample)', issues: [{ title: 'Edges (sample)', brief: 'Build it.' }] })
+    const { acceptance } = await setAcceptance(t.id, { add: [{ text: 'The tunnel reads as a tunnel (sample)' }, { text: 'Portals keep 40 frames a second (sample)' }] })
+    const [look, speed] = acceptance.map((c) => c.id)
+    await setAcceptance(t.id, { update: [{ id: look, built: null, builtEvidence: 'open the Tunnel story', builtWhere: '/edges' }, { id: speed, built: null, builtEvidence: 'watch the counter' }] }, 'engine')
+    let asked = '', let_go = () => {}
+    const held = new Promise<void>((r) => { let_go = r })
+    const first = await trySmoke(t.id, look, 'user', async (i) => { asked = i.prompt; await held; return { verdict: 'holds', note: 'GET /edges answered 200 and the page has the tunnel (sample)' } })
+    expect(first.view.checks.map((c) => [c.id, c.trying ?? false])).toEqual([[look, true], [speed, false]])
+    await expect(trySmoke(t.id, look)).rejects.toThrow(/already trying that one/)
+    let_go(); await first.done
+    for (const said of ['The check: The tunnel reads as a tunnel (sample)', 'open the Tunnel story', 'Where: /edges (https://staging.example.test/edges)', 'You do not mark it', 'Change nothing', 'not a sweep']) expect(asked).toContain(said)
+    const after = await smokeView(t.id)
+    expect(after.checks[0]).toMatchObject({ mark: 'todo', tried: { verdict: 'holds', note: 'GET /edges answered 200 and the page has the tunnel (sample)' } })
+    expect(after.checks[0].trying).toBeUndefined()
+    expect(after.owed).toBe(2) // nothing is marked by it
+    // One that goes wrong says so, as "unsure"; a check that is not there is refused.
+    const lost = await trySmoke(t.id, speed, 'user', async () => { throw new Error('it ran out of time (6 minutes)') })
+    await lost.done
+    expect((await smokeView(t.id)).checks[1].tried).toMatchObject({ verdict: 'unsure', note: 'The agent could not try it: it ran out of time (6 minutes)' })
+    await expect(trySmoke(t.id, 'ac_nope')).rejects.toThrow(/no smoke test check ac_nope/)
+    expect((await db.select().from(event).where(eq(event.issueId, t.id))).filter((e) => e.type.startsWith('smoke.tr')).sort((a, b) => a.seq - b.seq).map((e) => e.type)).toEqual(['smoke.trying', 'smoke.tried', 'smoke.trying', 'smoke.tried'])
+  })
+  it('main is brought up beside the build, on a port of its own, and goes when the build is stopped', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'se-smoke-cmp-'))
+    const sh = (args: string[]) => execFileSync('git', args, { cwd: dir, stdio: 'pipe' }).toString().trim()
+    sh(['init', '-q', '-b', 'main']); sh(['config', 'user.email', 'sample@example.test']); sh(['config', 'user.name', 'Sample'])
+    await writeFile(join(dir, 'index.html'), 'as it is on main (sample)'); sh(['add', '-A']); sh(['commit', '-q', '-m', 'main'])
+    const mainSha = sh(['rev-parse', 'HEAD'])
+    const own = newId('app')
+    const serve = `exec node -e "require('http').createServer((q,r)=>r.end(require('fs').readFileSync('index.html'))).listen(process.env.PORT)"`
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'Compared (sample)', key: own.slice(-6).toUpperCase(), setup: { prototype_cmd: serve } })
+    await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: dir })
+    const { project: p, issues: [t] } = await createProject({ appId: own, name: 'Compared (sample)', issues: [{ title: 'Edges (sample)', brief: 'Build it.' }] })
+    await db.update(project).set({ integrationBranch: 'proj-sample' }).where(eq(project.id, p.id))
+    const branch = (await smokeView(t.id)).branch!
+    sh(['checkout', '-q', '-b', branch]); await writeFile(join(dir, 'index.html'), 'as it is built (sample)'); sh(['commit', '-q', '-am', 'built']); sh(['checkout', '-q', 'main'])
+    const up = async (pick: (v: Awaited<ReturnType<typeof smokeView>>) => { url: string | null; up: boolean } | null) => { for (let i = 0; i < 60; i++) { const x = pick(await smokeView(t.id)); if (x?.up) return x.url!; await new Promise((r) => setTimeout(r, 250)) } throw new Error('it did not come up') }
+    try {
+      expect((await startSmoke(t.id)).setups[0]).toMatchObject({ canCompare: true, compare: null })
+      const mine = await up((v) => v.setups[0])
+      await startSmoke(t.id, 'user', { compare: true })
+      const theirs = await up((v) => v.setups[0].compare)
+      expect(theirs).not.toBe(mine)
+      expect(await (await fetch(mine)).text()).toBe('as it is built (sample)')
+      expect(await (await fetch(theirs)).text()).toBe('as it is on main (sample)')
+      expect((await smokeView(t.id)).setups[0].compare).toMatchObject({ sha: mainSha, up: true })
+      await startSmoke(t.id) // the build started again: its comparison stays up
+      expect((await smokeView(t.id)).setups[0].compare).toMatchObject({ url: theirs })
+      await stopSmoke(t.id, 'main') // stopped: main goes with it
+      expect((await smokeView(t.id)).setups[0]).toMatchObject({ url: null, compare: null })
+    } finally { await stopSmoke(t.id); await rm(dir, { recursive: true, force: true }); await rm(`${dir}-worktrees`, { recursive: true, force: true }) }
+  }, 40_000)
+  it('a comparison is the same set-up from main, kept beside it; what an agent saw on an earlier commit says so', () => {
+    expect(compareKey('main')).toBe('main@main'); expect(compareKey('docs-site')).toBe('docs-site@main')
+    const tried = { verdict: 'fails' as const, note: 'the lip is above the edge (sample)', sha: 'aaa1111', at }
+    const [c] = smokeChecks([{ ...criteria[1], builtEvidence: 'open the Tunnel story', tried }], 'bbb2222')
+    expect(c).toMatchObject({ mark: 'todo', tried: { verdict: 'fails', stale: true } })
+    expect(smokeChecks([{ ...criteria[1], builtEvidence: 'open the Tunnel story', tried }], 'aaa1111')[0].tried?.stale).toBeUndefined()
   })
 })
 
