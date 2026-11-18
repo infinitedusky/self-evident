@@ -71,6 +71,9 @@ export function stagesOf(i: { subs: { title: string; status: string }[]; build: 
       detail: fixes.length && fixing !== 'done' ? 'fixing what the run found' : i.tested === true ? `the whole run passed${fixes.length ? `, after ${fixes.length} fix${fixes.length === 1 ? '' : 'es'}` : ''}` : i.tested === false ? 'the whole run failed' : 'the whole run, once, last' })
   }
   const h = i.byHand
+  // Always a stage, so it does not vanish when the check verifies everything itself (Sandy, 2026-11-17: "I might want
+  // to look anyway … let it stay"): with nothing left to the person it is done, and still theirs to open and try.
+  if (h && !h.total) stages.push({ key: 'smoke', label: 'Smoke test', state: loop === 'done' && !i.unmet && rounds > 0 ? 'done' : 'todo', detail: loop === 'done' && !i.unmet && rounds > 0 ? 'nothing left to you; look anyway' : 'yours, after the check' })
   if (h?.total) {
     const ready = of(i.subs) === 'done' // nothing is building: it is the person's turn
     stages.push({ key: 'smoke', label: 'Smoke test', state: h.failed ? 'failed' : !h.todo ? 'done' : ready ? 'doing' : 'todo',

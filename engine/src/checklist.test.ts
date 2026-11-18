@@ -59,6 +59,12 @@ describe('the flow of a checklist task, as nodes', () => {
     const f = flow([['Cart', 'done'], ['Pay', 'done'], [CHECK_TITLE, 'running']], { build: 'planned' })
     expect(f.slice(0, 3)).toEqual([['s0', null, 'done'], ['s1', null, 'done'], ['s2', ['s0', 's1'], 'doing']])
   })
+  it('the smoke test stays a stage when the check verified everything itself: done, and still the person\'s to open', () => {
+    const none = { todo: 0, failed: 0, total: 0 }
+    expect(stages([[B, 'done'], [CHECK_TITLE, 'done'], [PROBE_TITLE, 'done']], { met: 5, tested: true, byHand: none }).at(-1)).toEqual({ key: 'smoke', label: 'Smoke test', state: 'done', detail: 'nothing left to you; look anyway' })
+    expect(stages([[B, 'running']], { byHand: none }).at(-1)).toMatchObject({ key: 'smoke', state: 'todo', detail: 'yours, after the check' }) // not checked yet: nobody knows what will be left
+    expect(stages([[B, 'done']]).some((x) => x.key === 'smoke')).toBe(false) // a task the smoke test is not asked about
+  })
   it('a fix after a failed test run sits before the run it leads back to; the smoke test is last, when there is one', () => {
     const all: [string, string][] = [[B, 'done'], [CHECK_TITLE, 'done'], [PROBE_TITLE, 'done'], ['Fix what the whole test run found', 'running']]
     expect(flow(all, { met: 5, tested: false, byHand: { todo: 2, failed: 0, total: 2 } }).slice(2))
