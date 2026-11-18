@@ -297,6 +297,12 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return JSON.parse(text) as T
 }
 
+/** Another device with the page open, over the private network. */
+export interface Device { ip: string; name: string; kind: 'phone' | 'computer'; since: string }
+/** `address`: the page on the private network, null when it is not served there. `remote`: this page is the one that came over it. */
+export interface DevicesHere { address: string | null; remote: boolean; devices: Device[] }
+export const devicesHere = () => call<DevicesHere>('GET', '/devices')
+
 // The front door (GET /now): what's running, what needs a person, what just happened.
 type Where = { projectId: string; projectName: string; appName: string }
 export type Attention =
