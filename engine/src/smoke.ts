@@ -47,21 +47,23 @@ import { getIssue, identifier, PlanError } from './issues.js'
 import { morePorts, straySays, straysOf } from './ports.js'
 import { databaseExists, databaseUrl, dropDatabase, listScenarios, rebuild, type PrototypeDb } from './prototype-data.js'
 import { homeRepo } from './workbench.js'
+import { terminalOpen } from './smoke-terminal.js'
 
-export type Where = 'local' | 'preview' | 'staging' | 'flag'
-export const WHERES: Where[] = ['local', 'preview', 'staging', 'flag']
+export type Where = 'local' | 'preview' | 'staging' | 'flag' | 'terminal'
+export const WHERES: Where[] = ['local', 'preview', 'staging', 'flag', 'terminal']
 export const WHERE_SAYS: Record<Where, string> = {
   local: 'run here, like its prototypes: the built branch, made-up data',
   preview: 'on a preview of its own pull request, at that pull request\'s address',
   staging: 'a deployed build at an address, with a test account',
   flag: 'in production, behind a feature flag that is on for a test account only',
+  terminal: 'in a terminal on this computer: commands you run and watch',
 }
-export interface SmokeSetup { where: Where; /** staging or flag: the address to test at. preview: its pattern, with {pr} for the pull request's number. */ url?: string; /** How to get in for a test, in words: which account, where its sign-in is. Never a password. */ account?: string; /** flag: its name, or how flags are named here. */ flag?: string; /** local: a script of its own, any number of lines; else the command that runs prototypes. */ cmd?: string; /** local: run when it is stopped or started again, for what the script leaves running (containers). */ stop?: string; /** local: SQL that fills its database with made-up rows. */ seed?: string }
+export interface SmokeSetup { where: Where; /** staging or flag: the address to test at. preview: its pattern, with {pr} for the pull request's number. */ url?: string; /** How to get in for a test, in words: which account, where its sign-in is. Never a password. */ account?: string; /** flag: its name, or how flags are named here. */ flag?: string; /** local: a script of its own, any number of lines; else the command that runs prototypes. */ cmd?: string; /** local: run when it is stopped or started again, for what the script leaves running (containers). */ stop?: string; /** local: SQL that fills its database with made-up rows. */ seed?: string; /** terminal: where it opens. build: the smoke test's checkout of the built code. temp: a new empty folder, thrown away when it is closed. */ folder?: 'build' | 'temp' }
 
 const text = (v: unknown, n = 400) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : undefined)
 const one = (s: Partial<SmokeSetup>): SmokeSetup => {
   const where = WHERES.includes(s.where as Where) ? s.where as Where : 'local'
-  return { where, ...(text(s.url) ? { url: text(s.url) } : {}), ...(text(s.account) ? { account: text(s.account) } : {}), ...(text(s.flag) ? { flag: text(s.flag) } : {}), ...(text(s.cmd, SCRIPT_MAX) ? { cmd: text(s.cmd, SCRIPT_MAX) } : {}), ...(text(s.stop, SCRIPT_MAX) ? { stop: text(s.stop, SCRIPT_MAX) } : {}), ...(text(s.seed, SEED_MAX) ? { seed: text(s.seed, SEED_MAX) } : {}) }
+  return { where, ...(text(s.url) ? { url: text(s.url) } : {}), ...(text(s.account) ? { account: text(s.account) } : {}), ...(text(s.flag) ? { flag: text(s.flag) } : {}), ...(text(s.cmd, SCRIPT_MAX) ? { cmd: text(s.cmd, SCRIPT_MAX) } : {}), ...(text(s.stop, SCRIPT_MAX) ? { stop: text(s.stop, SCRIPT_MAX) } : {}), ...(text(s.seed, SEED_MAX) ? { seed: text(s.seed, SEED_MAX) } : {}), ...(where === 'terminal' ? { folder: s.folder === 'temp' ? 'temp' as const : 'build' as const } : {}) }
 }
 
 /**
@@ -137,7 +139,7 @@ export async function smokeSetupOf(appId: string) {
   if (!a) throw new PlanError('no such app')
   const proto = (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd ?? null
   return {
-    setups: smokeSetups(a.setup).map((s) => ({ key: s.key, name: s.name, what: s.what ?? null, where: s.where, url: s.url ?? null, script: s.cmd ?? null, stop: s.stop ?? null, seed: s.seed ?? null, falls_back_to: s.cmd ? null : proto })),
+    setups: smokeSetups(a.setup).map((s) => ({ key: s.key, name: s.name, what: s.what ?? null, where: s.where, ...(s.folder ? { folder: s.folder } : {}), url: s.url ?? null, script: s.cmd ?? null, stop: s.stop ?? null, seed: s.seed ?? null, falls_back_to: s.cmd || s.where === 'terminal' ? null : proto })),
     database: !!(a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db?.url,
   }
 }
@@ -146,7 +148,7 @@ export async function smokeSetupOf(appId: string) {
  * set-up, which needs a name. Each of script, stop and seed is replaced when given, cleared when given empty, left
  * when not given.
  */
-export async function setSmokeSetup(appId: string, i: { setup?: string; name?: string; what?: string; script?: string; stop?: string; seed?: string }) {
+export async function setSmokeSetup(appId: string, i: { setup?: string; name?: string; what?: string; script?: string; stop?: string; seed?: string; /** local (a server, shown in the page) or terminal (commands, run and watched). */ where?: 'local' | 'terminal'; /** terminal: build (the built code's checkout) or temp (a new empty folder). */ folder?: 'build' | 'temp' }) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError('no such app')
   if ((i.script?.length ?? 0) > SCRIPT_MAX || (i.stop?.length ?? 0) > SCRIPT_MAX) throw new PlanError(`a script is ${SCRIPT_MAX} characters at most`)
@@ -156,7 +158,7 @@ export async function setSmokeSetup(appId: string, i: { setup?: string; name?: s
   const key = i.setup ? setupKey(i.setup) : all[0].key
   if (!key) throw new PlanError('a set-up\'s key is letters, numbers and dashes, like "playground"')
   const put = (o: Record<string, unknown>, k: string, v?: string) => { if (v === undefined) return; if (v.trim()) o[k] = v.trim(); else delete o[k] }
-  const change = (o: Record<string, unknown>) => { put(o, 'cmd', i.script); put(o, 'stop', i.stop); put(o, 'seed', i.seed); put(o, 'name', i.name); put(o, 'what', i.what); return o }
+  const change = (o: Record<string, unknown>) => { put(o, 'cmd', i.script); put(o, 'stop', i.stop); put(o, 'seed', i.seed); put(o, 'name', i.name); put(o, 'what', i.what); if (i.where) o.where = i.where; if (i.folder) o.folder = i.folder; return o }
   let smoke: Record<string, unknown>
   if (!Array.isArray(was.setups) && key === all[0].key) smoke = change({ ...was }) // an app with the one set-up it always had: its settings as they are
   else {
@@ -333,7 +335,7 @@ export async function smokeView(issueId: string) {
     const run = runs.find((r) => r.setup === setup.key)
     const on = alive(t.id, setup.key)
     const local = run?.port ? `http://localhost:${run.port}` : null
-    const up = setup.where === 'local' ? (on && local ? await answers(local) : false) : !!there
+    const up = setup.where === 'local' ? (on && local ? await answers(local) : false) : setup.where === 'terminal' ? terminalOpen(t.id, setup.key) : !!there
     // Once it answers: does it listen anywhere it was not told to (ports.ts)?
     const stray = setup.where === 'local' && up ? await straysOf(running.get(runKey(t.id, setup.key)), (ports) => db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor: 'engine', type: 'smoke.stray_port', payload: { setup: setup.key, ports, note: straySays(ports) } }))) : []
     // Its comparison, when one was started: the same set-up from main, on its own port.
@@ -341,6 +343,7 @@ export async function smokeView(issueId: string) {
     const cUrl = cOn && cRun?.port ? `http://localhost:${cRun.port}` : null
     const compare = cUrl ? { url: cUrl, up: await answers(cUrl), /** The commit of main it runs. */ sha: cRun?.sha ?? null, log: running.get(runKey(t.id, ck))?.log.slice(-30) ?? [] } : null
     return {
+      /** A terminal can be opened on it (smoke-terminal.ts), and where it would open; open: one is. */ ...(setup.where === 'local' || setup.where === 'terminal' ? { terminal: { folder: setup.where === 'terminal' ? setup.folder ?? 'build' : 'build' as const, open: terminalOpen(t.id, setup.key) } } : {}),
       key: setup.key, name: setup.name, what: setup.what ?? null,
       where: setup.where, says: WHERE_SAYS[setup.where], account: setup.account ?? null, flag: setup.flag ?? null,
       /** local: the commit its server is running; it is behind when the branch has moved on. */ running: setup.where === 'local' && on ? run?.sha ?? null : null,
@@ -369,6 +372,33 @@ export async function smokeView(issueId: string) {
   }
 }
 
+/** A set-up's checkout of the build: one per set-up, so two can install and run side by side. */
+const checkoutPath = (repoPath: string, name: string, key: string, first: boolean) => join(`${repoPath}-worktrees`, `smoke--${name.toLowerCase()}${first ? '' : `--${key}`}`)
+
+/**
+ * Where a set-up's terminal opens (smoke-terminal.ts): its checkout of the build, made at the branch's head when
+ * there is none yet and left as it is when there is (a server may be running in it); whether it wants a new empty
+ * folder instead; the script typed in at the start (a terminal set-up's own); and the address of the build, when a
+ * set-up tested here is up, for commands that ask it.
+ */
+export async function smokePlace(issueId: string, setupKey?: string) {
+  const { t, a, repoPath, name, head } = await built(issueId)
+  const all = smokeSetups(a.setup)
+  const named = setupKey ? all.find((x) => x.key === setupKey) : all[0]
+  if (!named) throw new PlanError(`${a.name} has no smoke test set-up "${setupKey}" (${all.map((x) => x.key).join(', ')})`)
+  if (named.where !== 'local' && named.where !== 'terminal') throw new PlanError(`${named.name} is deployed: there is no folder here to open a terminal in`)
+  const folder = named.where === 'terminal' ? named.folder ?? 'build' : 'build'
+  let checkout: string | null = null
+  if (repoPath && head) {
+    checkout = checkoutPath(repoPath, name, named.key, named.key === all[0].key)
+    if (!existsSync(checkout)) await git(repoPath, ['worktree', 'add', '--detach', checkout, head])
+  }
+  if (folder === 'build' && !checkout) throw new PlanError(`${name} is not built yet: there is no checkout to open a terminal in`)
+  const runs = await db.select().from(smokeRun).where(eq(smokeRun.issueId, t.id))
+  const up = all.filter((x) => x.where === 'local').map((x) => ({ x, run: runs.find((r) => r.setup === x.key) })).find(({ x, run }) => run?.port && alive(t.id, x.key))
+  return { key: named.key, task: name, folder, checkout, script: named.where === 'terminal' ? named.cmd ?? null : null, url: up?.run?.port ? `http://localhost:${up.run.port}` : null }
+}
+
 /** Local only: run the built branch, at its head, in the smoke test's own worktree. Run again, it moves to the new head. */
 export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean; /** Which set-up (its key); none: the app's first. */ setup?: string; /** Not the build: main, where the branch left it, beside the build (COMPARE). */ compare?: boolean } = {}) {
   const { t, a, repoPath, name, branch, head: tip, base } = await built(issueId)
@@ -379,6 +409,7 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   const first = named.key === all[0].key
   const key = opts.compare ? compareKey(named.key) : named.key // what its run is kept under
   const tag = opts.compare ? '-main' : ''
+  if (setup.where === 'terminal') throw new PlanError(`${named.name} is a terminal: open it, there is no server to start`)
   if (setup.where !== 'local') throw new PlanError(`${a.name} is smoke tested ${setup.where === 'staging' ? 'on staging' : setup.where === 'preview' ? 'on a preview of its pull request' : 'behind a feature flag'}: there is nothing to start here`)
   if (!repoPath) throw new PlanError(`${a.name} has no local checkout`)
   if (!branch || !tip) throw new PlanError(`${name} is not built yet: there is no branch to run`)
@@ -387,7 +418,7 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   const cmd = setup.cmd ?? (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd?.trim()
   if (!cmd) throw new PlanError(`${a.name} has no command to run it: set how its prototypes are started in Settings, or a command of the smoke test's own`)
   await stopOne(t.id, key)
-  const path = join(`${repoPath}-worktrees`, `smoke--${name.toLowerCase()}${first ? '' : `--${named.key}`}${tag.replace('-', '--')}`) // a checkout per set-up, so two can install and run side by side
+  const path = `${checkoutPath(repoPath, name, named.key, first)}${tag.replace('-', '--')}` // a checkout per set-up, so two can install and run side by side
   // Its own worktree, at the commit and on no branch: the task's branch is nobody's to check out (it is moved by landing).
   if (existsSync(path)) await git(path, ['checkout', '--detach', '--force', head])
   else await git(repoPath, ['worktree', 'add', '--detach', path, head])
