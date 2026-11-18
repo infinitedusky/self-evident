@@ -4596,3 +4596,17 @@ one thing running.
 Not done: a demo app that lives with Self Evident for a library whose repository must not get one (a script can only
 run what is in the checkout); the checks on a staged task have no set-up, so all go to the first.
 
+## The engine looks at what a prototype or smoke test listens on (Bonkei's agent, passed on by Sandy, 2026-11-17: "the only test is whether the app answers on $PORT. A second server the app starts on a fixed port, like Bonkei's viewer on 5174, passes that test while quietly sharing one server between every prototype")
+
+- **Once it answers, the engine lists every TCP port its processes listen on** (`engine/src/ports.ts`, by process
+  group). One it was not given is a stray: said above the prototype and beside the smoke test, returned to the
+  agent (`strayPorts`, `strayNote`), and recorded once per run (`prototype.stray_port`, `smoke.stray_port`).
+- **More than one port is handed out**: `$PORT`, and `$PORT_2` and `$PORT_3`, each free at every start, so a second
+  server has somewhere to go.
+- **An agent writing an app's commands is told** (`set_prototype_command`, `set_smoke_setup`): search for fixed
+  ports first; each must come from the ones handed out; one that cannot be moved without changing the code is a
+  task before the first prototype.
+
+Not done: running two copies side by side and comparing; a server that leaves its process group (a container) is
+not seen; nothing stops the start, it only says.
+

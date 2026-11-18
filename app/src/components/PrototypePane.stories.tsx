@@ -98,3 +98,10 @@ export const Stopped: Story = {
     await expect(await within(canvasElement).findByRole('button', { name: 'Start it' })).toBeInTheDocument()
   },
 }
+
+/** Up, and listening on a port it was not given (a viewer on a fixed port, made up): said above the prototype, so it is fixed before two run side by side. */
+export const StrayPort: Story = {
+  args: { id: running.id, path: at },
+  beforeEach: withEngine({ prototypes: [{ ...running, strayPorts: [5174], strayNote: 'It also listens on port 5174, which it chose itself. A second copy running beside it would share or fight over it. Make it follow $PORT_2 or $PORT_3, which are free and handed out with $PORT.' }] }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('note')).toHaveTextContent('port 5174, which it chose itself') },
+}

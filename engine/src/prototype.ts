@@ -18,11 +18,12 @@ import { appendEvent } from './events.js'
 import { addWorktree, git, removeWorktree } from './git.js'
 import { newId } from './ids.js'
 import { PlanError } from './projects.js'
+import { morePorts, straySays, straysOf } from './ports.js'
 import { databaseExists, databaseName, databaseUrl, dropDatabase, dropScenarios, listScenarios, rebuild, save, scenarioTables, writeScenario, type PrototypeDb, type Tables } from './prototype-data.js'
 import { endTalk, say, showTalk, startPrototypeTalk } from './talk.js'
 
 const STOP_TIMEOUT_MS = Number(process.env.PROTOTYPE_STOP_TIMEOUT_MS ?? 120_000)
-const running = new Map<string, { proc: ChildProcess; log: string[] }>()
+const running = new Map<string, { proc: ChildProcess; log: string[]; given?: number[]; stray?: { at: number; ports: number[] } }>()
 const alive = (id: string) => { const m = running.get(id); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
 
 async function setupOf(appId: string) {
@@ -72,7 +73,10 @@ export async function prototypeStatus(id: string) {
   const { dbCfg } = await setupOf(p.appId)
   const { stopCmd, discardCmd } = await setupOf(p.appId)
   const data = dbCfg ? { database: databaseName(slugOf(p)), scenarios: await listScenarios({ appId: p.appId, prototypeId: p.id }, p.path).catch(() => []) } : { database: null, scenarios: [] }
-  return { ...p, ...data, cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up: on && url ? await answers(url) : false, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [] }
+  const up = on && url ? await answers(url) : false
+  // Once it answers: does it listen anywhere it was not told to?
+  const stray = up ? await straysOf(running.get(id), (ports) => emit(p, 'prototype.stray_port', 'engine', { ports, note: straySays(ports) })) : []
+  return { ...p, ...data, cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
 }
 
 export async function listPrototypes(appId: string) {
@@ -94,13 +98,14 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
     await db.update(prototype).set({ scenario }).where(eq(prototype.id, id))
   }
   const port = await freePort(p.port ?? 0)
+  const more = await morePorts()
   // Its own process group, so stopping it also stops what the command started (a package manager's dev server).
-  const proc = spawn('sh', ['-c', cmd], { cwd: p.path, env: { ...process.env, ...(await prototypeEnv(p)), PORT: String(port), BROWSER: 'none', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+  const proc = spawn('sh', ['-c', cmd], { cwd: p.path, env: { ...process.env, ...(await prototypeEnv(p)), PORT: String(port), ...more.env, BROWSER: 'none', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   const log: string[] = []
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
   proc.on('exit', (code) => { log.push(`exited${code === null ? '' : ` with ${code}`}`) })
-  running.set(id, { proc, log })
+  running.set(id, { proc, log, given: [port, ...more.ports] })
   await db.update(prototype).set({ port, status: 'running', updatedAt: new Date() }).where(eq(prototype.id, id))
   await emit(p, 'prototype.started', actor, { port })
   return prototypeStatus(id)

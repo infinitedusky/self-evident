@@ -111,6 +111,7 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Pr
   const width = DEVICES.find((d) => d.id === device)?.width
   return (
     <div className="preview" data-component="PrototypePane">
+      {p.strayPorts?.length ? <p className="smoke-stale" role="note" style={{ margin: '0 0 8px' }}>{p.strayNote ?? `It also listens on ${p.strayPorts.join(', ')}, which it chose itself.`}</p> : null}
       {/* Two rows (Sandy, 2026-11-13: "the header is too crowded… we need a second row"): where it is and its server, then how it is shown. */}
       <div className="preview-bar">
         <button className="icon-btn" onClick={() => setReloads((n) => n + 1)} title="Reload" aria-label="Reload">↻</button>
