@@ -4697,3 +4697,21 @@ Not done: links pressed inside the built code are not seen (it is another origin
 follow them and Back does not undo them. Following them needs the build served through a proxy of ours that
 reports its address, as a shared prototype's guide is.
 
+## What takes an agent a long run is the person's (Sandy, 2026-11-18: "Certain smoke tests are asking for things that probably take a long time for an agent to do. If that's the case, we don't have the agent do it, right? That's the whole reason for having the smoke test")
+
+A builder on a docs task wrote a script that opened about 45 pages in a browser and ran it twice in the middle of
+the build, 12 minutes each: more than half of the build's time, to show things a person would see at a glance
+while trying it. Nothing told it not to. The check left an item to a person only when an agent could not judge it.
+
+Now every builder, the check and the probe are told the same thing (`LEAVE_LONG_RUNS`, `engine/src/verify.ts`):
+
+- What would take more than about two minutes of running to show (every page in a browser, a whole journey,
+  every size or device) is not run and no script is written for it. One or two cases, then it is left to the
+  person, with where they look.
+- The check gives such an item `met: null`, so it becomes one of the person's smoke test checks.
+- A command that takes minutes is not run a second time to see a fix.
+- The probe keeps each try to a minute or two and sweeps nothing.
+
+It is wording only: nothing measures how long an agent's command ran or stops one. Not done: the engine noticing
+a builder's long command and saying so in the build; a criterion saying up front that it is the person's.
+

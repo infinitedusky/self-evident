@@ -9,6 +9,7 @@ import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import { builderGuard, guardOptions, STOP_ONLY_YOURS } from './guard.js'
 import { StepTracker } from './step-track.js'
 import { referencePrompt, type Reference } from './references.js'
+import { LEAVE_LONG_RUNS } from './verify.js'
 
 export interface RunInput {
   subIssue: { id: string; identifier: string; title: string; brief: string | null }
@@ -62,6 +63,7 @@ function prompt(i: RunInput): string {
     '- Before you change anything, list the steps you will take with your task tool (TaskCreate, or TodoWrite if that is the one you have), one for each step of this sub-task. Mark each in progress when you begin it and completed when it is done. The people watching this sub-task see that list live, and nothing else tells them where you are.',
     `- ${STOP_ONLY_YOURS}`,
     i.testCmd ? `- Test what you built: add or adjust tests for what you change, and run the tests of the parts you touched. They must pass before you finish. Do not run the whole suite unless your brief says to: it runs once, when every sub-task of this task is merged. For reference, the whole suite is: ${i.testCmd}` : '- There is no test command configured; verify your change by running it.',
+    `- ${LEAVE_LONG_RUNS}`,
     '- Commit your work with a clear message when it is done (git add -A && git commit). Leave nothing uncommitted.',
     '- Finish with a short summary for the reviewer: what changed, why, how you verified it, and anything you were unsure of.',
     '- The brief is settled: build what it says, the way it says. Do not propose follow-ups, improvements or things to consider; nothing collects them. A small slip inside the files that are yours (a stray file, a typo) is simply fixed. If the sub-task cannot be built as written, stop and say exactly what is wrong and where, in your summary.',

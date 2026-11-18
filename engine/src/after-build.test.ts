@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Criterion } from './acceptance.js'
 import { DEFAULT_REQUIREMENTS } from './requirements.js'
-import { afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, numbered, PROBE_TITLE, probeBrief, readVerdicts, reqId, requirementsChecked, unmetOf } from './verify.js'
+import { afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, LEAVE_LONG_RUNS, numbered, PROBE_TITLE, probeBrief, readVerdicts, reqId, requirementsChecked, unmetOf } from './verify.js'
 import { ONE_GO_TITLE, oneGoBrief, oneGoProposal, validateProposal } from './planner.js'
 
 const at = '2026-11-16T00:00:00.000Z'
@@ -48,6 +48,9 @@ describe('the list a build is checked against', () => {
     expect(b).toContain('[ac_1] The file has every order (sample)'); expect(b).toContain('[req_telemetry] Telemetry:'); expect(b).toContain('[req_tests] Tests:')
     expect(b).toContain('does not apply'); expect(b).toContain('Check, do not build')
     expect(checkTaskBrief([criteria[1]], [], { round: 2 })).toMatch(/^Check 2: the last check found these not done/)
+    // What would take it a long run is left to the person, not swept.
+    expect(b).toContain('when checking it would take you more than about two minutes of running'); expect(b).toContain('do not run or write a sweep')
+    expect(LEAVE_LONG_RUNS).toContain('do not run it and do not write a script that does')
   })
   it('its verdicts mark the requirements: done, not done with what is missing, does not apply, or left alone', () => {
     const v = readVerdicts('```acceptance\n[{"id":"req_telemetry","met":false,"evidence":"no span on a failed export"},{"id":"req_tests","met":true,"evidence":"export.test.ts"},{"id":"req_test_plan","met":true,"evidence":"does not apply: nothing a person does changes"},{"id":"ac_2","met":false,"evidence":"the second run adds a row"}]\n```', [...criteria.map((c) => c.id), ...required.map((r) => reqId(r.key))])
@@ -68,7 +71,7 @@ describe('the list a build is checked against', () => {
   })
   it('the probe is told it did not build it, to try to break it, to clean up, and how to report', () => {
     const p = probeBrief(criteria, 'main')
-    for (const s of ['You did not build this', 'Try to break it', 'git diff main...HEAD', 'debug output', '**Broke and left**', '[ac_1]']) expect(p).toContain(s)
+    for (const s of ['You did not build this', 'Try to break it', 'git diff main...HEAD', 'debug output', '**Broke and left**', '[ac_1]', 'never a sweep of every page']) expect(p).toContain(s)
   })
 })
 
