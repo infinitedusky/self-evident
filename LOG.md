@@ -4791,3 +4791,12 @@ terminals are lost when the engine is started again.
 
 The scratch terminal is kept under the set-up's key with `@temp` after it (`scratchKey`).
 
+## A new prototype's server waits for its agent (Sandy, 2026-11-18: "it seems to want to open the prototype right away, before the agent has had a chance to actually set up the work tree, and it ends up failing … it should just wait until the prototype agent has gotten started and set something up")
+
+A prototype made with a brief (so an agent builds it at once) no longer has its server started with it: the worktree
+is the default branch as it stands, with nothing set up, and the start failed. The agent is told it is not started
+and starts it itself (`run_prototype`) once there is something to run. Until then the Prototype tab says its agent is
+setting it up, with "Start it now" for the person. One made with no brief starts at once, as before.
+
+Not done: a prototype with no screen and a brief shows the same "setting it up" line until it has a guide.
+
