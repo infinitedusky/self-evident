@@ -4902,3 +4902,20 @@ or the setup JSON); a task's page shows them only as sub-tasks, not as results; 
 list, judged by the check; a skill probe works for a skill the app's conversations already have, so a second
 repository's skills are not reachable yet; a probe whose agent gives no verdict is recorded as not run and holds
 nothing; no naming probe (names are checked where they are made, slice 1); nothing here has run on a real build.
+
+## Settings › Skills as steps, stages and probes: the story (Sandy, 2026-11-18: "Redesign Settings › Skills around this: each step with its contract and stages, what's attached to each stage, and the probes, so a person can see at a glance what will happen and where")
+
+The page is drawn before anything behind it is built (`app/src/components/StepContracts.tsx`, three stories, made-up
+data). After GitHub Actions' run view and Linear's workflow settings.
+
+- **Each step is one line**, in the order it happens, with what is attached and where ("Do · ticket-naming-convention",
+  "7 probes"). Opened, it shows what it needs, what it leaves, when it is done, then its stages.
+- **A stage says who runs it** (the engine, an agent, you). Skills are added only where an agent works; probes only
+  where the engine verifies. A step lists only the stages it has.
+- **The build has one Verify**, and Check, "Try to break it" and Tests are probes in it, beside the app's own: a
+  command, a sentence judged, a skill run as a reviewer, or one built in. Each blocks or only reports.
+- **A reading view**: nothing to press until someone means to change it.
+
+It is the proposal for the page, to be agreed before the engine is built to it. Not done: it is not in Settings yet,
+and nothing reads or saves it; when it goes in, "Skills by workflow step", the skills by job and the requirements
+list under Landing come out.
