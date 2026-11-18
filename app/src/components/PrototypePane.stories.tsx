@@ -105,3 +105,16 @@ export const StrayPort: Story = {
   beforeEach: withEngine({ prototypes: [{ ...running, strayPorts: [5174], strayNote: 'It also listens on port 5174, which it chose itself. A second copy running beside it would share or fight over it. Make it follow $PORT_2 or $PORT_3, which are free and handed out with $PORT.' }] }),
   play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('note')).toHaveTextContent('port 5174, which it chose itself') },
 }
+
+/** Its data was rebuilt and the guide's links name rows that are gone (made up): said above the prototype, with what to do. */
+export const GuideGoneStale: Story = {
+  args: { id: running.id, path: at },
+  beforeEach: withEngine({ prototypes: [{ ...running, guideNote: 'The guide has a step that no longer opens since the data was rebuilt: /staff/12. Its ids changed. Write the guide again (set_guide) with the ids the data has now, or rebuild from a saved scenario, which keeps them.' }] }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/no longer opens since the data was rebuilt: \/staff\/12/)).toBeInTheDocument() },
+}
+/** No scenario loaded, but one was kept: building it again offers that one, not empty. */
+export const RebuildOffersAKeptScenario: Story = {
+  args: { id: running.id, path: at },
+  beforeEach: withEngine({ prototypes: [{ ...running, database: 'proto_sample', scenario: null, scenarios: ['three-overdue', 'default'] }] }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('button', { name: 'Reset the data' })).toHaveAttribute('title', 'Build it again from the scenario "default"') },
+}

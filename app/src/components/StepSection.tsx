@@ -88,9 +88,10 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
         )}
         {row.required ? <Badge tone={finished(s, on) ? 'ok' : 'warn'}>required</Badge> : skipped(s) ? <Badge>skipped</Badge> : <span className="faint" style={{ fontSize: 13 }}>optional</span>}
         {/* The check mark is the person's: the agent can only say a step is ready (Sandy, 2026-11-10: "an approve button for each step"). */}
-        {approves && !s.approved && s.status !== 'none' && !skipped(s) && !row.waitingOn && <button className={ready(s, on) ? 'btn small' : 'btn quiet small'} disabled={busy} onClick={() => act(() => engine.approveStep(subject.id, row.key))} title={row.key === 'prototype' && on === 'task' ? 'Your last press: it approves the brief too when the brief is ready, and the analysis, the ADR, the plan, its audit and the build follow by themselves' : 'Approve this step: it gets its check, and the steps after it can go on'}>{row.key === 'prototype' && on === 'task' ? 'Approve the prototype' : 'Approve'}</button>}
+        {approves && !s.approved && s.status !== 'none' && !skipped(s) && !row.waitingOn && <button className={ready(s, on) && !s.needs ? 'btn small' : 'btn quiet small'} disabled={busy || !!s.needs} onClick={() => act(() => engine.approveStep(subject.id, row.key))} title={row.key === 'prototype' && on === 'task' ? 'Your last press: it approves the brief too when the brief is ready, and the analysis, the ADR, the plan, its audit and the build follow by themselves' : 'Approve this step: it gets its check, and the steps after it can go on'}>{row.key === 'prototype' && on === 'task' ? 'Approve the prototype' : 'Approve'}</button>}
         {approves && s.approved && <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.approveStep(subject.id, row.key, false))} title="Take the approval back">Withdraw</button>}
       </div>
+      {s.needs && !s.approved && <p className="smoke-stale" role="note">{s.needs}</p>}
       {showView && viewed && <Viewer tab={viewed} embedded />}
       {showCode && code && <PrototypeCode id={code} appId={appId} focus={shown} />}
       {!showView && !showCode && <>
