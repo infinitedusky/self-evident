@@ -236,7 +236,7 @@ Details and sources in `research/`.
     browser, a whole journey) is not run or scripted by a builder, the check or the probe; it is left as a check
     of the person's.
   - **Main can be brought up beside the build** (Sandy, 2026-11-18: "look at the two side by side"): the same
-    set-up from where the branch left main, on its own port, both views on one address bar. Smoke test first; the
+    set-up from where the branch left main, on its own port, each view with its own back, forward, reload and address. Smoke test first; the
     prototype's is not built.
   - **A check can be handed to an agent to try** (Sandy, 2026-11-18): it says what it saw beside the check and
     marks nothing; the mark stays the person's.

@@ -255,7 +255,7 @@ export const AddressBar: Story = {
   },
 }
 
-/** Main beside the build (made up): pressing Compare with main brings it up on its own port, and both views follow the same address. */
+/** Main beside the build (made up): pressing Compare with main brings it up on its own port; a check sends both views to the same place, and each has its own back, forward, reload and address. */
 export const ComparedWithMain: Story = {
   beforeEach: withEngine({ smoke: { ...smokeSample, canCompare: true, compare: null } }),
   play: async ({ canvasElement }) => {
@@ -266,6 +266,14 @@ export const ComparedWithMain: Story = {
     await userEvent.click(c.getAllByRole('button', { name: 'Go there' })[0])
     await expect(c.getByTitle('The built code')).toHaveAttribute('src', 'http://localhost:6500/iframe.html?id=edges-tunnel--default&viewMode=story')
     await expect(c.getByTitle('main')).toHaveAttribute('src', 'http://localhost:6600/iframe.html?id=edges-tunnel--default&viewMode=story') // the same place, on main
+    // Each view has its own bar: main goes somewhere, back and forward, and the build stays where it is.
+    const theirs = c.getByRole('textbox', { name: 'Address (main)' })
+    await userEvent.clear(theirs); await userEvent.type(theirs, '/as-it-was{Enter}')
+    await expect(c.getByTitle('main')).toHaveAttribute('src', 'http://localhost:6600/as-it-was')
+    await expect(c.getByTitle('The built code')).toHaveAttribute('src', expect.stringContaining('edges-tunnel--default'))
+    await userEvent.click(c.getByRole('button', { name: 'Back (main)' }))
+    await expect(c.getByTitle('main')).toHaveAttribute('src', expect.stringContaining('localhost:6600/iframe.html?id=edges-tunnel--default'))
+    await expect(c.getByRole('button', { name: 'Back' })).toBeEnabled(); await expect(c.getByRole('button', { name: 'Reload (main)' })).toBeInTheDocument()
     await userEvent.click(c.getByRole('button', { name: 'Stop comparing' }))
     await waitFor(() => expect(c.queryByTitle('main')).toBeNull())
   },

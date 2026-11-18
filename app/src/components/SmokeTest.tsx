@@ -17,8 +17,9 @@
  * so links pressed inside it are not seen here.
  *
  * Main can be brought up beside it (Sandy, 2026-11-18: "spin up a comp setup that uses main … so I can look at the two
- * side by side"): the same set-up from where the branch left main, on its own port. Both views follow one address
- * bar. After a visual regression review (Chromatic, Percy): before and after, next to each other.
+ * side by side"): the same set-up from where the branch left main, on its own port. Each view has its own back,
+ * forward, reload and address (Sandy, 2026-11-18: "when main spins up we need to split the address bar and back and
+ * refresh"); a check's "Go there" sends both. After a visual regression review (Chromatic, Percy): before and after, next to each other.
  *
  * A check has "Ask an agent" (Sandy, 2026-11-18: "a button that triggers the agent to do a test of it and gets their
  * result. That doesn't pass it"): what the agent saw is shown beside the check, and Pass and Fail stay the person's.
@@ -45,16 +46,41 @@ export const addressOf = (base: string, where?: string) => {
   return `${base.replace(/\/$/, '')}/iframe.html?id=${encodeURIComponent(where)}&viewMode=story` // a story's id: the story alone, as Storybook serves it
 }
 
+/** Where one view was sent, in order: back, forward, reload and what is typed in its address bar. */
+function useTrail() {
+  const [trail, setTrail] = useState<{ list: string[]; i: number }>({ list: [], i: -1 })
+  const [typed, setTyped] = useState<string | null>(null) // what is in the address bar while it is being typed
+  const [reloads, setReloads] = useState(0)
+  const setAt = (to: string | null) => { setTyped(null); setTrail((t) => (to === null ? { list: [], i: -1 } : t.list[t.i] === to ? t : { list: [...t.list.slice(0, t.i + 1), to], i: t.i + 1 })) }
+  const step = (by: number) => { setTyped(null); setTrail((t) => ({ ...t, i: Math.max(-1, Math.min(t.list.length - 1, t.i + by)) })) }
+  return { at: trail.list[trail.i] ?? null, canBack: trail.i >= 0, canForward: trail.i < trail.list.length - 1, typed, setTyped, reloads, reload: () => setReloads((n) => n + 1), setAt, step }
+}
+type Trail = ReturnType<typeof useTrail>
+/** Back, forward, reload and an address, for one view. `of` names it when there are two ("main"). */
+function Nav({ t, home, src, of }: { t: Trail; home: string; src: string; of?: string }) {
+  const path = src.startsWith(home) ? src.slice(home.length) || '/' : src // somewhere else entirely: the whole address
+  const go = (to: string) => { const x = to.trim(); if (x) t.setAt(/^https?:\/\//.test(x) ? x : `${home}${x.startsWith('/') ? x : `/${x}`}`) }
+  const n = (what: string) => (of ? `${what} (${of})` : what)
+  return (
+    <>
+      <button className="icon-btn" disabled={!t.canBack} onClick={() => t.step(-1)} title={n('Back')} aria-label={n('Back')}>←</button>
+      <button className="icon-btn" disabled={!t.canForward} onClick={() => t.step(1)} title={n('Forward')} aria-label={n('Forward')}>→</button>
+      <button className="icon-btn" onClick={t.reload} title={n('Reload')} aria-label={n('Reload')}>↻</button>
+      <form className="preview-address smoke-address" onSubmit={(e) => { e.preventDefault(); go(t.typed ?? path) }}>
+        {src.startsWith(home) && <span className="faint mono">{home}</span>}
+        <input className="mono" value={t.typed ?? path} onChange={(e) => t.setTyped(e.target.value)} aria-label={n('Address')} title="A path, or a whole address. Enter goes there." />
+      </form>
+    </>
+  )
+}
+
 export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: string; /** The task's address, for the links on from here. */ base: string }) {
   const [v, setV] = useState<SmokeView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [trail, setTrail] = useState<{ list: string[]; i: number }>({ list: [], i: -1 }) // where the view was sent, in order, and which of them it is at
-  const [typed, setTyped] = useState<string | null>(null) // what is in the address bar while it is being typed
-  const [reloads, setReloads] = useState(0)
-  const at = trail.list[trail.i] ?? null
-  const setAt = (to: string | null) => { setTyped(null); setTrail((t) => (to === null ? { list: [], i: -1 } : t.list[t.i] === to ? t : { list: [...t.list.slice(0, t.i + 1), to], i: t.i + 1 })) }
-  const step = (by: number) => { setTyped(null); setTrail((t) => ({ ...t, i: Math.max(-1, Math.min(t.list.length - 1, t.i + by)) })) }
+  const mine = useTrail(), theirs = useTrail() // the build's view, and main's beside it: each goes its own way
+  const { at, setAt: setMine } = mine
+  const setAt = (to: string | null) => { setMine(to); if (to === null) theirs.setAt(null) }
   const [marking, setMarking] = useState<{ id: string; pass: boolean } | null>(null)
   const [note, setNote] = useState('')
   const [sent, setSent] = useState<number | null>(null)
@@ -90,8 +116,10 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   const behind = local && su.running && v.head && su.running !== v.head
   const src = su.url ? at ?? su.url : null
   const cmp = local && su.up ? su.compare ?? null : null
-  // Main shows the same place: the build's address, on main's port.
-  const cmpSrc = cmp && src && su.url ? (src.startsWith(su.url.replace(/\/$/, '')) ? `${cmp.url.replace(/\/$/, '')}${src.slice(su.url.replace(/\/$/, '').length)}` : src) : null
+  const home = su.url?.replace(/\/$/, '') ?? '', cmpHome = cmp?.url.replace(/\/$/, '') ?? ''
+  /** The same place on main: the build's address, on main's port. */
+  const onMain = (to: string) => (cmp && to.startsWith(home) ? `${cmpHome}${to.slice(home.length)}` : to)
+  const cmpSrc = cmp ? theirs.at ?? cmp.url : null
   const SAW = { holds: 'An agent saw it hold', fails: 'An agent saw it fail', unsure: 'An agent could not tell' } as const
   const done = v.checks.length > 0 && v.owed === 0
   const row = (c: SmokeCheck, waits = false) => (
@@ -124,7 +152,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
         </div>
       ) : (
         <div className="smoke-actions">
-          {su.url && local && goable(c.where) && <button className="btn quiet small" onClick={() => setAt(c.link ?? addressOf(su.url!, c.where))} title={`Show ${c.where} in the view beside this`}>Go there</button>}
+          {su.url && local && goable(c.where) && <button className="btn quiet small" onClick={() => { const to = c.link ?? addressOf(su.url!, c.where); setAt(to); if (cmp) theirs.setAt(onMain(to)) }} title={cmp ? `Show ${c.where} in both views` : `Show ${c.where} in the view beside this`}>Go there</button>}
           <button className="btn small" disabled={busy || waits} onClick={() => { setMarking({ id: c.id, pass: true }); setNote('') }}>{c.mark === 'todo' ? 'Pass' : 'Pass instead'}</button>
           <button className="btn quiet small" disabled={busy || waits} onClick={() => { setMarking({ id: c.id, pass: false }); setNote('') }}>{c.mark === 'todo' ? 'Fail' : 'Fail instead'}</button>
           <button className="btn quiet small" disabled={busy || waits || !!c.trying || (local && (c.when ?? 'here') === 'here' && !su.up)} title={local && (c.when ?? 'here') === 'here' && !su.up ? 'Run it first: the agent tries what is up' : 'An agent tries it and says what it saw. It does not mark it.'} onClick={() => void act(() => engine.trySmoke(issueId, c.id))}>{c.tried ? 'Ask again' : 'Ask an agent'}</button>
@@ -168,22 +196,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
             {src && (local ? su.up : true) && (
               <>
                 <div className="smoke-bar">
-                  {local ? (() => {
-                    const home = su.url!.replace(/\/$/, '')
-                    const path = src.startsWith(home) ? src.slice(home.length) || '/' : src // somewhere else entirely: the whole address
-                    const go = (to: string) => { const x = to.trim(); if (x) setAt(/^https?:\/\//.test(x) ? x : `${home}${x.startsWith('/') ? x : `/${x}`}`) }
-                    return (
-                      <>
-                        <button className="icon-btn" disabled={trail.i < 0} onClick={() => step(-1)} title="Back" aria-label="Back">←</button>
-                        <button className="icon-btn" disabled={trail.i >= trail.list.length - 1} onClick={() => step(1)} title="Forward" aria-label="Forward">→</button>
-                        <button className="icon-btn" onClick={() => setReloads((n) => n + 1)} title="Reload" aria-label="Reload">↻</button>
-                        <form className="preview-address smoke-address" onSubmit={(e) => { e.preventDefault(); go(typed ?? path) }}>
-                          {src.startsWith(home) && <span className="faint mono">{home}</span>}
-                          <input className="mono" value={typed ?? path} onChange={(e) => setTyped(e.target.value)} aria-label="Address" title="A path of the built code, or a whole address. Enter goes there." />
-                        </form>
-                      </>
-                    )
-                  })() : <code className="smoke-address">{src}</code>}
+                  {local ? (cmp ? null : <Nav t={mine} home={home} src={src} />) : <code className="smoke-address">{src}</code>}
                   <a className="btn quiet small" href={src} target="_blank" rel="noreferrer">Open in a new tab</a>
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.startSmoke(issueId, false, many ? su.key : undefined))}>{behind ? 'Run the new commit' : 'Restart'}</button>}
                   {local && su.canClean && <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true, many ? su.key : undefined))}>Start clean</button>}
@@ -195,13 +208,13 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
                 {behind && <p className="smoke-stale" role="note">The branch has moved on since this was started. Run the new commit to test what will be reviewed.</p>}
                 {local && cmp
                   ? <div className="smoke-pair">
-                      <figure><figcaption>This build{su.running ? <> <code>{su.running.slice(0, 7)}</code></> : null}</figcaption><iframe key={`${src}#${reloads}`} className="smoke-frame" title="The built code" src={src} /></figure>
-                      <figure><figcaption>main{cmp.sha ? <> <code>{cmp.sha.slice(0, 7)}</code></> : null}</figcaption>{cmp.up && cmpSrc
-                        ? <iframe key={`${cmpSrc}#${reloads}`} className="smoke-frame" title="main" src={cmpSrc} />
+                      <figure><figcaption>This build{su.running ? <> <code>{su.running.slice(0, 7)}</code></> : null}</figcaption><div className="smoke-bar"><Nav t={mine} home={home} src={src} /></div><iframe key={`${src}#${mine.reloads}`} className="smoke-frame" title="The built code" src={src} /></figure>
+                      <figure><figcaption>main{cmp.sha ? <> <code>{cmp.sha.slice(0, 7)}</code></> : null}</figcaption>{cmp.up && cmpSrc && <div className="smoke-bar"><Nav t={theirs} home={cmpHome} src={cmpSrc} of="main" /></div>}{cmp.up && cmpSrc
+                        ? <iframe key={`${cmpSrc}#${theirs.reloads}`} className="smoke-frame" title="main" src={cmpSrc} />
                         : <div className="empty smoke-frame">Starting main… {cmp.log.length > 0 && <pre className="smoke-log">{cmp.log.slice(-6).join('\n')}</pre>}</div>}</figure>
                     </div>
                   : local
-                  ? <iframe key={`${src}#${reloads}`} className="smoke-frame" title="The built code" src={src} />
+                  ? <iframe key={`${src}#${mine.reloads}`} className="smoke-frame" title="The built code" src={src} />
                   : <div className="empty">{su.where === 'preview' && v.pr ? <>The preview of pull request #{v.pr.number}. It opens in its own tab, and is rebuilt on each new commit. </> : <>It is deployed, so it opens in its own tab. </>}{su.account && <>Sign in as: {su.account}. </>}{su.flag && <>Flag: <code>{su.flag}</code>. </>}</div>}
               </>
             )}
