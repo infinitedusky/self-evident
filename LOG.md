@@ -4639,3 +4639,10 @@ shared") and the prototype skill's definition of done, which never named it.
 Not done: checking that the steps really cover each criterion (it is asked for, not verified); a guide whose
 steps are all commands is not rechecked after a rebuild.
 
+
+## The smoke test stays when nothing is left to check (Sandy, 2026-11-17: "I might want to look anyway … let it stay")
+
+On a task whose every criterion the check verified itself, the smoke test row left the nav the moment the check
+finished (it was shown only with at least one check for a person), which read as something breaking. Now it stays
+once the task is built: "nothing left to you; look anyway". The page says an agent checked everything and where
+its evidence is, and the built code can still be brought up, each set-up as usual.
