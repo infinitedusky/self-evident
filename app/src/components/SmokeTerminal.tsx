@@ -12,7 +12,7 @@ import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { API, engine } from '../engine'
 
-export function SmokeTerminal({ issueId, setup, send, tall }: { issueId: string; setup: string; /** A command to type in, from a check: `n` makes each press a new one. */ send?: { n: number; text: string } | null; /** It is the whole view, not a strip under the build. */ tall?: boolean }) {
+export function SmokeTerminal({ issueId, setup, send, tall, scratch }: { issueId: string; setup: string; /** The set-up's throwaway terminal, in a new empty folder, not its own. */ scratch?: boolean; /** A command to type in, from a check: `n` makes each press a new one. */ send?: { n: number; text: string } | null; /** It is the whole view, not a strip under the build. */ tall?: boolean }) {
   const box = useRef<HTMLDivElement>(null)
   const type = useRef<(data: string) => void>(() => {})
   const [error, setError] = useState<string | null>(null)
@@ -28,13 +28,13 @@ export function SmokeTerminal({ issueId, setup, send, tall }: { issueId: string;
     term.open(box.current)
     try { fit.fit() } catch { /* not laid out yet */ }
     let es: EventSource | null = null, gone = false
-    const post = (what: 'input' | 'resize', body: Record<string, unknown>) => fetch(`${API}/issues/${issueId}/smoke/terminal/${what}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ setup, ...body }) }).catch(() => {})
+    const post = (what: 'input' | 'resize', body: Record<string, unknown>) => fetch(`${API}/issues/${issueId}/smoke/terminal/${what}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ setup, ...(scratch ? { scratch: true } : {}), ...body }) }).catch(() => {})
     type.current = (data) => void post('input', { data })
     const typing = term.onData((data) => type.current(data))
-    engine.openSmokeTerminal(issueId, setup, term.cols, term.rows).then((o) => {
+    engine.openSmokeTerminal(issueId, setup, term.cols, term.rows, !!scratch).then((o) => {
       if (gone) return
       setWhere({ cwd: o.cwd, folder: o.folder })
-      es = new EventSource(`${API}/issues/${issueId}/smoke/terminal/stream?setup=${encodeURIComponent(setup)}`)
+      es = new EventSource(`${API}/issues/${issueId}/smoke/terminal/stream?setup=${encodeURIComponent(setup)}${scratch ? '&scratch=1' : ''}`)
       es.onopen = () => { term.reset(); setReady(true) } // each time it connects it is told everything said so far
       es.addEventListener('data', (e) => term.write(JSON.parse((e as MessageEvent).data) as string))
       es.addEventListener('exit', () => { term.write('\r\n[the shell ended]\r\n'); es?.close() })
@@ -44,7 +44,7 @@ export function SmokeTerminal({ issueId, setup, send, tall }: { issueId: string;
     const sized = new ResizeObserver(() => { window.clearTimeout(timer); timer = window.setTimeout(() => { try { fit.fit(); void post('resize', { cols: term.cols, rows: term.rows }) } catch { /* gone */ } }, 150) })
     sized.observe(box.current)
     return () => { gone = true; setReady(false); window.clearTimeout(timer); sized.disconnect(); typing.dispose(); es?.close(); term.dispose() }
-  }, [issueId, setup])
+  }, [issueId, setup, scratch])
 
   useEffect(() => { if (ready && send?.text && send.n !== sent.current) { sent.current = send.n; type.current(send.text) } }, [send?.n, ready]) // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -169,11 +169,16 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     }),
     // Task branches and save points: the engine's rules, roughly.
     http.get('/api/issues/:id/smoke', () => reply(d.smoke ?? { where: 'local', says: 'run here, like its prototypes', account: null, flag: null, branch: null, head: null, running: null, url: null, up: false, canRun: false, log: [], checks: [], owed: 0, failed: 0 })),
-    http.post('/api/issues/:id/smoke/terminal', () => { if (d.smoke) d.smoke = { ...d.smoke, terminal: { folder: d.smoke.terminal?.folder ?? 'build', open: true }, ...(d.smoke.where === 'terminal' ? { up: true } : {}) }; return reply({ setup: 'main', cwd: d.smoke?.terminal?.folder === 'temp' ? '/tmp/smoke-ss-20-sample' : '/sample/shop-worktrees/smoke--ss-20', folder: d.smoke?.terminal?.folder ?? 'build', fresh: true }) }),
+    http.post('/api/issues/:id/smoke/terminal', async ({ request }) => {
+      const b = await request.json().catch(() => ({})) as { scratch?: boolean }
+      if (b.scratch) { if (d.smoke) d.smoke = { ...d.smoke, scratch: { open: true } }; return reply({ setup: 'main@temp', cwd: '/tmp/smoke-ss-20-scratch-sample', folder: 'temp', fresh: true }) }
+      if (d.smoke) d.smoke = { ...d.smoke, terminal: { folder: d.smoke.terminal?.folder ?? 'build', open: true }, ...(d.smoke.where === 'terminal' ? { up: true } : {}) }
+      return reply({ setup: 'main', cwd: d.smoke?.terminal?.folder === 'temp' ? '/tmp/smoke-ss-20-sample' : '/sample/shop-worktrees/smoke--ss-20', folder: d.smoke?.terminal?.folder ?? 'build', fresh: true })
+    }),
     http.get('/api/issues/:id/smoke/terminal/stream', () => new HttpResponse(new ReadableStream({ start(c) { shell = c; say('$ npm i ./bonkei-0.0.0.tgz (sample)\r\nadded 1 package (sample)\r\n$ ') } }), { headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' } })),
     http.post('/api/issues/:id/smoke/terminal/input', async ({ request }) => { const b = await request.json() as { data: string }; say(b.data.replace(/\r/g, '\r\n(sample output)\r\n$ ')); return reply({ ok: true }) }),
     http.post('/api/issues/:id/smoke/terminal/resize', () => reply({ ok: true })),
-    http.post('/api/issues/:id/smoke/terminal/close', () => { if (d.smoke) d.smoke = { ...d.smoke, terminal: { folder: d.smoke.terminal?.folder ?? 'build', open: false }, ...(d.smoke.where === 'terminal' ? { up: false } : {}) }; return reply(d.smoke) }),
+    http.post('/api/issues/:id/smoke/terminal/close', async ({ request }) => { const b = await request.json().catch(() => ({})) as { scratch?: boolean }; if (b.scratch) { if (d.smoke) d.smoke = { ...d.smoke, scratch: { open: false } }; return reply(d.smoke) } if (d.smoke) d.smoke = { ...d.smoke, terminal: { folder: d.smoke.terminal?.folder ?? 'build', open: false }, ...(d.smoke.where === 'terminal' ? { up: false } : {}) }; return reply(d.smoke) }),
     http.post('/api/issues/:id/smoke/start', async ({ request }) => {
       const b = await request.json().catch(() => ({})) as { clean?: boolean; setup?: string; compare?: boolean }
       if (d.smoke && b.compare) { d.smoke = { ...d.smoke, compare: { url: 'http://localhost:6600', up: true, sha: 'fed9876cba', log: [] } }; return reply(d.smoke) }

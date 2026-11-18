@@ -26,8 +26,9 @@
  *
  * Some checks are commands, not pages (Sandy, 2026-11-18: "a way to do tests of things like installing … a temp folder
  * on the machine and a terminal where it runs commands and you see it working"): a set-up can be a terminal, and one
- * tested here has a terminal in its checkout to open. A command a check names (`in backticks`) is a button that
- * runs it there.
+ * tested here has a terminal in its checkout to open, before it is started too ("we want to test starting it"). Every
+ * set-up also has a throwaway terminal, in a new empty folder ("we always want access to a terminal pointed at a temp
+ * throwaway folder"). A command a check names (`in backticks`) is a button that runs it in whichever is open.
  *
  * Reading first: a check shows Pass and Fail, and a note is asked for only once one is pressed (a fail needs one:
  * it is what the fix works from). After a QA test run in TestRail and a GitHub deployment's "View deployment":
@@ -115,7 +116,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   }
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
-  const all: SmokeSetupView[] = v.setups?.length ? v.setups : [{ key: 'main', name: 'Smoke test', what: null, where: v.where, says: v.says, account: v.account, flag: v.flag, running: v.running, url: v.url, up: v.up, canRun: v.canRun, canClean: v.canClean, canCompare: v.canCompare, compare: v.compare, terminal: v.terminal, log: v.log, owed: v.owed }]
+  const all: SmokeSetupView[] = v.setups?.length ? v.setups : [{ key: 'main', name: 'Smoke test', what: null, where: v.where, says: v.says, account: v.account, flag: v.flag, running: v.running, url: v.url, up: v.up, canRun: v.canRun, canClean: v.canClean, canCompare: v.canCompare, compare: v.compare, terminal: v.terminal, scratch: v.scratch, log: v.log, owed: v.owed }]
   const many = all.length > 1
   // The one they chose; else the first with something still to check; else the first.
   const su = all.find((x) => x.key === picked) ?? all.find((x) => x.owed > 0) ?? all[0]
@@ -123,10 +124,12 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   const local = su.where === 'local'
   const shell = su.where === 'terminal'
   const termOn = !!su.terminal && (term[su.key] ?? su.terminal.open)
-  const closeTerm = () => { setTerm((t) => ({ ...t, [su.key]: false })); void act(() => engine.closeSmokeTerminal(issueId, su.key)) }
+  const scratchOn = !!su.scratch && (term[`${su.key}@temp`] ?? su.scratch.open)
+  const closeTerm = (scratch = false) => { setTerm((t) => ({ ...t, [scratch ? `${su.key}@temp` : su.key]: false })); void act(() => engine.closeSmokeTerminal(issueId, su.key, scratch)) }
+  const anyTerm = termOn || scratchOn // a check's command runs in the set-up's own when it is open, else the throwaway one
   /** What to do, with each command it names as a button that runs it in the terminal, once one is open. */
   const how = (text: string) => text.split(/(`[^`\n]+`)/).map((part, n) => (/^`[^`]+`$/.test(part)
-    ? (termOn ? <button key={n} type="button" className="smoke-cmd" title="Run it in the terminal" onClick={() => setSend((x) => ({ n: (x?.n ?? 0) + 1, text: `${part.slice(1, -1)}\r` }))}>▶ <code>{part.slice(1, -1)}</code></button> : <code key={n}>{part.slice(1, -1)}</code>)
+    ? (anyTerm ? <button key={n} type="button" className="smoke-cmd" title="Run it in the terminal" onClick={() => setSend((x) => ({ n: (x?.n ?? 0) + 1, text: `${part.slice(1, -1)}\r` }))}>▶ <code>{part.slice(1, -1)}</code></button> : <code key={n}>{part.slice(1, -1)}</code>)
     : part))
   const behind = local && su.running && v.head && su.running !== v.head
   const src = su.url ? at ?? su.url : null
@@ -196,6 +199,12 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
         </>
       )}
       {(v.checks.length > 0 || !!v.head) && su.what && <p className="faint smoke-what">{su.what}</p>}
+      {((local && su.terminal && !!v.head) || su.scratch) && (
+        <div className="smoke-terms" role="group" aria-label="Terminals">
+          {local && su.terminal && !!v.head && <button className="btn quiet small" aria-pressed={termOn} disabled={busy} title="A terminal in the build's checkout. It does not need the build to be running." onClick={() => (termOn ? closeTerm() : setTerm((t) => ({ ...t, [su.key]: true })))}>{termOn ? 'Close terminal' : 'Terminal'}</button>}
+          {su.scratch && <button className="btn quiet small" aria-pressed={scratchOn} disabled={busy} title="A terminal in a new empty folder, thrown away when you close it" onClick={() => (scratchOn ? closeTerm(true) : setTerm((t) => ({ ...t, [`${su.key}@temp`]: true })))}>{scratchOn ? 'Close scratch terminal' : 'Scratch terminal'}</button>}
+        </div>
+      )}
       {(v.checks.length > 0 || !!v.head) && (
         <div className={`smoke-layout ${cmp ? 'comparing' : ''}`}>
           <div className="smoke-view">
@@ -217,7 +226,6 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
                   {local && su.canClean && <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true, many ? su.key : undefined))}>Start clean</button>}
                   {local && su.canCompare && !su.compare && <button className="btn quiet small" disabled={busy} title="Bring up main beside it, on its own port, to look at the two side by side" onClick={() => void act(() => engine.startSmoke(issueId, false, many ? su.key : undefined, true))}>Compare with main</button>}
                   {local && su.compare && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.stopSmoke(issueId, many ? su.key : undefined, true))}>Stop comparing</button>}
-                  {local && su.terminal && <button className="btn quiet small" disabled={busy} title="A terminal in the build's checkout, under the view" onClick={() => (termOn ? closeTerm() : setTerm((t) => ({ ...t, [su.key]: true })))}>{termOn ? 'Close terminal' : 'Terminal'}</button>}
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.stopSmoke(issueId, many ? su.key : undefined))}>Stop</button>}
                 </div>
                 {local && su.strayPorts?.length ? <p className="smoke-stale" role="note">{su.strayNote ?? `It also listens on ${su.strayPorts.join(', ')}, which it chose itself.`}</p> : null}
@@ -236,11 +244,10 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
             )}
             {shell && (termOn
               ? <>
-                  <div className="smoke-bar"><span className="faint">A terminal on this computer. Commands in a check run here with a press.</span><button className="btn quiet small" disabled={busy} onClick={closeTerm}>Close</button></div>
+                  <div className="smoke-bar"><span className="faint">A terminal on this computer. Commands in a check run here with a press.</span><button className="btn quiet small" disabled={busy} onClick={() => closeTerm()}>Close</button></div>
                   <SmokeTerminal issueId={issueId} setup={su.key} send={send} tall />
                 </>
               : <div className="empty">{su.terminal?.folder === 'temp' ? 'This is tried in a terminal, in a new empty folder that is thrown away after.' : v.head ? 'This is tried in a terminal, in the build\'s checkout.' : 'Nothing is built yet: its terminal opens in the build\'s checkout.'} {(su.terminal?.folder === 'temp' || v.head) && <button className="btn small" onClick={() => setTerm((t) => ({ ...t, [su.key]: true }))}>Open terminal</button>}</div>)}
-            {local && su.up && termOn && <SmokeTerminal issueId={issueId} setup={su.key} send={send} />}
             {!local && !shell && !su.url && (su.where === 'preview' && !v.pr
               ? <div className="empty">This app is tried on a preview of its pull request, and this task has no pull request yet. It is opened once the first of its work is merged.</div>
               : <div className="empty">This app is smoke tested {su.where === 'staging' ? 'on staging' : su.where === 'preview' ? 'on a preview of its pull request' : 'behind a feature flag'}, and has not said at what address. Settings › Prototype has it.</div>)}
@@ -265,6 +272,8 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
           </div>
         </div>
       )}
+      {local && termOn && <SmokeTerminal key={`${su.key}:own`} issueId={issueId} setup={su.key} send={send} />}
+      {scratchOn && <SmokeTerminal key={`${su.key}:scratch`} issueId={issueId} setup={su.key} scratch send={termOn ? null : send} />}
     </section>
   )
 }

@@ -988,3 +988,5 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .smoke-term.tall .smoke-term-box { height: min(60vh, 520px); }
 .smoke-cmd { font: inherit; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 0 6px; cursor: pointer; }
 .smoke-cmd:hover { border-color: var(--accent); }
+
+.smoke-terms { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }

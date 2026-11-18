@@ -26,6 +26,8 @@ import { smokePlace } from './smoke.js'
 interface Term { proc: pty.IPty; buf: string; subs: Set<(data: string) => void>; ends: Set<(code: number) => void>; cwd: string; temp: string | null; exited: number | null }
 const terms = new Map<string, Term>() // by task and set-up
 const tKey = (issueId: string, setup: string) => `${issueId}:${setup}`
+/** A set-up's throwaway terminal is kept beside its own, under its key with this after it; a set-up's key never has an "@". */
+export const scratchKey = (setup: string) => `${setup}@temp`
 /** What a page that connects late is shown first: the last of what was said. */
 export const SCROLLBACK = 200_000
 
@@ -65,8 +67,8 @@ function helper() {
 export const terminalOpen = (issueId: string, setup: string) => { const t = terms.get(tKey(issueId, setup)); return !!t && t.exited === null }
 
 /** Open the task's terminal for a set-up, or say where the one already open is. */
-export async function openTerminal(issueId: string, setup?: string, size: { cols?: number; rows?: number } = {}) {
-  const place = await smokePlace(issueId, setup)
+export async function openTerminal(issueId: string, setup?: string, size: { cols?: number; rows?: number } = {}, /** The throwaway one, in a new empty folder, whatever the set-up is. */ scratch = false) {
+  const place = await smokePlace(issueId, setup, scratch)
   const k = tKey(issueId, place.key)
   const had = terms.get(k)
   if (had && had.exited === null) return { setup: place.key, cwd: had.cwd, folder: had.temp ? 'temp' as const : 'build' as const, fresh: false }
