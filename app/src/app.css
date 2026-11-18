@@ -990,3 +990,19 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .smoke-cmd:hover { border-color: var(--accent); }
 
 .smoke-terms { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
+
+/* Settings › Skills: each step, its contract and its stages (StepContracts.tsx). */
+.step-contract { border-top: 1px solid var(--line); padding: 8px 0; }
+.step-contract > summary { display: flex; gap: 12px; align-items: center; cursor: pointer; list-style: none; }
+.step-contract > summary::-webkit-details-marker { display: none; }
+.step-contract-name { flex: 0 0 180px; font-weight: 600; }
+.step-contract-attached { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+.step-contract-body { margin: 10px 0 6px; font-size: 13px; }
+.step-stages { list-style: none; margin: 0; padding: 0; }
+.step-stages > li { display: grid; grid-template-columns: 140px 1fr; gap: 16px; padding: 8px 0; border-top: 1px dashed var(--line); font-size: 13px; }
+.step-stage-head { display: flex; flex-direction: column; gap: 2px; }
+.step-stage-what { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; min-width: 0; }
+.step-stage-attached { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.step-probes { border-collapse: collapse; }
+.step-probes td { padding: 3px 24px 3px 0; vertical-align: baseline; }
+@media (max-width: 640px) { .step-stages > li { grid-template-columns: 1fr; gap: 4px; } .step-contract-name { flex-basis: auto; } }
