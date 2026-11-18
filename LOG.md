@@ -4616,3 +4616,26 @@ not seen; nothing stops the start, it only says.
 but reading the set-up back built it without that line, so it came back empty. Now it is read (and a name, when
 given). Settings shows the field with one set-up too, and the smoke test page says it.
 
+## The guide is part of a finished prototype (Sandy, 2026-11-17: "I want every prototype to have one, because it's how I and anyone I show it to know what to try")
+
+A prototype on another app was started, reported done and could have been approved with no guide. Agents only heard
+of the guide in connection with sharing: the prompt, the `set_guide` tool ("write one before or when a prototype is
+shared") and the prototype skill's definition of done, which never named it.
+
+- **Every prototype has a guide**, shared or not: what this is and that the data is made up, then steps in the
+  order to try them, covering every acceptance criterion the prototype shows. It is point 7 of the skill's
+  definition of done and part of its report; the prompt and the tool say the same.
+- **The engine refuses without one.** A task's prototype step cannot be set done by an agent or approved by a
+  person while its prototype has no guide (or a guide with no steps). The step says why on its page (`needs`), and
+  Approve is off until it has one. A task with no prototype of its own is not held.
+- **A data rebuild checks the guide again.** Once the prototype answers, each path is asked for; the ones that no
+  longer open are kept on the guide (`stale`), said above the prototype and to the agent, and recorded once
+  (`prototype.guide_stale`). Writing the guide again clears it. What happened: an empty rebuild ran the seed again,
+  every row got a new id, and the guide's links pointed at rows that were gone.
+- **The rebuild button offers a kept scenario**, not empty, when none is loaded ("default" first).
+- The skill's rule that scenarios are rebuilt from `.prototype/scenarios/` was stale since earlier today: reworded
+  to the rows `prototype_data` keeps. No other mention of those files is left in the skill or the prompt.
+
+Not done: checking that the steps really cover each criterion (it is asked for, not verified); a guide whose
+steps are all commands is not rechecked after a rebuild.
+
