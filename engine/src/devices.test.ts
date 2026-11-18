@@ -1,6 +1,6 @@
 /** Which other devices have the page open: told from the address Tailscale adds, named from Tailscale's own list. */
 import { describe, expect, it } from 'vitest'
-import { addressIn, deviceJoined, devicesHere, namesIn, remoteIp } from './devices.js'
+import { addressIn, connectedIn, deviceJoined, enableIn, devicesHere, namesIn, remoteIp } from './devices.js'
 
 const from = (xff?: string) => (name: string) => (name === 'x-forwarded-for' ? xff : undefined)
 const phone = async () => ({ name: 'Made-up phone', kind: 'phone' as const })
@@ -26,6 +26,14 @@ describe('devices here', () => {
     expect(addressIn(serve('http://127.0.0.1:5180'))).toBe('https://made-up.tail0000.ts.net')
     expect(addressIn(serve('http://127.0.0.1:3000'))).toBeNull() // something else is served, not the page
     expect(addressIn('{}')).toBeNull()
+  })
+
+  it('knows connected from not, and where Tailscale says to allow serving', () => {
+    expect(connectedIn(JSON.stringify({ BackendState: 'Running' }))).toBe(true)
+    expect(connectedIn(JSON.stringify({ BackendState: 'NeedsLogin' }))).toBe(false)
+    expect(connectedIn('')).toBe(false)
+    expect(enableIn('Serve is not enabled on your tailnet.\nTo enable, visit:\n\n   https://login.tailscale.com/f/serve?node=madeup\n')).toBe('https://login.tailscale.com/f/serve?node=madeup')
+    expect(enableIn('Serve started and running in the background.')).toBeNull()
   })
 
   it('a device is here while it holds a feed, once however many feeds, and gone when the last closes', async () => {

@@ -5,7 +5,7 @@
  * is here while it holds a live feed open, and gone when it lets go (the phone sleeps, the tab closes).
  * Kept in memory only: nothing about a device is stored.
  */
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 
 export interface Device { ip: string; name: string; kind: 'phone' | 'computer'; since: string }
 
@@ -34,14 +34,62 @@ export function addressIn(serveJson: string, port = UI_PORT): string | null {
   return null
 }
 
-let address: { at: number; value: string | null } | null = null
-/** The address to open on a phone, asked of Tailscale at most twice a minute. */
-export async function phoneAddress(): Promise<string | null> {
-  if (address && Date.now() - address.at < 30_000) return address.value
-  let value: string | null = null
-  for (const bin of BINS) { const out = await run(bin, ['serve', 'status', '--json']); if (out) { value = addressIn(out); break } }
-  address = { at: Date.now(), value }
+/** Where Tailscale stands on this computer: not installed, installed but not connected, or connected. */
+export type Tailscale = 'missing' | 'off' | 'ready'
+export interface Phone { tailscale: Tailscale; address: string | null }
+
+/** Whether Tailscale is connected, from `tailscale status --json`. */
+export const connectedIn = (statusJson: string) => { try { return (JSON.parse(statusJson) as { BackendState?: string }).BackendState === 'Running' } catch { return false } }
+
+/** The first Tailscale that answers, with what it said to `args`; null when there is none on this computer. */
+async function ask(args: string[]): Promise<{ bin: string; out: string } | null> {
+  for (const bin of BINS) { const out = await run(bin, args); if (out !== null) return { bin, out } }
+  return null
+}
+
+let phone: { at: number; value: Phone } | null = null
+/** Tailscale's state and the address to open on a phone, asked at most twice a minute. */
+export async function phoneState(fresh = false): Promise<Phone> {
+  if (!fresh && phone && Date.now() - phone.at < 30_000) return phone.value
+  const status = await ask(['status', '--json'])
+  const value: Phone = !status ? { tailscale: 'missing', address: null }
+    : !connectedIn(status.out) ? { tailscale: 'off', address: null }
+    : { tailscale: 'ready', address: addressIn((await run(status.bin, ['serve', 'status', '--json'])) ?? '') }
+  phone = { at: Date.now(), value }
   return value
+}
+
+/** The page Tailscale names when serving has to be allowed on the account first. */
+export const enableIn = (said: string) => /https:\/\/login\.tailscale\.com\/\S+/.exec(said)?.[0] ?? null
+
+/**
+ * Put the page on the private network (`tailscale serve --bg`), the one press that replaces the terminal step
+ * (Sandy, 2026-11-18: "that should be a button that starts it no?"). Only this computer's devices can open it;
+ * nothing is made public. When the account has not allowed serving yet, Tailscale says where to allow it and waits:
+ * `enable` is that page, and nothing is served.
+ */
+export async function servePhone(): Promise<Phone & { enable?: string }> {
+  const status = await ask(['status', '--json'])
+  if (!status || !connectedIn(status.out)) return phoneState(true)
+  const said = await new Promise<string>((resolve) => {
+    const child = spawn(status.bin, ['serve', '--bg', String(UI_PORT)], { stdio: ['ignore', 'pipe', 'pipe'] })
+    let out = ''
+    const end = () => { clearTimeout(t); resolve(out) }
+    const t = setTimeout(() => { child.kill(); end() }, 12_000) // it waits forever when serving is not allowed yet
+    child.stdout.on('data', (b) => { out += String(b); if (enableIn(out)) { child.kill(); end() } })
+    child.stderr.on('data', (b) => { out += String(b) })
+    child.on('close', end); child.on('error', end)
+  })
+  const now = await phoneState(true)
+  const enable = now.address ? null : enableIn(said)
+  return enable ? { ...now, enable } : now
+}
+
+/** Take the page off the private network again. */
+export async function stopPhone(): Promise<Phone> {
+  const status = await ask(['status', '--json'])
+  if (status) await run(status.bin, ['serve', '--https=443', 'off'])
+  return phoneState(true)
 }
 
 /** Each address's device, as Tailscale has it. Exported so a test can read a made-up answer. */
