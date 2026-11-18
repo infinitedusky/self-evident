@@ -4715,3 +4715,31 @@ Now every builder, the check and the probe are told the same thing (`LEAVE_LONG_
 It is wording only: nothing measures how long an agent's command ran or stops one. Not done: the engine noticing
 a builder's long command and saying so in the build; a criterion saying up front that it is the person's.
 
+## Smoke test: main beside the build, and an agent's try of one check (Sandy, 2026-11-18)
+
+### Compare with main ("spin up a comp setup that uses main instead of whatever I'm building … so I can look at the two side by side"; "start with smoke test first … running it on a different port both at the same time")
+
+A running local smoke test has **Compare with main**. It brings the same set-up up a second time, from main, on a
+port, a worktree (`smoke--<task>--main`) and a database (`smoke-<task>-main`) of its own, with the same seed. The
+two views sit side by side and follow one address bar, so a check's "Go there" shows the same place in both.
+Stopping the build stops its comparison; restarting the build leaves it up.
+
+- "main" is the commit where the build's branch left the default branch, not today's tip (mine to choose; said to
+  Sandy first). The only differences on screen are then the build's own.
+- A seed that names what only the build has (a new table) does not stop main coming up: its log says what did not
+  load.
+- Its run is kept in `smoke_run` under the set-up's key with `@main` after it. No migration.
+
+Not done: the prototype's comparison (smoke test first, Sandy's word); staging and feature-flag set-ups, where the
+comparison is an address, not a server; today's main as a second choice.
+
+### Ask an agent ("a button that triggers the agent to do a test of it and gets their result. That doesn't pass it, but it gives us their result since we're no longer doing that as part of the regular workflow")
+
+Each check has **Ask an agent**. One agent, in the smoke test's own checkout, tries that check against what is
+running and says holds, fails or could not tell, with a line on what it saw. That is kept on the criterion
+(`tried`) and shown beside the check; Pass and Fail stay the person's, and nothing is sent back by it. Six minutes
+at most; it can read and run commands, and cannot edit. A try made on an earlier commit says so.
+
+Not done: watching the agent work while it tries (only the result is shown); asking for every check at once; a try
+lost to an engine restart is forgotten, not resumed.
+

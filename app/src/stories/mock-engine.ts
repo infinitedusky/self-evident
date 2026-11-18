@@ -167,15 +167,21 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     // Task branches and save points: the engine's rules, roughly.
     http.get('/api/issues/:id/smoke', () => reply(d.smoke ?? { where: 'local', says: 'run here, like its prototypes', account: null, flag: null, branch: null, head: null, running: null, url: null, up: false, canRun: false, log: [], checks: [], owed: 0, failed: 0 })),
     http.post('/api/issues/:id/smoke/start', async ({ request }) => {
-      const b = await request.json().catch(() => ({})) as { clean?: boolean; setup?: string }
+      const b = await request.json().catch(() => ({})) as { clean?: boolean; setup?: string; compare?: boolean }
+      if (d.smoke && b.compare) { d.smoke = { ...d.smoke, compare: { url: 'http://localhost:6600', up: true, sha: 'fed9876cba', log: [] } }; return reply(d.smoke) }
       if (d.smoke && b.setup && d.smoke.setups) d.smoke = { ...d.smoke, setups: d.smoke.setups.map((x, n) => (x.key === b.setup ? { ...x, url: `http://localhost:${6500 + n}`, up: true, running: d.smoke!.head } : x)) }
       else if (d.smoke) d.smoke = { ...d.smoke, url: 'http://localhost:6500', up: true, running: d.smoke.head, log: b.clean ? ['started clean (sample)'] : d.smoke.log }
       return reply(d.smoke)
     }),
     http.post('/api/issues/:id/smoke/stop', async ({ request }) => {
-      const b = await request.json().catch(() => ({})) as { setup?: string }
+      const b = await request.json().catch(() => ({})) as { setup?: string; compare?: boolean }
+      if (d.smoke && b.compare) { d.smoke = { ...d.smoke, compare: null }; return reply(d.smoke) }
       if (d.smoke && b.setup && d.smoke.setups) d.smoke = { ...d.smoke, setups: d.smoke.setups.map((x) => (x.key === b.setup ? { ...x, url: null, up: false, running: null } : x)) }
       else if (d.smoke) d.smoke = { ...d.smoke, url: null, up: false, running: null }
+      return reply(d.smoke)
+    }),
+    http.post('/api/issues/:id/smoke/:criterion/try', ({ params }) => { // the agent says at once here; the real one takes a few minutes
+      if (d.smoke) d.smoke = { ...d.smoke, checks: d.smoke.checks.map((c) => (c.id === params.criterion ? { ...c, tried: { verdict: 'holds' as const, note: 'Opened it headless: the edge dips under the lip (sample)', sha: d.smoke!.head, at: '2026-11-18T12:00:00.000Z' } } : c)) }
       return reply(d.smoke)
     }),
     http.post('/api/issues/:id/smoke/:criterion', async ({ params, request }) => {

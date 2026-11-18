@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises'
 import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
 import { checklistOf } from './checklist.js'
-import { markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes } from './smoke.js'
+import { compareKey, markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
 import { startLearning, talkBusy } from './talk.js'
 import { serve } from '@hono/node-server'
 import { appendEvent } from './events.js'
@@ -650,8 +650,10 @@ export function buildApp(bus: EventBus) {
   }
   // The smoke test (smoke.ts): the checks left to a person on a built task, where it runs, and their marks.
   api.get('/issues/:id/smoke', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err, 404) } })
-  api.post('/issues/:id/smoke/start', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { clean?: boolean; setup?: string }; return c.json(await startSmoke(t.id, 'user', { clean: body.clean === true, setup: typeof body.setup === 'string' ? body.setup : undefined }), 202) } catch (err) { return planError(c, err) } })
-  api.post('/issues/:id/smoke/stop', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { setup?: string }; await stopSmoke(t.id, typeof body.setup === 'string' ? body.setup : undefined); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err) } })
+  api.post('/issues/:id/smoke/start', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { clean?: boolean; setup?: string; compare?: boolean }; return c.json(await startSmoke(t.id, 'user', { clean: body.clean === true, compare: body.compare === true, setup: typeof body.setup === 'string' ? body.setup : undefined }), 202) } catch (err) { return planError(c, err) } })
+  api.post('/issues/:id/smoke/stop', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { setup?: string; compare?: boolean }; if (body.compare === true) { const v = await smokeView(t.id); await stopSmoke(t.id, compareKey(typeof body.setup === 'string' ? body.setup : v.setups[0].key)) } else await stopSmoke(t.id, typeof body.setup === 'string' ? body.setup : undefined); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err) } })
+  // An agent tries one check and says what it saw; it marks nothing (smoke.ts, trySmoke).
+  api.post('/issues/:id/smoke/:criterion/try', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json((await trySmoke(t.id, c.req.param('criterion'), 'user')).view) } catch (err) { return planError(c, err, 400) } })
   api.post('/issues/:id/smoke/:criterion', async (c) => {
     const body = await c.req.json<{ pass?: boolean; note?: string }>().catch(() => ({} as { pass?: boolean; note?: string }))
     if (typeof body.pass !== 'boolean') return c.json({ error: 'pass is true or false' }, 400)

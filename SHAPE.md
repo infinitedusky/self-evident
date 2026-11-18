@@ -235,6 +235,11 @@ Details and sources in `research/`.
     … That's the whole reason for having the smoke test"): more than about two minutes of running (every page in a
     browser, a whole journey) is not run or scripted by a builder, the check or the probe; it is left as a check
     of the person's.
+  - **Main can be brought up beside the build** (Sandy, 2026-11-18: "look at the two side by side"): the same
+    set-up from where the branch left main, on its own port, both views on one address bar. Smoke test first; the
+    prototype's is not built.
+  - **A check can be handed to an agent to try** (Sandy, 2026-11-18): it says what it saw beside the check and
+    marks nothing; the mark stays the person's.
   - **Where it runs is the app's setting**, one of: the **same as its prototypes** (run locally, made-up data: a
     library and its Storybook); a **staging** environment (a deployed build, a test account, real services in test
     mode; "a fake account in a staging environment"); or **behind a feature flag** in production, on for a test

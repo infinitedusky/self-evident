@@ -254,3 +254,51 @@ export const AddressBar: Story = {
     await expect(c.getByRole('button', { name: 'Reload' })).toBeEnabled()
   },
 }
+
+/** Main beside the build (made up): pressing Compare with main brings it up on its own port, and both views follow the same address. */
+export const ComparedWithMain: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, canCompare: true, compare: null } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Compare with main' }))
+    await waitFor(() => expect(c.getByTitle('main')).toHaveAttribute('src', 'http://localhost:6600'))
+    await expect(c.getByText('This build')).toBeInTheDocument()
+    await userEvent.click(c.getAllByRole('button', { name: 'Go there' })[0])
+    await expect(c.getByTitle('The built code')).toHaveAttribute('src', 'http://localhost:6500/iframe.html?id=edges-tunnel--default&viewMode=story')
+    await expect(c.getByTitle('main')).toHaveAttribute('src', 'http://localhost:6600/iframe.html?id=edges-tunnel--default&viewMode=story') // the same place, on main
+    await userEvent.click(c.getByRole('button', { name: 'Stop comparing' }))
+    await waitFor(() => expect(c.queryByTitle('main')).toBeNull())
+  },
+}
+/** Main is still starting (made up): the build stays usable, and main's side says so. */
+export const MainStarting: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, canCompare: true, compare: { url: 'http://localhost:6600', up: false, sha: 'fed9876cba', log: ['installing (sample)'] } } }),
+  play: async ({ canvasElement }) => { const c = within(canvasElement); await expect(await c.findByText(/Starting main/)).toBeInTheDocument(); await expect(c.getByTitle('The built code')).toBeInTheDocument() },
+}
+/** Ask an agent (made up): it says what it saw beside the check, and the check is still yours to mark. */
+export const AgentTriesOne: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click((await c.findAllByRole('button', { name: 'Ask an agent' }))[0])
+    await expect(await c.findByText(/An agent saw it hold/)).toBeInTheDocument()
+    await expect(c.getByText(/the edge dips under the lip/)).toBeInTheDocument()
+    await expect(c.getByText(/3 of 3 for you to check/)).toBeInTheDocument() // nothing is marked by it
+    await expect(c.getAllByRole('button', { name: 'Pass' })).toHaveLength(3)
+  },
+}
+/** What an agent can say (made up): it failed, it could not tell, it is trying now, and one said on an earlier commit. */
+export const WhatAnAgentSaw: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, checks: [
+    { ...smokeSample.checks[0], tried: { verdict: 'fails', note: 'The edge sits on top of the lip at the default zoom (sample)', sha: 'abc1234def', at: '2026-11-18T12:00:00.000Z' } },
+    { ...smokeSample.checks[1], tried: { verdict: 'unsure', note: 'Hover needs a real pointer: look at whether the twin lights up (sample)', sha: '0000000aaa', at: '2026-11-18T11:00:00.000Z', stale: true } },
+    { ...smokeSample.checks[2], trying: true },
+  ] } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/An agent saw it fail/)).toBeInTheDocument()
+    await expect(c.getByText(/An agent could not tell/)).toBeInTheDocument()
+    await expect(c.getByText(/on an earlier commit/)).toBeInTheDocument()
+    await expect(c.getByText(/An agent is trying it/)).toBeInTheDocument()
+    await expect(c.getAllByRole('button', { name: 'Ask again' })).toHaveLength(2)
+  },
+}

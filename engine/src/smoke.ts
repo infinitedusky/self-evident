@@ -27,11 +27,14 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { createServer, type AddressInfo } from 'node:net'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import pg from 'pg'
 import { and, eq } from 'drizzle-orm'
-import { acceptanceOf, setAcceptance, type Criterion } from './acceptance.js'
+import { query } from '@anthropic-ai/claude-agent-sdk'
+import { accountEnv } from './account.js'
+import { acceptanceOf, setAcceptance, type Criterion, type Tried } from './acceptance.js'
+import { builderGuard, guardOptions, STOP_ONLY_YOURS } from './guard.js'
 import { styleOf } from './steps.js'
 import { workflowFor } from './work.js'
 import { landingBranch, modeOf } from './branches.js'
@@ -205,6 +208,10 @@ export interface SmokeCheck {
   stale?: boolean
   /** What they said last time, when it has come back to them after a fix. */
   before?: { pass: boolean; note: string }
+  /** What an agent saw when asked to try it (trySmoke): its word, not a mark. stale: said on an earlier commit. */
+  tried?: Tried & { stale?: boolean }
+  /** An agent is trying it now. */
+  trying?: boolean
 }
 
 /** Whether a check's "where" is somewhere to be sent: an address, a path, or a story's id. Anything else is a place said in words ("the pull request on GitHub"). */
@@ -260,6 +267,7 @@ export function smokeChecks(criteria: Criterion[], head: string | null = null, s
       ...(marked || agent ? { note: c.builtEvidence ?? '' } : {}),
       ...(marked && head && c.byHand!.sha && c.byHand!.sha !== head ? { stale: true } : {}),
       ...(c.built === undefined && c.byHand ? { before: { pass: c.byHand.pass, note: c.byHand.note } } : {}),
+      ...(c.tried ? { tried: { ...c.tried, ...(head && c.tried.sha && c.tried.sha !== head ? { stale: true } : {}) } } : {}),
     }
   })
 }
@@ -270,6 +278,22 @@ export const smokeReady = (criteria: Criterion[], hasPr: boolean) => smokeChecks
 
 const running = new Map<string, { proc: ChildProcess; log: string[]; given?: number[]; stray?: { at: number; ports: number[] }; stop?: { cmd: string; cwd: string; env: Record<string, string> } }>() // by task and set-up
 const runKey = (issueId: string, key: string) => `${issueId}:${key}`
+/**
+ * The comparison (Sandy, 2026-11-18: "spin up a comp setup that uses main instead of whatever I'm building … so I can
+ * look at the two side by side"): the same set-up run a second time, from where the build's branch left the app's
+ * default branch, on a port, a worktree and a database of its own. Its run is kept under the set-up's key with this
+ * after it; a set-up's key never has an "@".
+ */
+export const COMPARE = '@main'
+export const compareKey = (key: string) => `${key}${COMPARE}`
+/** Where the build left main: what it is compared with, so the only differences are the build's own. */
+async function baseOf(repoPath: string, defaultBranch: string, head: string): Promise<string | null> {
+  for (const ref of [`origin/${defaultBranch}`, defaultBranch]) {
+    const r = await git(repoPath, ['merge-base', ref, head], { allowFail: true })
+    if (r.code === 0 && r.stdout.trim()) return r.stdout.trim()
+  }
+  return null
+}
 const alive = (issueId: string, key: string) => { const m = running.get(runKey(issueId, key)); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
 const freePort = (want = 0): Promise<number> => new Promise((resolveP, reject) => {
   const s = createServer()
@@ -292,17 +316,18 @@ async function built(issueId: string) {
   const prs = p ? await db.select().from(prTable).where(eq(prTable.projectId, p.id)) : []
   const pull = prs.find((x) => x.issueId === t.id) ?? prs.find((x) => !x.issueId) ?? null
   const staged = styleOf((await workflowFor(db, { issueId: t.id })).workflow) !== 'checklist'
-  return { t, a, p, repoPath: r?.localPath ?? null, name, branch, head, staged, pr: pull?.number ? { number: pull.number, url: pull.url } : null }
+  const base = head && r?.localPath ? await baseOf(r.localPath, a.defaultBranch ?? 'main', head) : null
+  return { t, a, p, repoPath: r?.localPath ?? null, name, branch, head, /** Where the branch left main: what a comparison runs. */ base, staged, pr: pull?.number ? { number: pull.number, url: pull.url } : null }
 }
 
 export async function smokeView(issueId: string) {
-  const { t, a, branch, head, pr, staged } = await built(issueId)
+  const { t, a, branch, head, base, pr, staged } = await built(issueId)
   const all = smokeSetups(a.setup)
   const runs = await db.select().from(smokeRun).where(eq(smokeRun.issueId, t.id))
   const proto = (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd?.trim()
   const hasDb = !!(a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db?.url
   // A check that named no set-up, or one the app no longer has, is the first one's.
-  const checks = smokeChecks(acceptanceOf(t), head, staged).map((c) => ({ ...c, setup: all.some((s) => s.key === c.setup) ? c.setup! : all[0].key }))
+  const checks = smokeChecks(acceptanceOf(t), head, staged).map((c) => ({ ...c, setup: all.some((s) => s.key === c.setup) ? c.setup! : all[0].key, ...(trying.has(runKey(t.id, c.id)) ? { trying: true } : {}) }))
   const setups = await Promise.all(all.map(async (setup) => {
     const there = setup.where === 'preview' ? previewUrl(setup.url, pr?.number) : setup.url ?? null // where it is deployed, when it is
     const run = runs.find((r) => r.setup === setup.key)
@@ -311,6 +336,10 @@ export async function smokeView(issueId: string) {
     const up = setup.where === 'local' ? (on && local ? await answers(local) : false) : !!there
     // Once it answers: does it listen anywhere it was not told to (ports.ts)?
     const stray = setup.where === 'local' && up ? await straysOf(running.get(runKey(t.id, setup.key)), (ports) => db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor: 'engine', type: 'smoke.stray_port', payload: { setup: setup.key, ports, note: straySays(ports) } }))) : []
+    // Its comparison, when one was started: the same set-up from main, on its own port.
+    const ck = compareKey(setup.key), cRun = runs.find((r) => r.setup === ck), cOn = alive(t.id, ck)
+    const cUrl = cOn && cRun?.port ? `http://localhost:${cRun.port}` : null
+    const compare = cUrl ? { url: cUrl, up: await answers(cUrl), /** The commit of main it runs. */ sha: cRun?.sha ?? null, log: running.get(runKey(t.id, ck))?.log.slice(-30) ?? [] } : null
     return {
       key: setup.key, name: setup.name, what: setup.what ?? null,
       where: setup.where, says: WHERE_SAYS[setup.where], account: setup.account ?? null, flag: setup.flag ?? null,
@@ -318,6 +347,7 @@ export async function smokeView(issueId: string) {
       url: setup.where === 'local' ? (on ? local : null) : there,
       up, ...(stray.length ? { /** Ports it listens on that it was not given: a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}),
       canRun: setup.where === 'local' && !!(setup.cmd ?? proto),
+      /** local: main can be brought up beside it, to look at the two side by side. */ canCompare: setup.where === 'local' && !!(setup.cmd ?? proto) && !!base && base !== head, compare,
       /** local: there is something to start from nothing: a database of its own, a seed, or a script of its own. */ canClean: setup.where === 'local' && !!(setup.cmd || setup.seed || hasDb),
       log: running.get(runKey(t.id, setup.key))?.log.slice(-30) ?? [],
       /** How many of its checks still wait for the person. */ owed: checks.filter((c) => c.setup === setup.key && c.mark === 'todo' && c.when !== 'after').length,
@@ -340,54 +370,63 @@ export async function smokeView(issueId: string) {
 }
 
 /** Local only: run the built branch, at its head, in the smoke test's own worktree. Run again, it moves to the new head. */
-export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean; /** Which set-up (its key); none: the app's first. */ setup?: string } = {}) {
-  const { t, a, repoPath, name, branch, head } = await built(issueId)
+export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean; /** Which set-up (its key); none: the app's first. */ setup?: string; /** Not the build: main, where the branch left it, beside the build (COMPARE). */ compare?: boolean } = {}) {
+  const { t, a, repoPath, name, branch, head: tip, base } = await built(issueId)
   const all = smokeSetups(a.setup)
   const named = opts.setup ? all.find((x) => x.key === opts.setup) : all[0]
   if (!named) throw new PlanError(`${a.name} has no smoke test set-up "${opts.setup}" (${all.map((x) => x.key).join(', ')})`)
   const setup: SmokeSetup = named
-  const key = named.key, first = key === all[0].key
+  const first = named.key === all[0].key
+  const key = opts.compare ? compareKey(named.key) : named.key // what its run is kept under
+  const tag = opts.compare ? '-main' : ''
   if (setup.where !== 'local') throw new PlanError(`${a.name} is smoke tested ${setup.where === 'staging' ? 'on staging' : setup.where === 'preview' ? 'on a preview of its pull request' : 'behind a feature flag'}: there is nothing to start here`)
   if (!repoPath) throw new PlanError(`${a.name} has no local checkout`)
-  if (!branch || !head) throw new PlanError(`${name} is not built yet: there is no branch to run`)
+  if (!branch || !tip) throw new PlanError(`${name} is not built yet: there is no branch to run`)
+  if (opts.compare && (!base || base === tip)) throw new PlanError(`${name} has nothing to compare with: its branch has not left ${a.defaultBranch ?? 'main'}`)
+  const head = opts.compare ? base! : tip
   const cmd = setup.cmd ?? (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd?.trim()
   if (!cmd) throw new PlanError(`${a.name} has no command to run it: set how its prototypes are started in Settings, or a command of the smoke test's own`)
-  await stopSmoke(t.id, key)
-  const path = join(`${repoPath}-worktrees`, `smoke--${name.toLowerCase()}${first ? '' : `--${key}`}`) // a checkout per set-up, so two can install and run side by side
+  await stopOne(t.id, key)
+  const path = join(`${repoPath}-worktrees`, `smoke--${name.toLowerCase()}${first ? '' : `--${named.key}`}${tag.replace('-', '--')}`) // a checkout per set-up, so two can install and run side by side
   // Its own worktree, at the commit and on no branch: the task's branch is nobody's to check out (it is moved by landing).
   if (existsSync(path)) await git(path, ['checkout', '--detach', '--force', head])
   else await git(repoPath, ['worktree', 'add', '--detach', path, head])
   const dbCfg = (a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db?.url ? (a.setup as { prototype_db: PrototypeDb }).prototype_db : null
-  const slug = `smoke-${name.toLowerCase()}${first ? '' : `-${key}`}`
+  let seedNote: string | null = null
+  const slug = `smoke-${name.toLowerCase()}${first ? '' : `-${named.key}`}${tag}`
   if (dbCfg && opts.clean) await dropDatabase(dbCfg, slug)
   if (dbCfg && !(await databaseExists(dbCfg, slug))) {
     const { url } = await rebuild(dbCfg, slug, path, (await listScenarios({ appId: a.id }, path)).includes('default') ? 'default' : null, { appId: a.id }) // the app's shared "default" scenario, when it has one
     if (setup.seed) { // the app's own seed, from its settings: after the schema, and after the app's shared scenario when it has one
       const c = new pg.Client({ connectionString: url })
       await c.connect()
-      try { await c.query(setup.seed) } catch (err) { throw new PlanError(`the smoke test's seed failed: ${(err as Error).message}`) } finally { await c.end() }
+      // On main the seed may name what only the build has (a new table, a new column): it is brought up anyway, and its log says so.
+      try { await c.query(setup.seed) } catch (err) { if (opts.compare) seedNote = `The seed did not all load on main: ${(err as Error).message}`; else throw new PlanError(`the smoke test's seed failed: ${(err as Error).message}`) } finally { await c.end() }
     }
   }
   const [old] = await db.select().from(smokeRun).where(and(eq(smokeRun.issueId, t.id), eq(smokeRun.setup, key)))
   const port = await freePort(old?.port ?? 0)
   const more = await morePorts()
-  const env = { ...more.env, ...await smokeEnv(a.id, setup, { port, db: dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : undefined, clean: opts.clean, key }) }
+  const env = { ...more.env, ...await smokeEnv(a.id, setup, { port, db: dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : undefined, clean: opts.clean, key: opts.compare ? `${named.key}-main` : named.key }) }
   if (setup.stop && old) await runStop(setup.stop, old.path, { ...env, PORT: String(old.port) }) // what the last run left up, when the engine has been started again since
   const proc = spawn('sh', ['-c', cmd], { cwd: path, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
-  const log: string[] = []
+  const log: string[] = seedNote ? [seedNote.slice(0, 300)] : []
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
   proc.on('exit', (code) => { log.push(`exited${code === null ? '' : ` with ${code}`}`) })
   running.set(runKey(t.id, key), { proc, log, given: [port, ...more.ports], ...(setup.stop ? { stop: { cmd: setup.stop, cwd: path, env } } : {}) })
   if (old) await db.update(smokeRun).set({ path, sha: head, port, updatedAt: new Date() }).where(eq(smokeRun.id, old.id))
   else await db.insert(smokeRun).values({ id: newId('run').replace(/^run_/, 'smoke_'), appId: a.id, issueId: t.id, setup: key, path, sha: head, port })
-  await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'smoke.started', payload: { sha: head, port, setup: key } }))
+  await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'smoke.started', payload: { sha: head, port, setup: named.key, ...(opts.compare ? { compare: true } : {}) } }))
   return smokeView(t.id)
 }
 
 /** Stop one set-up of a task's, or, with no key, every one of them that is up. */
 export function stopSmoke(issueId: string, key?: string): Promise<void> {
-  if (key === undefined) return Promise.all([...running.keys()].filter((k) => k.startsWith(`${issueId}:`)).map((k) => stopSmoke(issueId, k.slice(issueId.length + 1)))).then(() => {})
+  if (key === undefined) return Promise.all([...running.keys()].filter((k) => k.startsWith(`${issueId}:`)).map((k) => stopOne(issueId, k.slice(issueId.length + 1)))).then(() => {})
+  return Promise.all([stopOne(issueId, key), ...(key.endsWith(COMPARE) ? [] : [stopOne(issueId, compareKey(key))])]).then(() => {}) // a set-up takes its comparison with it
+}
+function stopOne(issueId: string, key: string): Promise<void> {
   const m = running.get(runKey(issueId, key))
   running.delete(runKey(issueId, key))
   if (!m) return Promise.resolve()
@@ -397,7 +436,7 @@ export function stopSmoke(issueId: string, key?: string): Promise<void> {
   try { process.kill(-m.proc.pid, 'SIGTERM') } catch { m.proc.kill('SIGTERM') }
   return gone.then(down)
 }
-export function stopSmokes() { for (const k of [...running.keys()]) { const at = k.lastIndexOf(':'); void stopSmoke(k.slice(0, at), k.slice(at + 1)) } }
+export function stopSmokes() { for (const k of [...running.keys()]) { const at = k.lastIndexOf(':'); void stopOne(k.slice(0, at), k.slice(at + 1)) } }
 
 /** A person's word on one check: the build's mark on that criterion, by hand, with their note and the commit it was made on. */
 export async function markSmoke(issueId: string, criterionId: string, input: { pass: boolean; note?: string }, by = 'user') {
@@ -412,4 +451,75 @@ export async function markSmoke(issueId: string, criterionId: string, input: { p
   await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor: by, type: 'smoke.marked', payload: { criterionId: c.id, pass: input.pass, note, sha: head } }))
   const view = await smokeView(t.id)
   return { ...view, marked: { id: c.id, pass: input.pass } }
+}
+
+/**
+ * An agent tries one check, when the person asks (Sandy, 2026-11-18: "a button that triggers the agent to do a test of
+ * it and gets their result. That doesn't pass it, but it gives us their result since we're no longer doing that as
+ * part of the regular workflow"). What it saw is kept on the criterion as `tried` and shown on the check; the mark
+ * stays the person's. It runs in the smoke test's own worktree, against what is up, and changes nothing.
+ */
+const trying = new Set<string>() // by task and criterion; in memory, so an engine that is started again forgets a try it lost
+const TRY_SCHEMA = { type: 'object', additionalProperties: false, required: ['verdict', 'note'], properties: { verdict: { type: 'string', enum: ['holds', 'fails', 'unsure'] }, note: { type: 'string' } } }
+const TRY_TOOLS = ['Read', 'Glob', 'Grep', 'LS']
+export const TRY_MINUTES = 6
+
+export const tryPrompt = (i: { text: string; where?: string; how?: string; url: string | null; link?: string | null; pr?: string | null; when: When }) => [
+  'A person is smoke testing a built task by hand, and has asked you to try one of its checks and say what you saw. You do not mark it: your word is shown beside the check, and the person decides.',
+  '',
+  `The check: ${i.text}`,
+  ...(i.how ? [`What to do and what passing looks like: ${i.how}`] : []),
+  ...(i.where ? [`Where: ${i.where}${i.link ? ` (${i.link})` : ''}`] : []),
+  i.url ? `The built code is running at ${i.url}. You are in its checkout, at the commit it runs. Use what is running; do not start another copy.` : 'The built code is not running here. You are in its checkout: try what you can from the code and its commands.',
+  ...(i.when === 'pr' && i.pr ? [`It can only be seen on the pull request: ${i.pr} (gh can read it).`] : []),
+  '',
+  'Rules:',
+  '- Try it the way the person would: ask the running code (curl, or a headless browser the repository already has), run the command, read what comes back.',
+  `- A few minutes at most (${TRY_MINUTES} and you are stopped). One or two cases, not a sweep.`,
+  '- Change nothing: no edits, no commits, no installs. Stop anything you start.',
+  `- ${STOP_ONLY_YOURS}`,
+  '- verdict is "holds" only if you saw it hold, "fails" only if you saw it fail, and "unsure" when you could not see it (how it looks or feels, a real device) or could not get there.',
+  '- note is for the person, under 300 characters, plain words: what you did and what you saw. For "unsure", what they should look at.',
+].join('\n')
+
+/** The agent's run, apart so a test can stand in for it. */
+export type TryRun = (i: { prompt: string; cwd: string; setup: unknown }) => Promise<{ verdict: Tried['verdict']; note: string }>
+const agentTry: TryRun = async (i) => {
+  const abort = new AbortController()
+  const timer = setTimeout(() => abort.abort(), TRY_MINUTES * 60_000)
+  let out: unknown
+  try {
+    for await (const m of query({ prompt: i.prompt, options: { cwd: i.cwd, ...accountEnv(i.setup as never), abortController: abort, maxTurns: 40, settingSources: [], tools: [...TRY_TOOLS, 'Bash'], allowedTools: TRY_TOOLS, permissionMode: 'default', ...guardOptions(builderGuard(i.cwd, TRY_TOOLS, [])), outputFormat: { type: 'json_schema', schema: TRY_SCHEMA } } })) {
+      if (m.type === 'result') out = (m as { structured_output?: unknown }).structured_output
+    }
+  } finally { clearTimeout(timer) }
+  const o = out as { verdict?: string; note?: string } | undefined
+  if (!o || !['holds', 'fails', 'unsure'].includes(o.verdict ?? '')) throw new Error(abort.signal.aborted ? `it ran out of time (${TRY_MINUTES} minutes)` : 'it finished without saying what it saw')
+  return { verdict: o.verdict as Tried['verdict'], note: String(o.note ?? '') }
+}
+
+export async function trySmoke(issueId: string, criterionId: string, actor = 'user', run: TryRun = agentTry) {
+  const { t, a, repoPath, head, pr } = await built(issueId)
+  const view = await smokeView(t.id)
+  const check = view.checks.find((c) => c.id === criterionId)
+  if (!check) throw new PlanError(`no smoke test check ${criterionId} on this task`)
+  const k = runKey(t.id, criterionId)
+  if (trying.has(k)) throw new PlanError('an agent is already trying that one')
+  const su = view.setups.find((x) => x.key === check.setup) ?? view.setups[0]
+  if (su.where === 'local' && check.when === 'here' && !su.up) throw new PlanError(`${su.name} is not running: run it first, and the agent tries what is up`)
+  const runRow = (await db.select().from(smokeRun).where(and(eq(smokeRun.issueId, t.id), eq(smokeRun.setup, su.key))))[0]
+  const cwd = runRow?.path && existsSync(runRow.path) ? runRow.path : repoPath ?? tmpdir() // deployed, with no checkout here: it still has the address to ask
+  const prompt = tryPrompt({ text: check.text, where: check.where, how: check.how, url: su.url, link: check.link, pr: pr?.url ?? null, when: check.when })
+  const say = (type: string, payload: Record<string, unknown>) => db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type, payload: { criterionId, ...payload } }))
+  trying.add(k)
+  await say('smoke.trying', {})
+  const done = (async () => {
+    let tried: Tried
+    try { const r = await run({ prompt, cwd, setup: a.setup }); tried = { verdict: r.verdict, note: r.note, sha: head, at: new Date().toISOString() } }
+    catch (err) { tried = { verdict: 'unsure', note: `The agent could not try it: ${String((err as Error).message ?? err).slice(0, 300)}`, sha: head, at: new Date().toISOString() } }
+    finally { trying.delete(k) }
+    await setAcceptance(t.id, { update: [{ id: criterionId, tried }] }, 'engine')
+    await say('smoke.tried', { verdict: tried.verdict, note: tried.note, sha: head })
+  })().catch((err) => console.warn(`[smoke] a try of ${criterionId} was lost: ${(err as Error).message}`))
+  return { view: await smokeView(t.id), /** For a test: when the agent has said. */ done }
 }
