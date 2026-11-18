@@ -4819,3 +4819,57 @@ the engine tells it from the address `tailscale serve` adds to the request and n
 In memory only. `GET /api/devices`. The code is drawn by `qrcode.react`.
 
 Not done: sending the link by message; a notice when a device joins; the smoke terminal from the phone.
+
+## Steps, stages and probes: what was decided (Sandy, 2026-11-18, from CEB-79: "Builders … have no Skill tool and no step skills … every commit still came out as `feat(CEB-84): ...`"; then "let's do it. Probes and checks don't change code. They can create additional subtasks … or steps")
+
+Found on CEB-79 (enterprise-dashboard, Main): the repository had a naming skill and no builder could use it; branch
+and commit names came from the engine; skills could be chosen only for the steps before the build; only an app's first
+repository's skills were offered; Settings › Skills was a flat list. Decided, to be built in slices:
+
+- **A step has stages, each with an owner**: prepare (the engine: worktree, branch, inputs), do (the agent), verify
+  (the engine: probes), report (the agent, in a fixed form). A step lists only the stages it has. Skills attach to a
+  stage an agent does; probes attach to verify.
+- **Probes and checks do not change code.** They report pass or fail with evidence, and what they find becomes a
+  sub-task (or a step) for a builder. Today's "try to break it" fixes small things itself; that goes.
+- **One list of what every change is held to.** A requirement (judged by the check's agent) and a probe (a command
+  the engine runs, a skill run as a reviewer, or a built-in) are the same kind of thing with a different way of
+  being verified.
+- **Replace, do not add** (Sandy: "make sure that we're not just adding on, that we're actually removing the way we
+  were doing things, so that the UI doesn't get overly complicated in the setting"). The new Skills page takes the
+  place of "Skills by workflow step", the skills by job and the requirements list under Landing; it does not sit
+  beside them. Each slice removes what it supersedes.
+- **A name is checked where it is made**, not after: a commit as it is committed (below). The branch and the pull
+  request's title are the engine's own, from the app's templates, so checking them afterwards would prove nothing.
+- The prompts keep their words (nearly every line has a dated reason); a step's contract fills in around them.
+- A skill attached and not invoked stops the agent from finishing once (a Stop hook), then is flagged; whether it
+  was followed is a probe's to say. Builders get skills, never a plugin's tools.
+- A second repository's skills come through what already pulls skills from a repository (`skill-sources.ts`), kept
+  per app, not a second mechanism.
+
+Order: names (this entry), the Skills page as a story, probes, skills on stages.
+
+### Slice 1: the repository's names for branches and commits (`engine/src/conventions.ts`)
+
+The cause of `feat(CEB-84)`: a builder was told only "You are building CEB-84 … a sub-task of CEB-79" and "commit with
+a clear message". CEB-84 is our number for a sub-task; the task's ticket was known only to the code that titles the
+pull request.
+
+- **Every builder is told the ticket**: the team's when the task came from their tracker, else our task id, and that
+  the sub-task's number is ours and goes in no commit, branch or file. With no convention set it is told to commit
+  the way the repository's own commits are written.
+- **Commit message** (`setup.commit_format`, Settings › Landing, beside the pull request title): the first line, like
+  `{type}({ticket}): {subject}`. The builder is told it with the ticket filled in, and every commit an agent makes is
+  held to it as it is made: `{type}` is one lowercase word, any other name in braces any text, the rest exact. A
+  commit that does not fit is refused with the format, and the agent rewords it. It is a git `commit-msg` hook in a
+  folder of ours (`~/.self-evident/hooks/`), named to git through the agent's environment only: nothing is written to
+  the repository or its config, the engine's own git is not checked, and the repository's own hooks (husky and the
+  like) still run, each passed on to. One setting, not a format and a pattern: which types are allowed is the
+  repository's own hook's to refuse.
+- **Branch name** (`setup.branch_name`): a new task's branch, like `feature/{ticket}-{title}`. Given once, when the
+  task's branch is first cut, and kept on the task (`issue.branch`, migration 0038); a task already building keeps
+  the name it had, and with no template, or one git would not take, the name is the engine's as before.
+- **`set_pr_rules` sets all three** (title, branch, commit) from the repository's rules, so nobody types them.
+
+Not done: the engine's own "Commit remaining work (engine)", made when an agent leaves changes uncommitted, is not in
+the format; merge commits are let through as they are; a branch template applies to one pull request per task, not
+to a project's single branch; no way yet to give one task an exact branch name, as `set_pr_title` does for a title.

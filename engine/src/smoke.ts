@@ -312,7 +312,7 @@ async function built(issueId: string) {
   const [p] = t.projectId ? await db.select().from(project).where(eq(project.id, t.projectId)) : []
   const r = await homeRepo(t.appId)
   const name = identifier(a.key, t.number)
-  const branch = p?.integrationBranch ? landingBranch(modeOf(p, a.setup), p.integrationBranch, { identifier: name }) : null
+  const branch = p?.integrationBranch ? landingBranch(modeOf(p, a.setup), p.integrationBranch, { identifier: name, branch: t.branch }) : null
   const head = branch && r?.localPath ? await headSha(r.localPath, branch).catch(() => null) : null
   // Its pull request: the task's own when each task has one, else its project's.
   const prs = p ? await db.select().from(prTable).where(eq(prTable.projectId, p.id)) : []
