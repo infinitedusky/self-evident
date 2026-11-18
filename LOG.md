@@ -4743,3 +4743,8 @@ at most; it can read and run commands, and cannot edit. A try made on an earlier
 Not done: watching the agent work while it tries (only the result is shown); asking for every check at once; a try
 lost to an engine restart is forgotten, not resumed.
 
+### Each view has its own bar when main is up (Sandy, 2026-11-18: "when main spins up we need to split the address bar and back and refresh")
+
+With main beside the build, each view has its own back, forward, reload and address, and goes its own way. A
+check's "Go there" still sends both to the same place. With no comparison the one bar is as it was.
+
