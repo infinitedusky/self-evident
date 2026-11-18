@@ -345,3 +345,28 @@ export const TerminalUnderTheBuild: Story = {
   },
 }
 
+/** Before it is started (made up): the terminal in the build's checkout is there already, to try starting it by hand. */
+export const TerminalBeforeItRuns: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, url: null, up: false, running: null, terminal: { folder: 'build', open: false }, scratch: { open: false } } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/The built code is not running/)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Terminal' }))
+    await expect(await c.findByText(/The build's checkout/)).toBeInTheDocument()
+    await waitFor(() => expect(canvasElement.querySelector('.xterm-rows')?.textContent ?? '').toContain('(sample)'))
+    await expect(c.getByRole('button', { name: 'Run it' })).toBeInTheDocument() // still not started
+  },
+}
+/** Every set-up has a throwaway terminal (made up), a deployed one too: a new empty folder, gone when it is closed. */
+export const ScratchTerminal: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, where: 'staging', says: 'a deployed build at an address, with a test account', url: 'https://staging.example.test', running: null, canRun: false, account: 'the test parent (sample)', scratch: { open: false } } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.queryByRole('button', { name: 'Terminal' })).toBeNull() // deployed: no checkout of its own to open
+    await userEvent.click(await c.findByRole('button', { name: 'Scratch terminal' }))
+    await expect(await c.findByText(/A new empty folder, thrown away when you close this/)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Close scratch terminal' }))
+    await waitFor(() => expect(c.queryByRole('group', { name: 'Terminal' })).toBeNull())
+  },
+}
+
