@@ -115,7 +115,9 @@ describe.skipIf(!reachable)('a pull request waits for the person (sample data)',
   })
 
   it('keeps the app\'s rules for its pull requests', async () => {
-    expect(await setPrRules(appId, { titleTemplate: 'feat[{ticket}]: {title}' })).toEqual({ pr_title: 'feat[{ticket}]: {title}', pr_draft: true })
-    expect(await setPrRules(appId, { titleTemplate: '', draft: false })).toEqual({ pr_title: null, pr_draft: false })
+    expect(await setPrRules(appId, { titleTemplate: 'feat[{ticket}]: {title}' })).toEqual({ pr_title: 'feat[{ticket}]: {title}', pr_draft: true, branch_name: null, commit_format: null })
+    expect(await setPrRules(appId, { titleTemplate: '', draft: false })).toEqual({ pr_title: null, pr_draft: false, branch_name: null, commit_format: null })
+    expect(await setPrRules(appId, { branchTemplate: 'feature/{ticket}-{title}', commitFormat: '{type}({ticket}): {subject}' })).toMatchObject({ branch_name: 'feature/{ticket}-{title}', commit_format: '{type}({ticket}): {subject}' })
+    expect(await setPrRules(appId, { branchTemplate: '', commitFormat: '' })).toMatchObject({ branch_name: null, commit_format: null })
   })
 })

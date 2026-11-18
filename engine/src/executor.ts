@@ -10,10 +10,17 @@ import { builderGuard, guardOptions, STOP_ONLY_YOURS } from './guard.js'
 import { StepTracker } from './step-track.js'
 import { referencePrompt, type Reference } from './references.js'
 import { LEAVE_LONG_RUNS } from './verify.js'
+import { hookEnv } from './conventions.js'
 
 export interface RunInput {
   subIssue: { id: string; identifier: string; title: string; brief: string | null }
   issue: { identifier: string; title: string; brief: string | null }
+  /** The ticket this work is named by outside Self Evident: the team's, else our task id; never the sub-task's (conventions.ts). */
+  ticket?: string
+  /** The repository's format for a commit's first line, when the app has one. */
+  commitFormat?: string
+  /** A hooks folder for this agent's git: its commits are held to the app's pattern as they are made. */
+  hooksPath?: string
   worktreePath: string
   branch: string
   files: string[]
@@ -64,7 +71,7 @@ function prompt(i: RunInput): string {
     `- ${STOP_ONLY_YOURS}`,
     i.testCmd ? `- Test what you built: add or adjust tests for what you change, and run the tests of the parts you touched. They must pass before you finish. Do not run the whole suite unless your brief says to: it runs once, when every sub-task of this task is merged. For reference, the whole suite is: ${i.testCmd}` : '- There is no test command configured; verify your change by running it.',
     `- ${LEAVE_LONG_RUNS}`,
-    '- Commit your work with a clear message when it is done (git add -A && git commit). Leave nothing uncommitted.',
+    commitLine(i),
     '- Finish with a short summary for the reviewer: what changed, why, how you verified it, and anything you were unsure of.',
     '- The brief is settled: build what it says, the way it says. Do not propose follow-ups, improvements or things to consider; nothing collects them. A small slip inside the files that are yours (a stray file, a typo) is simply fixed. If the sub-task cannot be built as written, stop and say exactly what is wrong and where, in your summary.',
     referencePrompt(i.references ?? []),
@@ -73,6 +80,15 @@ function prompt(i: RunInput): string {
       ? '\nYou ran out of turns in the middle of this, and your conversation is resumed with more. Nothing is lost: what you changed is in the worktree, and what you worked out is above. Carry on from where you were: look at git status and your list of steps, and do not start again.'
       : '\nThe engine restarted while you were working; your earlier conversation is resumed. Check the worktree state (git status, git log) before continuing.') : '',
   ].join('\n')
+}
+
+/** How to commit: in the repository's format when the app has one, and always by the task's ticket, never the sub-task's number. */
+export function commitLine(i: Pick<RunInput, 'ticket' | 'commitFormat' | 'hooksPath' | 'subIssue' | 'issue'>): string {
+  const ticket = i.ticket ?? i.issue.identifier
+  const ours = ticket === i.subIssue.identifier ? '' : ` ${i.subIssue.identifier} is a number of ours for this sub-task and means nothing outside: never put it in a commit, a branch or a file.`
+  return i.commitFormat
+    ? `- Commit your work when it is done (git add -A && git commit), every commit's first line in this repository's format: \`${i.commitFormat}\`. The ticket is ${ticket}.${ours}${i.hooksPath ? ' A commit whose first line does not fit is refused: reword it and commit again.' : ''} Leave nothing uncommitted.`
+    : `- Commit your work with a clear message when it is done (git add -A && git commit), in the way this repository's own commits are written (git log shows it; CLAUDE.md or AGENTS.md may say). Where a commit names a ticket, it is ${ticket}.${ours} Leave nothing uncommitted.`
 }
 
 const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet'] // its own list of steps is kept with whichever task tool it has (step-track.ts)
@@ -87,7 +103,7 @@ export async function runTask(i: RunInput): Promise<RunOutput> {
       prompt: prompt(i),
       options: {
         cwd: i.worktreePath,
-        ...account,
+        ...(i.hooksPath ? { env: hookEnv(i.hooksPath, account.env ?? process.env) } : account),
         ...(i.references?.length ? { additionalDirectories: i.references.map((r) => r.path) } : {}), // readable; the guard keeps edits inside the worktree
         resume: i.resumeSessionId,
         abortController: i.abort,

@@ -17,12 +17,15 @@ export const modeOf = (p: { prMode?: string | null }, setup: unknown): PrMode =>
 
 export const issueBranch = (integrationBranch: string, identifier: string) => `${integrationBranch}--${identifier.toLowerCase()}`
 
-export interface StackIssue { id: string; identifier: string; sortOrder: number }
+/** A task's branch: the one it was given by the app's template (issue.branch, conventions.ts), else the engine's own name. */
+export const branchOf = (integrationBranch: string, t: { identifier: string; branch?: string | null }) => t.branch || issueBranch(integrationBranch, t.identifier)
+
+export interface StackIssue { id: string; identifier: string; sortOrder: number; branch?: string | null }
 export interface StackPr { issueId: string | null; status: string; headBranch: string | null; number: number | null }
 
 /** The branch an issue lands on. */
-export function landingBranch(mode: PrMode, integrationBranch: string, t: { identifier: string }) {
-  return mode === 'issue' ? issueBranch(integrationBranch, t.identifier) : integrationBranch
+export function landingBranch(mode: PrMode, integrationBranch: string, t: { identifier: string; branch?: string | null }) {
+  return mode === 'issue' ? branchOf(integrationBranch, t) : integrationBranch
 }
 
 /**
@@ -31,8 +34,8 @@ export function landingBranch(mode: PrMode, integrationBranch: string, t: { iden
  */
 export function issueStart(integrationBranch: string, t: StackIssue, issues: StackIssue[], existing: Set<string>) {
   const earlier = issues.filter((x) => x.sortOrder < t.sortOrder).sort((a, b) => b.sortOrder - a.sortOrder)
-  const prev = earlier.find((x) => existing.has(issueBranch(integrationBranch, x.identifier)))
-  return prev ? issueBranch(integrationBranch, prev.identifier) : integrationBranch
+  const prev = earlier.find((x) => existing.has(branchOf(integrationBranch, x)))
+  return prev ? branchOf(integrationBranch, prev) : integrationBranch
 }
 
 /**

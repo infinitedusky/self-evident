@@ -176,6 +176,7 @@ export const issue = pgTable('issue', {
   description: text('description'), // for a person: what will be different, plain words; no file names or code
   brief: text('brief'), // for the builder: its instructions, Markdown
   briefApprovedBy: text('brief_approved_by'), briefApprovedAt: at('brief_approved_at'), // a task completes only once its brief is approved
+  branch: text('branch'), // the branch its work lands on, when the app's template named it (conventions.ts); null: the engine's own name (branches.ts)
   prTitle: text('pr_title'), // its pull request's title, exactly, when the repository's convention needs more than the app's template can say (pr.ts)
   acceptance: jsonb('acceptance').notNull().default([]), // how we will know it is done: [{id, text, check?, shown?, evidence?}], approved with the brief (acceptance.ts)
   workflowId: text('workflow_id').references((): AnyPgColumn => workflow.id), // its own, over its project's and the app's

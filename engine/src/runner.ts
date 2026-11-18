@@ -12,7 +12,7 @@ import { appendEvent, type NewEvent } from './events.js'
 import { runTask, type Execute } from './executor.js'
 import { addWorktree, branchExists, ensureBranch, git, headSha, removeWorktree } from './git.js'
 import { hasStorybook } from './storybook.js'
-import { issueBranch, issueStart, landingBranch, modeOf, stackBase } from './branches.js'
+import { branchOf, issueBranch, issueStart, landingBranch, modeOf, stackBase } from './branches.js'
 import { newId } from './ids.js'
 import { commentOnIssue, identifier, setState } from './issues.js'
 import { land, wholeRun, withLock } from './landing.js'
@@ -31,6 +31,10 @@ import { stepsOf } from './work.js'
 import { reapAgentProcesses } from './reap.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { referencesOf } from './references.js'
+import { branchName, commitRule, installCommitCheck, ticketOf } from './conventions.js'
+
+/** The team's own ticket id for a task, when it came from their tracker; null when it is only ours. */
+const teamTicket = (t: { sourceRef?: unknown }) => (t.sourceRef as { linear?: { identifier?: string } } | null | undefined)?.linear?.identifier ?? null
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
 
@@ -220,6 +224,11 @@ export class Runner {
     const worktreePath = x.worktreePath ?? join(`${r!.localPath}-worktrees`, `${p.id}--${x.identifier.toLowerCase()}`)
     const pb = { ...base, issueId: subId }
     const mode = modeOf(p, a.setup)
+    const named = { ticket: teamTicket(t), id: t.identifier, title: t.title, project: p.name }
+    // A task's branch is named once, when it is first cut: by the app's template when it has one and the name is free,
+    // else the engine's own. One already building keeps the name it had.
+    const wanted = mode === 'issue' && !t.branch && !(await branchExists(r!.localPath!, issueBranch(p.integrationBranch!, t.identifier))) ? branchName(a.setup, named) : null
+    if (wanted && !(await branchExists(r!.localPath!, wanted))) { await db.update(issue).set({ branch: wanted }).where(eq(issue.id, t.id)); t.branch = wanted }
     const onto = landingBranch(mode, p.integrationBranch!, t) // the project's branch, or the issue's own (stacked PRs)
     // Worktree and branch creation touch the repo's refs: one at a time per repo. A failure here is an attempt too.
     let baseSha: string
@@ -227,7 +236,7 @@ export class Runner {
       baseSha = await withLock(`git:${r!.localPath}`, async () => {
         if (mode === 'issue' && !(await branchExists(r!.localPath!, onto))) { // an issue's branch starts where the issue before it ended
           const existing = new Set<string>()
-          for (const q of g.issues) { const b = issueBranch(p.integrationBranch!, q.identifier); if (await branchExists(r!.localPath!, b)) existing.add(b) }
+          for (const q of g.issues) { const b = branchOf(p.integrationBranch!, q); if (await branchExists(r!.localPath!, b)) existing.add(b) }
           await git(r!.localPath!, ['branch', onto, issueStart(p.integrationBranch!, t, g.issues, existing)])
         }
         await addWorktree(r!.localPath!, worktreePath, branch, onto)
@@ -247,8 +256,11 @@ export class Runner {
     await db.transaction((tx) => setBuild(tx, subId, { status: 'running', attempt, branch, worktreePath, baseSha, heldReason: null }, { runId, payload: { attempt, branch, worktreePath, resumes: interrupted?.agentSessionId ?? null } }))
     const rb = { ...pb, runId }
 
+    const commits = commitRule(a.setup, named)
+    const hooksPath = commits.pattern ? await installCommitCheck(worktreePath, { pattern: commits.pattern, format: commits.format }).catch(() => undefined) : undefined
     const result = await this.execute({
       subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief },
+      ticket: ticketOf(t), commitFormat: commits.format ?? undefined, hooksPath,
       worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, maxTurns: turnsFor(x.title, setup), maxBudgetUsd: setup.max_budget_usd,
       resumeSessionId: interrupted?.agentSessionId ?? undefined, ...(interrupted?.error?.startsWith(OUT_OF_TURNS) ? { resumeWhy: 'turns' as const } : {}), abort: this.active.get(subId),
       onEvent: async (type, payload) => {
@@ -653,10 +665,10 @@ export class Runner {
     const prs = await db.select().from(prTable).where(eq(prTable.projectId, projectId))
     const issues = g.issues.filter((q) => q.state !== 'canceled')
     const t = issueId ? issues.find((q) => q.id === issueId)! : null
-    const head = t ? issueBranch(p.integrationBranch!, t.identifier) : p.integrationBranch!
+    const head = t ? branchOf(p.integrationBranch!, t) : p.integrationBranch!
     const stack = t ? stackBase(a.defaultBranch, t, issues, prs) : { base: a.defaultBranch, on: null }
     const k = t ? issues.findIndex((q) => q.id === t.id) + 1 : 0
-    const ticket = t ? ((t as { sourceRef?: { linear?: { identifier?: string } } | null }).sourceRef?.linear?.identifier ?? null) : null
+    const ticket = t ? teamTicket(t) : null
     const title = prTitle(a.setup, { ticket, id: t?.identifier ?? p.name, title: t?.title ?? p.name, project: p.name, n: k, of: issues.length }, t ? (t as { prTitle?: string | null }).prTitle : null)
       ?? (t ? `${t.identifier} ${t.title} (${p.name}, ${k} of ${issues.length})` : p.name)
     const intro = t ? { ...p, name: `${p.name}, task ${k} of ${issues.length}: ${t.identifier} ${t.title}`, content: [t.description, stack.on ? `Stacked on #${stack.on}: review and merge that one first; this PR then retargets to ${a.defaultBranch}.` : null].filter(Boolean).join('\n\n') || p.content } : p
