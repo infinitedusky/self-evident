@@ -310,3 +310,38 @@ export const WhatAnAgentSaw: Story = {
     await expect(c.getAllByRole('button', { name: 'Ask again' })).toHaveLength(2)
   },
 }
+
+const terminalChecks = [
+  { id: 'ac_t1', text: 'The docs install the packed package, not the source (sample)', how: 'Run `ls docs/node_modules/bonkei`: dist and package.json only, no src folder (sample)', mark: 'todo' as const },
+  { id: 'ac_t2', text: 'It installs in a new app (sample)', how: 'Run `npm ls bonkei`: one copy, no errors (sample)', mark: 'todo' as const },
+]
+/** A set-up that is a terminal (made up): nothing opens until asked; then a check's command is a button that runs there. */
+export const InATerminal: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, where: 'terminal', says: 'in a terminal on this computer (sample)', url: null, up: false, running: null, canRun: false, terminal: { folder: 'temp', open: false }, owed: 2, checks: terminalChecks } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/in a new empty folder that is thrown away after/)).toBeInTheDocument()
+    await expect(c.queryByRole('group', { name: 'Terminal' })).toBeNull() // not opened by itself
+    await expect(c.queryByRole('button', { name: /npm ls bonkei/ })).toBeNull() // a command is words until there is somewhere to run it
+    await userEvent.click(c.getByRole('button', { name: 'Open terminal' }))
+    const said = () => canvasElement.querySelector('.xterm-rows')?.textContent ?? ''
+    await waitFor(() => expect(said()).toContain('added 1 package (sample)'))
+    await userEvent.click(c.getByRole('button', { name: /npm ls bonkei/ }))
+    await waitFor(() => expect(said()).toContain('npm ls bonkei'))
+    await userEvent.click(c.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(c.queryByRole('group', { name: 'Terminal' })).toBeNull())
+  },
+}
+/** A set-up tested here has a terminal too (made up): in the build's checkout, under the view. */
+export const TerminalUnderTheBuild: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, terminal: { folder: 'build', open: false }, checks: [terminalChecks[0], ...smokeSample.checks.slice(1)] } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Terminal' }))
+    await expect(await c.findByText(/The build's checkout/)).toBeInTheDocument()
+    await expect(c.getByTitle('The built code')).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: /ls docs\/node_modules\/bonkei/ })).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Close terminal' })).toBeInTheDocument()
+  },
+}
+

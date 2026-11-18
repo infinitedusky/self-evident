@@ -24,6 +24,11 @@
  * A check has "Ask an agent" (Sandy, 2026-11-18: "a button that triggers the agent to do a test of it and gets their
  * result. That doesn't pass it"): what the agent saw is shown beside the check, and Pass and Fail stay the person's.
  *
+ * Some checks are commands, not pages (Sandy, 2026-11-18: "a way to do tests of things like installing … a temp folder
+ * on the machine and a terminal where it runs commands and you see it working"): a set-up can be a terminal, and one
+ * tested here has a terminal in its checkout to open. A command a check names (`in backticks`) is a button that
+ * runs it there.
+ *
  * Reading first: a check shows Pass and Fail, and a note is asked for only once one is pressed (a fail needs one:
  * it is what the fix works from). After a QA test run in TestRail and a GitHub deployment's "View deployment":
  * the thing under test and the list to tick off, side by side.
@@ -31,6 +36,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge } from './Badge'
+import { SmokeTerminal } from './SmokeTerminal'
 import { API, engine, openEvents, type SmokeCheck, type SmokeSetupView, type SmokeView } from '../engine'
 
 const WHEN = { here: 'Here, on the built code', pr: 'On the pull request', after: 'After it is merged' } as const
@@ -84,6 +90,8 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   const [marking, setMarking] = useState<{ id: string; pass: boolean } | null>(null)
   const [note, setNote] = useState('')
   const [sent, setSent] = useState<number | null>(null)
+  const [term, setTerm] = useState<Record<string, boolean>>({}) // which set-ups' terminals the person has opened or closed here
+  const [send, setSend] = useState<{ n: number; text: string } | null>(null) // a check's command, on its way to the terminal
   const [picked, setPicked] = useState<string | null>(null) // which set-up is shown, once they have chosen
   const timer = useRef<number | undefined>(undefined)
   const load = useCallback(() => engine.smoke(issueId).then((x) => { setV(x); setError(null) }).catch((e) => setError(String(e.message ?? e))), [issueId])
@@ -107,12 +115,19 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   }
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
-  const all: SmokeSetupView[] = v.setups?.length ? v.setups : [{ key: 'main', name: 'Smoke test', what: null, where: v.where, says: v.says, account: v.account, flag: v.flag, running: v.running, url: v.url, up: v.up, canRun: v.canRun, canClean: v.canClean, canCompare: v.canCompare, compare: v.compare, log: v.log, owed: v.owed }]
+  const all: SmokeSetupView[] = v.setups?.length ? v.setups : [{ key: 'main', name: 'Smoke test', what: null, where: v.where, says: v.says, account: v.account, flag: v.flag, running: v.running, url: v.url, up: v.up, canRun: v.canRun, canClean: v.canClean, canCompare: v.canCompare, compare: v.compare, terminal: v.terminal, log: v.log, owed: v.owed }]
   const many = all.length > 1
   // The one they chose; else the first with something still to check; else the first.
   const su = all.find((x) => x.key === picked) ?? all.find((x) => x.owed > 0) ?? all[0]
   const shown = many ? v.checks.filter((c) => (c.setup ?? all[0].key) === su.key) : v.checks
   const local = su.where === 'local'
+  const shell = su.where === 'terminal'
+  const termOn = !!su.terminal && (term[su.key] ?? su.terminal.open)
+  const closeTerm = () => { setTerm((t) => ({ ...t, [su.key]: false })); void act(() => engine.closeSmokeTerminal(issueId, su.key)) }
+  /** What to do, with each command it names as a button that runs it in the terminal, once one is open. */
+  const how = (text: string) => text.split(/(`[^`\n]+`)/).map((part, n) => (/^`[^`]+`$/.test(part)
+    ? (termOn ? <button key={n} type="button" className="smoke-cmd" title="Run it in the terminal" onClick={() => setSend((x) => ({ n: (x?.n ?? 0) + 1, text: `${part.slice(1, -1)}\r` }))}>▶ <code>{part.slice(1, -1)}</code></button> : <code key={n}>{part.slice(1, -1)}</code>)
+    : part))
   const behind = local && su.running && v.head && su.running !== v.head
   const src = su.url ? at ?? su.url : null
   const cmp = local && su.up ? su.compare ?? null : null
@@ -136,7 +151,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
           ? <><a href={to} target="_blank" rel="noreferrer" title={`${to} (opens in its own tab)`}>{/^https?:/.test(c.where) ? c.where : goable(c.where) && !c.where.startsWith('/') ? `story ${c.where}` : c.where} ↗</a>{src === to && <span className="faint"> you are here</span>}</>
           : goable(c.where) ? <><code>{c.where}</code> <span className="faint">a link once it is running</span></> : c.where}</div>
       })()}
-      {c.how && c.mark === 'todo' && <div className="smoke-how">{c.how}</div>}
+      {c.how && c.mark === 'todo' && <div className="smoke-how">{how(c.how)}</div>}
       {c.before && <div className="faint smoke-before">Last time you {c.before.pass ? 'passed' : 'failed'} it{c.before.note ? `: ${c.before.note}` : ''}. It was sent back, and is yours to try again.</div>}
       {c.note && c.mark !== 'todo' && <div className="faint smoke-before">{c.note}</div>}
       {c.trying && <div className="smoke-tried" role="status">An agent is trying it… <span className="faint">a few minutes at most</span></div>}
@@ -193,7 +208,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
               </div>
             )}
             {local && su.url && !su.up && <div className="empty">Starting… {su.log.length > 0 && <pre className="smoke-log">{su.log.slice(-6).join('\n')}</pre>}</div>}
-            {src && (local ? su.up : true) && (
+            {src && !shell && (local ? su.up : true) && (
               <>
                 <div className="smoke-bar">
                   {local ? (cmp ? null : <Nav t={mine} home={home} src={src} />) : <code className="smoke-address">{src}</code>}
@@ -202,6 +217,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
                   {local && su.canClean && <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true, many ? su.key : undefined))}>Start clean</button>}
                   {local && su.canCompare && !su.compare && <button className="btn quiet small" disabled={busy} title="Bring up main beside it, on its own port, to look at the two side by side" onClick={() => void act(() => engine.startSmoke(issueId, false, many ? su.key : undefined, true))}>Compare with main</button>}
                   {local && su.compare && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.stopSmoke(issueId, many ? su.key : undefined, true))}>Stop comparing</button>}
+                  {local && su.terminal && <button className="btn quiet small" disabled={busy} title="A terminal in the build's checkout, under the view" onClick={() => (termOn ? closeTerm() : setTerm((t) => ({ ...t, [su.key]: true })))}>{termOn ? 'Close terminal' : 'Terminal'}</button>}
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.stopSmoke(issueId, many ? su.key : undefined))}>Stop</button>}
                 </div>
                 {local && su.strayPorts?.length ? <p className="smoke-stale" role="note">{su.strayNote ?? `It also listens on ${su.strayPorts.join(', ')}, which it chose itself.`}</p> : null}
@@ -218,7 +234,14 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
                   : <div className="empty">{su.where === 'preview' && v.pr ? <>The preview of pull request #{v.pr.number}. It opens in its own tab, and is rebuilt on each new commit. </> : <>It is deployed, so it opens in its own tab. </>}{su.account && <>Sign in as: {su.account}. </>}{su.flag && <>Flag: <code>{su.flag}</code>. </>}</div>}
               </>
             )}
-            {!local && !su.url && (su.where === 'preview' && !v.pr
+            {shell && (termOn
+              ? <>
+                  <div className="smoke-bar"><span className="faint">A terminal on this computer. Commands in a check run here with a press.</span><button className="btn quiet small" disabled={busy} onClick={closeTerm}>Close</button></div>
+                  <SmokeTerminal issueId={issueId} setup={su.key} send={send} tall />
+                </>
+              : <div className="empty">{su.terminal?.folder === 'temp' ? 'This is tried in a terminal, in a new empty folder that is thrown away after.' : v.head ? 'This is tried in a terminal, in the build\'s checkout.' : 'Nothing is built yet: its terminal opens in the build\'s checkout.'} {(su.terminal?.folder === 'temp' || v.head) && <button className="btn small" onClick={() => setTerm((t) => ({ ...t, [su.key]: true }))}>Open terminal</button>}</div>)}
+            {local && su.up && termOn && <SmokeTerminal issueId={issueId} setup={su.key} send={send} />}
+            {!local && !shell && !su.url && (su.where === 'preview' && !v.pr
               ? <div className="empty">This app is tried on a preview of its pull request, and this task has no pull request yet. It is opened once the first of its work is merged.</div>
               : <div className="empty">This app is smoke tested {su.where === 'staging' ? 'on staging' : su.where === 'preview' ? 'on a preview of its pull request' : 'behind a feature flag'}, and has not said at what address. Settings › Prototype has it.</div>)}
           </div>
