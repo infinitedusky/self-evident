@@ -4646,3 +4646,23 @@ On a task whose every criterion the check verified itself, the smoke test row le
 finished (it was shown only with at least one check for a person), which read as something breaking. Now it stays
 once the task is built: "nothing left to you; look anyway". The page says an agent checked everything and where
 its evidence is, and the built code can still be brought up, each set-up as usual.
+
+## A project's graph links tasks in the order they were built (Sandy, 2026-11-17: "they should be hooked up in the order in which they were built … I have a running one in the project and then there's a bunch of already completed nodes coming from it")
+
+The links between tasks were drawn by the order tasks are listed in. A task listed late but built early had its
+finished nodes hanging off a task listed before it that was only now running.
+
+- **Between tasks** (`orderEdges`): tasks that have started come first, by when their first sub-task started; the
+  ones not started follow in their listed order, which is what they will wait on. Scheduling is unchanged
+  (`impliedDeps`); this is only what is drawn.
+- **Inside a task**: a sub-task added after the task was under way, with nothing recorded about what it follows, is
+  drawn after the one added just before it. The check, finish and probe sub-tasks made before 2026-11-17 recorded
+  nothing, so each was drawn as starting the task: five lines out of one node. Now a check comes from what it
+  checked.
+
+## Pressing a node in a graph opens that sub-task's build (Sandy, 2026-11-17: "click on a node and it should open up the node and be able to see the status and what the agent is doing … like I would if I was building something directly within VS Code")
+
+The live view of a build existed (the build log tab: its status, the builder's steps, then everything it says,
+runs, reads and changes, as it happens) but only an agent could open it. Now pressing a node in any graph (a
+task's, a project's, an app's) opens it beside the graph. A step drawn before it exists has nothing to open. The
+project page still shows the pressed node's detail under the graph.

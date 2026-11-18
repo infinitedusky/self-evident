@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, waitFor, within } from 'storybook/test'
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
+import { WorkspaceContext, type WorkspaceApi } from '../workspace'
 import { flowGraph, PlanGraphView, stepProgress } from './PlanGraphView'
 import type { FlowNode, GraphSubIssue } from '../engine'
 
@@ -119,5 +120,18 @@ export const FlowUnderWay: Story = {
     await expect(await within(canvasElement).findByText('round 1')).toBeInTheDocument()
     await expect(canvasElement.querySelectorAll('[data-ghost]')).toHaveLength(4)
     await waitFor(() => expect(canvasElement.querySelectorAll('.react-flow__edge')).toHaveLength(4))
+  },
+}
+
+const opened = fn()
+/** Pressing a node opens that sub-task's build beside the graph: its status, its steps and what its agent is doing, live. */
+export const NodeOpensItsBuild: Story = {
+  args: { subIssues: midRun },
+  decorators: [(S) => <WorkspaceContext.Provider value={{ open: opened, tabs: [], focused: null } as unknown as WorkspaceApi}><S /></WorkspaceContext.Provider>],
+  play: async ({ canvasElement }) => {
+    opened.mockClear()
+    const node = await waitFor(() => { const n = canvasElement.querySelector('.react-flow__node'); if (!n) throw new Error('no node yet'); return n as HTMLElement })
+    await userEvent.click(node)
+    await waitFor(() => expect(opened).toHaveBeenCalledWith({ kind: 'build', issueId: node.getAttribute('data-id') }, { split: 'right' }))
   },
 }
