@@ -242,6 +242,9 @@ Details and sources in `research/`.
     that database, a prototype's own or shared with the app, and never files on its branch.
   - **An app can have several set-ups, each with a name**, and each check left to a person names the one it needs
     (Sandy, 2026-11-17). A library: its docs site, and a demo app that exercises it. Each is brought up once.
+  - **Each check links to where it is tried**, as a prototype's guide does (Sandy, 2026-11-17): the place it
+    names, on the address of the set-up it needs, so nobody works out a port. A place nobody recorded is read
+    from the criterion's own words.
   - Where it sits in a task follows from that: staging and local gate the merge; a feature flag gates the
     release, after the merge.
   - An app that releases behind flags holds its builds to "this change is behind a flag", on its checklist.

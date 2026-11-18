@@ -941,6 +941,9 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .smoke-check-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .smoke-how { font-size: 14px; }
 .smoke-before { font-size: 13px; }
+.smoke-bar .preview-address { max-width: none; white-space: normal; overflow: visible; }
+.smoke-where a { word-break: break-all; }
+.smoke-where code { font-size: 12px; }
 .smoke-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .smoke-note label { display: grid; gap: 4px; font-size: 13px; }
 .smoke-note textarea { width: 100%; }

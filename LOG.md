@@ -4666,3 +4666,34 @@ The live view of a build existed (the build log tab: its status, the builder's s
 runs, reads and changes, as it happens) but only an agent could open it. Now pressing a node in any graph (a
 task's, a project's, an app's) opens it beside the graph. A step drawn before it exists has nothing to open. The
 project page still shows the pressed node's detail under the graph.
+
+
+## Smoke test checks link to where they are tried (Sandy, 2026-11-17: "smoke tests should have links to test like the prototype guides")
+
+A conductor had to hand the person three addresses with the run's port typed in, because the checks on a staged
+task named no place: only a check after the build recorded one, and a staged task has no such check. Now:
+
+- A check with no recorded place takes the first path its own words name (`placeIn` in `engine/src/smoke.ts`:
+  what was left for the person, how it is checked, the prototype's evidence, the statement). An address on this
+  computer gives its path, since its port was another run's. File names and fractions are not places. A recorded
+  place always wins.
+- The view gives each check a `link`: that place on the address of the set-up it needs, while that is up or
+  deployed. The page shows it on the check as a link that opens in its own tab ("/import ↗"), beside "Go there",
+  which sends the view next to it. Before it is running the path is shown as words.
+- `set_acceptance` takes `where` when a criterion is written and `builtWhere` when it is updated, and says to give
+  one for anything a person checks by hand. Neither asks for the brief's approval again.
+
+Not done: a criterion whose words name no path still has no link (an agent or the person has to say where); the
+place cannot be edited on the smoke test page itself. Seen while testing, and failing on main as well: the
+stacked pull requests test in `github.test.ts`.
+
+### The view is a small browser (Sandy, 2026-11-17: "back buttons and an address bar … so I can type in an address or I can go back")
+
+Where the built code runs here, the bar above it now has back, forward, reload and an address to type in (a path
+of the build, or a whole address), as the prototype's view has. Back and forward step through where this page
+sent the view: an address typed, a check's "Go there".
+
+Not done: links pressed inside the built code are not seen (it is another origin), so the address bar does not
+follow them and Back does not undo them. Following them needs the build served through a proxy of ours that
+reports its address, as a shared prototype's guide is.
+
