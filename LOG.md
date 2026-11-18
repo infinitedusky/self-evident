@@ -4780,3 +4780,14 @@ the first shell.
 Not done: an agent's try ("Ask an agent") using the terminal; a record of what was run; a terminal on a prototype;
 terminals are lost when the engine is started again.
 
+### The terminal before it is started, and a throwaway one always (Sandy, 2026-11-18: "the terminal should be available before starting the smoke env. It may be we want to test starting it... Also I think we always want access to a terminal pointed at a temp throwaway folder")
+
+- A set-up tested here has its **Terminal** button above the view whether or not the build is running: its checkout
+  is made at the branch's head when there is none yet, so starting it by hand can be tried.
+- Every set-up has a **Scratch terminal** beside it: a new empty folder, thrown away when it is closed. A deployed
+  set-up has it too. A terminal set-up whose own folder is already a new one does not get a second.
+- Both open under the view and can be open together. A check's command runs in the set-up's own terminal when it is
+  open, else in the scratch one.
+
+The scratch terminal is kept under the set-up's key with `@temp` after it (`scratchKey`).
+
