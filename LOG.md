@@ -4919,3 +4919,12 @@ data). After GitHub Actions' run view and Linear's workflow settings.
 It is the proposal for the page, to be agreed before the engine is built to it. Not done: it is not in Settings yet,
 and nothing reads or saves it; when it goes in, "Skills by workflow step", the skills by job and the requirements
 list under Landing come out.
+
+### One press starts it, and stops it (Sandy, 2026-11-18: "that should be a button that starts it no?" … "starts and stops that?")
+
+Setting a second computer up was a terminal command. Now the rail's 📱 shows wherever Tailscale is installed:
+**Open on a phone** runs `tailscale serve` for the page, **Turn off** takes it off. If the account has not allowed
+serving, the panel links to where to allow it. Tailscale installed but signed out says so. Both buttons answer only
+to the page on the computer itself (`POST /api/devices/serve`, `/serve/stop`), never to a phone or another site.
+
+Not done: installing Tailscale from here (it needs the computer's password and an account).
