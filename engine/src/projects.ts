@@ -225,21 +225,48 @@ export const projectGraph = (projectId: string) => loadProject(db, projectId)
 export type Graph = NonNullable<Awaited<ReturnType<typeof projectGraph>>>
 
 /**
- * Issue order, drawn: the sub-issues that start an issue point back at the sub-issues that finish the nearest earlier
- * issue with sub-issues. Transitively the same constraint as impliedDeps, with far fewer edges, so a graph reads left
- * to right: whatever a sub-issue waits on is to its left.
+ * How tasks follow one another, drawn: the sub-issues that start a task point back at the sub-issues that finish the
+ * task before it, so a graph reads left to right and whatever a sub-issue waits on is to its left.
+ *
+ * "Before" is the order things were built in, not only the order they are listed in (Sandy, 2026-11-17: "they should
+ * be hooked up in the order in which they were built … Right now it's weird. I have a running one in the project and
+ * then there's a bunch of already completed nodes coming from it"): tasks that have started come first, by when
+ * their first sub-issue started; tasks not started yet follow, in their listed order, which is what they will wait on
+ * (impliedDeps). So nothing finished is ever drawn as coming after something still running.
+ *
+ * Inside a task, a sub-issue added after the task was under way with nothing said about what it follows (the check
+ * after a build, the finish, the probe, before those recorded it) is drawn after the sub-issue added just before it:
+ * a check comes from what it was a check on.
  */
-export function orderEdges(subs: { id: string; parentId: string | null; dependsOn: string[] }[], issues: { id: string; sortOrder: number }[]): Map<string, string[]> {
+type Drawn = { id: string; parentId: string | null; dependsOn: string[]; startedAt?: Date | string | null; createdAt?: Date | string | null }
+const ms = (d?: Date | string | null) => (d ? new Date(d).getTime() : null)
+export function orderEdges(subs: Drawn[], issues: { id: string; sortOrder: number }[]): Map<string, string[]> {
   const pos = new Map(issues.map((t) => [t.id, t.sortOrder]))
-  const byParent = new Map<string, typeof subs>()
+  const byParent = new Map<string, Drawn[]>()
   for (const x of subs) byParent.set(x.parentId!, [...(byParent.get(x.parentId!) ?? []), x])
-  const ordered = [...byParent.entries()].sort((a, b) => (pos.get(a[0]) ?? 0) - (pos.get(b[0]) ?? 0)).map((e) => e[1])
   const out = new Map<string, string[]>(subs.map((x) => [x.id, []]))
+  // Inside a task: what a late addition follows, when it did not say.
+  const within = new Map<string, string[]>()
+  for (const list of byParent.values()) {
+    const ids = new Set(list.map((x) => x.id))
+    const first = Math.min(...list.map((x) => ms(x.createdAt) ?? Infinity))
+    const byMade = [...list].sort((p, q) => (ms(p.createdAt) ?? 0) - (ms(q.createdAt) ?? 0))
+    for (const x of list) {
+      const made = ms(x.createdAt)
+      if (x.dependsOn.some((d) => ids.has(d)) || made === null || made <= first) continue // it said, or it is one of the task's first: nothing to infer
+      const before = byMade.filter((y) => y.id !== x.id && (ms(y.createdAt) ?? Infinity) < made).at(-1)
+      if (before) { within.set(x.id, [before.id]); out.set(x.id, [before.id]) }
+    }
+  }
+  const deps = (x: Drawn) => [...x.dependsOn, ...(within.get(x.id) ?? [])]
+  const began = (list: Drawn[]) => { const t = list.map((x) => ms(x.startedAt)).filter((n): n is number => n !== null); return t.length ? Math.min(...t) : null }
+  const ordered = [...byParent.entries()].map(([id, list]) => ({ list, began: began(list), pos: pos.get(id) ?? 0 }))
+    .sort((p, q) => (p.began !== null && q.began !== null ? p.began - q.began || p.pos - q.pos : p.began !== null ? -1 : q.began !== null ? 1 : p.pos - q.pos)).map((e) => e.list)
   for (let i = 1; i < ordered.length; i++) {
     const prev = ordered[i - 1], cur = ordered[i]
     const curIds = new Set(cur.map((x) => x.id))
-    const finishers = prev.filter((x) => !prev.some((y) => y.dependsOn.includes(x.id))).map((x) => x.id)
-    for (const x of cur) if (!x.dependsOn.some((d) => curIds.has(d))) out.set(x.id, finishers.filter((f) => !x.dependsOn.includes(f)))
+    const finishers = prev.filter((x) => !prev.some((y) => deps(y).includes(x.id))).map((x) => x.id)
+    for (const x of cur) if (!deps(x).some((d) => curIds.has(d))) out.set(x.id, finishers.filter((f) => !x.dependsOn.includes(f)))
   }
   return out
 }
