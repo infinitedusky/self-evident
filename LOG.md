@@ -4659,3 +4659,10 @@ finished nodes hanging off a task listed before it that was only now running.
   drawn after the one added just before it. The check, finish and probe sub-tasks made before 2026-11-17 recorded
   nothing, so each was drawn as starting the task: five lines out of one node. Now a check comes from what it
   checked.
+
+## Pressing a node in a graph opens that sub-task's build (Sandy, 2026-11-17: "click on a node and it should open up the node and be able to see the status and what the agent is doing … like I would if I was building something directly within VS Code")
+
+The live view of a build existed (the build log tab: its status, the builder's steps, then everything it says,
+runs, reads and changes, as it happens) but only an agent could open it. Now pressing a node in any graph (a
+task's, a project's, an app's) opens it beside the graph. A step drawn before it exists has nothing to open. The
+project page still shows the pressed node's detail under the graph.
