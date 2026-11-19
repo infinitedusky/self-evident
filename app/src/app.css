@@ -423,6 +423,8 @@ pre.guide { margin: 8px 0 0; padding: 12px; max-height: 360px; overflow: auto; f
 
 /* The workspace, after Replit's: the loop as an icon rail, the agent's column, tabs that split (Dockview) */
 html, body, #root { height: 100%; }
+/* A two-finger swipe sideways never goes back or forward in the browser's history: a prototype or a smoke test being tried is in a frame here, and a swipe in it that ran out of things to scroll left the page mid-test. */
+html, body { overscroll-behavior-x: none; }
 .workspace { display: grid; grid-template-columns: 48px 52px 1fr; height: 100vh; overflow: hidden; }
 .ws-main { display: flex; min-width: 0; height: 100%; }
 .ws-main > .ws-split { flex: 1; }

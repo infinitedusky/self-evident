@@ -4950,3 +4950,11 @@ serving, the panel links to where to allow it. Tailscale installed but signed ou
 to the page on the computer itself (`POST /api/devices/serve`, `/serve/stop`), never to a phone or another site.
 
 Not done: installing Tailscale from here (it needs the computer's password and an account).
+
+## A sideways swipe does not leave the page (Sandy, 2026-11-18: "two fingers swipe left and right doesn't move back and forward in Chrome because it disrupts tests going on in prototype and smoke tests")
+
+The page sets `overscroll-behavior-x: none` on its root (`app/src/app.css`), which is how Chrome is told not to turn a
+two-finger swipe sideways into Back or Forward. Scrolling sideways inside anything that scrolls is as it was.
+
+Not tried with a real swipe (a trackpad gesture cannot be driven from a test). Not covered: a prototype or smoke test
+opened in a tab of its own, which is that app's page and not ours; Safari, which ignores this for its own swipe.
