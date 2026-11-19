@@ -334,6 +334,16 @@ export const probeTrial = pgTable('probe_trial', {
   createdAt: at('created_at').notNull().defaultNow(), finishedAt: at('finished_at'),
 }, (t) => [index('probe_trial_app').on(t.appId, t.createdAt)])
 
+// A nightly check's last word (nightly.ts): a workflow the repository runs on a schedule on its default branch, named
+// by the app as something its builds are held to (held.ts, when: nightly). One row for each, kept by the GitHub sync.
+export const nightly = pgTable('nightly', {
+  id: id(), appId: appId(), key: text('key').notNull(), workflow: text('workflow').notNull(), // the held row's key, and the workflow's file
+  status: text('status').notNull().default('none'), // passed | failed | none (no run has said yet)
+  runId: text('run_id'), url: text('url'), sha: text('sha'), ranAt: at('ran_at'),
+  failing: integer('failing').notNull().default(0), // runs in a row that failed
+  greenAt: at('green_at'), greenSha: text('green_sha'), error: text('error'), checkedAt: at('checked_at').notNull().defaultNow(),
+}, (t) => [uniqueIndex('nightly_app_key').on(t.appId, t.key)])
+
 // Pull requests Self Evident did not open (a teammate's, or the person's own by hand), kept from GitHub by the sync:
 // a review requested from the person shows in My Stuff, and one that touches files our open work claims is flagged.
 export const outsidePr = pgTable('outside_pr', {

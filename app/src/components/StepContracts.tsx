@@ -11,12 +11,16 @@
  * and nowhere else.
  */
 import { Fragment, useState } from 'react'
-import type { ProbeChange, ProbeView, StageKey, StepGroup } from '@self-evident/engine/contracts'
+import type { ProbeChange, ProbeView, RunsWhen, StageKey, StepGroup } from '@self-evident/engine/contracts'
 import { Badge } from './Badge'
 
 const STAGE: Record<StageKey, string> = { prepare: 'Prepare', do: 'Do', verify: 'Verify', report: 'Report' }
 const BY = { engine: 'the engine', agent: 'an agent', person: 'you' }
 const KIND: Record<ProbeView['kind'], string> = { command: 'command', judged: 'judged', skill: 'skill as reviewer', 'built-in': 'built in' }
+/** When a command is run, as the row and the form say it. After GitHub Actions' own three triggers: push, pull_request, schedule. */
+const WHEN: Record<RunsWhen, string> = { build: 'Every build', pr: 'On the pull request (CI)', nightly: 'Nightly, on the default branch' }
+const WHEN_KIND: Record<RunsWhen, string> = { build: 'command', pr: 'CI on the pull request', nightly: 'nightly' }
+const kindOf = (p: ProbeView) => (p.when && p.when !== 'build' ? WHEN_KIND[p.when] : KIND[p.kind])
 
 export interface StepContractsProps {
   groups: StepGroup[]
@@ -34,11 +38,18 @@ export interface StepContractsProps {
   /** Try a probe, as the row shows it, on the app's last merged tasks; `tryOn` is how many there are (none: no Try). */
   onTry?: (p: ProbeView) => void
   tryOn?: number
+  /** Each nightly check's last run, by its key. */
+  nightly?: Record<string, NightView>
+  /** The workflows the app's repository has: a nightly check picks one that runs on a schedule, one left to CI picks a job. */
+  workflows?: WorkflowView[]
 }
+/** A nightly check's last word (the engine's nightly.ts). `ran` and `green` are said as times ("6 hours ago"). */
+export interface NightView { status: 'passed' | 'failed' | 'none'; url?: string | null; ran?: string; failing: number; green?: string; error?: string | null }
+export interface WorkflowView { file: string; name: string; scheduled: boolean; onPr: boolean; jobs: string[] }
 /** A probe as it was when tried, and what it said of each merged task. */
 export interface TrialView { status: 'running' | 'done' | 'failed'; runs: string; tasks: number; when?: string; costUsd?: string | null; error?: string | null; results: { identifier: string; title: string; pr: number | null; pass: boolean | null; evidence: string; findings: string[] }[] }
 
-export function StepContracts({ groups, open = [], usable = [], onSkills, onProbe, onWorkflow, trials = {}, onTry, tryOn = 0 }: StepContractsProps) {
+export function StepContracts({ groups, open = [], usable = [], onSkills, onProbe, onWorkflow, trials = {}, onTry, tryOn = 0, nightly = {}, workflows = [] }: StepContractsProps) {
   return (
     <div className="step-contracts" data-component="StepContracts">
       {groups.map((g) => (
@@ -85,7 +96,7 @@ export function StepContracts({ groups, open = [], usable = [], onSkills, onProb
                               </select>}
                             </div>
                           ) : null}
-                          {t.probes ? <Probes step={s.label} probes={t.probes} onProbe={onProbe} onWorkflow={onWorkflow} trials={trials} onTry={onTry} tryOn={tryOn} /> : null}
+                          {t.probes ? <Probes step={s.label} probes={t.probes} onProbe={onProbe} onWorkflow={onWorkflow} trials={trials} onTry={onTry} tryOn={tryOn} nightly={nightly} workflows={workflows} /> : null}
                         </div>
                       </li>
                     )
@@ -100,9 +111,10 @@ export function StepContracts({ groups, open = [], usable = [], onSkills, onProb
   )
 }
 
-type Draft = { name: string; kind: 'command' | 'skill' | 'judged'; runs: string; blocks: boolean }
+type Draft = { name: string; kind: 'command' | 'skill' | 'judged'; runs: string; blocks: boolean; when: RunsWhen }
 const HINT = { command: 'a shell command; exit 0 passes, e.g. pnpm lint', skill: 'a skill this app\'s agents have, e.g. security-review', judged: 'a sentence the check\'s agent can judge' }
-const NEW: Draft = { name: '', kind: 'command', runs: '', blocks: true }
+const HINT_WHEN = { pr: 'the check\'s name on the pull request, e.g. smoke', nightly: 'the workflow\'s file, e.g. nightly.yml' }
+const NEW: Draft = { name: '', kind: 'command', runs: '', blocks: true, when: 'build' }
 
 /** Blocks or reports, said in full where it is chosen. */
 function Blocks({ label, value, disabled, onChange }: { label: string; value: boolean; disabled?: boolean; onChange: (blocks: boolean) => void }) {
@@ -115,19 +127,34 @@ function Blocks({ label, value, disabled, onChange }: { label: string; value: bo
 }
 
 /** One probe's fields, for a new one and for one being edited (its kind stays what it was). */
-function ProbeForm({ start, editing, named = true, onSave, onCancel }: { start: Draft; editing?: string; /** false: its name is the engine's (the test command). */ named?: boolean; onSave: (d: Draft) => void; onCancel: () => void }) {
+function ProbeForm({ start, editing, named = true, timed = true, workflows = [], onSave, onCancel }: { start: Draft; editing?: string; /** false: its name is the engine's (the test command). */ named?: boolean; /** false: it is run on every build and that is not a choice (the test command). */ timed?: boolean; workflows?: WorkflowView[]; onSave: (d: Draft) => void; onCancel: () => void }) {
   const [draft, setDraft] = useState(start)
   const ready = draft.name.trim() && draft.runs.trim()
+  const when = draft.kind === 'command' && timed ? draft.when : 'build'
+  // What there is to pick: a nightly check, the workflows that run on a schedule; one left to CI, the jobs of the ones that run on pull requests.
+  const picks = when === 'nightly' ? workflows.filter((w) => w.scheduled).map((w) => ({ value: w.file, label: w.name === w.file ? w.file : `${w.name} (${w.file})` }))
+    : when === 'pr' ? [...new Set(workflows.filter((w) => w.onPr).flatMap((w) => w.jobs))].map((j) => ({ value: j, label: j })) : []
+  const known = picks.some((x) => x.value === draft.runs)
   return (
     <form className="step-probe-add" aria-label={editing ? `Edit ${editing}` : 'Add a probe'} onSubmit={(e) => { e.preventDefault(); if (ready) onSave(draft) }}>
       {named ? <input aria-label="Probe name" placeholder="Name" autoFocus value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /> : <strong>{draft.name}</strong>}
       {editing ? <span className="faint">{KIND[draft.kind]}</span> : <select aria-label="Probe kind" value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as Draft['kind'] })}>
         <option value="command">Command</option><option value="skill">Skill as reviewer</option><option value="judged">Judged</option>
       </select>}
-      <input aria-label="What it runs" className={draft.kind === 'judged' ? undefined : 'mono'} placeholder={HINT[draft.kind]} value={draft.runs} onChange={(e) => setDraft({ ...draft, runs: e.target.value })} />
-      <Blocks label="When it fails" value={draft.blocks} onChange={(blocks) => setDraft({ ...draft, blocks })} />
+      {draft.kind === 'command' && timed && <select aria-label="When it runs" value={when} onChange={(e) => { const w = e.target.value as RunsWhen; setDraft({ ...draft, when: w, runs: w === start.when ? start.runs : '', ...(w === 'nightly' ? { blocks: false } : {}) }) }}>
+        {(Object.keys(WHEN) as RunsWhen[]).map((w) => <option key={w} value={w}>{WHEN[w]}</option>)}
+      </select>}
+      {when !== 'build' && picks.length > 0 && (known || !draft.runs)
+        ? <select aria-label={when === 'nightly' ? 'The workflow that runs it' : 'Its check on the pull request'} className="mono" value={draft.runs} onChange={(e) => setDraft({ ...draft, runs: e.target.value })}>
+            <option value="">{when === 'nightly' ? 'Pick a workflow…' : 'Pick a check…'}</option>
+            {picks.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}
+          </select>
+        : <input aria-label={when === 'nightly' ? 'The workflow that runs it' : when === 'pr' ? 'Its check on the pull request' : 'What it runs'} className={draft.kind === 'judged' ? undefined : 'mono'} placeholder={when === 'build' ? HINT[draft.kind] : HINT_WHEN[when]} value={draft.runs} onChange={(e) => setDraft({ ...draft, runs: e.target.value })} />}
+      <Blocks label="When it fails" value={when === 'nightly' ? false : draft.blocks} disabled={when === 'nightly'} onChange={(blocks) => setDraft({ ...draft, blocks })} />
       <button type="submit" className="small" disabled={!ready}>{editing ? 'Save' : 'Add'}</button>
       <button type="button" className="linkish small" onClick={onCancel}>Cancel</button>
+      {when === 'nightly' && <p className="faint step-probe-says">The repository runs it on a schedule; nothing here does, and nothing waits for it. A red run shows under what needs you.{picks.length === 0 ? ' No workflow in this repository runs on a schedule yet: add one with schedule: in .github/workflows and it can be picked here.' : ''}</p>}
+      {when === 'pr' && <p className="faint step-probe-says">The repository's CI runs it on the pull request; no step here does.{draft.blocks ? ' A task is not closed while it is failing there.' : ''}</p>}
     </form>
   )
 }
@@ -162,7 +189,20 @@ function TrialLine({ p, t }: { p: ProbeView; t: TrialView }) {
   )
 }
 
-function Probes({ step, probes, onProbe, onWorkflow, trials = {}, onTry, tryOn = 0 }: { step: string; probes: ProbeView[]; onProbe?: (change: ProbeChange) => void; onWorkflow?: (key: string, on: boolean | null) => void; trials?: Record<string, TrialView>; onTry?: (p: ProbeView) => void; tryOn?: number }) {
+/** A nightly check's last run, under its row: one line. After a CI badge (passing, failing) with the run one click away. */
+function NightLine({ p, n }: { p: ProbeView; n?: NightView }) {
+  const run = n?.url ? <> · <a href={n.url} target="_blank" rel="noreferrer">Open the run</a></> : null
+  return (
+    <div className="step-probe-night" aria-label={`Last run of ${p.name}`}>
+      {!n ? <span className="faint">Not read from GitHub yet.</span>
+        : n.status === 'failed' ? <><span className="trial-fail">{n.failing > 1 ? `Failed ${n.failing} runs in a row` : 'The last run failed'}</span><span className="faint">{n.ran ? ` · ${n.ran}` : ''}{n.green ? ` · last passed ${n.green}` : ' · it has not passed yet'}{run}</span></>
+        : n.status === 'passed' ? <><span>The last run passed</span><span className="faint">{n.ran ? ` · ${n.ran}` : ''}{run}</span></>
+        : <span className="faint">{n.error ? `It could not be read from GitHub: ${n.error}` : 'No run on the default branch yet.'}</span>}
+    </div>
+  )
+}
+
+function Probes({ step, probes, onProbe, onWorkflow, trials = {}, onTry, tryOn = 0, nightly = {}, workflows = [] }: { step: string; probes: ProbeView[]; onProbe?: (change: ProbeChange) => void; onWorkflow?: (key: string, on: boolean | null) => void; trials?: Record<string, TrialView>; onTry?: (p: ProbeView) => void; tryOn?: number; nightly?: Record<string, NightView>; workflows?: WorkflowView[] }) {
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
   const unset = (p: ProbeView) => p.key === 'tests' && !p.runs // the test command, before there is one
@@ -173,8 +213,8 @@ function Probes({ step, probes, onProbe, onWorkflow, trials = {}, onTry, tryOn =
         <tbody>
           {probes.map((p) => onProbe && editing === p.key && p.kind !== 'built-in' ? (
             <tr key={p.key}><td colSpan={6}>
-              <ProbeForm editing={p.name} named={p.key !== 'tests'} start={{ name: p.name, kind: p.kind, runs: p.runs, blocks: p.blocks }} onCancel={() => setEditing(null)} onSave={(d) => {
-                onProbe({ op: 'edit', key: p.key, name: d.name, runs: d.runs, ...(d.blocks !== p.blocks ? { blocks: d.blocks } : {}) }) // one change: two would each start from the same settings
+              <ProbeForm editing={p.name} named={p.key !== 'tests'} timed={p.own} workflows={workflows} start={{ name: p.name, kind: p.kind, runs: p.runs, blocks: p.blocks, when: p.when ?? 'build' }} onCancel={() => setEditing(null)} onSave={(d) => {
+                onProbe({ op: 'edit', key: p.key, name: d.name, runs: d.runs, ...(d.blocks !== p.blocks ? { blocks: d.blocks } : {}), ...(d.when !== (p.when ?? 'build') ? { when: d.when } : {}) }) // one change: two would each start from the same settings
                 setEditing(null)
               }} />
             </td></tr>
@@ -182,26 +222,27 @@ function Probes({ step, probes, onProbe, onWorkflow, trials = {}, onTry, tryOn =
             <tr className={p.on ? undefined : 'off'} title={p.fixed ?? (p.from ? `The ${p.from} workflow switches this ${p.on ? 'on' : 'off'} for its tasks.` : undefined)}>
               {onProbe && <td><input type="checkbox" aria-label={`Run ${said(p)}`} checked={p.on} disabled={!!p.fixed || unset(p)} onChange={(e) => (p.from && onWorkflow ? onWorkflow(p.key, e.target.checked) : onProbe({ op: 'on', key: p.key, on: e.target.checked }))} /></td>}
               <td>{p.name}{p.from && <span className="faint step-probe-from"> · from {p.from}{onWorkflow && <button type="button" className="linkish" aria-label={`Leave ${p.name} to the app, not the ${p.from} workflow`} title="Leave it to the app's own setting" onClick={() => onWorkflow(p.key, null)}>✕</button>}</span>}</td>
-              <td className="faint">{KIND[p.kind]}</td>
+              <td className="faint">{kindOf(p)}</td>
               <td className={p.kind === 'command' || p.kind === 'skill' ? 'mono' : undefined}>{unset(p) ? <span className="faint" style={{ fontFamily: 'inherit' }}>no test command yet</span> : p.runs}</td>
-              <td>{onProbe && !p.fixed && !unset(p)
+              <td>{onProbe && !p.fixed && !unset(p) && p.when !== 'nightly'
                 ? <Blocks label={`When ${said(p)} fails`} value={p.blocks} disabled={!p.on} onChange={(blocks) => onProbe({ op: 'blocks', key: p.key, blocks })} />
                 : !p.on ? <Badge>off</Badge> : <Badge tone={p.blocks ? 'warn' : undefined}>{p.blocks ? 'blocks' : 'reports'}</Badge>}</td>
               {onProbe && <td className="step-probe-acts">
                 {p.editable && <button type="button" className="linkish" aria-label={unset(p) ? 'Set the test command' : p.key === 'tests' ? 'Edit the test command' : `Edit the probe ${p.name}`} onClick={() => { setEditing(p.key); setAdding(false) }}>{unset(p) ? 'Set' : 'Edit'}</button>}
-                {onTry && tryOn > 0 && p.on && !unset(p) && !p.fixed && <button type="button" className="linkish" disabled={trials[p.key]?.status === 'running'} aria-label={`Try ${said(p)} on past work`}
+                {onTry && tryOn > 0 && p.on && !unset(p) && !p.fixed && (p.when ?? 'build') === 'build' && <button type="button" className="linkish" disabled={trials[p.key]?.status === 'running'} aria-label={`Try ${said(p)} on past work`}
                   title={p.kind === 'command' ? `Runs it on the last ${tryOn} merged task${tryOn === 1 ? '' : 's'}. Nothing is changed and it costs nothing.` : `An agent reads each of the last ${tryOn} merged task${tryOn === 1 ? '' : 's'}. Nothing is changed.`}
                   onClick={() => onTry(p)}>{p.kind === 'command' ? 'Try' : `Try (${tryOn} agent run${tryOn === 1 ? '' : 's'})`}</button>}
                 {p.changed && <button type="button" className="linkish" aria-label={`Put ${p.name} back as the engine ships it`} title="Back to the default" onClick={() => onProbe({ op: 'reset', key: p.key })}>Reset</button>}
                 {(p.own || (p.key === 'tests' && !unset(p))) && <button type="button" className="linkish" aria-label={p.key === 'tests' ? 'Clear the test command' : `Remove the probe ${p.name}`} onClick={() => onProbe({ op: 'remove', key: p.key })}>✕</button>}
               </td>}
             </tr>
+            {p.when === 'nightly' && p.on && <tr className="step-probe-trial-row"><td colSpan={6}><NightLine p={p} n={nightly[p.key]} /></td></tr>}
             {trials[p.key] && <tr className="step-probe-trial-row"><td colSpan={6}><TrialLine p={p} t={trials[p.key]} /></td></tr>}
           </Fragment>))}
         </tbody>
       </table>
       {onProbe && !adding && <button type="button" className="linkish small" aria-label={`Add a probe to ${step}`} onClick={() => { setAdding(true); setEditing(null) }}>Add a probe</button>}
-      {onProbe && adding && <ProbeForm start={NEW} onCancel={() => setAdding(false)} onSave={(d) => { onProbe({ op: 'add', name: d.name, kind: d.kind, runs: d.runs, ...(d.blocks ? {} : { blocks: false }) }); setAdding(false) }} />}
+      {onProbe && adding && <ProbeForm start={NEW} workflows={workflows} onCancel={() => setAdding(false)} onSave={(d) => { const when = d.kind === 'command' ? d.when : 'build'; onProbe({ op: 'add', name: d.name, kind: d.kind, runs: d.runs, ...(d.blocks && when !== 'nightly' ? {} : { blocks: false }), ...(when !== 'build' ? { when } : {}) }); setAdding(false) }} />}
     </>
   )
 }

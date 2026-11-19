@@ -16,7 +16,7 @@ import { branchOf, issueBranch, issueStart, landingBranch, modeOf, stackBase } f
 import { newId } from './ids.js'
 import { commentOnIssue, identifier, setState } from './issues.js'
 import { commandRun, land, wholeRun, withLock } from './landing.js'
-import { agentProbes, commandFixBrief, commandProbes, nextProbe, PROBE_FIX_TITLE, PROBE_PREFIX, probeBrief, probeFixBrief, probeOfTitle, probesOf, probeTitle, resultOf, TESTS_KEY, withResult, BUILT_IN, type ProbeResult } from './probes.js'
+import { agentProbes, commandFixBrief, commandProbes, leftTo, nextProbe, PROBE_FIX_TITLE, PROBE_PREFIX, probeBrief, probeFixBrief, probeOfTitle, probesOf, probeTitle, resultOf, TESTS_KEY, withResult, BUILT_IN, type ProbeResult } from './probes.js'
 import { skillOptions } from './skills.js'
 import { guideTasks, mergeGuide, mergeRecord } from './merge-guide.js'
 import { acceptanceOf, setAcceptance } from './acceptance.js'
@@ -406,7 +406,7 @@ export class Runner {
       const again = next.round > 1
       const criteria = again ? list.criteria.filter((c) => c.built === false) : list.criteria
       const required = again ? list.required.filter((r) => list.held?.find((c) => c.key === r.key)?.built === false) : list.required
-      await addSubTask(taskId, { title: numbered(CHECK_TITLE, next.round), brief: checkTaskBrief(criteria, required, again ? { round: next.round } : undefined, smokeSetups(setup)), after }, 'engine')
+      await addSubTask(taskId, { title: numbered(CHECK_TITLE, next.round), brief: checkTaskBrief(criteria, required, again ? { round: next.round } : undefined, smokeSetups(setup), { pr: leftTo(setup, 'pr'), nightly: leftTo(setup, 'nightly') }), after }, 'engine')
       return
     }
     if (next.do === 'finish') { await addSubTask(taskId, { title: numbered(FINISH_TITLE, next.round), brief: finishBrief(unmet, next.round), after }, 'engine'); return }

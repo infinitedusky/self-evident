@@ -87,6 +87,18 @@ export const ByProject: Story = {
     await expect(c.getByText('Closed projects · 1')).toBeInTheDocument()
   },
 }
+/** A nightly check is red: said on top, with the tasks merged since it last passed. Sample data. */
+export const NightlyFailing: Story = {
+  beforeEach: withEngine({ now: { ...now, tasks: [building, merged, closed], needsYou: [{ kind: 'nightly_failed', appId: 'app_sample', appName: 'Sample Shop', name: 'Docs smoke', workflow: 'nightly.yml', url: 'https://example.com/sample/actions/runs/19', nights: 2, since: [{ id: 'iss_sample4', identifier: 'SS-4', title: 'Postcode lookup (sample)' }] }] } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const red = within((await c.findByRole('heading', { name: 'Nightly checks failing' })).closest('section')!)
+    await expect(red.getByText('Docs smoke')).toBeInTheDocument()
+    await expect(red.getByText(/failed 2 runs in a row/)).toBeInTheDocument()
+    await expect(red.getByRole('link', { name: 'SS-4 Postcode lookup (sample)' })).toHaveAttribute('href', '/tasks/iss_sample4/build')
+    await expect(red.getByRole('link', { name: 'Open the run' })).toHaveAttribute('href', 'https://example.com/sample/actions/runs/19')
+  },
+}
 /** Only work going well: nothing waits for the person. */
 export const AllBuilding: Story = { beforeEach: withEngine({ now: { ...now, tasks: [building, closed] } }) }
 /** A question is the only thing on the page. */

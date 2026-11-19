@@ -261,6 +261,7 @@ export async function syncApp(appId: string, api: GitHubApi = ghCli) {
   const out: { prs?: Awaited<ReturnType<typeof syncPrs>>; catchUp?: Awaited<ReturnType<typeof catchUpApp>>; error?: string } = {}
   try { out.prs = await syncPrs(appId, api) } catch (err: any) { out.error = `pull requests: ${String(err?.message ?? err).slice(0, 300)}` }
   try { out.catchUp = await catchUpApp(appId) } catch (err: any) { out.error = [out.error, `main: ${String(err?.message ?? err).slice(0, 300)}`].filter(Boolean).join('; ') }
+  try { await (await import('./nightly.js')).syncNightly(appId) } catch (err: any) { out.error = [out.error, `nightly: ${String(err?.message ?? err).slice(0, 300)}`].filter(Boolean).join('; ') }
   lastSync.set(appId, { at: new Date(), error: out.error ?? null })
   return out
 }

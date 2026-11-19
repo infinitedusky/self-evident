@@ -5158,3 +5158,38 @@ Since Close (2026-11-18) a merge leaves a task In review and Done is the person'
 The word "landed" is gone from this page. The rule is `phaseOf` in `engine/src/now.ts`; what a task waits on is
 `waitsOf` in `close.ts`. A project's own "landed" status (its work is merged; "closed" when its last task is) is
 unchanged, and still shows on the project lists.
+
+## A check says when it runs: every build, on the pull request, or nightly (Sandy, 2026-11-19: "I feel like this should be a nightly check or something"; "can self evident allow this configuration?"; "great lets do that")
+
+Bonkei's CI ran its whole smoke, the every-page docs run included, on every pull request. The usual answer is a
+nightly build: fast checks on each pull request, the slow suite on a schedule on the default branch. Self Evident had
+no way to say it: a command on the list of what a build is held to was run on every build, and a criterion could be
+left to the pull request's CI or to a person, never to a run that happens later.
+
+Decided:
+- **The schedule is the repository's** (Sandy: "the schedule would be set in github and we would just be able to
+  select it"). A workflow with `schedule:` in `.github/workflows/` runs it. Self Evident runs nothing overnight and
+  writes no workflow; it would only work while this Mac is on.
+- **A command of the app's own says when** (`when` in held.ts): every build (as before); on the pull request, where
+  it is a check of the repository's CI and names that check; or nightly, where it names the workflow's file. In
+  Settings › Skills, Build › Verify, the form has "When it runs", and the check or the workflow is picked from the
+  ones the checkout has (a nightly one from those with a schedule).
+- **Neither of the last two is run in a build.** The check after the build is told what is left to each, so a
+  criterion one of them proves is left with "when" pr or nightly, naming it.
+- **Left to the pull request and blocking**: a task is not closed while that check is failing there (from the pull
+  request's checks the sync already keeps).
+- **Nightly only reports.** There is nothing left to block when it runs, so the choice is not offered. A criterion
+  left to it is listed in the smoke test under "Left to the nightly run", nobody is asked to try it, and it does not
+  hold Close.
+- **A red night is said once and shows under what needs you**, on the home page and on top of Build: the check, how
+  many runs in a row, the run on GitHub, and the tasks merged since the last green run, since one of them broke it.
+  Under the row in Settings: the last run, and when it last passed.
+
+How: `engine/src/nightly.ts` reads the workflow's last runs on the default branch with `gh run list`, with the
+GitHub sync, at most every fifteen minutes an app; table `nightly` keeps one row for each (migration 0042). Only a run
+that finished as passed or failed counts; a run on a pull request is not the nightly one. Events `nightly.failed`
+and `nightly.passed`. The agents' `set_held` tool takes `when` too.
+
+Not built: Self Evident writing the workflow file (moving Bonkei's docs run to a nightly workflow is a change to
+Bonkei, made as a task); telling who broke it by running the suite on each merged commit; a notification beyond the
+list.

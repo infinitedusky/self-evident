@@ -1032,6 +1032,9 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .step-probe-from button { margin-left: 4px; }
 .step-probes .step-probe-trial-row td { padding: 0 0 6px 24px; }
 .step-probe-trial { font-size: 12px; }
+.step-probe-night { font-size: 12px; }
+.step-probe-night .trial-fail { color: var(--bad, #b42318); }
+.step-probe-says { flex-basis: 100%; margin: 0; font-size: 12px; }
 .step-probe-trial summary { cursor: pointer; color: var(--ink-soft, inherit); }
 .step-probe-trial .trial-fail { color: var(--bad, #b42318); }
 .step-probe-trial ul { list-style: none; margin: 4px 0 0; padding: 0 0 0 14px; }

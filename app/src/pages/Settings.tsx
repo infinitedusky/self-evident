@@ -4,7 +4,7 @@
  * All apps: plugins, the jobs their skills cover, the integrations (a list, then a page each). An app: its repo, agents, plugins,
  * landing, prototype, Storybook, integration values, and its workflow rules.
  */
-import { StepContracts, type TrialView } from '../components/StepContracts'
+import { StepContracts, type NightView, type TrialView } from '../components/StepContracts'
 import { applyProbeChanges, contractsOf, type ProbeChange } from '@self-evident/engine/contracts'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useMatch, useNavigate, useParams } from 'react-router'
@@ -472,6 +472,10 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   const trying = tried.trials.some((t) => t.status === 'running')
   useEffect(() => { if (!trying) return; const timer = setInterval(() => void loadTrials(), 3000); return () => clearInterval(timer) }, [trying, app.id])
   const trials: Record<string, TrialView> = Object.fromEntries(tried.trials.map((t) => [t.key, { status: t.status, runs: t.probe.runs, tasks: t.tasks, when: ago(t.createdAt), costUsd: t.costUsd, error: t.error, results: t.results }]))
+  // Nightly checks (the engine's nightly.ts): each one's last run, and the repository's workflows to pick from. Read again when the list is saved.
+  const [night, setNight] = useState<Awaited<ReturnType<typeof engine.nightly>>>({ checks: [], workflows: [] })
+  useEffect(() => { engine.nightly(app.id).then(setNight).catch(() => {}) }, [app.id, base])
+  const nightly: Record<string, NightView> = Object.fromEntries(night.checks.map((n) => [n.key, { status: n.status, url: n.url, failing: n.failing, error: n.error, ...(n.ranAt ? { ran: ago(n.ranAt) } : {}), ...(n.greenAt ? { green: ago(n.greenAt) } : {}) }]))
   const held = Object.fromEntries(Object.entries({ ...setup, ...applyProbeChanges(setup, ops) }).filter(([, v]) => v !== null && v !== undefined)) as AppSetup
   const switches = Object.fromEntries(Object.entries({ ...(workflow?.requirements ?? {}), ...wfSwitch }).filter(([, v]) => typeof v === 'boolean')) as Record<string, boolean>
   const shownWorkflow = workflow ? { ...workflow, requirements: switches } : null
@@ -560,7 +564,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         <button type="button" className="small" onClick={() => setChanging(!changing)}>{changing ? 'Done' : 'Change'}</button>
       </div>
       {info === null ? <p className="muted">Loading…</p> : <StepContracts
-        groups={contractsOf({ setup: held, workflow: shownWorkflow, usable: info.usable ?? [] })} open={changing ? ['build'] : []} trials={trials}
+        groups={contractsOf({ setup: held, workflow: shownWorkflow, usable: info.usable ?? [] })} open={changing ? ['build'] : []} trials={trials} nightly={nightly} workflows={night.workflows}
         {...(changing ? {
           usable: info.usable ?? [],
           onSkills: (step: string, names: string[]) => { const { [step]: _, ...rest } = setup.step_skills ?? {}; const next = names.length ? { ...rest, [step]: names } : rest; set({ step_skills: Object.keys(next).length ? next : undefined }) },

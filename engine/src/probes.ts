@@ -146,5 +146,5 @@ export async function setHeld(appId: string, changes: HeldChange[]) {
     for (const c of changes) { const patch = applyHeldChange(cur, c); if (!patch) refused.push(c); else cur = Object.fromEntries(Object.entries({ ...cur, ...patch }).filter(([, v]) => v !== null && v !== undefined)) }
     return applyHeldChanges(now, changes)
   })
-  return { held: heldOf(setup).map(({ id, name, kind, runs, blocks, on, own, changed }) => ({ key: id, name, kind, runs, blocks, on, own, changed })), ...(refused.length ? { refused } : {}) }
+  return { held: heldOf(setup).map(({ id, name, kind, runs, blocks, on, own, changed, when }) => ({ key: id, name, kind, runs, blocks, on, own, changed, ...(when ? { when } : {}) })), ...(refused.length ? { refused } : {}) }
 }
