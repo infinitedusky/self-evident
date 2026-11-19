@@ -5015,3 +5015,21 @@ Settings › Skills, Build › Verify, while changing:
 - The app's own (a command, a reviewer skill, a judged sentence) has Edit: its row becomes its fields, name and what
   it runs. Its key and kind stay, so results already recorded still belong to it. The engine's probes and the test
   command (Landing) are not edited here.
+
+## An app's main on this computer follows GitHub past a person's edit, and says so when it cannot (Sandy, 2026-11-19: "we need to make pulling merged PRs to the local main happen when it detects that the PR is merged on github")
+
+The pull was already there (2026-11-15): every sync fetches the default branch and fast-forwards the checkout's own
+copy, in the same pass that sees a pull request merged. What was wrong, found on Bonkei: its main was 100 commits
+behind after three days of merges, because one tracked file had an edit that was not committed, and any such edit
+made the pull step aside without a word.
+
+- A change that is not committed no longer stops it. In a file the new commits do not touch, git moves around it. In
+  a file they do touch, the change is set aside and put back on top (git's own autostash), only when that is known
+  beforehand to go cleanly (asked of git without touching a file) and nothing is staged. The person's change is
+  never dropped and never left with conflict marks.
+- When it cannot move (the change would collide, main has commits of its own, main is open in another worktree), it
+  is said once, under what needs you: the app, how far behind, why, which files, and the folder. It is unsaid when
+  the checkout catches up. Events `checkout.behind` and `checkout.pulled`, on the app.
+
+Not changed: the checkout the engine itself runs from (Self Evident's own) is still never pulled by the sync, since
+new engine code restarts the engine and cuts off what is building. Only an app's first repository is followed.

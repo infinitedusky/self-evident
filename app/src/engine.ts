@@ -323,6 +323,7 @@ export type Attention =
   | ({ kind: 'pr_feedback'; prNumber: number | null; url: string | null; review: string | null; checks: string; failing: string[] } & Where)
   | ({ kind: 'behind_main'; files: string; commits: number } & Where)
   | { kind: 'review'; appName: string; prNumber: number; title: string; author: string | null; url: string | null }
+  | { kind: 'checkout_behind'; appName: string; branch: string; path: string; commits: number; why: string; files: string[] }
   | ({ kind: 'overlap'; prNumber: number; title: string; author: string | null; url: string | null; files: string[] } & Where)
 export interface RunningProject {
   projectId: string; projectName: string; appName: string; status: string; integrationBranch: string | null; backlogOpen: number
@@ -576,7 +577,7 @@ export const EVENT_TYPES = [
   'issue.created', 'issue.deleted', 'issue.updated', 'issue.state', 'issue.reordered', 'issue.cleared', 'issue.planning', 'issue.planned', 'issue.plan_failed', 'issue.plan_waiting', 'issue.commented',
   'question.asked', 'question.answered', 'initiative.created', 'initiative.updated', 'cycle.created',
   'talk.message', 'talk.permission', 'talk.result', 'prototype.shown', 'share.started', 'share.stopped', 'idea.created', 'idea.converted', 'step.updated', 'brief.approved', 'brief.unapproved', 'workflow.saved', 'workflow.used', 'engine.hold', 'engine.resumed',
-  'pr.merged', 'pr.closed', 'pr.retargeted', 'pr.review', 'pr.checks', 'review.requested', 'project.caught_up', 'project.behind_main',
+  'pr.merged', 'pr.closed', 'pr.retargeted', 'pr.review', 'pr.checks', 'review.requested', 'project.caught_up', 'project.behind_main', 'checkout.behind', 'checkout.pulled',
   'backlog.error', 'project.backlog_open',
   'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted', 'build.carried_on',
   'run.started', 'run.message', 'run.steps', 'run.tool_call', 'run.tool_result', 'run.result', 'run.error', 'run.rate_limit',
