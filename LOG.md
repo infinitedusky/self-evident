@@ -5274,3 +5274,26 @@ hand before being told, the other people's rows still were, and the scan was sta
   invited it: "sample data lives in scenarios, made-up rows by table" did not say which tables.
 - **Tried from the screen.** Each thing is tried the way the person will; a route called by hand is said so in the
   report, and is not finished.
+
+## A stand-in is part of the prototype, and has a folder outside the repository (Sandy, 2026-11-19: "both please", on what a Cloaked task agent's report showed)
+
+The agent had wired a vendor stand-in the right way (a base URL and a key, the app's own client none the wiser) and
+kept it in `/tmp` with a compose file beside it: "If the prototype is restarted or reset, the stand-in and its env are
+gone. Say so if you want it … made permanent." It also held a real person's recorded findings, which cannot go in the
+repository, so there was nowhere else for it.
+
+Decided:
+- **A stand-in belongs to the prototype** (`prototype.stand_ins`, migration 0043; `engine/src/stand-ins.ts`): a name,
+  a command that serves on `$PORT`, and the variables that point the app at it (`{url}`, `{port}`, `{dir}`, `{home}`,
+  `{worktree}` filled in). The engine starts each one before the prototype's server, gives the server those
+  variables, and stops them with it. A restart or a data reset brings them back, at the same address.
+- **Each prototype has a folder outside every repository** (`~/.self-evident/prototypes/<id>`, `$PROTOTYPE_HOME`):
+  its stand-ins run there, one folder each, and what they serve is kept there, recorded responses with real people's
+  data among them. On this computer only (it does not move between Macs with the database), and removed when the
+  prototype is discarded.
+- **The agent sets them** with `prototype_stand_in` (set, remove); setting one restarts a running prototype so its
+  server has the variables. The prototype's agent and the skill are told: never by hand, never in `/tmp`.
+- **The page shows them**: by name beside the made-up data, each with whether it is up. A reading line.
+
+Not built: recordings moving between computers; a stand-in for something reached other than over HTTP is still just
+a command and its variables; making one from a recorded real run (the agent writes the stub and the recording).

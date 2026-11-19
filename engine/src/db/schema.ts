@@ -425,6 +425,7 @@ export const prototype = pgTable('prototype', {
   sessionId: text('session_id'), // the conversation that builds it, working in its worktree
   scenario: text('scenario'), // the made-up data its database was last built from (.prototype/scenarios/<name>)
   depth: text('depth'), // full | rough: how thoroughly it is built (prototype.ts, depthOf); null reads as full
+  standIns: jsonb('stand_ins').notNull().default([]), // what it runs in place of what is outside the system: [{key, name, what?, cmd, env}] (stand-ins.ts)
   guide: jsonb('guide'), // what someone opening its shared link is told: {intro?, steps: [{title, path?, try?}]} (share-guide.ts)
   shown: jsonb('shown').notNull().default([]), // what the agent put in its Code view to explain it: files (with lines) and pages (prototype-code.ts)
   branch: text('branch').notNull(), path: homePath('path').notNull(), port: integer('port'),

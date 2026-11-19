@@ -1,0 +1,1 @@
+ALTER TABLE "prototype" ADD COLUMN "stand_ins" jsonb DEFAULT '[]'::jsonb NOT NULL;

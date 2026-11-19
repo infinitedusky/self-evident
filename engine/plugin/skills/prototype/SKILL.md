@@ -92,6 +92,13 @@ by recorded fixtures), identity and login (a dependency override or a dev-only s
 config values. Name each seam you used in your report, and say whether it already existed or you added it; a seam you
 added is something the real build will need too.
 
+**A stand-in is part of the prototype.** Set each one with `prototype_stand_in`: a command that serves on `$PORT`,
+and the variables that point the app at it. Self Evident starts it with the prototype and stops it with it, so it is
+still there after a restart or a data reset. Never start one by hand or keep one, or what it serves, in `/tmp`: the
+next start loses it, and the prototype no longer works. What it serves is kept in its own folder outside the
+repository (`$PROTOTYPE_HOME`): recorded responses from the real service go there, real people's among them, never
+on the branch. A stub program the repository already keeps can be run from there.
+
 Not allowed: skipping a layer, hard-coding what a query should return, parsing that only handles the sample, a
 schema you would not ship, logic in the browser that belongs on the server.
 
@@ -122,7 +129,7 @@ Then the test, answered plainly: what would have to change to deploy this, beyon
 key and switch that points somewhere else in the prototype (that list is the configuration), and anything that would
 need code changed (each one is a gap, and goes under Not met).
 
-Then: each seam and stub used (existing or added), what is assumed rather than recorded from the real service, and
+Then: each stand-in (by its name in `prototype_stand_in`), each seam and stub used (existing or added), what is assumed rather than recorded from the real service, and
 what was hard or surprising; the analysis reads it.
 
 Then the **telemetry hook points**, as a table (where, what it records, the question it answers, the alert), saying
