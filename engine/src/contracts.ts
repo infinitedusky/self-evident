@@ -5,14 +5,11 @@
  * Verify; nothing else about a step is an app's to change.
  *
  * `contractsOf` lays an app's own choices over the contracts, for Settings › Skills: only the steps its workflow
- * uses, the skills chosen for each, and one list of what a build is held to (the engine's probes, the app's
- * commands and reviewer skills, and its requirements, which the check's agent judges). `applyProbeChange` is the
- * other way: a change made on that page, as a change to the app's settings.
+ * uses, the skills chosen for each, and the one list of what a build is held to (held.ts).
  *
  * Nothing here needs the database: the web UI imports it (`@self-evident/engine/contracts`).
  */
-import { cleanProbes, keyOf, probesOf, TESTS_KEY, type Probe } from './probe-list.js'
-import { requirementsOf, type Requirement } from './requirements.js'
+import { applyHeldChange, heldOf, TESTS_KEY, type HeldChange, type Resolved } from './held.js'
 import { normalize, step, STEPS, styleOf, type StepKey, type Workflow } from './steps.js'
 
 export type StageKey = 'prepare' | 'do' | 'verify' | 'report'
@@ -21,7 +18,7 @@ export type ContractKey = Exclude<StepKey, 'idea'> | 'build' | 'smoke'
 /** How a probe reaches its verdict: a command's exit code, the check's agent judging a sentence, a skill run by a fresh agent that edits nothing, or one the engine brings. */
 export type ProbeViewKind = 'command' | 'judged' | 'skill' | 'built-in'
 export interface AttachedSkill { name: string; label: string; from: string; missing?: boolean; /** Every app has it here; it is not the app's to remove. */ fixed?: boolean }
-export interface ProbeView { key: string; name: string; kind: ProbeViewKind; runs: string; blocks: boolean; on: boolean; /** The app's own: it can be removed. */ own: boolean; /** Why it cannot be switched here, when it cannot. */ fixed?: string }
+export interface ProbeView { key: string; name: string; kind: ProbeViewKind; runs: string; blocks: boolean; on: boolean; /** The app's own: it can be removed. */ own: boolean; /** Its name and what it runs can be changed here. */ editable?: boolean; /** One the engine ships that this app has switched or reworded: it can be put back. */ changed?: boolean; /** The workflow that has the last word on whether it is on, by name. Switching it here switches it for that workflow. */ from?: string; /** Why it cannot be switched here, when it cannot. */ fixed?: string }
 export interface Stage { key: StageKey; by: By; what: string; skills?: AttachedSkill[]; probes?: ProbeView[] }
 export interface StepContract { key: ContractKey; icon: string; label: string; needs: string[]; leaves: string[]; done: string; stages: Stage[] }
 export interface StepGroup { title: string; steps: StepContract[] }
@@ -55,20 +52,22 @@ export const CONTRACTS: Record<ContractKey, Fixed> = {
 export const TAKES_SKILLS = (Object.keys(CONTRACTS) as ContractKey[]).filter((k) => CONTRACTS[k].stages.some((s) => s.key === 'do' && s.by === 'agent'))
 
 const CRITERIA: ProbeView = { key: 'criteria', name: 'Acceptance criteria', kind: 'built-in', runs: 'each one checked, with evidence', blocks: true, on: true, own: false, fixed: 'Always checked.' }
-const REQ = 'req:'
+const NO_TESTS: ProbeView = { key: TESTS_KEY, name: 'Tests', kind: 'command', runs: '', blocks: true, on: false, own: false, editable: true }
 const PROTOTYPE_SKILLS = ['shared:prototype', 'self-evident:prototype']
 
 export interface Usable { name: string; label: string; from: string }
 export interface ContractsInput { setup: unknown; /** The app's default workflow; none, every step it could have is shown. */ workflow?: Workflow | null; /** The skills the app's agents have. */ usable?: Usable[] }
 
-/** What a build of this app is held to, in the order it is verified: the list first, then the agents' probes, then the commands. */
+/** What a build of this app is held to (held.ts), in the order it is verified: the list first, then the agents' probes, then the commands. */
 export function heldTo(setup: unknown, workflow?: Workflow | null): ProbeView[] {
   const checklist = !workflow || styleOf(workflow) === 'checklist'
-  const switched = (workflow?.requirements ?? {}) as Record<string, boolean>
-  const judged: ProbeView[] = checklist ? requirementsOf(setup, null, workflow?.requirements).map((r) => ({ key: `${REQ}${r.key}`, name: r.name, kind: 'judged', runs: r.what, blocks: r.blocks !== false, on: r.on, own: true, ...(typeof switched[r.key] === 'boolean' ? { fixed: `Switched ${switched[r.key] ? 'on' : 'off'} by the ${workflow!.name} workflow.` } : {}) })) : []
-  const view = (p: Probe): ProbeView => ({ key: p.key, name: p.name, kind: p.kind, runs: p.runs, blocks: p.blocks, on: p.on, own: p.kind !== 'built-in' && p.key !== TESTS_KEY, ...(p.key === TESTS_KEY ? { fixed: 'The app\'s test command (Landing).' } : {}) })
-  const all = probesOf(setup).filter((p) => checklist || p.key === TESTS_KEY).map(view)
-  return [CRITERIA, ...judged, ...all.filter((p) => p.kind !== 'command'), ...all.filter((p) => p.kind === 'command')]
+  const view = (h: Resolved): ProbeView => ({
+    key: h.id, name: h.name, kind: h.kind, runs: h.runs, blocks: h.blocks, on: h.on, own: h.own,
+    ...(h.kind !== 'built-in' ? { editable: true } : {}), ...(h.changed ? { changed: true } : {}), ...(h.by === 'workflow' && workflow ? { from: workflow.name } : {}),
+  })
+  const all = heldOf(setup, workflow?.requirements).filter((h) => checklist || h.id === TESTS_KEY).map(view)
+  const commands = all.filter((p) => p.kind === 'command')
+  return [CRITERIA, ...all.filter((p) => p.kind === 'judged'), ...all.filter((p) => p.kind !== 'command' && p.kind !== 'judged'), ...(commands.some((p) => p.key === TESTS_KEY) ? [] : [NO_TESTS]), ...commands]
 }
 
 /** An app's steps as Settings › Skills shows them: the ones its workflow uses, in order, each with what is attached. */
@@ -96,43 +95,6 @@ export function contractsOf(i: ContractsInput): StepGroup[] {
   ]
 }
 
-export type ProbeChange =
-  | { op: 'on'; key: string; on: boolean } | { op: 'blocks'; key: string; blocks: boolean } | { op: 'remove'; key: string }
-  | { op: 'add'; name: string; kind: 'command' | 'skill' | 'judged'; runs: string; /** false: it reports only. */ blocks?: boolean }
-  /** The app's own: its name and what it runs (a judged one, its sentence). Its key and kind stay. */
-  | { op: 'edit'; key: string; name: string; runs: string; /** Given: also whether it blocks, in the same change. */ blocks?: boolean }
-
-/**
- * A change to what a build is held to, as a change to the app's settings: a requirement (judged) is kept in
- * `requirements`, everything else in `probes`. `starting` is the list an app without one of its own starts from.
- * Returns only the settings that change; null when the change cannot be made (nothing to run, a name already there,
- * an edit to one that is not the app's own).
- */
-export function applyProbeChange(setup: unknown, change: ProbeChange, starting?: Requirement[]): { requirements?: Requirement[]; probes?: Partial<Probe>[] } | null {
-  const s = (setup ?? {}) as { requirements?: Requirement[]; probes?: unknown }
-  const reqs = (): Requirement[] => (Array.isArray(s.requirements) ? s.requirements : starting ?? requirementsOf(setup))
-  const probes = cleanProbes(s.probes)
-  const put = (key: string, patch: Partial<Probe>) => ({ probes: cleanProbes([...probes.filter((p) => p.key !== key), { ...probes.find((p) => p.key === key), ...patch, key }]) })
-  if (change.op === 'add') {
-    const name = change.name.trim(), runs = change.runs.trim(), key = keyOf(name)
-    if (!name || !runs || !key) return null
-    if (change.kind === 'judged') return reqs().some((r) => r.key === key) ? null : { requirements: [...reqs(), { key, name, what: runs, on: true, ...(change.blocks === false ? { blocks: false } : {}) }] }
-    return probesOf(setup).some((p) => p.key === key) ? null : { probes: cleanProbes([...probes, { key, name, kind: change.kind, runs, ...(change.blocks === false ? { blocks: false } : {}) }]) }
-  }
-  if (change.key.startsWith(REQ)) {
-    const key = change.key.slice(REQ.length)
-    if (change.op === 'remove') return { requirements: reqs().filter((r) => r.key !== key) }
-    if (change.op === 'on') return { requirements: reqs().map((r) => (r.key === key ? { ...r, on: change.on } : r)) }
-    if (change.op === 'blocks') return { requirements: reqs().map((r) => { if (r.key !== key) return r; const { blocks: _, ...rest } = r; return change.blocks ? rest : { ...rest, blocks: false } }) }
-    const name = change.name.trim(), what = change.runs.trim()
-    if (!name || !what) return null
-    return { requirements: reqs().map((r) => { if (r.key !== key) return r; const { blocks: was, ...rest } = r; const blocks = change.blocks ?? was !== false; return { ...rest, name, what, ...(blocks ? {} : { blocks: false }) } }) }
-  }
-  if (change.op === 'remove') return { probes: probes.filter((p) => p.key !== change.key) }
-  if (change.op === 'on') return put(change.key, { on: change.on })
-  if (change.op === 'edit') { // only the app's own: the engine's probes and the test command are not rewritten here
-    const name = change.name.trim(), runs = change.runs.trim()
-    return name && runs && probes.some((p) => p.key === change.key && p.kind) ? put(change.key, { name, runs, ...(typeof change.blocks === 'boolean' ? { blocks: change.blocks } : {}) }) : null
-  }
-  return put(change.key, { blocks: change.blocks })
-}
+/** A change made on the page, and what it does to the app's settings: held.ts. */
+export type ProbeChange = HeldChange
+export const applyProbeChange = applyHeldChange

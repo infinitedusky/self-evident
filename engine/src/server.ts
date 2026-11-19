@@ -61,6 +61,8 @@ import { activeApps, appHolds, bringBack, deleteForGood, putAway, putAwayApps } 
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { requirementsOf } from './requirements.js'
 import { patchSetup } from './setup.js'
+import { setHeld } from './probes.js'
+import { diffsOf, hasLegacy, type HeldChange } from './held.js'
 import { autoBuild } from './branches.js'
 import { runner } from './runner.js'
 import { homeRepo, inOrder } from './workbench.js'
@@ -334,7 +336,8 @@ export function buildApp(bus: EventBus) {
   })
   api.patch('/apps/:id', async (c) => {
     // `setup` is the settings that change, not all of them: a key with a value is set, one with null is removed, the rest stay (setup.ts).
-    const body = await c.req.json<{ name?: string; key?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
+    // `held` is changes to what a build is held to (held.ts), applied in order to the list as it is now.
+    const body = await c.req.json<{ name?: string; key?: string; defaultBranch?: string; setup?: Record<string, unknown>; held?: HeldChange[] }>()
     // Its abbreviation can be changed after it is made: every task's name follows at once (MER-50 becomes BON-50),
     // since a task's name is the abbreviation and its number. What was already written elsewhere keeps the old one:
     // branch names, pull request titles, text in comments and briefs.
@@ -362,6 +365,8 @@ export function buildApp(bus: EventBus) {
         .filter(([id, v]) => known.has(id) && typeof v?.on === 'boolean').map(([id, v]) => [id, { on: v!.on }]))
     }
     const [was] = key ? await db.select({ key: appTable.key }).from(appTable).where(eq(appTable.id, c.req.param('id'))) : []
+    if (body.setup) for (const k of ['held', 'requirements', 'probes', 'requirements_added']) delete body.setup[k] // what a build is held to is changed by `held`, a change at a time
+    if (body.held?.length) { try { await setHeld(c.req.param('id'), body.held) } catch { return c.json({ error: 'no such app' }, 404) } }
     if (body.setup && Object.keys(body.setup).length) { try { await patchSetup(c.req.param('id'), body.setup) } catch { return c.json({ error: 'no such app' }, 404) } }
     const fields = { ...(body.name ? { name: body.name } : {}), ...(key ? { key } : {}), ...(body.defaultBranch ? { defaultBranch: body.defaultBranch } : {}) }
     const [row] = Object.keys(fields).length ? await db.update(appTable).set(fields).where(eq(appTable.id, c.req.param('id'))).returning() : await db.select().from(appTable).where(eq(appTable.id, c.req.param('id')))
@@ -1044,6 +1049,8 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   stayUp() // a failure nobody was waiting on is logged, and the engine carries on
   serve({ fetch: buildApp(bus).fetch, port }, (info) => console.log(`engine listening on http://localhost:${info.port}  (API under /api; UI at / when built)`))
   void reopenUnclosed().then((ids) => { if (ids.length) console.log(`[engine] ${ids.length} task${ids.length === 1 ? '' : 's'} marked done by a merge, with checks of yours unmarked, put back in review to be closed`) }).catch((err) => console.error('reopening unclosed tasks failed', err))
+  // Apps from before there was one list (held.ts): their two stores become it, once.
+  void (async () => { for (const a of await db.select().from(appTable)) if (hasLegacy(a.setup)) await patchSetup(a.id, (now) => (hasLegacy(now) ? { requirements: null, probes: null, requirements_added: null, held: diffsOf(now).length ? diffsOf(now) : null } : {})) })().catch((err) => console.error('moving apps to one list failed', err))
   void ensureMain().then((r) => { if (r.made) console.log(`[engine] ${r.made} app${r.made === 1 ? '' : 's'} given a Main workflow; what they had is Legacy`) }).catch((err) => console.error('workflows: could not make Main', err))
   void speedIntoWorkflows().then((r) => { if (r.moved) console.log(`[engine] ${r.moved} app${r.moved === 1 ? '' : 's'} set to Fast moved onto a fast workflow`) }).catch((err) => console.error('workflows: could not move the old speed setting', err))
   setTimeout(() => void resumeChecks().catch((err) => console.error('checks: could not resume after the restart', err)), 8_000) // a task's checks that were under way carry on

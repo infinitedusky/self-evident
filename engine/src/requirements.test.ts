@@ -5,7 +5,7 @@ import { prompt, PROPOSAL_SCHEMA } from './planner.js'
 import { taskGuide, taskRecord } from './merge-guide.js'
 
 describe('requirements', () => {
-  it('an app starts with telemetry, tests, a test plan and docs; its own list replaces them', () => {
+  it('an app starts with telemetry, tests, a test plan and docs; a whole list of its own, from before, is read as differences', () => {
     expect(inForce({}).map((r) => r.key)).toEqual(['telemetry', 'tests', 'test_plan', 'docs'])
     expect(requirementsOf({}).filter((r) => !r.on).map((r) => r.key)).toEqual(['adr', 'risks']) // there to be switched on: a workflow does
     // A workflow switches some for the tasks that use it; a project has the last word for its own.
@@ -13,8 +13,10 @@ describe('requirements', () => {
     expect(inForce({}, { adr: false, docs: true }, { adr: true, docs: false }).map((r) => r.key)).toEqual(['telemetry', 'tests', 'test_plan', 'docs'])
     expect(requirementsOf(null)).toEqual(DEFAULT_REQUIREMENTS)
     const own = { requirements: [{ name: 'Works offline', what: 'Every screen opens with no network.' }, { name: ' ', what: 'no name: dropped' }, { key: 'tests', name: 'Tests', what: 'x', on: false }, { name: 'Works offline', what: 'twice: once' }] }
-    expect(requirementsOf(own)).toEqual([{ key: 'works_offline', name: 'Works offline', what: 'Every screen opens with no network.', on: true }, { key: 'tests', name: 'Tests', what: 'x', on: false }])
-    expect(requirementsOf({ requirements: [] })).toEqual([]) // an app can ask for none
+    expect(inForce(own)).toEqual([{ key: 'works_offline', name: 'Works offline', what: 'Every screen opens with no network.', on: true }]) // what it left out is off, not gone
+    expect(requirementsOf(own).find((r) => r.key === 'tests')).toEqual({ key: 'tests', name: 'Tests', what: 'x', on: false })
+    expect(requirementsOf(own).map((r) => r.key)).toEqual(['telemetry', 'tests', 'test_plan', 'docs', 'adr', 'risks', 'works_offline'])
+    expect(inForce({ requirements: [] })).toEqual([]) // an app can ask for none
   })
   it('a project switches one off or on for its own tasks', () => {
     expect(inForce({}, { docs: false }).map((r) => r.key)).toEqual(['telemetry', 'tests', 'test_plan'])

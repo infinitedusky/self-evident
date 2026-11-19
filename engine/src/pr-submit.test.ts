@@ -114,14 +114,14 @@ describe.skipIf(!reachable)('a pull request waits for the person (sample data)',
     expect(opened).toHaveLength(1)
   })
 
-  it('keeps the app\'s probes: one added, a built-in switched, one removed', async () => {
-    const { setProbe } = await import('./probes.js')
-    await expect(setProbe(appId, { name: 'Lint (sample)' })).rejects.toThrow('needs a name, a kind')
-    expect((await setProbe(appId, { name: 'Lint (sample)', kind: 'command', runs: 'pnpm lint' })).probes.map((p) => p.key)).toEqual(['break', 'comments', 'tests', 'lint_sample'])
-    expect((await setProbe(appId, { key: 'comments', on: false })).probes.find((p) => p.key === 'comments')).toMatchObject({ on: false, blocks: false })
-    expect((await setProbe(appId, { key: 'lint_sample', blocks: false })).probes.find((p) => p.key === 'lint_sample')).toMatchObject({ runs: 'pnpm lint', blocks: false })
-    expect((await setProbe(appId, { key: 'lint_sample', remove: true })).probes.map((p) => p.key)).toEqual(['break', 'comments', 'tests'])
-    await setProbe(appId, { key: 'comments', on: true })
+  it('keeps what the app\'s builds are held to: one added, a built-in switched, one removed, and what cannot be done said', async () => {
+    const { setHeld } = await import('./probes.js')
+    const keys = (r: Awaited<ReturnType<typeof setHeld>>) => r.held.filter((h) => h.kind !== 'judged').map((h) => h.key)
+    const added = await setHeld(appId, [{ op: 'add', name: 'Lint (sample)', kind: 'command', runs: 'pnpm lint' }, { op: 'add', name: ' ', kind: 'command', runs: 'x' }])
+    expect(keys(added)).toEqual(['break', 'comments', 'tests', 'lint_sample']); expect(added.refused).toHaveLength(1)
+    expect((await setHeld(appId, [{ op: 'on', key: 'comments', on: false }])).held.find((p) => p.key === 'comments')).toMatchObject({ on: false, blocks: false, changed: true })
+    expect((await setHeld(appId, [{ op: 'blocks', key: 'lint_sample', blocks: false }])).held.find((p) => p.key === 'lint_sample')).toMatchObject({ runs: 'pnpm lint', blocks: false, own: true })
+    expect(keys(await setHeld(appId, [{ op: 'remove', key: 'lint_sample' }, { op: 'reset', key: 'comments' }]))).toEqual(['break', 'comments', 'tests'])
   })
   it('keeps the app\'s rules for its pull requests', async () => {
     expect(await setPrRules(appId, { titleTemplate: 'feat[{ticket}]: {title}' })).toEqual({ pr_title: 'feat[{ticket}]: {title}', pr_draft: true, branch_name: null, commit_format: null })

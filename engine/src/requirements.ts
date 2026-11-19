@@ -2,50 +2,25 @@
  * Requirements: what every plan in an app must cover, whatever the task (Sandy, 2026-11-14: "there's also the need to
  * say what exactly are the requirements that we're planning for … is OpenTelemetry a requirement … a test plan, all
  * the things that need to get taken care of after the prototype needs to be known"; "configured at a project or at
- * an app level"). One list per app (setup.requirements), each a name and a sentence saying what it means for this
- * app; a project can switch one off or on for its own tasks (project.requirements: {key: boolean}).
+ * an app level"). They are the sentences among what an app's builds are held to (held.ts: the engine's, as the app
+ * has switched and reworded them, and its own), each a name and a sentence saying what it means for this app; a project can switch one off or on for its own tasks (project.requirements: {key: boolean}).
  *
  * The planner must say, for each one in force, how the plan meets it or why it does not apply (the task keeps the
  * answer, issue.requirements); the merge guide reports each on the pull request. A requirement the planner did not
  * speak to is kept as "not addressed", never dropped.
  */
+import { heldOf, JUDGED } from './held.js'
+
 export interface Requirement { key: string; name: string; what: string; on: boolean; /** false: an unmet one is reported (the list, the pull request) and the build is not sent back for it. Absent: it blocks. */ blocks?: boolean }
 export interface Covered { key: string; name: string; applies: boolean; how: string; /** The check after the build (verify.ts): true, the build meets it; false, it does not. Absent: not checked. */ built?: boolean }
 
-/** What an app starts with. An app's own list replaces these; they are a first draft to edit, not rules. */
-export const DEFAULT_REQUIREMENTS: Requirement[] = [
-  { key: 'telemetry', name: 'Telemetry', what: 'Anything new that a person does, or that can fail, can be seen with OpenTelemetry: a span or an event where the prototype analysis says one belongs.', on: true },
-  { key: 'tests', name: 'Tests', what: 'New behaviour has automated tests that fail without the change, and the app\'s test command passes.', on: true },
-  { key: 'test_plan', name: 'Test plan', what: 'How a person checks it by hand: the pages to open and what to look for, in order.', on: true },
-  { key: 'docs', name: 'Docs', what: 'The documentation that describes what changed is updated in the same task.', on: true },
-  // What the stages before a build used to write, as things a build is held to (Sandy, 2026-11-16: "It needs to create
-  // an ADR"). Off for an app until a workflow switches them on; Main does.
-  { key: 'adr', name: 'Decision record', what: 'Each real design choice made in this change is written down where the repo keeps its decisions: what was chosen, what was turned down, and why.', on: false },
-  { key: 'risks', name: 'Risks', what: 'The pull request says what this change could break and how someone would notice, in a few lines.', on: false },
-]
-/** The two added on 2026-11-16, by key: an app with a list of its own is given them once (work.ts, ensureMain). */
-export const ADDED_REQUIREMENTS = ['adr', 'risks']
+/** What an app starts with (held.ts ships them). An app rewords or switches one; it does not copy the list. */
+export const DEFAULT_REQUIREMENTS: Requirement[] = JUDGED.map((d) => ({ key: d.key, name: d.name, what: d.runs, on: d.on }))
 
-const clean = (r: Partial<Requirement>): Requirement | null => {
-  const name = r.name?.trim()
-  if (!name) return null
-  const key = (r.key?.trim() || name).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
-  return key ? { key, name, what: r.what?.trim() ?? '', on: r.on !== false, ...(r.blocks === false ? { blocks: false } : {}) } : null
-}
-
-/** The app's list (its own, else the starting one), with a project's switches applied. Every one, on or off. */
+/** The app's list, with a workflow's and then a project's switches applied (held.ts). Every one, on or off. */
 export function requirementsOf(setup: unknown, project?: unknown, workflow?: unknown): Requirement[] {
-  const own = (setup as { requirements?: unknown } | null)?.requirements
-  const list = Array.isArray(own) ? own.map((r) => clean(r as Partial<Requirement>)).filter((r): r is Requirement => r !== null) : DEFAULT_REQUIREMENTS
-  const seen = new Set<string>()
-  const unique = list.filter((r) => !seen.has(r.key) && (seen.add(r.key), true))
-  // The app's list says what each means and whether it is on; a workflow switches some for the tasks that use it;
-  // a project has the last word for its own.
-  const wf = workflow && typeof workflow === 'object' ? workflow as Record<string, unknown> : {}
-  const sw = project && typeof project === 'object' ? project as Record<string, unknown> : {}
-  return unique.map((r) => (typeof sw[r.key] === 'boolean' ? { ...r, on: sw[r.key] as boolean } : typeof wf[r.key] === 'boolean' ? { ...r, on: wf[r.key] as boolean } : r))
+  return heldOf(setup, workflow, project).filter((h) => h.kind === 'judged').map((h) => ({ key: h.key, name: h.name, what: h.runs, on: h.on, ...(h.blocks ? {} : { blocks: false }) }))
 }
-
 /** The ones in force: what a plan must cover. */
 export const inForce = (setup: unknown, project?: unknown, workflow?: unknown) => requirementsOf(setup, project, workflow).filter((r) => r.on)
 

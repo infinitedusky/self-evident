@@ -11,14 +11,15 @@
  * A probe changes nothing (Sandy, 2026-11-18: "Probes and checks don't change code. They can create additional
  * subtasks"). What the agents' probes find is sent back to a builder as one sub-task for the round, and only the
  * probes that failed are run again; three rounds at most, then a person. A client's own requirement is a probe added
- * to the app (`setup.probes`, set_probe), never a new step.
+ * to the app (held.ts, the set_held tool), never a new step.
  *
  * Results are kept on the task (issue.probes), the latest for each probe.
  */
 import { acceptanceLines, type Criterion } from './acceptance.js'
 import { LONG_RUN, MAX_ROUNDS } from './verify.js'
 
-import { BUILT_IN, cleanProbes, keyOf, probesOf, TESTS_KEY, type Probe, type ProbeResult } from './probe-list.js'
+import { probesOf, type Probe, type ProbeResult } from './probe-list.js'
+import { applyHeldChange, applyHeldChanges, heldOf, type HeldChange } from './held.js'
 export * from './probe-list.js'
 
 /** The sub-tasks' titles: how the engine knows them (as verify.ts does for the check). */
@@ -122,18 +123,18 @@ export const commandFixBrief = (failed: { name: string; runs: string; detail: st
   ...failed.flatMap((f) => ['', `What \`${f.runs}\` said (${f.name}):`, '```', f.detail, '```']),
 ].join('\n')
 
-/** Add, change or remove one probe of an app (set_probe): a built-in is switched by its key; the app's own is added or replaced by its key or name. */
-export async function setProbe(appId: string, i: { key?: string; name?: string; kind?: 'command' | 'skill'; runs?: string; blocks?: boolean; on?: boolean; remove?: boolean }) {
-  const { db } = await import('./db/client.js'); const { app } = await import('./db/schema.js'); const { eq } = await import('drizzle-orm')
-  const [a] = await db.select().from(app).where(eq(app.id, appId))
-  if (!a) throw new Error(`no app ${appId}`)
-  const key = keyOf(i.key || i.name || '')
-  if (!key) throw new Error('a probe needs a key or a name')
-  const held = cleanProbes((a.setup as { probes?: unknown } | null)?.probes)
-  const was = held.find((p) => p.key === key)
-  const builtIn = BUILT_IN.some((b) => b.key === key) || key === TESTS_KEY
-  if (!builtIn && !i.remove && !was && !(i.name?.trim() && i.kind && i.runs?.trim())) throw new Error('a new probe needs a name, a kind (command or skill) and what it runs')
-  const next = i.remove ? held.filter((p) => p.key !== key) : cleanProbes([...held.filter((p) => p.key !== key), { ...was, ...Object.fromEntries(Object.entries({ name: i.name, kind: i.kind, runs: i.runs, blocks: i.blocks, on: i.on }).filter(([, v]) => v !== undefined)), key }])
-  const setup = await (await import('./setup.js')).patchSetup(appId, { probes: next.length ? next : null })
-  return { probes: probesOf(setup) }
+/**
+ * Changes to what an app's builds are held to (the set_held tool, and a page's save): each as held.ts takes it,
+ * applied in order to the settings as they are at that moment. Returns the list as it is afterwards, and the changes
+ * that could not be made.
+ */
+export async function setHeld(appId: string, changes: HeldChange[]) {
+  const { patchSetup } = await import('./setup.js')
+  const refused: HeldChange[] = []
+  const setup = await patchSetup(appId, (now) => {
+    let cur = now
+    for (const c of changes) { const patch = applyHeldChange(cur, c); if (!patch) refused.push(c); else cur = Object.fromEntries(Object.entries({ ...cur, ...patch }).filter(([, v]) => v !== null && v !== undefined)) }
+    return applyHeldChanges(now, changes)
+  })
+  return { held: heldOf(setup).map(({ id, name, kind, runs, blocks, on, own, changed }) => ({ key: id, name, kind, runs, blocks, on, own, changed })), ...(refused.length ? { refused } : {}) }
 }
