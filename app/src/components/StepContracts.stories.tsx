@@ -89,8 +89,11 @@ export const Changing: Story = {
     await expect(c.queryByLabelText('Add a skill to Build, Prepare')).toBeNull() // the engine's stage takes no skill
     await userEvent.click(c.getByRole('checkbox', { name: 'Run Licence scan' }))
     await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'on', key: 'licences', on: true })
-    await userEvent.click(c.getByRole('button', { name: 'Lint blocks: make it report only' }))
+    await userEvent.selectOptions(c.getByLabelText('When Lint fails'), 'reports')
     await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'blocks', key: 'lint', blocks: false })
+    await userEvent.selectOptions(c.getByLabelText('When Telemetry fails'), 'reports') // a judged one too
+    await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'blocks', key: 'req:telemetry', blocks: false })
+    await expect(c.queryByLabelText('When Acceptance criteria fails')).toBeNull() // always blocks
     await userEvent.click(c.getByRole('button', { name: 'Remove the probe Lint' }))
     await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'remove', key: 'lint' })
     await expect(c.getByRole('checkbox', { name: 'Run Acceptance criteria' })).toBeDisabled(); await expect(c.getByRole('checkbox', { name: 'Run Decision record' })).toBeDisabled()
@@ -101,5 +104,27 @@ export const Changing: Story = {
     await userEvent.type(c.getByLabelText('What it runs'), 'pnpm typecheck')
     await userEvent.click(c.getByRole('button', { name: 'Add' }))
     await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'add', name: 'Types (sample)', kind: 'command', runs: 'pnpm typecheck' })
+    // One that only reports is chosen as it is added.
+    await userEvent.click(c.getByRole('button', { name: 'Add a probe to Build' }))
+    await userEvent.type(c.getByLabelText('Probe name'), 'Bundle size (sample)'); await userEvent.type(c.getByLabelText('What it runs'), 'pnpm size')
+    await userEvent.selectOptions(c.getByLabelText('When it fails'), 'reports'); await userEvent.click(c.getByRole('button', { name: 'Add' }))
+    await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'add', name: 'Bundle size (sample)', kind: 'command', runs: 'pnpm size', blocks: false })
+  },
+}
+
+/** Editing one of the app's own: its row becomes its fields, with what it has now; the engine's own have no Edit. */
+export const EditingAProbe: Story = {
+  args: { open: ['build'], usable, onSkills: fn(), onProbe: fn() },
+  play: async ({ canvasElement, args }) => {
+    const c = within(canvasElement)
+    await expect(c.queryByRole('button', { name: 'Edit the probe Try to break it' })).toBeNull(); await expect(c.queryByRole('button', { name: 'Edit the probe Tests' })).toBeNull()
+    await userEvent.click(c.getByRole('button', { name: 'Edit the probe Lint' }))
+    const form = within(c.getByRole('form', { name: 'Edit Lint' }))
+    await expect(form.getByLabelText('What it runs')).toHaveValue('pnpm lint')
+    await userEvent.clear(form.getByLabelText('What it runs')); await userEvent.type(form.getByLabelText('What it runs'), 'pnpm lint --max-warnings 0')
+    await userEvent.click(form.getByRole('button', { name: 'Save' }))
+    await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'edit', key: 'lint', name: 'Lint', runs: 'pnpm lint --max-warnings 0' })
+    await userEvent.click(c.getByRole('button', { name: 'Edit the probe Telemetry' })) // a judged one: its sentence
+    await expect(within(c.getByRole('form', { name: 'Edit Telemetry' })).getByLabelText('What it runs')).toHaveValue('Anything new that can fail can be seen in a trace.')
   },
 }

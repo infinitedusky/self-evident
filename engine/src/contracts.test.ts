@@ -48,6 +48,21 @@ describe('applyProbeChange', () => {
     expect(applyProbeChange(setup, { op: 'remove', key: 'lint' })!.probes!.map((p) => p.key)).toEqual(['comments'])
     expect(applyProbeChange({}, { op: 'on', key: 'req:docs', on: false })!.requirements!.find((r) => r.key === 'docs')!.on).toBe(false)
     expect(applyProbeChange({}, { op: 'remove', key: 'req:docs' })!.requirements!.map((r) => r.key)).not.toContain('docs')
-    expect(applyProbeChange({}, { op: 'blocks', key: 'req:docs', blocks: false })).toBeNull()
+  })
+  it('a requirement can report only, and block again', () => {
+    const off = applyProbeChange({}, { op: 'blocks', key: 'req:docs', blocks: false })!
+    expect(off.requirements!.find((r) => r.key === 'docs')!.blocks).toBe(false)
+    expect(heldTo(off).find((p) => p.key === 'req:docs')!.blocks).toBe(false)
+    expect(applyProbeChange(off, { op: 'blocks', key: 'req:docs', blocks: true })!.requirements!.find((r) => r.key === 'docs')).not.toHaveProperty('blocks')
+    expect(applyProbeChange(setup, { op: 'add', name: 'Types', kind: 'command', runs: 'pnpm typecheck', blocks: false })!.probes!.at(-1)).toMatchObject({ key: 'types', blocks: false })
+    expect(applyProbeChange({}, { op: 'add', name: 'Audit log', kind: 'judged', runs: 'Sample.', blocks: false })!.requirements!.at(-1)).toMatchObject({ key: 'audit_log', blocks: false })
+  })
+  it('the app\'s own is edited in place: its name and what it runs, never its key; the engine\'s are not', () => {
+    expect(applyProbeChange(setup, { op: 'edit', key: 'lint', name: 'Lint and format', runs: 'pnpm lint --fix=false' })!.probes).toContainEqual({ key: 'lint', name: 'Lint and format', kind: 'command', runs: 'pnpm lint --fix=false' })
+    expect(applyProbeChange({}, { op: 'edit', key: 'req:docs', name: 'Docs', runs: 'The README says what changed (sample).' })!.requirements!.find((r) => r.key === 'docs')).toMatchObject({ name: 'Docs', what: 'The README says what changed (sample).', on: true })
+    expect(applyProbeChange(setup, { op: 'edit', key: 'break', name: 'x', runs: 'y' })).toBeNull(); expect(applyProbeChange(setup, { op: 'edit', key: 'tests', name: 'x', runs: 'y' })).toBeNull()
+    expect(applyProbeChange(setup, { op: 'edit', key: 'lint', name: ' ', runs: 'y' })).toBeNull()
+    expect(applyProbeChange(setup, { op: 'edit', key: 'lint', name: 'Lint', runs: 'pnpm lint', blocks: false })!.probes).toContainEqual({ key: 'lint', name: 'Lint', kind: 'command', runs: 'pnpm lint', blocks: false })
+    expect(applyProbeChange({}, { op: 'edit', key: 'req:docs', name: 'Docs', runs: 'Sample.', blocks: false })!.requirements!.find((r) => r.key === 'docs')!.blocks).toBe(false)
   })
 })

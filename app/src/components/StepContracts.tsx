@@ -7,7 +7,8 @@
  * After GitHub Actions' run view (jobs in order, each opening to its steps) and Linear's workflow settings (one calm
  * row per state). It took the place of "Skills by workflow step", the skills by job and the requirements list.
  * A reading view until handlers are given: then skills are added and removed where an agent works, and probes are
- * switched, added and removed where the engine verifies, and nowhere else.
+ * switched, set to block or to report only, edited (the app's own), added and removed where the engine verifies,
+ * and nowhere else.
  */
 import { useState } from 'react'
 import type { ProbeChange, ProbeView, StageKey, StepGroup } from '@self-evident/engine/contracts'
@@ -90,42 +91,70 @@ export function StepContracts({ groups, open = [], usable = [], onSkills, onProb
   )
 }
 
-/** What a build is held to: one row each, in the order it is verified. Being changed: switched, set to report only, removed, added to. */
+type Draft = { name: string; kind: 'command' | 'skill' | 'judged'; runs: string; blocks: boolean }
+const HINT = { command: 'a shell command; exit 0 passes, e.g. pnpm lint', skill: 'a skill this app\'s agents have, e.g. security-review', judged: 'a sentence the check\'s agent can judge' }
+const NEW: Draft = { name: '', kind: 'command', runs: '', blocks: true }
+
+/** Blocks or reports, said in full where it is chosen. */
+function Blocks({ label, value, disabled, onChange }: { label: string; value: boolean; disabled?: boolean; onChange: (blocks: boolean) => void }) {
+  return (
+    <select className="small" aria-label={label} title={value ? 'Blocks: a failure goes back to a builder.' : 'Reports: a failure is said, and nothing is held.'} value={value ? 'blocks' : 'reports'} disabled={disabled} onChange={(e) => onChange(e.target.value === 'blocks')}>
+      <option value="blocks">Blocks</option>
+      <option value="reports">Reports</option>
+    </select>
+  )
+}
+
+/** One probe's fields, for a new one and for one being edited (its kind stays what it was). */
+function ProbeForm({ start, editing, onSave, onCancel }: { start: Draft; editing?: string; onSave: (d: Draft) => void; onCancel: () => void }) {
+  const [draft, setDraft] = useState(start)
+  const ready = draft.name.trim() && draft.runs.trim()
+  return (
+    <form className="step-probe-add" aria-label={editing ? `Edit ${editing}` : 'Add a probe'} onSubmit={(e) => { e.preventDefault(); if (ready) onSave(draft) }}>
+      <input aria-label="Probe name" placeholder="Name" autoFocus value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+      {editing ? <span className="faint">{KIND[draft.kind]}</span> : <select aria-label="Probe kind" value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as Draft['kind'] })}>
+        <option value="command">Command</option><option value="skill">Skill as reviewer</option><option value="judged">Judged</option>
+      </select>}
+      <input aria-label="What it runs" className={draft.kind === 'judged' ? undefined : 'mono'} placeholder={HINT[draft.kind]} value={draft.runs} onChange={(e) => setDraft({ ...draft, runs: e.target.value })} />
+      <Blocks label="When it fails" value={draft.blocks} onChange={(blocks) => setDraft({ ...draft, blocks })} />
+      <button type="submit" className="small" disabled={!ready}>{editing ? 'Save' : 'Add'}</button>
+      <button type="button" className="linkish small" onClick={onCancel}>Cancel</button>
+    </form>
+  )
+}
+
+/** What a build is held to: one row each, in the order it is verified. Being changed: switched, set to block or to report only, edited (the app's own), removed, added to. */
 function Probes({ step, probes, onProbe }: { step: string; probes: ProbeView[]; onProbe?: (change: ProbeChange) => void }) {
   const [adding, setAdding] = useState(false)
-  const [draft, setDraft] = useState<{ name: string; kind: 'command' | 'skill' | 'judged'; runs: string }>({ name: '', kind: 'command', runs: '' })
-  const ready = draft.name.trim() && draft.runs.trim()
-  const hint = { command: 'a shell command; exit 0 passes, e.g. pnpm lint', skill: 'a skill this app\'s agents have, e.g. security-review', judged: 'a sentence the check\'s agent can judge' }[draft.kind]
+  const [editing, setEditing] = useState<string | null>(null)
   return (
     <>
       <table className="step-probes">
         <tbody>
-          {probes.map((p) => (
+          {probes.map((p) => onProbe && editing === p.key && p.kind !== 'built-in' ? (
+            <tr key={p.key}><td colSpan={6}>
+              <ProbeForm editing={p.name} start={{ name: p.name, kind: p.kind, runs: p.runs, blocks: p.blocks }} onCancel={() => setEditing(null)} onSave={(d) => {
+                onProbe({ op: 'edit', key: p.key, name: d.name, runs: d.runs, ...(d.blocks !== p.blocks ? { blocks: d.blocks } : {}) }) // one change: two would each start from the same settings
+                setEditing(null)
+              }} />
+            </td></tr>
+          ) : (
             <tr key={p.key} className={p.on ? undefined : 'off'} title={p.fixed}>
               {onProbe && <td><input type="checkbox" aria-label={`Run ${p.name}`} checked={p.on} disabled={!!p.fixed} onChange={(e) => onProbe({ op: 'on', key: p.key, on: e.target.checked })} /></td>}
               <td>{p.name}</td>
               <td className="faint">{KIND[p.kind]}</td>
               <td className={p.kind === 'command' || p.kind === 'skill' ? 'mono' : undefined}>{p.runs}</td>
-              <td>{!p.on ? <Badge>off</Badge> : onProbe && p.kind !== 'judged' && p.key !== 'criteria'
-                ? <button type="button" className={`badge ${p.blocks ? 'warn' : ''}`} aria-label={`${p.name} ${p.blocks ? 'blocks: make it report only' : 'reports: make it block'}`} onClick={() => onProbe({ op: 'blocks', key: p.key, blocks: !p.blocks })}>{p.blocks ? 'blocks' : 'reports'}</button>
-                : <Badge tone={p.blocks ? 'warn' : undefined}>{p.blocks ? 'blocks' : 'reports'}</Badge>}</td>
-              {onProbe && <td>{p.own && !p.fixed && <button type="button" className="linkish" aria-label={`Remove the probe ${p.name}`} onClick={() => onProbe({ op: 'remove', key: p.key })}>✕</button>}</td>}
+              <td>{onProbe && p.key !== 'criteria'
+                ? <Blocks label={`When ${p.name} fails`} value={p.blocks} disabled={!p.on} onChange={(blocks) => onProbe({ op: 'blocks', key: p.key, blocks })} />
+                : !p.on ? <Badge>off</Badge> : <Badge tone={p.blocks ? 'warn' : undefined}>{p.blocks ? 'blocks' : 'reports'}</Badge>}</td>
+              {onProbe && <td className="step-probe-acts">{p.own && <button type="button" className="linkish" aria-label={`Edit the probe ${p.name}`} onClick={() => { setEditing(p.key); setAdding(false) }}>Edit</button>}
+                {p.own && !p.fixed && <button type="button" className="linkish" aria-label={`Remove the probe ${p.name}`} onClick={() => onProbe({ op: 'remove', key: p.key })}>✕</button>}</td>}
             </tr>
           ))}
         </tbody>
       </table>
-      {onProbe && !adding && <button type="button" className="linkish small" aria-label={`Add a probe to ${step}`} onClick={() => setAdding(true)}>Add a probe</button>}
-      {onProbe && adding && (
-        <form className="step-probe-add" onSubmit={(e) => { e.preventDefault(); if (!ready) return; onProbe({ op: 'add', ...draft }); setDraft({ name: '', kind: 'command', runs: '' }); setAdding(false) }}>
-          <input aria-label="Probe name" placeholder="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-          <select aria-label="Probe kind" value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as typeof draft.kind })}>
-            <option value="command">Command</option><option value="skill">Skill as reviewer</option><option value="judged">Judged</option>
-          </select>
-          <input aria-label="What it runs" className={draft.kind === 'judged' ? undefined : 'mono'} placeholder={hint} value={draft.runs} onChange={(e) => setDraft({ ...draft, runs: e.target.value })} />
-          <button type="submit" className="small" disabled={!ready}>Add</button>
-          <button type="button" className="linkish small" onClick={() => setAdding(false)}>Cancel</button>
-        </form>
-      )}
+      {onProbe && !adding && <button type="button" className="linkish small" aria-label={`Add a probe to ${step}`} onClick={() => { setAdding(true); setEditing(null) }}>Add a probe</button>}
+      {onProbe && adding && <ProbeForm start={NEW} onCancel={() => setAdding(false)} onSave={(d) => { onProbe({ op: 'add', name: d.name, kind: d.kind, runs: d.runs, ...(d.blocks ? {} : { blocks: false }) }); setAdding(false) }} />}
     </>
   )
 }

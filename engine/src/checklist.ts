@@ -142,7 +142,7 @@ export async function checklistOf(issueId: string): Promise<Checklist | null> {
   const live = subs.filter((s) => s.state !== 'canceled' && s.state !== 'duplicate')
   const builds = live.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, live.map((s) => s.id))) : []
   const [last] = await db.select({ payload: event.payload }).from(event).where(and(eq(event.issueId, t.id), eq(event.type, 'task.tested'))).orderBy(desc(event.seq)).limit(1)
-  const met = items.filter((x) => x.mark === 'met' || x.mark === 'na').length, unmet = items.filter((x) => x.mark === 'unmet').length
+  const met = items.filter((x) => x.mark === 'met' || x.mark === 'na').length, reports = new Set(required.filter((r) => r.blocks === false).map((r) => `req_${r.key}`)), unmet = items.filter((x) => x.mark === 'unmet' && !reports.has(x.id)).length // one set to report only holds nothing
   const b = buildOf(w)
   const statusOf = (id: string) => builds.find((x) => x.issueId === id)?.status ?? 'queued'
   const stages = stagesOf({ subs: live.map((s) => ({ title: s.title, status: builds.find((x) => x.issueId === s.id)?.status ?? 'queued' })), build: b, unmet, met, total: items.length, hasTests: !!(a?.setup as { test_cmd?: string } | null)?.test_cmd, tested: last ? (last.payload as { ok?: boolean }).ok === true : null,

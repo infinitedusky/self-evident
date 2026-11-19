@@ -1026,3 +1026,6 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .step-probe-add { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; width: 100%; }
 .step-probe-add input, .step-probe-add select { width: auto; margin: 0; }
 .step-probe-add input[aria-label="What it runs"] { flex: 1 1 260px; }
+.step-probes select { width: auto; margin: 0; }
+.step-probe-acts { white-space: nowrap; }
+.step-probe-acts button + button { margin-left: 10px; }
