@@ -1,6 +1,6 @@
 /** The checkout's own main follows the fetched one, by fast-forward only, and never over a person's work. Real git, sample repos. */
 import { existsSync } from 'node:fs'
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -10,6 +10,7 @@ import { ownCheckout, pullCheckout } from './github.js'
 describe('the checkout follows main (sample repos)', () => {
   let local: string, teammate: string
   const teammateLands = async (file: string) => { await git(teammate, ['pull', '-q', 'origin', 'main']); await writeFile(join(teammate, file), 'sample\n'); await commitAll(teammate, `add ${file}`); await git(teammate, ['push', '-q', 'origin', 'main']); await git(local, ['fetch', '-q', 'origin', 'main']) }
+  const teammateWrites = async (file: string, text: string) => { await git(teammate, ['pull', '-q', 'origin', 'main']); await writeFile(join(teammate, file), text); await commitAll(teammate, `write ${file}`); await git(teammate, ['push', '-q', 'origin', 'main']); await git(local, ['fetch', '-q', 'origin', 'main']) }
   beforeEach(async () => {
     const dir = await mkdtemp(join(tmpdir(), 'if-pull-'))
     await git(dir, ['init', '-q', '--bare', '-b', 'main', 'origin.git'])
@@ -35,12 +36,40 @@ describe('the checkout follows main (sample repos)', () => {
     expect(existsSync(join(local, 'notes.txt'))).toBe(true)
   })
 
-  it('a changed tracked file: left as it is', async () => {
+  it('a changed file the new commits do not touch: main moves and the change stays', async () => {
     await teammateLands('a.txt')
     await writeFile(join(local, 'README.md'), 'half an edit\n')
+    expect(await pullCheckout(local, 'main')).toEqual({ state: 'pulled', commits: 1 })
+    expect(await readFile(join(local, 'README.md'), 'utf8')).toBe('half an edit\n')
+  })
+
+  it('a change in a file the new commits also change, in another place: carried over them', async () => {
+    const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`)
+    await teammateWrites('list.txt', lines.join('\n') + '\n'); await git(local, ['merge', '-q', '--ff-only', 'origin/main'])
+    await teammateWrites('list.txt', ['theirs', ...lines].join('\n') + '\n')
+    await writeFile(join(local, 'list.txt'), [...lines, 'mine'].join('\n') + '\n')
+    expect(await pullCheckout(local, 'main')).toEqual({ state: 'pulled', commits: 1 })
+    expect(await readFile(join(local, 'list.txt'), 'utf8')).toBe(['theirs', ...lines, 'mine'].join('\n') + '\n')
+    expect((await git(local, ['stash', 'list'])).stdout).toBe('')
+  })
+
+  it('a change the new commits would collide with: left exactly as it is, and the files are named', async () => {
+    await teammateWrites('README.md', 'theirs\n')
+    await writeFile(join(local, 'README.md'), 'half an edit\n')
     const before = await headSha(local, 'main')
-    expect(await pullCheckout(local, 'main')).toMatchObject({ state: 'left', why: expect.stringMatching(/not committed/) })
+    expect(await pullCheckout(local, 'main')).toEqual({ state: 'left', why: expect.stringMatching(/not committed/), commits: 1, files: ['README.md'] })
     expect(await headSha(local, 'main')).toBe(before)
+    expect(await readFile(join(local, 'README.md'), 'utf8')).toBe('half an edit\n')
+    expect((await git(local, ['stash', 'list'])).stdout).toBe('')
+  })
+
+  it('a staged change in a file the new commits change: not carried, left', async () => {
+    const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`)
+    await teammateWrites('list.txt', lines.join('\n') + '\n'); await git(local, ['merge', '-q', '--ff-only', 'origin/main'])
+    await teammateWrites('list.txt', ['theirs', ...lines].join('\n') + '\n')
+    await writeFile(join(local, 'list.txt'), [...lines, 'mine'].join('\n') + '\n'); await git(local, ['add', 'list.txt'])
+    expect(await pullCheckout(local, 'main')).toMatchObject({ state: 'left', files: ['list.txt'] })
+    expect((await git(local, ['diff', '--cached', '--name-only'])).stdout).toBe('list.txt')
   })
 
   it('on another branch: main\'s pointer moves, the files in front of the person stay', async () => {
@@ -56,7 +85,7 @@ describe('the checkout follows main (sample repos)', () => {
     await teammateLands('a.txt')
     await writeFile(join(local, 'mine.txt'), 'mine\n'); await commitAll(local, 'a local commit')
     const before = await headSha(local, 'main')
-    expect(await pullCheckout(local, 'main')).toMatchObject({ state: 'left', why: expect.stringMatching(/commits of its own/) })
+    expect(await pullCheckout(local, 'main')).toMatchObject({ state: 'left', why: expect.stringMatching(/commits of its own/), commits: 1 })
     await git(local, ['checkout', '-q', '-b', 'feature'])
     expect((await pullCheckout(local, 'main')).state).toBe('left')
     expect(await headSha(local, 'main')).toBe(before)

@@ -127,6 +127,9 @@ function AttentionRow({ a, busy, act }: { a: Attention; busy: string | null; act
     case 'behind_main': return (
       <li><Badge tone="bad">conflict</Badge><div><strong>{a.projectName}</strong> <span className="faint">{a.appName} · main moved ({a.commits} commit{a.commits === 1 ? '' : 's'}) and conflicts with this project's branch</span><div className="muted" style={{ fontSize: 13 }}>In: {a.files.split('\n').join(', ')}</div></div>
         <Link className="btn quiet small" to={`/projects/${a.projectId}`}>Look</Link></li>)
+    case 'checkout_behind': return (
+      <li><Badge tone="warn">behind</Badge><div><strong>{a.appName}</strong> <span className="faint">{a.branch} on this computer is {a.commits} commit{a.commits === 1 ? '' : 's'} behind GitHub: {a.why}</span>
+        <div className="muted" style={{ fontSize: 13 }}>{a.files.length > 0 ? `In ${a.files.join(', ')}. Commit or undo them` : 'Put it right'} in {a.path} and it catches up by itself.</div></div></li>)
     case 'review': return (
       <li><Badge tone="warn">review</Badge><div><strong>#{a.prNumber} {a.title}</strong> <span className="faint">{a.appName}{a.author ? ` · from ${a.author}` : ''} · your review is asked</span></div>
         {a.url ? <a className="btn small" href={a.url} target="_blank" rel="noreferrer">Review</a> : null}</li>)

@@ -14,13 +14,14 @@ export const Busy: Story = {}
 /** Nothing needs you and nothing runs. */
 export const Quiet: Story = { beforeEach: withEngine({ now: quietNow }) }
 /** Every kind of thing that can need you, once each. */
-export const EveryKindOfAttention: Story = { beforeEach: withEngine({ now: { ...now, counts: { ...now.counts, needsYou: 9 }, needsYou: [
+export const EveryKindOfAttention: Story = { beforeEach: withEngine({ now: { ...now, counts: { ...now.counts, needsYou: 10 }, needsYou: [
   { kind: 'failed_build', issueId: 'iss_sample5', identifier: 'SS-5', title: 'A declined card is shown in place', error: 'landing failed at test: tests failed (exit 1)', ...where },
   { kind: 'run_project', subIssues: 4, ...where, projectId: 'proj_draft', projectName: 'Gift cards (sample)' },
   { kind: 'plan_issue', issueId: 'iss_sample2', identifier: 'SS-2', issueTitle: 'Totals and analytics', ...where },
   { kind: 'merge_pr', prNumber: 42, url: 'https://github.com/example/sample-shop/pull/42', review: 'APPROVED', checks: 'passing', failing: [], ...where },
   { kind: 'pr_feedback', prNumber: 42, url: 'https://github.com/example/sample-shop/pull/42', review: 'CHANGES_REQUESTED', checks: 'failing', failing: ['test (sample)'], ...where },
   { kind: 'behind_main', files: 'web/checkout/submit.ts\nweb/cart/Cart.tsx', commits: 3, ...where },
+  { kind: 'checkout_behind', appName: 'Sample Shop', branch: 'main', path: '/Users/sample/code/sample-shop', commits: 12, why: 'changes that are not committed, in files the new commits change', files: ['web/cart/Cart.tsx'] },
   { kind: 'overlap', prNumber: 51, title: 'Sample: fix the footer links', author: 'a-teammate', url: 'https://github.com/example/sample-shop/pull/51', files: ['web/checkout/submit.ts'], ...where },
   ...now.needsYou,
 ] } }) }

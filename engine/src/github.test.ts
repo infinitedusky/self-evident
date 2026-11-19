@@ -130,6 +130,21 @@ describe.skipIf(!reachable)('github sync', () => {
     expect((await now(appId)).needsYou.find((n) => n.kind === 'behind_main')).toMatchObject({ projectId: p.id, files: 'README.md' })
     expect((await db.select().from(event).where(and(eq(event.projectId, p.id), eq(event.type, 'project.behind_main')))).length).toBe(1)
   })
+
+  it('a checkout held back by a person\'s edit: said once under what needs you, and unsaid when it catches up', async () => {
+    await git(local, ['merge', '-q', '--ff-only', 'origin/main'])
+    await writeFile(join(local, 'README.md'), 'half an edit\n')
+    await writeFile(join(teammate, 'README.md'), 'theirs again\n'); await commitAll(teammate, 'theirs again'); await git(teammate, ['push', '-q', 'origin', 'main'])
+    await catchUpApp(appId); await catchUpApp(appId)
+    const said = () => db.select().from(event).where(and(eq(event.appId, appId), eq(event.type, 'checkout.behind')))
+    expect((await said()).length).toBe(1)
+    expect((await now(appId)).needsYou.find((n) => n.kind === 'checkout_behind')).toMatchObject({ appName: 'shop', branch: 'main', path: local, commits: 1, files: ['README.md'] })
+    await git(local, ['checkout', '-q', '--', 'README.md']) // the person undoes it
+    await catchUpApp(appId)
+    expect((await git(local, ['rev-parse', 'main'])).stdout).toBe((await git(local, ['rev-parse', 'origin/main'])).stdout)
+    expect((await now(appId)).needsYou.find((n) => n.kind === 'checkout_behind')).toBeUndefined()
+    expect((await said()).length).toBe(1)
+  })
 })
 
 describe('myRepos', () => {

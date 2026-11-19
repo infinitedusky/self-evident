@@ -29,6 +29,7 @@ export type Attention =
   | ({ kind: 'pr_feedback'; prNumber: number | null; url: string | null; review: string | null; checks: string; failing: string[] } & Where)
   | ({ kind: 'behind_main'; files: string; commits: number } & Where)
   | { kind: 'review'; appName: string; prNumber: number; title: string; author: string | null; url: string | null }
+  | { kind: 'checkout_behind'; appName: string; branch: string; path: string; commits: number; why: string; files: string[] }
   | ({ kind: 'overlap'; prNumber: number; title: string; author: string | null; url: string | null; files: string[] } & Where)
 
 /** A task past its plan, for Build's page: ready (planned, not started), checking (planned after a prototype, being read before it is built), building, stopped (asking, failed, held or paused) or landed. */
@@ -191,6 +192,14 @@ export async function now(appId?: string) {
   for (const p of projects.filter((x) => !['stopped', 'superseded'].includes(x.status))) {
     const last = mainEvents.find((e) => e.projectId === p.id)
     if (last?.type === 'project.behind_main') needsYou.push({ kind: 'behind_main', ...tag(p), files: String((last.payload as any).files ?? ''), commits: Number((last.payload as any).commits ?? 0) })
+  }
+  // An app's own checkout held back from GitHub (github.ts, pullCheckout): only the person can free it.
+  const mineApps = apps.filter((a) => !appId || a.id === appId)
+  const held = mineApps.length ? await db.select().from(event).where(and(inArray(event.type, ['checkout.behind', 'checkout.pulled']), inArray(event.appId, mineApps.map((a) => a.id)))).orderBy(desc(event.seq)) : []
+  for (const a of mineApps) {
+    const last = held.find((e) => e.appId === a.id)
+    const w = (last?.payload ?? {}) as { branch?: string; path?: string; commits?: number; why?: string; files?: string[] }
+    if (last?.type === 'checkout.behind') needsYou.push({ kind: 'checkout_behind', appName: a.name, branch: w.branch ?? a.defaultBranch, path: w.path ?? '', commits: Number(w.commits ?? 0), why: String(w.why ?? ''), files: w.files ?? [] })
   }
   const outside = await db.select().from(outsidePr).where(appId ? and(eq(outsidePr.state, 'open'), eq(outsidePr.appId, appId)) : eq(outsidePr.state, 'open'))
   for (const o of outside.filter((x) => x.reviewRequested && !x.draft)) needsYou.push({ kind: 'review', appName: appName(o.appId), prNumber: o.number, title: o.title, author: o.author, url: o.url })
