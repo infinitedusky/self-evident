@@ -127,8 +127,6 @@ export interface Graph {
   project: { id: string; name: string; description: string | null; content: string | null; status: string; integrationBranch: string | null; createdAt: string; solo?: boolean } // solo: one task on its own, never listed as a project
   app: { id: string; name: string; key: string; defaultBranch: string }
   pr: Pr | null; prs: Pr[]
-  /** Whether a person can close it now, and if not, what it waits on, in their words. */
-  close?: { can: boolean; waits: string[] }
   issues: GraphIssue[] // in order: the order they are built in
   subIssues: GraphSubIssue[]
   backlog: BacklogIssue[]
@@ -147,6 +145,8 @@ export interface IssueRow { id: string; identifier: string; number: number; titl
 /** What was written on a ticket as it moved: one comment per heading (the plan, the handoff, the review), the latest write of each. */
 export interface IssueComment { id: string; issueId: string; heading: string; body: string; author: string; createdAt: string; updatedAt: string }
 export interface IssueDetail extends Issue {
+  /** A built task not yet closed: whether a person can close it now, and if not, what it waits on, in their words. */
+  close?: { can: boolean; waits: string[] }
   pr?: TaskPr | null // the pull request its work is in (a sub-task shows its task's)
   requirements?: { key: string; name: string; applies: boolean; how: string }[] | null // how its plan covers what the app requires of every plan
   madeBy: { sessionId: string; title: string; open: boolean } | null // the conversation that created it, when an agent did
@@ -560,8 +560,8 @@ export const engine = {
   summary: (appId: string) => call<SummaryState>('GET', `/apps/${appId}/summary`),
   writeSummary: (appId: string) => call<{ started: boolean }>('POST', `/apps/${appId}/summary`),
   syncGithub: (appId: string) => call<{ prs?: { changes: string[] }; catchUp?: { projectId: string; state: string }[]; error?: string }>('POST', `/apps/${appId}/sync`),
-  /** Close a project: its pull requests are merged and every check left to a person is passed or skipped. */
-  closeProject: (projectId: string) => call<{ id: string; status: 'closed' }>('POST', `/projects/${projectId}/close`),
+  /** Close a task: it is Done. Its pull request is merged and every check left to a person is passed or skipped. Its project is closed with it when it was the last. */
+  closeTask: (issueId: string) => call<{ id: string; state: 'done'; projectClosed: boolean }>('POST', `/issues/${issueId}/close`),
   pause: (projectId: string) => call<unknown>('POST', `/projects/${projectId}/pause`),
   resume: (projectId: string) => call<unknown>('POST', `/projects/${projectId}/resume`),
   releaseHold: () => call<unknown>('POST', '/engine/release'),
@@ -573,7 +573,7 @@ export const engine = {
 export interface TalkImage { name: string; mediaType: string; data: string }
 
 export const EVENT_TYPES = [
-  'project.created', 'project.started', 'project.landed', 'project.closed', 'project.cleaned', 'project.cancelled', 'project.paused', 'project.resumed', 'project.described',
+  'project.created', 'project.started', 'project.landed', 'project.closed', 'task.closed', 'project.cleaned', 'project.cancelled', 'project.paused', 'project.resumed', 'project.described',
   'issue.created', 'issue.deleted', 'issue.updated', 'issue.state', 'issue.reordered', 'issue.cleared', 'issue.planning', 'issue.planned', 'issue.plan_failed', 'issue.plan_waiting', 'issue.commented',
   'question.asked', 'question.answered', 'initiative.created', 'initiative.updated', 'cycle.created',
   'talk.message', 'talk.permission', 'talk.result', 'prototype.shown', 'share.started', 'share.stopped', 'idea.created', 'idea.converted', 'step.updated', 'brief.approved', 'brief.unapproved', 'workflow.saved', 'workflow.used', 'engine.hold', 'engine.resumed',

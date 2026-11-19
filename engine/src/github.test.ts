@@ -52,7 +52,7 @@ describe.skipIf(!reachable)('github sync', () => {
   })
   afterAll(async () => { await db.update(project).set({ status: 'superseded' }).where(eq(project.appId, appId)); await pool.end() })
 
-  it('records our PR merged (its issues done) and reviewed; keeps a teammate\'s PR, its review request, and where it touches our work', async () => {
+  it('records our PR merged (its issues left in review, for a person to close) and reviewed; keeps a teammate\'s PR, its review request, and where it touches our work', async () => {
     const { project: p, issues, subIssues: phases } = await createProject({ appId, name: 'cart', issues: [{ title: 'Cart', subIssues: [{ key: 'a', title: 'Cart page', files: ['app/cart'] }] }] })
     await db.update(project).set({ status: 'running' }).where(eq(project.id, p.id))
     await db.insert(pr).values({ id: newId('pr'), appId, projectId: p.id, repoId, number: 7, status: 'open', headBranch: p.integrationBranch })
@@ -76,7 +76,7 @@ describe.skipIf(!reachable)('github sync', () => {
     const second = await syncPrs(appId, fake([{ ...ours, state: 'MERGED', reviewDecision: 'APPROVED', statusCheckRollup: [{ name: 'test', status: 'COMPLETED', conclusion: 'SUCCESS' }] }, { ...theirs, state: 'MERGED' }]))
     expect(second.changes).toEqual(expect.arrayContaining(['#7 pr.merged', '#7 pr.review', '#7 pr.checks']))
     expect((await db.select().from(pr).where(eq(pr.projectId, p.id)))[0].status).toBe('merged')
-    expect((await getIssue(db, issues[0].id)).state).toBe('done') // Linear's way: the PR merged, the issue is done
+    expect((await getIssue(db, issues[0].id)).state).toBe('in_review') // merged is not done: a task is done when a person closes it (close.ts)
     expect((await db.select().from(outsidePr).where(eq(outsidePr.number, 8)))[0].state).toBe('merged')
     expect((await now(appId)).needsYou.some((n) => n.kind === 'review' || n.kind === 'overlap')).toBe(false)
     await db.update(project).set({ status: 'superseded' }).where(eq(project.id, p.id))

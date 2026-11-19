@@ -9,7 +9,7 @@
  * answer, issue.requirements); the merge guide reports each on the pull request. A requirement the planner did not
  * speak to is kept as "not addressed", never dropped.
  */
-export interface Requirement { key: string; name: string; what: string; on: boolean }
+export interface Requirement { key: string; name: string; what: string; on: boolean; /** false: an unmet one is reported (the list, the pull request) and the build is not sent back for it. Absent: it blocks. */ blocks?: boolean }
 export interface Covered { key: string; name: string; applies: boolean; how: string; /** The check after the build (verify.ts): true, the build meets it; false, it does not. Absent: not checked. */ built?: boolean }
 
 /** What an app starts with. An app's own list replaces these; they are a first draft to edit, not rules. */
@@ -30,7 +30,7 @@ const clean = (r: Partial<Requirement>): Requirement | null => {
   const name = r.name?.trim()
   if (!name) return null
   const key = (r.key?.trim() || name).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
-  return key ? { key, name, what: r.what?.trim() ?? '', on: r.on !== false } : null
+  return key ? { key, name, what: r.what?.trim() ?? '', on: r.on !== false, ...(r.blocks === false ? { blocks: false } : {}) } : null
 }
 
 /** The app's list (its own, else the starting one), with a project's switches applied. Every one, on or off. */

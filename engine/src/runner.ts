@@ -33,6 +33,7 @@ import { stepsOf } from './work.js'
 import { reapAgentProcesses } from './reap.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { referencesOf } from './references.js'
+import { settleProject } from './close.js'
 import { branchName, commitRule, installCommitCheck, ticketOf } from './conventions.js'
 
 /** The team's own ticket id for a task, when it came from their tracker; null when it is only ours. */
@@ -211,6 +212,7 @@ export class Runner {
         } else if (allDone && !this.testing.get(p.id) && !(await this.heldForSmoke(p.id))) { // not while a task's whole test run is going (it may add a sub-task), nor while a person has checks of theirs to do by hand
           await db.update(project).set({ status: 'landed', updatedAt: new Date() }).where(eq(project.id, p.id))
           await this.emit({ ...(await this.context(p.id)).base, type: 'project.landed', payload: {} })
+          await settleProject(p.id).catch(() => false) // every task closed already: the project is closed with it
           await this.cleanup(p.id)
         }
       }

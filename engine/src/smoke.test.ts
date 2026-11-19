@@ -214,28 +214,32 @@ describe.skipIf(!reachable)('a person marks a check', () => {
     expect(after.briefApprovedBy ?? null).toBeNull()
     expect((await db.select().from(event).where(eq(event.issueId, t.id))).filter((e) => e.type === 'smoke.marked').sort((a, b) => a.seq - b.seq).map((e) => (e.payload as { pass: boolean }).pass)).toEqual([true, false])
   })
-  it('a check can be skipped: it stops waiting and is never read as a pass; a project closes once its pull request is merged and every check is passed or skipped', async () => {
-    const { closeProject, closeView } = await import('./close.js')
+  it('a check can be skipped, never read as a pass; a task is closed once its pull request is merged and every check is passed or skipped, and its project with it', async () => {
+    const { closeTask, closeView, reopenUnclosed } = await import('./close.js')
     const { project: p, issues: [t] } = await createProject({ appId, name: 'Close (sample)', issues: [{ title: 'Edges (sample)', brief: 'Build it.' }] })
     const { acceptance } = await setAcceptance(t.id, { add: [{ text: 'The tunnel reads as a tunnel (sample)' }, { text: 'The release note is on the site (sample)' }] })
     const [look, note] = acceptance.map((c) => c.id)
     await setAcceptance(t.id, { update: [{ id: look, built: null, builtEvidence: 'open the Tunnel story' }, { id: note, built: null, builtEvidence: 'open the site', builtWhen: 'after' }] }, 'engine')
+    await db.update(issue).set({ state: 'in_review', briefApprovedBy: 'Sam (sample)', briefApprovedAt: new Date() }).where(eq(issue.id, t.id))
     await db.update(project).set({ status: 'landed' }).where(eq(project.id, p.id))
     const prId = newId('pr')
     await db.insert(prTable).values({ id: prId, appId, projectId: p.id, issueId: t.id, number: 31, url: 'https://github.test/sample/pull/31', status: 'open' })
-    expect(await closeView(p.id)).toEqual({ can: false, waits: ['Pull request #31 is not merged.', expect.stringMatching(/: 2 checks of yours are not passed or skipped\.$/)] })
-    await expect(closeProject(p.id)).rejects.toThrow(/cannot be closed yet/)
+    expect(await closeView(t.id)).toEqual({ can: false, waits: ['Pull request #31 is not merged.', '2 checks of yours are not passed or skipped.'] })
+    await expect(closeTask(t.id)).rejects.toThrow(/cannot be closed yet/)
     await markSmoke(t.id, look, { pass: true })
     const skipped = await markSmoke(t.id, note, { pass: false, skip: true, note: 'nothing to release yet (sample)' }) // no note is needed to skip; one given is kept
     expect(skipped.checks.map((c) => [c.mark, c.note])).toEqual([['pass', 'Checked by hand: it holds.'], ['skip', 'Skipped, not tried: nothing to release yet (sample)']])
     expect(skipped).toMatchObject({ owed: 0, failed: 0, marked: { id: note, skipped: true } })
-    expect((await closeView(p.id)).waits).toEqual(['Pull request #31 is not merged.'])
+    expect((await closeView(t.id)).waits).toEqual(['Pull request #31 is not merged.'])
     await db.update(prTable).set({ status: 'merged' }).where(eq(prTable.id, prId))
-    expect(await closeView(p.id)).toEqual({ can: true, waits: [] })
-    expect(await closeProject(p.id)).toEqual({ id: p.id, status: 'closed' })
-    expect((await db.select().from(project).where(eq(project.id, p.id)))[0].status).toBe('closed')
-    await expect(closeProject(p.id)).rejects.toThrow(/closed already/)
-    expect((await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => e.type === 'project.closed').map((e) => e.payload)).toEqual([{ prs: [31], skipped: 1 }])
+    expect((await db.select().from(issue).where(eq(issue.id, t.id)))[0].state).toBe('in_review') // merged, and still not done: that is the person's
+    expect(await closeView(t.id)).toEqual({ can: true, waits: [] })
+    expect(await closeTask(t.id)).toEqual({ id: t.id, state: 'done', projectClosed: true })
+    expect((await db.select().from(issue).where(eq(issue.id, t.id)))[0].state).toBe('done')
+    expect((await db.select().from(project).where(eq(project.id, p.id)))[0].status).toBe('closed') // its last task closed: the project is closed with it
+    await expect(closeTask(t.id)).rejects.toThrow(/closed already/)
+    expect((await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => ['task.closed', 'project.closed'].includes(e.type)).sort((a, b) => a.seq - b.seq).map((e) => [e.type, e.payload])).toEqual([['task.closed', { pr: 31, skipped: 1 }], ['project.closed', { tasks: 1 }]])
+    expect(await reopenUnclosed()).not.toContain(t.id) // closed by a person: left alone
   })
   it('an agent tries one when asked: what it saw is beside the check, and the mark stays the person\'s', async () => {
     const { issues: [t] } = await createProject({ appId, name: 'Tried (sample)', issues: [{ title: 'Edges (sample)', brief: 'Build it.' }] })

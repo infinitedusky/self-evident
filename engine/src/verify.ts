@@ -125,11 +125,11 @@ export function requirementsChecked(required: Requirement[], held: Covered[] | n
 /** Whether a criterion still wants checking: no mark from the build, and no note leaving it to a person. */
 export const unchecked = (c: Criterion) => c.built === undefined && !c.builtEvidence
 
-/** What a check left not done, for the finish: the criteria and the requirements the build did not meet. */
+/** What a check left not done, for the finish: the criteria and the requirements the build did not meet. A requirement set to report only is not sent back. */
 export function unmetOf(criteria: Criterion[], requirements: Covered[] | null | undefined, required: Requirement[]): Unmet[] {
   return [
     ...criteria.filter((c) => c.built === false).map((c) => ({ id: c.id, text: c.text, missing: c.builtEvidence })),
-    ...required.flatMap((r) => { const c = requirements?.find((x) => x.key === r.key); return c?.built === false ? [{ id: reqId(r.key), text: `${r.name}: ${r.what}`, missing: c.how || undefined }] : [] }),
+    ...required.filter((r) => r.blocks !== false).flatMap((r) => { const c = requirements?.find((x) => x.key === r.key); return c?.built === false ? [{ id: reqId(r.key), text: `${r.name}: ${r.what}`, missing: c.how || undefined }] : [] }),
   ]
 }
 

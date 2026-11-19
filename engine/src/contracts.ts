@@ -65,7 +65,7 @@ export interface ContractsInput { setup: unknown; /** The app's default workflow
 export function heldTo(setup: unknown, workflow?: Workflow | null): ProbeView[] {
   const checklist = !workflow || styleOf(workflow) === 'checklist'
   const switched = (workflow?.requirements ?? {}) as Record<string, boolean>
-  const judged: ProbeView[] = checklist ? requirementsOf(setup, null, workflow?.requirements).map((r) => ({ key: `${REQ}${r.key}`, name: r.name, kind: 'judged', runs: r.what, blocks: true, on: r.on, own: true, ...(typeof switched[r.key] === 'boolean' ? { fixed: `Switched ${switched[r.key] ? 'on' : 'off'} by the ${workflow!.name} workflow.` } : {}) })) : []
+  const judged: ProbeView[] = checklist ? requirementsOf(setup, null, workflow?.requirements).map((r) => ({ key: `${REQ}${r.key}`, name: r.name, kind: 'judged', runs: r.what, blocks: r.blocks !== false, on: r.on, own: true, ...(typeof switched[r.key] === 'boolean' ? { fixed: `Switched ${switched[r.key] ? 'on' : 'off'} by the ${workflow!.name} workflow.` } : {}) })) : []
   const view = (p: Probe): ProbeView => ({ key: p.key, name: p.name, kind: p.kind, runs: p.runs, blocks: p.blocks, on: p.on, own: p.kind !== 'built-in' && p.key !== TESTS_KEY, ...(p.key === TESTS_KEY ? { fixed: 'The app\'s test command (Landing).' } : {}) })
   const all = probesOf(setup).filter((p) => checklist || p.key === TESTS_KEY).map(view)
   return [CRITERIA, ...judged, ...all.filter((p) => p.kind !== 'command'), ...all.filter((p) => p.kind === 'command')]
@@ -98,12 +98,15 @@ export function contractsOf(i: ContractsInput): StepGroup[] {
 
 export type ProbeChange =
   | { op: 'on'; key: string; on: boolean } | { op: 'blocks'; key: string; blocks: boolean } | { op: 'remove'; key: string }
-  | { op: 'add'; name: string; kind: 'command' | 'skill' | 'judged'; runs: string }
+  | { op: 'add'; name: string; kind: 'command' | 'skill' | 'judged'; runs: string; /** false: it reports only. */ blocks?: boolean }
+  /** The app's own: its name and what it runs (a judged one, its sentence). Its key and kind stay. */
+  | { op: 'edit'; key: string; name: string; runs: string; /** Given: also whether it blocks, in the same change. */ blocks?: boolean }
 
 /**
  * A change to what a build is held to, as a change to the app's settings: a requirement (judged) is kept in
  * `requirements`, everything else in `probes`. `starting` is the list an app without one of its own starts from.
- * Returns only the settings that change; null when the change cannot be made (nothing to run, a name already there).
+ * Returns only the settings that change; null when the change cannot be made (nothing to run, a name already there,
+ * an edit to one that is not the app's own).
  */
 export function applyProbeChange(setup: unknown, change: ProbeChange, starting?: Requirement[]): { requirements?: Requirement[]; probes?: Partial<Probe>[] } | null {
   const s = (setup ?? {}) as { requirements?: Requirement[]; probes?: unknown }
@@ -113,16 +116,23 @@ export function applyProbeChange(setup: unknown, change: ProbeChange, starting?:
   if (change.op === 'add') {
     const name = change.name.trim(), runs = change.runs.trim(), key = keyOf(name)
     if (!name || !runs || !key) return null
-    if (change.kind === 'judged') return reqs().some((r) => r.key === key) ? null : { requirements: [...reqs(), { key, name, what: runs, on: true }] }
-    return probesOf(setup).some((p) => p.key === key) ? null : { probes: cleanProbes([...probes, { key, name, kind: change.kind, runs }]) }
+    if (change.kind === 'judged') return reqs().some((r) => r.key === key) ? null : { requirements: [...reqs(), { key, name, what: runs, on: true, ...(change.blocks === false ? { blocks: false } : {}) }] }
+    return probesOf(setup).some((p) => p.key === key) ? null : { probes: cleanProbes([...probes, { key, name, kind: change.kind, runs, ...(change.blocks === false ? { blocks: false } : {}) }]) }
   }
   if (change.key.startsWith(REQ)) {
     const key = change.key.slice(REQ.length)
     if (change.op === 'remove') return { requirements: reqs().filter((r) => r.key !== key) }
     if (change.op === 'on') return { requirements: reqs().map((r) => (r.key === key ? { ...r, on: change.on } : r)) }
-    return null // a requirement is on the list or it is not: it always blocks
+    if (change.op === 'blocks') return { requirements: reqs().map((r) => { if (r.key !== key) return r; const { blocks: _, ...rest } = r; return change.blocks ? rest : { ...rest, blocks: false } }) }
+    const name = change.name.trim(), what = change.runs.trim()
+    if (!name || !what) return null
+    return { requirements: reqs().map((r) => { if (r.key !== key) return r; const { blocks: was, ...rest } = r; const blocks = change.blocks ?? was !== false; return { ...rest, name, what, ...(blocks ? {} : { blocks: false }) } }) }
   }
   if (change.op === 'remove') return { probes: probes.filter((p) => p.key !== change.key) }
   if (change.op === 'on') return put(change.key, { on: change.on })
+  if (change.op === 'edit') { // only the app's own: the engine's probes and the test command are not rewritten here
+    const name = change.name.trim(), runs = change.runs.trim()
+    return name && runs && probes.some((p) => p.key === change.key && p.kind) ? put(change.key, { name, runs, ...(typeof change.blocks === 'boolean' ? { blocks: change.blocks } : {}) }) : null
+  }
   return put(change.key, { blocks: change.blocks })
 }

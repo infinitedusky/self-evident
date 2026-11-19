@@ -82,7 +82,7 @@ export async function syncPrs(appId: string, api: GitHubApi = ghCli) {
       const base = { workspaceId: a.workspaceId, appId, projectId, actor: 'github' }
       const say = async (type: string, payload: Record<string, unknown>) => { changes.push(`#${g.number} ${type}`); await db.transaction((tx) => appendEvent(tx, { ...base, type, payload: { number: g.number, url: g.url, ...payload } })) }
       if (before.status !== status && (status === 'merged' || status === 'closed')) await say(`pr.${status}`, { title: g.title })
-      if (before.status !== status && status === 'merged') await mergedDone(projectId, before.issueId) // Linear's way: the PR merged, its issues are done
+      // A merge no longer marks its tasks done (it did, Linear's way, until 2026-11-18): a task is done when a person closes it (close.ts).
       if ((prev.review ?? null) !== signals.review && signals.review) await say('pr.review', { decision: signals.review })
       if ((prev.checks ?? 'none') !== signals.checks && signals.checks !== 'pending') await say('pr.checks', { state: signals.checks, failing: signals.failing })
     }
@@ -98,15 +98,6 @@ export async function syncPrs(appId: string, api: GitHubApi = ghCli) {
     }
   }
   return { me, changes }
-}
-
-/** A PR merged: the code issues it carried are done (one issue's, when stacked; else every issue of the project in review). */
-async function mergedDone(projectId: string, issueId: string | null) {
-  await db.transaction(async (tx) => {
-    const rows = issueId ? await tx.select().from(issue).where(eq(issue.id, issueId))
-      : await tx.select().from(issue).where(and(eq(issue.projectId, projectId), eq(issue.kind, 'code'), eq(issue.state, 'in_review')))
-    for (const i of rows.filter((x) => !x.parentId && x.state === 'in_review')) await setState(tx, i, 'done', { actor: 'github' })
-  })
 }
 
 async function keepOutside(appId: string, repoId: string, g: GhPr, me: string) {
