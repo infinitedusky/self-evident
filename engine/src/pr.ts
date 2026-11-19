@@ -3,6 +3,7 @@
  * updated as more issues land. The PR carries the support for the change: each sub-issue, its summary, its cost.
  */
 import { execFile } from 'node:child_process'
+import { commitParts } from './conventions.js'
 import { promisify } from 'node:util'
 import { push } from './git.js'
 
@@ -23,7 +24,10 @@ export interface PrInput {
  * How an app's pull requests are opened (Sandy, 2026-11-16: one opened ready for review after the first of nine
  * sub-tasks, titled outside the repository's convention). `setup.pr_draft`: as a draft unless set false.
  * `setup.pr_title`: the title's template, in the repository's own convention, with {ticket} (the team's ticket id,
- * else ours), {id} (ours), {title}, {project}, {n} and {of} (the task's place in its project).
+ * else ours), {id} (ours), {title}, {project}, {n} and {of} (the task's place in its project). Any other name in
+ * braces ({type}, {scope}) is the builder's choice, as in the commit format (conventions.ts): it is read back from the
+ * branch's first commit that follows that format, so `{type}{scope}[{ticket}]: {title}` opens as
+ * `feat(scan)[ENT-481]: …` without an agent writing the title by hand. One that cannot be read is left out.
  */
 /**
  * Whether a task's pull request is opened by the engine, as a draft, once the task is built and checked (Sandy,
@@ -34,12 +38,14 @@ export interface PrInput {
  */
 export const prAuto = (setup: unknown) => (setup as { pr_auto?: boolean } | null)?.pr_auto !== false
 export const prDraft = (setup: unknown) => (setup as { pr_draft?: boolean } | null)?.pr_draft !== false
-export function prTitle(setup: unknown, v: { ticket?: string | null; id: string; title: string; project: string; n?: number; of?: number }, exact?: string | null): string | null {
+export function prTitle(setup: unknown, v: { ticket?: string | null; id: string; title: string; project: string; n?: number; of?: number }, exact?: string | null, /** The branch's commits' first lines, oldest first. */ commits: string[] = []): string | null {
   if (exact?.trim()) return exact.trim().slice(0, 250)
   const t = (setup as { pr_title?: string } | null)?.pr_title?.trim()
   if (!t) return null
   const vars: Record<string, string> = { ticket: v.ticket || v.id, id: v.id, title: v.title, project: v.project, n: String(v.n ?? ''), of: String(v.of ?? '') }
-  return t.replace(/\{(ticket|id|title|project|n|of)\}/g, (_, k: string) => vars[k]).replace(/\s+/g, ' ').trim().slice(0, 250)
+  let chosen: Record<string, string> = {}
+  if (/\{(?!(?:ticket|id|title|project|n|of)\})\w+\}/.test(t)) for (const c of commits) { const parts = commitParts(setup, { ticket: v.ticket, id: v.id }, c); if (parts) { chosen = parts; break } }
+  return t.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? chosen[k] ?? '').replace(/\s+/g, ' ').trim().slice(0, 250)
 }
 
 /**

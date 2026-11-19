@@ -25,6 +25,11 @@ describe('how a pull request is titled and opened', () => {
     expect(prTitle({ pr_title: '{id} {title} ({n} of {of}, {project})' }, { ...v, ticket: null })).toBe('SH-3 Export orders (sample) (1 of 2, Orders)')
     expect(prTitle({ pr_title: '[{ticket}] {title}' }, { ...v, ticket: null })).toBe('[SH-3] Export orders (sample)') // no ticket of theirs: ours
     expect(prTitle({ pr_title: 'feat[{ticket}]: {title}' }, v, 'fix(T12)[SHOP-12]: orders export (sample)')).toBe('fix(T12)[SHOP-12]: orders export (sample)')
+    // What the format leaves to the builder is read back from its first commit that follows the format.
+    const rules = { pr_title: '{type}{scope}[{ticket}]: {title}', commit_format: '{type}{scope}[{ticket}]: {subject}' }
+    expect(prTitle(rules, v, null, ['wip', 'feat(orders)[SHOP-12]: add the export (sample)', 'fix[SHOP-12]: a typo'])).toBe('feat(orders)[SHOP-12]: Export orders (sample)')
+    expect(prTitle(rules, v, null, ['fix[SHOP-12]: no scope (sample)'])).toBe('fix[SHOP-12]: Export orders (sample)')
+    expect(prTitle(rules, v, null, [])).toBe('[SHOP-12]: Export orders (sample)') // nothing to read: left out, not invented
     expect(prTitle({}, v)).toBeNull() // no template: the engine's own title
   })
   it('says in its text how many sub-tasks have landed, and that it is not ready while some have not', () => {
