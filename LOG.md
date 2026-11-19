@@ -4941,3 +4941,12 @@ list under Landing come out.
 Not done: a builder that does not use an attached skill is recorded, not stopped (no Stop hook yet); a requirement
 cannot be reworded in place (remove it and add it again); the page follows the app's default workflow only, not a
 second one; a second repository's skills are still not offered; builders' skills have not run on a real build.
+
+## The page on a phone: one press starts it, and stops it (Sandy, 2026-11-18: "that should be a button that starts it no?" … "starts and stops that?")
+
+Setting a second computer up was a terminal command. Now the rail's 📱 shows wherever Tailscale is installed:
+**Open on a phone** runs `tailscale serve` for the page, **Turn off** takes it off. If the account has not allowed
+serving, the panel links to where to allow it. Tailscale installed but signed out says so. Both buttons answer only
+to the page on the computer itself (`POST /api/devices/serve`, `/serve/stop`), never to a phone or another site.
+
+Not done: installing Tailscale from here (it needs the computer's password and an account).

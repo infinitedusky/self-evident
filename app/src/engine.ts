@@ -300,8 +300,11 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 /** Another device with the page open, over the private network. */
 export interface Device { ip: string; name: string; kind: 'phone' | 'computer'; since: string }
 /** `address`: the page on the private network, null when it is not served there. `remote`: this page is the one that came over it. */
-export interface DevicesHere { address: string | null; remote: boolean; devices: Device[] }
+export interface DevicesHere { /** Tailscale on this computer: not installed, not connected, or connected. */ tailscale: 'missing' | 'off' | 'ready'; address: string | null; remote: boolean; devices: Device[]; /** Where to allow serving on the Tailscale account, when it said no. */ enable?: string }
 export const devicesHere = () => call<DevicesHere>('GET', '/devices')
+/** Put the page on the private network (one press), or take it off. */
+export const servePhone = () => call<DevicesHere>('POST', '/devices/serve', {})
+export const stopPhone = () => call<DevicesHere>('POST', '/devices/serve/stop', {})
 
 // The front door (GET /now): what's running, what needs a person, what just happened.
 type Where = { projectId: string; projectName: string; appName: string }

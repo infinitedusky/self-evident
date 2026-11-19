@@ -122,13 +122,17 @@ The page has no sign-in, so it is never given a public address. A phone reaches 
 only your own devices are on:
 
 1. Install Tailscale on this computer and on the phone, signed in to the same account.
-2. In Tailscale's admin console, under DNS, turn on MagicDNS and HTTPS certificates.
-3. On this computer: `tailscale serve --bg 5180`. It prints the address, `https://<computer>.<network>.ts.net`.
-4. Open that address on the phone. `tailscale serve status` shows it again; `tailscale serve reset` turns it off.
+2. In the rail, hover 📱 and press **Open on a phone**. The first time on an account, Tailscale asks to allow it:
+   the panel gives the link; allow it there and press again.
+3. Scan the code with the phone's camera, or copy the address.
 
-Once it is served, the rail's 📱 shows a code to scan with the phone's camera, and a green dot with the device's
-name while a phone (or another computer) has the page open. Checking the address from this computer itself fails:
-Caddy has the secure port here and does not know the name. Try it from the phone.
+**Turn off** in the same panel takes the page off the network. The rail's 📱 shows only when Tailscale is installed.
+A green dot, with the device's name, shows while a phone (or another computer) has the page open. The buttons work
+from this computer's page only, never from the phone.
+
+By hand: `tailscale serve --bg 5180`, `tailscale serve status`, `tailscale serve --https=443 off`. If the address
+errors, turn on HTTPS certificates in Tailscale's admin console, under DNS. Checking the address from this computer
+itself fails where Caddy has the secure port: try it from the phone.
 
 What does not work from the phone: the smoke test's and prototype's views and an app's Storybook (they are addresses
 on this computer), and the smoke terminal (it answers only to the page's own address, `UI_URL`). Links the engine
