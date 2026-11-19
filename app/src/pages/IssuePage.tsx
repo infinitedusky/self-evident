@@ -98,12 +98,15 @@ export function IssuePage() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {error && <Badge tone="warn" dot>{error}</Badge>}
+          {/* Closing is the person's, and what makes a task Done: once its pull request is merged and every check of theirs is passed or skipped. Until then it says what it waits on. */}
+          {i.close && <button className="btn" disabled={busy || !i.close.can} title={i.close.can ? 'Its pull request is merged and every check is passed or skipped. Closing it marks it done.' : i.close.waits.join(' ')} onClick={() => act(() => engine.closeTask(i.id))}>Close task</button>}
           {i.build && ['failed', 'cancelled'].includes(i.build.status) && <button className="btn" disabled={busy} onClick={() => act(() => engine.retry(i.id))}>Retry</button>}
           <button className="btn quiet" disabled={busy} onClick={() => void remove()} title="For a task made by mistake: it leaves nothing behind. One with work on it is canceled instead.">Delete</button>
         </div>
       </div>
       {refused && <div className="empty bad" style={{ marginBottom: 16 }}>{refused}</div>}
 
+      {i.close && !i.close.can && <p className="muted" style={{ margin: '0 0 16px' }} data-component="CloseWaits">Before it can be closed: {i.close.waits.join(' ')}</p>}
       {i.reason && <div className="empty" style={{ marginBottom: 16 }}>{STATE_LABEL[i.state]}: <Md text={i.reason} inline /></div>}
       {i.build?.heldReason && i.build.status !== 'done' && <div className="empty" style={{ marginBottom: 16 }}>{i.build.heldReason}</div>}
 

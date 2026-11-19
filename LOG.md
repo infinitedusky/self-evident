@@ -4982,3 +4982,25 @@ per task where that is how the app builds.
 Not done: a task on its own (a solo project) has the same button only on its project page, not on the task's; a
 closed project cannot be opened again; nothing is tidied at close beyond what landing already tidied; a closed pull
 request that was never merged holds the project open, and the way out is to cancel the project.
+
+## Closing is a task's, and it is what makes a task done (Sandy, 2026-11-18: "This is about closing tasks, not projects"; asked what Close does: "Close makes it Done"; and of the button put on projects by mistake: "Remove it; projects close themselves")
+
+This replaces the entry above ("A project is closed by a person, last"), which read the request as about projects.
+
+- **A merge no longer marks a task Done.** Until now a task went from In review to Done by itself the moment its
+  pull request merged (`github.ts`, `mergedDone`, taken out), with checks of the person's still unmarked. BON-50 and
+  BON-51 were Done with 22 between them. Now it stays In review.
+- **Close task** is on a built task's page, and pressing it is what makes the task Done (`engine/src/close.ts`). It can
+  be pressed once the task's pull request is merged and every check left to a person on it is passed or skipped.
+  Until then it is there and cannot be pressed, and the page says what it waits on. Marking a built task Done any
+  other way is held to the same rule.
+- **Skip** on a check stays as built (the entry above).
+- **A project has no Close button.** One that has landed is closed by itself when its last task is closed
+  (`settleProject`); the status `closed` and its filter on Projects stay.
+- **Once, at start**: a task marked Done by a merge, in a project still running, on a checklist workflow, with checks
+  of the person's unmarked, is put back In review so it can be closed (`reopenUnclosed`). Nothing in a project that
+  has landed or stopped is touched.
+
+Not done: nothing tells the person a merged task is waiting to be closed (it is not under "needs you"); a closed task
+cannot be opened again from its page; a task whose pull request was closed without being merged cannot be closed,
+only canceled; Linear now sees such a task as In review until it is closed, where it saw Done at the merge.

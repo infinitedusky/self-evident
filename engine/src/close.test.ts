@@ -1,30 +1,28 @@
-/** When a project can be closed: its pull requests merged, and every check left to a person passed or skipped. Sample data. */
+/** When a task can be closed: its pull request merged, and every check left to a person passed or skipped. Sample data. */
 import { describe, expect, it } from 'vitest'
-import { closeWaits, type CloseFacts } from './close.js'
+import { taskWaits, type CloseFacts } from './close.js'
 import { smokeChecks } from './smoke.js'
 
-const merged = { number: 12, status: 'merged' }
-const task = (identifier: string, ...marks: ('todo' | 'pass' | 'fail' | 'skip')[]) => ({ identifier, checks: marks.map((mark) => ({ mark })) })
-const ok: CloseFacts = { status: 'landed', prs: [merged], tasks: [task('SS-4', 'pass', 'skip'), task('SS-5')] }
+const marks = (...m: ('todo' | 'pass' | 'fail' | 'skip')[]) => m.map((mark) => ({ mark }))
+const ok: CloseFacts = { state: 'in_review', pr: { number: 12, status: 'merged' }, checks: marks('pass', 'skip') }
 
-describe('closeWaits', () => {
-  it('nothing, once it is built, every pull request is merged and every check is passed or skipped', () => {
-    expect(closeWaits(ok)).toEqual([])
-    expect(closeWaits({ ...ok, prs: [merged, { number: 13, status: 'merged' }] })).toEqual([])
+describe('taskWaits', () => {
+  it('nothing, once it is built, its pull request is merged and every check is passed or skipped', () => {
+    expect(taskWaits(ok)).toEqual([]); expect(taskWaits({ ...ok, checks: [] })).toEqual([])
   })
   it('a pull request not merged, or none', () => {
-    expect(closeWaits({ ...ok, prs: [merged, { number: 13, status: 'open' }] })).toEqual(['Pull request #13 is not merged.'])
-    expect(closeWaits({ ...ok, prs: [{ number: 13, status: 'closed' }] })).toEqual(['Pull request #13 is closed without being merged.'])
-    expect(closeWaits({ ...ok, prs: [] })).toEqual(['It has no pull request.'])
+    expect(taskWaits({ ...ok, pr: { number: 13, status: 'open' } })).toEqual(['Pull request #13 is not merged.'])
+    expect(taskWaits({ ...ok, pr: { number: 13, status: 'closed' } })).toEqual(['Pull request #13 is closed without being merged.'])
+    expect(taskWaits({ ...ok, pr: null })).toEqual(['It has no pull request.'])
   })
-  it('a check of the person\'s not marked, or one they failed, on any task', () => {
-    expect(closeWaits({ ...ok, tasks: [task('SS-4', 'todo', 'todo', 'pass'), task('SS-5', 'fail')] })).toEqual(['SS-4: 2 checks of yours are not passed or skipped.', 'SS-5: 1 check failed by hand.'])
-    expect(closeWaits({ ...ok, tasks: [task('SS-4', 'todo')] })).toEqual(['SS-4: 1 check of yours is not passed or skipped.'])
+  it('a check of the person\'s not marked, or one they failed', () => {
+    expect(taskWaits({ ...ok, checks: marks('todo', 'todo', 'pass', 'fail') })).toEqual(['2 checks of yours are not passed or skipped.', '1 check failed by hand.'])
+    expect(taskWaits({ ...ok, checks: marks('todo') })).toEqual(['1 check of yours is not passed or skipped.'])
   })
-  it('not before it is built, and never twice or after it was stopped', () => {
-    expect(closeWaits({ ...ok, status: 'running' })).toEqual(['It is not built yet.'])
-    expect(closeWaits({ ...ok, status: 'closed' })).toEqual(['It is closed already.'])
-    expect(closeWaits({ ...ok, status: 'stopped' })).toEqual(['It was stopped, not finished.'])
+  it('not before it is built, and never twice', () => {
+    expect(taskWaits({ ...ok, state: 'in_progress' })).toEqual(['It is not built yet.'])
+    expect(taskWaits({ ...ok, state: 'done' })).toEqual(['It is closed already.'])
+    expect(taskWaits({ ...ok, state: 'canceled' })).toEqual(['It was not built.'])
   })
 })
 
