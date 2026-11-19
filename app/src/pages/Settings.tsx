@@ -4,14 +4,16 @@
  * All apps: plugins, the jobs their skills cover, the integrations (a list, then a page each). An app: its repo, agents, plugins,
  * landing, prototype, Storybook, integration values, and its workflow rules.
  */
-import { Requirements, type RequirementRow } from '../components/Requirements'
+import type { RequirementRow } from '../components/Requirements'
+import { StepContracts } from '../components/StepContracts'
+import { applyProbeChange, contractsOf, type ProbeChange } from '@self-evident/engine/contracts'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useMatch, useNavigate, useParams } from 'react-router'
 import { Badge } from '../components/Badge'
 import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
-import { STEPS } from '@self-evident/engine/steps'
-import { engine, type AppHolds, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type AppJob, type UsableSkill, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type SmokeSetupSetting, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
+import type { Workflow } from '@self-evident/engine/steps'
+import { engine, type AppHolds, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type SmokeSetupSetting, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { RemoveApp, RemovedApps } from '../components/RemoveApp'
 
@@ -452,6 +454,11 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   // Until the app has a list of its own, the engine's starting one is shown; editing it makes it the app's.
   const [startingRequirements, setStartingRequirements] = useState<RequirementRow[] | null>(null)
   useEffect(() => { engine.appRequirements(app.id).then(setStartingRequirements).catch(() => {}) }, [app.id])
+  // Settings › Skills: the app's default workflow says which steps it has; the page is read until Change is pressed.
+  const [workflow, setWorkflow] = useState<Workflow | null>(null)
+  useEffect(() => { setWorkflow(null); engine.workflows(app.id).then((list) => setWorkflow(list.find((w) => w.appDefault) ?? null)).catch(() => {}) }, [app.id])
+  const [changing, setChanging] = useState(false)
+  const held = { ...setup, requirements: setup.requirements ?? startingRequirements ?? undefined } // until the app has a list of its own, the engine's starting one
   const save = async () => {
     setBusy(true); setError(null)
     try {
@@ -529,12 +536,20 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         </dl>
       </div>
     </>,
-    skills: <><StepSkills usable={info?.usable ?? null} value={setup.step_skills ?? {}} onChange={(next) => set({ step_skills: Object.keys(next).length ? next : undefined })} />
-      <AppJobs jobs={info?.jobs ?? null} value={setup.skills_by_job ?? {}} onChange={(next) => set({ skills_by_job: Object.keys(next).length ? next : undefined })} /></>,
+    skills: <div data-component="AppSkills">
+      <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <p className="faint settings-desc" style={{ margin: 0 }}>{`What happens at each step${workflow ? ` of the ${workflow.name} workflow` : ''}, and what this app adds: skills where an agent works, probes on what is built.`}</p>
+        <button type="button" className="small" onClick={() => setChanging(!changing)}>{changing ? 'Done' : 'Change'}</button>
+      </div>
+      {info === null ? <p className="muted">Loading…</p> : <StepContracts
+        groups={contractsOf({ setup: held, workflow, usable: info.usable ?? [] })} open={changing ? ['build'] : []}
+        {...(changing ? {
+          usable: info.usable ?? [],
+          onSkills: (step: string, names: string[]) => { const { [step]: _, ...rest } = setup.step_skills ?? {}; const next = names.length ? { ...rest, [step]: names } : rest; set({ step_skills: Object.keys(next).length ? next : undefined }) },
+          onProbe: (change: ProbeChange) => { const patch = applyProbeChange(held, change); if (patch) set({ ...patch, ...(patch.probes && !patch.probes.length ? { probes: undefined } : {}) } as Partial<AppSetup>) },
+        } : {})} />}
+    </div>,
     landing: <>
-      <Group title="What every plan must cover" lead="Asked of every task's plan, whatever the task. The planner says how the plan meets each one, or why it does not apply, and the pull request reports it.">
-        <Requirements value={setup.requirements ?? startingRequirements ?? []} onChange={(next) => set({ requirements: next })} />
-      </Group>
       <Group title="Landing" lead="How finished work reaches the default branch.">
         <label style={{ gridColumn: '1 / -1' }}>Test command<input className="mono" value={setup.test_cmd ?? ''} onChange={(e) => set({ test_cmd: e.target.value })} placeholder="runs in the worktree on the merged commit; must exit 0 to land" /></label>
         <label style={{ gridColumn: '1 / -1' }}>Pull requests<select value={setup.pr_mode ?? 'issue'} onChange={(e) => set({ pr_mode: e.target.value as 'project' | 'issue' })}>
@@ -611,98 +626,6 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
       {groups[section]}
       <SaveRow dirty={dirty} busy={busy} error={error} onSave={save} />
     </section>
-  )
-}
-
-/**
- * An app's skills for the steps of its workflow (Sandy, 2026-11-13: "a skill that can be used in sketch, or mockup
- * etc. This allows an app to have special context"). Each step takes any number of the skills the app's conversations
- * already get: its repo's own and the plugins' that are on for it. The agent doing that step is told to use them.
- * A skill saved for a step and no longer there is shown as missing, to remove.
- */
-function StepSkills({ usable, value, onChange }: { usable: UsableSkill[] | null; value: Record<string, string[]>; onChange: (next: Record<string, string[]>) => void }) {
-  const put = (key: string, names: string[]) => { const { [key]: _, ...rest } = value; onChange(names.length ? { ...rest, [key]: names } : rest) }
-  return (
-    <div className="settings-group" data-component="StepSkills">
-      <h3 className="settings-h3">Skills by workflow step</h3>
-      <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>What this app knows about doing a step: its design rules for a sketch or a mockup, its standard for a decision record. The agent doing the step is told to use the skills chosen for it. Choose from the skills in this app's repo (<span className="mono">.claude/skills/</span>), your own (<NavLink to="/settings/yours">All apps › Your skills</NavLink>) and the plugins on for it.</p>
-      {usable === null ? <p className="muted">Loading…</p> : <>
-        {!usable.length && <p className="settings-note" style={{ margin: '0 0 8px' }}><Badge>Nothing to choose yet</Badge><span>This app's conversations get no skills: none in its repo's <span className="mono">.claude/skills/</span>, none of your own (<NavLink to="/settings/yours">All apps › Your skills</NavLink>), and no plugin with skills on for it.</span></p>}
-        <dl className="fields">
-          {STEPS.filter((s) => s.key !== 'idea').map((s) => {
-            const chosen = value[s.key] ?? []
-            const rest = usable.filter((u) => !chosen.includes(u.name))
-            return (
-              <div key={s.key} style={{ display: 'contents' }}>
-                <dt>{s.icon} {s.label}</dt>
-                <dd style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                  {chosen.map((n) => {
-                    const u = usable.find((x) => x.name === n)
-                    return <span key={n} className={`badge ${u ? 'accent' : 'warn'}`} title={u ? `${u.description} (${u.from})` : 'This app\'s conversations no longer get this skill, so it is not used.'}>
-                      {u?.label ?? n}{u ? '' : ' · missing'} <button type="button" className="linkish" aria-label={`Remove ${u?.label ?? n} from ${s.label}`} onClick={() => put(s.key, chosen.filter((x) => x !== n))}>✕</button>
-                    </span>
-                  })}
-                  {rest.length > 0 && <select className="small" aria-label={`Add a skill to ${s.label}`} value="" onChange={(e) => { if (e.target.value) put(s.key, [...chosen, e.target.value]) }}>
-                    <option value="">Add a skill…</option>
-                    {rest.map((u) => <option key={u.name} value={u.name}>{u.label} ({u.from})</option>)}
-                  </select>}
-                  {!chosen.length && !rest.length && <span className="faint">None.</span>}
-                  {s.key === 'adr' && <div className="faint" style={{ flexBasis: '100%', fontSize: 13 }}>This app's standard for a decision record. The planner gets it too: it settles the draft and plans the final record, written with the build.</div>}
-                </dd>
-              </div>
-            )
-          })}
-        </dl>
-      </>}
-    </div>
-  )
-}
-
-/**
- * An app's own skill per job (Sandy, 2026-11-13: "it shouldn't be a plugin, it should have its own nav"). Every job
- * is listed, grouped by where it sits in the loop, so the page is never empty: a job with a skill filed follows All
- * apps unless this app picks another filed there, or none; a job with none filed says so, and what the engine does
- * there itself. Filing a skill under a job is done in All apps.
- */
-function AppJobs({ jobs, value, onChange }: { jobs: AppJob[] | null; value: Record<string, string | null>; onChange: (next: Record<string, string | null>) => void }) {
-  if (!jobs) return <p className="muted">Loading…</p>
-  const groups = [...new Set(jobs.map((j) => j.group ?? ''))]
-  const filed = jobs.filter((j) => j.skills.length).length
-  return (
-    <div data-component="AppJobs">
-      <div className="settings-group">
-        <h3 className="settings-h3">Skills by job</h3>
-        <p className="faint settings-desc" style={{ margin: '0 0 8px' }}>One skill does each job. Each follows All apps unless this app picks another skill filed under that job, or none. A skill is filed under a job in <NavLink to="/settings/skills">All apps › Skills by job</NavLink>.</p>
-        {!filed && <p className="settings-note" style={{ margin: '0 0 8px' }}><Badge>Nothing to choose yet</Badge><span>No skill is filed under any job. Write or pull skills of your own (All apps › Your skills), or install a plugin that brings some (All apps › Plugins), and file them (All apps › Skills by job); then each job here can be chosen for this app.</span></p>}
-      </div>
-      {groups.map((g) => (
-        <div className="settings-group" key={g}>
-          {g && <h3 className="settings-h3">{g}</h3>}
-          <dl className="fields">
-            {jobs.filter((j) => (j.group ?? '') === g).map((j) => {
-              const mine = j.key in value
-              const named = (key: string | null) => j.skills.find((s) => s.key === key)?.name ?? 'none'
-              const choose = (v: string) => { const { [j.key]: _, ...rest } = value; onChange(v === '' ? rest : { ...rest, [j.key]: v === '-' ? null : v }) }
-              return (
-                <div key={j.key} style={{ display: 'contents' }}>
-                  <dt>{j.name}<div className="faint" style={{ fontSize: 13, fontWeight: 400 }}>{j.for}</div></dt>
-                  <dd>
-                    {j.skills.length
-                      ? <><select aria-label={`Skill for ${j.name}`} value={!mine ? '' : value[j.key] ?? '-'} onChange={(e) => choose(e.target.value)}>
-                          <option value="">As All apps ({named(j.factory)})</option>
-                          {j.skills.map((s) => <option key={s.key} value={s.key}>{s.name} ({s.plugin})</option>)}
-                          <option value="-">None for this app</option>
-                        </select> {mine && <Badge tone="accent">override</Badge>}</>
-                      : <span className="faint">No skill filed.</span>}
-                    {j.builtIn && <div className="faint" style={{ fontSize: 13 }}>The engine itself: {j.builtIn}</div>}
-                  </dd>
-                </div>
-              )
-            })}
-          </dl>
-        </div>
-      ))}
-    </div>
   )
 }
 

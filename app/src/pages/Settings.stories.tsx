@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, userEvent, within } from 'storybook/test'
 import { Settings } from './Settings'
 import { engineDown, withEngine } from '../stories/mock-engine'
-import { appSettings, apps, factorySettings, otherApp, repoNote, sampleApp, storybookCheck } from '../stories/sample'
+import { appSettings, apps, factorySettings, otherApp, repoNote, sampleApp, storybookCheck, workflowRows } from '../stories/sample'
 import type { PluginInfo } from '../engine'
 
 // Settings: which settings across the top (All apps, each app), that scope's sections down the side.
@@ -77,49 +77,55 @@ export const AppWithRepoSkills: Story = {
     appSettings: { ...appSettings, skills: [...appSettings.skills, { key: 'release-notes', name: 'release-notes', description: 'Writes the release note in the shop’s voice (sample).' }] },
   }),
 }
-/** Skills: at the top, a skill for a step of the workflow. The mockup step uses the shop's design skill; the ADR names one the repo no longer has (made up). */
-export const AppStepSkills: Story = {
+/** Skills: the app's steps, one line each, with what is attached and where. The sample shop's workflow has a blast radius; its mockups use the shop's design skill, and the build names one the repo no longer has (made up). */
+const withSkills = { ...sampleApp.setup, test_cmd: 'pnpm test', step_skills: { mockup: ['shop-design'], build: ['checkout-rules', 'gone-skill'] }, probes: [{ name: 'Lint (sample)', kind: 'command' as const, runs: 'pnpm lint' }] }
+export const AppSkills: Story = {
   parameters: appPage(sampleApp.id, 'skills'),
-  beforeEach: withEngine({ apps: apps.map((a) => (a.id === sampleApp.id ? { ...a, setup: { ...a.setup, step_skills: { mockup: ['shop-design'], adr: ['decision-record'] } } } : a)) }),
+  beforeEach: withEngine({ apps: apps.map((a) => (a.id === sampleApp.id ? { ...a, setup: withSkills } : a)) }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByRole('button', { name: 'Remove shop-design from Mockups' })).toBeVisible()
-    await expect(c.getByText(/decision-record · missing/)).toBeVisible()
-    await userEvent.selectOptions(c.getByLabelText('Add a skill to Sketches'), 'shop-design')
-    await expect(c.getByRole('button', { name: 'Remove shop-design from Sketches' })).toBeVisible()
-    await userEvent.click(c.getByRole('button', { name: 'Remove shop-design from Mockups' }))
-    await expect(c.queryByRole('button', { name: 'Remove shop-design from Mockups' })).toBeNull()
+    await expect(await c.findByText(/of the UI change \(sample\) workflow/)).toBeVisible()
+    await expect(await c.findByText('Do · shop-design')).toBeVisible()
+    await expect(c.getByText('Do · checkout-rules')).toBeVisible(); await expect(c.getByText('Do · gone-skill · missing')).toBeVisible()
+    await expect(c.getByText(/Blast radius/)).toBeVisible() // this workflow has it; one without does not list it
+    await expect(c.queryByRole('checkbox')).toBeNull() // read until Change is pressed
+    await expect(c.queryByText('Skills by workflow step')).toBeNull(); await expect(c.queryByText('Skills by job')).toBeNull()
   },
 }
-/** An app whose conversations get no skills at all: the steps are listed, and it says why there is nothing to choose. */
-export const AppStepSkillsNone: Story = {
+const mainRow = { ...workflowRows[0], name: 'Main (sample)', style: 'checklist' as const, build: 'one' as const, steps: [{ key: 'idea' as const, on: true, required: false }, { key: 'research' as const, on: true, required: false }, { key: 'prototype' as const, on: true, required: true }, ...(['analysis', 'adr', 'risk', 'audit', 'final'] as const).map((key) => ({ key, on: false, required: false })), { key: 'brief' as const, on: true, required: true }] }
+/** A workflow with nothing between the prototype and the build (as Main is): no blast radius, no audit, on the page. */
+export const AppSkillsMain: Story = {
   parameters: appPage(sampleApp.id, 'skills'),
-  beforeEach: withEngine({ appSettings: { ...appSettings, usable: [] } }),
-  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/This app's conversations get no skills/)).toBeVisible() },
-}
-/** Skills by job, a section of its own: every job, grouped. One with skills filed follows All apps until this app picks another filed there, or none; one with none says so (made-up skills). */
-export const AppSkillsByJob: Story = {
-  parameters: appPage(sampleApp.id, 'skills'),
-  beforeEach: withEngine({ apps: apps.map((a) => (a.id === sampleApp.id ? { ...a, setup: { ...a.setup, skills_by_job: { review: null } } } : a)) }),
+  beforeEach: withEngine({ workflows: [mainRow] }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    const testing = await c.findByLabelText('Skill for Testing')
-    await expect(testing).toHaveValue('')
-    await expect(within(testing).getByRole('option', { name: 'As All apps (write-tests)' })).toBeInTheDocument()
-    await expect(c.getByLabelText('Skill for Review')).toHaveValue('-')
-    await userEvent.selectOptions(testing, 'other-plugin/test-first')
-    await expect(c.getAllByText('override').length).toBe(2)
-      await expect(c.getByText('No skill filed.')).toBeVisible()
+    await expect(await c.findByText(/of the Main \(sample\) workflow/)).toBeVisible()
+    await expect(c.queryByText(/Blast radius/)).toBeNull(); await expect(c.queryByText(/Audit/)).toBeNull()
+    await expect(c.getByLabelText('Build')).toBeVisible(); await expect(c.getByLabelText('Smoke test')).toBeVisible()
   },
 }
-/** No skill filed under any job yet, as on a new install: the jobs are still listed, and it says how to get something to choose. */
-export const AppSkillsByJobNoneFiled: Story = {
+/** Changing it: the build opens; a skill is put on Build › Do, a probe is switched off and one of the app's own is added. Save keeps it. */
+export const AppSkillsChanging: Story = {
   parameters: appPage(sampleApp.id, 'skills'),
-  beforeEach: withEngine({ appSettings: { ...appSettings, jobs: (appSettings.jobs ?? []).map((j) => ({ ...j, skills: [], factory: null })) } }),
+  beforeEach: withEngine({ workflows: [mainRow], apps: apps.map((a) => (a.id === sampleApp.id ? { ...a, setup: withSkills } : a)) }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByText('Nothing to choose yet')).toBeVisible()
-    await expect(c.getAllByText('No skill filed.').length).toBe(3)
+    await userEvent.click(await c.findByRole('button', { name: 'Change' }))
+    await userEvent.selectOptions(await c.findByLabelText('Add a skill to Build, Do'), 'shop-design')
+    await expect(c.getByRole('button', { name: 'Remove shop-design from Build, Do' })).toBeVisible()
+    await userEvent.click(c.getByRole('button', { name: 'Remove gone-skill from Build, Do' }))
+    await expect(c.queryByText(/gone-skill/)).toBeNull()
+    await userEvent.click(c.getByRole('checkbox', { name: 'Run Try to break it' }))
+    await expect(c.getByRole('checkbox', { name: 'Run Try to break it' })).not.toBeChecked()
+    await userEvent.click(c.getByRole('button', { name: 'Add a probe to Build' }))
+    await userEvent.type(c.getByLabelText('Probe name'), 'Audit log (sample)')
+    await userEvent.selectOptions(c.getByLabelText('Probe kind'), 'judged')
+    await userEvent.type(c.getByLabelText('What it runs'), 'Every admin action is written to the audit log.')
+    await userEvent.click(c.getByRole('button', { name: 'Add' }))
+    await expect(c.getByText('Every admin action is written to the audit log.')).toBeVisible()
+    await userEvent.click(c.getByRole('button', { name: 'Remove the probe Lint (sample)' }))
+    await expect(c.queryByText('pnpm lint')).toBeNull()
+    await expect(c.getByRole('button', { name: 'Save' })).toBeEnabled()
   },
 }
 /** Agents: the Claude account this app's agents run on. Nothing chosen: the engine's default, and who that is (made up). */

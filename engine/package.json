@@ -43,6 +43,7 @@
   "exports": {
     "./steps": "./src/steps.ts",
     "./requirements": "./src/requirements.ts",
+    "./contracts": "./src/contracts.ts",
     "./brief": "./src/brief.ts",
     "./guide-widget": "./src/guide-widget.ts"
   }
