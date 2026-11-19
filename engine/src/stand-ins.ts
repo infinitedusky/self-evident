@@ -11,12 +11,20 @@
  * that point the app at it. The engine starts each one before the prototype's server, on a port of its own, and gives
  * the server those variables; it stops them with the server. A restart or a data reset brings them back.
  *
+ * An app run in containers (Cloaked's own agent, reading its set-up, 2026-11-19: the compose file "never passes a base
+ * URL to the containers", and its start script names its compose files itself, so a variable the engine gives the
+ * start command stops there). Two things for that, the same for every app:
+ * - `{container_url}`: the stand-in as a container reaches it (`host.docker.internal`), where `{url}` is this computer's.
+ * - `stand-ins.env` in the prototype's folder (`envFileOf`, `$STAND_INS_ENV`): every stand-in's variables, written
+ *   at each start, there even when empty. A compose service that names it as an `env_file` once gets whatever the
+ *   stand-ins set from then on, with no line added for each variable.
+ *
  * Each prototype has a folder of its own outside every repository (`homeOf`): its stand-ins run there, one folder
  * each, and what they serve is kept there, recorded responses with real people's data among them. It is on this
  * computer only, and goes when the prototype is discarded.
  */
 import { spawn, type ChildProcess } from 'node:child_process'
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -54,12 +62,22 @@ export function withStandIn(list: unknown, one: Partial<StandIn>): StandIn[] | n
 
 export interface Where { port: number; home: string; dir: string; worktree: string }
 /** A value with its places filled in: {url} is the stand-in on this computer. */
-export const fill = (value: string, w: Where) => value.replace(/\{url\}/g, `http://localhost:${w.port}`).replace(/\{port\}/g, String(w.port)).replace(/\{home\}/g, w.home).replace(/\{dir\}/g, w.dir).replace(/\{worktree\}/g, w.worktree)
+export const fill = (value: string, w: Where) => value.replace(/\{container_url\}/g, `http://host.docker.internal:${w.port}`).replace(/\{url\}/g, `http://localhost:${w.port}`).replace(/\{port\}/g, String(w.port)).replace(/\{home\}/g, w.home).replace(/\{dir\}/g, w.dir).replace(/\{worktree\}/g, w.worktree)
 /** The variables the prototype's server is given, from every stand-in that has a port. Pure. */
 export function envOf(prototypeId: string, list: StandIn[], ports: Record<string, number>, worktree: string): Record<string, string> {
   const out: Record<string, string> = {}
   for (const s of list) { const port = ports[s.key]; if (!port) continue; for (const [k, v] of Object.entries(s.env)) out[k] = fill(v, { port, home: homeOf(prototypeId), dir: dirOf(prototypeId, s.key), worktree }) }
   return out
+}
+
+/** The file a container is given the stand-ins' variables by. */
+export const envFileOf = (prototypeId: string) => join(homeOf(prototypeId), 'stand-ins.env')
+/** Write it: one NAME=value a line, as docker's env_file reads them. Always written, so naming it never fails. */
+export function writeEnvFile(prototypeId: string, env: Record<string, string>): string {
+  mkdirSync(homeOf(prototypeId), { recursive: true })
+  const file = envFileOf(prototypeId)
+  writeFileSync(file, ['# The variables this prototype\'s stand-ins set. Written by Self Evident at each start: do not edit.', ...Object.entries(env).map(([k, v]) => `${k}=${v.replace(/[\r\n]+/g, ' ')}`)].join('\n') + '\n')
+  return file
 }
 
 interface Running { proc: ChildProcess; log: string[]; port: number }

@@ -5322,3 +5322,19 @@ recording a call by itself (the agent saves the response).
 
 Tests no longer touch the person's own folders: `RECORDINGS_HOME`, `STAND_INS_HOME` and `REPO_SKILLS_HOME` point at
 the temporary folder under vitest, as the shared skills already did.
+
+## A stand-in reaches an app that runs in containers (Cloaked's agent, reading its set-up after the three merges, passed on by Sandy, 2026-11-19)
+
+Its two obstacles: the vendor's stub listens on a fixed port (a wrapper that takes `$PORT` answers that, and is the
+agent's to write); and "the compose override sets the key and workflow id but never passes a base URL to the
+containers", with a start script that names its compose files itself, so a variable given to the start command stops
+there. The second is every containerised app's, so it is answered here:
+
+- `{container_url}` in a stand-in's variables is the stand-in as a container reaches it (`host.docker.internal`);
+  `{url}` stays this computer's.
+- Every stand-in's variables are also written, at each start, to `stand-ins.env` in the prototype's folder
+  (`$STAND_INS_ENV`), there even when empty. A service that names it as an `env_file` once gets whatever the
+  stand-ins set from then on: no line for each variable, and nothing for a start script to pass along.
+
+Tried by hand on this Mac with a real container (`docker run --env-file`): it read the variable and fetched the
+stand-in's recorded response through `host.docker.internal`. Not tried: Cloaked's own stack.
