@@ -34,17 +34,17 @@ export type Attention =
 
 /**
  * A task past its plan, for Build's page: ready (planned, not started), checking (planned after a prototype, being
- * read before it is built), building, stopped (asking, failed, held or paused), built (every sub-task is in; its pull
- * request may be merged) or landed. Landed is closed, and only that (Sandy, 2026-11-19: "Build should only show landed
- * if the task is closed, if it is merged it should say that but it needs to be closed to be landed"): a merge does not
- * land a task, the person's Close does (close.ts).
+ * read before it is built), building, stopped (asking, failed, held or paused), smoke (every sub-task is in: it is the
+ * person's to try by hand, and then to close) or closed. A merge closes nothing (Sandy, 2026-11-19: "if it is merged
+ * it should say that but it needs to be closed to be landed"; then "I am not seeing tasks that are at the smoke test
+ * stage and I don't see a closed section"): the person's Close does (close.ts).
  */
-export type Phase = 'ready' | 'checking' | 'building' | 'stopped' | 'built' | 'landed'
+export type Phase = 'ready' | 'checking' | 'building' | 'stopped' | 'smoke' | 'closed'
 
 /** Where a task past its plan stands. Pure. `stopped`: it asks something, or a sub-task failed or is held. */
 export function phaseOf(f: { state: string; done: number; total: number; projectStatus: string; stopped: boolean }): Phase {
-  if (f.state === 'done') return 'landed'
-  if (f.done === f.total) return 'built'
+  if (f.state === 'done') return 'closed'
+  if (f.done === f.total) return 'smoke'
   if (['drafting', 'proposed', 'approved'].includes(f.projectStatus)) return 'ready'
   return f.stopped || f.projectStatus !== 'running' ? 'stopped' : 'building'
 }
@@ -59,6 +59,8 @@ export interface BuildTask {
   failed: { id: string; identifier: string; title: string; error: string | null }[]
   questions: { id: string; text: string; cost: string | null; reason: string | null; options: { label: string; description: string; changes: string[]; recommended: boolean }[] }[]
   pr: { number: number | null; url: string | null; status: string } | null
+  /** At the smoke test: what still stands between it and being closed, in the person's words; empty when it can be closed. */
+  waits?: string[]
 }
 
 export async function now(appId?: string) {
@@ -123,6 +125,11 @@ export async function now(appId?: string) {
       pr: thePr ? { number: thePr.number, url: thePr.url, status: thePr.status } : null,
     }
   }).filter((x): x is BuildTask => x !== null))
+  // At the smoke test: what each still waits on (its pull request, the person's checks), as its Close button says it.
+  {
+    const { waitsOf } = await import('./close.js')
+    await Promise.all(tasks.filter((x) => x.phase === 'smoke').map(async (x) => { x.waits = await waitsOf(top.find((t) => t.id === x.id)!, x.pr) }))
+  }
   // After a prototype a planned task is read before it is built (the blast radius, the audit, the final ADR and
   // plan). Until those are in it is not ready: it is being checked, or it is stopped because the last step has a
   // question for the person ("NEEDS YOU:", checks.ts).

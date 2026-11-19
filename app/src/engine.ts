@@ -339,10 +339,12 @@ export interface FocusLine { text: string; refs: string[] }
 export interface FocusBody { headline: string; people: { who: string; doing: FocusLine[] }[]; goals: { near: FocusLine[]; mid: FocusLine[]; long: FocusLine[] }; stated?: boolean; links: Record<string, FocusRef> }
 export interface SummaryState { focus: { id: number; body: FocusBody; createdAt: string; trigger: 'person' | 'schedule'; costUsd: string | null } | null; writing: boolean; stale: boolean }
 export interface Hold { until: string; reason: string; level: number }
-/** A task past its plan, for Build's page: ready (planned, not started), checking (being read before it is built), building, stopped (asking, failed, held or paused), built (every sub-task is in; its pull request may be merged) or landed (closed by the person, and only then). */
+/** A task past its plan, for Build's page: ready (planned, not started), checking (being read before it is built), building, stopped (asking, failed, held or paused), smoke (built: the person's to try by hand, then close) or closed (by the person, and only then). */
 export interface BuildTask {
   id: string; identifier: string; title: string; projectId: string; projectName: string | null; projectStatus: string
-  phase: 'ready' | 'checking' | 'building' | 'stopped' | 'built' | 'landed'; done: number; total: number
+  phase: 'ready' | 'checking' | 'building' | 'stopped' | 'smoke' | 'closed'; done: number; total: number
+  /** At the smoke test: what still stands between it and being closed; empty when it can be closed. */
+  waits?: string[]
   /** Planned after a prototype and still being read before the build: the steps left; and, when the last one stopped for the person, its question and the conversation to answer it in. */
   checks?: { left: string[]; needsYou: string | null; sessionId: string | null }
   live: { id: string; identifier: string; title: string; status: string; step: string | null }[]
