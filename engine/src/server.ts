@@ -55,7 +55,7 @@ import { mergeGuideAndRecord } from './merge-guide.js'
 import { autoSave, clearTaskBranches, deleteSavePoint, deleteTaskBranch, goBack, saveHere, switchTo, taskBranches } from './task-branches.js'
 import { restoreAfterRestart, share, shared, ShareError, sharesOf, SHARE_KINDS, stopShares, unshare, type ShareKind } from './share.js'
 import { runsOf, runStep, stopStep, stopStepRuns } from './prototype-run.js'
-import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
+import { compareWithMain, discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopComparing, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { activeApps, appHolds, bringBack, deleteForGood, putAway, putAwayApps } from './apps.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
@@ -460,6 +460,9 @@ export function buildApp(bus: EventBus) {
   api.post('/prototypes/:id/guide/:step/run', async (c) => { try { return c.json(await runStep(c.req.param('id'), Number(c.req.param('step')))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/guide/:step/stop', (c) => { try { return c.json(stopStep(c.req.param('id'), Number(c.req.param('step')))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/talk', async (c) => { try { return c.json(await talkFor(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  // Main beside it, on a port of its own (prototype.ts), and stopped again.
+  api.post('/prototypes/:id/compare', async (c) => { try { return c.json(await compareWithMain(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  api.post('/prototypes/:id/compare/stop', async (c) => { try { return c.json(await stopComparing(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/stop', async (c) => { try { return c.json(await stopPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/discard', async (c) => { try { return c.json(await discardPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/graph', async (c) => {

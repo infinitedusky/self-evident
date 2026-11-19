@@ -98,6 +98,26 @@ export const WithStandIns: Story = {
     await expect(group.getByText('Mail (sample) · not running')).toBeInTheDocument()
   },
 }
+/** Main beside it: pressed, the app's main comes up on a port of its own and the two follow one address bar. Sample data. */
+export const CompareWithMain: Story = {
+  args: { id: running.id, path: at },
+  beforeEach: withEngine({ prototypes: [{ ...running, canCompare: true, compare: null }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Compare with main' }))
+    await expect(await c.findByTitle('main')).toHaveAttribute('src', expect.stringContaining(at))
+    await expect(c.getByTitle(running.title)).toHaveAttribute('src', expect.stringContaining(at))
+    await expect(c.getByText('4f2a9c1')).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Stop comparing' }))
+    await expect(await c.findByRole('button', { name: 'Compare with main' })).toBeInTheDocument()
+  },
+}
+/** Main is still coming up: its side says so, with what its server last printed. Sample data. */
+export const MainStarting: Story = {
+  args: { id: running.id, path: at },
+  beforeEach: withEngine({ prototypes: [{ ...running, canCompare: true, compare: { url: 'http://localhost:6999', up: false, sha: '4f2a9c1d0b7e', log: ['installing (sample)', 'building (sample)'] } }] }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/Starting main/)).toBeInTheDocument() },
+}
 /** An app with no database set: no data control. */
 export const NoDatabase: Story = { args: { id: running.id, path: at }, beforeEach: withEngine({ prototypes: [{ ...running, database: null, scenarios: [] }] }) }
 /** Its server is starting: the last lines it printed. */
