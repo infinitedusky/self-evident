@@ -9,7 +9,7 @@ import { and, eq } from 'drizzle-orm'
 import { app, event, repo, session, workspace } from './db/schema.js'
 import { branchExists, commitAll, git } from './git.js'
 import { newId } from './ids.js'
-import { compareWithMain, stopComparing, discardPrototype, listPrototypes, prototypeStatus, runPrototype, setPrototypeCleanup, setPrototypeCommand, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
+import { discardPrototype, listPrototypes, prototypeStatus, runPrototype, setPrototypeCleanup, setPrototypeCommand, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -83,33 +83,6 @@ describe.skipIf(!reachable)('prototypes', () => {
     expect(await branchExists(repoPath, p.branch)).toBe(false)
     expect(await listPrototypes(appId)).toEqual([])
     await expect(runPrototype(p.id)).rejects.toThrow(/discarded/)
-  })
-
-  it('brings main up beside a running prototype, from where its branch left main, and takes it down with it', async () => {
-    await setPrototypeCommand(appId, `node -e "require('http').createServer((q, s) => s.end(require('fs').readFileSync('a.txt', 'utf8') + process.cwd())).listen(process.env.PORT)"`)
-    const p = await startPrototype({ appId, title: 'Beside main (sample)', wait: true })
-    expect(p).toMatchObject({ canCompare: true, compare: null })
-    await expect(compareWithMain(p.id)).rejects.toThrow(/start the prototype first/)
-    await writeFile(join(p.path, 'a.txt'), 'two\n'); await commitAll(p.path, 'the prototype\'s change')
-    await runPrototype(p.id)
-    const base = (await git(repoPath, ['rev-parse', 'main'])).stdout.trim()
-    const c = await compareWithMain(p.id)
-    expect(c.compare).toMatchObject({ sha: base })
-    expect(c.compare!.url).not.toBe(c.url)
-    expect(await until(async () => { const s = await prototypeStatus(p.id); return s.up && !!s.compare?.up })).toBe(true)
-    expect(await (await fetch(c.url!)).text()).toMatch(/^two\n.*prototype--beside-main-sample-[a-z0-9]{4}$/)
-    expect(await (await fetch(c.compare!.url)).text()).toMatch(/^one\n.*--main$/) // main as it was, in a worktree of its own
-    expect((await compareWithMain(p.id)).compare!.url).toBe(c.compare!.url) // asked again while it is up: the same one
-    // A restart of the prototype leaves main up; stopping comparing takes it down; stopping the prototype does too.
-    expect((await runPrototype(p.id, 'person', { restart: true })).compare).not.toBeNull()
-    expect((await stopComparing(p.id)).compare).toBeNull()
-    expect(await fetch(c.compare!.url).then(() => true, () => false)).toBe(false)
-    await compareWithMain(p.id)
-    expect((await stopPrototype(p.id)).compare).toBeNull()
-    expect(existsSync(`${p.path}--main`)).toBe(true) // kept for the next time
-    expect((await discardPrototype(p.id)).status).toBe('discarded')
-    expect(existsSync(`${p.path}--main`)).toBe(false)
-    await setPrototypeCommand(appId, SERVER)
   })
 
   it('runs the app\'s stop command in the prototype\'s worktree when it is stopped, restarted and discarded, with its port; a failing one never blocks, and says so', async () => {

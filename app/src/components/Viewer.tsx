@@ -13,21 +13,25 @@ import { Mockups } from '../pages/Mockups'
 import { Sketches } from '../pages/Sketches'
 import { PagePane } from './PagePane'
 import { PrototypePane } from './PrototypePane'
+import { MainPane } from './MainPane'
 import { Share } from './Share'
 import { useCurrentApp } from '../current-app'
 import type { Tab } from '../workspace'
 
-export type Viewed = Extract<Tab, { kind: 'sketch' | 'storybook' | 'prototype' }>
-const NAME = { sketch: 'Sketches', storybook: 'Mockups', prototype: 'The prototype' }
+export type Viewed = Extract<Tab, { kind: 'sketch' | 'storybook' | 'prototype' | 'main' }>
+const NAME = { sketch: 'Sketches', storybook: 'Mockups', prototype: 'The prototype', main: 'Main' }
+/** One thing ("it is"), not several ("they are"). */
+const one = (t: Viewed) => t.kind === 'prototype' || t.kind === 'main'
 type Msg = { type: 'here' | 'closed' | 'who' | 'back'; key: string }
 const channel = () => (typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('self-evident-viewer'))
 /** What is shown, as one string: a detached viewer and the place it left agree on it. */
-export const viewKey = (t: Viewed) => `${t.kind}:${t.kind === 'prototype' ? t.id ?? '' : `${t.session ?? ''}:${t.kind === 'sketch' ? t.file ?? '' : t.story ?? ''}`}`
+export const viewKey = (t: Viewed) => `${t.kind}:${t.kind === 'main' ? '' : t.kind === 'prototype' ? t.id ?? '' : `${t.session ?? ''}:${t.kind === 'sketch' ? t.file ?? '' : t.story ?? ''}`}`
 export const viewUrl = (t: Viewed) => `${window.location.origin}/view?tab=${encodeURIComponent(JSON.stringify(t))}`
 
 function Body({ tab, embedded, onNavigate }: { tab: Viewed; embedded?: boolean; onNavigate?: (path: string) => void }) {
   if (tab.kind === 'sketch') return <Sketches file={tab.file} session={tab.session} embedded={embedded} />
   if (tab.kind === 'storybook') return <Mockups story={tab.story} session={tab.session} embedded={embedded} />
+  if (tab.kind === 'main') return <MainPane path={tab.path} onNavigate={onNavigate} />
   return <PrototypePane id={tab.id} path={tab.path} onNavigate={onNavigate} />
 }
 
@@ -36,7 +40,7 @@ export function Viewer({ tab, embedded, onNavigate, detached: startDetached = fa
   const key = viewKey(tab)
   const { app } = useCurrentApp()
   // What a share of this reaches: the prototype, or the mockups or sketches of the conversation they are from (else the app's).
-  const shareId = tab.kind === 'prototype' ? tab.id : tab.session ?? app?.id
+  const shareId = tab.kind === 'main' ? undefined : tab.kind === 'prototype' ? tab.id : tab.session ?? app?.id
   const [detached, setDetached] = useState(startDetached)
   const [problem, setProblem] = useState<string | null>(null)
   const ch = useRef<BroadcastChannel | null>(null)
@@ -56,14 +60,14 @@ export function Viewer({ tab, embedded, onNavigate, detached: startDetached = fa
   return (
     <div className={`viewer ${embedded ? 'embedded' : ''}`} data-component="Viewer">
       <div className="viewer-bar">
-        {shareId && <Share kind={tab.kind} id={shareId} appId={app?.id} />}
+        {shareId && tab.kind !== 'main' && <Share kind={tab.kind} id={shareId} appId={app?.id} />}
         {detached
           ? <button className="btn quiet small" onClick={back} title="Close its browser tab and show it here again">↙ Bring it back</button>
           : <button className="btn quiet small" onClick={detach} title="Open it in a browser tab of its own">↗ Detach</button>}
       </div>
       {problem && <div className="empty bad">{problem}</div>}
       {detached
-        ? <div className="empty viewer-out">{NAME[tab.kind]} {tab.kind === 'prototype' ? 'is' : 'are'} open in a browser tab of {tab.kind === 'prototype' ? 'its' : 'their'} own. <button className="btn quiet small" onClick={back}>Bring {tab.kind === 'prototype' ? 'it' : 'them'} back</button></div>
+        ? <div className="empty viewer-out">{NAME[tab.kind]} {one(tab) ? 'is' : 'are'} open in a browser tab of {one(tab) ? 'its' : 'their'} own. <button className="btn quiet small" onClick={back}>Bring {one(tab) ? 'it' : 'them'} back</button></div>
         : <Body tab={tab} embedded={embedded} onNavigate={onNavigate} />}
     </div>
   )
@@ -71,7 +75,7 @@ export function Viewer({ tab, embedded, onNavigate, detached: startDetached = fa
 
 /** The detached page: the same viewer, the whole browser tab, and the way back. */
 export function ViewerWindow() {
-  const tab = useMemo<Viewed | null>(() => { try { const t = JSON.parse(new URLSearchParams(window.location.search).get('tab') ?? 'null'); return t && ['sketch', 'storybook', 'prototype'].includes(t.kind) ? t : null } catch { return null } }, [])
+  const tab = useMemo<Viewed | null>(() => { try { const t = JSON.parse(new URLSearchParams(window.location.search).get('tab') ?? 'null'); return t && ['sketch', 'storybook', 'prototype', 'main'].includes(t.kind) ? t : null } catch { return null } }, [])
   const [orphan, setOrphan] = useState(false)
   useEffect(() => {
     if (!tab) return
@@ -97,7 +101,7 @@ export function ViewerWindow() {
         <span className="faint">{orphan ? 'It is showing in Self Evident again. You can close this tab.' : `Detached from Self Evident.`}</span>
         <button className="btn quiet small" onClick={putBack} title="Close this tab and show it in Self Evident again">↙ Put it back</button>
       </div>
-      {tab.kind === 'prototype' ? <Body tab={tab} /> : <PagePane path="/mockups"><Body tab={tab} /></PagePane>}
+      {one(tab) ? <Body tab={tab} /> : <PagePane path="/mockups"><Body tab={tab} /></PagePane>}
     </div>
   )
 }

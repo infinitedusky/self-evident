@@ -276,7 +276,7 @@ select, input { color-scheme: light dark; }
 .mockups { display: flex; flex-direction: column; height: 100%; }
 /* The viewer: sketches, mockups or a prototype, where the work is, with a way out to a browser tab and back. */
 .viewer { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.viewer > .mockups, .viewer > [data-component="PrototypePane"] { flex: 1; min-height: 0; }
+.viewer > .mockups, .viewer > [data-component="PrototypePane"], .viewer > [data-component="MainPane"] { flex: 1; min-height: 0; }
 .viewer-bar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 0 0 6px; }
 .viewer.embedded { flex: 1; min-height: 0; margin-top: 10px; }
 .viewer.embedded > .viewer-bar { position: absolute; top: 0; right: 0; padding: 0; z-index: 1; } /* Detach shares a row with the view's own controls */
@@ -288,7 +288,7 @@ select, input { color-scheme: light dark; }
 .step-section .card-head .step-tabs { margin-left: auto; margin-right: 10px; }
 .viewer-out { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .viewer-window { height: 100vh; display: flex; flex-direction: column; padding: 10px 14px; box-sizing: border-box; }
-.viewer-window > .tab-page, .viewer-window > [data-component="PrototypePane"] { flex: 1; min-height: 0; }
+.viewer-window > .tab-page, .viewer-window > [data-component="PrototypePane"], .viewer-window > [data-component="MainPane"] { flex: 1; min-height: 0; }
 .sb-frame { flex: 1; width: 100%; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; min-height: 480px; }
 .sketch-stage { flex: 1; display: flex; justify-content: center; min-height: 0; } .sketch-frame { flex: none; height: 100%; width: 100%; }
 .sb-log { font-size: 11px; max-height: 160px; overflow: auto; background: var(--ground); padding: 8px; border-radius: 8px; text-align: left; }

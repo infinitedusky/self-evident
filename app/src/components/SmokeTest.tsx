@@ -39,6 +39,7 @@ import { Link } from 'react-router'
 import { Badge } from './Badge'
 import { SmokeTerminal } from './SmokeTerminal'
 import { Nav, useTrail } from './Trail'
+import { useMain } from '../main-running'
 import { API, engine, openEvents, type SmokeCheck, type SmokeSetupView, type SmokeView } from '../engine'
 
 const WHEN = { here: 'Here, on the built code', pr: 'On the pull request', after: 'After it is merged', nightly: 'Left to the nightly run' } as const
@@ -58,6 +59,9 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   const [v, setV] = useState<SmokeView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Compare is the app's own running main beside the build, at the same place (main-running.ts): turned on if it is off, and not this task's to turn off.
+  const [comparing, setComparing] = useState(false)
+  const theMain = useMain(appId, comparing)
   const mine = useTrail(), theirs = useTrail() // the build's view, and main's beside it: each goes its own way
   const { at, setAt: setMine } = mine
   const setAt = (to: string | null) => { setMine(to); if (to === null) theirs.setAt(null) }
@@ -77,7 +81,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
     return () => { es.close(); window.clearTimeout(timer.current) }
   }, [issueId, appId, load])
   useEffect(() => { // a server that was just started takes a moment to answer: look again until it does
-    if (!v || !(v.setups ?? [v]).some((x) => (x.where === 'local' && x.url && !x.up) || (x.compare && !x.compare.up))) return
+    if (!v || !(v.setups ?? [v]).some((x) => (x.where === 'local' && x.url && !x.up))) return
     const t = window.setTimeout(() => void load(), 1500)
     return () => window.clearTimeout(t)
   }, [v, load])
@@ -89,7 +93,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   }
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
-  const all: SmokeSetupView[] = v.setups?.length ? v.setups : [{ key: 'main', name: 'Smoke test', what: null, where: v.where, says: v.says, account: v.account, flag: v.flag, running: v.running, url: v.url, up: v.up, canRun: v.canRun, canClean: v.canClean, canCompare: v.canCompare, compare: v.compare, terminal: v.terminal, scratch: v.scratch, log: v.log, owed: v.owed }]
+  const all: SmokeSetupView[] = v.setups?.length ? v.setups : [{ key: 'main', name: 'Smoke test', what: null, where: v.where, says: v.says, account: v.account, flag: v.flag, running: v.running, url: v.url, up: v.up, canRun: v.canRun, canClean: v.canClean, terminal: v.terminal, scratch: v.scratch, log: v.log, owed: v.owed }]
   const many = all.length > 1
   // The one they chose; else the first with something still to check; else the first.
   const su = all.find((x) => x.key === picked) ?? all.find((x) => x.owed > 0) ?? all[0]
@@ -106,7 +110,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
     : part))
   const behind = local && su.running && v.head && su.running !== v.head
   const src = su.url ? at ?? su.url : null
-  const cmp = local && su.up ? su.compare ?? null : null
+  const cmp = local && su.up && comparing && theMain.main?.running && theMain.main.url ? { url: theMain.main.url, up: theMain.main.up, sha: theMain.main.sha, log: theMain.main.log, branch: theMain.main.branch } : null
   const home = su.url?.replace(/\/$/, '') ?? '', cmpHome = cmp?.url.replace(/\/$/, '') ?? ''
   /** The same place on main: the build's address, on main's port. */
   const onMain = (to: string) => (cmp && to.startsWith(home) ? `${cmpHome}${to.slice(home.length)}` : to)
@@ -198,8 +202,9 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
                   <a className="btn quiet small" href={src} target="_blank" rel="noreferrer">Open in a new tab</a>
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.startSmoke(issueId, false, many ? su.key : undefined))}>{behind ? 'Run the new commit' : 'Restart'}</button>}
                   {local && su.canClean && <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true, many ? su.key : undefined))}>Start clean</button>}
-                  {local && su.canCompare && !su.compare && <button className="btn quiet small" disabled={busy} title="Bring up main beside it, on its own port, to look at the two side by side" onClick={() => void act(() => engine.startSmoke(issueId, false, many ? su.key : undefined, true))}>Compare with main</button>}
-                  {local && su.compare && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.stopSmoke(issueId, many ? su.key : undefined, true))}>Stop comparing</button>}
+                  {local && !cmp && theMain.main && theMain.main.how !== 'none' && <button className="btn quiet small" disabled={theMain.busy} title="The app's main beside it, at the same place. Turned on if it is off." onClick={() => { setComparing(true); void theMain.start().then((m) => { if (!m?.running) setComparing(false) }) }}>{theMain.busy ? 'Turning main on…' : 'Compare with main'}</button>}
+                  {local && cmp && <button className="btn quiet small" title="Main stays on for its own tab; it turns itself off when nobody has looked for a while" onClick={() => { setComparing(false); theirs.setAt(null) }}>Stop comparing</button>}
+                  {theMain.error && <span className="bad" role="alert">{theMain.error}</span>}
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.stopSmoke(issueId, many ? su.key : undefined))}>Stop</button>}
                 </div>
                 {local && su.strayPorts?.length ? <p className="smoke-stale" role="note">{su.strayNote ?? `It also listens on ${su.strayPorts.join(', ')}, which it chose itself.`}</p> : null}
@@ -207,9 +212,9 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
                 {local && cmp
                   ? <div className="smoke-pair">
                       <figure><figcaption>This build{su.running ? <> <code>{su.running.slice(0, 7)}</code></> : null}</figcaption><div className="smoke-bar"><Nav t={mine} home={home} src={src} /></div><iframe key={`${src}#${mine.reloads}`} className="smoke-frame" title="The built code" src={src} /></figure>
-                      <figure><figcaption>main{cmp.sha ? <> <code>{cmp.sha.slice(0, 7)}</code></> : null}</figcaption>{cmp.up && cmpSrc && <div className="smoke-bar"><Nav t={theirs} home={cmpHome} src={cmpSrc} of="main" /></div>}{cmp.up && cmpSrc
+                      <figure><figcaption>{cmp.branch}{cmp.sha ? <> <code>{cmp.sha.slice(0, 7)}</code></> : null}</figcaption>{cmp.up && cmpSrc && <div className="smoke-bar"><Nav t={theirs} home={cmpHome} src={cmpSrc} of="main" /></div>}{cmp.up && cmpSrc
                         ? <iframe key={`${cmpSrc}#${theirs.reloads}`} className="smoke-frame" title="main" src={cmpSrc} />
-                        : <div className="empty smoke-frame">Starting main… {cmp.log.length > 0 && <pre className="smoke-log">{cmp.log.slice(-6).join('\n')}</pre>}</div>}</figure>
+                        : <div className="empty smoke-frame">Turning main on… {cmp.log.length > 0 && <pre className="smoke-log">{cmp.log.slice(-6).join('\n')}</pre>}</div>}</figure>
                     </div>
                   : local
                   ? <iframe key={`${src}#${mine.reloads}`} className="smoke-frame" title="The built code" src={src} />

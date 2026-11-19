@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { addressOf, goable, SmokeTest } from './SmokeTest'
-import { withEngine } from '../stories/mock-engine'
+import { MAIN_OFF, withEngine } from '../stories/mock-engine'
 import { smokeSample } from '../stories/sample'
 
 // A task's smoke test: the built code beside the checks left to a person. All made up: a diagram library's edges.
@@ -277,9 +277,9 @@ export const AddressBar: Story = {
   },
 }
 
-/** Main beside the build (made up): pressing Compare with main brings it up on its own port; a check sends both views to the same place, and each has its own back, forward, reload and address. */
+/** Main beside the build (made up): pressing Compare with main turns the app's own running main on and shows it beside the build; a check sends both views to the same place, and each has its own back, forward, reload and address. */
 export const ComparedWithMain: Story = {
-  beforeEach: withEngine({ smoke: { ...smokeSample, canCompare: true, compare: null } }),
+  beforeEach: withEngine({ smoke: smokeSample, main: MAIN_OFF, mainUrl: 'http://localhost:6600' }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Compare with main' }))
@@ -302,8 +302,8 @@ export const ComparedWithMain: Story = {
 }
 /** Main is still starting (made up): the build stays usable, and main's side says so. */
 export const MainStarting: Story = {
-  beforeEach: withEngine({ smoke: { ...smokeSample, canCompare: true, compare: { url: 'http://localhost:6600', up: false, sha: 'fed9876cba', log: ['installing (sample)'] } } }),
-  play: async ({ canvasElement }) => { const c = within(canvasElement); await expect(await c.findByText(/Starting main/)).toBeInTheDocument(); await expect(c.getByTitle('The built code')).toBeInTheDocument() },
+  beforeEach: withEngine({ smoke: smokeSample, main: { ...MAIN_OFF, running: true, up: false, url: 'http://localhost:6600', sha: 'fed9876cba', log: ['installing (sample)'] } }),
+  play: async ({ canvasElement }) => { const c = within(canvasElement); await userEvent.click(await c.findByRole('button', { name: 'Compare with main' })); await expect(await c.findByText(/Turning main on/)).toBeInTheDocument(); await expect(c.getByTitle('The built code')).toBeInTheDocument() },
 }
 /** Ask an agent (made up): it says what it saw beside the check, and the check is still yours to mark. */
 export const AgentTriesOne: Story = {

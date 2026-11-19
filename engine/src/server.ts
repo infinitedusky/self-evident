@@ -9,7 +9,7 @@ import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
 import { checklistOf } from './checklist.js'
 import { closeTask, closeView, reopenUnclosed } from './close.js'
-import { compareKey, markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
+import { markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
 import { closeTerminal, closeTerminals, openTerminal, ownPage, resizeTerminal, scratchKey, typeInTerminal, watchTerminal } from './smoke-terminal.js'
 import { startLearning, talkBusy } from './talk.js'
 import { serve } from '@hono/node-server'
@@ -55,7 +55,8 @@ import { mergeGuideAndRecord } from './merge-guide.js'
 import { autoSave, clearTaskBranches, deleteSavePoint, deleteTaskBranch, goBack, saveHere, switchTo, taskBranches } from './task-branches.js'
 import { restoreAfterRestart, share, shared, ShareError, sharesOf, SHARE_KINDS, stopShares, unshare, type ShareKind } from './share.js'
 import { runsOf, runStep, stopStep, stopStepRuns } from './prototype-run.js'
-import { compareWithMain, discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopComparing, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
+import { mainStatus, startMain, stopMain, stopMains } from './main-running.js'
+import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { activeApps, appHolds, bringBack, deleteForGood, putAway, putAwayApps } from './apps.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
@@ -460,9 +461,10 @@ export function buildApp(bus: EventBus) {
   api.post('/prototypes/:id/guide/:step/run', async (c) => { try { return c.json(await runStep(c.req.param('id'), Number(c.req.param('step')))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/guide/:step/stop', (c) => { try { return c.json(stopStep(c.req.param('id'), Number(c.req.param('step')))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/talk', async (c) => { try { return c.json(await talkFor(c.req.param('id'))) } catch (err) { return planError(c, err) } })
-  // Main beside it, on a port of its own (prototype.ts), and stopped again.
-  api.post('/prototypes/:id/compare', async (c) => { try { return c.json(await compareWithMain(c.req.param('id'))) } catch (err) { return planError(c, err) } })
-  api.post('/prototypes/:id/compare/stop', async (c) => { try { return c.json(await stopComparing(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  // The app's main, running (main-running.ts): turned on and off by the person; a look at it (touch=1) keeps it from turning itself off.
+  api.get('/apps/:id/main', async (c) => { try { return c.json(await mainStatus(c.req.param('id'), c.req.query('touch') === '1')) } catch (err) { return planError(c, err, 404) } })
+  api.post('/apps/:id/main/start', async (c) => { try { return c.json(await startMain(c.req.param('id'), 'person', { update: c.req.query('update') === '1' })) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/main/stop', async (c) => { try { return c.json(await stopMain(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/stop', async (c) => { try { return c.json(await stopPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/discard', async (c) => { try { return c.json(await discardPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/graph', async (c) => {
@@ -697,8 +699,8 @@ export function buildApp(bus: EventBus) {
     })
     stop()
   })))
-  api.post('/issues/:id/smoke/start', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { clean?: boolean; setup?: string; compare?: boolean }; return c.json(await startSmoke(t.id, 'user', { clean: body.clean === true, compare: body.compare === true, setup: typeof body.setup === 'string' ? body.setup : undefined }), 202) } catch (err) { return planError(c, err) } })
-  api.post('/issues/:id/smoke/stop', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { setup?: string; compare?: boolean }; if (body.compare === true) { const v = await smokeView(t.id); await stopSmoke(t.id, compareKey(typeof body.setup === 'string' ? body.setup : v.setups[0].key)) } else await stopSmoke(t.id, typeof body.setup === 'string' ? body.setup : undefined); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err) } })
+  api.post('/issues/:id/smoke/start', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { clean?: boolean; setup?: string }; return c.json(await startSmoke(t.id, 'user', { clean: body.clean === true, setup: typeof body.setup === 'string' ? body.setup : undefined }), 202) } catch (err) { return planError(c, err) } })
+  api.post('/issues/:id/smoke/stop', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { setup?: string }; await stopSmoke(t.id, typeof body.setup === 'string' ? body.setup : undefined); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err) } })
   // An agent tries one check and says what it saw; it marks nothing (smoke.ts, trySmoke).
   api.post('/issues/:id/smoke/:criterion/try', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json((await trySmoke(t.id, c.req.param('criterion'), 'user')).view) } catch (err) { return planError(c, err, 400) } })
   api.post('/issues/:id/smoke/:criterion', async (c) => {
@@ -1068,7 +1070,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   void watchTerminals().catch(() => {}) // conversations still in a terminal: keep copying what's said there
   const stopSync = process.env.GITHUB_SYNC === '0' ? () => undefined : startSync(Number(process.env.GITHUB_SYNC_MINUTES ?? 2)) // GitHub: reviews, checks, merges, main moving
   const stopSummaries = process.env.SUMMARY === '0' ? () => undefined : startSummaries(Number(process.env.SUMMARY_HOURS ?? 24)) // the summary page, rewritten when a day old and something moved
-  const shutdown = async () => { stopSync(); stopSummaries(); stopStorybooks(); stopShares(); stopPrototypes(); stopSmokes(); void closeTerminals(); stopStepRuns(); closeTalks(); await runner.shutdown(); await bus.stop(); await pool.end(); process.exit(0) }
+  const shutdown = async () => { stopSync(); stopSummaries(); stopStorybooks(); stopShares(); stopPrototypes(); stopMains(); stopSmokes(); void closeTerminals(); stopStepRuns(); closeTalks(); await runner.shutdown(); await bus.stop(); await pool.end(); process.exit(0) }
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
 }

@@ -249,8 +249,16 @@ export interface Prototype {
   standIns?: { key: string; name: string; what?: string; running: boolean; url: string | null }[]
   /** What someone opening its shared link is told, in the tab at the bottom right. */
   guide?: Guide | null
-  /** Main can be brought up beside it; compare: it is, at this address (sha: the commit of main it runs). */
-  canCompare?: boolean; compare?: { url: string; up: boolean; sha: string | null; log: string[] } | null
+}
+/**
+ * The app's main, running (the engine's main-running.ts): what is there today, to look at beside what is being made.
+ * how: run here ("local"), a deployed address, or "none" (the app has no command to start it yet).
+ */
+export interface MainRunning {
+  appId: string; branch: string; how: 'local' | 'address' | 'none'; url: string | null; running: boolean; up: boolean; canRun: boolean
+  /** The commit it runs and the branch's now; behind: the branch has moved on since it was turned on. */ sha: string | null; tip: string | null; behind: boolean
+  log: string[]; standIns: { key: string; name: string; what?: string; running: boolean; url: string | null }[]; database: string | null
+  /** With nobody looking for this long it turns itself off. */ idleMinutes: number | null; stopsAt: string | null
 }
 export interface Guide { intro?: string; steps: { title: string; path?: string; /** For something with no screen: a command, run in the prototype's worktree on a press. */ run?: string; try?: string }[]; by?: string; at?: string }
 /** The last run of a guide step that is a command: how it ended and what it printed. */
@@ -276,11 +284,9 @@ export interface FlowNode { id: string; sub?: string; title: string; state: Chec
 export interface Checklist { build: 'one' | 'planned'; stages: ChecklistStage[]; items: ChecklistItem[]; met: number; unmet: number; total: number; flow?: FlowNode[] }
 /** A task's smoke test (the engine's smoke module): where the built code runs, and the checks left to a person with their marks. */
 export interface SmokeCheck { /** Which of the app's set-ups it needs up (its key). */ setup?: string; /** When it can be done: here on the built code, on the pull request, or after the merge. */ when?: 'here' | 'pr' | 'after' | 'nightly'; id: string; text: string; where?: string; /** That place as an address to open, while its set-up is up or deployed. */ link?: string; how?: string; mark: 'todo' | 'pass' | 'fail' | 'skip'; note?: string; stale?: boolean; before?: { pass: boolean; note: string }; /** What an agent saw when asked to try it: its word, not a mark. stale: said on an earlier commit. */ tried?: { verdict: 'holds' | 'fails' | 'unsure'; note: string; sha: string | null; at: string; stale?: boolean }; /** An agent is trying it now. */ trying?: boolean }
-/** Main, brought up beside a build to look at the two side by side. */
-export interface SmokeCompare { url: string; up: boolean; /** The commit of main it runs. */ sha: string | null; log: string[] }
 /** One of an app's smoke test set-ups on a task: where it is and whether it is up. */
-export interface SmokeSetupView { /** Ports it listens on that it was not given: a second copy would share them. */ strayPorts?: number[]; strayNote?: string; key: string; name: string; what: string | null; where: 'local' | 'preview' | 'staging' | 'flag' | 'terminal'; says: string; account: string | null; flag: string | null; running: string | null; url: string | null; up: boolean; canRun: boolean; /** A terminal can be opened on it: where it opens, and whether one is open. */ terminal?: { folder: 'build' | 'temp'; open: boolean }; /** The throwaway terminal every set-up has, in a new empty folder; left out where its own is already that. */ scratch?: { open: boolean }; canClean?: boolean; /** Main can be brought up beside it. */ canCompare?: boolean; compare?: SmokeCompare | null; log: string[]; owed: number }
-export interface SmokeView { /** Every set-up of the app; left out, the app has the one the fields below describe. */ setups?: SmokeSetupView[]; /** A staged task: the checks are every criterion no agent marked, not what a check after the build left. */ staged?: boolean; /** Its pull request, when there is one: a preview is of it. */ pr?: { number: number; url: string | null } | null; where: 'local' | 'preview' | 'staging' | 'flag' | 'terminal'; says: string; account: string | null; flag: string | null; branch: string | null; head: string | null; running: string | null; url: string | null; up: boolean; canRun: boolean; /** There is something to start from nothing: a database, a seed, or a script of its own. */ canClean?: boolean; terminal?: { folder: 'build' | 'temp'; open: boolean }; scratch?: { open: boolean }; canCompare?: boolean; compare?: SmokeCompare | null; log: string[]; checks: SmokeCheck[]; owed: number; failed: number; /** After a mark: how many that failed were sent back. */ sentBack?: number }
+export interface SmokeSetupView { /** Ports it listens on that it was not given: a second copy would share them. */ strayPorts?: number[]; strayNote?: string; key: string; name: string; what: string | null; where: 'local' | 'preview' | 'staging' | 'flag' | 'terminal'; says: string; account: string | null; flag: string | null; running: string | null; url: string | null; up: boolean; canRun: boolean; /** A terminal can be opened on it: where it opens, and whether one is open. */ terminal?: { folder: 'build' | 'temp'; open: boolean }; /** The throwaway terminal every set-up has, in a new empty folder; left out where its own is already that. */ scratch?: { open: boolean }; canClean?: boolean; log: string[]; owed: number }
+export interface SmokeView { /** Every set-up of the app; left out, the app has the one the fields below describe. */ setups?: SmokeSetupView[]; /** A staged task: the checks are every criterion no agent marked, not what a check after the build left. */ staged?: boolean; /** Its pull request, when there is one: a preview is of it. */ pr?: { number: number; url: string | null } | null; where: 'local' | 'preview' | 'staging' | 'flag' | 'terminal'; says: string; account: string | null; flag: string | null; branch: string | null; head: string | null; running: string | null; url: string | null; up: boolean; canRun: boolean; /** There is something to start from nothing: a database, a seed, or a script of its own. */ canClean?: boolean; terminal?: { folder: 'build' | 'temp'; open: boolean }; scratch?: { open: boolean }; log: string[]; checks: SmokeCheck[]; owed: number; failed: number; /** After a mark: how many that failed were sent back. */ sentBack?: number }
 /** What an agent learned from an app's code: a short document each, the part for a person and the part for agents. */
 export interface Learned { key: string; title: string; summary: string; body: string; sha: string | null; updatedAt: string }
 export interface Learning { docs: Learned[]; missing: string[]; working: { sessionId: string } | null; sessionId: string | null; stale: number }
@@ -413,8 +419,10 @@ export const engine = {
   prototype: (id: string) => call<Prototype>('GET', `/prototypes/${id}`),
   runPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/start`),
   stopPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/stop`),
-  comparePrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/compare`),
-  stopComparingPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/compare/stop`),
+  /** touch: someone is looking at it, so it stays on. */
+  main: (appId: string, touch = false) => call<MainRunning>('GET', `/apps/${appId}/main${touch ? '?touch=1' : ''}`),
+  startMain: (appId: string, update = false) => call<MainRunning>('POST', `/apps/${appId}/main/start${update ? '?update=1' : ''}`),
+  stopMain: (appId: string) => call<MainRunning>('POST', `/apps/${appId}/main/stop`),
   prototypeRuns: (id: string) => call<StepRun[]>('GET', `/prototypes/${id}/runs`),
   runGuideStep: (id: string, step: number) => call<StepRun>('POST', `/prototypes/${id}/guide/${step}/run`),
   stopGuideStep: (id: string, step: number) => call<StepRun>('POST', `/prototypes/${id}/guide/${step}/stop`),
@@ -444,8 +452,8 @@ export const engine = {
   setAcceptance: (issueId: string, change: AcceptanceChange) => call<{ acceptance: Criterion[]; note?: string }>('PUT', `/issues/${issueId}/acceptance`, change),
   mergeGuide: (issueId: string) => call<{ guide: string; /** Everything the guide left out. */ record?: string; subTasks: number }>('GET', `/issues/${issueId}/merge-guide`),
   smoke: (issueId: string) => call<SmokeView>('GET', `/issues/${issueId}/smoke`),
-  startSmoke: (issueId: string, clean = false, setup?: string, compare = false) => call<SmokeView>('POST', `/issues/${issueId}/smoke/start`, clean || setup || compare ? { ...(clean ? { clean: true } : {}), ...(setup ? { setup } : {}), ...(compare ? { compare: true } : {}) } : undefined),
-  stopSmoke: (issueId: string, setup?: string, compare = false) => call<SmokeView>('POST', `/issues/${issueId}/smoke/stop`, setup || compare ? { ...(setup ? { setup } : {}), ...(compare ? { compare: true } : {}) } : undefined),
+  startSmoke: (issueId: string, clean = false, setup?: string) => call<SmokeView>('POST', `/issues/${issueId}/smoke/start`, clean || setup ? { ...(clean ? { clean: true } : {}), ...(setup ? { setup } : {}) } : undefined),
+  stopSmoke: (issueId: string, setup?: string) => call<SmokeView>('POST', `/issues/${issueId}/smoke/stop`, setup ? { setup } : undefined),
   /** The smoke test's terminal: a shell in the build's checkout or a new folder. Opened when asked; the same one when asked again. */
   openSmokeTerminal: (issueId: string, setup: string, cols?: number, rows?: number, scratch = false) => call<{ setup: string; cwd: string; folder: 'build' | 'temp'; fresh: boolean }>('POST', `/issues/${issueId}/smoke/terminal`, { setup, cols, rows, ...(scratch ? { scratch: true } : {}) }),
   closeSmokeTerminal: (issueId: string, setup: string, scratch = false) => call<SmokeView>('POST', `/issues/${issueId}/smoke/terminal/close`, { setup, ...(scratch ? { scratch: true } : {}) }),

@@ -285,22 +285,6 @@ export const smokeReady = (criteria: Criterion[], hasPr: boolean) => smokeChecks
 
 const running = new Map<string, { proc: ChildProcess; log: string[]; given?: number[]; stray?: { at: number; ports: number[] }; stop?: { cmd: string; cwd: string; env: Record<string, string> } }>() // by task and set-up
 const runKey = (issueId: string, key: string) => `${issueId}:${key}`
-/**
- * The comparison (Sandy, 2026-11-18: "spin up a comp setup that uses main instead of whatever I'm building … so I can
- * look at the two side by side"): the same set-up run a second time, from where the build's branch left the app's
- * default branch, on a port, a worktree and a database of its own. Its run is kept under the set-up's key with this
- * after it; a set-up's key never has an "@".
- */
-export const COMPARE = '@main'
-export const compareKey = (key: string) => `${key}${COMPARE}`
-/** Where the build left main: what it is compared with, so the only differences are the build's own. */
-async function baseOf(repoPath: string, defaultBranch: string, head: string): Promise<string | null> {
-  for (const ref of [`origin/${defaultBranch}`, defaultBranch]) {
-    const r = await git(repoPath, ['merge-base', ref, head], { allowFail: true })
-    if (r.code === 0 && r.stdout.trim()) return r.stdout.trim()
-  }
-  return null
-}
 const alive = (issueId: string, key: string) => { const m = running.get(runKey(issueId, key)); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
 const freePort = (want = 0): Promise<number> => new Promise((resolveP, reject) => {
   const s = createServer()
@@ -323,12 +307,11 @@ async function built(issueId: string) {
   const prs = p ? await db.select().from(prTable).where(eq(prTable.projectId, p.id)) : []
   const pull = prs.find((x) => x.issueId === t.id) ?? prs.find((x) => !x.issueId) ?? null
   const staged = styleOf((await workflowFor(db, { issueId: t.id })).workflow) !== 'checklist'
-  const base = head && r?.localPath ? await baseOf(r.localPath, a.defaultBranch ?? 'main', head) : null
-  return { t, a, p, repoPath: r?.localPath ?? null, name, branch, head, /** Where the branch left main: what a comparison runs. */ base, staged, pr: pull?.number ? { number: pull.number, url: pull.url } : null }
+  return { t, a, p, repoPath: r?.localPath ?? null, name, branch, head, staged, pr: pull?.number ? { number: pull.number, url: pull.url } : null }
 }
 
 export async function smokeView(issueId: string) {
-  const { t, a, branch, head, base, pr, staged } = await built(issueId)
+  const { t, a, branch, head, pr, staged } = await built(issueId)
   const all = smokeSetups(a.setup)
   const runs = await db.select().from(smokeRun).where(eq(smokeRun.issueId, t.id))
   const proto = (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd?.trim()
@@ -343,10 +326,6 @@ export async function smokeView(issueId: string) {
     const up = setup.where === 'local' ? (on && local ? await answers(local) : false) : setup.where === 'terminal' ? terminalOpen(t.id, setup.key) : !!there
     // Once it answers: does it listen anywhere it was not told to (ports.ts)?
     const stray = setup.where === 'local' && up ? await straysOf(running.get(runKey(t.id, setup.key)), (ports) => db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor: 'engine', type: 'smoke.stray_port', payload: { setup: setup.key, ports, note: straySays(ports) } }))) : []
-    // Its comparison, when one was started: the same set-up from main, on its own port.
-    const ck = compareKey(setup.key), cRun = runs.find((r) => r.setup === ck), cOn = alive(t.id, ck)
-    const cUrl = cOn && cRun?.port ? `http://localhost:${cRun.port}` : null
-    const compare = cUrl ? { url: cUrl, up: await answers(cUrl), /** The commit of main it runs. */ sha: cRun?.sha ?? null, log: running.get(runKey(t.id, ck))?.log.slice(-30) ?? [] } : null
     return {
       /** The throwaway terminal every set-up has (Sandy, 2026-11-18: "we always want access to a terminal pointed at a temp throwaway folder"): a new empty folder. Left out where the set-up's own terminal is already that. */ ...(setup.where === 'terminal' && setup.folder === 'temp' ? {} : { scratch: { open: terminalOpen(t.id, scratchKey(setup.key)) } }),
       /** A terminal can be opened on it (smoke-terminal.ts), and where it would open; open: one is. */ ...(setup.where === 'local' || setup.where === 'terminal' ? { terminal: { folder: setup.where === 'terminal' ? setup.folder ?? 'build' : 'build' as const, open: terminalOpen(t.id, setup.key) } } : {}),
@@ -356,7 +335,6 @@ export async function smokeView(issueId: string) {
       url: setup.where === 'local' ? (on ? local : null) : there,
       up, ...(stray.length ? { /** Ports it listens on that it was not given: a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}),
       canRun: setup.where === 'local' && !!(setup.cmd ?? proto),
-      /** local: main can be brought up beside it, to look at the two side by side. */ canCompare: setup.where === 'local' && !!(setup.cmd ?? proto) && !!base && base !== head, compare,
       /** local: there is something to start from nothing: a database of its own, a seed, or a script of its own. */ canClean: setup.where === 'local' && !!(setup.cmd || setup.seed || hasDb),
       log: running.get(runKey(t.id, setup.key))?.log.slice(-30) ?? [],
       /** How many of its checks still wait for the person. */ owed: checks.filter((c) => c.setup === setup.key && c.mark === 'todo' && holds(c.when)).length,
@@ -406,62 +384,57 @@ export async function smokePlace(issueId: string, setupKey?: string, /** Not the
 }
 
 /** Local only: run the built branch, at its head, in the smoke test's own worktree. Run again, it moves to the new head. */
-export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean; /** Which set-up (its key); none: the app's first. */ setup?: string; /** Not the build: main, where the branch left it, beside the build (COMPARE). */ compare?: boolean } = {}) {
-  const { t, a, repoPath, name, branch, head: tip, base } = await built(issueId)
+export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean; /** Which set-up (its key); none: the app's first. */ setup?: string } = {}) {
+  const { t, a, repoPath, name, branch, head } = await built(issueId)
   const all = smokeSetups(a.setup)
   const named = opts.setup ? all.find((x) => x.key === opts.setup) : all[0]
   if (!named) throw new PlanError(`${a.name} has no smoke test set-up "${opts.setup}" (${all.map((x) => x.key).join(', ')})`)
   const setup: SmokeSetup = named
   const first = named.key === all[0].key
-  const key = opts.compare ? compareKey(named.key) : named.key // what its run is kept under
-  const tag = opts.compare ? '-main' : ''
+  const key = named.key // what its run is kept under
   if (setup.where === 'terminal') throw new PlanError(`${named.name} is a terminal: open it, there is no server to start`)
   if (setup.where !== 'local') throw new PlanError(`${a.name} is smoke tested ${setup.where === 'staging' ? 'on staging' : setup.where === 'preview' ? 'on a preview of its pull request' : 'behind a feature flag'}: there is nothing to start here`)
   if (!repoPath) throw new PlanError(`${a.name} has no local checkout`)
-  if (!branch || !tip) throw new PlanError(`${name} is not built yet: there is no branch to run`)
-  if (opts.compare && (!base || base === tip)) throw new PlanError(`${name} has nothing to compare with: its branch has not left ${a.defaultBranch ?? 'main'}`)
-  const head = opts.compare ? base! : tip
+  if (!branch || !head) throw new PlanError(`${name} is not built yet: there is no branch to run`)
   const cmd = setup.cmd ?? (a.setup as { prototype_cmd?: string } | null)?.prototype_cmd?.trim()
   if (!cmd) throw new PlanError(`${a.name} has no command to run it: set how its prototypes are started in Settings, or a command of the smoke test's own`)
   await stopOne(t.id, key)
-  const path = `${checkoutPath(repoPath, name, named.key, first)}${tag.replace('-', '--')}` // a checkout per set-up, so two can install and run side by side
+  const path = checkoutPath(repoPath, name, named.key, first) // a checkout per set-up, so two can install and run side by side
   // Its own worktree, at the commit and on no branch: the task's branch is nobody's to check out (it is moved by landing).
   if (existsSync(path)) await git(path, ['checkout', '--detach', '--force', head])
   else await git(repoPath, ['worktree', 'add', '--detach', path, head])
   const dbCfg = (a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db?.url ? (a.setup as { prototype_db: PrototypeDb }).prototype_db : null
-  let seedNote: string | null = null
-  const slug = `smoke-${name.toLowerCase()}${first ? '' : `-${named.key}`}${tag}`
+  const slug = `smoke-${name.toLowerCase()}${first ? '' : `-${named.key}`}`
   if (dbCfg && opts.clean) await dropDatabase(dbCfg, slug)
   if (dbCfg && !(await databaseExists(dbCfg, slug))) {
     const { url } = await rebuild(dbCfg, slug, path, (await listScenarios({ appId: a.id }, path)).includes('default') ? 'default' : null, { appId: a.id }) // the app's shared "default" scenario, when it has one
     if (setup.seed) { // the app's own seed, from its settings: after the schema, and after the app's shared scenario when it has one
       const c = new pg.Client({ connectionString: url })
       await c.connect()
-      // On main the seed may name what only the build has (a new table, a new column): it is brought up anyway, and its log says so.
-      try { await c.query(setup.seed) } catch (err) { if (opts.compare) seedNote = `The seed did not all load on main: ${(err as Error).message}`; else throw new PlanError(`the smoke test's seed failed: ${(err as Error).message}`) } finally { await c.end() }
+      try { await c.query(setup.seed) } catch (err) { throw new PlanError(`the smoke test's seed failed: ${(err as Error).message}`) } finally { await c.end() }
     }
   }
   const [old] = await db.select().from(smokeRun).where(and(eq(smokeRun.issueId, t.id), eq(smokeRun.setup, key)))
   const port = await freePort(old?.port ?? 0)
   const more = await morePorts()
-  const env = { ...more.env, ...await smokeEnv(a.id, setup, { port, db: dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : undefined, clean: opts.clean, key: opts.compare ? `${named.key}-main` : named.key }) }
+  const env = { ...more.env, ...await smokeEnv(a.id, setup, { port, db: dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : undefined, clean: opts.clean, key: named.key }) }
   if (setup.stop && old) await runStop(setup.stop, old.path, { ...env, PORT: String(old.port) }) // what the last run left up, when the engine has been started again since
   const proc = spawn('sh', ['-c', cmd], { cwd: path, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
-  const log: string[] = seedNote ? [seedNote.slice(0, 300)] : []
+  const log: string[] = []
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
   proc.on('exit', (code) => { log.push(`exited${code === null ? '' : ` with ${code}`}`) })
   running.set(runKey(t.id, key), { proc, log, given: [port, ...more.ports], ...(setup.stop ? { stop: { cmd: setup.stop, cwd: path, env } } : {}) })
   if (old) await db.update(smokeRun).set({ path, sha: head, port, updatedAt: new Date() }).where(eq(smokeRun.id, old.id))
   else await db.insert(smokeRun).values({ id: newId('run').replace(/^run_/, 'smoke_'), appId: a.id, issueId: t.id, setup: key, path, sha: head, port })
-  await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'smoke.started', payload: { sha: head, port, setup: named.key, ...(opts.compare ? { compare: true } : {}) } }))
+  await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'smoke.started', payload: { sha: head, port, setup: named.key } }))
   return smokeView(t.id)
 }
 
 /** Stop one set-up of a task's, or, with no key, every one of them that is up. */
 export function stopSmoke(issueId: string, key?: string): Promise<void> {
   if (key === undefined) return Promise.all([...running.keys()].filter((k) => k.startsWith(`${issueId}:`)).map((k) => stopOne(issueId, k.slice(issueId.length + 1)))).then(() => {})
-  return Promise.all([stopOne(issueId, key), ...(key.endsWith(COMPARE) ? [] : [stopOne(issueId, compareKey(key))])]).then(() => {}) // a set-up takes its comparison with it
+  return stopOne(issueId, key)
 }
 function stopOne(issueId: string, key: string): Promise<void> {
   const m = running.get(runKey(issueId, key))
