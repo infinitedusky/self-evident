@@ -20,6 +20,19 @@ const KIND: Record<ProbeView['kind'], string> = { command: 'command', judged: 'j
 /** When a command is run, as the row and the form say it. After GitHub Actions' own three triggers: push, pull_request, schedule. */
 const WHEN: Record<RunsWhen, string> = { build: 'Every build', pr: 'On the pull request (CI)', nightly: 'Nightly, on the default branch' }
 const WHEN_KIND: Record<RunsWhen, string> = { build: 'command', pr: 'CI on the pull request', nightly: 'nightly' }
+/**
+ * Who runs a row, which is what its kind decides (Sandy, 2026-11-19: "It isn't clear that checks and probes are judges
+ * vs scripts"). Three runs, in this order, then what the repository runs itself. The list is drawn in these groups so
+ * the page says it: an agent judging, or a script running. After GitHub's checks list, grouped by the workflow that ran them.
+ */
+type Group = 'check' | 'probe' | 'command' | 'left'
+const GROUPS: { key: Group; title: string; says: string }[] = [
+  { key: 'check', title: 'The check', says: 'Judged. One agent reads the change and judges all of these in a single run.' },
+  { key: 'probe', title: 'Probes', says: 'Judged. A fresh agent for each, one after another. None edits anything.' },
+  { key: 'command', title: 'Commands', says: 'Scripts. The engine runs each one itself, last. No agent: exit 0 passes.' },
+  { key: 'left', title: 'Run by the repository', says: 'Scripts. Its CI on the pull request, or its nightly run. Nothing here runs them.' },
+]
+const groupOf = (p: ProbeView): Group => (p.kind === 'judged' || p.key === 'criteria' ? 'check' : p.kind !== 'command' ? 'probe' : (p.when ?? 'build') === 'build' ? 'command' : 'left')
 const kindOf = (p: ProbeView) => (p.when && p.when !== 'build' ? WHEN_KIND[p.when] : KIND[p.kind])
 
 export interface StepContractsProps {
@@ -139,7 +152,7 @@ function ProbeForm({ start, editing, named = true, timed = true, workflows = [],
     <form className="step-probe-add" aria-label={editing ? `Edit ${editing}` : 'Add a probe'} onSubmit={(e) => { e.preventDefault(); if (ready) onSave(draft) }}>
       {named ? <input aria-label="Probe name" placeholder="Name" autoFocus value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /> : <strong>{draft.name}</strong>}
       {editing ? <span className="faint">{KIND[draft.kind]}</span> : <select aria-label="Probe kind" value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as Draft['kind'] })}>
-        <option value="command">Command</option><option value="skill">Skill as reviewer</option><option value="judged">Judged</option>
+        <option value="command">Command: a script, no agent</option><option value="skill">Skill: a probe, its own agent</option><option value="judged">Judged: a sentence, in the check</option>
       </select>}
       {draft.kind === 'command' && timed && <select aria-label="When it runs" value={when} onChange={(e) => { const w = e.target.value as RunsWhen; setDraft({ ...draft, when: w, runs: w === start.when ? start.runs : '', ...(w === 'nightly' ? { blocks: false } : {}) }) }}>
         {(Object.keys(WHEN) as RunsWhen[]).map((w) => <option key={w} value={w}>{WHEN[w]}</option>)}
@@ -160,7 +173,7 @@ function ProbeForm({ start, editing, named = true, timed = true, workflows = [],
 }
 
 /**
- * What a build is held to: one row each, in the order it is verified. Being changed, every row but the acceptance
+ * What a build is held to: one row each, in the order it is verified, grouped by who runs it (GROUPS). Being changed, every row but the acceptance
  * criteria can be switched and set to block or to report only; all but the engine's own probes can be reworded; one
  * the app has changed can be put back as the engine ships it; the app's own can be removed, and added to.
  */
@@ -210,8 +223,10 @@ function Probes({ step, probes, onProbe, onWorkflow, trials = {}, onTry, tryOn =
   return (
     <>
       <table className="step-probes">
-        <tbody>
-          {probes.map((p) => onProbe && editing === p.key && p.kind !== 'built-in' ? (
+        {GROUPS.filter((g) => probes.some((p) => groupOf(p) === g.key)).map((g) => (
+        <tbody key={g.key} aria-label={g.title}>
+          <tr className="step-probe-group"><th colSpan={6} scope="rowgroup">{g.title} <span className="faint">{g.says}</span></th></tr>
+          {probes.filter((p) => groupOf(p) === g.key).map((p) => onProbe && editing === p.key && p.kind !== 'built-in' ? (
             <tr key={p.key}><td colSpan={6}>
               <ProbeForm editing={p.name} named={p.key !== 'tests'} timed={p.own} workflows={workflows} start={{ name: p.name, kind: p.kind, runs: p.runs, blocks: p.blocks, when: p.when ?? 'build' }} onCancel={() => setEditing(null)} onSave={(d) => {
                 onProbe({ op: 'edit', key: p.key, name: d.name, runs: d.runs, ...(d.blocks !== p.blocks ? { blocks: d.blocks } : {}), ...(d.when !== (p.when ?? 'build') ? { when: d.when } : {}) }) // one change: two would each start from the same settings
@@ -240,6 +255,7 @@ function Probes({ step, probes, onProbe, onWorkflow, trials = {}, onTry, tryOn =
             {trials[p.key] && <tr className="step-probe-trial-row"><td colSpan={6}><TrialLine p={p} t={trials[p.key]} /></td></tr>}
           </Fragment>))}
         </tbody>
+        ))}
       </table>
       {onProbe && !adding && <button type="button" className="linkish small" aria-label={`Add a probe to ${step}`} onClick={() => { setAdding(true); setEditing(null) }}>Add a probe</button>}
       {onProbe && adding && <ProbeForm start={NEW} workflows={workflows} onCancel={() => setAdding(false)} onSave={(d) => { const when = d.kind === 'command' ? d.when : 'build'; onProbe({ op: 'add', name: d.name, kind: d.kind, runs: d.runs, ...(d.blocks && when !== 'nightly' ? {} : { blocks: false }), ...(when !== 'build' ? { when } : {}) }); setAdding(false) }} />}
