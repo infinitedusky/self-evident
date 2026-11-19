@@ -5139,3 +5139,15 @@ the minutes it takes. Left off, it runs only in CI and when the person runs it f
 
 This is wording, like the long-run rule before it: nothing cuts a command off. A limit on how long one command may
 run in a step that only reads is the next thing if an agent does it again.
+
+## On Build, landed is closed (Sandy, 2026-11-19: "Build should only show landed if the task is closed, if it is merged it should say that but it needs to be closed to be landed")
+
+Build's list called a task landed as soon as every sub-task was in, with its pull request still open. Since Close
+(2026-11-18) a merge leaves a task In review and Done is the person's, so the list now says the same:
+
+- **Built, not closed**: every sub-task is in. The row shows its pull request, or "merged" with "Close it →" to the
+  task's Build section, where Close is and says what it still waits on.
+- **Landed**: the task is closed (Done). Nothing else puts a row there.
+
+The rule is `phaseOf` in `engine/src/now.ts`. A project's own "landed" status (its work is merged; it is "closed"
+when its last task is) is unchanged, and still shows on the project lists.

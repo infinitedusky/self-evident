@@ -32,10 +32,26 @@ export type Attention =
   | { kind: 'checkout_behind'; appName: string; branch: string; path: string; commits: number; why: string; files: string[] }
   | ({ kind: 'overlap'; prNumber: number; title: string; author: string | null; url: string | null; files: string[] } & Where)
 
-/** A task past its plan, for Build's page: ready (planned, not started), checking (planned after a prototype, being read before it is built), building, stopped (asking, failed, held or paused) or landed. */
+/**
+ * A task past its plan, for Build's page: ready (planned, not started), checking (planned after a prototype, being
+ * read before it is built), building, stopped (asking, failed, held or paused), built (every sub-task is in; its pull
+ * request may be merged) or landed. Landed is closed, and only that (Sandy, 2026-11-19: "Build should only show landed
+ * if the task is closed, if it is merged it should say that but it needs to be closed to be landed"): a merge does not
+ * land a task, the person's Close does (close.ts).
+ */
+export type Phase = 'ready' | 'checking' | 'building' | 'stopped' | 'built' | 'landed'
+
+/** Where a task past its plan stands. Pure. `stopped`: it asks something, or a sub-task failed or is held. */
+export function phaseOf(f: { state: string; done: number; total: number; projectStatus: string; stopped: boolean }): Phase {
+  if (f.state === 'done') return 'landed'
+  if (f.done === f.total) return 'built'
+  if (['drafting', 'proposed', 'approved'].includes(f.projectStatus)) return 'ready'
+  return f.stopped || f.projectStatus !== 'running' ? 'stopped' : 'building'
+}
+
 export interface BuildTask {
   id: string; identifier: string; title: string; projectId: string; projectName: string | null; projectStatus: string
-  phase: 'ready' | 'checking' | 'building' | 'stopped' | 'landed'; done: number; total: number; appId: string
+  phase: Phase; done: number; total: number; appId: string
   /** Planned after a prototype and still being read before the build: the steps left; and, when the last one stopped for the person, its question and the conversation to answer it in. */
   checks?: { left: string[]; needsYou: string | null; sessionId: string | null }
   live: { id: string; identifier: string; title: string; status: string; step: string | null }[]
@@ -98,9 +114,7 @@ export async function now(appId?: string) {
     const held = mine.filter((x) => status(x.id) === 'queued' && b(x.id)?.heldReason).map((x) => ({ id: x.id, identifier: name(x), title: x.title, reason: b(x.id)!.heldReason! }))
     const done = mine.filter((x) => status(x.id) === 'done').length
     const thePr = prs.find((q) => q.issueId === t.id) ?? prs.find((q) => q.projectId === p.id && !q.issueId) ?? null
-    const phase: BuildTask['phase'] = done === mine.length ? 'landed'
-      : ['drafting', 'proposed', 'approved'].includes(p.status) ? 'ready'
-      : asked.length || failed.length || held.length || p.status !== 'running' ? 'stopped' : 'building'
+    const phase = phaseOf({ state: t.state, done, total: mine.length, projectStatus: p.status, stopped: asked.length + failed.length + held.length > 0 })
     return {
       id: t.id, appId: t.appId, identifier: name(t), title: t.title, projectId: p.id, projectName: p.solo ? null : p.name, projectStatus: p.status, phase, done, total: mine.length,
       live: mine.filter((x) => LIVE.includes(status(x.id))).map((x) => ({ id: x.id, identifier: name(x), title: x.title, status: status(x.id), step: currentStep(x.id) })),

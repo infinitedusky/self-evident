@@ -2,8 +2,8 @@
  * Build: everything after the plan (Sandy, 2026-11-14: "after the plan is done, it's done. Now we're in the build
  * phase"; "it also needs to be the place where questions are asked or anything that stops. Everything needs to
  * happen in there"). It lists tasks, since a task is what is built: what is waiting for the person on top (a
- * question to answer here, a build that failed, one that is held), then what is ready, what is building and what
- * has landed. A row leads to the task's own Build section. Laid out like Linear's My Issues: what needs you first.
+ * question to answer here, a build that failed, one that is held), then what is ready, what is building, what is
+ * built and what has landed. Landed is closed by the person; a merged pull request alone is "merged", under Built. A row leads to the task's own Build section. Laid out like Linear's My Issues: what needs you first.
  */
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
@@ -38,7 +38,7 @@ export function Build() {
     try { await fn(); if (app) setTasks((await engine.now(app.id)).tasks ?? []) } catch (e) { setRefused({ key, why: e instanceof Error ? e.message : String(e) }) } finally { setBusy(null) }
   }
   const of = (phase: BuildTask['phase']) => tasks?.filter((t) => t.phase === phase) ?? []
-  const stopped = of('stopped'), ready = of('ready'), checking = of('checking'), building = of('building'), landed = of('landed')
+  const stopped = of('stopped'), ready = of('ready'), checking = of('checking'), building = of('building'), built = of('built'), landed = of('landed')
   const row = (t: BuildTask, extra?: React.ReactNode, action?: React.ReactNode) => (
     <li key={t.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start' }}>
       <div style={{ minWidth: 0 }}>
@@ -114,11 +114,22 @@ export function Build() {
         </section>
       )}
 
+      {built.length > 0 && (
+        <section data-component="BuildBuilt">
+          <h2 className="build-h">Built, not closed</h2>
+          <ul className="list panel build-list">
+            {built.map((t) => row(t, null, t.pr?.status === 'merged'
+              ? <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Badge tone="ok">merged</Badge><Link className="btn quiet small" to={`/tasks/${t.id}/build`}>Close it →</Link></span>
+              : t.pr?.url ? <a className="btn quiet small" href={t.pr.url} target="_blank" rel="noreferrer">Pull request #{t.pr.number}</a> : <Badge tone="neutral">built</Badge>))}
+          </ul>
+        </section>
+      )}
+
       {landed.length > 0 && (
         <section data-component="BuildLanded">
           <h2 className="build-h">Landed</h2>
           <ul className="list panel build-list">
-            {landed.map((t) => row(t, null, t.pr?.url ? <a className="btn quiet small" href={t.pr.url} target="_blank" rel="noreferrer">Pull request #{t.pr.number}</a> : <Badge tone="ok">landed</Badge>))}
+            {landed.map((t) => row(t, null, <Badge tone="ok">landed</Badge>))}
           </ul>
         </section>
       )}

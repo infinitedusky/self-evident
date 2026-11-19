@@ -20,13 +20,15 @@ const failed: BuildTask = { ...base, id: 'iss_sample1', identifier: 'SS-1', titl
 const ready: BuildTask = { ...base, id: 'iss_sample16', identifier: 'SS-16', title: 'Fix the footer link (sample)', projectName: null, projectStatus: 'drafting', phase: 'ready', done: 0, total: 1 }
 const building: BuildTask = { ...base, id: 'iss_sample22', identifier: 'SS-22', title: 'Gift cards at checkout (sample)', phase: 'building', done: 1, total: 3,
   live: [{ id: 'iss_sample7', identifier: 'SS-7', title: 'A gift card takes off the total', status: 'running', step: 'Writing the totals test' }], pr: { number: 41, url: 'https://example.com/sample/pull/41', status: 'open' } }
-const landed: BuildTask = { ...base, id: 'iss_sample3', identifier: 'SS-3', title: 'Wallet buttons first (sample)', phase: 'landed', done: 2, total: 2, pr: { number: 38, url: 'https://example.com/sample/pull/38', status: 'open' } }
+const built: BuildTask = { ...base, id: 'iss_sample3', identifier: 'SS-3', title: 'Wallet buttons first (sample)', phase: 'built', done: 2, total: 2, pr: { number: 38, url: 'https://example.com/sample/pull/38', status: 'open' } }
+const merged: BuildTask = { ...base, id: 'iss_sample4', identifier: 'SS-4', title: 'Postcode lookup (sample)', phase: 'built', done: 3, total: 3, pr: { number: 36, url: 'https://example.com/sample/pull/36', status: 'merged' } }
+const landed: BuildTask = { ...base, id: 'iss_sample2', identifier: 'SS-2', title: 'Guest checkout (sample)', projectStatus: 'closed', phase: 'landed', done: 2, total: 2, pr: { number: 31, url: 'https://example.com/sample/pull/31', status: 'merged' } }
 const reading: BuildTask = { ...base, id: 'iss_sample23', identifier: 'SS-23', title: 'Saved cards (sample)', projectStatus: 'drafting', phase: 'checking', done: 0, total: 3, checks: { left: ['Blast radius', 'Audit', 'Final ADR and plan'], needsYou: null, sessionId: null } }
 const heldForYou: BuildTask = { ...base, id: 'iss_sample24', identifier: 'SS-24', title: 'Order history (sample)', projectStatus: 'drafting', phase: 'stopped', done: 0, total: 4,
   checks: { left: ['Final ADR and plan'], needsYou: 'The audit found the brief asks for **export to CSV** and no sub-task does it. Add a sub-task for it, or drop it from this task? I would drop it: nothing in the prototype shows it (sample).', sessionId: 'talk_sample_final' } }
-const tasks = [asking, heldForYou, failed, ready, reading, building, landed]
+const tasks = [asking, heldForYou, failed, ready, reading, building, built, merged, landed]
 
-/** One of each: a question to answer here, a build that failed, a planned task to start, one building, one landed. */
+/** One of each: a question to answer here, a build that failed, a planned task to start, one building, one built, one merged and one landed. */
 export const EveryPhase: Story = {
   beforeEach: withEngine({ now: { ...now, tasks } }),
   play: async ({ canvasElement }) => {
@@ -47,6 +49,21 @@ export const HeldBeforeTheBuild: Story = {
     await expect(await c.findByLabelText('Your answer')).toBeInTheDocument()
     await expect(await c.findByText('Planned, being read before it is built')).toBeInTheDocument()
     await expect(c.queryByRole('button', { name: 'Build it' })).toBeNull() // nobody builds around the reading
+  },
+}
+/** Merged is not landed: a task whose pull request merged stays under Built, with the way to close it; only a closed one is Landed. */
+export const MergedIsNotLanded: Story = {
+  beforeEach: withEngine({ now: { ...now, tasks: [built, merged, landed] } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const of = async (name: string) => within((await c.findByRole('heading', { name })).closest('section')!)
+    const open = await of('Built, not closed'), over = await of('Landed')
+    await expect(open.getByRole('link', { name: 'SS-4 Postcode lookup (sample)' })).toBeInTheDocument()
+    await expect(open.getByText('merged', { selector: '.badge' })).toBeInTheDocument()
+    await expect(open.getByRole('link', { name: 'Close it →' })).toHaveAttribute('href', '/tasks/iss_sample4/build')
+    await expect(open.getByRole('link', { name: 'Pull request #38' })).toBeInTheDocument() // built, its pull request still open
+    await expect(over.getAllByRole('listitem')).toHaveLength(1)
+    await expect(over.getByRole('link', { name: 'SS-2 Guest checkout (sample)' })).toBeInTheDocument()
   },
 }
 /** Only work going well: nothing waits for the person. */
