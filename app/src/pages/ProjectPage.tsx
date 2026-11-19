@@ -29,7 +29,6 @@ export function ProjectPage() {
   const { app, setAppId } = useCurrentApp()
   const [selectedId, setSelectedId] = useState<string>()
   const [busy, setBusy] = useState(false)
-  const [closedHere, setClosedHere] = useState(false) // closed a moment ago: shown at once, before the engine's word arrives
   if (error && !graph) return <p className="muted">{error}</p>
   if (!graph) return <p className="muted">Loading…</p>
   // A project belongs to its app. Saved among another app's tabs, it says so rather than switching the app itself.
@@ -41,7 +40,7 @@ export function ProjectPage() {
   )
   const selected = graph.subIssues.find((p) => p.id === selectedId) ?? null
   const issueOf = (p: GraphSubIssue) => graph.issues.find((t) => t.id === p.parentId)
-  const status = closedHere && graph.project.status === 'landed' ? 'closed' : graph.project.status
+  const status = graph.project.status
   const draft = ['drafting', 'proposed', 'approved'].includes(graph.project.status)
   const solo = !!graph.project.solo // one task on its own: no tasks are added here, and it is not among the projects
   const act = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn() } finally { setBusy(false) } }
@@ -64,7 +63,6 @@ export function ProjectPage() {
             {graph.pr && !graph.pr.issueId && <a className="badge accent" href={graph.pr.url ?? '#'} target="_blank" rel="noreferrer">PR #{graph.pr.number} · {graph.pr.status}</a>}{/* the project's one pull request; a task's own is on its row */}
             {error && <Badge tone="warn" dot>{error}</Badge>}
           </div>
-          {status === 'landed' && graph.close && !graph.close.can && <p className="muted" style={{ margin: '8px 0 0', maxWidth: 720 }} data-component="CloseWaits">Before it can be closed: {graph.close.waits.join(' ')}</p>}
           {solo && <p className="muted" style={{ margin: '8px 0 0', maxWidth: 720 }} data-component="SoloNote">A task on its own: this is its plan and build. Add it to a project from Tasks, until it starts building.</p>}
           <About text={graph.project.content} />
         </div>
@@ -72,8 +70,6 @@ export function ProjectPage() {
           {draft && (
             <button className="btn quiet" disabled={busy} onClick={() => { if (window.confirm('Discard this draft? Its tasks, sub-tasks, questions and decisions go with it.')) void act(async () => { await engine.cancelProject(graph.project.id); nav('/projects') }) }}>Discard draft</button>
           )}
-          {/* Closing is the person's, and last: once every pull request is merged and every check of theirs is passed or skipped. Until then it says what it waits on. */}
-          {status === 'landed' && graph.close && <button className="btn" disabled={busy || !graph.close.can} title={graph.close.can ? 'Its pull requests are merged and every check is passed or skipped.' : graph.close.waits.join(' ')} onClick={() => act(async () => { await engine.closeProject(graph.project.id); setClosedHere(true) })}>Close project</button>}
           {graph.project.status === 'running' && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.pause(graph.project.id))} title="Nothing new starts; running agents stop and resume where they were">Pause</button>}
           {graph.project.status === 'paused' && <button className="btn" disabled={busy} onClick={() => act(() => engine.resume(graph.project.id))}>Resume</button>}
           {['running', 'paused'].includes(graph.project.status) && (

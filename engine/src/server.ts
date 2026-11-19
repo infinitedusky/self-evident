@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises'
 import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
 import { checklistOf } from './checklist.js'
-import { closeProject, closeView } from './close.js'
+import { closeTask, closeView, reopenUnclosed } from './close.js'
 import { compareKey, markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
 import { closeTerminal, closeTerminals, openTerminal, ownPage, resizeTerminal, scratchKey, typeInTerminal, watchTerminal } from './smoke-terminal.js'
 import { startLearning, talkBusy } from './talk.js'
@@ -43,7 +43,7 @@ import { prepareCheckout } from './checkout.js'
 import { addChecklist, draftChecklist, completeTodo, createTodo, dropTodo, getTodo, itemToTodo, listTodos, removeChecklistItem, reopenTodo, setChecklistItem, updateTodo } from './todos.js'
 import { addIdea, addItems, dropItem, listBacklog, markDuplicate, promote, reopenItem } from './backlog.js'
 import { createCycle, createInitiative, listCycles, listInitiatives, updateInitiative } from './goals.js'
-import { changeState, commentOnIssue, createIssue, listComments, identifier, listIssues, reorder, resolveIssue, updateIssue } from './issues.js'
+import { getIssue, changeState, commentOnIssue, createIssue, listComments, identifier, listIssues, reorder, resolveIssue, updateIssue } from './issues.js'
 import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
 import { deleteReport, editReport, getReport, isWritingReport, listReports, setReportFormat, writeReport, type Period } from './reports.js'
@@ -773,7 +773,9 @@ export function buildApp(bus: EventBus) {
   })
   api.post('/issues/reorder', async (c) => { const { ids } = await c.req.json<{ ids: string[] }>(); try { return c.json(await reorder(ids ?? [], 'user')) } catch (err) { return planError(c, err) } })
   // One issue, by its id or its identifier (SE-12): the identifier is what a ticket is called everywhere outside.
-  api.get('/issues/:id', async (c) => { try { return c.json(await issueDetail((await resolveIssue(db, c.req.param('id'))).id)) } catch (err) { return planError(c, err, 404) } })
+  api.get('/issues/:id', async (c) => { try { const d = await issueDetail((await resolveIssue(db, c.req.param('id'))).id); return c.json(!d.parentId && d.kind === 'code' && d.state === 'in_review' ? { ...d, close: await closeView(d.id) } : d) } catch (err) { return planError(c, err, 404) } })
+  // A person closes a task: it is Done. Only once its pull request is merged and every check of theirs is passed or skipped (close.ts).
+  api.post('/issues/:id/close', async (c) => { try { return c.json(await closeTask((await resolveIssue(db, c.req.param('id'))).id, 'user')) } catch (err) { return planError(c, err) } })
   api.patch('/issues/:id', async (c) => { try { return c.json(settle(await updateIssue((await resolveIssue(db, c.req.param('id'))).id, await c.req.json(), 'user'))) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/state', async (c) => {
     const { state, reason } = await c.req.json<{ state: IssueState; reason?: string }>()
@@ -781,6 +783,7 @@ export function buildApp(bus: EventBus) {
     try {
       const { id } = await resolveIssue(db, c.req.param('id'))
       if (state === 'done') await guardComplete(db, id)
+      if (state === 'done') { const t = await getIssue(db, id); if (!t.parentId && t.kind === 'code' && t.state === 'in_review') { const w = await closeView(id); if (!w.can) throw new PlanError(`this task cannot be closed yet: ${w.waits.join(' ')}`) } } // a built task is done by being closed, by the same rule
       return c.json(settle(await changeState(id, state, { actor: 'user', reason })))
     } catch (err) { return planError(c, err) }
   })
@@ -798,10 +801,8 @@ export function buildApp(bus: EventBus) {
   })
   api.get('/projects/:id/graph', async (c) => {
     const g = await projectGraph(c.req.param('id'))
-    return g ? c.json({ ...g, close: await closeView(g.project.id) }) : c.json({ error: 'no such project' }, 404)
+    return g ? c.json(g) : c.json({ error: 'no such project' }, 404)
   })
-  // A person closes a project once its pull requests are merged and every check of theirs is passed or skipped (close.ts).
-  api.post('/projects/:id/close', async (c) => { try { return c.json(await closeProject(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
   api.post('/projects/:id/start', async (c) => {
     try { return c.json(await runner.startProject(c.req.param('id'))) } catch (err) { return planError(c, err) }
   })
@@ -1039,6 +1040,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const port = Number(process.env.PORT ?? 4000)
   stayUp() // a failure nobody was waiting on is logged, and the engine carries on
   serve({ fetch: buildApp(bus).fetch, port }, (info) => console.log(`engine listening on http://localhost:${info.port}  (API under /api; UI at / when built)`))
+  void reopenUnclosed().then((ids) => { if (ids.length) console.log(`[engine] ${ids.length} task${ids.length === 1 ? '' : 's'} marked done by a merge, with checks of yours unmarked, put back in review to be closed`) }).catch((err) => console.error('reopening unclosed tasks failed', err))
   void ensureMain().then((r) => { if (r.made) console.log(`[engine] ${r.made} app${r.made === 1 ? '' : 's'} given a Main workflow; what they had is Legacy`) }).catch((err) => console.error('workflows: could not make Main', err))
   void speedIntoWorkflows().then((r) => { if (r.moved) console.log(`[engine] ${r.moved} app${r.moved === 1 ? '' : 's'} set to Fast moved onto a fast workflow`) }).catch((err) => console.error('workflows: could not move the old speed setting', err))
   setTimeout(() => void resumeChecks().catch((err) => console.error('checks: could not resume after the restart', err)), 8_000) // a task's checks that were under way carry on
