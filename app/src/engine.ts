@@ -127,6 +127,8 @@ export interface Graph {
   project: { id: string; name: string; description: string | null; content: string | null; status: string; integrationBranch: string | null; createdAt: string; solo?: boolean } // solo: one task on its own, never listed as a project
   app: { id: string; name: string; key: string; defaultBranch: string }
   pr: Pr | null; prs: Pr[]
+  /** Whether a person can close it now, and if not, what it waits on, in their words. */
+  close?: { can: boolean; waits: string[] }
   issues: GraphIssue[] // in order: the order they are built in
   subIssues: GraphSubIssue[]
   backlog: BacklogIssue[]
@@ -267,7 +269,7 @@ export interface ChecklistItem { id: string; kind: 'criterion' | 'requirement'; 
 export interface FlowNode { id: string; sub?: string; title: string; state: ChecklistStage['state']; detail: string; after: string[] | null }
 export interface Checklist { build: 'one' | 'planned'; stages: ChecklistStage[]; items: ChecklistItem[]; met: number; unmet: number; total: number; flow?: FlowNode[] }
 /** A task's smoke test (the engine's smoke module): where the built code runs, and the checks left to a person with their marks. */
-export interface SmokeCheck { /** Which of the app's set-ups it needs up (its key). */ setup?: string; /** When it can be done: here on the built code, on the pull request, or after the merge. */ when?: 'here' | 'pr' | 'after'; id: string; text: string; where?: string; /** That place as an address to open, while its set-up is up or deployed. */ link?: string; how?: string; mark: 'todo' | 'pass' | 'fail'; note?: string; stale?: boolean; before?: { pass: boolean; note: string }; /** What an agent saw when asked to try it: its word, not a mark. stale: said on an earlier commit. */ tried?: { verdict: 'holds' | 'fails' | 'unsure'; note: string; sha: string | null; at: string; stale?: boolean }; /** An agent is trying it now. */ trying?: boolean }
+export interface SmokeCheck { /** Which of the app's set-ups it needs up (its key). */ setup?: string; /** When it can be done: here on the built code, on the pull request, or after the merge. */ when?: 'here' | 'pr' | 'after'; id: string; text: string; where?: string; /** That place as an address to open, while its set-up is up or deployed. */ link?: string; how?: string; mark: 'todo' | 'pass' | 'fail' | 'skip'; note?: string; stale?: boolean; before?: { pass: boolean; note: string }; /** What an agent saw when asked to try it: its word, not a mark. stale: said on an earlier commit. */ tried?: { verdict: 'holds' | 'fails' | 'unsure'; note: string; sha: string | null; at: string; stale?: boolean }; /** An agent is trying it now. */ trying?: boolean }
 /** Main, brought up beside a build to look at the two side by side. */
 export interface SmokeCompare { url: string; up: boolean; /** The commit of main it runs. */ sha: string | null; log: string[] }
 /** One of an app's smoke test set-ups on a task: where it is and whether it is up. */
@@ -436,7 +438,7 @@ export const engine = {
   closeSmokeTerminal: (issueId: string, setup: string, scratch = false) => call<SmokeView>('POST', `/issues/${issueId}/smoke/terminal/close`, { setup, ...(scratch ? { scratch: true } : {}) }),
   /** An agent tries one check and says what it saw; it marks nothing. */
   trySmoke: (issueId: string, criterionId: string) => call<SmokeView>('POST', `/issues/${issueId}/smoke/${criterionId}/try`),
-  markSmoke: (issueId: string, criterionId: string, pass: boolean, note?: string) => call<SmokeView>('POST', `/issues/${issueId}/smoke/${criterionId}`, { pass, note }),
+  markSmoke: (issueId: string, criterionId: string, pass: boolean, note?: string, skip?: boolean) => call<SmokeView>('POST', `/issues/${issueId}/smoke/${criterionId}`, skip ? { skip: true, note } : { pass, note }),
   checklist: (issueId: string) => call<Checklist | null>('GET', `/issues/${issueId}/checklist`),
   learning: (appId: string) => call<Learning>('GET', `/apps/${appId}/learning`),
   learn: (appId: string) => call<{ sessionId: string; started: boolean }>('POST', `/apps/${appId}/learn`),
@@ -557,6 +559,8 @@ export const engine = {
   summary: (appId: string) => call<SummaryState>('GET', `/apps/${appId}/summary`),
   writeSummary: (appId: string) => call<{ started: boolean }>('POST', `/apps/${appId}/summary`),
   syncGithub: (appId: string) => call<{ prs?: { changes: string[] }; catchUp?: { projectId: string; state: string }[]; error?: string }>('POST', `/apps/${appId}/sync`),
+  /** Close a project: its pull requests are merged and every check left to a person is passed or skipped. */
+  closeProject: (projectId: string) => call<{ id: string; status: 'closed' }>('POST', `/projects/${projectId}/close`),
   pause: (projectId: string) => call<unknown>('POST', `/projects/${projectId}/pause`),
   resume: (projectId: string) => call<unknown>('POST', `/projects/${projectId}/resume`),
   releaseHold: () => call<unknown>('POST', '/engine/release'),
@@ -568,7 +572,7 @@ export const engine = {
 export interface TalkImage { name: string; mediaType: string; data: string }
 
 export const EVENT_TYPES = [
-  'project.created', 'project.started', 'project.landed', 'project.cleaned', 'project.cancelled', 'project.paused', 'project.resumed', 'project.described',
+  'project.created', 'project.started', 'project.landed', 'project.closed', 'project.cleaned', 'project.cancelled', 'project.paused', 'project.resumed', 'project.described',
   'issue.created', 'issue.deleted', 'issue.updated', 'issue.state', 'issue.reordered', 'issue.cleared', 'issue.planning', 'issue.planned', 'issue.plan_failed', 'issue.plan_waiting', 'issue.commented',
   'question.asked', 'question.answered', 'initiative.created', 'initiative.updated', 'cycle.created',
   'talk.message', 'talk.permission', 'talk.result', 'prototype.shown', 'share.started', 'share.stopped', 'idea.created', 'idea.converted', 'step.updated', 'brief.approved', 'brief.unapproved', 'workflow.saved', 'workflow.used', 'engine.hold', 'engine.resumed',
@@ -577,7 +581,7 @@ export const EVENT_TYPES = [
   'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted', 'build.carried_on',
   'run.started', 'run.message', 'run.steps', 'run.tool_call', 'run.tool_result', 'run.result', 'run.error', 'run.rate_limit',
   'land.committed', 'land.tested', 'land.landed', 'land.conflict', 'land.retry', 'pr.opened', 'pr.updated', 'pr.error',
-  'task.tested', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked', 'learn.written', 'smoke.started', 'smoke.marked', 'smoke.trying', 'smoke.tried', 'task.smoke_waiting',
+  'task.tested', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked', 'learn.written', 'smoke.started', 'smoke.marked', 'smoke.skipped', 'smoke.trying', 'smoke.tried', 'task.smoke_waiting',
 ]
 
 const LIVE_POLL_MS = 20_000

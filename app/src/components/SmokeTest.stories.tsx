@@ -35,6 +35,18 @@ export const FailingOne: Story = {
     await expect(c.getByText(/2 of 3 for you to check/)).toBeInTheDocument()
   },
 }
+/** Skip: a check the person chooses not to try. No note is needed; it stops waiting for them and reads as skipped, never as passed. */
+export const SkippingOne: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click((await c.findAllByRole('button', { name: 'Skip' }))[2])
+    await expect(c.getByRole('textbox', { name: /Why it is skipped/ })).toBeVisible()
+    await userEvent.click(c.getByRole('button', { name: 'Skip it' }))
+    await waitFor(() => expect(c.getByText('skipped')).toBeInTheDocument())
+    await expect(c.getByText(/2 of 3 for you to check/)).toBeInTheDocument()
+    await expect(c.getByText('Skipped, not tried.')).toBeVisible()
+  },
+}
 /** All marked, one failed: it says it was sent back, and that it comes back here. */
 export const SentBack: Story = {
   beforeEach: withEngine({ smoke: { ...smokeSample, owed: 1, checks: smokeSample.checks.map((x, n) => (n === 0 ? { ...x, mark: 'pass' as const, note: 'trough visible, lip outline faint (sample)' } : n === 1 ? { ...x, mark: 'pass' as const, note: '' } : x)) } }),

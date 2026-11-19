@@ -229,7 +229,7 @@ export async function catchUpApp(appId: string) {
   const out = []
   for (const p of live) {
     const open = prs.filter((x) => x.projectId === p.id && ['open', 'draft'].includes(x.status))
-    if (p.status === 'landed' && !open.length) continue // done with: every PR merged or closed
+    if ((p.status === 'landed' || p.status === 'closed') && !open.length) continue // done with: every PR merged or closed
     out.push({ projectId: p.id, ...(await catchUp(p.id)) })
   }
   return out

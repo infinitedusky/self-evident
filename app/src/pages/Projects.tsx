@@ -5,14 +5,15 @@ import { Badge, type Tone } from '../components/Badge'
 import { engine, useIdeaFirst, type ProjectSummary } from '../engine'
 import { useCurrentApp } from '../current-app'
 
-const TONE: Record<string, Tone> = { running: 'accent', landed: 'ok', stopped: 'warn', drafting: 'neutral' }
+const TONE: Record<string, Tone> = { running: 'accent', landed: 'ok', closed: 'neutral', stopped: 'warn', drafting: 'neutral' }
 const DRAFT = ['drafting', 'proposed', 'approved']
 // Plan lists every project, filtered by stage; Build lists what runs and what landed.
 const FILTERS: { key: string; label: string; match: (s: string) => boolean }[] = [
-  { key: 'open', label: 'Open', match: (s) => !['landed', 'stopped', 'superseded'].includes(s) },
+  { key: 'open', label: 'Open', match: (s) => !['landed', 'closed', 'stopped', 'superseded'].includes(s) },
   { key: 'drafting', label: 'Drafting', match: (s) => DRAFT.includes(s) },
   { key: 'running', label: 'Running', match: (s) => s === 'running' || s === 'paused' },
   { key: 'landed', label: 'Landed', match: (s) => s === 'landed' },
+  { key: 'closed', label: 'Closed', match: (s) => s === 'closed' },
   { key: 'stopped', label: 'Stopped', match: (s) => s === 'stopped' },
   { key: 'all', label: 'All', match: () => true },
 ]

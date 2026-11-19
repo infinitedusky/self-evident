@@ -32,7 +32,7 @@ export function Issues() {
   const reload = () => { if (app) { engine.codeIssues(app.id).then(setRows).catch((e) => setError(String(e.message ?? e))); engine.projects(app.id).then(setProjects).catch(() => {}) } }
   useEffect(() => { setRows(null); reload() }, [app?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const act = async (key: string, fn: () => Promise<unknown>) => { setBusy(key); setError(null); try { await fn(); reload() } catch (e: any) { const m = String(e.message ?? e); try { setError(JSON.parse(m).error ?? m) } catch { setError(m) } } finally { setBusy(null) } }
-  const open = (s: string) => !['landed', 'stopped', 'superseded'].includes(s) // an issue can be planned until its project is over
+  const open = (s: string) => !['landed', 'closed', 'stopped', 'superseded'].includes(s) // an issue can be planned until its project is over
   const targets = projects.filter((p) => open(p.status))
   const linearTeam = app?.setup?.integrations?.linear?.team?.trim().toUpperCase() // set under Integrations › Linear: tickets can be brought in
   const loose = rows?.filter((t) => (!t.project || t.project.solo) && !['done', 'canceled', 'duplicate'].includes(t.state)) ?? [] // on its own: in no project, or planned in one of its own

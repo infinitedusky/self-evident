@@ -18,7 +18,7 @@ import { pendingOpen } from '../workspace'
 import { TodoCard } from './Todos'
 import { Md } from '../components/Md'
 
-const PROJECT_TONE: Record<string, Tone> = { paused: 'warn', drafting: 'neutral', proposed: 'neutral', approved: 'neutral', running: 'accent', landed: 'ok', stopped: 'warn', superseded: 'neutral' }
+const PROJECT_TONE: Record<string, Tone> = { paused: 'warn', drafting: 'neutral', proposed: 'neutral', approved: 'neutral', running: 'accent', landed: 'ok', closed: 'neutral', stopped: 'warn', superseded: 'neutral' }
 const COST_TONE: Record<string, Tone> = { cheap: 'neutral', moderate: 'warn', expensive: 'bad' }
 const short = (t: string) => (t.length > 28 ? t.slice(0, 26).trimEnd() + '…' : t)
 
@@ -29,6 +29,7 @@ export function ProjectPage() {
   const { app, setAppId } = useCurrentApp()
   const [selectedId, setSelectedId] = useState<string>()
   const [busy, setBusy] = useState(false)
+  const [closedHere, setClosedHere] = useState(false) // closed a moment ago: shown at once, before the engine's word arrives
   if (error && !graph) return <p className="muted">{error}</p>
   if (!graph) return <p className="muted">Loading…</p>
   // A project belongs to its app. Saved among another app's tabs, it says so rather than switching the app itself.
@@ -40,6 +41,7 @@ export function ProjectPage() {
   )
   const selected = graph.subIssues.find((p) => p.id === selectedId) ?? null
   const issueOf = (p: GraphSubIssue) => graph.issues.find((t) => t.id === p.parentId)
+  const status = closedHere && graph.project.status === 'landed' ? 'closed' : graph.project.status
   const draft = ['drafting', 'proposed', 'approved'].includes(graph.project.status)
   const solo = !!graph.project.solo // one task on its own: no tasks are added here, and it is not among the projects
   const act = async (fn: () => Promise<unknown>) => { setBusy(true); try { await fn() } finally { setBusy(false) } }
@@ -56,12 +58,13 @@ export function ProjectPage() {
         <div>
           <h1>{graph.project.name}</h1>
           <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-            <Badge tone={PROJECT_TONE[graph.project.status] ?? 'neutral'} dot={graph.project.status === 'running'}>{graph.project.status}</Badge>
+            <Badge tone={PROJECT_TONE[status] ?? 'neutral'} dot={status === 'running'}>{status}</Badge>
             <Badge>{graph.app.name}</Badge>
             {graph.project.integrationBranch && <Badge><span className="mono">{graph.project.integrationBranch}</span></Badge>}
             {graph.pr && !graph.pr.issueId && <a className="badge accent" href={graph.pr.url ?? '#'} target="_blank" rel="noreferrer">PR #{graph.pr.number} · {graph.pr.status}</a>}{/* the project's one pull request; a task's own is on its row */}
             {error && <Badge tone="warn" dot>{error}</Badge>}
           </div>
+          {status === 'landed' && graph.close && !graph.close.can && <p className="muted" style={{ margin: '8px 0 0', maxWidth: 720 }} data-component="CloseWaits">Before it can be closed: {graph.close.waits.join(' ')}</p>}
           {solo && <p className="muted" style={{ margin: '8px 0 0', maxWidth: 720 }} data-component="SoloNote">A task on its own: this is its plan and build. Add it to a project from Tasks, until it starts building.</p>}
           <About text={graph.project.content} />
         </div>
@@ -69,6 +72,8 @@ export function ProjectPage() {
           {draft && (
             <button className="btn quiet" disabled={busy} onClick={() => { if (window.confirm('Discard this draft? Its tasks, sub-tasks, questions and decisions go with it.')) void act(async () => { await engine.cancelProject(graph.project.id); nav('/projects') }) }}>Discard draft</button>
           )}
+          {/* Closing is the person's, and last: once every pull request is merged and every check of theirs is passed or skipped. Until then it says what it waits on. */}
+          {status === 'landed' && graph.close && <button className="btn" disabled={busy || !graph.close.can} title={graph.close.can ? 'Its pull requests are merged and every check is passed or skipped.' : graph.close.waits.join(' ')} onClick={() => act(async () => { await engine.closeProject(graph.project.id); setClosedHere(true) })}>Close project</button>}
           {graph.project.status === 'running' && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.pause(graph.project.id))} title="Nothing new starts; running agents stop and resume where they were">Pause</button>}
           {graph.project.status === 'paused' && <button className="btn" disabled={busy} onClick={() => act(() => engine.resume(graph.project.id))}>Resume</button>}
           {['running', 'paused'].includes(graph.project.status) && (
@@ -87,7 +92,7 @@ export function ProjectPage() {
         <ol className="task-list">
         {graph.issues.map((t, n) => (
           <IssueChip key={t.id} issue={t} subIssues={graph.subIssues.filter((p) => p.parentId === t.id)} pr={graph.prs?.find((q) => q.issueId === t.id) ?? null} planning={planning(t.id)} waiting={waitingForModel(t.id)}
-            onPlan={!['landed', 'stopped', 'superseded'].includes(graph.project.status) && !planning(t.id) && t.state === 'todo' ? () => act(() => engine.planIssue(t.id)) : undefined}
+            onPlan={!['landed', 'closed', 'stopped', 'superseded'].includes(graph.project.status) && !planning(t.id) && t.state === 'todo' ? () => act(() => engine.planIssue(t.id)) : undefined}
             onReplan={draft && !planning(t.id) ? () => { if (window.confirm('Remove this task\'s sub-tasks, decisions and questions and plan it again?')) void act(async () => { await engine.clearSubIssues(t.id); await engine.planIssue(t.id) }) } : undefined}
             onEarlier={draft && n > 0 ? () => move(n, n - 1) : undefined} onLater={draft && n < graph.issues.length - 1 ? () => move(n, n + 1) : undefined}
             busy={busy} />
@@ -95,7 +100,7 @@ export function ProjectPage() {
         </ol>
       </section>
 
-      {!solo && !['landed', 'stopped', 'superseded'].includes(graph.project.status) && <AddTasks appId={graph.app.id} projectId={graph.project.id} linearTeam={app?.setup?.integrations?.linear?.team?.trim().toUpperCase() || undefined}
+      {!solo && !['landed', 'closed', 'stopped', 'superseded'].includes(graph.project.status) && <AddTasks appId={graph.app.id} projectId={graph.project.id} linearTeam={app?.setup?.integrations?.linear?.team?.trim().toUpperCase() || undefined}
         onAdd={(issueId) => act(() => engine.updateIssue(issueId, { projectId: graph.project.id }))}
         onCreate={(title, description) => act(() => engine.createIssue({ appId: graph.app.id, title, description, projectId: graph.project.id }))} />}
 
@@ -161,7 +166,7 @@ function BacklogPanel({ graph, busy, act }: { graph: Graph; busy: boolean; act: 
   const [text, setText] = useState('')
   const [ideas, setIdeas] = useState<IdeaRow[]>([])
   const [showDone, setShowDone] = useState(false)
-  const closed = ['landed', 'stopped', 'superseded'].includes(graph.project.status)
+  const closed = ['landed', 'closed', 'stopped', 'superseded'].includes(graph.project.status)
   useEffect(() => { if (!closed) engine.ideas(graph.app.id).then(setIdeas).catch(() => setIdeas([])) }, [graph.app.id, closed, graph.backlog.length])
   const items = graph.backlog ?? []
   const open = items.filter((i) => i.state === 'backlog' || i.state === 'triage')

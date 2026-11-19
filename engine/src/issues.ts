@@ -24,7 +24,7 @@ export interface NewIssue {
 }
 
 export const identifier = (key: string, number: number) => `${key}-${number}`
-export const CLOSED_PROJECTS = ['landed', 'stopped', 'superseded']
+export const CLOSED_PROJECTS = ['landed', 'closed', 'stopped', 'superseded']
 
 /** The app, locked for numbering: one writer hands out numbers at a time. */
 export async function lockApp(tx: Tx, appId: string) {
