@@ -10,12 +10,12 @@ import { db } from './db/client.js'
 import { app } from './db/schema.js'
 import { PlanError } from './issues.js'
 
-/** `changes`: a key with a value is set; a key with null or undefined is removed; a key not named is left as it is. Returns the settings as saved. */
-export async function patchSetup(appId: string, changes: Record<string, unknown>): Promise<Record<string, unknown>> {
+/** `changes` (or a function of the settings as they are, giving them): a key with a value is set; a key with null or undefined is removed; a key not named is left as it is. Returns the settings as saved. */
+export async function patchSetup(appId: string, changes: Record<string, unknown> | ((now: Record<string, unknown>) => Record<string, unknown>)): Promise<Record<string, unknown>> {
   return db.transaction(async (tx) => {
     const [a] = await tx.select({ setup: app.setup }).from(app).where(eq(app.id, appId)).for('update')
     if (!a) throw new PlanError(`no app ${appId}`)
-    return (await tx.update(app).set({ setup: merged(a.setup, changes) }).where(eq(app.id, appId)).returning({ setup: app.setup }))[0].setup as Record<string, unknown>
+    return (await tx.update(app).set({ setup: merged(a.setup, typeof changes === 'function' ? changes((a.setup ?? {}) as Record<string, unknown>) : changes) }).where(eq(app.id, appId)).returning({ setup: app.setup }))[0].setup as Record<string, unknown>
   })
 }
 

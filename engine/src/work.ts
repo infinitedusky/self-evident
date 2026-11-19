@@ -6,7 +6,6 @@
  * A task's steps are read from where they live: the brief is the issue's own, the prototype is the prototype table,
  * "starts as an idea" is the idea it came from, and the rest are step_work rows.
  */
-import { ADDED_REQUIREMENTS, DEFAULT_REQUIREMENTS } from './requirements.js'
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { db, type Tx } from './db/client.js'
 import { app, idea, issue, project, prototype, session, stepWork, workflow } from './db/schema.js'
@@ -118,11 +117,6 @@ export async function ensureMain(only?: { tx: Tx; appId: string }): Promise<{ ma
   const work = async (tx: Tx, appId: string) => {
     const [a] = await tx.select().from(app).where(eq(app.id, appId))
     if (!a || a.removedAt) return
-    // An app with a list of requirements of its own is given the two added since, off, once: a workflow switches them on.
-    const setup = (a.setup ?? {}) as { requirements?: { key?: string }[]; requirements_added?: string[] }
-    const missing = Array.isArray(setup.requirements) ? ADDED_REQUIREMENTS.filter((k) => !(setup.requirements_added ?? []).includes(k) && !setup.requirements!.some((r) => r.key === k)) : []
-    if (Array.isArray(setup.requirements) && ADDED_REQUIREMENTS.some((k) => !(setup.requirements_added ?? []).includes(k)))
-      await tx.update(app).set({ setup: { ...setup, requirements: [...setup.requirements, ...DEFAULT_REQUIREMENTS.filter((r) => missing.includes(r.key))], requirements_added: ADDED_REQUIREMENTS } }).where(eq(app.id, a.id))
     // A workflow built in one go, from before there were kinds, is a checklist: that is what it already did.
     await tx.update(workflow).set({ style: 'checklist', requirements: MAIN_REQUIREMENTS }).where(and(eq(workflow.appId, a.id), eq(workflow.build, 'one'), eq(workflow.style, 'staged')))
     const all = await tx.select().from(workflow).where(eq(workflow.appId, a.id))

@@ -92,7 +92,7 @@ export const AppSkills: Story = {
     await expect(c.queryByText('Skills by workflow step')).toBeNull(); await expect(c.queryByText('Skills by job')).toBeNull()
   },
 }
-const mainRow = { ...workflowRows[0], name: 'Main (sample)', style: 'checklist' as const, build: 'one' as const, steps: [{ key: 'idea' as const, on: true, required: false }, { key: 'research' as const, on: true, required: false }, { key: 'prototype' as const, on: true, required: true }, ...(['analysis', 'adr', 'risk', 'audit', 'final'] as const).map((key) => ({ key, on: false, required: false })), { key: 'brief' as const, on: true, required: true }] }
+const mainRow = { ...workflowRows[0], name: 'Main (sample)', style: 'checklist' as const, build: 'one' as const, requirements: { adr: true }, steps: [{ key: 'idea' as const, on: true, required: false }, { key: 'research' as const, on: true, required: false }, { key: 'prototype' as const, on: true, required: true }, ...(['analysis', 'adr', 'risk', 'audit', 'final'] as const).map((key) => ({ key, on: false, required: false })), { key: 'brief' as const, on: true, required: true }] }
 /** A workflow with nothing between the prototype and the build (as Main is): no blast radius, no audit, on the page. */
 export const AppSkillsMain: Story = {
   parameters: appPage(sampleApp.id, 'skills'),
@@ -125,6 +125,15 @@ export const AppSkillsChanging: Story = {
     await expect(c.getByText('Every admin action is written to the audit log.')).toBeVisible()
     await userEvent.click(c.getByRole('button', { name: 'Remove the probe Lint (sample)' }))
     await expect(c.queryByText('pnpm lint')).toBeNull()
+    // The test command is a row like the rest, and no longer a field under Landing.
+    await userEvent.click(c.getByRole('button', { name: 'Edit the test command' }))
+    const tests = within(c.getByRole('form', { name: 'Edit Tests' }))
+    await userEvent.type(tests.getByLabelText('What it runs'), ' --run'); await userEvent.click(tests.getByRole('button', { name: 'Save' }))
+    await expect(c.getByText('pnpm test --run')).toBeVisible()
+    // A sentence the workflow switches on is switched for the workflow here, not greyed out.
+    await expect(c.getByText('· from Main (sample)')).toBeVisible()
+    await userEvent.click(c.getByRole('checkbox', { name: 'Run Decision record' }))
+    await expect(c.getByRole('checkbox', { name: 'Run Decision record' })).not.toBeChecked()
     await expect(c.getByRole('button', { name: 'Save' })).toBeEnabled()
   },
 }

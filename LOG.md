@@ -5061,3 +5061,27 @@ Not built yet; in this order after the save fix above.
    (Sandy: "It's not required, but we would have, we have the setup to do it"). Probes replay safely because they
    change nothing; a skill on Do would need the task built twice, which is not part of this.
 7. The pull request's title follows the commit format's rule: the engine fills what it knows, the builder the rest.
+
+## One list of what a build is held to, in layers (built 2026-11-19; items 1 to 5 of the entry above)
+
+- `engine/src/held.ts` is the list. The engine ships its two probes and six sentences. An app keeps only its
+  differences (`setup.held`): a switch or a rewording of one the engine ships, or one of its own. A workflow, then a
+  project, switches a sentence for its own tasks. `requirementsOf` and `probesOf` read from it, so the planner, the
+  check and the runner did not change.
+- The two stores there were (`setup.requirements`, a whole copy; `setup.probes`) are moved to `held` once, at engine
+  start, and are read correctly until then. A copy of a default is the default again, so those apps now follow the
+  engine's wording; a rewording is kept; a default an app had deleted is back on its list, switched off.
+- Telemetry no longer says OpenTelemetry: "can be seen afterwards, the way this repository already makes things
+  seen". An app says how (Cloaked: Datadog and PostHog) by rewording it.
+- Settings › Skills: nothing is greyed but the acceptance criteria. A row its workflow switches says "from Main" and
+  is switched for that workflow there, or left to the app again. A row the app changed has Reset. The engine's
+  sentences can be reworded. The test command is the Tests row (Set, Edit, clear); its field under Landing is gone.
+  `setup.test_cmd` is still where it is kept, because landing reads it.
+- The page sends its changes to the list one by one (`held` on `PATCH /apps/:id`), applied by the engine to the list
+  as it is then: the last place where a stale page could undo an agent.
+- Agents: `set_held` takes the same changes the page makes (it replaced `set_probe`), and `set_step_skills` puts
+  skills on a step. An agent can now set an app up without handing anything back.
+
+Kept apart on purpose: a sentence and a command can both be called `tests`, so a sentence's id on the list is
+`req:<key>`. A workflow or project switches sentences only, not commands or reviewer skills.
+Not built yet: trying a command as it is added, the A/B of a change, the pull request title rule (6 and 7 above).

@@ -5,7 +5,7 @@ import { db, pool } from './db/client.js'
 import { app, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { setPrRules } from './pr.js'
-import { setProbe } from './probes.js'
+import { setHeld } from './probes.js'
 import { merged, patchSetup } from './setup.js'
 
 describe('merged', () => {
@@ -30,10 +30,11 @@ describe.skipIf(!reachable)('changing an app\'s settings', () => {
   it('a page that loaded before an agent\'s tools ran saves its own changes and wipes none of theirs', async () => {
     // The page loaded here, with only test_cmd. Then an agent sets naming and a probe.
     await setPrRules(appId, { commitFormat: '{type}[{ticket}]: {subject}' })
-    await setProbe(appId, { name: 'Lint (sample)', kind: 'command', runs: 'pnpm lint' })
+    await setHeld(appId, [{ op: 'add', name: 'Lint (sample)', kind: 'command', runs: 'pnpm lint' }])
     // The page saves what the person changed on it: a requirement and the skills on a step.
-    await patchSetup(appId, { requirements: [{ key: 'privacy', name: 'Privacy (sample)', what: 'Sample.', on: true }], step_skills: { build: ['a-skill'] } })
-    expect(await saved()).toMatchObject({ test_cmd: 'pnpm test', commit_format: '{type}[{ticket}]: {subject}', probes: [{ key: 'lint_sample' }], requirements: [{ key: 'privacy' }], step_skills: { build: ['a-skill'] } })
+    await patchSetup(appId, { step_skills: { build: ['a-skill'] } })
+    await setHeld(appId, [{ op: 'add', name: 'Privacy (sample)', kind: 'judged', runs: 'Sample.' }])
+    expect(await saved()).toMatchObject({ test_cmd: 'pnpm test', commit_format: '{type}[{ticket}]: {subject}', held: [{ key: 'lint_sample' }, { key: 'privacy_sample', kind: 'judged' }], step_skills: { build: ['a-skill'] } })
   })
   it('many at once, each its own key: every one is kept', async () => {
     await Promise.all(Array.from({ length: 8 }, (_, n) => patchSetup(appId, { [`k${n}`]: n })))

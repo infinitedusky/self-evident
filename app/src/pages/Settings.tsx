@@ -4,9 +4,8 @@
  * All apps: plugins, the jobs their skills cover, the integrations (a list, then a page each). An app: its repo, agents, plugins,
  * landing, prototype, Storybook, integration values, and its workflow rules.
  */
-import type { RequirementRow } from '../components/Requirements'
 import { StepContracts } from '../components/StepContracts'
-import { applyProbeChange, contractsOf, type ProbeChange } from '@self-evident/engine/contracts'
+import { applyProbeChanges, contractsOf, type ProbeChange } from '@self-evident/engine/contracts'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useMatch, useNavigate, useParams } from 'react-router'
 import { Badge } from '../components/Badge'
@@ -433,6 +432,11 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   const [setup, setSetup] = useState<AppSetup>(app.setup ?? {})
   // What `setup` started from: a save sends only what differs from it, so a setting changed elsewhere since (an agent's tool, another tab) is not put back.
   const [base, setBase] = useState<AppSetup>(app.setup ?? {})
+  // What a build is held to is changed a change at a time: the changes made here wait in `ops` and are sent as they are
+  // on Save, so the engine applies them to the list as it is then, not as it was when this page loaded.
+  const [ops, setOps] = useState<ProbeChange[]>([])
+  // A row the workflow switches is switched for the workflow: true or false, or null to leave it to the app again.
+  const [wfSwitch, setWfSwitch] = useState<Record<string, boolean | null>>({})
   const was = (app.repos ?? []).map(rowOf) // the engine lists home first
   const [repos, setRepos] = useState<RepoRow[]>(was)
   const [home, setHome] = useState<string | null>(was[0]?.key ?? null)
@@ -449,27 +453,28 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   useEffect(() => { setAbbr(app.key) }, [app.key]) // saved, or changed elsewhere
   useEffect(() => { setBranch(app.defaultBranch) }, [app.defaultBranch]) // the engine may have made the checkout's branch the default
 
-  const dirty = name !== app.name || (abbr.trim() !== app.key && abbr.trim() !== '') || branch !== app.defaultBranch || Object.keys(changesOf(base, setup)).length > 0
+  const dirty = name !== app.name || (abbr.trim() !== app.key && abbr.trim() !== '') || branch !== app.defaultBranch || Object.keys(changesOf(base, setup)).length > 0 || ops.length > 0 || Object.keys(wfSwitch).length > 0
     || repos.map((r) => r.key).join() !== was.map((r) => r.key).join() || (repos.length > 1 && homeOf(repos, home) !== was[0]?.key)
   const num = (v: string) => (v.trim() === '' ? undefined : Number(v))
   const set = (patch: Partial<AppSetup>) => setSetup({ ...setup, ...patch })
   const smokes = smokeSetupsOf(setup.smoke)
   // One set-up, never listed: its settings stay as they were. More than one, or a list already: the list.
   const putSmoke = (n: number, patch: Partial<SmokeSetupSetting>) => (setup.smoke?.setups?.length ? set({ smoke: { setups: smokes.map((x, k) => (k === n ? { ...x, ...patch } : x)) } }) : set({ smoke: { ...setup.smoke, ...patch } }))
-  // Until the app has a list of its own, the engine's starting one is shown; editing it makes it the app's.
-  const [startingRequirements, setStartingRequirements] = useState<RequirementRow[] | null>(null)
-  useEffect(() => { engine.appRequirements(app.id).then(setStartingRequirements).catch(() => {}) }, [app.id])
   // Settings › Skills: the app's default workflow says which steps it has; the page is read until Change is pressed.
   const [workflow, setWorkflow] = useState<Workflow | null>(null)
   useEffect(() => { setWorkflow(null); engine.workflows(app.id).then((list) => setWorkflow(list.find((w) => w.appDefault) ?? null)).catch(() => {}) }, [app.id])
   const [changing, setChanging] = useState(false)
-  const held = { ...setup, requirements: setup.requirements ?? startingRequirements ?? undefined } // until the app has a list of its own, the engine's starting one
+  const held = Object.fromEntries(Object.entries({ ...setup, ...applyProbeChanges(setup, ops) }).filter(([, v]) => v !== null && v !== undefined)) as AppSetup
+  const switches = Object.fromEntries(Object.entries({ ...(workflow?.requirements ?? {}), ...wfSwitch }).filter(([, v]) => typeof v === 'boolean')) as Record<string, boolean>
+  const shownWorkflow = workflow ? { ...workflow, requirements: switches } : null
   const save = async () => {
     setBusy(true); setError(null)
     try {
       const homeKey = homeOf(repos, home)
       const many = (id?: string) => ({ ...setup, home_repo: repos.length > 1 ? id : undefined })
-      let saved = await engine.updateApp(app.id, { name: name.trim(), ...(abbr.trim() && abbr.trim() !== app.key ? { key: abbr.trim() } : {}), defaultBranch: branch.trim() || 'main', setup: changesOf(base, clean(many(repos.find((r) => r.key === homeKey)?.id ?? setup.home_repo))) })
+      let saved = await engine.updateApp(app.id, { name: name.trim(), ...(abbr.trim() && abbr.trim() !== app.key ? { key: abbr.trim() } : {}), defaultBranch: branch.trim() || 'main', setup: changesOf(base, clean(many(repos.find((r) => r.key === homeKey)?.id ?? setup.home_repo))), ...(ops.length ? { held: ops } : {}) })
+      if (workflow && Object.keys(wfSwitch).length) setWorkflow({ ...workflow, ...(await engine.saveWorkflow({ id: workflow.id, appId: app.id, name: workflow.name, steps: workflow.steps, ordered: workflow.ordered, build: workflow.build, style: workflow.style, requirements: switches })) })
+      setOps([]); setWfSwitch({})
       for (const r of was.filter((w) => !repos.some((x) => x.key === w.key))) await engine.deleteRepo(r.id!)
       const notes: string[] = []
       const rows: RepoRow[] = []
@@ -547,16 +552,16 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         <button type="button" className="small" onClick={() => setChanging(!changing)}>{changing ? 'Done' : 'Change'}</button>
       </div>
       {info === null ? <p className="muted">Loading…</p> : <StepContracts
-        groups={contractsOf({ setup: held, workflow, usable: info.usable ?? [] })} open={changing ? ['build'] : []}
+        groups={contractsOf({ setup: held, workflow: shownWorkflow, usable: info.usable ?? [] })} open={changing ? ['build'] : []}
         {...(changing ? {
           usable: info.usable ?? [],
           onSkills: (step: string, names: string[]) => { const { [step]: _, ...rest } = setup.step_skills ?? {}; const next = names.length ? { ...rest, [step]: names } : rest; set({ step_skills: Object.keys(next).length ? next : undefined }) },
-          onProbe: (change: ProbeChange) => { const patch = applyProbeChange(held, change); if (patch) set({ ...patch, ...(patch.probes && !patch.probes.length ? { probes: undefined } : {}) } as Partial<AppSetup>) },
+          onProbe: (change: ProbeChange) => setOps([...ops, change]),
+          onWorkflow: (key: string, on: boolean | null) => setWfSwitch({ ...wfSwitch, [key.replace(/^req:/, '')]: on }),
         } : {})} />}
     </div>,
     landing: <>
       <Group title="Landing" lead="How finished work reaches the default branch.">
-        <label style={{ gridColumn: '1 / -1' }}>Test command<input className="mono" value={setup.test_cmd ?? ''} onChange={(e) => set({ test_cmd: e.target.value })} placeholder="runs in the worktree on the merged commit; must exit 0 to land" /></label>
         <label style={{ gridColumn: '1 / -1' }}>Pull requests<select value={setup.pr_mode ?? 'issue'} onChange={(e) => set({ pr_mode: e.target.value as 'project' | 'issue' })}>
           <option value="issue">One per task: each task builds on its own branch and merges on its own</option>
           <option value="project">One per project: every task lands on the project's branch</option>
