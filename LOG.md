@@ -5211,3 +5211,23 @@ own agent", "Judged: a sentence, in the check"). Nothing in the engine changed: 
 
 Raised by the same conversation and not done: commands run last though they are the cheapest, so a lint failure is
 found only after the check and every agent probe. Running them first (fail fast) is a change to the runner's order.
+
+## The builder is told what Verify will hold it to (Sandy, 2026-11-19: "the point is to trust the agent to just build and then verify. But that works only if you have told the agent what to do")
+
+Verify and the builder's instructions are meant to be a pair, and they had drifted as Verify grew. Only the
+acceptance criteria, the judged sentences and the test command reached the builder. A lint command, a reviewer's
+skill and the engine's own two probes were first heard of when they failed, each at the cost of a round of fixes.
+
+Now a builder on a checklist task is told, from the same list Verify runs (`builderHeld` in probes.ts), in the order
+it happens:
+- each command the engine will run on the merged work, to run on what it changed before it finishes;
+- each skill a fresh agent will review the change by; the builder is given those skills too, with its own
+  (`reviewerSkills`), so it can build to what it will be judged by;
+- what "Try to break it" tries and what "Comment discipline" reads for, when they are on;
+- what is left to the repository's CI and to its nightly run: not its to run, still its to keep passing.
+
+One that is off is not said; one that only reports says so. Nothing is a second setting: adding a row to Verify is
+what tells the builder. The check and the probes are told nothing new.
+
+Not done: the planner is not told (a plan's steps do not yet name the lint or the reviewer); and commands still run
+last, after the agents (LOG.md, the entry above on judges and scripts).

@@ -16,7 +16,7 @@ import { branchOf, issueBranch, issueStart, landingBranch, modeOf, stackBase } f
 import { newId } from './ids.js'
 import { commentOnIssue, identifier, setState } from './issues.js'
 import { commandRun, land, wholeRun, withLock } from './landing.js'
-import { agentProbes, commandFixBrief, commandProbes, leftTo, nextProbe, PROBE_FIX_TITLE, PROBE_PREFIX, probeBrief, probeFixBrief, probeOfTitle, probesOf, probeTitle, resultOf, TESTS_KEY, withResult, BUILT_IN, type ProbeResult } from './probes.js'
+import { agentProbes, builderHeld, commandFixBrief, commandProbes, leftTo, reviewerSkills, nextProbe, PROBE_FIX_TITLE, PROBE_PREFIX, probeBrief, probeFixBrief, probeOfTitle, probesOf, probeTitle, resultOf, TESTS_KEY, withResult, BUILT_IN, type ProbeResult } from './probes.js'
 import { skillOptions } from './skills.js'
 import { guideTasks, mergeGuide, mergeRecord } from './merge-guide.js'
 import { acceptanceOf, setAcceptance } from './acceptance.js'
@@ -267,13 +267,15 @@ export class Runner {
     // The skills this run is given: the one a probe runs as a reviewer, or, for a builder, the app's skills for the build
     // (Settings › Skills, Build › Do). Only ones this app's agents have; a probe whose skill is not there is not run.
     const probe = probeOfTitle(x.title, probesOf(a.setup))
-    const skillsWanted = probe?.kind === 'skill' ? [probe.runs] : onlyLooks(x.title) ? [] : ((a.setup as { step_skills?: { build?: string[] } } | null)?.step_skills?.build ?? [])
+    // A builder on a checklist task is told what Verify will hold its work to, and given the reviewers' skills with its own.
+    const told = !onlyLooks(x.title) && styleOf((await workflowFor(db, { issueId: t.id })).workflow) === 'checklist'
+    const skillsWanted = probe?.kind === 'skill' ? [probe.runs] : onlyLooks(x.title) ? [] : [...new Set([...((a.setup as { step_skills?: { build?: string[] } } | null)?.step_skills?.build ?? []), ...(told ? reviewerSkills(a.setup) : [])])]
     const has = skillsWanted.length ? await skillOptions('talk', worktreePath, a.id).catch(() => null) : null
     const names = skillsWanted.filter((n) => has?.skills.includes(n))
     const skill = names.length ? { names, plugins: has!.plugins, mcpServers: has!.mcpServers } : undefined
     const result = probe?.kind === 'skill' && !skill ? { status: 'completed' as const, summary: `The skill \`${probe.runs}\` is not one this app's agents have, so this probe was not run.` } : await this.execute({
       subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief },
-      readOnly: onlyLooks(x.title), skills: skill,
+      readOnly: onlyLooks(x.title), skills: skill, ...(told ? { heldTo: builderHeld(a.setup) } : {}),
       ticket: ticketOf(t), commitFormat: commits.format ?? undefined, hooksPath,
       worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, maxTurns: turnsFor(x.title, setup), maxBudgetUsd: setup.max_budget_usd,
       resumeSessionId: interrupted?.agentSessionId ?? undefined, ...(interrupted?.error?.startsWith(OUT_OF_TURNS) ? { resumeWhy: 'turns' as const } : {}), abort: this.active.get(subId),

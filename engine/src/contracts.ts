@@ -43,7 +43,7 @@ export const CONTRACTS: Record<ContractKey, Fixed> = {
   final: { needs: ['The blast radius', 'The audit'], leaves: ['The final ADR and plan', 'The merge checklist'], done: 'The plan is put right.', stages: [agent('Puts the ADR and the plan right from what the checks found.'), report(READ)] },
   build: { needs: ['The approved brief', 'Its acceptance criteria', 'The ticket'], leaves: ['Commits on the task\'s branch', 'A draft pull request'], done: 'Every blocking probe passes, in at most three rounds.', stages: [
     { key: 'prepare', by: 'engine', what: 'Cuts the branch by the app\'s naming, and holds commits to its format.' },
-    agent('Writes the code and its tests, and commits.'),
+    agent('Writes the code and its tests, and commits. It is told everything Verify will hold it to, and has the reviewers\' skills.'),
     { key: 'verify', by: 'engine', what: 'Runs each probe on what was built. A probe changes nothing: what one finds goes back to a builder.' },
     report('What changed, why, and how it was verified.'),
   ] },

@@ -18,7 +18,7 @@
 import { acceptanceLines, type Criterion } from './acceptance.js'
 import { EYES_AND_CI, LONG_RUN, MAX_ROUNDS } from './verify.js'
 
-import { probesOf, type Probe, type ProbeResult } from './probe-list.js'
+import { probesOf, TESTS_KEY, type Probe, type ProbeResult } from './probe-list.js'
 import { applyHeldChange, applyHeldChanges, heldOf, type HeldChange } from './held.js'
 export * from './probe-list.js'
 
@@ -83,6 +83,32 @@ export function probeBrief(p: Probe, criteria: Criterion[], base: string): strin
     '', ...VERDICT,
   ].join('\n')
 }
+
+/**
+ * What a builder is told before it builds: everything its work is held to afterwards, from the same list Verify runs
+ * (Sandy, 2026-11-19: "the point is to trust the agent to just build and then verify. But that works only if you have
+ * told the agent what to do"). Until now only the criteria, the judged sentences and the test command reached the
+ * builder: a lint command or a reviewer's skill was first heard of when it failed, and cost a round of fixes.
+ * Pure; empty when there is nothing to say. The test command is said elsewhere in the builder's brief (executor.ts),
+ * and the judged sentences in the task's own (planner.ts).
+ */
+export function builderHeld(setup: unknown): string {
+  const on = probesOf(setup).filter((p) => p.on)
+  const only = (p: Probe) => (p.blocks ? '' : ' (reported only)')
+  const commands = on.filter((p) => p.kind === 'command' && (p.when ?? 'build') === 'build' && p.key !== TESTS_KEY)
+  const skills = on.filter((p) => p.kind === 'skill')
+  const pr = on.filter((p) => p.when === 'pr'), nightly = on.filter((p) => p.when === 'nightly')
+  const lines = [
+    ...(commands.length ? [`- The engine runs ${commands.length === 1 ? 'this command' : 'these commands'} on the merged work, and a failure comes back to you as a fix: ${commands.map((p) => `${p.name}, \`${p.runs}\`${only(p)}`).join('; ')}. Run ${commands.length === 1 ? 'it' : 'each'} on what you changed before you finish, and leave it passing.`] : []),
+    ...(skills.length ? [`- A fresh agent then reviews the change by ${skills.length === 1 ? 'this skill' : 'these skills'}: ${skills.map((p) => `${p.name}, \`${p.runs}\`${only(p)}`).join('; ')}. You have ${skills.length === 1 ? 'it' : 'them'} too: build the way ${skills.length === 1 ? 'it says' : 'they say'}, so the review finds nothing.`] : []),
+    ...(on.some((p) => p.key === 'break') ? ['- An agent then uses what you built the way a person would, and tries what nobody wrote down: nothing entered, far too much, the same thing twice, steps out of order, the wrong kind of input, a failure halfway. Handle those, and what sits next to your change still does what it did.'] : []),
+    ...(on.some((p) => p.key === 'comments') ? ['- An agent then reads the change for what a build leaves behind: debug output, dead or commented-out code, a TODO with nobody to do it, a file that does not belong, a test that asserts nothing, a comment that is not true. Leave none.'] : []),
+    ...(pr.length || nightly.length ? [`- Not yours to run, and still yours to keep passing: ${[pr.length ? `the repository's CI runs ${pr.map((p) => `${p.name} (its check "${p.runs}")`).join(', ')} on the pull request` : '', nightly.length ? `${nightly.map((p) => `${p.name} (${p.runs})`).join(', ')} ${nightly.length === 1 ? 'runs' : 'run'} every night on the default branch` : ''].filter(Boolean).join('; ')}.`] : []),
+  ]
+  return lines.length ? ['What your work is held to once it is built (this app\'s own list). None of it should be news to you later, so build to it now:', ...lines].join('\n') : ''
+}
+/** The reviewers' skills a builder is given too, so it can build to what it will be reviewed by. */
+export const reviewerSkills = (setup: unknown) => probesOf(setup).filter((p) => p.on && p.kind === 'skill').map((p) => p.runs)
 
 /** For a trial (trials.ts): one sentence judged on its own against a change that is already merged. In a build, the check's agent judges the sentences with the rest of the list (verify.ts). */
 export const judgedBrief = (name: string, what: string, base: string) => [
