@@ -5297,3 +5297,28 @@ Decided:
 
 Not built: recordings moving between computers; a stand-in for something reached other than over HTTP is still just
 a command and its variables; making one from a recorded real run (the agent writes the stub and the recording).
+
+## A real response is kept raw, with the task (Sandy, 2026-11-19: "can you do 4", on what the same Cloaked prototype showed)
+
+A real run against the vendor had been made early, and only a copy reshaped for a sketch's screen was kept. When the
+prototype needed a stand-in, the raw response was gone: its agent rebuilt the format from an assumption ("the scan
+proves the code handles that shape, not that SixtyFour sends it"), and two fields the real items carry (evidence,
+sources) were dropped without anyone deciding to. A prototype's own folder (the entry above) did not help: the run
+was made before any prototype existed.
+
+Decided:
+- **Recordings belong to the task** (or the idea; else the app): one folder for each outside every repository,
+  `~/.self-evident/recordings/<app>/<task>` (`engine/src/recordings.ts`), because a real response holds real
+  people's data.
+- **Every conversation is given it** (`$RECORDINGS`, and it may read and write there) and told: a real response
+  from an outside service is saved there raw, before anything else is done with it, never only a reshaped copy. It is
+  also told how many files are there already, so it looks before it assumes a shape.
+- **The prototype and its stand-ins get the same folder.** A stand-in serves from it; the prototype tool lists what
+  is there. The stand-in's own working files stay in the prototype's folder.
+- **Discarding a prototype leaves it**: it is the task's.
+
+On this computer only, like the prototype's folder. Not built: a page that shows them; moving them between computers;
+recording a call by itself (the agent saves the response).
+
+Tests no longer touch the person's own folders: `RECORDINGS_HOME`, `STAND_INS_HOME` and `REPO_SKILLS_HOME` point at
+the temporary folder under vitest, as the shared skills already did.

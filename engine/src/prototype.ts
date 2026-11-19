@@ -23,6 +23,7 @@ import { guideOf, hasGuide, NO_GUIDE, recheckGuide, staleSays } from './share-gu
 import { morePorts, straySays, straysOf } from './ports.js'
 import { databaseExists, databaseName, databaseUrl, dropDatabase, dropScenarios, listScenarios, rebuild, save, scenarioTables, writeScenario, type PrototypeDb, type Tables } from './prototype-data.js'
 import { endTalk, say, showTalk, startPrototypeTalk } from './talk.js'
+import { listRecordings, recordingsDir, recordingsOf } from './recordings.js'
 import { cleanStandIns, envOf, forgetStandIns, homeOf, standInKey, standInsStatus, startStandIns, stopStandIns, withStandIn, type StandIn } from './stand-ins.js'
 
 const STOP_TIMEOUT_MS = Number(process.env.PROTOTYPE_STOP_TIMEOUT_MS ?? 120_000)
@@ -43,8 +44,9 @@ const slugOf = (p: typeof prototype.$inferSelect) => { const b = basename(p.path
 /** What the prototype's server and its conversation are given: the app's database variable, at its own database. */
 export async function prototypeEnv(p: typeof prototype.$inferSelect): Promise<Record<string, string>> {
   const { dbCfg } = await setupOf(p.appId)
+  // RECORDINGS: what real services sent back for its task, kept raw (recordings.ts): a stand-in serves from there.
   // PROTOTYPE_HOME: its own folder outside every repository, where its stand-ins run and recorded responses are kept (stand-ins.ts).
-  return { PROTOTYPE_HOME: homeOf(p.id), ...(dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slugOf(p)) } : {}) }
+  return { PROTOTYPE_HOME: homeOf(p.id), RECORDINGS: recordingsDir(p.appId, p), ...(dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slugOf(p)) } : {}) }
 }
 
 async function rowOf(id: string) {
@@ -81,7 +83,7 @@ export async function prototypeStatus(id: string) {
   // Once it answers: does it listen anywhere it was not told to?
   const stray = up ? await straysOf(running.get(id), (ports) => emit(p, 'prototype.stray_port', 'engine', { ports, note: straySays(ports) })) : []
   const staleGuide = guideOf(p)?.stale ?? []
-  return { ...p, ...data, standIns: standInsStatus(p.id, cleanStandIns(p.standIns)), home: homeOf(p.id), ...(staleGuide.length ? { guideNote: staleSays(staleGuide) } : {}), ...(hasGuide(p) ? {} : { needsGuide: NO_GUIDE }), /** Its server has never been started: its agent starts it once it is set up. */ ...(p.status === 'stopped' && p.port === null && cmd ? { notStarted: true } : {}), cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
+  return { ...p, ...data, standIns: standInsStatus(p.id, cleanStandIns(p.standIns)), home: homeOf(p.id), recordings: { dir: recordingsOf(p.appId, p), files: listRecordings(recordingsOf(p.appId, p)).slice(0, 30) }, ...(staleGuide.length ? { guideNote: staleSays(staleGuide) } : {}), ...(hasGuide(p) ? {} : { needsGuide: NO_GUIDE }), /** Its server has never been started: its agent starts it once it is set up. */ ...(p.status === 'stopped' && p.port === null && cmd ? { notStarted: true } : {}), cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
 }
 
 export async function listPrototypes(appId: string) {
@@ -106,7 +108,7 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
   const more = await morePorts()
   // Its stand-ins first, each on a port of its own; the server is given the variables that point the app at them.
   const standIns = cleanStandIns(p.standIns)
-  const pointed = envOf(p.id, standIns, await startStandIns(p.id, standIns, p.path), p.path)
+  const pointed = envOf(p.id, standIns, await startStandIns(p.id, standIns, p.path, { ...process.env, ...(await prototypeEnv(p)) }), p.path)
   // Its own process group, so stopping it also stops what the command started (a package manager's dev server).
   const proc = spawn('sh', ['-c', cmd], { cwd: p.path, env: { ...process.env, ...(await prototypeEnv(p)), ...pointed, PORT: String(port), ...more.env, BROWSER: 'none', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   const log: string[] = []
@@ -136,7 +138,7 @@ export const DEPLOY_TEST = 'The test: it could be deployed as it stands and made
  */
 export const THROUGH_THE_PATH = 'Seed only what exists before the feature runs (companies, people, settings). What the feature itself makes (what it imports, computes or stores) is never seeded or inserted by hand: it arrives the way it will in production, in through the integration point from a stand-in. A row you wrote where the feature should have written it is a faked layer.'
 /** Where a stand-in lives (stand-ins.ts): said to the prototype's agent, and in the skill. */
-export const STAND_INS_STAY = 'What stands in for something outside the system (a vendor\'s API, another service) is a stand-in of this prototype, set with prototype_stand_in: a command that serves on $PORT and the variables that point the app at it. The engine starts it with the prototype and stops it with it, so it is still there after a restart or a reset. Never start one by hand or keep one, or what it serves, in /tmp. What it serves is kept in its own folder outside the repository ($PROTOTYPE_HOME): recorded responses from the real service go there, real people\'s among them, and never on the branch.'
+export const STAND_INS_STAY = 'What stands in for something outside the system (a vendor\'s API, another service) is a stand-in of this prototype, set with prototype_stand_in: a command that serves on $PORT and the variables that point the app at it. The engine starts it with the prototype and stops it with it, so it is still there after a restart or a reset. Never start one by hand or keep one, or what it serves, in /tmp. It runs in a folder of its own outside the repository ($PROTOTYPE_HOME), and serves what the real service really sent: the raw recordings kept with this task in $RECORDINGS, real people\'s among them, never on the branch. Look there first; where nothing was recorded, record a real run there if you can, and say plainly what is assumed if you cannot.'
 export const FROM_THE_SCREEN = 'Try each thing the way the person will, from the screen: press the button, submit the form, open the page. Calling a route or running a job by hand shows that part works, not that the path to it does. Say in your report anything you did not try from the screen.'
 /**
  * How thoroughly a prototype is built (Sandy, 2026-11-15: "prototypes can be set as being full or rough").
