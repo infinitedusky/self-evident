@@ -95,9 +95,15 @@ added is something the real build will need too.
 **A stand-in is part of the prototype.** Set each one with `prototype_stand_in`: a command that serves on `$PORT`,
 and the variables that point the app at it. Self Evident starts it with the prototype and stops it with it, so it is
 still there after a restart or a data reset. Never start one by hand or keep one, or what it serves, in `/tmp`: the
-next start loses it, and the prototype no longer works. What it serves is kept in its own folder outside the
-repository (`$PROTOTYPE_HOME`): recorded responses from the real service go there, real people's among them, never
-on the branch. A stub program the repository already keeps can be run from there.
+next start loses it, and the prototype no longer works. It runs in a folder of its own outside the repository
+(`$PROTOTYPE_HOME`), and a stub program the repository already keeps can be run from there.
+
+**It serves what the real service really sent.** Raw recordings are kept with the task in `$RECORDINGS`, outside the
+repository, real people's among them: every conversation of the task saves a real response there untouched, so look
+there before you write a single made-up response. Build the stand-in from the raw recording, never from a copy that
+was reshaped for a screen: the reshaped copy has lost the format and the fields nobody thought to keep. Where nothing
+was recorded, make a real run and record it if you can; if you cannot, say plainly that the shape is assumed, and
+which fields of the real thing you do not carry.
 
 Not allowed: skipping a layer, hard-coding what a query should return, parsing that only handles the sample, a
 schema you would not ship, logic in the browser that belongs on the server.

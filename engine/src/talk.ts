@@ -30,6 +30,7 @@ import { engineTools } from './tools.js'
 import { DEPLOY_TEST, FROM_THE_SCREEN, prototypeEnv, STAND_INS_STAY, THROUGH_THE_PATH } from './prototype.js'
 import { prototypeSkill, skillOptions, stepSkillPrompt, withStepDefaults, type StepSkills } from './skills.js'
 import { accountEnv, accountPrefix, configDirFor, configDirOf } from './account.js'
+import { listRecordings, recordingsDir, recordingsPrompt } from './recordings.js'
 import { issueDetail, PlanError, projectGraph } from './projects.js'
 import { putAwayIds } from './apps.js'
 import { onIdeaMoved, splitPrompt } from './work.js'
@@ -665,16 +666,18 @@ async function open(sessionId: string): Promise<Live> {
   const mates = await matesOf(s.appId, s.worktreePath)
   const account = accountEnv(a?.setup) // the app's own Claude account, when it has one; throws when that can't be used
   const assets = await assetsFor(s.appId, (s.subjectRef as SubjectRef | null)?.projectId ?? ownTask?.projectId) // the app's, and the project's when it is about one
+  // What real services sent back for this work, kept raw outside the repository (recordings.ts): the task's, else the idea's, else the app's.
+  const recordings = s.appId ? recordingsDir(s.appId, proto ? { issueId: proto.issueId, ideaId: proto.ideaId } : { issueId: ownTaskId ?? (s.subjectRef as SubjectRef | null)?.checkOf, ideaId: (s.subjectRef as SubjectRef | null)?.ideaId }) : null
   const q = query({
     prompt: input.it,
     options: {
       cwd: s.cwd!,
-      ...(refs.length || mates.length ? { additionalDirectories: [...mates.map((m) => m.path), ...refs.map((r) => r.path)] } : {}),
-      ...(proto ? { env: { ...(account.env ?? process.env), ...(await prototypeEnv(proto)) } } : account),
+      ...(refs.length || mates.length || recordings ? { additionalDirectories: [...mates.map((m) => m.path), ...refs.map((r) => r.path), ...(recordings ? [recordings] : [])] } : {}),
+      env: { ...(account.env ?? process.env), ...(proto ? await prototypeEnv(proto) : {}), ...(recordings ? { RECORDINGS: recordings } : {}) },
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) + (recordings && !unwatched ? recordingsPrompt(recordings, listRecordings(recordings).length) : '') },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...(check || whole ? CHECK_TOOLS : ASK_TOOLS)],
