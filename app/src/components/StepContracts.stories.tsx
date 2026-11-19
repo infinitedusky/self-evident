@@ -248,3 +248,20 @@ export const NoScheduledWorkflow: Story = {
     await expect(form.getByLabelText('The workflow that runs it')).toHaveAttribute('placeholder', 'the workflow\'s file, e.g. nightly.yml')
   },
 }
+
+/** Who runs what: the check's one agent, a probe's own agent, a script the engine runs, or the repository itself. The kind picked when adding one says which. Sample data. */
+export const JudgesAndScripts: Story = {
+  args: { groups: withNightly, open: ['build'], onProbe: fn() },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const names = (group: string) => within(c.getByRole('rowgroup', { name: group })).getAllByRole('row').slice(1).map((r) => r.querySelector('td:nth-child(2)')?.textContent?.replace(/ · from.*/, '')).filter(Boolean)
+    await expect(names('The check')).toEqual(['Acceptance criteria', 'Telemetry', 'Decision record'])
+    await expect(names('Probes')).toEqual(['Try to break it', 'Comment discipline', 'Security review'])
+    await expect(names('Commands')).toEqual(['Tests', 'Lint', 'Licence scan'])
+    await expect(names('Run by the repository')).toEqual(['Smoke', 'Docs smoke', 'Load test'])
+    await expect(c.getByText('Judged. One agent reads the change and judges all of these in a single run.')).toBeVisible()
+    await expect(c.getByText('Scripts. The engine runs each one itself, last. No agent: exit 0 passes.')).toBeVisible()
+    await userEvent.click(c.getByRole('button', { name: 'Add a probe to Build' }))
+    await expect(within(c.getByLabelText('Probe kind')).getAllByRole('option').map((o) => o.textContent)).toEqual(['Command: a script, no agent', 'Skill: a probe, its own agent', 'Judged: a sentence, in the check'])
+  },
+}

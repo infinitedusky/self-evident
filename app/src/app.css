@@ -1022,6 +1022,9 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .step-probes td { padding: 3px 24px 3px 0; vertical-align: baseline; }
 @media (max-width: 640px) { .step-stages > li { grid-template-columns: 1fr; gap: 4px; } .step-contract-name { flex-basis: auto; } }
 .step-probes tr.off td { color: var(--ink-faint); }
+.step-probes .step-probe-group th { text-align: left; font-size: 12px; font-weight: 600; padding: 10px 0 2px; }
+.step-probes .step-probe-group th .faint { font-weight: 400; }
+.step-probes tbody:first-child .step-probe-group th { padding-top: 2px; }
 .step-probes input[type="checkbox"] { width: auto; margin: 0; }
 .step-probe-add { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; width: 100%; }
 .step-probe-add input, .step-probe-add select { width: auto; margin: 0; }

@@ -5193,3 +5193,21 @@ and `nightly.passed`. The agents' `set_held` tool takes `when` too.
 Not built: Self Evident writing the workflow file (moving Bonkei's docs run to a nightly workflow is a change to
 Bonkei, made as a task); telling who broke it by running the suite on each merged commit; a notification beyond the
 list.
+
+## Verify is drawn in the groups that run it: judges and scripts (Sandy, 2026-11-19: "It isn't clear that checks and probes are judges vs scripts")
+
+From Cloaked's set-up conversation: Verify was one flat list, and its agent had to explain from the code that a row's
+kind decides who runs it, that the "command" in the Add form is a choice, and that picking a kind is picking check or
+probe. The page never said any of it. Now the list is in four groups, in the order they run, each with one line:
+
+- **The check**: judged. One agent reads the change and judges all of these in a single run (the acceptance criteria
+  and every judged sentence).
+- **Probes**: judged. A fresh agent for each, one after another. None edits anything (the built-in ones, and skills).
+- **Commands**: scripts. The engine runs each one itself, last. No agent: exit 0 passes.
+- **Run by the repository**: scripts. Its CI on the pull request, or its nightly run. Nothing here runs them.
+
+The kind picker in the Add form says the same in its options ("Command: a script, no agent", "Skill: a probe, its
+own agent", "Judged: a sentence, in the check"). Nothing in the engine changed: this is `StepContracts.tsx` only.
+
+Raised by the same conversation and not done: commands run last though they are the cheapest, so a lint failure is
+found only after the check and every agent probe. Running them first (fail fast) is a change to the runner's order.
