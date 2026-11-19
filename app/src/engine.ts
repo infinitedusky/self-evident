@@ -249,6 +249,8 @@ export interface Prototype {
   standIns?: { key: string; name: string; what?: string; running: boolean; url: string | null }[]
   /** What someone opening its shared link is told, in the tab at the bottom right. */
   guide?: Guide | null
+  /** Main can be brought up beside it; compare: it is, at this address (sha: the commit of main it runs). */
+  canCompare?: boolean; compare?: { url: string; up: boolean; sha: string | null; log: string[] } | null
 }
 export interface Guide { intro?: string; steps: { title: string; path?: string; /** For something with no screen: a command, run in the prototype's worktree on a press. */ run?: string; try?: string }[]; by?: string; at?: string }
 /** The last run of a guide step that is a command: how it ended and what it printed. */
@@ -411,6 +413,8 @@ export const engine = {
   prototype: (id: string) => call<Prototype>('GET', `/prototypes/${id}`),
   runPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/start`),
   stopPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/stop`),
+  comparePrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/compare`),
+  stopComparingPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/compare/stop`),
   prototypeRuns: (id: string) => call<StepRun[]>('GET', `/prototypes/${id}/runs`),
   runGuideStep: (id: string, step: number) => call<StepRun>('POST', `/prototypes/${id}/guide/${step}/run`),
   stopGuideStep: (id: string, step: number) => call<StepRun>('POST', `/prototypes/${id}/guide/${step}/stop`),

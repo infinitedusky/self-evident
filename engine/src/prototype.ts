@@ -24,7 +24,7 @@ import { morePorts, straySays, straysOf } from './ports.js'
 import { databaseExists, databaseName, databaseUrl, dropDatabase, dropScenarios, listScenarios, rebuild, save, scenarioTables, writeScenario, type PrototypeDb, type Tables } from './prototype-data.js'
 import { endTalk, say, showTalk, startPrototypeTalk } from './talk.js'
 import { listRecordings, recordingsDir, recordingsOf } from './recordings.js'
-import { writeEnvFile, cleanStandIns, envOf, forgetStandIns, homeOf, standInKey, standInsStatus, startStandIns, stopStandIns, withStandIn, type StandIn } from './stand-ins.js'
+import { writeEnvFile, cleanStandIns, envFileOf, envOf, forgetStandIns, homeOf, standInKey, standInsStatus, startStandIns, stopStandIns, withStandIn, type StandIn } from './stand-ins.js'
 
 const STOP_TIMEOUT_MS = Number(process.env.PROTOTYPE_STOP_TIMEOUT_MS ?? 120_000)
 const running = new Map<string, { proc: ChildProcess; log: string[]; given?: number[]; stray?: { at: number; ports: number[] } }>()
@@ -83,7 +83,9 @@ export async function prototypeStatus(id: string) {
   // Once it answers: does it listen anywhere it was not told to?
   const stray = up ? await straysOf(running.get(id), (ports) => emit(p, 'prototype.stray_port', 'engine', { ports, note: straySays(ports) })) : []
   const staleGuide = guideOf(p)?.stale ?? []
-  return { ...p, ...data, standIns: standInsStatus(p.id, cleanStandIns(p.standIns)), home: homeOf(p.id), recordings: { dir: recordingsOf(p.appId, p), files: listRecordings(recordingsOf(p.appId, p)).slice(0, 30) }, ...(staleGuide.length ? { guideNote: staleSays(staleGuide) } : {}), ...(hasGuide(p) ? {} : { needsGuide: NO_GUIDE }), /** Its server has never been started: its agent starts it once it is set up. */ ...(p.status === 'stopped' && p.port === null && cmd ? { notStarted: true } : {}), cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
+  const cmp = comparing.get(id), cOn = aliveCompare(id)
+  const compare = cmp && cOn ? { url: `http://localhost:${cmp.port}`, up: await answers(`http://localhost:${cmp.port}`), /** The commit of main it runs. */ sha: cmp.sha, log: cmp.log.slice(-30) } : null
+  return { ...p, ...data, /** Main can be brought up beside it, to look at the two side by side. */ canCompare: !!cmd && p.status !== 'discarded', compare, standIns: standInsStatus(p.id, cleanStandIns(p.standIns)), home: homeOf(p.id), recordings: { dir: recordingsOf(p.appId, p), files: listRecordings(recordingsOf(p.appId, p)).slice(0, 30) }, ...(staleGuide.length ? { guideNote: staleSays(staleGuide) } : {}), ...(hasGuide(p) ? {} : { needsGuide: NO_GUIDE }), /** Its server has never been started: its agent starts it once it is set up. */ ...(p.status === 'stopped' && p.port === null && cmd ? { notStarted: true } : {}), cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
 }
 
 export async function listPrototypes(appId: string) {
@@ -235,6 +237,7 @@ const sayStopped = (id: string) => { for (const fn of stopped) { try { fn(id) } 
 export async function stopPrototype(id: string, actor = 'person') {
   const p = await rowOf(id)
   sayStopped(id)
+  await endCompare(p) // a prototype takes its comparison with it
   await kill(id)
   await cleanUp(p)
   if (p.status === 'running') { await db.update(prototype).set({ status: 'stopped', updatedAt: new Date() }).where(eq(prototype.id, id)); await emit(p, 'prototype.stopped', actor) }
@@ -245,6 +248,7 @@ export async function stopPrototype(id: string, actor = 'person') {
 export async function discardPrototype(id: string, actor = 'person') {
   const p = await rowOf(id)
   sayStopped(id)
+  await endCompare(p, true)
   await kill(id)
   await cleanUp(p) // while its worktree is still there for the commands to run in
   await cleanUp(p, 'discard') // what is only removed when it is thrown away: its containers, volumes, data
@@ -256,6 +260,103 @@ export async function discardPrototype(id: string, actor = 'person') {
   if (repoPath) { await removeWorktree(repoPath, p.path); await git(repoPath, ['branch', '-D', p.branch], { allowFail: true }) }
   await db.update(prototype).set({ status: 'discarded', updatedAt: new Date() }).where(eq(prototype.id, id))
   await emit(p, 'prototype.discarded', actor)
+  return prototypeStatus(id)
+}
+
+/**
+ * Main beside the prototype (Sandy, 2026-11-19: "we had definitely built something that allowed us to compare main
+ * with whatever worktree we were building on … can we add this to the prototype?"; the smoke test's is in smoke.ts).
+ * The app's prototype command run a second time, from where the prototype's branch left the default branch, on a
+ * port, a worktree (`<its worktree>--main`) and a database (`<its database>_main`) of its own, with the scenario the
+ * prototype is on. It is pointed at the prototype's own stand-ins, so main reaches no real service either. Kept in
+ * memory only: after an engine restart there is no comparison until it is asked for again.
+ */
+const comparing = new Map<string, { proc: ChildProcess; log: string[]; port: number; sha: string; path: string; env: Record<string, string> }>()
+const aliveCompare = (id: string) => { const m = comparing.get(id); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
+const comparePath = (p: typeof prototype.$inferSelect) => `${p.path}--main`
+const compareSlug = (p: typeof prototype.$inferSelect) => `${slugOf(p)}-main`
+
+/** Where the prototype's branch left the default branch: what it is compared with, so the only differences are its own. */
+async function baseOf(p: typeof prototype.$inferSelect, defaultBranch: string): Promise<string | null> {
+  for (const ref of [`origin/${defaultBranch}`, defaultBranch]) {
+    const r = await git(p.path, ['merge-base', 'HEAD', ref], { allowFail: true })
+    if (r.code === 0 && r.stdout.trim()) return r.stdout.trim()
+  }
+  return null
+}
+
+function killCompare(id: string): Promise<void> {
+  const m = comparing.get(id)
+  comparing.delete(id)
+  if (!m || m.proc.exitCode !== null || m.proc.signalCode !== null || !m.proc.pid) return Promise.resolve()
+  const gone = new Promise<void>((r) => { m.proc.once('exit', () => r()); setTimeout(r, 3000) })
+  try { process.kill(-m.proc.pid, 'SIGTERM') } catch { m.proc.kill('SIGTERM') }
+  return gone
+}
+
+/** Stop the comparison and what its command left up (the app's stop command, in main's worktree). gone: the prototype is thrown away, so its worktree and database go too. */
+async function endCompare(p: typeof prototype.$inferSelect, gone = false): Promise<boolean> {
+  const m = comparing.get(p.id)
+  await killCompare(p.id)
+  const path = comparePath(p)
+  const { repoPath, dbCfg, stopCmd, discardCmd } = await setupOf(p.appId)
+  if (existsSync(path)) for (const cmd of [m ? stopCmd : null, gone ? discardCmd : null]) {
+    if (!cmd) continue
+    await new Promise<void>((done) => {
+      const proc = spawn('sh', ['-c', cmd], { cwd: path, env: { ...process.env, ...(m?.env ?? {}), CI: '1' }, stdio: 'ignore' })
+      const timer = setTimeout(done, STOP_TIMEOUT_MS)
+      proc.on('error', () => { clearTimeout(timer); done() }); proc.on('exit', () => { clearTimeout(timer); done() })
+    })
+  }
+  if (gone) {
+    if (dbCfg) await dropDatabase(dbCfg, compareSlug(p)).catch(() => {})
+    if (repoPath && existsSync(path)) await removeWorktree(repoPath, path).catch(() => {})
+  }
+  return !!m
+}
+
+export async function compareWithMain(id: string, actor = 'person') {
+  const p = await rowOf(id)
+  if (p.status === 'discarded') throw new PlanError('that prototype was discarded')
+  if (aliveCompare(id)) return prototypeStatus(id)
+  if (!alive(id)) throw new PlanError('start the prototype first: main is brought up beside it')
+  const { a, repoPath, cmd, dbCfg } = await setupOf(p.appId)
+  if (!cmd || !repoPath) throw new PlanError(`${a.name} has no prototype command yet`)
+  const sha = await baseOf(p, a.defaultBranch ?? 'main')
+  if (!sha) throw new PlanError(`cannot tell where this prototype left ${a.defaultBranch ?? 'main'}: there is nothing to compare it with`)
+  await killCompare(id)
+  const path = comparePath(p)
+  // Its own worktree, at the commit and on no branch.
+  if (existsSync(path)) await git(path, ['checkout', '--detach', '--force', sha])
+  else await git(repoPath, ['worktree', 'add', '--detach', path, sha])
+  const log: string[] = []
+  const slug = compareSlug(p)
+  if (dbCfg && !(await databaseExists(dbCfg, slug))) {
+    // The scenario the prototype is on may name what only the prototype has (a new table): main is brought up anyway, and its log says so.
+    try { await rebuild(dbCfg, slug, path, p.scenario, { appId: p.appId, prototypeId: p.id }) }
+    catch (err) {
+      log.push(`The made-up data did not all load on main: ${(err as Error).message}`.slice(0, 300))
+      if (!(await databaseExists(dbCfg, slug))) await rebuild(dbCfg, slug, path, null, { appId: p.appId, prototypeId: p.id })
+    }
+  }
+  // Pointed at the stand-ins the prototype already has up, on the ports they are on.
+  const standIns = cleanStandIns(p.standIns)
+  const ports = Object.fromEntries(standInsStatus(p.id, standIns).flatMap((s) => (s.port ? [[s.key, s.port]] : [])))
+  const port = await freePort(comparing.get(id)?.port ?? 0)
+  const more = await morePorts()
+  const env: Record<string, string> = { ...(await prototypeEnv(p)), ...(dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : {}), ...envOf(p.id, standIns, ports, path), STAND_INS_ENV: envFileOf(p.id), PORT: String(port), ...more.env, BROWSER: 'none', CI: '1' }
+  const proc = spawn('sh', ['-c', cmd], { cwd: path, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+  const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
+  proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
+  proc.on('exit', (code) => { log.push(`exited${code === null ? '' : ` with ${code}`}`) })
+  comparing.set(id, { proc, log, port, sha, path, env })
+  await emit(p, 'prototype.compare_started', actor, { port, sha })
+  return prototypeStatus(id)
+}
+
+export async function stopComparing(id: string, actor = 'person') {
+  const p = await rowOf(id)
+  if (await endCompare(p)) await emit(p, 'prototype.compare_stopped', actor)
   return prototypeStatus(id)
 }
 
@@ -370,4 +471,4 @@ export async function removeStandIn(id: string, key: string, actor = 'agent') {
   return alive(id) ? runPrototype(id, actor, { restart: true }) : prototypeStatus(id)
 }
 
-export function stopPrototypes() { for (const id of [...running.keys()]) void kill(id) }
+export function stopPrototypes() { for (const id of [...running.keys()]) void kill(id); for (const id of [...comparing.keys()]) killCompare(id) }
