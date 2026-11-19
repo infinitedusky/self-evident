@@ -501,7 +501,7 @@ export const engine = {
   // The code may come with the app; a local checkout is made ready as it is set, and `note` says what the engine did.
   createApp: (body: { workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: AppSetup; repo?: { fullName?: string; localPath?: string } }) => call<App & { note: string | null }>('POST', '/apps', body),
   githubRepos: () => call<GitHubRepos>('GET', '/github/repos'),
-  updateApp: (id: string, body: { name?: string; /** Its abbreviation: MER in MER-50. */ key?: string; defaultBranch?: string; setup?: AppSetup }) => call<App>('PATCH', `/apps/${id}`, body),
+  updateApp: (id: string, body: { name?: string; /** Its abbreviation: MER in MER-50. */ key?: string; defaultBranch?: string; /** Only the settings that change: a value sets one, null removes it, the rest stay as the engine has them. */ setup?: Record<string, unknown> }) => call<App>('PATCH', `/apps/${id}`, body),
   createRepo: (body: { appId: string; fullName: string; localPath?: string; baseBranch?: string }) => call<Repo & { note: string | null }>('POST', '/repos', body),
   /** The open tickets of the app's Linear team (Integrations › Linear). Reads Linear; nothing is written there. */
   linearTickets: (appId: string, scope: LinearScope) => call<{ team: string; tickets: LinearTicket[] }>('GET', `/apps/${appId}/linear/tickets?scope=${scope}`),

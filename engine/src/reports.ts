@@ -12,6 +12,7 @@
  * After a stand-up note ("today / tomorrow") and a weekly status ("where it stands / done / next / risks"), and the
  * summary page (summary.ts) for one model call over gathered facts.
  */
+import { patchSetup } from './setup.js'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { and, desc, eq, gte, inArray, lt, notInArray, or } from 'drizzle-orm'
 import { db } from './db/client.js'
@@ -167,7 +168,7 @@ export async function setReportFormat(appId: string, i: { daily?: string; weekly
   const now = await reportFormat(appId)
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   const next = { daily: (i.daily ?? now.daily).slice(0, 40_000), weekly: (i.weekly ?? now.weekly).slice(0, 40_000) }
-  await db.update(app).set({ setup: { ...(a.setup as object), report_format: next } }).where(eq(app.id, appId))
+  await patchSetup(appId, { report_format: next })
   return next
 }
 
