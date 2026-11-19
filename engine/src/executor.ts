@@ -23,6 +23,8 @@ export interface RunInput {
   hooksPath?: string
   /** A check or a probe: it reads and runs, and has no tool that edits. */
   readOnly?: boolean
+  /** For a builder: what its work is held to once it is built (probes.ts, `builderHeld`). */
+  heldTo?: string
   /** The skills this run must use, with what its session needs to have them: the app's skills for the build (Settings › Skills, Build › Do), or the one a probe runs as a reviewer. It gets these and no other. */
   skills?: { names: string[]; plugins?: unknown[]; mcpServers?: Record<string, unknown> }
   worktreePath: string
@@ -76,6 +78,7 @@ function prompt(i: RunInput): string {
     i.testCmd ? `- Test what you built: add or adjust tests for what you change, and run the tests of the parts you touched. They must pass before you finish. Do not run the whole suite unless your brief says to: it runs once, when every sub-task of this task is merged. For reference, the whole suite is: ${i.testCmd}` : '- There is no test command configured; verify your change by running it.',
     `- ${LEAVE_LONG_RUNS}`,
     !i.readOnly && i.skills?.names.length ? `- This app has ${i.skills.names.length > 1 ? 'skills' : 'a skill'} for building: ${i.skills.names.map((n) => `\`${n}\``).join(', ')}. Invoke ${i.skills.names.length > 1 ? 'each' : 'it'} with the Skill tool before you change anything, and follow ${i.skills.names.length > 1 ? 'them' : 'it'}: it is this app's own way of working, and wins over the general way where they differ.` : '',
+    !i.readOnly && i.heldTo ? `\n${i.heldTo}\n` : '',
     i.readOnly ? '- You change nothing: you have no tool that edits, and anything you leave in this directory is thrown away. Commit nothing.' : commitLine(i),
     '- Finish with a short summary for the reviewer: what changed, why, how you verified it, and anything you were unsure of.',
     '- The brief is settled: build what it says, the way it says. Do not propose follow-ups, improvements or things to consider; nothing collects them. A small slip inside the files that are yours (a stray file, a typo) is simply fixed. If the sub-task cannot be built as written, stop and say exactly what is wrong and where, in your summary.',

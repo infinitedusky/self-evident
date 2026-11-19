@@ -1,6 +1,7 @@
 /** Probes: an app's list, what runs next, and what a probe's agent is told and reports. Sample data throughout. */
 import { describe, expect, it } from 'vitest'
-import { agentProbes, cleanProbes, commandProbes, nextProbe, probeBrief, probeFixBrief, probeOfTitle, probesOf, probeTitle, readProbe, resultOf, withResult, type ProbeResult } from './probes.js'
+import { applyHeldChange } from './held.js'
+import { agentProbes, builderHeld, reviewerSkills, cleanProbes, commandProbes, nextProbe, probeBrief, probeFixBrief, probeOfTitle, probesOf, probeTitle, readProbe, resultOf, withResult, type ProbeResult } from './probes.js'
 
 const setup = { test_cmd: 'pnpm test', probes: [
   { name: 'Lint', kind: 'command', runs: 'pnpm lint' },
@@ -22,6 +23,36 @@ describe('an app\'s probes', () => {
   })
   it('what is saved is tidied: nothing to run, a name twice and an unknown kind are dropped', () => {
     expect(cleanProbes(setup.probes).map((p) => p.key)).toEqual(['lint', 'security_review', 'comments', 'break']); expect(cleanProbes('x')).toEqual([])
+  })
+})
+
+describe('what a builder is told its work is held to', () => {
+  const add = (setup: unknown, c: Parameters<typeof applyHeldChange>[1]) => ({ ...(setup as object), ...applyHeldChange(setup, c) })
+  let app: unknown = { test_cmd: 'pnpm test' }
+  app = add(app, { op: 'add', name: 'Lint', kind: 'command', runs: 'pnpm lint' })
+  app = add(app, { op: 'add', name: 'Types', kind: 'command', runs: 'pnpm typecheck', blocks: false })
+  app = add(app, { op: 'add', name: 'Security review', kind: 'skill', runs: 'backend-core:security-review' })
+  app = add(app, { op: 'add', name: 'Docs smoke', kind: 'command', runs: 'nightly.yml', when: 'nightly' })
+  it('every command, reviewer and built-in probe that is on, in the order they run; the test command is said elsewhere', () => {
+    const b = builderHeld(app)
+    expect(b).toContain('Lint, `pnpm lint`; Types, `pnpm typecheck` (reported only)')
+    expect(b).toContain('Run each on what you changed before you finish')
+    expect(b).toContain('Security review, `backend-core:security-review`')
+    expect(b).toContain('tries what nobody wrote down') // Try to break it
+    expect(b).toContain('what a build leaves behind') // Comment discipline
+    expect(b).toContain('Docs smoke (nightly.yml) runs every night on the default branch')
+    expect(b).not.toContain('pnpm test')
+    expect(b.indexOf('pnpm lint')).toBeGreaterThan(0); expect(b.indexOf('reviews the change')).toBeGreaterThan(b.indexOf('pnpm lint'))
+  })
+  it('one switched off is not said, and with nothing on there is nothing to say', () => {
+    const quiet = [{ op: 'on', key: 'break', on: false }, { op: 'on', key: 'comments', on: false }, { op: 'on', key: 'lint', on: false }] as const
+    const b = builderHeld(quiet.reduce(add, app))
+    expect(b).not.toContain('pnpm lint'); expect(b).not.toContain('nobody wrote down'); expect(b).toContain('pnpm typecheck')
+    expect(builderHeld(quiet.slice(0, 2).reduce(add, {} as unknown))).toBe('')
+  })
+  it('the builder is given the reviewers\' skills that are on', () => {
+    expect(reviewerSkills(app)).toEqual(['backend-core:security-review'])
+    expect(reviewerSkills(add(app, { op: 'on', key: 'security_review', on: false }))).toEqual([])
   })
 })
 
