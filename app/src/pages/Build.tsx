@@ -2,8 +2,10 @@
  * Build: everything after the plan (Sandy, 2026-11-14: "after the plan is done, it's done. Now we're in the build
  * phase"; "it also needs to be the place where questions are asked or anything that stops. Everything needs to
  * happen in there"). It lists tasks, since a task is what is built: what is waiting for the person on top (a
- * question to answer here, a build that failed, one that is held), then what is ready, what is building and what
- * has landed. A row leads to the task's own Build section. Laid out like Linear's My Issues: what needs you first.
+ * question to answer here, a build that failed, one that is held), then what is ready, what is building, what is at
+ * the smoke test (built: the person's to try and then close) and, folded, what is closed. A merge closes nothing.
+ * The same tasks can be listed by project (Sandy, 2026-11-19: "build should also have projects so you can see it
+ * organized"). A row leads to the task's own Build section. Laid out like Linear's My Issues: what needs you first.
  */
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
@@ -14,6 +16,20 @@ import { API, engine, EVENT_TYPES, openEvents, type BuildTask } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const PR_WORD: Record<string, string> = { open: 'open', draft: 'draft', merged: 'merged', closed: 'closed' }
+type Phase = BuildTask['phase']
+type View = 'stage' | 'project'
+const VIEW_KEY = 'build.view'
+/** The stages in the order a task goes through them, what needs the person first; closed is kept folded under them. */
+const ORDER: Phase[] = ['stopped', 'ready', 'checking', 'building', 'smoke', 'closed']
+const STAGE: Record<Phase, { title: string; word: string; tone: 'ok' | 'warn' | 'bad' | 'accent' | 'neutral'; component: string }> = {
+  stopped: { title: 'Waiting for you', word: 'waiting for you', tone: 'warn', component: 'BuildNeedsYou' },
+  ready: { title: 'Planned, not started', word: 'planned', tone: 'neutral', component: 'BuildReady' },
+  checking: { title: 'Planned, being read before it is built', word: 'reading', tone: 'accent', component: 'BuildChecking' },
+  building: { title: 'Building', word: 'building', tone: 'accent', component: 'BuildRunning' },
+  smoke: { title: 'Smoke test: yours to try, then close', word: 'smoke test', tone: 'warn', component: 'BuildSmoke' },
+  closed: { title: 'Closed', word: 'closed', tone: 'neutral', component: 'BuildClosed' },
+}
+const savedView = (): View => { try { return localStorage.getItem(VIEW_KEY) === 'project' ? 'project' : 'stage' } catch { return 'stage' } }
 
 export function Build() {
   const { app } = useCurrentApp()
@@ -21,6 +37,7 @@ export function Build() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [refused, setRefused] = useState<{ key: string; why: string } | null>(null)
+  const [view, setView] = useState<View>(savedView)
   const timer = useRef<number | undefined>(undefined)
   useEffect(() => {
     setTasks(null)
@@ -37,14 +54,13 @@ export function Build() {
     setBusy(key); setRefused(null)
     try { await fn(); if (app) setTasks((await engine.now(app.id)).tasks ?? []) } catch (e) { setRefused({ key, why: e instanceof Error ? e.message : String(e) }) } finally { setBusy(null) }
   }
-  const of = (phase: BuildTask['phase']) => tasks?.filter((t) => t.phase === phase) ?? []
-  const stopped = of('stopped'), ready = of('ready'), checking = of('checking'), building = of('building'), landed = of('landed')
+  const flip = (v: View) => { setView(v); try { localStorage.setItem(VIEW_KEY, v) } catch { /* the choice is only a convenience */ } }
   const row = (t: BuildTask, extra?: React.ReactNode, action?: React.ReactNode) => (
     <li key={t.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start' }}>
       <div style={{ minWidth: 0 }}>
         <Link to={`/tasks/${t.id}/build`} style={{ fontWeight: 600, textDecoration: 'none' }}>{t.identifier} {t.title}</Link>
         <div className="faint" style={{ fontSize: 13 }}>
-          {t.done} of {t.total} sub-task{t.total === 1 ? '' : 's'} done{t.projectName ? <> · in <Link to={`/projects/${t.projectId}`}>{t.projectName}</Link></> : ''}
+          {t.done} of {t.total} sub-task{t.total === 1 ? '' : 's'} done{view === 'stage' && t.projectName ? <> · in <Link to={`/projects/${t.projectId}`}>{t.projectName}</Link></> : ''}
           {t.pr?.url ? <> · <a href={t.pr.url} target="_blank" rel="noreferrer">pull request #{t.pr.number}</a> {PR_WORD[t.pr.status] ?? t.pr.status}</> : ''}
         </div>
         {extra}
@@ -53,6 +69,47 @@ export function Build() {
       {action}
     </li>
   )
+  // One task's row, whatever list it is in. By project its stage is a badge, since no heading says it.
+  const item = (t: BuildTask) => {
+    const tag = (node: React.ReactNode) => (view === 'project' ? <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Badge tone={STAGE[t.phase].tone}>{STAGE[t.phase].word}</Badge>{node}</span> : node)
+    switch (t.phase) {
+      case 'stopped': return row(t, <>
+        {t.questions.map((q) => <QuestionAsk key={q.id} q={q} busy={busy !== null} onAnswer={(answer) => act(t.id, () => engine.answer(q.id, answer))} />)}
+        {t.checks?.needsYou && <HeldAsk task={t} busy={busy !== null} onAnswer={(answer) => act(t.id, () => engine.say(t.checks!.sessionId!, answer))} />}
+        {t.failed.map((x) => (
+          <div key={x.id} className="build-ask">
+            <div><Badge tone="bad">failed</Badge> <strong>{x.identifier} {x.title}</strong></div>
+            {x.error && <div className="muted" style={{ fontSize: 13 }}>{x.error.slice(0, 240)}</div>}
+            <div className="opts"><button className="btn quiet small" disabled={busy !== null} onClick={() => void act(t.id, () => engine.retry(x.id))}>Try it again</button></div>
+          </div>
+        ))}
+        {t.held.map((x) => <div key={x.id} className="build-ask"><Badge tone="warn">held</Badge> <strong>{x.identifier} {x.title}</strong> <span className="muted" style={{ fontSize: 13 }}>{x.reason}</span></div>)}
+        {!t.questions.length && !t.failed.length && !t.held.length && !t.checks?.needsYou && <div className="build-ask"><Badge tone="warn">{t.projectStatus}</Badge> <span className="muted" style={{ fontSize: 13 }}>Its build is {t.projectStatus}. <Link to={`/projects/${t.projectId}`}>Look →</Link></span></div>}
+      </>, tag(null))
+      case 'ready': return row(t, null, <button className="btn" disabled={busy !== null} onClick={() => void act(t.id, () => engine.buildTask(t.id))}>{busy === t.id ? 'Starting…' : 'Build it'}</button>)
+      case 'checking': return row(t, <div className="muted" style={{ fontSize: 13 }}>Still to come, by themselves: {t.checks?.left.join(', ')}. Then it is built.</div>, <Badge tone="accent" dot>reading</Badge>)
+      case 'building': return row(t, t.live.map((x) => <div key={x.id} className="muted" style={{ fontSize: 13 }}><span className="mono">{x.identifier}</span> {x.title}{x.step ? <> · {x.step}</> : ''}</div>), <Badge tone="accent" dot>building</Badge>)
+      case 'smoke': return row(t, <div className="muted" style={{ fontSize: 13 }}>{t.waits?.length ? t.waits.join(' ') : 'Everything is checked. It can be closed.'}</div>,
+        tag(<Link className="btn quiet small" to={`/tasks/${t.id}/build`}>{t.waits?.length ? 'Smoke test →' : 'Close it →'}</Link>))
+      case 'closed': return row(t, null, <Badge tone="neutral">closed</Badge>)
+    }
+  }
+  const of = (phase: Phase) => tasks?.filter((t) => t.phase === phase) ?? []
+  // By project: a project's tasks together, in the order they are built; tasks that are a project of their own last.
+  const groups: { id: string; name: string | null; status: string; tasks: BuildTask[] }[] = []
+  for (const t of tasks ?? []) {
+    const id = t.projectName ? t.projectId : ''
+    const g = groups.find((x) => x.id === id) ?? groups[groups.push({ id, name: t.projectName, status: t.projectStatus, tasks: [] }) - 1]
+    g.tasks.push(t)
+  }
+  groups.sort((x, y) => Number(!x.id) - Number(!y.id))
+  const over = (g: typeof groups[number]) => !!g.id && g.tasks.every((t) => t.phase === 'closed')
+  const group = (g: typeof groups[number]) => (
+    <section key={g.id || 'own'} data-component="BuildProject">
+      <h2 className="build-h">{g.id ? <><Link to={`/projects/${g.id}`}>{g.name}</Link> <Badge tone={g.status === 'running' ? 'accent' : 'neutral'}>{g.status}</Badge></> : 'Tasks on their own'}</h2>
+      <ul className="list panel build-list">{g.tasks.map(item)}</ul>
+    </section>
+  )
   return (
     <>
       <div className="page-head">
@@ -60,67 +117,37 @@ export function Build() {
           <h1>🔨 Build{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
           <p className="muted" style={{ margin: '4px 0 0' }}>Everything after the plan. A task builds by itself once its brief is approved; what it asks, and anything that stops it, shows here.</p>
         </div>
-        <Link to="/graph" className="btn quiet">Graph</Link>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div className="seg" role="group" aria-label="How to list it">
+            <button className={view === 'stage' ? 'on' : ''} aria-pressed={view === 'stage'} onClick={() => flip('stage')}>By stage</button>
+            <button className={view === 'project' ? 'on' : ''} aria-pressed={view === 'project'} onClick={() => flip('project')}>By project</button>
+          </div>
+          <Link to="/graph" className="btn quiet">Graph</Link>
+        </div>
       </div>
       {error && <div className="empty">The engine isn't reachable: {error}.</div>}
       {!app && <div className="empty">No app yet. Add one in Settings.</div>}
       {tasks && !tasks.length && <div className="empty">Nothing is being built. A task shows here once its brief is approved and it has been planned. <Link to="/plan">Go to Plan →</Link></div>}
 
-      {stopped.length > 0 && (
-        <section data-component="BuildNeedsYou">
-          <h2 className="build-h">Waiting for you</h2>
-          <ul className="list panel build-list">
-            {stopped.map((t) => row(t, <>
-              {t.questions.map((q) => <QuestionAsk key={q.id} q={q} busy={busy !== null} onAnswer={(answer) => act(t.id, () => engine.answer(q.id, answer))} />)}
-              {t.checks?.needsYou && <HeldAsk task={t} busy={busy !== null} onAnswer={(answer) => act(t.id, () => engine.say(t.checks!.sessionId!, answer))} />}
-              {t.failed.map((x) => (
-                <div key={x.id} className="build-ask">
-                  <div><Badge tone="bad">failed</Badge> <strong>{x.identifier} {x.title}</strong></div>
-                  {x.error && <div className="muted" style={{ fontSize: 13 }}>{x.error.slice(0, 240)}</div>}
-                  <div className="opts"><button className="btn quiet small" disabled={busy !== null} onClick={() => void act(t.id, () => engine.retry(x.id))}>Try it again</button></div>
-                </div>
-              ))}
-              {t.held.map((x) => <div key={x.id} className="build-ask"><Badge tone="warn">held</Badge> <strong>{x.identifier} {x.title}</strong> <span className="muted" style={{ fontSize: 13 }}>{x.reason}</span></div>)}
-              {!t.questions.length && !t.failed.length && !t.held.length && !t.checks?.needsYou && <div className="build-ask"><Badge tone="warn">{t.projectStatus}</Badge> <span className="muted" style={{ fontSize: 13 }}>Its build is {t.projectStatus}. <Link to={`/projects/${t.projectId}`}>Look →</Link></span></div>}
-            </>))}
-          </ul>
+      {view === 'stage' && ORDER.filter((ph) => ph !== 'closed' && of(ph).length > 0).map((ph) => (
+        <section key={ph} data-component={STAGE[ph].component}>
+          <h2 className="build-h">{STAGE[ph].title}</h2>
+          <ul className="list panel build-list">{of(ph).map(item)}</ul>
         </section>
+      ))}
+      {view === 'stage' && of('closed').length > 0 && (
+        <details data-component="BuildClosed">
+          <summary className="build-h" style={{ cursor: 'pointer' }}>Closed · {of('closed').length}</summary>
+          <ul className="list panel build-list">{of('closed').map(item)}</ul>
+        </details>
       )}
 
-      {ready.length > 0 && (
-        <section data-component="BuildReady">
-          <h2 className="build-h">Planned, not started</h2>
-          <ul className="list panel build-list">
-            {ready.map((t) => row(t, null, <button className="btn" disabled={busy !== null} onClick={() => void act(t.id, () => engine.buildTask(t.id))}>{busy === t.id ? 'Starting…' : 'Build it'}</button>))}
-          </ul>
-        </section>
-      )}
-
-      {checking.length > 0 && (
-        <section data-component="BuildChecking">
-          <h2 className="build-h">Planned, being read before it is built</h2>
-          <ul className="list panel build-list">
-            {checking.map((t) => row(t, <div className="muted" style={{ fontSize: 13 }}>Still to come, by themselves: {t.checks?.left.join(', ')}. Then it is built.</div>, <Badge tone="accent" dot>reading</Badge>))}
-          </ul>
-        </section>
-      )}
-
-      {building.length > 0 && (
-        <section data-component="BuildRunning">
-          <h2 className="build-h">Building</h2>
-          <ul className="list panel build-list">
-            {building.map((t) => row(t, t.live.map((x) => <div key={x.id} className="muted" style={{ fontSize: 13 }}><span className="mono">{x.identifier}</span> {x.title}{x.step ? <> · {x.step}</> : ''}</div>), <Badge tone="accent" dot>building</Badge>))}
-          </ul>
-        </section>
-      )}
-
-      {landed.length > 0 && (
-        <section data-component="BuildLanded">
-          <h2 className="build-h">Landed</h2>
-          <ul className="list panel build-list">
-            {landed.map((t) => row(t, null, t.pr?.url ? <a className="btn quiet small" href={t.pr.url} target="_blank" rel="noreferrer">Pull request #{t.pr.number}</a> : <Badge tone="ok">landed</Badge>))}
-          </ul>
-        </section>
+      {view === 'project' && groups.filter((g) => !over(g)).map(group)}
+      {view === 'project' && groups.some(over) && (
+        <details data-component="BuildClosed">
+          <summary className="build-h" style={{ cursor: 'pointer' }}>Closed projects · {groups.filter(over).length}</summary>
+          {groups.filter(over).map(group)}
+        </details>
       )}
     </>
   )

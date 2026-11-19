@@ -48,6 +48,12 @@ async function facts(issueId: string) {
   return { t, f: { state: t.state, pr: pull ? { number: pull.number, status: pull.status } : null, checks: smokeChecks(acceptanceOf(t), null, staged) } satisfies CloseFacts }
 }
 
+/** What a task still waits on before it can be closed, from rows already read (Build's list: one lookup a task). */
+export async function waitsOf(t: typeof issue.$inferSelect, pull: { number: number | null; status: string } | null): Promise<string[]> {
+  const staged = styleOf((await workflowFor(db, { issueId: t.id })).workflow) !== 'checklist'
+  return taskWaits({ state: t.state, pr: pull, checks: smokeChecks(acceptanceOf(t), null, staged) })
+}
+
 /** Whether a task can be closed now, and if not, what it waits on. */
 export async function closeView(issueId: string): Promise<{ can: boolean; waits: string[] }> {
   const waits = taskWaits((await facts(issueId)).f)

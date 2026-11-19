@@ -32,10 +32,26 @@ export type Attention =
   | { kind: 'checkout_behind'; appName: string; branch: string; path: string; commits: number; why: string; files: string[] }
   | ({ kind: 'overlap'; prNumber: number; title: string; author: string | null; url: string | null; files: string[] } & Where)
 
-/** A task past its plan, for Build's page: ready (planned, not started), checking (planned after a prototype, being read before it is built), building, stopped (asking, failed, held or paused) or landed. */
+/**
+ * A task past its plan, for Build's page: ready (planned, not started), checking (planned after a prototype, being
+ * read before it is built), building, stopped (asking, failed, held or paused), smoke (every sub-task is in: it is the
+ * person's to try by hand, and then to close) or closed. A merge closes nothing (Sandy, 2026-11-19: "if it is merged
+ * it should say that but it needs to be closed to be landed"; then "I am not seeing tasks that are at the smoke test
+ * stage and I don't see a closed section"): the person's Close does (close.ts).
+ */
+export type Phase = 'ready' | 'checking' | 'building' | 'stopped' | 'smoke' | 'closed'
+
+/** Where a task past its plan stands. Pure. `stopped`: it asks something, or a sub-task failed or is held. */
+export function phaseOf(f: { state: string; done: number; total: number; projectStatus: string; stopped: boolean }): Phase {
+  if (f.state === 'done') return 'closed'
+  if (f.done === f.total) return 'smoke'
+  if (['drafting', 'proposed', 'approved'].includes(f.projectStatus)) return 'ready'
+  return f.stopped || f.projectStatus !== 'running' ? 'stopped' : 'building'
+}
+
 export interface BuildTask {
   id: string; identifier: string; title: string; projectId: string; projectName: string | null; projectStatus: string
-  phase: 'ready' | 'checking' | 'building' | 'stopped' | 'landed'; done: number; total: number; appId: string
+  phase: Phase; done: number; total: number; appId: string
   /** Planned after a prototype and still being read before the build: the steps left; and, when the last one stopped for the person, its question and the conversation to answer it in. */
   checks?: { left: string[]; needsYou: string | null; sessionId: string | null }
   live: { id: string; identifier: string; title: string; status: string; step: string | null }[]
@@ -43,6 +59,8 @@ export interface BuildTask {
   failed: { id: string; identifier: string; title: string; error: string | null }[]
   questions: { id: string; text: string; cost: string | null; reason: string | null; options: { label: string; description: string; changes: string[]; recommended: boolean }[] }[]
   pr: { number: number | null; url: string | null; status: string } | null
+  /** At the smoke test: what still stands between it and being closed, in the person's words; empty when it can be closed. */
+  waits?: string[]
 }
 
 export async function now(appId?: string) {
@@ -98,9 +116,7 @@ export async function now(appId?: string) {
     const held = mine.filter((x) => status(x.id) === 'queued' && b(x.id)?.heldReason).map((x) => ({ id: x.id, identifier: name(x), title: x.title, reason: b(x.id)!.heldReason! }))
     const done = mine.filter((x) => status(x.id) === 'done').length
     const thePr = prs.find((q) => q.issueId === t.id) ?? prs.find((q) => q.projectId === p.id && !q.issueId) ?? null
-    const phase: BuildTask['phase'] = done === mine.length ? 'landed'
-      : ['drafting', 'proposed', 'approved'].includes(p.status) ? 'ready'
-      : asked.length || failed.length || held.length || p.status !== 'running' ? 'stopped' : 'building'
+    const phase = phaseOf({ state: t.state, done, total: mine.length, projectStatus: p.status, stopped: asked.length + failed.length + held.length > 0 })
     return {
       id: t.id, appId: t.appId, identifier: name(t), title: t.title, projectId: p.id, projectName: p.solo ? null : p.name, projectStatus: p.status, phase, done, total: mine.length,
       live: mine.filter((x) => LIVE.includes(status(x.id))).map((x) => ({ id: x.id, identifier: name(x), title: x.title, status: status(x.id), step: currentStep(x.id) })),
@@ -109,6 +125,11 @@ export async function now(appId?: string) {
       pr: thePr ? { number: thePr.number, url: thePr.url, status: thePr.status } : null,
     }
   }).filter((x): x is BuildTask => x !== null))
+  // At the smoke test: what each still waits on (its pull request, the person's checks), as its Close button says it.
+  {
+    const { waitsOf } = await import('./close.js')
+    await Promise.all(tasks.filter((x) => x.phase === 'smoke').map(async (x) => { x.waits = await waitsOf(top.find((t) => t.id === x.id)!, x.pr) }))
+  }
   // After a prototype a planned task is read before it is built (the blast radius, the audit, the final ADR and
   // plan). Until those are in it is not ready: it is being checked, or it is stopped because the last step has a
   // question for the person ("NEEDS YOU:", checks.ts).
