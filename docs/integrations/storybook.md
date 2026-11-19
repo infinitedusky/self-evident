@@ -7,6 +7,25 @@ repo's package manager and `--no-open`; the port the script names, else 6006), a
 wrong. (Sandy, 2026-11-09: "for all the integrations there has to be a default where I can just put the integration
 and say set up"; "Storybook is simple, every project uses it, it should not be hard to add to a repo".)
 
+## Kept outside the repo
+
+For an app whose repository must not hold a Storybook (someone else's code, or a team that does not use one). Switch
+**Kept outside the repo** on and set **Command** to a script of your own, anywhere on the computer:
+
+    ~/tools/storybook/run.sh "$WORKTREE" "$PORT"
+
+- The command runs for the main checkout and for each conversation's or prototype's worktree, in that checkout, with
+  `$WORKTREE` (the checkout's path) and `$PORT` (its own port) set. Nothing is added to it, and nothing is installed
+  first. A worktree gets its Storybook whether or not it has a `.storybook/` in git.
+- The check asks only whether it answers and lists stories (`index.json`). The repo is not read, so the standard
+  below does not apply.
+- Set up Storybook is not offered: nothing is installed into the repo or committed to it.
+- **Where stories go** is told, in your words, to the agent of each conversation, with the rule that Storybook's
+  files never go into a commit. Builders and the planner are not held to "a screen without a story is not done".
+- The stories tool, a story opened in a tab, and stopping a worktree's Storybook work as they do in the repo.
+
+In the repo, a command that names `$PORT` is also run as written; one that does not gets ` -p <port>` in a worktree.
+
 ## The standard
 
 Every project's Storybook, checked by Self Evident (`engine/src/storybook.ts`, `checkStorybook`):
