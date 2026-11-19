@@ -24,20 +24,32 @@ import { commitOnBase, type Run } from './tkt.js'
 
 const running = new Map<string, { proc: ChildProcess; startedAt: Date }>() // by the folder it runs in: the main checkout, or a conversation's worktree
 
-export interface StorybookSetup { on: boolean; url: string | null; cmd: string | null }
+export interface StorybookSetup { on: boolean; url: string | null; cmd: string | null; /** It lives outside the repo, run by the command. */ outside: boolean; /** Where stories go, in the person's words, told to agents. */ stories: string | null }
 /**
  * The integration's values on an app: the switch, and the command and URL when the person set them (otherwise the
  * defaults from the repo, storybookValues). Before the switch (2026-11-09) a command or URL meant on; the keys the
  * values lived under before the integration are still read until the start-up move.
  */
 export function storybookSetup(setup: unknown): StorybookSetup {
-  const s = (setup ?? {}) as { integrations?: { storybook?: { on?: string; url?: string; cmd?: string } }; storybook_url?: string; storybook_cmd?: string }
+  const s = (setup ?? {}) as { integrations?: { storybook?: { on?: string; url?: string; cmd?: string; outside?: string; stories?: string } }; storybook_url?: string; storybook_cmd?: string }
   const url = s.integrations?.storybook?.url?.trim() || s.storybook_url?.trim() || null
   const cmd = s.integrations?.storybook?.cmd?.trim() || s.storybook_cmd?.trim() || null
   const sw = s.integrations?.storybook?.on?.trim()
-  return { on: sw === undefined ? !!(url || cmd) : sw === 'true', url, cmd }
+  return { on: sw === undefined ? !!(url || cmd) : sw === 'true', url, cmd, outside: s.integrations?.storybook?.outside?.trim() === 'true', stories: s.integrations?.storybook?.stories?.trim() || null }
 }
 export const hasStorybook = (setup: unknown) => storybookSetup(setup).on
+/**
+ * Whether stories lead the UI in the repo: builders and the planner are held to "a screen without a story is not
+ * done" only where the Storybook is the repo's own. One kept outside the repo is for mockups; nothing of it is built
+ * into the repo's work.
+ */
+export const storiesLead = (setup: unknown) => { const s = storybookSetup(setup); return s.on && !s.outside }
+/** What an agent in a conversation is told about a Storybook kept outside the repo; nothing for one in the repo. */
+export function storiesNote(setup: unknown): string {
+  const s = storybookSetup(setup)
+  if (!s.on || !s.outside) return ''
+  return `\n\nThis app's Storybook is kept outside the repository and run by Self Evident for this worktree (the stories tool lists it; open_tab kind storybook shows it). Never install Storybook into the repository, and never commit Storybook's files or its configuration.${s.stories ? ` Where stories go: ${s.stories}` : ''}`
+}
 
 /**
  * The house defaults, read from the repo (Sandy, 2026-11-09: "for all the integrations there has to be a default where
@@ -61,9 +73,10 @@ export async function storybookDefaults(repoPath: string): Promise<{ cmd: string
 /** The values in force for an app: its own where set, the repo's defaults for the rest; nothing when it is off. */
 export async function storybookValues(setup: unknown, repoPath: string | null): Promise<StorybookSetup> {
   const s = storybookSetup(setup)
+  if (s.on && s.outside) return { ...s, url: s.url ?? (repoPath ? `http://localhost:${portFor(repoPath)}` : null) } // nothing is read from the repo: the command is the person's, the port the checkout's own
   if (!s.on || (s.url && s.cmd) || !repoPath) return s
   const d = await storybookDefaults(repoPath)
-  return { on: s.on, url: s.url ?? d?.url ?? null, cmd: s.cmd ?? d?.cmd ?? null }
+  return { ...s, url: s.url ?? d?.url ?? null, cmd: s.cmd ?? d?.cmd ?? null }
 }
 
 /**
@@ -84,8 +97,8 @@ async function setupOf(appId: string) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError(`no app ${appId}`)
   const r = await homeRepo(appId)
-  const { url, cmd } = await storybookValues(a.setup, r?.localPath ?? null)
-  return { a, cwd: r?.localPath ?? null, url, cmd }
+  const { url, cmd, outside } = await storybookValues(a.setup, r?.localPath ?? null)
+  return { a, cwd: r?.localPath ?? null, url, cmd, outside }
 }
 
 /** A worktree's own port, the same every time (so a Storybook started before an engine restart is found again by asking it). */
@@ -101,20 +114,31 @@ export function portFor(cwd: string): number {
  * plan of the task"). A conversation with a worktree of its own that has a Storybook gets that worktree's, on the
  * worktree's own port, with the dependencies installed first when the worktree has none; anything else gets the
  * app's, from the main checkout. `branch` says which, for the page to show.
+ *
+ * The command is handed the checkout and the port as $WORKTREE and $PORT, like a prototype's command. One that names
+ * $PORT is run as written; one that does not gets ` -p <port>` added in a worktree, as before. A Storybook kept
+ * outside the repo (the integration's switch) is run by its command for every checkout, whether or not the checkout
+ * has a `.storybook/` in git, with nothing installed first and nothing added: the command is a script that takes
+ * the two and does the rest (asked for by an app whose Storybook must stay out of its repository, 2026-11-19).
  */
+const namesPort = (cmd: string) => /\$\{?PORT\b/.test(cmd)
+const portOf = (url: string | null) => { try { return url ? new URL(url).port : '' } catch { return '' } }
 async function placeFor(appId: string, sessionId?: string | null) {
   const base = await setupOf(appId)
-  const main = { ...base, branch: base.a.defaultBranch ?? 'main', main: true }
+  const main = { ...base, branch: base.a.defaultBranch ?? 'main', main: true, env: { WORKTREE: base.cwd ?? '', PORT: portOf(base.url) } }
   if (!sessionId) return main
   const [s] = await db.select().from(session).where(eq(session.id, sessionId))
   if (!s || s.appId !== appId || !s.cwd || s.cwd === base.cwd || !(await exists(s.cwd))) return main
+  const port = portFor(s.cwd)
+  const env = { WORKTREE: s.cwd, PORT: String(port) }
+  const at = { a: base.a, cwd: s.cwd, url: `http://localhost:${port}`, branch: s.branch ?? 'its worktree', main: false, outside: base.outside, env }
+  if (base.outside) return base.cmd ? { ...at, cmd: base.cmd } : main
   if (!(await tracked(s.cwd, '*.storybook/main.*')).length) return main // its branch was cut before the app had a Storybook
   const d = await storybookDefaults(s.cwd)
   const own = storybookSetup(base.a.setup).cmd ?? d?.cmd ?? null
   if (!own) return main
-  const port = portFor(s.cwd)
   const install = (await exists(join(s.cwd, 'node_modules'))) ? '' : `${{ pnpm: 'pnpm install --frozen-lockfile', npm: 'npm install', yarn: 'yarn install', bun: 'bun install' }[await pmOf(s.cwd)]} && `
-  return { a: base.a, cwd: s.cwd, url: `http://localhost:${port}`, cmd: `${install}${own} -p ${port}`, branch: s.branch ?? 'its worktree', main: false }
+  return { ...at, cmd: `${install}${own}${namesPort(own) ? '' : ` -p ${port}`}` }
 }
 
 /**
@@ -162,16 +186,16 @@ export async function storybookStatus(appId: string, sessionId?: string | null, 
  * deploy, and a Storybook that died with it left the Mockups page on an error (Sandy's 502). Its output goes to a file.
  */
 export async function startStorybook(appId: string, sessionId?: string | null) {
-  const { a, url, cmd, cwd } = await placeFor(appId, sessionId)
+  const { a, url, cmd, cwd, env, outside } = await placeFor(appId, sessionId)
   if (!cwd) throw new PlanError(`${a.name} has no local checkout: Storybook starts in the repo. Set it under Settings › Repo.`)
-  if (!url || !cmd) throw new PlanError(`${a.name} has no Storybook to start: no \`storybook\` script in the repo, and no command set under Integrations › Storybook.`)
+  if (!url || !cmd) throw new PlanError(outside ? `${a.name}'s Storybook is kept outside the repo and has no command: set the one that runs it under Integrations › Storybook.` : `${a.name} has no Storybook to start: no \`storybook\` script in the repo, and no command set under Integrations › Storybook.`)
   if (await answers(url)) return storybookStatus(appId, sessionId)
   const mine = running.get(cwd)
   if (mine && mine.proc.exitCode === null) return storybookStatus(appId, sessionId)
   await mkdir(dirname(logFile(cwd)), { recursive: true })
   await writeFile(logFile(cwd), `> ${cmd}\n`)
   const out = openSync(logFile(cwd), 'a')
-  const proc = spawn('sh', ['-c', cmd], { cwd, env: { ...process.env, BROWSER: 'none', CI: '1' }, stdio: ['ignore', out, out], detached: true })
+  const proc = spawn('sh', ['-c', cmd], { cwd, env: { ...process.env, BROWSER: 'none', CI: '1', ...env }, stdio: ['ignore', out, out], detached: true })
   proc.unref()
   closeSync(out)
   running.set(cwd, { proc, startedAt: new Date() })
@@ -211,10 +235,23 @@ export function stopStorybooks() { running.clear() }
 // The check: the standard for every project's Storybook, read from the repo.
 
 export const ADDON = '@zigbang/storybook-addon-story-flow'
-export interface StorybookContext { app: { id: string; name: string; defaultBranch?: string }; repoPath: string | null; url: string | null; cmd: string | null }
+export interface StorybookContext { app: { id: string; name: string; defaultBranch?: string }; repoPath: string | null; url: string | null; cmd: string | null; /** Kept outside the repo: the check asks it for its stories and reads nothing in the repo. */ outside?: boolean }
+export const OUTSIDE = 'This app\'s Storybook is kept outside the repo: nothing is installed into the repo or committed to it.'
+/** How many stories a Storybook lists (its index.json); null when it does not answer with a list. */
+const storyCount = (url: string) => fetch(`${url.replace(/\/$/, '')}/index.json`, { signal: AbortSignal.timeout(4000) })
+  .then(async (r) => (r.ok ? Object.values(((await r.json()) as { entries?: Record<string, { type?: string }> }).entries ?? {}).filter((e) => (e.type ?? 'story') === 'story').length : null)).catch(() => null)
+/** The check for a Storybook kept outside the repo: is there a command, does it answer, does it list stories. */
+async function checkOutside(ctx: StorybookContext, deps: StorybookDeps): Promise<Check> {
+  if (!ctx.cmd) return { ok: false, detail: 'Kept outside the repo, with no command: set the one that runs it. It is given the checkout as $WORKTREE and its port as $PORT.' }
+  if (!ctx.url) return { ok: false, detail: 'No local checkout under Repo: the command runs for a checkout.' }
+  if (!(await (deps.answers ?? answers)(ctx.url))) return { ok: true, detail: `Storybook outside the repo; not running at ${ctx.url}: Start it.` }
+  const n = await (deps.stories ?? storyCount)(ctx.url)
+  if (n === null) return { ok: false, detail: `Something answers at ${ctx.url}, but it lists no stories (index.json): the command may be serving something else there.` }
+  return { ok: true, detail: `Storybook outside the repo: ${n} ${n === 1 ? 'story' : 'stories'}, answering at ${ctx.url}.` }
+}
 export interface Check { ok: boolean; detail: string; links?: { label: string; href: string }[] }
 /** `answers` and `run` only in tests: whether a URL answers, and the command runner the install uses. */
-export interface StorybookDeps { answers?: (url: string) => Promise<boolean>; run?: Run }
+export interface StorybookDeps { answers?: (url: string) => Promise<boolean>; run?: Run; stories?: (url: string) => Promise<number | null> }
 const SETUP = 'Set up Storybook (the button below) does it.'
 
 const exists = (p: string) => stat(p).then(() => true, () => false)
@@ -237,6 +274,7 @@ const major = (range: string) => Number((range.match(/\d+/) ?? [NaN])[0])
 export const mapDocsId = (title: string) => `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}--docs`
 
 export async function checkStorybook(ctx: StorybookContext, deps: StorybookDeps = {}): Promise<Check> {
+  if (ctx.outside) return checkOutside(ctx, deps)
   const { repoPath, url } = ctx
   if (!repoPath) return { ok: false, detail: 'No local checkout under Repo: the check reads the Storybook config in the repo.' }
   const rel = (p: string) => relative(repoPath, p)

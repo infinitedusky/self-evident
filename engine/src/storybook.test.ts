@@ -81,11 +81,11 @@ describe('checkStorybook', () => {
 
 describe('storybookSetup', () => {
   it('reads the switch, the integration, and the keys the values lived under before', () => {
-    expect(storybookSetup({ integrations: { storybook: { on: 'true', url: 'http://localhost:6007', cmd: 'pnpm storybook' } } })).toEqual({ on: true, url: 'http://localhost:6007', cmd: 'pnpm storybook' })
-    expect(storybookSetup({ integrations: { storybook: { url: 'http://localhost:6007' } } })).toEqual({ on: true, url: 'http://localhost:6007', cmd: null }) // before the switch, a value meant on
+    expect(storybookSetup({ integrations: { storybook: { on: 'true', url: 'http://localhost:6007', cmd: 'pnpm storybook' } } })).toMatchObject({ on: true, url: 'http://localhost:6007', cmd: 'pnpm storybook' })
+    expect(storybookSetup({ integrations: { storybook: { url: 'http://localhost:6007' } } })).toMatchObject({ on: true, url: 'http://localhost:6007', cmd: null }) // before the switch, a value meant on
     expect(storybookSetup({ integrations: { storybook: { on: 'false', url: 'http://localhost:6007' } } }).on).toBe(false)
-    expect(storybookSetup({ storybook_url: 'http://localhost:6006', storybook_cmd: 'cd web && pnpm storybook' })).toEqual({ on: true, url: 'http://localhost:6006', cmd: 'cd web && pnpm storybook' })
-    expect(storybookSetup({})).toEqual({ on: false, url: null, cmd: null }); expect(hasStorybook({})).toBe(false); expect(hasStorybook({ storybook_cmd: 'x' })).toBe(true); expect(hasStorybook({ integrations: { storybook: { on: 'true' } } })).toBe(true)
+    expect(storybookSetup({ storybook_url: 'http://localhost:6006', storybook_cmd: 'cd web && pnpm storybook' })).toMatchObject({ on: true, url: 'http://localhost:6006', cmd: 'cd web && pnpm storybook' })
+    expect(storybookSetup({})).toMatchObject({ on: false, url: null, cmd: null }); expect(hasStorybook({})).toBe(false); expect(hasStorybook({ storybook_cmd: 'x' })).toBe(true); expect(hasStorybook({ integrations: { storybook: { on: 'true' } } })).toBe(true)
   })
   it('defaults the command and URL from the repo: the storybook script, the package manager, the port', async () => {
     const root = await repoWith({ 'package.json': JSON.stringify({ scripts: { storybook: 'storybook dev -p 6007' } }), 'pnpm-lock.yaml': '' })
@@ -93,8 +93,8 @@ describe('storybookSetup', () => {
     const sub = await repoWith({ 'package.json': JSON.stringify({ name: 'root' }), 'web/package.json': JSON.stringify({ scripts: { storybook: 'storybook dev' } }), 'package-lock.json': '' })
     expect(await storybookDefaults(sub)).toEqual({ cmd: 'cd web && npm run storybook -- --no-open', url: 'http://localhost:6006' })
     expect(await storybookDefaults(await repoWith({ 'package.json': JSON.stringify({ scripts: { dev: 'vite' } }) }))).toBeNull()
-    expect(await storybookValues({ integrations: { storybook: { on: 'true', url: 'http://localhost:9000' } } }, root)).toEqual({ on: true, url: 'http://localhost:9000', cmd: 'pnpm storybook --no-open' }) // the app's own value wins
-    expect(await storybookValues({ integrations: { storybook: { on: 'false' } } }, root)).toEqual({ on: false, url: null, cmd: null }) // off: nothing read
+    expect(await storybookValues({ integrations: { storybook: { on: 'true', url: 'http://localhost:9000' } } }, root)).toMatchObject({ on: true, url: 'http://localhost:9000', cmd: 'pnpm storybook --no-open' }) // the app's own value wins
+    expect(await storybookValues({ integrations: { storybook: { on: 'false' } } }, root)).toMatchObject({ on: false, url: null, cmd: null }) // off: nothing read
   })
   it('turns a map title into its docs id', () => { expect(mapDocsId('Pages/Map')).toBe('pages-map--docs'); expect(mapDocsId('Parent App/Map')).toBe('parent-app-map--docs') })
 })

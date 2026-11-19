@@ -11,7 +11,7 @@ import { homeRepo } from './workbench.js'
 import { appendEvent, type NewEvent } from './events.js'
 import { runTask, type Execute } from './executor.js'
 import { addWorktree, branchExists, ensureBranch, git, headSha, removeWorktree } from './git.js'
-import { hasStorybook } from './storybook.js'
+import { storiesLead } from './storybook.js'
 import { branchOf, issueBranch, issueStart, landingBranch, modeOf, stackBase } from './branches.js'
 import { newId } from './ids.js'
 import { commentOnIssue, identifier, setState } from './issues.js'
@@ -277,7 +277,7 @@ export class Runner {
       subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief },
       readOnly: onlyLooks(x.title), skills: skill, ...(told ? { heldTo: builderHeld(a.setup) } : {}),
       ticket: ticketOf(t), commitFormat: commits.format ?? undefined, hooksPath,
-      worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, maxTurns: turnsFor(x.title, setup), maxBudgetUsd: setup.max_budget_usd,
+      worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: storiesLead(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, maxTurns: turnsFor(x.title, setup), maxBudgetUsd: setup.max_budget_usd,
       resumeSessionId: interrupted?.agentSessionId ?? undefined, ...(interrupted?.error?.startsWith(OUT_OF_TURNS) ? { resumeWhy: 'turns' as const } : {}), abort: this.active.get(subId),
       onEvent: async (type, payload) => {
         if (type === 'run.steps') await this.saveSteps(a.id, subId, runId, (payload.steps as { text: string; status: string }[]) ?? [])
