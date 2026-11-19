@@ -62,17 +62,17 @@ function OnePrototype({ id, path, onNavigate }: { id: string; path: string; onNa
     if (!appId) return
     const es = openEvents(`${API}/events?since=now&app=${appId}`)
     const onEvent = (ev: MessageEvent) => { if ((JSON.parse(ev.data) as { payload?: { prototypeId?: string } }).payload?.prototypeId === id) void refresh() }
-    for (const type of ['prototype.started', 'prototype.stopped', 'prototype.discarded']) es.addEventListener(type, onEvent as EventListener)
+    for (const type of ['prototype.started', 'prototype.stopped', 'prototype.discarded', 'prototype.compare_started', 'prototype.compare_stopped']) es.addEventListener(type, onEvent as EventListener)
     return () => es.close()
   }, [appId, id, refresh])
   // While its server comes up, ask again every second or so.
-  const waiting = p?.status === 'running' && !p.up
+  const waiting = p?.status === 'running' && (!p.up || (!!p.compare && !p.compare.up))
   useEffect(() => { if (!waiting) return; const t = window.setInterval(() => void refresh(), 1200); return () => window.clearInterval(t) }, [waiting, refresh])
   const act = (fn: (id: string) => Promise<unknown>) => () => fn(id).then(refresh).catch((e) => setError(String(e.message ?? e)))
   const talk = () => void engine.prototypeTalk(id).catch((e) => setError(String(e.message ?? e)))
 
   if (!p) return <div className="tab-page" data-component="PrototypePane">{error ? <div className="empty bad">{error}</div> : <p className="muted">Loading…</p>}</div>
-  if (p.status === 'running' && p.up && p.url) return <Frame p={p} path={path} onNavigate={onNavigate} onStop={act(engine.stopPrototype)} onRestart={act(engine.restartPrototype)} onTalk={talk} data={<><StandIns p={p} /><Data p={p} onDone={refresh} /></>} />
+  if (p.status === 'running' && p.up && p.url) return <Frame p={p} path={path} onNavigate={onNavigate} onStop={act(engine.stopPrototype)} onRestart={act(engine.restartPrototype)} onTalk={talk} data={<><StandIns p={p} /><Data p={p} onDone={refresh} />{error && <span className="bad" role="alert">{error}</span>}</>} onCompare={act(engine.comparePrototype)} onStopComparing={act(engine.stopComparingPrototype)} />
   // Nothing to open, but its guide has commands: it is tried by running them, so they are the page.
   if (p.status !== 'discarded' && p.guide?.steps.some((s) => s.run)) return (
     <div className="tab-page preview-runs" data-component="PrototypePane">
@@ -101,7 +101,9 @@ function OnePrototype({ id, path, onNavigate }: { id: string; path: string; onNa
   )
 }
 
-function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Prototype; path: string; onNavigate?: (path: string) => void; onStop: () => void; onRestart: () => void; onTalk: () => void; data: React.ReactNode }) {
+function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, onCompare, onStopComparing, data }: { p: Prototype; path: string; onNavigate?: (path: string) => void; onStop: () => void; onRestart: () => void; onTalk: () => void; onCompare: () => Promise<unknown>; onStopComparing: () => void; data: React.ReactNode }) {
+  const cmp = p.compare ?? null, cmpBase = cmp?.url.replace(/\/$/, '') ?? ''
+  const [asking, setAsking] = useState(false) // pressed, and main is not there yet
   const base = p.url!.replace(/\/$/, '')
   const [at, setAt] = useState(path)
   const [typed, setTyped] = useState(path)
@@ -131,10 +133,20 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Pr
         <div className="seg" role="group" aria-label="Device">
           {DEVICES.map((d) => <button key={d.id} className={device === d.id ? 'on' : ''} onClick={() => setDevice(d.id)} title={d.width ? `${d.width}px wide` : 'Full width'}>{d.label}</button>)}
         </div>
+        {/* Main beside it (after the smoke test's own Compare with main): one address bar, two views. */}
+        {cmp ? <button className="btn quiet small" onClick={onStopComparing}>Stop comparing</button>
+          : p.canCompare ? <button className="btn quiet small" disabled={asking} title="Bring up main beside it, on its own port, to look at the two side by side" onClick={() => { setAsking(true); void onCompare().finally(() => setAsking(false)) }}>{asking ? 'Bringing up main…' : 'Compare with main'}</button> : null}
         {data}
       </div>
       <div className="preview-stage">
-        <iframe key={`${at}#${reloads}#${p.updatedAt ?? ''}`} /* a restart reloads it */ src={base + at} title={p.title} style={width ? { width, maxWidth: '100%' } : undefined} />
+        {cmp
+          ? <div className="preview-pair">
+              <figure><figcaption>This prototype</figcaption><iframe key={`${at}#${reloads}#${p.updatedAt ?? ''}`} src={base + at} title={p.title} style={width ? { width, maxWidth: '100%' } : undefined} /></figure>
+              <figure><figcaption>main{cmp.sha ? <> <code>{cmp.sha.slice(0, 7)}</code></> : null}</figcaption>{cmp.up
+                ? <iframe key={`${at}#${reloads}`} src={cmpBase + at} title="main" style={width ? { width, maxWidth: '100%' } : undefined} />
+                : <div className="empty">Starting main… {cmp.log.length > 0 && <pre className="proto-log mono">{cmp.log.slice(-6).join('\n')}</pre>}</div>}</figure>
+            </div>
+          : <iframe key={`${at}#${reloads}#${p.updatedAt ?? ''}`} /* a restart reloads it */ src={base + at} title={p.title} style={width ? { width, maxWidth: '100%' } : undefined} />}
         <PrototypeGuide id={p.id} guide={p.guide} at={at} onGo={go} />
       </div>
     </div>

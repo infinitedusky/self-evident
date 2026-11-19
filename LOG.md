@@ -5338,3 +5338,23 @@ there. The second is every containerised app's, so it is answered here:
 
 Tried by hand on this Mac with a real container (`docker run --env-file`): it read the variable and fetched the
 stand-in's recorded response through `host.docker.internal`. Not tried: Cloaked's own stack.
+
+## Main beside a prototype (Sandy, 2026-11-19: "we had definitely built something that allowed us to compare main with whatever worktree we were building on … can we add this to the prototype?")
+
+The smoke test had **Compare with main** (2026-11-18); the prototype's was left "not done" then. Now a running
+prototype has the same button, in the second row of its bar.
+
+- It runs the app's prototype command a second time, from where the prototype's branch left the default branch, on
+  a port, a worktree (`<its worktree>--main`) and a database (`<its database>_main`) of its own, built from the
+  scenario the prototype is on. A scenario that names what only the prototype has does not stop main coming up:
+  its log says what did not load.
+- The two views sit side by side under the one address bar and the one device width.
+- Main is pointed at the prototype's own stand-ins, on the ports they are already on, so it reaches no real service
+  either (mine to choose).
+- Stopping the prototype stops main; restarting the prototype leaves it up; discarding removes main's worktree and
+  database. The app's stop and discard commands are run in main's worktree too, for an app in containers.
+- Kept in memory, no migration: after an engine restart there is no comparison until it is asked for again.
+
+Not done: a tool for the prototype's agent to bring main up (the button is the person's); today's main as a second
+choice; an app whose command uses fixed ports or one compose project name cannot run twice, here as in the smoke
+test (the page already says when a server listens on a port it was not given).

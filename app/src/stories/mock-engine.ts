@@ -143,6 +143,8 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/prototypes/:id/runs', () => reply(d.prototypeRuns ?? [])),
     http.post('/api/prototypes/:id/guide/:step/run', ({ params }) => { const run = { step: Number(params.step), command: '(sample)', status: 'running' as const, exitCode: null, startedAt: '2026-11-15T10:00:00Z', endedAt: null, lines: ['started (sample)'] }; d.prototypeRuns = [...(d.prototypeRuns ?? []).filter((r) => r.step !== run.step), run]; return reply(run) }),
     http.post('/api/prototypes/:id/guide/:step/stop', ({ params }) => { d.prototypeRuns = (d.prototypeRuns ?? []).map((r) => r.step === Number(params.step) ? { ...r, status: 'stopped' as const } : r); return reply({}) }),
+    http.post('/api/prototypes/:id/compare', ({ params }) => { d.prototypes = d.prototypes.map((x) => x.id === params.id ? { ...x, compare: { url: window.location.origin, up: true, sha: '4f2a9c1d0b7e (sample)', log: [] } } : x); return reply(d.prototypes.find((x) => x.id === params.id)) }),
+    http.post('/api/prototypes/:id/compare/stop', ({ params }) => { d.prototypes = d.prototypes.map((x) => x.id === params.id ? { ...x, compare: null } : x); return reply(d.prototypes.find((x) => x.id === params.id)) }),
     http.get('/api/prototypes/:id', ({ params }) => { const p = d.prototypes.find((x) => x.id === params.id); return p ? reply({ log: [], ...p, up: p.up ?? p.status === 'running' }) : missing('prototype') }),
     // Reports: the engine's rules, roughly. Writing one here answers at once.
     http.get('/api/apps/:id/learning', () => reply(d.learning ?? { docs: [], missing: ['What it is', 'The parts', 'Running and testing it', 'What is fragile'], working: null, sessionId: null, stale: 0 })),
