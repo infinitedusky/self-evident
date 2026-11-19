@@ -5250,3 +5250,19 @@ named. Settings › Skills offers them wherever a skill is picked, saying which 
 
 Known and left: a session started in the second repository's own worktree sees that repository's skills twice (plain,
 and by the plugin's name), and not the home repository's. Nothing runs there today.
+
+## A prototype's goal is said as a test: deployable as it stands (Sandy, 2026-11-19: "I had to really explain to this agent what the goal here was. That we actually want this thing to function exactly like what we're building, and that we should be able to technically deploy it and just point it at different APIs")
+
+Every place that says what a prototype is for already said "built the way we would ship it" and "essentially the code
+we would go live with". An agent on Cloaked still had to have the goal explained. "Essentially" left room, and
+nothing gave the agent a way to tell a prototype from a convincing demo.
+
+Now one sentence, the same words everywhere (`DEPLOY_TEST` in prototype.ts): it could be deployed as it stands and
+made real by configuration alone, by pointing its addresses and keys at the real services; if going live would need
+code changed, that part is not built yet. It is said to the prototype's own agent, to the task's agent (which briefs
+the prototype and holds its report), in the `start_prototype` tool where the brief is written, in the `prototype`
+skill, and in a line on Settings › Skills. The skill's report now answers it: the list of addresses, keys and
+switches that point elsewhere is the configuration, and anything that would need code changed is a gap.
+
+A rough prototype is unchanged: it is thrown away by design and says so. Not known: which agent on Cloaked needed
+telling, and whether that prototype was a rough one or used an app's own `prototype` skill, which wins over ours.

@@ -9,7 +9,11 @@ description: Use when building a prototype for a task, idea or project in Self E
 
 A prototype answers one question with evidence: **will this work, built the way we would ship it?**
 
-So the prototype's code is **essentially the code we would go live with**: the real integration point, the real
+It works exactly as the thing we are building will. **The test: it could be deployed as it stands and made real by
+configuration alone**, by pointing its addresses and keys at the real services. If going live would need code changed
+(a stub inside the code, a hard-coded answer, a path that only the prototype takes), that part is not built yet.
+
+So the prototype's code is **the code we would go live with**: the real integration point, the real
 parsing, the real schema and migration, the real storage and queries, the real API, the real screens, written the way
 the repository writes them. The only things that are not real are **outside the system's edges** (vendors, other
 services, identity, real people's data), and those are swapped in through **seams the production code already has or
@@ -27,6 +31,8 @@ approach altogether) is the prototype analysis's job, and the build follows what
 
 ## What it is not
 
+- **Not a demo.** Something that looks right on the screen and could not be deployed has shown nothing. Ask of every
+  part: what would have to change, other than configuration, for this to be live?
 - **Not a UI guide.** Screens on sample data in the browser answer *what it should look like*. That is the job of
   sketches and mockups. A branch someone called a "prototype" that only renders screens is a starting point to build
   on, not a prototype.
@@ -104,6 +110,10 @@ When you say you are done, report against the checklist, one line per requiremen
 - **Met**: how to see it in the running prototype (page, record, scenario, script).
 
 Then the guide: that it is set, and how many steps.
+
+Then the test, answered plainly: what would have to change to deploy this, beyond configuration? List every address,
+key and switch that points somewhere else in the prototype (that list is the configuration), and anything that would
+need code changed (each one is a gap, and goes under Not met).
 
 Then: each seam and stub used (existing or added), what is assumed rather than recorded from the real service, and
 what was hard or surprising; the analysis reads it.

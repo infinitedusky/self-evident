@@ -125,6 +125,13 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
  *   is whatever is quickest. No migration discipline, no full test run, no polish. The build does it properly, once.
  * An app has a usual one (setup.prototype_depth; full when unset) and a prototype can be started as either.
  */
+/**
+ * The test of a full prototype, in one sentence, said the same to every agent that makes, briefs or judges one
+ * (Sandy, 2026-11-19: "I had to really explain to this agent what the goal here was. That we actually want this thing
+ * to function exactly like what we're building, and that we should be able to technically deploy it and just point it
+ * at different APIs"). "Built the way we would ship it" was said everywhere and left room: this is how to tell.
+ */
+export const DEPLOY_TEST = 'The test: it could be deployed as it stands and made real by configuration alone, by pointing its addresses and keys at the real services. If going live would need code changed (a stub inside the code, a hard-coded answer, a path that only the prototype takes), that part is not built yet.'
 export type Depth = 'full' | 'rough'
 export const depthOf = (own: unknown, appSetup: unknown): Depth =>
   own === 'full' || own === 'rough' ? own : (appSetup as { prototype_depth?: string } | null)?.prototype_depth === 'rough' ? 'rough' : 'full'
