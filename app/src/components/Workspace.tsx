@@ -35,7 +35,7 @@ const recall = (k: string) => { try { return localStorage.getItem(k) } catch { r
 const MENU: { label: string; tab: Tab }[] = [
   { label: 'My Stuff', tab: { kind: 'page', path: '/' } }, { label: 'Projects', tab: { kind: 'page', path: '/projects' } },
   { label: 'Tasks', tab: { kind: 'page', path: '/tasks' } }, { label: 'To-dos', tab: { kind: 'page', path: '/todos' } },
-  { label: 'Ideas', tab: { kind: 'page', path: '/ideas' } }, { label: 'Prototypes', tab: { kind: 'prototype' } },
+  { label: 'Ideas', tab: { kind: 'page', path: '/ideas' } }, { label: 'Prototypes', tab: { kind: 'prototype' } }, { label: 'Main, running', tab: { kind: 'main' } },
   { label: 'Sketches', tab: { kind: 'sketch' } }, { label: 'Storybook', tab: { kind: 'storybook' } }, { label: 'Settings', tab: { kind: 'page', path: '/settings' } },
 ]
 
@@ -114,6 +114,7 @@ function TabBody({ params, api }: IDockviewPanelProps<Params>) {
       case 'storybook': return <PagePane path="/mockups"><Viewer tab={t} /></PagePane>
       case 'sketch': return <PagePane path="/mockups"><Viewer tab={t} /></PagePane>
       case 'build': return <BuildLog issueId={t.issueId} />
+      case 'main': return <Viewer tab={t} onNavigate={(path) => went({ kind: 'main', path })} />
       default: return <PrototypePane /> // a tab saved before Preview became Prototypes
     }
   })()

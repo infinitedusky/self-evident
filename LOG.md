@@ -5381,3 +5381,35 @@ back and forward. A step of its guide still sends both views to the same place.
 **Detach** on main opens it in a browser tab of its own, where it was, and gives the prototype the whole pane; **Put
 main back** brings it beside the prototype again. Mine to choose: detaching is a plain browser tab at main's
 address, not the viewer's own detached page, since main has nothing of Self Evident's around it to carry.
+
+## The app's main, running (Sandy, 2026-11-19)
+
+"For Cloaked, we don't have access to their actual website … there's always the current main that we need to see …
+it shows us the functionality that's currently available. This is really important to have as a comp when we're
+building. When I have something like Bonkei I don't need this because I just have bonkei.dev … I don't want to have
+to go to the prototype and trigger it to create a prototype just so I can look at the main." Then: "you would turn
+it on and turn it off because we don't want it running all the time … it would shut off if not active for a while",
+and "compare would always just open the running main to whatever location you want to compare it against".
+
+- **One per app**, owned by the app and not by a prototype or a task (`engine/src/main-running.ts`). The app's
+  prototype command, in a worktree of its own (`<repository>-worktrees/main--running`) at the default branch's tip,
+  on a port and a database of its own built from the shared "default" scenario.
+- **A tab of its own**: "Main, running" in the + menu (tab kind `main`), with back, forward, reload, an address,
+  device widths and Detach, like a prototype.
+- **On and off by hand.** With nobody looking for 30 minutes (`MAIN_IDLE_MS`) it turns itself off. "Looking" is a
+  view of it open in Self Evident (its tab, its detached page, or beside a prototype or a build), which says so
+  every minute. Turned on again it keeps its address.
+- **It never moves under the person.** When the default branch has moved on it says so, and Update brings it up
+  there with its database made again (mine to choose, said to Sandy first).
+- **Or an address.** `setup.main_url` for an app that is deployed where the person can look: nothing is run.
+- **Stand-ins of its own** (`setup.main_stand_ins`), started and stopped with it, for an app that cannot show its
+  screens without something outside it. Mine to add: Cloaked's main needs its vendor stood in.
+- **Compare is this.** The prototype's and the smoke test's "Compare with main" turn it on if it is off and show it
+  beside the work at the same place. What each had of its own (a second copy from where the branch left main, built
+  2026-11-18 and earlier today) is removed: one main for the app, not one per piece of work. "Stop comparing" hides
+  it; it is not that page's to turn off.
+- The agent's tool is `app_main` (status, start, stop, set_address, stand_in, remove_stand_in).
+
+Not done: a place in Settings to give the address or see the stand-ins (the agent sets them, on being asked); main
+beside a mockup or a sketch other than by opening its tab; a smoke set-up with a script of its own (a docs site) is
+compared with the app's main, not with that script run from main; after an engine restart it is off.

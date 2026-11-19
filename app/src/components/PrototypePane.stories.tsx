@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, userEvent, within } from 'storybook/test'
 import { PrototypePane } from './PrototypePane'
-import { withEngine } from '../stories/mock-engine'
+import { MAIN_OFF, withEngine } from '../stories/mock-engine'
 import { apps, prototypes, sampleApp } from '../stories/sample'
 
 // A prototype, in a tab: the actual thing built fast in its own worktree. All made up. The "running prototype" is one
@@ -101,10 +101,10 @@ export const WithStandIns: Story = {
     await expect(group.getByText('Mail (sample) · not running')).toBeInTheDocument()
   },
 }
-/** Main beside it: pressed, the app's main comes up on a port of its own and the two follow one address bar. Sample data. */
+/** Main beside it: pressed, the app's own running main is turned on if it is off and shown at the same place, each with a bar of its own. Sample data. */
 export const CompareWithMain: Story = {
   args: { id: running.id, path: at },
-  beforeEach: withEngine({ prototypes: [{ ...running, canCompare: true, compare: null }] }),
+  beforeEach: withEngine({ prototypes: [running], main: MAIN_OFF }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Compare with main' }))
@@ -124,7 +124,7 @@ export const CompareWithMain: Story = {
     // Detached, main is in a browser tab of its own and the prototype has the room; put back, it is beside it again.
     const opened: string[] = []; const open = window.open; window.open = ((u: string) => { opened.push(u); return null }) as typeof window.open
     try { await userEvent.click(c.getByRole('button', { name: '↗ Detach' })) } finally { window.open = open }
-    await expect(opened[0]).toContain(at)
+    await expect(decodeURIComponent(opened[0])).toContain('/view?tab={"kind":"main","path":"/iframe.html?id=pages-now--quiet')
     await expect(c.queryByTitle('main')).toBeNull()
     await userEvent.click(c.getByRole('button', { name: 'Put main back' }))
     await expect(await c.findByTitle('main')).toBeInTheDocument()
@@ -135,8 +135,8 @@ export const CompareWithMain: Story = {
 /** Main is still coming up: its side says so, with what its server last printed. Sample data. */
 export const MainStarting: Story = {
   args: { id: running.id, path: at },
-  beforeEach: withEngine({ prototypes: [{ ...running, canCompare: true, compare: { url: 'http://localhost:6999', up: false, sha: '4f2a9c1d0b7e', log: ['installing (sample)', 'building (sample)'] } }] }),
-  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/Starting main/)).toBeInTheDocument() },
+  beforeEach: withEngine({ prototypes: [running], main: { ...MAIN_OFF, running: true, up: false, url: 'http://localhost:6999', sha: '4f2a9c1d0b7e', log: ['installing (sample)', 'building (sample)'] } }),
+  play: async ({ canvasElement }) => { const c = within(canvasElement); await userEvent.click(await c.findByRole('button', { name: 'Compare with main' })); await expect(await c.findByText(/Turning main on/)).toBeInTheDocument() },
 }
 /** An app with no database set: no data control. */
 export const NoDatabase: Story = { args: { id: running.id, path: at }, beforeEach: withEngine({ prototypes: [{ ...running, database: null, scenarios: [] }] }) }

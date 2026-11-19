@@ -7,6 +7,8 @@ import type { StoryContext } from '@storybook/react-vite'
 import * as s from './sample'
 import { rows } from '@self-evident/engine/steps'
 
+/** An app's main, off: it can be run here. Made-up (sample). */
+export const MAIN_OFF: import('../engine').MainRunning = { appId: 'app_sample', branch: 'main', how: 'local', url: null, running: false, up: false, canRun: true, sha: null, tip: '4f2a9c1d0b7e', behind: false, log: [], standIns: [], database: null, idleMinutes: 30, stopsAt: null }
 export interface MockData {
   apps: typeof s.apps; now: typeof s.now; projects: typeof s.projects; graphs: Record<string, typeof s.graph>; issueRows: typeof s.issueRows
   issueDetails: typeof s.issueDetails; todos: typeof s.todos; ideas: typeof s.ideaRows; initiatives: typeof s.initiatives; cycles: typeof s.cycles
@@ -26,6 +28,7 @@ export interface MockData {
   /** A task's save points and task branches; none when left out. */ taskBranches?: import('../engine').TaskBranches; /** Why a move fails, when it should. */ moveError?: string
   /** What a run read and said, for the planner's tab. */ runLog?: import('../engine').RunLog
   /** What is public right now, by "kind:id". */ shares?: Record<string, import('../engine').Shared>; /** Why making a link fails, when it should. */ shareError?: string; /** ngrok's one address is held by these, until the person frees it. */ ngrokHolders?: import('../engine').NgrokHolder[]; /** What the guide tab of a shared prototype is given. */ visitorGuide?: { title: string; guide: import('../engine').Guide | null }
+  /** The app's main, running; off when left out. */ main?: import('../engine').MainRunning; /** Why turning it on fails, when it should. */ mainError?: string; /** Where it answers once on; this page's own address when left out. */ mainUrl?: string
   prototypes: typeof s.prototypes; /** A prototype's changed files and what the agent shows. */ prototypeCode: typeof s.prototypeCode
   claudeSessions: typeof s.claudeSessions
   check: { ok: boolean; detail: string; links?: { label: string; href: string }[] }
@@ -143,8 +146,9 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/prototypes/:id/runs', () => reply(d.prototypeRuns ?? [])),
     http.post('/api/prototypes/:id/guide/:step/run', ({ params }) => { const run = { step: Number(params.step), command: '(sample)', status: 'running' as const, exitCode: null, startedAt: '2026-11-15T10:00:00Z', endedAt: null, lines: ['started (sample)'] }; d.prototypeRuns = [...(d.prototypeRuns ?? []).filter((r) => r.step !== run.step), run]; return reply(run) }),
     http.post('/api/prototypes/:id/guide/:step/stop', ({ params }) => { d.prototypeRuns = (d.prototypeRuns ?? []).map((r) => r.step === Number(params.step) ? { ...r, status: 'stopped' as const } : r); return reply({}) }),
-    http.post('/api/prototypes/:id/compare', ({ params }) => { d.prototypes = d.prototypes.map((x) => x.id === params.id ? { ...x, compare: { url: window.location.origin, up: true, sha: '4f2a9c1d0b7e (sample)', log: [] } } : x); return reply(d.prototypes.find((x) => x.id === params.id)) }),
-    http.post('/api/prototypes/:id/compare/stop', ({ params }) => { d.prototypes = d.prototypes.map((x) => x.id === params.id ? { ...x, compare: null } : x); return reply(d.prototypes.find((x) => x.id === params.id)) }),
+    http.get('/api/apps/:id/main', () => reply(d.main ?? MAIN_OFF)),
+    http.post('/api/apps/:id/main/start', () => { if (d.mainError) return new Response(JSON.stringify({ error: d.mainError }), { status: 400, headers: { 'content-type': 'application/json' } }); const was = d.main ?? MAIN_OFF; d.main = was.how === 'local' ? { ...was, running: true, up: true, url: d.mainUrl ?? window.location.origin, sha: was.tip, behind: false, stopsAt: '2026-11-19T18:30:00Z' } : was; return reply(d.main) }),
+    http.post('/api/apps/:id/main/stop', () => { d.main = { ...(d.main ?? MAIN_OFF), running: false, up: false, url: null, sha: null, behind: false, stopsAt: null }; return reply(d.main) }),
     http.get('/api/prototypes/:id', ({ params }) => { const p = d.prototypes.find((x) => x.id === params.id); return p ? reply({ log: [], ...p, up: p.up ?? p.status === 'running' }) : missing('prototype') }),
     // Reports: the engine's rules, roughly. Writing one here answers at once.
     http.get('/api/apps/:id/learning', () => reply(d.learning ?? { docs: [], missing: ['What it is', 'The parts', 'Running and testing it', 'What is fragile'], working: null, sessionId: null, stale: 0 })),
@@ -189,15 +193,13 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/issues/:id/smoke/terminal/resize', () => reply({ ok: true })),
     http.post('/api/issues/:id/smoke/terminal/close', async ({ request }) => { const b = await request.json().catch(() => ({})) as { scratch?: boolean }; if (b.scratch) { if (d.smoke) d.smoke = { ...d.smoke, scratch: { open: false } }; return reply(d.smoke) } if (d.smoke) d.smoke = { ...d.smoke, terminal: { folder: d.smoke.terminal?.folder ?? 'build', open: false }, ...(d.smoke.where === 'terminal' ? { up: false } : {}) }; return reply(d.smoke) }),
     http.post('/api/issues/:id/smoke/start', async ({ request }) => {
-      const b = await request.json().catch(() => ({})) as { clean?: boolean; setup?: string; compare?: boolean }
-      if (d.smoke && b.compare) { d.smoke = { ...d.smoke, compare: { url: 'http://localhost:6600', up: true, sha: 'fed9876cba', log: [] } }; return reply(d.smoke) }
+      const b = await request.json().catch(() => ({})) as { clean?: boolean; setup?: string }
       if (d.smoke && b.setup && d.smoke.setups) d.smoke = { ...d.smoke, setups: d.smoke.setups.map((x, n) => (x.key === b.setup ? { ...x, url: `http://localhost:${6500 + n}`, up: true, running: d.smoke!.head } : x)) }
       else if (d.smoke) d.smoke = { ...d.smoke, url: 'http://localhost:6500', up: true, running: d.smoke.head, log: b.clean ? ['started clean (sample)'] : d.smoke.log }
       return reply(d.smoke)
     }),
     http.post('/api/issues/:id/smoke/stop', async ({ request }) => {
-      const b = await request.json().catch(() => ({})) as { setup?: string; compare?: boolean }
-      if (d.smoke && b.compare) { d.smoke = { ...d.smoke, compare: null }; return reply(d.smoke) }
+      const b = await request.json().catch(() => ({})) as { setup?: string }
       if (d.smoke && b.setup && d.smoke.setups) d.smoke = { ...d.smoke, setups: d.smoke.setups.map((x) => (x.key === b.setup ? { ...x, url: null, up: false, running: null } : x)) }
       else if (d.smoke) d.smoke = { ...d.smoke, url: null, up: false, running: null }
       return reply(d.smoke)

@@ -13,7 +13,7 @@ import { app, event, issue, pr as prTable, project, repo, workspace } from './db
 import { newId } from './ids.js'
 import { createProject } from './projects.js'
 import { oneGoBrief } from './planner.js'
-import { addressOf, placeIn, byHand, markSmoke, previewUrl, runStop, setSmokeSetup, smokeChecks, smokeEnv, smokeOwed, smokeReady, smokeSetup, smokeSetupOf, smokeSetups, smokeView, startSmoke, stopSmoke, trySmoke, compareKey, whenOf, forPerson } from './smoke.js'
+import { addressOf, placeIn, byHand, markSmoke, previewUrl, runStop, setSmokeSetup, smokeChecks, smokeEnv, smokeOwed, smokeReady, smokeSetup, smokeSetupOf, smokeSetups, smokeView, startSmoke, stopSmoke, trySmoke, whenOf, forPerson } from './smoke.js'
 import { checkTaskBrief, readVerdicts, verdictChange } from './verify.js'
 
 const at = '2026-11-17T00:00:00.000Z'
@@ -264,38 +264,7 @@ describe.skipIf(!reachable)('a person marks a check', () => {
     await expect(trySmoke(t.id, 'ac_nope')).rejects.toThrow(/no smoke test check ac_nope/)
     expect((await db.select().from(event).where(eq(event.issueId, t.id))).filter((e) => e.type.startsWith('smoke.tr')).sort((a, b) => a.seq - b.seq).map((e) => e.type)).toEqual(['smoke.trying', 'smoke.tried', 'smoke.trying', 'smoke.tried'])
   })
-  it('main is brought up beside the build, on a port of its own, and goes when the build is stopped', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'se-smoke-cmp-'))
-    const sh = (args: string[]) => execFileSync('git', args, { cwd: dir, stdio: 'pipe' }).toString().trim()
-    sh(['init', '-q', '-b', 'main']); sh(['config', 'user.email', 'sample@example.test']); sh(['config', 'user.name', 'Sample'])
-    await writeFile(join(dir, 'index.html'), 'as it is on main (sample)'); sh(['add', '-A']); sh(['commit', '-q', '-m', 'main'])
-    const mainSha = sh(['rev-parse', 'HEAD'])
-    const own = newId('app')
-    const serve = `exec node -e "require('http').createServer((q,r)=>r.end(require('fs').readFileSync('index.html'))).listen(process.env.PORT)"`
-    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'Compared (sample)', key: own.slice(-6).toUpperCase(), setup: { prototype_cmd: serve } })
-    await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: dir })
-    const { project: p, issues: [t] } = await createProject({ appId: own, name: 'Compared (sample)', issues: [{ title: 'Edges (sample)', brief: 'Build it.' }] })
-    await db.update(project).set({ integrationBranch: 'proj-sample' }).where(eq(project.id, p.id))
-    const branch = (await smokeView(t.id)).branch!
-    sh(['checkout', '-q', '-b', branch]); await writeFile(join(dir, 'index.html'), 'as it is built (sample)'); sh(['commit', '-q', '-am', 'built']); sh(['checkout', '-q', 'main'])
-    const up = async (pick: (v: Awaited<ReturnType<typeof smokeView>>) => { url: string | null; up: boolean } | null) => { for (let i = 0; i < 60; i++) { const x = pick(await smokeView(t.id)); if (x?.up) return x.url!; await new Promise((r) => setTimeout(r, 250)) } throw new Error('it did not come up') }
-    try {
-      expect((await startSmoke(t.id)).setups[0]).toMatchObject({ canCompare: true, compare: null })
-      const mine = await up((v) => v.setups[0])
-      await startSmoke(t.id, 'user', { compare: true })
-      const theirs = await up((v) => v.setups[0].compare)
-      expect(theirs).not.toBe(mine)
-      expect(await (await fetch(mine)).text()).toBe('as it is built (sample)')
-      expect(await (await fetch(theirs)).text()).toBe('as it is on main (sample)')
-      expect((await smokeView(t.id)).setups[0].compare).toMatchObject({ sha: mainSha, up: true })
-      await startSmoke(t.id) // the build started again: its comparison stays up
-      expect((await smokeView(t.id)).setups[0].compare).toMatchObject({ url: theirs })
-      await stopSmoke(t.id, 'main') // stopped: main goes with it
-      expect((await smokeView(t.id)).setups[0]).toMatchObject({ url: null, compare: null })
-    } finally { await stopSmoke(t.id); await rm(dir, { recursive: true, force: true }); await rm(`${dir}-worktrees`, { recursive: true, force: true }) }
-  }, 40_000)
-  it('a comparison is the same set-up from main, kept beside it; what an agent saw on an earlier commit says so', () => {
-    expect(compareKey('main')).toBe('main@main'); expect(compareKey('docs-site')).toBe('docs-site@main')
+  it('what an agent saw on an earlier commit says so', () => {
     const tried = { verdict: 'fails' as const, note: 'the lip is above the edge (sample)', sha: 'aaa1111', at }
     const [c] = smokeChecks([{ ...criteria[1], builtEvidence: 'open the Tunnel story', tried }], 'bbb2222')
     expect(c).toMatchObject({ mark: 'todo', tried: { verdict: 'fails', stale: true } })

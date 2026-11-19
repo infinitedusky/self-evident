@@ -13,6 +13,7 @@ import { openEvents, API, engine, type Prototype } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { useWorkspace } from '../workspace'
 import { Nav, useTrail } from './Trail'
+import { useMain } from '../main-running'
 
 const DEVICES = [{ id: 'desktop', label: 'Desktop', width: null }, { id: 'tablet', label: 'Tablet', width: 768 }, { id: 'phone', label: 'Phone', width: 390 }] as const
 
@@ -63,17 +64,17 @@ function OnePrototype({ id, path, onNavigate }: { id: string; path: string; onNa
     if (!appId) return
     const es = openEvents(`${API}/events?since=now&app=${appId}`)
     const onEvent = (ev: MessageEvent) => { if ((JSON.parse(ev.data) as { payload?: { prototypeId?: string } }).payload?.prototypeId === id) void refresh() }
-    for (const type of ['prototype.started', 'prototype.stopped', 'prototype.discarded', 'prototype.compare_started', 'prototype.compare_stopped']) es.addEventListener(type, onEvent as EventListener)
+    for (const type of ['prototype.started', 'prototype.stopped', 'prototype.discarded']) es.addEventListener(type, onEvent as EventListener)
     return () => es.close()
   }, [appId, id, refresh])
   // While its server comes up, ask again every second or so.
-  const waiting = p?.status === 'running' && (!p.up || (!!p.compare && !p.compare.up))
+  const waiting = p?.status === 'running' && !p.up
   useEffect(() => { if (!waiting) return; const t = window.setInterval(() => void refresh(), 1200); return () => window.clearInterval(t) }, [waiting, refresh])
   const act = (fn: (id: string) => Promise<unknown>) => () => fn(id).then(refresh).catch((e) => setError(String(e.message ?? e)))
   const talk = () => void engine.prototypeTalk(id).catch((e) => setError(String(e.message ?? e)))
 
   if (!p) return <div className="tab-page" data-component="PrototypePane">{error ? <div className="empty bad">{error}</div> : <p className="muted">Loading…</p>}</div>
-  if (p.status === 'running' && p.up && p.url) return <Frame p={p} path={path} onNavigate={onNavigate} onStop={act(engine.stopPrototype)} onRestart={act(engine.restartPrototype)} onTalk={talk} data={<><StandIns p={p} /><Data p={p} onDone={refresh} />{error && <span className="bad" role="alert">{error}</span>}</>} onCompare={act(engine.comparePrototype)} onStopComparing={act(engine.stopComparingPrototype)} />
+  if (p.status === 'running' && p.up && p.url) return <Frame p={p} path={path} onNavigate={onNavigate} onStop={act(engine.stopPrototype)} onRestart={act(engine.restartPrototype)} onTalk={talk} data={<><StandIns p={p} /><Data p={p} onDone={refresh} />{error && <span className="bad" role="alert">{error}</span>}</>} />
   // Nothing to open, but its guide has commands: it is tried by running them, so they are the page.
   if (p.status !== 'discarded' && p.guide?.steps.some((s) => s.run)) return (
     <div className="tab-page preview-runs" data-component="PrototypePane">
@@ -102,9 +103,15 @@ function OnePrototype({ id, path, onNavigate }: { id: string; path: string; onNa
   )
 }
 
-function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, onCompare, onStopComparing, data }: { p: Prototype; path: string; onNavigate?: (path: string) => void; onStop: () => void; onRestart: () => void; onTalk: () => void; onCompare: () => Promise<unknown>; onStopComparing: () => void; data: React.ReactNode }) {
-  const cmp = p.compare ?? null, cmpBase = cmp?.url.replace(/\/$/, '') ?? ''
-  const [asking, setAsking] = useState(false) // pressed, and main is not there yet
+function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Prototype; path: string; onNavigate?: (path: string) => void; onStop: () => void; onRestart: () => void; onTalk: () => void; data: React.ReactNode }) {
+  // Compare is the app's own running main, opened beside it at the same place (Sandy, 2026-11-19: "compare would always just open the
+  // running main to whatever location you want to compare it against"). Turned on here if it is off; it is not this prototype's to turn off.
+  const [comparing, setComparing] = useState(false)
+  const { main, error: mainError, busy: asking, start } = useMain(p.appId, comparing)
+  const cmp = comparing && main?.running && main.url ? { url: main.url, up: main.up, sha: main.sha, log: main.log, branch: main.branch } : null
+  const cmpBase = cmp?.url.replace(/\/$/, '') ?? ''
+  useEffect(() => { if (comparing && main && !main.running && !asking) setComparing(false) }, [comparing, main?.running, asking]) // turned off elsewhere, or by itself
+  const compare = () => { setComparing(true); void start().then((m) => { if (!m?.running) setComparing(false) }) }
   const base = p.url!.replace(/\/$/, '')
   // Each view goes its own way (Sandy, 2026-11-19: "we need the browser address and back forward and refresh for both the proto and the compared main").
   const mine = useTrail(), theirs = useTrail()
@@ -117,7 +124,8 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, onCompare, onSt
   useEffect(() => { if (!cmp) { setAway(false); theirs.setAt(null) } }, [!!cmp])
   /** A step of its guide: both views go there. */
   const go = (to: string) => { const next = to.startsWith('/') ? to : `/${to}`; mine.setAt(base + next); if (cmp) theirs.setAt(cmpBase + next) }
-  const detachMain = () => { window.open(mainSrc, `main-${p.id}`); setAway(true) }
+  /** Main's own tab, detached: Self Evident's page around it, so it still counts as being looked at. */
+  const detachMain = () => { window.open(`${window.location.origin}/view?tab=${encodeURIComponent(JSON.stringify({ kind: 'main', path: mainSrc.startsWith(cmpBase) ? mainSrc.slice(cmpBase.length) || '/' : '/' }))}`, '_blank'); setAway(true) }
   const width = DEVICES.find((d) => d.id === device)?.width
   const sized = width ? { width, maxWidth: '100%' } : undefined
   const pair = !!cmp && !away
@@ -140,8 +148,9 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, onCompare, onSt
           {DEVICES.map((d) => <button key={d.id} className={device === d.id ? 'on' : ''} onClick={() => setDevice(d.id)} title={d.width ? `${d.width}px wide` : 'Full width'}>{d.label}</button>)}
         </div>
         {/* Main beside it (after the smoke test's own Compare with main): two views, each with a bar of its own. */}
-        {cmp ? <button className="btn quiet small" onClick={onStopComparing}>Stop comparing</button>
-          : p.canCompare ? <button className="btn quiet small" disabled={asking} title="Bring up main beside it, on its own port, to look at the two side by side" onClick={() => { setAsking(true); void onCompare().finally(() => setAsking(false)) }}>{asking ? 'Bringing up main…' : 'Compare with main'}</button> : null}
+        {cmp ? <button className="btn quiet small" onClick={() => setComparing(false)} title="Main stays on for its own tab; it turns itself off when nobody has looked for a while">Stop comparing</button>
+          : main && main.how !== 'none' ? <button className="btn quiet small" disabled={asking} title="The app's main beside it, at the same place. Turned on if it is off." onClick={compare}>{asking ? 'Turning main on…' : 'Compare with main'}</button> : null}
+        {mainError && <span className="bad" role="alert">{mainError}</span>}
         {cmp && away && <><span className="faint">main is in a browser tab of its own</span><button className="btn quiet small" onClick={() => setAway(false)}>Put main back</button></>}
         {data}
       </div>
@@ -153,10 +162,10 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, onCompare, onSt
                 <iframe key={`${src}#${mine.reloads}#${p.updatedAt ?? ''}`} src={src} title={p.title} style={sized} />
               </figure>
               <figure aria-label="main">
-                <figcaption><span>main{cmp!.sha ? <> <code>{cmp!.sha.slice(0, 7)}</code></> : null}</span>{cmp!.up && <><Nav t={theirs} home={cmpBase} src={mainSrc} of="main" /><button className="btn quiet small" onClick={detachMain} title="Open main in a browser tab of its own, and give the prototype the room">↗ Detach</button></>}</figcaption>
+                <figcaption><span>{cmp!.branch}{cmp!.sha ? <> <code>{cmp!.sha.slice(0, 7)}</code></> : null}</span>{cmp!.up && <><Nav t={theirs} home={cmpBase} src={mainSrc} of="main" /><button className="btn quiet small" onClick={detachMain} title="Open main in a browser tab of its own, and give the prototype the room">↗ Detach</button></>}</figcaption>
                 {cmp!.up
                   ? <iframe key={`${mainSrc}#${theirs.reloads}`} src={mainSrc} title="main" style={sized} />
-                  : <div className="empty">Starting main… {cmp!.log.length > 0 && <pre className="proto-log mono">{cmp!.log.slice(-6).join('\n')}</pre>}</div>}
+                  : <div className="empty">Turning main on… {cmp!.log.length > 0 && <pre className="proto-log mono">{cmp!.log.slice(-6).join('\n')}</pre>}</div>}
               </figure>
             </div>
           : <iframe key={`${src}#${mine.reloads}#${p.updatedAt ?? ''}`} /* a restart reloads it */ src={src} title={p.title} style={sized} />}
