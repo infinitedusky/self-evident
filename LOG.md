@@ -5115,3 +5115,27 @@ the cost said first.
 Not built: choosing which tasks (it is always the latest five with a pull request of their own; a project with one
 pull request for all its tasks has none to try on); trying a skill put on Build › Do, which would mean building a
 task twice; running a command by itself as it is added (Try is pressed, or an agent calls `try_held`).
+
+## What is judged by eye is the person's, what CI runs is CI's, and no step runs either (Sandy, 2026-11-19: "visual checks should be signed off on, not automated I think, we have the automated version we can trigger from the smoke test if we want. this is a probe and ci/cd issue")
+
+Found on BON-204 (Bonkei): the step that tries to break a change ran the repository's whole docs smoke, every page
+in Chrome, about fifteen minutes. BON-197's first criterion read "the whole docs smoke passes", and that step was
+told to try each criterion "start to finish", which beat the rule about long runs.
+
+- One rule, said to the builder, the check and the step that tries to break it (`EYES_AND_CI`, verify.ts): what is
+  judged by eye is signed off by the person in the smoke test, where the repository's own automated version can be
+  run if they want it; what the repository's CI runs on the pull request (its smoke, end-to-end or browser suite,
+  anything a criterion says a CI job will show) is CI's. An agent's step runs neither, and says what it left to whom.
+- The check leaves such a criterion to the person: by eye, to try here; CI's, on the pull request, naming the job
+  to see green.
+- Trying to break it is using what was built, in short scenarios. A criterion proved by a suite, a CI job or a
+  person's eye is not a scenario.
+
+A visual or browser suite in the build is a setting, never an agent's choice (Sandy, same day: "if we want to set
+a visual test as a probe, we could do it, but it should be something that we … set as an option in the settings").
+It is a command on the list of what a build is held to (Settings › Skills, Build › Verify, Add a probe: for Bonkei,
+`pnpm docs:smoke`), set to block or to report. The engine runs it once on the merged work, and the app has chosen
+the minutes it takes. Left off, it runs only in CI and when the person runs it from the smoke test.
+
+This is wording, like the long-run rule before it: nothing cuts a command off. A limit on how long one command may
+run in a step that only reads is the next thing if an agent does it again.

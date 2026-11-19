@@ -56,6 +56,9 @@ describe('a probe\'s agent', () => {
       expect(b).toContain('You did not build this'); expect(b).toContain('You change nothing'); expect(b).toContain('```probe')
     }
     expect(probeBrief(probesOf(setup)[0], criteria as never, 'main')).toContain('[ac_1]')
+    // Trying to break it is using it, never running the repository's suites: those are CI's, and what is judged by eye is the person's.
+    const brk = probeBrief(probesOf(setup)[0], criteria as never, 'main')
+    expect(brk).toContain('is not a scenario: leave it'); expect(brk).toContain('Do not run those suites or their scripts here'); expect(brk).not.toContain('start to finish')
     expect(probeBrief(probesOf(setup)[1], criteria as never, 'main')).toContain('git diff main...HEAD')
     expect(probeBrief(probesOf(setup)[4], criteria as never, 'main')).toContain('Invoke `backend-core:security-review` with the Skill tool')
   })

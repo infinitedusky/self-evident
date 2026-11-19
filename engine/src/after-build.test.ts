@@ -54,6 +54,9 @@ describe('the list a build is checked against', () => {
     // What would take it a long run is left to the person, not swept.
     expect(b).toContain('when checking it would take you more than about two minutes of running'); expect(b).toContain('do not run or write a sweep')
     expect(LEAVE_LONG_RUNS).toContain('do not run it and do not write a script that does')
+    // What is judged by eye is the person's; what CI runs is CI's: said to the builder and the check (and the step that tries to break it: probes.test.ts).
+    for (const told of [LEAVE_LONG_RUNS, b]) { expect(told).toContain('signed off by the person'); expect(told).toContain('Do not run those suites or their scripts here') }
+    expect(b).toContain('"when" is "pr" and the evidence names the job to see green')
   })
   it('its verdicts mark the requirements: done, not done with what is missing, does not apply, or left alone', () => {
     const v = readVerdicts('```acceptance\n[{"id":"req_telemetry","met":false,"evidence":"no span on a failed export"},{"id":"req_tests","met":true,"evidence":"export.test.ts"},{"id":"req_test_plan","met":true,"evidence":"does not apply: nothing a person does changes"},{"id":"ac_2","met":false,"evidence":"the second run adds a row"}]\n```', [...criteria.map((c) => c.id), ...required.map((r) => reqId(r.key))])
