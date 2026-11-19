@@ -23,6 +23,7 @@
  * This slice is the step and the marks. Watching while they test (the page's console, the app's telemetry,
  * screenshots) and testers through a link are not built.
  */
+import { patchSetup } from './setup.js'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
@@ -172,7 +173,7 @@ export async function setSmokeSetup(appId: string, i: { setup?: string; name?: s
     }
     smoke = { setups: list }
   }
-  await db.update(app).set({ setup: { ...(a.setup as object), smoke } }).where(eq(app.id, appId))
+  await patchSetup(appId, { smoke })
   return smokeSetupOf(appId)
 }
 

@@ -6,6 +6,7 @@
  * until it is started again. Each has its own conversation, working in its worktree: given a brief, it builds a first
  * version at once, and the person iterates there.
  */
+import { patchSetup } from './setup.js'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
@@ -294,15 +295,15 @@ export async function setPrototypeDatabase(appId: string, cfg: PrototypeDb) {
   const { a } = await setupOf(appId)
   new URL(cfg.url) // a URL, or it throws
   const clean: PrototypeDb = { url: cfg.url.trim(), env: cfg.env?.trim() || 'DATABASE_URL', ...(cfg.schema_cmd?.trim() ? { schema_cmd: cfg.schema_cmd.trim() } : {}) }
-  await db.update(app).set({ setup: { ...(a.setup as object), prototype_db: clean } }).where(eq(app.id, appId))
+  await patchSetup(appId, { prototype_db: clean })
   return { prototype_db: clean }
 }
 
 /** How this app's prototype server starts: a shell command run in the prototype's worktree, serving on $PORT. */
 export async function setPrototypeCommand(appId: string, cmd: string, stop?: string) {
   const { a } = await setupOf(appId)
-  const next = { ...(a.setup as object), prototype_cmd: cmd.trim(), ...(stop === undefined ? {} : { prototype_stop_cmd: stop.trim() || undefined }) }
-  await db.update(app).set({ setup: next }).where(eq(app.id, appId))
+  await setupOf(appId) // an app there is
+  const next = await patchSetup(appId, { prototype_cmd: cmd.trim(), ...(stop === undefined ? {} : { prototype_stop_cmd: stop.trim() || null }) })
   return { prototype_cmd: cmd.trim(), prototype_stop_cmd: (next as { prototype_stop_cmd?: string }).prototype_stop_cmd ?? null }
 }
 
@@ -314,10 +315,8 @@ export async function setPrototypeCommand(appId: string, cmd: string, stop?: str
  */
 export async function setPrototypeCleanup(appId: string, i: { stop?: string; discard?: string }) {
   const { a } = await setupOf(appId)
-  const next = { ...(a.setup as Record<string, unknown>) }
-  if (i.stop !== undefined) { if (i.stop.trim()) next.prototype_stop_cmd = i.stop.trim(); else delete next.prototype_stop_cmd }
-  if (i.discard !== undefined) { if (i.discard.trim()) next.prototype_discard_cmd = i.discard.trim(); else delete next.prototype_discard_cmd }
-  await db.update(app).set({ setup: next }).where(eq(app.id, appId))
+  await setupOf(appId) // an app there is
+  const next = await patchSetup(appId, { ...(i.stop === undefined ? {} : { prototype_stop_cmd: i.stop.trim() || null }), ...(i.discard === undefined ? {} : { prototype_discard_cmd: i.discard.trim() || null }) })
   return { prototype_stop_cmd: (next.prototype_stop_cmd as string | undefined) ?? null, prototype_discard_cmd: (next.prototype_discard_cmd as string | undefined) ?? null }
 }
 

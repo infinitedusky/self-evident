@@ -5033,3 +5033,31 @@ made the pull step aside without a word.
 
 Not changed: the checkout the engine itself runs from (Self Evident's own) is still never pulled by the sync, since
 new engine code restarts the engine and cuts off what is building. Only an app's first repository is followed.
+
+## An app's settings are saved a key at a time (found on Cloaked, 2026-11-19)
+
+Setting Cloaked up, two requirements and the skills on a step vanished after being saved. The Settings page saved the
+whole settings object as it was when the page loaded, and each agent tool rewrote the whole object from its own
+read: whichever wrote last wiped the other. Now every writer sends only what it changes and the engine merges it
+into what is saved at that moment, under a lock on the app's row (`setup.ts`, `patchSetup`): the page (`PATCH
+/apps/:id`, where `setup` is now the changes, null removing a key) and the tools (`set_probe`, `set_pr_rules`, the
+smoke and prototype set-ups, the report format). After a save the page takes the settings back from the engine, so
+what changed elsewhere shows.
+
+## Decided next for what a build is held to (Sandy, 2026-11-19: "still feels like we have too many rigid settings that should be defaults that you override or extend"; "This sounds good")
+
+Not built yet; in this order after the save fix above.
+1. One list, layered: a thing a build is held to is one kind of record (name, how it is judged, blocks or reports,
+   on or off). The engine ships defaults; the app, the workflow and the project each keep only their differences.
+   Requirements and probes stop being two stores.
+2. Override in place: a row set by a workflow says so ("from Main") and can still be changed on the app's page, with
+   a way back to what it inherits. Only the acceptance criteria stay fixed.
+3. Tests is an ordinary command probe, edited in the list; the field under Landing goes.
+4. The defaults are worded for any repository (telemetry is "the way this repository already does it").
+5. One agent tool that makes every change the page can (judged ones, skills on a step, the test command).
+6. Trying a change. A command is run once on a build known to be good as it is added, to show the command itself
+   works. And a change to the probes can be A/B tested: the changed probe is run on past merged tasks and its
+   verdicts are shown beside what happened to each, kept with the change it tested. Offered, never required
+   (Sandy: "It's not required, but we would have, we have the setup to do it"). Probes replay safely because they
+   change nothing; a skill on Do would need the task built twice, which is not part of this.
+7. The pull request's title follows the commit format's rule: the engine fills what it knows, the builder the rest.

@@ -134,8 +134,6 @@ export async function setProbe(appId: string, i: { key?: string; name?: string; 
   const builtIn = BUILT_IN.some((b) => b.key === key) || key === TESTS_KEY
   if (!builtIn && !i.remove && !was && !(i.name?.trim() && i.kind && i.runs?.trim())) throw new Error('a new probe needs a name, a kind (command or skill) and what it runs')
   const next = i.remove ? held.filter((p) => p.key !== key) : cleanProbes([...held.filter((p) => p.key !== key), { ...was, ...Object.fromEntries(Object.entries({ name: i.name, kind: i.kind, runs: i.runs, blocks: i.blocks, on: i.on }).filter(([, v]) => v !== undefined)), key }])
-  const setup = { ...(a.setup as Record<string, unknown>) }
-  if (next.length) setup.probes = next; else delete setup.probes
-  await db.update(app).set({ setup }).where(eq(app.id, appId))
+  const setup = await (await import('./setup.js')).patchSetup(appId, { probes: next.length ? next : null })
   return { probes: probesOf(setup) }
 }

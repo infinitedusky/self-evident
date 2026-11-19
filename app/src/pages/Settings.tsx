@@ -19,6 +19,9 @@ import { RemoveApp, RemovedApps } from '../components/RemoveApp'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
 const err = (e: any) => String(e?.message ?? e)
+/** The settings that differ from `base`, as the engine takes them: the new value, or null for one that is gone. */
+export const changesOf = (base: AppSetup, next: AppSetup): Record<string, unknown> => Object.fromEntries([...new Set([...Object.keys(base), ...Object.keys(next)])]
+  .filter((k) => JSON.stringify((base as Record<string, unknown>)[k]) !== JSON.stringify((next as Record<string, unknown>)[k])).map((k) => [k, (next as Record<string, unknown>)[k] ?? null]))
 
 export const FACTORY_SECTIONS = [
   { key: 'plugins', label: 'Plugins' }, { key: 'yours', label: 'Your skills' }, { key: 'skills', label: 'Skills by job' }, { key: 'integrations', label: 'Integrations' }, { key: 'removed', label: 'Removed apps' },
@@ -428,6 +431,8 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   const [abbr, setAbbr] = useState(app.key)
   const [branch, setBranch] = useState(app.defaultBranch)
   const [setup, setSetup] = useState<AppSetup>(app.setup ?? {})
+  // What `setup` started from: a save sends only what differs from it, so a setting changed elsewhere since (an agent's tool, another tab) is not put back.
+  const [base, setBase] = useState<AppSetup>(app.setup ?? {})
   const was = (app.repos ?? []).map(rowOf) // the engine lists home first
   const [repos, setRepos] = useState<RepoRow[]>(was)
   const [home, setHome] = useState<string | null>(was[0]?.key ?? null)
@@ -444,7 +449,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   useEffect(() => { setAbbr(app.key) }, [app.key]) // saved, or changed elsewhere
   useEffect(() => { setBranch(app.defaultBranch) }, [app.defaultBranch]) // the engine may have made the checkout's branch the default
 
-  const dirty = name !== app.name || (abbr.trim() !== app.key && abbr.trim() !== '') || branch !== app.defaultBranch || JSON.stringify(setup) !== JSON.stringify(app.setup ?? {})
+  const dirty = name !== app.name || (abbr.trim() !== app.key && abbr.trim() !== '') || branch !== app.defaultBranch || Object.keys(changesOf(base, setup)).length > 0
     || repos.map((r) => r.key).join() !== was.map((r) => r.key).join() || (repos.length > 1 && homeOf(repos, home) !== was[0]?.key)
   const num = (v: string) => (v.trim() === '' ? undefined : Number(v))
   const set = (patch: Partial<AppSetup>) => setSetup({ ...setup, ...patch })
@@ -464,7 +469,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
     try {
       const homeKey = homeOf(repos, home)
       const many = (id?: string) => ({ ...setup, home_repo: repos.length > 1 ? id : undefined })
-      await engine.updateApp(app.id, { name: name.trim(), ...(abbr.trim() && abbr.trim() !== app.key ? { key: abbr.trim() } : {}), defaultBranch: branch.trim() || 'main', setup: clean(many(repos.find((r) => r.key === homeKey)?.id ?? setup.home_repo)) })
+      let saved = await engine.updateApp(app.id, { name: name.trim(), ...(abbr.trim() && abbr.trim() !== app.key ? { key: abbr.trim() } : {}), defaultBranch: branch.trim() || 'main', setup: changesOf(base, clean(many(repos.find((r) => r.key === homeKey)?.id ?? setup.home_repo))) })
       for (const r of was.filter((w) => !repos.some((x) => x.key === w.key))) await engine.deleteRepo(r.id!)
       const notes: string[] = []
       const rows: RepoRow[] = []
@@ -475,8 +480,8 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         rows.push({ ...rowOf(made), key: r.key })
       }
       const homeId = rows.find((r) => r.key === homeKey)?.id
-      if (repos.length > 1 && homeId && repos.find((r) => r.key === homeKey)?.id !== homeId) await engine.updateApp(app.id, { setup: clean(many(homeId)) }) // home was only just made
-      setRepos(rows.map((r) => ({ ...r, key: r.id! }))); setHome(homeId ?? null); setSetup(clean(many(homeId)))
+      if (repos.length > 1 && homeId && repos.find((r) => r.key === homeKey)?.id !== homeId) saved = await engine.updateApp(app.id, { setup: { home_repo: homeId } }) // home was only just made
+      setRepos(rows.map((r) => ({ ...r, key: r.id! }))); setHome(homeId ?? null); setSetup(saved.setup ?? {}); setBase(saved.setup ?? {}) // as the engine holds them now, with whatever changed elsewhere
       if (notes.length) setNote(notes.join(' '))
       await onSaved(); await load()
     } catch (e) { setError(err(e)) } finally { setBusy(false) }
@@ -484,7 +489,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   if (section === 'workflows') return <WorkflowSettings appId={app.id} />
   if (section === 'integrations') return info && factory
     ? <Integrations base={`/settings/apps/${app.id}/integrations`} item={item} integrations={factory.integrations} values={info.integrations} status={info.status} keys={info.keys} onKeys={() => void load()} scope="app" appId={app.id}
-        onSave={async (v) => { await engine.updateApp(app.id, { setup: { ...(app.setup ?? {}), integrations: v } }); await onSaved(); await load() }} />
+        onSave={async (v) => { await engine.updateApp(app.id, { setup: { integrations: v } }); await onSaved(); await load() }} />
     : error ? <div className="empty bad">{error}</div> : <p className="muted">Loading…</p>
   const groups: Record<string, React.ReactNode> = {
     repo: <>
