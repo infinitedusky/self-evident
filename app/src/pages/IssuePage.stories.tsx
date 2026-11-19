@@ -17,6 +17,26 @@ const approved = withEngine({ steps: { ...sampleData.steps, issues: approvedTask
 
 /** A task's home: what it's for, what stops it completing, the next step. The brief waits on the blast radius, and the build on the brief's approval. */
 export const Overview: Story = { parameters: at('iss_sample20') }
+const built = (close: { can: boolean; waits: string[] }, pr: 'merged' | 'open') => withEngine({ issueDetails: { ...sampleData.issueDetails, iss_sample20: { ...issueDetails.iss_sample20, state: 'in_review' as const, close, pr: { id: 'pr_sample', number: 412, url: 'https://example.com/pull/412', status: pr } as never } } })
+/** Built, its pull request merged and every check of the person's passed or skipped: it can be closed, and closing it marks it done (made up). */
+export const CanBeClosed: Story = {
+  parameters: at('iss_sample20'), beforeEach: built({ can: true, waits: [] }, 'merged'),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Close task' }))
+    await waitFor(() => expect(c.queryByRole('button', { name: 'Close task' })).toBeNull())
+    await expect(c.getAllByText('Done').length).toBeGreaterThan(0)
+  },
+}
+/** Built, but not ready to close: the button is there and cannot be pressed, and the page says what it waits on (made up). */
+export const WaitsToBeClosed: Story = {
+  parameters: at('iss_sample20'), beforeEach: built({ can: false, waits: ['Pull request #412 is not merged.', '2 checks of yours are not passed or skipped.'] }, 'open'),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('button', { name: 'Close task' })).toBeDisabled()
+    await expect(c.getByText('Before it can be closed: Pull request #412 is not merged. 2 checks of yours are not passed or skipped.')).toBeVisible()
+  },
+}
 /** A step's page: research, approved, with its notes and a way to take the approval back. */
 export const ResearchStep: Story = { parameters: at('iss_sample20', 'research') }
 /** The mockups' page: the agent says it is done, so it is ready for you, with Approve; the task's Storybook right on it (here not running). */
