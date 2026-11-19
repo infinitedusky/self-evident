@@ -11,7 +11,7 @@
  */
 import type { McpServerConfig, SdkPluginConfig } from '@anthropic-ai/claude-agent-sdk'
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
@@ -21,7 +21,7 @@ import { eq } from 'drizzle-orm'
 import { parse } from 'yaml'
 import { CATALOGUE, CATEGORY_KEYS } from './catalogue.js'
 import { db } from './db/client.js'
-import { app, workspace } from './db/schema.js'
+import { app, repo, workspace } from './db/schema.js'
 import { PlanError } from './issues.js'
 import type { Risk } from './risk.js'
 import { STEPS, step, type StepKey } from './steps.js'
@@ -173,6 +173,53 @@ export function describeJobs(f: FactorySettings, jobs: AppJobs = {}, list: Insta
 }
 
 /** What a role gets in one app: the plugins switched on for it, and the skills switched on in them. */
+/**
+ * The skills of an app's other repositories (Cloaked's set-up, passed on by Sandy, 2026-11-19: "offer skills from a
+ * second repo (backend-core)"). An app can have more than one repository, and its agents start in the home one, so
+ * only that one's `.claude/skills/` reached them: a reviewer's skill kept in the other repository could not be named.
+ *
+ * Each other repository that has skills is given to the app's sessions as a plugin of its own, named after the
+ * repository, so its skills are named `backend-core:security-review` the way any plugin's are. Nothing is written
+ * into that repository: the plugin is a folder of ours (`repoSkillsHome`) holding a manifest and a copy of the
+ * repository's skills as its checkout has them now, made again each time a session starts. Only this app gets them.
+ */
+export const repoSkillsHome = () => process.env.REPO_SKILLS_HOME ?? join(homedir(), '.self-evident', 'repo-skills')
+export interface RepoRef { id: string; fullName: string; localPath: string | null }
+export interface RepoPlugin { /** As a session names it: the prefix of its skills. */ name: string; /** The repository, as the page says where a skill is from. */ from: string; path: string; skills: SkillInfo[] }
+/** A repository's name as a plugin's: its last part, in the letters a plugin's name may have. */
+export const repoPluginName = (r: { fullName: string; localPath: string | null }, taken: string[] = []) => {
+  const base = (basename(r.fullName || r.localPath || '') || 'repo').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').slice(0, 40) || 'repo'
+  return taken.includes(base) ? `${base}-repo` : base
+}
+/**
+ * The plugins for an app's repositories other than its home one (`repos` in order, home first): one for each that has
+ * skills in its checkout. `write` false only describes them (Settings); true also makes the folders a session loads.
+ */
+export function repoPlugins(appId: string, repos: RepoRef[], taken: string[] = [], write = true): RepoPlugin[] {
+  const out: RepoPlugin[] = []
+  for (const r of repos.slice(1)) {
+    if (!r.localPath) continue
+    const src = join(r.localPath, '.claude', 'skills')
+    const skills = readSkills(src, null).filter((k) => existsSync(join(src, k.name, 'SKILL.md')))
+    if (!skills.length) continue
+    const name = repoPluginName(r, [...taken, ...out.map((o) => o.name)])
+    const path = join(repoSkillsHome(), appId, name)
+    if (write) {
+      rmSync(path, { recursive: true, force: true })
+      mkdirSync(join(path, '.claude-plugin'), { recursive: true })
+      writeFileSync(join(path, '.claude-plugin', 'plugin.json'), JSON.stringify({ name, description: `The skills of ${r.fullName || r.localPath}, as its checkout has them. A copy made by Self Evident: change them in that repository.`, skills: './skills' }, null, 2) + '\n')
+      for (const k of skills) cpSync(join(src, k.name), join(path, 'skills', k.name), { recursive: true, dereference: true })
+    }
+    out.push({ name, from: r.fullName || basename(r.localPath), path, skills })
+  }
+  return out
+}
+/** An app's repositories, home first (as workbench.ts orders them; read here so this module needs nothing of it). */
+async function reposFor(appId: string, setup: unknown): Promise<RepoRef[]> {
+  const home = (setup as { home_repo?: unknown } | null | undefined)?.home_repo
+  return (await db.select({ id: repo.id, fullName: repo.fullName, localPath: repo.localPath }).from(repo).where(eq(repo.appId, appId))).sort((x, y) => Number(y.id === home) - Number(x.id === home) || x.fullName.localeCompare(y.fullName))
+}
+
 export function resolvePlugins(list: Installed[], f: FactorySettings, a: AppPlugins, role: Role, jobs: AppJobs = {}) {
   const plugins = list.filter((p) => pluginOn(p.id, f, a) && pluginRoles(p.id, f).includes(role))
   return { plugins, skills: plugins.flatMap((p) => p.skills.filter((s) => skillOnFor(s.key, f, jobs)).map((s) => `${p.sdkName}:${s.name}`)) }
@@ -198,7 +245,7 @@ async function settingsFor(appId: string) {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   const [w] = a ? await db.select().from(workspace).where(eq(workspace.id, a.workspaceId)) : []
   const setup = (a?.setup ?? {}) as { plugins?: AppPlugins; skills_by_job?: AppJobs }
-  return { factory: ((w?.settings ?? {}) as FactorySettings), app: setup.plugins ?? {}, jobs: setup.skills_by_job ?? {} }
+  return { factory: ((w?.settings ?? {}) as FactorySettings), app: setup.plugins ?? {}, jobs: setup.skills_by_job ?? {}, repos: a ? await reposFor(appId, a.setup) : [] }
 }
 
 /**
@@ -208,11 +255,13 @@ async function settingsFor(appId: string) {
  */
 export async function skillOptions(role: Role, cwd: string, appId: string): Promise<{ plugins: SdkPluginConfig[]; mcpServers: Record<string, McpServerConfig>; skills: string[] }> {
   const s = await settingsFor(appId)
-  const r = resolvePlugins(installed(), s.factory, s.app, role, s.jobs)
+  const list = installed()
+  const r = resolvePlugins(list, s.factory, s.app, role, s.jobs)
+  const others = repoPlugins(appId, s.repos, list.map((p) => p.sdkName)) // the app's other repositories' skills, each as a plugin
   return {
-    plugins: r.plugins.map((p) => ({ type: 'local', path: p.path })),
+    plugins: [...r.plugins, ...others].map((p) => ({ type: 'local', path: p.path })),
     mcpServers: Object.assign({}, ...r.plugins.map((p) => (p.shim ? SHIMS[p.id].mcpServers : {}))),
-    skills: yoursFirst([...r.skills, ...skillDirs(join(cwd, '.claude', 'skills'))]),
+    skills: yoursFirst([...r.skills, ...others.flatMap((o) => o.skills.map((k) => `${o.name}:${k.name}`)), ...skillDirs(join(cwd, '.claude', 'skills'))]),
   }
 }
 
@@ -255,12 +304,14 @@ export function cleanStepSkills(given: unknown): StepSkills {
   return out
 }
 
-/** The skills an app's conversations get, as Settings offers them for a step: the repo's own, then the plugins' that are on for it. */
+/** The skills an app's conversations get, as Settings offers them for a step: the home repo's own, its other repositories', then the plugins' that are on for it. */
 export async function usableSkills(appId: string, repoPath: string | null | undefined) {
   const s = await settingsFor(appId)
-  const r = resolvePlugins(installed(), s.factory, s.app, 'talk', s.jobs)
+  const list = installed()
+  const r = resolvePlugins(list, s.factory, s.app, 'talk', s.jobs)
   return [
     ...(repoPath ? appSkills(repoPath).map((k) => ({ name: k.name, label: k.name, from: 'this repo', description: k.description })) : []),
+    ...repoPlugins(appId, s.repos, list.map((p) => p.sdkName), false).flatMap((o) => o.skills.map((k) => ({ name: `${o.name}:${k.name}`, label: k.name, from: o.from, description: k.description }))),
     ...r.plugins.flatMap((p) => p.skills.filter((k) => skillOnFor(k.key, s.factory, s.jobs)).map((k) => ({ name: `${p.sdkName}:${k.name}`, label: k.name, from: p.name, description: k.description }))),
   ]
 }

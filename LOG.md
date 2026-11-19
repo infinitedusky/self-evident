@@ -5231,3 +5231,22 @@ what tells the builder. The check and the probes are told nothing new.
 
 Not done: the planner is not told (a plan's steps do not yet name the lint or the reviewer); and commands still run
 last, after the agents (LOG.md, the entry above on judges and scripts).
+
+## An app's other repositories' skills are offered too (Cloaked's set-up, passed on by Sandy, 2026-11-19: "offer skills from a second repo (backend-core). This is the proper fix and also unlocks threat-modeling and supply-chain-audit")
+
+An app can have more than one repository, and its agents start in the home one. Only that one's `.claude/skills/`
+reached them, so Cloaked could not name backend-core's review skills for a step or as a reviewer in Verify. The way
+round it (pulling the repository into the shared skills) gives them to every app and keeps a copy that goes stale.
+
+Now each of an app's repositories other than its home one, if its checkout has skills, is given to that app's
+sessions as a plugin named after the repository: `backend-core:security-review`, the way any plugin's skills are
+named. Settings › Skills offers them wherever a skill is picked, saying which repository they are from.
+
+- Nothing is written into that repository. The plugin is a folder of ours (`~/.self-evident/repo-skills/<app>/<repo>`)
+  with a manifest and a copy of the skills as the checkout has them, made again each time a session starts. The same
+  layout as the shared skills' plugin, which Claude Code already loads.
+- Only that app gets them. The home repository's own stay named plainly, as before.
+- A repository with no checkout on this computer, or no skills, gives nothing.
+
+Known and left: a session started in the second repository's own worktree sees that repository's skills twice (plain,
+and by the plugin's name), and not the home repository's. Nothing runs there today.

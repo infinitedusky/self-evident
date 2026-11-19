@@ -1,9 +1,9 @@
 /** Plugins: switched for the factory and overridden per app; skills filed by the job they cover, one per job. */
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { prototypeSkill, withStepDefaults, yoursFirst, installed, removePlugin, writeSharedSkill, cleanStepSkills, stepSkillPrompt, cleanJobs, describeJobs, fileSkill, forgetPlugin, pluginOn, resolvePlugins, skillCategory, type Installed } from './skills.js'
+import { repoPluginName, repoPlugins, prototypeSkill, withStepDefaults, yoursFirst, installed, removePlugin, writeSharedSkill, cleanStepSkills, stepSkillPrompt, cleanJobs, describeJobs, fileSkill, forgetPlugin, pluginOn, resolvePlugins, skillCategory, type Installed } from './skills.js'
 
 const plugin = (id: string, sdkName: string, skills: string[]): Installed => ({
   id, name: id.split('@')[0], sdkName, path: `/p/${id}`, version: null, description: '', source: null, builtIn: false, mcpServers: [], shim: null,
@@ -137,5 +137,47 @@ describe('your own skills, outside every repo', () => {
     expect(() => writeSharedSkill({ name: '../escape', description: 'x', body: 'y' })).toThrow('lowercase letters')
     expect(() => writeSharedSkill({ name: 'ok', description: ' ', body: 'y' })).toThrow('needs a description')
     expect(() => writeSharedSkill({ name: 'ok', description: 'x', body: '' })).toThrow('needs its instructions')
+  })
+})
+
+describe('the skills of an app\'s other repositories', () => {
+  // A made-up app with two repositories: the home one, and backend-core with two skills of its own.
+  const made = () => {
+    const root = mkdtempSync(join(tmpdir(), 'repo-skills-'))
+    process.env.REPO_SKILLS_HOME = join(root, 'ours')
+    const home = join(root, 'enterprise-dashboard'), other = join(root, 'backend-core'), bare = join(root, 'docs-site')
+    for (const [dir, name, says] of [[home, 'ticket-naming', 'How tickets are named (sample).'], [other, 'security-review', 'Review a change for security (sample).'], [other, 'threat-modeling', 'Model the threats (sample).']] as const) {
+      mkdirSync(join(dir, '.claude', 'skills', name), { recursive: true })
+      writeFileSync(join(dir, '.claude', 'skills', name, 'SKILL.md'), `---\ndescription: ${says}\n---\nBody (sample).\n`)
+    }
+    mkdirSync(join(other, '.claude', 'skills', 'not-a-skill'), { recursive: true }) // a folder with no SKILL.md
+    mkdirSync(bare, { recursive: true })
+    return { root, repos: [{ id: 'repo_home', fullName: 'sample/enterprise-dashboard', localPath: home }, { id: 'repo_core', fullName: 'sample/backend-core', localPath: other }, { id: 'repo_docs', fullName: 'sample/docs-site', localPath: bare }, { id: 'repo_far', fullName: 'sample/not-here', localPath: null }] }
+  }
+  it('each one that has skills is a plugin named after it, holding a copy of them; the home repository is not one', () => {
+    const { repos } = made()
+    const [p, ...rest] = repoPlugins('app_sample', repos)
+    expect(rest).toEqual([]) // docs-site has no skills, not-here has no checkout
+    expect(p).toMatchObject({ name: 'backend-core', from: 'sample/backend-core' })
+    expect(p.skills.map((k) => [k.name, k.description])).toEqual([['security-review', 'Review a change for security (sample).'], ['threat-modeling', 'Model the threats (sample).']])
+    expect(JSON.parse(readFileSync(join(p.path, '.claude-plugin', 'plugin.json'), 'utf8'))).toMatchObject({ name: 'backend-core', skills: './skills' })
+    expect(readdirSync(join(p.path, 'skills')).sort()).toEqual(['security-review', 'threat-modeling'])
+    expect(existsSync(join(repos[1].localPath!, '.claude-plugin'))).toBe(false) // nothing is written into the repository
+  })
+  it('is made again each time: a skill the repository dropped is gone, a changed one is as it is now', () => {
+    const { repos } = made()
+    repoPlugins('app_sample', repos)
+    rmSync(join(repos[1].localPath!, '.claude', 'skills', 'threat-modeling'), { recursive: true })
+    writeFileSync(join(repos[1].localPath!, '.claude', 'skills', 'security-review', 'SKILL.md'), '---\ndescription: Changed (sample).\n---\nNew body (sample).\n')
+    const [p] = repoPlugins('app_sample', repos)
+    expect(readdirSync(join(p.path, 'skills'))).toEqual(['security-review'])
+    expect(readFileSync(join(p.path, 'skills', 'security-review', 'SKILL.md'), 'utf8')).toContain('New body (sample).')
+  })
+  it('only describing them writes nothing; a name a plugin already has is not taken twice', () => {
+    const { repos } = made()
+    const [p] = repoPlugins('app_other', repos, ['backend-core'], false)
+    expect(p.name).toBe('backend-core-repo')
+    expect(existsSync(p.path)).toBe(false)
+    expect(repoPluginName({ fullName: '', localPath: '/Users/sample/code/My Repo!' })).toBe('my-repo')
   })
 })
