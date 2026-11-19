@@ -98,3 +98,4 @@ export function contractsOf(i: ContractsInput): StepGroup[] {
 /** A change made on the page, and what it does to the app's settings: held.ts. */
 export type ProbeChange = HeldChange
 export const applyProbeChange = applyHeldChange
+export { applyHeldChanges as applyProbeChanges } from './held.js'

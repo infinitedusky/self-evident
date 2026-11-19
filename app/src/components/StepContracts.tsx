@@ -27,9 +27,11 @@ export interface StepContractsProps {
   /** A step's skills, as they are after a change. */
   onSkills?: (step: string, names: string[]) => void
   onProbe?: (change: ProbeChange) => void
+  /** A row its workflow switches (`from`): switched for that workflow, or (null) left to the app again. */
+  onWorkflow?: (key: string, on: boolean | null) => void
 }
 
-export function StepContracts({ groups, open = [], usable = [], onSkills, onProbe }: StepContractsProps) {
+export function StepContracts({ groups, open = [], usable = [], onSkills, onProbe, onWorkflow }: StepContractsProps) {
   return (
     <div className="step-contracts" data-component="StepContracts">
       {groups.map((g) => (
@@ -76,7 +78,7 @@ export function StepContracts({ groups, open = [], usable = [], onSkills, onProb
                               </select>}
                             </div>
                           ) : null}
-                          {t.probes ? <Probes step={s.label} probes={t.probes} onProbe={onProbe} /> : null}
+                          {t.probes ? <Probes step={s.label} probes={t.probes} onProbe={onProbe} onWorkflow={onWorkflow} /> : null}
                         </div>
                       </li>
                     )
@@ -106,12 +108,12 @@ function Blocks({ label, value, disabled, onChange }: { label: string; value: bo
 }
 
 /** One probe's fields, for a new one and for one being edited (its kind stays what it was). */
-function ProbeForm({ start, editing, onSave, onCancel }: { start: Draft; editing?: string; onSave: (d: Draft) => void; onCancel: () => void }) {
+function ProbeForm({ start, editing, named = true, onSave, onCancel }: { start: Draft; editing?: string; /** false: its name is the engine's (the test command). */ named?: boolean; onSave: (d: Draft) => void; onCancel: () => void }) {
   const [draft, setDraft] = useState(start)
   const ready = draft.name.trim() && draft.runs.trim()
   return (
     <form className="step-probe-add" aria-label={editing ? `Edit ${editing}` : 'Add a probe'} onSubmit={(e) => { e.preventDefault(); if (ready) onSave(draft) }}>
-      <input aria-label="Probe name" placeholder="Name" autoFocus value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+      {named ? <input aria-label="Probe name" placeholder="Name" autoFocus value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /> : <strong>{draft.name}</strong>}
       {editing ? <span className="faint">{KIND[draft.kind]}</span> : <select aria-label="Probe kind" value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as Draft['kind'] })}>
         <option value="command">Command</option><option value="skill">Skill as reviewer</option><option value="judged">Judged</option>
       </select>}
@@ -123,32 +125,41 @@ function ProbeForm({ start, editing, onSave, onCancel }: { start: Draft; editing
   )
 }
 
-/** What a build is held to: one row each, in the order it is verified. Being changed: switched, set to block or to report only, edited (the app's own), removed, added to. */
-function Probes({ step, probes, onProbe }: { step: string; probes: ProbeView[]; onProbe?: (change: ProbeChange) => void }) {
+/**
+ * What a build is held to: one row each, in the order it is verified. Being changed, every row but the acceptance
+ * criteria can be switched and set to block or to report only; all but the engine's own probes can be reworded; one
+ * the app has changed can be put back as the engine ships it; the app's own can be removed, and added to.
+ */
+function Probes({ step, probes, onProbe, onWorkflow }: { step: string; probes: ProbeView[]; onProbe?: (change: ProbeChange) => void; onWorkflow?: (key: string, on: boolean | null) => void }) {
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
+  const unset = (p: ProbeView) => p.key === 'tests' && !p.runs // the test command, before there is one
+  const said = (p: ProbeView) => (p.key === 'tests' ? 'the test command' : p.name) // a sentence can be named Tests too
   return (
     <>
       <table className="step-probes">
         <tbody>
           {probes.map((p) => onProbe && editing === p.key && p.kind !== 'built-in' ? (
             <tr key={p.key}><td colSpan={6}>
-              <ProbeForm editing={p.name} start={{ name: p.name, kind: p.kind, runs: p.runs, blocks: p.blocks }} onCancel={() => setEditing(null)} onSave={(d) => {
+              <ProbeForm editing={p.name} named={p.key !== 'tests'} start={{ name: p.name, kind: p.kind, runs: p.runs, blocks: p.blocks }} onCancel={() => setEditing(null)} onSave={(d) => {
                 onProbe({ op: 'edit', key: p.key, name: d.name, runs: d.runs, ...(d.blocks !== p.blocks ? { blocks: d.blocks } : {}) }) // one change: two would each start from the same settings
                 setEditing(null)
               }} />
             </td></tr>
           ) : (
-            <tr key={p.key} className={p.on ? undefined : 'off'} title={p.fixed}>
-              {onProbe && <td><input type="checkbox" aria-label={`Run ${p.name}`} checked={p.on} disabled={!!p.fixed} onChange={(e) => onProbe({ op: 'on', key: p.key, on: e.target.checked })} /></td>}
-              <td>{p.name}</td>
+            <tr key={p.key} className={p.on ? undefined : 'off'} title={p.fixed ?? (p.from ? `The ${p.from} workflow switches this ${p.on ? 'on' : 'off'} for its tasks.` : undefined)}>
+              {onProbe && <td><input type="checkbox" aria-label={`Run ${said(p)}`} checked={p.on} disabled={!!p.fixed || unset(p)} onChange={(e) => (p.from && onWorkflow ? onWorkflow(p.key, e.target.checked) : onProbe({ op: 'on', key: p.key, on: e.target.checked }))} /></td>}
+              <td>{p.name}{p.from && <span className="faint step-probe-from"> · from {p.from}{onWorkflow && <button type="button" className="linkish" aria-label={`Leave ${p.name} to the app, not the ${p.from} workflow`} title="Leave it to the app's own setting" onClick={() => onWorkflow(p.key, null)}>✕</button>}</span>}</td>
               <td className="faint">{KIND[p.kind]}</td>
-              <td className={p.kind === 'command' || p.kind === 'skill' ? 'mono' : undefined}>{p.runs}</td>
-              <td>{onProbe && p.key !== 'criteria'
-                ? <Blocks label={`When ${p.name} fails`} value={p.blocks} disabled={!p.on} onChange={(blocks) => onProbe({ op: 'blocks', key: p.key, blocks })} />
+              <td className={p.kind === 'command' || p.kind === 'skill' ? 'mono' : undefined}>{unset(p) ? <span className="faint" style={{ fontFamily: 'inherit' }}>no test command yet</span> : p.runs}</td>
+              <td>{onProbe && !p.fixed && !unset(p)
+                ? <Blocks label={`When ${said(p)} fails`} value={p.blocks} disabled={!p.on} onChange={(blocks) => onProbe({ op: 'blocks', key: p.key, blocks })} />
                 : !p.on ? <Badge>off</Badge> : <Badge tone={p.blocks ? 'warn' : undefined}>{p.blocks ? 'blocks' : 'reports'}</Badge>}</td>
-              {onProbe && <td className="step-probe-acts">{p.own && <button type="button" className="linkish" aria-label={`Edit the probe ${p.name}`} onClick={() => { setEditing(p.key); setAdding(false) }}>Edit</button>}
-                {p.own && !p.fixed && <button type="button" className="linkish" aria-label={`Remove the probe ${p.name}`} onClick={() => onProbe({ op: 'remove', key: p.key })}>✕</button>}</td>}
+              {onProbe && <td className="step-probe-acts">
+                {p.editable && <button type="button" className="linkish" aria-label={unset(p) ? 'Set the test command' : p.key === 'tests' ? 'Edit the test command' : `Edit the probe ${p.name}`} onClick={() => { setEditing(p.key); setAdding(false) }}>{unset(p) ? 'Set' : 'Edit'}</button>}
+                {p.changed && <button type="button" className="linkish" aria-label={`Put ${p.name} back as the engine ships it`} title="Back to the default" onClick={() => onProbe({ op: 'reset', key: p.key })}>Reset</button>}
+                {(p.own || (p.key === 'tests' && !unset(p))) && <button type="button" className="linkish" aria-label={p.key === 'tests' ? 'Clear the test command' : `Remove the probe ${p.name}`} onClick={() => onProbe({ op: 'remove', key: p.key })}>✕</button>}
+              </td>}
             </tr>
           ))}
         </tbody>
