@@ -281,6 +281,13 @@
       "when": 1795043733891,
       "tag": "0039_issue_probes",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1795048042240,
+      "tag": "0040_project_closed",
+      "breakpoints": true
     }
   ]
 }

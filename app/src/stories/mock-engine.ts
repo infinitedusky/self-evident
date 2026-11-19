@@ -162,6 +162,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/ideas/:id', ({ params }) => { const i = d.ideas.find((x) => x.id === params.id); return i ? reply(i) : missing('idea') }),
     http.get('/api/projects', () => reply(d.projects)),
     http.get('/api/projects/:id/graph', ({ params }) => { const g = d.graphs[params.id as string]; return g ? reply(g) : missing('project') }),
+    http.post('/api/projects/:id/close', ({ params }) => { const g = d.graphs[params.id as string]; if (!g) return missing('project'); d.graphs = { ...d.graphs, [g.project.id]: { ...g, project: { ...g.project, status: 'closed' }, close: { can: false, waits: ['It is closed already.'] } } }; return reply({ id: g.project.id, status: 'closed' }) }),
     http.get('/api/issues', ({ request }) => {
       const q = new URL(request.url).searchParams
       if (q.get('view') === 'code') return reply(d.issueRows)
@@ -199,8 +200,8 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       return reply(d.smoke)
     }),
     http.post('/api/issues/:id/smoke/:criterion', async ({ params, request }) => {
-      const b = await request.json() as { pass: boolean; note?: string }
-      const checks = (d.smoke?.checks ?? []).map((c) => (c.id === params.criterion ? { ...c, mark: b.pass ? 'pass' as const : 'fail' as const, note: b.note ?? '' } : c))
+      const b = await request.json() as { pass?: boolean; note?: string; skip?: boolean }
+      const checks = (d.smoke?.checks ?? []).map((c) => (c.id === params.criterion ? { ...c, mark: b.skip ? 'skip' as const : b.pass ? 'pass' as const : 'fail' as const, note: b.skip ? `Skipped, not tried${b.note ? `: ${b.note}` : '.'}` : b.note ?? '' } : c))
       const owed = checks.filter((c) => c.mark === 'todo').length, failed = checks.filter((c) => c.mark === 'fail').length
       d.smoke = { ...d.smoke!, checks, owed, failed }
       return reply({ ...d.smoke, sentBack: owed === 0 ? failed : 0 })

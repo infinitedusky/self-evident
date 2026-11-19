@@ -126,7 +126,7 @@ export async function addIssue(projectId: string, input: { title: string; descri
   const work = async (tx: Tx) => {
     const [p] = await tx.select().from(project).where(eq(project.id, projectId))
     if (!p) throw new PlanError(`no project ${projectId}`)
-    if (['landed', 'stopped', 'superseded'].includes(p.status)) throw new PlanError(`project is ${p.status}; it takes no new tasks`)
+    if (['landed', 'closed', 'stopped', 'superseded'].includes(p.status)) throw new PlanError(`project is ${p.status}; it takes no new tasks`)
     const [row] = await insertIssues(tx, p.appId, [{
       kind: 'code', projectId, ideaId: input.ideaId ?? null, title: input.title, description: input.description, brief: input.brief, state: input.state ?? 'todo',
       sortOrder: await nextSort(tx, { projectId }), delegate: input.state === 'backlog' ? null : 'planner', source: input.source, sourceRef: input.sourceRef,

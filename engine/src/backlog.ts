@@ -14,7 +14,7 @@ import { getIssue, identifier, insertIssues, nextSort, PlanError, relate, setSta
 
 export interface NewItem { text: string; body?: string; source?: Source; sourceRef?: Record<string, unknown>; ideaId?: string }
 
-const CLOSED = ['landed', 'stopped', 'superseded']
+const CLOSED = ['landed', 'closed', 'stopped', 'superseded']
 
 async function openProject(tx: Tx | typeof db, projectId: string) {
   const [p] = await tx.select().from(project).where(eq(project.id, projectId))

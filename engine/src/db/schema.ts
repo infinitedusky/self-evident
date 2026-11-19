@@ -60,10 +60,10 @@ export const BUILD_STATE: Record<BuildStatus, IssueState> = {
 }
 
 // Projects keep the engine's statuses; each has Linear's project status type.
-export const PROJECT_STATUSES = ['drafting', 'proposed', 'approved', 'running', 'paused', 'landed', 'stopped', 'superseded'] as const
+export const PROJECT_STATUSES = ['drafting', 'proposed', 'approved', 'running', 'paused', 'landed', 'closed', 'stopped', 'superseded'] as const
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number]
 export const PROJECT_STATUS_TYPE: Record<ProjectStatus, 'backlog' | 'planned' | 'started' | 'paused' | 'completed' | 'canceled'> = {
-  drafting: 'backlog', proposed: 'planned', approved: 'planned', running: 'started', paused: 'paused', landed: 'completed', stopped: 'canceled', superseded: 'canceled',
+  drafting: 'backlog', proposed: 'planned', approved: 'planned', running: 'started', paused: 'paused', landed: 'completed', closed: 'completed', stopped: 'canceled', superseded: 'canceled',
 }
 
 export type IdeaLane = (typeof IDEA_LANES)[number]

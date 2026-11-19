@@ -4958,3 +4958,27 @@ two-finger swipe sideways into Back or Forward. Scrolling sideways inside anythi
 
 Not tried with a real swipe (a trackpad gesture cannot be driven from a test). Not covered: a prototype or smoke test
 opened in a tab of its own, which is that app's page and not ours; Safari, which ignores this for its own swipe.
+
+## A project is closed by a person, last (Sandy, 2026-11-18: "a close button on projects that can only happen once the pull request has been merged and everything has been checked or skipped")
+
+The engine calls a project **landed** by itself, when its last sub-task is in: before anyone has merged anything, and
+before the checks that can only be made after the merge. **Closed** is new, the person's, and last (`engine/src/close.ts`,
+status `closed`, migration 0040).
+
+- **Close project** is on a landed project's page. It can be pressed once every pull request of the project is merged
+  and every check left to a person on its tasks is passed or skipped. Until then it is there and cannot be pressed,
+  and the page says what it waits on ("Pull request #31 is not merged.", "SS-4: 2 checks of yours are not passed or
+  skipped."). A check failed by hand holds it too.
+- **A check can be skipped** (the smoke test, beside Pass and Fail): the person's choice not to try it, with a reason
+  if they give one. It stops waiting for them and is recorded as skipped, never as passed ("Skipped, not tried: …").
+  One for the pull request can be skipped before there is one.
+- A closed project is over like a landed one: no new tasks, no planning, out of the open lists, with its own filter
+  on Projects. To Linear it is completed, as landed is.
+
+Read two ways and built as the first: "everything checked or skipped" is the checks left to a person (the smoke
+test), the only things a person checks on a build; and "the pull request" is every pull request of the project, one
+per task where that is how the app builds.
+
+Not done: a task on its own (a solo project) has the same button only on its project page, not on the task's; a
+closed project cannot be opened again; nothing is tidied at close beyond what landing already tidied; a closed pull
+request that was never merged holds the project open, and the way out is to cancel the project.

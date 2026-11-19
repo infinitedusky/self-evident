@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises'
 import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
 import { checklistOf } from './checklist.js'
+import { closeProject, closeView } from './close.js'
 import { compareKey, markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
 import { closeTerminal, closeTerminals, openTerminal, ownPage, resizeTerminal, scratchKey, typeInTerminal, watchTerminal } from './smoke-terminal.js'
 import { startLearning, talkBusy } from './talk.js'
@@ -688,11 +689,11 @@ export function buildApp(bus: EventBus) {
   // An agent tries one check and says what it saw; it marks nothing (smoke.ts, trySmoke).
   api.post('/issues/:id/smoke/:criterion/try', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json((await trySmoke(t.id, c.req.param('criterion'), 'user')).view) } catch (err) { return planError(c, err, 400) } })
   api.post('/issues/:id/smoke/:criterion', async (c) => {
-    const body = await c.req.json<{ pass?: boolean; note?: string }>().catch(() => ({} as { pass?: boolean; note?: string }))
-    if (typeof body.pass !== 'boolean') return c.json({ error: 'pass is true or false' }, 400)
+    const body = await c.req.json<{ pass?: boolean; note?: string; skip?: boolean }>().catch(() => ({} as { pass?: boolean; note?: string; skip?: boolean }))
+    if (typeof body.pass !== 'boolean' && body.skip !== true) return c.json({ error: 'pass is true or false, or skip is true' }, 400)
     try {
       const t = await resolveIssue(db, c.req.param('id'))
-      const view = await markSmoke(t.id, c.req.param('criterion'), { pass: body.pass, note: body.note }, 'user')
+      const view = await markSmoke(t.id, c.req.param('criterion'), { pass: body.pass === true, note: body.note, skip: body.skip === true }, 'user')
       const { sentBack } = await runner.afterSmoke(t.id) // every check marked: what failed goes back, or the task carries on
       return c.json({ ...view, sentBack })
     } catch (err) { return planError(c, err) }
@@ -797,8 +798,10 @@ export function buildApp(bus: EventBus) {
   })
   api.get('/projects/:id/graph', async (c) => {
     const g = await projectGraph(c.req.param('id'))
-    return g ? c.json(g) : c.json({ error: 'no such project' }, 404)
+    return g ? c.json({ ...g, close: await closeView(g.project.id) }) : c.json({ error: 'no such project' }, 404)
   })
+  // A person closes a project once its pull requests are merged and every check of theirs is passed or skipped (close.ts).
+  api.post('/projects/:id/close', async (c) => { try { return c.json(await closeProject(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
   api.post('/projects/:id/start', async (c) => {
     try { return c.json(await runner.startProject(c.req.param('id'))) } catch (err) { return planError(c, err) }
   })

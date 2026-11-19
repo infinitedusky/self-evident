@@ -88,7 +88,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   const mine = useTrail(), theirs = useTrail() // the build's view, and main's beside it: each goes its own way
   const { at, setAt: setMine } = mine
   const setAt = (to: string | null) => { setMine(to); if (to === null) theirs.setAt(null) }
-  const [marking, setMarking] = useState<{ id: string; pass: boolean } | null>(null)
+  const [marking, setMarking] = useState<{ id: string; pass: boolean; skip?: boolean } | null>(null)
   const [note, setNote] = useState('')
   const [sent, setSent] = useState<number | null>(null)
   const [term, setTerm] = useState<Record<string, boolean>>({}) // which set-ups' terminals the person has opened or closed here
@@ -112,7 +112,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   const mark = async () => {
     if (!marking) return
     setBusy(true); setError(null)
-    try { const r = await engine.markSmoke(issueId, marking.id, marking.pass, note); setV(r); setSent(r.sentBack ?? 0); setMarking(null); setNote('') } catch (e: any) { setError(String(e.message ?? e)) } finally { setBusy(false) }
+    try { const r = await engine.markSmoke(issueId, marking.id, marking.pass, note, marking.skip); setV(r); setSent(r.sentBack ?? 0); setMarking(null); setNote('') } catch (e: any) { setError(String(e.message ?? e)) } finally { setBusy(false) }
   }
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
@@ -144,7 +144,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
     <li key={c.id} className={`smoke-check ${c.mark}`}>
       <div className="smoke-check-head">
         <strong>{c.text}</strong>
-        {c.mark === 'pass' && <Badge tone="ok">pass</Badge>}{c.mark === 'fail' && <Badge tone="bad">fail</Badge>}
+        {c.mark === 'pass' && <Badge tone="ok">pass</Badge>}{c.mark === 'fail' && <Badge tone="bad">fail</Badge>}{c.mark === 'skip' && <Badge>skipped</Badge>}
         {c.stale && <Badge tone="warn">marked on an earlier commit</Badge>}
       </div>
       {c.where && (() => {
@@ -161,10 +161,10 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
       {c.tried && !c.trying && <div className={`smoke-tried ${c.tried.verdict}`}><strong>{SAW[c.tried.verdict]}</strong>{c.tried.stale ? <span className="faint"> on an earlier commit</span> : null}{c.tried.note ? <>: {c.tried.note}</> : null}</div>}
       {marking?.id === c.id ? (
         <div className="smoke-note">
-          <label>{marking.pass ? 'What you saw (optional)' : 'What you saw: it is sent back with this'}
-            <textarea rows={2} value={note} autoFocus onChange={(e) => setNote(e.target.value)} placeholder={marking.pass ? 'trough visible, lip outline faint' : 'portal 22 fps, 45 without'} /></label>
+          <label>{marking.skip ? 'Why it is skipped (optional)' : marking.pass ? 'What you saw (optional)' : 'What you saw: it is sent back with this'}
+            <textarea rows={2} value={note} autoFocus onChange={(e) => setNote(e.target.value)} placeholder={marking.skip ? 'nothing to release yet' : marking.pass ? 'trough visible, lip outline faint' : 'portal 22 fps, 45 without'} /></label>
           <div className="smoke-actions">
-            <button className="btn small" disabled={busy || (!marking.pass && !note.trim())} onClick={() => void mark()}>{marking.pass ? 'Mark it passed' : 'Mark it failed'}</button>
+            <button className="btn small" disabled={busy || (!marking.pass && !marking.skip && !note.trim())} onClick={() => void mark()}>{marking.skip ? 'Skip it' : marking.pass ? 'Mark it passed' : 'Mark it failed'}</button>
             <button className="btn quiet small" onClick={() => { setMarking(null); setNote('') }}>Cancel</button>
           </div>
         </div>
@@ -173,6 +173,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
           {su.url && local && goable(c.where) && <button className="btn quiet small" onClick={() => { const to = c.link ?? addressOf(su.url!, c.where); setAt(to); if (cmp) theirs.setAt(onMain(to)) }} title={cmp ? `Show ${c.where} in both views` : `Show ${c.where} in the view beside this`}>Go there</button>}
           <button className="btn small" disabled={busy || waits} onClick={() => { setMarking({ id: c.id, pass: true }); setNote('') }}>{c.mark === 'todo' ? 'Pass' : 'Pass instead'}</button>
           <button className="btn quiet small" disabled={busy || waits} onClick={() => { setMarking({ id: c.id, pass: false }); setNote('') }}>{c.mark === 'todo' ? 'Fail' : 'Fail instead'}</button>
+          {c.mark !== 'skip' && <button className="btn quiet small" disabled={busy} title="Not tried, by choice. It stops waiting for you, and is recorded as skipped, never as passed." onClick={() => { setMarking({ id: c.id, pass: false, skip: true }); setNote('') }}>Skip</button>}
           <button className="btn quiet small" disabled={busy || waits || !!c.trying || (local && (c.when ?? 'here') === 'here' && !su.up)} title={local && (c.when ?? 'here') === 'here' && !su.up ? 'Run it first: the agent tries what is up' : 'An agent tries it and says what it saw. It does not mark it.'} onClick={() => void act(() => engine.trySmoke(issueId, c.id))}>{c.tried ? 'Ask again' : 'Ask an agent'}</button>
         </div>
       )}

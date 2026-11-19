@@ -86,6 +86,30 @@ export const Paused: Story = { parameters: at('proj_paused'), beforeEach: withGr
 export const WorkLandedBacklogOpen: Story = { parameters: at('proj_worklanded'), beforeEach: withGraph(workLanded) }
 /** Landed: all done, the PR merged, the question answered; the backlog is closed (covered and dropped). */
 export const Landed: Story = { parameters: at('proj_landed'), beforeEach: withGraph(landed) }
+/** Landed, its pull request merged and every check of the person's passed or skipped: it can be closed, and closing it is one press. */
+export const LandedCanBeClosed: Story = {
+  parameters: at('proj_canclose'), beforeEach: withGraph({ ...landed, project: { ...landed.project, id: 'proj_canclose' }, close: { can: true, waits: [] } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Close project' }))
+    await expect(await c.findByText('closed')).toBeVisible()
+    await expect(c.queryByRole('button', { name: 'Close project' })).toBeNull()
+  },
+}
+/** Landed, but not ready to close: the button is there and cannot be pressed, and the page says what it waits on (made up). */
+export const LandedWaitsToClose: Story = {
+  parameters: at('proj_waits'), beforeEach: withGraph({ ...landed, project: { ...landed.project, id: 'proj_waits' }, pr: { ...graph.pr!, status: 'open' }, prs: [{ ...graph.pr!, status: 'open' }], close: { can: false, waits: ['Pull request #412 is not merged.', 'SS-4: 2 checks of yours are not passed or skipped.'] } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('button', { name: 'Close project' })).toBeDisabled()
+    await expect(c.getByText(/Before it can be closed: Pull request #412 is not merged\. SS-4: 2 checks of yours are not passed or skipped\./)).toBeVisible()
+  },
+}
+/** Closed: over, like a landed one, with nothing left to press. */
+export const Closed: Story = {
+  parameters: at('proj_closed'), beforeEach: withGraph({ ...landed, project: { ...landed.project, id: 'proj_closed', status: 'closed' }, close: { can: false, waits: ['It is closed already.'] } }),
+  play: async ({ canvasElement }) => { const c = within(canvasElement); await expect(await c.findByText('closed')).toBeVisible(); await expect(c.queryByRole('button', { name: 'Close project' })).toBeNull() },
+}
 /** Stopped after a sub-task failed three times; the rest cancelled. */
 export const StoppedWithAFailure: Story = { parameters: at('proj_stopped'), beforeEach: withGraph(stopped) }
 /** Nothing in the backlog, no to-dos, no questions or decisions: the bare project. */

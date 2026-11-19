@@ -71,7 +71,7 @@ function NewTodo({ appId, projects, onMade, onError }: { appId: string; projects
   const [owner, setOwner] = useState<'person' | 'agent'>('person')
   const [draft, setDraft] = useState(true)
   const [busy, setBusy] = useState(false)
-  const open = projects.filter((p) => !['landed', 'stopped', 'superseded'].includes(p.status))
+  const open = projects.filter((p) => !['landed', 'closed', 'stopped', 'superseded'].includes(p.status))
   const make = async () => {
     if (!title.trim()) return
     setBusy(true)

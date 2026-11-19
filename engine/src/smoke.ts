@@ -204,7 +204,8 @@ export interface SmokeCheck {
   link?: string
   /** What to do there and what passing looks like. */
   how?: string
-  mark: 'todo' | 'pass' | 'fail'
+  /** skip: the person chose not to try it. It holds nothing up, and it is not a pass. */
+  mark: 'todo' | 'pass' | 'fail' | 'skip'
   note?: string
   /** A mark made on an earlier commit than the branch is at now: the code has changed since. */
   stale?: boolean
@@ -265,7 +266,7 @@ export function smokeChecks(criteria: Criterion[], head: string | null = null, s
       id: c.id, text: c.text, when: whenOf(c), ...(c.builtSetup ? { setup: c.builtSetup } : {}),
       ...((c.builtWhere ?? placeIn(c.built === undefined ? c.builtEvidence : null, c.check, c.evidence, c.text)) ? { where: c.builtWhere ?? placeIn(c.built === undefined ? c.builtEvidence : null, c.check, c.evidence, c.text) } : {}),
       ...((c.built === undefined ? c.builtEvidence ?? c.check : c.check) ? { how: (c.built === undefined ? c.builtEvidence ?? c.check : c.check)!.replace(/^(for a person|needs a person)[:,]?\s*/i, '') } : {}),
-      mark: c.built === undefined ? 'todo' as const : c.built ? 'pass' as const : 'fail' as const,
+      mark: c.built === undefined ? 'todo' as const : c.byHand?.skipped ? 'skip' as const : c.built ? 'pass' as const : 'fail' as const,
       ...(marked || agent ? { note: c.builtEvidence ?? '' } : {}),
       ...(marked && head && c.byHand!.sha && c.byHand!.sha !== head ? { stale: true } : {}),
       ...(c.built === undefined && c.byHand ? { before: { pass: c.byHand.pass, note: c.byHand.note } } : {}),
@@ -471,13 +472,18 @@ function stopOne(issueId: string, key: string): Promise<void> {
 export function stopSmokes() { for (const k of [...running.keys()]) { const at = k.lastIndexOf(':'); void stopOne(k.slice(0, at), k.slice(at + 1)) } }
 
 /** A person's word on one check: the build's mark on that criterion, by hand, with their note and the commit it was made on. */
-export async function markSmoke(issueId: string, criterionId: string, input: { pass: boolean; note?: string }, by = 'user') {
+export async function markSmoke(issueId: string, criterionId: string, input: { pass: boolean; note?: string; /** Not tried, by choice: it stops waiting for the person, and is recorded as skipped, never as passed. */ skip?: boolean }, by = 'user') {
   const { t, a, head, pr, staged } = await built(issueId)
   const c = acceptanceOf(t).find((x) => x.id === criterionId)
   if (!c) throw new PlanError(`no acceptance criterion ${criterionId} on this task`)
   if (!forPerson(c, staged)) throw new PlanError(staged ? 'that criterion is not one for a person here: an agent has already marked it. Change its mark on the brief\'s page' : 'that criterion is not one for a person: the check after the build did not leave it to them')
-  if (whenOf(c) === 'pr' && !pr) throw new PlanError('that one is checked on the pull request, and this task has none yet')
+  if (whenOf(c) === 'pr' && !pr && !input.skip) throw new PlanError('that one is checked on the pull request, and this task has none yet')
   const note = (input.note ?? '').replace(/\s+/g, ' ').trim().slice(0, 600)
+  if (input.skip) {
+    await setAcceptance(t.id, { update: [{ id: c.id, built: true, builtEvidence: `Skipped, not tried${note ? `: ${note}` : '.'}`, byHand: { pass: true, note, sha: head, at: new Date().toISOString(), by, skipped: true } }] }, by)
+    await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor: by, type: 'smoke.skipped', payload: { criterionId: c.id, note, sha: head } }))
+    return { ...(await smokeView(t.id)), marked: { id: c.id, pass: true, skipped: true } }
+  }
   if (!input.pass && !note) throw new PlanError('say what you saw: a fail is sent back to be fixed, and the note is what the fix works from')
   await setAcceptance(t.id, { update: [{ id: c.id, built: input.pass, builtEvidence: note || 'Checked by hand: it holds.', byHand: { pass: input.pass, note, sha: head, at: new Date().toISOString(), by } }] }, by)
   await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor: by, type: 'smoke.marked', payload: { criterionId: c.id, pass: input.pass, note, sha: head } }))

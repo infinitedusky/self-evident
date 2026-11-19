@@ -271,7 +271,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
   const mine = g.subIssues.filter((x) => x.parentId === issueId)
   const name = identifier(g.app.key, t.number)
   if (mine.length) throw new PlanError(`${name} already has ${mine.length} sub-task${mine.length > 1 ? 's' : ''}; it is planned`)
-  if (['landed', 'stopped', 'superseded'].includes(g.project.status)) throw new PlanError(`project is ${g.project.status}; it takes no more planning`) // drafts, and running or paused projects planning their next task
+  if (['landed', 'closed', 'stopped', 'superseded'].includes(g.project.status)) throw new PlanError(`project is ${g.project.status}; it takes no more planning`) // drafts, and running or paused projects planning their next task
   if (['backlog', 'triage', 'canceled', 'duplicate', 'done'].includes(t.state)) throw new PlanError(`${name} is ${t.state}; take it on first`)
   const [a] = await db.select().from(app).where(eq(app.id, t.appId))
   const r = await homeRepo(t.appId)
