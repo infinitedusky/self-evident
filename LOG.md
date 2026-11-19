@@ -5371,3 +5371,13 @@ never offered; builders are not held to stories in the repo; and a conversation'
 
 Not done: the screen map for a Storybook outside the repo; the house defaults (there are none outside: the command
 must be set).
+
+### Each view has its own bar, and main can be detached (Sandy, 2026-11-19: "we need the browser address and back forward and refresh for both the proto and the compared main. Also a detach button for main")
+
+Side by side, the prototype and main each have back, forward, reload and an address of their own, as the smoke
+test's two views do; the bar is now one component (`Trail.tsx`) used by both pages. Alone, the prototype's bar gains
+back and forward. A step of its guide still sends both views to the same place.
+
+**Detach** on main opens it in a browser tab of its own, where it was, and gives the prototype the whole pane; **Put
+main back** brings it beside the prototype again. Mine to choose: detaching is a plain browser tab at main's
+address, not the viewer's own detached page, since main has nothing of Self Evident's around it to carry.

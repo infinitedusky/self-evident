@@ -12,6 +12,7 @@ import { Badge } from './Badge'
 import { openEvents, API, engine, type Prototype } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { useWorkspace } from '../workspace'
+import { Nav, useTrail } from './Trail'
 
 const DEVICES = [{ id: 'desktop', label: 'Desktop', width: null }, { id: 'tablet', label: 'Tablet', width: 768 }, { id: 'phone', label: 'Phone', width: 390 }] as const
 
@@ -105,25 +106,30 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, onCompare, onSt
   const cmp = p.compare ?? null, cmpBase = cmp?.url.replace(/\/$/, '') ?? ''
   const [asking, setAsking] = useState(false) // pressed, and main is not there yet
   const base = p.url!.replace(/\/$/, '')
-  const [at, setAt] = useState(path)
-  const [typed, setTyped] = useState(path)
+  // Each view goes its own way (Sandy, 2026-11-19: "we need the browser address and back forward and refresh for both the proto and the compared main").
+  const mine = useTrail(), theirs = useTrail()
   const [device, setDevice] = useState<(typeof DEVICES)[number]['id']>('desktop')
-  const [reloads, setReloads] = useState(0)
-  const go = (to: string) => { const next = to.startsWith('/') ? to : `/${to}`; setAt(next); setTyped(next); onNavigate?.(next) }
+  const [away, setAway] = useState(false) // main is in a browser tab of its own
+  const src = mine.at ?? base + path
+  const at = src.startsWith(base) ? src.slice(base.length) || '/' : path // the prototype's own path, for its guide and its tab
+  const mainSrc = theirs.at ?? cmpBase + path
+  useEffect(() => { if (mine.at?.startsWith(base)) onNavigate?.(mine.at.slice(base.length) || '/') }, [mine.at])
+  useEffect(() => { if (!cmp) { setAway(false); theirs.setAt(null) } }, [!!cmp])
+  /** A step of its guide: both views go there. */
+  const go = (to: string) => { const next = to.startsWith('/') ? to : `/${to}`; mine.setAt(base + next); if (cmp) theirs.setAt(cmpBase + next) }
+  const detachMain = () => { window.open(mainSrc, `main-${p.id}`); setAway(true) }
   const width = DEVICES.find((d) => d.id === device)?.width
+  const sized = width ? { width, maxWidth: '100%' } : undefined
+  const pair = !!cmp && !away
   return (
     <div className="preview" data-component="PrototypePane">
       {p.guideNote ? <p className="smoke-stale" role="note" style={{ margin: '0 0 8px' }}>{p.guideNote}</p> : null}
       {p.strayPorts?.length ? <p className="smoke-stale" role="note" style={{ margin: '0 0 8px' }}>{p.strayNote ?? `It also listens on ${p.strayPorts.join(', ')}, which it chose itself.`}</p> : null}
       {/* Two rows (Sandy, 2026-11-13: "the header is too crowded… we need a second row"): where it is and its server, then how it is shown. */}
       <div className="preview-bar">
-        <button className="icon-btn" onClick={() => setReloads((n) => n + 1)} title="Reload" aria-label="Reload">↻</button>
-        <form className="preview-address" onSubmit={(e) => { e.preventDefault(); go(typed) }}>
-          <span className="faint mono">{base}</span>
-          <input className="mono" value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Path" />
-        </form>
+        {pair ? <span className="faint">Side by side with main</span> : <Nav t={mine} home={base} src={src} />}
         <div className="preview-actions">
-          <a className="icon-btn" href={base + at} target="_blank" rel="noreferrer" title="Open in a browser tab" aria-label="Open in a browser tab">↗</a>
+          <a className="icon-btn" href={src} target="_blank" rel="noreferrer" title="Open in a browser tab" aria-label="Open in a browser tab">↗</a>
           <button className="icon-btn" onClick={onTalk} title="Its conversation, in the agent's column" aria-label="Talk about it">💬</button>
           <button className="icon-btn" onClick={onRestart} title="Restart its server" aria-label="Restart its server">⟲</button>
           <button className="icon-btn" onClick={onStop} title="Stop its server" aria-label="Stop its server">■</button>
@@ -133,20 +139,27 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, onCompare, onSt
         <div className="seg" role="group" aria-label="Device">
           {DEVICES.map((d) => <button key={d.id} className={device === d.id ? 'on' : ''} onClick={() => setDevice(d.id)} title={d.width ? `${d.width}px wide` : 'Full width'}>{d.label}</button>)}
         </div>
-        {/* Main beside it (after the smoke test's own Compare with main): one address bar, two views. */}
+        {/* Main beside it (after the smoke test's own Compare with main): two views, each with a bar of its own. */}
         {cmp ? <button className="btn quiet small" onClick={onStopComparing}>Stop comparing</button>
           : p.canCompare ? <button className="btn quiet small" disabled={asking} title="Bring up main beside it, on its own port, to look at the two side by side" onClick={() => { setAsking(true); void onCompare().finally(() => setAsking(false)) }}>{asking ? 'Bringing up main…' : 'Compare with main'}</button> : null}
+        {cmp && away && <><span className="faint">main is in a browser tab of its own</span><button className="btn quiet small" onClick={() => setAway(false)}>Put main back</button></>}
         {data}
       </div>
       <div className="preview-stage">
-        {cmp
+        {pair
           ? <div className="preview-pair">
-              <figure><figcaption>This prototype</figcaption><iframe key={`${at}#${reloads}#${p.updatedAt ?? ''}`} src={base + at} title={p.title} style={width ? { width, maxWidth: '100%' } : undefined} /></figure>
-              <figure><figcaption>main{cmp.sha ? <> <code>{cmp.sha.slice(0, 7)}</code></> : null}</figcaption>{cmp.up
-                ? <iframe key={`${at}#${reloads}`} src={cmpBase + at} title="main" style={width ? { width, maxWidth: '100%' } : undefined} />
-                : <div className="empty">Starting main… {cmp.log.length > 0 && <pre className="proto-log mono">{cmp.log.slice(-6).join('\n')}</pre>}</div>}</figure>
+              <figure aria-label="This prototype">
+                <figcaption><span>This prototype</span><Nav t={mine} home={base} src={src} of="prototype" /></figcaption>
+                <iframe key={`${src}#${mine.reloads}#${p.updatedAt ?? ''}`} src={src} title={p.title} style={sized} />
+              </figure>
+              <figure aria-label="main">
+                <figcaption><span>main{cmp!.sha ? <> <code>{cmp!.sha.slice(0, 7)}</code></> : null}</span>{cmp!.up && <><Nav t={theirs} home={cmpBase} src={mainSrc} of="main" /><button className="btn quiet small" onClick={detachMain} title="Open main in a browser tab of its own, and give the prototype the room">↗ Detach</button></>}</figcaption>
+                {cmp!.up
+                  ? <iframe key={`${mainSrc}#${theirs.reloads}`} src={mainSrc} title="main" style={sized} />
+                  : <div className="empty">Starting main… {cmp!.log.length > 0 && <pre className="proto-log mono">{cmp!.log.slice(-6).join('\n')}</pre>}</div>}
+              </figure>
             </div>
-          : <iframe key={`${at}#${reloads}#${p.updatedAt ?? ''}`} /* a restart reloads it */ src={base + at} title={p.title} style={width ? { width, maxWidth: '100%' } : undefined} />}
+          : <iframe key={`${src}#${mine.reloads}#${p.updatedAt ?? ''}`} /* a restart reloads it */ src={src} title={p.title} style={sized} />}
         <PrototypeGuide id={p.id} guide={p.guide} at={at} onGo={go} />
       </div>
     </div>

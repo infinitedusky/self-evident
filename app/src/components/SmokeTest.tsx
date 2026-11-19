@@ -38,6 +38,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge } from './Badge'
 import { SmokeTerminal } from './SmokeTerminal'
+import { Nav, useTrail } from './Trail'
 import { API, engine, openEvents, type SmokeCheck, type SmokeSetupView, type SmokeView } from '../engine'
 
 const WHEN = { here: 'Here, on the built code', pr: 'On the pull request', after: 'After it is merged', nightly: 'Left to the nightly run' } as const
@@ -51,34 +52,6 @@ export const addressOf = (base: string, where?: string) => {
   if (/^https?:\/\//.test(where)) return where
   if (where.startsWith('/')) return `${base.replace(/\/$/, '')}${where}`
   return `${base.replace(/\/$/, '')}/iframe.html?id=${encodeURIComponent(where)}&viewMode=story` // a story's id: the story alone, as Storybook serves it
-}
-
-/** Where one view was sent, in order: back, forward, reload and what is typed in its address bar. */
-function useTrail() {
-  const [trail, setTrail] = useState<{ list: string[]; i: number }>({ list: [], i: -1 })
-  const [typed, setTyped] = useState<string | null>(null) // what is in the address bar while it is being typed
-  const [reloads, setReloads] = useState(0)
-  const setAt = (to: string | null) => { setTyped(null); setTrail((t) => (to === null ? { list: [], i: -1 } : t.list[t.i] === to ? t : { list: [...t.list.slice(0, t.i + 1), to], i: t.i + 1 })) }
-  const step = (by: number) => { setTyped(null); setTrail((t) => ({ ...t, i: Math.max(-1, Math.min(t.list.length - 1, t.i + by)) })) }
-  return { at: trail.list[trail.i] ?? null, canBack: trail.i >= 0, canForward: trail.i < trail.list.length - 1, typed, setTyped, reloads, reload: () => setReloads((n) => n + 1), setAt, step }
-}
-type Trail = ReturnType<typeof useTrail>
-/** Back, forward, reload and an address, for one view. `of` names it when there are two ("main"). */
-function Nav({ t, home, src, of }: { t: Trail; home: string; src: string; of?: string }) {
-  const path = src.startsWith(home) ? src.slice(home.length) || '/' : src // somewhere else entirely: the whole address
-  const go = (to: string) => { const x = to.trim(); if (x) t.setAt(/^https?:\/\//.test(x) ? x : `${home}${x.startsWith('/') ? x : `/${x}`}`) }
-  const n = (what: string) => (of ? `${what} (${of})` : what)
-  return (
-    <>
-      <button className="icon-btn" disabled={!t.canBack} onClick={() => t.step(-1)} title={n('Back')} aria-label={n('Back')}>←</button>
-      <button className="icon-btn" disabled={!t.canForward} onClick={() => t.step(1)} title={n('Forward')} aria-label={n('Forward')}>→</button>
-      <button className="icon-btn" onClick={t.reload} title={n('Reload')} aria-label={n('Reload')}>↻</button>
-      <form className="preview-address smoke-address" onSubmit={(e) => { e.preventDefault(); go(t.typed ?? path) }}>
-        {src.startsWith(home) && <span className="faint mono">{home}</span>}
-        <input className="mono" value={t.typed ?? path} onChange={(e) => t.setTyped(e.target.value)} aria-label={n('Address')} title="A path, or a whole address. Enter goes there." />
-      </form>
-    </>
-  )
 }
 
 export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: string; /** The task's address, for the links on from here. */ base: string }) {
