@@ -323,6 +323,17 @@ export const event = pgTable('event', { // [IF] append-only live stream; the gra
 }, (t) => [index('event_workspace_seq').on(t.workspaceId, t.seq), index('event_issue_seq').on(t.issueId, t.seq),
   index('event_project_seq').on(t.projectId, t.seq), index('event_app_seq').on(t.appId, t.seq)])
 
+// A change to what an app's builds are held to, tried on past work (trials.ts): one probe as it was at that moment, run
+// on the app's last merged tasks, and what it said of each. Kept, so the change it tested can be read beside it.
+export const probeTrial = pgTable('probe_trial', {
+  id: id(), appId: appId(), key: text('key').notNull(), // the probe's id on the one list (held.ts): lint, req:docs, tests
+  probe: jsonb('probe').$type<{ name: string; kind: 'command' | 'skill' | 'judged' | 'built-in'; runs: string }>().notNull(),
+  status: text('status').notNull().default('running'), // running | done | failed
+  results: jsonb('results').$type<{ issueId: string; identifier: string; title: string; pr: number | null; sha: string; pass: boolean | null; evidence: string; findings: string[]; ms: number }[]>().notNull().default([]),
+  tasks: integer('tasks').notNull().default(0), costUsd: text('cost_usd'), error: text('error'),
+  createdAt: at('created_at').notNull().defaultNow(), finishedAt: at('finished_at'),
+}, (t) => [index('probe_trial_app').on(t.appId, t.createdAt)])
+
 // Pull requests Self Evident did not open (a teammate's, or the person's own by hand), kept from GitHub by the sync:
 // a review requested from the person shows in My Stuff, and one that touches files our open work claims is flagged.
 export const outsidePr = pgTable('outside_pr', {

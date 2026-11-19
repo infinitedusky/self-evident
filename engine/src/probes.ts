@@ -83,6 +83,15 @@ export function probeBrief(p: Probe, criteria: Criterion[], base: string): strin
   ].join('\n')
 }
 
+/** For a trial (trials.ts): one sentence judged on its own against a change that is already merged. In a build, the check's agent judges the sentences with the rest of the list (verify.ts). */
+export const judgedBrief = (name: string, what: string, base: string) => [
+  'You did not build this. It is built and merged. Judge one thing about it.',
+  '',
+  `Read the change (git diff ${base}...HEAD) and what it touches, and say whether it meets this: ${name}: ${what}`,
+  'When it does not apply to this change at all, it passes: say so in the evidence.',
+  '', ...VERDICT,
+].join('\n')
+
 /** The verdict at the end of a probe's summary; null when there is none to read. */
 export function readProbe(summary: string | null | undefined): { pass: boolean; evidence: string; findings: string[] } | null {
   const raw = [...(summary ?? '').matchAll(/```probe\s*([\s\S]*?)```/g)].pop()?.[1]

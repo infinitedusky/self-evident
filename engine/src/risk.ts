@@ -25,6 +25,7 @@ const ENGINE: Record<string, [Risk, string]> = {
   create_project: ['cheap', 'a draft project; nothing runs'],
   create_task: ['cheap', 'a task; easy to cancel'],
   set_pr_rules: ['moderate', 'changes how every pull request of this app is titled and opened'],
+  try_held: ['moderate', 'runs a command, or an agent per task, on this app\'s past work'],
   set_held: ['moderate', 'changes what every build of this app is held to'],
   set_step_skills: ['moderate', 'changes which skills this app\'s agents are told to use on a step'],
   set_pr_title: ['cheap', 'one task\'s pull request title; easy to change'],

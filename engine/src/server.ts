@@ -62,6 +62,7 @@ import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueD
 import { requirementsOf } from './requirements.js'
 import { patchSetup } from './setup.js'
 import { setHeld } from './probes.js'
+import { endStrayTrials, pastTasks, startTrial, trialsOf } from './trials.js'
 import { diffsOf, hasLegacy, type HeldChange } from './held.js'
 import { autoBuild } from './branches.js'
 import { runner } from './runner.js'
@@ -830,6 +831,9 @@ export function buildApp(bus: EventBus) {
   api.post('/projects/:id/describe', async (c) => { // plain descriptions for issues and sub-issues that have none
     try { return c.json(await describeProject(c.req.param('id'))) } catch (err) { return planError(c, err) }
   })
+  // Trying a probe on past work (trials.ts): the latest trial of each probe, the tasks one would run on, and starting one.
+  api.get('/apps/:id/trials', async (c) => { try { return c.json({ trials: await trialsOf(c.req.param('id'), true), tasks: (await pastTasks(c.req.param('id'))).map(({ acceptance: _, ...t }) => t) }) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/trials', async (c) => { try { const { trial } = await startTrial(c.req.param('id'), await c.req.json()); return c.json(trial) } catch (err) { return planError(c, err) } })
   // Requirements (requirements.ts): the app's list is in its settings (setup.requirements); a project switches one on or off for its own tasks.
   api.get('/apps/:id/requirements', async (c) => { const [a] = await db.select().from(appTable).where(eq(appTable.id, c.req.param('id'))); return a ? c.json(requirementsOf(a.setup)) : c.json({ error: 'no such app' }, 404) })
   api.get('/projects/:id/requirements', async (c) => {
@@ -1049,6 +1053,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   stayUp() // a failure nobody was waiting on is logged, and the engine carries on
   serve({ fetch: buildApp(bus).fetch, port }, (info) => console.log(`engine listening on http://localhost:${info.port}  (API under /api; UI at / when built)`))
   void reopenUnclosed().then((ids) => { if (ids.length) console.log(`[engine] ${ids.length} task${ids.length === 1 ? '' : 's'} marked done by a merge, with checks of yours unmarked, put back in review to be closed`) }).catch((err) => console.error('reopening unclosed tasks failed', err))
+  void endStrayTrials().catch(() => {})
   // Apps from before there was one list (held.ts): their two stores become it, once.
   void (async () => { for (const a of await db.select().from(appTable)) if (hasLegacy(a.setup)) await patchSetup(a.id, (now) => (hasLegacy(now) ? { requirements: null, probes: null, requirements_added: null, held: diffsOf(now).length ? diffsOf(now) : null } : {})) })().catch((err) => console.error('moving apps to one list failed', err))
   void ensureMain().then((r) => { if (r.made) console.log(`[engine] ${r.made} app${r.made === 1 ? '' : 's'} given a Main workflow; what they had is Legacy`) }).catch((err) => console.error('workflows: could not make Main', err))

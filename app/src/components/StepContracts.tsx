@@ -10,7 +10,7 @@
  * switched, set to block or to report only, edited (the app's own), added and removed where the engine verifies,
  * and nowhere else.
  */
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import type { ProbeChange, ProbeView, StageKey, StepGroup } from '@self-evident/engine/contracts'
 import { Badge } from './Badge'
 
@@ -29,9 +29,16 @@ export interface StepContractsProps {
   onProbe?: (change: ProbeChange) => void
   /** A row its workflow switches (`from`): switched for that workflow, or (null) left to the app again. */
   onWorkflow?: (key: string, on: boolean | null) => void
+  /** Each probe's latest trial on past work, by its key. */
+  trials?: Record<string, TrialView>
+  /** Try a probe, as the row shows it, on the app's last merged tasks; `tryOn` is how many there are (none: no Try). */
+  onTry?: (p: ProbeView) => void
+  tryOn?: number
 }
+/** A probe as it was when tried, and what it said of each merged task. */
+export interface TrialView { status: 'running' | 'done' | 'failed'; runs: string; tasks: number; when?: string; costUsd?: string | null; error?: string | null; results: { identifier: string; title: string; pr: number | null; pass: boolean | null; evidence: string; findings: string[] }[] }
 
-export function StepContracts({ groups, open = [], usable = [], onSkills, onProbe, onWorkflow }: StepContractsProps) {
+export function StepContracts({ groups, open = [], usable = [], onSkills, onProbe, onWorkflow, trials = {}, onTry, tryOn = 0 }: StepContractsProps) {
   return (
     <div className="step-contracts" data-component="StepContracts">
       {groups.map((g) => (
@@ -78,7 +85,7 @@ export function StepContracts({ groups, open = [], usable = [], onSkills, onProb
                               </select>}
                             </div>
                           ) : null}
-                          {t.probes ? <Probes step={s.label} probes={t.probes} onProbe={onProbe} onWorkflow={onWorkflow} /> : null}
+                          {t.probes ? <Probes step={s.label} probes={t.probes} onProbe={onProbe} onWorkflow={onWorkflow} trials={trials} onTry={onTry} tryOn={tryOn} /> : null}
                         </div>
                       </li>
                     )
@@ -130,7 +137,32 @@ function ProbeForm({ start, editing, named = true, onSave, onCancel }: { start: 
  * criteria can be switched and set to block or to report only; all but the engine's own probes can be reworded; one
  * the app has changed can be put back as the engine ships it; the app's own can be removed, and added to.
  */
-function Probes({ step, probes, onProbe, onWorkflow }: { step: string; probes: ProbeView[]; onProbe?: (change: ProbeChange) => void; onWorkflow?: (key: string, on: boolean | null) => void }) {
+/**
+ * What a probe said of past work, under its row: one line, opening to each task. After a CI run's summary line
+ * (GitHub Actions: "4 passed, 1 failed", then the jobs). All of the tasks were merged, so a fail is the probe
+ * disagreeing with what was shipped.
+ */
+function TrialLine({ p, t }: { p: ProbeView; t: TrialView }) {
+  const pass = t.results.filter((r) => r.pass === true).length, fail = t.results.filter((r) => r.pass === false).length, none = t.results.length - pass - fail
+  const stale = t.runs !== p.runs
+  const head = t.status === 'running' ? `Trying it on ${t.tasks} merged task${t.tasks === 1 ? '' : 's'}: ${t.results.length} done…`
+    : `Tried on ${t.results.length} merged task${t.results.length === 1 ? '' : 's'}: ${pass} pass${fail ? `, ${fail} fail` : ''}${none ? `, ${none} not run` : ''}`
+  return (
+    <details className="step-probe-trial" aria-label={`Trial of ${p.name}`}>
+      <summary><span className={fail ? 'trial-fail' : undefined}>{head}</span><span className="faint">{t.when ? ` · ${t.when}` : ''}{stale ? ' · before it was changed' : ''}{t.costUsd ? ` · $${t.costUsd}` : ''}{t.status === 'failed' ? ` · stopped: ${t.error ?? 'it failed'}` : ''}</span></summary>
+      <ul>
+        {t.results.map((r) => (
+          <li key={r.identifier}>
+            <span aria-label={r.pass === true ? 'passed' : r.pass === false ? 'failed' : 'not run'}>{r.pass === true ? '✓' : r.pass === false ? '✗' : '–'}</span> <strong>{r.identifier}</strong> {r.title}{r.pr ? <span className="faint"> · #{r.pr}</span> : null}
+            {(r.findings.length > 0 || (r.pass !== true && r.evidence)) && <div className="muted">{r.findings.length ? r.findings.join(' · ') : r.evidence}</div>}
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
+}
+
+function Probes({ step, probes, onProbe, onWorkflow, trials = {}, onTry, tryOn = 0 }: { step: string; probes: ProbeView[]; onProbe?: (change: ProbeChange) => void; onWorkflow?: (key: string, on: boolean | null) => void; trials?: Record<string, TrialView>; onTry?: (p: ProbeView) => void; tryOn?: number }) {
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
   const unset = (p: ProbeView) => p.key === 'tests' && !p.runs // the test command, before there is one
@@ -146,8 +178,8 @@ function Probes({ step, probes, onProbe, onWorkflow }: { step: string; probes: P
                 setEditing(null)
               }} />
             </td></tr>
-          ) : (
-            <tr key={p.key} className={p.on ? undefined : 'off'} title={p.fixed ?? (p.from ? `The ${p.from} workflow switches this ${p.on ? 'on' : 'off'} for its tasks.` : undefined)}>
+          ) : (<Fragment key={p.key}>
+            <tr className={p.on ? undefined : 'off'} title={p.fixed ?? (p.from ? `The ${p.from} workflow switches this ${p.on ? 'on' : 'off'} for its tasks.` : undefined)}>
               {onProbe && <td><input type="checkbox" aria-label={`Run ${said(p)}`} checked={p.on} disabled={!!p.fixed || unset(p)} onChange={(e) => (p.from && onWorkflow ? onWorkflow(p.key, e.target.checked) : onProbe({ op: 'on', key: p.key, on: e.target.checked }))} /></td>}
               <td>{p.name}{p.from && <span className="faint step-probe-from"> · from {p.from}{onWorkflow && <button type="button" className="linkish" aria-label={`Leave ${p.name} to the app, not the ${p.from} workflow`} title="Leave it to the app's own setting" onClick={() => onWorkflow(p.key, null)}>✕</button>}</span>}</td>
               <td className="faint">{KIND[p.kind]}</td>
@@ -157,11 +189,15 @@ function Probes({ step, probes, onProbe, onWorkflow }: { step: string; probes: P
                 : !p.on ? <Badge>off</Badge> : <Badge tone={p.blocks ? 'warn' : undefined}>{p.blocks ? 'blocks' : 'reports'}</Badge>}</td>
               {onProbe && <td className="step-probe-acts">
                 {p.editable && <button type="button" className="linkish" aria-label={unset(p) ? 'Set the test command' : p.key === 'tests' ? 'Edit the test command' : `Edit the probe ${p.name}`} onClick={() => { setEditing(p.key); setAdding(false) }}>{unset(p) ? 'Set' : 'Edit'}</button>}
+                {onTry && tryOn > 0 && p.on && !unset(p) && !p.fixed && <button type="button" className="linkish" disabled={trials[p.key]?.status === 'running'} aria-label={`Try ${said(p)} on past work`}
+                  title={p.kind === 'command' ? `Runs it on the last ${tryOn} merged task${tryOn === 1 ? '' : 's'}. Nothing is changed and it costs nothing.` : `An agent reads each of the last ${tryOn} merged task${tryOn === 1 ? '' : 's'}. Nothing is changed.`}
+                  onClick={() => onTry(p)}>{p.kind === 'command' ? 'Try' : `Try (${tryOn} agent run${tryOn === 1 ? '' : 's'})`}</button>}
                 {p.changed && <button type="button" className="linkish" aria-label={`Put ${p.name} back as the engine ships it`} title="Back to the default" onClick={() => onProbe({ op: 'reset', key: p.key })}>Reset</button>}
                 {(p.own || (p.key === 'tests' && !unset(p))) && <button type="button" className="linkish" aria-label={p.key === 'tests' ? 'Clear the test command' : `Remove the probe ${p.name}`} onClick={() => onProbe({ op: 'remove', key: p.key })}>✕</button>}
               </td>}
             </tr>
-          ))}
+            {trials[p.key] && <tr className="step-probe-trial-row"><td colSpan={6}><TrialLine p={p} t={trials[p.key]} /></td></tr>}
+          </Fragment>))}
         </tbody>
       </table>
       {onProbe && !adding && <button type="button" className="linkish small" aria-label={`Add a probe to ${step}`} onClick={() => { setAdding(true); setEditing(null) }}>Add a probe</button>}

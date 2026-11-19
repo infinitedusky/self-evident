@@ -156,3 +156,32 @@ export const NoTestCommand: Story = {
     await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'edit', key: 'tests', name: 'Tests', runs: 'pnpm test' })
   },
 }
+
+const tried = {
+  lint: { status: 'done' as const, runs: 'pnpm lint', tasks: 5, when: '2 hours ago', results: [
+    { identifier: 'CEB-79', title: 'Audit export (sample)', pr: 412, pass: true, evidence: '', findings: [] }, { identifier: 'CEB-74', title: 'Scan summary (sample)', pr: 409, pass: true, evidence: '', findings: [] },
+    { identifier: 'CEB-70', title: 'Work email check (sample)', pr: 401, pass: false, evidence: 'frontend/src/scan/Otp.svelte: 2 problems (sample)', findings: [] },
+    { identifier: 'CEB-66', title: 'Finding fields (sample)', pr: 398, pass: true, evidence: '', findings: [] }, { identifier: 'CEB-61', title: 'Reports list (sample)', pr: 390, pass: true, evidence: '', findings: [] },
+  ] },
+  'req:telemetry': { status: 'done' as const, runs: 'An older wording (sample).', tasks: 5, when: 'yesterday', costUsd: '1.40', results: [
+    { identifier: 'CEB-79', title: 'Audit export (sample)', pr: 412, pass: false, evidence: 'sample', findings: ['a failed export logs nothing (sample)'] },
+  ] },
+  security: { status: 'running' as const, runs: 'backend-core:security-review', tasks: 5, results: [{ identifier: 'CEB-79', title: 'Audit export (sample)', pr: 412, pass: true, evidence: '', findings: [] }] },
+}
+/** A change tried on past work: under each probe, what it said of the app's last merged tasks. Offered, never required. Sample data. */
+export const TriedOnPastWork: Story = {
+  args: { open: ['build'], onProbe: fn(), onTry: fn(), tryOn: 5, trials: tried },
+  play: async ({ canvasElement, args }) => {
+    const c = within(canvasElement)
+    await expect(c.getByText('Tried on 5 merged tasks: 4 pass, 1 fail')).toBeVisible()
+    await expect(c.getByText(/before it was changed/)).toBeVisible() // Telemetry was reworded since its trial
+    await expect(c.getByText('Trying it on 5 merged tasks: 1 done…')).toBeVisible()
+    await userEvent.click(c.getByText('Tried on 5 merged tasks: 4 pass, 1 fail'))
+    await expect(c.getByText('frontend/src/scan/Otp.svelte: 2 problems (sample)')).toBeVisible()
+    await userEvent.click(c.getByRole('button', { name: 'Try Lint on past work' }))
+    await expect(args.onTry).toHaveBeenCalledWith(expect.objectContaining({ key: 'lint', runs: 'pnpm lint' }))
+    await expect(c.getByRole('button', { name: 'Try Telemetry on past work' })).toHaveTextContent('Try (5 agent runs)') // what it costs is on the button
+    await expect(c.getByRole('button', { name: 'Try Security review on past work' })).toBeDisabled() // one is running
+    await expect(c.queryByRole('button', { name: 'Try Acceptance criteria on past work' })).toBeNull(); await expect(c.queryByRole('button', { name: 'Try Licence scan on past work' })).toBeNull() // off: not tried
+  },
+}
