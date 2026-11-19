@@ -4942,7 +4942,7 @@ Not done: a builder that does not use an attached skill is recorded, not stopped
 cannot be reworded in place (remove it and add it again); the page follows the app's default workflow only, not a
 second one; a second repository's skills are still not offered; builders' skills have not run on a real build.
 
-### One press starts it, and stops it (Sandy, 2026-11-18: "that should be a button that starts it no?" … "starts and stops that?")
+## The page on a phone: one press starts it, and stops it (Sandy, 2026-11-18: "that should be a button that starts it no?" … "starts and stops that?")
 
 Setting a second computer up was a terminal command. Now the rail's 📱 shows wherever Tailscale is installed:
 **Open on a phone** runs `tailscale serve` for the page, **Turn off** takes it off. If the account has not allowed
