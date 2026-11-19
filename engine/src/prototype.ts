@@ -132,6 +132,12 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
  * at different APIs"). "Built the way we would ship it" was said everywhere and left room: this is how to tell.
  */
 export const DEPLOY_TEST = 'The test: it could be deployed as it stands and made real by configuration alone, by pointing its addresses and keys at the real services. If going live would need code changed (a stub inside the code, a hard-coded answer, a path that only the prototype takes), that part is not built yet.'
+/**
+ * Two rules the test implies, found on Cloaked (Sandy, 2026-11-19): a prototype's agent had inserted by hand the rows
+ * the feature was there to produce, and started its scan by calling the route, with the button never pressed.
+ */
+export const THROUGH_THE_PATH = 'Seed only what exists before the feature runs (companies, people, settings). What the feature itself makes (what it imports, computes or stores) is never seeded or inserted by hand: it arrives the way it will in production, in through the integration point from a stand-in. A row you wrote where the feature should have written it is a faked layer.'
+export const FROM_THE_SCREEN = 'Try each thing the way the person will, from the screen: press the button, submit the form, open the page. Calling a route or running a job by hand shows that part works, not that the path to it does. Say in your report anything you did not try from the screen.'
 export type Depth = 'full' | 'rough'
 export const depthOf = (own: unknown, appSetup: unknown): Depth =>
   own === 'full' || own === 'rough' ? own : (appSetup as { prototype_depth?: string } | null)?.prototype_depth === 'rough' ? 'rough' : 'full'

@@ -50,6 +50,8 @@ approach altogether) is the prototype analysis's job, and the build follows what
    shows it and where. A criterion marked **final build only** is not the prototype's: skip it. Only the task's agent
    or the person marks one that way. For each one, the running prototype shows it working through the whole path:
    in through the real integration point, into storage, out through the API, onto the screen the task names.
+   **Try each one the way the person will, from the screen**: press the button, submit the form, open the page.
+   Calling a route or running a job by hand shows that part works, not that the path to it does.
 2. **Real data shapes.** Stub responses are recorded from the real service whenever possible (a real run, captured
    once, kept out of git if it holds real people's data, with a committed copy whose people are invented but whose
    shape is identical). When nothing real can be had, write the stand-in from the best reference and say plainly that
@@ -59,6 +61,10 @@ approach altogether) is the prototype analysis's job, and the build follows what
    on the branch: write one with `prototype_data` (write), keep the current data with it (save), load one with it
    (reset). Keep scenarios that show each requirement, including empty and edge cases (nothing found, many found,
    re-run). Do not add sample data files or a `.prototype` folder to the repository.
+   **Seed only what exists before the feature runs** (companies, people, settings). What the feature itself makes
+   (what it imports, computes or stores) is never seeded or inserted by hand: it arrives the way it will in
+   production, in through the integration point from a stand-in. A row you wrote where the feature should have
+   written it is a faked layer.
 4. **It answers the hard questions by trying them.** Where the brief leaves a design choice open (one record per scan
    or per finding, where a field is stored, how duplicates are avoided), pick one, build it properly, and note what it
    showed.
@@ -107,7 +113,8 @@ Duplicated or clumsy code is fine; a skipped or faked layer is not.
 When you say you are done, report against the checklist, one line per requirement, gaps first:
 
 - **Not met**: why, and what it would take. Plainly, before anything else.
-- **Met**: how to see it in the running prototype (page, record, scenario, script).
+- **Met**: how to see it in the running prototype (page, record, scenario, script). Say which you tried from the
+  screen and which only by calling a route or running a job; the second kind is not finished.
 
 Then the guide: that it is set, and how many steps.
 

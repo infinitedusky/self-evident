@@ -5266,3 +5266,11 @@ switches that point elsewhere is the configuration, and anything that would need
 
 A rough prototype is unchanged: it is thrown away by design and says so. Not known: which agent on Cloaked needed
 telling, and whether that prototype was a rough one or used an app's own `prototype` skill, which wins over ours.
+
+Two rules the test implies, added the same day from that task agent's report (it had inserted Brad's 104 findings by
+hand before being told, the other people's rows still were, and the scan was started by calling the route):
+- **What the feature makes comes in through the path.** Seed only what exists before the feature runs (companies,
+  people, settings). What it imports, computes or stores is never seeded or inserted by hand. Our own instructions
+  invited it: "sample data lives in scenarios, made-up rows by table" did not say which tables.
+- **Tried from the screen.** Each thing is tried the way the person will; a route called by hand is said so in the
+  report, and is not finished.
