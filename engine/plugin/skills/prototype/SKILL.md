@@ -9,7 +9,11 @@ description: Use when building a prototype for a task, idea or project in Self E
 
 A prototype answers one question with evidence: **will this work, built the way we would ship it?**
 
-So the prototype's code is **essentially the code we would go live with**: the real integration point, the real
+It works exactly as the thing we are building will. **The test: it could be deployed as it stands and made real by
+configuration alone**, by pointing its addresses and keys at the real services. If going live would need code changed
+(a stub inside the code, a hard-coded answer, a path that only the prototype takes), that part is not built yet.
+
+So the prototype's code is **the code we would go live with**: the real integration point, the real
 parsing, the real schema and migration, the real storage and queries, the real API, the real screens, written the way
 the repository writes them. The only things that are not real are **outside the system's edges** (vendors, other
 services, identity, real people's data), and those are swapped in through **seams the production code already has or
@@ -27,6 +31,8 @@ approach altogether) is the prototype analysis's job, and the build follows what
 
 ## What it is not
 
+- **Not a demo.** Something that looks right on the screen and could not be deployed has shown nothing. Ask of every
+  part: what would have to change, other than configuration, for this to be live?
 - **Not a UI guide.** Screens on sample data in the browser answer *what it should look like*. That is the job of
   sketches and mockups. A branch someone called a "prototype" that only renders screens is a starting point to build
   on, not a prototype.
@@ -44,6 +50,8 @@ approach altogether) is the prototype analysis's job, and the build follows what
    shows it and where. A criterion marked **final build only** is not the prototype's: skip it. Only the task's agent
    or the person marks one that way. For each one, the running prototype shows it working through the whole path:
    in through the real integration point, into storage, out through the API, onto the screen the task names.
+   **Try each one the way the person will, from the screen**: press the button, submit the form, open the page.
+   Calling a route or running a job by hand shows that part works, not that the path to it does.
 2. **Real data shapes.** Stub responses are recorded from the real service whenever possible (a real run, captured
    once, kept out of git if it holds real people's data, with a committed copy whose people are invented but whose
    shape is identical). When nothing real can be had, write the stand-in from the best reference and say plainly that
@@ -53,6 +61,10 @@ approach altogether) is the prototype analysis's job, and the build follows what
    on the branch: write one with `prototype_data` (write), keep the current data with it (save), load one with it
    (reset). Keep scenarios that show each requirement, including empty and edge cases (nothing found, many found,
    re-run). Do not add sample data files or a `.prototype` folder to the repository.
+   **Seed only what exists before the feature runs** (companies, people, settings). What the feature itself makes
+   (what it imports, computes or stores) is never seeded or inserted by hand: it arrives the way it will in
+   production, in through the integration point from a stand-in. A row you wrote where the feature should have
+   written it is a faked layer.
 4. **It answers the hard questions by trying them.** Where the brief leaves a design choice open (one record per scan
    or per finding, where a field is stored, how duplicates are avoided), pick one, build it properly, and note what it
    showed.
@@ -101,9 +113,14 @@ Duplicated or clumsy code is fine; a skipped or faked layer is not.
 When you say you are done, report against the checklist, one line per requirement, gaps first:
 
 - **Not met**: why, and what it would take. Plainly, before anything else.
-- **Met**: how to see it in the running prototype (page, record, scenario, script).
+- **Met**: how to see it in the running prototype (page, record, scenario, script). Say which you tried from the
+  screen and which only by calling a route or running a job; the second kind is not finished.
 
 Then the guide: that it is set, and how many steps.
+
+Then the test, answered plainly: what would have to change to deploy this, beyond configuration? List every address,
+key and switch that points somewhere else in the prototype (that list is the configuration), and anything that would
+need code changed (each one is a gap, and goes under Not met).
 
 Then: each seam and stub used (existing or added), what is assumed rather than recorded from the real service, and
 what was hard or surprising; the analysis reads it.

@@ -119,6 +119,19 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
  * every open Self Evident with the prototype beside it. With a brief, the conversation starts building at once.
  */
 /**
+ * The test of a full prototype, in one sentence, said the same to every agent that makes, briefs or judges one
+ * (Sandy, 2026-11-19: "I had to really explain to this agent what the goal here was. That we actually want this thing
+ * to function exactly like what we're building, and that we should be able to technically deploy it and just point it
+ * at different APIs"). "Built the way we would ship it" was said everywhere and left room: this is how to tell.
+ */
+export const DEPLOY_TEST = 'The test: it could be deployed as it stands and made real by configuration alone, by pointing its addresses and keys at the real services. If going live would need code changed (a stub inside the code, a hard-coded answer, a path that only the prototype takes), that part is not built yet.'
+/**
+ * Two rules the test implies, found on Cloaked (Sandy, 2026-11-19): a prototype's agent had inserted by hand the rows
+ * the feature was there to produce, and started its scan by calling the route, with the button never pressed.
+ */
+export const THROUGH_THE_PATH = 'Seed only what exists before the feature runs (companies, people, settings). What the feature itself makes (what it imports, computes or stores) is never seeded or inserted by hand: it arrives the way it will in production, in through the integration point from a stand-in. A row you wrote where the feature should have written it is a faked layer.'
+export const FROM_THE_SCREEN = 'Try each thing the way the person will, from the screen: press the button, submit the form, open the page. Calling a route or running a job by hand shows that part works, not that the path to it does. Say in your report anything you did not try from the screen.'
+/**
  * How thoroughly a prototype is built (Sandy, 2026-11-15: "prototypes can be set as being full or rough").
  * - full: the thing built the way we would ship it, every layer real, so an analysis and an ADR can be read out of it.
  * - rough: built quickly to learn from and to see that it works. The one thing in doubt is real; everything around it
