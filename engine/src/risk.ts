@@ -64,6 +64,7 @@ const ENGINE: Record<string, [Risk, string]> = {
   set_smoke_setup: ['moderate', 'changes the scripts and made-up data this app is smoke tested with; they run on this computer when a smoke test is started'],
   set_prototype_command: ['moderate', 'changes how this app\'s prototypes start'],
   set_prototype_cleanup: ['moderate', 'changes the commands run when this app\'s prototypes are stopped or discarded'],
+  prototype_stand_in: ['moderate', "sets a command the engine runs with a prototype, in a folder outside the repository, and restarts the prototype"],
   prototype_data: ['cheap', "rebuilds a prototype's made-up data, or keeps it as a scenario in Self Evident"],
   set_prototype_database: ['moderate', "changes where this app's prototypes get their databases"],
   share: ['expensive', 'makes a public address: anyone with it can open what it shows'],

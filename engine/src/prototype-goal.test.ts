@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { CONTRACTS } from './contracts.js'
-import { DEPLOY_TEST, FROM_THE_SCREEN, THROUGH_THE_PATH } from './prototype.js'
+import { DEPLOY_TEST, FROM_THE_SCREEN, STAND_INS_STAY, THROUGH_THE_PATH } from './prototype.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const plain = (s: string) => s.replace(/\*\*/g, '').replace(/\s+/g, ' ')
@@ -27,6 +27,11 @@ describe('what a prototype is for', () => {
     expect(skill).toContain('What the feature itself makes (what it imports, computes or stores) is never seeded or inserted by hand')
     expect(skill).toContain('Try each one the way the person will, from the screen')
     expect(talk).toContain('${THROUGH_THE_PATH}'); expect(talk).toContain('${FROM_THE_SCREEN}')
+  })
+  it('a stand-in is the prototype\'s, set with the tool and never left in /tmp: said to the agent and in the skill', () => {
+    expect(STAND_INS_STAY).toContain('prototype_stand_in'); expect(STAND_INS_STAY).toContain('$PROTOTYPE_HOME')
+    expect(readFileSync(join(here, 'talk.ts'), 'utf8')).toContain('${STAND_INS_STAY}')
+    expect(plain(readFileSync(join(here, '..', 'plugin', 'skills', 'prototype', 'SKILL.md'), 'utf8'))).toContain('A stand-in is part of the prototype. Set each one with `prototype_stand_in`')
   })
   it('the settings page says it in a line', () => {
     expect(CONTRACTS.prototype.stages.find((s) => s.key === 'do')?.what).toContain('deployable as it stands')

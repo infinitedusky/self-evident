@@ -245,6 +245,8 @@ export interface Prototype {
   /** How thoroughly it was built: full, or rough (quick, to learn; not a base for the build). */
   depth?: 'full' | 'rough' | null
   scenario: string | null; database?: string | null; scenarios?: string[]; up?: boolean; log?: string[]
+  /** What it runs in place of what is outside the system (the engine's stand-ins.ts): started and stopped with it. */
+  standIns?: { key: string; name: string; what?: string; running: boolean; url: string | null }[]
   /** What someone opening its shared link is told, in the tab at the bottom right. */
   guide?: Guide | null
 }

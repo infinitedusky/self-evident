@@ -23,6 +23,7 @@ import { guideOf, hasGuide, NO_GUIDE, recheckGuide, staleSays } from './share-gu
 import { morePorts, straySays, straysOf } from './ports.js'
 import { databaseExists, databaseName, databaseUrl, dropDatabase, dropScenarios, listScenarios, rebuild, save, scenarioTables, writeScenario, type PrototypeDb, type Tables } from './prototype-data.js'
 import { endTalk, say, showTalk, startPrototypeTalk } from './talk.js'
+import { cleanStandIns, envOf, forgetStandIns, homeOf, standInKey, standInsStatus, startStandIns, stopStandIns, withStandIn, type StandIn } from './stand-ins.js'
 
 const STOP_TIMEOUT_MS = Number(process.env.PROTOTYPE_STOP_TIMEOUT_MS ?? 120_000)
 const running = new Map<string, { proc: ChildProcess; log: string[]; given?: number[]; stray?: { at: number; ports: number[] } }>()
@@ -42,7 +43,8 @@ const slugOf = (p: typeof prototype.$inferSelect) => { const b = basename(p.path
 /** What the prototype's server and its conversation are given: the app's database variable, at its own database. */
 export async function prototypeEnv(p: typeof prototype.$inferSelect): Promise<Record<string, string>> {
   const { dbCfg } = await setupOf(p.appId)
-  return dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slugOf(p)) } : {}
+  // PROTOTYPE_HOME: its own folder outside every repository, where its stand-ins run and recorded responses are kept (stand-ins.ts).
+  return { PROTOTYPE_HOME: homeOf(p.id), ...(dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slugOf(p)) } : {}) }
 }
 
 async function rowOf(id: string) {
@@ -79,7 +81,7 @@ export async function prototypeStatus(id: string) {
   // Once it answers: does it listen anywhere it was not told to?
   const stray = up ? await straysOf(running.get(id), (ports) => emit(p, 'prototype.stray_port', 'engine', { ports, note: straySays(ports) })) : []
   const staleGuide = guideOf(p)?.stale ?? []
-  return { ...p, ...data, ...(staleGuide.length ? { guideNote: staleSays(staleGuide) } : {}), ...(hasGuide(p) ? {} : { needsGuide: NO_GUIDE }), /** Its server has never been started: its agent starts it once it is set up. */ ...(p.status === 'stopped' && p.port === null && cmd ? { notStarted: true } : {}), cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
+  return { ...p, ...data, standIns: standInsStatus(p.id, cleanStandIns(p.standIns)), home: homeOf(p.id), ...(staleGuide.length ? { guideNote: staleSays(staleGuide) } : {}), ...(hasGuide(p) ? {} : { needsGuide: NO_GUIDE }), /** Its server has never been started: its agent starts it once it is set up. */ ...(p.status === 'stopped' && p.port === null && cmd ? { notStarted: true } : {}), cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
 }
 
 export async function listPrototypes(appId: string) {
@@ -102,8 +104,11 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
   }
   const port = await freePort(p.port ?? 0)
   const more = await morePorts()
+  // Its stand-ins first, each on a port of its own; the server is given the variables that point the app at them.
+  const standIns = cleanStandIns(p.standIns)
+  const pointed = envOf(p.id, standIns, await startStandIns(p.id, standIns, p.path), p.path)
   // Its own process group, so stopping it also stops what the command started (a package manager's dev server).
-  const proc = spawn('sh', ['-c', cmd], { cwd: p.path, env: { ...process.env, ...(await prototypeEnv(p)), PORT: String(port), ...more.env, BROWSER: 'none', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+  const proc = spawn('sh', ['-c', cmd], { cwd: p.path, env: { ...process.env, ...(await prototypeEnv(p)), ...pointed, PORT: String(port), ...more.env, BROWSER: 'none', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   const log: string[] = []
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
@@ -130,6 +135,8 @@ export const DEPLOY_TEST = 'The test: it could be deployed as it stands and made
  * the feature was there to produce, and started its scan by calling the route, with the button never pressed.
  */
 export const THROUGH_THE_PATH = 'Seed only what exists before the feature runs (companies, people, settings). What the feature itself makes (what it imports, computes or stores) is never seeded or inserted by hand: it arrives the way it will in production, in through the integration point from a stand-in. A row you wrote where the feature should have written it is a faked layer.'
+/** Where a stand-in lives (stand-ins.ts): said to the prototype's agent, and in the skill. */
+export const STAND_INS_STAY = 'What stands in for something outside the system (a vendor\'s API, another service) is a stand-in of this prototype, set with prototype_stand_in: a command that serves on $PORT and the variables that point the app at it. The engine starts it with the prototype and stops it with it, so it is still there after a restart or a reset. Never start one by hand or keep one, or what it serves, in /tmp. What it serves is kept in its own folder outside the repository ($PROTOTYPE_HOME): recorded responses from the real service go there, real people\'s among them, and never on the branch.'
 export const FROM_THE_SCREEN = 'Try each thing the way the person will, from the screen: press the button, submit the form, open the page. Calling a route or running a job by hand shows that part works, not that the path to it does. Say in your report anything you did not try from the screen.'
 /**
  * How thoroughly a prototype is built (Sandy, 2026-11-15: "prototypes can be set as being full or rough").
@@ -181,13 +188,16 @@ async function openTab(p: typeof prototype.$inferSelect) {
 }
 
 /** Stop its server and what it started; resolves once it has exited (or after a few seconds). */
-function kill(id: string): Promise<void> {
+async function kill(id: string): Promise<void> {
   const m = running.get(id)
   running.delete(id)
-  if (!m || m.proc.exitCode !== null || m.proc.signalCode !== null || !m.proc.pid) return Promise.resolve()
-  const gone = new Promise<void>((r) => { m.proc.once('exit', () => r()); setTimeout(r, 3000) })
-  try { process.kill(-m.proc.pid, 'SIGTERM') } catch { m.proc.kill('SIGTERM') }
-  return gone
+  const standIns = stopStandIns(id) // they stop and start with the server, so a restart brings them back as they are set
+  if (m && m.proc.exitCode === null && m.proc.signalCode === null && m.proc.pid) {
+    const gone = new Promise<void>((r) => { m.proc.once('exit', () => r()); setTimeout(r, 3000) })
+    try { process.kill(-m.proc.pid, 'SIGTERM') } catch { m.proc.kill('SIGTERM') }
+    await gone
+  }
+  await standIns
 }
 
 /**
@@ -239,6 +249,7 @@ export async function discardPrototype(id: string, actor = 'person') {
   const { repoPath, dbCfg } = await setupOf(p.appId)
   if (dbCfg) await dropDatabase(dbCfg, slugOf(p)).catch(() => {})
   await dropScenarios(p.appId, p.id) // its own made-up data goes with it; what was shared with the app stays
+  await forgetStandIns(p.id) // and its folder outside the repository, with what was recorded there
   if (repoPath) { await removeWorktree(repoPath, p.path); await git(repoPath, ['branch', '-D', p.branch], { allowFail: true }) }
   await db.update(prototype).set({ status: 'discarded', updatedAt: new Date() }).where(eq(prototype.id, id))
   await emit(p, 'prototype.discarded', actor)
@@ -331,6 +342,29 @@ export async function setPrototypeCleanup(appId: string, i: { stop?: string; dis
   await setupOf(appId) // an app there is
   const next = await patchSetup(appId, { ...(i.stop === undefined ? {} : { prototype_stop_cmd: i.stop.trim() || null }), ...(i.discard === undefined ? {} : { prototype_discard_cmd: i.discard.trim() || null }) })
   return { prototype_stop_cmd: (next.prototype_stop_cmd as string | undefined) ?? null, prototype_discard_cmd: (next.prototype_discard_cmd as string | undefined) ?? null }
+}
+
+/**
+ * A prototype's stand-ins (stand-ins.ts). Setting or removing one restarts the prototype when it is running, so its
+ * server is given the new variables: a stand-in the server was not started with points at nothing.
+ */
+export async function setStandIn(id: string, one: Partial<StandIn>, actor = 'agent') {
+  const p = await rowOf(id)
+  if (p.status === 'discarded') throw new PlanError('that prototype was discarded')
+  const next = withStandIn(p.standIns, one)
+  if (!next) throw new PlanError('a stand-in needs a name and a command that serves on $PORT')
+  if (!next.some((s) => s.key === standInKey(String(one.key || one.name)))) throw new PlanError('a prototype has at most eight stand-ins')
+  await db.update(prototype).set({ standIns: next, updatedAt: new Date() }).where(eq(prototype.id, id))
+  await emit(p, 'prototype.stand_in', actor, { name: one.name, set: true })
+  return alive(id) ? runPrototype(id, actor, { restart: true }) : prototypeStatus(id)
+}
+export async function removeStandIn(id: string, key: string, actor = 'agent') {
+  const p = await rowOf(id)
+  const was = cleanStandIns(p.standIns), k = standInKey(key)
+  if (!was.some((s) => s.key === k)) throw new PlanError(`no stand-in "${key}" on that prototype: it has ${was.map((s) => s.key).join(', ') || 'none'}`)
+  await db.update(prototype).set({ standIns: was.filter((s) => s.key !== k), updatedAt: new Date() }).where(eq(prototype.id, id))
+  await emit(p, 'prototype.stand_in', actor, { name: key, set: false })
+  return alive(id) ? runPrototype(id, actor, { restart: true }) : prototypeStatus(id)
 }
 
 export function stopPrototypes() { for (const id of [...running.keys()]) void kill(id) }

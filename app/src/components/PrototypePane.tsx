@@ -72,7 +72,7 @@ function OnePrototype({ id, path, onNavigate }: { id: string; path: string; onNa
   const talk = () => void engine.prototypeTalk(id).catch((e) => setError(String(e.message ?? e)))
 
   if (!p) return <div className="tab-page" data-component="PrototypePane">{error ? <div className="empty bad">{error}</div> : <p className="muted">Loading…</p>}</div>
-  if (p.status === 'running' && p.up && p.url) return <Frame p={p} path={path} onNavigate={onNavigate} onStop={act(engine.stopPrototype)} onRestart={act(engine.restartPrototype)} onTalk={talk} data={<Data p={p} onDone={refresh} />} />
+  if (p.status === 'running' && p.up && p.url) return <Frame p={p} path={path} onNavigate={onNavigate} onStop={act(engine.stopPrototype)} onRestart={act(engine.restartPrototype)} onTalk={talk} data={<><StandIns p={p} /><Data p={p} onDone={refresh} /></>} />
   // Nothing to open, but its guide has commands: it is tried by running them, so they are the page.
   if (p.status !== 'discarded' && p.guide?.steps.some((s) => s.run)) return (
     <div className="tab-page preview-runs" data-component="PrototypePane">
@@ -137,6 +137,22 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Pr
         <iframe key={`${at}#${reloads}#${p.updatedAt ?? ''}`} /* a restart reloads it */ src={base + at} title={p.title} style={width ? { width, maxWidth: '100%' } : undefined} />
         <PrototypeGuide id={p.id} guide={p.guide} at={at} onGo={go} />
       </div>
+    </div>
+  )
+}
+
+/**
+ * What it runs in place of what is outside the system (a vendor's API): each stand-in by name, and whether it is up.
+ * They start and stop with the prototype; its agent sets them. A reading line: nothing to press. After a status page's
+ * row of services, each with a dot.
+ */
+function StandIns({ p }: { p: Prototype }) {
+  const list = p.standIns ?? []
+  if (!list.length) return null
+  return (
+    <div className="proto-data" role="group" aria-label="Stand-ins">
+      <span className="faint">Stands in</span>
+      {list.map((s) => <span key={s.key} className={`badge ${s.running ? 'ok' : 'warn'}`} title={`${s.what ? `${s.what}. ` : ''}${s.running ? `Running at ${s.url}; the prototype is pointed at it.` : 'Not running: restart the prototype to bring it back.'}`}>{s.name}{s.running ? '' : ' · not running'}</span>)}
     </div>
   )
 }

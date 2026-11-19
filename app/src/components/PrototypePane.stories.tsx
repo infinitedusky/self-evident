@@ -84,6 +84,20 @@ export const ItsData: Story = {
     await expect(c.getByRole('textbox', { name: 'Scenario name' })).toBeInTheDocument()
   },
 }
+/** A prototype that reaches a vendor through a stand-in: named beside its data, with whether each is up. Sample data. */
+export const WithStandIns: Story = {
+  args: { id: running.id, path: at },
+  beforeEach: withEngine({ prototypes: [{ ...running, standIns: [
+    { key: 'vendor', name: 'Vendor API (sample)', what: 'The scan vendor\'s API, serving recorded responses (sample)', running: true, url: 'http://localhost:6123' },
+    { key: 'mail', name: 'Mail (sample)', running: false, url: null },
+  ] }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const group = within(await c.findByRole('group', { name: 'Stand-ins' }))
+    await expect(group.getByText('Vendor API (sample)')).toHaveAttribute('title', expect.stringContaining('Running at http://localhost:6123'))
+    await expect(group.getByText('Mail (sample) · not running')).toBeInTheDocument()
+  },
+}
 /** An app with no database set: no data control. */
 export const NoDatabase: Story = { args: { id: running.id, path: at }, beforeEach: withEngine({ prototypes: [{ ...running, database: null, scenarios: [] }] }) }
 /** Its server is starting: the last lines it printed. */
