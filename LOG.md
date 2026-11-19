@@ -5358,3 +5358,16 @@ prototype has the same button, in the second row of its bar.
 Not done: a tool for the prototype's agent to bring main up (the button is the person's); today's main as a second
 choice; an app whose command uses fixed ports or one compose project name cannot run twice, here as in the smoke
 test (the page already says when a server listens on a port it was not given).
+
+## Storybook kept outside the repo (asked for by an app's own agent, relayed by Sandy, 2026-11-19: "Storybook outside the repo … run by a command")
+
+An app whose repository must stay free of Storybook could not have mockups: a worktree got its own Storybook only
+with `.storybook/` in git, the port was added to the end of the command, and the check and Set up assumed the repo.
+Now the integration has a switch, **Kept outside the repo**. On, the command is a script of the person's own, run
+for every checkout with `$WORKTREE` and `$PORT` and nothing added; the check only asks it for its stories; Set up is
+never offered; builders are not held to stories in the repo; and a conversation's agent is told where stories go
+(the new **Where stories go** value) and never to commit Storybook's files. In the repo, a command that names
+`$PORT` is run as written too. How: docs/integrations/storybook.md, "Kept outside the repo".
+
+Not done: the screen map for a Storybook outside the repo; the house defaults (there are none outside: the command
+must be set).

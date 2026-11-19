@@ -271,6 +271,8 @@ export const sampleIntegrations: FactorySettings['integrations'] = [
       { key: 'on', label: 'Mockups in Storybook', kind: 'switch', required: true, states: { on: 'this app’s mockups are stories, checked against the standard', off: 'no Storybook for this app' } },
       { key: 'cmd', label: 'Command', placeholder: 'default: the repo’s storybook script, with --no-open' },
       { key: 'url', label: 'URL', placeholder: 'default: http://localhost:6006, or the port the script names' },
+      { key: 'outside', label: 'Kept outside the repo', kind: 'switch', states: { on: 'run by the command for each checkout, given $WORKTREE and $PORT; nothing is installed into the repo, and the check only asks it for its stories', off: 'in the repo, checked against the standard' } },
+      { key: 'stories', label: 'Where stories go', placeholder: 'told to agents, when the Storybook is kept outside the repo' },
     ],
     calls: true, perApp: true, docs: 'https://github.com/zigbang/storybook-addon-story-flow',
     actions: [

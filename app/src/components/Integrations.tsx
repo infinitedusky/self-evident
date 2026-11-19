@@ -155,8 +155,9 @@ function Page({ i, base, values, status, kept, onKeys, scope, appId, all, onSave
     } catch (e) { setActed(err(e)) }
   }
   const linkOf = (a: Integration['actions'][number]) => (check && check !== 'busy' ? check.links?.find((l) => l.label === a.name) : undefined)
-  const setup = i.actions.find((a) => a.kind === 'ask') // one button under the check, when it fails
-  const shown = buttons ? i.actions.filter((a) => a.kind !== 'ask') : i.actions
+  const outside = i.key === 'storybook' && values.outside?.value === 'true' // kept outside the repo: nothing is ever installed into it, so there is no set-up to offer
+  const setup = outside ? undefined : i.actions.find((a) => a.kind === 'ask') // one button under the check, when it fails
+  const shown = (buttons ? i.actions.filter((a) => a.kind !== 'ask') : i.actions).filter((a) => !outside || a.kind === 'start') // outside the repo: no set-up, and no map to open
   const actions = (
     <div className="settings-group">
       <h3 className="settings-h3">{i.role === 'Runner' ? 'On a ticket' : buttons || i.actions.some((a) => a.kind) ? 'From here' : 'In a workflow'}</h3>
@@ -237,6 +238,7 @@ function Page({ i, base, values, status, kept, onKeys, scope, appId, all, onSave
             <p className="settings-desc">
               {!on ? <>Nothing to check while it is off. </>
                 : i.key === 'tkt' ? <>Whether {i.name} can run this app's tickets from here: the runner on the engine's PATH, a local checkout with the tracker guide pointing at this app, and its own doctor passing there. </>
+                : outside ? <>Whether this app's Storybook answers and lists its stories. It is kept outside the repo: nothing in the repo is read, and nothing is installed into it. </>
                 : <>Whether this app's Storybook meets the standard: Storybook 10 in the checkout, the screen map add-on installed and wired, its stylesheet imported, the flow files kept out of the story tests, and a map; then whether it is answering at the URL. </>}
               Installed and kept working outside Self Evident{i.docs && <>: <a href={i.docs} target="_blank" rel="noreferrer">{i.key === 'storybook' ? 'the screen map add-on' : `about ${i.name}`} ↗</a></>}.
             </p>

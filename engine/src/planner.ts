@@ -24,7 +24,7 @@ import { getStep } from './work.js'
 import { accountEnv } from './account.js'
 import { addSubIssues, PlanError, projectGraph, type NewSubIssue } from './projects.js'
 import { ensureSolo } from './solo.js'
-import { hasStorybook } from './storybook.js'
+import { storiesLead } from './storybook.js'
 import { referencePrompt, referencesOf, type Reference } from './references.js'
 
 export interface ProposeInput {
@@ -297,7 +297,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
     runId, issueId, projectId: t.projectId, appId: a.id, attempt, base, oneGo,
     input: {
       repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, acceptance: acceptanceOf(t).length ? acceptanceLines(acceptanceOf(t)) : null, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, analysis: (await getStep({ issueId }, 'analysis'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
-      testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), requirements: inForce(setup, g.project.requirements, wf?.requirements), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
+      testCmd: setup.test_cmd, storybook: storiesLead(setup), references: await referencesOf(a.id), requirements: inForce(setup, g.project.requirements, wf?.requirements), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }
 }

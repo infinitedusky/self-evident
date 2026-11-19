@@ -11,7 +11,7 @@
  * Every integration is the service's official API or SDK, with no paid middleman (Sandy, 2026-10-29).
  */
 import { LinearClient } from '@linear/sdk'
-import { checkStorybook, installAsk, installStorybook, storybookDefaults, type Check, type StorybookContext, type StorybookDeps } from './storybook.js'
+import { checkStorybook, installAsk, installStorybook, OUTSIDE, storybookDefaults, type Check, type StorybookContext, type StorybookDeps } from './storybook.js'
 import { checkTkt, setupTkt, type Deps as TktDeps, type TktContext } from './tkt.js'
 
 /**
@@ -60,6 +60,8 @@ export const INTEGRATIONS: Integration[] = [
       { key: 'on', label: 'Mockups in Storybook', kind: 'switch', required: true, states: { on: 'this app\'s mockups are stories, checked against the standard', off: 'no Storybook for this app' } },
       { key: 'cmd', label: 'Command', placeholder: 'default: the repo\'s storybook script, with --no-open' },
       { key: 'url', label: 'URL', placeholder: 'default: http://localhost:6006, or the port the script names' },
+      { key: 'outside', label: 'Kept outside the repo', kind: 'switch', states: { on: 'run by the command for each checkout, given $WORKTREE and $PORT; nothing is installed into the repo, and the check only asks it for its stories', off: 'in the repo, checked against the standard' } },
+      { key: 'stories', label: 'Where stories go', placeholder: 'told to agents, when the Storybook is kept outside the repo' },
     ],
     calls: true, perApp: true, docs: 'https://github.com/zigbang/storybook-addon-story-flow',
     actions: [
@@ -235,6 +237,7 @@ export async function setupIntegration(key: string, values: Record<string, strin
     if (!local?.storybook) throw new IntegrationError('Storybook is set per app: set it up from an app\'s Integrations')
     if (st.state === 'off') return { done: false, did: [], ask: null, detail: 'Storybook is off for this app: switch it on first.' }
     const ctx = local.storybook.ctx
+    if (ctx.outside) return { done: false, did: [], ask: null, detail: OUTSIDE }
     if (!ctx.repoPath) return { done: false, did: [], ask: null, detail: 'No local checkout under Repo: Storybook is installed in the repo. Set it under Settings › Repo first.' }
     const inst = await installStorybook(ctx, local.storybook.deps)
     const d = await storybookDefaults(ctx.repoPath) // the installer may have just made the script the defaults come from

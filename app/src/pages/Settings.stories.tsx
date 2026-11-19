@@ -288,6 +288,20 @@ export const AllAppsTkt: Story = { parameters: { route: { path: '/settings/:sect
 export const AppStorybook: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/storybook` } }, beforeEach: withEngine({ check: storybookCheck }) }
 export const AppStorybookNoMap: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/storybook` } }, beforeEach: withEngine({ check: { ok: false, detail: "Storybook is there (web), the screen map isn't: @zigbang/storybook-addon-story-flow isn't installed. Set up Storybook (the button below) does it." } }) }
 export const AppStorybookNotSet: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/storybook` } }, beforeEach: withEngine({ appSettings: { ...appSettings, integrations: { ...appSettings.integrations, storybook: { on: { value: null, from: null }, cmd: { value: null, from: null }, url: { value: null, from: null } } }, status: { ...appSettings.status, storybook: { state: 'off', missing: [], keyVar: null } } } }) }
+/** A Storybook kept outside the repo (made-up command): run by a script for each checkout, checked only by asking it; even when the check fails, no set-up is offered, since nothing is ever installed into the repo. */
+export const AppStorybookOutside: Story = {
+  parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/storybook` } },
+  beforeEach: withEngine({
+    appSettings: { ...appSettings, integrations: { ...appSettings.integrations, storybook: { on: { value: 'true', from: 'app' }, cmd: { value: '~/tools/storybook/run.sh "$WORKTREE" "$PORT"', from: 'app' }, url: { value: null, from: null }, outside: { value: 'true', from: 'app' }, stories: { value: 'Next to the component, hidden from git.', from: 'app' } } } },
+    check: { ok: false, detail: 'Something answers at http://localhost:6123, but it lists no stories (index.json): the command may be serving something else there.' },
+  }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/lists no stories/)).toBeVisible()
+    await expect(c.getByText(/nothing is installed into it/)).toBeVisible()
+    await expect(c.queryByRole('button', { name: 'Set up Storybook' })).toBeNull()
+  },
+}
 export const AllAppsStorybook: Story = { parameters: { route: { path: '/settings/:section/:item', url: '/settings/integrations/storybook' } } }
 /** An app's prototype settings: how its server starts and where its throwaway databases go. */
 export const AppPrototype: Story = {
