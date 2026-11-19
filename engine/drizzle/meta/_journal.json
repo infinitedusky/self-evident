@@ -288,6 +288,13 @@
       "when": 1795048042240,
       "tag": "0040_project_closed",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1795104671007,
+      "tag": "0041_probe_trial",
+      "breakpoints": true
     }
   ]
 }
