@@ -68,6 +68,7 @@ describe('the list a build is checked against', () => {
     const marked: Criterion[] = [criteria[0], { ...criteria[1], built: false, builtEvidence: 'the second run adds a row' }]
     const unmet = unmetOf(marked, got, required)
     expect(unmet.map((u) => u.id)).toEqual(['ac_2', 'req_telemetry'])
+    expect(unmetOf(marked, got, required.map((r) => (r.key === 'telemetry' ? { ...r, blocks: false } : r))).map((u) => u.id)).toEqual(['ac_2']) // set to report only: not sent back
     const f = finishBrief(unmet, 2)
     expect(f).toContain('these 2 not done (round 2 of 3)'); expect(f).toContain('[ac_2] Running it twice makes no duplicates (sample)\n  Missing: the second run adds a row'); expect(f).toContain('[req_telemetry] Telemetry:')
     expect(finishBrief([unmet[0]], 1)).toMatch(/^A check of what was built found this not done\. Do it, and nothing else/)

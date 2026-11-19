@@ -5004,3 +5004,14 @@ This replaces the entry above ("A project is closed by a person, last"), which r
 Not done: nothing tells the person a merged task is waiting to be closed (it is not under "needs you"); a closed task
 cannot be opened again from its page; a task whose pull request was closed without being merged cannot be closed,
 only canceled; Linear now sees such a task as In review until it is closed, where it saw Done at the merge.
+
+## What a build is held to can be edited, and anything on it can report only (Sandy, 2026-11-19: "there is currently no way to edit a record, in the verify section, and there is no way to set blocks or reports")
+
+Settings › Skills, Build › Verify, while changing:
+- Every row but the acceptance criteria has a Blocks / Reports choice, in place of a badge that was a button nobody
+  could tell was one. A new probe has the same choice as it is added.
+- A judged one (a requirement) can report only too: `blocks: false` on the requirement. An unmet one is still marked
+  on the list and the pull request, and the build is not sent back for it nor counted as stuck.
+- The app's own (a command, a reviewer skill, a judged sentence) has Edit: its row becomes its fields, name and what
+  it runs. Its key and kind stay, so results already recorded still belong to it. The engine's probes and the test
+  command (Landing) are not edited here.
