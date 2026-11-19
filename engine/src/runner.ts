@@ -722,7 +722,8 @@ export class Runner {
     const stack = t ? stackBase(a.defaultBranch, t, issues, prs) : { base: a.defaultBranch, on: null }
     const k = t ? issues.findIndex((q) => q.id === t.id) + 1 : 0
     const ticket = t ? teamTicket(t) : null
-    const title = prTitle(a.setup, { ticket, id: t?.identifier ?? p.name, title: t?.title ?? p.name, project: p.name, n: k, of: issues.length }, t ? (t as { prTitle?: string | null }).prTitle : null)
+    const subjects = (await git(r.localPath!, ['log', '--reverse', '--no-merges', '--format=%s', `${stack.base}..${head}`], { allowFail: true })).stdout.split('\n').filter(Boolean) // what the builder chose in its commits fills the title
+    const title = prTitle(a.setup, { ticket, id: t?.identifier ?? p.name, title: t?.title ?? p.name, project: p.name, n: k, of: issues.length }, t ? (t as { prTitle?: string | null }).prTitle : null, subjects)
       ?? (t ? `${t.identifier} ${t.title} (${p.name}, ${k} of ${issues.length})` : p.name)
     const intro = t ? { ...p, name: `${p.name}, task ${k} of ${issues.length}: ${t.identifier} ${t.title}`, content: [t.description, stack.on ? `Stacked on #${stack.on}: review and merge that one first; this PR then retargets to ${a.defaultBranch}.` : null].filter(Boolean).join('\n\n') || p.content } : p
     const open = mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled')

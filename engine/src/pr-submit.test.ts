@@ -25,6 +25,11 @@ describe('how a pull request is titled and opened', () => {
     expect(prTitle({ pr_title: '{id} {title} ({n} of {of}, {project})' }, { ...v, ticket: null })).toBe('SH-3 Export orders (sample) (1 of 2, Orders)')
     expect(prTitle({ pr_title: '[{ticket}] {title}' }, { ...v, ticket: null })).toBe('[SH-3] Export orders (sample)') // no ticket of theirs: ours
     expect(prTitle({ pr_title: 'feat[{ticket}]: {title}' }, v, 'fix(T12)[SHOP-12]: orders export (sample)')).toBe('fix(T12)[SHOP-12]: orders export (sample)')
+    // What the format leaves to the builder is read back from its first commit that follows the format.
+    const rules = { pr_title: '{type}{scope}[{ticket}]: {title}', commit_format: '{type}{scope}[{ticket}]: {subject}' }
+    expect(prTitle(rules, v, null, ['wip', 'feat(orders)[SHOP-12]: add the export (sample)', 'fix[SHOP-12]: a typo'])).toBe('feat(orders)[SHOP-12]: Export orders (sample)')
+    expect(prTitle(rules, v, null, ['fix[SHOP-12]: no scope (sample)'])).toBe('fix[SHOP-12]: Export orders (sample)')
+    expect(prTitle(rules, v, null, [])).toBe('[SHOP-12]: Export orders (sample)') // nothing to read: left out, not invented
     expect(prTitle({}, v)).toBeNull() // no template: the engine's own title
   })
   it('says in its text how many sub-tasks have landed, and that it is not ready while some have not', () => {
@@ -114,14 +119,14 @@ describe.skipIf(!reachable)('a pull request waits for the person (sample data)',
     expect(opened).toHaveLength(1)
   })
 
-  it('keeps the app\'s probes: one added, a built-in switched, one removed', async () => {
-    const { setProbe } = await import('./probes.js')
-    await expect(setProbe(appId, { name: 'Lint (sample)' })).rejects.toThrow('needs a name, a kind')
-    expect((await setProbe(appId, { name: 'Lint (sample)', kind: 'command', runs: 'pnpm lint' })).probes.map((p) => p.key)).toEqual(['break', 'comments', 'tests', 'lint_sample'])
-    expect((await setProbe(appId, { key: 'comments', on: false })).probes.find((p) => p.key === 'comments')).toMatchObject({ on: false, blocks: false })
-    expect((await setProbe(appId, { key: 'lint_sample', blocks: false })).probes.find((p) => p.key === 'lint_sample')).toMatchObject({ runs: 'pnpm lint', blocks: false })
-    expect((await setProbe(appId, { key: 'lint_sample', remove: true })).probes.map((p) => p.key)).toEqual(['break', 'comments', 'tests'])
-    await setProbe(appId, { key: 'comments', on: true })
+  it('keeps what the app\'s builds are held to: one added, a built-in switched, one removed, and what cannot be done said', async () => {
+    const { setHeld } = await import('./probes.js')
+    const keys = (r: Awaited<ReturnType<typeof setHeld>>) => r.held.filter((h) => h.kind !== 'judged').map((h) => h.key)
+    const added = await setHeld(appId, [{ op: 'add', name: 'Lint (sample)', kind: 'command', runs: 'pnpm lint' }, { op: 'add', name: ' ', kind: 'command', runs: 'x' }])
+    expect(keys(added)).toEqual(['break', 'comments', 'tests', 'lint_sample']); expect(added.refused).toHaveLength(1)
+    expect((await setHeld(appId, [{ op: 'on', key: 'comments', on: false }])).held.find((p) => p.key === 'comments')).toMatchObject({ on: false, blocks: false, changed: true })
+    expect((await setHeld(appId, [{ op: 'blocks', key: 'lint_sample', blocks: false }])).held.find((p) => p.key === 'lint_sample')).toMatchObject({ runs: 'pnpm lint', blocks: false, own: true })
+    expect(keys(await setHeld(appId, [{ op: 'remove', key: 'lint_sample' }, { op: 'reset', key: 'comments' }]))).toEqual(['break', 'comments', 'tests'])
   })
   it('keeps the app\'s rules for its pull requests', async () => {
     expect(await setPrRules(appId, { titleTemplate: 'feat[{ticket}]: {title}' })).toEqual({ pr_title: 'feat[{ticket}]: {title}', pr_draft: true, branch_name: null, commit_format: null })

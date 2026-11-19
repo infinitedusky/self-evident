@@ -4,21 +4,24 @@
  * All apps: plugins, the jobs their skills cover, the integrations (a list, then a page each). An app: its repo, agents, plugins,
  * landing, prototype, Storybook, integration values, and its workflow rules.
  */
-import type { RequirementRow } from '../components/Requirements'
-import { StepContracts } from '../components/StepContracts'
-import { applyProbeChange, contractsOf, type ProbeChange } from '@self-evident/engine/contracts'
+import { StepContracts, type TrialView } from '../components/StepContracts'
+import { applyProbeChanges, contractsOf, type ProbeChange } from '@self-evident/engine/contracts'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useMatch, useNavigate, useParams } from 'react-router'
 import { Badge } from '../components/Badge'
 import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
 import type { Workflow } from '@self-evident/engine/steps'
-import { engine, type AppHolds, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type SmokeSetupSetting, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
+import { engine, type AppHolds, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type SmokeSetupSetting, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo, type Trial } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { RemoveApp, RemovedApps } from '../components/RemoveApp'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
 const err = (e: any) => String(e?.message ?? e)
+const ago = (iso: string) => { const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60_000)); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 48 * 60 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago` }
+/** The settings that differ from `base`, as the engine takes them: the new value, or null for one that is gone. */
+export const changesOf = (base: AppSetup, next: AppSetup): Record<string, unknown> => Object.fromEntries([...new Set([...Object.keys(base), ...Object.keys(next)])]
+  .filter((k) => JSON.stringify((base as Record<string, unknown>)[k]) !== JSON.stringify((next as Record<string, unknown>)[k])).map((k) => [k, (next as Record<string, unknown>)[k] ?? null]))
 
 export const FACTORY_SECTIONS = [
   { key: 'plugins', label: 'Plugins' }, { key: 'yours', label: 'Your skills' }, { key: 'skills', label: 'Skills by job' }, { key: 'integrations', label: 'Integrations' }, { key: 'removed', label: 'Removed apps' },
@@ -428,6 +431,13 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   const [abbr, setAbbr] = useState(app.key)
   const [branch, setBranch] = useState(app.defaultBranch)
   const [setup, setSetup] = useState<AppSetup>(app.setup ?? {})
+  // What `setup` started from: a save sends only what differs from it, so a setting changed elsewhere since (an agent's tool, another tab) is not put back.
+  const [base, setBase] = useState<AppSetup>(app.setup ?? {})
+  // What a build is held to is changed a change at a time: the changes made here wait in `ops` and are sent as they are
+  // on Save, so the engine applies them to the list as it is then, not as it was when this page loaded.
+  const [ops, setOps] = useState<ProbeChange[]>([])
+  // A row the workflow switches is switched for the workflow: true or false, or null to leave it to the app again.
+  const [wfSwitch, setWfSwitch] = useState<Record<string, boolean | null>>({})
   const was = (app.repos ?? []).map(rowOf) // the engine lists home first
   const [repos, setRepos] = useState<RepoRow[]>(was)
   const [home, setHome] = useState<string | null>(was[0]?.key ?? null)
@@ -444,27 +454,35 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   useEffect(() => { setAbbr(app.key) }, [app.key]) // saved, or changed elsewhere
   useEffect(() => { setBranch(app.defaultBranch) }, [app.defaultBranch]) // the engine may have made the checkout's branch the default
 
-  const dirty = name !== app.name || (abbr.trim() !== app.key && abbr.trim() !== '') || branch !== app.defaultBranch || JSON.stringify(setup) !== JSON.stringify(app.setup ?? {})
+  const dirty = name !== app.name || (abbr.trim() !== app.key && abbr.trim() !== '') || branch !== app.defaultBranch || Object.keys(changesOf(base, setup)).length > 0 || ops.length > 0 || Object.keys(wfSwitch).length > 0
     || repos.map((r) => r.key).join() !== was.map((r) => r.key).join() || (repos.length > 1 && homeOf(repos, home) !== was[0]?.key)
   const num = (v: string) => (v.trim() === '' ? undefined : Number(v))
   const set = (patch: Partial<AppSetup>) => setSetup({ ...setup, ...patch })
   const smokes = smokeSetupsOf(setup.smoke)
   // One set-up, never listed: its settings stay as they were. More than one, or a list already: the list.
   const putSmoke = (n: number, patch: Partial<SmokeSetupSetting>) => (setup.smoke?.setups?.length ? set({ smoke: { setups: smokes.map((x, k) => (k === n ? { ...x, ...patch } : x)) } }) : set({ smoke: { ...setup.smoke, ...patch } }))
-  // Until the app has a list of its own, the engine's starting one is shown; editing it makes it the app's.
-  const [startingRequirements, setStartingRequirements] = useState<RequirementRow[] | null>(null)
-  useEffect(() => { engine.appRequirements(app.id).then(setStartingRequirements).catch(() => {}) }, [app.id])
   // Settings › Skills: the app's default workflow says which steps it has; the page is read until Change is pressed.
   const [workflow, setWorkflow] = useState<Workflow | null>(null)
   useEffect(() => { setWorkflow(null); engine.workflows(app.id).then((list) => setWorkflow(list.find((w) => w.appDefault) ?? null)).catch(() => {}) }, [app.id])
   const [changing, setChanging] = useState(false)
-  const held = { ...setup, requirements: setup.requirements ?? startingRequirements ?? undefined } // until the app has a list of its own, the engine's starting one
+  // Probes tried on past work (the engine's trials.ts): the latest of each, read again while one runs.
+  const [tried, setTried] = useState<{ trials: Trial[]; tasks: number }>({ trials: [], tasks: 0 })
+  const loadTrials = () => engine.trials(app.id).then((t) => setTried({ trials: t.trials, tasks: t.tasks.length })).catch(() => {})
+  useEffect(() => { void loadTrials() }, [app.id])
+  const trying = tried.trials.some((t) => t.status === 'running')
+  useEffect(() => { if (!trying) return; const timer = setInterval(() => void loadTrials(), 3000); return () => clearInterval(timer) }, [trying, app.id])
+  const trials: Record<string, TrialView> = Object.fromEntries(tried.trials.map((t) => [t.key, { status: t.status, runs: t.probe.runs, tasks: t.tasks, when: ago(t.createdAt), costUsd: t.costUsd, error: t.error, results: t.results }]))
+  const held = Object.fromEntries(Object.entries({ ...setup, ...applyProbeChanges(setup, ops) }).filter(([, v]) => v !== null && v !== undefined)) as AppSetup
+  const switches = Object.fromEntries(Object.entries({ ...(workflow?.requirements ?? {}), ...wfSwitch }).filter(([, v]) => typeof v === 'boolean')) as Record<string, boolean>
+  const shownWorkflow = workflow ? { ...workflow, requirements: switches } : null
   const save = async () => {
     setBusy(true); setError(null)
     try {
       const homeKey = homeOf(repos, home)
       const many = (id?: string) => ({ ...setup, home_repo: repos.length > 1 ? id : undefined })
-      await engine.updateApp(app.id, { name: name.trim(), ...(abbr.trim() && abbr.trim() !== app.key ? { key: abbr.trim() } : {}), defaultBranch: branch.trim() || 'main', setup: clean(many(repos.find((r) => r.key === homeKey)?.id ?? setup.home_repo)) })
+      let saved = await engine.updateApp(app.id, { name: name.trim(), ...(abbr.trim() && abbr.trim() !== app.key ? { key: abbr.trim() } : {}), defaultBranch: branch.trim() || 'main', setup: changesOf(base, clean(many(repos.find((r) => r.key === homeKey)?.id ?? setup.home_repo))), ...(ops.length ? { held: ops } : {}) })
+      if (workflow && Object.keys(wfSwitch).length) setWorkflow({ ...workflow, ...(await engine.saveWorkflow({ id: workflow.id, appId: app.id, name: workflow.name, steps: workflow.steps, ordered: workflow.ordered, build: workflow.build, style: workflow.style, requirements: switches })) })
+      setOps([]); setWfSwitch({})
       for (const r of was.filter((w) => !repos.some((x) => x.key === w.key))) await engine.deleteRepo(r.id!)
       const notes: string[] = []
       const rows: RepoRow[] = []
@@ -475,8 +493,8 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         rows.push({ ...rowOf(made), key: r.key })
       }
       const homeId = rows.find((r) => r.key === homeKey)?.id
-      if (repos.length > 1 && homeId && repos.find((r) => r.key === homeKey)?.id !== homeId) await engine.updateApp(app.id, { setup: clean(many(homeId)) }) // home was only just made
-      setRepos(rows.map((r) => ({ ...r, key: r.id! }))); setHome(homeId ?? null); setSetup(clean(many(homeId)))
+      if (repos.length > 1 && homeId && repos.find((r) => r.key === homeKey)?.id !== homeId) saved = await engine.updateApp(app.id, { setup: { home_repo: homeId } }) // home was only just made
+      setRepos(rows.map((r) => ({ ...r, key: r.id! }))); setHome(homeId ?? null); setSetup(saved.setup ?? {}); setBase(saved.setup ?? {}) // as the engine holds them now, with whatever changed elsewhere
       if (notes.length) setNote(notes.join(' '))
       await onSaved(); await load()
     } catch (e) { setError(err(e)) } finally { setBusy(false) }
@@ -484,7 +502,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   if (section === 'workflows') return <WorkflowSettings appId={app.id} />
   if (section === 'integrations') return info && factory
     ? <Integrations base={`/settings/apps/${app.id}/integrations`} item={item} integrations={factory.integrations} values={info.integrations} status={info.status} keys={info.keys} onKeys={() => void load()} scope="app" appId={app.id}
-        onSave={async (v) => { await engine.updateApp(app.id, { setup: { ...(app.setup ?? {}), integrations: v } }); await onSaved(); await load() }} />
+        onSave={async (v) => { await engine.updateApp(app.id, { setup: { integrations: v } }); await onSaved(); await load() }} />
     : error ? <div className="empty bad">{error}</div> : <p className="muted">Loading…</p>
   const groups: Record<string, React.ReactNode> = {
     repo: <>
@@ -542,21 +560,23 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         <button type="button" className="small" onClick={() => setChanging(!changing)}>{changing ? 'Done' : 'Change'}</button>
       </div>
       {info === null ? <p className="muted">Loading…</p> : <StepContracts
-        groups={contractsOf({ setup: held, workflow, usable: info.usable ?? [] })} open={changing ? ['build'] : []}
+        groups={contractsOf({ setup: held, workflow: shownWorkflow, usable: info.usable ?? [] })} open={changing ? ['build'] : []} trials={trials}
         {...(changing ? {
           usable: info.usable ?? [],
           onSkills: (step: string, names: string[]) => { const { [step]: _, ...rest } = setup.step_skills ?? {}; const next = names.length ? { ...rest, [step]: names } : rest; set({ step_skills: Object.keys(next).length ? next : undefined }) },
-          onProbe: (change: ProbeChange) => { const patch = applyProbeChange(held, change); if (patch) set({ ...patch, ...(patch.probes && !patch.probes.length ? { probes: undefined } : {}) } as Partial<AppSetup>) },
+          onProbe: (change: ProbeChange) => setOps([...ops, change]),
+          tryOn: tried.tasks,
+          onTry: (p: { key: string; name: string; kind: Trial['probe']['kind']; runs: string }) => { void engine.startTrial(app.id, { key: p.key, probe: { name: p.name, kind: p.kind, runs: p.runs } }).then(loadTrials).catch((e) => setError(err(e))) },
+          onWorkflow: (key: string, on: boolean | null) => setWfSwitch({ ...wfSwitch, [key.replace(/^req:/, '')]: on }),
         } : {})} />}
     </div>,
     landing: <>
       <Group title="Landing" lead="How finished work reaches the default branch.">
-        <label style={{ gridColumn: '1 / -1' }}>Test command<input className="mono" value={setup.test_cmd ?? ''} onChange={(e) => set({ test_cmd: e.target.value })} placeholder="runs in the worktree on the merged commit; must exit 0 to land" /></label>
         <label style={{ gridColumn: '1 / -1' }}>Pull requests<select value={setup.pr_mode ?? 'issue'} onChange={(e) => set({ pr_mode: e.target.value as 'project' | 'issue' })}>
           <option value="issue">One per task: each task builds on its own branch and merges on its own</option>
           <option value="project">One per project: every task lands on the project's branch</option>
         </select></label>
-        <label style={{ gridColumn: '1 / -1' }}>Pull request title<input className="mono" value={setup.pr_title ?? ''} onChange={(e) => set({ pr_title: e.target.value })} placeholder="the repository's convention, e.g. feat[{ticket}]: {title}   ({ticket} {id} {title} {project} {n} {of})" /></label>
+        <label style={{ gridColumn: '1 / -1' }}>Pull request title<input className="mono" value={setup.pr_title ?? ''} onChange={(e) => set({ pr_title: e.target.value })} placeholder="the repository's convention, e.g. {type}[{ticket}]: {title}   ({ticket} {id} {title} {project} {n} {of}; {type} and the like come from the commits)" /></label>
         <label style={{ gridColumn: '1 / -1' }}>Branch name<input className="mono" value={setup.branch_name ?? ''} onChange={(e) => set({ branch_name: e.target.value })} placeholder="a new task's branch, e.g. feature/{ticket}-{title}   ({ticket} {id} {title} {project})" /></label>
         <label style={{ gridColumn: '1 / -1' }}>Commit message<input className="mono" value={setup.commit_format ?? ''} onChange={(e) => set({ commit_format: e.target.value })} placeholder="its first line, e.g. {type}({ticket}): {subject}   (a commit that does not fit is refused)" /></label>
         <label style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" style={{ width: 'auto', margin: 0 }} checked={setup.pr_draft !== false} onChange={(e) => set({ pr_draft: e.target.checked })} /> Open pull requests as drafts when you submit one yourself.</label>

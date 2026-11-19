@@ -27,14 +27,14 @@ const groups: StepGroup[] = [
       { key: 'do', by: 'agent', what: 'Writes the code and its tests, and commits.', skills: [skill('ticket-naming-convention', 'enterprise-dashboard (sample)'), skill('old-style-guide', '', { missing: true })] },
       { key: 'verify', by: 'engine', what: 'Runs each probe on what was built. A probe changes nothing: what one finds goes back to a builder.', probes: [
         { key: 'criteria', name: 'Acceptance criteria', kind: 'built-in', runs: 'each one checked, with evidence', blocks: true, on: true, own: false, fixed: 'Always checked.' },
-        { key: 'req:telemetry', name: 'Telemetry', kind: 'judged', runs: 'Anything new that can fail can be seen in a trace.', blocks: true, on: true, own: true },
-        { key: 'req:adr', name: 'Decision record', kind: 'judged', runs: 'Each real design choice is written down where the repo keeps its decisions.', blocks: true, on: true, own: true, fixed: 'Switched on by the Main workflow.' },
+        { key: 'req:telemetry', name: 'Telemetry', kind: 'judged', runs: 'Anything new that can fail can be seen in a trace.', blocks: true, on: true, own: false, editable: true, changed: true },
+        { key: 'req:adr', name: 'Decision record', kind: 'judged', runs: 'Each real design choice is written down where the repo keeps its decisions.', blocks: true, on: true, own: false, editable: true, from: 'Main' },
         { key: 'break', name: 'Try to break it', kind: 'built-in', runs: 'used the way a person would, then the cases nobody wrote down', blocks: true, on: true, own: false },
         { key: 'comments', name: 'Comment discipline', kind: 'built-in', runs: 'no debug output, dead code or stray TODOs in the change', blocks: false, on: true, own: false },
-        { key: 'security', name: 'Security review', kind: 'skill', runs: 'backend-core:security-review', blocks: true, on: true, own: true },
-        { key: 'tests', name: 'Tests', kind: 'command', runs: 'pnpm test', blocks: true, on: true, own: false, fixed: 'The app\'s test command (Landing).' },
-        { key: 'lint', name: 'Lint', kind: 'command', runs: 'pnpm lint', blocks: true, on: true, own: true },
-        { key: 'licences', name: 'Licence scan', kind: 'command', runs: 'pnpm licences', blocks: true, on: false, own: true },
+        { key: 'security', name: 'Security review', kind: 'skill', runs: 'backend-core:security-review', blocks: true, on: true, own: true, editable: true },
+        { key: 'tests', name: 'Tests', kind: 'command', runs: 'pnpm test', blocks: true, on: true, own: false, editable: true },
+        { key: 'lint', name: 'Lint', kind: 'command', runs: 'pnpm lint', blocks: true, on: true, own: true, editable: true },
+        { key: 'licences', name: 'Licence scan', kind: 'command', runs: 'pnpm licences', blocks: true, on: false, own: true, editable: true },
       ] },
       { key: 'report', by: 'agent', what: 'What changed, why, and how it was verified.' },
     ] },
@@ -78,7 +78,7 @@ export const BuildOpen: Story = {
 
 /** Being changed: skills are added and removed where an agent works; probes are switched, set to report only, removed and added where the engine verifies. */
 export const Changing: Story = {
-  args: { open: ['build'], usable, onSkills: fn(), onProbe: fn() },
+  args: { open: ['build'], usable, onSkills: fn(), onProbe: fn(), onWorkflow: fn() },
   play: async ({ canvasElement, args }) => {
     const c = within(canvasElement)
     await userEvent.selectOptions(c.getByLabelText('Add a skill to Build, Do'), 'backend-core:security-review')
@@ -96,7 +96,17 @@ export const Changing: Story = {
     await expect(c.queryByLabelText('When Acceptance criteria fails')).toBeNull() // always blocks
     await userEvent.click(c.getByRole('button', { name: 'Remove the probe Lint' }))
     await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'remove', key: 'lint' })
-    await expect(c.getByRole('checkbox', { name: 'Run Acceptance criteria' })).toBeDisabled(); await expect(c.getByRole('checkbox', { name: 'Run Decision record' })).toBeDisabled()
+    // Only the acceptance criteria are fixed. A row the workflow switches is switched for the workflow, or left to the app again.
+    await expect(c.getByRole('checkbox', { name: 'Run Acceptance criteria' })).toBeDisabled()
+    await expect(c.getByText('· from Main')).toBeVisible()
+    await userEvent.click(c.getByRole('checkbox', { name: 'Run Decision record' }))
+    await expect(args.onWorkflow).toHaveBeenLastCalledWith('req:adr', false)
+    await userEvent.click(c.getByRole('button', { name: 'Leave Decision record to the app, not the Main workflow' }))
+    await expect(args.onWorkflow).toHaveBeenLastCalledWith('req:adr', null)
+    // One the engine ships that the app has reworded can be put back.
+    await userEvent.click(c.getByRole('button', { name: 'Put Telemetry back as the engine ships it' }))
+    await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'reset', key: 'req:telemetry' })
+    await expect(c.queryByRole('button', { name: 'Put Lint back as the engine ships it' })).toBeNull(); await expect(c.queryByRole('button', { name: 'Remove the probe Telemetry' })).toBeNull()
     // A client's own requirement is added as a probe.
     await userEvent.click(c.getByRole('button', { name: 'Add a probe to Build' }))
     await expect(c.getByRole('button', { name: 'Add' })).toBeDisabled()
@@ -112,12 +122,17 @@ export const Changing: Story = {
   },
 }
 
-/** Editing one of the app's own: its row becomes its fields, with what it has now; the engine's own have no Edit. */
+/** Editing: a row becomes its fields, with what it has now. The engine's sentences and the test command can be reworded like the app's own; the engine's two probes cannot. */
 export const EditingAProbe: Story = {
   args: { open: ['build'], usable, onSkills: fn(), onProbe: fn() },
   play: async ({ canvasElement, args }) => {
     const c = within(canvasElement)
-    await expect(c.queryByRole('button', { name: 'Edit the probe Try to break it' })).toBeNull(); await expect(c.queryByRole('button', { name: 'Edit the probe Tests' })).toBeNull()
+    await expect(c.queryByRole('button', { name: 'Edit the probe Try to break it' })).toBeNull()
+    await userEvent.click(c.getByRole('button', { name: 'Edit the test command' })) // the test command: its command, not its name
+    const tests = within(c.getByRole('form', { name: 'Edit Tests' }))
+    await expect(tests.queryByLabelText('Probe name')).toBeNull()
+    await userEvent.type(tests.getByLabelText('What it runs'), ' --run'); await userEvent.click(tests.getByRole('button', { name: 'Save' }))
+    await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'edit', key: 'tests', name: 'Tests', runs: 'pnpm test --run' })
     await userEvent.click(c.getByRole('button', { name: 'Edit the probe Lint' }))
     const form = within(c.getByRole('form', { name: 'Edit Lint' }))
     await expect(form.getByLabelText('What it runs')).toHaveValue('pnpm lint')
@@ -126,5 +141,47 @@ export const EditingAProbe: Story = {
     await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'edit', key: 'lint', name: 'Lint', runs: 'pnpm lint --max-warnings 0' })
     await userEvent.click(c.getByRole('button', { name: 'Edit the probe Telemetry' })) // a judged one: its sentence
     await expect(within(c.getByRole('form', { name: 'Edit Telemetry' })).getByLabelText('What it runs')).toHaveValue('Anything new that can fail can be seen in a trace.')
+  },
+}
+
+/** No test command yet: the row is there to give it one. Sample data. */
+export const NoTestCommand: Story = {
+  args: { open: ['build'], onProbe: fn(), groups: groups.map((g) => ({ ...g, steps: g.steps.map((st) => ({ ...st, stages: st.stages.map((t) => (t.probes ? { ...t, probes: t.probes.map((p) => (p.key === 'tests' ? { ...p, runs: '', on: false } : p)) } : t)) })) })) },
+  play: async ({ canvasElement, args }) => {
+    const c = within(canvasElement)
+    await expect(c.getByText('no test command yet')).toBeVisible(); await expect(c.getByRole('checkbox', { name: 'Run the test command' })).toBeDisabled()
+    await userEvent.click(c.getByRole('button', { name: 'Set the test command' }))
+    const form = within(c.getByRole('form', { name: 'Edit Tests' }))
+    await userEvent.type(form.getByLabelText('What it runs'), 'pnpm test'); await userEvent.click(form.getByRole('button', { name: 'Save' }))
+    await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'edit', key: 'tests', name: 'Tests', runs: 'pnpm test' })
+  },
+}
+
+const tried = {
+  lint: { status: 'done' as const, runs: 'pnpm lint', tasks: 5, when: '2 hours ago', results: [
+    { identifier: 'CEB-79', title: 'Audit export (sample)', pr: 412, pass: true, evidence: '', findings: [] }, { identifier: 'CEB-74', title: 'Scan summary (sample)', pr: 409, pass: true, evidence: '', findings: [] },
+    { identifier: 'CEB-70', title: 'Work email check (sample)', pr: 401, pass: false, evidence: 'frontend/src/scan/Otp.svelte: 2 problems (sample)', findings: [] },
+    { identifier: 'CEB-66', title: 'Finding fields (sample)', pr: 398, pass: true, evidence: '', findings: [] }, { identifier: 'CEB-61', title: 'Reports list (sample)', pr: 390, pass: true, evidence: '', findings: [] },
+  ] },
+  'req:telemetry': { status: 'done' as const, runs: 'An older wording (sample).', tasks: 5, when: 'yesterday', costUsd: '1.40', results: [
+    { identifier: 'CEB-79', title: 'Audit export (sample)', pr: 412, pass: false, evidence: 'sample', findings: ['a failed export logs nothing (sample)'] },
+  ] },
+  security: { status: 'running' as const, runs: 'backend-core:security-review', tasks: 5, results: [{ identifier: 'CEB-79', title: 'Audit export (sample)', pr: 412, pass: true, evidence: '', findings: [] }] },
+}
+/** A change tried on past work: under each probe, what it said of the app's last merged tasks. Offered, never required. Sample data. */
+export const TriedOnPastWork: Story = {
+  args: { open: ['build'], onProbe: fn(), onTry: fn(), tryOn: 5, trials: tried },
+  play: async ({ canvasElement, args }) => {
+    const c = within(canvasElement)
+    await expect(c.getByText('Tried on 5 merged tasks: 4 pass, 1 fail')).toBeVisible()
+    await expect(c.getByText(/before it was changed/)).toBeVisible() // Telemetry was reworded since its trial
+    await expect(c.getByText('Trying it on 5 merged tasks: 1 done…')).toBeVisible()
+    await userEvent.click(c.getByText('Tried on 5 merged tasks: 4 pass, 1 fail'))
+    await expect(c.getByText('frontend/src/scan/Otp.svelte: 2 problems (sample)')).toBeVisible()
+    await userEvent.click(c.getByRole('button', { name: 'Try Lint on past work' }))
+    await expect(args.onTry).toHaveBeenCalledWith(expect.objectContaining({ key: 'lint', runs: 'pnpm lint' }))
+    await expect(c.getByRole('button', { name: 'Try Telemetry on past work' })).toHaveTextContent('Try (5 agent runs)') // what it costs is on the button
+    await expect(c.getByRole('button', { name: 'Try Security review on past work' })).toBeDisabled() // one is running
+    await expect(c.queryByRole('button', { name: 'Try Acceptance criteria on past work' })).toBeNull(); await expect(c.queryByRole('button', { name: 'Try Licence scan on past work' })).toBeNull() // off: not tried
   },
 }

@@ -5034,6 +5034,88 @@ made the pull step aside without a word.
 Not changed: the checkout the engine itself runs from (Self Evident's own) is still never pulled by the sync, since
 new engine code restarts the engine and cuts off what is building. Only an app's first repository is followed.
 
+## An app's settings are saved a key at a time (found on Cloaked, 2026-11-19)
+
+Setting Cloaked up, two requirements and the skills on a step vanished after being saved. The Settings page saved the
+whole settings object as it was when the page loaded, and each agent tool rewrote the whole object from its own
+read: whichever wrote last wiped the other. Now every writer sends only what it changes and the engine merges it
+into what is saved at that moment, under a lock on the app's row (`setup.ts`, `patchSetup`): the page (`PATCH
+/apps/:id`, where `setup` is now the changes, null removing a key) and the tools (`set_probe`, `set_pr_rules`, the
+smoke and prototype set-ups, the report format). After a save the page takes the settings back from the engine, so
+what changed elsewhere shows.
+
+## Decided next for what a build is held to (Sandy, 2026-11-19: "still feels like we have too many rigid settings that should be defaults that you override or extend"; "This sounds good")
+
+Not built yet; in this order after the save fix above.
+1. One list, layered: a thing a build is held to is one kind of record (name, how it is judged, blocks or reports,
+   on or off). The engine ships defaults; the app, the workflow and the project each keep only their differences.
+   Requirements and probes stop being two stores.
+2. Override in place: a row set by a workflow says so ("from Main") and can still be changed on the app's page, with
+   a way back to what it inherits. Only the acceptance criteria stay fixed.
+3. Tests is an ordinary command probe, edited in the list; the field under Landing goes.
+4. The defaults are worded for any repository (telemetry is "the way this repository already does it").
+5. One agent tool that makes every change the page can (judged ones, skills on a step, the test command).
+6. Trying a change. A command is run once on a build known to be good as it is added, to show the command itself
+   works. And a change to the probes can be A/B tested: the changed probe is run on past merged tasks and its
+   verdicts are shown beside what happened to each, kept with the change it tested. Offered, never required
+   (Sandy: "It's not required, but we would have, we have the setup to do it"). Probes replay safely because they
+   change nothing; a skill on Do would need the task built twice, which is not part of this.
+7. The pull request's title follows the commit format's rule: the engine fills what it knows, the builder the rest.
+
+## One list of what a build is held to, in layers (built 2026-11-19; items 1 to 5 of the entry above)
+
+- `engine/src/held.ts` is the list. The engine ships its two probes and six sentences. An app keeps only its
+  differences (`setup.held`): a switch or a rewording of one the engine ships, or one of its own. A workflow, then a
+  project, switches a sentence for its own tasks. `requirementsOf` and `probesOf` read from it, so the planner, the
+  check and the runner did not change.
+- The two stores there were (`setup.requirements`, a whole copy; `setup.probes`) are moved to `held` once, at engine
+  start, and are read correctly until then. A copy of a default is the default again, so those apps now follow the
+  engine's wording; a rewording is kept; a default an app had deleted is back on its list, switched off.
+- Telemetry no longer says OpenTelemetry: "can be seen afterwards, the way this repository already makes things
+  seen". An app says how (Cloaked: Datadog and PostHog) by rewording it.
+- Settings › Skills: nothing is greyed but the acceptance criteria. A row its workflow switches says "from Main" and
+  is switched for that workflow there, or left to the app again. A row the app changed has Reset. The engine's
+  sentences can be reworded. The test command is the Tests row (Set, Edit, clear); its field under Landing is gone.
+  `setup.test_cmd` is still where it is kept, because landing reads it.
+- The page sends its changes to the list one by one (`held` on `PATCH /apps/:id`), applied by the engine to the list
+  as it is then: the last place where a stale page could undo an agent.
+- Agents: `set_held` takes the same changes the page makes (it replaced `set_probe`), and `set_step_skills` puts
+  skills on a step. An agent can now set an app up without handing anything back.
+
+Kept apart on purpose: a sentence and a command can both be called `tests`, so a sentence's id on the list is
+`req:<key>`. A workflow or project switches sentences only, not commands or reviewer skills.
+Not built yet: trying a command as it is added, the A/B of a change, the pull request title rule (6 and 7 above).
+
+## The pull request's title follows the commit format (built 2026-11-19; item 7 above)
+
+A title template can name what the commit format leaves to the builder (`{type}{scope}[{ticket}]: {title}`). Those
+parts are read back from the branch's first commit that follows the format, so the title opens as
+`feat(scan)[ENT-481]: …` with nobody writing it by hand. One that cannot be read is left out, never invented.
+`set_pr_title` still sets an exact title for one task.
+
+## A change to what a build is held to can be tried on past work (built 2026-11-19; item 6 above)
+
+Sandy: "these setting changes are really sort of core to the way you build for an entire project, so I think it's
+worth having … an A/B test … that gets linked to changes"; "It's not required, but … we have the setup to do it";
+and "go" to: the last five merged tasks, the result kept with the change and shown under its row, agents too with
+the cost said first.
+
+- Try, on a row of Build › Verify while changing: the probe as the row shows it (saved or not yet) is run on the
+  app's last five merged tasks, each at its merged commit in a scratch worktree (`engine/src/trials.ts`). The
+  checkout is not touched and nothing is changed: a probe only reads and runs.
+- What it said is kept with the probe as it was then (`probe_trial`) and shown under the row: "Tried on 5 merged
+  tasks: 4 pass, 1 fail", opening to each task. Reworded since: "before it was changed". All five were merged, so a
+  fail is the probe disagreeing with what was shipped.
+- A command costs nothing. A reviewer skill, a sentence or one of the engine's own is an agent run per task: the
+  button says so ("Try (5 agent runs)") and the trial records what it cost. A sentence is judged on its own in a
+  trial; in a build the check's agent judges it with the rest of the list, so the two can differ.
+- Agents have the same as `try_held`, and are told to say the cost before trying one that needs agents.
+- One trial at a time for an app. One cut off by a restart is marked stopped.
+
+Not built: choosing which tasks (it is always the latest five with a pull request of their own; a project with one
+pull request for all its tasks has none to try on); trying a skill put on Build › Do, which would mean building a
+task twice; running a command by itself as it is added (Try is pressed, or an agent calls `try_held`).
+
 ## What is judged by eye is the person's, what CI runs is CI's, and no step runs either (Sandy, 2026-11-19: "visual checks should be signed off on, not automated I think, we have the automated version we can trigger from the smoke test if we want. this is a probe and ci/cd issue")
 
 Found on BON-204 (Bonkei): the step that tries to break a change ran the repository's whole docs smoke, every page

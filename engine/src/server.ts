@@ -60,6 +60,10 @@ import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from
 import { activeApps, appHolds, bringBack, deleteForGood, putAway, putAwayApps } from './apps.js'
 import { addIssue, addSubIssues, appGraph, clearSubIssues, createProject, issueDetail, listCodeIssues, listProjects, PlanError, projectGraph, setBuildStatus, tick } from './projects.js'
 import { requirementsOf } from './requirements.js'
+import { patchSetup } from './setup.js'
+import { setHeld } from './probes.js'
+import { endStrayTrials, pastTasks, startTrial, trialsOf } from './trials.js'
+import { diffsOf, hasLegacy, type HeldChange } from './held.js'
 import { autoBuild } from './branches.js'
 import { runner } from './runner.js'
 import { homeRepo, inOrder } from './workbench.js'
@@ -332,7 +336,9 @@ export function buildApp(bus: EventBus) {
     return c.text(await trackerGuide(ctx), 200, { 'content-type': 'text/markdown; charset=utf-8' })
   })
   api.patch('/apps/:id', async (c) => {
-    const body = await c.req.json<{ name?: string; key?: string; defaultBranch?: string; setup?: Record<string, unknown> }>()
+    // `setup` is the settings that change, not all of them: a key with a value is set, one with null is removed, the rest stay (setup.ts).
+    // `held` is changes to what a build is held to (held.ts), applied in order to the list as it is now.
+    const body = await c.req.json<{ name?: string; key?: string; defaultBranch?: string; setup?: Record<string, unknown>; held?: HeldChange[] }>()
     // Its abbreviation can be changed after it is made: every task's name follows at once (MER-50 becomes BON-50),
     // since a task's name is the abbreviation and its number. What was already written elsewhere keeps the old one:
     // branch names, pull request titles, text in comments and briefs.
@@ -344,24 +350,27 @@ export function buildApp(bus: EventBus) {
       const taken = (await activeApps()).filter((r) => r.workspaceId === me.workspaceId && r.id !== me.id).map((r) => r.key) // a put-away app's abbreviation is free
       if (taken.includes(key)) return c.json({ error: `the abbreviation ${key} is another app's` }, 400)
     }
-    if (body.setup && 'integrations' in body.setup) body.setup.integrations = cleanValues(body.setup.integrations)
-    if (body.setup && 'account' in body.setup) { try { const acct = cleanAccount(body.setup.account); if (acct) body.setup.account = acct; else delete body.setup.account } catch (err) { return planError(c, err) } }
-    if (body.setup && 'step_skills' in body.setup) { const steps = cleanStepSkills(body.setup.step_skills); if (Object.keys(steps).length) body.setup.step_skills = steps; else delete body.setup.step_skills }
-    if (body.setup && 'skills_by_job' in body.setup) { // an app's own skill per job; absent inherits
+    if (body.setup?.integrations != null) body.setup.integrations = cleanValues(body.setup.integrations)
+    if (body.setup?.account != null) { try { const acct = cleanAccount(body.setup.account); body.setup.account = acct ?? null } catch (err) { return planError(c, err) } }
+    if (body.setup && 'step_skills' in body.setup) { const steps = cleanStepSkills(body.setup.step_skills); body.setup.step_skills = Object.keys(steps).length ? steps : null }
+    if (body.setup?.skills_by_job != null) { // an app's own skill per job; absent inherits
       const [of] = await db.select().from(appTable).where(eq(appTable.id, c.req.param('id')))
       const [w] = of ? await db.select().from(workspace).where(eq(workspace.id, of.workspaceId)) : []
       const jobs = cleanJobs(body.setup.skills_by_job, (w?.settings ?? {}) as FactorySettings, installed())
-      if (Object.keys(jobs).length) body.setup.skills_by_job = jobs; else delete body.setup.skills_by_job
+      body.setup.skills_by_job = Object.keys(jobs).length ? jobs : null
     }
-    if (body.setup && 'references' in body.setup) body.setup.references = cleanReferences(body.setup.references, c.req.param('id'))
-    if (body.setup && 'plugins' in body.setup) { // an app's own switch per plugin; null inherits
+    if (body.setup?.references != null) body.setup.references = cleanReferences(body.setup.references, c.req.param('id'))
+    if (body.setup?.plugins != null) { // an app's own switch per plugin; null inherits
       const known = new Set(installed().map((p) => p.id))
       body.setup.plugins = Object.fromEntries(Object.entries((body.setup.plugins ?? {}) as Record<string, { on?: unknown } | null>)
         .filter(([id, v]) => known.has(id) && typeof v?.on === 'boolean').map(([id, v]) => [id, { on: v!.on }]))
     }
     const [was] = key ? await db.select({ key: appTable.key }).from(appTable).where(eq(appTable.id, c.req.param('id'))) : []
-    const [row] = await db.update(appTable).set({ ...(body.name ? { name: body.name } : {}), ...(key ? { key } : {}), ...(body.defaultBranch ? { defaultBranch: body.defaultBranch } : {}), ...(body.setup ? { setup: body.setup } : {}) })
-      .where(eq(appTable.id, c.req.param('id'))).returning()
+    if (body.setup) for (const k of ['held', 'requirements', 'probes', 'requirements_added']) delete body.setup[k] // what a build is held to is changed by `held`, a change at a time
+    if (body.held?.length) { try { await setHeld(c.req.param('id'), body.held) } catch { return c.json({ error: 'no such app' }, 404) } }
+    if (body.setup && Object.keys(body.setup).length) { try { await patchSetup(c.req.param('id'), body.setup) } catch { return c.json({ error: 'no such app' }, 404) } }
+    const fields = { ...(body.name ? { name: body.name } : {}), ...(key ? { key } : {}), ...(body.defaultBranch ? { defaultBranch: body.defaultBranch } : {}) }
+    const [row] = Object.keys(fields).length ? await db.update(appTable).set(fields).where(eq(appTable.id, c.req.param('id'))).returning() : await db.select().from(appTable).where(eq(appTable.id, c.req.param('id')))
     if (key && was && was.key !== key) await moveSecrets(was.key, key).catch((err) => console.error(`secrets: could not follow ${was.key} to ${key}`, err)) // its kept keys go with its key
     return row ? c.json(row) : c.json({ error: 'no such app' }, 404)
   })
@@ -822,6 +831,9 @@ export function buildApp(bus: EventBus) {
   api.post('/projects/:id/describe', async (c) => { // plain descriptions for issues and sub-issues that have none
     try { return c.json(await describeProject(c.req.param('id'))) } catch (err) { return planError(c, err) }
   })
+  // Trying a probe on past work (trials.ts): the latest trial of each probe, the tasks one would run on, and starting one.
+  api.get('/apps/:id/trials', async (c) => { try { return c.json({ trials: await trialsOf(c.req.param('id'), true), tasks: (await pastTasks(c.req.param('id'))).map(({ acceptance: _, ...t }) => t) }) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/trials', async (c) => { try { const { trial } = await startTrial(c.req.param('id'), await c.req.json()); return c.json(trial) } catch (err) { return planError(c, err) } })
   // Requirements (requirements.ts): the app's list is in its settings (setup.requirements); a project switches one on or off for its own tasks.
   api.get('/apps/:id/requirements', async (c) => { const [a] = await db.select().from(appTable).where(eq(appTable.id, c.req.param('id'))); return a ? c.json(requirementsOf(a.setup)) : c.json({ error: 'no such app' }, 404) })
   api.get('/projects/:id/requirements', async (c) => {
@@ -1041,6 +1053,9 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   stayUp() // a failure nobody was waiting on is logged, and the engine carries on
   serve({ fetch: buildApp(bus).fetch, port }, (info) => console.log(`engine listening on http://localhost:${info.port}  (API under /api; UI at / when built)`))
   void reopenUnclosed().then((ids) => { if (ids.length) console.log(`[engine] ${ids.length} task${ids.length === 1 ? '' : 's'} marked done by a merge, with checks of yours unmarked, put back in review to be closed`) }).catch((err) => console.error('reopening unclosed tasks failed', err))
+  void endStrayTrials().catch(() => {})
+  // Apps from before there was one list (held.ts): their two stores become it, once.
+  void (async () => { for (const a of await db.select().from(appTable)) if (hasLegacy(a.setup)) await patchSetup(a.id, (now) => (hasLegacy(now) ? { requirements: null, probes: null, requirements_added: null, held: diffsOf(now).length ? diffsOf(now) : null } : {})) })().catch((err) => console.error('moving apps to one list failed', err))
   void ensureMain().then((r) => { if (r.made) console.log(`[engine] ${r.made} app${r.made === 1 ? '' : 's'} given a Main workflow; what they had is Legacy`) }).catch((err) => console.error('workflows: could not make Main', err))
   void speedIntoWorkflows().then((r) => { if (r.moved) console.log(`[engine] ${r.moved} app${r.moved === 1 ? '' : 's'} set to Fast moved onto a fast workflow`) }).catch((err) => console.error('workflows: could not move the old speed setting', err))
   setTimeout(() => void resumeChecks().catch((err) => console.error('checks: could not resume after the restart', err)), 8_000) // a task's checks that were under way carry on

@@ -63,6 +63,28 @@ export function commitRule(setup: unknown, v: Named): { format: string | null; p
   return { format, pattern }
 }
 
+/**
+ * What the builder put where the format left it to choose ({type}, {scope}, …), read back from a commit's first
+ * line: the pull request's title is filled from it (pr.ts), so one convention covers both. Null when the line does
+ * not follow the format, or there is none.
+ */
+export function commitParts(setup: unknown, v: Named, subject: string): Record<string, string> | null {
+  const t = setting(setup, 'commit_format')
+  if (!t) return null
+  const known = (k: string) => (k === 'ticket' ? v.ticket || v.id : k === 'id' ? v.id : null)
+  const seen = new Set<string>()
+  const source = '^' + t.split(/(\{\w+\})/).map((part) => {
+    const k = /^\{(\w+)\}$/.exec(part)?.[1]
+    if (!k) return escape(part)
+    if (known(k) !== null) return escape(known(k)!)
+    if (seen.has(k)) return k === 'type' ? '[a-z]+' : '.*?'
+    seen.add(k)
+    return k === 'type' ? `(?<${k}>[a-z]+)` : `(?<${k}>.*?)`
+  }).join('') + '$'
+  const m = new RegExp(source).exec(subject.trim())
+  return m ? { ...(m.groups ?? {}) } : null
+}
+
 /** What an agent's own git makes without a person's words: left alone. */
 const PASSES = /^(Merge |Revert "|fixup! |squash! |amend! )/
 export const commitOk = (subject: string, pattern: string) => PASSES.test(subject) || new RegExp(pattern).test(subject)
