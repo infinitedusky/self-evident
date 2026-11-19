@@ -5085,3 +5085,10 @@ Not built yet; in this order after the save fix above.
 Kept apart on purpose: a sentence and a command can both be called `tests`, so a sentence's id on the list is
 `req:<key>`. A workflow or project switches sentences only, not commands or reviewer skills.
 Not built yet: trying a command as it is added, the A/B of a change, the pull request title rule (6 and 7 above).
+
+## The pull request's title follows the commit format (built 2026-11-19; item 7 above)
+
+A title template can name what the commit format leaves to the builder (`{type}{scope}[{ticket}]: {title}`). Those
+parts are read back from the branch's first commit that follows the format, so the title opens as
+`feat(scan)[ENT-481]: …` with nobody writing it by hand. One that cannot be read is left out, never invented.
+`set_pr_title` still sets an exact title for one task.

@@ -87,3 +87,13 @@ describe('installCommitCheck', () => {
     expect((await git(repo, ['config', '--get', 'core.hooksPath'], { allowFail: true })).stdout).toBe('') // the repository's config is untouched
   })
 })
+
+describe('what the builder chose in a commit', () => {
+  it('is read back by the format: the type, an optional scope, and nothing from a line that does not follow it', async () => {
+    const { commitParts } = await import('./conventions.js')
+    const setup = { commit_format: '{type}{scope}[{ticket}]: {subject}' }, v = { ticket: 'ENT-481', id: 'CEB-79' }
+    expect(commitParts(setup, v, 'feat(scan)[ENT-481]: verify the work email (sample)')).toEqual({ type: 'feat', scope: '(scan)', subject: 'verify the work email (sample)' })
+    expect(commitParts(setup, v, 'fix[ENT-481]: a typo')).toEqual({ type: 'fix', scope: '', subject: 'a typo' })
+    expect(commitParts(setup, v, 'feat(scan)[ENT-999]: another ticket')).toBeNull(); expect(commitParts({}, v, 'feat: x')).toBeNull()
+  })
+})
