@@ -1,0 +1,34 @@
+import { useState } from 'react'
+import type { Meta, StoryObj } from '@storybook/react-vite'
+import { expect, userEvent, within } from 'storybook/test'
+import { Nav, useTrail } from './Trail'
+
+/** One view's bar, alone: where it is, and its way back and forward. Made-up addresses (sample). */
+function One({ of }: { of?: string }) {
+  const t = useTrail()
+  const [home] = useState('http://localhost:6123')
+  const src = t.at ?? `${home}/orders`
+  return <div className="preview-bar"><Nav t={t} home={home} src={src} of={of} /><span className="faint mono" data-testid="at">{src}#{t.reloads}</span></div>
+}
+const meta = { title: 'Components/Trail', component: One } satisfies Meta<typeof One>
+export default meta
+type Story = StoryObj<typeof meta>
+
+/** Sent somewhere, then back, forward and reloaded. */
+export const BackAndForward: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.getByRole('button', { name: 'Back' })).toBeDisabled()
+    const address = c.getByRole('textbox', { name: 'Address' })
+    await userEvent.clear(address); await userEvent.type(address, 'orders/42 (sample){Enter}')
+    await expect(c.getByTestId('at')).toHaveTextContent('http://localhost:6123/orders/42 (sample)#0')
+    await userEvent.click(c.getByRole('button', { name: 'Back' }))
+    await expect(c.getByTestId('at')).toHaveTextContent('http://localhost:6123/orders#0')
+    await userEvent.click(c.getByRole('button', { name: 'Forward' }))
+    await expect(address).toHaveValue('/orders/42 (sample)')
+    await userEvent.click(c.getByRole('button', { name: 'Reload' }))
+    await expect(c.getByTestId('at')).toHaveTextContent('#1')
+  },
+}
+/** Beside another view, each button says whose it is. */
+export const Named: Story = { args: { of: 'main' }, play: async ({ canvasElement }) => { await expect(within(canvasElement).getByRole('button', { name: 'Back (main)' })).toBeInTheDocument() } }

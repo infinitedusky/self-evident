@@ -48,7 +48,10 @@ export const WithAGuide: Story = {
     await userEvent.click(await c.findByRole('button', { name: /What to try · 0\/2/ }, { timeout: 5000 }))
     await expect(await c.findByText('You are here')).toBeInTheDocument()
     await userEvent.click(await c.findByRole('button', { name: 'Go there →' }))
-    await expect(await c.findByLabelText('Path')).toHaveValue('/iframe.html?id=pages-now--busy&viewMode=story')
+    await expect(await c.findByLabelText('Address')).toHaveValue('/iframe.html?id=pages-now--busy&viewMode=story')
+    // Its own way back, as in a browser.
+    await userEvent.click(c.getByRole('button', { name: 'Back' }))
+    await expect(c.getByLabelText('Address')).toHaveValue(at)
   },
 }
 /** In a narrow column: the address and the server's buttons on one row, the device widths and the data on the next. Nothing hides or overlaps. */
@@ -108,6 +111,23 @@ export const CompareWithMain: Story = {
     await expect(await c.findByTitle('main')).toHaveAttribute('src', expect.stringContaining(at))
     await expect(c.getByTitle(running.title)).toHaveAttribute('src', expect.stringContaining(at))
     await expect(c.getByText('4f2a9c1')).toBeInTheDocument()
+    // Each view has a bar of its own: main goes somewhere, and back, without the prototype moving.
+    const main = c.getByRole('textbox', { name: 'Address (main)' })
+    await userEvent.clear(main); await userEvent.type(main, '/iframe.html?id=pages-now--busy&viewMode=story{Enter}')
+    await expect(c.getByTitle('main')).toHaveAttribute('src', expect.stringContaining('pages-now--busy'))
+    await expect(c.getByTitle(running.title)).toHaveAttribute('src', expect.stringContaining(at))
+    await expect(c.getByRole('textbox', { name: 'Address (prototype)' })).toHaveValue(at)
+    await userEvent.click(c.getByRole('button', { name: 'Back (main)' }))
+    await expect(c.getByTitle('main')).toHaveAttribute('src', expect.stringContaining(at))
+    await expect(c.getByRole('button', { name: 'Forward (main)' })).toBeEnabled()
+    await expect(c.getByRole('button', { name: 'Reload (prototype)' })).toBeInTheDocument()
+    // Detached, main is in a browser tab of its own and the prototype has the room; put back, it is beside it again.
+    const opened: string[] = []; const open = window.open; window.open = ((u: string) => { opened.push(u); return null }) as typeof window.open
+    try { await userEvent.click(c.getByRole('button', { name: '↗ Detach' })) } finally { window.open = open }
+    await expect(opened[0]).toContain(at)
+    await expect(c.queryByTitle('main')).toBeNull()
+    await userEvent.click(c.getByRole('button', { name: 'Put main back' }))
+    await expect(await c.findByTitle('main')).toBeInTheDocument()
     await userEvent.click(c.getByRole('button', { name: 'Stop comparing' }))
     await expect(await c.findByRole('button', { name: 'Compare with main' })).toBeInTheDocument()
   },
