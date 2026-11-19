@@ -24,7 +24,7 @@ import { morePorts, straySays, straysOf } from './ports.js'
 import { databaseExists, databaseName, databaseUrl, dropDatabase, dropScenarios, listScenarios, rebuild, save, scenarioTables, writeScenario, type PrototypeDb, type Tables } from './prototype-data.js'
 import { endTalk, say, showTalk, startPrototypeTalk } from './talk.js'
 import { listRecordings, recordingsDir, recordingsOf } from './recordings.js'
-import { cleanStandIns, envOf, forgetStandIns, homeOf, standInKey, standInsStatus, startStandIns, stopStandIns, withStandIn, type StandIn } from './stand-ins.js'
+import { writeEnvFile, cleanStandIns, envOf, forgetStandIns, homeOf, standInKey, standInsStatus, startStandIns, stopStandIns, withStandIn, type StandIn } from './stand-ins.js'
 
 const STOP_TIMEOUT_MS = Number(process.env.PROTOTYPE_STOP_TIMEOUT_MS ?? 120_000)
 const running = new Map<string, { proc: ChildProcess; log: string[]; given?: number[]; stray?: { at: number; ports: number[] } }>()
@@ -109,8 +109,9 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
   // Its stand-ins first, each on a port of its own; the server is given the variables that point the app at them.
   const standIns = cleanStandIns(p.standIns)
   const pointed = envOf(p.id, standIns, await startStandIns(p.id, standIns, p.path, { ...process.env, ...(await prototypeEnv(p)) }), p.path)
+  const envFile = writeEnvFile(p.id, pointed) // for a container: a compose service names it as an env_file once
   // Its own process group, so stopping it also stops what the command started (a package manager's dev server).
-  const proc = spawn('sh', ['-c', cmd], { cwd: p.path, env: { ...process.env, ...(await prototypeEnv(p)), ...pointed, PORT: String(port), ...more.env, BROWSER: 'none', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+  const proc = spawn('sh', ['-c', cmd], { cwd: p.path, env: { ...process.env, ...(await prototypeEnv(p)), ...pointed, STAND_INS_ENV: envFile, PORT: String(port), ...more.env, BROWSER: 'none', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   const log: string[] = []
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)

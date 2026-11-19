@@ -96,7 +96,9 @@ added is something the real build will need too.
 and the variables that point the app at it. Self Evident starts it with the prototype and stops it with it, so it is
 still there after a restart or a data reset. Never start one by hand or keep one, or what it serves, in `/tmp`: the
 next start loses it, and the prototype no longer works. It runs in a folder of its own outside the repository
-(`$PROTOTYPE_HOME`), and a stub program the repository already keeps can be run from there.
+(`$PROTOTYPE_HOME`), and a stub program the repository already keeps can be run from there. Where the app runs in
+containers, point it with `{container_url}` and give the containers `$STAND_INS_ENV` as an `env_file` (the tool says
+how), then read the variable from inside a container to see that it arrived.
 
 **It serves what the real service really sent.** Raw recordings are kept with the task in `$RECORDINGS`, outside the
 repository, real people's among them: every conversation of the task saves a real response there untouched, so look

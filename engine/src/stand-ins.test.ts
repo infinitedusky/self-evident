@@ -1,5 +1,5 @@
 /** Stand-ins: a prototype's own, started and stopped with it, in a folder outside the repository. Real processes, sample data. */
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,7 +9,7 @@ import { app, repo, workspace } from './db/schema.js'
 import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
 import { discardPrototype, prototypeEnv, prototypeStatus, removeStandIn, runPrototype, setPrototypeCommand, setStandIn, startPrototype, stopPrototype, stopPrototypes } from './prototype.js'
-import { cleanStandIns, dirOf, envOf, fill, homeOf, withStandIn } from './stand-ins.js'
+import { cleanStandIns, dirOf, envFileOf, envOf, fill, homeOf, withStandIn } from './stand-ins.js'
 
 process.env.STAND_INS_HOME = mkdtempSync(join(tmpdir(), 'if-stand-ins-'))
 
@@ -29,6 +29,7 @@ describe('a stand-in, as it is kept', () => {
     const where = { port: 6123, home: '/h', dir: '/h/stand-ins/vendor', worktree: '/w' }
     expect(fill('{url}/v1', where)).toBe('http://localhost:6123/v1')
     expect(fill('http://host.docker.internal:{port}', where)).toBe('http://host.docker.internal:6123')
+    expect(fill('{container_url}/v1 {url}', where)).toBe('http://host.docker.internal:6123/v1 http://localhost:6123') // as a container reaches it, and as this computer does
     expect(fill('compose.yml:{home}/stub.yml {dir} {worktree}', where)).toBe('compose.yml:/h/stub.yml /h/stand-ins/vendor /w')
     const list = cleanStandIns([{ name: 'Vendor', cmd: 'x', env: { VENDOR_BASE_URL: '{url}', VENDOR_API_KEY: 'stub' } }, { name: 'Mail', cmd: 'y', env: { MAIL_URL: '{url}' } }])
     expect(envOf('proto_sample', list, { vendor: 6123 }, '/w')).toEqual({ VENDOR_BASE_URL: 'http://localhost:6123', VENDOR_API_KEY: 'stub' }) // one that is not up points nowhere
@@ -64,17 +65,20 @@ describe.skipIf(!reachable)('a prototype with a stand-in', () => {
     const p = await startPrototype({ appId, title: 'Vendor scan (sample)' })
     expect(await until(async () => (await prototypeStatus(p.id)).up)).toBe(true)
     expect(await says(p.url!)).toBe('no vendor: not set') // nothing stands in yet
+    expect(readFileSync(envFileOf(p.id), 'utf8').split('\n').filter((l) => l && !l.startsWith('#'))).toEqual([]) // the file a container is given is there even so: naming it never fails
     expect((await prototypeEnv(p)).PROTOTYPE_HOME).toBe(homeOf(p.id))
 
     // What it serves is kept in its own folder, outside the repository: here, a recorded response.
     mkdirSync(dirOf(p.id, 'vendor'), { recursive: true })
     writeFileSync(join(dirOf(p.id, 'vendor'), 'recording.txt'), 'recorded findings (sample)')
-    const set = await setStandIn(p.id, { name: 'Vendor', what: 'the vendor\'s API (sample)', cmd: STUB, env: { VENDOR_BASE_URL: '{url}' } })
+    const set = await setStandIn(p.id, { name: 'Vendor', what: 'the vendor\'s API (sample)', cmd: STUB, env: { VENDOR_BASE_URL: '{url}', VENDOR_URL_IN_A_CONTAINER: '{container_url}/v1', VENDOR_API_KEY: 'stub' } })
     expect(set.standIns).toMatchObject([{ key: 'vendor', name: 'Vendor', running: true, dir: dirOf(p.id, 'vendor') }])
     expect(dirOf(p.id, 'vendor').startsWith(repoPath)).toBe(false)
     // Setting it restarted the prototype, so its server has the variable: the app's own code now reaches the stand-in.
     expect(await until(async () => (await says(p.url!)) === 'app got: recorded findings (sample)')).toBe(true)
     const stub = set.standIns[0].url!
+    // And for a container: every variable in one file, written at this start.
+    expect(readFileSync(envFileOf(p.id), 'utf8').split('\n').filter((l) => l && !l.startsWith('#')).sort()).toEqual(['VENDOR_API_KEY=stub', `VENDOR_BASE_URL=${stub}`, `VENDOR_URL_IN_A_CONTAINER=http://host.docker.internal:${set.standIns[0].port}/v1`])
 
     await runPrototype(p.id, 'person', { restart: true }) // the restart that lost the one kept in /tmp
     expect(await until(async () => (await says(p.url!)) === 'app got: recorded findings (sample)')).toBe(true)
