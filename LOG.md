@@ -5049,5 +5049,11 @@ told to try each criterion "start to finish", which beat the rule about long run
 - Trying to break it is using what was built, in short scenarios. A criterion proved by a suite, a CI job or a
   person's eye is not a scenario.
 
+A visual or browser suite in the build is a setting, never an agent's choice (Sandy, same day: "if we want to set
+a visual test as a probe, we could do it, but it should be something that we … set as an option in the settings").
+It is a command on the list of what a build is held to (Settings › Skills, Build › Verify, Add a probe: for Bonkei,
+`pnpm docs:smoke`), set to block or to report. The engine runs it once on the merged work, and the app has chosen
+the minutes it takes. Left off, it runs only in CI and when the person runs it from the smoke test.
+
 This is wording, like the long-run rule before it: nothing cuts a command off. A limit on how long one command may
 run in a step that only reads is the next thing if an agent does it again.
