@@ -130,6 +130,10 @@ function AttentionRow({ a, busy, act }: { a: Attention; busy: string | null; act
     case 'checkout_behind': return (
       <li><Badge tone="warn">behind</Badge><div><strong>{a.appName}</strong> <span className="faint">{a.branch} on this computer is {a.commits} commit{a.commits === 1 ? '' : 's'} behind GitHub: {a.why}</span>
         <div className="muted" style={{ fontSize: 13 }}>{a.files.length > 0 ? `In ${a.files.join(', ')}. Commit or undo them` : 'Put it right'} in {a.path} and it catches up by itself.</div></div></li>)
+    case 'nightly_failed': return (
+      <li><Badge tone="bad">nightly</Badge><div><strong>{a.appName}: {a.name} failed</strong> <span className="faint">{a.nights > 1 ? `${a.nights} runs in a row` : 'last night'} · {a.workflow} on the default branch</span>
+        <div className="muted" style={{ fontSize: 13 }}>{a.since.length ? <>Merged since it last passed: {a.since.map((t, i) => <span key={t.id}>{i ? ', ' : ''}<Link to={`/tasks/${t.id}/build`}>{t.identifier} {t.title}</Link></span>)}.</> : 'Nothing of ours merged since it last passed.'}</div></div>
+        {a.url ? <a className="btn small" href={a.url} target="_blank" rel="noreferrer">Open the run</a> : <Link className="btn quiet small" to="/settings">Settings</Link>}</li>)
     case 'review': return (
       <li><Badge tone="warn">review</Badge><div><strong>#{a.prNumber} {a.title}</strong> <span className="faint">{a.appName}{a.author ? ` · from ${a.author}` : ''} · your review is asked</span></div>
         {a.url ? <a className="btn small" href={a.url} target="_blank" rel="noreferrer">Review</a> : null}</li>)

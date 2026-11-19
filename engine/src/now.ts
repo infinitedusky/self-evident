@@ -8,7 +8,8 @@ import { and, asc, desc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzl
 import { db } from './db/client.js'
 import { BEFORE_PLAN, checksOf } from './steps.js'
 import { workflowFor } from './work.js'
-import { app, build, event, fileClaim, issue, outsidePr, project, pr, question, run, session, step, stepWork } from './db/schema.js'
+import { app, build, event, fileClaim, issue, outsidePr, project, pr, question, run, session, step, stepWork, nightly } from './db/schema.js'
+import { leftTo } from './probe-list.js'
 import { putAwayIds } from './apps.js'
 import { identifier } from './issues.js'
 
@@ -30,6 +31,8 @@ export type Attention =
   | ({ kind: 'behind_main'; files: string; commits: number } & Where)
   | { kind: 'review'; appName: string; prNumber: number; title: string; author: string | null; url: string | null }
   | { kind: 'checkout_behind'; appName: string; branch: string; path: string; commits: number; why: string; files: string[] }
+  /** A nightly check is red (nightly.ts): the tasks merged since its last green run, one of which broke it. */
+  | { kind: 'nightly_failed'; appId: string; appName: string; name: string; workflow: string; url: string | null; nights: number; since: { id: string; identifier: string; title: string }[] }
   | ({ kind: 'overlap'; prNumber: number; title: string; author: string | null; url: string | null; files: string[] } & Where)
 
 /**
@@ -128,7 +131,7 @@ export async function now(appId?: string) {
   // At the smoke test: what each still waits on (its pull request, the person's checks), as its Close button says it.
   {
     const { waitsOf } = await import('./close.js')
-    await Promise.all(tasks.filter((x) => x.phase === 'smoke').map(async (x) => { x.waits = await waitsOf(top.find((t) => t.id === x.id)!, x.pr) }))
+    await Promise.all(tasks.filter((x) => x.phase === 'smoke').map(async (x) => { const t = top.find((t) => t.id === x.id)!; x.waits = await waitsOf(t, prs.find((q) => q.issueId === t.id) ?? prs.find((q) => q.projectId === t.projectId && !q.issueId) ?? null, appOf(t.appId)?.setup) }))
   }
   // After a prototype a planned task is read before it is built (the blast radius, the audit, the final ADR and
   // plan). Until those are in it is not ready: it is being checked, or it is stopped because the last step has a
@@ -223,6 +226,14 @@ export async function now(appId?: string) {
     if (last?.type === 'checkout.behind') needsYou.push({ kind: 'checkout_behind', appName: a.name, branch: w.branch ?? a.defaultBranch, path: w.path ?? '', commits: Number(w.commits ?? 0), why: String(w.why ?? ''), files: w.files ?? [] })
   }
   const outside = await db.select().from(outsidePr).where(appId ? and(eq(outsidePr.state, 'open'), eq(outsidePr.appId, appId)) : eq(outsidePr.state, 'open'))
+  // A nightly check that is red, while the app still holds its builds to it.
+  for (const n of (await db.select().from(nightly).where(eq(nightly.status, 'failed'))).filter((n) => appOf(n.appId) && (!appId || n.appId === appId))) {
+    const held = leftTo(appOf(n.appId)!.setup, 'nightly').find((h) => h.key === n.key && h.runs === n.workflow)
+    if (!held) continue
+    const merged = n.greenAt ? prs.filter((q) => q.appId === n.appId && q.status === 'merged' && q.mergedAt && q.mergedAt > n.greenAt! && (!n.ranAt || q.mergedAt <= n.ranAt)) : []
+    const since = top.filter((t) => merged.some((q) => (q.issueId ? q.issueId === t.id : q.projectId === t.projectId)) && !['backlog', 'triage', 'canceled', 'duplicate'].includes(t.state))
+    needsYou.push({ kind: 'nightly_failed', appId: n.appId, appName: appName(n.appId), name: held.name, workflow: n.workflow, url: n.url, nights: n.failing, since: since.slice(0, 12).map((t) => ({ id: t.id, identifier: name(t), title: t.title })) })
+  }
   for (const o of outside.filter((x) => x.reviewRequested && !x.draft)) needsYou.push({ kind: 'review', appName: appName(o.appId), prNumber: o.number, title: o.title, author: o.author, url: o.url })
   const live = subs.filter((x) => !['done', 'failed', 'cancelled'].includes(status(x.id)) && projects.find((p) => p.id === x.projectId && ['running', 'paused'].includes(p.status)))
   const claims = live.length ? await db.select().from(fileClaim).where(inArray(fileClaim.issueId, live.map((x) => x.id))) : []

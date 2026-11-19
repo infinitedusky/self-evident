@@ -9,7 +9,8 @@
  *
  * Nothing here needs the database: the web UI imports it (`@self-evident/engine/contracts`).
  */
-import { applyHeldChange, heldOf, TESTS_KEY, type HeldChange, type Resolved } from './held.js'
+import { applyHeldChange, heldOf, TESTS_KEY, type HeldChange, type Resolved, type RunsWhen } from './held.js'
+export type { RunsWhen }
 import { normalize, step, STEPS, styleOf, type StepKey, type Workflow } from './steps.js'
 
 export type StageKey = 'prepare' | 'do' | 'verify' | 'report'
@@ -18,7 +19,7 @@ export type ContractKey = Exclude<StepKey, 'idea'> | 'build' | 'smoke'
 /** How a probe reaches its verdict: a command's exit code, the check's agent judging a sentence, a skill run by a fresh agent that edits nothing, or one the engine brings. */
 export type ProbeViewKind = 'command' | 'judged' | 'skill' | 'built-in'
 export interface AttachedSkill { name: string; label: string; from: string; missing?: boolean; /** Every app has it here; it is not the app's to remove. */ fixed?: boolean }
-export interface ProbeView { key: string; name: string; kind: ProbeViewKind; runs: string; blocks: boolean; on: boolean; /** The app's own: it can be removed. */ own: boolean; /** Its name and what it runs can be changed here. */ editable?: boolean; /** One the engine ships that this app has switched or reworded: it can be put back. */ changed?: boolean; /** The workflow that has the last word on whether it is on, by name. Switching it here switches it for that workflow. */ from?: string; /** Why it cannot be switched here, when it cannot. */ fixed?: string }
+export interface ProbeView { key: string; name: string; kind: ProbeViewKind; runs: string; blocks: boolean; on: boolean; /** A command the build does not run: left to the repository's CI on the pull request (`runs` is the check's name), or to its nightly run (`runs` is the workflow's file). */ when?: RunsWhen; /** The app's own: it can be removed. */ own: boolean; /** Its name and what it runs can be changed here. */ editable?: boolean; /** One the engine ships that this app has switched or reworded: it can be put back. */ changed?: boolean; /** The workflow that has the last word on whether it is on, by name. Switching it here switches it for that workflow. */ from?: string; /** Why it cannot be switched here, when it cannot. */ fixed?: string }
 export interface Stage { key: StageKey; by: By; what: string; skills?: AttachedSkill[]; probes?: ProbeView[] }
 export interface StepContract { key: ContractKey; icon: string; label: string; needs: string[]; leaves: string[]; done: string; stages: Stage[] }
 export interface StepGroup { title: string; steps: StepContract[] }
@@ -63,7 +64,7 @@ export function heldTo(setup: unknown, workflow?: Workflow | null): ProbeView[] 
   const checklist = !workflow || styleOf(workflow) === 'checklist'
   const view = (h: Resolved): ProbeView => ({
     key: h.id, name: h.name, kind: h.kind, runs: h.runs, blocks: h.blocks, on: h.on, own: h.own,
-    ...(h.kind !== 'built-in' ? { editable: true } : {}), ...(h.changed ? { changed: true } : {}), ...(h.by === 'workflow' && workflow ? { from: workflow.name } : {}),
+    ...(h.when ? { when: h.when } : {}), ...(h.kind !== 'built-in' ? { editable: true } : {}), ...(h.changed ? { changed: true } : {}), ...(h.by === 'workflow' && workflow ? { from: workflow.name } : {}),
   })
   const all = heldOf(setup, workflow?.requirements).filter((h) => checklist || h.id === TESTS_KEY).map(view)
   const commands = all.filter((p) => p.kind === 'command')

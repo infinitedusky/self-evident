@@ -63,6 +63,7 @@ import { requirementsOf } from './requirements.js'
 import { patchSetup } from './setup.js'
 import { setHeld } from './probes.js'
 import { endStrayTrials, pastTasks, startTrial, trialsOf } from './trials.js'
+import { nightlyView } from './nightly.js'
 import { diffsOf, hasLegacy, type HeldChange } from './held.js'
 import { autoBuild } from './branches.js'
 import { runner } from './runner.js'
@@ -831,6 +832,8 @@ export function buildApp(bus: EventBus) {
   api.post('/projects/:id/describe', async (c) => { // plain descriptions for issues and sub-issues that have none
     try { return c.json(await describeProject(c.req.param('id'))) } catch (err) { return planError(c, err) }
   })
+  // Nightly checks (nightly.ts): each one's last run on the default branch, and the checkout's workflows to pick one from.
+  api.get('/apps/:id/nightly', async (c) => { try { return c.json(await nightlyView(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   // Trying a probe on past work (trials.ts): the latest trial of each probe, the tasks one would run on, and starting one.
   api.get('/apps/:id/trials', async (c) => { try { return c.json({ trials: await trialsOf(c.req.param('id'), true), tasks: (await pastTasks(c.req.param('id'))).map(({ acceptance: _, ...t }) => t) }) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/trials', async (c) => { try { const { trial } = await startTrial(c.req.param('id'), await c.req.json()); return c.json(trial) } catch (err) { return planError(c, err) } })

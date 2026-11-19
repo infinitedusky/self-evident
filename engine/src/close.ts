@@ -18,11 +18,12 @@ import { db } from './db/client.js'
 import { app, issue, pr, project } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { changeState, getIssue, PlanError } from './issues.js'
+import { leftTo } from './probe-list.js'
 import { smokeChecks, type SmokeCheck } from './smoke.js'
 import { styleOf } from './steps.js'
 import { guardComplete, workflowFor } from './work.js'
 
-export interface CloseFacts { state: string; pr: { number: number | null; status: string } | null; checks: Pick<SmokeCheck, 'mark'>[] }
+export interface CloseFacts { state: string; pr: { number: number | null; status: string } | null; checks: (Pick<SmokeCheck, 'mark'> & { when?: SmokeCheck['when'] })[]; /** Checks of the repository's CI this app holds a build to (held.ts, `pr`) that are failing on the pull request. */ ci?: string[] }
 const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`
 
 /** What stands between a task and being closed; empty when it can be. Pure. */
@@ -33,10 +34,17 @@ export function taskWaits(f: CloseFacts): string[] {
   if (f.state !== 'in_review') waits.push('It is not built yet.')
   if (!f.pr) waits.push('It has no pull request.')
   else if (f.pr.status !== 'merged') waits.push(`Pull request ${f.pr.number ? `#${f.pr.number}` : '(not opened)'} is ${f.pr.status === 'closed' ? 'closed without being merged' : 'not merged'}.`)
-  const todo = f.checks.filter((c) => c.mark === 'todo').length, failed = f.checks.filter((c) => c.mark === 'fail').length
+  for (const name of f.ci ?? []) waits.push(`The pull request's check "${name}" is failing.`)
+  const todo = f.checks.filter((c) => c.mark === 'todo' && c.when !== 'nightly').length, failed = f.checks.filter((c) => c.mark === 'fail').length
   if (todo) waits.push(`${n(todo, 'check of yours is', 'checks of yours are')} not passed or skipped.`)
   if (failed) waits.push(`${n(failed, 'check', 'checks')} failed by hand.`)
   return waits
+}
+
+/** The CI checks this app holds a build to (held.ts: left to the pull request, and blocking) that the pull request's last read from GitHub shows failing. Pure. */
+export function ciFailing(setup: unknown, signals: unknown): string[] {
+  const failing = (((signals ?? {}) as { failing?: string[] }).failing ?? []).map((x) => x.toLowerCase())
+  return leftTo(setup, 'pr').filter((p) => p.blocks && failing.includes(p.runs.toLowerCase())).map((p) => p.runs)
 }
 
 async function facts(issueId: string) {
@@ -45,13 +53,14 @@ async function facts(issueId: string) {
   const prs = t.projectId ? await db.select().from(pr).where(eq(pr.projectId, t.projectId)) : []
   const pull = prs.find((x) => x.issueId === t.id) ?? prs.find((x) => !x.issueId) ?? null // its own when each task has one, else its project's
   const staged = styleOf((await workflowFor(db, { issueId: t.id })).workflow) !== 'checklist'
-  return { t, f: { state: t.state, pr: pull ? { number: pull.number, status: pull.status } : null, checks: smokeChecks(acceptanceOf(t), null, staged) } satisfies CloseFacts }
+  const [a] = await db.select({ setup: app.setup }).from(app).where(eq(app.id, t.appId))
+  return { t, f: { state: t.state, pr: pull ? { number: pull.number, status: pull.status } : null, checks: smokeChecks(acceptanceOf(t), null, staged), ci: pull ? ciFailing(a?.setup, pull.signals) : [] } satisfies CloseFacts }
 }
 
 /** What a task still waits on before it can be closed, from rows already read (Build's list: one lookup a task). */
-export async function waitsOf(t: typeof issue.$inferSelect, pull: { number: number | null; status: string } | null): Promise<string[]> {
+export async function waitsOf(t: typeof issue.$inferSelect, pull: { number: number | null; status: string; signals?: unknown } | null, setup?: unknown): Promise<string[]> {
   const staged = styleOf((await workflowFor(db, { issueId: t.id })).workflow) !== 'checklist'
-  return taskWaits({ state: t.state, pr: pull, checks: smokeChecks(acceptanceOf(t), null, staged) })
+  return taskWaits({ state: t.state, pr: pull, checks: smokeChecks(acceptanceOf(t), null, staged), ci: pull ? ciFailing(setup, pull.signals) : [] })
 }
 
 /** Whether a task can be closed now, and if not, what it waits on. */

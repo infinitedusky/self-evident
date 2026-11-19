@@ -40,7 +40,7 @@ import { Badge } from './Badge'
 import { SmokeTerminal } from './SmokeTerminal'
 import { API, engine, openEvents, type SmokeCheck, type SmokeSetupView, type SmokeView } from '../engine'
 
-const WHEN = { here: 'Here, on the built code', pr: 'On the pull request', after: 'After it is merged' } as const
+const WHEN = { here: 'Here, on the built code', pr: 'On the pull request', after: 'After it is merged', nightly: 'Left to the nightly run' } as const
 
 /** Where a check sends the view: a path of the app, or a story by its id. */
 /** Whether a check's "where" is somewhere the view can be sent: an address, a path, or a story's id. Anything else is a place said in words ("the pull request on GitHub"), shown as it is. */
@@ -255,7 +255,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
           </div>
           <div className="smoke-groups">
             {many && shown.length === 0 && v.checks.length > 0 && <p className="muted" style={{ margin: 0 }}>No check on this task needs {su.name}.</p>}
-            {(['here', 'pr', 'after'] as const).map((when) => {
+            {(['here', 'pr', 'after', 'nightly'] as const).map((when) => {
               const mine = shown.filter((c) => (c.when ?? 'here') === when)
               if (!mine.length) return null
               const waits = when === 'pr' && !v.pr
@@ -265,6 +265,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
                   {when === 'pr' && (v.pr
                     ? <p className="faint smoke-when-says">{v.pr.url ? <a href={v.pr.url} target="_blank" rel="noreferrer">Pull request #{v.pr.number}</a> : <>Pull request #{v.pr.number}</>}: these can only be seen there.</p>
                     : <p className="faint smoke-when-says">These can only be seen on the pull request, and this task has none yet. It is opened as a draft once the build is done and checked, or from <Link to={`${base}/build`}>the build page</Link>.</p>)}
+                  {when === 'nightly' && <p className="faint smoke-when-says">The repository runs these every night on its default branch. Nobody tries them here and they do not hold the task; a red night shows under what needs you.</p>}
                   {when === 'after' && <p className="faint smoke-when-says">These can only be seen once it is merged. They do not hold the task; mark them when you have looked.</p>}
                   <ol className={`smoke-checks ${waits ? 'waiting' : ''}`} aria-label={WHEN[when]}>{mine.map((c) => row(c, waits))}</ol>
                 </div>

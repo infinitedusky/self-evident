@@ -185,8 +185,11 @@ export async function setSmokeSetup(appId: string, i: { setup?: string; name?: s
  * - after: only once it is merged: a release, a deploy, a flag switched on.
  * A task waits for its here and pr checks; one for after the merge is listed and holds nothing.
  */
-export type When = 'here' | 'pr' | 'after'
-export const WHENS: When[] = ['here', 'pr', 'after']
+/** nightly: left to the repository's scheduled run on its default branch (held.ts). Like one for after the merge it holds nothing, and it does not hold the task open either. */
+export type When = 'here' | 'pr' | 'after' | 'nightly'
+export const WHENS: When[] = ['here', 'pr', 'after', 'nightly']
+/** Whether a check waits for the person before the merge. */
+export const holds = (when: When) => when === 'here' || when === 'pr'
 /** When, from what the check said; for one written before checks said when, from its own words. */
 export function whenOf(c: Criterion): When {
   if (c.builtWhen) return c.builtWhen
@@ -276,7 +279,7 @@ export function smokeChecks(criteria: Criterion[], head: string | null = null, s
   })
 }
 /** How many still wait for the person and hold the task: not the ones for after the merge. */
-export const smokeOwed = (criteria: Criterion[]) => smokeChecks(criteria).filter((c) => c.mark === 'todo' && c.when !== 'after').length
+export const smokeOwed = (criteria: Criterion[]) => smokeChecks(criteria).filter((c) => c.mark === 'todo' && holds(c.when)).length
 /** Of those, how many can be done now: the ones on the pull request wait for it to exist. */
 export const smokeReady = (criteria: Criterion[], hasPr: boolean) => smokeChecks(criteria).filter((c) => c.mark === 'todo' && (c.when === 'here' || (c.when === 'pr' && hasPr))).length
 
@@ -356,7 +359,7 @@ export async function smokeView(issueId: string) {
       /** local: main can be brought up beside it, to look at the two side by side. */ canCompare: setup.where === 'local' && !!(setup.cmd ?? proto) && !!base && base !== head, compare,
       /** local: there is something to start from nothing: a database of its own, a seed, or a script of its own. */ canClean: setup.where === 'local' && !!(setup.cmd || setup.seed || hasDb),
       log: running.get(runKey(t.id, setup.key))?.log.slice(-30) ?? [],
-      /** How many of its checks still wait for the person. */ owed: checks.filter((c) => c.setup === setup.key && c.mark === 'todo' && c.when !== 'after').length,
+      /** How many of its checks still wait for the person. */ owed: checks.filter((c) => c.setup === setup.key && c.mark === 'todo' && holds(c.when)).length,
     }
   }))
   const { key: _k, name: _n, what: _w, owed: _o, ...first } = setups[0]
@@ -371,7 +374,7 @@ export async function smokeView(issueId: string) {
     ...first, // the app's first set-up, as the view was when an app had one
     branch, head, /** Its pull request, when there is one: a preview is of it. */ pr,
     /** Every set-up of the app, each with where it is and whether it is up; a check names the one it needs. */ setups,
-    checks: linked, owed: checks.filter((c) => c.mark === 'todo' && c.when !== 'after').length, failed: checks.filter((c) => c.mark === 'fail').length,
+    checks: linked, owed: checks.filter((c) => c.mark === 'todo' && holds(c.when)).length, failed: checks.filter((c) => c.mark === 'fail').length,
   }
 }
 

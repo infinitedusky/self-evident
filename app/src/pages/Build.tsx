@@ -12,7 +12,7 @@ import { Link } from 'react-router'
 import { Badge } from '../components/Badge'
 import { QuestionAsk } from '../components/QuestionAsk'
 import { Md } from '../components/Md'
-import { API, engine, EVENT_TYPES, openEvents, type BuildTask } from '../engine'
+import { API, engine, EVENT_TYPES, openEvents, type Attention, type BuildTask } from '../engine'
 import { useCurrentApp } from '../current-app'
 
 const PR_WORD: Record<string, string> = { open: 'open', draft: 'draft', merged: 'merged', closed: 'closed' }
@@ -34,6 +34,7 @@ const savedView = (): View => { try { return localStorage.getItem(VIEW_KEY) === 
 export function Build() {
   const { app } = useCurrentApp()
   const [tasks, setTasks] = useState<BuildTask[] | null>(null)
+  const [red, setRed] = useState<Extract<Attention, { kind: 'nightly_failed' }>[]>([]) // nightly checks that are red: what merged is what broke them
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [refused, setRefused] = useState<{ key: string; why: string } | null>(null)
@@ -43,7 +44,7 @@ export function Build() {
     setTasks(null)
     if (!app) return
     let closed = false
-    const refresh = () => engine.now(app.id).then((d) => { if (!closed) { setTasks(d.tasks ?? []); setError(null) } }).catch((e) => setError(String(e.message ?? e)))
+    const refresh = () => engine.now(app.id).then((d) => { if (!closed) { setTasks(d.tasks ?? []); setRed(d.needsYou.filter((n) => n.kind === 'nightly_failed')); setError(null) } }).catch((e) => setError(String(e.message ?? e)))
     void refresh()
     const es = openEvents(`${API}/events?since=now&app=${app.id}`)
     const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(refresh, 250) }
@@ -127,7 +128,24 @@ export function Build() {
       </div>
       {error && <div className="empty">The engine isn't reachable: {error}.</div>}
       {!app && <div className="empty">No app yet. Add one in Settings.</div>}
-      {tasks && !tasks.length && <div className="empty">Nothing is being built. A task shows here once its brief is approved and it has been planned. <Link to="/plan">Go to Plan →</Link></div>}
+      {tasks && !tasks.length && !red.length && <div className="empty">Nothing is being built. A task shows here once its brief is approved and it has been planned. <Link to="/plan">Go to Plan →</Link></div>}
+
+      {red.length > 0 && (
+        <section data-component="BuildNightly">
+          <h2 className="build-h">Nightly checks failing</h2>
+          <ul className="list panel build-list">
+            {red.map((a) => (
+              <li key={a.workflow + a.name} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start' }}>
+                <div style={{ minWidth: 0 }}>
+                  <strong>{a.name}</strong> <span className="faint" style={{ fontSize: 13 }}>{a.nights > 1 ? `failed ${a.nights} runs in a row` : 'failed last night'} · {a.workflow}</span>
+                  <div className="muted" style={{ fontSize: 13 }}>{a.since.length ? <>Merged since it last passed: {a.since.map((t, i) => <span key={t.id}>{i ? ', ' : ''}<Link to={`/tasks/${t.id}/build`}>{t.identifier} {t.title}</Link></span>)}.</> : 'Nothing of ours merged since it last passed.'}</div>
+                </div>
+                {a.url ? <a className="btn quiet small" href={a.url} target="_blank" rel="noreferrer">Open the run</a> : <Badge tone="bad">failed</Badge>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {view === 'stage' && ORDER.filter((ph) => ph !== 'closed' && of(ph).length > 0).map((ph) => (
         <section key={ph} data-component={STAGE[ph].component}>

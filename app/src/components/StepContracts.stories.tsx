@@ -185,3 +185,66 @@ export const TriedOnPastWork: Story = {
     await expect(c.queryByRole('button', { name: 'Try Acceptance criteria on past work' })).toBeNull(); await expect(c.queryByRole('button', { name: 'Try Licence scan on past work' })).toBeNull() // off: not tried
   },
 }
+
+// A slow suite taken off every build (sample data): one check left to CI on the pull request, two workflows the repository runs every night.
+const withNightly: StepGroup[] = groups.map((g) => ({ ...g, steps: g.steps.map((st) => ({ ...st, stages: st.stages.map((t) => (t.probes ? { ...t, probes: [...t.probes,
+  { key: 'smoke', name: 'Smoke', kind: 'command' as const, runs: 'smoke', blocks: true, on: true, own: true, editable: true, when: 'pr' as const },
+  { key: 'docs_smoke', name: 'Docs smoke', kind: 'command' as const, runs: 'nightly.yml', blocks: false, on: true, own: true, editable: true, when: 'nightly' as const },
+  { key: 'load_test', name: 'Load test', kind: 'command' as const, runs: 'load.yml', blocks: false, on: true, own: true, editable: true, when: 'nightly' as const },
+] } : t)) })) }))
+const workflows = [
+  { file: 'ci.yml', name: 'CI', scheduled: false, onPr: true, jobs: ['check', 'smoke', 'size'] },
+  { file: 'nightly.yml', name: 'Nightly', scheduled: true, onPr: false, jobs: ['docs'] },
+  { file: 'load.yml', name: 'Load test', scheduled: true, onPr: false, jobs: ['k6'] },
+]
+/** When a check runs: every build, on the pull request (the repository's CI), or nightly on the default branch. A nightly row shows its last run; it only reports. Sample data. */
+export const NightlyAndCi: Story = {
+  args: { groups: withNightly, open: ['build'], onProbe: fn(), onTry: fn(), tryOn: 5, workflows, nightly: {
+    docs_smoke: { status: 'failed', url: 'https://example.com/sample/actions/runs/19', ran: '6 h ago', failing: 2, green: '3 days ago' },
+    load_test: { status: 'passed', url: 'https://example.com/sample/actions/runs/20', ran: '5 h ago', failing: 0 },
+  } },
+  play: async ({ canvasElement, args }) => {
+    const c = within(canvasElement)
+    const row = (name: string) => within(c.getAllByRole('row').find((r) => within(r).queryByText(name, { selector: 'td' }))!)
+    await expect(row('Smoke').getByText('CI on the pull request')).toBeVisible()
+    await expect(row('Docs smoke').getByText('nightly')).toBeVisible()
+    await expect(row('Docs smoke').getByText('reports')).toBeVisible() // a nightly one has nothing left to block: no choice
+    await expect(c.queryByRole('combobox', { name: 'When Docs smoke fails' })).toBeNull()
+    await expect(c.queryByRole('button', { name: 'Try Docs smoke on past work' })).toBeNull(); await expect(c.queryByRole('button', { name: 'Try Smoke on past work' })).toBeNull() // nothing here runs them
+    await expect(c.getByText('Failed 2 runs in a row')).toBeVisible()
+    await expect(c.getByText(/last passed 3 days ago/)).toBeVisible()
+    await expect(within(c.getByLabelText('Last run of Docs smoke')).getByRole('link', { name: 'Open the run' })).toHaveAttribute('href', 'https://example.com/sample/actions/runs/19')
+    await expect(c.getByText('The last run passed')).toBeVisible()
+
+    // Adding one: pick when, then the workflow from the ones the repository runs on a schedule.
+    await userEvent.click(c.getByRole('button', { name: 'Add a probe to Build' }))
+    const form = within(c.getByRole('form', { name: 'Add a probe' }))
+    await userEvent.type(form.getByLabelText('Probe name'), 'Visual pass')
+    await userEvent.selectOptions(form.getByLabelText('When it runs'), 'nightly')
+    await expect(form.getByLabelText('When it fails')).toBeDisabled()
+    await expect(within(form.getByLabelText('The workflow that runs it')).getAllByRole('option').map((o) => o.textContent)).toEqual(['Pick a workflow…', 'Nightly (nightly.yml)', 'Load test (load.yml)']) // ci.yml has no schedule
+    await userEvent.selectOptions(form.getByLabelText('The workflow that runs it'), 'nightly.yml')
+    await userEvent.click(form.getByRole('button', { name: 'Add' }))
+    await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'add', name: 'Visual pass', kind: 'command', runs: 'nightly.yml', blocks: false, when: 'nightly' })
+
+    // Moving Lint to the pull request: its check is picked from the jobs that run there.
+    await userEvent.click(c.getByRole('button', { name: 'Edit the probe Lint' }))
+    const edit = within(c.getByRole('form', { name: 'Edit Lint' }))
+    await userEvent.selectOptions(edit.getByLabelText('When it runs'), 'pr')
+    await userEvent.selectOptions(edit.getByLabelText('Its check on the pull request'), 'check')
+    await userEvent.click(edit.getByRole('button', { name: 'Save' }))
+    await expect(args.onProbe).toHaveBeenLastCalledWith({ op: 'edit', key: 'lint', name: 'Lint', runs: 'check', when: 'pr' })
+  },
+}
+/** A repository with no scheduled workflow yet: the form says how one gets there, and takes the file's name typed. Sample data. */
+export const NoScheduledWorkflow: Story = {
+  args: { open: ['build'], onProbe: fn(), workflows: [workflows[0]] },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(c.getByRole('button', { name: 'Add a probe to Build' }))
+    const form = within(c.getByRole('form', { name: 'Add a probe' }))
+    await userEvent.selectOptions(form.getByLabelText('When it runs'), 'nightly')
+    await expect(form.getByText(/No workflow in this repository runs on a schedule yet/)).toBeVisible()
+    await expect(form.getByLabelText('The workflow that runs it')).toHaveAttribute('placeholder', 'the workflow\'s file, e.g. nightly.yml')
+  },
+}

@@ -16,10 +16,21 @@
  * both have a `tests`. It was two stores (`setup.requirements`, a whole copy of the list; `setup.probes`, differences):
  * those are still read when an app has no `held` yet (`legacy`), and every write leaves only `held`.
  *
+ * When it is run (Sandy, 2026-11-19, on Bonkei's every-page docs smoke running on every pull request: "I feel like
+ * this should be a nightly check"; then "great lets do that"). A command of the app's own says when:
+ * - build: the engine runs it on every build (as every other kind is);
+ * - pr: nothing runs it here. It is a check of the repository's CI on the pull request, and `runs` is that check's name;
+ * - nightly: nothing runs it here and nothing waits for it. It is a workflow the repository runs on a schedule on its
+ *   default branch, `runs` is that workflow's file, and the engine reads its last run (nightly.ts). It only reports.
+ *
  * Nothing here needs the database: the web UI imports it.
  */
 export type HeldKind = 'command' | 'skill' | 'judged' | 'built-in'
-export interface Held { key: string; name: string; kind: HeldKind; /** The command, the skill as a session names it, the sentence to judge, or what a built-in does. */ runs: string; /** false: reported, and nothing is held or sent back. */ blocks: boolean; on: boolean }
+export type RunsWhen = 'build' | 'pr' | 'nightly'
+export const RUNS_WHEN: RunsWhen[] = ['build', 'pr', 'nightly']
+export interface Held { key: string; name: string; kind: HeldKind; /** The command, the skill as a session names it, the sentence to judge, or what a built-in does; left to CI, the pull request check's name; nightly, the workflow's file. */ runs: string; /** false: reported, and nothing is held or sent back. */ blocks: boolean; on: boolean; /** When it is run; none is every build. Only a command of the app's own says otherwise. */ when?: RunsWhen }
+/** When one is run. */
+export const whenRun = (h: { when?: RunsWhen | string }): RunsWhen => (h.when === 'pr' || h.when === 'nightly' ? h.when : 'build')
 /** What an app keeps: for one the engine ships, only what differs; for its own, all of it. */
 export type HeldDiff = { key: string } & Partial<Omit<Held, 'key'>>
 export interface Resolved extends Held {
@@ -80,7 +91,8 @@ export function cleanHeld(given: unknown): HeldDiff[] {
     }
     if (!name || (!runs && !judged) || (g.kind !== 'command' && g.kind !== 'skill' && g.kind !== 'judged')) continue
     seen.add(id)
-    out.push({ key, name, kind: g.kind, runs: runs || name, ...(g.on === false ? { on: false } : {}), ...(g.blocks === false ? { blocks: false } : {}) })
+    const when = g.kind === 'command' ? whenRun(g) : 'build'
+    out.push({ key, name, kind: g.kind, runs: runs || name, ...(g.on === false ? { on: false } : {}), ...(g.blocks === false || when === 'nightly' ? { blocks: false } : {}), ...(when !== 'build' ? { when } : {}) })
   }
   return out
 }
@@ -119,15 +131,15 @@ export function heldOf(setup: unknown, workflow?: unknown, project?: unknown): R
     if (d.kind !== 'judged') return r
     return typeof pr[d.key] === 'boolean' ? { ...r, on: pr[d.key] as boolean, by: 'project' } : typeof wf[d.key] === 'boolean' ? { ...r, on: wf[d.key] as boolean, by: 'workflow' } : r
   }
-  const mine = diffs.filter((x) => !shipped(idOf(x))).map((x) => one({ key: x.key, name: x.name!, kind: x.kind!, runs: x.runs!, blocks: x.blocks ?? true, on: x.on ?? true }, true))
+  const mine = diffs.filter((x) => !shipped(idOf(x))).map((x) => one({ key: x.key, name: x.name!, kind: x.kind!, runs: x.runs!, blocks: x.blocks ?? true, on: x.on ?? true, ...(x.when ? { when: x.when } : {}) }, true))
   return [...BUILT_IN.map((d) => one(d, false)), ...(cmd ? [one({ ...TESTS, runs: cmd }, false)] : []), ...JUDGED.map((d) => one(d, false)), ...mine]
 }
 
 export type HeldChange =
   | { op: 'on'; key: string; on: boolean } | { op: 'blocks'; key: string; blocks: boolean } | { op: 'remove'; key: string }
-  | { op: 'add'; name: string; kind: 'command' | 'skill' | 'judged'; runs: string; /** false: it reports only. */ blocks?: boolean }
+  | { op: 'add'; name: string; kind: 'command' | 'skill' | 'judged'; runs: string; /** false: it reports only. */ blocks?: boolean; /** A command: when it is run (none: every build). */ when?: RunsWhen }
   /** Its name and what it runs (a judged one, its sentence; the test command, its command), and whether it blocks when given. Its key and kind stay. */
-  | { op: 'edit'; key: string; name: string; runs: string; blocks?: boolean }
+  | { op: 'edit'; key: string; name: string; runs: string; blocks?: boolean; /** A command of the app's own: when it is run, when given. */ when?: RunsWhen }
   /** One the engine ships, back to how the engine ships it. */
   | { op: 'reset'; key: string }
 
@@ -144,7 +156,7 @@ export function applyHeldChange(setup: unknown, change: HeldChange): Record<stri
     if (!name || !runs || !key) return null
     const id = idOf({ key, kind: change.kind })
     if (shipped(id) || heldOf(setup).some((h) => h.id === id)) return null
-    return out([...diffs, { key, name, kind: change.kind, runs, ...(change.blocks === false ? { blocks: false } : {}) }])
+    return out([...diffs, { key, name, kind: change.kind, runs, ...(change.blocks === false ? { blocks: false } : {}), ...(change.when ? { when: change.when } : {}) }])
   }
   const judged = change.key.startsWith(REQ), key = judged ? change.key.slice(REQ.length) : change.key
   const id = change.key, d = shipped(id), was = diffs.find((x) => idOf(x) === id), rest = diffs.filter((x) => idOf(x) !== id)
@@ -153,12 +165,12 @@ export function applyHeldChange(setup: unknown, change: HeldChange): Record<stri
   if (change.op === 'remove') return d ? (id === TESTS_KEY ? out(rest, { test_cmd: null }) : null) : out(rest)
   if (change.op === 'reset') return d && was ? out(rest) : null
   if (change.op === 'on') return put({ on: change.on })
-  if (change.op === 'blocks') return put({ blocks: change.blocks })
+  if (change.op === 'blocks') return whenRun(was ?? {}) === 'nightly' && change.blocks ? null : put({ blocks: change.blocks }) // a nightly run has nothing left to block
   const name = change.name.trim(), runs = change.runs.trim(), blocks = typeof change.blocks === 'boolean' ? { blocks: change.blocks } : {}
   if (!runs) return null
   if (id === TESTS_KEY) return put(blocks, { test_cmd: runs })
   if (d?.kind === 'built-in' || !name) return null
-  return put({ name, runs, ...blocks })
+  return put({ name, runs, ...blocks, ...(change.when && !d ? { when: change.when } : {}) })
 }
 
 /** Several changes, one after another, as one change to the settings (a page's save, an agent's set-up). Ones that cannot be made are passed over. */

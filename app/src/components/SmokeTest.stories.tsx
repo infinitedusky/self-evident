@@ -149,6 +149,16 @@ export const AtDifferentTimes: Story = {
     await expect(within(c.getByRole('group', { name: 'Here, on the built code' })).getByRole('button', { name: 'Pass' })).toBeEnabled()
   },
 }
+/** A criterion the app leaves to its nightly run: listed in a group of its own, and it holds nothing. Sample data. */
+export const LeftToTheNightlyRun: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, checks: [mixed[0], { id: 'ac_s10', text: 'The whole docs smoke passes (sample)', when: 'nightly' as const, how: 'The workflow nightly.yml runs it on main every night (sample)', mark: 'todo' as const }], owed: 1 } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const night = within(await c.findByRole('group', { name: 'Left to the nightly run' }))
+    await expect(night.getByText('The whole docs smoke passes (sample)')).toBeInTheDocument()
+    await expect(night.getByText(/they do not hold the task/)).toBeInTheDocument()
+  },
+}
 /** The same once the pull request is open: its checks can be done, with a link to it. */
 export const PullRequestOpen: Story = {
   beforeEach: withEngine({ smoke: { ...smokeSample, checks: mixed, owed: 2, pr: { number: 12, url: 'https://github.test/sample/pull/12' } } }),

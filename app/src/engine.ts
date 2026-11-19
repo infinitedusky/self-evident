@@ -271,7 +271,7 @@ export interface ChecklistItem { id: string; kind: 'criterion' | 'requirement'; 
 export interface FlowNode { id: string; sub?: string; title: string; state: ChecklistStage['state']; detail: string; after: string[] | null }
 export interface Checklist { build: 'one' | 'planned'; stages: ChecklistStage[]; items: ChecklistItem[]; met: number; unmet: number; total: number; flow?: FlowNode[] }
 /** A task's smoke test (the engine's smoke module): where the built code runs, and the checks left to a person with their marks. */
-export interface SmokeCheck { /** Which of the app's set-ups it needs up (its key). */ setup?: string; /** When it can be done: here on the built code, on the pull request, or after the merge. */ when?: 'here' | 'pr' | 'after'; id: string; text: string; where?: string; /** That place as an address to open, while its set-up is up or deployed. */ link?: string; how?: string; mark: 'todo' | 'pass' | 'fail' | 'skip'; note?: string; stale?: boolean; before?: { pass: boolean; note: string }; /** What an agent saw when asked to try it: its word, not a mark. stale: said on an earlier commit. */ tried?: { verdict: 'holds' | 'fails' | 'unsure'; note: string; sha: string | null; at: string; stale?: boolean }; /** An agent is trying it now. */ trying?: boolean }
+export interface SmokeCheck { /** Which of the app's set-ups it needs up (its key). */ setup?: string; /** When it can be done: here on the built code, on the pull request, or after the merge. */ when?: 'here' | 'pr' | 'after' | 'nightly'; id: string; text: string; where?: string; /** That place as an address to open, while its set-up is up or deployed. */ link?: string; how?: string; mark: 'todo' | 'pass' | 'fail' | 'skip'; note?: string; stale?: boolean; before?: { pass: boolean; note: string }; /** What an agent saw when asked to try it: its word, not a mark. stale: said on an earlier commit. */ tried?: { verdict: 'holds' | 'fails' | 'unsure'; note: string; sha: string | null; at: string; stale?: boolean }; /** An agent is trying it now. */ trying?: boolean }
 /** Main, brought up beside a build to look at the two side by side. */
 export interface SmokeCompare { url: string; up: boolean; /** The commit of main it runs. */ sha: string | null; log: string[] }
 /** One of an app's smoke test set-ups on a task: where it is and whether it is up. */
@@ -326,6 +326,8 @@ export type Attention =
   | ({ kind: 'behind_main'; files: string; commits: number } & Where)
   | { kind: 'review'; appName: string; prNumber: number; title: string; author: string | null; url: string | null }
   | { kind: 'checkout_behind'; appName: string; branch: string; path: string; commits: number; why: string; files: string[] }
+  /** A nightly check is red: the tasks merged since its last green run, one of which broke it. */
+  | { kind: 'nightly_failed'; appId: string; appName: string; name: string; workflow: string; url: string | null; nights: number; since: { id: string; identifier: string; title: string }[] }
   | ({ kind: 'overlap'; prNumber: number; title: string; author: string | null; url: string | null; files: string[] } & Where)
 export interface RunningProject {
   projectId: string; projectName: string; appName: string; status: string; integrationBranch: string | null; backlogOpen: number
@@ -481,6 +483,8 @@ export const engine = {
   updateWorkspace: (id: string, body: { name?: string; integrations?: IntegrationValues }) => call<Workspace>('PATCH', `/workspaces/${id}`, body),
   appSettings: (id: string) => call<AppSettings>('GET', `/apps/${id}/settings`),
   /** A probe tried on past work: the latest trial of each, and the merged tasks one would run on. */
+  /** Each nightly check's last run on the default branch, and the workflows the app's checkout has (the engine's nightly.ts). */
+  nightly: (appId: string) => call<{ checks: { key: string; workflow: string; status: 'passed' | 'failed' | 'none'; url: string | null; ranAt: string | null; failing: number; greenAt: string | null; error: string | null }[]; workflows: { file: string; name: string; scheduled: boolean; onPr: boolean; jobs: string[] }[] }>('GET', `/apps/${appId}/nightly`),
   trials: (appId: string) => call<{ trials: Trial[]; tasks: { issueId: string; identifier: string; title: string; pr: number | null }[] }>('GET', `/apps/${appId}/trials`),
   startTrial: (appId: string, body: { key: string; probe: Trial['probe']; limit?: number }) => call<Trial>('POST', `/apps/${appId}/trials`, body),
   appAccount: (id: string) => call<AccountStatus>('GET', `/apps/${id}/account`),
@@ -583,7 +587,7 @@ export const EVENT_TYPES = [
   'issue.created', 'issue.deleted', 'issue.updated', 'issue.state', 'issue.reordered', 'issue.cleared', 'issue.planning', 'issue.planned', 'issue.plan_failed', 'issue.plan_waiting', 'issue.commented',
   'question.asked', 'question.answered', 'initiative.created', 'initiative.updated', 'cycle.created',
   'talk.message', 'talk.permission', 'talk.result', 'prototype.shown', 'share.started', 'share.stopped', 'idea.created', 'idea.converted', 'step.updated', 'brief.approved', 'brief.unapproved', 'workflow.saved', 'workflow.used', 'engine.hold', 'engine.resumed',
-  'pr.merged', 'pr.closed', 'pr.retargeted', 'pr.review', 'pr.checks', 'review.requested', 'project.caught_up', 'project.behind_main', 'trial.started', 'trial.progress', 'trial.finished', 'checkout.behind', 'checkout.pulled',
+  'pr.merged', 'pr.closed', 'pr.retargeted', 'pr.review', 'pr.checks', 'nightly.failed', 'nightly.passed', 'review.requested', 'project.caught_up', 'project.behind_main', 'trial.started', 'trial.progress', 'trial.finished', 'checkout.behind', 'checkout.pulled',
   'backlog.error', 'project.backlog_open',
   'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted', 'build.carried_on',
   'run.started', 'run.message', 'run.steps', 'run.tool_call', 'run.tool_result', 'run.result', 'run.error', 'run.rate_limit',

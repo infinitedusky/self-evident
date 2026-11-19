@@ -44,7 +44,7 @@ export interface Criterion {
   /** For a criterion the check left to a person: where to go to see it, a path of the app or a story's id (smoke.ts). */
   builtWhere?: string
   /** When a person can check it (smoke.ts): here on the built code, on the pull request, or only after it is merged. Absent: here. */
-  builtWhen?: 'here' | 'pr' | 'after'
+  builtWhen?: 'here' | 'pr' | 'after' | 'nightly'
   /** Which of the app's smoke test set-ups a person needs up to check it (its key). Absent: the app's first. */
   builtSetup?: string
   /** The build's mark made by a person, by hand, in a smoke test: what they said, and the commit they said it on. */
@@ -85,7 +85,7 @@ export function applyAcceptance(list: Criterion[], c: AcceptanceChange, by: stri
     if (u.builtEvidence !== undefined) { const e = line(u.builtEvidence, 1000); if (e) x.builtEvidence = e; else delete x.builtEvidence }
     if (u.builtWhere !== undefined) { const w = line(u.builtWhere, 300); if (w) x.builtWhere = w; else delete x.builtWhere }
     if (u.builtSetup !== undefined) { if (typeof u.builtSetup === 'string' && u.builtSetup.trim()) x.builtSetup = u.builtSetup.trim().slice(0, 40); else delete x.builtSetup }
-    if (u.builtWhen !== undefined) { if (u.builtWhen === 'pr' || u.builtWhen === 'after' || u.builtWhen === 'here') x.builtWhen = u.builtWhen; else delete x.builtWhen }
+    if (u.builtWhen !== undefined) { if (u.builtWhen === 'pr' || u.builtWhen === 'after' || u.builtWhen === 'here' || u.builtWhen === 'nightly') x.builtWhen = u.builtWhen; else delete x.builtWhen }
     if (u.tried !== undefined) { if (u.tried) x.tried = { verdict: u.tried.verdict, note: line(u.tried.note, 600), sha: u.tried.sha ?? null, at: u.tried.at }; else delete x.tried }
     if (u.byHand !== undefined) { if (u.byHand) x.byHand = { pass: !!u.byHand.pass, note: line(u.byHand.note, 600), sha: u.byHand.sha ?? null, at: u.byHand.at, by: u.byHand.by, ...(u.byHand.skipped ? { skipped: true } : {}) }; else delete x.byHand }
     if (u.buildOnly !== undefined) { if (u.buildOnly) x.buildOnly = true; else { delete x.buildOnly; delete x.why } } // which half proves it, not what must be true: no new approval

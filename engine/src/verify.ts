@@ -50,7 +50,7 @@ export const LEAVE_LONG_RUNS = `${EYES_AND_CI} Leave long runs to the person. Af
 /** One line per item, each with the id its verdict is reported under. */
 const requirementItems = (reqs: Requirement[]) => reqs.map((r) => `- [${reqId(r.key)}] ${r.name}: ${r.what}`).join('\n')
 
-export const checkTaskBrief = (criteria: Criterion[], requirements: Requirement[] = [], again?: { round: number }, /** The app's smoke test set-ups, when it has more than one: what a person can have brought up to check by hand. */ setups: { key: string; name: string; what?: string }[] = []) => [
+export const checkTaskBrief = (criteria: Criterion[], requirements: Requirement[] = [], again?: { round: number }, /** The app's smoke test set-ups, when it has more than one: what a person can have brought up to check by hand. */ setups: { key: string; name: string; what?: string }[] = [], /** What this app's settings leave to its CI on the pull request, and to its nightly run (probe-list.ts, `leftTo`). */ left: { pr?: { name: string; runs: string }[]; nightly?: { name: string; runs: string }[] } = {}) => [
   again
     ? `Check ${again.round}: the last check found these not done, and they were sent back. Check each again against what is built now.`
     : 'Every other sub-task of this task is merged. Check what was built against the list below, so the person who approves the pull request does not have to.',
@@ -61,6 +61,8 @@ export const checkTaskBrief = (criteria: Criterion[], requirements: Requirement[
   '- met is true only if you saw it hold, and false if you saw it fail or it is not there.',
   `- ${EYES_AND_CI} For one of those, met is null: for the person, "when" is "here" and the evidence is what to look at; for CI, "when" is "pr" and the evidence names the job to see green.`,
   `- met is null when only a person can judge it (how it looks or feels, a real device), when checking it would take you ${LONG_RUN}, or when you could not check it. For a long one look at one or two cases, do not run or write a sweep, and leave it to the person with what you saw. ` + 'The person is then walked through it, so write it for them: add "where", the path of the app or the story\'s id to open; and make the evidence what to do there and what passing looks like, in plain words ("Drag a node across the tunnel: the edge should stay under the lip, not jump above it"). Add "when" too: "here" if it can be tried on the built code on this computer; "pr" if it needs the pull request to exist (a comment a bot posts, a check that runs in CI, a preview of the pull request); "after" if it can only be seen once it is merged (a release, a deploy, a flag switched on).',
+  ...(left.pr?.length ? [`- This app's settings leave ${left.pr.length === 1 ? 'this' : 'these'} to CI on the pull request: ${left.pr.map((x) => `${x.name} (the check "${x.runs}")`).join('; ')}. An item ${left.pr.length === 1 ? 'it proves' : 'one of them proves'} is met null with "when" "pr", and its evidence names that check.`] : []),
+  ...(left.nightly?.length ? [`- This app's settings leave ${left.nightly.length === 1 ? 'this' : 'these'} to a run every night on the default branch, after the merge: ${left.nightly.map((x) => `${x.name} (the workflow ${x.runs})`).join('; ')}. An item ${left.nightly.length === 1 ? 'it proves' : 'one of them proves'} is met null with "when" "nightly", and its evidence names that workflow. Nobody is asked to try it and the task does not wait for it.`] : []),
   ...(setups.length > 1 ? [`- This app has ${setups.length} set-ups a person can have brought up to check by hand. For each item you leave to a person add "setup": the key of the one they need. Give items that need the same thing the same one, so it is brought up once. They are: ${setups.map((s) => `"${s.key}" (${s.name}${s.what ? `: ${s.what}` : ''})`).join('; ')}.`] : []),
   '- Where the person checks it by running commands, put each command in `backticks` in the evidence, one command each: they get a button that runs it in a terminal beside the check.',
   '- A requirement that does not apply to this change (no new behaviour to trace, nothing a person does differently) is met: true, with "does not apply:" and why as its evidence.',
@@ -88,7 +90,7 @@ export const finishBrief = (unmet: Unmet[], round: number) => [
   'If one cannot be done as written, do not work around it: say exactly what stands in the way.',
 ].join('\n')
 
-export interface Verdict { id: string; met: boolean | null; evidence: string; /** For one left to a person: where to go. */ where?: string; /** For one left to a person: when it can be done. */ when?: 'here' | 'pr' | 'after'; /** For one left to a person: which of the app's set-ups they need (its key). */ setup?: string }
+export interface Verdict { id: string; met: boolean | null; evidence: string; /** For one left to a person: where to go. */ where?: string; /** For one left to a person: when it can be done. */ when?: 'here' | 'pr' | 'after' | 'nightly'; /** For one left to a person: which of the app's set-ups they need (its key). */ setup?: string }
 
 /** The verdicts in a check's summary, for the ids given; an entry for anything else is dropped. Empty when there is no block to read. */
 export function readVerdicts(summary: string | null | undefined, ids: string[]): Verdict[] {
@@ -105,7 +107,7 @@ export function readVerdicts(summary: string | null | undefined, ids: string[]):
       for (const v of list as { id?: unknown; met?: unknown; evidence?: unknown; where?: unknown; when?: unknown; setup?: unknown }[]) {
         if (typeof v?.id !== 'string' || !known.has(v.id) || out.some((o) => o.id === v.id)) continue
         const where = typeof v.where === 'string' && v.where.trim() ? v.where.trim().slice(0, 300) : undefined
-        out.push({ id: v.id, met: v.met === true ? true : v.met === false ? false : null, evidence: String(v.evidence ?? '').replace(/\s+/g, ' ').trim().slice(0, 300), ...(where && v.met !== true && v.met !== false ? { where } : {}), ...((v.when === 'pr' || v.when === 'after' || v.when === 'here') && v.met !== true && v.met !== false ? { when: v.when } : {}), ...(typeof v.setup === 'string' && v.setup.trim() && v.met !== true && v.met !== false ? { setup: v.setup.trim().slice(0, 40) } : {}) })
+        out.push({ id: v.id, met: v.met === true ? true : v.met === false ? false : null, evidence: String(v.evidence ?? '').replace(/\s+/g, ' ').trim().slice(0, 300), ...(where && v.met !== true && v.met !== false ? { where } : {}), ...((v.when === 'pr' || v.when === 'after' || v.when === 'here' || v.when === 'nightly') && v.met !== true && v.met !== false ? { when: v.when } : {}), ...(typeof v.setup === 'string' && v.setup.trim() && v.met !== true && v.met !== false ? { setup: v.setup.trim().slice(0, 40) } : {}) })
       }
       if (out.length) return out
     } catch { /* not JSON: try the next */ }
