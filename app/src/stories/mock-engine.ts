@@ -17,6 +17,7 @@ export interface MockData {
   /** Where a checklist task stands; left out, the task's workflow is staged and it has none. */ checklist?: import('../engine').Checklist
   /** What a task's pull request will open with; none when left out. */ mergeGuide?: string; /** The record folded away under it. */ mergeRecord?: string
   /** The last run of each command step of a prototype's guide; none when left out. */ prototypeRuns?: import('../engine').StepRun[]
+  /** Probes tried on past work, and the merged tasks a trial would run on; none when left out. */ trials?: import('../engine').Trial[]; trialTasks?: { issueId: string; identifier: string; title: string; pr: number | null }[]
   /** The apps put away; none when left out. */ removedApps?: import('../engine').AppHolds[]; /** Why an app can't be removed yet, as the engine says it. */ removeProblem?: string
   /** The app's reports; none when left out. */ reports?: import('../engine').Reports
   /** What was learned from the app's code; nothing yet when left out. */ learning?: import('../engine').Learning
@@ -88,6 +89,8 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.delete('/api/skills/sources', ({ request }) => { const url = new URL(request.url).searchParams.get('url'); const had = d.skillSources.find((x) => x.url === url); d.skillSources = d.skillSources.filter((x) => x.url !== url); return reply({ removed: had?.skills ?? [] }) }),
     http.post('/api/skills/shared', async ({ request }) => { const b = (await request.json()) as { name: string }; return reply({ key: `shared/${b.name}`, name: b.name, file: `/Users/sample/.self-evident/shared/skills/${b.name}/SKILL.md` }) }),
     http.get('/api/apps/:id/settings', () => reply(d.appSettings)),
+    http.get('/api/apps/:id/trials', () => reply({ trials: d.trials ?? [], tasks: d.trialTasks ?? [] })),
+    http.post('/api/apps/:id/trials', async ({ request }) => { const b = await request.json() as { key: string; probe: import('../engine').Trial['probe'] }; const t = { id: 'trial_sample', key: b.key, probe: b.probe, status: 'running' as const, tasks: (d.trialTasks ?? []).length, costUsd: null, error: null, createdAt: s.T0, results: [] }; d.trials = [t, ...(d.trials ?? []).filter((x) => x.key !== b.key)]; return reply(t) }),
     http.get('/api/apps/:id/account', () => reply(d.account)),
     http.post('/api/integrations/:key/check', () => reply(d.check)),
     http.post('/api/integrations/:key/setup', () => reply(d.setup)),

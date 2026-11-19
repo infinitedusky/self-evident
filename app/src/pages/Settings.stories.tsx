@@ -107,7 +107,7 @@ export const AppSkillsMain: Story = {
 /** Changing it: the build opens; a skill is put on Build › Do, a probe is switched off and one of the app's own is added. Save keeps it. */
 export const AppSkillsChanging: Story = {
   parameters: appPage(sampleApp.id, 'skills'),
-  beforeEach: withEngine({ workflows: [mainRow], apps: apps.map((a) => (a.id === sampleApp.id ? { ...a, setup: withSkills } : a)) }),
+  beforeEach: withEngine({ workflows: [mainRow], apps: apps.map((a) => (a.id === sampleApp.id ? { ...a, setup: withSkills } : a)), trialTasks: [1, 2, 3].map((n) => ({ issueId: `iss_sample${n}`, identifier: `SS-${n}`, title: `Sample task ${n}`, pr: 40 + n })) }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Change' }))
@@ -135,6 +135,9 @@ export const AppSkillsChanging: Story = {
     await userEvent.click(c.getByRole('checkbox', { name: 'Run Decision record' }))
     await expect(c.getByRole('checkbox', { name: 'Run Decision record' })).not.toBeChecked()
     await expect(c.getByRole('button', { name: 'Save' })).toBeEnabled()
+    // Trying a change on past work: the sample engine has three merged tasks; the trial starts and shows under the row.
+    await userEvent.click(c.getByRole('button', { name: 'Try the test command on past work' }))
+    await expect(await c.findByText('Trying it on 3 merged tasks: 0 done…')).toBeVisible()
   },
 }
 /** Agents: the Claude account this app's agents run on. Nothing chosen: the engine's default, and who that is (made up). */

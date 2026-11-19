@@ -5092,3 +5092,26 @@ A title template can name what the commit format leaves to the builder (`{type}{
 parts are read back from the branch's first commit that follows the format, so the title opens as
 `feat(scan)[ENT-481]: …` with nobody writing it by hand. One that cannot be read is left out, never invented.
 `set_pr_title` still sets an exact title for one task.
+
+## A change to what a build is held to can be tried on past work (built 2026-11-19; item 6 above)
+
+Sandy: "these setting changes are really sort of core to the way you build for an entire project, so I think it's
+worth having … an A/B test … that gets linked to changes"; "It's not required, but … we have the setup to do it";
+and "go" to: the last five merged tasks, the result kept with the change and shown under its row, agents too with
+the cost said first.
+
+- Try, on a row of Build › Verify while changing: the probe as the row shows it (saved or not yet) is run on the
+  app's last five merged tasks, each at its merged commit in a scratch worktree (`engine/src/trials.ts`). The
+  checkout is not touched and nothing is changed: a probe only reads and runs.
+- What it said is kept with the probe as it was then (`probe_trial`) and shown under the row: "Tried on 5 merged
+  tasks: 4 pass, 1 fail", opening to each task. Reworded since: "before it was changed". All five were merged, so a
+  fail is the probe disagreeing with what was shipped.
+- A command costs nothing. A reviewer skill, a sentence or one of the engine's own is an agent run per task: the
+  button says so ("Try (5 agent runs)") and the trial records what it cost. A sentence is judged on its own in a
+  trial; in a build the check's agent judges it with the rest of the list, so the two can differ.
+- Agents have the same as `try_held`, and are told to say the cost before trying one that needs agents.
+- One trial at a time for an app. One cut off by a restart is marked stopped.
+
+Not built: choosing which tasks (it is always the latest five with a pull request of their own; a project with one
+pull request for all its tasks has none to try on); trying a skill put on Build › Do, which would mean building a
+task twice; running a command by itself as it is added (Try is pressed, or an agent calls `try_held`).

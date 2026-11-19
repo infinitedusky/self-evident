@@ -4,7 +4,7 @@
  * All apps: plugins, the jobs their skills cover, the integrations (a list, then a page each). An app: its repo, agents, plugins,
  * landing, prototype, Storybook, integration values, and its workflow rules.
  */
-import { StepContracts } from '../components/StepContracts'
+import { StepContracts, type TrialView } from '../components/StepContracts'
 import { applyProbeChanges, contractsOf, type ProbeChange } from '@self-evident/engine/contracts'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useMatch, useNavigate, useParams } from 'react-router'
@@ -12,12 +12,13 @@ import { Badge } from '../components/Badge'
 import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
 import type { Workflow } from '@self-evident/engine/steps'
-import { engine, type AppHolds, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type SmokeSetupSetting, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo } from '../engine'
+import { engine, type AppHolds, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type SmokeSetupSetting, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo, type Trial } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { RemoveApp, RemovedApps } from '../components/RemoveApp'
 
 const ROLE: Record<AgentRole, string> = { talk: 'Talk', planner: 'Planner' }
 const err = (e: any) => String(e?.message ?? e)
+const ago = (iso: string) => { const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60_000)); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 48 * 60 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago` }
 /** The settings that differ from `base`, as the engine takes them: the new value, or null for one that is gone. */
 export const changesOf = (base: AppSetup, next: AppSetup): Record<string, unknown> => Object.fromEntries([...new Set([...Object.keys(base), ...Object.keys(next)])]
   .filter((k) => JSON.stringify((base as Record<string, unknown>)[k]) !== JSON.stringify((next as Record<string, unknown>)[k])).map((k) => [k, (next as Record<string, unknown>)[k] ?? null]))
@@ -464,6 +465,13 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
   const [workflow, setWorkflow] = useState<Workflow | null>(null)
   useEffect(() => { setWorkflow(null); engine.workflows(app.id).then((list) => setWorkflow(list.find((w) => w.appDefault) ?? null)).catch(() => {}) }, [app.id])
   const [changing, setChanging] = useState(false)
+  // Probes tried on past work (the engine's trials.ts): the latest of each, read again while one runs.
+  const [tried, setTried] = useState<{ trials: Trial[]; tasks: number }>({ trials: [], tasks: 0 })
+  const loadTrials = () => engine.trials(app.id).then((t) => setTried({ trials: t.trials, tasks: t.tasks.length })).catch(() => {})
+  useEffect(() => { void loadTrials() }, [app.id])
+  const trying = tried.trials.some((t) => t.status === 'running')
+  useEffect(() => { if (!trying) return; const timer = setInterval(() => void loadTrials(), 3000); return () => clearInterval(timer) }, [trying, app.id])
+  const trials: Record<string, TrialView> = Object.fromEntries(tried.trials.map((t) => [t.key, { status: t.status, runs: t.probe.runs, tasks: t.tasks, when: ago(t.createdAt), costUsd: t.costUsd, error: t.error, results: t.results }]))
   const held = Object.fromEntries(Object.entries({ ...setup, ...applyProbeChanges(setup, ops) }).filter(([, v]) => v !== null && v !== undefined)) as AppSetup
   const switches = Object.fromEntries(Object.entries({ ...(workflow?.requirements ?? {}), ...wfSwitch }).filter(([, v]) => typeof v === 'boolean')) as Record<string, boolean>
   const shownWorkflow = workflow ? { ...workflow, requirements: switches } : null
@@ -552,11 +560,13 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         <button type="button" className="small" onClick={() => setChanging(!changing)}>{changing ? 'Done' : 'Change'}</button>
       </div>
       {info === null ? <p className="muted">Loading…</p> : <StepContracts
-        groups={contractsOf({ setup: held, workflow: shownWorkflow, usable: info.usable ?? [] })} open={changing ? ['build'] : []}
+        groups={contractsOf({ setup: held, workflow: shownWorkflow, usable: info.usable ?? [] })} open={changing ? ['build'] : []} trials={trials}
         {...(changing ? {
           usable: info.usable ?? [],
           onSkills: (step: string, names: string[]) => { const { [step]: _, ...rest } = setup.step_skills ?? {}; const next = names.length ? { ...rest, [step]: names } : rest; set({ step_skills: Object.keys(next).length ? next : undefined }) },
           onProbe: (change: ProbeChange) => setOps([...ops, change]),
+          tryOn: tried.tasks,
+          onTry: (p: { key: string; name: string; kind: Trial['probe']['kind']; runs: string }) => { void engine.startTrial(app.id, { key: p.key, probe: { name: p.name, kind: p.kind, runs: p.runs } }).then(loadTrials).catch((e) => setError(err(e))) },
           onWorkflow: (key: string, on: boolean | null) => setWfSwitch({ ...wfSwitch, [key.replace(/^req:/, '')]: on }),
         } : {})} />}
     </div>,
