@@ -16,7 +16,7 @@
  * Results are kept on the task (issue.probes), the latest for each probe.
  */
 import { acceptanceLines, type Criterion } from './acceptance.js'
-import { LONG_RUN, MAX_ROUNDS } from './verify.js'
+import { EYES_AND_CI, LONG_RUN, MAX_ROUNDS } from './verify.js'
 
 import { BUILT_IN, cleanProbes, keyOf, probesOf, TESTS_KEY, type Probe, type ProbeResult } from './probe-list.js'
 export * from './probe-list.js'
@@ -61,7 +61,8 @@ export function probeBrief(p: Probe, criteria: Criterion[], base: string): strin
     `${head} Find out whether it really works.`,
     '',
     `Run it and use it the way a person would. Keep each try short: a scenario of a minute or two, never a sweep of every page or every case; what would take ${LONG_RUN} is a person's, after you.`,
-    '- Each acceptance criterion as a scenario, start to finish.',
+    '- Each acceptance criterion you can try by using what was built, as a short scenario. One that is proved by a suite, a CI job or a person\'s eye is not a scenario: leave it, and say so in the evidence.',
+    `- ${EYES_AND_CI}`,
     '- Then what nobody wrote down: nothing entered, far too much, the same thing twice, steps out of order, the wrong kind of input, a failure halfway (a service down, a slow answer).',
     '- What it sits next to: the pages and calls that share code with it still do what they did.',
     '- Stop any server you start.',

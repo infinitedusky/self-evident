@@ -5033,3 +5033,21 @@ made the pull step aside without a word.
 
 Not changed: the checkout the engine itself runs from (Self Evident's own) is still never pulled by the sync, since
 new engine code restarts the engine and cuts off what is building. Only an app's first repository is followed.
+
+## What is judged by eye is the person's, what CI runs is CI's, and no step runs either (Sandy, 2026-11-19: "visual checks should be signed off on, not automated I think, we have the automated version we can trigger from the smoke test if we want. this is a probe and ci/cd issue")
+
+Found on BON-204 (Bonkei): the step that tries to break a change ran the repository's whole docs smoke, every page
+in Chrome, about fifteen minutes. BON-197's first criterion read "the whole docs smoke passes", and that step was
+told to try each criterion "start to finish", which beat the rule about long runs.
+
+- One rule, said to the builder, the check and the step that tries to break it (`EYES_AND_CI`, verify.ts): what is
+  judged by eye is signed off by the person in the smoke test, where the repository's own automated version can be
+  run if they want it; what the repository's CI runs on the pull request (its smoke, end-to-end or browser suite,
+  anything a criterion says a CI job will show) is CI's. An agent's step runs neither, and says what it left to whom.
+- The check leaves such a criterion to the person: by eye, to try here; CI's, on the pull request, naming the job
+  to see green.
+- Trying to break it is using what was built, in short scenarios. A criterion proved by a suite, a CI job or a
+  person's eye is not a scenario.
+
+This is wording, like the long-run rule before it: nothing cuts a command off. A limit on how long one command may
+run in a step that only reads is the next thing if an agent does it again.

@@ -36,7 +36,16 @@ export const reqId = (key: string) => `${REQ}${key}`
  * probe: a builder had written a sweep of 45 pages in a browser and run it twice, 12 minutes each.
  */
 export const LONG_RUN = 'more than about two minutes of running (every page opened in a browser, a whole journey end to end, every size or device)'
-export const LEAVE_LONG_RUNS = `Leave long runs to the person. After the checks a person tries what is built by hand (the smoke test), and what is slow to show belongs there. If showing that one thing holds would take ${LONG_RUN}, do not run it and do not write a script that does: show it on one or two cases, and say in your summary what you left to the person and where they look. Do not run a command that takes minutes a second time to see a fix: run only the part you changed.`
+/**
+ * Whose a check is (Sandy, 2026-11-19: "visual checks should be signed off on, not automated I think, we have the
+ * automated version we can trigger from the smoke test if we want. this is a probe and ci/cd issue"). Found on BON-204:
+ * the step that tries to break a change ran the repository's whole docs smoke, every page in Chrome for fifteen
+ * minutes, because a criterion read "the whole docs smoke passes" and it was told to try each criterion start to
+ * finish. A person signs off what is judged by eye; the repository's CI runs its own browser and smoke suites on the
+ * pull request; an agent's step runs neither, and says which it left to whom.
+ */
+export const EYES_AND_CI = 'Two kinds of checking are never yours to run, whatever a criterion says. What is judged by eye (how a page looks, moves or reads; a visual pass over pages; a comparison of screenshots) is signed off by the person, in the smoke test, where the repository\'s own automated version can be run if they want it. What the repository\'s CI runs on the pull request (its smoke, end-to-end or browser suite, and anything a criterion says a CI job will show) is CI\'s. Do not run those suites or their scripts here, in whole or in a loop over pages, and do not write one. Say which you left, and to whom.'
+export const LEAVE_LONG_RUNS = `${EYES_AND_CI} Leave long runs to the person. After the checks a person tries what is built by hand (the smoke test), and what is slow to show belongs there. If showing that one thing holds would take ${LONG_RUN}, do not run it and do not write a script that does: show it on one or two cases, and say in your summary what you left to the person and where they look. Do not run a command that takes minutes a second time to see a fix: run only the part you changed.`
 
 /** One line per item, each with the id its verdict is reported under. */
 const requirementItems = (reqs: Requirement[]) => reqs.map((r) => `- [${reqId(r.key)}] ${r.name}: ${r.what}`).join('\n')
@@ -50,6 +59,7 @@ export const checkTaskBrief = (criteria: Criterion[], requirements: Requirement[
   '- Check, do not build. Change no product code. If something is not done, say so; do not do it.',
   '- For each item do what it says to look at, where you can: run that test, render that story headless, read that file, run that command. Run what an item needs, not the whole suite; that runs after you.',
   '- met is true only if you saw it hold, and false if you saw it fail or it is not there.',
+  `- ${EYES_AND_CI} For one of those, met is null: for the person, "when" is "here" and the evidence is what to look at; for CI, "when" is "pr" and the evidence names the job to see green.`,
   `- met is null when only a person can judge it (how it looks or feels, a real device), when checking it would take you ${LONG_RUN}, or when you could not check it. For a long one look at one or two cases, do not run or write a sweep, and leave it to the person with what you saw. ` + 'The person is then walked through it, so write it for them: add "where", the path of the app or the story\'s id to open; and make the evidence what to do there and what passing looks like, in plain words ("Drag a node across the tunnel: the edge should stay under the lip, not jump above it"). Add "when" too: "here" if it can be tried on the built code on this computer; "pr" if it needs the pull request to exist (a comment a bot posts, a check that runs in CI, a preview of the pull request); "after" if it can only be seen once it is merged (a release, a deploy, a flag switched on).',
   ...(setups.length > 1 ? [`- This app has ${setups.length} set-ups a person can have brought up to check by hand. For each item you leave to a person add "setup": the key of the one they need. Give items that need the same thing the same one, so it is brought up once. They are: ${setups.map((s) => `"${s.key}" (${s.name}${s.what ? `: ${s.what}` : ''})`).join('; ')}.`] : []),
   '- Where the person checks it by running commands, put each command in `backticks` in the evidence, one command each: they get a button that runs it in a terminal beside the check.',
