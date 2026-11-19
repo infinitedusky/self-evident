@@ -223,7 +223,7 @@ export async function skillOptions(role: Role, cwd: string, appId: string): Prom
  * already get (its repo's own, or a plugin's that is on for it); this says when to use it. "Starts as an idea" is not
  * work an agent does, so it takes none.
  */
-export type StepSkills = Partial<Record<StepKey, string[]>>
+export type StepSkills = Partial<Record<StepKey | 'build', string[]>>
 
 /** A skill of the person's own with the name of one Self Evident brings replaces it: two of one name would compete on their descriptions. */
 export const yoursFirst = (skills: string[]) => skills.filter((s) => !(s.startsWith('self-evident:') && skills.includes(`${SHARED_ID}:${s.slice('self-evident:'.length)}`)))
@@ -241,14 +241,16 @@ export function withStepDefaults(chosen: StepSkills | undefined, given: string[]
   return d ? { ...chosen, prototype: [d, ...(chosen?.prototype ?? []).filter((n) => n !== d && n !== 'self-evident:prototype' && n !== `${SHARED_ID}:prototype`)] } : chosen ?? {}
 }
 export const SKILL_STEPS = STEPS.filter((s) => s.key !== 'idea').map((s) => s.key)
+/** The build takes skills too (2026-11-18): every builder of the app is given them and told to use them (executor.ts). Kept beside the steps' as `build`. */
+export const BUILD_STEP = 'build'
 
 /** What Settings saved, tidied: known steps, skill names as short strings, none twice, no empty lists. */
 export function cleanStepSkills(given: unknown): StepSkills {
   const out: StepSkills = {}
   for (const [k, v] of Object.entries((given ?? {}) as Record<string, unknown>)) {
-    if (!SKILL_STEPS.includes(k as StepKey) || !Array.isArray(v)) continue
+    if ((!SKILL_STEPS.includes(k as StepKey) && k !== BUILD_STEP) || !Array.isArray(v)) continue
     const names = [...new Set(v.filter((n): n is string => typeof n === 'string' && /^[\w.:@/-]{1,120}$/.test(n)))]
-    if (names.length) out[k as StepKey] = names
+    if (names.length) out[k as StepKey | 'build'] = names
   }
   return out
 }

@@ -262,13 +262,16 @@ export class Runner {
 
     const commits = commitRule(a.setup, named)
     const hooksPath = commits.pattern ? await installCommitCheck(worktreePath, { pattern: commits.pattern, format: commits.format }).catch(() => undefined) : undefined
-    // A probe that is a skill run as a reviewer gets that skill, and only if this app's sessions have it.
+    // The skills this run is given: the one a probe runs as a reviewer, or, for a builder, the app's skills for the build
+    // (Settings › Skills, Build › Do). Only ones this app's agents have; a probe whose skill is not there is not run.
     const probe = probeOfTitle(x.title, probesOf(a.setup))
-    const has = probe?.kind === 'skill' ? await skillOptions('talk', worktreePath, a.id).catch(() => null) : null
-    const skill = probe?.kind === 'skill' && has?.skills.includes(probe.runs) ? { name: probe.runs, plugins: has.plugins, mcpServers: has.mcpServers } : undefined
+    const skillsWanted = probe?.kind === 'skill' ? [probe.runs] : onlyLooks(x.title) ? [] : ((a.setup as { step_skills?: { build?: string[] } } | null)?.step_skills?.build ?? [])
+    const has = skillsWanted.length ? await skillOptions('talk', worktreePath, a.id).catch(() => null) : null
+    const names = skillsWanted.filter((n) => has?.skills.includes(n))
+    const skill = names.length ? { names, plugins: has!.plugins, mcpServers: has!.mcpServers } : undefined
     const result = probe?.kind === 'skill' && !skill ? { status: 'completed' as const, summary: `The skill \`${probe.runs}\` is not one this app's agents have, so this probe was not run.` } : await this.execute({
       subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief },
-      readOnly: onlyLooks(x.title), skill,
+      readOnly: onlyLooks(x.title), skills: skill,
       ticket: ticketOf(t), commitFormat: commits.format ?? undefined, hooksPath,
       worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: hasStorybook(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, maxTurns: turnsFor(x.title, setup), maxBudgetUsd: setup.max_budget_usd,
       resumeSessionId: interrupted?.agentSessionId ?? undefined, ...(interrupted?.error?.startsWith(OUT_OF_TURNS) ? { resumeWhy: 'turns' as const } : {}), abort: this.active.get(subId),
