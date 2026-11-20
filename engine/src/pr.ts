@@ -23,6 +23,8 @@ export interface PrInput {
 /**
  * How an app's pull requests are opened (Sandy, 2026-11-16: one opened ready for review after the first of nine
  * sub-tasks, titled outside the repository's convention). `setup.pr_draft`: as a draft unless set false.
+ * {title} is the task's name for the team when it has one (issue.team_title), else our title; {subject}, like any
+ * name the commit format leaves to the builder, is read from the branch's first commit.
  * `setup.pr_title`: the title's template, in the repository's own convention, with {ticket} (the team's ticket id,
  * else ours), {id} (ours), {title}, {project}, {n} and {of} (the task's place in its project). Any other name in
  * braces ({type}, {scope}) is the builder's choice, as in the commit format (conventions.ts): it is read back from the
@@ -102,13 +104,14 @@ export function prBody(project: { name: string; content?: string | null; id: str
 }
 
 /** Set how an app's work is named on GitHub: the pull request's title and whether it opens as a draft, and the branch and commit conventions (conventions.ts). Undefined leaves one; empty clears it. */
-export async function setPrRules(appId: string, i: { titleTemplate?: string; draft?: boolean; branchTemplate?: string; commitFormat?: string }) {
+export async function setPrRules(appId: string, i: { titleTemplate?: string; draft?: boolean; branchTemplate?: string; commitFormat?: string; /** A task needs the team's own ticket before its branch is cut or its pull request opened (ticket.ts). */ ticketRequired?: boolean }) {
   const { db } = await import('./db/client.js'); const { app } = await import('./db/schema.js'); const { eq } = await import('drizzle-orm')
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new Error(`no app ${appId}`)
   const changes: Record<string, unknown> = {}
   if (i.draft !== undefined) changes.pr_draft = i.draft
+  if (i.ticketRequired !== undefined) changes.ticket_required = i.ticketRequired
   for (const [given, key] of [[i.titleTemplate, 'pr_title'], [i.branchTemplate, 'branch_name'], [i.commitFormat, 'commit_format']] as const) if (given !== undefined) changes[key] = given.trim().slice(0, 250) || null
   const next = await (await import('./setup.js')).patchSetup(appId, changes)
-  return { pr_title: (next.pr_title as string | undefined) ?? null, pr_draft: next.pr_draft !== false, branch_name: (next.branch_name as string | undefined) ?? null, commit_format: (next.commit_format as string | undefined) ?? null }
+  return { pr_title: (next.pr_title as string | undefined) ?? null, pr_draft: next.pr_draft !== false, branch_name: (next.branch_name as string | undefined) ?? null, commit_format: (next.commit_format as string | undefined) ?? null, ticket_required: next.ticket_required === true }
 }

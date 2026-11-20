@@ -61,6 +61,7 @@ export function PrStep({ issueId, appId, base }: { issueId: string; appId: strin
       {error && <p className="bad" role="alert" style={{ margin: '0 0 8px' }}>{error}</p>}
       {checks.some((c) => c.state === 'fail') && live && <p className="faint" style={{ margin: '0 0 8px', fontSize: 13 }}>Failing: {checks.filter((c) => c.state === 'fail').map((c) => c.name).join(', ')}.</p>}
 
+      {(!pr || pr.status === 'closed') && v.waits.length > 0 && <ul className="pr-waits" aria-label="What it waits on">{v.waits.map((w) => <li key={w}>{w}</li>)}</ul>}
       {/* The one thing to press now. */}
       {!pr || pr.status === 'closed' ? (
         <>

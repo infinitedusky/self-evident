@@ -35,10 +35,10 @@ import { reapAgentProcesses } from './reap.js'
 import { holdMinutes, isOutage } from './outage.js'
 import { referencesOf } from './references.js'
 import { settleProject } from './close.js'
-import { branchName, commitRule, installCommitCheck, ticketOf } from './conventions.js'
+import { branchName, commitRule, installCommitCheck } from './conventions.js'
+import { needsTicket, teamTicket, ticketRequired } from './ticket.js' // a task with no ticket where one is required never reaches here: the scheduler holds it (projects.ts)
 
 /** The team's own ticket id for a task, when it came from their tracker; null when it is only ours. */
-const teamTicket = (t: { sourceRef?: unknown }) => (t.sourceRef as { linear?: { identifier?: string } } | null | undefined)?.linear?.identifier ?? null
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
 
@@ -231,7 +231,8 @@ export class Runner {
     const worktreePath = x.worktreePath ?? join(`${r!.localPath}-worktrees`, `${p.id}--${x.identifier.toLowerCase()}`)
     const pb = { ...base, issueId: subId }
     const mode = modeOf(p, a.setup)
-    const named = { ticket: teamTicket(t), id: t.identifier, title: t.title, project: p.name }
+    const ticket = (await teamTicket(t))?.ticket ?? null
+    const named = { ticket, id: t.identifier, title: t.teamTitle || t.title, project: p.name }
     // A task's branch is named once, when it is first cut: by the app's template when it has one and the name is free,
     // else the engine's own. One already building keeps the name it had.
     const wanted = mode === 'issue' && !t.branch && !(await branchExists(r!.localPath!, issueBranch(p.integrationBranch!, t.identifier))) ? branchName(a.setup, named) : null
@@ -277,7 +278,7 @@ export class Runner {
     const result = probe?.kind === 'skill' && !skill ? { status: 'completed' as const, summary: `The skill \`${probe.runs}\` is not one this app's agents have, so this probe was not run.` } : await this.execute({
       subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief }, origin: originPrompt(await originOf({ issueId: t.id })),
       readOnly: onlyLooks(x.title), skills: skill, ...(told ? { heldTo: builderHeld(a.setup) } : {}),
-      ticket: ticketOf(t), commitFormat: commits.format ?? undefined, hooksPath,
+      ticket: ticket ?? t.identifier, commitFormat: commits.format ?? undefined, hooksPath,
       worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: storiesLead(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, maxTurns: turnsFor(x.title, setup), maxBudgetUsd: setup.max_budget_usd,
       resumeSessionId: interrupted?.agentSessionId ?? undefined, ...(interrupted?.error?.startsWith(OUT_OF_TURNS) ? { resumeWhy: 'turns' as const } : {}), abort: this.active.get(subId),
       onEvent: async (type, payload) => {
@@ -727,9 +728,11 @@ export class Runner {
     const head = t ? branchOf(p.integrationBranch!, t) : p.integrationBranch!
     const stack = t ? stackBase(a.defaultBranch, t, issues, prs) : { base: a.defaultBranch, on: null }
     const k = t ? issues.findIndex((q) => q.id === t.id) + 1 : 0
-    const ticket = t ? teamTicket(t) : null
+    const ticket = t ? (await teamTicket(t))?.ticket ?? null : null
+    // An app that requires a team ticket never has our id in its place: nothing is opened without one.
+    if (t && !ticket && ticketRequired(a.setup)) { if (preview) return; if (submit === true) throw new PlanError(needsTicket(t.identifier, 'its pull request is titled by it')); if (auto) { await this.emit({ ...base, issueId: t.id, type: 'pr.held', payload: { reason: needsTicket(t.identifier, 'its pull request is titled by it'), needs: 'ticket' } }); return } }
     const subjects = (await git(r!.localPath!, ['log', '--reverse', '--no-merges', '--format=%s', `${stack.base}..${head}`], { allowFail: true })).stdout.split('\n').filter(Boolean) // what the builder chose in its commits fills the title
-    const title = prTitle(a.setup, { ticket, id: t?.identifier ?? p.name, title: t?.title ?? p.name, project: p.name, n: k, of: issues.length }, t ? (t as { prTitle?: string | null }).prTitle : null, subjects)
+    const title = prTitle(a.setup, { ticket, id: t?.identifier ?? p.name, title: (t as { teamTitle?: string | null } | null)?.teamTitle || t?.title || p.name, project: p.name, n: k, of: issues.length }, t ? (t as { prTitle?: string | null }).prTitle : null, subjects)
       ?? (t ? `${t.identifier} ${t.title} (${p.name}, ${k} of ${issues.length})` : p.name)
     const intro = t ? { ...p, name: `${p.name}, task ${k} of ${issues.length}: ${t.identifier} ${t.title}`, content: [t.description, stack.on ? `Stacked on #${stack.on}: review and merge that one first; this PR then retargets to ${a.defaultBranch}.` : null].filter(Boolean).join('\n\n') || p.content } : p
     const open = mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled')

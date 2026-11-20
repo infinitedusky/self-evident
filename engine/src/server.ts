@@ -807,6 +807,8 @@ export function buildApp(bus: EventBus) {
   api.get('/issues/:id', async (c) => { try { const d = await issueDetail((await resolveIssue(db, c.req.param('id'))).id); return c.json(!d.parentId && d.kind === 'code' && d.state === 'in_review' ? { ...d, close: await closeView(d.id) } : d) } catch (err) { return planError(c, err, 404) } })
   // A person closes a task: it is Done. Only once its pull request is merged and every check of theirs is passed or skipped (close.ts).
   api.post('/issues/:id/close', async (c) => { try { return c.json(await closeTask((await resolveIssue(db, c.req.param('id'))).id, 'user')) } catch (err) { return planError(c, err) } })
+  // A task's team ticket and its name for the team (ticket.ts): set by the person on its page; a build held for want of a ticket carries on.
+  api.put('/issues/:id/team', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const b = await c.req.json() as { ticket?: string | null; title?: string | null }; const out = await (await import('./ticket.js')).setTeamNames(t.id, b); void runner.dispatch(); return c.json(out) } catch (err) { return planError(c, err) } })
   api.patch('/issues/:id', async (c) => { try { return c.json(settle(await updateIssue((await resolveIssue(db, c.req.param('id'))).id, await c.req.json(), 'user'))) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/state', async (c) => {
     const { state, reason } = await c.req.json<{ state: IssueState; reason?: string }>()

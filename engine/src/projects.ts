@@ -16,6 +16,7 @@ import { tktOn } from './tkt.js'
 import { view as todoView } from './todos.js'
 import { claimsOverlap, findCycle, pickTasksToStart, type SchedTask } from './scheduler.js'
 import { checksOwed, step as stepDef0 } from './steps.js'
+import { needsTicket, teamTicket, ticketRequired, ticketView } from './ticket.js'
 
 export { PlanError } from './issues.js'
 
@@ -347,6 +348,9 @@ export async function tickAll(room: number, opts: { projectId?: string } = {}) {
         const v = await stepsOf({ issueId: t.id }, tx)
         const left = checksOwed(v.states, v.resolved.workflow)
         if (left.length) holds.set(t.id, `its plan is read before it is built; still to come: ${left.map((k) => stepDef0(k).label).join(', ')}`)
+        // An app that requires a team ticket (ticket.ts): a task with none is held here, before its branch is first
+        // cut, since a branch cannot be renamed once its pull request is open. It carries on once the ticket is there.
+        else if (!t.branch && ticketRequired(apps.find((q) => q.id === t.appId)?.setup) && !(await teamTicket(t))) holds.set(t.id, needsTicket(identifier(apps.find((q) => q.id === t.appId)!.key, t.number), 'its branch is named by it'))
       }
     }
     // Linear's priority: 1 urgent … 4 low, 0 none. The scheduler wants bigger first.
@@ -525,6 +529,8 @@ export async function issueDetail(issueId: string) {
     build: b ?? null, questions, decisions, relations: rels, steps, stepsAttempt: last?.attempt ?? null, // the builder's list, from its latest run
     subIssues: subs.map((s) => ({ ...s, identifier: identifier(a.key, s.number), build: builds.find((x) => x.issueId === s.id) ?? null })),
     origin: originView(await originOf({ issueId })), // where it came from, word for word, as its agents are given it (origins.ts)
+    // Its team ticket in force and where it was read from; and whether the app requires one it lacks (ticket.ts).
+    ...(i.parentId ? {} : await ticketView(i, a?.setup)),
   }
 }
 
