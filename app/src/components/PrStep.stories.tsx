@@ -120,6 +120,16 @@ export const ScannerFindings: Story = {
   },
 }
 
+/** The app has its own form for a description (Settings › Landing): writing one here starts from its sections. Made-up (sample). */
+export const StartsFromTheAppsTemplate: Story = {
+  beforeEach: withEngine({ prView: { ...prSample, template: '## Why\n\n## What changed\n\n## How to test (sample)' } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Write it' }))
+    await expect(c.getByRole('textbox')).toHaveValue('## Why\n\n## What changed\n\n## How to test (sample)')
+  },
+}
+
 /** Not written for the team yet: it says so, and it can be written here; once it is, that leads and our record is folded under it. Made-up text (sample). */
 export const WrittenForTheTeam: Story = {
   play: async ({ canvasElement }) => {

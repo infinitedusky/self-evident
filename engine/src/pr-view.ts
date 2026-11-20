@@ -21,7 +21,7 @@ import { app, build, issue, pr as prTable, project } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { getIssue, identifier, PlanError } from './issues.js'
 import { needsTicket, teamTicket, ticketRequired } from './ticket.js'
-import { prAuto, prDraft } from './pr.js'
+import { prAuto, prDescription, prDraft } from './pr.js'
 import { smokeOwed } from './smoke.js'
 import { homeRepo } from './workbench.js'
 
@@ -99,6 +99,7 @@ export async function prView(issueId: string, deps: { gh?: Gh; preview: (project
     /** What it would open with now, or what the next update sends: the title by the app's rule, the message with its merge guide. */ message: message && { title: message.title, body: message.body, head: message.head, base: message.base },
     /** What GitHub has differs from what would be sent: it is brought up to date when the next sub-task lands, or on submitting again. */ behind: !!(onGithub && message && liveNow && (onGithub.title !== message.title || onGithub.body.trim() !== message.body.trim())),
     /** Its description was written for the team (and is what leads); else the engine's merge guide leads. */ written: t.prBody?.trim() ? t.prBody : null,
+    /** The app's own form for a description (Settings › Landing), to start writing from; null when it has none. */ template: prDescription(a?.setup).template,
     landed, total: live.length, unchecked, byHand,
     /** The app opens pull requests as drafts; and opens one by itself once the task is built and checked. */ draft: prDraft(a?.setup), auto: prAuto(a?.setup),
     /** It can be submitted now (a new one, or the closed one again); else why not. */ canSubmit: !liveNow && pr?.status !== 'merged' && waits.length === 0, waits,
