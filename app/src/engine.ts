@@ -260,6 +260,7 @@ export interface Prototype {
 export interface MainRunning {
   /** The task (or prototype) it is beside, when it is that one's own and not the app's. */ for?: string | null
   /** A task's main: the data it was turned on with. */ data?: { mode: 'copy' | 'shared'; beside: string } | null
+  /** It stopped by itself: when, with what, and its last lines. */ exited?: { at: string; code: number | null; log: string[] } | null
   appId: string; branch: string; how: 'local' | 'address' | 'none'; url: string | null; running: boolean; up: boolean; canRun: boolean
   /** The commit it runs and the branch's now; behind: the branch has moved on since it was turned on. */ sha: string | null; tip: string | null; behind: boolean
   log: string[]; standIns: { key: string; name: string; what?: string; running: boolean; url: string | null }[]; database: string | null

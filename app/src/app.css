@@ -1005,6 +1005,8 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 
 /* Smoke test: main beside the build, and what an agent saw on a check. */
 .smoke-layout.comparing { grid-template-columns: 1fr; }
+.compare-with { font-size: 12px; padding: 3px 6px; margin: 0; width: auto; max-width: 220px; }
+.compare-stopped { flex-basis: 100%; margin: 6px 0 0; padding: 8px 12px; border-left: 3px solid var(--bad, #b42318); border-radius: 6px; font-size: 13px; }
 .compare-data { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
 .compare-data select { font-size: 12px; padding: 2px 4px; margin: 0; width: auto; }
 .smoke-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

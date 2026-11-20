@@ -384,12 +384,14 @@ export async function smokePlace(issueId: string, setupKey?: string, /** Not the
 }
 
 /** Local only: run the built branch, at its head, in the smoke test's own worktree. Run again, it moves to the new head. */
-/** What a smoke test's data is: its database and the seed it was filled with, for a main run beside it (main-running.ts). */
+/** A smoke test, for a main run beside it (main-running.ts): its database, and how that set-up is started (its own script, stop script and variables), so main is started the same way. */
 export async function smokeDataOf(issueId: string, setupKey?: string | null) {
   const { a, name } = await built(issueId)
   const all = smokeSetups(a.setup)
   const named = all.find((x) => x.key === setupKey) ?? all[0]
-  return { slug: `smoke-${name.toLowerCase()}${named.key === all[0].key ? '' : `-${named.key}`}`, seed: named.seed ?? null, beside: `${name}'s smoke test` }
+  const first = named.key === all[0].key
+  const { PORT: _port, ...env } = await smokeEnv(a.id, named, { port: 0, key: first ? undefined : named.key })
+  return { slug: `smoke-${name.toLowerCase()}${first ? '' : `-${named.key}`}`, cmd: named.cmd ?? null, stop: named.stop ?? null, env, beside: `${name}'s smoke test` }
 }
 
 export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean; /** Which set-up (its key); none: the app's first. */ setup?: string } = {}) {

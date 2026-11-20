@@ -4,18 +4,19 @@
  * With `forId` it is the main a task has of its own for comparing (its prototype and its smoke test share it), on
  * a port of its own, and not the app's.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { API, engine, openEvents, type MainDataChoice, type MainRunning } from './engine'
 
-/** Which data a compared main runs on, as last chosen on this browser: a copy of the work's, unless they chose its own database. */
-export const dataChoice = (): 'copy' | 'shared' => { try { return localStorage.getItem('se.compare.data') === 'shared' ? 'shared' : 'copy' } catch { return 'copy' } }
-export const keepDataChoice = (m: 'copy' | 'shared') => { try { localStorage.setItem('se.compare.data', m) } catch { /* fine without it */ } }
+/** What the work is compared with: the app's own main (its standard data), or a new main for this task, on a copy of this work's data as it is now or on its very database. */
+export type CompareWith = 'app' | 'copy' | 'shared'
 
 export function useMain(appId: string | undefined, looking: boolean, forId?: string) {
   const [main, setMain] = useState<MainRunning | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const refresh = useCallback((touch = false) => { if (appId) return engine.main(appId, touch, forId).then((m) => { setMain(m); return m }).catch((e) => { setError(String(e.message ?? e)); return null }); return Promise.resolve(null) }, [appId, forId])
+  // Answers can come back out of order (a look sent before it was turned on, answered after): only the latest asked is kept.
+  const asked = useRef(0)
+  const refresh = useCallback((touch = false) => { if (appId) { const n = ++asked.current; return engine.main(appId, touch, forId).then((m) => { if (n === asked.current) setMain(m); return m }).catch((e) => { setError(String(e.message ?? e)); return null }); } return Promise.resolve(null) }, [appId, forId])
   useEffect(() => { setMain(null); void refresh(looking) }, [appId, forId])
   // Turned on or off by anyone (the agent, or by itself when nobody looked): show it as it is now.
   useEffect(() => {
@@ -30,7 +31,8 @@ export function useMain(appId: string | undefined, looking: boolean, forId?: str
   useEffect(() => { if (!coming) return; const t = window.setInterval(() => void refresh(looking), 1200); return () => window.clearInterval(t) }, [coming, looking, refresh])
   const up = !!main?.running && main.up && main.how === 'local'
   useEffect(() => { if (!up || !looking) return; void refresh(true); const t = window.setInterval(() => void refresh(true), 60_000); return () => window.clearInterval(t) }, [up, looking, refresh])
-  const act = (fn: () => Promise<MainRunning>) => { setBusy(true); setError(null); return fn().then((m) => { setMain(m); return m }).catch((e) => { setError(String(e.message ?? e)); return null }).finally(() => setBusy(false)) }
+  // Turning it on or off is the truth when it answers: a look sent meanwhile may have been answered from before it, so every look still out is dropped.
+  const act = (fn: () => Promise<MainRunning>) => { setBusy(true); setError(null); ++asked.current; return fn().then((m) => { ++asked.current; setMain(m); return m }).catch((e) => { setError(String(e.message ?? e)); return null }).finally(() => setBusy(false)) }
   return {
     main, error, busy,
     start: (data?: MainDataChoice) => (appId ? act(() => engine.startMain(appId, false, forId, data)) : Promise.resolve(null)),
@@ -38,3 +40,37 @@ export function useMain(appId: string | undefined, looking: boolean, forId?: str
     stop: () => (appId ? act(() => engine.stopMain(appId, forId)) : Promise.resolve(null)),
   }
 }
+
+/**
+ * Comparing a piece of work with main (Sandy, 2026-11-20: "compare with app level … or do a new one in which you are
+ * copying or just running it off the same db"). The app's main is turned on if it is off and is not this page's to
+ * turn off; a new one is the task's own (forId), turned off when comparing stops. One that stops by itself is kept
+ * as `stopped`, with its last lines, so the page can say why and not just drop the comparison.
+ */
+export function useCompare(appId: string | undefined, forId: string) {
+  const [which, setWhich] = useState<CompareWith | null>(null)
+  const [stopped, setStopped] = useState<{ which: CompareWith; exited: MainRunning['exited'] } | null>(null)
+  const app = useMain(appId, which === 'app')
+  const task = useMain(appId, which === 'copy' || which === 'shared', forId)
+  const active = which === 'app' ? app : task
+  const stopping = useRef<Promise<unknown>>(Promise.resolve())
+  const starting = useRef(0) // a start is on its way: what an earlier stop reports back meanwhile is not this one stopping by itself
+  useEffect(() => { // turned off elsewhere, or stopped by itself
+    if (!which || !active.main || active.main.running || active.busy || starting.current) return
+    setStopped({ which, exited: active.main.exited ?? null }); setWhich(null)
+  }, [which, active.main?.running, active.busy]) // eslint-disable-line react-hooks/exhaustive-deps
+  const choose = (w: CompareWith, beside: string) => {
+    setStopped(null); setWhich(w)
+    starting.current++
+    // After a stop that is still on its way: its answer must not arrive after this start's and be taken for main having stopped.
+    void stopping.current.then(() => (w === 'app' ? app.start() : task.start({ mode: w, beside }))).then((m) => { if (!m?.running) setWhich(null) }).finally(() => { starting.current-- })
+  }
+  const stop = () => { if (which && which !== 'app') stopping.current = task.stop().catch(() => null); setWhich(null); setStopped(null) }
+  return {
+    which, choose, stop, stopped,
+    /** The main being compared with, while there is one. */ main: which ? active.main : null,
+    busy: app.busy || task.busy, error: (which === 'app' ? app.error : task.error) ?? null,
+    /** There is a main to compare with at all; and the app has a database, so the two new ones differ. */ can: !!app.main && app.main.how !== 'none', local: app.main?.how === 'local', hasData: app.main?.how === 'local' && !!app.main.database,
+  }
+}
+

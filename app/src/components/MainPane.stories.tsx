@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, userEvent, within } from 'storybook/test'
+import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test'
 import { MainPane } from './MainPane'
 import { MAIN_OFF, withEngine } from '../stories/mock-engine'
 
@@ -31,10 +31,11 @@ export const On: Story = {
     const c = within(canvasElement)
     await expect(await c.findByText('4f2a9c1')).toBeInTheDocument()
     const address = c.getByRole('textbox', { name: 'Address' })
-    await userEvent.clear(address); await userEvent.type(address, '/iframe.html?id=pages-now--busy&viewMode=story{Enter}')
-    await expect(c.getByTitle(/main$/)).toHaveAttribute('src', expect.stringContaining('pages-now--busy'))
+    // Set and sent in one go, not typed key by key: the view beside it is a live page that can take the keyboard while it loads.
+    fireEvent.change(address, { target: { value: '/iframe.html?id=pages-now--busy&viewMode=story' } }); fireEvent.submit(address.closest('form')!)
+    await waitFor(() => expect(c.getByTitle(/main$/)).toHaveAttribute('src', expect.stringContaining('pages-now--busy')))
     await userEvent.click(c.getByRole('button', { name: 'Back' }))
-    await expect(c.getByTitle(/main$/)).toHaveAttribute('src', expect.stringContaining(at))
+    await waitFor(() => expect(c.getByTitle(/main$/)).toHaveAttribute('src', expect.stringContaining(at)))
   },
 }
 /** Main has moved on since it was turned on: it stays where it is, and says so, with one press to update. */
