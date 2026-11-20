@@ -20,8 +20,10 @@ const words = (t: string) => t.trim().split(/\s+/).length
 
 const err = (e: any) => String(e?.message ?? e)
 
-export function StepSection({ subject, appId, name, on = 'task', row, base, fromIdea, waitingState, session, children }: {
+export function StepSection({ subject, appId, name, on = 'task', row, base, fromIdea, waitingState, session, small = false, children }: {
   subject: StepSubject; appId: string; name: string; on?: On; row: Row
+  /** The task's head is small: what the step is, said at its top, is left out with it. */
+  small?: boolean
   /** Where this thing's pages live, for the link to the step it waits on. */
   base: string
   fromIdea?: { id: string; number: number; title: string } | null
@@ -95,7 +97,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
       {showView && viewed && <Viewer tab={viewed} embedded />}
       {showCode && code && <PrototypeCode id={code} appId={appId} focus={shown} />}
       {!showView && !showCode && <>
-      <p className="faint" style={{ margin: '4px 0 14px' }}>{step(row.key).what}</p>
+      {!small && <p className="faint" style={{ margin: '4px 0 14px' }}>{step(row.key).what}</p>}
 
       {row.waitingOn && (
         <div className="empty" style={{ marginBottom: 14 }}>
@@ -109,7 +111,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
           : <p className="muted">{row.required ? 'Made directly, but this workflow wants tasks to start as an idea.' : 'Made directly, not from an idea.'}</p>
       ) : children ?? (
         <>
-          {row.key === 'prototype' && on === 'task' && !s.approved && !skipped(s) && s.status !== 'none' && <p className="faint" style={{ fontSize: 13, margin: '0 0 8px' }}>Approving the prototype is the last thing you press. It approves the brief with it, when the brief is ready, and then the analysis, the ADR, the plan, the blast radius, the audit, the final ADR and plan, and the build follow by themselves.</p>}
+          {row.key === 'prototype' && on === 'task' && !small && !s.approved && !skipped(s) && s.status !== 'none' && <p className="faint" style={{ fontSize: 13, margin: '0 0 8px' }}>Approving the prototype is the last thing you press. It approves the brief with it, when the brief is ready, and then the analysis, the ADR, the plan, the blast radius, the audit, the final ADR and plan, and the build follow by themselves.</p>}
           <p className="step-status">
             {skipped(s) ? <span>– Skipped: not being done on this {on}.</span> : s.status === 'none' ? <span className="faint">Not started.{on === 'task' && canSkip(row) ? ' It is optional: do it, or skip it. The brief waits until you have said which.' : ''}</span> : <span>{s.status === 'done' ? '✓ ' : '◐ '}{s.detail ?? (s.status === 'done' ? 'Done' : 'Started')}</span>}
             {work?.updatedBy && <span className="faint"> · {work.updatedBy}{work.updatedAt ? `, ${new Date(work.updatedAt).toLocaleDateString()}` : ''}</span>}

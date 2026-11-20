@@ -5504,6 +5504,19 @@ database); a choice of some other scenario for main; saying on the page, when ma
 it is likely the schema; the app's own main is unchanged (its "default" scenario).
 
 
+## A task's head, full or small (Sandy, 2026-11-20: "it still taking up a bunch of space … now we just have less information … reverting to what we had, but having a toggle")
+
+Trimming the smoke test's head saved little room and lost what it said. Undone, and made a choice instead:
+
+- **The full head is back by default**, on the smoke test too: the project line, the badges, and the paragraph
+  saying what the smoke test is (no longer behind "About").
+- **"▴ Less" on the task's head makes it small**, on every page of the task, remembered on this browser. Small is
+  the id and title on one line, plus Close and Retry when they apply. Left out until "▾ Show all": the project
+  line, the badges, Delete, what the task waits on before it can be closed, and the top of the page being worked on:
+  what the step is (and the prototype's "last thing you press" note), or what the smoke test is.
+- The smoke test's "Hide checks" stays as it was, on its own.
+
+
 ## Compare with: the app's main, or a new main on a copy or on the same database (Sandy, 2026-11-20: "the two options are copy it as it is now or share a database. If we want to look at the standard data set, we can just look at the main app level one. So it's like compare with app level … or do a new one in which you are copying or just running it off the same db")
 
 Found on CEB-90, the first real use of a task's own main:

@@ -31,8 +31,9 @@
  * throwaway folder"). A command a check names (`in backticks`) is a button that runs it in whichever is open.
  *
  * Room for the thing being looked at (Sandy, 2026-11-20: "the ability to collapse the cards on the right for smoke
- * tests and … more vertical real estate"): the checks fold away to a strip at the side, remembered on this browser;
- * what the page is sits behind "About" on the title's line; and the view is as tall as the window has left.
+ * tests and … more vertical real estate"): the checks fold away, remembered on this browser, and the view is as tall
+ * as the window has left. What the page is shows in full, unless the task's head is made small (`small`): then it is
+ * left out, with the rest of the head.
  *
  * Reading first: a check shows Pass and Fail, and a note is asked for only once one is pressed (a fail needs one:
  * it is what the fix works from). After a QA test run in TestRail and a GitHub deployment's "View deployment":
@@ -60,7 +61,7 @@ export const addressOf = (base: string, where?: string) => {
   return `${base.replace(/\/$/, '')}/iframe.html?id=${encodeURIComponent(where)}&viewMode=story` // a story's id: the story alone, as Storybook serves it
 }
 
-export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: string; /** The task's address, for the links on from here. */ base: string }) {
+export function SmokeTest({ issueId, appId, base, small = false }: { issueId: string; appId: string; /** The task's address, for the links on from here. */ base: string; /** The task's head is small: what this page is is left out. */ small?: boolean }) {
   const [v, setV] = useState<SmokeView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -78,7 +79,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
     measure(); const t = window.setTimeout(measure, 400)
     window.addEventListener('resize', measure)
     return () => { window.removeEventListener('resize', measure); window.clearTimeout(t) }
-  }, [v === null, aside, comparing])
+  }, [v === null, aside, comparing, small])
   const theMain = { main: compare.main }
   const mine = useTrail(), theirs = useTrail() // the build's view, and main's beside it: each goes its own way
   const { at, setAt: setMine } = mine
@@ -180,10 +181,9 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
         <h2>🧪 Smoke test <span className="faint">{v.checks.length === 0 ? 'nothing for you' : done ? `${v.checks.length} checked by hand${v.failed ? `, ${v.failed} failed` : ''}` : `${v.owed} of ${v.checks.length} for you to check`}</span></h2>
         {v.checks.length > 0 && <button className="btn quiet small" aria-expanded={!aside} title={aside ? 'Show the checks beside the view' : 'Put the checks aside, for a wider view'} onClick={() => putAside(!aside)}>{aside ? `Show checks${v.owed ? ` · ${v.owed} to check` : ''}` : 'Hide checks'}</button>}
       </div>
-      <details className="smoke-about"><summary className="faint">About this smoke test{v.head ? <> · commit <code>{v.head.slice(0, 7)}</code></> : null}</summary>
-      <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }}>
+      {!small && <p className="faint" style={{ margin: '0 0 10px', fontSize: 13 }}>
         {v.staged ? 'Every acceptance criterion no agent has marked, for you to check by hand on the built code' : 'What the agents could not judge, for you to try by hand on the built code'}{v.head ? <> (commit <code>{v.head.slice(0, 7)}</code>{v.branch ? <>, branch <code>{v.branch}</code></> : null})</> : ''}. Not the prototype. {many ? <>This app has {all.length} set-ups; each check is under the one it needs.</> : <>It runs {su.says}.</>}
-      </p></details>
+      </p>}
       {error && <p className="bad" style={{ margin: '0 0 8px' }}>{error}</p>}
       {sent !== null && sent > 0 && <p className="smoke-sent" role="status">Sent back: {sent} that failed, with what you saw. It is fixed, checked again, and comes back to you here.</p>}
       {sent === 0 && done && !v.failed && <p className="smoke-sent ok" role="status">All of it holds. The task carries on to its pull request.</p>}

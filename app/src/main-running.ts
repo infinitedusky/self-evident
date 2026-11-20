@@ -14,7 +14,9 @@ export function useMain(appId: string | undefined, looking: boolean, forId?: str
   const [main, setMain] = useState<MainRunning | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const refresh = useCallback((touch = false) => { if (appId) return engine.main(appId, touch, forId).then((m) => { setMain(m); return m }).catch((e) => { setError(String(e.message ?? e)); return null }); return Promise.resolve(null) }, [appId, forId])
+  // Answers can come back out of order (a look sent before it was turned on, answered after): only the latest asked is kept.
+  const asked = useRef(0)
+  const refresh = useCallback((touch = false) => { if (appId) { const n = ++asked.current; return engine.main(appId, touch, forId).then((m) => { if (n === asked.current) setMain(m); return m }).catch((e) => { setError(String(e.message ?? e)); return null }); } return Promise.resolve(null) }, [appId, forId])
   useEffect(() => { setMain(null); void refresh(looking) }, [appId, forId])
   // Turned on or off by anyone (the agent, or by itself when nobody looked): show it as it is now.
   useEffect(() => {
@@ -29,7 +31,8 @@ export function useMain(appId: string | undefined, looking: boolean, forId?: str
   useEffect(() => { if (!coming) return; const t = window.setInterval(() => void refresh(looking), 1200); return () => window.clearInterval(t) }, [coming, looking, refresh])
   const up = !!main?.running && main.up && main.how === 'local'
   useEffect(() => { if (!up || !looking) return; void refresh(true); const t = window.setInterval(() => void refresh(true), 60_000); return () => window.clearInterval(t) }, [up, looking, refresh])
-  const act = (fn: () => Promise<MainRunning>) => { setBusy(true); setError(null); return fn().then((m) => { setMain(m); return m }).catch((e) => { setError(String(e.message ?? e)); return null }).finally(() => setBusy(false)) }
+  // Turning it on or off is the truth when it answers: a look sent meanwhile may have been answered from before it, so every look still out is dropped.
+  const act = (fn: () => Promise<MainRunning>) => { setBusy(true); setError(null); ++asked.current; return fn().then((m) => { ++asked.current; setMain(m); return m }).catch((e) => { setError(String(e.message ?? e)); return null }).finally(() => setBusy(false)) }
   return {
     main, error, busy,
     start: (data?: MainDataChoice) => (appId ? act(() => engine.startMain(appId, false, forId, data)) : Promise.resolve(null)),
@@ -50,6 +53,7 @@ export function useCompare(appId: string | undefined, forId: string) {
   const app = useMain(appId, which === 'app')
   const task = useMain(appId, which === 'copy' || which === 'shared', forId)
   const active = which === 'app' ? app : task
+  const stopping = useRef<Promise<unknown>>(Promise.resolve())
   const starting = useRef(0) // a start is on its way: what an earlier stop reports back meanwhile is not this one stopping by itself
   useEffect(() => { // turned off elsewhere, or stopped by itself
     if (!which || !active.main || active.main.running || active.busy || starting.current) return
@@ -58,9 +62,10 @@ export function useCompare(appId: string | undefined, forId: string) {
   const choose = (w: CompareWith, beside: string) => {
     setStopped(null); setWhich(w)
     starting.current++
-    void (w === 'app' ? app.start() : task.start({ mode: w, beside })).then((m) => { if (!m?.running) setWhich(null) }).finally(() => { starting.current-- })
+    // After a stop that is still on its way: its answer must not arrive after this start's and be taken for main having stopped.
+    void stopping.current.then(() => (w === 'app' ? app.start() : task.start({ mode: w, beside }))).then((m) => { if (!m?.running) setWhich(null) }).finally(() => { starting.current-- })
   }
-  const stop = () => { if (which && which !== 'app') void task.stop(); setWhich(null); setStopped(null) }
+  const stop = () => { if (which && which !== 'app') stopping.current = task.stop().catch(() => null); setWhich(null); setStopped(null) }
   return {
     which, choose, stop, stopped,
     /** The main being compared with, while there is one. */ main: which ? active.main : null,
