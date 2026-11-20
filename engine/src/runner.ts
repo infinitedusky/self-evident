@@ -762,6 +762,20 @@ export class Runner {
     return (await this.updatePr(projectId, issueId, 'preview')) ?? null
   }
 
+  /**
+   * The person brings an open pull request up to date now: its title and description as they stand, sent without
+   * waiting for the next sub-task to land (asked for from a client app, 2026-11-20: a description written after
+   * submitting had no way to GitHub but a new commit). Refused when there is none open: that is submitting.
+   */
+  async refreshPr(projectId: string, issueId?: string) {
+    const find = async () => (await db.select().from(prTable).where(eq(prTable.projectId, projectId))).filter((q) => (issueId ? q.issueId === issueId : !q.issueId))[0]
+    const had = await find()
+    if (!had?.number) throw new PlanError('there is no pull request to update yet: submit it first')
+    if (had.status === 'closed' || had.status === 'merged') throw new PlanError(`#${had.number} is ${had.status}: ${had.status === 'closed' ? 'submit it again to reopen it' : 'nothing more is sent to it'}`)
+    await withLock(`land:${projectId}`, () => this.updatePr(projectId, issueId, false))
+    return find()
+  }
+
   /** The person submits the pull request: the branch is pushed and it is opened (a draft, by the app's rule), or the one they closed is reopened. Refused while sub-tasks are still to land. */
   async submitPr(projectId: string, issueId?: string) {
     await withLock(`land:${projectId}`, () => this.updatePr(projectId, issueId, true))

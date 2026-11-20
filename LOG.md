@@ -5701,3 +5701,20 @@ on the page); checking a written description against the repository's template; 
 pull request (pr_mode "project"), which has no task to hold one; an open pull request is not rewritten until its
 next update or submit.
 
+
+## Update pull request: an open one is brought up to date by a press (asked for from a client app, passed on by Sandy, 2026-11-20: "push the current title and description without needing a new commit")
+
+A description written after a pull request was submitted had no way to GitHub but the next sub-task landing. Now an
+open or draft pull request's page has **Update pull request**: its title and description are sent as they stand
+(and its branch pushed), with nothing new landed. It says when GitHub's is an earlier version, and "Updated" once it
+is not. Its draft state is left as it is.
+
+- `POST /issues/:id/pr/update` (`runner.refreshPr`): the same update a landing makes. Refused with nothing
+  submitted (that is submitting) and for a closed or merged one (a closed one is submitted again, by the person).
+- The person's, like submitting and marking ready: no agent tool does it. An agent writes the description
+  (`set_pr_message`); the person sends it.
+- Saving a description on the page now says to press Update to send it.
+
+Not done: updating by itself when a description or a team ticket changes; a project's single pull request from a
+project's own page (it is updated from any of its tasks).
+

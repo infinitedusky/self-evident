@@ -54,7 +54,7 @@ export const Draft: Story = {
   },
 }
 
-/** GitHub's message is an earlier one: it says so, and what will be sent can be looked at. */
+/** GitHub's message is an earlier one: it says so, what will be sent can be looked at, and Update pull request sends it now. */
 export const MessageBehind: Story = {
   beforeEach: withEngine({ prView: { ...prDraftSample, behind: true, pr: { ...prDraftSample.pr!, body: 'An earlier message, from the first landing (sample).' } } }),
   play: async ({ canvasElement }) => {
@@ -63,6 +63,11 @@ export const MessageBehind: Story = {
     await userEvent.click(c.getByRole('button', { name: 'Show what will be sent' }))
     await expect(c.getByText('What the next update sends')).toBeInTheDocument()
     await expect(c.getByText(/Edges can dip under a node/)).toBeInTheDocument()
+    // One press sends it as it stands: GitHub's is then the same, with no new commit.
+    await userEvent.click(c.getByRole('button', { name: 'Update pull request' }))
+    await expect(await c.findByRole('status')).toHaveTextContent('Updated.')
+    await expect(c.getByText('On GitHub now')).toBeInTheDocument()
+    await expect(c.queryByText('An earlier message, from the first landing (sample).')).toBeNull()
   },
 }
 

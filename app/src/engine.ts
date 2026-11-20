@@ -510,6 +510,7 @@ export const engine = {
   setReportFormat: (appId: string, f: { daily?: string; weekly?: string }) => call<{ daily: string; weekly: string }>('PUT', `/apps/${appId}/report-format`, f),
   prView: (issueId: string) => call<PrView>('GET', `/issues/${issueId}/pr`),
   setPrMessage: (issueId: string, body: string) => call<{ written: string | null }>('PUT', `/issues/${issueId}/pr/message`, { body }),
+  updatePr: (issueId: string) => call<{ number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/update`),
   markPrReady: (issueId: string) => call<{ number: number; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/ready`),
   setTeamNames: (issueId: string, names: { ticket?: string | null; title?: string | null }) => call<{ teamTicket: string | null; teamTitle: string | null; ticket: string | null; ticketFrom: string | null; ticketMissing: boolean }>('PUT', `/issues/${issueId}/team`, names),
   submitPr: (issueId: string) => call<{ id: string; number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/submit`),
