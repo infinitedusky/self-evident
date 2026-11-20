@@ -5861,3 +5861,31 @@ Not done: tried end to end on a real task (the listing is tested on its parts, t
 height is one guess per width, so a long screen is cut off on the wall and whole when opened; a share of the wall
 itself (sharing shares the Storybook); comparing a mockup against its screens; the Screens step on the workflow
 card's story; the planner and builders are not told to hold the build to the prototype in words of their own.
+
+
+## The whole test run can be asked for again, and one a restart cut off is made again (Sandy, 2026-11-20: "the Tests tab shows an x and says the whole run failed. What is up with that?")
+
+A task showed a failed run that was hours old and no longer true. The run had failed on a set-up problem, a fix
+sub-task landed, and the run after the fix was under way when the engine restarted (a merge of ours, under the
+watcher). Nothing recorded that run, nothing made it again, and nothing on the page could ask for one.
+
+- **A run says when it starts and when it is over** (`task.testing`, `task.test_ran`). A start with no end is a run
+  that was cut off. While one is going the Tests stage says so ("the whole run is under way").
+- **At the start the engine makes a cut-off run again** (`Runner.recover`). When the engine stops by itself it ends
+  the commands it had running, with everything they started (a group of their own), and says nothing of them: a
+  run ended that way is not a failure.
+- **A person can ask for it again**: "Run again" on the Tests line of the task's Checklist page
+  (`POST /issues/:id/test`, `Runner.testAgain`). It runs on the task's branch as it is now, in a checkout of its own
+  at the head and on no branch (`tests--<task>`), as the smoke test's does, because the last sub-task's worktree is
+  not the head once anything else is committed to the branch. What follows is what follows any run: a failure adds
+  a sub-task that fixes it, two at most.
+- **The line says when the run was** ("ran 5 h ago") and, when it failed, shows what it said.
+- The Tests row of the task's nav opens the Checklist page: the tests have no agent to watch on the build page.
+
+Mine to choose: it is a person's press and not an agent's tool; it is refused, with the reason, while a sub-task is
+landing or a run is going, and before the check and the probes are done.
+
+Not done: the test checkout is not removed when the task is done (nor is the smoke test's); a run made again after
+a restart starts from the beginning; the build page's graph does not show a run under way; not yet seen on a real
+task (the one that showed this is the first to try it on).
+

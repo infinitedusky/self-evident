@@ -5,6 +5,11 @@ import { CHECK_TITLE, FINISH_TITLE } from './verify.js'
 const PROBE_TITLE = 'Probe: Try to break it'
 
 const B = 'Build it'
+it('the whole run under way is said, whatever it last was', () => {
+  const s = stagesOf({ subs: [{ title: 'Build it', status: 'done' }], build: 'one', unmet: 0, met: 5, total: 5, hasTests: true, tested: false, testing: true }).find((x) => x.key === 'test')
+  expect([s?.state, s?.detail]).toEqual(['doing', 'the whole run is under way'])
+})
+
 const at = (subs: [string, string][], more: Partial<Parameters<typeof stagesOf>[0]> = {}) =>
   stagesOf({ subs: subs.map(([title, status]) => ({ title, status })), build: 'one', unmet: 0, met: 0, total: 5, hasTests: true, tested: null, ...more }).map((s) => [s.key, s.state, s.detail])
 

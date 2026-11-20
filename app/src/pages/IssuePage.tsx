@@ -150,6 +150,9 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
   const [checklist, setChecklist] = useState<Checklist | null>(null)
   const subStamp = i ? i.subIssues.map((s) => `${s.id}:${s.build?.status ?? ''}:${s.state}`).join('|') : ''
   useEffect(() => { if (i) void engine.checklist(i.id).then(setChecklist).catch(() => setChecklist(null)) }, [i?.id, i?.updatedAt, subStamp, section]) // eslint-disable-line react-hooks/exhaustive-deps
+  // While its whole test run is going, look again: its end moves nothing else on the task.
+  const testing = !!checklist?.tests?.running
+  useEffect(() => { if (!testing || !i) return; const id = setInterval(() => { void engine.checklist(i.id).then(setChecklist).catch(() => {}) }, 5000); return () => clearInterval(id) }, [testing, i?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   // A staged task's smoke test: every criterion no agent marked is the person's to check by hand. Read with the task, for the nav.
   const [smoke, setSmoke] = useState<{ owed: number; total: number; failed: number; built?: boolean } | null>(null)
   useEffect(() => { if (i && !i.parentId && i.kind === 'code') void engine.smoke(i.id).then((s) => setSmoke(s.staged ? { owed: s.owed, total: s.checks.length, failed: s.failed, built: !!s.head } : null)).catch(() => setSmoke(null)) }, [i?.id, i?.updatedAt, subStamp, section]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -200,7 +203,7 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
             {row.key === 'brief' ? <BriefStep i={i} busy={busy} act={act} feeds={rows.filter((r) => r.key !== 'brief')} base={base} /> : undefined}
           </StepSection>
         )}
-        {here === 'checklist' && checklist && <ChecklistView checklist={checklist} base={base} />}
+        {here === 'checklist' && checklist && <ChecklistView checklist={checklist} base={base} onTestAgain={() => engine.testAgain(i.id).then(() => engine.checklist(i.id)).then(setChecklist)} />}
         {here === 'smoke' && (checklist || staged) && <SmokeTest issueId={i.id} appId={i.appId} base={base} small={small} />}
         {here === 'pr' && <PrStep issueId={i.id} appId={i.appId} base={base} />}
         {here === 'saves' && <TaskBranches issueId={i.id} at={new URLSearchParams(window.location.search).get('at')} stamp={savesStamp} onMoved={() => void act(async () => {})} onChanged={readSaves} />}

@@ -949,6 +949,8 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 
 .checklist-stages { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 6px; }
 .checklist-stages .faint { font-size: 13px; }
+.checklist-output { margin: 6px 0 0; font-size: 13px; }
+.checklist-output pre { margin: 6px 0 0; padding: 10px; max-height: 320px; overflow: auto; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--panel-2, rgba(127, 127, 127, 0.08)); border-radius: 6px; }
 .checklist-items { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
 .checklist-item { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 6px; align-items: start; }
 .checklist-item.unmet strong { color: var(--bad, #b42318); }

@@ -124,7 +124,7 @@ export function TaskNav({ pr, checklist, smoke, base, here, on = 'task', rows, w
               <span className="task-nav-text">☑️ Checklist</span>
               {checklist.total > 0 && <span className="faint mono" style={{ fontSize: 12 }}>{checklist.met}/{checklist.total}</span>}
             </span>, null)}
-          {checklist.stages.map((s) => item(s.key === 'smoke' ? 'smoke' : `stage-${s.key}`, s.key === 'smoke' ? `${base}/smoke` : `${base}/build`,
+          {checklist.stages.map((s) => item(s.key === 'smoke' ? 'smoke' : `stage-${s.key}`, s.key === 'smoke' ? `${base}/smoke` : s.key === 'test' ? `${base}/checklist` : `${base}/build`, // the tests have no agent to watch: their page is the list, where the run is shown and asked for again
             <>
               <span className="task-nav-row">
                 <span className={`task-nav-mark ${s.state === 'done' ? 'ok' : s.state === 'failed' ? 'bad' : ''}`}>{STAGE_MARK[s.state]}</span>
