@@ -13,6 +13,7 @@ import { markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } fro
 import { closeTerminal, closeTerminals, openTerminal, ownPage, resizeTerminal, scratchKey, typeInTerminal, watchTerminal } from './smoke-terminal.js'
 import { startLearning, talkBusy } from './talk.js'
 import { serve } from '@hono/node-server'
+import { frameFor } from './frame-proxy.js'
 import { appendEvent } from './events.js'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
@@ -81,6 +82,7 @@ import { chooseFolder } from './folders.js'
 import { deleteIssue } from './delete-issue.js'
 import { addAsset, listAssets, removeAsset, updateAsset } from './assets.js'
 import { importTickets, linearTickets, type Scope } from './linear-import.js'
+import { originOf, originView } from './origins.js'
 import { accountStatus, cleanAccount } from './account.js'
 import { pullSkills, removeSkillSource, skillSources } from './skill-sources.js'
 import { outsidePr, pr as prRows } from './db/schema.js'
@@ -107,7 +109,7 @@ export function buildApp(bus: EventBus) {
     routes: {
       'GET /health': 'database reachable?', 'POST /devices/serve': 'put the page on the Tailscale network (this computer\'s page only); the same answer as GET /devices, plus enable (a page on Tailscale) when the account must allow serving first', 'POST /devices/serve/stop': 'take it off again', 'GET /devices': '{tailscale: missing | off | ready, address, remote, devices} — the page\'s address on the Tailscale network (null when not served), whether the one asking came over it, and the other devices with the page open: ip, name, kind (phone | computer), since',
       'POST /workspaces': '{name}', 'POST /apps': '{workspaceId, name, key?, defaultBranch?, setup?}', 'POST /repos': '{appId, fullName, localPath?, baseBranch?}',
-      'GET /apps': 'the apps in use, each with its repos; ?removed=1: the ones put away, with what each holds', 'POST /apps/:id/remove': 'put it away: out of every list, nothing of it runs, can be brought back', 'POST /apps/:id/restore': 'bring a put-away app back', 'DELETE /apps/:id': '{name}: delete a put-away app and every row of it, for good', 'PATCH /apps/:id': '{name?, defaultBranch?, setup?}', 'PATCH /repos/:id': '{fullName?, localPath?, baseBranch?}', 'DELETE /repos/:id': 'the repository leaves the app', 'GET /skills/sources': 'the repositories skills were pulled from', 'POST /skills/sources': '{url} → pulls that repository\'s skills into the shared skills, or brings them up to date: {source, added, updated, unchanged, removed, skipped}', 'DELETE /skills/sources?url=': 'stops pulling from it and removes its skills', 'POST /skills/shared': '{name, description, body} → one of your own skills, for every app (a SKILL.md outside every repo)', 'GET /apps/:id/account': 'which Claude account the app\'s agents run on: {kind: default|key|login, ok, note}', 'GET /apps/:id/linear/tickets?scope=mine|unassigned|all': 'the Linear team\'s open tickets, each with the task it already is here', 'POST /apps/:id/linear/import': '{identifiers: ["ENG-12"]} → {made, updated, missing}', 'GET /apps/:id/assets?project=': 'the app\'s assets, or one project\'s own', 'POST /assets': '{appId, projectId?, name, location, note?}', 'PATCH /assets/:id': '{name?, location?, note?}', 'DELETE /assets/:id': 'removes it',  'POST /folders/choose': '{path?} → {path, repos: [{name, path, fullName, branch}]}; no path opens the folder dialog', 'GET /workspaces': 'all workspaces',
+      'GET /apps': 'the apps in use, each with its repos; ?removed=1: the ones put away, with what each holds', 'POST /apps/:id/remove': 'put it away: out of every list, nothing of it runs, can be brought back', 'POST /apps/:id/restore': 'bring a put-away app back', 'DELETE /apps/:id': '{name}: delete a put-away app and every row of it, for good', 'PATCH /apps/:id': '{name?, defaultBranch?, setup?}', 'PATCH /repos/:id': '{fullName?, localPath?, baseBranch?}', 'DELETE /repos/:id': 'the repository leaves the app', 'GET /skills/sources': 'the repositories skills were pulled from', 'POST /skills/sources': '{url} → pulls that repository\'s skills into the shared skills, or brings them up to date: {source, added, updated, unchanged, removed, skipped}', 'DELETE /skills/sources?url=': 'stops pulling from it and removes its skills', 'POST /skills/shared': '{name, description, body} → one of your own skills, for every app (a SKILL.md outside every repo)', 'GET /apps/:id/account': 'which Claude account the app\'s agents run on: {kind: default|key|login, ok, note}', 'GET /apps/:id/linear/tickets?scope=mine|unassigned|all': 'the Linear team\'s open tickets, each with the task or idea it already is here', 'POST /apps/:id/linear/import': '{identifiers: ["ENG-12"], as?: idea|task} → each ticket an idea (or a task) here: {made, updated, missing}', 'GET /apps/:id/assets?project=': 'the app\'s assets, or one project\'s own', 'POST /assets': '{appId, projectId?, name, location, note?}', 'PATCH /assets/:id': '{name?, location?, note?}', 'DELETE /assets/:id': 'removes it',  'POST /folders/choose': '{path?} → {path, repos: [{name, path, fullName, branch}]}; no path opens the folder dialog', 'GET /workspaces': 'all workspaces',
       'GET /apps/:id/graph': 'the top-level graph: every sub-task of every project in the app', 'GET /now': 'the front door: running, needs you, recent',
       'POST /projects': '{appId, name, content?, description?, ideaId?, issues: [{title, description?, brief?, subIssues?: [{key, title, brief?, dependsOn?, files?}]}]}',
       'GET /projects?app=': 'the app\'s projects with counts', 'GET /projects/:id/graph': 'tasks in order, sub-tasks with builds, edges, claims, held reasons, last run, steps, the PR, backlog, to-dos',
@@ -447,6 +449,8 @@ export function buildApp(bus: EventBus) {
     if (!body.title?.trim()) return c.json({ error: 'a prototype needs a title' }, 400)
     try { return c.json(await startPrototype({ appId: c.req.param('id'), title: body.title.trim(), brief: body.brief, projectId: body.projectId, depth: body.depth }), 201) } catch (err) { return planError(c, err) }
   })
+  // A view of something running on this computer, through a proxy that lets it say where it is (frame-proxy.ts).
+  api.get('/frame', async (c) => { const frame = await frameFor(c.req.query('url') ?? '').catch(() => null); return c.json({ frame }) })
   api.get('/prototypes/:id', async (c) => { try { return c.json(await prototypeStatus(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/prototypes/:id/start', async (c) => { try { return c.json(await runPrototype(c.req.param('id'), 'person', { restart: c.req.query('restart') === '1' })) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/data/reset', async (c) => { const b = await c.req.json<{ scenario?: string | null }>().catch(() => ({ scenario: null })); try { return c.json(await resetPrototypeData(c.req.param('id'), b.scenario ?? null)) } catch (err) { return planError(c, err) } })
@@ -501,7 +505,7 @@ export function buildApp(bus: EventBus) {
     return c.json({ removed: was.id })
   })
   const envOfApp = async (appId: string) => { const [a] = await db.select({ key: appTable.key }).from(appTable).where(eq(appTable.id, appId)); return envFor(a?.key) }
-  // Tasks from Linear tickets (linear-import.ts): the team's open tickets for the app, and bringing the ticked ones in. Reads Linear, never writes.
+  // Linear tickets brought in (linear-import.ts): the team's open tickets for the app, and bringing the ticked ones in as ideas (or, from a project's Add tasks, as tasks). Reads Linear, never writes.
   // Which Claude account this app's agents run on (account.ts): the engine's default, or the app's own key or login.
   api.get('/apps/:id/account', async (c) => {
     const [a] = await db.select().from(appTable).where(eq(appTable.id, c.req.param('id')))
@@ -512,8 +516,8 @@ export function buildApp(bus: EventBus) {
     try { return c.json(await linearTickets(c.req.param('id'), scope, await envOfApp(c.req.param('id')))) } catch (err) { return planError(c, err) }
   })
   api.post('/apps/:id/linear/import', async (c) => {
-    const body = await c.req.json<{ identifiers?: string[] }>().catch(() => ({} as { identifiers?: string[] }))
-    try { return c.json(await importTickets(c.req.param('id'), body.identifiers ?? [], 'user', await envOfApp(c.req.param('id'))), 201) } catch (err) { return planError(c, err) }
+    const body = await c.req.json<{ identifiers?: string[]; as?: string }>().catch(() => ({} as { identifiers?: string[]; as?: string }))
+    try { return c.json(await importTickets(c.req.param('id'), body.identifiers ?? [], 'user', await envOfApp(c.req.param('id')), undefined, body.as === 'task' ? 'task' : 'idea'), 201) } catch (err) { return planError(c, err) }
   })
   // Assets (assets.ts): what an app or a project is worked from. A name, a link or path, a note.
   api.get('/apps/:id/assets', async (c) => c.json(await listAssets(c.req.param('id'), c.req.query('project') || null)))
@@ -593,7 +597,7 @@ export function buildApp(bus: EventBus) {
   })
 
   // The inbox: capture an idea in a moment; make it a project when its time comes.
-  api.get('/ideas/:id', async (c) => { const i = await getIdea(c.req.param('id')); return i ? c.json(i) : c.json({ error: 'no such idea' }, 404) }) // one idea: what a tab on it is named after
+  api.get('/ideas/:id', async (c) => { const i = await getIdea(c.req.param('id')); return i ? c.json({ ...i, origin: originView(await originOf({ ideaId: i.id })) }) : c.json({ error: 'no such idea' }, 404) }) // one idea: what a tab on it is named after
   api.get('/ideas', async (c) => { const a = c.req.query('app'); return a ? c.json(await listIdeas(a)) : c.json({ error: 'app is required: one app at a time' }, 400) })
   api.post('/ideas', async (c) => {
     try { return c.json(await createIdea({ ...(await c.req.json()), actor: 'user' }), 201) } catch (err) { return planError(c, err) }

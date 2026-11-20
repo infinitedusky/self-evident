@@ -1,17 +1,39 @@
 /**
- * One view's own way around: where it was sent, in order, with back, forward, reload and an address bar (after a
+ * One view's own way around: where it went, in order, with back, forward, reload and an address bar (after a
  * browser's own). The smoke test and the prototype each give one to the build and one to main beside it.
+ *
+ * The view says where it is (Sandy, 2026-11-20: "the address doesn't update with the site like a real browser. This
+ * makes the back and forward useless"): what runs on this computer is shown through the engine's proxy, which puts a
+ * script in each of its pages that tells this page its address on every load and history change. A link pressed
+ * inside it is a step in the trail, as in a browser, and the address bar follows. Somewhere the proxy cannot stand in
+ * front of (a deployed site) is shown as it is, and only where this page sent it is known.
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { API } from '../engine'
 
-/** Where one view was sent, in order: back, forward, reload and what is typed in its address bar. */
+type Steps = { list: string[]; i: number; /** The lowest step back can reach: 0 once the first page has been taken over by where the view itself went. */ floor: number }
+
+/** Where one view went, in order: back, forward, reload and what is typed in its address bar. */
 export function useTrail() {
-  const [trail, setTrail] = useState<{ list: string[]; i: number }>({ list: [], i: -1 })
+  const [trail, setTrail] = useState<Steps>({ list: [], i: -1, floor: -1 })
   const [typed, setTyped] = useState<string | null>(null) // what is in the address bar while it is being typed
   const [reloads, setReloads] = useState(0)
-  const setAt = (to: string | null) => { setTyped(null); setTrail((t) => (to === null ? { list: [], i: -1 } : t.list[t.i] === to ? t : { list: [...t.list.slice(0, t.i + 1), to], i: t.i + 1 })) }
-  const step = (by: number) => { setTyped(null); setTrail((t) => ({ ...t, i: Math.max(-1, Math.min(t.list.length - 1, t.i + by)) })) }
-  return { at: trail.list[trail.i] ?? null, canBack: trail.i >= 0, canForward: trail.i < trail.list.length - 1, typed, setTyped, reloads, reload: () => setReloads((n) => n + 1), setAt, step }
+  /** Where the view itself last said it is: being there already, it is not loaded again. */
+  const [frameAt, setFrameAt] = useState<string | null>(null)
+  const setAt = (to: string | null) => { setTyped(null); setTrail((t) => (to === null ? { list: [], i: -1, floor: -1 } : t.list[t.i] === to ? t : { ...t, list: [...t.list.slice(0, t.i + 1), to], i: t.i + 1 })) }
+  const step = (by: number) => { setTyped(null); setTrail((t) => ({ ...t, i: Math.max(t.floor, Math.min(t.list.length - 1, t.i + by)) })) }
+  /** The view went somewhere on its own (a link in it): a new step, or, for a redirect or a replaceState, the step it is on. */
+  const seen = (href: string, replace: boolean) => {
+    setFrameAt(href); setTyped(null)
+    setTrail((t) => {
+      if (t.list[t.i] === href) return t
+      if (replace) return t.i < 0 ? { list: [href], i: 0, floor: 0 } : { ...t, list: [...t.list.slice(0, t.i), href, ...t.list.slice(t.i + 1)] }
+      if (t.i - 1 >= t.floor && t.i > 0 && t.list[t.i - 1] === href) return { ...t, i: t.i - 1 } // its own back (history.back() in its code)
+      if (t.list[t.i + 1] === href) return { ...t, i: t.i + 1 }
+      return { ...t, list: [...t.list.slice(0, t.i + 1), href], i: t.i + 1 }
+    })
+  }
+  return { at: trail.list[trail.i] ?? null, canBack: trail.i > trail.floor, canForward: trail.i < trail.list.length - 1, typed, setTyped, reloads, reload: () => setReloads((n) => n + 1), setAt, step, seen, frameAt }
 }
 export type Trail = ReturnType<typeof useTrail>
 /** Back, forward, reload and an address, for one view. `of` names it when there are two ("main"). */
@@ -30,4 +52,69 @@ export function Nav({ t, home, src, of }: { t: Trail; home: string; src: string;
       </form>
     </>
   )
+}
+
+const frames = new Map<string, Promise<string | null>>()
+const known = new Map<string, string | null>() // what the engine said, for a view opened again
+/** The proxy in front of `origin`, asked of the engine once a page; null for an address it does not stand in front of. */
+const frameOf = (origin: string) => {
+  let p = frames.get(origin)
+  if (!p) {
+    p = fetch(`${API}/frame?url=${encodeURIComponent(origin)}`).then((r) => (r.ok ? r.json() : { frame: null })).then((x: { frame: string | null }) => x.frame).catch(() => null)
+    p.then((f) => known.set(origin, f))
+    frames.set(origin, p)
+  }
+  return p
+}
+const originOf = (url: string) => { try { return new URL(url).origin } catch { return null } }
+
+/**
+ * The view itself: `src` is where the trail has it, `home` the address it runs at. When the engine can stand in front
+ * of it, it is loaded through that, and says where it goes; the trail follows. It is loaded again only when the trail
+ * sends it somewhere it is not (back, forward, an address typed, a check's "Go there"), on reload, or when `version`
+ * changes (a restart).
+ */
+export function Framed({ t, src, home, version = '', ...rest }: { t: Trail; src: string; home: string; version?: string } & Omit<React.IframeHTMLAttributes<HTMLIFrameElement>, 'src'>) {
+  const homeOrigin = originOf(home)
+  const [proxy, setProxy] = useState<{ for: string; frame: string | null } | null>(() => (homeOrigin && known.has(homeOrigin) ? { for: homeOrigin, frame: known.get(homeOrigin)! } : null))
+  useEffect(() => {
+    if (!homeOrigin || proxy?.for === homeOrigin) return
+    let live = true
+    void frameOf(homeOrigin).then((frame) => { if (live) setProxy({ for: homeOrigin, frame }) })
+    return () => { live = false }
+  }, [homeOrigin]) // eslint-disable-line react-hooks/exhaustive-deps
+  const ready = !homeOrigin || proxy?.for === homeOrigin
+  const frame = ready && homeOrigin ? proxy?.frame ?? null : null
+  /** Through the proxy, and back. */
+  const toFrame = (u: string) => (frame && homeOrigin && u.startsWith(homeOrigin) ? frame + u.slice(homeOrigin.length) : u)
+  const fromFrame = (u: string) => (frame && homeOrigin && u.startsWith(frame) ? homeOrigin + u.slice(frame.length) : u)
+
+  // What the frame is loaded with, and how many times: it changes only when the trail sends it somewhere it is not.
+  const [load, setLoad] = useState({ src, n: 0, last: src, reloads: t.reloads })
+  if (load.last !== src || load.reloads !== t.reloads) { // worked out here, not after: the frame is where the bar says in the same render
+    const go = load.reloads !== t.reloads || src !== t.frameAt
+    setLoad({ src: go ? src : load.src, n: go ? load.n + 1 : load.n, last: src, reloads: t.reloads })
+  }
+  const fresh = useRef(true) // the next thing the view says is its first since it was loaded: a redirect is not a step
+  useEffect(() => { fresh.current = true }, [load.n, version, frame])
+
+  const ref = useRef<HTMLIFrameElement>(null)
+  const seen = useRef(t.seen)
+  seen.current = t.seen
+  useEffect(() => {
+    if (!frame) return
+    const on = (e: MessageEvent) => {
+      if (e.source !== ref.current?.contentWindow || e.origin !== frame) return
+      const d = e.data as { selfEvident?: string; href?: unknown; kind?: unknown }
+      if (d?.selfEvident !== 'at' || typeof d.href !== 'string') return
+      const first = fresh.current
+      fresh.current = false
+      seen.current(fromFrame(d.href), first || d.kind === 'replace')
+    }
+    window.addEventListener('message', on)
+    return () => window.removeEventListener('message', on)
+  }, [frame]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!ready) return <div className={rest.className} style={rest.style} aria-busy="true" />
+  return <iframe {...rest} ref={ref} key={`${load.n}#${version}#${frame ?? ''}`} src={toFrame(load.src)} />
 }

@@ -76,6 +76,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
   }
   return [
     http.get('/api/events', () => silentStream()),
+    http.get('/api/frame', () => HttpResponse.json({ frame: null })), // a story's views are shown as they are, not through the engine's proxy
     http.get('/api/devices', () => reply({ tailscale: 'missing', address: null, remote: false, devices: [] })),
     http.get('/api/apps', ({ request }) => reply(new URL(request.url).searchParams.get('removed') === '1' ? d.removedApps ?? [] : d.apps)),
     http.post('/api/apps/:id/remove', () => d.removeProblem ? HttpResponse.json({ error: d.removeProblem }, { status: 400 }) : reply({})),
@@ -118,8 +119,11 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       return reply({ team: 'SHOP', tickets: d.linearTickets.filter((t) => (scope === 'mine' ? t.mine : scope === 'unassigned' ? !t.assignee : true)) })
     }),
     http.post('/api/apps/:id/linear/import', async ({ request }) => {
-      const { identifiers } = await request.json() as { identifiers: string[] }
-      return reply({ made: identifiers.map((l, i) => ({ id: `iss_sample_made${i}`, identifier: `SS-${50 + i}`, title: d.linearTickets.find((t) => t.identifier === l)?.title ?? l, linear: l })), updated: [], missing: [] })
+      const { identifiers, as } = await request.json() as { identifiers: string[]; as?: 'idea' | 'task' }
+      const title = (l: string) => d.linearTickets.find((t) => t.identifier === l)?.title ?? l
+      return reply({ made: identifiers.map((l, i) => as === 'task'
+        ? { kind: 'task', id: `iss_sample_made${i}`, identifier: `SS-${50 + i}`, title: title(l), linear: l }
+        : { kind: 'idea', id: `idea_sample_made${i}`, identifier: `#${30 + i}`, title: title(l), linear: l }), updated: [], missing: [] })
     }),
     http.get('/api/apps/:id/tracker-guide', () => HttpResponse.text(d.trackerGuide, { headers: { 'content-type': 'text/markdown; charset=utf-8' } })),
     http.get('/api/apps/:id/claude-sessions', () => reply(d.claudeSessions)),

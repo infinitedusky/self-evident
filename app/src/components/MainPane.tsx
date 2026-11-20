@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
 import { useCurrentApp } from '../current-app'
 import { useMain } from '../main-running'
 import { useWorkspace } from '../workspace'
-import { Nav, useTrail } from './Trail'
+import { Framed, Nav, useTrail } from './Trail'
 
 const DEVICES = [{ id: 'desktop', label: 'Desktop', width: null }, { id: 'tablet', label: 'Tablet', width: 768 }, { id: 'phone', label: 'Phone', width: 390 }] as const
 
@@ -71,7 +71,7 @@ export function MainPane({ path = '/', onNavigate }: { path?: string; onNavigate
         )}
       </div>
       <div className="preview-stage">
-        <iframe key={`${src}#${t.reloads}#${main.sha ?? ''}`} src={src} title={`${name}'s main`} style={width ? { width, maxWidth: '100%' } : undefined} />
+        <Framed t={t} home={base} src={src} version={main.sha ?? ''} title={`${name}'s main`} style={width ? { width, maxWidth: '100%' } : undefined} />
       </div>
     </div>
   )

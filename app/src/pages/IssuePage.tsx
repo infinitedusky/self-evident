@@ -32,6 +32,7 @@ import { ChecklistView } from '../components/ChecklistView'
 import { SmokeTest } from '../components/SmokeTest'
 import { openEvents, useLiveProject, type Events, type Checklist, API, engine, useWorkflows, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
 import { Md } from '../components/Md'
+import { Origin } from '../components/Origin'
 
 /** Where a task's workflow comes from, after its name. */
 const FROM = { task: ', its own', project: ', from its project', app: ', the app\'s default' }
@@ -173,6 +174,7 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
         {here === 'overview' && (
           <>
             <section className="panel"><Brief description={i.description} brief={null} /></section>
+            {i.origin && <Origin origin={i.origin} />}
             <Handover madeBy={i.madeBy} handover={i.handover} onWrite={(again) => engine.writeHandover(i.id, again)} />
             <section className="panel">
               <h2>Where it stands</h2>

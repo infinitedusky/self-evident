@@ -1081,3 +1081,6 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .step-probe-trial .trial-fail { color: var(--bad, #b42318); }
 .step-probe-trial ul { list-style: none; margin: 4px 0 0; padding: 0 0 0 14px; }
 .step-probe-trial li { padding: 2px 0; }
+.origin summary { cursor: pointer; list-style-position: outside; }
+.origin-comments { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.origin-comments li { border-left: 2px solid var(--line); padding-left: 10px; }

@@ -3,7 +3,7 @@ import { expect, spyOn, userEvent, within, waitFor } from 'storybook/test'
 import { IssuePage, TASK_HEAD } from './IssuePage'
 import { step } from '@self-evident/engine/steps'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
-import { acceptance, approvedTaskStepsView, issueDetails, waitingTaskStepsView } from '../stories/sample'
+import { acceptance, approvedTaskStepsView, issueDetails, sampleOrigin, waitingTaskStepsView } from '../stories/sample'
 
 // One task at /tasks/:id, from the sample engine. Each story stands on a different task. A task has its own nav down
 // the left: overview, then its two stages: the brief, with the steps that feed it under it ("UI change (sample)", in
@@ -201,4 +201,9 @@ export const SmallHead: Story = {
     await expect(c.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
     await expect(c.getByRole('button', { name: /Less/ })).toBeInTheDocument()
   },
+}
+/** A task from a Linear ticket (made up): the ticket, word for word, on its overview, folded. */
+export const FromATicket: Story = {
+  parameters: at('iss_sample20'), beforeEach: withEngine({ issueDetails: { ...sampleData.issueDetails, iss_sample20: { ...issueDetails.iss_sample20, origin: sampleOrigin } } }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText('Where this came from')).toBeInTheDocument() },
 }

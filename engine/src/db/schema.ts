@@ -107,10 +107,22 @@ export const providerConnection = pgTable('provider_connection', { // [IF] modul
 }, (t) => [uniqueIndex('provider_connection_role_provider').on(t.appId, t.role, t.provider),
   inList('provider_role', t.role, PROVIDER_ROLES)])
 
+// Where a piece of work came from, word for word (origins.ts): a ticket in Linear, and whatever tracker comes next. Never
+// edited by an agent; brought up to date only from the source. Ideas, projects and tasks point at it, and every agent
+// working on one of them is given it whole.
+export const origin = pgTable('origin', {
+  id: id(), appId: appId(), source: text('source').notNull(), ref: text('ref').notNull(), // 'linear', 'SHOP-12'
+  url: text('url'), title: text('title').notNull(), body: text('body'),
+  comments: jsonb('comments').$type<{ author: string | null; at: string; body: string }[]>().notNull().default([]),
+  links: jsonb('links').$type<{ title: string; url: string }[]>().notNull().default([]), // what the source attaches: pull requests, designs, documents
+  files: jsonb('files').$type<{ url: string; path: string | null; note?: string }[]>().notNull().default([]), // images and uploads in its text, kept on this computer when they could be fetched
+  fetchedAt: at('fetched_at').notNull().defaultNow(), createdAt: createdAt(),
+}, (t) => [uniqueIndex('origin_app_source_ref').on(t.appId, t.source, t.ref)])
+
 export const idea = pgTable('idea', { // [IF] the unit of work that outlives the merge
   id: id(), appId: appId(), number: integer('number').notNull(),
   title: text('title').notNull(), body: text('body'),
-  source: text('source').notNull(), sourceRef: jsonb('source_ref'),
+  source: text('source').notNull(), sourceRef: jsonb('source_ref'), originId: text('origin_id').references((): AnyPgColumn => origin.id),
   lane: text('lane').notNull().default('inbox'),
   hypothesis: text('hypothesis'), baseline: jsonb('baseline'), // {metric, value, window, captured_at, insight_id}
   measures: jsonb('measures').notNull().default([]), // [{kind: insight|flag|experiment, provider_ref, target}]
@@ -118,7 +130,7 @@ export const idea = pgTable('idea', { // [IF] the unit of work that outlives the
   decision: text('decision'), decidedAt: at('decided_at'),
   createdBy: text('created_by').references(() => user.id), createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [uniqueIndex('idea_app_number').on(t.appId, t.number), uniqueIndex('idea_id_app').on(t.id, t.appId),
-  inList('idea_source', t.source, ['person', 'agent', 'telemetry']), inList('idea_lane', t.lane, IDEA_LANES),
+  inList('idea_source', t.source, ['person', 'agent', 'telemetry', 'linear']), inList('idea_lane', t.lane, IDEA_LANES),
   check('idea_decision', sql`${t.decision} is null or ${t.decision} in ('yes', 'no', 'not_yet')`)])
 
 export const evidence = pgTable('evidence', { // [IF] append-only telemetry results
@@ -147,7 +159,7 @@ export const cycle = pgTable('cycle', {
 }, (t) => [uniqueIndex('cycle_app_number').on(t.appId, t.number), uniqueIndex('cycle_id_app').on(t.id, t.appId), check('cycle_dates', sql`${t.endsAt} >= ${t.startsAt}`)])
 
 export const project = pgTable('project', { // issues in order (an InDusk master plan); the branch and PR unit
-  id: id(), appId: appId(), ideaId: text('idea_id').references(() => idea.id),
+  id: id(), appId: appId(), ideaId: text('idea_id').references(() => idea.id), originId: text('origin_id').references(() => origin.id),
   name: text('name').notNull(), description: text('description'), // description: one line, Linear's summary
   content: text('content'), // why it exists and what it must do, Markdown
   status: text('status').notNull().default('drafting'),
@@ -171,7 +183,7 @@ export const issue = pgTable('issue', {
   kind: text('kind').notNull().default('code'),
   parentId: text('parent_id').references((): AnyPgColumn => issue.id), // a sub-issue: a build unit under code, a checklist line under a to-do
   projectId: text('project_id').references(() => project.id), cycleId: text('cycle_id').references(() => cycle.id),
-  ideaId: text('idea_id').references(() => idea.id),
+  ideaId: text('idea_id').references(() => idea.id), originId: text('origin_id').references(() => origin.id), // its own origin; else its parent's, project's or idea's (origins.ts)
   title: text('title').notNull(),
   description: text('description'), // for a person: what will be different, plain words; no file names or code
   brief: text('brief'), // for the builder: its instructions, Markdown

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, userEvent, within } from 'storybook/test'
 import { Issues } from './Issues'
 import { engineDown, withEngine } from '../stories/mock-engine'
-import { issueRows, sampleApp } from '../stories/sample'
+import { issueRows } from '../stories/sample'
 import type { IssueRow } from '../engine'
 
 // Every code task of the app at /tasks: the ones in no project first, then by project.
@@ -27,8 +27,6 @@ const standings: IssueRow[] = [
 export const Typical: Story = {}
 /** Every standing a task can show: not planned, planning, waiting for the model, planning failed, a failed build, in review (with a link to its pull request), done. */
 export const EveryStanding: Story = { beforeEach: withEngine({ issueRows: standings }) }
-/** An app whose Linear team is set (made up: SHOP): tickets can be brought in from the top of the page. */
-export const WithLinear: Story = { beforeEach: withEngine({ apps: [{ ...sampleApp, setup: { ...sampleApp.setup, integrations: { linear: { team: 'SHOP', key_env: 'LINEAR_API_KEY' } } } }] }) }
 /** A task in a project can be moved to another open one, or out to no project. */
 export const Moving: Story = {
   play: async ({ canvasElement }) => {

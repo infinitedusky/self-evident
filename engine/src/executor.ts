@@ -15,6 +15,8 @@ import { hookEnv } from './conventions.js'
 export interface RunInput {
   subIssue: { id: string; identifier: string; title: string; brief: string | null }
   issue: { identifier: string; title: string; brief: string | null }
+  /** Where the task came from, word for word (origins.ts, `originPrompt`): the ticket, not the brief's account of it. */
+  origin?: string
   /** The ticket this work is named by outside Self Evident: the team's, else our task id; never the sub-task's (conventions.ts). */
   ticket?: string
   /** The repository's format for a commit's first line, when the app has one. */
@@ -67,6 +69,7 @@ function prompt(i: RunInput): string {
     '',
     i.subIssue.brief ?? '',
     i.issue.brief ? `\nThe task's brief, for context:\n${i.issue.brief}` : '',
+    i.origin ?? '',
     '',
     'How to work:',
     `- Work only inside this directory. It is a git worktree on branch ${i.branch}. Do not change branches, do not push, do not open pull requests.`,

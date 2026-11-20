@@ -4,6 +4,7 @@
  * page); the engine's own API is the agent's MCP tools; an edit or a shell command waits for the person's yes in
  * the UI, Claude Code's default mode. Development runs on the operator's login, the product on an API key.
  */
+import { originOf, originPrompt } from './origins.js'
 import type { ImageSaved } from './uploads.js'
 import { STOP_ONLY_YOURS, stopsOthers } from './guard.js'
 import { BRIEF_FORM } from './brief.js'
@@ -668,6 +669,9 @@ async function open(sessionId: string): Promise<Live> {
   const assets = await assetsFor(s.appId, (s.subjectRef as SubjectRef | null)?.projectId ?? ownTask?.projectId) // the app's, and the project's when it is about one
   // What real services sent back for this work, kept raw outside the repository (recordings.ts): the task's, else the idea's, else the app's.
   const recordings = s.appId ? recordingsDir(s.appId, proto ? { issueId: proto.issueId, ideaId: proto.ideaId } : { issueId: ownTaskId ?? (s.subjectRef as SubjectRef | null)?.checkOf, ideaId: (s.subjectRef as SubjectRef | null)?.ideaId }) : null
+  // Where the work came from, word for word (origins.ts): the ticket, for every agent on a task, an idea, a project or one of their steps.
+  const about = s.subjectRef as SubjectRef | null
+  const origin = originPrompt(await originOf(ownTaskId ? { issueId: ownTaskId } : proto?.issueId ? { issueId: proto.issueId } : about?.checkOf ? { issueId: about.checkOf } : about?.issueId ? { issueId: about.issueId } : proto?.ideaId ? { ideaId: proto.ideaId } : about?.ideaId ? { ideaId: about.ideaId } : about?.projectId ? { projectId: about.projectId } : {}).catch(() => null))
   const q = query({
     prompt: input.it,
     options: {
@@ -677,7 +681,7 @@ async function open(sessionId: string): Promise<Live> {
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + storiesNote(a?.setup) + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) + (recordings && !unwatched ? recordingsPrompt(recordings, listRecordings(recordings).length) : '') },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + origin + storiesNote(a?.setup) + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) + (recordings && !unwatched ? recordingsPrompt(recordings, listRecordings(recordings).length) : '') },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...(check || whole ? CHECK_TOOLS : ASK_TOOLS)],
