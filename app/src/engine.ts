@@ -324,7 +324,7 @@ export interface ChecklistStage { key: 'build' | 'check' | 'probe' | 'test' | 's
 export interface ChecklistItem { id: string; kind: 'criterion' | 'requirement'; text: string; what?: string; mark: 'met' | 'unmet' | 'person' | 'na' | 'unchecked'; evidence?: string }
 /** One node of a checklist task's flow: a sub-task that exists (`sub`), or a stage still to come. `after`: what it follows; null keeps the sub-task's own dependencies. */
 export interface FlowNode { id: string; sub?: string; title: string; state: ChecklistStage['state']; detail: string; after: string[] | null }
-export interface Checklist { build: 'one' | 'planned'; stages: ChecklistStage[]; items: ChecklistItem[]; met: number; unmet: number; total: number; flow?: FlowNode[] }
+export interface Checklist { /** The whole test run as it last was, and whether it can be asked for again; absent when the app has no test command. */ tests?: { ok: boolean | null; at: string | null; flaky: boolean; output?: string; running: boolean; canRun: boolean }; build: 'one' | 'planned'; stages: ChecklistStage[]; items: ChecklistItem[]; met: number; unmet: number; total: number; flow?: FlowNode[] }
 /** A task's smoke test (the engine's smoke module): where the built code runs, and the checks left to a person with their marks. */
 export interface SmokeCheck { /** Which of the app's set-ups it needs up (its key). */ setup?: string; /** When it can be done: here on the built code, on the pull request, or after the merge. */ when?: 'here' | 'pr' | 'after' | 'nightly'; id: string; text: string; where?: string; /** That place as an address to open, while its set-up is up or deployed. */ link?: string; how?: string; mark: 'todo' | 'pass' | 'fail' | 'skip'; note?: string; stale?: boolean; before?: { pass: boolean; note: string }; /** What an agent saw when asked to try it: its word, not a mark. stale: said on an earlier commit. */ tried?: { verdict: 'holds' | 'fails' | 'unsure'; note: string; sha: string | null; at: string; stale?: boolean }; /** An agent is trying it now. */ trying?: boolean }
 /** One of an app's smoke test set-ups on a task: where it is and whether it is up. */
@@ -513,6 +513,8 @@ export const engine = {
   trySmoke: (issueId: string, criterionId: string) => call<SmokeView>('POST', `/issues/${issueId}/smoke/${criterionId}/try`),
   markSmoke: (issueId: string, criterionId: string, pass: boolean, note?: string, skip?: boolean) => call<SmokeView>('POST', `/issues/${issueId}/smoke/${criterionId}`, skip ? { skip: true, note } : { pass, note }),
   checklist: (issueId: string) => call<Checklist | null>('GET', `/issues/${issueId}/checklist`),
+  /** The whole test run again, on the task's branch as it is now. Answers once it has started. */
+  testAgain: (issueId: string) => call<{ started: true; head: string }>('POST', `/issues/${issueId}/test`),
   learning: (appId: string) => call<Learning>('GET', `/apps/${appId}/learning`),
   learn: (appId: string) => call<{ sessionId: string; started: boolean }>('POST', `/apps/${appId}/learn`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
@@ -664,7 +666,7 @@ export const EVENT_TYPES = [
   'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted', 'build.carried_on',
   'run.started', 'run.message', 'run.steps', 'run.tool_call', 'run.tool_result', 'run.result', 'run.error', 'run.rate_limit',
   'land.committed', 'land.tested', 'land.landed', 'land.conflict', 'land.retry', 'pr.opened', 'pr.updated', 'pr.error',
-  'task.tested', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked', 'learn.written', 'smoke.started', 'smoke.marked', 'smoke.skipped', 'smoke.trying', 'smoke.tried', 'task.smoke_waiting',
+  'task.tested', 'task.testing', 'task.test_ran', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked', 'learn.written', 'smoke.started', 'smoke.marked', 'smoke.skipped', 'smoke.trying', 'smoke.tried', 'task.smoke_waiting',
 ]
 
 const LIVE_POLL_MS = 20_000

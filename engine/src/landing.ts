@@ -76,15 +76,25 @@ export function failingLines(out: string, max = 60): string[] {
   return lines
 }
 
-function run(cmd: string, cwd: string, timeoutMs: number): Promise<{ code: number; tail: string }> {
+/**
+ * A run that was ended because the engine is stopping. It says nothing about the code: no result is recorded, and
+ * the run is made again when the engine is back (Runner.recover).
+ */
+export class CutOff extends Error { constructor() { super('the run was cut off: the engine stopped') } }
+
+function run(cmd: string, cwd: string, timeoutMs: number, signal?: AbortSignal): Promise<{ code: number; tail: string; cut?: boolean }> {
   return new Promise((resolveP) => {
-    const child = spawn('sh', ['-c', cmd], { cwd, env: { ...process.env, CI: '1' } })
+    // A group of its own, so ending it ends what it started too (a test runner's workers), not the shell alone.
+    const child = spawn('sh', ['-c', cmd], { cwd, env: { ...process.env, CI: '1' }, detached: true })
+    const kill = () => { try { process.kill(-child.pid!, 'SIGKILL') } catch { child.kill('SIGKILL') } }
+    if (signal?.aborted) kill(); else signal?.addEventListener('abort', kill, { once: true })
     let out = ''
     const take = (b: Buffer) => { out = (out + b.toString()).slice(-400_000) }
     child.stdout.on('data', take); child.stderr.on('data', take)
-    const timer = setTimeout(() => { child.kill('SIGKILL'); out += `\n[timed out after ${timeoutMs / 1000}s]` }, timeoutMs)
+    const timer = setTimeout(() => { kill(); out += `\n[timed out after ${timeoutMs / 1000}s]` }, timeoutMs)
     child.on('close', (code) => {
-      clearTimeout(timer)
+      clearTimeout(timer); signal?.removeEventListener('abort', kill)
+      if (signal?.aborted) return resolveP({ code: code ?? 1, tail: '', cut: true })
       const failing = code === 0 ? [] : failingLines(out)
       resolveP({ code: code ?? 1, tail: `${failing.length ? `What failed:\n${failing.join('\n')}\n\nThe end of the output:\n` : ''}${out.slice(-3000)}` })
     })
@@ -99,17 +109,20 @@ export type WholeRun = { ok: true; flaky: boolean } | { ok: false; code: number;
  * time, and is reported as flaky and not as a failure.
  */
 /** One command on the merged work, once: a probe of the app's own (probes.ts). */
-export async function commandRun(i: { cmd: string; cwd: string; timeoutMs?: number }): Promise<{ ok: boolean; code: number; detail: string }> {
-  const r = await run(i.cmd, i.cwd, i.timeoutMs ?? 20 * 60_000)
+export async function commandRun(i: { cmd: string; cwd: string; timeoutMs?: number; signal?: AbortSignal }): Promise<{ ok: boolean; code: number; detail: string }> {
+  const r = await run(i.cmd, i.cwd, i.timeoutMs ?? 20 * 60_000, i.signal)
+  if (r.cut) throw new CutOff()
   return { ok: r.code === 0, code: r.code, detail: r.tail }
 }
 
-export async function wholeRun(i: { testCmd: string; cwd: string; timeoutMs?: number; onEvent: (type: string, payload: Record<string, unknown>) => Promise<void> }): Promise<WholeRun> {
+export async function wholeRun(i: { testCmd: string; cwd: string; timeoutMs?: number; /** The engine is stopping: the run is ended and nothing is said of it (CutOff). */ signal?: AbortSignal; onEvent: (type: string, payload: Record<string, unknown>) => Promise<void> }): Promise<WholeRun> {
   const timeout = i.timeoutMs ?? 20 * 60_000
-  const first = await run(i.testCmd, i.cwd, timeout)
+  const first = await run(i.testCmd, i.cwd, timeout, i.signal)
+  if (first.cut) throw new CutOff()
   if (first.code === 0) { await i.onEvent('task.tested', { ok: true, flaky: false }); return { ok: true, flaky: false } }
   await i.onEvent('task.test_again', { code: first.code, tail: first.tail })
-  const second = await run(i.testCmd, i.cwd, timeout)
+  const second = await run(i.testCmd, i.cwd, timeout, i.signal)
+  if (second.cut) throw new CutOff()
   if (second.code === 0) { await i.onEvent('task.tested', { ok: true, flaky: true, firstRun: first.tail }); return { ok: true, flaky: true } }
   await i.onEvent('task.tested', { ok: false, code: second.code, tail: second.tail })
   return { ok: false, code: second.code, detail: second.tail }

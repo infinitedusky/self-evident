@@ -6,6 +6,7 @@
 import { originOf, originPrompt } from './origins.js'
 import { and, asc, desc, eq, inArray, notInArray } from 'drizzle-orm'
 import { join } from 'node:path'
+import { existsSync } from 'node:fs'
 import { db } from './db/client.js'
 import { app, build, event, issue, project, pr as prTable, repo, run, step } from './db/schema.js'
 import { homeRepo } from './workbench.js'
@@ -16,7 +17,7 @@ import { storiesLead } from './storybook.js'
 import { branchOf, issueBranch, issueStart, landingBranch, modeOf, stackBase } from './branches.js'
 import { newId } from './ids.js'
 import { commentOnIssue, identifier, setState } from './issues.js'
-import { commandRun, land, wholeRun, withLock } from './landing.js'
+import { commandRun, CutOff, land, wholeRun, withLock } from './landing.js'
 import { agentProbes, builderHeld, commandFixBrief, commandProbes, leftTo, reviewerSkills, nextProbe, PROBE_FIX_TITLE, PROBE_PREFIX, probeBrief, probeFixBrief, probeOfTitle, probesOf, probeTitle, resultOf, TESTS_KEY, withResult, BUILT_IN, type ProbeResult } from './probes.js'
 import { skillOptions } from './skills.js'
 import { guideTasks, mergeGuide, mergeRecord } from './merge-guide.js'
@@ -314,7 +315,7 @@ export class Runner {
     await this.markCriteria(subId, x.parentId!, result.summary, rb).catch((err) => this.emit({ ...rb, type: 'task.check_error', payload: { error: String(err?.message ?? err) } }))
     await this.markProbe(x.title, x.parentId!, a.setup, result.summary, rb).catch((err) => this.emit({ ...rb, type: 'task.probe_error', payload: { error: String(err?.message ?? err) } }))
     await withLock(`land:${projectId}`, () => this.updatePr(projectId, mode === 'issue' ? x.parentId! : undefined)).catch((err) => this.emit({ ...rb, type: 'pr.error', payload: { error: String(err?.message ?? err) } }))
-    await this.testTask(projectId, x.parentId!, r!.localPath!, worktreePath, onto, setup, rb, mode).catch((err) => this.emit({ ...rb, type: 'task.test_error', payload: { error: String(err?.message ?? err) } }))
+    await this.testTask(projectId, x.parentId!, r!.localPath!, worktreePath, onto, setup, rb, mode).catch((err) => this.testError(rb, x.parentId!, err))
     } finally { this.testing.set(projectId, (this.testing.get(projectId) ?? 1) - 1) }
     this.active.delete(subId)
     await this.dispatch()
@@ -328,6 +329,56 @@ export class Runner {
    * fixes at most; after that the task says so and waits for a person.
    */
   private testing = new Map<string, number>() // projects with a landing or a whole test run under way
+  private testRuns = new Set<AbortController>() // the commands running now: ended when the engine stops
+  private stopping = false
+
+  /** A test run that could not be made says so on its task. One the engine's own stopping cut off says nothing: it is made again (recover). */
+  private async testError(pb: Omit<NewEvent, 'type'>, taskId: string, err: unknown) {
+    if (err instanceof CutOff || this.stopping) return
+    await this.emit({ ...pb, issueId: taskId, type: 'task.test_error', payload: { error: String((err as Error)?.message ?? err) } })
+  }
+
+  /**
+   * The task's commands again, on its branch as it is now (Sandy, 2026-11-20: the page showed a failure hours old,
+   * because the run after the fix was cut off by a restart and nothing could ask for another). A person's press, or
+   * a run a restart cut off (recover). It runs in a checkout of its own at the branch's head, on no branch, as the
+   * smoke test's does: the last sub-task's worktree is not the head once anything else is committed to the branch.
+   * What follows is what follows any run: a failure adds a sub-task that fixes it, two at most.
+   * Answers once the run has started; what it finds is on the task's events.
+   */
+  async testAgain(taskId: string): Promise<{ started: true; head: string }> {
+    const [t] = await db.select().from(issue).where(eq(issue.id, taskId))
+    if (!t) throw new PlanError(`no task ${taskId}`)
+    if (t.parentId || !t.projectId) throw new PlanError('a test run is of a task that has been built; this one has not')
+    const { p, a, r, base } = await this.context(t.projectId)
+    if (!r) throw new PlanError('this app has no checkout on this computer to run its tests in')
+    if (this.testing.get(p.id)) throw new PlanError('a sub-task is landing or a test run is already under way: wait for it')
+    const setup = (a.setup ?? {}) as AppSetup
+    const mode = modeOf(p, a.setup)
+    const gt = (await projectGraph(p.id))!.issues.find((q) => q.id === taskId)
+    if (!gt) throw new PlanError('this task is not in its project\'s plan')
+    const onto = landingBranch(mode, p.integrationBranch!, gt)
+    if (!(await branchExists(r.localPath!, onto))) throw new PlanError('nothing of this task is built yet')
+    const path = join(`${r.localPath}-worktrees`, `tests--${gt.identifier.toLowerCase()}`)
+    this.testing.set(p.id, (this.testing.get(p.id) ?? 0) + 1) // from here, so two presses are not two runs
+    const over = () => { this.testing.set(p.id, (this.testing.get(p.id) ?? 1) - 1) }
+    let head: string
+    try {
+      head = await withLock(`git:${r.localPath}`, async () => {
+        const at = await headSha(r.localPath!, onto)
+        if (existsSync(path)) await git(path, ['checkout', '--detach', '--force', at]); else await git(r.localPath!, ['worktree', 'add', '--detach', path, at])
+        return at
+      })
+    } catch (err) { over(); throw err }
+    const pb = { ...base, issueId: taskId }
+    return new Promise((resolve, reject) => {
+      let going = false
+      this.testTask(p.id, taskId, r.localPath!, path, onto, setup, pb, mode, { started: () => { going = true; resolve({ started: true, head }) } })
+        .then(() => { if (!going) reject(new PlanError('there was nothing to run')) })
+        .catch((err) => (going ? this.testError(pb, taskId, err) : reject(err)))
+        .finally(() => { over(); if (!this.stopping) void this.dispatch() })
+    })
+  }
 
   /** What a task is checked against: its acceptance criteria, and the app's requirements in force for its project. */
   private async listOf(taskId: string) {
@@ -367,13 +418,13 @@ export class Runner {
     await this.emit({ ...pb, issueId: taskId, type: 'task.probed', payload: { key: p.key, name: p.name, kind: p.kind, pass: result.pass, blocks: p.blocks, evidence: result.evidence, findings: result.findings.length } })
   }
 
-  private async testTask(projectId: string, taskId: string, repoPath: string, worktreePath: string, onto: string, setup: AppSetup, pb: Omit<NewEvent, 'type'>, mode: 'project' | 'issue' = 'issue') {
+  private async testTask(projectId: string, taskId: string, repoPath: string, worktreePath: string, onto: string, setup: AppSetup, pb: Omit<NewEvent, 'type'>, mode: 'project' | 'issue' = 'issue', /** Asked for (testAgain): what would quietly wait is said, and the checkout is already at the head. */ again?: { started: () => void }) {
     const outcome = await withLock(`land:${projectId}`, async () => {
       const every = (await db.select({ id: issue.id, state: issue.state, title: issue.title, sortOrder: issue.sortOrder }).from(issue).where(eq(issue.parentId, taskId))).sort((a, b) => a.sortOrder - b.sortOrder)
       const subs = every.filter((s) => s.state !== 'canceled' && s.state !== 'duplicate')
       const builds = subs.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, subs.map((s) => s.id))) : []
-      if (!subs.length || !subs.every((s) => builds.find((b) => b.issueId === s.id)?.status === 'done')) return null // more to build first
-      if (await headSha(worktreePath) !== await headSha(repoPath, onto)) return null // another sub-task landed after this one: the run is its
+      if (!subs.length || !subs.every((s) => builds.find((b) => b.issueId === s.id)?.status === 'done')) { if (again) throw new PlanError('its sub-tasks are not all built yet: the test run comes after them'); return null } // more to build first
+      if (!again && await headSha(worktreePath) !== await headSha(repoPath, onto)) return null // another sub-task landed after this one: the run is its
       // Built. What comes next is the checklist's to say (verify.ts): check, finish what it found, probe, then the whole test run.
       const list = await this.listOf(taskId)
       const unmet = unmetOf(list.criteria, list.held, list.required)
@@ -387,19 +438,25 @@ export class Runner {
       // What is added now follows what there is: the first check, every sub-task of the build; anything later, the last one.
       const first = !subs.some((s) => [CHECK_TITLE, FINISH_TITLE, OLD_PROBE_TITLE, PROBE_PREFIX, PROBE_FIX_TITLE, FIX_TITLE].some((t) => s.title.startsWith(t)))
       const after = first ? subs.map((s) => s.id) : subs.slice(-1).map((s) => s.id)
-      if (next.do !== 'test') return { next, list, unmet, after, probing }
+      if (next.do !== 'test') { if (again) throw new PlanError(next.do === 'done' ? 'this app has no test command or commands of its own to run' : `the test run comes last, and this task is not there yet (next: ${next.do.replace('_', ' ')})`); return { next, list, unmet, after, probing } }
       const fixes = subs.filter((s) => s.title.startsWith(FIX_TITLE)).length
       // The commands, the engine's own to run: each once on the merged work (the test run twice before it is called failed).
       const emit = async (type: string, payload: Record<string, unknown>) => { await this.emit({ ...pb, issueId: taskId, type, payload }) }
       const failed: { name: string; runs: string; detail: string }[] = []
       let probed = list.probed
+      // Said before the first command and after the last: a run with a start and no end was cut off (recover runs it again).
+      const ac = new AbortController(); this.testRuns.add(ac)
+      await emit('task.testing', { head: await headSha(worktreePath), again: !!again }); again?.started()
+      try {
       for (const c of commands) {
-        const ran = c.key === TESTS_KEY ? await wholeRun({ testCmd: c.runs, cwd: worktreePath, onEvent: emit }) : await commandRun({ cmd: c.runs, cwd: worktreePath })
+        const ran = c.key === TESTS_KEY ? await wholeRun({ testCmd: c.runs, cwd: worktreePath, onEvent: emit, signal: ac.signal }) : await commandRun({ cmd: c.runs, cwd: worktreePath, signal: ac.signal })
         const detail = ran.ok ? '' : (ran as { detail: string }).detail
         probed = withResult(probed, { key: c.key, name: c.name, kind: 'command', pass: ran.ok, evidence: ran.ok ? `\`${c.runs}\` passed` : `\`${c.runs}\` failed`, findings: [], blocks: c.blocks, fixes, at: new Date().toISOString() })
         if (c.key !== TESTS_KEY) await emit('task.probed', { key: c.key, name: c.name, kind: 'command', pass: ran.ok, blocks: c.blocks, evidence: ran.ok ? '' : detail.slice(-600), findings: 0 })
         if (!ran.ok && c.blocks) failed.push({ name: c.name, runs: c.runs, detail })
       }
+      } finally { this.testRuns.delete(ac) }
+      await emit('task.test_ran', { failed: failed.map((f) => f.name) })
       if (list.loop) await db.update(issue).set({ probes: probed }).where(eq(issue.id, taskId))
       return { next, list, unmet, after, probing, fixes, failed }
     })
@@ -568,12 +625,20 @@ export class Runner {
       await db.transaction((tx) => setBuild(tx, x.issueId, { status: 'queued', heldReason: 'interrupted by a restart; will resume' },
         { type: 'build.interrupted', payload: { was: x.status, reaped: reaped.filter((q) => x.worktreePath && q.cwd.startsWith(x.worktreePath)).map((q) => q.pid) } }))
     }
+    // A test run with a start and no end (task.testing, then nothing): the restart cut it off. It is made again.
+    const marks = await db.select({ issueId: event.issueId, type: event.type }).from(event).where(inArray(event.type, ['task.testing', 'task.test_ran', 'task.test_error'])).orderBy(desc(event.seq))
+    const latest = new Map<string, string>()
+    for (const m of marks) if (m.issueId && !latest.has(m.issueId)) latest.set(m.issueId, m.type)
+    const cut = [...latest].filter(([, type]) => type === 'task.testing').map(([id]) => id)
+    for (const id of cut) void this.testAgain(id).catch((err) => this.closeCut(id, err))
     if (running.length) void this.dispatch()
-    return { projects: running.length, builds: stuck.length, reaped: reaped.length }
+    return { projects: running.length, builds: stuck.length, reaped: reaped.length, tests: cut.length }
   }
 
   /** On shutdown: abort live runs so the agents stop; recover() picks the builds up next start. */
   async shutdown() {
+    this.stopping = true
+    for (const ac of this.testRuns) ac.abort() // a test run under way ends with the engine, and is made again when it is back
     for (const [, ac] of this.active) ac.abort()
     this.active.clear()
   }
@@ -790,6 +855,15 @@ export class Runner {
     const r = await homeRepo(a.id)
     const base: Omit<NewEvent, 'type'> = { workspaceId: a.workspaceId, appId: a.id, projectId, actor: 'engine' }
     return { p, a, r: r?.localPath ? r : null, base }
+  }
+
+  /** A cut-off test run that could not be made again (its task is closed, its branch gone): said once, so it is not tried at every start. */
+  private async closeCut(taskId: string, err: unknown) {
+    if (this.stopping) return
+    const [t] = await db.select({ appId: issue.appId, projectId: issue.projectId }).from(issue).where(eq(issue.id, taskId))
+    const [a] = t ? await db.select({ workspaceId: app.workspaceId }).from(app).where(eq(app.id, t.appId)) : []
+    if (!t || !a) return
+    await this.emit({ workspaceId: a.workspaceId, appId: t.appId, projectId: t.projectId, issueId: taskId, actor: 'engine', type: 'task.test_error', payload: { error: String((err as Error)?.message ?? err), after: 'restart' } })
   }
 
   private emit(e: NewEvent) {

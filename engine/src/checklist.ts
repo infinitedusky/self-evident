@@ -39,7 +39,7 @@ export interface FlowNode {
   /** What it follows. Null: a sub-task of the build, which keeps the dependencies its plan gave it. */
   after: string[] | null
 }
-export interface Checklist { build: Build; stages: Stage[]; items: Item[]; met: number; unmet: number; total: number; flow: FlowNode[] }
+export interface Checklist { /** The whole test run as it last was; absent when the app has no test command. */ tests?: { ok: boolean | null; at: string | null; flaky: boolean; output?: string; running: boolean; canRun: boolean }; build: Build; stages: Stage[]; items: Item[]; met: number; unmet: number; total: number; flow: FlowNode[] }
 
 const FIX = 'Fix what the whole test run found'
 const kindOf = (title: string) => (title.startsWith(CHECK_TITLE) ? 'check' : title.startsWith(FINISH_TITLE) ? 'finish' : [OLD_PROBE_TITLE, PROBE_PREFIX, PROBE_FIX_TITLE].some((t) => title.startsWith(t)) ? 'probe' : title.startsWith(FIX) ? 'fix' : 'build')
@@ -53,7 +53,7 @@ function of(subs: { status: string }[]): StageState {
   return subs.some((s) => WORKING.includes(s.status) || s.status === 'done') ? 'doing' : 'todo'
 }
 
-export function stagesOf(i: { subs: { title: string; status: string }[]; build: Build; unmet: number; total: number; met: number; hasTests: boolean; /** The whole test run, last: true passed, false failed, null not run. */ tested: boolean | null; /** The checks left to a person (smoke.ts): how many wait, how many they failed, of how many. */ byHand?: { todo: number; failed: number; total: number } }): Stage[] {
+export function stagesOf(i: { subs: { title: string; status: string }[]; build: Build; unmet: number; total: number; met: number; hasTests: boolean; /** The whole test run, last: true passed, false failed, null not run. */ tested: boolean | null; /** The run is going now. */ testing?: boolean; /** The checks left to a person (smoke.ts): how many wait, how many they failed, of how many. */ byHand?: { todo: number; failed: number; total: number } }): Stage[] {
   const by = (k: string) => i.subs.filter((s) => kindOf(s.title) === k)
   const builders = by('build'), checks = by('check'), finishes = by('finish'), probes = by('probe'), fixes = by('fix')
   const built = of(builders)
@@ -68,8 +68,8 @@ export function stagesOf(i: { subs: { title: string; status: string }[]; build: 
   ]
   if (i.hasTests) {
     const fixing = of(fixes)
-    stages.push({ key: 'test', label: 'Tests', state: fixing === 'doing' || fixing === 'todo' && fixes.length ? 'doing' : i.tested === true ? 'done' : i.tested === false ? 'failed' : 'todo',
-      detail: fixes.length && fixing !== 'done' ? 'fixing what the run found' : i.tested === true ? `the whole run passed${fixes.length ? `, after ${fixes.length} fix${fixes.length === 1 ? '' : 'es'}` : ''}` : i.tested === false ? 'the whole run failed' : 'the whole run, once, last' })
+    stages.push({ key: 'test', label: 'Tests', state: i.testing || fixing === 'doing' || fixing === 'todo' && fixes.length ? 'doing' : i.tested === true ? 'done' : i.tested === false ? 'failed' : 'todo',
+      detail: i.testing ? 'the whole run is under way' : fixes.length && fixing !== 'done' ? 'fixing what the run found' : i.tested === true ? `the whole run passed${fixes.length ? `, after ${fixes.length} fix${fixes.length === 1 ? '' : 'es'}` : ''}` : i.tested === false ? 'the whole run failed' : 'the whole run, once, last' })
   }
   const h = i.byHand
   // Always a stage, so it does not vanish when the check verifies everything itself (Sandy, 2026-11-17: "I might want
@@ -141,11 +141,19 @@ export async function checklistOf(issueId: string): Promise<Checklist | null> {
   const subs = await db.select({ id: issue.id, title: issue.title, state: issue.state, sortOrder: issue.sortOrder }).from(issue).where(eq(issue.parentId, t.id))
   const live = subs.filter((s) => s.state !== 'canceled' && s.state !== 'duplicate')
   const builds = live.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, live.map((s) => s.id))) : []
-  const [last] = await db.select({ payload: event.payload }).from(event).where(and(eq(event.issueId, t.id), eq(event.type, 'task.tested'))).orderBy(desc(event.seq)).limit(1)
+  const [last] = await db.select({ payload: event.payload, ts: event.ts }).from(event).where(and(eq(event.issueId, t.id), eq(event.type, 'task.tested'))).orderBy(desc(event.seq)).limit(1)
+  // A run with a start and no end is going now (the runner says both; one a restart cut off is made again at the start).
+  const [mark] = await db.select({ type: event.type }).from(event).where(and(eq(event.issueId, t.id), inArray(event.type, ['task.testing', 'task.test_ran', 'task.test_error']))).orderBy(desc(event.seq)).limit(1)
+  const testing = mark?.type === 'task.testing'
+  const hasTests = !!(a?.setup as { test_cmd?: string } | null)?.test_cmd
   const met = items.filter((x) => x.mark === 'met' || x.mark === 'na').length, reports = new Set(required.filter((r) => r.blocks === false).map((r) => `req_${r.key}`)), unmet = items.filter((x) => x.mark === 'unmet' && !reports.has(x.id)).length // one set to report only holds nothing
   const b = buildOf(w)
   const statusOf = (id: string) => builds.find((x) => x.issueId === id)?.status ?? 'queued'
-  const stages = stagesOf({ subs: live.map((s) => ({ title: s.title, status: builds.find((x) => x.issueId === s.id)?.status ?? 'queued' })), build: b, unmet, met, total: items.length, hasTests: !!(a?.setup as { test_cmd?: string } | null)?.test_cmd, tested: last ? (last.payload as { ok?: boolean }).ok === true : null,
+  const stages = stagesOf({ subs: live.map((s) => ({ title: s.title, status: builds.find((x) => x.issueId === s.id)?.status ?? 'queued' })), build: b, unmet, met, total: items.length, hasTests, testing, tested: last ? (last.payload as { ok?: boolean }).ok === true : null,
       byHand: (() => { const h = smokeChecks(acceptanceOf(t)); return { todo: h.filter((x) => x.mark === 'todo').length, failed: h.filter((x) => x.mark === 'fail').length, total: h.length } })() })
-  return { build: b, items, met, unmet, total: items.length, stages, flow: flowOf({ subs: live.map((x) => ({ id: x.id, title: x.title, status: statusOf(x.id), sortOrder: x.sortOrder })), stages, build: b }) }
+  const ran = last?.payload as { ok?: boolean; flaky?: boolean; tail?: string } | undefined
+  /** The whole test run as it last was, and whether it can be asked for again: every sub-task in, none going. The runner says no to the rest (a check or a probe still to come). */
+  const tests = hasTests ? { ok: ran ? ran.ok === true : null, at: last?.ts ? new Date(last.ts).toISOString() : null, flaky: ran?.flaky === true, output: ran && ran.ok !== true ? (ran.tail ?? '').slice(-8000) : undefined, running: testing,
+    canRun: !testing && live.length > 0 && live.every((s) => statusOf(s.id) === 'done') } : undefined
+  return { tests, build: b, items, met, unmet, total: items.length, stages, flow: flowOf({ subs: live.map((x) => ({ id: x.id, title: x.title, status: statusOf(x.id), sortOrder: x.sortOrder })), stages, build: b }) }
 }

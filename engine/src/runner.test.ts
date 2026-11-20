@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq, inArray } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { appendEvent } from './events.js'
 import { setTeamNames } from './ticket.js'
 import { db, pool } from './db/client.js'
 import { app, build, event, issue, project, repo, run, step, workspace } from './db/schema.js'
@@ -478,7 +479,8 @@ describe.skipIf(!reachable)('runner', () => {
     expect(g.subIssues.map((x) => [x.title, x.status])).toEqual([['A', 'done'], ['B', 'done'], [FIX_TITLE, 'done']])
     expect(briefs[2]).toContain('FAIL  made-up.test > needs three') // the fix is told what failed
     const tested = (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => e.type.startsWith('task.test') || e.type === 'land.tested').sort((a, b) => a.seq - b.seq)
-    expect(tested.map((e) => [e.type, (e.payload as { ok?: boolean }).ok])).toEqual([['task.test_again', undefined], ['task.tested', false], ['task.tested', true]]) // not at A's landing, not at each sub-task's
+    // each run says when it starts and when it is over, so one with no end can be told (cut off by a restart)
+    expect(tested.map((e) => [e.type, (e.payload as { ok?: boolean }).ok])).toEqual([['task.testing', undefined], ['task.test_again', undefined], ['task.tested', false], ['task.test_ran', undefined], ['task.testing', undefined], ['task.tested', true], ['task.test_ran', undefined]]) // not at A's landing, not at each sub-task's
     expect(tested.every((e) => e.issueId === t.id)).toBe(true)
   })
 
@@ -596,6 +598,34 @@ describe.skipIf(!reachable)('runner', () => {
     const rows = await db.select().from(step).where(eq(step.issueId, phases[0].id))
     expect(rows.map((r) => [r.position, r.text, r.status])).toEqual([[0, 'read the code', 'completed'], [1, 'write it', 'completed'], [2, 'test it', 'in_progress']])
     expect((await projectGraph(p.id))!.subIssues[0].steps.map((s) => s.text)).toEqual(['read the code', 'write it', 'test it'])
+  })
+
+  it('the whole test run can be asked for again, on the branch as it is now; one a restart cut off is made again', async () => {
+    const own = newId('app')
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'tested again (sample)', key: own.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md' } })
+    await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: repoPath })
+    const { project: p, issues: [t] } = await createProject({ appId: own, name: 'tested again', issues: [one('One part', [{ key: 'a', title: 'A', files: ['again1.txt'] }])] })
+    const runner = new Runner({ execute: commits('again'), sessionsMax: 1 })
+    await approveBriefs(own)
+    await runner.startProject(p.id)
+    const runs = async () => (await db.select().from(event).where(eq(event.issueId, t.id))).filter((e) => e.type.startsWith('task.test')).sort((a, b) => a.seq - b.seq)
+    const ended = (n: number) => async () => (await runs()).filter((e) => e.type === 'task.test_ran').length >= n
+    await until(ended(1))
+    // A person's press: it runs at the branch's head, in a checkout of its own, and is said from start to end.
+    const again = await runner.testAgain(t.id)
+    expect(again.started).toBe(true)
+    await until(ended(2))
+    const seen = await runs()
+    expect(seen.map((e) => e.type)).toEqual(['task.testing', 'task.tested', 'task.test_ran', 'task.testing', 'task.tested', 'task.test_ran'])
+    expect((seen[3].payload as { again?: boolean; head?: string })).toMatchObject({ again: true, head: again.head })
+    const sub = (await projectGraph(p.id))!.subIssues[0]
+    await expect(runner.testAgain(sub.id)).rejects.toThrow(/of a task that has been built/) // a sub-task has no run of its own
+    // A start with no end: the engine stopped under it. The next start makes the run again.
+    await db.transaction((tx) => appendEvent(tx, { workspaceId: wsId, appId: own, projectId: p.id, issueId: t.id, actor: 'engine', type: 'task.testing', payload: { head: again.head, again: false } }))
+    const back = new Runner({ execute: commits('again'), sessionsMax: 1 })
+    expect((await back.recover()).tests).toBeGreaterThanOrEqual(1)
+    await until(ended(3))
+    expect((await runs()).slice(-3).map((e) => [e.type, (e.payload as { ok?: boolean }).ok])).toEqual([['task.testing', undefined], ['task.tested', true], ['task.test_ran', undefined]])
   })
 
   it('recover() re-queues builds that were running, marks their runs interrupted, and resumes the agent session', async () => {
