@@ -79,14 +79,15 @@ export function IssuePage() {
   const task = code && !i.parentId // a task: it has a brief to approve and steps
   return (
     <>
-      <div className="page-head">
+      {/* On the smoke test the head is one line (Sandy, 2026-11-20: "we're taking up … 1/3 of the screen before we get to the thing we're actually looking at"): the task's name, and the rest a step away on its other pages. */}
+      <div className={`page-head ${task && section === 'smoke' ? 'compact' : ''}`}>
         <div>
-          <div className="faint" style={{ fontSize: 13, marginBottom: 4 }}>
+          <div className="faint head-where" style={{ fontSize: 13, marginBottom: 4 }}>
             {i.project && !i.project.solo ? <Link to={`/projects/${i.project.id}`}>{i.project.name}</Link> : <Link to="/tasks">In no project</Link>}
             {i.parent && <> · sub-task of <Link to={`/tasks/${i.parent.id}`}>{i.parent.identifier} {i.parent.title}</Link></>}
           </div>
           <h1><span className="mono faint" style={{ fontWeight: 400 }}>{i.identifier}</span> {i.title}</h1>
-          <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+          <div className="head-badges" style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
             <Badge tone={STATE_TONE[i.state]} dot={i.state === 'in_progress'}>{STATE_LABEL[i.state]}</Badge>
             <Badge>{code ? 'code' : 'to-do'}</Badge>
             {i.delegate && <Badge>with the {i.delegate}</Badge>}
