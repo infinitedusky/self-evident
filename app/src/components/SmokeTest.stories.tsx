@@ -446,3 +446,13 @@ export const MainStoppedByItself: Story = {
     await expect(c.getByRole('combobox', { name: 'Compare with main' })).toBeInTheDocument() // and it can be tried again
   },
 }
+
+/** Its page calls an address fixed to this computer (made up): said beside the view, with what to do, since it would load here and nowhere else. */
+export const FixedAddress: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, setups: [{ key: 'main', name: 'Smoke test', what: null, where: 'local', says: 'run here (sample)', account: null, flag: null, running: 'abc1234def', url: 'http://localhost:6500', up: true, canRun: true, log: [], owed: 3, fixedAddresses: ['http://localhost:6500/api'], fixedNote: "Its page names an address fixed to this computer: `http://localhost:6500/api`. Opened any other way (a shared link, the phone) it will not reach it. Have the app call it by a path (`/api`) so it follows whatever address the page was opened at; which setting that is belongs to the app, so its set-up's script is where to change it. (sample)" }] } }),
+  play: async ({ canvasElement }) => {
+    const said = await within(canvasElement).findByText(/names an address fixed to this computer/)
+    await expect(said).toHaveTextContent('http://localhost:6500/api'); await expect(said).toHaveTextContent('call it by a path (/api)')
+  },
+}
+

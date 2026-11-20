@@ -92,6 +92,12 @@ by recorded fixtures), identity and login (a dependency override or a dev-only s
 config values. Name each seam you used in your report, and say whether it already existed or you added it; a seam you
 added is something the real build will need too.
 
+**Nothing it serves names this computer as its own address.** A prototype is opened at more than one address: its
+port here, a shared link, a phone. A frontend told `http://localhost:$PORT/api` loads at one of them and fails at the
+rest, and with another port it may be talking to another copy. Give it a path (`/api`) wherever it takes one. Self
+Evident reads the running page for addresses fixed to this computer and says so beside the prototype; if it does,
+fix the set-up, not the page.
+
 **A stand-in is part of the prototype.** Set each one with `prototype_stand_in`: a command that serves on `$PORT`,
 and the variables that point the app at it. Self Evident starts it with the prototype and stops it with it, so it is
 still there after a restart or a data reset. Never start one by hand or keep one, or what it serves, in `/tmp`: the

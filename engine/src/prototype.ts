@@ -21,6 +21,7 @@ import { newId } from './ids.js'
 import { PlanError } from './projects.js'
 import { guideOf, hasGuide, NO_GUIDE, recheckGuide, staleSays } from './share-guide.js'
 import { morePorts, straySays, straysOf } from './ports.js'
+import { fixedOf, fixedSays } from './addresses.js'
 import { databaseExists, databaseName, databaseUrl, dropDatabase, dropScenarios, listScenarios, rebuild, save, scenarioTables, writeScenario, type PrototypeDb, type Tables } from './prototype-data.js'
 import { endTalk, say, showTalk, startPrototypeTalk } from './talk.js'
 import { listRecordings, recordingsDir, recordingsOf } from './recordings.js'
@@ -88,8 +89,10 @@ export async function prototypeStatus(id: string) {
   const up = on && url ? await answers(url) : false
   // Once it answers: does it listen anywhere it was not told to?
   const stray = up ? await straysOf(running.get(id), (ports) => emit(p, 'prototype.stray_port', 'engine', { ports, note: straySays(ports) })) : []
+  // And does its page call an address fixed to this computer (addresses.ts)? It would load here and nowhere else.
+  const fixed = up && url ? await fixedOf(`prototype:${id}`, url, (found) => emit(p, 'prototype.fixed_address', 'engine', { addresses: found, note: fixedSays(found, url) })) : []
   const staleGuide = guideOf(p)?.stale ?? []
-  return { ...p, ...data, standIns: standInsStatus(p.id, cleanStandIns(p.standIns)), home: homeOf(p.id), recordings: { dir: recordingsOf(p.appId, p), files: listRecordings(recordingsOf(p.appId, p)).slice(0, 30) }, ...(staleGuide.length ? { guideNote: staleSays(staleGuide) } : {}), ...(hasGuide(p) ? {} : { needsGuide: NO_GUIDE }), /** Its server has never been started: its agent starts it once it is set up. */ ...(p.status === 'stopped' && p.port === null && cmd ? { notStarted: true } : {}), cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
+  return { ...(fixed.length ? { fixedAddresses: fixed, fixedNote: fixedSays(fixed, url!) } : {}), ...p, ...data, standIns: standInsStatus(p.id, cleanStandIns(p.standIns)), home: homeOf(p.id), recordings: { dir: recordingsOf(p.appId, p), files: listRecordings(recordingsOf(p.appId, p)).slice(0, 30) }, ...(staleGuide.length ? { guideNote: staleSays(staleGuide) } : {}), ...(hasGuide(p) ? {} : { needsGuide: NO_GUIDE }), /** Its server has never been started: its agent starts it once it is set up. */ ...(p.status === 'stopped' && p.port === null && cmd ? { notStarted: true } : {}), cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
 }
 
 export async function listPrototypes(appId: string) {

@@ -13,6 +13,7 @@ import { openEvents, API, engine, type Prototype } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { useWorkspace } from '../workspace'
 import { Framed, Nav, useTrail } from './Trail'
+import { Md } from './Md'
 import { useCompare } from '../main-running'
 import { CompareWith, comparedSays } from './CompareMain'
 
@@ -131,6 +132,7 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Pr
   return (
     <div className="preview" data-component="PrototypePane">
       {p.guideNote ? <p className="smoke-stale" role="note" style={{ margin: '0 0 8px' }}>{p.guideNote}</p> : null}
+      {p.fixedAddresses?.length ? <div className="smoke-stale" role="note" style={{ margin: '0 0 8px' }}><Md text={p.fixedNote ?? `Its page names an address fixed to this computer: ${p.fixedAddresses.join(', ')}.`} /></div> : null}
       {p.strayPorts?.length ? <p className="smoke-stale" role="note" style={{ margin: '0 0 8px' }}>{p.strayNote ?? `It also listens on ${p.strayPorts.join(', ')}, which it chose itself.`}</p> : null}
       {/* Two rows (Sandy, 2026-11-13: "the header is too crowded… we need a second row"): where it is and its server, then how it is shown. */}
       <div className="preview-bar">

@@ -44,6 +44,7 @@ import { Link } from 'react-router'
 import { Badge } from './Badge'
 import { SmokeTerminal } from './SmokeTerminal'
 import { Framed, Nav, useTrail } from './Trail'
+import { Md } from './Md'
 import { useCompare } from '../main-running'
 import { CompareWith, comparedSays } from './CompareMain'
 import { API, engine, openEvents, type SmokeCheck, type SmokeSetupView, type SmokeView } from '../engine'
@@ -227,6 +228,7 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
                   {local && <CompareWith c={compare} beside={`smoke:${issueId}:${su.key}`} onStop={() => theirs.setAt(null)} />}
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.stopSmoke(issueId, many ? su.key : undefined))}>Stop</button>}
                 </div>
+                {local && su.fixedAddresses?.length ? <div className="smoke-stale" role="note"><Md text={su.fixedNote ?? `Its page names an address fixed to this computer: ${su.fixedAddresses.join(', ')}.`} /></div> : null}
                 {local && su.strayPorts?.length ? <p className="smoke-stale" role="note">{su.strayNote ?? `It also listens on ${su.strayPorts.join(', ')}, which it chose itself.`}</p> : null}
                 {behind && <p className="smoke-stale" role="note">The branch has moved on since this was started. Run the new commit to test what will be reviewed.</p>}
                 {local && cmp
