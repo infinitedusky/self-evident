@@ -104,10 +104,10 @@ function OnePrototype({ id, path, onNavigate }: { id: string; path: string; onNa
 }
 
 function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Prototype; path: string; onNavigate?: (path: string) => void; onStop: () => void; onRestart: () => void; onTalk: () => void; data: React.ReactNode }) {
-  // Compare is the app's own running main, opened beside it at the same place (Sandy, 2026-11-19: "compare would always just open the
-  // running main to whatever location you want to compare it against"). Turned on here if it is off; it is not this prototype's to turn off.
+  // Compare is a main of the task's own, on a port of its own, beside it at the same place (Sandy, 2026-11-20: "compare with main should
+  // be a new port … there should only be one per task"). The task's smoke test shares it; the app's own main is left as it is.
   const [comparing, setComparing] = useState(false)
-  const { main, error: mainError, busy: asking, start } = useMain(p.appId, comparing)
+  const { main, error: mainError, busy: asking, start, stop: stopMain } = useMain(p.appId, comparing, p.issueId ?? p.id)
   const cmp = comparing && main?.running && main.url ? { url: main.url, up: main.up, sha: main.sha, log: main.log, branch: main.branch } : null
   const cmpBase = cmp?.url.replace(/\/$/, '') ?? ''
   useEffect(() => { if (comparing && main && !main.running && !asking) setComparing(false) }, [comparing, main?.running, asking]) // turned off elsewhere, or by itself
@@ -148,8 +148,8 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Pr
           {DEVICES.map((d) => <button key={d.id} className={device === d.id ? 'on' : ''} onClick={() => setDevice(d.id)} title={d.width ? `${d.width}px wide` : 'Full width'}>{d.label}</button>)}
         </div>
         {/* Main beside it (after the smoke test's own Compare with main): two views, each with a bar of its own. */}
-        {cmp ? <button className="btn quiet small" onClick={() => setComparing(false)} title="Main stays on for its own tab; it turns itself off when nobody has looked for a while">Stop comparing</button>
-          : main && main.how !== 'none' ? <button className="btn quiet small" disabled={asking} title="The app's main beside it, at the same place. Turned on if it is off." onClick={compare}>{asking ? 'Turning main on…' : 'Compare with main'}</button> : null}
+        {cmp ? <button className="btn quiet small" onClick={() => { setComparing(false); void stopMain() }} title="Turns this task's main off. The app's own main is not touched.">Stop comparing</button>
+          : main && main.how !== 'none' ? <button className="btn quiet small" disabled={asking} title="Main beside it, at the same place: a copy of this task's own, on its own port. The app's main is left as it is." onClick={compare}>{asking ? 'Turning main on…' : 'Compare with main'}</button> : null}
         {mainError && <span className="bad" role="alert">{mainError}</span>}
         {cmp && away && <><span className="faint">main is in a browser tab of its own</span><button className="btn quiet small" onClick={() => setAway(false)}>Put main back</button></>}
         {data}

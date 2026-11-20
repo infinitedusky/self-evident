@@ -8,7 +8,7 @@ import { db, pool } from './db/client.js'
 import { app, repo, workspace } from './db/schema.js'
 import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
-import { MAIN_IDLE_MS, mainStatus, setMainAddress, setMainStandIn, startMain, stopIdleMains, stopMain, stopMains } from './main-running.js'
+import { MAIN_IDLE_MS, mainStatus, removeMain, setMainAddress, setMainStandIn, startMain, stopIdleMains, stopMain, stopMains } from './main-running.js'
 import { setPrototypeCommand } from './prototype.js'
 
 let reachable = true
@@ -58,6 +58,22 @@ describe.skipIf(!reachable)('the app\'s main, running', () => {
     expect(await fetch(on.url!).then(() => true, () => false)).toBe(false)
     expect(existsSync(join(`${repoPath}-worktrees`, 'main--running'))).toBe(true) // kept for the next time
     expect((await startMain(appId)).url).toBe(on.url) // the same address, so an open tab finds it
+    await stopMain(appId)
+  })
+
+  it('a task has a main of its own for comparing: another port and worktree, the app\'s main left alone, removed with the task', async () => {
+    const app = await startMain(appId)
+    const mine = await startMain(appId, 'person', { for: 'iss_Task1' })
+    expect(mine).toMatchObject({ running: true, for: 'iss-task1' })
+    expect(mine.url).not.toBe(app.url)
+    expect(await until(async () => (await mainStatus(appId, false, 'iss_Task1')).up)).toBe(true)
+    expect(await (await fetch(mine.url!)).text()).toMatch(/main--iss-task1$/)
+    expect((await startMain(appId, 'person', { for: 'iss_Task1' })).url).toBe(mine.url) // one per task: asked for again, the same one
+    expect((await stopMain(appId, 'person', undefined, 'iss_Task1')).running).toBe(false)
+    expect((await mainStatus(appId)).running).toBe(true) // the app's own is not the comparison's to turn off
+    expect(existsSync(join(`${repoPath}-worktrees`, 'main--iss-task1'))).toBe(true)
+    await removeMain(appId, 'iss_Task1')
+    expect(existsSync(join(`${repoPath}-worktrees`, 'main--iss-task1'))).toBe(false)
     await stopMain(appId)
   })
 

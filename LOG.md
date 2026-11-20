@@ -5443,3 +5443,24 @@ through the app on the laptop, which is where Cloudflare is blocked.
 Not done: hosted links (next: which host is Sandy's choice); waking a stopped prototype when someone opens its link
 (possible with Funnel, since its address does not change: asked about, not built); the smoke test as something to share.
 
+
+## Compare with main is a main of the task's own (Sandy, 2026-11-20: "compare with main should be a new port. The app-wide main is just the default scenario that we can look at whenever we want … we should be able to spin up a new one. But there should only be one per task")
+
+On 2026-11-19 comparing was made to open the app's one running main. That is undone: the app's main stays as the
+thing to look at any time, and a comparison gets its own.
+
+- **One per task.** Compare with main, on a prototype or a smoke test, brings up a second main for that task: a
+  worktree (`main--<task id>`), a port and a database of its own, with the app's stand-ins. A task's prototype and
+  its smoke test share the one; a prototype with no task has one of its own. What is done in it while comparing is
+  not in the app's main, and comparing does not move or restart the app's main.
+- **Stop comparing turns it off**, since it is that task's. With nobody looking for 30 minutes it turns itself off,
+  as the app's does. Its worktree and database are kept between uses and removed when the task is done.
+- It is the same code as the app's main (`engine/src/main-running.ts`), told which piece of work it is beside
+  (`?for=` on the three routes). So it runs today's tip of the default branch, says when that has moved on, and its
+  database is built from the shared "default" scenario (mine to keep as it was; said to Sandy).
+
+Not done: the same data as the build (its database is separate, from the same scenario; pointing main at the build's
+database would also test that a schema change is backwards compatible, talked about and not built); Update for a
+task's main from the page (the app's tab has it; here it is stopped and started); a prototype's main is not removed
+when a prototype with no task is discarded; `app_main` (the agent's tool) reaches only the app's own.
+

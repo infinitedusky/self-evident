@@ -4,6 +4,7 @@ import type { On, Resolved, Row, StepKey, StepState, Workflow, WorkflowStep } fr
 import type { Plan } from './pages/PlanHome'
 
 export const API = '/api'
+const mainQuery = (o: { touch?: boolean; update?: boolean; forId?: string }) => { const q = [o.touch ? 'touch=1' : '', o.update ? 'update=1' : '', o.forId ? `for=${encodeURIComponent(o.forId)}` : ''].filter(Boolean).join('&'); return q ? `?${q}` : '' }
 
 /** What a view holds of the event stream: its own listeners on a shared connection. */
 export interface Events { addEventListener(type: string, fn: EventListener): void; onerror: EventListener | null; onopen: EventListener | null; close(): void }
@@ -255,6 +256,7 @@ export interface Prototype {
  * how: run here ("local"), a deployed address, or "none" (the app has no command to start it yet).
  */
 export interface MainRunning {
+  /** The task (or prototype) it is beside, when it is that one's own and not the app's. */ for?: string | null
   appId: string; branch: string; how: 'local' | 'address' | 'none'; url: string | null; running: boolean; up: boolean; canRun: boolean
   /** The commit it runs and the branch's now; behind: the branch has moved on since it was turned on. */ sha: string | null; tip: string | null; behind: boolean
   log: string[]; standIns: { key: string; name: string; what?: string; running: boolean; url: string | null }[]; database: string | null
@@ -420,9 +422,10 @@ export const engine = {
   runPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/start`),
   stopPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/stop`),
   /** touch: someone is looking at it, so it stays on. */
-  main: (appId: string, touch = false) => call<MainRunning>('GET', `/apps/${appId}/main${touch ? '?touch=1' : ''}`),
-  startMain: (appId: string, update = false) => call<MainRunning>('POST', `/apps/${appId}/main/start${update ? '?update=1' : ''}`),
-  stopMain: (appId: string) => call<MainRunning>('POST', `/apps/${appId}/main/stop`),
+  // forId: the task (or prototype) whose own main it is, for comparing; left out, the app's.
+  main: (appId: string, touch = false, forId?: string) => call<MainRunning>('GET', `/apps/${appId}/main${mainQuery({ touch, forId })}`),
+  startMain: (appId: string, update = false, forId?: string) => call<MainRunning>('POST', `/apps/${appId}/main/start${mainQuery({ update, forId })}`),
+  stopMain: (appId: string, forId?: string) => call<MainRunning>('POST', `/apps/${appId}/main/stop${mainQuery({ forId })}`),
   prototypeRuns: (id: string) => call<StepRun[]>('GET', `/prototypes/${id}/runs`),
   runGuideStep: (id: string, step: number) => call<StepRun>('POST', `/prototypes/${id}/guide/${step}/run`),
   stopGuideStep: (id: string, step: number) => call<StepRun>('POST', `/prototypes/${id}/guide/${step}/stop`),

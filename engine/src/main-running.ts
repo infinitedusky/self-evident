@@ -15,6 +15,14 @@
  * The person turns it on and off. A look at it keeps it up; with no look for MAIN_IDLE_MS it turns itself off. It
  * never moves under the person: when the default branch has moved on it says so, and Update brings it up again there.
  * Kept in memory: after an engine restart it is off.
+ *
+ * A task has a main of its own for comparing (Sandy, 2026-11-20: "compare with main should be a new port. The
+ * app-wide main is just the default scenario that we can look at whenever we want. But if we want to actually do
+ * comparisons on the prototypes or the smoke tests, we should be able to spin up a new one. But there should only be
+ * one per task"). The same thing run a second time, named for what it is beside (`forId`: the task, or a prototype
+ * that has none): a worktree (`main--<id>`), a port and a database of its own, so what is done in it while comparing
+ * is not in the app's main, and the app's main is not moved by a comparison. A task's prototype and its smoke test
+ * share the one. It is removed, with its worktree and database, when the task is done.
  */
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -36,13 +44,19 @@ import { homeRepo } from './workbench.js'
 export const MAIN_IDLE_MS = () => Number(process.env.MAIN_IDLE_MS ?? 30 * 60_000)
 const STOP_TIMEOUT_MS = Number(process.env.PROTOTYPE_STOP_TIMEOUT_MS ?? 120_000)
 const SLUG = 'main-running'
+/** Which main: the app's own, or the one beside a piece of work (its id). */
+const tagOf = (forId?: string | null) => (forId ? forId.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) : '')
+const keyOf = (appId: string, forId?: string | null) => (tagOf(forId) ? `${appId}:${tagOf(forId)}` : appId)
+const slugOf = (forId?: string | null) => (tagOf(forId) ? `main-${tagOf(forId)}` : SLUG)
+const folderOf = (forId?: string | null) => `main--${tagOf(forId) || 'running'}`
+const standKey = (appId: string, forId?: string | null) => (tagOf(forId) ? `${mainKey(appId)}-${tagOf(forId)}` : mainKey(appId))
 /** What its stand-ins and their folder are kept under (stand-ins.ts keys them by any id). */
 export const mainKey = (appId: string) => `main-${appId}`
 
-interface Running { proc: ChildProcess; log: string[]; port: number; sha: string; path: string; env: Record<string, string>; usedAt: number; startedAt: string }
+interface Running { appId: string; forId: string | null; proc: ChildProcess; log: string[]; port: number; sha: string; path: string; env: Record<string, string>; usedAt: number; startedAt: string }
 const running = new Map<string, Running>()
 const lastPort = new Map<string, number>() // turned on again, it keeps its address, so an open tab still finds it
-const alive = (appId: string) => { const m = running.get(appId); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
+const alive = (appId: string, forId?: string | null) => { const m = running.get(keyOf(appId, forId)); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
 const freePort = (want = 0): Promise<number> => new Promise((resolveP, reject) => {
   const s = createServer()
   s.once('error', (err) => (want ? freePort(0).then(resolveP, reject) : reject(err)))
@@ -72,38 +86,39 @@ async function emit(a: typeof app.$inferSelect, type: string, actor: string, pay
 }
 
 /** The app's main as the page sees it. touch: someone is looking at it, so it stays up. */
-export async function mainStatus(appId: string, touch = false) {
+export async function mainStatus(appId: string, touch = false, forId?: string | null) {
   const { a, repoPath, address, cmd, dbCfg, standIns } = await setupOf(appId)
   const branch = a.defaultBranch ?? 'main'
-  if (address) return { appId, branch, how: 'address' as const, url: address, running: true, up: true, canRun: false, sha: null, tip: null, behind: false, log: [] as string[], standIns: [], database: null, idleMinutes: null, stopsAt: null }
-  const m = running.get(appId), on = alive(appId)
+  if (address) return { appId, for: tagOf(forId) || null, branch, how: 'address' as const, url: address, running: true, up: true, canRun: false, sha: null, tip: null, behind: false, log: [] as string[], standIns: [], database: null, idleMinutes: null, stopsAt: null }
+  const m = running.get(keyOf(appId, forId)), on = alive(appId, forId)
   if (on && touch) m!.usedAt = Date.now()
   const url = on ? `http://localhost:${m!.port}` : null
   const tip = repoPath ? await tipOf(repoPath, branch) : null
   return {
-    appId, branch, how: cmd && repoPath ? 'local' as const : 'none' as const,
+    appId, /** The piece of work it is beside, when it is not the app's own. */ for: tagOf(forId) || null, branch, how: cmd && repoPath ? 'local' as const : 'none' as const,
     url, running: on, up: url ? await answers(url) : false,
     /** It can be turned on here: the app has a command to start it and a checkout. */ canRun: !!cmd && !!repoPath,
     /** The commit it runs, and the default branch's now: behind when that has moved on. */ sha: on ? m!.sha : null, tip, behind: on && !!tip && tip !== m!.sha,
     log: m?.log.slice(-30) ?? [],
-    standIns: standInsStatus(mainKey(appId), standIns).map((s) => ({ key: s.key, name: s.name, what: s.what, running: s.running, url: s.url })),
-    database: dbCfg ? databaseName(SLUG) : null,
+    standIns: standInsStatus(standKey(appId, forId), standIns).map((s) => ({ key: s.key, name: s.name, what: s.what, running: s.running, url: s.url })),
+    database: dbCfg ? databaseName(slugOf(forId)) : null,
     /** With nobody looking for this long it turns itself off; stopsAt: when, as things stand. */ idleMinutes: Math.round(MAIN_IDLE_MS() / 60_000), stopsAt: on ? new Date(m!.usedAt + MAIN_IDLE_MS()).toISOString() : null,
   }
 }
 
 /** Turn it on, at the default branch's tip. Already on: left as it is, unless update (it has moved on: up again there, its database made again). */
-export async function startMain(appId: string, actor = 'person', opts: { update?: boolean } = {}) {
+export async function startMain(appId: string, actor = 'person', opts: { update?: boolean; /** The task (or prototype) it is beside: a main of its own, not the app's. */ for?: string | null } = {}) {
+  const forId = opts.for ?? null, SLUG = slugOf(forId)
   const { a, repoPath, address, cmd, dbCfg, standIns } = await setupOf(appId)
-  if (address) return mainStatus(appId)
-  if (alive(appId) && !opts.update) return mainStatus(appId, true)
+  if (address) return mainStatus(appId, false, forId)
+  if (alive(appId, forId) && !opts.update) return mainStatus(appId, true, forId)
   if (!cmd) throw new PlanError(`${a.name} has no command to start it yet: set how its prototypes are started in Settings, or give the address its main is deployed at`)
   if (!repoPath) throw new PlanError(`${a.name} has no local checkout to run main from`)
   const branch = a.defaultBranch ?? 'main'
   const sha = await tipOf(repoPath, branch)
   if (!sha) throw new PlanError(`${a.name}'s repository has no ${branch} to run`)
-  await end(appId)
-  const path = join(`${repoPath}-worktrees`, 'main--running')
+  await end(appId, forId)
+  const path = join(`${repoPath}-worktrees`, folderOf(forId))
   // Its own worktree, at the commit and on no branch: the default branch is nobody's to check out twice.
   if (existsSync(path)) await git(path, ['checkout', '--detach', '--force', sha])
   else await git(repoPath, ['worktree', 'add', '--detach', path, sha])
@@ -120,11 +135,11 @@ export async function startMain(appId: string, actor = 'person', opts: { update?
       }
     }
   }
-  const mine: Record<string, string> = { PROTOTYPE_HOME: homeOf(mainKey(appId)), RECORDINGS: recordingsDir(appId), ...(dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, SLUG) } : {}) }
+  const mine: Record<string, string> = { PROTOTYPE_HOME: homeOf(standKey(appId, forId)), RECORDINGS: recordingsDir(appId), ...(dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, SLUG) } : {}) }
   // Its stand-ins first, each on a port of its own; the server is given the variables that point the app at them.
-  const pointed = envOf(mainKey(appId), standIns, await startStandIns(mainKey(appId), standIns, path, { ...process.env, ...mine }), path)
-  const envFile = writeEnvFile(mainKey(appId), pointed)
-  const port = await freePort(lastPort.get(appId) ?? 0)
+  const pointed = envOf(standKey(appId, forId), standIns, await startStandIns(standKey(appId, forId), standIns, path, { ...process.env, ...mine }), path)
+  const envFile = writeEnvFile(standKey(appId, forId), pointed)
+  const port = await freePort(lastPort.get(keyOf(appId, forId)) ?? 0)
   const more = await morePorts()
   const env = { ...mine, ...pointed, STAND_INS_ENV: envFile, PORT: String(port), ...more.env, BROWSER: 'none', CI: '1' }
   // Its own process group, so stopping it also stops what the command started.
@@ -132,18 +147,18 @@ export async function startMain(appId: string, actor = 'person', opts: { update?
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
   proc.on('exit', (code) => { log.push(`exited${code === null ? '' : ` with ${code}`}`) })
-  running.set(appId, { proc, log, port, sha, path, env, usedAt: Date.now(), startedAt: new Date().toISOString() })
-  lastPort.set(appId, port)
+  running.set(keyOf(appId, forId), { appId, forId: tagOf(forId) || null, proc, log, port, sha, path, env, usedAt: Date.now(), startedAt: new Date().toISOString() })
+  lastPort.set(keyOf(appId, forId), port)
   watch()
-  await emit(a, 'main.started', actor, { port, sha })
-  return mainStatus(appId)
+  await emit(a, 'main.started', actor, { port, sha, ...(tagOf(forId) ? { for: tagOf(forId) } : {}) })
+  return mainStatus(appId, false, forId)
 }
 
 /** Stop its server and stand-ins, then what the command left up (the app's stop command, in main's worktree). */
-async function end(appId: string): Promise<boolean> {
-  const m = running.get(appId)
-  running.delete(appId)
-  const standIns = stopStandIns(mainKey(appId))
+async function end(appId: string, forId?: string | null): Promise<boolean> {
+  const m = running.get(keyOf(appId, forId))
+  running.delete(keyOf(appId, forId))
+  const standIns = stopStandIns(standKey(appId, forId))
   if (m && m.proc.exitCode === null && m.proc.signalCode === null && m.proc.pid) {
     const gone = new Promise<void>((r) => { m.proc.once('exit', () => r()); setTimeout(r, 3000) })
     try { process.kill(-m.proc.pid, 'SIGTERM') } catch { m.proc.kill('SIGTERM') }
@@ -160,22 +175,33 @@ async function end(appId: string): Promise<boolean> {
   return true
 }
 
-export async function stopMain(appId: string, actor = 'person', why?: 'idle') {
+export async function stopMain(appId: string, actor = 'person', why?: 'idle', forId?: string | null) {
   const { a } = await setupOf(appId)
-  if (await end(appId)) await emit(a, 'main.stopped', actor, why ? { why } : {})
-  return mainStatus(appId)
+  if (await end(appId, forId)) await emit(a, 'main.stopped', actor, { ...(why ? { why } : {}), ...(tagOf(forId) ? { for: tagOf(forId) } : {}) })
+  return mainStatus(appId, false, forId)
+}
+
+/** A piece of work's own main, gone for good: stopped, its worktree and its database removed. For when the task is done. */
+export async function removeMain(appId: string, forId: string) {
+  if (!tagOf(forId)) return
+  const { repoPath, dbCfg } = await setupOf(appId)
+  await end(appId, forId)
+  lastPort.delete(keyOf(appId, forId))
+  const path = repoPath ? join(`${repoPath}-worktrees`, folderOf(forId)) : null
+  if (path && existsSync(path)) await git(repoPath!, ['worktree', 'remove', '--force', path], { allowFail: true })
+  if (dbCfg) await dropDatabase(dbCfg, slugOf(forId)).catch(() => {})
 }
 
 /** Turn off each one nobody has looked at for MAIN_IDLE_MS. Returns the apps it turned off. */
 export async function stopIdleMains(now = Date.now()): Promise<string[]> {
-  const idle = [...running.entries()].filter(([, m]) => now - m.usedAt >= MAIN_IDLE_MS()).map(([id]) => id)
-  for (const id of idle) await stopMain(id, 'engine', 'idle').catch(() => {})
-  return idle
+  const idle = [...running.values()].filter((m) => now - m.usedAt >= MAIN_IDLE_MS())
+  for (const m of idle) await stopMain(m.appId, 'engine', 'idle', m.forId).catch(() => {})
+  return idle.map((m) => keyOf(m.appId, m.forId))
 }
 let timer: NodeJS.Timeout | null = null
 function watch() { if (!timer) { timer = setInterval(() => { void stopIdleMains(); if (!running.size && timer) { clearInterval(timer); timer = null } }, 60_000); timer.unref() } }
 
-export function stopMains() { if (timer) { clearInterval(timer); timer = null } for (const id of [...running.keys()]) void end(id) }
+export function stopMains() { if (timer) { clearInterval(timer); timer = null } for (const m of [...running.values()]) void end(m.appId, m.forId) }
 
 /** Where the app's main can be looked at without running it here (a deployed site), or none: it is run here. */
 export async function setMainAddress(appId: string, url: string | null) {

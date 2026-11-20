@@ -277,9 +277,9 @@ export const AddressBar: Story = {
   },
 }
 
-/** Main beside the build (made up): pressing Compare with main turns the app's own running main on and shows it beside the build; a check sends both views to the same place, and each has its own back, forward, reload and address. */
+/** Main beside the build (made up): pressing Compare with main brings up a main of this task's own, on its own port, beside the build (the app's main is left as it is); a check sends both views to the same place, and each has its own back, forward, reload and address. */
 export const ComparedWithMain: Story = {
-  beforeEach: withEngine({ smoke: smokeSample, main: MAIN_OFF, mainUrl: 'http://localhost:6600' }),
+  beforeEach: withEngine({ smoke: smokeSample, main: MAIN_OFF, mainUrl: 'http://localhost:6600', mainFor: 'iss_sample20' /* the task's own main, on its own port: not the app's */ }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Compare with main' }))

@@ -462,9 +462,10 @@ export function buildApp(bus: EventBus) {
   api.post('/prototypes/:id/guide/:step/stop', (c) => { try { return c.json(stopStep(c.req.param('id'), Number(c.req.param('step')))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/talk', async (c) => { try { return c.json(await talkFor(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   // The app's main, running (main-running.ts): turned on and off by the person; a look at it (touch=1) keeps it from turning itself off.
-  api.get('/apps/:id/main', async (c) => { try { return c.json(await mainStatus(c.req.param('id'), c.req.query('touch') === '1')) } catch (err) { return planError(c, err, 404) } })
-  api.post('/apps/:id/main/start', async (c) => { try { return c.json(await startMain(c.req.param('id'), 'person', { update: c.req.query('update') === '1' })) } catch (err) { return planError(c, err) } })
-  api.post('/apps/:id/main/stop', async (c) => { try { return c.json(await stopMain(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  // ?for=<task or prototype id>: the main that piece of work has of its own for comparing, not the app's.
+  api.get('/apps/:id/main', async (c) => { try { return c.json(await mainStatus(c.req.param('id'), c.req.query('touch') === '1', c.req.query('for'))) } catch (err) { return planError(c, err, 404) } })
+  api.post('/apps/:id/main/start', async (c) => { try { return c.json(await startMain(c.req.param('id'), 'person', { update: c.req.query('update') === '1', for: c.req.query('for') })) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/main/stop', async (c) => { try { return c.json(await stopMain(c.req.param('id'), 'person', undefined, c.req.query('for'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/stop', async (c) => { try { return c.json(await stopPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/discard', async (c) => { try { return c.json(await discardPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/graph', async (c) => {

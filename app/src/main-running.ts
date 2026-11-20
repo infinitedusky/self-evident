@@ -1,16 +1,18 @@
 /**
  * The app's main, running, for a view that shows it (its own tab, or beside a prototype): how it stands now, kept
  * current, with turning it on and off. While `looking`, the engine is told someone is looking, so it stays on.
+ * With `forId` it is the main a task has of its own for comparing (its prototype and its smoke test share it), on
+ * a port of its own, and not the app's.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { API, engine, openEvents, type MainRunning } from './engine'
 
-export function useMain(appId: string | undefined, looking: boolean) {
+export function useMain(appId: string | undefined, looking: boolean, forId?: string) {
   const [main, setMain] = useState<MainRunning | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const refresh = useCallback((touch = false) => { if (appId) return engine.main(appId, touch).then((m) => { setMain(m); return m }).catch((e) => { setError(String(e.message ?? e)); return null }); return Promise.resolve(null) }, [appId])
-  useEffect(() => { setMain(null); void refresh(looking) }, [appId])
+  const refresh = useCallback((touch = false) => { if (appId) return engine.main(appId, touch, forId).then((m) => { setMain(m); return m }).catch((e) => { setError(String(e.message ?? e)); return null }); return Promise.resolve(null) }, [appId, forId])
+  useEffect(() => { setMain(null); void refresh(looking) }, [appId, forId])
   // Turned on or off by anyone (the agent, or by itself when nobody looked): show it as it is now.
   useEffect(() => {
     if (!appId) return
@@ -27,8 +29,8 @@ export function useMain(appId: string | undefined, looking: boolean) {
   const act = (fn: () => Promise<MainRunning>) => { setBusy(true); setError(null); return fn().then((m) => { setMain(m); return m }).catch((e) => { setError(String(e.message ?? e)); return null }).finally(() => setBusy(false)) }
   return {
     main, error, busy,
-    start: () => (appId ? act(() => engine.startMain(appId)) : Promise.resolve(null)),
-    update: () => (appId ? act(() => engine.startMain(appId, true)) : Promise.resolve(null)),
-    stop: () => (appId ? act(() => engine.stopMain(appId)) : Promise.resolve(null)),
+    start: () => (appId ? act(() => engine.startMain(appId, false, forId)) : Promise.resolve(null)),
+    update: () => (appId ? act(() => engine.startMain(appId, true, forId)) : Promise.resolve(null)),
+    stop: () => (appId ? act(() => engine.stopMain(appId, forId)) : Promise.resolve(null)),
   }
 }

@@ -101,10 +101,10 @@ export const WithStandIns: Story = {
     await expect(group.getByText('Mail (sample) · not running')).toBeInTheDocument()
   },
 }
-/** Main beside it: pressed, the app's own running main is turned on if it is off and shown at the same place, each with a bar of its own. Sample data. */
+/** Main beside it: pressed, a main of the task's own (the prototype's, when it has no task) comes up on its own port and is shown at the same place, each with a bar of its own. The app's main is left as it is. Sample data. */
 export const CompareWithMain: Story = {
   args: { id: running.id, path: at },
-  beforeEach: withEngine({ prototypes: [running], main: MAIN_OFF }),
+  beforeEach: withEngine({ prototypes: [running], main: MAIN_OFF, mainFor: (running as { issueId?: string | null }).issueId ?? running.id }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Compare with main' }))
