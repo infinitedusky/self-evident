@@ -9,7 +9,10 @@ import { app, repo, workspace } from './db/schema.js'
 import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
 import { MAIN_IDLE_MS, mainStatus, removeMain, setMainAddress, setMainStandIn, startMain, stopIdleMains, stopMain, stopMains } from './main-running.js'
+import pg from 'pg'
 import { setPrototypeCommand } from './prototype.js'
+import { databaseName, databaseUrl, dropDatabase, rebuild } from './prototype-data.js'
+import { patchSetup } from './setup.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -75,6 +78,35 @@ describe.skipIf(!reachable)('the app\'s main, running', () => {
     await removeMain(appId, 'iss_Task1')
     expect(existsSync(join(`${repoPath}-worktrees`, 'main--iss-task1'))).toBe(false)
     await stopMain(appId)
+  })
+
+  it('a task\'s main runs on a copy of the data of the work beside it, or on that work\'s own database, as chosen', async () => {
+    const cfg = { url: process.env.DATABASE_URL!, env: 'APP_DB' }
+    const says = `node -e "require('http').createServer((q, s) => s.end(process.env.APP_DB || 'none')).listen(process.env.PORT)"`
+    await setPrototypeCommand(appId, says); await patchSetup(appId, { prototype_db: cfg })
+    const rows = async (slug: string) => { const c = new pg.Client({ connectionString: databaseUrl(cfg, slug) }); await c.connect(); try { return (await c.query('select n from seeded')).rows.map((r) => r.n) } finally { await c.end() } }
+    const seed = 'create table seeded (n int); insert into seeded values (7);'
+    // The work beside it (made up): a smoke test's database, with a row made while testing.
+    const { url } = await rebuild(cfg, 'smoke-sample', repoPath, null, { appId })
+    const c = new pg.Client({ connectionString: url }); await c.connect(); await c.query(`${seed} insert into seeded values (8);`); await c.end()
+    try {
+      // A copy: its own database, filled as the work was to start with. What was done in the work since is not in it.
+      const copy = await startMain(appId, 'person', { for: 'iss_Data', data: { mode: 'copy', beside: 'the smoke test (sample)', seed } })
+      expect(copy).toMatchObject({ database: databaseName('main-iss-data'), data: { mode: 'copy' } })
+      expect(await rows('main-iss-data')).toEqual([7])
+      expect(await until(async () => (await mainStatus(appId, false, 'iss_Data')).up)).toBe(true)
+      expect(await (await fetch(copy.url!)).text()).toContain(databaseName('main-iss-data'))
+      expect((await startMain(appId, 'person', { for: 'iss_Data' })).data).toMatchObject({ mode: 'copy' }) // asked for again with no choice: as it is
+      // The same database: main is brought up again on the work's own, and nothing is made or dropped for it.
+      const shared = await startMain(appId, 'person', { for: 'iss_Data', data: { mode: 'shared', beside: 'the smoke test (sample)', slug: 'smoke-sample' } })
+      expect(shared).toMatchObject({ database: databaseName('smoke-sample'), data: { mode: 'shared' }, url: copy.url })
+      expect(await until(async () => (await mainStatus(appId, false, 'iss_Data')).up)).toBe(true)
+      expect(await (await fetch(shared.url!)).text()).toContain(databaseName('smoke-sample'))
+      expect(await rows('smoke-sample')).toEqual([7, 8])
+      await expect(startMain(appId, 'person', { for: 'iss_Data', data: { mode: 'shared', beside: 'a prototype (sample)', slug: 'never-run' } })).rejects.toThrow(/no database yet to share/)
+      await removeMain(appId, 'iss_Data')
+      expect(await rows('smoke-sample')).toEqual([7, 8]) // removing the task's main never drops the work's database
+    } finally { stopMains(); await dropDatabase(cfg, 'smoke-sample'); await dropDatabase(cfg, 'main-iss-data'); await patchSetup(appId, { prototype_db: null }); await setPrototypeCommand(appId, SERVER) }
   })
 
   it('turns itself off when nobody has looked for a while; a look keeps it up', async () => {

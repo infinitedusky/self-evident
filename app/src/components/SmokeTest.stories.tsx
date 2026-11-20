@@ -405,3 +405,16 @@ export const ChecksPutAside: Story = {
   },
 }
 
+/** Main's data is chosen (made up): a copy of this build's to start with, or the very same database; changing it while comparing brings main up again on the other. */
+export const MainsData: Story = {
+  beforeEach: (ctx) => { try { localStorage.removeItem('se.compare.data') } catch { /* fine */ } return withEngine({ smoke: smokeSample, main: { ...MAIN_OFF, database: 'proto_main_sample' }, mainUrl: 'http://localhost:6600', mainFor: 'iss_sample20' })(ctx) },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const pick = await c.findByRole('combobox', { name: "Main's data" })
+    await expect(pick).toHaveValue('copy')
+    await userEvent.click(c.getByRole('button', { name: 'Compare with main' }))
+    await expect(await c.findByText('· on a copy of the data')).toBeInTheDocument()
+    await userEvent.selectOptions(c.getByRole('combobox', { name: "Main's data" }), 'shared')
+    await expect(await c.findByText('· on the same database')).toBeInTheDocument()
+  },
+}

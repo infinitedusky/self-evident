@@ -5,7 +5,11 @@
  * a port of its own, and not the app's.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { API, engine, openEvents, type MainRunning } from './engine'
+import { API, engine, openEvents, type MainDataChoice, type MainRunning } from './engine'
+
+/** Which data a compared main runs on, as last chosen on this browser: a copy of the work's, unless they chose its own database. */
+export const dataChoice = (): 'copy' | 'shared' => { try { return localStorage.getItem('se.compare.data') === 'shared' ? 'shared' : 'copy' } catch { return 'copy' } }
+export const keepDataChoice = (m: 'copy' | 'shared') => { try { localStorage.setItem('se.compare.data', m) } catch { /* fine without it */ } }
 
 export function useMain(appId: string | undefined, looking: boolean, forId?: string) {
   const [main, setMain] = useState<MainRunning | null>(null)
@@ -29,7 +33,7 @@ export function useMain(appId: string | undefined, looking: boolean, forId?: str
   const act = (fn: () => Promise<MainRunning>) => { setBusy(true); setError(null); return fn().then((m) => { setMain(m); return m }).catch((e) => { setError(String(e.message ?? e)); return null }).finally(() => setBusy(false)) }
   return {
     main, error, busy,
-    start: () => (appId ? act(() => engine.startMain(appId, false, forId)) : Promise.resolve(null)),
+    start: (data?: MainDataChoice) => (appId ? act(() => engine.startMain(appId, false, forId, data)) : Promise.resolve(null)),
     update: () => (appId ? act(() => engine.startMain(appId, true, forId)) : Promise.resolve(null)),
     stop: () => (appId ? act(() => engine.stopMain(appId, forId)) : Promise.resolve(null)),
   }

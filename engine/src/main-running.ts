@@ -23,12 +23,21 @@
  * that has none): a worktree (`main--<id>`), a port and a database of its own, so what is done in it while comparing
  * is not in the app's main, and the app's main is not moved by a comparison. A task's prototype and its smoke test
  * share the one. It is removed, with its worktree and database, when the task is done.
+ *
+ * What data a task's main runs on is chosen when it is compared (Sandy, 2026-11-20: "the ability to choose the two
+ * options, one to literally use the same database and the other one is to mimic the data on its own"):
+ * - copy: a database of its own, made again each time it is turned on, from what the work beside it was built from
+ *   (the prototype's scenario; the smoke test's scenario and seed). The same rows to start with, and main's own
+ *   schema. What is done in one is not in the other.
+ * - shared: the very database of the work beside it. Main's code on the build's schema, as during a deploy, so a
+ *   change that is not backwards compatible shows as main breaking. Nothing is built or dropped for it.
  */
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
+import pg from 'pg'
 import { db } from './db/client.js'
 import { app } from './db/schema.js'
 import { appendEvent } from './events.js'
@@ -53,7 +62,9 @@ const standKey = (appId: string, forId?: string | null) => (tagOf(forId) ? `${ma
 /** What its stand-ins and their folder are kept under (stand-ins.ts keys them by any id). */
 export const mainKey = (appId: string) => `main-${appId}`
 
-interface Running { appId: string; forId: string | null; proc: ChildProcess; log: string[]; port: number; sha: string; path: string; env: Record<string, string>; usedAt: number; startedAt: string }
+/** What a task's main runs on (the server resolves the work beside it): its own copy of that work's starting data, or that work's database itself. */
+export interface MainData { mode: 'copy' | 'shared'; /** What it is beside, in words, for the page. */ beside: string; /** shared: that work's database. */ slug?: string; /** copy: the scenario that work was built from (null: none). */ scenario?: string | null; /** copy: where that scenario is kept. */ prototypeId?: string | null; /** copy: SQL run after it (a smoke set-up's seed). */ seed?: string | null }
+interface Running { data: MainData | null; appId: string; forId: string | null; proc: ChildProcess; log: string[]; port: number; sha: string; path: string; env: Record<string, string>; usedAt: number; startedAt: string }
 const running = new Map<string, Running>()
 const lastPort = new Map<string, number>() // turned on again, it keeps its address, so an open tab still finds it
 const alive = (appId: string, forId?: string | null) => { const m = running.get(keyOf(appId, forId)); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
@@ -101,41 +112,53 @@ export async function mainStatus(appId: string, touch = false, forId?: string | 
     /** The commit it runs, and the default branch's now: behind when that has moved on. */ sha: on ? m!.sha : null, tip, behind: on && !!tip && tip !== m!.sha,
     log: m?.log.slice(-30) ?? [],
     standIns: standInsStatus(standKey(appId, forId), standIns).map((s) => ({ key: s.key, name: s.name, what: s.what, running: s.running, url: s.url })),
-    database: dbCfg ? databaseName(slugOf(forId)) : null,
+    database: dbCfg ? databaseName(m?.data?.mode === 'shared' && m.data.slug ? m.data.slug : slugOf(forId)) : null,
+    /** A task's main: the data it was turned on with. */ data: on && m!.data ? { mode: m!.data.mode, beside: m!.data.beside } : null,
     /** With nobody looking for this long it turns itself off; stopsAt: when, as things stand. */ idleMinutes: Math.round(MAIN_IDLE_MS() / 60_000), stopsAt: on ? new Date(m!.usedAt + MAIN_IDLE_MS()).toISOString() : null,
   }
 }
 
 /** Turn it on, at the default branch's tip. Already on: left as it is, unless update (it has moved on: up again there, its database made again). */
-export async function startMain(appId: string, actor = 'person', opts: { update?: boolean; /** The task (or prototype) it is beside: a main of its own, not the app's. */ for?: string | null } = {}) {
+export async function startMain(appId: string, actor = 'person', opts: { update?: boolean; /** The task (or prototype) it is beside: a main of its own, not the app's. */ for?: string | null; /** A task's main: what data it runs on. Asked for again with another choice, it is brought up again on that. */ data?: MainData | null } = {}) {
   const forId = opts.for ?? null, SLUG = slugOf(forId)
+  const data = tagOf(forId) ? opts.data ?? null : null
+  const asIs = !opts.data || JSON.stringify(opts.data) === JSON.stringify(running.get(keyOf(appId, forId))?.data ?? null)
   const { a, repoPath, address, cmd, dbCfg, standIns } = await setupOf(appId)
   if (address) return mainStatus(appId, false, forId)
-  if (alive(appId, forId) && !opts.update) return mainStatus(appId, true, forId)
+  if (alive(appId, forId) && !opts.update && asIs) return mainStatus(appId, true, forId)
   if (!cmd) throw new PlanError(`${a.name} has no command to start it yet: set how its prototypes are started in Settings, or give the address its main is deployed at`)
   if (!repoPath) throw new PlanError(`${a.name} has no local checkout to run main from`)
   const branch = a.defaultBranch ?? 'main'
   const sha = await tipOf(repoPath, branch)
   if (!sha) throw new PlanError(`${a.name}'s repository has no ${branch} to run`)
+  if (dbCfg && data?.mode === 'shared' && (!data.slug || !(await databaseExists(dbCfg, data.slug)))) throw new PlanError(`${data.beside} has no database yet to share: run it first`) // said before anything is stopped
   await end(appId, forId)
   const path = join(`${repoPath}-worktrees`, folderOf(forId))
   // Its own worktree, at the commit and on no branch: the default branch is nobody's to check out twice.
   if (existsSync(path)) await git(path, ['checkout', '--detach', '--force', sha])
   else await git(repoPath, ['worktree', 'add', '--detach', path, sha])
   const log: string[] = []
-  if (dbCfg) {
-    if (opts.update) await dropDatabase(dbCfg, SLUG).catch(() => {}) // the schema may have moved with it
+  if (dbCfg && data?.mode === 'shared') {
+    if (!data.slug || !(await databaseExists(dbCfg, data.slug))) throw new PlanError(`${data.beside} has no database yet to share: run it first`)
+    log.push(`On the database of ${data.beside}: what is done here is done there.`)
+  } else if (dbCfg) {
+    if (opts.update || data) await dropDatabase(dbCfg, SLUG).catch(() => {}) // the schema may have moved with it; a copy is made again each time, from what the work beside it starts with
     if (!(await databaseExists(dbCfg, SLUG))) {
-      const scenario = (await listScenarios({ appId }, path)).includes('default') ? 'default' : null
+      const scope = { appId, ...(data?.prototypeId ? { prototypeId: data.prototypeId } : {}) }
+      const scenario = data && data.scenario !== undefined ? data.scenario : (await listScenarios({ appId }, path)).includes('default') ? 'default' : null
       // A shared scenario may name what main does not have yet (a prototype's new table): it comes up anyway, and its log says so.
-      try { await rebuild(dbCfg, SLUG, path, scenario, { appId }) }
+      try { await rebuild(dbCfg, SLUG, path, scenario, scope) }
       catch (err) {
         log.push(`The made-up data did not all load on ${branch}: ${(err as Error).message}`.slice(0, 300))
         if (!(await databaseExists(dbCfg, SLUG))) await rebuild(dbCfg, SLUG, path, null, { appId })
       }
+      if (data?.seed) { // the smoke set-up's own rows, after the scenario; what it names that main lacks is said, and main comes up anyway
+        const c = new pg.Client({ connectionString: databaseUrl(dbCfg, SLUG) })
+        try { await c.connect(); await c.query(data.seed) } catch (err) { log.push(`The seed did not all load on ${branch}: ${(err as Error).message}`.slice(0, 300)) } finally { await c.end().catch(() => {}) }
+      }
     }
   }
-  const mine: Record<string, string> = { PROTOTYPE_HOME: homeOf(standKey(appId, forId)), RECORDINGS: recordingsDir(appId), ...(dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, SLUG) } : {}) }
+  const mine: Record<string, string> = { PROTOTYPE_HOME: homeOf(standKey(appId, forId)), RECORDINGS: recordingsDir(appId), ...(dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, data?.mode === 'shared' ? data.slug! : SLUG) } : {}) }
   // Its stand-ins first, each on a port of its own; the server is given the variables that point the app at them.
   const pointed = envOf(standKey(appId, forId), standIns, await startStandIns(standKey(appId, forId), standIns, path, { ...process.env, ...mine }), path)
   const envFile = writeEnvFile(standKey(appId, forId), pointed)
@@ -147,7 +170,7 @@ export async function startMain(appId: string, actor = 'person', opts: { update?
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
   proc.on('exit', (code) => { log.push(`exited${code === null ? '' : ` with ${code}`}`) })
-  running.set(keyOf(appId, forId), { appId, forId: tagOf(forId) || null, proc, log, port, sha, path, env, usedAt: Date.now(), startedAt: new Date().toISOString() })
+  running.set(keyOf(appId, forId), { data, appId, forId: tagOf(forId) || null, proc, log, port, sha, path, env, usedAt: Date.now(), startedAt: new Date().toISOString() })
   lastPort.set(keyOf(appId, forId), port)
   watch()
   await emit(a, 'main.started', actor, { port, sha, ...(tagOf(forId) ? { for: tagOf(forId) } : {}) })

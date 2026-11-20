@@ -5480,3 +5480,26 @@ Not done: the same on the prototype's page and the other views (the smoke test i
 the task's left nav and the agent's column with one press (each folds by its own); a page of its own for the smoke
 test.
 
+
+## A compared main's data is chosen: a copy, or the same database (Sandy, 2026-11-20: "we want the ability to choose the two options, one to literally use the same database and the other one is to mimic the data on its own")
+
+A task's main (the one Compare with main brings up) always had a database of its own from the shared "default"
+scenario, whatever the work beside it was on. Now "main's data", beside the button on a prototype and a smoke test:
+
+- **A copy of this one's** (as it starts): main gets its own database, made again each time it is turned on, from
+  what the work beside it was built from: the prototype's scenario (its own or a shared one); the smoke test's
+  "default" scenario and the set-up's seed. Main's own schema. What is done in one is not in the other. What a
+  scenario or seed names that main lacks is said in its log, and main comes up anyway.
+- **The same database**: main is pointed at the work's own database and nothing is made or dropped for it. Main's
+  code on the build's schema, as during a deploy: what is done in one shows in the other, and a change that is not
+  backwards compatible shows as main breaking. It needs the work to have been run once.
+- Changing it while comparing brings main up again on the other, at the same address. The view of main says which
+  it is on. The choice is remembered on this browser. Asked for with no choice (the agent, an old tab), a running
+  one is left as it is.
+- `?data=copy|shared&beside=prototype:<id>|smoke:<task>:<set-up>` on the start route; the engine works out the
+  database, scenario and seed (`engine/src/main-running.ts`, `MainData`).
+
+Not done: a copy of the data as it is now (it is as the work started; the rows made since are only in the same
+database); a choice of some other scenario for main; saying on the page, when main breaks on the same database, that
+it is likely the schema; the app's own main is unchanged (its "default" scenario).
+

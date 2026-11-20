@@ -4,7 +4,9 @@ import type { On, Resolved, Row, StepKey, StepState, Workflow, WorkflowStep } fr
 import type { Plan } from './pages/PlanHome'
 
 export const API = '/api'
-const mainQuery = (o: { touch?: boolean; update?: boolean; forId?: string }) => { const q = [o.touch ? 'touch=1' : '', o.update ? 'update=1' : '', o.forId ? `for=${encodeURIComponent(o.forId)}` : ''].filter(Boolean).join('&'); return q ? `?${q}` : '' }
+/** What a task's main runs on when it is compared: a copy of the data of the work beside it, or that work's own database. */
+export type MainDataChoice = { mode: 'copy' | 'shared'; /** prototype:<id>, or smoke:<task id>:<set-up>. */ beside: string }
+const mainQuery = (o: { touch?: boolean; update?: boolean; forId?: string; data?: MainDataChoice }) => { const q = [o.touch ? 'touch=1' : '', o.update ? 'update=1' : '', o.forId ? `for=${encodeURIComponent(o.forId)}` : '', o.data ? `data=${o.data.mode}&beside=${encodeURIComponent(o.data.beside)}` : ''].filter(Boolean).join('&'); return q ? `?${q}` : '' }
 
 /** What a view holds of the event stream: its own listeners on a shared connection. */
 export interface Events { addEventListener(type: string, fn: EventListener): void; onerror: EventListener | null; onopen: EventListener | null; close(): void }
@@ -257,6 +259,7 @@ export interface Prototype {
  */
 export interface MainRunning {
   /** The task (or prototype) it is beside, when it is that one's own and not the app's. */ for?: string | null
+  /** A task's main: the data it was turned on with. */ data?: { mode: 'copy' | 'shared'; beside: string } | null
   appId: string; branch: string; how: 'local' | 'address' | 'none'; url: string | null; running: boolean; up: boolean; canRun: boolean
   /** The commit it runs and the branch's now; behind: the branch has moved on since it was turned on. */ sha: string | null; tip: string | null; behind: boolean
   log: string[]; standIns: { key: string; name: string; what?: string; running: boolean; url: string | null }[]; database: string | null
@@ -424,7 +427,7 @@ export const engine = {
   /** touch: someone is looking at it, so it stays on. */
   // forId: the task (or prototype) whose own main it is, for comparing; left out, the app's.
   main: (appId: string, touch = false, forId?: string) => call<MainRunning>('GET', `/apps/${appId}/main${mainQuery({ touch, forId })}`),
-  startMain: (appId: string, update = false, forId?: string) => call<MainRunning>('POST', `/apps/${appId}/main/start${mainQuery({ update, forId })}`),
+  startMain: (appId: string, update = false, forId?: string, data?: MainDataChoice) => call<MainRunning>('POST', `/apps/${appId}/main/start${mainQuery({ update, forId, data })}`),
   stopMain: (appId: string, forId?: string) => call<MainRunning>('POST', `/apps/${appId}/main/stop${mainQuery({ forId })}`),
   prototypeRuns: (id: string) => call<StepRun[]>('GET', `/prototypes/${id}/runs`),
   runGuideStep: (id: string, step: number) => call<StepRun>('POST', `/prototypes/${id}/guide/${step}/run`),
