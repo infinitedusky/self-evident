@@ -36,6 +36,15 @@ export function covered(required: Requirement[], said: { key: string; applies: b
 export const requirementLines = (required: Requirement[]) => required.map((r) => `- ${r.key} (${r.name}): ${r.what}`).join('\n')
 
 /** For the merge guide: met and how, does not apply and why, or not addressed. */
+/**
+ * Evidence that says the thing is still to come ("No PR yet: it needs…", "to be written", "pending") is not evidence
+ * that it is met, whatever mark came with it (a client's pull request, 2026-11-20: Risks ✅ and Test plan ✅ beside
+ * "No PR yet: it needs…").
+ */
+export const notYet = (how?: string | null) => /\b(not yet|no (pr|pull request) yet|yet to (be|come)|still (to|needs|missing)|to be (written|added|done|filled)|will be (added|written|done)|pending|it needs|needs the pull request|todo|tbd)\b/i.test(how ?? '')
+/** Met: the check said so, and its evidence does not say otherwise. */
+export const reqMet = (c: Covered) => c.built === true && !notYet(c.how)
+
 export function coveredLines(list: Covered[]): string {
-  return list.map((c) => (c.built === false ? `- ❌ **${c.name}**: not done. ${c.how}`.trimEnd() : !c.how ? `- ⬜ **${c.name}**: ${c.built === undefined ? 'not checked yet.' : 'met.'}` : c.applies ? `- ✅ **${c.name}**: ${c.how}` : `- ➖ **${c.name}** does not apply: ${c.how.replace(/^does not apply:?\s*/i, '')}`)).join('\n')
+  return list.map((c) => (c.built !== false && c.how && notYet(c.how) ? `- ⬜ **${c.name}**: not yet. ${c.how}` : c.built === false ? `- ❌ **${c.name}**: not done. ${c.how}`.trimEnd() : !c.how ? `- ⬜ **${c.name}**: ${c.built === undefined ? 'not checked yet.' : 'met.'}` : c.applies ? `- ✅ **${c.name}**: ${c.how}` : `- ➖ **${c.name}** does not apply: ${c.how.replace(/^does not apply:?\s*/i, '')}`)).join('\n')
 }

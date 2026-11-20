@@ -27,6 +27,7 @@ export function PrStep({ issueId, appId, base }: { issueId: string; appId: strin
   const [asking, setAsking] = useState(false)
   const [busy, setBusy] = useState(false)
   const [sent, setSent] = useState(false) // show what the next update sends, when GitHub's is behind
+  const [writing, setWriting] = useState<string | null>(null) // the description for the team, while it is being written here
   const timer = useRef<number | undefined>(undefined)
   const load = useCallback(() => engine.prView(issueId).then((x) => { setV(x); setError(null) }).catch((e) => setError(problemOf(e))), [issueId])
   useEffect(() => {
@@ -37,6 +38,7 @@ export function PrStep({ issueId, appId, base }: { issueId: string; appId: strin
     return () => { es.close(); window.clearTimeout(timer.current) }
   }, [issueId, appId, load])
   const ready = async () => { setBusy(true); setError(null); try { await engine.markPrReady(issueId); setAsking(false); await load() } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
+  const saveMessage = async () => { if (writing === null) return; setBusy(true); setError(null); try { await engine.setPrMessage(issueId, writing); setWriting(null); await load() } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
   const pr = v.pr
@@ -83,6 +85,20 @@ export function PrStep({ issueId, appId, base }: { issueId: string; appId: strin
       ) : <p className="pr-act faint">It is merged. Nothing more is sent to it.</p>}
 
       <h3 className="settings-h3">Message <span className="faint" style={{ fontWeight: 400 }}>{shown?.from ?? ''}</span></h3>
+      {/* What the team reads first: written for them, or (until it is) our merge guide. Our record is folded under either. */}
+      {writing === null && pr?.status !== 'merged' && (
+        <p className={v.written ? 'faint' : 'pr-unwritten'} style={{ margin: '0 0 8px', fontSize: 13 }}>
+          {v.written ? 'Its description was written for the team; Self Evident\'s record is folded under it. ' : 'Its description has not been written for the team: it leads with Self Evident\'s merge guide, which reads as our build log. Ask this task\'s agent to write it in the repository\'s style, or write it here. '}
+          <button className="linkish" onClick={() => setWriting(v.written ?? '')}>{v.written ? 'Edit it' : 'Write it'}</button>
+        </p>
+      )}
+      {writing !== null && (
+        <div className="pr-write" role="group" aria-label="The description for the team">
+          <label>The description, as the team will read it (Markdown). Leave out our ids and how we built it: that is folded under it for you.
+            <textarea rows={14} value={writing} autoFocus onChange={(e) => setWriting(e.target.value)} placeholder={'## What changed and why\n\n## How it works\n\n## Rollback and deploy notes\n\n## Test plan\n\n## Risks'} /></label>
+          <div className="smoke-actions"><button className="btn small" disabled={busy} onClick={() => void saveMessage()}>{busy ? 'Saving…' : writing.trim() ? 'Save it' : 'Clear it'}</button> <button className="btn quiet small" disabled={busy} onClick={() => setWriting(null)}>Cancel</button><span className="faint" style={{ fontSize: 12 }}>It is sent to GitHub with the next update, or when you submit.</span></div>
+        </div>
+      )}
       {v.behind && <p className="faint" style={{ margin: '0 0 8px', fontSize: 13 }}>GitHub has an earlier version of it. It is brought up to date when the next sub-task lands. <button className="linkish" onClick={() => setSent(!sent)}>{sent ? 'Show what GitHub has' : 'Show what will be sent'}</button></p>}
       {shown ? (
         <div className="pr-message">

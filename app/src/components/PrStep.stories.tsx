@@ -115,3 +115,18 @@ export const ScannerFindings: Story = {
   },
 }
 
+/** Not written for the team yet: it says so, and it can be written here; once it is, that leads and our record is folded under it. Made-up text (sample). */
+export const WrittenForTheTeam: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/has not been written for the team/)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Write it' }))
+    await userEvent.type(c.getByRole('textbox'), '## What changed and why{Enter}{Enter}Edges can tunnel under a node (sample).')
+    await userEvent.click(c.getByRole('button', { name: 'Save it' }))
+    await expect(await c.findByText(/was written for the team/)).toBeInTheDocument()
+    await expect(c.getByText('Edges can tunnel under a node (sample).')).toBeInTheDocument()
+    await expect(c.getByText('How this was built (sample)')).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Edit it' })).toBeInTheDocument()
+  },
+}
+

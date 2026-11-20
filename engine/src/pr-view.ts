@@ -98,12 +98,27 @@ export async function prView(issueId: string, deps: { gh?: Gh; preview: (project
     /** The pull request, as GitHub has it now (or as last known, with `problem`). Null: not submitted. */ pr,
     /** What it would open with now, or what the next update sends: the title by the app's rule, the message with its merge guide. */ message: message && { title: message.title, body: message.body, head: message.head, base: message.base },
     /** What GitHub has differs from what would be sent: it is brought up to date when the next sub-task lands, or on submitting again. */ behind: !!(onGithub && message && liveNow && (onGithub.title !== message.title || onGithub.body.trim() !== message.body.trim())),
+    /** Its description was written for the team (and is what leads); else the engine's merge guide leads. */ written: t.prBody?.trim() ? t.prBody : null,
     landed, total: live.length, unchecked, byHand,
     /** The app opens pull requests as drafts; and opens one by itself once the task is built and checked. */ draft: prDraft(a?.setup), auto: prAuto(a?.setup),
     /** It can be submitted now (a new one, or the closed one again); else why not. */ canSubmit: !liveNow && pr?.status !== 'merged' && waits.length === 0, waits,
     /** It is a draft: the person can mark it ready for review. */ canReady: pr?.status === 'draft',
     comments, problem,
   }
+}
+
+/**
+ * A task's pull request description, written for the team: prose in their repository's own style, which then leads
+ * the pull request, with our record folded under it. Empty clears it, and the merge guide leads again. Kept on the
+ * task; the pull request is brought up to date with it on the next update or submit.
+ */
+export async function setPrMessage(issueId: string, body: string | null) {
+  const t = await getIssue(db, issueId)
+  if (t.parentId) throw new PlanError('a pull request is a task\'s, not a sub-task\'s')
+  const clean = (body ?? '').trim()
+  if (clean.length > 30_000) throw new PlanError('a pull request\'s description is at most 30,000 characters: it is read by a reviewer, not kept as a record')
+  await db.update(issue).set({ prBody: clean || null, updatedAt: new Date() }).where(eq(issue.id, t.id))
+  return { written: clean || null }
 }
 
 /** A draft marked ready for review: the person's, never an agent's. */

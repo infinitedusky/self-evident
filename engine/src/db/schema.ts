@@ -191,6 +191,7 @@ export const issue = pgTable('issue', {
   branch: text('branch'), // the branch its work lands on, when the app's template named it (conventions.ts); null: the engine's own name (branches.ts)
   teamTicket: text('team_ticket'), // the team's own ticket for it (ENT-322), when a person or its agent set it; else read from its import or a link (ticket.ts)
   teamTitle: text('team_title'), // its name as the team would say it, for a pull request's title and a branch's name; null: our title
+  prBody: text('pr_body'), // its pull request's description, written for the team in their repository's own style; null: the engine's merge guide leads (pr.ts)
   prTitle: text('pr_title'), // its pull request's title, exactly, when the repository's convention needs more than the app's template can say (pr.ts)
   acceptance: jsonb('acceptance').notNull().default([]), // how we will know it is done: [{id, text, check?, shown?, evidence?}], approved with the brief (acceptance.ts)
   workflowId: text('workflow_id').references((): AnyPgColumn => workflow.id), // its own, over its project's and the app's

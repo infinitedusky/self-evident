@@ -13,13 +13,15 @@ import { and, eq, inArray, isNotNull } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { decision, issue, stepWork } from './db/schema.js'
 import { acceptanceOf, type Criterion } from './acceptance.js'
-import { coveredLines, type Covered } from './requirements.js'
+import { coveredLines, notYet, type Covered } from './requirements.js'
 
 export interface GuideTask {
   identifier: string; title: string; description?: string | null
   acceptance: Criterion[]
   /** The draft ADR and the blast radius: the summary written for a person, else the one-line verdict. */
   adr?: string | null; risk?: string | null
+  /** All the blast radius wrote, not only its summary: how the change is taken back is read from it (undoOf). */
+  riskAll?: string | null
   decisions: { question: string; chosen: string; why?: string | null }[]
   /** Sub-tasks not landed yet. */
   pending: string[]
@@ -72,7 +74,7 @@ export function taskGuide(t: GuideTask, opts: { heading?: boolean } = {}): strin
     listed.length && n.rows ? `**For you to check**\n\n${listed.slice(0, n.rows).map(row).join('\n')}${listed.length > n.rows ? `\n- and ${listed.length - n.rows} more in the record below` : ''}` : '',
     t.decisions.length && n.decisions ? `**Decisions**\n\n${t.decisions.slice(0, n.decisions).map((d) => `- ${clip(d.question, 70)} → **${clip(d.chosen, 90)}**`).join('\n')}${t.decisions.length > n.decisions ? `\n- and ${t.decisions.length - n.decisions} more in the record below` : ''}` : '',
     firstLine(t.risk) && n.risk ? `**Risk:** ${clip(firstLine(t.risk), 200)}` : '',
-    t.requirements?.length && n.needs ? `**Required of every change:** ${t.requirements.map((c) => `${c.built === false ? '❌' : c.built === true ? (c.applies ? '✅' : '➖') : !c.how ? '⬜' : c.applies ? '✅' : '➖'} ${c.name}`).join(' · ')}` : '',
+    t.requirements?.length && n.needs ? `**Required of every change:** ${t.requirements.map((c) => `${c.built === false ? '❌' : c.how && notYet(c.how) ? '⬜' : c.built === true ? (c.applies ? '✅' : '➖') : !c.how ? '⬜' : c.applies ? '✅' : '➖'} ${c.name}`).join(' · ')}` : '',
   ].filter(Boolean).join('\n\n')
   // From the fullest that fits to the leanest: what is cut first is what matters least to someone about to merge.
   const tries = [
@@ -106,10 +108,29 @@ export function taskRecord(t: GuideTask, opts: { heading?: boolean } = {}): stri
   ].filter(Boolean).join('\n\n')
 }
 
+/**
+ * How a task's change is taken back, in its own words (a client's pull request, 2026-11-20: the guide said "revert
+ * this pull request" while the task's blast radius said never to revert after the first scan, and to fix forward).
+ * The line the blast radius, the merge checklist or a decision gives for it: one that starts "To undo" or
+ * "Rollback", else one that speaks of reverting, rolling back or fixing forward. Null when none does. Pure.
+ */
+export function undoOf(t: GuideTask): string | null {
+  const lines = [t.riskAll, t.risk, t.checklist, ...t.decisions.map((d) => `${d.question} ${d.chosen}${d.why ? `. ${d.why}` : ''}`)].filter(Boolean).join('\n').split('\n').map((l) => l.replace(/^[\s>*#-]+|\*\*/g, '').trim()).filter(Boolean)
+  const led = lines.find((l) => /^(to undo|undo|rollback|roll back|rolling back|reverting|to revert|taking it back)\b/i.test(l))
+  const said = led ?? lines.find((l) => /\b(fix(ed|ing)? forward|roll(ed|ing)? back|rollback|(never|do not|don't|cannot|can't|safe to|can be) revert(ed)?|revert (this|the) (pr|pull request|change|migration|commit))\b/i.test(l))
+  return said ? clip(said.replace(/^(to undo|undo|rollback|roll back)\s*[:.-]\s*/i, ''), 260) : null
+}
+
 /** The guide for a pull request of one task or several (a project's). Empty when there is nothing to say. */
 export function mergeGuide(tasks: GuideTask[]): string {
   if (!tasks.length) return ''
-  return ['## Merge guide', ...tasks.map((t) => taskGuide(t, { heading: tasks.length > 1 })), '**To undo:** revert this pull request.'].join('\n\n')
+  // How it is taken back comes from the task, never from a default that may contradict it.
+  const undo = tasks.map((t) => {
+    const how = undoOf(t)
+    const name = tasks.length > 1 ? `${t.identifier}: ` : ''
+    return how ? `${name}${how}` : t.risk?.trim() || t.riskAll?.trim() ? `${name}its blast radius does not say how. Ask before reverting.` : `${name}nothing on this task says how. Reverting this pull request is the default; check that it is safe first.`
+  })
+  return ['## Merge guide', ...tasks.map((t) => taskGuide(t, { heading: tasks.length > 1 })), `**To undo:** ${undo.length === 1 ? undo[0] : `\n\n${undo.map((u) => `- ${u}`).join('\n')}`}`].join('\n\n')
 }
 
 /** The record under the guide: all of it, for whoever wants to look something up. */
@@ -131,6 +152,7 @@ export async function guideTasks(tasks: { id: string; identifier: string; title:
     const said = (key: string) => { const w = steps.find((s) => s.issueId === t.id && s.key === key); return w?.summary?.trim() || w?.detail?.trim() || null }
     return {
       identifier: t.identifier, title: t.title, description: i?.description, acceptance: i ? acceptanceOf(i) : [], adr: said('adr'), risk: said('risk'),
+      riskAll: (() => { const w = steps.find((x) => x.issueId === t.id && x.key === 'risk'); return w ? [w.summary, w.detail, w.body].filter(Boolean).join('\n') : null })(),
       decisions: decided.filter((d) => d.issueId && mine.has(d.issueId)).map((d) => ({ question: d.question, chosen: (d.options as { key: string; text: string }[] | null)?.find((o) => o.key === d.chosen)?.text ?? d.chosen!, why: d.rationale })),
       pending: pending.filter((p) => p.parentId === t.id).map((p) => p.identifier),
       requirements: i?.requirements ?? undefined,

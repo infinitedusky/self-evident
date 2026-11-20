@@ -35,7 +35,8 @@ describe('how a pull request is titled and opened', () => {
   it('says in its text how many sub-tasks have landed, and that it is not ready while some have not', () => {
     const p = { id: 'proj_x', name: 'Orders (sample)' }
     expect(prBody(p, [{ identifier: 'SH-4', title: 'A' }], [{ identifier: 'SH-5', title: 'B' }, { identifier: 'SH-6', title: 'C' }])).toContain('**1 of 3 sub-tasks have landed: this pull request is still being built, and is not ready to review until they all have.**')
-    expect(prBody(p, [{ identifier: 'SH-4', title: 'A' }, { identifier: 'SH-5', title: 'B' }], [])).toContain('**2 of 2 sub-tasks have landed.**')
+    const whole = prBody(p, [{ identifier: 'SH-4', title: 'A' }, { identifier: 'SH-5', title: 'B' }], [])
+    expect(whole).not.toContain('still being built'); expect(whole).toContain('2 of 2 sub-tasks have landed.') // all in: the count is in our record, not a banner
   })
 })
 

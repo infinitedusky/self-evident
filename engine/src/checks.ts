@@ -69,7 +69,7 @@ It is a draft. The planner settles it when it cuts the task into sub-tasks, and 
 ${report(key, f.issueId)}`
     case 'risk': return `**Blast radius.** ${task}
 ${earlier(f)}${proto(f)}The task is planned: the task tool shows its sub-tasks, each with its brief, its files and what it waits on. Work out what that plan touches on ${f.base} when it is built. Read the code it would change and what depends on that code.
-Report: the files and modules it changes; what else uses them and could break; data and migrations; anything shared or outward-facing (APIs, jobs, other apps); and for each risk, how we would know it broke (the test, the log line, the page).
+Report: the files and modules it changes; what else uses them and could break; data and migrations; anything shared or outward-facing (APIs, jobs, other apps); and for each risk, how we would know it broke (the test, the log line, the page). Say how the change is taken back once it is merged, in one line that starts with the words To undo, then a colon: revert the pull request, or, when that is not safe (data already written, a migration that cannot be reversed, something sent outside), say so and what is done instead. That line goes on the pull request word for word, so it must be true for this change.
 ${report(key, f.issueId)}`
     case 'audit': return `**Audit.** ${task}
 ${earlier(f)}${proto(f)}The task is planned and about to be built, with nobody pressing anything in between: this is the last read before agents start. Read the plan (the task tool shows the sub-tasks, each with its brief, its files and what it waits on) against the brief, the draft ADR, the code on ${f.base}, the prototype and the reports above.

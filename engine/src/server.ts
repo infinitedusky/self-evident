@@ -736,6 +736,7 @@ export function buildApp(bus: EventBus) {
   })
   // A task's pull request as a step of its own (pr-view.ts): where it stands, its message, what was said on it. Marking a draft ready is the person's.
   api.get('/issues/:id/pr', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await (await import('./pr-view.js')).prView(t.id, { preview: (p, i) => runner.previewPr(p, i) })) } catch (err) { return planError(c, err, 404) } })
+  api.put('/issues/:id/pr/message', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const b = await c.req.json() as { body?: string | null }; return c.json(await (await import('./pr-view.js')).setPrMessage(t.id, b.body ?? null)) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/pr/ready', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await (await import('./pr-view.js')).markReady(t.id)) } catch (err) { return planError(c, err) } })
   api.post('/projects/:id/pr/submit', async (c) => { try { return c.json(await runner.submitPr(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/issues/:id/merge-guide', async (c) => { // what the pull request will open with, for whoever approves it
