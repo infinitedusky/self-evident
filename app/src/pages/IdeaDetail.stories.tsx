@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { IdeaDetail } from './IdeaDetail'
 import { withEngine } from '../stories/mock-engine'
-import { ideaRows, talkSession } from '../stories/sample'
+import { expect, within } from 'storybook/test'
+import { ideaRows, sampleOrigin, talkSession } from '../stories/sample'
 
 // One idea from the inbox, worked through like a task: its steps down the side, its own agent beside it, and
 // converting it. Made up: the sample engine's first idea and a made-up conversation.
@@ -26,3 +27,6 @@ export const Converted: Story = { beforeEach: withEngine({ ideas: ideaRows.map((
   play: async ({ canvas }) => { await canvas.findByText('converted'); if (canvas.queryByRole('button', { name: 'Work on this idea' })) throw new Error('a converted idea offers an agent') } }
 /** No such idea. */
 export const Missing: Story = { args: { id: 'idea_nothing' } }
+/** Brought in from a Linear ticket (made up): the ticket, word for word, sits under the idea, folded. */
+export const FromATicket: Story = { beforeEach: withEngine({ ideas: inbox.map((i, n) => (n === 0 ? { ...i, origin: sampleOrigin } : i)) as never, ideaTalk: null }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText('Where this came from')).toBeInTheDocument() } }

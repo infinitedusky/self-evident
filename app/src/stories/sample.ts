@@ -26,6 +26,17 @@ export const otherApp: App = { id: 'app_sample2', workspaceId: workspace.id, nam
 export const apps = [otherApp, sampleApp] // the newest last: the app the UI picks when none is chosen
 
 /** Made-up tickets of a made-up Linear team, SHOP: two of the sample person's, one already a task here, one unassigned. */
+/** A ticket kept word for word (made up): what every agent on the work made from it reads. */
+export const sampleOrigin: import('../engine').OriginView = {
+  id: 'origin_sample1', source: 'linear', sourceName: 'Linear', ref: 'SHOP-41', url: 'https://linear.app/example/issue/SHOP-41', title: 'Saved cards at checkout (sample)',
+  body: 'Returning customers should be able to pay with a card they used before.\n\n- Show the last four digits and the expiry\n- Let them remove a saved card\n\n![the checkout today](https://uploads.linear.app/example/checkout.png)',
+  comments: [
+    { author: 'Sam Sample', at: '2026-11-01T09:00:00Z', body: 'Keep the "use a new card" button where it is.' },
+    { author: 'Made-up Teammate', at: '2026-11-02T10:00:00Z', body: 'Support says people also ask for this on mobile.' },
+  ],
+  links: [{ title: 'Checkout design (made up)', url: 'https://example.com/design' }],
+  files: [{ url: 'https://uploads.linear.app/example/checkout.png', kept: true, note: null }], fetchedAt: '2026-11-20T12:00:00Z',
+}
 const linearTicket = (n: number, title: string, over: Partial<LinearTicket> = {}): LinearTicket => ({
   id: `lin_sample${n}`, identifier: `SHOP-${n}`, title: `${title} (sample)`, url: `https://linear.app/example/issue/SHOP-${n}`, branchName: `sample/shop-${n}`, priority: 2,
   state: { name: 'Todo', type: 'unstarted' }, assignee: 'Sample Owner', mine: true, project: 'Checkout', task: null, ...over,

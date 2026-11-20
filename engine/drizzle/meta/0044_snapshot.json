@@ -1,5 +1,5 @@
 {
-  "id": "7eded296-b2a3-4d3c-ab5a-99ddf91325cc",
+  "id": "b639bc52-81f5-40bb-90f4-c9e17b6aeab0",
   "prevId": "1cddbf1d-eb95-4f71-91db-e7fd06d8f1de",
   "version": "7",
   "dialect": "postgresql",
@@ -1217,6 +1217,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "origin_id": {
+          "name": "origin_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "lane": {
           "name": "lane",
           "type": "text",
@@ -1338,6 +1344,19 @@
           "tableTo": "app",
           "columnsFrom": [
             "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "idea_origin_id_origin_id_fk": {
+          "name": "idea_origin_id_origin_id_fk",
+          "tableFrom": "idea",
+          "tableTo": "origin",
+          "columnsFrom": [
+            "origin_id"
           ],
           "columnsTo": [
             "id"
@@ -1623,6 +1642,12 @@
         },
         "idea_id": {
           "name": "idea_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "origin_id": {
+          "name": "origin_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1968,6 +1993,19 @@
           "tableTo": "idea",
           "columnsFrom": [
             "idea_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "issue_origin_id_origin_id_fk": {
+          "name": "issue_origin_id_origin_id_fk",
+          "tableFrom": "issue",
+          "tableTo": "origin",
+          "columnsFrom": [
+            "origin_id"
           ],
           "columnsTo": [
             "id"
@@ -2664,6 +2702,138 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.origin": {
+      "name": "origin",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ref": {
+          "name": "ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "comments": {
+          "name": "comments",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "links": {
+          "name": "links",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "files": {
+          "name": "files",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "origin_app_source_ref": {
+          "name": "origin_app_source_ref",
+          "columns": [
+            {
+              "expression": "app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ref",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "origin_app_id_app_id_fk": {
+          "name": "origin_app_id_app_id_fk",
+          "tableFrom": "origin",
+          "tableTo": "app",
+          "columnsFrom": [
+            "app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.outside_pr": {
       "name": "outside_pr",
       "schema": "",
@@ -3242,6 +3412,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "origin_id": {
+          "name": "origin_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "name": {
           "name": "name",
           "type": "text",
@@ -3402,6 +3578,19 @@
           "tableTo": "idea",
           "columnsFrom": [
             "idea_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "project_origin_id_origin_id_fk": {
+          "name": "project_origin_id_origin_id_fk",
+          "tableFrom": "project",
+          "tableTo": "origin",
+          "columnsFrom": [
+            "origin_id"
           ],
           "columnsTo": [
             "id"

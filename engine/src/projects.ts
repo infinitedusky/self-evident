@@ -5,6 +5,7 @@
  * every sub-issue of the earlier issues has landed. Explicit dependencies (blocks) and file claims come from the
  * sub-issues themselves. Each code sub-issue has a build: the engine's status, attempts and worktree for it.
  */
+import { originOf, originView } from './origins.js'
 import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm'
 import { db, type Tx } from './db/client.js'
 import { app, build, BUILD_STATE, decision, event, fileClaim, idea, issue, issueRelation, project, pr, question, run, session, step, type BuildStatus } from './db/schema.js'
@@ -523,6 +524,7 @@ export async function issueDetail(issueId: string) {
     parent: parent ? { id: parent.id, identifier: identifier(a.key, parent.number), title: parent.title } : null,
     build: b ?? null, questions, decisions, relations: rels, steps, stepsAttempt: last?.attempt ?? null, // the builder's list, from its latest run
     subIssues: subs.map((s) => ({ ...s, identifier: identifier(a.key, s.number), build: builds.find((x) => x.issueId === s.id) ?? null })),
+    origin: originView(await originOf({ issueId })), // where it came from, word for word, as its agents are given it (origins.ts)
   }
 }
 

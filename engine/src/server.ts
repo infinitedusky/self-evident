@@ -81,6 +81,7 @@ import { chooseFolder } from './folders.js'
 import { deleteIssue } from './delete-issue.js'
 import { addAsset, listAssets, removeAsset, updateAsset } from './assets.js'
 import { importTickets, linearTickets, type Scope } from './linear-import.js'
+import { originOf, originView } from './origins.js'
 import { accountStatus, cleanAccount } from './account.js'
 import { pullSkills, removeSkillSource, skillSources } from './skill-sources.js'
 import { outsidePr, pr as prRows } from './db/schema.js'
@@ -593,7 +594,7 @@ export function buildApp(bus: EventBus) {
   })
 
   // The inbox: capture an idea in a moment; make it a project when its time comes.
-  api.get('/ideas/:id', async (c) => { const i = await getIdea(c.req.param('id')); return i ? c.json(i) : c.json({ error: 'no such idea' }, 404) }) // one idea: what a tab on it is named after
+  api.get('/ideas/:id', async (c) => { const i = await getIdea(c.req.param('id')); return i ? c.json({ ...i, origin: originView(await originOf({ ideaId: i.id })) }) : c.json({ error: 'no such idea' }, 404) }) // one idea: what a tab on it is named after
   api.get('/ideas', async (c) => { const a = c.req.query('app'); return a ? c.json(await listIdeas(a)) : c.json({ error: 'app is required: one app at a time' }, 400) })
   api.post('/ideas', async (c) => {
     try { return c.json(await createIdea({ ...(await c.req.json()), actor: 'user' }), 201) } catch (err) { return planError(c, err) }

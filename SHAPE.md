@@ -581,6 +581,11 @@ Details and sources in `research/`.
   a link back and the branch name Linear gives it. Converted, the idea's task names the ticket. A project's Add tasks,
   where it is decided already, brings a ticket in as a task. Read only for now: nothing is written to Linear, and
   state here is its own.
+- **Where work came from is kept word for word, and every agent reads it** (Sandy, 2026-11-20: "I don't want the
+  agent building like off a summary … this should apply to all tickets, no matter where they come from"; LOG.md,
+  "The ticket, word for word, for every agent"). A ticket from any tracker is kept as an origin: its text, comments,
+  links and images, never edited here. The idea, project, task and sub-tasks made from it all have it, and every
+  agent on them is given it whole beside its brief, told to say where the brief leaves part of it out.
 - **tkt reads from Self Evident; a switch lets it run on its own against Linear** (Sandy, 2026-11-10: "we want Self
   Evident to be pulling from Linear and we want TKT to be pulling from Self Evident. But I want to test TKT on its
   own"). The arrangement stays as in "tkt is the runner; Self Evident is the tracker and the window": tkt's skills read

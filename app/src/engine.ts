@@ -147,7 +147,16 @@ export interface TaskPr { number: number | null; url: string | null; status: str
 export interface IssueRow { id: string; identifier: string; number: number; title: string; description: string | null; state: IssueState; sortOrder: number; priority: number; project: { id: string; name: string; status: string; solo?: boolean } | null; builds: Record<string, number>; planning: string | null; pr?: TaskPr | null }
 /** What was written on a ticket as it moved: one comment per heading (the plan, the handoff, the review), the latest write of each. */
 export interface IssueComment { id: string; issueId: string; heading: string; body: string; author: string; createdAt: string; updatedAt: string }
+/** Where a piece of work came from, word for word (the engine's origins.ts): what every agent on it is given. */
+export interface OriginView {
+  id: string; source: string; sourceName: string; ref: string; url: string | null; title: string; body: string | null
+  comments: { author: string | null; at: string; body: string }[]; links: { title: string; url: string }[]
+  /** Images and uploads in its text: kept on this computer for the agents, or not, with why. */
+  files: { url: string; kept: boolean; note: string | null }[]; fetchedAt: string
+}
 export interface IssueDetail extends Issue {
+  /** Where it came from, word for word, when it came from outside (its own, its project's or its idea's). */
+  origin?: OriginView | null
   /** A built task not yet closed: whether a person can close it now, and if not, what it waits on, in their words. */
   close?: { can: boolean; waits: string[] }
   pr?: TaskPr | null // the pull request its work is in (a sub-task shows its task's)
@@ -449,7 +458,7 @@ export const engine = {
   prototypeTalk: (id: string) => call<{ id: string }>('POST', `/prototypes/${id}/talk`),
   now: (appId?: string) => call<Now>('GET', `/now${appId ? `?app=${appId}` : ''}`),
   ideas: (appId?: string) => call<IdeaRow[]>('GET', `/ideas${appId ? `?app=${appId}` : ''}`),
-  idea: (id: string) => call<IdeaRow>('GET', `/ideas/${id}`),
+  idea: (id: string) => call<IdeaRow & { origin?: OriginView | null }>('GET', `/ideas/${id}`),
   createIdea: (body: { appId: string; title: string; body?: string }) => call<IdeaRow>('POST', '/ideas', body),
   planIdea: (id: string) => call<{ project: { id: string } }>('POST', `/ideas/${id}/project`, {}),
   convertIdea: (id: string, body: { as: 'task' | 'project'; title?: string; projectId?: string; why?: string }) => call<{ as: 'task' | 'project'; issueId?: string; projectId?: string }>('POST', `/ideas/${id}/convert`, body),

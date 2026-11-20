@@ -5566,3 +5566,21 @@ A ticket brought in became a task straight away, which decided for the person th
   task made from the idea is left alone (its title may be trimmed to its part of a project); the ticket is listed
   as that task.
 - The idea's source allows `linear` (migration 0044); tasks already made from tickets stay as they are.
+
+## The ticket, word for word, for every agent (Sandy, 2026-11-20: "I don't want the agent building like off a summary or a brief and not having access to the actual ticket … this should apply to all tickets, no matter where they come from")
+
+What a ticket said reached the agents only as a task's description, which the planner and the builders never read,
+and which the idea's agent is told to trim when it splits a project. Now:
+
+- **An origin** (`origin` table, origins.ts): a ticket as its tracker has it: title, text, comments oldest first,
+  what it links to, and the images in its text, fetched with the tracker's key and kept on this computer
+  (`~/.self-evident/origins/<app>/<ticket>/`). Never edited here; brought up to date each time the ticket is
+  brought in, whatever became of it. Linear is the first source; another tracker adds a source and calls
+  `keepOrigin` and `keepFiles` the same way.
+- **Ideas, projects and tasks point at it** (`origin_id`). A task with none of its own has its parent's, its
+  project's or its idea's (`originOf`): every task split from one ticket, and every sub-task, has the whole ticket.
+- **Every agent is given it whole** (`originPrompt`): the idea's and the task's own agents, the steps' and the
+  prototype's agents, the planner, and every builder. They are told to follow what they were given (the brief, the
+  sub-task), and where that leaves out or differs from the ticket, to say so, naming the part: never quietly drop it.
+- **Shown** on the idea's and the task's overview as "Where this came from", folded; an image that could not be
+  fetched is said in red, since the agents can't see it.

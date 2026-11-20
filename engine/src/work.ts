@@ -414,14 +414,14 @@ async function convertIdeaTx(ideaId: string, as: 'task' | 'project', opts: { tit
     let made: { id: string; name: string } | null = null
     if (as === 'project') {
       const id = newId('project')
-      await tx.insert(project).values({ id, appId: a.id, ideaId: i.id, name: title, content: i.body ?? null, integrationBranch: `project/${id}` })
+      await tx.insert(project).values({ id, appId: a.id, ideaId: i.id, originId: i.originId, name: title, content: i.body ?? null, integrationBranch: `project/${id}` })
       await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: id, actor, type: 'project.created', payload: { name: title, issues: 1, subIssues: 0, fromIdea: i.number } })
       projectId = id; made = { id, name: title }
     } else if (projectId) {
       const [p] = await tx.select().from(project).where(eq(project.id, projectId))
       if (!p || p.appId !== a.id) throw new PlanError(`no project ${projectId} in this app`)
     }
-    const [row] = await insertIssues(tx, a.id, [{ kind: 'code', projectId, ideaId: i.id, title, description: i.body ?? undefined, brief: draft?.body ?? undefined, delegate: 'planner', source: 'idea', ...(i.source === 'linear' ? { sourceRef: i.sourceRef as Record<string, unknown> } : {}) }], actor) // an idea from a Linear ticket: the task names the ticket (its branch, the reports)
+    const [row] = await insertIssues(tx, a.id, [{ kind: 'code', projectId, ideaId: i.id, title, description: i.body ?? undefined, brief: draft?.body ?? undefined, delegate: 'planner', source: 'idea', originId: i.originId, ...(i.source === 'linear' ? { sourceRef: i.sourceRef as Record<string, unknown> } : {}) }], actor) // an idea from a Linear ticket: the task names the ticket (its branch, the reports)
     const target = { issueId: row.id }
     // The idea's own agent goes with it: one conversation and one worktree from the first sketch on (talk.ts, ideaTalk).
     let moved: { talkId: string; task: string; project?: string } | null = null
