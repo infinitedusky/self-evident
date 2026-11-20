@@ -34,6 +34,7 @@ export const linearTickets: LinearTicket[] = [
   linearTicket(41, 'Saved cards at checkout'),
   linearTicket(42, 'Address autocomplete', { state: { name: 'In Progress', type: 'started' }, priority: 1 }),
   linearTicket(38, 'Order confirmation email', { task: { id: 'iss_sample20', identifier: 'SS-20' } }),
+  linearTicket(39, 'Wishlist sharing', { idea: { id: 'idea_sample3', number: 3 } }),
   linearTicket(44, 'Gift wrap option', { assignee: null, mine: false, project: null, state: { name: 'Backlog', type: 'backlog' }, priority: 0 }),
   linearTicket(45, 'Faster search results', { assignee: 'Made-up Teammate', mine: false, project: 'Search', priority: 3 }),
 ]

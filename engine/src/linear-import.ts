@@ -1,19 +1,26 @@
 /**
- * Tasks from Linear tickets (Sandy, 2026-11-12: "we should be able to create plans and tasks from linear"). The other
+ * Linear tickets brought in (Sandy, 2026-11-12: "we should be able to create plans and tasks from linear"). The other
  * direction from the Linear integration's declared actions: here Self Evident reads. A team's open tickets are listed
- * for an app, the person ticks the ones to bring in, and each becomes a task: its title, its description, its
- * priority, and where it came from (`source: 'linear'`, `sourceRef.linear`: the ticket's id, identifier, URL, the
- * branch name Linear gives it, and its Linear project).
+ * for an app, the person ticks the ones to bring in, and each becomes an idea (Sandy, 2026-11-20: "bring them in as
+ * ideas and then decide whether or not they should be projects or tasks … it might be that they should be a project
+ * with tasks. For one ticket"): its title, its description, and where it came from (`source: 'linear'`,
+ * `sourceRef.linear`: the ticket's id, identifier, URL, the branch name Linear gives it, and its Linear project).
+ * Converting the idea (work.ts) hands `sourceRef.linear` to the task it makes, so the branch and the reports still
+ * name the ticket.
  *
- * Read only: nothing is written to Linear. Bringing a ticket in again updates the task it made (title, description,
- * priority) and never makes a second one; the task's own state is left as it stands here.
+ * A project's "Add tasks" has decided already: there (`as: 'task'`) a ticket becomes a task, with its priority.
+ *
+ * Read only: nothing is written to Linear. Bringing a ticket in again updates what it already is here (title,
+ * description) and never makes a second one; its state here is left as it stands.
  *
  * The team and the key are the app's Linear integration (Integrations › Linear: team key, key variable).
  */
 import { LinearClient } from '@linear/sdk'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, issue, workspace, type IssueState } from './db/schema.js'
+import { app, idea, issue, workspace, type IssueState } from './db/schema.js'
+import { appendEvent } from './events.js'
+import { newId } from './ids.js'
 import { effectiveIntegrations, type Values } from './integrations.js'
 import { identifier, insertIssues, PlanError } from './issues.js'
 
@@ -66,20 +73,25 @@ async function connection(appId: string, env: Record<string, string | undefined>
 
 const said = (e: unknown) => new PlanError(`Linear refused: ${String((e as Error)?.message ?? e).split('\n')[0].slice(0, 300)}`)
 
-/** The tasks of this app that came from Linear, by the ticket's id. */
+const ticketId = (ref: unknown) => (ref as { linear?: { id?: string } } | null)?.linear?.id ?? ''
+/** What this app already has from Linear, by the ticket's id: the tasks that name a ticket (made from one, or from an idea that was one), and the ideas. */
 async function broughtIn(appId: string) {
-  const rows = await db.select().from(issue).where(and(eq(issue.appId, appId), eq(issue.source, 'linear')))
-  return new Map(rows.map((r) => [(r.sourceRef as { linear?: { id?: string } } | null)?.linear?.id ?? '', r]))
+  const tasks = await db.select().from(issue).where(and(eq(issue.appId, appId), sql`${issue.sourceRef}->'linear'->>'id' is not null`))
+  const ideas = await db.select().from(idea).where(and(eq(idea.appId, appId), eq(idea.source, 'linear')))
+  return { tasks: new Map(tasks.map((r) => [ticketId(r.sourceRef), r])), ideas: new Map(ideas.map((r) => [ticketId(r.sourceRef), r])) }
 }
 
-/** The team's open tickets, each with the task it already is here, if any. */
+/** The team's open tickets, each with what it already is here, if anything: the task it became, or the idea it is. */
 export async function linearTickets(appId: string, scope: Scope = 'mine', env: Record<string, string | undefined> = process.env, fetch: FetchTickets = fetchTickets) {
   const { team, key } = await connection(appId, env)
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   let tickets: LinearTicket[]
   try { tickets = await fetch(key, team, { scope }) } catch (e) { throw said(e) }
   const have = await broughtIn(appId)
-  return { team, tickets: tickets.map(({ description: _, ...t }) => { const task = have.get(t.id); return { ...t, task: task ? { id: task.id, identifier: identifier(a.key, task.number) } : null } }) }
+  return { team, tickets: tickets.map(({ description: _, ...t }) => {
+    const task = have.tasks.get(t.id), was = have.ideas.get(t.id)
+    return { ...t, task: task ? { id: task.id, identifier: identifier(a.key, task.number) } : null, idea: was ? { id: was.id, number: was.number } : null }
+  }) }
 }
 
 /** Linear's state types as ours: a ticket someone has started is still to do here until work starts here. */
@@ -88,26 +100,52 @@ const STATE: Record<string, IssueState> = { triage: 'triage', backlog: 'backlog'
 /** What a person reads on the task: the ticket's own words, and where they came from. */
 const describe = (t: LinearTicket) => [`From Linear ${t.identifier}: ${t.url}`, t.description?.trim()].filter(Boolean).join('\n\n')
 
-/** Each ticket named becomes a task, or updates the one it already is. Returns both lists. */
-export async function importTickets(appId: string, identifiers: string[], actor = 'user', env: Record<string, string | undefined> = process.env, fetch: FetchTickets = fetchTickets) {
+export type ImportAs = 'idea' | 'task'
+export interface Brought { kind: ImportAs; id: string; identifier: string; title: string; linear: string }
+
+/**
+ * Each ticket named becomes an idea (or, `as: 'task'`, a task), or updates what it already is here: a task it became
+ * is updated before the idea it was. Returns both lists, in the order asked, and the tickets not found.
+ */
+export async function importTickets(appId: string, identifiers: string[], actor = 'user', env: Record<string, string | undefined> = process.env, fetch: FetchTickets = fetchTickets, as: ImportAs = 'idea') {
   const wanted = [...new Set(identifiers.map((i) => i.trim().toUpperCase()).filter(Boolean))]
   if (!wanted.length) throw new PlanError('name at least one ticket')
   const { team, key } = await connection(appId, env)
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   let tickets: LinearTicket[]
   try { tickets = (await fetch(key, team, { identifiers: wanted })).filter((t) => wanted.includes(t.identifier)) } catch (e) { throw said(e) }
+  tickets.sort((x, y) => wanted.indexOf(x.identifier) - wanted.indexOf(y.identifier)) // in the order asked
   const missing = wanted.filter((w) => !tickets.some((t) => t.identifier === w))
   const have = await broughtIn(appId)
   const ref = (t: LinearTicket) => ({ linear: { id: t.id, identifier: t.identifier, url: t.url, branchName: t.branchName, project: t.project } })
+  const task = (r: typeof issue.$inferSelect): Brought => ({ kind: 'task', id: r.id, identifier: identifier(a.key, r.number), title: r.title, linear: (r.sourceRef as { linear: { identifier: string } }).linear.identifier })
+  const anIdea = (r: typeof idea.$inferSelect): Brought => ({ kind: 'idea', id: r.id, identifier: `#${r.number}`, title: r.title, linear: (r.sourceRef as { linear: { identifier: string } }).linear.identifier })
   return db.transaction(async (tx) => {
-    const fresh = tickets.filter((t) => !have.has(t.id)).sort((x, y) => wanted.indexOf(x.identifier) - wanted.indexOf(y.identifier)) // in the order asked
-    const made = await insertIssues(tx, appId, fresh.map((t) => ({ title: t.title, description: describe(t), priority: t.priority, state: STATE[t.state.type] === 'canceled' ? 'backlog' : STATE[t.state.type] ?? 'todo', source: 'linear', sourceRef: ref(t) })), actor)
-    const updated: typeof made = []
-    for (const t of tickets.filter((x) => have.has(x.id))) {
-      const [row] = await tx.update(issue).set({ title: t.title.slice(0, 500), description: describe(t), priority: t.priority, sourceRef: ref(t), updatedAt: sql`now()` }).where(eq(issue.id, have.get(t.id)!.id)).returning()
-      updated.push(row)
+    const made: Brought[] = [], updated: Brought[] = []
+    // Already here: a task made from it, or the idea it is, has its words brought up to date. A task made from that
+    // idea is the person's own by now (its title may have been trimmed to its part of a project): it is left alone.
+    const kept = new Set<string>()
+    for (const t of tickets) {
+      const was = have.tasks.get(t.id), thought = have.ideas.get(t.id)
+      if (was?.source === 'linear') {
+        const [row] = await tx.update(issue).set({ title: t.title.slice(0, 500), description: describe(t), priority: t.priority, sourceRef: ref(t), updatedAt: sql`now()` }).where(eq(issue.id, was.id)).returning()
+        updated.push(task(row)); kept.add(t.id)
+      } else if (was) kept.add(t.id)
+      else if (thought && as === 'idea') {
+        const [row] = await tx.update(idea).set({ title: t.title.slice(0, 500), body: describe(t), sourceRef: ref(t), updatedAt: new Date() }).where(eq(idea.id, thought.id)).returning()
+        updated.push(anIdea(row)); kept.add(t.id)
+      }
     }
-    const named = (rows: typeof made) => rows.map((r) => ({ id: r.id, identifier: identifier(a.key, r.number), title: r.title, linear: (r.sourceRef as { linear: { identifier: string } }).linear.identifier }))
-    return { made: named(made), updated: named(updated), missing }
+    const fresh = tickets.filter((t) => !kept.has(t.id))
+    if (as === 'task') {
+      const rows = await insertIssues(tx, appId, fresh.map((t) => ({ title: t.title, description: describe(t), priority: t.priority, state: STATE[t.state.type] === 'canceled' ? 'backlog' : STATE[t.state.type] ?? 'todo', source: 'linear', sourceRef: ref(t) })), actor)
+      made.push(...rows.map(task))
+    } else if (fresh.length) {
+      const [{ max }] = await tx.select({ max: sql<number>`coalesce(max(${idea.number}), 0)` }).from(idea).where(eq(idea.appId, appId))
+      const rows = await tx.insert(idea).values(fresh.map((t, n) => ({ id: newId('idea'), appId, number: Number(max) + 1 + n, title: t.title.slice(0, 500), body: describe(t), source: 'linear', sourceRef: ref(t), lane: 'inbox' }))).returning()
+      for (const r of rows) await appendEvent(tx, { workspaceId: a.workspaceId, appId, ideaId: r.id, actor, type: 'idea.created', payload: { number: r.number, title: r.title, linear: (r.sourceRef as { linear: { identifier: string } }).linear.identifier } })
+      made.push(...rows.sort((x, y) => x.number - y.number).map(anIdea))
+    }
+    return { made, updated, missing }
   })
 }

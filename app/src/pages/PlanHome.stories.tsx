@@ -22,15 +22,11 @@ export const NewTaskRefused: Story = {
     await canvas.findByText(/starts every task as an idea/)
   },
 }
-/** An app whose Linear team is set (made up: SHOP): From Linear, beside New task, opens the team's tickets to bring in. */
+/** An app whose Linear team is set (made up: SHOP): From Linear, beside New task, goes to the Ideas page, where tickets come in as ideas. */
 export const FromLinear: Story = {
   args: { appId: sampleApp.id, linearTeam: 'SHOP' },
-  play: async ({ canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'From Linear' }))
-    await canvas.findByText('Saved cards at checkout (sample)')
-    await userEvent.click(canvas.getByRole('button', { name: 'From Linear' })) // pressed again: it closes
-    await expect(canvas.queryByText('Saved cards at checkout (sample)')).toBeNull()
-    await userEvent.click(canvas.getByRole('button', { name: 'From Linear' }))
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('link', { name: 'From Linear' })).toHaveAttribute('href', '/ideas')
   },
 }
 /** The app's workflow makes everything start as an idea: no New task or New project, only From an idea. */

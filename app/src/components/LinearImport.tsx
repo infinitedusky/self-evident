@@ -1,8 +1,9 @@
 /**
- * Tasks from Linear tickets (LOG.md, "Tasks from Linear tickets"): on the Tasks page of an app whose Linear team is
- * set. Closed until asked for, so Linear is only read when the person wants it. Open: the team's open tickets (the
- * person's own, unassigned, or everyone's), a tick for each one to bring in, and the task a ticket already is.
- * Reads Linear; nothing is written there.
+ * Linear tickets brought in (LOG.md, "Linear tickets come in as ideas"): on the Ideas page of an app whose Linear team
+ * is set, where each ticket becomes an idea, and whether it is a task or a project (one with several tasks) is decided
+ * there. Closed until asked for, so Linear is only read when the person wants it. Open: the team's open tickets (the
+ * person's own, unassigned, or everyone's), a tick for each one to bring in, and the idea or task a ticket already
+ * is. Reads Linear; nothing is written there.
  */
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
@@ -16,10 +17,12 @@ const said = (e: any) => { const m = String(e?.message ?? e); try { return JSON.
 
 /**
  * `startOpen`: asked for by a button (Plan's From Linear), so it opens on the tickets straight away.
- * `embedded`: inside another panel (a project's Add tasks): no panel or heading of its own, always open, and the
- * button says `verb`. `onImported` is given what was made, so the caller can put the new tasks where they belong.
+ * `embedded`: inside another panel (a project's Add tasks, where it is decided already): no panel or heading of its
+ * own, always open, the button says `verb`, and a ticket becomes a task. `onImported` is given what was made, so the
+ * caller can put the new tasks where they belong.
  */
 export function LinearImport({ appId, team, onImported, startOpen = false, embedded = false, verb = 'Bring in' }: { appId: string; team: string; onImported: (r: LinearImported) => unknown; startOpen?: boolean; embedded?: boolean; verb?: string }) {
+  const as = embedded ? 'task' : 'idea'
   const [open, setOpen] = useState(startOpen || embedded)
   const [scope, setScope] = useState<LinearScope>('mine')
   const [tickets, setTickets] = useState<LinearTicket[] | null>(null)
@@ -34,9 +37,9 @@ export function LinearImport({ appId, team, onImported, startOpen = false, embed
   const shown = (tickets ?? []).filter((t) => !words || `${t.identifier} ${t.title} ${t.project ?? ''} ${t.assignee ?? ''}`.toLowerCase().includes(words))
   const bring = async () => {
     setBusy(true); setProblem(null)
-    try { const r = await engine.importLinear(appId, picked); await onImported(r); setDone(r); setPicked([]); load() } catch (e) { setProblem(said(e)) } finally { setBusy(false) }
+    try { const r = await engine.importLinear(appId, picked, as); await onImported(r); setDone(r); setPicked([]); load() } catch (e) { setProblem(said(e)) } finally { setBusy(false) }
   }
-  const list = (rows: LinearImported['made']) => rows.map((r) => `${r.identifier} (${r.linear})`).join(', ')
+  const list = (rows: LinearImported['made']) => rows.map((r) => `${r.kind === 'idea' ? 'idea ' : ''}${r.identifier} (${r.linear})`).join(', ')
   const Wrap = embedded ? 'div' : 'section'
   return (
     <Wrap className={embedded ? undefined : 'panel'} data-component="LinearImport">
@@ -44,7 +47,7 @@ export function LinearImport({ appId, team, onImported, startOpen = false, embed
         ? <p className="muted" style={{ margin: '12px 0 0', fontSize: 14 }}>Open tickets of <span className="mono">{team}</span>. A ticked one becomes a task in this project, with its words and a link back. Linear is read, never written to.</p>
         : <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
         <h2 style={{ margin: 0 }}>From Linear <span className="mono faint" style={{ fontWeight: 400 }}>{team}</span></h2>
-        <span className="muted" style={{ flex: '1 1 300px', fontSize: 14 }}>A ticket becomes a task here, with its words and a link back. Linear is read, never written to.</span>
+        <span className="muted" style={{ flex: '1 1 300px', fontSize: 14 }}>A ticket becomes an idea here, with its words and a link back; on the idea, decide whether it is a task or a project. Linear is read, never written to.</span>
         <button type="button" className="btn quiet" onClick={() => setOpen(!open)}>{open ? 'Close' : 'Bring in tickets…'}</button>
       </div>}
       {done && <p className="settings-note" style={{ marginTop: 10 }}><Badge tone="ok">Brought in</Badge><span>
@@ -63,7 +66,7 @@ export function LinearImport({ appId, team, onImported, startOpen = false, embed
         {shown.length > 0 && <ul className="list">
           {shown.map((t) => (
             <li key={t.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 10, alignItems: 'center' }}>
-              {t.task
+              {t.task || (as === 'idea' && t.idea)
                 ? <span style={{ width: 16 }} />
                 : <input type="checkbox" aria-label={`${t.identifier}: ${t.title}`} checked={picked.includes(t.identifier)} onChange={(e) => setPicked(e.target.checked ? [...picked, t.identifier] : picked.filter((p) => p !== t.identifier))} />}
               <div>
@@ -71,7 +74,9 @@ export function LinearImport({ appId, team, onImported, startOpen = false, embed
                 <div className="faint" style={{ fontSize: 13 }}>{[t.project, t.assignee ?? 'unassigned', PRIORITY[t.priority]].filter(Boolean).join(' · ')}</div>
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                {t.task && <span className="faint" style={{ fontSize: 13 }}>is <Link to={`/tasks/${t.task.id}`}>{t.task.identifier}</Link></span>}
+                {t.task
+                  ? <span className="faint" style={{ fontSize: 13 }}>is <Link to={`/tasks/${t.task.id}`}>{t.task.identifier}</Link></span>
+                  : t.idea && <span className="faint" style={{ fontSize: 13 }}>is <Link to={`/ideas/${t.idea.id}`}>idea #{t.idea.number}</Link></span>}
                 <Badge tone={t.state.type === 'started' ? 'accent' : 'neutral'}>{t.state.name}</Badge>
               </div>
             </li>

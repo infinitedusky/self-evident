@@ -421,7 +421,7 @@ async function convertIdeaTx(ideaId: string, as: 'task' | 'project', opts: { tit
       const [p] = await tx.select().from(project).where(eq(project.id, projectId))
       if (!p || p.appId !== a.id) throw new PlanError(`no project ${projectId} in this app`)
     }
-    const [row] = await insertIssues(tx, a.id, [{ kind: 'code', projectId, ideaId: i.id, title, description: i.body ?? undefined, brief: draft?.body ?? undefined, delegate: 'planner', source: 'idea' }], actor)
+    const [row] = await insertIssues(tx, a.id, [{ kind: 'code', projectId, ideaId: i.id, title, description: i.body ?? undefined, brief: draft?.body ?? undefined, delegate: 'planner', source: 'idea', ...(i.source === 'linear' ? { sourceRef: i.sourceRef as Record<string, unknown> } : {}) }], actor) // an idea from a Linear ticket: the task names the ticket (its branch, the reports)
     const target = { issueId: row.id }
     // The idea's own agent goes with it: one conversation and one worktree from the first sketch on (talk.ts, ideaTalk).
     let moved: { talkId: string; task: string; project?: string } | null = null

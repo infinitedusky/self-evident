@@ -189,9 +189,13 @@ export interface Asset { id: string; appId: string; projectId: string | null; na
 export interface LinearTicket {
   id: string; identifier: string; title: string; url: string; branchName: string | null; priority: number
   state: { name: string; type: string }; assignee: string | null; mine: boolean; project: string | null; task: { id: string; identifier: string } | null
+  /** The idea it was brought in as, when it has not become a task. */
+  idea?: { id: string; number: number } | null
 }
 export type LinearScope = 'mine' | 'unassigned' | 'all'
-export interface LinearImported { made: { id: string; identifier: string; title: string; linear: string }[]; updated: { id: string; identifier: string; title: string; linear: string }[]; missing: string[] }
+/** What a ticket was brought in as: an idea (`#12`) or, from a project's Add tasks, a task (`SS-50`). */
+export interface LinearBrought { kind: 'idea' | 'task'; id: string; identifier: string; title: string; linear: string }
+export interface LinearImported { made: LinearBrought[]; updated: LinearBrought[]; missing: string[] }
 /** A folder on the engine's computer and the git repositories in it (itself, or the ones directly inside); `path` null: the folder dialog was closed. */
 export interface FoundRepo { name: string; path: string; fullName: string | null; branch: string | null }
 export interface Folder { path: string | null; repos: FoundRepo[] }
@@ -537,7 +541,8 @@ export const engine = {
   createRepo: (body: { appId: string; fullName: string; localPath?: string; baseBranch?: string }) => call<Repo & { note: string | null }>('POST', '/repos', body),
   /** The open tickets of the app's Linear team (Integrations › Linear). Reads Linear; nothing is written there. */
   linearTickets: (appId: string, scope: LinearScope) => call<{ team: string; tickets: LinearTicket[] }>('GET', `/apps/${appId}/linear/tickets?scope=${scope}`),
-  importLinear: (appId: string, identifiers: string[]) => call<LinearImported>('POST', `/apps/${appId}/linear/import`, { identifiers }),
+  /** The tickets named become ideas, or (`as: 'task'`, a project's Add tasks) tasks. */
+  importLinear: (appId: string, identifiers: string[], as: 'idea' | 'task' = 'idea') => call<LinearImported>('POST', `/apps/${appId}/linear/import`, { identifiers, as }),
   /** The app's assets, or with a project that project's own. Every conversation there is told them. */
   assets: (appId: string, projectId?: string) => call<Asset[]>('GET', `/apps/${appId}/assets${projectId ? `?project=${projectId}` : ''}`),
   addAsset: (body: { appId: string; projectId?: string; name: string; location: string; note?: string }) => call<Asset>('POST', '/assets', body),

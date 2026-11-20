@@ -5549,3 +5549,20 @@ a prototype is started with the app's plain command (a prototype has no script o
 vendor response into main so the same person can be scanned on both without paying twice; a main run with the smoke
 set-up's variables can reach the real vendor, as the build can.
 
+
+## Linear tickets come in as ideas (Sandy, 2026-11-20: "I think what we want to do is bring them in as ideas and then decide whether or not they should be projects or tasks. Because it might be that they should be a project with tasks. For one ticket")
+
+A ticket brought in became a task straight away, which decided for the person that it was one thing to build. Now:
+
+- **A ticket becomes an idea**, in the inbox, with its words and the link back (`source: 'linear'`, the ticket in
+  `sourceRef.linear`). "As a task" or "As a project" is pressed on the idea, as for any other; as a project, its
+  agent decides whether the ticket is one task or several (work.ts, `splitPrompt`).
+- **The task an idea from Linear becomes names the ticket**: `sourceRef.linear` goes with it, so the branch
+  (`{ticket}`), the reports and the runner still say SHOP-12. Only that first task carries it; tasks its agent adds to
+  the project are their own.
+- **Where:** the panel moved from the Tasks page to the Ideas page; Plan's From Linear goes there. A project's
+  Add tasks › From Linear has decided already, so there a ticket still becomes a task in that project.
+- **Bringing one in again** updates the idea's words, or the task's when it was made from the ticket directly. A
+  task made from the idea is left alone (its title may be trimmed to its part of a project); the ticket is listed
+  as that task.
+- The idea's source allows `linear` (migration 0044); tasks already made from tickets stay as they are.

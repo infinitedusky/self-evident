@@ -118,7 +118,7 @@ export const idea = pgTable('idea', { // [IF] the unit of work that outlives the
   decision: text('decision'), decidedAt: at('decided_at'),
   createdBy: text('created_by').references(() => user.id), createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [uniqueIndex('idea_app_number').on(t.appId, t.number), uniqueIndex('idea_id_app').on(t.id, t.appId),
-  inList('idea_source', t.source, ['person', 'agent', 'telemetry']), inList('idea_lane', t.lane, IDEA_LANES),
+  inList('idea_source', t.source, ['person', 'agent', 'telemetry', 'linear']), inList('idea_lane', t.lane, IDEA_LANES),
   check('idea_decision', sql`${t.decision} is null or ${t.decision} in ('yes', 'no', 'not_yet')`)])
 
 export const evidence = pgTable('evidence', { // [IF] append-only telemetry results
