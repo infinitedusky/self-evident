@@ -5648,3 +5648,27 @@ Not done: findings a scanner keeps on its own site and only counts in its commen
 links to them); GitHub's own rendering (mentions, issue links, code at a commit) is not copied; a check's
 annotations are not shown.
 
+
+## A task has a team ticket and a name for the team; an app can require the ticket (from a client app's first pull request, passed on by Sandy, 2026-11-20: "Team tickets on tasks, and PRs that read like the team's")
+
+A task that linked the team's ticket in its description had none recorded: only a task imported from the tracker
+did. So {ticket} fell back to our id, and the branch and the pull request's title carried it; their CI rejects a
+title whose bracket is not one of their keys. And {title} was our working title ("…, third build: …").
+
+- **A task's team ticket** (`engine/src/ticket.ts`) is the first of: what was set on the task (`issue.team_ticket`,
+  migration 0045); the ticket it was imported from; a link to a ticket in its description or brief; the same in the
+  idea it came from. Only a link is read, never a bare "ENT-322" in prose, which may be another ticket.
+- **It is set** on the task's head (a badge that says where the ticket was read from, and opens to edit), by the
+  agent (`update_task`: ticket), and by `PUT /issues/:id/team`.
+- **A name for the team** (`issue.team_title`; `update_task`: teamTitle): the task as the team would say it. It is
+  the {title} of the pull request's title and the branch's name; without one it is our title. A title's description
+  can also come from the first commit, as {type} and {scope} do: `{subject}` in the template.
+- **An app can require a team ticket** (`setup.ticket_required`; Settings › Landing; `set_pr_rules`). Then our id is
+  never used in its place: a task with none is held by the scheduler before its branch is first cut (a branch
+  cannot be renamed once its pull request is open), its pull request is neither submitted nor opened by itself, and
+  each says what is missing. Setting the ticket lets it carry on. A build held while ready to start now shows under
+  what needs you, as a queued one did.
+
+Not done: an app that requires a ticket and a task already building under our id (it is left as it is; the pull
+request is still held); checking that the key belongs to the team's tracker; a task's ticket shown in lists.
+

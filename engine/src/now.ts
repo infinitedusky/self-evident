@@ -104,7 +104,7 @@ export async function now(appId?: string) {
       ...tag(p), status: p.status, integrationBranch: p.integrationBranch, backlogOpen: backlogOf(p).length,
       builds: { total: mine.length, done: mine.filter((x) => status(x.id) === 'done').length, failed: mine.filter((x) => status(x.id) === 'failed').length },
       live: mine.filter((x) => LIVE.includes(status(x.id))).map((x) => ({ id: x.id, identifier: name(x), title: x.title, status: status(x.id), step: currentStep(x.id) })),
-      held: mine.filter((x) => status(x.id) === 'queued' && b(x.id)?.heldReason).map((x) => ({ id: x.id, identifier: name(x), title: x.title, reason: b(x.id)!.heldReason })),
+      held: mine.filter((x) => ['queued', 'ready'].includes(status(x.id)) && b(x.id)?.heldReason).map((x) => ({ id: x.id, identifier: name(x), title: x.title, reason: b(x.id)!.heldReason })),
       pr: thePr ? { number: thePr.number, url: thePr.url, status: thePr.status } : null,
     }
   })
@@ -116,7 +116,7 @@ export async function now(appId?: string) {
     if (!mine.length) return null
     const asked = questions.filter((q) => q.issueId === t.id || mine.some((x) => x.id === q.issueId))
     const failed = mine.filter((x) => status(x.id) === 'failed').map((x) => ({ id: x.id, identifier: name(x), title: x.title, error: lastRun(x.id)?.error ?? b(x.id)?.heldReason ?? null }))
-    const held = mine.filter((x) => status(x.id) === 'queued' && b(x.id)?.heldReason).map((x) => ({ id: x.id, identifier: name(x), title: x.title, reason: b(x.id)!.heldReason! }))
+    const held = mine.filter((x) => ['queued', 'ready'].includes(status(x.id)) && b(x.id)?.heldReason).map((x) => ({ id: x.id, identifier: name(x), title: x.title, reason: b(x.id)!.heldReason! }))
     const done = mine.filter((x) => status(x.id) === 'done').length
     const thePr = prs.find((q) => q.issueId === t.id) ?? prs.find((q) => q.projectId === p.id && !q.issueId) ?? null
     const phase = phaseOf({ state: t.state, done, total: mine.length, projectStatus: p.status, stopped: asked.length + failed.length + held.length > 0 })

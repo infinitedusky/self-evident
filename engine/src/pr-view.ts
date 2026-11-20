@@ -19,7 +19,8 @@ import { acceptanceOf } from './acceptance.js'
 import { db } from './db/client.js'
 import { app, build, issue, pr as prTable, project } from './db/schema.js'
 import { appendEvent } from './events.js'
-import { getIssue, PlanError } from './issues.js'
+import { getIssue, identifier, PlanError } from './issues.js'
+import { needsTicket, teamTicket, ticketRequired } from './ticket.js'
 import { prAuto, prDraft } from './pr.js'
 import { smokeOwed } from './smoke.js'
 import { homeRepo } from './workbench.js'
@@ -89,6 +90,7 @@ export async function prView(issueId: string, deps: { gh?: Gh; preview: (project
   const liveNow = !!pr && pr.status !== 'closed' && pr.status !== 'merged'
   const waits: string[] = []
   if (!r?.fullName) waits.push('This app\'s repository is not on GitHub, so there is no pull request to open.')
+  if (ticketRequired(a?.setup) && !(await teamTicket(t))) waits.push(needsTicket(identifier(a.key, t.number), 'its pull request is titled by it'))
   if (!live.length) waits.push('Nothing is built yet.')
   else if (landed < live.length) waits.push(`${live.length - landed} of its ${live.length} sub-task${live.length === 1 ? '' : 's'} ${live.length - landed === 1 ? 'has' : 'have'} still to land.`)
   return {

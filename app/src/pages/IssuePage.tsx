@@ -18,6 +18,7 @@ import { Acceptance } from '../components/Acceptance'
 import { TaskBranches } from '../components/TaskBranches'
 import { MergeGuide } from '../components/MergeGuide'
 import { PrStep } from '../components/PrStep'
+import { TeamNames } from '../components/TeamNames'
 import { mark, TaskNav } from '../components/TaskNav'
 import { WorkflowChoice } from '../components/WorkflowChoice'
 import { Handover } from '../components/Handover'
@@ -99,6 +100,7 @@ export function IssuePage() {
             {i.runner === 'tkt' && <Badge tone="accent">run by tkt</Badge>}
             {i.build && <Badge tone={STATUS_TONE[i.build.status]}>build: {i.build.status.replace('_', ' ')}{i.build.attempt ? ` · attempt ${i.build.attempt}` : ''}</Badge>}
             {i.waitingOn && <Badge tone="warn">waiting on {i.waitingOn}</Badge>}
+            {task && <TeamNames issueId={i.id} ticket={i.ticket ?? null} from={i.ticketFrom ?? null} missing={i.ticketMissing} set={i.teamTicket ?? null} title={i.teamTitle ?? null} ourTitle={i.title} onSaved={() => void act(async () => {})} />}
             {i.pr?.url && <a className="badge accent" href={i.pr.url} target="_blank" rel="noreferrer">Pull request #{i.pr.number} · {i.pr.status}</a>}
           </div>
         </div>

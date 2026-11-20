@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq, inArray } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { setTeamNames } from './ticket.js'
 import { db, pool } from './db/client.js'
 import { app, build, event, issue, project, repo, run, step, workspace } from './db/schema.js'
 import type { Execute } from './executor.js'
@@ -320,6 +321,28 @@ describe.skipIf(!reachable)('runner', () => {
     expect(await files(b1)).toEqual([x])
     expect((await files(b2)).sort()).toEqual([x, y].sort()) // issue two started where issue one ended
     expect(await files(p.integrationBranch!)).toEqual([]) // the project's branch is only the starting point
+    await db.update(project).set({ status: 'superseded' }).where(eq(project.id, p.id))
+  })
+
+  it('an app that requires a team ticket holds a task with none before its branch is cut, says so, and carries on once it has one', async () => {
+    const tApp = newId('app')
+    await db.insert(app).values({ id: tApp, workspaceId: wsId, name: 'ticketed app (sample)', key: tApp.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md', pr_mode: 'issue', ticket_required: true, branch_name: 'feature/{ticket}-{title}' } })
+    await db.insert(repo).values({ id: newId('repo'), appId: tApp, fullName: '', localPath: repoPath })
+    const { project: p, issues: [t], subIssues: [x] } = await createProject({ appId: tApp, name: 'ticketed (sample)', issues: [one('Third build: brand fields (sample)', [{ key: 'x', title: 'X', files: ['tk.txt'] }])] })
+    const runner = new Runner({ execute: commits('tk'), sessionsMax: 2 })
+    await approveBriefs(tApp)
+    await runner.startProject(p.id)
+    await until(async () => !!(await db.select().from(build).where(eq(build.issueId, x.id)))[0]?.heldReason)
+    await sleep(300)
+    const held = (await db.select().from(build).where(eq(build.issueId, x.id)))[0]
+    expect(['queued', 'ready']).toContain(held.status); expect(held.heldReason).toMatch(/has no team ticket, and this app requires one: its branch is named by it/)
+    expect((await db.select().from(event).where(eq(event.issueId, x.id))).filter((e) => e.type === 'build.held')).toHaveLength(1) // said once, not on every pass
+    expect((await db.select().from(issue).where(eq(issue.id, t.id)))[0].branch).toBeNull() // nothing was named with our id
+    // The ticket and the task's name for the team are set: it carries on, and the branch carries them.
+    await setTeamNames(t.id, { ticket: 'ent-322', title: 'Brand fields from the employee scan (sample)' })
+    await runner.dispatch()
+    await until(cleaned(p.id))
+    expect((await db.select().from(issue).where(eq(issue.id, t.id)))[0].branch).toMatch(/^feature\/ENT-322-brand-fields-from-the-employee-scan/) // their ticket and the name for the team, not our id or our working title
     await db.update(project).set({ status: 'superseded' }).where(eq(project.id, p.id))
   })
 
