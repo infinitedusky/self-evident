@@ -5743,3 +5743,19 @@ files in Self Evident.
 Not done: that; the app's own main and a compared main are not looked at; it is a look at text, so an address in a
 comment is reported and one put together at run time is not; not yet seen on a real app (none was running).
 
+## A task shows only its own sketches (Sandy, 2026-11-20: "on a new task it has old sketches that are like defaults. But they are totally unrelated. I think a new task shouldn't show any old sketches")
+
+Sketches are files under `sketches/` in the repository, so the ones merged with earlier tasks ride along on every
+new branch, and a new task opened with them.
+
+- **A conversation's sketches are the ones its branch made or changed**: what differs from where the branch left
+  the app's main branch, plus what is not committed yet. The rest are counted and left out.
+- **A conversation with no worktree yet has made none**: it used to show everything on main.
+- **The earlier ones are a press away**: "Show N from earlier tasks", under the list. A new task's empty page says
+  "No sketches for this task yet."
+- The app's own Sketches page, with no conversation in front, still shows everything on main.
+- Sharing sketches shares the same list: a task's own.
+- When it cannot be told (not a git checkout, no such branch), nothing is hidden.
+
+Not done: taking old sketches out of the repository once their task is done. They stay in git either way.
+
