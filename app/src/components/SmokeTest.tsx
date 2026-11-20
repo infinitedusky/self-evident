@@ -59,9 +59,9 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   const [v, setV] = useState<SmokeView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  // Compare is the app's own running main beside the build, at the same place (main-running.ts): turned on if it is off, and not this task's to turn off.
+  // Compare is a main of the task's own beside the build, at the same place, on a port of its own (main-running.ts; Sandy, 2026-11-20: "one per task"). The task's prototype shares it; the app's own main is left as it is.
   const [comparing, setComparing] = useState(false)
-  const theMain = useMain(appId, comparing)
+  const theMain = useMain(appId, comparing, issueId)
   const mine = useTrail(), theirs = useTrail() // the build's view, and main's beside it: each goes its own way
   const { at, setAt: setMine } = mine
   const setAt = (to: string | null) => { setMine(to); if (to === null) theirs.setAt(null) }
@@ -202,8 +202,8 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
                   <a className="btn quiet small" href={src} target="_blank" rel="noreferrer">Open in a new tab</a>
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.startSmoke(issueId, false, many ? su.key : undefined))}>{behind ? 'Run the new commit' : 'Restart'}</button>}
                   {local && su.canClean && <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true, many ? su.key : undefined))}>Start clean</button>}
-                  {local && !cmp && theMain.main && theMain.main.how !== 'none' && <button className="btn quiet small" disabled={theMain.busy} title="The app's main beside it, at the same place. Turned on if it is off." onClick={() => { setComparing(true); void theMain.start().then((m) => { if (!m?.running) setComparing(false) }) }}>{theMain.busy ? 'Turning main on…' : 'Compare with main'}</button>}
-                  {local && cmp && <button className="btn quiet small" title="Main stays on for its own tab; it turns itself off when nobody has looked for a while" onClick={() => { setComparing(false); theirs.setAt(null) }}>Stop comparing</button>}
+                  {local && !cmp && theMain.main && theMain.main.how !== 'none' && <button className="btn quiet small" disabled={theMain.busy} title="Main beside it, at the same place: a copy of this task's own, on its own port. The app's main is left as it is." onClick={() => { setComparing(true); void theMain.start().then((m) => { if (!m?.running) setComparing(false) }) }}>{theMain.busy ? 'Turning main on…' : 'Compare with main'}</button>}
+                  {local && cmp && <button className="btn quiet small" title="Turns this task's main off. The app's own main is not touched." onClick={() => { setComparing(false); theirs.setAt(null); void theMain.stop() }}>Stop comparing</button>}
                   {theMain.error && <span className="bad" role="alert">{theMain.error}</span>}
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.stopSmoke(issueId, many ? su.key : undefined))}>Stop</button>}
                 </div>

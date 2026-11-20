@@ -131,6 +131,7 @@ export async function setState(tx: Tx, i: Issue, to: IssueState, opts: { actor?:
 export async function changeState(issueId: string, to: IssueState, opts: { actor?: string; reason?: string } = {}) {
   const row = await db.transaction(async (tx) => setState(tx, await getIssue(tx, issueId), to, opts))
   // Done: the task branch worked on is the one that counts; its save points and the set-aside ones go (task-branches.ts).
+  if (to === 'done' && !row.parentId) await import('./main-running.js').then((m) => m.removeMain(row.appId, issueId)).catch((err) => console.error(`main beside ${issueId}: could not be removed`, err))
   if (to === 'done' && !row.parentId) await import('./task-branches.js').then((m) => m.clearTaskBranches(issueId, opts.actor ?? 'user')).catch((err) => console.error(`task branches of ${issueId}: could not be cleared`, err))
   return row
 }
