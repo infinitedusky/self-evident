@@ -13,7 +13,8 @@ import { openEvents, API, engine, type Prototype } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { useWorkspace } from '../workspace'
 import { Nav, useTrail } from './Trail'
-import { dataChoice, keepDataChoice, useMain } from '../main-running'
+import { useCompare } from '../main-running'
+import { CompareWith, comparedSays } from './CompareMain'
 
 const DEVICES = [{ id: 'desktop', label: 'Desktop', width: null }, { id: 'tablet', label: 'Tablet', width: 768 }, { id: 'phone', label: 'Phone', width: 390 }] as const
 
@@ -106,13 +107,10 @@ function OnePrototype({ id, path, onNavigate }: { id: string; path: string; onNa
 function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Prototype; path: string; onNavigate?: (path: string) => void; onStop: () => void; onRestart: () => void; onTalk: () => void; data: React.ReactNode }) {
   // Compare is a main of the task's own, on a port of its own, beside it at the same place (Sandy, 2026-11-20: "compare with main should
   // be a new port … there should only be one per task"). The task's smoke test shares it; the app's own main is left as it is.
-  const [comparing, setComparing] = useState(false)
-  const { main, error: mainError, busy: asking, start, stop: stopMain } = useMain(p.appId, comparing, p.issueId ?? p.id)
-  const cmp = comparing && main?.running && main.url ? { url: main.url, up: main.up, sha: main.sha, log: main.log, branch: main.branch } : null
+  const compare = useCompare(p.appId, p.issueId ?? p.id)
+  const main = compare.main
+  const cmp = main?.running && main.url ? { url: main.url, up: main.up, sha: main.sha, log: main.log, branch: main.branch } : null
   const cmpBase = cmp?.url.replace(/\/$/, '') ?? ''
-  useEffect(() => { if (comparing && main && !main.running && !asking) setComparing(false) }, [comparing, main?.running, asking]) // turned off elsewhere, or by itself
-  const [mainData, setMainData] = useState(dataChoice)
-  const compare = () => { setComparing(true); void start({ mode: mainData, beside: `prototype:${p.id}` }).then((m) => { if (!m?.running) setComparing(false) }) }
   const base = p.url!.replace(/\/$/, '')
   // Each view goes its own way (Sandy, 2026-11-19: "we need the browser address and back forward and refresh for both the proto and the compared main").
   const mine = useTrail(), theirs = useTrail()
@@ -149,9 +147,7 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Pr
           {DEVICES.map((d) => <button key={d.id} className={device === d.id ? 'on' : ''} onClick={() => setDevice(d.id)} title={d.width ? `${d.width}px wide` : 'Full width'}>{d.label}</button>)}
         </div>
         {/* Main beside it (after the smoke test's own Compare with main): two views, each with a bar of its own. */}
-        {cmp ? <button className="btn quiet small" onClick={() => { setComparing(false); void stopMain() }} title="Turns this task's main off. The app's own main is not touched.">Stop comparing</button>
-          : main && main.how !== 'none' ? <>{main.how === 'local' && main.database ? <label className="compare-data" title="A copy: main gets its own database, filled as this was to start with. The same database: main's code on this one's data, so what you do here shows there, and a change main cannot read shows as main breaking."><span className="faint">main's data</span> <select aria-label="Main's data" value={mainData} disabled={asking} onChange={(e) => { const m = e.target.value as 'copy' | 'shared'; setMainData(m); keepDataChoice(m); if (comparing) void start({ mode: m, beside: `prototype:${p.id}` }) }}><option value="copy">a copy of this one's</option><option value="shared">the same database</option></select></label> : null}<button className="btn quiet small" disabled={asking} title="Main beside it, at the same place: a copy of this task's own, on its own port. The app's main is left as it is." onClick={compare}>{asking ? 'Turning main on…' : 'Compare with main'}</button></> : null}
-        {mainError && <span className="bad" role="alert">{mainError}</span>}
+        <CompareWith c={compare} beside={`prototype:${p.id}`} />
         {cmp && away && <><span className="faint">main is in a browser tab of its own</span><button className="btn quiet small" onClick={() => setAway(false)}>Put main back</button></>}
         {data}
       </div>
@@ -163,7 +159,7 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Pr
                 <iframe key={`${src}#${mine.reloads}#${p.updatedAt ?? ''}`} src={src} title={p.title} style={sized} />
               </figure>
               <figure aria-label="main">
-                <figcaption><span>{cmp!.branch}{cmp!.sha ? <> <code>{cmp!.sha.slice(0, 7)}</code></> : null}{main?.data ? <span className="faint"> · {main?.data.mode === 'shared' ? 'on the same database' : 'on a copy of the data'}</span> : null}</span>{cmp!.up && <><Nav t={theirs} home={cmpBase} src={mainSrc} of="main" /><button className="btn quiet small" onClick={detachMain} title="Open main in a browser tab of its own, and give the prototype the room">↗ Detach</button></>}</figcaption>
+                <figcaption><span>{cmp!.branch}{cmp!.sha ? <> <code>{cmp!.sha.slice(0, 7)}</code></> : null}{comparedSays(compare) ? <span className="faint"> · {comparedSays(compare)}</span> : null}</span>{cmp!.up && <><Nav t={theirs} home={cmpBase} src={mainSrc} of="main" /><button className="btn quiet small" onClick={detachMain} title="Open main in a browser tab of its own, and give the prototype the room">↗ Detach</button></>}</figcaption>
                 {cmp!.up
                   ? <iframe key={`${mainSrc}#${theirs.reloads}`} src={mainSrc} title="main" style={sized} />
                   : <div className="empty">Turning main on… {cmp!.log.length > 0 && <pre className="proto-log mono">{cmp!.log.slice(-6).join('\n')}</pre>}</div>}

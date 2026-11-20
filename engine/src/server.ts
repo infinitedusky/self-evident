@@ -60,8 +60,8 @@ import { mainStatus, startMain, stopMain, stopMains, type MainData } from './mai
 async function mainDataOf(mode?: string, beside?: string): Promise<MainData | undefined> {
   if ((mode !== 'copy' && mode !== 'shared') || !beside) return undefined
   const [kind, id, setup] = beside.split(':')
-  if (kind === 'prototype' && id) { const d = await (await import('./prototype.js')).prototypeDataOf(id); return mode === 'shared' ? { mode, beside: d.beside, slug: d.slug } : { mode, beside: d.beside, scenario: d.scenario, prototypeId: d.prototypeId } }
-  if (kind === 'smoke' && id) { const t = await resolveIssue(db, id); const d = await (await import('./smoke.js')).smokeDataOf(t.id, setup); return mode === 'shared' ? { mode, beside: d.beside, slug: d.slug } : { mode, beside: d.beside, seed: d.seed } }
+  if (kind === 'prototype' && id) { const d = await (await import('./prototype.js')).prototypeDataOf(id); return { mode, beside: d.beside, slug: d.slug } }
+  if (kind === 'smoke' && id) { const t = await resolveIssue(db, id); const d = await (await import('./smoke.js')).smokeDataOf(t.id, setup); return { mode, beside: d.beside, slug: d.slug, cmd: d.cmd, stop: d.stop, env: d.env } }
   return undefined
 }
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'

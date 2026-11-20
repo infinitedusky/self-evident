@@ -80,30 +80,37 @@ describe.skipIf(!reachable)('the app\'s main, running', () => {
     await stopMain(appId)
   })
 
-  it('a task\'s main runs on a copy of the data of the work beside it, or on that work\'s own database, as chosen', async () => {
-    const cfg = { url: process.env.DATABASE_URL!, env: 'APP_DB' }
-    const says = `node -e "require('http').createServer((q, s) => s.end(process.env.APP_DB || 'none')).listen(process.env.PORT)"`
+  it('a task\'s main runs on a copy of the data of the work beside it as it is now, or on that work\'s own database, as chosen', async () => {
+    const cfg = { url: process.env.DATABASE_URL!, env: 'APP_DB', schema_cmd: `psql "$APP_DB" -q -c "create table seeded (n int primary key); create table only_on_main (x int)"` }
+    const says = `node -e "require('http').createServer((q, s) => s.end([process.env.APP_DB, process.env.MAIN_SHARED_DB || 'own', process.env.TENANT || 'default'].join(' '))).listen(process.env.PORT)"`
     await setPrototypeCommand(appId, says); await patchSetup(appId, { prototype_db: cfg })
-    const rows = async (slug: string) => { const c = new pg.Client({ connectionString: databaseUrl(cfg, slug) }); await c.connect(); try { return (await c.query('select n from seeded')).rows.map((r) => r.n) } finally { await c.end() } }
-    const seed = 'create table seeded (n int); insert into seeded values (7);'
-    // The work beside it (made up): a smoke test's database, with a row made while testing.
-    const { url } = await rebuild(cfg, 'smoke-sample', repoPath, null, { appId })
-    const c = new pg.Client({ connectionString: url }); await c.connect(); await c.query(`${seed} insert into seeded values (8);`); await c.end()
+    const rows = async (slug: string) => { const c = new pg.Client({ connectionString: databaseUrl(cfg, slug) }); await c.connect(); try { return (await c.query('select n from seeded order by n')).rows.map((r) => r.n) } finally { await c.end() } }
+    // The work beside it (made up): a smoke test's database, on a schema ahead of main's (a column and a table main lacks), with a row made while testing.
+    const { url } = await rebuild({ ...cfg, schema_cmd: undefined }, 'smoke-sample', repoPath, null, { appId })
+    const c = new pg.Client({ connectionString: url }); await c.connect()
+    await c.query('create table seeded (n int primary key, added_by_the_build text); insert into seeded values (7, \'x\'), (8, \'made while testing\'); create table only_on_the_build (y int); insert into only_on_the_build values (1)'); await c.end()
+    const beside = { beside: 'the smoke test (sample)', slug: 'smoke-sample' }
     try {
-      // A copy: its own database, filled as the work was to start with. What was done in the work since is not in it.
-      const copy = await startMain(appId, 'person', { for: 'iss_Data', data: { mode: 'copy', beside: 'the smoke test (sample)', seed } })
-      expect(copy).toMatchObject({ database: databaseName('main-iss-data'), data: { mode: 'copy' } })
-      expect(await rows('main-iss-data')).toEqual([7])
+      // A copy: its own database on main's schema, with the work's rows as they are now. The field main lacks is ignored, the table it lacks left out and said.
+      const copy = await startMain(appId, 'person', { for: 'iss_Data', data: { mode: 'copy', ...beside, env: { TENANT: 'lazer' } } })
+      expect(copy).toMatchObject({ database: databaseName('main-iss-data'), data: { mode: 'copy' }, exited: null })
+      expect(await rows('main-iss-data')).toEqual([7, 8])
+      expect(copy.log.join('\n')).toMatch(/Copied 2 rows in 1 table[\s\S]*left out: only_on_the_build/)
       expect(await until(async () => (await mainStatus(appId, false, 'iss_Data')).up)).toBe(true)
-      expect(await (await fetch(copy.url!)).text()).toContain(databaseName('main-iss-data'))
+      expect(await (await fetch(copy.url!)).text()).toBe(`${databaseUrl(cfg, 'main-iss-data')} own lazer`) // started the way the set-up is: its variables
       expect((await startMain(appId, 'person', { for: 'iss_Data' })).data).toMatchObject({ mode: 'copy' }) // asked for again with no choice: as it is
-      // The same database: main is brought up again on the work's own, and nothing is made or dropped for it.
-      const shared = await startMain(appId, 'person', { for: 'iss_Data', data: { mode: 'shared', beside: 'the smoke test (sample)', slug: 'smoke-sample' } })
+      // The same database: main is brought up again on the work's own, told so, and nothing is made or dropped for it.
+      const shared = await startMain(appId, 'person', { for: 'iss_Data', data: { mode: 'shared', ...beside } })
       expect(shared).toMatchObject({ database: databaseName('smoke-sample'), data: { mode: 'shared' }, url: copy.url })
       expect(await until(async () => (await mainStatus(appId, false, 'iss_Data')).up)).toBe(true)
-      expect(await (await fetch(shared.url!)).text()).toContain(databaseName('smoke-sample'))
+      expect(await (await fetch(shared.url!)).text()).toBe(`${databaseUrl(cfg, 'smoke-sample')} 1 default`)
       expect(await rows('smoke-sample')).toEqual([7, 8])
       await expect(startMain(appId, 'person', { for: 'iss_Data', data: { mode: 'shared', beside: 'a prototype (sample)', slug: 'never-run' } })).rejects.toThrow(/no database yet to share/)
+      expect((await mainStatus(appId, false, 'iss_Data')).running).toBe(true) // refused before anything was stopped
+      // A script that stops by itself (as one that migrates a database ahead of its code does): it says so, with its last lines.
+      await startMain(appId, 'person', { for: 'iss_Data', data: { mode: 'shared', ...beside, cmd: 'echo "cannot locate revision (sample)"; exit 3' } })
+      expect(await until(async () => !(await mainStatus(appId, false, 'iss_Data')).running)).toBe(true)
+      expect((await mainStatus(appId, false, 'iss_Data')).exited).toMatchObject({ code: 3, log: expect.arrayContaining(['cannot locate revision (sample)']) })
       await removeMain(appId, 'iss_Data')
       expect(await rows('smoke-sample')).toEqual([7, 8]) // removing the task's main never drops the work's database
     } finally { stopMains(); await dropDatabase(cfg, 'smoke-sample'); await dropDatabase(cfg, 'main-iss-data'); await patchSetup(appId, { prototype_db: null }); await setPrototypeCommand(appId, SERVER) }

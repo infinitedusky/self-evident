@@ -172,6 +172,43 @@ export async function rebuild(cfg: PrototypeDb, slug: string, worktree: string, 
   try { return { url, loaded: await load(c, tables) } } finally { await c.end() }
 }
 
+/**
+ * One database's rows as they are now, in another made with a different checkout's schema (Sandy, 2026-11-20: "the
+ * two options are copy it as it is now or share a database"; "is it that hard to see the database that has seed data
+ * that includes fields that are not there? Will it just ignore them?"). For main beside a build: `to` is made again,
+ * its schema by the app's command run in `worktree` (main's), then every table of `from` is loaded into it. A field
+ * the older schema does not have is ignored; a table it does not have is skipped; a table whose rows it will not
+ * take (a column it requires that the build dropped) is left empty. Each is said, and the rest still loads.
+ */
+export async function copyData(cfg: PrototypeDb, from: string, to: string, worktree: string) {
+  await createDatabase(cfg, to)
+  if (cfg.schema_cmd) await runSchema(cfg.schema_cmd, worktree, { [cfg.env ?? 'DATABASE_URL']: databaseUrl(cfg, to) })
+  const src = new pg.Client({ connectionString: databaseUrl(cfg, from) }), dst = new pg.Client({ connectionString: databaseUrl(cfg, to) })
+  await src.connect(); await dst.connect()
+  const copied: Record<string, number> = {}, skipped: string[] = [], failed: { table: string; why: string }[] = []
+  try {
+    const have = new Set(await tablesOf(dst))
+    await dst.query('begin')
+    await dst.query("set local session_replication_role = 'replica'").catch(() => {})
+    for (const t of await tablesOf(src)) {
+      if (BOOKKEEPING.has(t)) continue
+      const rows = (await src.query(`select coalesce(jsonb_agg(to_jsonb(x)), '[]'::jsonb) as rows from ${ident(t)} x`)).rows[0].rows as unknown[]
+      if (!rows.length) continue
+      if (!have.has(t)) { skipped.push(t); continue }
+      await dst.query('savepoint one_table')
+      try {
+        await dst.query(`insert into ${ident(t)} select * from jsonb_populate_recordset(null::${ident(t)}, $1::jsonb) on conflict do nothing`, [JSON.stringify(rows)])
+        copied[t] = rows.length
+      } catch (err) { await dst.query('rollback to savepoint one_table'); failed.push({ table: t, why: (err as Error).message.slice(0, 200) }) }
+    }
+    await dst.query('commit')
+    const seqs = await dst.query<{ t: string; col: string; seq: string }>(`select c.table_name as t, c.column_name as col, pg_get_serial_sequence(quote_ident(c.table_name), c.column_name) as seq
+      from information_schema.columns c where c.table_schema = 'public' and pg_get_serial_sequence(quote_ident(c.table_name), c.column_name) is not null`)
+    for (const s of seqs.rows) if (copied[s.t]) await dst.query(`select setval($1, coalesce((select max(${ident(s.col)}) from ${ident(s.t)}), 1))`, [s.seq])
+  } finally { await src.end().catch(() => {}); await dst.end().catch(() => {}) }
+  return { copied, skipped, failed }
+}
+
 /** The database as it is now, kept as a scenario: each table that has rows (bookkeeping left out). Nothing is written into the worktree. */
 export async function save(cfg: PrototypeDb, slug: string, scope: Scope, name: string, shared = false) {
   if (!NAME.test(name)) throw new PlanError('a scenario name is letters, numbers and dashes, like "teacher-three-overdue"')

@@ -107,7 +107,7 @@ export const CompareWithMain: Story = {
   beforeEach: withEngine({ prototypes: [running], main: MAIN_OFF, mainFor: (running as { issueId?: string | null }).issueId ?? running.id }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await userEvent.click(await c.findByRole('button', { name: 'Compare with main' }))
+    await userEvent.selectOptions(await c.findByRole('combobox', { name: 'Compare with main' }), 'copy')
     await expect(await c.findByTitle('main')).toHaveAttribute('src', expect.stringContaining(at))
     await expect(c.getByTitle(running.title)).toHaveAttribute('src', expect.stringContaining(at))
     await expect(c.getByText('4f2a9c1')).toBeInTheDocument()
@@ -129,14 +129,14 @@ export const CompareWithMain: Story = {
     await userEvent.click(c.getByRole('button', { name: 'Put main back' }))
     await expect(await c.findByTitle('main')).toBeInTheDocument()
     await userEvent.click(c.getByRole('button', { name: 'Stop comparing' }))
-    await expect(await c.findByRole('button', { name: 'Compare with main' })).toBeInTheDocument()
+    await expect(await c.findByRole('combobox', { name: 'Compare with main' })).toBeInTheDocument()
   },
 }
 /** Main is still coming up: its side says so, with what its server last printed. Sample data. */
 export const MainStarting: Story = {
   args: { id: running.id, path: at },
   beforeEach: withEngine({ prototypes: [running], main: { ...MAIN_OFF, running: true, up: false, url: 'http://localhost:6999', sha: '4f2a9c1d0b7e', log: ['installing (sample)', 'building (sample)'] } }),
-  play: async ({ canvasElement }) => { const c = within(canvasElement); await userEvent.click(await c.findByRole('button', { name: 'Compare with main' })); await expect(await c.findByText(/Turning main on/)).toBeInTheDocument() },
+  play: async ({ canvasElement }) => { const c = within(canvasElement); await userEvent.selectOptions(await c.findByRole('combobox', { name: 'Compare with main' }), 'copy'); await expect(await c.findByText(/Turning main on/)).toBeInTheDocument() },
 }
 /** An app with no database set: no data control. */
 export const NoDatabase: Story = { args: { id: running.id, path: at }, beforeEach: withEngine({ prototypes: [{ ...running, database: null, scenarios: [] }] }) }

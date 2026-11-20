@@ -282,7 +282,7 @@ export const ComparedWithMain: Story = {
   beforeEach: withEngine({ smoke: smokeSample, main: MAIN_OFF, mainUrl: 'http://localhost:6600', mainFor: 'iss_sample20' /* the task's own main, on its own port: not the app's */ }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await userEvent.click(await c.findByRole('button', { name: 'Compare with main' }))
+    await userEvent.selectOptions(await c.findByRole('combobox', { name: 'Compare with main' }), 'copy')
     await waitFor(() => expect(c.getByTitle('main')).toHaveAttribute('src', 'http://localhost:6600'))
     await expect(c.getByText('This build')).toBeInTheDocument()
     await userEvent.click(c.getAllByRole('button', { name: 'Go there' })[0])
@@ -303,7 +303,7 @@ export const ComparedWithMain: Story = {
 /** Main is still starting (made up): the build stays usable, and main's side says so. */
 export const MainStarting: Story = {
   beforeEach: withEngine({ smoke: smokeSample, main: { ...MAIN_OFF, running: true, up: false, url: 'http://localhost:6600', sha: 'fed9876cba', log: ['installing (sample)'] } }),
-  play: async ({ canvasElement }) => { const c = within(canvasElement); await userEvent.click(await c.findByRole('button', { name: 'Compare with main' })); await expect(await c.findByText(/Turning main on/)).toBeInTheDocument(); await expect(c.getByTitle('The built code')).toBeInTheDocument() },
+  play: async ({ canvasElement }) => { const c = within(canvasElement); await userEvent.selectOptions(await c.findByRole('combobox', { name: 'Compare with main' }), 'copy'); await expect(await c.findByText(/Turning main on/)).toBeInTheDocument(); await expect(c.getByTitle('The built code')).toBeInTheDocument() },
 }
 /** Ask an agent (made up): it says what it saw beside the check, and the check is still yours to mark. */
 export const AgentTriesOne: Story = {
@@ -405,16 +405,34 @@ export const ChecksPutAside: Story = {
   },
 }
 
-/** Main's data is chosen (made up): a copy of this build's to start with, or the very same database; changing it while comparing brings main up again on the other. */
-export const MainsData: Story = {
-  beforeEach: (ctx) => { try { localStorage.removeItem('se.compare.data') } catch { /* fine */ } return withEngine({ smoke: smokeSample, main: { ...MAIN_OFF, database: 'proto_main_sample' }, mainUrl: 'http://localhost:6600', mainFor: 'iss_sample20' })(ctx) },
+/** What it is compared with is chosen (made up): the app's main on its standard data, or a new main for this task on a copy of this data as it is now, or on this same database. Main's view says which. */
+export const ComparedWithWhat: Story = {
+  beforeEach: withEngine({ smoke: smokeSample, main: { ...MAIN_OFF, database: 'proto_main_sample' }, mainUrl: 'http://localhost:6600' }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    const pick = await c.findByRole('combobox', { name: "Main's data" })
-    await expect(pick).toHaveValue('copy')
-    await userEvent.click(c.getByRole('button', { name: 'Compare with main' }))
+    const pick = () => c.findByRole('combobox', { name: 'Compare with main' })
+    await expect(within(await pick()).getAllByRole('option').map((o) => o.textContent)).toEqual(['Compare with main…', "The app's main (standard data)", 'A new main, on a copy of this data as it is now', 'A new main, on this same database'])
+    await userEvent.selectOptions(await pick(), 'copy')
     await expect(await c.findByText('· on a copy of the data')).toBeInTheDocument()
-    await userEvent.selectOptions(c.getByRole('combobox', { name: "Main's data" }), 'shared')
+    await userEvent.click(c.getByRole('button', { name: 'Stop comparing' }))
+    await userEvent.selectOptions(await pick(), 'shared')
     await expect(await c.findByText('· on the same database')).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Stop comparing' }))
+    await userEvent.selectOptions(await pick(), 'app')
+    await expect(await c.findByText("· the app's main, standard data")).toBeInTheDocument()
+  },
+}
+
+/** Main stops by itself (made up: its script could not migrate a database ahead of its code): the page says so, with its last lines, and does not just drop the comparison. */
+export const MainStoppedByItself: Story = {
+  beforeEach: withEngine({ smoke: smokeSample, main: { ...MAIN_OFF, database: 'proto_main_sample' }, mainUrl: 'http://localhost:6600', mainDies: ["Can't locate revision identified by 'added_by_the_build_01' (sample)", 'exited with 1'] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.selectOptions(await c.findByRole('combobox', { name: 'Compare with main' }), 'shared')
+    const said = await c.findByRole('alert')
+    await expect(said).toHaveTextContent('Main stopped by itself (exit 1).')
+    await expect(said).toHaveTextContent('a schema that is ahead of it')
+    await expect(said).toHaveTextContent("Can't locate revision identified by 'added_by_the_build_01' (sample)")
+    await expect(c.getByRole('combobox', { name: 'Compare with main' })).toBeInTheDocument() // and it can be tried again
   },
 }

@@ -4,12 +4,11 @@
  * With `forId` it is the main a task has of its own for comparing (its prototype and its smoke test share it), on
  * a port of its own, and not the app's.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { API, engine, openEvents, type MainDataChoice, type MainRunning } from './engine'
 
-/** Which data a compared main runs on, as last chosen on this browser: a copy of the work's, unless they chose its own database. */
-export const dataChoice = (): 'copy' | 'shared' => { try { return localStorage.getItem('se.compare.data') === 'shared' ? 'shared' : 'copy' } catch { return 'copy' } }
-export const keepDataChoice = (m: 'copy' | 'shared') => { try { localStorage.setItem('se.compare.data', m) } catch { /* fine without it */ } }
+/** What the work is compared with: the app's own main (its standard data), or a new main for this task, on a copy of this work's data as it is now or on its very database. */
+export type CompareWith = 'app' | 'copy' | 'shared'
 
 export function useMain(appId: string | undefined, looking: boolean, forId?: string) {
   const [main, setMain] = useState<MainRunning | null>(null)
@@ -38,3 +37,35 @@ export function useMain(appId: string | undefined, looking: boolean, forId?: str
     stop: () => (appId ? act(() => engine.stopMain(appId, forId)) : Promise.resolve(null)),
   }
 }
+
+/**
+ * Comparing a piece of work with main (Sandy, 2026-11-20: "compare with app level … or do a new one in which you are
+ * copying or just running it off the same db"). The app's main is turned on if it is off and is not this page's to
+ * turn off; a new one is the task's own (forId), turned off when comparing stops. One that stops by itself is kept
+ * as `stopped`, with its last lines, so the page can say why and not just drop the comparison.
+ */
+export function useCompare(appId: string | undefined, forId: string) {
+  const [which, setWhich] = useState<CompareWith | null>(null)
+  const [stopped, setStopped] = useState<{ which: CompareWith; exited: MainRunning['exited'] } | null>(null)
+  const app = useMain(appId, which === 'app')
+  const task = useMain(appId, which === 'copy' || which === 'shared', forId)
+  const active = which === 'app' ? app : task
+  const starting = useRef(0) // a start is on its way: what an earlier stop reports back meanwhile is not this one stopping by itself
+  useEffect(() => { // turned off elsewhere, or stopped by itself
+    if (!which || !active.main || active.main.running || active.busy || starting.current) return
+    setStopped({ which, exited: active.main.exited ?? null }); setWhich(null)
+  }, [which, active.main?.running, active.busy]) // eslint-disable-line react-hooks/exhaustive-deps
+  const choose = (w: CompareWith, beside: string) => {
+    setStopped(null); setWhich(w)
+    starting.current++
+    void (w === 'app' ? app.start() : task.start({ mode: w, beside })).then((m) => { if (!m?.running) setWhich(null) }).finally(() => { starting.current-- })
+  }
+  const stop = () => { if (which && which !== 'app') void task.stop(); setWhich(null); setStopped(null) }
+  return {
+    which, choose, stop, stopped,
+    /** The main being compared with, while there is one. */ main: which ? active.main : null,
+    busy: app.busy || task.busy, error: (which === 'app' ? app.error : task.error) ?? null,
+    /** There is a main to compare with at all; and the app has a database, so the two new ones differ. */ can: !!app.main && app.main.how !== 'none', local: app.main?.how === 'local', hasData: app.main?.how === 'local' && !!app.main.database,
+  }
+}
+

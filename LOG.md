@@ -5503,3 +5503,36 @@ Not done: a copy of the data as it is now (it is as the work started; the rows m
 database); a choice of some other scenario for main; saying on the page, when main breaks on the same database, that
 it is likely the schema; the app's own main is unchanged (its "default" scenario).
 
+
+## Compare with: the app's main, or a new main on a copy or on the same database (Sandy, 2026-11-20: "the two options are copy it as it is now or share a database. If we want to look at the standard data set, we can just look at the main app level one. So it's like compare with app level … or do a new one in which you are copying or just running it off the same db")
+
+Found on CEB-90, the first real use of a task's own main:
+
+- **"The same database" cut out as if cancelled.** The app's start script migrates first; main's code did not have
+  the build's new migration, so the script exited, and the page dropped the comparison without a word. The engine
+  kept no record that a server had stopped by itself, and its output is replaced on the next start.
+- **"A copy" showed the wrong data.** Main was started with the app's plain command, not the smoke set-up's script,
+  so it signed in to the default company and seeded the sample one. And the copy was the data as the work started
+  (scenario and seed), not as it is.
+
+Now, one control on a prototype and a smoke test (`app/src/components/CompareMain.tsx`), three choices:
+
+- **The app's main**: the one that is there to open any time, on its standard data. Turned on if it is off; not
+  the comparison's to turn off.
+- **A new main, on a copy of this data as it is now**: the task's own main, its database made again with main's
+  schema and filled with the work's rows as they are (`copyData`, prototype-data.ts). A field main's schema does not
+  have is ignored; a table it does not have is left out; a table whose rows it will not take is left empty. Each is
+  said in main's log, and the rest loads.
+- **A new main, on this same database**: the task's own main pointed at the work's database. The script is told
+  with `MAIN_SHARED_DB=1`, so it does not migrate or seed a database that is ahead of its code (the script has to
+  honour it; `set_smoke_setup` says so to the agent that writes one).
+- **Beside a smoke test, main is started the way that set-up is**: its script, its stop script, its variables.
+- **A main that stops by itself says so**: `exited` on its status (when, with what, its last lines) and an event,
+  `main.exited`. The page shows it, and for the same database says what it usually is.
+- The picker of "main's data" beside a button (earlier today) is gone: it is these choices.
+
+Not done: telemetry on Self Evident itself (it has events and each server's last lines, in memory); a main beside
+a prototype is started with the app's plain command (a prototype has no script of its own); replaying a recorded
+vendor response into main so the same person can be scanned on both without paying twice; a main run with the smoke
+set-up's variables can reach the real vendor, as the build can.
+
