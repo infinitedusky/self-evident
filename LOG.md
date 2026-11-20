@@ -5759,3 +5759,31 @@ new branch, and a new task opened with them.
 
 Not done: taking old sketches out of the repository once their task is done. They stay in git either way.
 
+
+## Each step settles its own question (Sandy, 2026-11-20: "the whole point is during the sketch. It's really easy to change things when you get to the prototype. It's not easy to change things. Therefore we should do as much as we can in the sketch")
+
+What was happening: a sketch Sandy did not like was called close enough and left for the mockup; the mockup's
+faults were left for the prototype. Each step was allowed to add something of the step before's kind, so the
+cheapest changes (layout, look) were carried to where they cost the most. Decided in conversation; nothing is built.
+
+- **A step is a question, and it is closed before the next starts.** Sketch: what is on a screen and where.
+  Screens: all that can be seen in a still. Mockup: the way through. Prototype: it works, and it is what goes live.
+  Build: the code. The steps after Screens are conversions, not more design (SHAPE.md has the list).
+- **Screens is a new step; Sketch stays what it is** (Sandy: "whatever the sketch right now should be called …
+  we should say the way it is. Screens should be a new thing"). A sketch stays a plain HTML file, rough and
+  instant. "Wireframe" was put aside for the exact one: most people read it as grey boxes.
+- **Screens are rendered through the app's own build** (Sandy: "render through its own build I think is right"),
+  so they use the components the app has, as they are. The other way, copying a component's markup into plain
+  HTML, was put aside: a copy drifts. A new part is drawn in the screen, not made a component; that is the mockup's
+  work, and a screen's list of what is new is the mockup's work order.
+- **A state is a screen.** Otherwise the states are what slides to the mockup.
+- **Each conversion is checked against the step before**, screen by screen: mockup against screens, prototype
+  against mockup, build against prototype. The build's "follow and improve on" now means the code only.
+- **Objections are sorted where they are raised**, and only the person passes a step.
+
+Not decided: where screens are rendered (stories in the app's Storybook, with fixed state, or a place of their
+own), and so what keeps a round on a screen as quick as a round on a sketch; how a conversion is compared (by eye
+side by side, or by screenshots); what an app with no Storybook does.
+
+Not done: all of it. The sketch skill still says nothing about sorting objections; no Screens step in a workflow;
+the prototype and build skills still let the build differ from the prototype.
