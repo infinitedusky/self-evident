@@ -594,3 +594,21 @@ export const smokeSample: import('../engine').SmokeView = {
     { id: 'ac_s3', text: 'Portals keep 40 frames a second (sample)', where: 'edges-portal--many', how: 'Turn portals on and watch the counter in the corner: it should stay above 40 (sample)', mark: 'todo' },
   ],
 }
+
+// A task's pull request as a step (made up): not submitted yet, with what it will open with.
+export const prSample: import('../engine').PrView = {
+  issueId: 'iss_sample20', pr: null,
+  message: { title: 'feat(SS-20): edges that tunnel and portal (sample)', body: '## What it does\n\nEdges can dip under a node (a tunnel) or jump across the diagram (a portal). Made-up text (sample).\n\n## How to check it\n\n- Open the Tunnel story: the edge dips under the lip.\n- Hover a portal: its twin lights up.\n\n**3 of 3 sub-tasks have landed.**', head: 'project/edges--ss-20', base: 'main' },
+  behind: false, landed: 3, total: 3, unchecked: 0, byHand: 0, draft: true, auto: false, canSubmit: true, waits: [], canReady: false, comments: [], problem: null,
+}
+/** The same one as a draft on GitHub (made up), with a review, a comment on a line and a comment. */
+export const prDraftSample: import('../engine').PrView = {
+  ...prSample, canSubmit: false, canReady: true,
+  pr: { number: 412, url: 'https://example.com/pull/412', status: 'draft', title: prSample.message!.title, body: prSample.message!.body, review: 'changes requested', mergeable: 'mergeable', updatedAt: '2026-11-20T10:00:00Z', checks: [{ name: 'tests (sample)', state: 'pass' }, { name: 'lint (sample)', state: 'fail' }, { name: 'preview (sample)', state: 'pending' }] },
+  comments: [
+    { id: 'r_1', kind: 'review', author: 'reviewer-a', body: 'Please split the portal lookup out of the renderer (sample).', at: '2026-11-20T09:00:00Z', url: null, state: 'changes requested' },
+    { id: 'l_7', kind: 'line', author: 'reviewer-a', body: 'This map is rebuilt on every frame (sample).', at: '2026-11-20T09:10:00Z', url: 'https://example.com/pull/412#discussion_r7', path: 'src/edges/portal.ts', line: 41 },
+    { id: 'c_2', kind: 'comment', author: 'reviewer-b', body: 'Looks close. The tunnel reads well (sample).', at: '2026-11-20T09:30:00Z', url: 'https://example.com/pull/412#issuecomment-2' },
+  ],
+}
+

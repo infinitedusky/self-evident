@@ -143,6 +143,21 @@ export interface Graph {
 export interface GraphFile { path: string; subIssues: string[]; heldBy: string | null }
 export interface ProjectSummary { id: string; name: string; status: string; createdAt: string; ideaId?: string | null; app: { id: string; name: string } | null; issueCount: number; backlogOpen?: number; builds: Record<string, number>; solo?: boolean; plannedTasks?: { id: string; identifier: string; title: string; subTasks: number }[] } // solo: a task's own project (only listed when asked for); plannedTasks: its tasks that have sub-tasks
 /** The pull request a task's work is in. */
+/** What was said on a pull request: a comment, a review (with its verdict), or a comment on a line. */
+export interface PrComment { id: string; kind: 'comment' | 'review' | 'line'; author: string; body: string; at: string; url: string | null; state?: string; path?: string; line?: number | null }
+/** A task's pull request as a step (the engine's pr-view.ts). */
+export interface PrView {
+  issueId: string
+  /** As GitHub has it now, or as last known when `problem` is set. Null: not submitted. */
+  pr: { number: number; url: string; status: 'draft' | 'open' | 'closed' | 'merged'; title: string; body: string; review: string | null; mergeable: string | null; checks: { name: string; state: 'pass' | 'fail' | 'pending' | 'skipped' }[]; updatedAt: string | null } | null
+  /** What it would open with, or what the next update sends. */
+  message: { title: string; body: string; head: string; base: string } | null
+  behind: boolean
+  landed: number; total: number; unchecked: number; byHand: number
+  draft: boolean; auto: boolean
+  canSubmit: boolean; waits: string[]; canReady: boolean
+  comments: PrComment[]; problem: string | null
+}
 export interface TaskPr { number: number | null; url: string | null; status: string }
 export interface IssueRow { id: string; identifier: string; number: number; title: string; description: string | null; state: IssueState; sortOrder: number; priority: number; project: { id: string; name: string; status: string; solo?: boolean } | null; builds: Record<string, number>; planning: string | null; pr?: TaskPr | null }
 /** What was written on a ticket as it moved: one comment per heading (the plan, the handoff, the review), the latest write of each. */
@@ -488,6 +503,8 @@ export const engine = {
   editReport: (id: string, body: string) => call<Report>('PUT', `/reports/${id}`, { body }),
   deleteReport: (id: string) => call<{ deleted: string }>('DELETE', `/reports/${id}`),
   setReportFormat: (appId: string, f: { daily?: string; weekly?: string }) => call<{ daily: string; weekly: string }>('PUT', `/apps/${appId}/report-format`, f),
+  prView: (issueId: string) => call<PrView>('GET', `/issues/${issueId}/pr`),
+  markPrReady: (issueId: string) => call<{ number: number; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/ready`),
   submitPr: (issueId: string) => call<{ id: string; number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/submit`),
   keepSecret: (name: string, value: string, appId?: string) => call<KeptKey>('PUT', `/secrets/${encodeURIComponent(name)}`, { value, ...(appId ? { appId } : {}) }),
   dropSecret: (name: string, appId?: string) => call<KeptKey>('DELETE', `/secrets/${encodeURIComponent(name)}${appId ? `?app=${appId}` : ''}`),

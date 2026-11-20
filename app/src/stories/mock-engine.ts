@@ -25,6 +25,7 @@ export interface MockData {
   /** The app's reports; none when left out. */ reports?: import('../engine').Reports
   /** What was learned from the app's code; nothing yet when left out. */ learning?: import('../engine').Learning
   /** Why submitting a pull request fails, when it should. */ submitPrError?: string
+  /** A task's pull request as a step; not submitted (prSample) when left out. */ prView?: import('../engine').PrView
   /** A task's save points and task branches; none when left out. */ taskBranches?: import('../engine').TaskBranches; /** Why a move fails, when it should. */ moveError?: string
   /** What a run read and said, for the planner's tab. */ runLog?: import('../engine').RunLog
   /** What is public right now, by "kind:id". */ shares?: Record<string, import('../engine').Shared>; /** Why making a link fails, when it should. */ shareError?: string; /** ngrok's one address is held by these, until the person frees it. */ ngrokHolders?: import('../engine').NgrokHolder[]; /** What the guide tab of a shared prototype is given. */ visitorGuide?: { title: string; guide: import('../engine').Guide | null }
@@ -220,7 +221,10 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       return reply({ ...d.smoke, sentBack: owed === 0 ? failed : 0 })
     }),
     http.get('/api/issues/:id/checklist', () => reply(d.checklist ?? null)),
-    http.post('/api/issues/:id/pr/submit', () => (d.submitPrError ? HttpResponse.json({ error: d.submitPrError }, { status: 400 }) : reply({ id: 'pr_sample', number: 412, url: 'https://example.com/pull/412', status: 'draft' }))),
+    // The pull request step: the engine's rules, roughly. Submitting opens a draft; marking it ready opens it.
+    http.get('/api/issues/:id/pr', () => reply(d.prView ?? s.prSample)),
+    http.post('/api/issues/:id/pr/ready', () => { const v = d.prView ?? s.prSample; if (!v.pr) return HttpResponse.json({ error: 'there is no pull request to mark ready: submit it first' }, { status: 400 }); d.prView = { ...v, canReady: false, pr: { ...v.pr, status: 'open' } }; return reply({ number: v.pr.number, url: v.pr.url, status: 'open' }) }),
+    http.post('/api/issues/:id/pr/submit', () => (d.submitPrError ? HttpResponse.json({ error: d.submitPrError }, { status: 400 }) : (() => { const v = d.prView ?? s.prSample; d.prView = { ...v, canSubmit: false, canReady: true, pr: { number: 412, url: 'https://example.com/pull/412', status: 'draft', title: v.message?.title ?? '', body: v.message?.body ?? '', review: null, mergeable: null, checks: [], updatedAt: null } } })() ?? reply({ id: 'pr_sample', number: 412, url: 'https://example.com/pull/412', status: 'draft' }))),
     // Kept keys: the engine's rules, roughly. The key is taken and never given back.
     http.put('/api/secrets/:name', async ({ params, request }) => { const b = await request.json() as { value?: string; appId?: string }; if (!b.value?.trim()) return HttpResponse.json({ error: 'paste the key; to take one away, remove it' }, { status: 400 }); return reply({ name: params.name, set: true, from: b.appId ? 'app' : 'shared', last4: b.value.trim().slice(-4) }) }),
     http.delete('/api/secrets/:name', ({ params }) => reply({ name: params.name, set: false, from: null, last4: null })),

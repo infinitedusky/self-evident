@@ -5550,6 +5550,32 @@ vendor response into main so the same person can be scanned on both without payi
 set-up's variables can reach the real vendor, as the build can.
 
 
+## The pull request is a step of its own, after the smoke test (Sandy, 2026-11-20: "a new step to the build section after smoke test, 'PR'. This will show us the PR status, the message, let us submit (new PR or draft to complete conversion) and let us see any comments. It will also in the future give us tools to help reviewers")
+
+A task's pull request was a panel at the foot of its Sub-tasks page: a button and a badge. Now "🔀 Pull request" is a
+row in the task's Build section, after the smoke test, with a page (`app/src/components/PrStep.tsx`,
+`engine/src/pr-view.ts`, `GET /issues/:id/pr`):
+
+- **Where it stands**: not submitted, a draft, open, closed or merged; what review says; its checks, with the
+  failing ones named; a conflict with its base; the branch and what it is against.
+- **The one thing to press**: submit it (as before: asked once more, pushed, opened as a draft by the app's rule;
+  a closed one is submitted again), or, for a draft, **Ready for review**, which takes it out of draft on GitHub
+  (`POST /issues/:id/pr/ready`). Both are the person's: neither is a tool an agent has. Checks of the person's own
+  still waiting in the smoke test are said, with a link, and do not block.
+- **Its message**: before it exists, what it will open with (the title by the app's rule, the body with its merge
+  guide), worked out without pushing anything (`runner.previewPr`). After, what GitHub has; when that is an earlier
+  version it says so, and what the next update sends can be looked at.
+- **What was said on it**: comments, reviews with their verdict, and comments on lines with the file and line,
+  oldest first, each with a link to it on GitHub.
+- GitHub is asked each time the page is read. When it cannot be reached the page says so and shows what was last
+  known. What it reads is kept: one closed, merged or made ready on GitHub is recorded as that.
+- **Replaced, not added**: the Submit panel is gone from the Sub-tasks page, which now has a line linking here.
+
+Not done: tools for reviewers (Sandy's "in the future"); replying to or resolving a comment from here; sending a
+comment to the task's agent as work; editing the message here (the title has `set_pr_title`; the body is made from
+the task); a project's single pull request (pr_mode "project") is shown on each of its tasks, whole; the row's
+count of comments in the nav.
+
 ## Linear tickets come in as ideas (Sandy, 2026-11-20: "I think what we want to do is bring them in as ideas and then decide whether or not they should be projects or tasks. Because it might be that they should be a project with tasks. For one ticket")
 
 A ticket brought in became a task straight away, which decided for the person that it was one thing to build. Now:
