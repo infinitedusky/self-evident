@@ -5465,6 +5465,22 @@ task's main from the page (the app's tab has it; here it is stopped and started)
 when a prototype with no task is discarded; `app_main` (the agent's tool) reaches only the app's own.
 
 
+## Room for what is being looked at, on the smoke test (Sandy, 2026-11-20: "the ability to collapse the cards on the right for smoke tests and … more vertical real estate … we're taking up 1/3 of the screen before we get to the thing we're actually looking at")
+
+Asked first as "open them as separate pages", then narrowed by Sandy to this. On a task's smoke test:
+
+- **The checks fold away.** "Hide checks" puts the cards aside and the view takes the full width; the button keeps
+  the count ("Show checks · 3 to check"). Remembered on this browser.
+- **The task's head is one line** there: its id and title. The project line and the badges are on the task's other
+  pages.
+- **What the page is sits behind "About this smoke test"**, closed, on a line with the commit.
+- **The view is as tall as the window has left**, not 640px at most; the checks beside it scroll on their own.
+
+Not done: the same on the prototype's page and the other views (the smoke test is the first, Sandy's word); folding
+the task's left nav and the agent's column with one press (each folds by its own); a page of its own for the smoke
+test.
+
+
 ## A compared main's data is chosen: a copy, or the same database (Sandy, 2026-11-20: "we want the ability to choose the two options, one to literally use the same database and the other one is to mimic the data on its own")
 
 A task's main (the one Compare with main brings up) always had a database of its own from the shared "default"

@@ -30,6 +30,10 @@
  * set-up also has a throwaway terminal, in a new empty folder ("we always want access to a terminal pointed at a temp
  * throwaway folder"). A command a check names (`in backticks`) is a button that runs it in whichever is open.
  *
+ * Room for the thing being looked at (Sandy, 2026-11-20: "the ability to collapse the cards on the right for smoke
+ * tests and … more vertical real estate"): the checks fold away to a strip at the side, remembered on this browser;
+ * what the page is sits behind "About" on the title's line; and the view is as tall as the window has left.
+ *
  * Reading first: a check shows Pass and Fail, and a note is asked for only once one is pressed (a fail needs one:
  * it is what the fix works from). After a QA test run in TestRail and a GitHub deployment's "View deployment":
  * the thing under test and the list to tick off, side by side.
@@ -61,6 +65,18 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   const [busy, setBusy] = useState(false)
   // Compare is a main of the task's own beside the build, at the same place, on a port of its own (main-running.ts; Sandy, 2026-11-20: "one per task"). The task's prototype shares it; the app's own main is left as it is.
   const [comparing, setComparing] = useState(false)
+  // The checks, put aside for a wider view: remembered on this browser.
+  const [aside, setAside] = useState(() => { try { return localStorage.getItem('se.smoke.checks') === '0' } catch { return false } })
+  const putAside = (to: boolean) => { setAside(to); try { localStorage.setItem('se.smoke.checks', to ? '0' : '1') } catch { /* fine without it */ } }
+  // The view is as tall as the window has left under it.
+  const viewRef = useRef<HTMLDivElement | null>(null)
+  const [room, setRoom] = useState<number | null>(null)
+  useEffect(() => {
+    const measure = () => { const el = viewRef.current; if (el) setRoom(Math.max(360, Math.round(window.innerHeight - Math.max(0, el.getBoundingClientRect().top) - 70))) }
+    measure(); const t = window.setTimeout(measure, 400)
+    window.addEventListener('resize', measure)
+    return () => { window.removeEventListener('resize', measure); window.clearTimeout(t) }
+  }, [v === null, aside, comparing])
   const theMain = useMain(appId, comparing, issueId)
   const [mainData, setMainData] = useState(dataChoice)
   const mine = useTrail(), theirs = useTrail() // the build's view, and main's beside it: each goes its own way
@@ -159,10 +175,14 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   )
   return (
     <section className="panel smoke" data-component="SmokeTest" aria-label="Smoke test">
-      <h2>🧪 Smoke test <span className="faint">{v.checks.length === 0 ? 'nothing for you' : done ? `${v.checks.length} checked by hand${v.failed ? `, ${v.failed} failed` : ''}` : `${v.owed} of ${v.checks.length} for you to check`}</span></h2>
-      <p className="faint" style={{ margin: '0 0 10px', fontSize: 13 }}>
+      <div className="smoke-head">
+        <h2>🧪 Smoke test <span className="faint">{v.checks.length === 0 ? 'nothing for you' : done ? `${v.checks.length} checked by hand${v.failed ? `, ${v.failed} failed` : ''}` : `${v.owed} of ${v.checks.length} for you to check`}</span></h2>
+        {v.checks.length > 0 && <button className="btn quiet small" aria-expanded={!aside} title={aside ? 'Show the checks beside the view' : 'Put the checks aside, for a wider view'} onClick={() => putAside(!aside)}>{aside ? `Show checks${v.owed ? ` · ${v.owed} to check` : ''}` : 'Hide checks'}</button>}
+      </div>
+      <details className="smoke-about"><summary className="faint">About this smoke test{v.head ? <> · commit <code>{v.head.slice(0, 7)}</code></> : null}</summary>
+      <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }}>
         {v.staged ? 'Every acceptance criterion no agent has marked, for you to check by hand on the built code' : 'What the agents could not judge, for you to try by hand on the built code'}{v.head ? <> (commit <code>{v.head.slice(0, 7)}</code>{v.branch ? <>, branch <code>{v.branch}</code></> : null})</> : ''}. Not the prototype. {many ? <>This app has {all.length} set-ups; each check is under the one it needs.</> : <>It runs {su.says}.</>}
-      </p>
+      </p></details>
       {error && <p className="bad" style={{ margin: '0 0 8px' }}>{error}</p>}
       {sent !== null && sent > 0 && <p className="smoke-sent" role="status">Sent back: {sent} that failed, with what you saw. It is fixed, checked again, and comes back to you here.</p>}
       {sent === 0 && done && !v.failed && <p className="smoke-sent ok" role="status">All of it holds. The task carries on to its pull request.</p>}
@@ -185,8 +205,8 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
         </div>
       )}
       {(v.checks.length > 0 || !!v.head) && (
-        <div className={`smoke-layout ${cmp ? 'comparing' : ''}`}>
-          <div className="smoke-view">
+        <div className={`smoke-layout ${cmp ? 'comparing' : ''} ${aside ? 'checks-aside' : ''}`} style={room ? { ['--smoke-room' as string]: `${room}px` } : undefined}>
+          <div className="smoke-view" ref={viewRef}>
             {local && !su.url && (
               <div className="empty">
                 {v.head ? (su.canRun
@@ -233,7 +253,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
               ? <div className="empty">This app is tried on a preview of its pull request, and this task has no pull request yet. It is opened once the first of its work is merged.</div>
               : <div className="empty">This app is smoke tested {su.where === 'staging' ? 'on staging' : su.where === 'preview' ? 'on a preview of its pull request' : 'behind a feature flag'}, and has not said at what address. Settings › Prototype has it.</div>)}
           </div>
-          <div className="smoke-groups">
+          {!aside && <div className="smoke-groups">
             {many && shown.length === 0 && v.checks.length > 0 && <p className="muted" style={{ margin: 0 }}>No check on this task needs {su.name}.</p>}
             {(['here', 'pr', 'after', 'nightly'] as const).map((when) => {
               const mine = shown.filter((c) => (c.when ?? 'here') === when)
@@ -251,7 +271,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
                 </div>
               )
             })}
-          </div>
+          </div>}
         </div>
       )}
       {local && termOn && <SmokeTerminal key={`${su.key}:own`} issueId={issueId} setup={su.key} send={send} />}

@@ -392,6 +392,19 @@ export const ScratchTerminal: Story = {
   },
 }
 
+/** The checks put aside for a wider view (made up): one press hides the cards, the count stays on the button, and another brings them back. */
+export const ChecksPutAside: Story = {
+  beforeEach: () => { try { localStorage.removeItem('se.smoke.checks') } catch { /* fine */ } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Hide checks' }))
+    await expect(c.queryByRole('button', { name: 'Pass' })).toBeNull()
+    await expect(c.getByTitle('The built code')).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Show checks · 3 to check' }))
+    await expect(c.getAllByRole('button', { name: 'Pass' })).toHaveLength(3)
+  },
+}
+
 /** Main's data is chosen (made up): a copy of this build's to start with, or the very same database; changing it while comparing brings main up again on the other. */
 export const MainsData: Story = {
   beforeEach: (ctx) => { try { localStorage.removeItem('se.compare.data') } catch { /* fine */ } return withEngine({ smoke: smokeSample, main: { ...MAIN_OFF, database: 'proto_main_sample' }, mainUrl: 'http://localhost:6600', mainFor: 'iss_sample20' })(ctx) },
@@ -405,4 +418,3 @@ export const MainsData: Story = {
     await expect(await c.findByText('· on the same database')).toBeInTheDocument()
   },
 }
-
