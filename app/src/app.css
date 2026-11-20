@@ -983,8 +983,6 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .smoke-layout.checks-aside { grid-template-columns: 1fr; }
 .smoke-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .smoke-head h2 { margin-bottom: 4px; }
-.smoke-about { margin: 0 0 8px; font-size: 13px; }
-.smoke-about summary { cursor: pointer; width: fit-content; }
 .page-head.compact { margin-bottom: 8px; align-items: center; }
 .page-head.compact .head-where, .page-head.compact .head-badges { display: none !important; }
 .page-head.compact h1 { font-size: 16px; margin: 0; }

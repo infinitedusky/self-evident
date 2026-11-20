@@ -39,12 +39,18 @@ const FROM = { task: ', its own', project: ', from its project', app: ', the app
 
 export const STATE_TONE: Record<IssueState, Tone> = { triage: 'neutral', backlog: 'neutral', todo: 'neutral', in_progress: 'accent', in_review: 'accent', done: 'ok', canceled: 'neutral', duplicate: 'neutral' }
 
+/** Where a task's head being small is remembered, on this browser. */
+export const TASK_HEAD = 'se.task.head'
+
 export function IssuePage() {
   const { id, section } = useParams()
   const [i, setI] = useState<IssueDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [refused, setRefused] = useState<string | null>(null) // why the engine wouldn't delete it
+  // A task's head, full or small (Sandy, 2026-11-20: "a toggle that's like verbose or just plain hidden … without losing the information that I need"): small is its id and title on one line, on every page of the task. Remembered on this browser.
+  const [small, setSmall] = useState(() => { try { return localStorage.getItem(TASK_HEAD) === 'small' } catch { return false } })
+  const toggleSmall = () => { const to = !small; setSmall(to); try { localStorage.setItem(TASK_HEAD, to ? 'small' : 'full') } catch { /* fine without it */ } }
   const nav = useNavigate()
   const timer = useRef<number | undefined>(undefined)
   useEffect(() => {
@@ -79,8 +85,7 @@ export function IssuePage() {
   const task = code && !i.parentId // a task: it has a brief to approve and steps
   return (
     <>
-      {/* On the smoke test the head is one line (Sandy, 2026-11-20: "we're taking up … 1/3 of the screen before we get to the thing we're actually looking at"): the task's name, and the rest a step away on its other pages. */}
-      <div className={`page-head ${task && section === 'smoke' ? 'compact' : ''}`}>
+      <div className={`page-head ${task && small ? 'compact' : ''}`}>
         <div>
           <div className="faint head-where" style={{ fontSize: 13, marginBottom: 4 }}>
             {i.project && !i.project.solo ? <Link to={`/projects/${i.project.id}`}>{i.project.name}</Link> : <Link to="/tasks">In no project</Link>}
@@ -99,19 +104,20 @@ export function IssuePage() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {error && <Badge tone="warn" dot>{error}</Badge>}
+          {task && <button className="btn quiet task-head-size" aria-pressed={small} onClick={toggleSmall} title={small ? 'Show the whole head: its project, its state and badges, and what each page is' : 'Make the head one line, for room to look at things'}>{small ? '▾ Show all' : '▴ Less'}</button>}
           {/* Closing is the person's, and what makes a task Done: once its pull request is merged and every check of theirs is passed or skipped. Until then it says what it waits on. */}
           {i.close && <button className="btn" disabled={busy || !i.close.can} title={i.close.can ? 'Its pull request is merged and every check is passed or skipped. Closing it marks it done.' : i.close.waits.join(' ')} onClick={() => act(() => engine.closeTask(i.id))}>Close task</button>}
           {i.build && ['failed', 'cancelled'].includes(i.build.status) && <button className="btn" disabled={busy} onClick={() => act(() => engine.retry(i.id))}>Retry</button>}
-          <button className="btn quiet" disabled={busy} onClick={() => void remove()} title="For a task made by mistake: it leaves nothing behind. One with work on it is canceled instead.">Delete</button>
+          {!(task && small) && <button className="btn quiet" disabled={busy} onClick={() => void remove()} title="For a task made by mistake: it leaves nothing behind. One with work on it is canceled instead.">Delete</button>}
         </div>
       </div>
       {refused && <div className="empty bad" style={{ marginBottom: 16 }}>{refused}</div>}
 
-      {i.close && !i.close.can && <p className="muted" style={{ margin: '0 0 16px' }} data-component="CloseWaits">Before it can be closed: {i.close.waits.join(' ')}</p>}
+      {i.close && !i.close.can && !(task && small) && <p className="muted" style={{ margin: '0 0 16px' }} data-component="CloseWaits">Before it can be closed: {i.close.waits.join(' ')}</p>}
       {i.reason && <div className="empty" style={{ marginBottom: 16 }}>{STATE_LABEL[i.state]}: <Md text={i.reason} inline /></div>}
       {i.build?.heldReason && i.build.status !== 'done' && <div className="empty" style={{ marginBottom: 16 }}>{i.build.heldReason}</div>}
 
-      {task ? <Task i={i} section={section} busy={busy} act={act} /> : (
+      {task ? <Task i={i} section={section} busy={busy} act={act} small={small} /> : (
         <>
           <section className="panel"><Brief description={i.description} brief={i.brief} open={!i.description} /></section>
           {code && <Steps i={i} />}
@@ -125,7 +131,7 @@ export function IssuePage() {
 }
 
 /** A task: its nav, and the section the address names. */
-function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; busy: boolean; act: (fn: () => Promise<unknown>) => Promise<void> }) {
+function Task({ i, section, busy, act, small = false }: { i: IssueDetail; section?: string; busy: boolean; act: (fn: () => Promise<unknown>) => Promise<void>; small?: boolean }) {
   const subject = { kind: 'issues' as const, id: i.id }
   const { v, error } = useSteps(subject, i.appId)
   const agent = useTaskAgent(i.id, i.appId)
@@ -187,12 +193,12 @@ function Task({ i, section, busy, act }: { i: IssueDetail; section?: string; bus
           </>
         )}
         {row && (
-          <StepSection subject={subject} appId={i.appId} name={i.title} row={row} base={base} fromIdea={v.fromIdea} waitingState={rows.find((r) => r.key === row.waitingOn)?.state} session={agent.session?.id}>
+          <StepSection subject={subject} appId={i.appId} name={i.title} row={row} base={base} fromIdea={v.fromIdea} waitingState={rows.find((r) => r.key === row.waitingOn)?.state} session={agent.session?.id} small={small}>
             {row.key === 'brief' ? <BriefStep i={i} busy={busy} act={act} feeds={rows.filter((r) => r.key !== 'brief')} base={base} /> : undefined}
           </StepSection>
         )}
         {here === 'checklist' && checklist && <ChecklistView checklist={checklist} base={base} />}
-        {here === 'smoke' && (checklist || staged) && <SmokeTest issueId={i.id} appId={i.appId} base={base} />}
+        {here === 'smoke' && (checklist || staged) && <SmokeTest issueId={i.id} appId={i.appId} base={base} small={small} />}
         {here === 'saves' && <TaskBranches issueId={i.id} at={new URLSearchParams(window.location.search).get('at')} stamp={savesStamp} onMoved={() => void act(async () => {})} onChanged={readSaves} />}
         {here === 'build' && (buildWaits
           ? <section className="panel"><h2>🏗️ {checklist ? 'Build' : 'Sub-tasks'}</h2><div className="empty">{checklist ? 'The build waits' : 'Planning and building wait'} for the brief's approval. <Link to={`${base}/brief`}>Go to the brief →</Link></div>{checklist?.flow && <TaskGraph i={i} checklist={checklist} />}</section>
