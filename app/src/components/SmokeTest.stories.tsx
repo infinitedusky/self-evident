@@ -21,6 +21,15 @@ export const ForYouToCheck: Story = {
     await expect(c.queryByRole('textbox', { name: /What you saw/ })).toBeNull() // no form until one is pressed
   },
 }
+/** The task's head made small (sample): what this page is is left out, and the checks and the view are what's left. */
+export const SmallHead: Story = {
+  args: { small: true },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/3 of 3 for you to check/)).toBeInTheDocument()
+    await expect(c.queryByText(/Not the prototype/)).toBeNull()
+  },
+}
 /** Go there sends the view to that check's story; Fail asks what you saw and will not send without it. */
 export const FailingOne: Story = {
   play: async ({ canvasElement }) => {

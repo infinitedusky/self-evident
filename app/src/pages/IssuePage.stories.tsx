@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, spyOn, userEvent, within, waitFor } from 'storybook/test'
-import { IssuePage } from './IssuePage'
+import { IssuePage, TASK_HEAD } from './IssuePage'
+import { step } from '@self-evident/engine/steps'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
 import { acceptance, approvedTaskStepsView, issueDetails, waitingTaskStepsView } from '../stories/sample'
 
@@ -185,3 +186,19 @@ export const DeleteDeclined: Story = {
 }
 export const Loading: Story = { parameters: at('iss_sample1'), beforeEach: withEngine({}, { latency: 'infinite' }) }
 export const EngineDown: Story = { parameters: at('iss_sample1'), beforeEach: withEngine(engineDown) }
+
+/** The head made small (sample): the task's id and title on one line, and what the step is left out at the top of its page. "Show all" puts it all back. */
+export const SmallHead: Story = {
+  parameters: at('iss_sample20', 'research'),
+  beforeEach: () => { localStorage.setItem(TASK_HEAD, 'small'); return () => localStorage.removeItem(TASK_HEAD) },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const more = await c.findByRole('button', { name: /Show all/ })
+    await expect(c.queryByText(step('research').what)).toBeNull()
+    await expect(c.queryByRole('button', { name: 'Delete' })).toBeNull()
+    await userEvent.click(more)
+    await expect(await c.findByText(step('research').what)).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: /Less/ })).toBeInTheDocument()
+  },
+}

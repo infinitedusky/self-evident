@@ -5503,3 +5503,15 @@ Not done: a copy of the data as it is now (it is as the work started; the rows m
 database); a choice of some other scenario for main; saying on the page, when main breaks on the same database, that
 it is likely the schema; the app's own main is unchanged (its "default" scenario).
 
+
+## A task's head, full or small (Sandy, 2026-11-20: "it still taking up a bunch of space … now we just have less information … reverting to what we had, but having a toggle")
+
+Trimming the smoke test's head saved little room and lost what it said. Undone, and made a choice instead:
+
+- **The full head is back by default**, on the smoke test too: the project line, the badges, and the paragraph
+  saying what the smoke test is (no longer behind "About").
+- **"▴ Less" on the task's head makes it small**, on every page of the task, remembered on this browser. Small is
+  the id and title on one line, plus Close and Retry when they apply. Left out until "▾ Show all": the project
+  line, the badges, Delete, what the task waits on before it can be closed, and the top of the page being worked on:
+  what the step is (and the prototype's "last thing you press" note), or what the smoke test is.
+- The smoke test's "Hide checks" stays as it was, on its own.
