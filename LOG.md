@@ -5787,3 +5787,23 @@ side by side, or by screenshots); what an app with no Storybook does.
 
 Not done: all of it. The sketch skill still says nothing about sorting objections; no Screens step in a workflow;
 the prototype and build skills still let the build differ from the prototype.
+
+## An app's own form for a pull request's description (Sandy, 2026-11-20: "a way for us to say what needs to go where and how it should be, basically like a prompt kind of thing that has a template and then a prompt"; "let's add those")
+
+The title and the commit message had templates in Settings › Landing; the description had none. Its agent was told,
+in words fixed in the engine, to copy the repository's template and its recent pull requests.
+
+- **Two settings, beside the title**: the description's sections, as text (`setup.pr_description`), and how to write
+  them (`setup.pr_description_how`). Either alone works.
+- **They come before the repository's own template.** The person set them for this app. With neither set, nothing
+  changes: the repository's template and its past pull requests are followed.
+- **The task's agent is told both**, in its own prompt: keep the headings and their order, fill each from what is
+  true of the branch, leave none out. What already held still holds: nothing of ours in it, rollback from the blast
+  radius.
+- **Writing it by hand starts from the sections**: "Write it" on the task's Pull request page opens with the
+  template in the box.
+- The app's agent can set both (`set_pr_rules`), only when the person asks for a form of their own.
+
+Not done: checking a written description against the template (a missing heading is not refused); a form per
+workflow or per project; our folded record's own shape, which stays the engine's.
+
