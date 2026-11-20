@@ -16,7 +16,7 @@ export const ForYouToCheck: Story = {
     const c = within(canvasElement)
     await expect(await c.findByText(/3 of 3 for you to check/)).toBeInTheDocument()
     await expect(c.getByText(/Not the prototype/)).toBeInTheDocument()
-    await expect(c.getByTitle('The built code')).toBeInTheDocument()
+    await expect(await c.findByTitle('The built code')).toBeInTheDocument() // once the engine has said whether it is shown through its proxy
     await expect(c.getAllByRole('button', { name: 'Pass' })).toHaveLength(3)
     await expect(c.queryByRole('textbox', { name: /What you saw/ })).toBeNull() // no form until one is pressed
   },

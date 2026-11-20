@@ -76,6 +76,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
   }
   return [
     http.get('/api/events', () => silentStream()),
+    http.get('/api/frame', () => HttpResponse.json({ frame: null })), // a story's views are shown as they are, not through the engine's proxy
     http.get('/api/devices', () => reply({ tailscale: 'missing', address: null, remote: false, devices: [] })),
     http.get('/api/apps', ({ request }) => reply(new URL(request.url).searchParams.get('removed') === '1' ? d.removedApps ?? [] : d.apps)),
     http.post('/api/apps/:id/remove', () => d.removeProblem ? HttpResponse.json({ error: d.removeProblem }, { status: 400 }) : reply({})),

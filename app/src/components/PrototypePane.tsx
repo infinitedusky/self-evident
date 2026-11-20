@@ -12,7 +12,7 @@ import { Badge } from './Badge'
 import { openEvents, API, engine, type Prototype } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { useWorkspace } from '../workspace'
-import { Nav, useTrail } from './Trail'
+import { Framed, Nav, useTrail } from './Trail'
 import { useCompare } from '../main-running'
 import { CompareWith, comparedSays } from './CompareMain'
 
@@ -156,16 +156,16 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Pr
           ? <div className="preview-pair">
               <figure aria-label="This prototype">
                 <figcaption><span>This prototype</span><Nav t={mine} home={base} src={src} of="prototype" /></figcaption>
-                <iframe key={`${src}#${mine.reloads}#${p.updatedAt ?? ''}`} src={src} title={p.title} style={sized} />
+                <Framed t={mine} home={base} src={src} version={p.updatedAt ?? ''} title={p.title} style={sized} />
               </figure>
               <figure aria-label="main">
                 <figcaption><span>{cmp!.branch}{cmp!.sha ? <> <code>{cmp!.sha.slice(0, 7)}</code></> : null}{comparedSays(compare) ? <span className="faint"> · {comparedSays(compare)}</span> : null}</span>{cmp!.up && <><Nav t={theirs} home={cmpBase} src={mainSrc} of="main" /><button className="btn quiet small" onClick={detachMain} title="Open main in a browser tab of its own, and give the prototype the room">↗ Detach</button></>}</figcaption>
                 {cmp!.up
-                  ? <iframe key={`${mainSrc}#${theirs.reloads}`} src={mainSrc} title="main" style={sized} />
+                  ? <Framed t={theirs} home={cmpBase} src={mainSrc} title="main" style={sized} />
                   : <div className="empty">Turning main on… {cmp!.log.length > 0 && <pre className="proto-log mono">{cmp!.log.slice(-6).join('\n')}</pre>}</div>}
               </figure>
             </div>
-          : <iframe key={`${src}#${mine.reloads}#${p.updatedAt ?? ''}`} /* a restart reloads it */ src={src} title={p.title} style={sized} />}
+          : <Framed t={mine} home={base} src={src} version={p.updatedAt ?? '' /* a restart reloads it */} title={p.title} style={sized} />}
         <PrototypeGuide id={p.id} guide={p.guide} at={at} onGo={go} />
       </div>
     </div>

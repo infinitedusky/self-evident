@@ -43,7 +43,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge } from './Badge'
 import { SmokeTerminal } from './SmokeTerminal'
-import { Nav, useTrail } from './Trail'
+import { Framed, Nav, useTrail } from './Trail'
 import { useCompare } from '../main-running'
 import { CompareWith, comparedSays } from './CompareMain'
 import { API, engine, openEvents, type SmokeCheck, type SmokeSetupView, type SmokeView } from '../engine'
@@ -231,13 +231,13 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
                 {behind && <p className="smoke-stale" role="note">The branch has moved on since this was started. Run the new commit to test what will be reviewed.</p>}
                 {local && cmp
                   ? <div className="smoke-pair">
-                      <figure><figcaption>This build{su.running ? <> <code>{su.running.slice(0, 7)}</code></> : null}</figcaption><div className="smoke-bar"><Nav t={mine} home={home} src={src} /></div><iframe key={`${src}#${mine.reloads}`} className="smoke-frame" title="The built code" src={src} /></figure>
+                      <figure><figcaption>This build{su.running ? <> <code>{su.running.slice(0, 7)}</code></> : null}</figcaption><div className="smoke-bar"><Nav t={mine} home={home} src={src} /></div><Framed t={mine} home={home} src={src} version={su.running ?? ''} className="smoke-frame" title="The built code" /></figure>
                       <figure><figcaption>{cmp.branch}{cmp.sha ? <> <code>{cmp.sha.slice(0, 7)}</code></> : null}{comparedSays(compare) ? <span className="faint"> · {comparedSays(compare)}</span> : null}</figcaption>{cmp.up && cmpSrc && <div className="smoke-bar"><Nav t={theirs} home={cmpHome} src={cmpSrc} of="main" /></div>}{cmp.up && cmpSrc
-                        ? <iframe key={`${cmpSrc}#${theirs.reloads}`} className="smoke-frame" title="main" src={cmpSrc} />
+                        ? <Framed t={theirs} home={cmpHome} src={cmpSrc} version={cmp.sha ?? ''} className="smoke-frame" title="main" />
                         : <div className="empty smoke-frame">Turning main on… {cmp.log.length > 0 && <pre className="smoke-log">{cmp.log.slice(-6).join('\n')}</pre>}</div>}</figure>
                     </div>
                   : local
-                  ? <iframe key={`${src}#${mine.reloads}`} className="smoke-frame" title="The built code" src={src} />
+                  ? <Framed t={mine} home={home} src={src} version={su.running ?? ''} className="smoke-frame" title="The built code" />
                   : <div className="empty">{su.where === 'preview' && v.pr ? <>The preview of pull request #{v.pr.number}. It opens in its own tab, and is rebuilt on each new commit. </> : <>It is deployed, so it opens in its own tab. </>}{su.account && <>Sign in as: {su.account}. </>}{su.flag && <>Flag: <code>{su.flag}</code>. </>}</div>}
               </>
             )}

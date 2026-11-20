@@ -13,6 +13,7 @@ import { markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } fro
 import { closeTerminal, closeTerminals, openTerminal, ownPage, resizeTerminal, scratchKey, typeInTerminal, watchTerminal } from './smoke-terminal.js'
 import { startLearning, talkBusy } from './talk.js'
 import { serve } from '@hono/node-server'
+import { frameFor } from './frame-proxy.js'
 import { appendEvent } from './events.js'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
@@ -448,6 +449,8 @@ export function buildApp(bus: EventBus) {
     if (!body.title?.trim()) return c.json({ error: 'a prototype needs a title' }, 400)
     try { return c.json(await startPrototype({ appId: c.req.param('id'), title: body.title.trim(), brief: body.brief, projectId: body.projectId, depth: body.depth }), 201) } catch (err) { return planError(c, err) }
   })
+  // A view of something running on this computer, through a proxy that lets it say where it is (frame-proxy.ts).
+  api.get('/frame', async (c) => { const frame = await frameFor(c.req.query('url') ?? '').catch(() => null); return c.json({ frame }) })
   api.get('/prototypes/:id', async (c) => { try { return c.json(await prototypeStatus(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/prototypes/:id/start', async (c) => { try { return c.json(await runPrototype(c.req.param('id'), 'person', { restart: c.req.query('restart') === '1' })) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/data/reset', async (c) => { const b = await c.req.json<{ scenario?: string | null }>().catch(() => ({ scenario: null })); try { return c.json(await resetPrototypeData(c.req.param('id'), b.scenario ?? null)) } catch (err) { return planError(c, err) } })

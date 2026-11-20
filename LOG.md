@@ -5610,3 +5610,24 @@ and which the idea's agent is told to trim when it splits a project. Now:
   sub-task), and where that leaves out or differs from the ticket, to say so, naming the part: never quietly drop it.
 - **Shown** on the idea's and the task's overview as "Where this came from", folded; an image that could not be
   fetched is said in red, since the agents can't see it.
+
+## A view's address bar follows the view (Sandy, 2026-11-20: "in prototype and smoke test, the browser screens have back forward refresh and address bars. But the address doesn't update with the site like a real browser. This makes the back and forward useless")
+
+What a prototype, a smoke test or main runs is on a port of its own, another origin, so the page around it could
+not read where it went: back and forward only stepped through addresses the page itself sent (typed, "Go there").
+
+- **The engine stands a proxy in front of it** (`engine/src/frame-proxy.ts`, `GET /api/frame?url=`): one per
+  local port, started the first time a view asks, on a port of its own on this computer. It passes everything
+  through (websockets too, so hot reload works) and puts one script first in each HTML page. The script tells the
+  page around it its address on each load, pushState, replaceState, popstate and hash change. Only addresses on
+  this computer are proxied, and it listens only here.
+- **The trail follows** (`app/src/components/Trail.tsx`, `Framed`): a link pressed inside the view is a step, as
+  in a browser; a redirect or a replaceState changes the step it is on. The frame is loaded again only when the bar
+  sends it somewhere it is not (back, forward, an address typed, a check's "Go there"), on reload, or on a restart.
+  The address bar shows the app's own address, not the proxy's.
+- Somewhere not on this computer (a deployed main, staging) is shown as it is, and only where the page sent it is
+  known.
+
+Not done: a page with a strict Content-Security-Policy that does not allow its own origin's scripts does not report
+(it still shows; the bar behaves as before). A link in the app to its own absolute `http://localhost:<port>` address
+leaves the proxy, and the view stops reporting until the bar sends it somewhere.
