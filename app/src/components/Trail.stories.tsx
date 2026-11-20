@@ -8,7 +8,14 @@ function One({ of }: { of?: string }) {
   const t = useTrail()
   const [home] = useState('http://localhost:6123')
   const src = t.at ?? `${home}/orders`
-  return <div className="preview-bar"><Nav t={t} home={home} src={src} of={of} /><span className="faint mono" data-testid="at">{src}#{t.reloads}</span></div>
+  return (
+    <div className="preview-bar">
+      <Nav t={t} home={home} src={src} of={of} /><span className="faint mono" data-testid="at">{src}#{t.reloads}</span>
+      {/* What the view would say of itself, through the engine's proxy: pressed here, as there is no view in a story. */}
+      <button className="btn quiet small" onClick={() => t.seen(`${home}/login`, true)}>View redirected to /login</button>
+      <button className="btn quiet small" onClick={() => t.seen(`${home}/orders/7`, false)}>View went to /orders/7</button>
+    </div>
+  )
 }
 const meta = { title: 'Components/Trail', component: One } satisfies Meta<typeof One>
 export default meta
@@ -32,3 +39,20 @@ export const BackAndForward: Story = {
 }
 /** Beside another view, each button says whose it is. */
 export const Named: Story = { args: { of: 'main' }, play: async ({ canvasElement }) => { await expect(within(canvasElement).getByRole('button', { name: 'Back (main)' })).toBeInTheDocument() } }
+/** A link pressed inside the view: the address follows, and back goes where it was. A redirect is not a step. */
+export const FollowsTheView: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const address = c.getByRole('textbox', { name: 'Address' })
+    await userEvent.click(c.getByRole('button', { name: 'View redirected to /login' }))
+    await expect(address).toHaveValue('/login')
+    await expect(c.getByRole('button', { name: 'Back' })).toBeDisabled()
+    await userEvent.click(c.getByRole('button', { name: 'View went to /orders/7' }))
+    await expect(address).toHaveValue('/orders/7')
+    await userEvent.click(c.getByRole('button', { name: 'Back' }))
+    await expect(c.getByTestId('at')).toHaveTextContent('http://localhost:6123/login#0')
+    await expect(c.getByRole('button', { name: 'Back' })).toBeDisabled()
+    await userEvent.click(c.getByRole('button', { name: 'Forward' }))
+    await expect(address).toHaveValue('/orders/7')
+  },
+}
