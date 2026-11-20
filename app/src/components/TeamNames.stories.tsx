@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, fn, userEvent, within } from 'storybook/test'
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { TeamNames } from './TeamNames'
 
@@ -20,8 +20,8 @@ export const ReadFromALink: Story = {
     await userEvent.click(badge)
     await userEvent.type(c.getByRole('textbox', { name: 'Its name for the team' }), 'Brand fields from the employee scan (sample)')
     await userEvent.click(c.getByRole('button', { name: 'Save' }))
-    await expect(saved).toHaveBeenCalledWith({ ticket: '', title: 'Brand fields from the employee scan (sample)' })
-    await expect(args.onSaved).toHaveBeenCalled()
+    await waitFor(() => expect(saved).toHaveBeenCalledWith({ ticket: '', title: 'Brand fields from the employee scan (sample)' }))
+    await waitFor(() => expect(args.onSaved).toHaveBeenCalled()) // the save answers a moment after the press
   },
 }
 /** Set by hand, with its name for the team beside it. */
