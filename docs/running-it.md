@@ -272,4 +272,11 @@ within a few seconds and goes through **ngrok** instead, which uses the ordinary
 (`brew install ngrok`) and give it your account's token once (`ngrok config add-authtoken <token>`). A free ngrok
 account has one address, so only one thing can be shared at a time and any other ngrok tunnel on the account has to
 be stopped first; visitors see ngrok's notice page before the prototype. `SHARE_TUNNEL=ngrok` (or `cloudflare`) in the
-engine's environment picks one and skips the other.
+engine's environment picks one and skips the others.
+
+Where the computer has **Tailscale** (see "From a phone"), sharing tries it before ngrok: a public link at the
+computer's own Tailscale name, on port 8443 or 10000, so **two things at once**, with no notice page. It needs
+Funnel allowed on the Tailscale account; if it is not, the share panel gives the link that allows it. The address
+shows the computer's name. Port 443 is never used for a share: it is where Self Evident's own page is served to the
+phone, and that page is never public. `SHARE_TUNNEL=funnel` uses only Tailscale. The first link from a computer can
+take a few minutes to answer everywhere, while its name spreads.

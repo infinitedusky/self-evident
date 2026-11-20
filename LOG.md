@@ -5413,3 +5413,33 @@ and "compare would always just open the running main to whatever location you wa
 Not done: a place in Settings to give the address or see the stand-ins (the agent sets them, on being asked); main
 beside a mockup or a sketch other than by opening its tab; a smoke set-up with a script of its own (a docs site) is
 compared with the app's main, not with that script run from main; after an engine restart it is off.
+
+## Tailscale Funnel as a tunnel for sharing: two things at once (Sandy, 2026-11-19: "since we have Tailscale running now, should we be using that? And would that allow us to share more things at the same time?"; "let's do both")
+
+"Both" is this and hosted links, so a share does not need the computer on. This entry is the first.
+
+- **Order: Cloudflare, then Tailscale Funnel, then ngrok.** Cloudflare stays first: no account, any number at once,
+  and a random address. Where the network blocks it, Funnel is next if the computer has Tailscale; a computer
+  without it goes on to ngrok without a word. `SHARE_TUNNEL=funnel` uses only it.
+- **Two at once, not three.** Funnel allows ports 443, 8443 and 10000. 443 is where Self Evident's own page is
+  served to the phone, and that page has no sign-in, so a share never takes it: 8443 and 10000 only. With ngrok's
+  one address after them, that is three things at once on a network that blocks Cloudflare.
+- **Never Self Evident itself.** The page's port and the engine's are refused as what a share reaches, and a share
+  is ready only when Funnel says it reaches the address it was asked for.
+- **Asked as itself.** Funnel passes on the public name as the host, which a dev server refuses. A prototype and the
+  sketches are already behind a server of ours; the mockups now go through a plain pass-on proxy when the tunnel is
+  Funnel.
+- **Stopping is checked.** The `tailscale` on the path is a shell wrapper round the app's program; stopping the
+  wrapper left the program and the public address up (seen with a throwaway page). So the app's program is run
+  directly, every stop is followed by a sweep for a funnel to that same address, and the engine's start closes any
+  funnel of ours left by an engine that was killed.
+- The panel says "Through Tailscale", that the link carries the computer's name, and that two can be shared this way.
+
+Tried for real on the Mac Studio with a throwaway page: Funnel is already allowed on the account, it came up on
+8443 in a few seconds and printed what the code reads. Not seen: the link opened from outside (this computer cannot
+open its own Tailscale name, since Caddy holds its port 443 and nothing answers its 8443 locally), and a share
+through the app on the laptop, which is where Cloudflare is blocked.
+
+Not done: hosted links (next: which host is Sandy's choice); waking a stopped prototype when someone opens its link
+(possible with Funnel, since its address does not change: asked about, not built); the smoke test as something to share.
+
