@@ -24,7 +24,7 @@ describe.skipIf(!reachable)('sharing', () => {
   const appId = newId('app')
   let dir: string
   let repoPath: string
-  const was = { bin: process.env.CLOUDFLARED_BIN, hours: process.env.SHARE_HOURS, ngrok: process.env.NGROK_BIN, tunnel: process.env.SHARE_TUNNEL }
+  const was = { ts: process.env.TAILSCALE_BIN, bin: process.env.CLOUDFLARED_BIN, hours: process.env.SHARE_HOURS, ngrok: process.env.NGROK_BIN, tunnel: process.env.SHARE_TUNNEL }
   beforeAll(async () => {
     dir = await mkdtemp(join(tmpdir(), 'if-share-'))
     await git(dir, ['init', '-q', '-b', 'main', 'repo'])
@@ -37,12 +37,13 @@ describe.skipIf(!reachable)('sharing', () => {
     await writeFile(fake, `#!/bin/sh\necho "$@" > "${dir}/asked.txt"\necho "INF |  https://sample-made-up-words.trycloudflare.com  |" >&2\necho "INF Registered tunnel connection connIndex=0" >&2\nexec sleep 600\n`); await chmod(fake, 0o755)
     process.env.CLOUDFLARED_BIN = fake
     process.env.NGROK_BIN = join(dir, 'no-ngrok'); delete process.env.SHARE_TUNNEL
+    process.env.TAILSCALE_BIN = join(dir, 'no-tailscale') // never the real one: it would make a public address
     await db.insert(workspace).values({ id: wsId, name: 'share test' })
     await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'Shop', key: appId.slice(-6).toUpperCase() })
     await db.insert(repo).values({ id: newId('repo'), appId, fullName: '', localPath: repoPath })
     await setPrototypeCommand(appId, SERVER)
   })
-  afterAll(async () => { stopShares(); stopPrototypes(); process.env.CLOUDFLARED_BIN = was.bin; process.env.SHARE_HOURS = was.hours; process.env.NGROK_BIN = was.ngrok; process.env.SHARE_TUNNEL = was.tunnel; await pool.end() })
+  afterAll(async () => { stopShares(); stopPrototypes(); process.env.TAILSCALE_BIN = was.ts; process.env.CLOUDFLARED_BIN = was.bin; process.env.SHARE_HOURS = was.hours; process.env.NGROK_BIN = was.ngrok; process.env.SHARE_TUNNEL = was.tunnel; await pool.end() })
 
   it('gives a running prototype a public address, reached as itself; the same again while it lasts; gone when the prototype stops', async () => {
     const p = await startPrototype({ appId, title: 'Shared (sample)' })
@@ -135,5 +136,49 @@ describe.skipIf(!reachable)('sharing', () => {
     process.env.SHARE_TUNNEL = 'cloudflare'; forgetBlocked()
     await expect(share('sketch', appId)).rejects.toThrow(/blocks outbound port 7844/) // told to use only Cloudflare: no fallback
     delete process.env.SHARE_TUNNEL; forgetBlocked()
+  })
+
+  it('goes through Tailscale Funnel before ngrok: two public ports, never 443, the target asked as itself; says so when both are taken or Funnel is not allowed', async () => {
+    const { readFileSync } = await import('node:fs')
+    // Tailscale as the engine reads it: its state, what it serves already (443: the page for the phone), and a funnel in the foreground.
+    const fake = async (name: string, o: { taken?: number[]; says?: string } = {}) => {
+      const f = join(dir, name)
+      const tcp = JSON.stringify(Object.fromEntries([443, ...(o.taken ?? [])].map((p) => [p, { HTTPS: true }])))
+      await writeFile(f, `#!/bin/sh\nif [ "$1" = status ]; then echo '{"BackendState":"Running"}'; exit 0; fi\nif [ "$2" = status ]; then echo '{"TCP":${tcp}}'; exit 0; fi\necho "$@" >> "${dir}/${name}-asked.txt"\n${o.says ?? `port=\${2#--https=}\necho "Available on the internet:"\necho\necho "https://sample-computer.sample-net.ts.net:$port/"\necho "|-- proxy $3"\necho\necho "Press Ctrl+C to exit."`}\nexec sleep 600\n`); await chmod(f, 0o755)
+      return f
+    }
+    process.env.TAILSCALE_BIN = await fake('tailscale'); process.env.SHARE_TUNNEL = 'funnel'
+    const s = await share('sketch', appId, 'user')
+    expect(s).toMatchObject({ url: 'https://sample-computer.sample-net.ts.net:8443', via: 'funnel' })
+    const p = await startPrototype({ appId, title: 'Second (sample)' })
+    expect(await until(async () => (await prototypeStatus(p.id)).up)).toBe(true)
+    expect(await share('prototype', p.id, 'user')).toMatchObject({ url: 'https://sample-computer.sample-net.ts.net:10000', via: 'funnel' }) // a second thing at once, on the other port
+    const asked = readFileSync(join(dir, 'tailscale-asked.txt'), 'utf8').trim().split('\n')
+    expect(asked[0]).toMatch(/^funnel --https=8443 http:\/\/127\.0\.0\.1:\d+$/)
+    expect(asked[1]).toMatch(/^funnel --https=10000 http:\/\/127\.0\.0\.1:\d+$/)
+    expect(await (await fetch(asked[1].split(' ')[2])).text()).toBe(`host localhost:${(await prototypeStatus(p.id)).port}`) // through our proxy, which asks the prototype as itself
+
+    const third = newId('app')
+    await db.insert(app).values({ id: third, workspaceId: wsId, name: 'Third', key: third.slice(-6).toUpperCase() })
+    await db.insert(repo).values({ id: newId('repo'), appId: third, fullName: '', localPath: repoPath })
+    await expect(share('sketch', third)).rejects.toThrow(/both of Tailscale's public ports \(8443 and 10000\) are in use/)
+    await unshare('sketch', appId)
+    expect(await share('sketch', third, 'user')).toMatchObject({ url: 'https://sample-computer.sample-net.ts.net:8443' }) // the port is free again
+    await unshare('sketch', third); await stopPrototype(p.id)
+    expect(await until(async () => shared('prototype', p.id) === null)).toBe(true)
+
+    process.env.TAILSCALE_BIN = await fake('tailscale-full', { taken: [8443, 10000] }) // something else on this computer serves on both
+    await expect(share('sketch', appId)).rejects.toThrow(/both of Tailscale's public ports/)
+    process.env.TAILSCALE_BIN = await fake('tailscale-not-allowed', { says: 'echo "Funnel is not enabled on your tailnet."; echo "To enable, visit:"; echo "  https://login.tailscale.com/f/funnel?node=sample"' })
+    await expect(share('sketch', appId)).rejects.toThrow(/not switched on for this account yet\. Open https:\/\/login\.tailscale\.com\/f\/funnel\?node=sample, allow it/)
+    await expect(share('sketch', appId)).rejects.toThrow(/not switched on/) // and the port it tried is not left held
+
+    // In order: Cloudflare blocked, then Tailscale, and ngrok is never asked.
+    process.env.TAILSCALE_BIN = join(dir, 'tailscale'); process.env.CLOUDFLARED_BIN = join(dir, 'cloudflared-blocked'); process.env.NGROK_BIN = join(dir, 'no-ngrok'); delete process.env.SHARE_TUNNEL; forgetBlocked()
+    expect(await share('sketch', appId, 'user')).toMatchObject({ via: 'funnel' })
+    await unshare('sketch', appId)
+    process.env.TAILSCALE_BIN = join(dir, 'tailscale-full')
+    await expect(share('sketch', appId)).rejects.toThrow(/Tried Tailscale instead: both of Tailscale's public ports[\s\S]*Tried ngrok instead: ngrok is not installed/)
+    process.env.TAILSCALE_BIN = join(dir, 'no-tailscale'); process.env.CLOUDFLARED_BIN = join(dir, 'cloudflared'); forgetBlocked()
   })
 })

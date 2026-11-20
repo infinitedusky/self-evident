@@ -138,12 +138,13 @@ const readBody = (req: IncomingMessage, max = 16_000) => new Promise<string>((ok
 
 /**
  * The proxy a shared prototype is reached through. `target` is the prototype's own address; `guide` and `onFeedback`
- * are asked each time, so a guide written after sharing shows at once.
+ * are asked each time, so a guide written after sharing shows at once. With no guide at all (`null`) it only passes
+ * things on, asking the target as itself: what a tunnel that cannot set the host itself goes through (funnel.ts).
  */
-export async function guideProxy(target: string, o: { title: string; guide: () => Promise<Guide | null>; onFeedback: (f: Feedback) => Promise<void> }): Promise<{ server: Server; port: number }> {
+export async function guideProxy(target: string, o: { title: string; guide: () => Promise<Guide | null>; onFeedback: (f: Feedback) => Promise<void> } | null): Promise<{ server: Server; port: number }> {
   const to = new URL(target)
   let taken = 0
-  const own = async (req: IncomingMessage, res: ServerResponse, path: string) => {
+  const own = async (o: { title: string; guide: () => Promise<Guide | null>; onFeedback: (f: Feedback) => Promise<void> }, req: IncomingMessage, res: ServerResponse, path: string) => {
     if (path === 'guide.js' && req.method === 'GET') { res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' }).end(WIDGET); return }
     if (path === 'guide.json' && req.method === 'GET') { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }).end(JSON.stringify({ title: o.title, guide: await o.guide().catch(() => null) })); return }
     if (path === 'feedback' && req.method === 'POST') {
@@ -160,11 +161,11 @@ export async function guideProxy(target: string, o: { title: string; guide: () =
   }
   const server = createServer((req, res) => {
     const url = req.url ?? '/'
-    if (url.startsWith(OWN)) { void own(req, res, url.slice(OWN.length).split('?')[0]).catch(() => { if (!res.headersSent) res.writeHead(500); res.end() }); return }
+    if (o && url.startsWith(OWN)) { void own(o, req, res, url.slice(OWN.length).split('?')[0]).catch(() => { if (!res.headersSent) res.writeHead(500); res.end() }); return }
     const headers = { ...req.headers, host: to.host }
-    delete headers['accept-encoding'] // plain text back, so a page can be read and added to
+    if (o) delete headers['accept-encoding'] // plain text back, so a page can be read and added to
     const up = httpRequest({ hostname: to.hostname, port: to.port, method: req.method, path: url, headers }, (r) => {
-      const html = /text\/html/i.test(String(r.headers['content-type'] ?? '')) && req.method === 'GET' && !r.headers['content-encoding']
+      const html = !!o && /text\/html/i.test(String(r.headers['content-type'] ?? '')) && req.method === 'GET' && !r.headers['content-encoding']
       if (!html) { res.writeHead(r.statusCode ?? 502, r.headers); r.pipe(res); return }
       const parts: Buffer[] = []
       r.on('data', (c: Buffer) => parts.push(c))
@@ -176,7 +177,7 @@ export async function guideProxy(target: string, o: { title: string; guide: () =
       })
       r.on('error', () => res.destroy())
     })
-    up.on('error', () => { if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' }); res.end('The prototype is not answering right now.') })
+    up.on('error', () => { if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' }); res.end(o ? 'The prototype is not answering right now.' : 'This is not answering right now.') })
     req.pipe(up)
   })
   // A dev server's live reload is a websocket: passed through as it is.

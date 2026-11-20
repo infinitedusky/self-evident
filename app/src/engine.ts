@@ -299,7 +299,7 @@ export interface TaskBranches { issueId: string; worktrees: { key: string; label
 export interface TaskMoved { now: { id: string; name: string }; setAside: { id: string; name: string; commits: number }; switched: { worktree: string; branch: string }[]; leftAlone: string[]; restarted: number; problems: string[] }
 /** Something made public for a look: a prototype, a place's mockups or its sketches, at a temporary address. */
 export type ShareKind = 'prototype' | 'storybook' | 'sketch'
-export interface Shared { kind: ShareKind; id: string; url: string; since: string; expiresAt: string; by: string; /** Which tunnel it goes through. */ via?: 'cloudflare' | 'ngrok'; what?: string }
+export interface Shared { kind: ShareKind; id: string; url: string; since: string; expiresAt: string; by: string; /** Which tunnel it goes through. */ via?: 'cloudflare' | 'funnel' | 'ngrok'; what?: string }
 export interface Event { seq: number; ts: string; type: string; actor: string; issueId: string | null; projectId: string | null; payload: Record<string, unknown> }
 export interface NewSubIssue { key: string; title: string; description?: string; brief?: string; dependsOn?: string[]; files?: string[] }
 export interface NewProjectIssue { title: string; description?: string; brief?: string; subIssues?: NewSubIssue[] }

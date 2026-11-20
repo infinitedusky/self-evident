@@ -67,6 +67,7 @@ export function Share({ kind, id, appId, open: startOpen = false }: { kind: Shar
             <strong>Anyone with this link can open {NAME[kind].it}</strong>
             <div className="share-link"><input className="mono" readOnly value={share.url} aria-label="The public link" onFocus={(e) => e.target.select()} /><button className="btn small" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button></div>
             <p className="faint">Public since {clock(share.since)}. It ends at {clock(share.expiresAt)}, or sooner when {NAME[kind].ends}.{kind === 'prototype' ? ' They use it with the sample data that is in it now, and what they do there changes it for everyone.' : ''}</p>
+            {share.via === 'funnel' && <p className="faint">Through Tailscale. The link carries this computer's name, and two things can be shared this way at once.</p>}
             {share.via === 'ngrok' && <p className="faint">Through ngrok, since this network blocks Cloudflare's tunnel. On a free ngrok account the visitor sees ngrok's notice first and presses Visit Site, and only one thing can be shared at a time.</p>}
             <button className="btn quiet small" disabled={busy} onClick={() => void act(async () => { await engine.unshare(kind, id); setShare(null) })}>Stop sharing</button>
           </> : <>

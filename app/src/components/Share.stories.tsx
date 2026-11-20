@@ -27,6 +27,16 @@ export const MakeTheLink: Story = {
 }
 /** Shared: the button says so; the panel has the link, when it ends, and the way to stop. */
 export const Shared: Story = { args: { open: true }, beforeEach: withEngine({ shares: { 'prototype:proto_sample1': live } }) }
+/** Through Tailscale Funnel (a made-up computer name): the link is this computer's own, on one of its two public ports. */
+export const ThroughTailscale: Story = {
+  args: { open: true }, beforeEach: withEngine({ shares: { 'prototype:proto_sample1': { ...live, url: 'https://sample-computer.sample-net.ts.net:8443', via: 'funnel' } } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByLabelText('The public link')).toHaveValue('https://sample-computer.sample-net.ts.net:8443')
+    await expect(c.getByText(/Through Tailscale\. The link carries this computer's name/)).toBeInTheDocument()
+  },
+}
+
 /** Through ngrok, because this network blocks Cloudflare's tunnel: the panel says so, and what that means for the visitor. */
 export const ThroughNgrok: Story = {
   args: { open: true }, beforeEach: withEngine({ shares: { 'prototype:proto_sample1': { ...live, url: 'https://sample-made-up.ngrok-free.dev', via: 'ngrok' } } }),

@@ -11,7 +11,8 @@
  * The tunnel is a Cloudflare quick tunnel (`cloudflared tunnel --url`): no account, no configuration, a random
  * `trycloudflare.com` address that lasts as long as the process does. Where a network will not let that connect
  * (it uses port 7844, which managed laptops block), ngrok is used instead: it needs an account's token, and gets
- * through on the ordinary HTTPS port. Anyone with the address can open it, so a share is always a person's decision (the
+ * through on the ordinary HTTPS port. Between the two comes Tailscale Funnel (funnel.ts), where this computer has
+ * Tailscale: also the ordinary port, two things at once, no notice page for the visitor. Anyone with the address can open it, so a share is always a person's decision (the
  * agent's tool is rated expensive, which always asks), it ends by itself after a few hours, and it ends with the
  * thing it shows. Nothing about a share is kept: after an engine restart there are none.
  *
@@ -26,6 +27,7 @@ import { db } from './db/client.js'
 import { app, session } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { PlanError } from './projects.js'
+import { FUNNEL_PORTS, funnelReady, funnelRefused, ownAddress, sweepFunnel, tailscale } from './funnel.js'
 import { freeNgrok, ngrokHolders, pausedServices, restoreNgrok, restoreNgrokNow, type Holder } from './ngrok-holders.js'
 import { onPrototypeStopped, prototypeStatus } from './prototype.js'
 import { guideOf, guideProxy, takeFeedback } from './share-guide.js'
@@ -34,8 +36,8 @@ import { storybookStatus } from './storybook.js'
 
 export const SHARE_KINDS = ['prototype', 'storybook', 'sketch'] as const
 export type ShareKind = (typeof SHARE_KINDS)[number]
-export interface Shared { kind: ShareKind; id: string; url: string; since: string; expiresAt: string; by: string; /** Which tunnel it goes through. */ via: 'cloudflare' | 'ngrok' }
-interface Live extends Shared { appId: string; proc: ChildProcess; server?: Server; timer: NodeJS.Timeout }
+export interface Shared { kind: ShareKind; id: string; url: string; since: string; expiresAt: string; by: string; /** Which tunnel it goes through. */ via: Via }
+interface Live extends Shared { appId: string; proc: ChildProcess; server?: Server; /** What the tunnel itself needed beside it, and how to be sure it is gone. */ also?: Server; gone?: () => void; timer: NodeJS.Timeout }
 
 const live = new Map<string, Live>()
 const starting = new Map<string, Promise<Shared>>()
@@ -97,10 +99,10 @@ async function targetOf(kind: ShareKind, id: string): Promise<{ appId: string; u
   return { appId, url: `http://127.0.0.1:${port}`, server }
 }
 
-export type Via = 'cloudflare' | 'ngrok'
-type Tunnel = { proc: ChildProcess; url: string; via: Via }
+export type Via = 'cloudflare' | 'funnel' | 'ngrok'
+type Tunnel = { proc: ChildProcess; url: string; via: Via; also?: Server; gone?: () => void }
 /** Why a tunnel did not come up, in a form the next step can act on: `blocked` means this network, so another provider may work. */
-class TunnelError extends PlanError { constructor(message: string, readonly blocked = false, readonly busy = false) { super(message) } }
+class TunnelError extends PlanError { constructor(message: string, readonly blocked = false, readonly busy = false, /** Nothing to say about it: this computer simply does not have that tunnel. */ readonly absent = false) { super(message) } }
 /** A share that could not be made, with what the person can do about it: ngrok's address held by tunnels on this computer, which can be stopped for them. */
 export class ShareError extends PlanError { constructor(message: string, readonly code: 'ngrok_busy', readonly holders: Holder[]) { super(message) } }
 
@@ -162,16 +164,43 @@ const ngrok = (target: string, timeoutMs = startTimeout()) => run(ngrokBin(), ['
 })
 
 /**
+ * Tailscale Funnel (funnel.ts): one of two public ports of this computer's Tailscale name. It cannot ask the target
+ * as itself, so what is not already behind a proxy of ours goes through one that does.
+ */
+const funnelHeld = new Set<number>()
+async function funnel(target: string, o: { own: boolean }, timeoutMs = startTimeout()): Promise<Tunnel> {
+  if (ownAddress(target)) throw new TunnelError('Self Evident\'s own page is never made public: it has no sign-in.')
+  const ts = await tailscale()
+  if (!ts) throw new TunnelError('Tailscale is not installed on this computer.', false, false, true)
+  if (!ts.running) throw new TunnelError('Tailscale is off on this computer: open it and connect, then share again.')
+  const port = FUNNEL_PORTS.find((p) => !funnelHeld.has(p) && !ts.taken.has(p))
+  if (!port) throw new TunnelError(`both of Tailscale's public ports (${FUNNEL_PORTS.join(' and ')}) are in use: two things can be shared through it at once. Stop sharing one, then share again.`, false, true)
+  funnelHeld.add(port)
+  const pass = o.own ? null : await guideProxy(target, null)
+  const to = pass ? `http://127.0.0.1:${pass.port}` : target
+  const gone = () => { funnelHeld.delete(port); pass?.server.close(); sweepFunnel(port, to) }
+  try {
+    const t = await run(ts.bin, ['funnel', `--https=${port}`, to], {
+      via: 'funnel', timeoutMs, ready: (all) => funnelReady(all, to),
+      broken: (all) => { const why = funnelRefused(all); return why ? new TunnelError(why) : null },
+      missing: 'Tailscale is not installed on this computer.',
+    })
+    return { ...t, also: pass?.server, gone }
+  } catch (err) { gone(); throw err }
+}
+
+/**
  * Which tunnel a share goes through. `SHARE_TUNNEL`: cloudflare, ngrok, or auto (the default): Cloudflare first, since
- * it needs no account, and ngrok when this network will not let Cloudflare connect. A network that blocked it once is
- * not asked again for an hour, so the next share does not wait to find out.
+ * it needs no account; when this network will not let Cloudflare connect, Tailscale Funnel if this computer has it, then
+ * ngrok. A network that blocked Cloudflare once is not asked again for an hour, so the next share does not wait to find out.
  */
 let cloudflareBlockedAt = 0
 export const forgetBlocked = () => { cloudflareBlockedAt = 0 } // for tests
 const ownNgrok = () => [...live.values()].filter((s) => s.via === 'ngrok' && s.proc.pid).map((s) => s.proc.pid!)
-async function tunnel(target: string): Promise<Tunnel> {
+async function tunnel(target: string, o: { own: boolean }): Promise<Tunnel> {
   const want = (process.env.SHARE_TUNNEL ?? 'auto').toLowerCase()
   if (want === 'ngrok') return ngrok(target)
+  if (want === 'funnel' || want === 'tailscale') return funnel(target, o)
   if (want === 'cloudflare' || want === 'cloudflared') return cloudflare(target)
   let first: TunnelError | null = null
   if (Date.now() - cloudflareBlockedAt > 3_600_000) {
@@ -180,8 +209,13 @@ async function tunnel(target: string): Promise<Tunnel> {
       first = err; cloudflareBlockedAt = Date.now()
     }
   }
+  let second = ''
+  try { return await funnel(target, o) } catch (err) {
+    if (!(err instanceof TunnelError)) throw err
+    if (!err.absent) second = ` Tried Tailscale instead: ${err.message}` // a computer without Tailscale: nothing to say, on to ngrok
+  }
   try { return await ngrok(target) } catch (err) {
-    const why = `${first ? first.message : 'This network does not let the Cloudflare tunnel connect (found earlier).'} Tried ngrok instead: ${(err as Error).message}`
+    const why = `${first ? first.message : 'This network does not let the Cloudflare tunnel connect (found earlier).'}${second} Tried ngrok instead: ${(err as Error).message}`
     if (err instanceof TunnelError && err.busy) {
       const holders = await ngrokHolders(ownNgrok()).catch(() => [])
       throw new ShareError(holders.length ? `${why} On this computer: ${holders.map((h) => `ngrok ${h.what}${h.service ? ` (the service ${h.service})` : ''}`).join('; ')}.` : `${why} None is running on this computer, so it is on another one.`, 'ngrok_busy', holders)
@@ -213,11 +247,11 @@ export async function share(kind: ShareKind, id: string, actor = 'person', opts:
     const target = await targetOf(kind, id)
     if (opts.freeNgrok) await freeNgrok(ownNgrok()).catch(() => [])
     let t: Tunnel
-    try { t = await tunnel(target.url) } catch (err) { target.server?.close(); throw err }
+    try { t = await tunnel(target.url, { own: !!target.server }) } catch (err) { target.server?.close(); throw err }
     const now = Date.now()
     const s: Live = {
       kind, id, appId: target.appId, url: t.url, via: t.via, since: new Date(now).toISOString(), expiresAt: new Date(now + hours() * 3_600_000).toISOString(), by: actor,
-      proc: t.proc, server: target.server, timer: setTimeout(() => void unshare(kind, id, 'engine', 'its time was up'), hours() * 3_600_000),
+      proc: t.proc, server: target.server, also: t.also, gone: t.gone, timer: setTimeout(() => void unshare(kind, id, 'engine', 'its time was up'), hours() * 3_600_000),
     }
     s.timer.unref?.()
     live.set(key, s)
@@ -237,7 +271,7 @@ export async function unshare(kind: ShareKind, id: string, actor = 'person', why
   live.delete(key)
   clearTimeout(s.timer)
   try { s.proc.kill('SIGTERM') } catch { /* gone */ }
-  s.server?.close()
+  s.server?.close(); s.also?.close(); s.gone?.()
   await tell(s.appId, actor, 'share.stopped', { kind, id, url: s.url, ...(why ? { why } : {}) }).catch(() => {})
   if (pausedServices().length && ![...live.values()].some((x) => x.via === 'ngrok')) { await new Promise((r) => setTimeout(r, 500)); await restoreNgrok().catch(() => {}) } // the address is free again: what was stopped for it comes back
   return { stopped: true }
@@ -247,6 +281,6 @@ export const shared = (kind: ShareKind, id: string): Shared | null => { const s 
 /** Everything of one app that is public right now. */
 export const sharesOf = (appId: string): (Shared & { what: string })[] => [...live.values()].filter((s) => s.appId === appId).map((s) => ({ ...view(s), what: WHAT[s.kind] }))
 /** The engine has just started: no share outlives it, so a service left stopped for one (the engine was killed mid-share) is put back now. */
-export const restoreAfterRestart = () => restoreNgrok().catch(() => [] as string[])
+export const restoreAfterRestart = () => { for (const p of FUNNEL_PORTS) sweepFunnel(p); return restoreNgrok().catch(() => [] as string[]) } // and a funnel left by an engine that was killed outright is closed: what it reached is gone, and its port could be anything's next
 /** The engine is going down: every address with it. */
-export function stopShares() { for (const s of live.values()) { clearTimeout(s.timer); try { s.proc.kill('SIGTERM') } catch { /* gone */ } s.server?.close() } live.clear(); restoreNgrokNow() }
+export function stopShares() { for (const s of live.values()) { clearTimeout(s.timer); try { s.proc.kill('SIGTERM') } catch { /* gone */ } s.server?.close(); s.also?.close(); s.gone?.() } live.clear(); restoreNgrokNow() }
