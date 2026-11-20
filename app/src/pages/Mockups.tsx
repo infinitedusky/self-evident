@@ -12,6 +12,25 @@ import { useCurrentTalk } from '../workspace'
 
 type Status = Awaited<ReturnType<typeof engine.storybook>>
 
+/** The app's Storybook is not set, or is not answering: where to set it, or the press that starts it. Mockups and Screens both stand on it. */
+export function StorybookOff({ s, starting, start }: { s: Pick<Status, 'configured' | 'up' | 'startable' | 'startedHere' | 'branch' | 'main' | 'log' | 'url'> | null; starting: boolean; start: () => void }) {
+  const { app } = useCurrentApp()
+  return (
+    <>
+      {s && !s.configured && <div className="empty">{app?.name} has no Storybook set. Add the command that starts it and its URL under <Link to={`/settings/apps/${app?.id}/integrations/storybook`}>Integrations › Storybook</Link>.</div>}
+      {s?.configured && !s.up && (
+        <div className="empty">
+          {s.startable ? <>
+            <p style={{ marginTop: 0 }}>Storybook isn't running{s.branch && !s.main ? <> for <code>{s.branch}</code></> : ''}. {s.startedHere ? 'Starting it…' : ''}</p>
+            {!s.startedHere && <button className="btn" disabled={starting} onClick={start}>Start Storybook</button>}
+            {s.log.length > 0 && <pre className="sb-log">{s.log.slice(-8).join('\n')}</pre>}
+          </> : <>Storybook isn't answering at <code>{s.url}</code>, and there's no command to start it. Add one under <Link to={`/settings/apps/${app?.id}/integrations/storybook`}>Integrations › Storybook</Link>.</>}
+        </div>
+      )}
+    </>
+  )
+}
+
 /** `story`: open at this story (its id, like pages-taskpage--sub-task-building) instead of Storybook's front page; `session`: the conversation whose worktree to show (else the one in front). */
 export function Mockups({ story, session, embedded }: { story?: string; session?: string; /** Inside a page with its own heading: only the controls. */ embedded?: boolean }) {
   const { app } = useCurrentApp()
@@ -45,16 +64,7 @@ export function Mockups({ story, session, embedded }: { story?: string; session?
       </div>
       {error && <div className="empty bad">{error}</div>}
       {!app && <div className="empty">Pick an app in the nav.</div>}
-      {s && !s.configured && <div className="empty">{app?.name} has no Storybook set. Add the command that starts it and its URL under <Link to={`/settings/apps/${app?.id}/integrations/storybook`}>Integrations › Storybook</Link>.</div>}
-      {s?.configured && !s.up && (
-        <div className="empty">
-          {s.startable ? <>
-            <p style={{ marginTop: 0 }}>Storybook isn't running{s.branch && !s.main ? <> for <code>{s.branch}</code></> : ''}. {s.startedHere ? 'Starting it…' : ''}</p>
-            {!s.startedHere && <button className="btn" disabled={starting} onClick={start}>Start Storybook</button>}
-            {s.log.length > 0 && <pre className="sb-log">{s.log.slice(-8).join('\n')}</pre>}
-          </> : <>Storybook isn't answering at <code>{s.url}</code>, and there's no command to start it. Add one under <Link to={`/settings/apps/${app?.id}/integrations/storybook`}>Integrations › Storybook</Link>.</>}
-        </div>
-      )}
+      <StorybookOff s={s} starting={starting} start={start} />
       {s?.up && s.story?.missing && <p className="faint" style={{ margin: '0 0 8px', fontSize: 13 }}>This Storybook has no story <code>{s.story.asked}</code>{s.story.show ? <>; showing <code>{s.story.show}</code> from the same component</> : '; showing its front page'}. The step names it from an earlier round: ask the agent to record the stories again.</p>}
       {s?.up && at && <iframe className="sb-frame" src={at} title={`${app?.name} Storybook`} />}
     </div>

@@ -338,6 +338,11 @@ export interface TaskBranch { id: string; name: string; current: boolean; fromSa
 export interface SavePoint { id: string; name: string; /** Made by the engine at a transition. */ auto: string | null; branchId: string; branchName: string | null; onCurrent: boolean; /** Commits (and uncommitted work) since, when it is on the task branch being worked on. */ changesSince: number | null; createdBy: string | null; createdAt: string; gitBranches: string[] }
 export interface TaskBranches { issueId: string; worktrees: { key: string; label: string; branch: string }[]; branches: TaskBranch[]; saves: SavePoint[] }
 export interface TaskMoved { now: { id: string; name: string }; setAside: { id: string; name: string; commits: number }; switched: { worktree: string; branch: string }[]; leftAlone: string[]; restarted: number; problems: string[] }
+/** A screen: one title under Screens/ in the app's Storybook, and its states, each a story. */
+export interface Screen { title: string; file: string | null; states: { id: string; name: string }[] }
+/** Where the Storybook that renders them stands, and the screens it has. */
+export interface ScreensView { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean; screens: Screen[]; earlier: number }
+
 /** Something made public for a look: a prototype, a place's mockups or its sketches, at a temporary address. */
 export type ShareKind = 'prototype' | 'storybook' | 'sketch'
 export interface Shared { kind: ShareKind; id: string; url: string; since: string; expiresAt: string; by: string; /** Which tunnel it goes through. */ via?: 'cloudflare' | 'funnel' | 'ngrok'; what?: string }
@@ -453,6 +458,8 @@ export const engine = {
   // session: the conversation in front; its worktree's Storybook when it has one (branch says which), else the app's.
   // story: one to show; the answer says which this Storybook can show for it (itself, another of the same component, or none).
   storybook: (appId: string, session?: string | null, story?: string | null) => call<{ url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean; story?: { asked: string; show: string | null; missing: boolean } }>('GET', `/apps/${appId}/storybook?${new URLSearchParams({ ...(session ? { session } : {}), ...(story ? { story } : {}) })}`),
+  /** A task's screens: the stories under Screens/ that its branch made, by screen, and the Storybook that renders them; `earlier` counts the ones it was handed, which `all` brings back. */
+  screens: (appId: string, session?: string | null, all = false) => call<ScreensView>('GET', `/apps/${appId}/screens?${new URLSearchParams({ ...(session ? { session } : {}), ...(all ? { all: '1' } : {}) })}`),
   startStorybook: (appId: string, session?: string | null) => call<unknown>('POST', `/apps/${appId}/storybook/start${session ? `?session=${session}` : ''}`),
   // scope: a conversation's id (its worktree) or an app's (the main checkout).
   /** A conversation's sketches are the ones its branch made; `earlier` counts the ones it was handed, which `all` brings back. */

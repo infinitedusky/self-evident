@@ -47,6 +47,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   const [asked_] = useSearchParams()
   const viewed: Viewed | null = row.waitingOn ? null
     : row.key === 'sketch' && session ? { kind: 'sketch', session, file: asked_.get('file') ?? work?.refs?.[0] }
+    : row.key === 'screen' && session ? { kind: 'screens', session, story: asked_.get('story') ?? undefined }
     : row.key === 'mockup' && session ? { kind: 'storybook', session, story: asked_.get('story') ?? work?.refs?.[0] }
     : row.key === 'prototype' && proto && s.status !== 'none' ? { kind: 'prototype', id: proto.id } : null
   // The agent showed a file or a page in the prototype's code (?shown=<its id>): the Code view, on that.

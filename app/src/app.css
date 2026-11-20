@@ -291,6 +291,15 @@ select, input { color-scheme: light dark; }
 .viewer-window > .tab-page, .viewer-window > [data-component="PrototypePane"], .viewer-window > [data-component="MainPane"] { flex: 1; min-height: 0; }
 .sb-frame { flex: 1; width: 100%; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; min-height: 480px; }
 .sketch-stage { flex: 1; display: flex; justify-content: center; min-height: 0; } .sketch-frame { flex: none; height: 100%; width: 100%; }
+/* Screens: a task's screens on one wall, each state a tile (the story's frame, drawn at its real size and scaled down). */
+.screen-wall { flex: 1; min-height: 0; overflow: auto; padding-bottom: 24px; }
+.screen-row { margin-bottom: 28px; } .screen-row h2 { font-size: 15px; margin: 0 0 10px; } .screen-row h2 .faint { font-weight: 400; font-size: 13px; margin-left: 6px; }
+.screen-tiles { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.screen-tile { margin: 0; } .screen-tile figcaption { font-size: 13px; color: var(--ink-soft); margin-top: 6px; }
+.screen-tile button { display: block; width: 100%; padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; cursor: zoom-in; }
+.screen-tile button:hover, .screen-tile button:focus-visible { border-color: var(--accent); outline: 2px solid var(--accent-wash); }
+.screen-tile iframe { display: block; border: 0; transform-origin: 0 0; pointer-events: none; }
+.screen-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .sb-log { font-size: 11px; max-height: 160px; overflow: auto; background: var(--ground); padding: 8px; border-radius: 8px; text-align: left; }
 .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .filter { font: 500 13px var(--sans); padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); cursor: pointer; }

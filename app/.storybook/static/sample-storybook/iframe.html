@@ -1,0 +1,26 @@
+<!doctype html>
+<!-- A made-up screen, for the Screens page's stories only: it stands in for a story of the app's Storybook
+     (iframe.html?id=screens-checkout--empty) and says which one, and that it is a sample. Not part of the app. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A made-up screen (sample)</title>
+<body style="font:16px system-ui;margin:0;background:#fbfaf7;color:#222">
+  <div style="padding:14px 24px;border-bottom:1px solid #e4e0d6;font-weight:600">Sample Shop <span style="font-weight:400;color:#888">(sample)</span></div>
+  <div style="padding:32px 24px">
+    <p id="id" style="font:12px ui-monospace,monospace;color:#888;margin:0 0 8px"></p>
+    <h1 id="screen" style="margin:0 0 6px;text-transform:capitalize"></h1>
+    <p id="state" style="margin:0 0 24px;color:#555"></p>
+    <div style="border:1px solid #d9d4c7;border-radius:10px;background:#fff;padding:20px;max-width:520px">
+      <div style="height:14px;width:60%;background:#e9e5da;border-radius:4px;margin-bottom:12px"></div>
+      <div style="height:14px;width:85%;background:#e9e5da;border-radius:4px;margin-bottom:12px"></div>
+      <div style="height:40px;width:160px;background:#2f6f4f;border-radius:8px;margin-top:20px"></div>
+    </div>
+  </div>
+  <script>
+    const id = new URLSearchParams(location.search).get('id') || ''
+    const [screen, state] = id.replace(/^screens-/, '').split('--')
+    document.getElementById('id').textContent = 'A made-up screen, in place of the story ' + id
+    document.getElementById('screen').textContent = screen || ''
+    document.getElementById('state').textContent = 'State: ' + (state || '').replace(/-/g, ' ')
+  </script>
+</body>

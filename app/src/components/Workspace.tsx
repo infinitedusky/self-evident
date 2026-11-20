@@ -222,6 +222,7 @@ export function Workspace({ initial = [], address = true }: { initial?: { tab: T
         sync()
       }
       const was = (there.params as { tab: Tab }).tab as { story?: string; file?: string; session?: string }
+      if (tab.kind === 'screens' && ((tab.story && tab.story !== was.story) || (tab.session && tab.session !== was.session))) { there.api.updateParameters({ tab: { ...was, ...tab } }); sync() }
       if (tab.kind === 'storybook' && ((tab.story && tab.story !== was.story) || (tab.session && tab.session !== was.session))) { there.api.updateParameters({ tab: { ...was, ...tab } }); sync() }
       if (tab.kind === 'sketch' && ((tab.file && tab.file !== was.file) || (tab.session && tab.session !== was.session))) { there.api.updateParameters({ tab: { ...was, ...tab } }); sync() } // one Sketches tab too
       there.api.setActive(); return
