@@ -31,7 +31,7 @@ export function briefStands(rows: Row[], on: On) {
 /** ✓ finished (approved, where a person approves it), ◐ started or ready for the person, ○ not started. */
 export const mark = (r: Row, on: On) => (finished(r.state, on) ? '✓' : skipped(r.state) ? '–' : r.state.status === 'none' ? '○' : '◐') // – skipped by a person
 
-export function TaskNav({ checklist, smoke, base, here, on = 'task', rows, workflow, build, folded, onToggle, saves, onSave }: {
+export function TaskNav({ pr, checklist, smoke, base, here, on = 'task', rows, workflow, build, folded, onToggle, saves, onSave }: {
   base: string; here: string; on?: On; rows: Row[]
   /** The workflow in force and where it comes from (", the app's default"); its steps are the list. */
   workflow?: { name: string; from: string } | null
@@ -49,6 +49,11 @@ export function TaskNav({ checklist, smoke, base, here, on = 'task', rows, workf
    * A staged task's smoke test (Sandy, 2026-11-17: "add it to the other ones, goes after subtask in the build
    * section"): how many of its criteria are the person's to check by hand. A checklist task has it as a stage.
    */
+  /**
+   * The task's pull request, a step of its own after the smoke test (Sandy, 2026-11-20: "a new step to the build
+   * section after smoke test, 'PR'"): shown once there is something built. Null status: not submitted.
+   */
+  pr?: { status: string | null; number: number | null } | null
   smoke?: { owed: number; total: number; failed: number; /** The task is built: the row stays with nothing left to check. */ built?: boolean } | null
   /**
    * The task's save points, at the bottom (Sandy, 2026-11-13: "a list could start and the one you are on could be
@@ -82,6 +87,7 @@ export function TaskNav({ checklist, smoke, base, here, on = 'task', rows, workf
         {feeds.map((r) => icon(r.key, `${base}/${r.key}`, step(r.key).icon, label(r.key, on), said(r), after(r, rows, on), finished(r.state, on)))}
         {build && icon('build', `${base}/build`, '🏗️', 'Sub-tasks', build.total ? `${build.done}/${build.total}` : 'not planned', build.waitingOn, !!build.total && build.done === build.total)}
         {build && !checklist && smoke && (smoke.total > 0 || smoke.built) && icon('smoke', `${base}/smoke`, '🧪', 'Smoke test', smoke.failed ? `${smoke.failed} failed by hand` : smoke.owed ? `${smoke.owed} for you to check by hand` : smoke.total ? 'all checked by hand' : 'nothing left to you; look anyway', build.waitingOn, !smoke.owed && !smoke.failed)}
+        {build && pr && icon('pr', `${base}/pr`, '🔀', 'Pull request', (pr.status === 'draft' ? `draft #${pr.number}` : pr.status === 'open' ? `#${pr.number}, ready for review` : pr.status === 'merged' ? `#${pr.number} merged` : pr.status === 'closed' ? `#${pr.number} closed` : 'not submitted'), build.waitingOn, pr.status === 'merged')}
         {saves && icon('saves', `${base}/saves`, '💾', 'Save points', saves.points.length || saves.aside.length ? `${saves.points.length} saved${saves.aside.length ? `, ${saves.aside.length} set aside` : ''}${saves.current ? `; working on ${saves.current}` : ''}` : 'none yet', null, false)}
       </nav>
     )
@@ -142,6 +148,14 @@ export function TaskNav({ checklist, smoke, base, here, on = 'task', rows, workf
           </span>
           <span className="task-nav-after">{smoke.failed ? `${smoke.failed} failed by hand` : smoke.owed ? `${smoke.owed} for you to check by hand` : smoke.total ? `${smoke.total} checked by hand` : 'nothing left to you; look anyway'}</span>
         </>, build.waitingOn)}
+      {build && pr && item('pr', `${base}/pr`,
+        <>
+          <span className="task-nav-row">
+            <span className={`task-nav-mark ${pr.status === 'merged' ? 'ok' : ''}`}>{pr.status === 'merged' ? '✓' : pr.status === 'open' || pr.status === 'draft' ? '◐' : '○'}</span>
+            <span className="task-nav-text">🔀 Pull request</span>
+          </span>
+          <span className="task-nav-after">{(pr.status === 'draft' ? `draft #${pr.number}` : pr.status === 'open' ? `#${pr.number}, ready for review` : pr.status === 'merged' ? `#${pr.number} merged` : pr.status === 'closed' ? `#${pr.number} closed` : 'not submitted')}</span>
+        </>, build.waitingOn, checklist ? 'task-nav-stage' : '')}
       {saves && (
         <>
           <div className="task-nav-label faint">Save points</div>

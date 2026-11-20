@@ -83,6 +83,14 @@ export const SmokeTestAfterSubTasks: Story = {
   },
 }
 /** Every one checked by hand, and one you failed: said on the row. */
+/** The pull request is a step of its own, after the smoke test: not submitted yet, then a draft by its number. Made-up task (sample). */
+export const WithPullRequest: Story = {
+  args: { here: 'pr', rows: rows('task', approvedTaskStepsView.states, approvedTaskStepsView.resolved.workflow), build: { done: 9, total: 9, waitingOn: null }, smoke: { owed: 0, total: 8, failed: 0 }, pr: { status: 'draft', number: 412 } },
+  play: async ({ canvasElement }) => {
+    const link = await within(canvasElement).findByRole('link', { name: /Pull request/ })
+    await expect(link).toHaveTextContent('draft #412'); await expect(link).toHaveAttribute('href', expect.stringContaining('/pr'))
+  },
+}
 export const SmokeTestMarked: Story = { args: { here: 'smoke', rows: rows('task', approvedTaskStepsView.states, approvedTaskStepsView.resolved.workflow), build: { done: 9, total: 9, waitingOn: null }, smoke: { owed: 0, total: 8, failed: 1 } } }
 
 /** A staged task whose every criterion an agent checked: the smoke test row stays, so it can still be opened and tried. */
