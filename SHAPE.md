@@ -224,6 +224,9 @@ Details and sources in `research/`.
 - **The loop's stages** (Sandy, 2026-10-29): Observe · Learn · Ideate (ideas and their research) · Plan
   (tasks: research, brief, mockup, prototype, in any order unless a workflow sets one) · Build (including the
   checks a build is held to). The rail lists only these stages; projects, tasks and the steps are inside them.
+- **A task's pull request is a step of its own, after the smoke test** (Sandy, 2026-11-20): where it stands, its
+  message, the press that submits it or takes a draft to ready for review, and what was said on it. Submitting and
+  marking ready are the person's, never an agent's. Tools that help its reviewers go here; none are built.
 - **An app says where it is smoke tested, beside where it is prototyped** (Sandy, 2026-11-17: "apps get a smoke
   test configuration setting, and it's like there's a prototype and a smoke test, and they can either be the same
   or they can be different"). The setting, the step and a person's marks are built (`engine/src/smoke.ts`,
