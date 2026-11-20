@@ -116,8 +116,10 @@ which fields of the real thing you do not carry.
 Not allowed: skipping a layer, hard-coding what a query should return, parsing that only handles the sample, a
 schema you would not ship, logic in the browser that belongs on the server.
 
-Optional, and better left out: polish (final copy, every error state, exhaustive tests beyond what proves a
-criterion), refactoring, shared abstractions and tidying. Required: every layer present and correct on the path.
+Optional, and better left out: polish (copy and error states no mockup settled, exhaustive tests beyond what proves
+a criterion), refactoring, shared abstractions and tidying. What the person agreed in a mockup (its look, its words,
+its states) is not polish: where the prototype shows that screen, it matches, and a difference is a fault to fix here.
+"The real build will get the look right" is not allowed either. Required: every layer present and correct on the path.
 Duplicated or clumsy code is fine; a skipped or faked layer is not.
 
 ## Rules

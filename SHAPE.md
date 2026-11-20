@@ -636,12 +636,14 @@ Details and sources in `research/`.
 - **Each step settles its own kind of question, and nothing is left for the next** (Sandy, 2026-11-20: "we're
   gonna get to a point where someone's gonna say, 'Yeah, yeah, but this is just a prototype. We'll get it done in
   the real build'"). Cheap to expensive only works if what is cheap to change is closed while it is cheap. Decided in
-  conversation, not built (LOG.md, "Each step settles its own question"). Where this and an older bullet disagree
+  conversation; the agents are told (`HOLD_THE_STEP`, talk.ts), Screens is not built (LOG.md, "Each step settles its
+  own question"). Where this and an older bullet disagree
   (a build that improves on the prototype, a mockup as the first exact look), this is the direction.
   1. **Sketch**, as it is today: a plain HTML file, there the moment it is written, rough. It settles what is on a
      screen and roughly where. Several at once, and the person picks. It can be skipped.
   2. **Screens**, new: every screen and every state (empty, loading, error, a long name), still, exactly as it will
-     look. Rendered through the app's own build, so a component the app already has is used as it is; a part that is
+     look. Seen on a Screens page of their own, all of a task's on one wall; rendered out of sight by the app's
+     Storybook, each a story in a folder of its own with no behaviour, so a component the app already has is used as it is; a part that is
      new, or an existing one changed, is drawn in the screen and is not made a component yet. The design never bends
      to fit a component. It settles everything that can be seen in a still.
   3. **Mockup**: the same screens in Storybook, clickable, the new parts made components. It settles the way

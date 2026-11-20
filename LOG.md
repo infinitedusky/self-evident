@@ -5781,12 +5781,31 @@ cheapest changes (layout, look) were carried to where they cost the most. Decide
   against mockup, build against prototype. The build's "follow and improve on" now means the code only.
 - **Objections are sorted where they are raised**, and only the person passes a step.
 
-Not decided: where screens are rendered (stories in the app's Storybook, with fixed state, or a place of their
-own), and so what keeps a round on a screen as quick as a round on a sketch; how a conversion is compared (by eye
-side by side, or by screenshots); what an app with no Storybook does.
+**Where screens are rendered and where they are seen are two answers** (Sandy, 2026-11-20: "I think this is right
+… I understand the risk and cost, but let's do it this way").
+- **Seen on a page of their own**: a Screens page in Self Evident, all of a task's screens on one wall, each with
+  its states. Storybook's own interface shows one story at a time, which is poor for going through ten.
+- **Rendered by the app's Storybook, out of sight**: a screen is a story file in a folder of its own, framed by its
+  plain address as a sketch is. Storybook is already the tool that renders a piece of an app through its own build;
+  our own would be that again for every framework. The integration, the switch per app and the mockups' proxy exist.
+- **Accepted**: a screen and a mockup are the same kind of file, so the line is held by separate folders, separate
+  pages, and a screen having no behaviour at all; and an app with no Storybook has no Screens until it is set up.
 
-Not done: all of it. The sketch skill still says nothing about sorting objections; no Screens step in a workflow;
-the prototype and build skills still let the build differ from the prototype.
+**The agents are told** (Sandy: "we also just need the agents to be fully briefed on this … that they don't push
+past or suggest to push past for no good reason"). `HOLD_THE_STEP` in `engine/src/talk.ts`, in what every
+conversation's agent is told: an objection the step can show is fixed in that step; one it cannot show is written on
+the step and opens the next; no "close enough", no proposing to move on, and only the person passes a step. The
+build now "looks and behaves as the approved prototype does" where it said "follow and improve on". The prototype's
+agent and its skill: what was agreed in a mockup is matched, and is not polish. Until Screens is built the mockup is
+the first exact look, so the agents are told the mockup settles all that can be seen; that moves to Screens then.
+Left as it is: a criterion marked final build only, which is the person's or the task's agent's stated reason, and a
+rough prototype, which is thrown away.
+
+Not decided: how a conversion is compared (by eye side by side, or by screenshots).
+
+Not done: the Screens page and its story; listing and framing a task's screens in the engine; a Screens step in a
+workflow; telling the agents about Screens; the planner and builders are not told to hold the build to the
+prototype in words of their own.
 
 ## An app's own form for a pull request's description (Sandy, 2026-11-20: "a way for us to say what needs to go where and how it should be, basically like a prompt kind of thing that has a template and then a prompt"; "let's add those")
 
