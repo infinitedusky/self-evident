@@ -20,12 +20,12 @@
  * The ADR here is a draft (Sandy, 2026-11-13: "draft ADR is what the step should be"): it proposes the architecture
  * so the blast radius and the brief have something to read; the planner settles it as a decision against the real
  * plan, and the final record is a file the build writes, in the form the repository keeps (planner.ts).
- * The three ways of looking (Sandy, 2026-11-09): a sketch is about speed, plain HTML until the screen is liked; a
- * mockup is the story done properly; the prototype shows, built the way we would ship it, that it works.
+ * The ways of looking (Sandy, 2026-11-09; screens, 2026-11-20): a sketch is about speed, plain HTML until the layout
+ * is liked; the screens are every screen and state, still and exact; a mockup is those made clickable; the prototype shows, built the way we would ship it, that it works.
  * The app imports this module too (`@self-evident/engine/steps`), so the rules live in one place.
  */
 
-export type StepKey = 'idea' | 'research' | 'brief' | 'sketch' | 'mockup' | 'prototype' | 'analysis' | 'adr' | 'risk' | 'audit' | 'final'
+export type StepKey = 'idea' | 'research' | 'brief' | 'sketch' | 'screen' | 'mockup' | 'prototype' | 'analysis' | 'adr' | 'risk' | 'audit' | 'final'
 export type On = 'idea' | 'task' | 'project'
 /** What kind of step it is: the idea, first; research; the brief, the parent of the rest; a way of looking (sketch, mockup, prototype); a check, after those, added or removed. */
 export type Place = 'first' | 'before' | 'brief' | 'either' | 'check'
@@ -36,7 +36,8 @@ export const STEPS: StepDef[] = [
   { key: 'research', label: 'Research', icon: '🔎', what: 'Who does this best, what exists already, our numbers, the case against.', place: 'before' },
   { key: 'brief', label: 'Brief', icon: '📝', what: 'What to build and why, in at most 200 words, for the person who approves it. How it is built is the ADR\'s and the plan\'s, which are made from it.', place: 'brief' },
   { key: 'sketch', label: 'Sketches', icon: '✏️', what: 'The first look, fast: plain HTML screens to react to and change in moments, before a real story.', place: 'either' },
-  { key: 'mockup', label: 'Mockups', icon: '🎨', what: 'How it looks, done properly: stories with made-up data, variants side by side. The brief points at the agreed one.', place: 'either' },
+  { key: 'screen', label: 'Screens', icon: '🖼️', what: 'Every screen and every state, still, exactly as it will look: stories under Screens/, made from the app\'s own components. What can be seen is settled here.', place: 'either' },
+  { key: 'mockup', label: 'Mockups', icon: '🎨', what: 'The agreed screens, clickable: stories with made-up data you can move through. The brief points at the agreed one.', place: 'either' },
   { key: 'prototype', label: 'Prototype', icon: '🛠️', what: 'The thing built the way we would ship it, with only what is outside the system faked, to show with evidence that it works.', place: 'either' },
   { key: 'analysis', label: 'Prototype analysis', icon: '🔬', what: 'The prototype read by a fresh agent: how it was built, what was faked, what to keep, and how the real build should be cleaner: what repeats, what to refactor, the simpler way.', place: 'check' },
   { key: 'adr', label: 'Draft ADR', icon: '🏛️', what: 'A first pass at the architecture decision, from the analysis and the code: the options, a proposed choice, why. A draft: the planner settles it, and the record is written with the build.', place: 'check' },
@@ -50,9 +51,9 @@ export const CHECKS = STEPS.filter((s) => s.place === 'check').map((s) => s.key)
 
 /** Where each step can be done. An idea has a rough draft, not a brief, and isn't checked; a project has no brief. */
 export const CAN: Record<On, StepKey[]> = {
-  idea: ['research', 'brief', 'sketch', 'mockup', 'prototype'],
+  idea: ['research', 'brief', 'sketch', 'screen', 'mockup', 'prototype'],
   task: STEPS.map((s) => s.key),
-  project: ['idea', 'research', 'sketch', 'mockup', 'prototype'],
+  project: ['idea', 'research', 'sketch', 'screen', 'mockup', 'prototype'],
 }
 export const label = (key: StepKey, on: On) => (key === 'brief' && on === 'idea' ? 'Rough draft' : step(key).label)
 
@@ -141,8 +142,8 @@ export function validOrder(steps: { key: StepKey }[]): boolean {
   })
 }
 
-/** The default list: the idea, research, sketches, mockups, the prototype, and the brief they feed; no checks; nothing but the brief required. */
-export const DEFAULT_STEPS: WorkflowStep[] = ['idea', 'research', 'sketch', 'mockup', 'prototype', 'brief'].map((key) => ({ key: key as StepKey, on: true, required: key === 'brief' }))
+/** The default list: the idea, research, sketches, screens, mockups, the prototype, and the brief they feed; no checks; nothing but the brief required. */
+export const DEFAULT_STEPS: WorkflowStep[] = ['idea', 'research', 'sketch', 'screen', 'mockup', 'prototype', 'brief'].map((key) => ({ key: key as StepKey, on: true, required: key === 'brief' }))
 
 /**
  * The workflow every app starts with, made with the app (Sandy, 2026-10-29: a task's workflow "can't be nothing").
@@ -154,16 +155,23 @@ export const DEFAULT_WORKFLOW: Workflow = { id: 'default', name: DEFAULT_NAME, s
 /**
  * A workflow with the fixed rules applied: the idea and the brief listed and on, the brief required and last, any
  * missing fixed step put back, and an order that breaks the rules put back in the default order. A workflow saved
- * before sketches existed gets them on, right before its mockups: it never switched them off.
+ * before sketches existed gets them on, right before its mockups: it never switched them off. One saved before
+ * screens existed (2026-11-20) gets them off, in the same place: an optional step that is on must be done or skipped
+ * on every task before its brief is approved, and tasks under way were not asked.
  */
 export function normalize(w: Workflow): Workflow {
   let steps = w.steps.filter((s, i) => STEPS.some((d) => d.key === s.key) && w.steps.findIndex((x) => x.key === s.key) === i)
-  const hadSketch = steps.some((s) => s.key === 'sketch')
+  const hadSketch = steps.some((s) => s.key === 'sketch'), hadScreen = steps.some((s) => s.key === 'screen')
   for (const d of DEFAULT_STEPS) if (!steps.some((s) => s.key === d.key)) steps.push({ ...d, on: d.key === 'idea' || d.key === 'brief' || d.key === 'sketch' })
   if (!hadSketch && steps.findIndex((s) => s.key === 'mockup') < steps.findIndex((s) => s.key === 'sketch')) { // beside its sibling, wherever that sits
     const sketch = steps.find((s) => s.key === 'sketch')!
     steps = steps.filter((s) => s.key !== 'sketch')
     steps.splice(steps.findIndex((s) => s.key === 'mockup'), 0, sketch)
+  }
+  if (!hadScreen && steps.findIndex((s) => s.key === 'mockup') < steps.findIndex((s) => s.key === 'screen')) {
+    const screen = steps.find((s) => s.key === 'screen')!
+    steps = steps.filter((s) => s.key !== 'screen')
+    steps.splice(steps.findIndex((s) => s.key === 'mockup'), 0, screen)
   }
   steps = steps.map((s) => (s.key === 'brief' ? { ...s, on: true, required: true } : s.key === 'idea' ? { ...s, on: true } : s))
   // What follows the prototype is the workflow's to choose, check by check (After). A workflow with a prototype lists

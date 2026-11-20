@@ -216,17 +216,21 @@ export async function stopStorybookAt(cwd: string) {
  * it belongs to, and its name. `match` keeps those whose id, title or name contains it (any case).
  */
 export async function listStories(appId: string, match?: string, sessionId?: string | null) {
+  const q = match?.toLowerCase()
+  return (await storyIndex(appId, sessionId))
+    .map((e) => ({ id: e.id, title: e.title, name: e.name }))
+    .filter((e) => !q || `${e.id} ${e.title} ${e.name}`.toLowerCase().includes(q))
+    .slice(0, 200)
+}
+
+/** Every story in the running Storybook's index, with the file it is written in (named from where Storybook runs). */
+export async function storyIndex(appId: string, sessionId?: string | null) {
   const { a, url } = await placeFor(appId, sessionId)
   if (!url) throw new PlanError(`${a.name} has no Storybook set; add its URL under Integrations › Storybook`)
   const res = await fetch(`${url.replace(/\/$/, '')}/index.json`, { signal: AbortSignal.timeout(4000) }).catch(() => null)
   if (!res?.ok) throw new PlanError(`${a.name}'s Storybook is not answering at ${url}; opening the storybook tab offers to start it`)
-  const index = (await res.json()) as { entries?: Record<string, { id: string; type?: string; title: string; name: string }> }
-  const q = match?.toLowerCase()
-  return Object.values(index.entries ?? {})
-    .filter((e) => (e.type ?? 'story') === 'story')
-    .map((e) => ({ id: e.id, title: e.title, name: e.name }))
-    .filter((e) => !q || `${e.id} ${e.title} ${e.name}`.toLowerCase().includes(q))
-    .slice(0, 200)
+  const index = (await res.json()) as { entries?: Record<string, { id: string; type?: string; title: string; name: string; importPath?: string }> }
+  return Object.values(index.entries ?? {}).filter((e) => (e.type ?? 'story') === 'story').map((e) => ({ id: e.id, title: e.title, name: e.name, file: e.importPath ?? null }))
 }
 
 /** Forgets them; they keep running, and are found again by asking their address (tests stop theirs with stopStorybookAt). */

@@ -55,16 +55,23 @@ export async function listSketchFiles(root: string): Promise<Sketch[]> {
 }
 
 /**
- * The sketches this branch made or changed: the ones that differ from where it left the app's main branch, and the
- * ones not committed yet. Null when that cannot be told (not a git checkout, no such branch): then nothing is hidden.
+ * The files this branch made or changed, under `dir` (the whole checkout when none is given): the ones that differ
+ * from where it left the app's main branch, and the ones not committed yet, named from the checkout's top. Null when
+ * that cannot be told (not a git checkout, no such branch): then nothing is hidden.
  */
-export async function ownSketches(root: string, base: string): Promise<Set<string> | null> {
+export async function ownFiles(root: string, base: string, dir = '.'): Promise<Set<string> | null> {
   let from = ''
   for (const ref of [base, `origin/${base}`]) { const r = await git(root, ['merge-base', 'HEAD', ref], { allowFail: true }).catch(() => null); if (r?.code === 0 && r.stdout.trim()) { from = r.stdout.trim(); break } }
   if (!from) return null
-  const [changed, fresh] = await Promise.all([git(root, ['diff', '--name-only', '--relative', from, '--', SKETCH_DIR], { allowFail: true }), git(root, ['ls-files', '--others', '--exclude-standard', '--', SKETCH_DIR], { allowFail: true })])
+  const [changed, fresh] = await Promise.all([git(root, ['diff', '--name-only', '--relative', from, '--', dir], { allowFail: true }), git(root, ['ls-files', '--others', '--exclude-standard', '--', dir], { allowFail: true })])
   if (changed.code !== 0 || fresh.code !== 0) return null
-  return new Set(`${changed.stdout}\n${fresh.stdout}`.split('\n').map((l) => l.trim()).filter((l) => l.startsWith(`${SKETCH_DIR}/`)).map((l) => l.slice(SKETCH_DIR.length + 1)))
+  return new Set(`${changed.stdout}\n${fresh.stdout}`.split('\n').map((l) => l.trim()).filter(Boolean))
+}
+
+/** The sketches this branch made or changed, named from `sketches/`. */
+export async function ownSketches(root: string, base: string): Promise<Set<string> | null> {
+  const own = await ownFiles(root, base, SKETCH_DIR)
+  return own && new Set([...own].filter((l) => l.startsWith(`${SKETCH_DIR}/`)).map((l) => l.slice(SKETCH_DIR.length + 1)))
 }
 
 /**
