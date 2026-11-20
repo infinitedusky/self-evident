@@ -12,7 +12,7 @@ import { app, event, pr as prTable, project, repo, workspace } from './db/schema
 import type { Execute } from './executor.js'
 import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
-import { prBody, prDraft, prTitle, setPrRules , prAuto } from './pr.js'
+import { prBody, prDescription, prDescriptionNote, prDraft, prTitle, setPrRules , prAuto } from './pr.js'
 import { createProject, projectGraph } from './projects.js'
 import { Runner } from './runner.js'
 import { approveBriefs } from './test-briefs.js'
@@ -136,8 +136,17 @@ describe.skipIf(!reachable)('a pull request waits for the person (sample data)',
     expect(keys(await setHeld(appId, [{ op: 'remove', key: 'lint_sample' }, { op: 'reset', key: 'comments' }]))).toEqual(['break', 'comments', 'tests'])
   })
   it('keeps the app\'s rules for its pull requests', async () => {
-    expect(await setPrRules(appId, { titleTemplate: 'feat[{ticket}]: {title}' })).toEqual({ pr_title: 'feat[{ticket}]: {title}', pr_draft: true, branch_name: null, commit_format: null, ticket_required: false })
-    expect(await setPrRules(appId, { titleTemplate: '', draft: false, ticketRequired: true })).toEqual({ pr_title: null, pr_draft: false, branch_name: null, commit_format: null, ticket_required: true })
+    // The app's own form for a description: its sections and how to write them, told to the task's agent ahead of the repository's template.
+    expect(prDescriptionNote({})).toBe('')
+    expect(await setPrRules(appId, { descriptionTemplate: '## Why\n\n## What changed\n\n## How to test (sample)', descriptionHow: 'Short. One paragraph a section.' })).toMatchObject({ pr_description: '## Why\n\n## What changed\n\n## How to test (sample)', pr_description_how: 'Short. One paragraph a section.' })
+    const [withForm] = await db.select().from(app).where(eq(app.id, appId))
+    expect(prDescription(withForm.setup)).toEqual({ template: '## Why\n\n## What changed\n\n## How to test (sample)', how: 'Short. One paragraph a section.' })
+    const note = prDescriptionNote(withForm.setup)
+    expect(note).toMatch(/comes before the repository's template[\s\S]*<template>\n## Why[\s\S]*<\/template>[\s\S]*<how>\nShort\. One paragraph a section\.\n<\/how>[\s\S]*nothing of ours in it/)
+    expect(prDescriptionNote({ pr_description_how: 'Short.' })).not.toContain('<template>') // either alone
+    expect(await setPrRules(appId, { descriptionTemplate: ' ', descriptionHow: '' })).toMatchObject({ pr_description: null, pr_description_how: null })
+    expect(await setPrRules(appId, { titleTemplate: 'feat[{ticket}]: {title}' })).toEqual({ pr_title: 'feat[{ticket}]: {title}', pr_draft: true, branch_name: null, commit_format: null, ticket_required: false, pr_description: null, pr_description_how: null })
+    expect(await setPrRules(appId, { titleTemplate: '', draft: false, ticketRequired: true })).toEqual({ pr_title: null, pr_draft: false, branch_name: null, commit_format: null, ticket_required: true, pr_description: null, pr_description_how: null })
     await setPrRules(appId, { ticketRequired: false })
     expect(await setPrRules(appId, { branchTemplate: 'feature/{ticket}-{title}', commitFormat: '{type}({ticket}): {subject}' })).toMatchObject({ branch_name: 'feature/{ticket}-{title}', commit_format: '{type}({ticket}): {subject}' })
     expect(await setPrRules(appId, { branchTemplate: '', commitFormat: '' })).toMatchObject({ branch_name: null, commit_format: null })

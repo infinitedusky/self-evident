@@ -108,8 +108,28 @@ export function prBody(project: { name: string; content?: string | null; id: str
   ].filter(Boolean).join('\n\n')
 }
 
+/**
+ * The app's own form for a pull request's description (Sandy, 2026-11-20: "a way for us to say what needs to go
+ * where and how it should be … a template and then a prompt"). Two settings: `setup.pr_description`, the sections as
+ * text, and `setup.pr_description_how`, how to write them. Either may be set alone. They come before the
+ * repository's own template: the person said so for this app.
+ */
+export function prDescription(setup: unknown): { template: string | null; how: string | null } {
+  const v = (setup ?? {}) as { pr_description?: string; pr_description_how?: string }
+  return { template: v.pr_description?.trim() || null, how: v.pr_description_how?.trim() || null }
+}
+/** What the task's agent is told about it, or nothing when the app has no form of its own. */
+export function prDescriptionNote(setup: unknown): string {
+  const d = prDescription(setup)
+  if (!d.template && !d.how) return ''
+  return `\n\nThis app has its own form for a pull request's description, set by the person (Settings › Landing). It comes before the repository's template and its past pull requests. When you write a description (set_pr_message):`
+    + (d.template ? `\n\nThe template: keep its headings and their order, fill each from what is true of the code on the branch, and leave none out (under one with nothing to say, say so in a few words).\n<template>\n${d.template}\n</template>` : '')
+    + (d.how ? `\n\nHow to write it:\n<how>\n${d.how}\n</how>` : '')
+    + '\n\nThe rest still holds: nothing of ours in it (our ids, probes, fix rounds, what an agent did), and rollback from the blast radius, never a default.'
+}
+
 /** Set how an app's work is named on GitHub: the pull request's title and whether it opens as a draft, and the branch and commit conventions (conventions.ts). Undefined leaves one; empty clears it. */
-export async function setPrRules(appId: string, i: { titleTemplate?: string; draft?: boolean; branchTemplate?: string; commitFormat?: string; /** A task needs the team's own ticket before its branch is cut or its pull request opened (ticket.ts). */ ticketRequired?: boolean }) {
+export async function setPrRules(appId: string, i: { titleTemplate?: string; draft?: boolean; branchTemplate?: string; commitFormat?: string; /** A task needs the team's own ticket before its branch is cut or its pull request opened (ticket.ts). */ ticketRequired?: boolean; /** The description's sections, as text, and how to write them (prDescription). */ descriptionTemplate?: string; descriptionHow?: string }) {
   const { db } = await import('./db/client.js'); const { app } = await import('./db/schema.js'); const { eq } = await import('drizzle-orm')
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new Error(`no app ${appId}`)
@@ -117,6 +137,8 @@ export async function setPrRules(appId: string, i: { titleTemplate?: string; dra
   if (i.draft !== undefined) changes.pr_draft = i.draft
   if (i.ticketRequired !== undefined) changes.ticket_required = i.ticketRequired
   for (const [given, key] of [[i.titleTemplate, 'pr_title'], [i.branchTemplate, 'branch_name'], [i.commitFormat, 'commit_format']] as const) if (given !== undefined) changes[key] = given.trim().slice(0, 250) || null
+  if (i.descriptionTemplate !== undefined) changes.pr_description = i.descriptionTemplate.trim().slice(0, 6000) || null
+  if (i.descriptionHow !== undefined) changes.pr_description_how = i.descriptionHow.trim().slice(0, 3000) || null
   const next = await (await import('./setup.js')).patchSetup(appId, changes)
-  return { pr_title: (next.pr_title as string | undefined) ?? null, pr_draft: next.pr_draft !== false, branch_name: (next.branch_name as string | undefined) ?? null, commit_format: (next.commit_format as string | undefined) ?? null, ticket_required: next.ticket_required === true }
+  return { pr_title: (next.pr_title as string | undefined) ?? null, pr_draft: next.pr_draft !== false, branch_name: (next.branch_name as string | undefined) ?? null, commit_format: (next.commit_format as string | undefined) ?? null, ticket_required: next.ticket_required === true, pr_description: prDescription(next).template, pr_description_how: prDescription(next).how }
 }

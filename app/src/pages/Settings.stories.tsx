@@ -236,6 +236,16 @@ export const AppReposEmptyFolder: Story = {
     await expect(await c.findByText(/No git repository in/)).toBeVisible()
   },
 }
+/** Landing, with the app's own form for a pull request's description: its sections, and how to write them (made-up, sample). */
+export const AppPrDescription: Story = {
+  parameters: appPage(sampleApp.id, 'landing'),
+  beforeEach: withEngine({ apps: [{ ...sampleApp, setup: { ...sampleApp.setup, pr_description: '## Why\n\n## What changed\n\n## How to test (sample)', pr_description_how: 'Short: a paragraph a section. Plain words (sample).' } }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByLabelText('Pull request description: its sections')).toHaveValue('## Why\n\n## What changed\n\n## How to test (sample)')
+    await expect(c.getByLabelText('Pull request description: how to write it')).toHaveValue('Short: a paragraph a section. Plain words (sample).')
+  },
+}
 /** No repository yet: the folder chooser is the way in. */
 export const AppReposNone: Story = { parameters: appPage('app_sample2', 'repo') }
 /** The only app: nothing to refer to yet, and the way on is to add the other repo as an app. */
