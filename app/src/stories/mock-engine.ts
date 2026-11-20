@@ -14,7 +14,7 @@ export interface MockData {
   issueDetails: typeof s.issueDetails; todos: typeof s.todos; ideas: typeof s.ideaRows; initiatives: typeof s.initiatives; cycles: typeof s.cycles
   summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript; /** A task's own agent, or null when it has none. */ taskTalk: typeof s.talkSession | null; /** The agents it has out. */ taskAgents?: import('../engine').TaskAgentOut[]; /** An idea's own agent, or null when it has none. */ ideaTalk?: typeof s.talkSession | null
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
-  sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[] }
+  sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[]; earlier?: number; /** With the earlier tasks' ones, when asked for. */ all?: { file: string; changedAt: number }[] }
   /** A task's smoke test; left out, there is nothing for a person on it. */ smoke?: import('../engine').SmokeView
   /** Where a checklist task stands; left out, the task's workflow is staged and it has none. */ checklist?: import('../engine').Checklist
   /** What a task's pull request will open with; none when left out. */ mergeGuide?: string; /** The record folded away under it. */ mergeRecord?: string
@@ -130,7 +130,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/talks/adopt', () => reply(d.talks[0])),
     http.post('/api/talks/:id/handoff', () => reply({ command: `cd "/Users/sample/code/sample-shop-worktrees/talk-sample" && claude --resume 00000000-sample --mcp-config '{"mcpServers":{"self-evident":{"type":"http","url":"http://localhost:4000/api/mcp/app_sample"}}}'` })),
     http.get('/api/apps/:id/storybook', () => reply(d.storybook)),
-    http.get('/api/sketches/:scope', () => reply(d.sketches)),
+    http.get('/api/sketches/:scope', ({ request }) => { const { all, ...rest } = d.sketches; return reply(new URL(request.url).searchParams.get('all') === '1' && all ? { ...rest, sketches: all } : rest) }),
     http.get('/api/sketches/:scope/file/*', ({ request }) => HttpResponse.html(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font:16px system-ui;margin:0;padding:24px;background:#fbfaf7;color:#222"><p style="font:12px ui-monospace,monospace;color:#888;margin:0 0 16px">sample sketch · ${new URL(request.url).pathname.split('/file/')[1]} · made-up data</p><h1 style="font-size:22px;margin:0 0 12px">Sample Shop</h1><div style="border:1px solid #ddd;border-radius:12px;padding:16px;background:#fff">A plain HTML screen, written fast, to react to.</div><button style="margin-top:16px;padding:10px 16px;border-radius:10px;border:0;background:#222;color:#fff">Continue</button></body>`)),
     http.get('/api/apps/:id/prototypes', () => reply(d.prototypes)),
     http.get('/api/shares/:kind/:id', ({ params }) => reply({ share: d.shares?.[`${params.kind}:${params.id}`] ?? null })),

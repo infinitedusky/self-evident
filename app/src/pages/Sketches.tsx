@@ -22,17 +22,19 @@ export function Sketches({ file, session, embedded }: { file?: string; session?:
   const [list, setList] = useState<List | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [picked, setPicked] = useState<string | null>(file ?? null)
+  const [all, setAll] = useState(false) // with the sketches earlier tasks left in the repository
   const [width, setWidth] = useState<(typeof WIDTHS)[number]['key']>('full') // the whole pane first (Sandy, 2026-11-10: "make the full the default"); Phone and Tablet narrow it
   useEffect(() => { if (file) setPicked(file) }, [file])
   useEffect(() => {
-    setList(null); setError(null)
-    if (!scope) return
+    setError(null)
+    if (!scope) { setList(null); return }
     let gone = false
-    const poll = () => engine.sketches(scope).then((x) => { if (!gone) { setList(x); setError(null) } }).catch((e) => { if (!gone) setError(String(e.message ?? e)) })
+    const poll = () => engine.sketches(scope, all).then((x) => { if (!gone) { setList(x); setError(null) } }).catch((e) => { if (!gone) setError(String(e.message ?? e)) })
     void poll()
     const t = window.setInterval(poll, 1500) // a changed file shows by itself
     return () => { gone = true; window.clearInterval(t) }
-  }, [scope])
+  }, [scope, all])
+  useEffect(() => { setAll(false) }, [scope])
   const shown = list?.sketches.find((s) => s.file === picked) ?? list?.sketches[0] ?? null
   const px = WIDTHS.find((w) => w.key === width)!.px
   const src = shown && scope ? `${API}/sketches/${scope}/file/${shown.file.split('/').map(encodeURIComponent).join('/')}` : null
@@ -58,9 +60,14 @@ export function Sketches({ file, session, embedded }: { file?: string; session?:
       )}
       {list && !list.sketches.length && (
         <div className="empty">
-          <p style={{ marginTop: 0 }}>No sketches{list.branch ? <> on <code>{list.branch}</code></> : ''} yet.</p>
+          <p style={{ marginTop: 0 }}>{list.earlier ? 'No sketches for this task yet.' : <>No sketches{list.branch ? <> on <code>{list.branch}</code></> : ''} yet.</>}</p>
           <p className="muted" style={{ marginBottom: 0 }}>Ask the agent to sketch a screen: it writes one HTML file per screen and shows it here. When you like it, it becomes a story under Mockups.</p>
         </div>
+      )}
+      {list && (all || !!list.earlier) && (
+        <p className="faint" style={{ margin: '8px 0' }}>
+          <button className="btn quiet small" onClick={() => setAll(!all)}>{all ? 'Hide earlier tasks\' sketches' : `Show ${list.earlier} from earlier tasks`}</button>
+        </p>
       )}
       {src && shown && (
         <div className="sketch-stage">
