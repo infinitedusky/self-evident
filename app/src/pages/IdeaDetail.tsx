@@ -13,7 +13,8 @@ import { useSteps } from '../components/StepsPanel'
 import { StepSection } from '../components/StepSection'
 import { TaskNav } from '../components/TaskNav'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
-import { engine, type IdeaRow } from '../engine'
+import { engine, type IdeaRow, type OriginView } from '../engine'
+import { Origin } from '../components/Origin'
 import { useCurrentApp } from '../current-app'
 import { Md } from '../components/Md'
 import { label } from '@self-evident/engine/steps'
@@ -52,6 +53,9 @@ function Work({ idea, section, open }: { idea: IdeaRow; section?: string; open: 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const base = `/ideas/${idea.id}`
+  // Where it came from, word for word, when it came from a tracker: what its agent and every agent after it reads.
+  const [origin, setOrigin] = useState<OriginView | null>(null)
+  useEffect(() => { engine.idea(idea.id).then((r) => setOrigin(r.origin ?? null)).catch(() => setOrigin(null)) }, [idea.id])
   const convert = async (as: 'task' | 'project') => {
     setBusy(true)
     try { const out = await engine.convertIdea(idea.id, { as }); nav(out.projectId ? `/projects/${out.projectId}` : `/tasks/${out.issueId}`) } catch (e: any) { setError(String(e.message ?? e)); setBusy(false) }
@@ -79,6 +83,7 @@ function Work({ idea, section, open }: { idea: IdeaRow; section?: string; open: 
               {idea.body ? <Md text={idea.body} /> : <p className="muted" style={{ margin: 0 }}>Only its title so far.</p>}
               {open && next && <p style={{ margin: '10px 0 0' }}>Next, if you want it: <Link to={`${base}/${next.key}`}>{label(next.key, 'idea')}</Link>. Nothing here commits to building it.</p>}
             </section>
+            {origin && <Origin origin={origin} />}
             {open && (
               <section className="panel">
                 <h2>Convert it</h2>

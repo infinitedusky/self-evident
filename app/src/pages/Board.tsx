@@ -11,6 +11,7 @@ import { LaneColumn } from '../components/LaneColumn'
 import { engine, type IdeaRow, type ProjectSummary } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { Md } from '../components/Md'
+import { LinearImport } from '../components/LinearImport'
 
 export function Board({ ideas }: { ideas: Idea[] }) {
   const nav = useNavigate()
@@ -33,6 +34,7 @@ export function Board({ ideas }: { ideas: Idea[] }) {
     setBusy(id)
     try { const out = await engine.convertIdea(id, { as }); nav(out.projectId ? `/projects/${out.projectId}` : `/tasks/${out.issueId}`) } catch (e: any) { setError(String(e.message ?? e)); setBusy(null) }
   }
+  const linearTeam = app?.setup?.integrations?.linear?.team?.trim().toUpperCase() // set under Integrations › Linear: its tickets come in as ideas
   const projectOf = (i: IdeaRow) => projects.find((p) => p.ideaId === i.id)
   const notes = ideas.filter((i) => i.app === app?.name) // the files are labelled with the app they are about
   const inbox = (rows ?? []).filter((r) => r.lane === 'inbox')
@@ -57,6 +59,8 @@ export function Board({ ideas }: { ideas: Idea[] }) {
         </div>
         {error && <div className="empty bad" style={{ marginTop: 10 }}>{error}</div>}
       </section>
+
+      {app && linearTeam && <LinearImport appId={app.id} team={linearTeam} onImported={reload} />}
 
       <section className="panel">
         <h2>Inbox</h2>

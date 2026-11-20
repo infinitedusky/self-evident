@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Board } from './Board'
 import { ideas } from '../ideas'
 import { sampleIdea } from '../fixtures'
+import { expect, within } from 'storybook/test'
 import { engineDown, withEngine } from '../stories/mock-engine'
 import { ideaRows, sampleApp } from '../stories/sample'
 
@@ -21,3 +22,11 @@ export const WithInbox: Story = { args: { ideas: [sampleIdea] }, beforeEach: wit
 export const BoardEmpty: Story = { args: { ideas: [] }, beforeEach: withEngine({ ideas: [] }) }
 export const Loading: Story = { beforeEach: withEngine({}, { latency: 'infinite' }) }
 export const EngineDown: Story = { beforeEach: withEngine(engineDown) }
+/** An app whose Linear team is set (made up: SHOP): its tickets are brought in here, each as an idea. */
+export const WithLinear: Story = {
+  beforeEach: withEngine({ ideas: inbox, apps: [{ ...sampleApp, setup: { ...sampleApp.setup, integrations: { linear: { team: 'SHOP', key_env: 'LINEAR_API_KEY' } } } }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/A ticket becomes an idea here/)).toBeVisible()
+  },
+}
