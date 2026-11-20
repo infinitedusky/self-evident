@@ -5,6 +5,7 @@
  * brief and the code is a decision (provisional until a person approves); one it cannot settle is a question. The
  * server sets the cost of every question, never the agent.
  */
+import { originOf, originPrompt } from './origins.js'
 import { covered, inForce, requirementLines, type Requirement } from './requirements.js'
 import { acceptanceLines, acceptanceOf, type Criterion } from './acceptance.js'
 import { buildOf } from './steps.js'
@@ -31,6 +32,8 @@ export interface ProposeInput {
   repoPath: string
   appId?: string // its plugins, as switched for it; none without
   issue: { identifier: string; title: string; brief: string | null }
+  /** Where the task came from, word for word (origins.ts, `originPrompt`): the ticket, never a summary of it. */
+  origin?: string
   /** The task's acceptance criteria, as lines (acceptance.ts): approved with the brief; every one must be met by a sub-task. */
   acceptance?: string | null
   /** The task's draft ADR, when its workflow has that step and it was done: the planner settles it. */
@@ -103,6 +106,7 @@ export function prompt(i: ProposeInput, recordSkills: string[] = []): string {
     `It is part of the project "${i.project.name}".`,
     '',
     i.issue.brief ?? '(The task has no brief beyond its title.)',
+    i.origin ?? '',
     i.acceptance ? `\nAcceptance criteria (the person approved these with the brief; the task is done when every one holds):\n${i.acceptance}` : '',
     i.project.content ? `\nWhy the project exists:\n${i.project.content}` : '',
     '',
@@ -296,7 +300,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
   return {
     runId, issueId, projectId: t.projectId, appId: a.id, attempt, base, oneGo,
     input: {
-      repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, acceptance: acceptanceOf(t).length ? acceptanceLines(acceptanceOf(t)) : null, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, analysis: (await getStep({ issueId }, 'analysis'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
+      repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, origin: originPrompt(await originOf({ issueId })), acceptance: acceptanceOf(t).length ? acceptanceLines(acceptanceOf(t)) : null, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, analysis: (await getStep({ issueId }, 'analysis'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
       testCmd: setup.test_cmd, storybook: storiesLead(setup), references: await referencesOf(a.id), requirements: inForce(setup, g.project.requirements, wf?.requirements), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }

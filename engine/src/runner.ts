@@ -3,6 +3,7 @@
  * across every running project), lands what finishes one at a time per project, retries what doesn't, keeps each
  * project's PR current, cleans up when a project lands, and recovers after a restart. One process; all state in Postgres.
  */
+import { originOf, originPrompt } from './origins.js'
 import { and, asc, desc, eq, inArray, notInArray } from 'drizzle-orm'
 import { join } from 'node:path'
 import { db } from './db/client.js'
@@ -274,7 +275,7 @@ export class Runner {
     const names = skillsWanted.filter((n) => has?.skills.includes(n))
     const skill = names.length ? { names, plugins: has!.plugins, mcpServers: has!.mcpServers } : undefined
     const result = probe?.kind === 'skill' && !skill ? { status: 'completed' as const, summary: `The skill \`${probe.runs}\` is not one this app's agents have, so this probe was not run.` } : await this.execute({
-      subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief },
+      subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief }, origin: originPrompt(await originOf({ issueId: t.id })),
       readOnly: onlyLooks(x.title), skills: skill, ...(told ? { heldTo: builderHeld(a.setup) } : {}),
       ticket: ticketOf(t), commitFormat: commits.format ?? undefined, hooksPath,
       worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: storiesLead(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, maxTurns: turnsFor(x.title, setup), maxBudgetUsd: setup.max_budget_usd,
@@ -699,13 +700,16 @@ export class Runner {
    * The project's PR (one per project), or an issue's (stacked: against the issue before it while that PR is open,
    * else main). Opened at the first landing, updated after every one.
    */
-  private async updatePr(projectId: string, issueId?: string, submit: boolean | 'auto' = false) {
+  private async updatePr(projectId: string, issueId?: string, submit: boolean | 'auto' | 'preview' = false): Promise<void | { title: string; body: string; head: string; base: string; landed: number; pending: string[] }> {
+    const preview = submit === 'preview' // only what it would open with: nothing is pushed, opened or recorded
+    if (preview) submit = false
     const { p, a, r, base } = await this.context(projectId)
     const auto = submit === 'auto' // the engine opening a draft once the task is built and checked (pr.ts, prAuto): never a reopening, never an error
-    if (!r?.fullName) { if (submit === true) throw new PlanError('this app\'s repository is not on GitHub, so there is no pull request to open'); return }
+    if (preview && !r?.localPath) return
+    if (!preview && !r?.fullName) { if (submit === true) throw new PlanError('this app\'s repository is not on GitHub, so there is no pull request to open'); return }
     // Nothing leaves this computer until the person submits it: no push, no pull request. After that, each landing updates it.
     const [had] = (await db.select().from(prTable).where(eq(prTable.projectId, projectId))).filter((q) => (issueId ? q.issueId === issueId : !q.issueId))
-    if (!submit && (!had || had.status === 'closed' || had.status === 'merged')) return
+    if (!preview && !submit && (!had || had.status === 'closed' || had.status === 'merged')) return
     if (auto && had && (had.status === 'closed' || had.status === 'merged')) return // one the person closed stays closed
     if (auto && had) submit = false // it is open already: this is an update like any other
     const g: Graph = (await projectGraph(projectId))!
@@ -724,7 +728,7 @@ export class Runner {
     const stack = t ? stackBase(a.defaultBranch, t, issues, prs) : { base: a.defaultBranch, on: null }
     const k = t ? issues.findIndex((q) => q.id === t.id) + 1 : 0
     const ticket = t ? teamTicket(t) : null
-    const subjects = (await git(r.localPath!, ['log', '--reverse', '--no-merges', '--format=%s', `${stack.base}..${head}`], { allowFail: true })).stdout.split('\n').filter(Boolean) // what the builder chose in its commits fills the title
+    const subjects = (await git(r!.localPath!, ['log', '--reverse', '--no-merges', '--format=%s', `${stack.base}..${head}`], { allowFail: true })).stdout.split('\n').filter(Boolean) // what the builder chose in its commits fills the title
     const title = prTitle(a.setup, { ticket, id: t?.identifier ?? p.name, title: t?.title ?? p.name, project: p.name, n: k, of: issues.length }, t ? (t as { prTitle?: string | null }).prTitle : null, subjects)
       ?? (t ? `${t.identifier} ${t.title} (${p.name}, ${k} of ${issues.length})` : p.name)
     const intro = t ? { ...p, name: `${p.name}, task ${k} of ${issues.length}: ${t.identifier} ${t.title}`, content: [t.description, stack.on ? `Stacked on #${stack.on}: review and merge that one first; this PR then retargets to ${a.defaultBranch}.` : null].filter(Boolean).join('\n\n') || p.content } : p
@@ -732,6 +736,8 @@ export class Runner {
     const guided = await guideTasks((t ? [t] : issues).map((q) => ({ id: q.id, identifier: q.identifier, title: q.title })), open.map((x) => ({ parentId: x.parentId ?? null, identifier: x.identifier }))).catch(() => [])
     const guide = mergeGuide(guided)
     const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog, guide, mergeRecord(guided))
+    if (preview) return { title, body, head, base: stack.base, landed: landed.length, pending: open.map((x) => x.identifier) }
+    if (!r?.fullName) return
     if (auto && submit && (open.length || !mine.some((x) => x.status === 'done'))) return // not whole yet: nothing is opened
     if (submit && open.length) throw new PlanError(`${open.length} sub-task${open.length === 1 ? ' has' : 's have'} still to land (${open.map((x) => x.identifier).join(', ')}): the pull request is submitted once they all have`)
     if (submit && !landed.length) throw new PlanError('nothing has landed yet: there is nothing to submit')
@@ -746,6 +752,11 @@ export class Runner {
     else await db.update(prTable).set({ baseBranch: stack.base, number: result.number, url: result.url, ...(submit ? { status: submit === 'auto' || prDraft(a.setup) ? 'draft' : 'open' } : {}) }).where(eq(prTable.id, existing.id))
     if (submit) await this.emit({ ...base, ...(issueId ? { issueId } : {}), actor: submit === 'auto' ? 'engine' : 'user', type: 'pr.submitted', payload: { number: result.number, url: result.url, draft: submit === 'auto' || prDraft(a.setup), ...(submit === 'auto' ? { auto: true } : {}) } })
     await this.emit({ ...base, ...(issueId ? { issueId } : {}), type: result.created ? 'pr.opened' : 'pr.updated', payload: { number: result.number, url: result.url, landed: landed.length, base: stack.base } })
+  }
+
+  /** What a task's pull request would open with now, or be updated to: its title and message. Nothing is pushed or opened. Null when there is no checkout to read. */
+  async previewPr(projectId: string, issueId?: string) {
+    return (await this.updatePr(projectId, issueId, 'preview')) ?? null
   }
 
   /** The person submits the pull request: the branch is pushed and it is opened (a draft, by the app's rule), or the one they closed is reopened. Refused while sub-tasks are still to land. */

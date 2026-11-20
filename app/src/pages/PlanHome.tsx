@@ -6,7 +6,6 @@
  */
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { LinearImport } from '../components/LinearImport'
 import { Assets } from '../components/Assets'
 import { Badge } from '../components/Badge'
 import { RulesPicker } from '../components/RulesPicker'
@@ -49,10 +48,9 @@ function Task({ t }: { t: PlanTask }) {
 }
 
 /** `onNewTask` makes a task from a title under the rules chosen ('' = the app's default); it may refuse, and says why. */
-/** `linearTeam`: the app's Linear team, when one is set: tickets can be brought in as tasks from here too. */
+/** `linearTeam`: the app's Linear team, when one is set: its tickets come in as ideas, on the Ideas page. */
 export function PlanHome({ plan, app, appId, onNewTask, linearTeam }: { plan: Plan; app?: string; appId?: string; onNewTask?: (title: string, workflowId: string | null) => Promise<void>; linearTeam?: string }) {
   const [adding, setAdding] = useState<string | null>(null)
-  const [fromLinear, setFromLinear] = useState(false)
   const [rules, setRules] = useState('')
   const defaultId = plan.workflows.find((w) => w.name === plan.appWorkflow)?.id ?? null
   const [why, setWhy] = useState<string | null>(null)
@@ -78,7 +76,7 @@ export function PlanHome({ plan, app, appId, onNewTask, linearTeam }: { plan: Pl
           {plan.ideaFirst
             ? <Link to="/ideas" className="btn" title={`The workflow "${plan.ideaFirst}" starts everything as an idea`}>From an idea</Link>
             : <>
-              {linearTeam && appId && <button className="btn quiet" aria-pressed={fromLinear} onClick={() => setFromLinear(!fromLinear)} title={`Bring tickets of the Linear team ${linearTeam} in as tasks`}>From Linear</button>}
+              {linearTeam && <Link to="/ideas" className="btn quiet" title={`Tickets of the Linear team ${linearTeam} come in as ideas: on the idea, decide whether it is a task or a project`}>From Linear</Link>}
               {onNewTask && <button className="btn quiet" onClick={() => setAdding(adding === null ? '' : null)}>New task</button>}
               <Link to="/projects/new" className="btn">New project</Link>
             </>}
@@ -94,8 +92,6 @@ export function PlanHome({ plan, app, appId, onNewTask, linearTeam }: { plan: Pl
           {why && <div className="empty bad" style={{ flexBasis: '100%' }}>{why}</div>}
         </section>
       )}
-
-      {fromLinear && linearTeam && appId && <LinearImport appId={appId} team={linearTeam} startOpen onImported={() => {}} />}
 
       <div className="home-cards">
         {cards.map((c) => (

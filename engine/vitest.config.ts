@@ -8,7 +8,7 @@ export const TEST_DATABASE_URL = process.env.DATABASE_URL_TEST ?? 'postgres://id
 
 export default defineConfig({
   test: {
-    env: { DATABASE_URL: TEST_DATABASE_URL, SHARED_SKILLS_HOME: join(tmpdir(), 'self-evident-test-shared-skills'), NGROK_PAUSED_FILE: join(tmpdir(), 'self-evident-test-ngrok-paused.json'), RECORDINGS_HOME: join(tmpdir(), 'self-evident-test-recordings'), STAND_INS_HOME: join(tmpdir(), 'self-evident-test-prototypes'), REPO_SKILLS_HOME: join(tmpdir(), 'self-evident-test-repo-skills') }, // never the person's own shared skills, their list of stopped services, or their recordings and prototypes' folders
+    env: { DATABASE_URL: TEST_DATABASE_URL, SHARED_SKILLS_HOME: join(tmpdir(), 'self-evident-test-shared-skills'), NGROK_PAUSED_FILE: join(tmpdir(), 'self-evident-test-ngrok-paused.json'), RECORDINGS_HOME: join(tmpdir(), 'self-evident-test-recordings'), STAND_INS_HOME: join(tmpdir(), 'self-evident-test-prototypes'), REPO_SKILLS_HOME: join(tmpdir(), 'self-evident-test-repo-skills'), ORIGINS_HOME: join(tmpdir(), 'self-evident-test-origins') }, // never the person's own shared skills, their list of stopped services, or their recordings, prototypes' and tickets' folders
     globalSetup: ['./src/test-setup.ts'],
     testTimeout: 20_000,
   },

@@ -224,6 +224,9 @@ Details and sources in `research/`.
 - **The loop's stages** (Sandy, 2026-10-29): Observe · Learn · Ideate (ideas and their research) · Plan
   (tasks: research, brief, mockup, prototype, in any order unless a workflow sets one) · Build (including the
   checks a build is held to). The rail lists only these stages; projects, tasks and the steps are inside them.
+- **A task's pull request is a step of its own, after the smoke test** (Sandy, 2026-11-20): where it stands, its
+  message, the press that submits it or takes a draft to ready for review, and what was said on it. Submitting and
+  marking ready are the person's, never an agent's. Tools that help its reviewers go here; none are built.
 - **An app says where it is smoke tested, beside where it is prototyped** (Sandy, 2026-11-17: "apps get a smoke
   test configuration setting, and it's like there's a prototype and a smoke test, and they can either be the same
   or they can be different"). The setting, the step and a person's marks are built (`engine/src/smoke.ts`,
@@ -574,10 +577,18 @@ Details and sources in `research/`.
   seeds in `docs/lifecycle/` are its documents' templates. The rest of the integrations move from the code into
   documents next, and the engine becomes their reader; a check the common forms cannot express (a command's exit
   code, a file containing a line, a URL answering) stays a named check the document points at.
-- **Self Evident pulls from Linear: a ticket becomes a task** (Sandy, 2026-11-12: "we should be able to create plans
-  and tasks from linear"; LOG.md, "Tasks from Linear tickets"). On the Tasks page of an app whose Linear team is set,
-  the team's open tickets are listed and the ones ticked are brought in, each once, with a link back and the branch
-  name Linear gives it. Read only for now: nothing is written to Linear, and a task's state here is its own.
+- **Self Evident pulls from Linear: a ticket becomes an idea** (Sandy, 2026-11-12: "we should be able to create plans
+  and tasks from linear"; 2026-11-20: "bring them in as ideas and then decide whether or not they should be projects
+  or tasks"; LOG.md, "Tasks from Linear tickets", "Linear tickets come in as ideas"). On the Ideas page of an app whose
+  Linear team is set, the team's open tickets are listed and the ones ticked are brought in, each once, as ideas, with
+  a link back and the branch name Linear gives it. Converted, the idea's task names the ticket. A project's Add tasks,
+  where it is decided already, brings a ticket in as a task. Read only for now: nothing is written to Linear, and
+  state here is its own.
+- **Where work came from is kept word for word, and every agent reads it** (Sandy, 2026-11-20: "I don't want the
+  agent building like off a summary … this should apply to all tickets, no matter where they come from"; LOG.md,
+  "The ticket, word for word, for every agent"). A ticket from any tracker is kept as an origin: its text, comments,
+  links and images, never edited here. The idea, project, task and sub-tasks made from it all have it, and every
+  agent on them is given it whole beside its brief, told to say where the brief leaves part of it out.
 - **tkt reads from Self Evident; a switch lets it run on its own against Linear** (Sandy, 2026-11-10: "we want Self
   Evident to be pulling from Linear and we want TKT to be pulling from Self Evident. But I want to test TKT on its
   own"). The arrangement stays as in "tkt is the runner; Self Evident is the tracker and the window": tkt's skills read

@@ -17,8 +17,7 @@ import { StepSection } from '../components/StepSection'
 import { Acceptance } from '../components/Acceptance'
 import { TaskBranches } from '../components/TaskBranches'
 import { MergeGuide } from '../components/MergeGuide'
-import { SubmitPr } from '../components/SubmitPr'
-import { useCurrentApp } from '../current-app'
+import { PrStep } from '../components/PrStep'
 import { mark, TaskNav } from '../components/TaskNav'
 import { WorkflowChoice } from '../components/WorkflowChoice'
 import { Handover } from '../components/Handover'
@@ -33,6 +32,7 @@ import { ChecklistView } from '../components/ChecklistView'
 import { SmokeTest } from '../components/SmokeTest'
 import { openEvents, useLiveProject, type Events, type Checklist, API, engine, useWorkflows, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
 import { Md } from '../components/Md'
+import { Origin } from '../components/Origin'
 
 /** Where a task's workflow comes from, after its name. */
 const FROM = { task: ', its own', project: ', from its project', app: ', the app\'s default' }
@@ -135,7 +135,6 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
   const subject = { kind: 'issues' as const, id: i.id }
   const { v, error } = useSteps(subject, i.appId)
   const agent = useTaskAgent(i.id, i.appId)
-  const { app } = useCurrentApp()
   const { workflows } = useWorkflows(i.appId)
   const [navOpen, setNavOpen] = useState(() => { try { return localStorage.getItem('se.task-nav.open') !== '0' } catch { return true } })
   const toggleNav = () => setNavOpen((o) => { try { localStorage.setItem('se.task-nav.open', o ? '0' : '1') } catch { /* fine */ } return !o })
@@ -157,8 +156,9 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
   const rows = v.rows
+  const live0 = i.subIssues.filter((s) => !dropped(s)).length // something is planned: its pull request has a page
   const staged = !checklist && !!smoke && (smoke.total > 0 || !!smoke.built) // it stays once the task is built, with nothing left to check too: they may want to look anyway
-  const here = section === 'build' || section === 'saves' || (section === 'checklist' && checklist) || (section === 'smoke' && (checklist || staged)) || rows.some((r) => r.key === section) ? section! : 'overview'
+  const here = section === 'build' || section === 'saves' || (section === 'pr' && live0 > 0) || (section === 'checklist' && checklist) || (section === 'smoke' && (checklist || staged)) || rows.some((r) => r.key === section) ? section! : 'overview'
   if (section && here === 'overview') return <Navigate to={base} replace />
   const live = i.subIssues.filter((s) => !dropped(s)) // canceled sub-tasks are out of the plan
   const done = live.filter((s) => s.state === 'done').length
@@ -169,11 +169,12 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
   const reading = rows.filter((r) => step(r.key).place === 'check' && r.state.status !== 'done') // after a prototype the plan is read before it is built
   return (
     <div className={`task-layout with-agent ${agent.open ? '' : 'agent-folded'} ${navOpen ? '' : 'nav-folded'}`}>
-      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} rows={rows} saves={navSaves} onSave={saveHere} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: live.length, waitingOn: buildWaits }} smoke={staged ? smoke : null} checklist={checklist} />
+      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} rows={rows} saves={navSaves} onSave={saveHere} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: live.length, waitingOn: buildWaits }} smoke={staged ? smoke : null} checklist={checklist} pr={live0 > 0 ? { status: i.pr?.status ?? null, number: i.pr?.number ?? null } : null} />
       <div className="task-main">
         {here === 'overview' && (
           <>
             <section className="panel"><Brief description={i.description} brief={null} /></section>
+            {i.origin && <Origin origin={i.origin} />}
             <Handover madeBy={i.madeBy} handover={i.handover} onWrite={(again) => engine.writeHandover(i.id, again)} />
             <section className="panel">
               <h2>Where it stands</h2>
@@ -199,6 +200,7 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
         )}
         {here === 'checklist' && checklist && <ChecklistView checklist={checklist} base={base} />}
         {here === 'smoke' && (checklist || staged) && <SmokeTest issueId={i.id} appId={i.appId} base={base} small={small} />}
+        {here === 'pr' && <PrStep issueId={i.id} appId={i.appId} base={base} />}
         {here === 'saves' && <TaskBranches issueId={i.id} at={new URLSearchParams(window.location.search).get('at')} stamp={savesStamp} onMoved={() => void act(async () => {})} onChanged={readSaves} />}
         {here === 'build' && (buildWaits
           ? <section className="panel"><h2>🏗️ {checklist ? 'Build' : 'Sub-tasks'}</h2><div className="empty">{checklist ? 'The build waits' : 'Planning and building wait'} for the brief's approval. <Link to={`${base}/brief`}>Go to the brief →</Link></div>{checklist?.flow && <TaskGraph i={i} checklist={checklist} />}</section>
@@ -219,7 +221,7 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
               {(live.length > 0 || checklist?.flow) && <TaskGraph i={i} checklist={checklist} />}
               {live.length > 0 && <PlanCovers list={i.requirements ?? []} />}
               {live.length > 0 && <MergeGuide issueId={i.id} stamp={i.updatedAt} />}
-              {live.length > 0 && <SubmitPr issueId={i.id} pr={i.pr ?? null} landed={done} total={live.length} unchecked={(i.acceptance ?? []).filter((c) => c.built !== true).length} draft={app?.setup?.pr_draft !== false} auto={app?.setup?.pr_auto !== false} onChanged={() => void act(async () => {})} />}
+              {live.length > 0 && <p className="faint" style={{ margin: '10px 0 0', fontSize: 13 }}>Its pull request has a page of its own: <Link to={`${base}/pr`}>{i.pr?.number ? `#${i.pr.number}, ${i.pr.status}` : 'not submitted yet'}</Link>.</p>}
             </>)}
       </div>
       {agent.session !== undefined && (

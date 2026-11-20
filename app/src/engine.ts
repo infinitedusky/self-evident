@@ -143,11 +143,35 @@ export interface Graph {
 export interface GraphFile { path: string; subIssues: string[]; heldBy: string | null }
 export interface ProjectSummary { id: string; name: string; status: string; createdAt: string; ideaId?: string | null; app: { id: string; name: string } | null; issueCount: number; backlogOpen?: number; builds: Record<string, number>; solo?: boolean; plannedTasks?: { id: string; identifier: string; title: string; subTasks: number }[] } // solo: a task's own project (only listed when asked for); plannedTasks: its tasks that have sub-tasks
 /** The pull request a task's work is in. */
+/** What was said on a pull request: a comment, a review (with its verdict), or a comment on a line. */
+export interface PrComment { id: string; kind: 'comment' | 'review' | 'line'; author: string; body: string; at: string; url: string | null; state?: string; path?: string; line?: number | null }
+/** A task's pull request as a step (the engine's pr-view.ts). */
+export interface PrView {
+  issueId: string
+  /** As GitHub has it now, or as last known when `problem` is set. Null: not submitted. */
+  pr: { number: number; url: string; status: 'draft' | 'open' | 'closed' | 'merged'; title: string; body: string; review: string | null; mergeable: string | null; checks: { name: string; state: 'pass' | 'fail' | 'pending' | 'skipped' }[]; updatedAt: string | null } | null
+  /** What it would open with, or what the next update sends. */
+  message: { title: string; body: string; head: string; base: string } | null
+  behind: boolean
+  landed: number; total: number; unchecked: number; byHand: number
+  draft: boolean; auto: boolean
+  canSubmit: boolean; waits: string[]; canReady: boolean
+  comments: PrComment[]; problem: string | null
+}
 export interface TaskPr { number: number | null; url: string | null; status: string }
 export interface IssueRow { id: string; identifier: string; number: number; title: string; description: string | null; state: IssueState; sortOrder: number; priority: number; project: { id: string; name: string; status: string; solo?: boolean } | null; builds: Record<string, number>; planning: string | null; pr?: TaskPr | null }
 /** What was written on a ticket as it moved: one comment per heading (the plan, the handoff, the review), the latest write of each. */
 export interface IssueComment { id: string; issueId: string; heading: string; body: string; author: string; createdAt: string; updatedAt: string }
+/** Where a piece of work came from, word for word (the engine's origins.ts): what every agent on it is given. */
+export interface OriginView {
+  id: string; source: string; sourceName: string; ref: string; url: string | null; title: string; body: string | null
+  comments: { author: string | null; at: string; body: string }[]; links: { title: string; url: string }[]
+  /** Images and uploads in its text: kept on this computer for the agents, or not, with why. */
+  files: { url: string; kept: boolean; note: string | null }[]; fetchedAt: string
+}
 export interface IssueDetail extends Issue {
+  /** Where it came from, word for word, when it came from outside (its own, its project's or its idea's). */
+  origin?: OriginView | null
   /** A built task not yet closed: whether a person can close it now, and if not, what it waits on, in their words. */
   close?: { can: boolean; waits: string[] }
   pr?: TaskPr | null // the pull request its work is in (a sub-task shows its task's)
@@ -189,9 +213,13 @@ export interface Asset { id: string; appId: string; projectId: string | null; na
 export interface LinearTicket {
   id: string; identifier: string; title: string; url: string; branchName: string | null; priority: number
   state: { name: string; type: string }; assignee: string | null; mine: boolean; project: string | null; task: { id: string; identifier: string } | null
+  /** The idea it was brought in as, when it has not become a task. */
+  idea?: { id: string; number: number } | null
 }
 export type LinearScope = 'mine' | 'unassigned' | 'all'
-export interface LinearImported { made: { id: string; identifier: string; title: string; linear: string }[]; updated: { id: string; identifier: string; title: string; linear: string }[]; missing: string[] }
+/** What a ticket was brought in as: an idea (`#12`) or, from a project's Add tasks, a task (`SS-50`). */
+export interface LinearBrought { kind: 'idea' | 'task'; id: string; identifier: string; title: string; linear: string }
+export interface LinearImported { made: LinearBrought[]; updated: LinearBrought[]; missing: string[] }
 /** A folder on the engine's computer and the git repositories in it (itself, or the ones directly inside); `path` null: the folder dialog was closed. */
 export interface FoundRepo { name: string; path: string; fullName: string | null; branch: string | null }
 export interface Folder { path: string | null; repos: FoundRepo[] }
@@ -445,7 +473,7 @@ export const engine = {
   prototypeTalk: (id: string) => call<{ id: string }>('POST', `/prototypes/${id}/talk`),
   now: (appId?: string) => call<Now>('GET', `/now${appId ? `?app=${appId}` : ''}`),
   ideas: (appId?: string) => call<IdeaRow[]>('GET', `/ideas${appId ? `?app=${appId}` : ''}`),
-  idea: (id: string) => call<IdeaRow>('GET', `/ideas/${id}`),
+  idea: (id: string) => call<IdeaRow & { origin?: OriginView | null }>('GET', `/ideas/${id}`),
   createIdea: (body: { appId: string; title: string; body?: string }) => call<IdeaRow>('POST', '/ideas', body),
   planIdea: (id: string) => call<{ project: { id: string } }>('POST', `/ideas/${id}/project`, {}),
   convertIdea: (id: string, body: { as: 'task' | 'project'; title?: string; projectId?: string; why?: string }) => call<{ as: 'task' | 'project'; issueId?: string; projectId?: string }>('POST', `/ideas/${id}/convert`, body),
@@ -475,6 +503,8 @@ export const engine = {
   editReport: (id: string, body: string) => call<Report>('PUT', `/reports/${id}`, { body }),
   deleteReport: (id: string) => call<{ deleted: string }>('DELETE', `/reports/${id}`),
   setReportFormat: (appId: string, f: { daily?: string; weekly?: string }) => call<{ daily: string; weekly: string }>('PUT', `/apps/${appId}/report-format`, f),
+  prView: (issueId: string) => call<PrView>('GET', `/issues/${issueId}/pr`),
+  markPrReady: (issueId: string) => call<{ number: number; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/ready`),
   submitPr: (issueId: string) => call<{ id: string; number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/submit`),
   keepSecret: (name: string, value: string, appId?: string) => call<KeptKey>('PUT', `/secrets/${encodeURIComponent(name)}`, { value, ...(appId ? { appId } : {}) }),
   dropSecret: (name: string, appId?: string) => call<KeptKey>('DELETE', `/secrets/${encodeURIComponent(name)}${appId ? `?app=${appId}` : ''}`),
@@ -537,7 +567,8 @@ export const engine = {
   createRepo: (body: { appId: string; fullName: string; localPath?: string; baseBranch?: string }) => call<Repo & { note: string | null }>('POST', '/repos', body),
   /** The open tickets of the app's Linear team (Integrations › Linear). Reads Linear; nothing is written there. */
   linearTickets: (appId: string, scope: LinearScope) => call<{ team: string; tickets: LinearTicket[] }>('GET', `/apps/${appId}/linear/tickets?scope=${scope}`),
-  importLinear: (appId: string, identifiers: string[]) => call<LinearImported>('POST', `/apps/${appId}/linear/import`, { identifiers }),
+  /** The tickets named become ideas, or (`as: 'task'`, a project's Add tasks) tasks. */
+  importLinear: (appId: string, identifiers: string[], as: 'idea' | 'task' = 'idea') => call<LinearImported>('POST', `/apps/${appId}/linear/import`, { identifiers, as }),
   /** The app's assets, or with a project that project's own. Every conversation there is told them. */
   assets: (appId: string, projectId?: string) => call<Asset[]>('GET', `/apps/${appId}/assets${projectId ? `?project=${projectId}` : ''}`),
   addAsset: (body: { appId: string; projectId?: string; name: string; location: string; note?: string }) => call<Asset>('POST', '/assets', body),

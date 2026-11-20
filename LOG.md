@@ -5550,6 +5550,67 @@ vendor response into main so the same person can be scanned on both without payi
 set-up's variables can reach the real vendor, as the build can.
 
 
+## The pull request is a step of its own, after the smoke test (Sandy, 2026-11-20: "a new step to the build section after smoke test, 'PR'. This will show us the PR status, the message, let us submit (new PR or draft to complete conversion) and let us see any comments. It will also in the future give us tools to help reviewers")
+
+A task's pull request was a panel at the foot of its Sub-tasks page: a button and a badge. Now "🔀 Pull request" is a
+row in the task's Build section, after the smoke test, with a page (`app/src/components/PrStep.tsx`,
+`engine/src/pr-view.ts`, `GET /issues/:id/pr`):
+
+- **Where it stands**: not submitted, a draft, open, closed or merged; what review says; its checks, with the
+  failing ones named; a conflict with its base; the branch and what it is against.
+- **The one thing to press**: submit it (as before: asked once more, pushed, opened as a draft by the app's rule;
+  a closed one is submitted again), or, for a draft, **Ready for review**, which takes it out of draft on GitHub
+  (`POST /issues/:id/pr/ready`). Both are the person's: neither is a tool an agent has. Checks of the person's own
+  still waiting in the smoke test are said, with a link, and do not block.
+- **Its message**: before it exists, what it will open with (the title by the app's rule, the body with its merge
+  guide), worked out without pushing anything (`runner.previewPr`). After, what GitHub has; when that is an earlier
+  version it says so, and what the next update sends can be looked at.
+- **What was said on it**: comments, reviews with their verdict, and comments on lines with the file and line,
+  oldest first, each with a link to it on GitHub.
+- GitHub is asked each time the page is read. When it cannot be reached the page says so and shows what was last
+  known. What it reads is kept: one closed, merged or made ready on GitHub is recorded as that.
+- **Replaced, not added**: the Submit panel is gone from the Sub-tasks page, which now has a line linking here.
+
+Not done: tools for reviewers (Sandy's "in the future"); replying to or resolving a comment from here; sending a
+comment to the task's agent as work; editing the message here (the title has `set_pr_title`; the body is made from
+the task); a project's single pull request (pr_mode "project") is shown on each of its tasks, whole; the row's
+count of comments in the nav.
+
+## Linear tickets come in as ideas (Sandy, 2026-11-20: "I think what we want to do is bring them in as ideas and then decide whether or not they should be projects or tasks. Because it might be that they should be a project with tasks. For one ticket")
+
+A ticket brought in became a task straight away, which decided for the person that it was one thing to build. Now:
+
+- **A ticket becomes an idea**, in the inbox, with its words and the link back (`source: 'linear'`, the ticket in
+  `sourceRef.linear`). "As a task" or "As a project" is pressed on the idea, as for any other; as a project, its
+  agent decides whether the ticket is one task or several (work.ts, `splitPrompt`).
+- **The task an idea from Linear becomes names the ticket**: `sourceRef.linear` goes with it, so the branch
+  (`{ticket}`), the reports and the runner still say SHOP-12. Only that first task carries it; tasks its agent adds to
+  the project are their own.
+- **Where:** the panel moved from the Tasks page to the Ideas page; Plan's From Linear goes there. A project's
+  Add tasks › From Linear has decided already, so there a ticket still becomes a task in that project.
+- **Bringing one in again** updates the idea's words, or the task's when it was made from the ticket directly. A
+  task made from the idea is left alone (its title may be trimmed to its part of a project); the ticket is listed
+  as that task.
+- The idea's source allows `linear` (migration 0044); tasks already made from tickets stay as they are.
+
+## The ticket, word for word, for every agent (Sandy, 2026-11-20: "I don't want the agent building like off a summary or a brief and not having access to the actual ticket … this should apply to all tickets, no matter where they come from")
+
+What a ticket said reached the agents only as a task's description, which the planner and the builders never read,
+and which the idea's agent is told to trim when it splits a project. Now:
+
+- **An origin** (`origin` table, origins.ts): a ticket as its tracker has it: title, text, comments oldest first,
+  what it links to, and the images in its text, fetched with the tracker's key and kept on this computer
+  (`~/.self-evident/origins/<app>/<ticket>/`). Never edited here; brought up to date each time the ticket is
+  brought in, whatever became of it. Linear is the first source; another tracker adds a source and calls
+  `keepOrigin` and `keepFiles` the same way.
+- **Ideas, projects and tasks point at it** (`origin_id`). A task with none of its own has its parent's, its
+  project's or its idea's (`originOf`): every task split from one ticket, and every sub-task, has the whole ticket.
+- **Every agent is given it whole** (`originPrompt`): the idea's and the task's own agents, the steps' and the
+  prototype's agents, the planner, and every builder. They are told to follow what they were given (the brief, the
+  sub-task), and where that leaves out or differs from the ticket, to say so, naming the part: never quietly drop it.
+- **Shown** on the idea's and the task's overview as "Where this came from", folded; an image that could not be
+  fetched is said in red, since the agents can't see it.
+
 ## A view's address bar follows the view (Sandy, 2026-11-20: "in prototype and smoke test, the browser screens have back forward refresh and address bars. But the address doesn't update with the site like a real browser. This makes the back and forward useless")
 
 What a prototype, a smoke test or main runs is on a port of its own, another origin, so the page around it could
