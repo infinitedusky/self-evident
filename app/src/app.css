@@ -703,7 +703,8 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .task-nav.folded { justify-items: center; }
 .task-nav.folded .task-nav-fold { justify-self: center; margin-bottom: 4px; }
 .task-nav.folded .link { width: 36px; padding: 6px 0; text-align: center; }
-.task-nav.folded .link.done { box-shadow: inset 2px 0 0 var(--ok); }
+.task-nav.folded .link { position: relative; }
+.task-nav.folded .link.done::after { content: '✓'; position: absolute; right: -4px; top: 50%; transform: translateY(-50%); font: 700 11px/1 var(--sans); color: var(--ok); }
 .task-nav.folded .link.locked { opacity: .45; }
 .task-agent { position: sticky; top: 20px; height: calc(100vh - 160px); min-height: 420px; max-height: 820px; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .task-agent-head { display: flex; align-items: center; gap: 6px; padding-right: 8px; border-bottom: 1px solid var(--line); }
