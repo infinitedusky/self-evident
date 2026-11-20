@@ -39,7 +39,7 @@ import { Link } from 'react-router'
 import { Badge } from './Badge'
 import { SmokeTerminal } from './SmokeTerminal'
 import { Nav, useTrail } from './Trail'
-import { useMain } from '../main-running'
+import { dataChoice, keepDataChoice, useMain } from '../main-running'
 import { API, engine, openEvents, type SmokeCheck, type SmokeSetupView, type SmokeView } from '../engine'
 
 const WHEN = { here: 'Here, on the built code', pr: 'On the pull request', after: 'After it is merged', nightly: 'Left to the nightly run' } as const
@@ -62,6 +62,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
   // Compare is a main of the task's own beside the build, at the same place, on a port of its own (main-running.ts; Sandy, 2026-11-20: "one per task"). The task's prototype shares it; the app's own main is left as it is.
   const [comparing, setComparing] = useState(false)
   const theMain = useMain(appId, comparing, issueId)
+  const [mainData, setMainData] = useState(dataChoice)
   const mine = useTrail(), theirs = useTrail() // the build's view, and main's beside it: each goes its own way
   const { at, setAt: setMine } = mine
   const setAt = (to: string | null) => { setMine(to); if (to === null) theirs.setAt(null) }
@@ -202,8 +203,9 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
                   <a className="btn quiet small" href={src} target="_blank" rel="noreferrer">Open in a new tab</a>
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.startSmoke(issueId, false, many ? su.key : undefined))}>{behind ? 'Run the new commit' : 'Restart'}</button>}
                   {local && su.canClean && <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true, many ? su.key : undefined))}>Start clean</button>}
-                  {local && !cmp && theMain.main && theMain.main.how !== 'none' && <button className="btn quiet small" disabled={theMain.busy} title="Main beside it, at the same place: a copy of this task's own, on its own port. The app's main is left as it is." onClick={() => { setComparing(true); void theMain.start().then((m) => { if (!m?.running) setComparing(false) }) }}>{theMain.busy ? 'Turning main on…' : 'Compare with main'}</button>}
+                  {local && !cmp && theMain.main && theMain.main.how !== 'none' && <button className="btn quiet small" disabled={theMain.busy} title="Main beside it, at the same place: a copy of this task's own, on its own port. The app's main is left as it is." onClick={() => { setComparing(true); void theMain.start({ mode: mainData, beside: `smoke:${issueId}:${su.key}` }).then((m) => { if (!m?.running) setComparing(false) }) }}>{theMain.busy ? 'Turning main on…' : 'Compare with main'}</button>}
                   {local && cmp && <button className="btn quiet small" title="Turns this task's main off. The app's own main is not touched." onClick={() => { setComparing(false); theirs.setAt(null); void theMain.stop() }}>Stop comparing</button>}
+                  {local && theMain.main?.how === 'local' && theMain.main.database ? <label className="compare-data" title="A copy: main gets its own database, filled as this was to start with. The same database: main's code on this one's data, so what you do here shows there, and a change main cannot read shows as main breaking."><span className="faint">main's data</span> <select aria-label="Main's data" value={mainData} disabled={theMain.busy} onChange={(e) => { const m = e.target.value as 'copy' | 'shared'; setMainData(m); keepDataChoice(m); if (comparing) void theMain.start({ mode: m, beside: `smoke:${issueId}:${su.key}` }) }}><option value="copy">a copy of this one's</option><option value="shared">the same database</option></select></label> : null}
                   {theMain.error && <span className="bad" role="alert">{theMain.error}</span>}
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.stopSmoke(issueId, many ? su.key : undefined))}>Stop</button>}
                 </div>
@@ -212,7 +214,7 @@ export function SmokeTest({ issueId, appId, base }: { issueId: string; appId: st
                 {local && cmp
                   ? <div className="smoke-pair">
                       <figure><figcaption>This build{su.running ? <> <code>{su.running.slice(0, 7)}</code></> : null}</figcaption><div className="smoke-bar"><Nav t={mine} home={home} src={src} /></div><iframe key={`${src}#${mine.reloads}`} className="smoke-frame" title="The built code" src={src} /></figure>
-                      <figure><figcaption>{cmp.branch}{cmp.sha ? <> <code>{cmp.sha.slice(0, 7)}</code></> : null}</figcaption>{cmp.up && cmpSrc && <div className="smoke-bar"><Nav t={theirs} home={cmpHome} src={cmpSrc} of="main" /></div>}{cmp.up && cmpSrc
+                      <figure><figcaption>{cmp.branch}{cmp.sha ? <> <code>{cmp.sha.slice(0, 7)}</code></> : null}{theMain.main?.data ? <span className="faint"> · {theMain.main?.data.mode === 'shared' ? 'on the same database' : 'on a copy of the data'}</span> : null}</figcaption>{cmp.up && cmpSrc && <div className="smoke-bar"><Nav t={theirs} home={cmpHome} src={cmpSrc} of="main" /></div>}{cmp.up && cmpSrc
                         ? <iframe key={`${cmpSrc}#${theirs.reloads}`} className="smoke-frame" title="main" src={cmpSrc} />
                         : <div className="empty smoke-frame">Turning main on… {cmp.log.length > 0 && <pre className="smoke-log">{cmp.log.slice(-6).join('\n')}</pre>}</div>}</figure>
                     </div>

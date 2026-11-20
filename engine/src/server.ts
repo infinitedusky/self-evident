@@ -55,7 +55,15 @@ import { mergeGuideAndRecord } from './merge-guide.js'
 import { autoSave, clearTaskBranches, deleteSavePoint, deleteTaskBranch, goBack, saveHere, switchTo, taskBranches } from './task-branches.js'
 import { restoreAfterRestart, share, shared, ShareError, sharesOf, SHARE_KINDS, stopShares, unshare, type ShareKind } from './share.js'
 import { runsOf, runStep, stopStep, stopStepRuns } from './prototype-run.js'
-import { mainStatus, startMain, stopMain, stopMains } from './main-running.js'
+import { mainStatus, startMain, stopMain, stopMains, type MainData } from './main-running.js'
+/** What a task's main is to run on, from the page's choice: ?data=copy|shared and ?beside=prototype:<id> or smoke:<task id>[:<set-up>]. Left out: as it was. */
+async function mainDataOf(mode?: string, beside?: string): Promise<MainData | undefined> {
+  if ((mode !== 'copy' && mode !== 'shared') || !beside) return undefined
+  const [kind, id, setup] = beside.split(':')
+  if (kind === 'prototype' && id) { const d = await (await import('./prototype.js')).prototypeDataOf(id); return mode === 'shared' ? { mode, beside: d.beside, slug: d.slug } : { mode, beside: d.beside, scenario: d.scenario, prototypeId: d.prototypeId } }
+  if (kind === 'smoke' && id) { const t = await resolveIssue(db, id); const d = await (await import('./smoke.js')).smokeDataOf(t.id, setup); return mode === 'shared' ? { mode, beside: d.beside, slug: d.slug } : { mode, beside: d.beside, seed: d.seed } }
+  return undefined
+}
 import { discardPrototype, listPrototypes, prototypeStatus, resetPrototypeData, runPrototype, savePrototypeData, startPrototype, stopPrototype, stopPrototypes, talkFor } from './prototype.js'
 import { answerQuestion, finishPlanning, preparePlanning, recoverPlanning } from './planner.js'
 import { activeApps, appHolds, bringBack, deleteForGood, putAway, putAwayApps } from './apps.js'
@@ -464,7 +472,7 @@ export function buildApp(bus: EventBus) {
   // The app's main, running (main-running.ts): turned on and off by the person; a look at it (touch=1) keeps it from turning itself off.
   // ?for=<task or prototype id>: the main that piece of work has of its own for comparing, not the app's.
   api.get('/apps/:id/main', async (c) => { try { return c.json(await mainStatus(c.req.param('id'), c.req.query('touch') === '1', c.req.query('for'))) } catch (err) { return planError(c, err, 404) } })
-  api.post('/apps/:id/main/start', async (c) => { try { return c.json(await startMain(c.req.param('id'), 'person', { update: c.req.query('update') === '1', for: c.req.query('for') })) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/main/start', async (c) => { try { return c.json(await startMain(c.req.param('id'), 'person', { update: c.req.query('update') === '1', for: c.req.query('for'), data: await mainDataOf(c.req.query('data'), c.req.query('beside')) })) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/main/stop', async (c) => { try { return c.json(await stopMain(c.req.param('id'), 'person', undefined, c.req.query('for'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/stop', async (c) => { try { return c.json(await stopPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/prototypes/:id/discard', async (c) => { try { return c.json(await discardPrototype(c.req.param('id'))) } catch (err) { return planError(c, err) } })

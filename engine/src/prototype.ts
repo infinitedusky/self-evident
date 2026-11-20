@@ -39,6 +39,12 @@ async function setupOf(appId: string) {
 }
 
 // From its folder, not its git branch: the branch changes when the task moves to another task branch, its database does not.
+/** What a prototype's data is: its database and the scenario it was built from, for a main run beside it (main-running.ts). */
+export async function prototypeDataOf(id: string) {
+  const [p] = await db.select().from(prototype).where(eq(prototype.id, id))
+  if (!p) throw new PlanError(`no prototype ${id}`)
+  return { slug: slugOf(p), scenario: p.scenario ?? null, prototypeId: p.id, beside: `the prototype "${p.title}"` }
+}
 const slugOf = (p: typeof prototype.$inferSelect) => { const b = basename(p.path); return b.startsWith('prototype--') ? b.slice('prototype--'.length) : p.branch.slice('prototype/'.length) }
 
 /** What the prototype's server and its conversation are given: the app's database variable, at its own database. */
