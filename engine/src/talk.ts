@@ -38,6 +38,7 @@ import { onIdeaMoved, splitPrompt } from './work.js'
 import { gate, NOT_IN_THE_CHECKOUT } from './gate.js'
 import { existsSync, statSync } from 'node:fs'
 import { stopStorybookAt, storiesNote } from './storybook.js'
+import { prDescriptionNote } from './pr.js'
 import { lastUuid, latestSession, readTurns, sessionFile, sessionLabel, sessionsIn, sessionTitle } from './terminal.js'
 
 const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']
@@ -681,7 +682,7 @@ async function open(sessionId: string): Promise<Live> {
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + origin + storiesNote(a?.setup) + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) + (recordings && !unwatched ? recordingsPrompt(recordings, listRecordings(recordings).length) : '') },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) + prDescriptionNote(a.setup) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + origin + storiesNote(a?.setup) + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) + (recordings && !unwatched ? recordingsPrompt(recordings, listRecordings(recordings).length) : '') },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...(check || whole ? CHECK_TOOLS : ASK_TOOLS)],
