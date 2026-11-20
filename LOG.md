@@ -5631,3 +5631,20 @@ not read where it went: back and forward only stepped through addresses the page
 Not done: a page with a strict Content-Security-Policy that does not allow its own origin's scripts does not report
 (it still shows; the bar behaves as before). A link in the app to its own absolute `http://localhost:<port>` address
 leaves the proxy, and the view stops reporting until the bar sends it somewhere.
+
+
+## A comment written on GitHub is shown as GitHub shows it (Sandy, 2026-11-20: "can we make sure that all the Wiz findings are formatted?")
+
+On a task's pull request page a scanner's comment showed as its own source: GitHub lets a comment carry HTML (a
+table with icons, a folded section), and our Markdown showed the tags as text. Now a pull request's message and
+every comment on it are rendered with their HTML and then cleaned to what GitHub itself allows (`Md`'s `html`;
+`rehype-raw`, then `rehype-sanitize`, whose list is made after GitHub's): tables, images and folded sections show,
+and a script, a style or a handler does not get through (a story holds it to that). The few `:names:` bots use for
+a status (`:x:`, `:white_check_mark:`, `:warning:` …) are shown as their signs.
+
+Only where the text came from GitHub. Everything else that is Markdown is as it was.
+
+Not done: findings a scanner keeps on its own site and only counts in its comment are not brought in (the comment
+links to them); GitHub's own rendering (mentions, issue links, code at a commit) is not copied; a check's
+annotations are not shown.
+
