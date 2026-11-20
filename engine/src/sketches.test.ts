@@ -9,9 +9,9 @@ import { eq } from 'drizzle-orm'
 import { afterAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
 import { app, repo, session, workspace } from './db/schema.js'
-import { git } from './git.js'
+import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
-import { listSketches, listSketchFiles, placeOf, readSketch } from './sketches.js'
+import { listSketches, listSketchFiles, ownSketches, placeOf, readSketch } from './sketches.js'
 import { frameUrl, portFor, storybookStatus } from './storybook.js'
 
 async function folder(files: Record<string, string>) {
@@ -26,6 +26,18 @@ describe('sketch files', () => {
     const dir = await folder({ 'sketches/home.html': '<h1>Home</h1>', 'sketches/flows/checkout.html': '<h1>Pay</h1>', 'sketches/style.css': 'h1{}', 'index.html': 'not a sketch' })
     expect((await listSketchFiles(dir)).map((s) => s.file).sort()).toEqual(['flows/checkout.html', 'home.html'])
     expect(await listSketchFiles(await folder({ 'index.html': 'x' }))).toEqual([])
+  })
+  it('tells the sketches a branch made or changed from the ones it was handed', async () => {
+    const dir = await folder({ 'sketches/old.html': '<p>an earlier task (sample)</p>', 'sketches/kept.html': '<p>also earlier (sample)</p>' })
+    await commitAll(dir, 'earlier sketches')
+    await git(dir, ['checkout', '-q', '-b', 'talk/new'])
+    expect([...(await ownSketches(dir, 'main'))!]).toEqual([]) // a new branch has made none
+    await writeFile(join(dir, 'sketches', 'fresh.html'), '<p>new</p>') // not committed yet
+    await writeFile(join(dir, 'sketches', 'old.html'), '<p>changed here</p>')
+    expect([...(await ownSketches(dir, 'main'))!].sort()).toEqual(['fresh.html', 'old.html'])
+    await commitAll(dir, 'sketch')
+    expect([...(await ownSketches(dir, 'main'))!].sort()).toEqual(['fresh.html', 'old.html']) // committed on the branch: still its own
+    expect(await ownSketches(dir, 'no-such-branch')).toBeNull() // cannot tell: nothing is hidden
   })
   it('frames a local Storybook at its proxied name when there is one, and leaves the rest alone', () => {
     expect(frameUrl('http://localhost:6385', 'https://sb-{port}.idea.dawn')).toBe('https://sb-6385.idea.dawn')
@@ -64,6 +76,12 @@ describe.skipIf(!reachable)('a conversation\'s worktree', () => {
     expect(await placeOf(gone)).toMatchObject({ root: main, main: true }) // its worktree is gone: the app's checkout
     expect((await listSketches(withSb)).sketches.map((s) => s.file)).toEqual(['swing.html'])
     expect(await listSketches(appId)).toMatchObject({ branch: 'main', main: true, sketches: [{ file: 'old.html' }] })
+    expect(await listSketches(gone)).toMatchObject({ main: true, sketches: [], earlier: 1 }) // no worktree of its own: it has made none, and main's are not its
+    expect((await listSketches(gone, { all: true })).sketches.map((x) => x.file)).toEqual(['old.html'])
+    await commitAll(tree, 'handed over'); await git(tree, ['checkout', '-q', '-b', 'talk/swing']); await db.update(app).set({ defaultBranch: 'main' }).where(eq(app.id, appId))
+    expect(await listSketches(withSb)).toMatchObject({ sketches: [], earlier: 1 }) // what the branch started with is earlier work
+    await writeFile(join(tree, 'sketches', 'putt.html'), '<h1>Putt (sample)</h1>')
+    expect(await listSketches(withSb)).toMatchObject({ sketches: [{ file: 'putt.html' }], earlier: 1 })
 
     const mine = await storybookStatus(appId, withSb)
     expect(mine).toMatchObject({ url: `http://localhost:${portFor(tree)}`, branch: 'talk/swing', main: false, startable: true, up: false })

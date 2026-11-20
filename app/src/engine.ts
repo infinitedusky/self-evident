@@ -455,7 +455,8 @@ export const engine = {
   storybook: (appId: string, session?: string | null, story?: string | null) => call<{ url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean; story?: { asked: string; show: string | null; missing: boolean } }>('GET', `/apps/${appId}/storybook?${new URLSearchParams({ ...(session ? { session } : {}), ...(story ? { story } : {}) })}`),
   startStorybook: (appId: string, session?: string | null) => call<unknown>('POST', `/apps/${appId}/storybook/start${session ? `?session=${session}` : ''}`),
   // scope: a conversation's id (its worktree) or an app's (the main checkout).
-  sketches: (scope: string) => call<{ scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[] }>('GET', `/sketches/${scope}`),
+  /** A conversation's sketches are the ones its branch made; `earlier` counts the ones it was handed, which `all` brings back. */
+  sketches: (scope: string, all = false) => call<{ scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[]; earlier?: number }>('GET', `/sketches/${scope}${all ? '?all=1' : ''}`),
   prototypes: (appId: string) => call<Prototype[]>('GET', `/apps/${appId}/prototypes`),
   prototype: (id: string) => call<Prototype>('GET', `/prototypes/${id}`),
   runPrototype: (id: string) => call<Prototype>('POST', `/prototypes/${id}/start`),

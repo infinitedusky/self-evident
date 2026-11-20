@@ -13,6 +13,7 @@ import { extname, join, resolve, sep } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, repo, session } from './db/schema.js'
+import { git } from './git.js'
 import { homeRepo } from './workbench.js'
 import { PlanError } from './projects.js'
 
@@ -53,9 +54,35 @@ export async function listSketchFiles(root: string): Promise<Sketch[]> {
   return out.sort((a, b) => b.changedAt - a.changedAt)
 }
 
-export async function listSketches(scope: string) {
+/**
+ * The sketches this branch made or changed: the ones that differ from where it left the app's main branch, and the
+ * ones not committed yet. Null when that cannot be told (not a git checkout, no such branch): then nothing is hidden.
+ */
+export async function ownSketches(root: string, base: string): Promise<Set<string> | null> {
+  let from = ''
+  for (const ref of [base, `origin/${base}`]) { const r = await git(root, ['merge-base', 'HEAD', ref], { allowFail: true }).catch(() => null); if (r?.code === 0 && r.stdout.trim()) { from = r.stdout.trim(); break } }
+  if (!from) return null
+  const [changed, fresh] = await Promise.all([git(root, ['diff', '--name-only', '--relative', from, '--', SKETCH_DIR], { allowFail: true }), git(root, ['ls-files', '--others', '--exclude-standard', '--', SKETCH_DIR], { allowFail: true })])
+  if (changed.code !== 0 || fresh.code !== 0) return null
+  return new Set(`${changed.stdout}\n${fresh.stdout}`.split('\n').map((l) => l.trim()).filter((l) => l.startsWith(`${SKETCH_DIR}/`)).map((l) => l.slice(SKETCH_DIR.length + 1)))
+}
+
+/**
+ * A conversation's sketches are the ones it made (Sandy, 2026-11-20: "on a new task it has old sketches … totally
+ * unrelated. I think a new task shouldn't show any old sketches"). Sketches merged with earlier tasks stay in the
+ * repository, so every new branch carries them: they are counted (`earlier`) and left out, unless `all` asks for
+ * them. A conversation with no worktree yet has made none. An app's own scope shows everything on main.
+ */
+export async function listSketches(scope: string, o: { all?: boolean } = {}) {
   const place = await placeOf(scope)
-  return { scope, branch: place.branch, main: place.main, dir: SKETCH_DIR, sketches: place.root ? await listSketchFiles(place.root) : [] }
+  const every = place.root ? await listSketchFiles(place.root) : []
+  const base = { scope, branch: place.branch, main: place.main, dir: SKETCH_DIR }
+  if (!scope.startsWith('sess_') || !place.root) return { ...base, sketches: every, earlier: 0 }
+  const [a] = await db.select({ defaultBranch: app.defaultBranch }).from(app).where(eq(app.id, place.appId))
+  const own = place.main ? new Set<string>() : await ownSketches(place.root, a?.defaultBranch ?? 'main')
+  if (!own) return { ...base, sketches: every, earlier: 0 }
+  const earlier = every.filter((s) => !own.has(s.file)).length
+  return { ...base, sketches: o.all ? every : every.filter((s) => own.has(s.file)), earlier }
 }
 
 const TYPES: Record<string, string> = {
