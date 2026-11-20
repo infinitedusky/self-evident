@@ -5718,3 +5718,28 @@ is not. Its draft state is left as it is.
 Not done: updating by itself when a description or a team ticket changes; a project's single pull request from a
 project's own page (it is updated from any of its tasks).
 
+
+## A page that calls an address fixed to this computer is said so (Sandy, 2026-11-20: "the reason I need to make this change seems like something that should be universally set for Self Evident, not just on this project … Why is it not in the database?")
+
+An app's set-up gave its frontend `http://localhost:<port>/api`, so its pages loaded at that one address and failed
+through any other. The fix was one line in that app's own set-up files. What is universal is the rule, not the
+line: which variable a frontend reads is the app's, so Self Evident cannot set it; it can look, and tell.
+
+- **It looks** (`engine/src/addresses.ts`). When a prototype or a local smoke test answers, its page and the scripts
+  the page names on its own address are read (a dozen at most, each capped) for absolute addresses on this
+  computer. A dev server's own paths and the page's own home are left out. Once as it comes up, again every few
+  minutes.
+- **It says so** beside the view, as a port the server chose itself already is: which addresses, that the page will
+  not reach them through a shared link or a phone, that one on another port may be another copy (main, another
+  prototype), and to call it by a path. Events `prototype.fixed_address`, `smoke.fixed_address`, the first time.
+- **The agents are told**: `set_prototype_command`, `set_smoke_setup` and the prototype skill each say that nothing
+  the app serves names this computer as its own address.
+
+Why that app's line was not in the database: a set-up in Self Evident is a script, a stop script and a seed, and
+this one needs files beside them (a compose override, a guard, helpers), which have nowhere to live in settings, so
+they are in a repository of their own and the script calls them. Talked about and not built: a set-up keeping its
+files in Self Evident.
+
+Not done: that; the app's own main and a compared main are not looked at; it is a look at text, so an address in a
+comment is reported and one put together at run time is not; not yet seen on a real app (none was running).
+

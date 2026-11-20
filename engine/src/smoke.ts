@@ -46,6 +46,7 @@ import { git, headSha } from './git.js'
 import { newId } from './ids.js'
 import { getIssue, identifier, PlanError } from './issues.js'
 import { morePorts, straySays, straysOf } from './ports.js'
+import { fixedOf, fixedSays } from './addresses.js'
 import { databaseExists, databaseUrl, dropDatabase, listScenarios, rebuild, type PrototypeDb } from './prototype-data.js'
 import { homeRepo } from './workbench.js'
 import { scratchKey, terminalOpen } from './smoke-terminal.js'
@@ -326,7 +327,10 @@ export async function smokeView(issueId: string) {
     const up = setup.where === 'local' ? (on && local ? await answers(local) : false) : setup.where === 'terminal' ? terminalOpen(t.id, setup.key) : !!there
     // Once it answers: does it listen anywhere it was not told to (ports.ts)?
     const stray = setup.where === 'local' && up ? await straysOf(running.get(runKey(t.id, setup.key)), (ports) => db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor: 'engine', type: 'smoke.stray_port', payload: { setup: setup.key, ports, note: straySays(ports) } }))) : []
+    // And does its page call an address fixed to this computer (addresses.ts)? It would load here and nowhere else.
+    const fixed = setup.where === 'local' && up && local ? await fixedOf(`smoke:${runKey(t.id, setup.key)}`, local, (found) => db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor: 'engine', type: 'smoke.fixed_address', payload: { setup: setup.key, addresses: found, note: fixedSays(found, local) } }))) : []
     return {
+      ...(fixed.length ? { /** Addresses fixed to this computer that its page names: it will not load through any other address. */ fixedAddresses: fixed, fixedNote: fixedSays(fixed, local!) } : {}),
       /** The throwaway terminal every set-up has (Sandy, 2026-11-18: "we always want access to a terminal pointed at a temp throwaway folder"): a new empty folder. Left out where the set-up's own terminal is already that. */ ...(setup.where === 'terminal' && setup.folder === 'temp' ? {} : { scratch: { open: terminalOpen(t.id, scratchKey(setup.key)) } }),
       /** A terminal can be opened on it (smoke-terminal.ts), and where it would open; open: one is. */ ...(setup.where === 'local' || setup.where === 'terminal' ? { terminal: { folder: setup.where === 'terminal' ? setup.folder ?? 'build' : 'build' as const, open: terminalOpen(t.id, setup.key) } } : {}),
       key: setup.key, name: setup.name, what: setup.what ?? null,
