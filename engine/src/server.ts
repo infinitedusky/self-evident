@@ -435,7 +435,7 @@ export function buildApp(bus: EventBus) {
   api.get('/apps/:id/storybook', async (c) => { try { return c.json(await storybookStatus(c.req.param('id'), c.req.query('session'), c.req.query('story'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/storybook/start', async (c) => { try { return c.json(await startStorybook(c.req.param('id'), c.req.query('session'))) } catch (err) { return planError(c, err) } })
   // Sketches: the HTML files under sketches/ in a conversation's worktree (scope: its id) or the app's checkout (scope: the app's id).
-  api.get('/sketches/:scope', async (c) => { try { return c.json(await listSketches(c.req.param('scope'))) } catch (err) { return planError(c, err, 404) } })
+  api.get('/sketches/:scope', async (c) => { try { return c.json(await listSketches(c.req.param('scope'), { all: c.req.query('all') === '1' })) } catch (err) { return planError(c, err, 404) } })
   api.get('/sketches/:scope/file/*', async (c) => {
     const scope = c.req.param('scope')
     const file = decodeURIComponent(c.req.path.split(`/sketches/${scope}/file/`)[1] ?? '')
