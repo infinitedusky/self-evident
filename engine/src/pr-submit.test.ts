@@ -79,6 +79,7 @@ describe.skipIf(!reachable)('a pull request waits for the person (sample data)',
     expect(await db.select().from(prTable).where(eq(prTable.projectId, p.id))).toEqual([])
     expect((await git(remote, ['branch', '--list'])).stdout.split('\n').map((l) => l.replace(/^[* ]+/, '')).filter(Boolean)).toEqual(['main']) // the project's branch never left this computer
     await expect(runner.submitPr(p.id)).rejects.toThrow(/1 sub-task has still to land .*the pull request is submitted once they all have/)
+    await expect(runner.refreshPr(p.id)).rejects.toThrow(/no pull request to update yet: submit it first/)
     hold = false
     await until(async () => (await projectGraph(p.id))!.subIssues.every((x) => x.status === 'done'))
     await sleep(400)
@@ -114,10 +115,15 @@ describe.skipIf(!reachable)('a pull request waits for the person (sample data)',
     await until(async () => (await said()).length === 1)
     const submitted = await said()
     expect(submitted.map((e) => [e.actor, (e.payload as { auto?: boolean; draft?: boolean }).auto, (e.payload as { draft?: boolean }).draft])).toEqual([['engine', true, true]])
+    // The person brings it up to date by hand: sent as it stands, with nothing new landed; not a reopening, and its draft state is left alone.
+    const before = opened.length
+    expect(await runner.refreshPr(p.id)).toMatchObject({ number: 41, status: 'draft' })
+    expect(opened.length).toBe(before + 1); expect(opened[opened.length - 1]).toMatchObject({ reopen: false })
     // One the person closed stays closed: the engine does not open it again by itself.
     await db.update(prTable).set({ status: 'closed' }).where(eq(prTable.id, row.id))
     await (runner as unknown as { updatePr: (p: string, i: string | undefined, s: 'auto') => Promise<void> }).updatePr(p.id, undefined, 'auto')
-    expect(opened).toHaveLength(1)
+    expect(opened).toHaveLength(2) // the first opening and the person's update: nothing more
+    await expect(runner.refreshPr(p.id)).rejects.toThrow(/#41 is closed: submit it again to reopen it/) // and updating is not a way round a closed one
   })
 
   it('keeps what the app\'s builds are held to: one added, a built-in switched, one removed, and what cannot be done said', async () => {

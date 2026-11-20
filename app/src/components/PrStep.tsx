@@ -38,6 +38,8 @@ export function PrStep({ issueId, appId, base }: { issueId: string; appId: strin
     return () => { es.close(); window.clearTimeout(timer.current) }
   }, [issueId, appId, load])
   const ready = async () => { setBusy(true); setError(null); try { await engine.markPrReady(issueId); setAsking(false); await load() } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
+  const [updated, setUpdated] = useState(false)
+  const update = async () => { setBusy(true); setError(null); setUpdated(false); try { await engine.updatePr(issueId); setSent(false); await load(); setUpdated(true) } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
   const saveMessage = async () => { if (writing === null) return; setBusy(true); setError(null); try { await engine.setPrMessage(issueId, writing); setWriting(null); await load() } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
@@ -96,10 +98,18 @@ export function PrStep({ issueId, appId, base }: { issueId: string; appId: strin
         <div className="pr-write" role="group" aria-label="The description for the team">
           <label>The description, as the team will read it (Markdown). Leave out our ids and how we built it: that is folded under it for you.
             <textarea rows={14} value={writing} autoFocus onChange={(e) => setWriting(e.target.value)} placeholder={'## What changed and why\n\n## How it works\n\n## Rollback and deploy notes\n\n## Test plan\n\n## Risks'} /></label>
-          <div className="smoke-actions"><button className="btn small" disabled={busy} onClick={() => void saveMessage()}>{busy ? 'Saving…' : writing.trim() ? 'Save it' : 'Clear it'}</button> <button className="btn quiet small" disabled={busy} onClick={() => setWriting(null)}>Cancel</button><span className="faint" style={{ fontSize: 12 }}>It is sent to GitHub with the next update, or when you submit.</span></div>
+          <div className="smoke-actions"><button className="btn small" disabled={busy} onClick={() => void saveMessage()}>{busy ? 'Saving…' : writing.trim() ? 'Save it' : 'Clear it'}</button> <button className="btn quiet small" disabled={busy} onClick={() => setWriting(null)}>Cancel</button><span className="faint" style={{ fontSize: 12 }}>{live ? 'Saved here; press Update pull request to send it to GitHub.' : 'It is sent to GitHub when you submit.'}</span></div>
         </div>
       )}
-      {v.behind && <p className="faint" style={{ margin: '0 0 8px', fontSize: 13 }}>GitHub has an earlier version of it. It is brought up to date when the next sub-task lands. <button className="linkish" onClick={() => setSent(!sent)}>{sent ? 'Show what GitHub has' : 'Show what will be sent'}</button></p>}
+      {/* An open one is brought up to date by a press: its title and description as they stand, with no new commit needed. */}
+      {live && (
+        <p className={v.behind ? 'pr-unwritten' : 'faint'} style={{ margin: '0 0 8px', fontSize: 13 }}>
+          {v.behind ? 'GitHub has an earlier version of its title or description. ' : updated ? 'GitHub has it as it stands here. ' : 'GitHub has it as it stands here, as far as its title and description go. '}
+          <button className="btn quiet small" disabled={busy} onClick={() => void update()} title="Sends its title and description to GitHub as they stand now, and pushes its branch. Its draft state is left as it is.">{busy ? 'Updating…' : 'Update pull request'}</button>
+          {v.behind && <> <button className="linkish" onClick={() => setSent(!sent)}>{sent ? 'Show what GitHub has' : 'Show what will be sent'}</button></>}
+          {updated && !v.behind && <span role="status"> Updated.</span>}
+        </p>
+      )}
       {shown ? (
         <div className="pr-message">
           <div className="pr-title">{shown.title}</div>
