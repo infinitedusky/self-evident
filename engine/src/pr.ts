@@ -77,30 +77,35 @@ export async function ensureProjectPr(i: PrInput & { reopen?: boolean }): Promis
 
 export interface Landed { identifier: string; title: string; summary?: string | null; costUsd?: number | null; sha?: string | null }
 
-export function prBody(project: { name: string; content?: string | null; id: string }, landed: Landed[], pending: { identifier: string; title: string }[], backlog: { title: string; state: string; reason: string | null }[] = [], /** The merge guide, for whoever approves it (merge-guide.ts): first, and short. */ guide = '', /** Everything the guide left out: folded away under it, with what landed. */ record = ''): string {
-  const lines = [
-    `Built by Self Evident from project \`${project.id}\`: ${project.name}.`,
-    landed.length + pending.length > 0 ? `\n**${landed.length} of ${landed.length + pending.length} sub-task${landed.length + pending.length === 1 ? ' has' : 's have'} landed${pending.length ? ': this pull request is still being built, and is not ready to review until they all have' : ''}.**` : '',
-    project.content && !guide ? `\n${project.content}` : '', // the guide says what it does, per task
-    guide ? `\n${guide}` : '',
-    '',
-    // With a guide, the rest is folded away: the guide is what to read, the record is for looking something up.
-    guide ? `<details>\n<summary>The full record: every criterion and decision, and what each sub-task's builder reported</summary>\n\n${record ? `${record}\n\n` : ''}## What landed, sub-task by sub-task\n` : '## Landed',
-    ...landed.map((t) => [`### ${t.identifier} ${t.title}` + (t.sha ? ` (\`${t.sha.slice(0, 7)}\`)` : ''),
+/**
+ * A pull request's description. What the team reads comes first and is all that shows: the description written for
+ * them when the task has one (issue.pr_body: prose in their repository's own style), else the merge guide. Everything
+ * of ours is folded away at the very bottom: which project and task of ours it is, the merge guide when a written
+ * description leads, every criterion and decision, and what each sub-task's builder reported (a client's pull
+ * request, 2026-11-20: the description was 511 lines of our build log, opening with our project's id).
+ */
+export function prBody(project: { name: string; content?: string | null; id: string }, landed: Landed[], pending: { identifier: string; title: string }[], backlog: { title: string; state: string; reason: string | null }[] = [], /** The merge guide, for whoever approves it (merge-guide.ts): short. */ guide = '', /** Everything the guide left out: folded away, with what landed. */ record = '', /** The description written for the team, when the task has one: it leads, and the guide joins the fold. */ written: string | null = null): string {
+  const lead = written?.trim() || guide || project.content?.trim() || ''
+  const all = landed.length + pending.length
+  const building = pending.length ? `**${landed.length} of ${all} sub-task${all === 1 ? ' has' : 's have'} landed: this pull request is still being built, and is not ready to review until they all have.**` : ''
+  const ours = [
+    `Built by Self Evident from project \`${project.id}\`: ${project.name}. ${landed.length} of ${all} sub-task${all === 1 ? ' has' : 's have'} landed.`,
+    written?.trim() && guide ? guide : '',
+    record,
+    landed.length ? `## What landed, sub-task by sub-task\n\n${landed.map((t) => [`### ${t.identifier} ${t.title}` + (t.sha ? ` (\`${t.sha.slice(0, 7)}\`)` : ''),
       (t.summary?.trim() || '_No summary from the run._').slice(0, 4000),
-      t.costUsd != null ? `_Run cost estimate: $${Number(t.costUsd).toFixed(2)}_` : ''].join('\n\n')),
-    guide ? '\n</details>' : '',
-    pending.length ? `\n## Still to land\n${pending.map((t) => `- ${t.identifier} ${t.title}`).join('\n')}` : '',
-    backlog.some((b) => b.state === 'backlog') ? `\n## Backlog still open\n${backlog.filter((b) => b.state === 'backlog').map((b) => `- ${b.title}`).join('\n')}` : '',
-    backlog.some((b) => b.state === 'canceled') ? `\n## Left out on purpose\n${backlog.filter((b) => b.state === 'canceled').map((b) => `- ${b.title}: ${b.reason}`).join('\n')}` : '',
-    '',
+      t.costUsd != null ? `_Run cost estimate: $${Number(t.costUsd).toFixed(2)}_` : ''].filter(Boolean).join('\n\n')).join('\n\n')}` : '',
+    pending.length ? `## Still to land\n${pending.map((t) => `- ${t.identifier} ${t.title}`).join('\n')}` : '',
+    backlog.some((x) => x.state === 'backlog') ? `## Backlog still open\n${backlog.filter((x) => x.state === 'backlog').map((x) => `- ${x.title}`).join('\n')}` : '',
+    backlog.some((x) => x.state === 'canceled') ? `## Left out on purpose\n${backlog.filter((x) => x.state === 'canceled').map((x) => `- ${x.title}: ${x.reason}`).join('\n')}` : '',
     'Each sub-task was built in its own worktree and merged here one at a time. The app\'s whole test run is once per task, when its sub-tasks are all in.',
-    '',
-    'Rollback project: revert this PR. Off switch, guard metric and schema impact per task come in a later step.',
-    '',
+  ].filter(Boolean).join('\n\n')
+  return [
+    building,
+    lead,
+    `<details>\n<summary>How this was built (Self Evident's record${written?.trim() && guide ? ': the merge guide, ' : ': '}every criterion and decision, and what each sub-task's builder reported)</summary>\n\n${ours}\n\n</details>`,
     '🤖 Generated with [Claude Code](https://claude.com/claude-code) via Self Evident',
-  ]
-  return lines.filter((l) => l !== null).join('\n')
+  ].filter(Boolean).join('\n\n')
 }
 
 /** Set how an app's work is named on GitHub: the pull request's title and whether it opens as a draft, and the branch and commit conventions (conventions.ts). Undefined leaves one; empty clears it. */

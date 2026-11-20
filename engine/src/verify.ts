@@ -16,7 +16,7 @@
  * (runner.ts). `afterBuild` says which comes next, from what has been done. A check and a probe change nothing.
  */
 import { acceptanceLines, type AcceptanceChange, type Criterion } from './acceptance.js'
-import type { Covered, Requirement } from './requirements.js'
+import { notYet, type Covered, type Requirement } from './requirements.js'
 
 /** The sub-tasks' titles: how the engine knows them, and counts the rounds. */
 export const CHECK_TITLE = 'Check it against its acceptance criteria'
@@ -130,7 +130,8 @@ export function requirementsChecked(required: Requirement[], held: Covered[] | n
     const base: Covered = was ?? { key: r.key, name: r.name, applies: true, how: '' }
     if (!v) return base
     const na = v.met === true && /^does not apply\b/i.test(v.evidence)
-    return { ...base, name: r.name, applies: !na, how: v.evidence || base.how, ...(v.met === null ? {} : { built: v.met }) }
+    // Marked met, with evidence that says it is still to come, is not met: it stays unchecked, with what was said.
+    return { ...base, name: r.name, applies: !na, how: v.evidence || base.how, ...(v.met === null || (v.met === true && notYet(v.evidence)) ? {} : { built: v.met }) }
   })
 }
 

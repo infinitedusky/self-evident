@@ -153,6 +153,8 @@ export interface PrView {
   /** What it would open with, or what the next update sends. */
   message: { title: string; body: string; head: string; base: string } | null
   behind: boolean
+  /** Its description as written for the team, when it has one: it leads the pull request, and our record is folded under it. Null: the merge guide leads. */
+  written?: string | null
   landed: number; total: number; unchecked: number; byHand: number
   draft: boolean; auto: boolean
   canSubmit: boolean; waits: string[]; canReady: boolean
@@ -507,6 +509,7 @@ export const engine = {
   deleteReport: (id: string) => call<{ deleted: string }>('DELETE', `/reports/${id}`),
   setReportFormat: (appId: string, f: { daily?: string; weekly?: string }) => call<{ daily: string; weekly: string }>('PUT', `/apps/${appId}/report-format`, f),
   prView: (issueId: string) => call<PrView>('GET', `/issues/${issueId}/pr`),
+  setPrMessage: (issueId: string, body: string) => call<{ written: string | null }>('PUT', `/issues/${issueId}/pr/message`, { body }),
   markPrReady: (issueId: string) => call<{ number: number; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/ready`),
   setTeamNames: (issueId: string, names: { ticket?: string | null; title?: string | null }) => call<{ teamTicket: string | null; teamTitle: string | null; ticket: string | null; ticketFrom: string | null; ticketMissing: boolean }>('PUT', `/issues/${issueId}/team`, names),
   submitPr: (issueId: string) => call<{ id: string; number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/submit`),

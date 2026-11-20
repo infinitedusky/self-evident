@@ -5672,3 +5672,32 @@ title whose bracket is not one of their keys. And {title} was our working title 
 Not done: an app that requires a ticket and a task already building under our id (it is left as it is; the pull
 request is still held); checking that the key belongs to the team's tracker; a task's ticket shown in lists.
 
+
+## A pull request reads like the team's: a description written for them, our record folded under it, and a merge guide that does not contradict the task (from a client app's first pull request, passed on by Sandy, 2026-11-20)
+
+The description of that pull request was 511 lines of our build log, opening with "Built by Self Evident from
+project proj_…, task 1 of 1" and listing every probe and fix round. The repository's own pull requests are prose:
+what changed and why, how it works, decisions, rollback and deploy notes, a test plan with numbers, risks,
+follow-ups. And the merge guide on it was wrong twice.
+
+- **A description written for the team** (`issue.pr_body`, migration 0046). When a task has one it leads the pull
+  request and is all that shows. The task's agent writes it (`set_pr_message`: told to read the repository's
+  template and recent merged pull requests, write what they write, and leave out everything that is ours), or the
+  person does, on the task's Pull request page, which says plainly when it has not been written.
+- **Everything of ours is folded at the very bottom**, under one line, whatever leads: which project of ours it is,
+  the merge guide when a written description leads, every criterion and decision, what each sub-task's builder
+  reported. Nothing of ours is above the fold. The banner that it is still being built stays, only while it is.
+- **"To undo" comes from the task, never a default.** The guide said "revert this pull request" while the task's
+  blast radius said never to revert after the first scan. Now it is the line the blast radius (all of it, not only
+  its summary), the merge checklist or a decision gives; when the blast radius does not say, the guide says that
+  and to ask before reverting; only with no blast radius at all is reverting named, as a default to check. The
+  blast radius is now asked for that line. The body's own "Rollback project: revert this PR" is gone.
+- **A requirement whose evidence says "not yet" is not shown as met.** Risks ✅ and Test plan ✅ stood beside "No PR
+  yet: it needs…". Such evidence now shows ⬜ "not yet" in the guide and the record, and the check's mark is not
+  kept as met in the first place (`notYet`, requirements.ts).
+
+Not done: writing the description by itself when a pull request is submitted without one (it is asked for, and said
+on the page); checking a written description against the repository's template; the same for a project's single
+pull request (pr_mode "project"), which has no task to hold one; an open pull request is not rewritten until its
+next update or submit.
+

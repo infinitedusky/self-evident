@@ -1,6 +1,8 @@
 /** The merge guide: what the pull request opens with, put together from what the task holds. */
 import { describe, expect, it } from 'vitest'
-import { GUIDE_MAX, mergeGuide, mergeRecord, taskGuide, taskRecord, type GuideTask } from './merge-guide.js'
+import { GUIDE_MAX, mergeGuide, mergeRecord, taskGuide, taskRecord, undoOf, type GuideTask } from './merge-guide.js'
+import { coveredLines, notYet } from './requirements.js'
+import { requirementsChecked } from './verify.js'
 import { prBody } from './pr.js'
 import { checkBrief, finalizeBrief, SUMMARY } from './checks.js'
 
@@ -55,9 +57,46 @@ describe('the merge guide', () => {
     expect(taskRecord(task)).toContain('✅ The file has every order (sample). Seen: export.test.ts passes (sample)')
   })
 
+  it('says how the change is taken back in the task\'s own words, never a default that may contradict them', () => {
+    // The blast radius says it: its line, word for word.
+    const never = { ...task, riskAll: 'It changes the scan table (sample).\n- **To undo:** never revert after the first scan; fix forward with a new migration (sample).' }
+    expect(undoOf(never)).toBe('never revert after the first scan; fix forward with a new migration (sample).')
+    expect(mergeGuide([never])).toMatch(/\*\*To undo:\*\* never revert after the first scan; fix forward with a new migration \(sample\)\.$/)
+    expect(mergeGuide([never])).not.toContain('revert this pull request')
+    // It speaks of rolling back without that heading: still its line.
+    expect(undoOf({ ...task, riskAll: 'The flag can be turned off, and the change rolled back by reverting the pull request (sample).' })).toMatch(/rolled back by reverting/)
+    // A blast radius that does not say: said, and nobody is told to revert.
+    expect(undoOf(task)).toBeNull()
+    expect(mergeGuide([task])).toMatch(/\*\*To undo:\*\* its blast radius does not say how\. Ask before reverting\.$/)
+    // No blast radius at all: the default, as a default.
+    expect(mergeGuide([{ ...task, risk: null }])).toMatch(/nothing on this task says how\. Reverting this pull request is the default; check that it is safe first\.$/)
+  })
+
+  it('never shows a requirement as met when its evidence says it is still to come', () => {
+    expect(notYet('No PR yet: it needs the pull request to exist (sample)')).toBe(true); expect(notYet('to be written with the pull request')).toBe(true)
+    expect(notYet('RISKS.md lists three, each with how we would know (sample)')).toBe(false); expect(notYet(null)).toBe(false)
+    const reqs = [{ key: 'risks', name: 'Risks', applies: true, how: 'No PR yet: it needs the pull request to exist (sample)', built: true }, { key: 'tests', name: 'Tests', applies: true, how: 'export.test.ts (sample)', built: true }]
+    expect(taskGuide({ ...task, requirements: reqs })).toContain('⬜ Risks · ✅ Tests')
+    expect(coveredLines(reqs)).toContain('- ⬜ **Risks**: not yet. No PR yet'); expect(coveredLines(reqs)).toContain('- ✅ **Tests**: export.test.ts (sample)')
+    // And the check's own mark is not kept as met in the first place.
+    const required = [{ key: 'risks', name: 'Risks', what: 'x', on: true }, { key: 'tests', name: 'Tests', what: 'y', on: true }]
+    const checked = requirementsChecked(required, null, [{ id: 'req_risks', met: true, evidence: 'No PR yet: it needs the pull request (sample)' }, { id: 'req_tests', met: true, evidence: 'export.test.ts (sample)' }])
+    expect(checked[0].built).toBeUndefined(); expect(checked[1].built).toBe(true)
+  })
+
+  it('a description written for the team leads the pull request; everything of ours is folded at the bottom', () => {
+    const written = '## What changed and why\n\nPeople can download their orders (sample).\n\n## Rollback\n\nRevert; no data is written (sample).'
+    const body = prBody({ id: 'proj_x', name: 'Orders (sample)' }, [{ identifier: 'XX-3', title: 'Stream it', summary: 'Done.' }], [], [], mergeGuide([task]), mergeRecord([task]), written)
+    expect(body.startsWith(written)).toBe(true)
+    const fold = body.indexOf('<details>')
+    for (const ours of ['Built by Self Evident', '## Merge guide', 'XX-3 Stream it', '**Every acceptance criterion**']) expect(body.indexOf(ours)).toBeGreaterThan(fold)
+    expect(body.slice(0, fold)).not.toMatch(/XX-\d|proj_x|Self Evident/) // nothing of ours above the fold
+    expect(body.trimEnd().endsWith('via Self Evident')).toBe(true)
+  })
+
   it('heads each task when a pull request carries several; the pull request opens with it and folds the rest away', () => {
     const g = mergeGuide([task, { ...task, identifier: 'XX-2', title: 'Import (sample)' }])
-    expect(g).toMatch(/^## Merge guide\n\n### XX-1 Export \(sample\)/); expect(g).toContain('### XX-2 Import (sample)'); expect(g).toMatch(/\*\*To undo:\*\* revert this pull request\.$/)
+    expect(g).toMatch(/^## Merge guide\n\n### XX-1 Export \(sample\)/); expect(g).toContain('### XX-2 Import (sample)'); expect(g).toMatch(/\*\*To undo:\*\* \n\n- XX-1: its blast radius does not say how\. Ask before reverting\.\n- XX-2: its blast radius does not say how\. Ask before reverting\.$/)
     expect(mergeGuide([])).toBe('')
     const body = prBody({ id: 'proj_x', name: 'Orders (sample)', content: 'Long project text.' }, [{ identifier: 'XX-3', title: 'Stream it', summary: 'Done.' }], [], [], mergeGuide([task]), mergeRecord([task]))
     expect(body).not.toContain('Long project text.')
@@ -65,8 +104,9 @@ describe('the merge guide', () => {
     expect(body.indexOf('## Merge guide')).toBeLessThan(fold)
     for (const inside of ['**Every acceptance criterion**', 'Opens everywhere.', '## What landed, sub-task by sub-task', '### XX-3 Stream it']) { expect(body.indexOf(inside)).toBeGreaterThan(fold); expect(body.indexOf(inside)).toBeLessThan(body.indexOf('</details>')) }
     expect(body).toContain('whole test run is once per task'); expect(body).not.toContain('tested on the merged commit')
-    expect(prBody({ id: 'proj_x', name: 'Orders (sample)', content: 'Long project text.' }, [], [])).toContain('## Landed') // without a guide, as before
-    expect(prBody({ id: 'proj_x', name: 'Orders (sample)', content: 'Long project text.' }, [], [])).not.toContain('<details>')
+    expect(body).not.toMatch(/^Built by Self Evident/); expect(body.indexOf('Built by Self Evident from project `proj_x`')).toBeGreaterThan(fold) // which project of ours it is belongs to our record, not the top
+    expect(prBody({ id: 'proj_x', name: 'Orders (sample)', content: 'Long project text.' }, [], [])).toMatch(/^Long project text\./) // without a guide the project's own words lead
+    expect(prBody({ id: 'proj_x', name: 'Orders (sample)', content: 'Long project text.' }, [], [])).toContain('<details>') // our record is folded whatever leads
   })
 
   it('every check is asked for a summary for the person, apart from the report for the next agent', () => {
