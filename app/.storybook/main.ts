@@ -16,6 +16,6 @@ const config: StorybookConfig = {
     { "name": "@zigbang/storybook-addon-story-flow", "options": { "flowGlob": "../src/stories/**/*.flow.json" } }
   ],
   "framework": "@storybook/react-vite",
-  "staticDirs": ["../public"] // the MSW worker that fakes the engine
+  "staticDirs": ["../public", "./static"] // the MSW worker that fakes the engine; and, for stories only, the made-up screen the Screens page frames
 };
 export default config;

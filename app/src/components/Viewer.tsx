@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Mockups } from '../pages/Mockups'
 import { Sketches } from '../pages/Sketches'
+import { Screens } from '../pages/Screens'
 import { PagePane } from './PagePane'
 import { PrototypePane } from './PrototypePane'
 import { MainPane } from './MainPane'
@@ -18,8 +19,8 @@ import { Share } from './Share'
 import { useCurrentApp } from '../current-app'
 import type { Tab } from '../workspace'
 
-export type Viewed = Extract<Tab, { kind: 'sketch' | 'storybook' | 'prototype' | 'main' }>
-const NAME = { sketch: 'Sketches', storybook: 'Mockups', prototype: 'The prototype', main: 'Main' }
+export type Viewed = Extract<Tab, { kind: 'sketch' | 'screens' | 'storybook' | 'prototype' | 'main' }>
+const NAME = { sketch: 'Sketches', screens: 'Screens', storybook: 'Mockups', prototype: 'The prototype', main: 'Main' }
 /** One thing ("it is"), not several ("they are"). */
 const one = (t: Viewed) => t.kind === 'prototype' || t.kind === 'main'
 type Msg = { type: 'here' | 'closed' | 'who' | 'back'; key: string }
@@ -30,6 +31,7 @@ export const viewUrl = (t: Viewed) => `${window.location.origin}/view?tab=${enco
 
 function Body({ tab, embedded, onNavigate }: { tab: Viewed; embedded?: boolean; onNavigate?: (path: string) => void }) {
   if (tab.kind === 'sketch') return <Sketches file={tab.file} session={tab.session} embedded={embedded} />
+  if (tab.kind === 'screens') return <Screens story={tab.story} session={tab.session} embedded={embedded} />
   if (tab.kind === 'storybook') return <Mockups story={tab.story} session={tab.session} embedded={embedded} />
   if (tab.kind === 'main') return <MainPane path={tab.path} onNavigate={onNavigate} />
   return <PrototypePane id={tab.id} path={tab.path} onNavigate={onNavigate} />
@@ -60,7 +62,7 @@ export function Viewer({ tab, embedded, onNavigate, detached: startDetached = fa
   return (
     <div className={`viewer ${embedded ? 'embedded' : ''}`} data-component="Viewer">
       <div className="viewer-bar">
-        {shareId && tab.kind !== 'main' && <Share kind={tab.kind} id={shareId} appId={app?.id} />}
+        {shareId && tab.kind !== 'main' && <Share kind={tab.kind === 'screens' ? 'storybook' : tab.kind} id={shareId} appId={app?.id} />}
         {detached
           ? <button className="btn quiet small" onClick={back} title="Close its browser tab and show it here again">↙ Bring it back</button>
           : <button className="btn quiet small" onClick={detach} title="Open it in a browser tab of its own">↗ Detach</button>}

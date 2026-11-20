@@ -49,6 +49,7 @@ import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
 import { deleteReport, editReport, getReport, isWritingReport, listReports, setReportFormat, writeReport, type Period } from './reports.js'
 import { listSketches, readSketch } from './sketches.js'
+import { listScreens } from './screens.js'
 import { migrateStorybookSetup, startStorybook, stopStorybookAt, stopStorybooks, storybookStatus, storybookValues, STORY_FLOW_CSS } from './storybook.js'
 import { prototypeCode, prototypeFile, unshowInPrototype } from './prototype-code.js'
 import { setAcceptance, type AcceptanceChange } from './acceptance.js'
@@ -434,6 +435,8 @@ export function buildApp(bus: EventBus) {
   // ?session=: the conversation the person is in; its worktree's Storybook when it has one, else the app's.
   api.get('/apps/:id/storybook', async (c) => { try { return c.json(await storybookStatus(c.req.param('id'), c.req.query('session'), c.req.query('story'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/storybook/start', async (c) => { try { return c.json(await startStorybook(c.req.param('id'), c.req.query('session'))) } catch (err) { return planError(c, err) } })
+  // Screens: the stories under Screens/ in the Storybook of the conversation's worktree (?session=), else the app's; ?all=1 with earlier tasks' ones.
+  api.get('/apps/:id/screens', async (c) => { try { return c.json(await listScreens(c.req.param('id'), c.req.query('session'), { all: c.req.query('all') === '1' })) } catch (err) { return planError(c, err, 404) } })
   // Sketches: the HTML files under sketches/ in a conversation's worktree (scope: its id) or the app's checkout (scope: the app's id).
   api.get('/sketches/:scope', async (c) => { try { return c.json(await listSketches(c.req.param('scope'), { all: c.req.query('all') === '1' })) } catch (err) { return planError(c, err, 404) } })
   api.get('/sketches/:scope/file/*', async (c) => {

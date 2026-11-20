@@ -636,8 +636,8 @@ Details and sources in `research/`.
 - **Each step settles its own kind of question, and nothing is left for the next** (Sandy, 2026-11-20: "we're
   gonna get to a point where someone's gonna say, 'Yeah, yeah, but this is just a prototype. We'll get it done in
   the real build'"). Cheap to expensive only works if what is cheap to change is closed while it is cheap. Decided in
-  conversation; the agents are told (`HOLD_THE_STEP`, talk.ts), Screens is not built (LOG.md, "Each step settles its
-  own question"). Where this and an older bullet disagree
+  conversation; the agents are told (`HOLD_THE_STEP`, talk.ts) and Screens is built (LOG.md, "Each step settles its
+  own question" and "Screens: every screen and state on one wall"). Where this and an older bullet disagree
   (a build that improves on the prototype, a mockup as the first exact look), this is the direction.
   1. **Sketch**, as it is today: a plain HTML file, there the moment it is written, rough. It settles what is on a
      screen and roughly where. Several at once, and the person picks. It can be skipped.

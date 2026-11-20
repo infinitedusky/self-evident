@@ -5803,10 +5803,6 @@ rough prototype, which is thrown away.
 
 Not decided: how a conversion is compared (by eye side by side, or by screenshots).
 
-Not done: the Screens page and its story; listing and framing a task's screens in the engine; a Screens step in a
-workflow; telling the agents about Screens; the planner and builders are not told to hold the build to the
-prototype in words of their own.
-
 ## An app's own form for a pull request's description (Sandy, 2026-11-20: "a way for us to say what needs to go where and how it should be, basically like a prompt kind of thing that has a template and then a prompt"; "let's add those")
 
 The title and the commit message had templates in Settings › Landing; the description had none. Its agent was told,
@@ -5826,3 +5822,42 @@ in words fixed in the engine, to copy the repository's template and its recent p
 Not done: checking a written description against the template (a missing heading is not refused); a form per
 workflow or per project; our folded record's own shape, which stays the engine's.
 
+## Screens: every screen and state on one wall (Sandy, 2026-11-20: "go ahead")
+
+The step between the sketches and the mockups, built as decided above.
+
+- **A screen is a story whose title starts with `Screens/`**: one title per screen (`Screens/Checkout`), one story
+  per state. That is the whole contract: no new file kind, no folder the engine reads. The agents are told to keep
+  them in a folder named `screens` where the app's stories go, and that a screen is still.
+- **The engine lists them** (`engine/src/screens.ts`, `GET /apps/:id/screens?session=&all=1`): the running
+  Storybook's index, grouped by screen, with where that Storybook stands (not set, not running, startable), as the
+  Mockups page has it. **A task's are its own**, as with sketches: the story's file is among what its branch made or
+  changed (`ownFiles`, now shared with the sketches); the rest are counted, and "Show N from earlier tasks" brings
+  them back.
+- **The page** (`app/src/pages/Screens.tsx`, stories first): every screen a row, every state a tile, each tile the
+  story's own frame (`iframe.html?id=`) drawn at its real size and scaled down. Phone, tablet and desktop widths.
+  Press a tile and it is large, with Previous and Next through all of them and the way back to the wall. After
+  Figma's frames on a canvas and Chromatic's review grid. It is the Screens step's view on a task, a tab of its own
+  (`open_tab` kind `screens`), and detaches and shares as the Mockups do.
+- **The step** (`screen`, "Screens", between sketch and mockup): on in a new app's workflow. **Off in a workflow
+  saved before it**, mine to choose: an optional step that is on must be done or skipped on every task before its
+  brief is approved, and tasks under way were not asked. Switching it on is the workflow's switch.
+- **The agents are told**: how to draw them (the app's components as they are, a new part drawn in the screen and
+  not made a component, nothing that responds), to show them on the wall, and that the mockup then makes the same
+  screens clickable. `HOLD_THE_STEP` now says the screens settle what can be seen and the mockup the way through;
+  with the step off, the mockup settles both, as before.
+
+Mine to choose, besides the above: a title that starts with `Screens/` and not a file name or a folder as the mark,
+because Storybook's index already says it and an app keeps its stories where it likes; the made-up screen the page's
+stories frame is a static file Storybook alone serves (`app/.storybook/static`), since the mock engine cannot answer
+a frame's own address.
+
+Not decided: **who draws them** (Sandy, the same day: "would it make sense to have a mockups, sketches and screens
+agent? … those agents know exactly what their job is"). Today the task's own agent does, told in its briefing. What
+I suggested: the sketch stays the task agent's, with a skill; screens and mockups each get an agent of their own, as
+the prototype has, with a skill that says what done is.
+
+Not done: tried end to end on a real task (the listing is tested on its parts, the page on made-up data); a tile's
+height is one guess per width, so a long screen is cut off on the wall and whole when opened; a share of the wall
+itself (sharing shares the Storybook); comparing a mockup against its screens; the Screens step on the workflow
+card's story; the planner and builders are not told to hold the build to the prototype in words of their own.

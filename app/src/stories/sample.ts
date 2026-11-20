@@ -612,3 +612,7 @@ export const prDraftSample: import('../engine').PrView = {
   ],
 }
 
+// A task's screens (made up): three screens of a sample checkout, each with its states, rendered by a Storybook that is up. Its frames are one made-up page (.storybook/static/sample-storybook), labelled.
+const sampleScreen = (title: string, states: string[]): import('../engine').Screen => ({ title, file: `./src/screens/${title}.stories.tsx`, states: states.map((name) => ({ id: `screens-${title.toLowerCase()}--${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, name })) })
+export const sampleScreens = [sampleScreen('Checkout', ['Filled', 'Empty', 'Card declined', 'A long name']), sampleScreen('Cart', ['Three items', 'Empty']), sampleScreen('Receipt', ['Paid'])]
+export const screensView: import('../engine').ScreensView = { url: 'http://localhost:6007', frame: '/sample-storybook', configured: true, startable: true, up: true, startedHere: true, log: [], branch: 'talk/sample', main: false, screens: sampleScreens, earlier: 0 }
