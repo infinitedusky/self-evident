@@ -5576,3 +5576,19 @@ comment to the task's agent as work; editing the message here (the title has `se
 the task); a project's single pull request (pr_mode "project") is shown on each of its tasks, whole; the row's
 count of comments in the nav.
 
+
+## A comment written on GitHub is shown as GitHub shows it (Sandy, 2026-11-20: "can we make sure that all the Wiz findings are formatted?")
+
+On a task's pull request page a scanner's comment showed as its own source: GitHub lets a comment carry HTML (a
+table with icons, a folded section), and our Markdown showed the tags as text. Now a pull request's message and
+every comment on it are rendered with their HTML and then cleaned to what GitHub itself allows (`Md`'s `html`;
+`rehype-raw`, then `rehype-sanitize`, whose list is made after GitHub's): tables, images and folded sections show,
+and a script, a style or a handler does not get through (a story holds it to that). The few `:names:` bots use for
+a status (`:x:`, `:white_check_mark:`, `:warning:` …) are shown as their signs.
+
+Only where the text came from GitHub. Everything else that is Markdown is as it was.
+
+Not done: findings a scanner keeps on its own site and only counts in its comment are not brought in (the comment
+links to them); GitHub's own rendering (mentions, issue links, code at a commit) is not copied; a check's
+annotations are not shown.
+

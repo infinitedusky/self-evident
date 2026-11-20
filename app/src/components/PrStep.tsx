@@ -86,7 +86,7 @@ export function PrStep({ issueId, appId, base }: { issueId: string; appId: strin
       {shown ? (
         <div className="pr-message">
           <div className="pr-title">{shown.title}</div>
-          <Md text={shown.body} />
+          <Md html text={shown.body} />
         </div>
       ) : <p className="muted">It has no message yet: nothing has been planned or built.</p>}
 
@@ -106,7 +106,7 @@ function Comment({ c }: { c: PrComment }) {
         {c.kind === 'review' && c.state && <Badge tone={c.state === 'approved' ? 'ok' : c.state === 'changes requested' ? 'bad' : 'neutral'}>{c.state}</Badge>}
         {c.url && <a className="faint" href={c.url} target="_blank" rel="noreferrer" aria-label={`Open ${c.author}'s comment on GitHub`}>↗</a>}
       </div>
-      {c.body.trim() ? <Md text={c.body} /> : <span className="faint">No words with it.</span>}
+      {c.body.trim() ? <Md html text={c.body} /> : <span className="faint">No words with it.</span>}
     </li>
   )
 }

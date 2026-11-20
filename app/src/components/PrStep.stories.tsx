@@ -85,3 +85,33 @@ export const Merged: Story = {
   beforeEach: withEngine({ prView: { ...prDraftSample, canReady: false, pr: { ...prDraftSample.pr!, status: 'merged', review: 'approved' } } }),
   play: async ({ canvasElement }) => { const c = within(canvasElement); await expect(await c.findByText('It is merged. Nothing more is sent to it.')).toBeInTheDocument(); await expect(c.queryByRole('button', { name: /Ready|Submit/ })).toBeNull() },
 }
+
+const findings = `### Scan summary (sample)
+
+| Scanner | Findings |
+|:--------|---------:|
+| <a><picture><source media="(prefers-color-scheme: dark)" srcset="data:image/gif;base64,R0lGODlhAQABAAAAACw="><img align="top" alt="Secret Finding" title="Secret Finding" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="></picture></a>&ensp;Secrets | <b>1</b> |
+| Vulnerabilities | - |
+
+<details><summary>:x: 1 secret (sample)</summary>
+
+\`config/sample.env\` line 3: a made-up key.
+
+</details>
+
+<script>window.__got_through = true</script><img src="x" onerror="window.__got_through = true" alt="broken (sample)">`
+/** A scanner's findings, as its bot writes them on GitHub (made up): the table, its icons and the folded section are shown as they would be there, not as their source; a script or a handler in a comment does not get through. */
+export const ScannerFindings: Story = {
+  beforeEach: withEngine({ prView: { ...prDraftSample, comments: [{ id: 'c_9', kind: 'comment', author: 'scanner-bot', body: findings, at: '2026-11-20T09:40:00Z', url: 'https://example.com/pull/412#issuecomment-9' }] } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const said = await c.findByRole('list', { name: 'Comments' })
+    await expect(within(said).getByRole('table')).toBeInTheDocument()
+    await expect(within(said).getByRole('img', { name: 'Secret Finding' })).toBeInTheDocument()
+    await expect(within(said).getByText('❌ 1 secret (sample)')).toBeInTheDocument()
+    await expect(said).not.toHaveTextContent('<picture>'); await expect(said).not.toHaveTextContent('srcset')
+    await expect(said.querySelector('script')).toBeNull(); await expect(said.querySelector('[onerror]')).toBeNull()
+    await expect((window as unknown as { __got_through?: boolean }).__got_through).toBeUndefined()
+  },
+}
+
