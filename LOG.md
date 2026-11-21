@@ -6075,3 +6075,9 @@ default table; the Data step in a task; record-and-fake as one step; a person pr
 Not done here: record-and-fake still needs the task's agent for the first fake (it makes the plan: what is
 structure); a prototype cannot record. Not tried on a real response or a real app.
 
+## A workflow's name can be changed (Sandy, 2026-11-21: "we have 2 main workflows on cloaked, we need to be able to edit the name")
+
+The engine always saved a workflow's name, and tells the built-in one by how it builds (`ensureMain`: any workflow
+built in one go), never by what it is called; the card just had no field for it. Editing a workflow now starts with
+its name (`WorkflowCard`, story `Renaming`); one left empty cannot be saved. Nothing else reads the name.
+
