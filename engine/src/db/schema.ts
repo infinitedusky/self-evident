@@ -423,6 +423,26 @@ export const scenario = pgTable('scenario', {
   createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [uniqueIndex('scenario_name').on(t.appId, t.scope, t.name)])
 
+// A mock: an app's stand-in for one outside service, kept in the app's library (mocks.ts) and used by its prototypes,
+// smoke tests, main and review environments. Its files are invented data and the server that serves them, never a
+// recording (those stay in the recordings folder, on this computer). One row per service.
+export const MOCK_STATUSES = ['needs_recording', 'assumed', 'mined'] as const
+export const mock = pgTable('mock', {
+  id: id(), appId: appId(), key: text('key').notNull(), name: text('name').notNull(),
+  /** What it stands in for, in a line: "SixtyFour workflow 3d50b61e, results CSV". */ standsInFor: text('stands_in_for').notNull().default(''),
+  /** The real service's base URL: a live run is recorded through it. */ upstream: text('upstream'),
+  status: text('status').notNull().default('needs_recording'),
+  /** Serves on $PORT, run in the folder its files are written to. */ cmd: text('cmd'),
+  /** The variables that point the app at it, as a stand-in's ({url}, {container_url}, {port} filled in). */ env: jsonb('env').$type<Record<string, string>>().notNull().default({}),
+  /** path → text: the server and its invented data. */ files: jsonb('files').$type<Record<string, string>>().notNull().default({}),
+  provenance: jsonb('provenance').$type<Record<string, unknown>>().notNull().default({}),
+  /** A new recording is needed (none yet, or the shape changed): what the real call needs. */ needs: jsonb('needs').$type<Record<string, unknown> | null>(),
+  /** The task it was raised on or last recorded for. */ issueId: text('issue_id').references(() => issue.id, { onDelete: 'set null' }),
+  /** The recording it was mined from, or the newest one not mined yet: a folder under the recordings home. */ recording: text('recording'),
+  recordedAt: at('recorded_at'), minedAt: at('mined_at'),
+  createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [uniqueIndex('mock_key').on(t.appId, t.key), inList('mock_status', t.status, MOCK_STATUSES)])
+
 // What an agent learned by reading an app's code (learn.ts): one row per document per app, replaced when it is
 // learned again. summary is for the person and short; body is for agents. sha: the home repository's commit then.
 export const learning = pgTable('learning', {

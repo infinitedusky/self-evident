@@ -365,6 +365,14 @@ button.badge { border: 0; cursor: pointer; }
 .settings-add .btn { padding: 6px 10px; font-size: 13px; }
 .settings-lead { margin: 0 0 12px; }
 .settings-desc { font-size: 13px; margin-top: 2px; }
+.mock-list { display: grid; gap: 10px; }
+.mock-card .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.mock-needs { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-left: 3px solid var(--bad); border-radius: 6px; font-size: 14px; }
+.mock-needs ul { margin: 4px 0 6px; padding-left: 18px; }
+.mock-provenance { margin-top: 8px; font-size: 14px; }
+.mock-provenance summary { cursor: pointer; color: var(--ink-soft); }
+.mock-edit { display: grid; gap: 8px; margin-top: 8px; max-width: 640px; }
+.mock-edit label { display: grid; gap: 4px; font-size: 13px; }
 .settings-note { display: flex; gap: 8px; align-items: baseline; margin: 10px 0 0; font-size: 13px; color: var(--ink-soft); }
 .form-grid label .settings-desc { text-transform: none; letter-spacing: 0; font: 12px/1.5 var(--sans); margin-top: 4px; }
 .settings-h3 { font: 600 14px var(--sans); margin: 18px 0 4px; }

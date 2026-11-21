@@ -47,6 +47,7 @@ import { git } from './git.js'
 import { PlanError } from './projects.js'
 import { morePorts } from './ports.js'
 import { copyData, databaseExists, databaseName, databaseUrl, dropDatabase, listScenarios, rebuild, type PrototypeDb } from './prototype-data.js'
+import { dropUse, libraryStandIns, noteUse } from './mocks.js'
 import { recordingsDir } from './recordings.js'
 import { patchSetup } from './setup.js'
 import { cleanStandIns, envOf, homeOf, standInKey, standInsStatus, startStandIns, stopStandIns, withStandIn, writeEnvFile, type StandIn } from './stand-ins.js'
@@ -84,7 +85,8 @@ async function setupOf(appId: string) {
   if (!a) throw new PlanError(`no app ${appId}`)
   const r = await homeRepo(appId)
   const s = (a.setup ?? {}) as { main_url?: string; main_stand_ins?: unknown; prototype_cmd?: string; prototype_stop_cmd?: string; prototype_db?: PrototypeDb }
-  return { a, repoPath: r?.localPath ?? null, address: s.main_url?.trim() || null, cmd: s.prototype_cmd?.trim() || null, stopCmd: s.prototype_stop_cmd?.trim() || null, dbCfg: s.prototype_db?.url ? s.prototype_db : null, standIns: cleanStandIns(s.main_stand_ins) }
+  const own = cleanStandIns(s.main_stand_ins) // its own, then the app's mocks it has none of its own for (mocks.ts)
+  return { a, repoPath: r?.localPath ?? null, address: s.main_url?.trim() || null, cmd: s.prototype_cmd?.trim() || null, stopCmd: s.prototype_stop_cmd?.trim() || null, dbCfg: s.prototype_db?.url ? s.prototype_db : null, standIns: [...own, ...(await libraryStandIns(appId, own.map((x) => x.key)))], ownStandIns: own }
 }
 
 /** The default branch as it is now: GitHub's when the checkout has it, else the local one. */
@@ -171,6 +173,7 @@ export async function startMain(appId: string, actor = 'person', opts: { update?
   }
   const mine: Record<string, string> = { PROTOTYPE_HOME: homeOf(standKey(appId, forId)), RECORDINGS: recordingsDir(appId), ...(data?.env ?? {}), ...(data?.mode === 'shared' ? { MAIN_SHARED_DB: '1' } : {}), ...(dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, data?.mode === 'shared' ? data.slug : SLUG) } : {}) }
   // Its stand-ins first, each on a port of its own; the server is given the variables that point the app at them.
+  noteUse(standKey(appId, forId), appId, tagOf(forId) ? `Main, beside ${tagOf(forId)}` : 'Main', standIns.filter((x) => 'mock' in x).map((x) => x.key))
   const pointed = envOf(standKey(appId, forId), standIns, await startStandIns(standKey(appId, forId), standIns, path, { ...process.env, ...mine }), path)
   const envFile = writeEnvFile(standKey(appId, forId), pointed)
   const port = await freePort(lastPort.get(keyOf(appId, forId)) ?? 0)
@@ -200,6 +203,7 @@ async function end(appId: string, forId?: string | null): Promise<boolean> {
   const m = running.get(keyOf(appId, forId))
   running.delete(keyOf(appId, forId))
   const standIns = stopStandIns(standKey(appId, forId))
+  dropUse(standKey(appId, forId))
   if (m && m.proc.exitCode === null && m.proc.signalCode === null && m.proc.pid) {
     const gone = new Promise<void>((r) => { m.proc.once('exit', () => r()); setTimeout(r, 3000) })
     try { process.kill(-m.proc.pid, 'SIGTERM') } catch { m.proc.kill('SIGTERM') }
@@ -255,7 +259,7 @@ export async function setMainAddress(appId: string, url: string | null) {
 
 /** What main runs in place of what is outside the system: the app's own, started and stopped with it. In force the next time it is turned on (at once, when it is on). */
 export async function setMainStandIn(appId: string, one: Partial<StandIn> | null, removeKey?: string) {
-  const { standIns } = await setupOf(appId)
+  const { ownStandIns: standIns } = await setupOf(appId)
   const next = one ? withStandIn(standIns, one) : standIns.filter((s) => s.key !== standInKey(removeKey ?? ''))
   if (!next) throw new PlanError('a stand-in needs a name and a command that serves on $PORT')
   await patchSetup(appId, { main_stand_ins: next })

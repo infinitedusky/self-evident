@@ -826,6 +826,14 @@ Details and sources in `research/`.
   opened, as a draft, titled by the repository's own convention. One they close stays closed until they submit again.
   No agent has a way to submit one.
 
+- **Outside services are mocks, mined from one recording (Sandy, 2026-11-20, "Reviewable pull requests", step 1).**
+  An app keeps one mock per outside service, in a library: what its prototypes, smoke tests, main and (next) review
+  environments are pointed at in place of the real thing. A service is called for real once, in a live smoke run, and
+  the engine keeps the raw response with the task (never in a repository). Its mock is mined from that: every
+  column, nesting, format and edge case kept, every value invented and marked as sample data, and the states the
+  recording lacked added. A mock carries its provenance (what it stands in for, what it was mined from and when,
+  what is real, what is invented, what it cannot show), and only the invented copy is ever exported.
+
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
 > "When I use VS Code, I can just move really quickly … I just set things to dangerously skip permissions and just
