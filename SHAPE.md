@@ -835,6 +835,9 @@ Details and sources in `research/`.
     written by the task's agent, so it can do what the service needs, such as answering for exactly what it was
     sent). The data is what it answers with, read from `$MOCK_DATA`, and is the only thing that changes between
     places.
+  - **A response belongs to an endpoint.** A mock lists the calls the app makes to its service; each data file
+    is exactly one endpoint's, by its name; and each endpoint says whether a real response is behind it (given, or
+    recorded) or its shape is taken from the code that calls it.
   - **Data has a source and a form.** The source is the real API, a real response (recorded in a live run, or a
     file the person gives), or a file we provide. The form is as it is (this computer only) or faked. So for each
     place a task runs (prototype, smoke test, reviewer) the task says one of: real API; record and replay; record

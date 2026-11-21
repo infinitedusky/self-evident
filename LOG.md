@@ -6093,3 +6093,27 @@ where one would do, and a card that said "The task's agent is mining it" with a 
   when that is true.
 - A given file's own note (`given.meta.json`) is no longer counted as one of its files.
 
+### A response belongs to an endpoint, and the page says which (Sandy, 2026-11-21, looking at the first real mock)
+
+"There's some data that we're storing … that's a response. That has to map on to an endpoint, right? … I'm looking at
+one and there's nowhere that I can see that it is linked to a specific endpoint. So if there were ten, how would it
+know which one this is supposed to be serving and then fill in the other nine?" She was right: the link was inside
+the server's code ("serve the CSV in the data folder"), which nobody could check, and nothing showed which calls had a
+real response behind them.
+- **A mock lists its endpoints** (`mock.endpoints`, `engine/src/mock-endpoints.ts`): every call the app makes to the
+  service, each with a key, its method, its path and what it answers with. The agent that builds the mock declares
+  them (`mock` op save, `endpoints`).
+- **A response is one endpoint's, by its file's name**: `<key>.<ext>`, `<key>.<anything>.<ext>` for more added by hand,
+  or the file an endpoint names outright (one kept under the name it came with). A data file that is no endpoint's
+  is shown as unlinked.
+- **Where a shape came from is read, not claimed**: a real response given for that endpoint, one recorded in a live
+  run (the recorder notes each call's method and address, matched to the endpoint's path), or neither: the code.
+- **A file can be given for one endpoint** from its row; it is kept under that endpoint's name.
+- **A recorded run** is read under its endpoints' names (`keyed`: the last answer of each as `<key>.<ext>`, earlier
+  ones beside it), so a server and the faker read a recorded run and a given file the same way.
+- **The card** has the table: the call, what answers it, where its shape came from; "10 calls: 2 with a real response
+  behind them, 8 taken from the code". A mock built before this says its endpoints are not listed, and its task's
+  agent can be asked to list them.
+
+Not done: a call the app makes that the mock does not have is still found by its failing, not reported by the mock.
+

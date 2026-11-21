@@ -461,7 +461,7 @@ export function buildApp(bus: EventBus) {
     const appId = c.req.param('id'), key = c.req.param('key')
     const body = await c.req.parseBody({ all: true })
     const given = ([] as unknown[]).concat(body.file ?? []).filter((f): f is File => typeof f === 'object' && f !== null && 'arrayBuffer' in f)
-    const r = await giveRecording(appId, key, await Promise.all(given.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }))), 'user')
+    const r = await giveRecording(appId, key, await Promise.all(given.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }))), 'user', typeof body.endpoint === 'string' && body.endpoint ? body.endpoint : null)
     if (r.issueId) await askToMine(r.issueId, key, r.dir, r.files.length)
     return c.json({ files: r.files, asked: r.issueId }, 201)
   } catch (err) { return planError(c, err) } })

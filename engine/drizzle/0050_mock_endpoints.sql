@@ -1,0 +1,1 @@
+ALTER TABLE "mock" ADD COLUMN "endpoints" jsonb DEFAULT '[]'::jsonb NOT NULL;

@@ -397,6 +397,18 @@ button.badge { border: 0; cursor: pointer; }
 .mock-h3 { font-size: 14px; margin: 16px 0 8px; }
 .mock-check { display: flex !important; grid-template-columns: none; gap: 8px; align-items: center; }
 .mock-history { margin: 6px 0 0; padding-left: 18px; font-size: 13px; display: grid; gap: 2px; }
+.mock-endpoints { margin-top: 6px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.mock-endpoints-head, .mock-endpoints-row { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; padding: 8px 10px; }
+.mock-endpoints-head { font-size: 12px; font-weight: 600; color: var(--ink-soft); border-bottom: 1px solid var(--line); }
+.mock-endpoints-row + .mock-endpoints-row { border-top: 1px solid var(--line); }
+.mock-endpoints-row { font-size: 13px; }
+.mock-endpoints-row code { overflow-wrap: anywhere; }
+.mock-endpoints-row .faint { font-size: 12px; }
+.mock-method { font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.mock-give-one { display: block; margin-top: 4px; cursor: pointer; }
+.mock-give-one input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.mock-give-one input:focus-visible + .btn { outline: 2px solid var(--accent); }
+@media (max-width: 760px) { .mock-endpoints-head { display: none; } .mock-endpoints-row { grid-template-columns: 1fr; gap: 4px; } }
 .mock-needs { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-left: 3px solid var(--bad); border-radius: 6px; font-size: 14px; }
 .mock-needs ul { margin: 4px 0 6px; padding-left: 18px; }
 .mock-provenance { margin-top: 8px; font-size: 14px; }
