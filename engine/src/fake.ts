@@ -159,7 +159,7 @@ export function fake(recorded: { name: string; text: string }[], plan: FakePlan 
 
   const report: FakeReport = { files: 0, replaced: 0, kept: 0, byKind: {}, keptValues: [], refusedKeep: [], maybeStructure: [] }
   const keptValues = new Set<string>(), refused = new Set<string>()
-  const fields = new Map<string, { n: number; plain: number; faked: number }>()
+  const fields = new Map<string, { n: number; plain: number; faked: number; lower: number }>()
   const cache = new Map<string, string>()
 
   const bytes = (what: string, v: string) => createHash('sha256').update(`${salt}\0${what}\0${v}`).digest()
@@ -175,10 +175,11 @@ export function fake(recorded: { name: string; text: string }[], plan: FakePlan 
   const note = (path: string[], v: string, faked: boolean) => {
     const k = path.join('.')
     if (!k) return
-    const f = fields.get(k) ?? { n: 0, plain: 0, faked: 0 }
+    const f = fields.get(k) ?? { n: 0, plain: 0, faked: 0, lower: 0 }
     f.n++
     if (/^[\p{L}][\p{L}_-]{1,23}$/u.test(v)) f.plain++
     if (faked) f.faked++
+    if (v === v.toLowerCase()) f.lower++
     fields.set(k, f)
   }
 
@@ -241,7 +242,9 @@ export function fake(recorded: { name: string; text: string }[], plan: FakePlan 
     else if (/^[+(]?\d[\d\s().\-/:]*$/.test(t)) { v = digits(t); kind = 'number' }
     else if (t.includes('\n') || t.length > 60 || t.trim().split(/\s+/).length > 5) { v = prose(t); kind = 'text' }
     else { v = tokens(t); kind = 'words' }
-    if (v === t) v = kind === 'number' ? digits(`${t} `).trimEnd() : `${v}-${word(`x\0${t}`, 0)}` // never the real one back
+    // Never the real one back: other digits tried until they differ (one digit comes out the same one time in ten).
+    for (let n = 1; v === t && kind === 'number' && n < 12; n++) v = digits(t + ' '.repeat(n)).trimEnd()
+    if (v === t) v = `${v}-${word(`x\0${t}`, 0)}`
     cache.set(t, v)
     return { v, kind }
   }
@@ -251,10 +254,10 @@ export function fake(recorded: { name: string; text: string }[], plan: FakePlan 
     const t = raw.trim()
     if (!t) return raw
     const lead = raw.slice(0, raw.indexOf(t)), tail = raw.slice(raw.indexOf(t) + t.length)
-    if (depth < 3 && /^[[{(]/.test(t)) {
+    if (depth < 9 && /^[[{(]/.test(t)) { // as deep as the leak check reads (mock-leaks.ts)
       try { const n = parseLiteral(t); walk(n, path, depth + 1, level + 1); return lead + write(n, styleOf(t)) + tail } catch { /* not one written-out value */ }
-      // Something like one: its quoted strings and long numbers, where they stand.
-      return lead + t.replace(/'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"|\d{7,}/g, (m, a: string | undefined, b: string | undefined, at: number) => {
+      // Something like one (it has quoted strings): those and its long numbers, where they stand. Anything else that merely opens with a bracket, "(1)." or "[draft] a note", is a plain value.
+      if (/["']/.test(t)) return lead + t.replace(/'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"|\d{7,}/g, (m, a: string | undefined, b: string | undefined, at: number) => {
         if (a === undefined && b === undefined) { count('number'); return digits(m) }
         if (/^\s*:/.test(t.slice(at + m.length))) return m
         const r = leaf(a ?? b ?? '', path)
@@ -314,6 +317,8 @@ export function fake(recorded: { name: string; text: string }[], plan: FakePlan 
   }
   report.keptValues = [...keptValues].sort()
   report.refusedKeep = [...refused].sort()
-  report.maybeStructure = [...fields].filter(([, f]) => f.n > 0 && f.plain === f.n && f.faked === f.n).map(([k]) => k).sort()
+  // Never a column that by its name is someone's (a first name is one plain word too), and never one whose values begin with a capital, as a name does.
+  const someones = /name|address|city|state|street|zip|postal|country|locality|region|company|employer|organi[sz]ation|title|handle|user|owner|author/i
+  report.maybeStructure = [...fields].filter(([k, f]) => f.n > 0 && f.plain === f.n && f.faked === f.n && f.lower === f.n && !someones.test(k)).map(([k]) => k).sort()
   return { files, report }
 }

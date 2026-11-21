@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MockLibrary } from './MockLibrary'
-import { expect, within } from 'storybook/test'
+import { expect, userEvent, within } from 'storybook/test'
 import { withEngine } from '../stories/mock-engine'
 import { mocks, sampleApp } from '../stories/sample'
 
@@ -55,3 +55,37 @@ export const TenEndpoints: Story = {
 export const UnlinkedFile: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], unlinked: ['sample-people.csv'] }] }) }
 /** A mock built before endpoints were listed: it says so, and the task's agent can be asked to list them. */
 export const EndpointsNotListed: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], endpoints: [], unlinked: [] }] }) }
+/** Removing a mock: it says what goes with it, and asks whether its real responses are deleted from this computer too, so nothing is left for the next one to trip over. */
+export const RemovingAMock: Story = {
+  beforeEach: withEngine({ mocks: [mocks[0]] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Remove the mock' }))
+    await expect(await c.findByRole('checkbox', { name: /Also delete its 2 real responses from this computer/ })).toBeChecked()
+    await userEvent.click(c.getByRole('button', { name: 'Remove it' }))
+    await expect(await c.findByText(/No mocks yet/)).toBeInTheDocument()
+  },
+}
+/** Its real responses on this computer, each deletable: one of them was left by a mock that was removed, and says it is not used. */
+export const RealResponses: Story = {
+  beforeEach: withEngine({ mocks: [mocks[0]] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByText('Real responses on this computer'))
+    await expect(await c.findByText(/From before this mock was made: it is not used/)).toBeInTheDocument()
+    await expect(c.getAllByRole('button', { name: /Delete the real response of/ })).toHaveLength(2)
+  },
+}
+/** An endpoint being edited: its method, its path and what it answers with; or taken off the mock. */
+export const EditingAnEndpoint: Story = {
+  beforeEach: withEngine({ mocks: [mocks[0]] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click((await c.findAllByRole('button', { name: /^Edit the call/ }))[1])
+    const what = c.getByRole('textbox', { name: 'What it answers with' })
+    await userEvent.clear(what); await userEvent.type(what, 'Running, then completed, then failed (sample)')
+    await userEvent.click(c.getByRole('button', { name: 'Save the call' }))
+    await expect(await c.findByText('Running, then completed, then failed (sample)')).toBeInTheDocument()
+    await expect(c.getAllByRole('button', { name: /^Remove the call/ })).toHaveLength(4)
+  },
+}

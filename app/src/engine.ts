@@ -356,6 +356,8 @@ export interface Mock {
   /** What it can answer with, kept apart from its server, and which of them it serves unless a run says otherwise. */ data: MockData[]; defaultData: string | null
   /** The calls it answers, and the data files that are no endpoint's (engine/src/mock-endpoints.ts). */ endpoints: MockEndpoint[]; unlinked: string[]
 }
+/** One real response of a service on this computer (never its contents). before: from before this mock was made, so not used by it. */
+export interface MockReal { id: string; at: string; given: boolean; files: { name: string; bytes: number }[]; before: boolean; issueId: string | null }
 /** One call the app makes to the service. A response belongs to exactly one endpoint, by its file's name. */
 export interface MockEndpoint {
   key: string; method: string; path: string; what?: string; file?: string
@@ -514,7 +516,14 @@ export const engine = {
   /** A service that needs a mock: raised, with the real service's address and the variables that point the app at it. */
   raiseMock: (appId: string, body: { name: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; issueId?: string; needs?: Mock['needs'] }) => call<Mock>('POST', `/apps/${appId}/mocks`, body),
   updateMock: (appId: string, key: string, body: { name?: string; standsInFor?: string; upstream?: string | null; env?: Record<string, string> }) => call<Mock>('PATCH', `/apps/${appId}/mocks/${key}`, body),
-  removeMock: (appId: string, key: string) => call<{ removed: boolean }>('DELETE', `/apps/${appId}/mocks/${key}`),
+  /** files: its real responses are deleted from this computer with it. */
+  removeMock: (appId: string, key: string, files = false) => call<{ removed: boolean; files: number }>('DELETE', `/apps/${appId}/mocks/${key}${files ? '?files=1' : ''}`),
+  /** A service's real responses on this computer: what is there, never what is in it. */
+  mockReal: (appId: string, key: string) => call<MockReal[]>('GET', `/apps/${appId}/mocks/${key}/real`),
+  removeMockReal: (appId: string, key: string, id: string) => call<MockReal[]>('DELETE', `/apps/${appId}/mocks/${key}/real?id=${encodeURIComponent(id)}`),
+  editMockEndpoint: (appId: string, key: string, endpoint: string, body: { method?: string; path?: string; what?: string }) => call<Mock>('PATCH', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}`, body),
+  removeMockEndpoint: (appId: string, key: string, endpoint: string) => call<Mock>('DELETE', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}`),
+  renameMockData: (appId: string, key: string, data: string, name: string) => call<MockData[]>('PATCH', `/apps/${appId}/mocks/${key}/data/${data}`, { name }),
   /** Ask the agent of the task the newest recording was made for to mine it. */
   mineMock: (appId: string, key: string) => call<{ asked: string }>('POST', `/apps/${appId}/mocks/${key}/mine`),
   /** Where its exported files are downloaded from: the server, its invented data and its provenance. */
@@ -522,6 +531,9 @@ export const engine = {
   taskCalls: (issueId: string) => call<TaskCall[]>('GET', `/issues/${issueId}/calls`),
   addTaskCall: (issueId: string, body: { service: string; method: string; path: string; what?: string }) => call<TaskCall[]>('POST', `/issues/${issueId}/calls`, body),
   removeTaskCall: (issueId: string, id: string) => call<TaskCall[]>('DELETE', `/issues/${issueId}/calls/${id}`),
+  editTaskCall: (issueId: string, id: string, body: { service?: string; method?: string; path?: string; what?: string }) => call<TaskCall[]>('PATCH', `/issues/${issueId}/calls/${id}`, body),
+  /** The whole list emptied, to start again. */
+  clearTaskCalls: (issueId: string) => call<TaskCall[]>('DELETE', `/issues/${issueId}/calls`),
   linkTaskCall: (issueId: string, id: string, endpoint: string | null) => call<TaskCall[]>('PUT', `/issues/${issueId}/calls/${id}/endpoint`, { endpoint }),
   /** Something to answer it: the service's mock made if it has none, the call added to the mock if it lacks it. */
   coverTaskCall: (issueId: string, id: string) => call<{ calls: TaskCall[]; mock: Mock }>('POST', `/issues/${issueId}/calls/${id}/cover`, {}),

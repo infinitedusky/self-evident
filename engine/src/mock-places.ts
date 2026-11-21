@@ -23,7 +23,7 @@ import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { PlanError } from './issues.js'
 import { dataFor, fakeData, useReal, type DataKind, type DataRow } from './mock-data.js'
-import { day, recordingsOfService, rowOf, workspaceOf, type Row } from './mocks.js'
+import { day, recordingsFor, rowOf, workspaceOf, type Row } from './mocks.js'
 import { standInKey } from './stand-ins.js'
 
 export type Place = (typeof MOCK_PLACES)[number]
@@ -72,7 +72,7 @@ export async function planOf(m: Row, place: Place, issueId?: string | null, opts
     return m.cmd && m.status !== 'needs_recording' ? { ...base, how: 'own', says: 'What its server holds itself', ...(note ? { note } : {}) } : { ...base, how: 'none', says: 'Nothing yet: it has no mock', ...(note ? { note } : {}) }
   }
   const liveFirst = (then: string): Plan => ({ ...base, how: 'live', record: true, says: `The real ${m.name} on the first run, kept as it comes; ${then}` })
-  const newest = recordingsOfService(m.appId, m.key)[0]
+  const newest = recordingsFor(m)[0]
   let plan: Plan
   if (choice.source === 'live') {
     plan = canLive(m)
@@ -170,7 +170,7 @@ export async function placesTable(appId: string, issueId?: string | null): Promi
     const own = issueId ? await db.select().from(mockChoice).where(and(eq(mockChoice.mockId, m.id), eq(mockChoice.issueId, issueId))) : []
     const places = {} as PlacesRow['places']
     for (const p of MOCK_PLACES) places[p] = { ...(await planOf(m, p, issueId, { dry: true })), own: cleanChoice(own.find((c) => c.place === p)), app: cleanChoice((m.places ?? {})[p]) }
-    out.push({ mock: m.key, name: m.name, status: m.status, canLive: canLive(m), real: recordingsOfService(appId, m.key)[0]?.at ?? null, data: sets.map(brief), places })
+    out.push({ mock: m.key, name: m.name, status: m.status, canLive: canLive(m), real: recordingsFor(m)[0]?.at ?? null, data: sets.map(brief), places })
   }
   return out
 }

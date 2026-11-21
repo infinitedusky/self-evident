@@ -94,10 +94,10 @@ import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError,
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
 import { linearFor } from './linear-home.js'
 import { CATALOGUE } from './catalogue.js'
-import { removeData, saveData, setDefaultData } from './mock-data.js'
+import { removeData, renameData, saveData, setDefaultData } from './mock-data.js'
 import { placesTable, setChoice, type Choice } from './mock-places.js'
-import { addCall, coverCall, linkCall, listCalls, removeCall, type NewCall } from './task-calls.js'
-import { mockHistory } from './mocks.js'
+import { addCall, clearCalls, coverCall, editCall, linkCall, listCalls, removeCall, type NewCall } from './task-calls.js'
+import { editEndpoint, listReal, mockHistory, recordingsFor, removeReal, rowOf } from './mocks.js'
 import { exportMock, getMock, giveRecording, listMocks, needsRecording, recordingsOfService, removeMock, setMockDetails, type Needs } from './mocks.js'
 import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role, cleanJobs, cleanStepSkills, describeJobs, usableSkills, writeSharedSkill, type AppJobs } from './skills.js'
 
@@ -448,10 +448,17 @@ export function buildApp(bus: EventBus) {
   api.get('/apps/:id/mocks/:key', async (c) => { try { return c.json(await getMock(c.req.param('id'), c.req.param('key'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/mocks', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { name?: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; issueId?: string; needs?: Needs }; return c.json(await needsRecording(c.req.param('id'), { name: String(b.name ?? ''), standsInFor: b.standsInFor, upstream: b.upstream, env: b.env, issueId: b.issueId ?? null, needs: b.needs }, 'user'), 201) } catch (err) { return planError(c, err) } })
   api.patch('/apps/:id/mocks/:key', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { name?: string; standsInFor?: string; upstream?: string | null; env?: Record<string, string> }; return c.json(await setMockDetails(c.req.param('id'), c.req.param('key'), b, 'user')) } catch (err) { return planError(c, err) } })
-  api.delete('/apps/:id/mocks/:key', async (c) => { try { return c.json(await removeMock(c.req.param('id'), c.req.param('key'), 'user')) } catch (err) { return planError(c, err) } })
+  api.delete('/apps/:id/mocks/:key', async (c) => { try { return c.json(await removeMock(c.req.param('id'), c.req.param('key'), 'user', { files: c.req.query('files') === '1' })) } catch (err) { return planError(c, err) } })
+  // What can be changed or taken away on a mock, piece by piece: its real responses on this computer, an endpoint, a data set's name.
+  api.get('/apps/:id/mocks/:key/real', async (c) => { try { return c.json(await listReal(c.req.param('id'), c.req.param('key'))) } catch (err) { return planError(c, err, 404) } })
+  api.delete('/apps/:id/mocks/:key/real', async (c) => { try { return c.json(await removeReal(c.req.param('id'), c.req.param('key'), c.req.query('id') ?? '', 'user')) } catch (err) { return planError(c, err) } })
+  api.patch('/apps/:id/mocks/:key/endpoints/:endpoint', async (c) => { try { return c.json(await editEndpoint(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), await c.req.json().catch(() => ({})), 'user')) } catch (err) { return planError(c, err) } })
+  api.delete('/apps/:id/mocks/:key/endpoints/:endpoint', async (c) => { try { return c.json(await editEndpoint(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), null, 'user')) } catch (err) { return planError(c, err) } })
+  api.patch('/apps/:id/mocks/:key/data/:data', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { name?: string }; return c.json(await renameData(c.req.param('id'), c.req.param('key'), c.req.param('data'), String(b.name ?? ''), 'user')) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/mocks/:key/mine', async (c) => { try {
     const appId = c.req.param('id'), m = await getMock(appId, c.req.param('key'))
-    const newest = recordingsOfService(appId, m.key)[0]
+    const row = await rowOf(appId, m.key)
+    const newest = row ? recordingsFor(row)[0] : undefined // its own: never one left by a mock that was removed
     if (!newest) return c.json({ error: `${m.name} has no recording yet: make a live smoke run of a task that calls it` }, 409)
     if (!newest.issueId) return c.json({ error: `the newest recording of ${m.name} is not a task's, so there is no task agent to mine it` }, 409)
     await askToMine(newest.issueId, m.key, newest.dir, newest.files)
@@ -469,6 +476,8 @@ export function buildApp(bus: EventBus) {
   // What a task calls outside the app (task-calls.ts): its Data step starts from these.
   api.get('/issues/:id/calls', async (c) => { try { return c.json(await listCalls(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/issues/:id/calls', async (c) => { try { return c.json(await addCall(c.req.param('id'), await c.req.json() as NewCall, 'user'), 201) } catch (err) { return planError(c, err) } })
+  api.delete('/issues/:id/calls', async (c) => { try { return c.json(await clearCalls(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
+  api.patch('/issues/:id/calls/:call', async (c) => { try { return c.json(await editCall(c.req.param('id'), c.req.param('call'), await c.req.json().catch(() => ({})) as Partial<NewCall>, 'user')) } catch (err) { return planError(c, err) } })
   api.delete('/issues/:id/calls/:call', async (c) => { try { return c.json(await removeCall(c.req.param('id'), c.req.param('call'), 'user')) } catch (err) { return planError(c, err) } })
   api.put('/issues/:id/calls/:call/endpoint', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { endpoint?: string | null }; return c.json(await linkCall(c.req.param('id'), c.req.param('call'), b.endpoint || null, 'user')) } catch (err) { return planError(c, err) } })
   // Something to answer it: the service's mock made if it has none, and the call added to the mock if it lacks it.

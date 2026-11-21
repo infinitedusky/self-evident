@@ -18,6 +18,7 @@ export interface MockData {
   /** Where each mock's data comes from: the app's defaults, and one task's. */ mockPlaces: import('../engine').MockPlacesRow[]; mockPlacesForTask: import('../engine').MockPlacesRow[]
   mockChanges: import('../engine').MockChange[]
   /** What the sample task calls outside the app. */ taskCalls: import('../engine').TaskCall[]
+  /** A service's real responses on this computer. */ mockReal: import('../engine').MockReal[]
   /** The stories under Screens/ and the Storybook that renders them. */ screens: import('../engine').ScreensView & { /** With the earlier tasks' ones, when asked for. */ all?: import('../engine').Screen[] }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[]; earlier?: number; /** With the earlier tasks' ones, when asked for. */ all?: { file: string; changedAt: number }[] }
   /** A task's smoke test; left out, there is nothing for a person on it. */ smoke?: import('../engine').SmokeView
@@ -56,7 +57,7 @@ export const sampleData: MockData = {
   storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [], branch: 'talk/sample', main: false },
   screens: s.screensView,
   mocks: s.mocks,
-  mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls,
+  mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls, mockReal: s.mockReal,
   sketches: { scope: 'sess_sample', branch: 'talk/sample', main: false, dir: 'sketches', sketches: [{ file: 'home.html', changedAt: 1794250000000 }, { file: 'checkout.html', changedAt: 1794240000000 }] },
   prototypes: s.prototypes, prototypeCode: s.prototypeCode,
   claudeSessions: s.claudeSessions,
@@ -141,6 +142,14 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/apps/:id/mocks', () => reply(d.mocks)),
     http.get('/api/issues/:id/calls', () => reply(d.taskCalls)),
     http.post('/api/issues/:id/calls', async ({ request }) => { const b = await request.json() as { service: string; method: string; path: string; what?: string }; d.taskCalls = [...d.taskCalls, { id: `tcall_new${d.taskCalls.length}`, service: b.service.toLowerCase(), serviceName: b.service, method: b.method, path: b.path, what: b.what ?? '', by: 'user', state: 'no_mock', mock: null, endpoint: null, linked: false }]; return reply(d.taskCalls) }),
+    http.delete('/api/issues/:id/calls', () => { d.taskCalls = []; return reply(d.taskCalls) }),
+    http.patch('/api/issues/:id/calls/:call', async ({ params, request }) => { const b = await request.json() as Partial<import('../engine').TaskCall>; d.taskCalls = d.taskCalls.map((c) => (c.id === params.call ? { ...c, ...b } : c)); return reply(d.taskCalls) }),
+    http.get('/api/apps/:id/mocks/:key/real', () => reply(d.mockReal)),
+    http.delete('/api/apps/:id/mocks/:key/real', ({ request }) => { d.mockReal = d.mockReal.filter((r) => r.id !== new URL(request.url).searchParams.get('id')); return reply(d.mockReal) }),
+    http.patch('/api/apps/:id/mocks/:key/endpoints/:endpoint', async ({ params, request }) => { const b = await request.json() as { what?: string }; d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: m.endpoints.map((e) => (e.key === params.endpoint ? { ...e, ...b } : e)) } : m)); return reply(d.mocks.find((m) => m.key === params.key)) }),
+    http.delete('/api/apps/:id/mocks/:key/endpoints/:endpoint', ({ params }) => { d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: m.endpoints.filter((e) => e.key !== params.endpoint) } : m)); return reply(d.mocks.find((m) => m.key === params.key)) }),
+    http.patch('/api/apps/:id/mocks/:key/data/:data', () => reply(d.mocks[0].data)),
+    http.delete('/api/apps/:id/mocks/:key', ({ params }) => { d.mocks = d.mocks.filter((m) => m.key !== params.key); return reply({ removed: true, files: 2 }) }),
     http.delete('/api/issues/:id/calls/:call', ({ params }) => { d.taskCalls = d.taskCalls.filter((c) => c.id !== params.call); return reply(d.taskCalls) }),
     http.put('/api/issues/:id/calls/:call/endpoint', () => reply(d.taskCalls)),
     http.post('/api/issues/:id/calls/:call/cover', () => reply({ calls: d.taskCalls, mock: d.mocks[0] })),

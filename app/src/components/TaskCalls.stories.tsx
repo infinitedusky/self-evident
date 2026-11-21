@@ -39,3 +39,15 @@ export const AddingACall: Story = {
 }
 /** Everything answered, all from real responses. */
 export const AllAnswered: Story = { beforeEach: withEngine({ taskCalls: taskCalls.slice(0, 3).map((c) => ({ ...c, endpoint: { ...c.endpoint!, real: { at: '2026-11-18T15:20:00Z', how: 'recorded' as const }, files: [`${c.endpoint!.key}.json`] } })) }) }
+/** A call being edited: the service, the call and what the task needs from it. And the whole list can be cleared, to start again. */
+export const EditingACall: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click((await c.findAllByRole('button', { name: /^Edit / }))[0])
+    const what = c.getByRole('textbox', { name: 'What this task needs from it' })
+    await userEvent.clear(what); await userEvent.type(what, 'A job id, and a refusal when nobody is sent (sample)')
+    await userEvent.click(c.getByRole('button', { name: 'Save' }))
+    await expect(await c.findByText('Needs: A job id, and a refusal when nobody is sent (sample)')).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Clear the list' })).toBeInTheDocument()
+  },
+}

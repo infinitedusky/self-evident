@@ -63,12 +63,15 @@ export function parseCsv(text: string): string[][] {
 }
 export const looksCsv = (text: string) => { const first = text.slice(0, 4000).split(/\r?\n/)[0] ?? ''; return first.split(',').length >= 3 && !/^\s*[[{<]/.test(text) }
 
+const DEPTH = 8
 interface Read { values: string[]; shape: string[]; /** Values that are data written out (JSON, a Python-style list): read for what is inside them, and for ids anywhere in them, never as a run of words, since their keys would make one. */ inside: string[] }
 /** A value, and what is inside it: JSON in a cell, or quoted strings in a Python-style list. */
 function addValue(v: string, out: Read, depth = 0) {
   const t = v.trim()
   if (!t) return
-  if (depth > 2) { out.values.push(t); return }
+  // Data written out inside data inside data (a provider's raw answer kept as a string in a cell): gone into as far as it goes.
+  // Past that, something that is still written-out data is read for ids anywhere in it, never as a run of words.
+  if (depth > DEPTH) { if (/^[[{(]/.test(t) && /["']\s*:/.test(t)) out.inside.push(t); else out.values.push(t); return }
   if (/^[[{]/.test(t)) { try { const j: unknown = JSON.parse(t); if (j && typeof j === 'object') { out.inside.push(t); walk(j, out, depth + 1); return } } catch { /* not JSON: a repr, perhaps */ } }
   // Every quoted string is paired, however short, or a one-letter one ('x') would pair the wrong quotes from there on.
   const quoted = [...t.matchAll(/'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"/g)].filter((m) => (m[1] ?? m[2]).length >= 2)
@@ -117,6 +120,7 @@ export function checkLeaks(recorded: Recorded[], files: MockFile[], kept: string
   const phrases = new Set<string>() // 2–4 words in a row, found anywhere
   const whole = new Set<string>() // a one-word value, as a whole value
   const handles = new Set<string>() // a one-word value that is rare enough to look for inside prose
+  const proper = new Set<string>() // a one-word value written as a name is (Rowan, Northgate): looked for anywhere, as written
   let values = 0
   const reads = recorded.map((r) => readRecorded(r.text))
   for (const r of reads) for (const k of r.shape) { shape.add(norm(k)); for (const w of words(k)) shape.add(w) }
@@ -127,7 +131,8 @@ export function checkLeaks(recorded: Recorded[], files: MockFile[], kept: string
     const v = norm(raw)
     if (shape.has(v) || keptSet.has(v) || STOP.has(v)) continue
     const ws = words(raw)
-    if (ws.length === 1) { if (v.length >= 4 && !/^\d+(\.\d+)?$/.test(v)) { whole.add(v); if (handleLike(raw.trim())) handles.add(ws[0]) } }
+    if (ws.length === 1 && /^\p{Lu}\p{Ll}{2,}$/u.test(raw.trim())) proper.add(raw.trim())
+    if (ws.length === 1) { if (v.length >= 4 && !/^\d+(\.\d+)?$/.test(v)) { whole.add(v); if (handleLike(raw.trim()) && ws[0].length >= 4) handles.add(ws[0]) } } // a handle is looked for inside prose only when it is long enough to be someone's: "(1)." is not
     else if (ws.length <= 3) phrases.add(ws.join(' '))
     else for (const g of grams(ws, 4)) phrases.add(g)
   }
@@ -141,8 +146,12 @@ export function checkLeaks(recorded: Recorded[], files: MockFile[], kept: string
     const once = (kind: Leak['kind'], v: string) => { if (seen.has(v)) return; seen.add(v); hit(f.path, kind, v) }
     for (const a of anywhere(f.text)) if (strong.has(a.v)) once(strong.get(a.v)!, a.v)
     const ws = words(f.text)
-    for (const n of [2, 3, 4]) for (const g of grams(ws, n)) if (phrases.has(g) && !shape.has(g)) once('words', g)
+    // A run of words that are all structure (keys, column names, kept values, true and false, small numbers) is the response's shape, not anyone's data.
+    const plain = (w: string) => shape.has(w) || keptSet.has(w) || STOP.has(w) || /^\d{1,6}(\.\d+)?$/.test(w)
+    for (const n of [2, 3, 4]) for (const g of grams(ws, n)) if (phrases.has(g) && !shape.has(g) && !g.split(' ').every(plain)) once('words', g)
     for (const w of ws) if (handles.has(w) && !shape.has(w)) once('value', w)
+    // A first name alone in a sentence is someone's too. As it was written, capital and all, so "Mark" is found and "mark" is not.
+    for (const m of f.text.matchAll(/\p{Lu}\p{Ll}{2,}/gu)) if (proper.has(m[0]) && !shape.has(m[0].toLowerCase())) once('value', m[0].toLowerCase())
     // Whole values: the mock read the way the recording was (its cells and strings), and its code's string literals.
     const mine = readRecorded(f.text).values
     for (const m of f.text.matchAll(/'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`([^`]*)`/g)) { const lit = m[1] ?? m[2] ?? m[3]; if (lit.length >= 4) mine.push(lit) }

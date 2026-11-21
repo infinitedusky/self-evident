@@ -6156,3 +6156,31 @@ answers it now. Where nothing does, the mock is made (or the call added to it) f
 call's. A mock that needs a real response and lists its endpoints points at those rows instead of taking a file of
 its own.
 
+### A clean slate, and every piece can be changed or removed (Sandy, 2026-11-21)
+
+"I removed the mock so I didn't upload the CSV yet. Or if it's there, it's because it wasn't deleted, but it should
+have been … I'm trying to start from scratch … it feels like there's legacy data that's hanging around, making it
+just impossible to figure out what's going on." And: "make sure … there's edit and delete capability for all the
+different components we're going to be dealing with."
+
+What had happened: Remove left a mock's real responses on this computer on purpose, and the next mock of that
+service took the newest one up as its own, so a mock she had given nothing showed a real response and was built from
+it.
+- **A mock's real responses are its own** (`recordingsFor`): those that came in since it was made. One left by a
+  removed mock is never taken up. The leak check still reads every one on this computer.
+- **Removing a mock asks** whether its real responses are deleted from this computer too, deleted unless unticked.
+- **Real responses on this computer** are listed on the mock's card (what and from when, never what is in them),
+  each deletable; one from before the mock says it is not used.
+- **Everything can be edited and removed**: a call on a task (edit, remove, clear the list), an endpoint on a mock
+  (edit, remove), a data set (rename, remove, as before), a real response (delete), a mock (edit, remove).
+
+**Why the first full real file got no data** (found on the 89-column results file): the faker was right, the leak
+check was wrong, twice. Data written out four levels deep was read as a sentence past the third level, so its keys in
+a row counted as a phrase; and "(1)." was taken for a handle, so every "1" in the fake counted. Both fixed, and tried
+on the real files: no leaks, and the person's name is not in the fake. Tightened on the way: a one-word value written
+as a name is (a first name, a surname, a company) is now looked for anywhere in a mock, where before a single word
+was only found as a whole value; and the faker no longer offers a column like `first_name` as "perhaps structure".
+
+Next: a data agent with instructions of its own, called by the task's agent, that works in three steps and stops
+after each (what the task calls; where each service's data comes from; build what was decided).
+
