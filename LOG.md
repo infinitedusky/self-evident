@@ -6203,3 +6203,15 @@ in the settings."
   to a service the app does not have is refused.
 - **The Data step**: Services this task calls (each with its calls), where its data comes from, each mock in full.
 
+### A service is described as it really is, not by how to mock it (Sandy, 2026-11-21)
+
+Filling in a service she was asked for "the variables that point the app at it" and told to type
+`SIXTYFOUR_BASE_URL={container_url}`. "container_url? what is that?" Then: "we don't have a mock yet, so the service
+we should be defining the way the service actually works, not how to mock it. That way if we need the connection, if
+we need to record anything …". So a service's form asks three facts about the real connection: its real address, the
+name of the app's setting that holds that address, and the name of the setting that holds its key. From those the
+engine works out the rest (`envFromConnection`): the address setting is given the mock's or the recorder's address
+(as a container reaches this computer, or as this computer does, read from how the app is started and kept as an
+agent set it), and the key setting a made-up key, so the real key never reaches a mock. No placeholder is shown to a
+person; an agent still sets the variables directly. A mock's card says the connection in a line.
+

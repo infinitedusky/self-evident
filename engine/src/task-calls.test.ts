@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
 import { app, workspace } from './db/schema.js'
 import { newId } from './ids.js'
-import { addService, getMock, giveRecording, listMocks } from './mocks.js'
+import { addService, getMock, giveRecording, listMocks, setMockDetails } from './mocks.js'
 import { createProject } from './projects.js'
 import { addCall, addTaskService, callsPrompt, coverCall, linkCall, listCalls, listTaskServices, removeCall, removeTaskService, setCalls } from './task-calls.js'
 
@@ -37,6 +37,19 @@ describe.skipIf(!reachable)('what a task calls', () => {
     expect((await listMocks(appId)).map((m) => m.name)).toEqual(['Flags', 'Scanner'])
     expect((await removeTaskService(issueId, 'flags')).map((s) => s.key)).toEqual([]) // off the task; still one of the app's
     expect((await listMocks(appId)).map((m) => m.name)).toEqual(['Flags', 'Scanner'])
+  })
+
+  it('is described by how the app really connects to it; pointing the app at a mock is worked out from that', async () => {
+    const m = await addService(appId, { name: 'Payments', upstream: 'https://api.payments.example', addressSetting: 'PAYMENTS_BASE_URL', keySetting: 'PAYMENTS_API_KEY' })
+    expect(m.connection).toEqual({ address: 'https://api.payments.example', addressSetting: 'PAYMENTS_BASE_URL', keySetting: 'PAYMENTS_API_KEY', others: {} })
+    expect(m.env).toEqual({ PAYMENTS_BASE_URL: '{url}', PAYMENTS_API_KEY: 'mock-key' }) // the mock's address where the app looks for the real one, and a made-up key
+    await expect(setMockDetails(appId, 'payments', { addressSetting: 'https://not-a-name' })).rejects.toThrow('is not a setting\'s name')
+    // What an agent set stays: a setting of its own, and the way a container reaches this computer.
+    await setMockDetails(appId, 'payments', { env: { PAYMENTS_BASE_URL: '{container_url}', PAYMENTS_API_KEY: 'mock-key', PAYMENTS_ACCOUNT: 'acct_sample' } })
+    const renamed = await setMockDetails(appId, 'payments', { addressSetting: 'PAYMENTS_URL' })
+    expect(renamed.env).toEqual({ PAYMENTS_URL: '{container_url}', PAYMENTS_API_KEY: 'mock-key', PAYMENTS_ACCOUNT: 'acct_sample' })
+    expect(renamed.connection).toMatchObject({ addressSetting: 'PAYMENTS_URL', keySetting: 'PAYMENTS_API_KEY', others: { PAYMENTS_ACCOUNT: 'acct_sample' } })
+    expect((await setMockDetails(appId, 'payments', { keySetting: null })).env).toEqual({ PAYMENTS_URL: '{container_url}', PAYMENTS_ACCOUNT: 'acct_sample' })
   })
 
   it('lists its calls under their service, however the service is written, and each is on the mock from then on', async () => {

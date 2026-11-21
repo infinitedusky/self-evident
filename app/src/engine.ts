@@ -353,6 +353,7 @@ export interface Mock {
   recordedAt: string | null; minedAt: string | null
   /** A newer recording waits to be mined. */ unmined: { at: string; files: number } | null
   /** Where it is in use now: a prototype, main, a smoke test. */ usedBy: string[]
+  /** How the app connects to the real service: its address, and the names of the app's settings that hold the address and the key. others: further settings a mock is given (a workflow id). */ connection: { address: string | null; addressSetting: string | null; keySetting: string | null; others: Record<string, string> }
   /** What it can answer with, kept apart from its server, and which of them it serves unless a run says otherwise. */ data: MockData[]; defaultData: string | null
   /** The calls it answers, and the data files that are no endpoint's (engine/src/mock-endpoints.ts). */ endpoints: MockEndpoint[]; unlinked: string[]
 }
@@ -516,8 +517,8 @@ export const engine = {
   /** The app's mock library (Settings › Mocks). */
   mocks: (appId: string) => call<Mock[]>('GET', `/apps/${appId}/mocks`),
   /** A service that needs a mock: raised, with the real service's address and the variables that point the app at it. */
-  raiseMock: (appId: string, body: { name: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; issueId?: string; needs?: Mock['needs'] }) => call<Mock>('POST', `/apps/${appId}/mocks`, body),
-  updateMock: (appId: string, key: string, body: { name?: string; standsInFor?: string; upstream?: string | null; env?: Record<string, string> }) => call<Mock>('PATCH', `/apps/${appId}/mocks/${key}`, body),
+  raiseMock: (appId: string, body: { name: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; addressSetting?: string; keySetting?: string; issueId?: string; needs?: Mock['needs'] }) => call<Mock>('POST', `/apps/${appId}/mocks`, body),
+  updateMock: (appId: string, key: string, body: { name?: string; standsInFor?: string; upstream?: string | null; env?: Record<string, string>; addressSetting?: string | null; keySetting?: string | null }) => call<Mock>('PATCH', `/apps/${appId}/mocks/${key}`, body),
   /** files: its real responses are deleted from this computer with it. */
   removeMock: (appId: string, key: string, files = false) => call<{ removed: boolean; files: number }>('DELETE', `/apps/${appId}/mocks/${key}${files ? '?files=1' : ''}`),
   /** A service's real responses on this computer: what is there, never what is in it. */

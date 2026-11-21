@@ -124,6 +124,7 @@ export interface MockView {
   recordedAt: string | null; minedAt: string | null
   /** The newest recording, when it is newer than what the mock was mined from: waiting to be mined. */ unmined: { at: string; files: number } | null
   usedBy: string[]
+  /** How the app connects to the real service: its address, and the app's settings that hold the address and the key. */ connection: Connection
   /** What it can answer with (mock-data.ts), and which of them it serves unless a run says otherwise. */ data: DataView[]; defaultData: string | null
   /** The calls it answers, each with the real response behind it (or none: taken from the code) and its files in the default data; and the data files that are no endpoint's. */ endpoints: EndpointView[]; unlinked: string[]
 }
@@ -138,7 +139,7 @@ async function viewOf(m: Row, ident?: (id: string) => Promise<{ id: string; iden
     provenance: prov(m), note: provenanceNote(m), needs: (m.needs as Needs | null) ?? null,
     issue: m.issueId && ident ? await ident(m.issueId) : null,
     recordedAt: m.recordedAt?.toISOString() ?? null, minedAt: m.minedAt?.toISOString() ?? null, unmined, usedBy: usedBy(m.appId, m.key),
-    data, defaultData: m.defaultData,
+    connection: connectionOf(m), data, defaultData: m.defaultData,
     ...endpointViews(cleanEndpoints(m.endpoints), m.recording ?? newest?.dir ?? null, (data.find((d) => d.isDefault) ?? data.find((d) => d.kind !== 'real'))?.files.map((f) => f.path) ?? [], m.upstream),
   }
 }
@@ -193,6 +194,39 @@ export async function needsRecording(appId: string, i: { key?: string; name: str
   return getMock(appId, key).then(({ fileText: _f, ...v }) => v)
 }
 
+/**
+ * How the app connects to the real service, said as it is (Sandy, 2026-11-21: "we don't have a mock yet, so the
+ * service we should be defining the way the service actually works, not how to mock it"): its real address, the
+ * app's setting that holds that address, and the setting that holds its key. Pointing the app at a mock is the
+ * engine's own business, worked out from these: the address setting is given the mock's (or the recorder's) address,
+ * and the key setting a made-up key, so the real one is never sent to a mock. Kept as the mock's variables (`env`),
+ * which is what a run reads; `others` are the rest of them (a workflow id an agent set).
+ */
+export interface Connection { address: string | null; addressSetting: string | null; keySetting: string | null; others: Record<string, string> }
+const PLACE = /\{(container_url|url)\}/
+export function connectionOf(m: Pick<Row, 'upstream' | 'env'>): Connection {
+  const env = m.env ?? {}
+  const addressSetting = Object.keys(env).find((k) => PLACE.test(env[k])) ?? null
+  const keySetting = Object.keys(env).find((k) => k !== addressSetting && /KEY|TOKEN|SECRET|PASSWORD/i.test(k)) ?? null
+  return { address: m.upstream ?? null, addressSetting, keySetting, others: Object.fromEntries(Object.entries(env).filter(([k]) => k !== addressSetting && k !== keySetting)) }
+}
+const SETTING = /^[A-Za-z_][A-Za-z0-9_]*$/
+/** The variables a run is given, from the connection as a person states it. An app tried in containers reaches this computer by another name than localhost: read from how the app is started, and kept as it was once an agent has set it. */
+async function envFromConnection(appId: string, old: Record<string, string>, i: { addressSetting?: string | null; keySetting?: string | null }): Promise<Record<string, string>> {
+  const was = connectionOf({ upstream: null, env: old })
+  const env: Record<string, string> = { ...was.others }
+  const addr = i.addressSetting === undefined ? was.addressSetting : i.addressSetting?.trim() || null
+  const key = i.keySetting === undefined ? was.keySetting : i.keySetting?.trim() || null
+  for (const [what, v] of [['address', addr], ['key', key]] as const) if (v && !SETTING.test(v)) throw new PlanError(`"${v}" is not a setting's name: the ${what} setting is the name of a variable the app reads, such as ${what === 'address' ? 'VENDOR_BASE_URL' : 'VENDOR_API_KEY'}`)
+  if (addr) {
+    let place = was.addressSetting ? old[was.addressSetting] : null
+    if (!place) { const [a] = await db.select({ setup: app.setup }).from(app).where(eq(app.id, appId)); place = /docker|compose|container|make\s+up/i.test(JSON.stringify(a?.setup ?? {})) ? '{container_url}' : '{url}' }
+    env[addr] = place
+  }
+  if (key) env[key] = (was.keySetting && old[was.keySetting]) || 'mock-key'
+  return env
+}
+
 /** Two names that are the same service written differently: SixtyFour, sixty_four, "Sixty Four". */
 const alike = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 /** One of the app's services, by its key or by its name however it is written. None: the app has no such service. */
@@ -210,18 +244,20 @@ export async function serviceFor(appId: string, given: string): Promise<Row | nu
  * when it is named, its mock built later by a task. A name that is one already there, written differently, is
  * refused with the one it is.
  */
-export async function addService(appId: string, i: { name: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; issueId?: string | null; why?: string }, actor = 'user') {
+export async function addService(appId: string, i: { name: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; addressSetting?: string | null; keySetting?: string | null; issueId?: string | null; why?: string }, actor = 'user') {
   const name = clip(i.name, 80)
   if (!standInKey(name)) throw new PlanError('a service needs a name')
   const there = await serviceFor(appId, name)
   if (there) throw new PlanError(`that is already one of this app's services, as "${there.name}"`)
-  return needsRecording(appId, { name, standsInFor: i.standsInFor, upstream: i.upstream, env: i.env, issueId: i.issueId ?? null, needs: i.why ? { why: i.why } : undefined }, actor)
+  const env = i.addressSetting || i.keySetting ? await envFromConnection(appId, i.env ?? {}, i) : i.env
+  return needsRecording(appId, { name, standsInFor: i.standsInFor, upstream: i.upstream, env, issueId: i.issueId ?? null, needs: i.why ? { why: i.why } : undefined }, actor)
 }
 
 /** Its name, what it stands in for, the real service's address and the variables that point the app at it: the person's to set on the page. */
-export async function setMockDetails(appId: string, key: string, i: { name?: string; standsInFor?: string; upstream?: string | null; env?: Record<string, string> }, actor = 'user') {
+export async function setMockDetails(appId: string, key: string, i: { name?: string; standsInFor?: string; upstream?: string | null; env?: Record<string, string>; addressSetting?: string | null; keySetting?: string | null }, actor = 'user') {
   const m = await rowOf(appId, key)
   if (!m) throw new PlanError(`this app has no mock "${key}"`)
+  if (i.addressSetting !== undefined || i.keySetting !== undefined) i = { ...i, env: await envFromConnection(appId, i.env ?? m.env ?? {}, i) }
   const workspaceId = await workspaceOf(appId)
   const set = { ...(i.name ? { name: clip(i.name, 80) } : {}), ...(i.standsInFor !== undefined ? { standsInFor: clip(i.standsInFor, 200) } : {}), ...(i.upstream !== undefined ? { upstream: i.upstream ? cleanUrl(i.upstream) : null } : {}), ...(i.env ? { env: cleanEnv(i.env) } : {}), updatedAt: new Date() }
   await db.transaction(async (tx) => {

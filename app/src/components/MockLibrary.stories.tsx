@@ -103,3 +103,16 @@ export const AddingAService: Story = {
     await expect(await c.findByText('Payments (sample)')).toBeInTheDocument()
   },
 }
+/** A service is described by how the app really connects to it: its real address, and the names of the app's settings that hold the address and the key. Nothing about mocks is asked. */
+export const TheRealConnection: Story = {
+  beforeEach: withEngine({ mocks: [mocks[0]] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('FRAUD_SCAN_BASE_URL')).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Edit' }))
+    await expect(c.getByRole('textbox', { name: 'Its real address' })).toHaveValue('https://api.fraud-scan.example')
+    await expect(c.getByRole('textbox', { name: "The app's setting that holds that address" })).toHaveValue('FRAUD_SCAN_BASE_URL')
+    await expect(c.getByRole('textbox', { name: /The app's setting that holds its key/ })).toHaveValue('FRAUD_SCAN_API_KEY')
+    await expect(canvasElement.textContent).not.toContain('container_url')
+  },
+}
