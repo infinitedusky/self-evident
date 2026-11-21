@@ -26,7 +26,7 @@ describe('screens', () => {
 
 describe('the Screens step', () => {
   it('is between the sketches and the mockups, on, in a new app\'s workflow', () => {
-    expect(DEFAULT_STEPS.map((s) => s.key)).toEqual(['idea', 'research', 'sketch', 'screen', 'mockup', 'prototype', 'brief'])
+    expect(DEFAULT_STEPS.map((s) => s.key)).toEqual(['idea', 'research', 'sketch', 'screen', 'mockup', 'data', 'prototype', 'brief'])
     expect(DEFAULT_STEPS.find((s) => s.key === 'screen')).toEqual({ key: 'screen', on: true, required: false })
   })
   it('a workflow saved before it gets it off, right before its mockups: tasks under way are not asked to do or skip it', () => {

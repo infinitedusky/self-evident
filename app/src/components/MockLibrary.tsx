@@ -7,7 +7,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge, type Tone } from './Badge'
 import { Md } from './Md'
-import { engine, type Mock, type MockData } from '../engine'
+import { MockPlaces } from './MockPlaces'
+import { engine, type Mock, type MockChange, type MockData } from '../engine'
 
 const STATUS: Record<Mock['status'], { label: string; tone: Tone }> = {
   mined: { label: 'From a real response', tone: 'ok' },
@@ -25,34 +26,38 @@ const envText = (e: Record<string, string>) => Object.entries(e).map(([k, v]) =>
 const envOf = (t: string) => Object.fromEntries(t.split('\n').map((l) => l.trim()).filter((l) => l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()]))
 const err = (e: unknown) => String((e as Error)?.message ?? e)
 
-export function MockLibrary({ appId }: { appId: string }) {
+export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's Data step: its own table, and what it adds is the task's. None: the app's settings. */ issueId?: string }) {
   const [list, setList] = useState<Mock[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [tick, setTick] = useState(0) // the table is read again when a mock or its data changes
   const reload = () => engine.mocks(appId).then((l) => { setList(l); setError(null) }).catch((e) => setError(err(e)))
   useEffect(() => { setList(null); void reload() }, [appId]) // eslint-disable-line react-hooks/exhaustive-deps
-  const act = async (fn: () => Promise<unknown>) => { try { await fn(); await reload() } catch (e) { setError(err(e)) } }
+  const act = async (fn: () => Promise<unknown>) => { try { await fn(); await reload(); setTick((t) => t + 1) } catch (e) { setError(err(e)) } }
   return (
     <section className="panel" data-component="MockLibrary">
       <div className="task-block-head">
-        <h2 style={{ margin: 0 }}>Mocks</h2>
-        <button className="btn quiet small" onClick={() => setAdding(!adding)}>Add a service</button>
+        <h2 style={{ margin: 0 }}>{issueId ? 'This task\'s data' : 'Mocks'}</h2>
+        {issueId && <button className="btn quiet small" onClick={() => setAdding(!adding)}>Add a service</button>}
       </div>
       <p className="faint settings-desc" style={{ margin: '6px 0 12px', maxWidth: 760 }}>
-        One mock for each outside service this app calls. Its prototypes, smoke tests and main are pointed at the mock instead of the real service.
+        {issueId ? 'What stands outside the app is mocked, so this task can be tried without calling it. The app\'s own code is what goes live: only its settings point at the mock.' : 'One mock for each outside service this app calls. Its prototypes, smoke tests and main are pointed at the mock instead of the real service. A mock is made in a task, on its Data step, and kept here for the next one.'}{' '}
         A mock is a small server that behaves as the service does, and, kept apart from it, the data it answers with: a real response as it is, a fake of one, or invented data.
         A real response stays on this computer. Only faked or invented data is ever exported or shared.
       </p>
-      {adding && <AddService onAdd={(b) => act(async () => { await engine.raiseMock(appId, b); setAdding(false) })} onCancel={() => setAdding(false)} />}
+      <h3 className="mock-h3">{issueId ? 'Where its data comes from, for this task' : 'Where the data comes from, unless a task says otherwise'}</h3>
+      <MockPlaces key={tick} appId={appId} issueId={issueId} />
+      <h3 className="mock-h3">{issueId ? 'The app\'s mocks' : 'Each mock'}</h3>
+      {adding && <AddService onAdd={(b) => act(async () => { await engine.raiseMock(appId, { ...b, issueId }); setAdding(false) })} onCancel={() => setAdding(false)} />}
       {error && <div className="empty bad" style={{ marginBottom: 12 }}>{error}</div>}
       {list === null ? (error ? null : <p className="muted">Loading…</p>)
-        : !list.length ? <div className="empty">No mocks yet. One is added when a task's agent finds a service the change depends on, or here with Add a service.</div>
-        : <div className="mock-list">{list.map((m) => <MockCard key={m.key} appId={appId} mock={m} act={act} />)}</div>}
+        : !list.length ? <div className="empty">{issueId ? 'No mocks yet. Start this step with the agent and it names the outside services the change depends on, or add one with Add a service.' : 'No mocks yet. One is made on a task\'s Data step, when its change depends on an outside service.'}</div>
+        : <div className="mock-list">{list.map((m) => <MockCard key={m.key} appId={appId} issueId={issueId} mock={m} act={act} />)}</div>}
     </section>
   )
 }
 
-function MockCard({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn: () => Promise<unknown>) => Promise<void> }) {
+function MockCard({ appId, issueId, mock: m, act }: { appId: string; issueId?: string; mock: Mock; act: (fn: () => Promise<unknown>) => Promise<void> }) {
   const [editing, setEditing] = useState(false)
   const [live, setLive] = useState(false)
   const s = STATUS[m.status]
@@ -100,7 +105,7 @@ function MockCard({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn
         </div>
       )}
 
-      {m.status !== 'needs_recording' && <DataSets appId={appId} mock={m} act={act} />}
+      {m.status !== 'needs_recording' && <DataSets appId={appId} issueId={issueId} mock={m} act={act} />}
 
       {m.status !== 'needs_recording' && (
         <details className="mock-provenance">
@@ -109,6 +114,7 @@ function MockCard({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn
           {m.files.length > 0 && <p className="faint" style={{ fontSize: 13 }}>Files: {m.files.map((f) => `${f.path} (${size(f.bytes)})`).join(', ')}. Run with <code>{m.cmd}</code>.</p>}
         </details>
       )}
+      <History appId={appId} mockKey={m.key} />
       {editing && <EditMock mock={m} onSave={(b) => act(async () => { await engine.updateMock(appId, m.key, b); setEditing(false) })} onCancel={() => setEditing(false)} />}
       <div className="row">
         {m.status !== 'needs_recording' && !realDefault && <a className="btn quiet small" href={engine.mockExportUrl(appId, m.key)} download>Export</a>}
@@ -135,7 +141,7 @@ function GiveFiles({ what, onGive }: { what?: string; onGive: (files: File[]) =>
 }
 
 /** What the mock can answer with: each set, what it is, and which it serves unless a run says otherwise. */
-function DataSets({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn: () => Promise<unknown>) => Promise<void> }) {
+function DataSets({ appId, issueId, mock: m, act }: { appId: string; issueId?: string; mock: Mock; act: (fn: () => Promise<unknown>) => Promise<void> }) {
   const realDefault = m.data.some((d) => d.isDefault && d.kind === 'real')
   return (
     <div className="mock-data" data-component="MockDataSets">
@@ -155,8 +161,45 @@ function DataSets({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn
           ))}
         </ul>
       )}
+      <ProvideData mock={m} onReal={(files) => act(() => engine.giveRecording(appId, m.key, files))} onInvented={(files, name) => act(() => engine.provideMockData(appId, m.key, files, name, issueId))} />
       {realDefault && <p className="mock-data-warn">Its default is a real response, so runs here show real data and it cannot be exported or shared. Make a faked set the default to export it.</p>}
     </div>
+  )
+}
+
+/** A file of data from the person: one that may hold real data is kept here and faked; one they state holds nothing real is used as it is. */
+function ProvideData({ mock: m, onReal, onInvented }: { mock: Mock; onReal: (files: File[]) => Promise<void>; onInvented: (files: File[], name: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false)
+  const [files, setFiles] = useState<File[]>([])
+  const [name, setName] = useState('')
+  const [nothingReal, setNothingReal] = useState(false)
+  const [busy, setBusy] = useState(false)
+  if (!open) return <div className="row"><button className="btn quiet small" onClick={() => setOpen(true)}>Add data from a file</button></div>
+  const go = async () => { setBusy(true); try { await (nothingReal ? onInvented(files, name.trim() || files[0].name) : onReal(files)); setOpen(false); setFiles([]); setName(''); setNothingReal(false) } finally { setBusy(false) } }
+  return (
+    <div className="mock-edit" data-component="ProvideData">
+      <label>A response {m.name} sent, or data in its shape<input type="file" multiple onChange={(e) => setFiles([...(e.target.files ?? [])])} /></label>
+      <label className="mock-check"><input type="checkbox" checked={nothingReal} onChange={(e) => setNothingReal(e.target.checked)} /> I wrote this, or made it up: it holds nothing real</label>
+      {nothingReal
+        ? <><label>What to call it<input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Someone with nothing found" /></label><p className="faint" style={{ margin: 0, fontSize: 13 }}>It is used as it is, and may go to a reviewer. Where a real response of {m.name} is on this computer it is checked against it; otherwise your word is all there is, and its note says so.</p></>
+        : <p className="faint" style={{ margin: 0, fontSize: 13 }}>It is treated as real: kept on this computer, never exported, and {m.issue ? 'the task\'s agent makes a fake of it' : 'faked once a task takes this mock up'}.</p>}
+      <div className="row"><button className="btn small" disabled={!files.length || busy} onClick={go}>{busy ? 'Adding…' : 'Add it'}</button><button className="btn quiet small" onClick={() => setOpen(false)}>Cancel</button></div>
+    </div>
+  )
+}
+
+/** What has changed on a mock: the app's own choices, and what tasks did to it. Read when it is opened. */
+function History({ appId, mockKey }: { appId: string; mockKey: string }) {
+  const [list, setList] = useState<MockChange[] | null>(null)
+  return (
+    <details className="mock-provenance" data-component="MockHistory" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open && !list) void engine.mockHistory(appId, mockKey).then(setList).catch(() => setList([])) }}>
+      <summary>History</summary>
+      {!list ? <p className="muted">Loading…</p> : !list.length ? <p className="muted">Nothing has changed yet.</p> : (
+        <ul className="mock-history">
+          {list.map((c, i) => <li key={i}><span className="faint">{new Date(c.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span> {c.what} <span className="faint">· {c.by}{c.issue ? <>, for <Link to={`/tasks/${c.issue.id}`}>{c.issue.identifier}</Link></> : ', in the app\'s settings'}</span></li>)}
+        </ul>
+      )}
+    </details>
   )
 }
 

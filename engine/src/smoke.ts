@@ -49,6 +49,7 @@ import { morePorts, straySays, straysOf } from './ports.js'
 import { fixedOf, fixedSays } from './addresses.js'
 import { databaseExists, databaseUrl, dropDatabase, listScenarios, rebuild, type PrototypeDb } from './prototype-data.js'
 import { homeRepo } from './workbench.js'
+import { plansFor } from './mock-places.js'
 import { dropUse, isGiven, libraryStandIns, noteRecording, noteUse } from './mocks.js'
 import { mock } from './db/schema.js'
 import { startRecorder, type Recording } from './recorder.js'
@@ -288,7 +289,7 @@ export const smokeOwed = (criteria: Criterion[]) => smokeChecks(criteria).filter
 /** Of those, how many can be done now: the ones on the pull request wait for it to exist. */
 export const smokeReady = (criteria: Criterion[], hasPr: boolean) => smokeChecks(criteria).filter((c) => c.mark === 'todo' && (c.when === 'here' || (c.when === 'pr' && hasPr))).length
 
-export interface Mocks { /** Its stand-ins' key (stand-ins.ts). */ id: string; recorders: Recording[]; on: { key: string; name: string; how: 'mock' | 'assumed' | 'recording' }[] }
+export interface Mocks { /** Its stand-ins' key (stand-ins.ts). */ id: string; recorders: Recording[]; on: { key: string; name: string; /** real: a real response served as it is. recording: the real service, kept as it comes. */ how: 'mock' | 'assumed' | 'real' | 'recording' }[] }
 const running = new Map<string, { proc: ChildProcess; log: string[]; given?: number[]; stray?: { at: number; ports: number[] }; stop?: { cmd: string; cwd: string; env: Record<string, string> }; mocks?: Mocks }>() // by task and set-up
 const runKey = (issueId: string, key: string) => `${issueId}:${key}`
 const alive = (issueId: string, key: string) => { const m = running.get(runKey(issueId, key)); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
@@ -412,10 +413,13 @@ export async function smokeDataOf(issueId: string, setupKey?: string | null) {
  */
 export async function mocksFor(appId: string, issueId: string, key: string, path: string, live: string[], base: Record<string, string>) {
   const id = `smoke-${issueId}-${key}`.toLowerCase()
-  const lib = await libraryStandIns(appId, live)
+  // The task's table says which data each mock serves in a smoke test, and which services it calls for real (mock-places.ts).
+  const plans = await plansFor(appId, 'smoke', issueId)
+  live = [...new Set([...live, ...plans.record])]
+  const lib = await libraryStandIns(appId, live, plans.pick)
   const ports = await startStandIns(id, lib, path, { ...process.env, ...base })
   const env: Record<string, string> = envOf(id, lib, ports, path)
-  const held: Mocks = { id, recorders: [], on: lib.map((s) => ({ key: s.key, name: s.name, how: s.mock === 'assumed' ? 'assumed' as const : 'mock' as const })) }
+  const held: Mocks = { id, recorders: [], on: lib.map((s) => ({ key: s.key, name: s.name, how: s.data?.kind === 'real' ? 'real' as const : s.mock === 'assumed' ? 'assumed' as const : 'mock' as const })) }
   try {
     for (const k of live) {
       const [m] = await db.select().from(mock).where(and(eq(mock.appId, appId), eq(mock.key, k)))
@@ -448,8 +452,8 @@ export async function endMocks(issueId: string, m: Mocks | undefined, mine = tru
 }
 /** The words the task's agent is given to mine a recording: also what "Mine it" on the Mocks page sends. */
 /** What a mock's server is, said the same to whoever writes one. */
-const THE_SERVER = (name: string) => `Write its server (stdlib only where you can): it serves on $PORT, answers the calls the app makes to ${name} the way ${name} does, and reads what it answers with from the folder $MOCK_DATA, which holds the response files under the same names as the real response's folder (the real ones, or a fake of them: it must work with either, and holds no data of its own). Read the code that calls ${name} first, and above all how the app matches an answer to what it sent: a service that answers a batch (ids, emails or an order carried back, row for row) must be answered for exactly what this request sent, so the server remembers what each job was sent and builds that job's answer from it, giving each thing sent a row of the data (the row whose key matches it, else one by turn, so everything sent is answered) with the sent ids and emails written over the data's. A link it sends to fetch next points back at the server. It accepts any key`
-const THE_DATA = (key: string, dir: string) => `Then its data, with the mock_data tool, mock ${key}: op fake, recording ${dir}, and a plan naming what is structure (keep: the columns or keys the app reads as fixed words, a status, a category, a platform; keepHosts: the sites whose address the app reads; text: any column that is prose about the person). It refuses while a real value is still in the fake, and says which: change the plan and fake again. Then add the people the real response did not have (someone with nothing found, someone with one of each, someone with a lot) with op write on the fake's own name, giving all its files, the added rows invented in the same shape and marked as sample data.`
+const THE_SERVER = (name: string) => `Write its server (stdlib only where you can): it serves on $PORT, answers the calls the app makes to ${name} the way ${name} does, and reads what it answers with from the folder $MOCK_DATA, which holds the response files under the same names as the real response's folder (the real ones, or a fake of them: it must work with either, and holds no data of its own). A fake may have more files beside those, added by hand in the same shape: it reads every file there of the kind it serves, not one by name. Read the code that calls ${name} first, and above all how the app matches an answer to what it sent: a service that answers a batch (ids, emails or an order carried back, row for row) must be answered for exactly what this request sent, so the server remembers what each job was sent and builds that job's answer from it, giving each thing sent a row of the data (the row whose key matches it, else one by turn, so everything sent is answered) with the sent ids and emails written over the data's. A link it sends to fetch next points back at the server. It accepts any key`
+const THE_DATA = (key: string, dir: string) => `Then its data, with the mock_data tool, mock ${key}: op fake, recording ${dir}, and a plan naming what is structure (keep: the columns or keys the app reads as fixed words, a status, a category, a platform; keepHosts: the sites whose address the app reads; text: any column that is prose about the person). It refuses while a real value is still in the fake, and says which: change the plan and fake again. Then add the people the real response did not have (someone with nothing found, someone with one of each, someone with a lot) as a file of their own beside the fake's: op write on the fake's own name, giving the fake's files as they are and yours (the same header, rows invented in the same shape and marked as sample data). A fake made again from a newer real response keeps your file and replaces only its own.`
 const NEVER = 'Never copy a real response, or a value from one, into the server, the data you write, the repository or a message.'
 /** What the task's agent is asked, once a live run of a service has been recorded. */
 export const MINE_IT = (name: string, key: string, dir: string, exchanges: number) => `A live run of ${name} was recorded: ${exchanges} call${exchanges === 1 ? '' : 's'}, kept raw in ${dir} (outside every repository; it holds a real person's data). Make the app's mock of ${name} from it now:\n1. Read every file there. Each call is NNN.meta.json (method, address, status; secrets were never kept) with its NNN.request.* and NNN.response.* bodies.\n2. ${THE_SERVER(name)}.\n3. Save it with the mock tool: op save, key ${key}, status mined, recording ${dir}, the server's files, cmd, env, and provenance (minedFrom in counts and never naming the person, real, invented, covers, cannotShow; changed when it replaces one).\n4. ${THE_DATA(key, dir)}\n${NEVER}`
@@ -506,7 +510,7 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
   proc.on('exit', (code) => { log.push(`exited${code === null ? '' : ` with ${code}`}`) })
   running.set(runKey(t.id, key), { proc, log, given: [port, ...more.ports], mocks: mocks.held, ...(setup.stop ? { stop: { cmd: setup.stop, cwd: path, env } } : {}) })
-  noteUse(mocks.held.id, a.id, `Smoke test: ${name}`, mocks.held.on.filter((m) => m.how !== 'recording').map((m) => m.key))
+  noteUse(mocks.held.id, a.id, `Smoke test: ${name}`, mocks.held.on.filter((m) => m.how !== 'recording').map((m) => m.key), mocks.held.on.filter((m) => m.how === 'recording' || m.how === 'real').map((m) => m.key))
   if (old) await db.update(smokeRun).set({ path, sha: head, port, updatedAt: new Date() }).where(eq(smokeRun.id, old.id))
   else await db.insert(smokeRun).values({ id: newId('run').replace(/^run_/, 'smoke_'), appId: a.id, issueId: t.id, setup: key, path, sha: head, port })
   await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'smoke.started', payload: { sha: head, port, setup: named.key, ...(mocks.held.on.length ? { mocks: mocks.held.on } : {}) } }))

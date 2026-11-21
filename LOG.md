@@ -6046,3 +6046,32 @@ Not done here: the task's table (where a prototype's, a smoke test's and a revie
 default table; the Data step in a task; record-and-fake as one step; a person providing an invented file on the page
 (the engine takes it, `saveData` with `stated`; there is no control for it yet). Not tried on a real response.
 
+### Built second: the table, the app's defaults and the Data step (2026-11-21)
+
+- **The table** (`engine/src/mock-places.ts`, `mock_choice`, `mock.places`): for each mock and each place (prototype,
+  smoke test, reviewer) a source: `live` (the real service, every run; a smoke run goes through the recorder),
+  `replay` (the newest real response as it is; with none yet a smoke run is live once, then replays), `fake` (a fake
+  of the newest; one made with a plan is made again by itself when a newer real response comes in), `data` (a named
+  set) or `default`. The app's defaults are on the mock; a task's own choices are rows of their own, and a task with
+  none follows the app. `planOf` says what a place gets; `plansFor` is what a run uses.
+- **Runs follow it**: a prototype (its task's row; main uses the app's default for a prototype), a smoke test (its
+  live services from the table are recorded as a "Record it" run is). A prototype set to `live` leaves the mock out
+  and reaches the service by the app's own settings; that is not recorded, since only a smoke run has the recorder.
+- **Nothing real leaves**: `live` and `replay` cannot be chosen for a reviewer, nor a set that is a real response; a
+  default that is real blocks the reviewer's copy and says why; a prototype that holds real data (or calls the real
+  service) cannot be shared by a public link (`realIn`, checked in `share.ts`).
+- **The Data step** (`steps.ts`, key `data`, right before the prototype, optional): the task's own table and the
+  app's mocks, there before any agent is asked, since the table needs none. Skipped, the app's defaults are used.
+  On in a new app's workflow; off in one saved before it existed, as Screens was, so no task under way is asked.
+- **Settings › Mocks** is now the app's defaults: the default table, each mock with its data and its history; a
+  service is added on a task's Data step, not there, so there is always an agent to build it.
+- **A file from the person** ("Add data from a file" on a mock): one that may hold real data is kept as a real
+  response and faked; one they state holds nothing real is used as it is, and its note says it was stated.
+- **History** (`mockHistory`): every change to a mock from the event stream, the app's own (no task) told apart from
+  a task's, on the mock's card.
+- **Found while testing**: a fake made again threw away people added to it by hand. They are now files of their own
+  beside the fake's (`provenance.fakedFiles`), kept when it is made again; servers read every file in `$MOCK_DATA`.
+
+Not done here: record-and-fake still needs the task's agent for the first fake (it makes the plan: what is
+structure); a prototype cannot record. Not tried on a real response or a real app.
+

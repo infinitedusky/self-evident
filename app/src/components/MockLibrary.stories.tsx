@@ -25,3 +25,5 @@ export const NoTask: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[2], i
 export const DefaultIsReal: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], defaultData: 'real', data: mocks[0].data.map((d) => ({ ...d, isDefault: d.key === 'real' })) }] }) }
 /** A server with no data of its own yet. */
 export const NoDataYet: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], defaultData: null, data: [] }] }) }
+/** On a task's Data step: the task's own table first, then the app's mocks, where a service can be added for this task. */
+export const OnATask: Story = { args: { issueId: 'iss_sample2' } }

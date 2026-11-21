@@ -40,6 +40,7 @@ const CHECKED_AGAINST = 5
 
 export interface DataProvenance {
   /** The real response it is, or was made from. */ from?: { at: string; given: boolean; files: number }
+  /** faked: the files the faker made. Any other file in the set was added by hand, and is kept when the fake is made again. */ fakedFiles?: string[]
   /** faked: what the faker did. */ faked?: { replaced: number; kept: number; byKind: Record<string, number> }
   /** Values left as they were because they are structure. */ kept?: string[]
   /** When it was last checked against a real response, and how much of one. */ checked?: { at: string; files: number; values: number; against: number }
@@ -145,7 +146,10 @@ export async function fakeData(appId: string, key: string, i: { recording?: stri
     keep: strings(given.keep, 200), keepValues: strings(given.keepValues, 200), keepHosts: strings(given.keepHosts, 60), text: strings(given.text, 200),
     ...(given.varyCounts === false ? { varyCounts: false } : {}), salt: typeof old?.plan?.salt === 'string' ? old.plan.salt : randomBytes(16).toString('hex'),
   }
-  const { files, report } = fake(recorded, plan)
+  const { files: made, report } = fake(recorded, plan)
+  // What was added to the fake by hand (the person with nothing found, in a file of their own) stays when it is made again.
+  const was = old ? provOf(old).fakedFiles ?? Object.keys(old.files) : []
+  const files = { ...(old ? Object.fromEntries(Object.entries(old.files).filter(([p]) => !was.includes(p) && !(p in made))) : {}), ...made }
   const refused = keptRefused(report.keptValues)
   if (refused.length) throw new PlanError(`the plan keeps values that are someone's, not structure: ${refused.slice(0, 10).map((r) => `"${r.slice(0, 30)}"`).join(', ')}. Take their column out of keep`)
   const r = checkLeaks(recorded, Object.entries(files).map(([path, text]) => ({ path, text })), report.keptValues)
@@ -153,7 +157,7 @@ export async function fakeData(appId: string, key: string, i: { recording?: stri
   const { keptValues, ...rest } = report
   const data = await keep(m, dk, {
     name: clip(i.name, 80) || old?.name || 'Faked from the real response', kind: 'faked', files: cleanData(files), recording: dir, plan: plan as Record<string, unknown>,
-    provenance: { from, faked: { replaced: report.replaced, kept: report.kept, byKind: report.byKind }, kept: keptValues.slice(0, 200), checked: { at: new Date().toISOString(), files: r.read.files, values: r.read.values, against: 1 } },
+    provenance: { from, fakedFiles: Object.keys(made).sort(), faked: { replaced: report.replaced, kept: report.kept, byKind: report.byKind }, kept: keptValues.slice(0, 200), checked: { at: new Date().toISOString(), files: r.read.files, values: r.read.values, against: 1 } },
     issueId: i.issueId,
   }, actor, old)
   return { data, report: rest }
