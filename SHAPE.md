@@ -835,6 +835,9 @@ Details and sources in `research/`.
     written by the task's agent, so it can do what the service needs, such as answering for exactly what it was
     sent). The data is what it answers with, read from `$MOCK_DATA`, and is the only thing that changes between
     places.
+  - **Services are the app's.** The outside services an app connects to are set up in its settings, each with
+    its mock; a task picks the ones it calls and lists its calls under each, so one service is never two by a slip
+    of the keyboard. One found in the code that the settings lack is added there.
   - **A response belongs to an endpoint.** A mock lists the calls the app makes to its service; each data file
     is exactly one endpoint's, by its name; and each endpoint says whether a real response is behind it (given, or
     recorded) or its shape is taken from the code that calls it.

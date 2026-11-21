@@ -475,6 +475,13 @@ export const taskCall = pgTable('task_call', {
   createdAt: createdAt(),
 }, (t) => [uniqueIndex('task_call_key').on(t.issueId, t.service, t.method, t.path)])
 
+// A service a task calls (task-calls.ts): the task's link to one of the app's outside services, which is its mock
+// row. There from when the service is named for the task, before any call of it is listed.
+export const taskService = pgTable('task_service', {
+  id: id(), issueId: text('issue_id').notNull().references(() => issue.id, { onDelete: 'cascade' }), mockId: text('mock_id').notNull().references(() => mock.id, { onDelete: 'cascade' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('task_service_key').on(t.issueId, t.mockId)])
+
 // A task's own choice of where one mock's data comes from in one place (mock-places.ts). No row: the app's default.
 export const MOCK_PLACES = ['prototype', 'smoke', 'review'] as const
 export const MOCK_SOURCES = ['default', 'live', 'replay', 'fake', 'data'] as const

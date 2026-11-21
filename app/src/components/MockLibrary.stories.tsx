@@ -63,7 +63,7 @@ export const RemovingAMock: Story = {
     await userEvent.click(await c.findByRole('button', { name: 'Remove the mock' }))
     await expect(await c.findByRole('checkbox', { name: /Also delete its 2 real responses from this computer/ })).toBeChecked()
     await userEvent.click(c.getByRole('button', { name: 'Remove it' }))
-    await expect(await c.findByText(/No mocks yet/)).toBeInTheDocument()
+    await expect(await c.findByText(/No services yet/)).toBeInTheDocument()
   },
 }
 /** Its real responses on this computer, each deletable: one of them was left by a mock that was removed, and says it is not used. */
@@ -87,5 +87,19 @@ export const EditingAnEndpoint: Story = {
     await userEvent.click(c.getByRole('button', { name: 'Save the call' }))
     await expect(await c.findByText('Running, then completed, then failed (sample)')).toBeInTheDocument()
     await expect(c.getAllByRole('button', { name: /^Remove the call/ })).toHaveLength(4)
+  },
+}
+/** A service added in the app's settings: its name and what it is. One already there, written differently, is refused. */
+export const AddingAService: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Add a service' }))
+    await userEvent.type(c.getByRole('textbox', { name: 'The service' }), 'breach-LOOKUP (sample)')
+    await userEvent.click(c.getByRole('button', { name: 'Add' }))
+    await expect(await c.findByText('that is already one of this app\'s services, as "Breach lookup (sample)"')).toBeInTheDocument()
+    await userEvent.clear(c.getByRole('textbox', { name: 'The service' }))
+    await userEvent.type(c.getByRole('textbox', { name: 'The service' }), 'Payments (sample)')
+    await userEvent.click(c.getByRole('button', { name: 'Add' }))
+    await expect(await c.findByText('Payments (sample)')).toBeInTheDocument()
   },
 }

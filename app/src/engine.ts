@@ -376,6 +376,8 @@ export interface TaskCall {
   /** answered: an endpoint of the service's mock answers it. no_endpoint: the mock is there and lacks this call. no_mock: the service has no mock. */ state: 'answered' | 'no_endpoint' | 'no_mock'
   mock: { key: string; name: string; status: Mock['status'] } | null; endpoint: MockEndpoint | null; /** Tied by hand, not found by its method and path. */ linked: boolean
 }
+/** One of the app's services that a task calls, with the task's calls of it. A service is set up in the app's settings; a task picks from those. */
+export interface TaskService { key: string; name: string; standsInFor: string; status: Mock['status']; /** The task an agent found it for, in the code. */ foundFor: string | null; calls: TaskCall[] }
 /** Where a mock's data comes from in each place a task runs (engine/src/mock-places.ts). */
 export type MockPlace = 'prototype' | 'smoke' | 'review'
 /** live: the real service. replay: the newest real response as it is. fake: a fake of it. data: one named set. default: the app's (for the app: the mock's default data). */
@@ -527,6 +529,12 @@ export const engine = {
   /** Ask the agent of the task the newest recording was made for to mine it. */
   mineMock: (appId: string, key: string) => call<{ asked: string }>('POST', `/apps/${appId}/mocks/${key}/mine`),
   /** Where its exported files are downloaded from: the server, its invented data and its provenance. */
+  /** The services a task calls, each with its calls. */
+  taskServices: (issueId: string) => call<TaskService[]>('GET', `/issues/${issueId}/services`),
+  /** One of the app's services, named for a task. */
+  addTaskService: (issueId: string, service: string) => call<TaskService[]>('POST', `/issues/${issueId}/services`, { service }),
+  /** Off the task's list, with the task's calls of it. The app's service stays. */
+  removeTaskService: (issueId: string, service: string) => call<TaskService[]>('DELETE', `/issues/${issueId}/services/${service}`),
   /** What a task calls outside the app, each with what answers it. */
   taskCalls: (issueId: string) => call<TaskCall[]>('GET', `/issues/${issueId}/calls`),
   addTaskCall: (issueId: string, body: { service: string; method: string; path: string; what?: string }) => call<TaskCall[]>('POST', `/issues/${issueId}/calls`, body),

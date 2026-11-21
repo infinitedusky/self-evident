@@ -33,7 +33,7 @@ import { prototypeSkill, skillOptions, stepSkillPrompt, withStepDefaults, type S
 import { accountEnv, accountPrefix, configDirFor, configDirOf } from './account.js'
 import { listRecordings, recordingsDir, recordingsPrompt } from './recordings.js'
 import { placesPrompt, placesTable } from './mock-places.js'
-import { callsPrompt, listCalls } from './task-calls.js'
+import { callsPrompt, listTaskServices } from './task-calls.js'
 import { listMocks, mocksPrompt } from './mocks.js'
 import { issueDetail, PlanError, projectGraph } from './projects.js'
 import { putAwayIds } from './apps.js'
@@ -682,7 +682,7 @@ async function open(sessionId: string): Promise<Live> {
   // The app's mock library (mocks.ts), for every agent that builds a prototype or works on a task: it checks it before it builds.
   const mockList = s.appId && (proto || ownTask) ? await listMocks(s.appId).catch(() => []) : []
   const mockPlaces = s.appId && mockList.length ? placesPrompt(await placesTable(s.appId, ownTask?.id ?? proto?.issueId ?? null).catch(() => [])) : ''
-  const taskCalls = ownTask ? callsPrompt(await listCalls(ownTask.id).catch(() => [])) : ''
+  const taskCalls = ownTask ? callsPrompt(await listTaskServices(ownTask.id).catch(() => []), mockList.map((m) => ({ key: m.key, name: m.name }))) : ''
   // Where the work came from, word for word (origins.ts): the ticket, for every agent on a task, an idea, a project or one of their steps.
   const about = s.subjectRef as SubjectRef | null
   const origin = originPrompt(await originOf(ownTaskId ? { issueId: ownTaskId } : proto?.issueId ? { issueId: proto.issueId } : about?.checkOf ? { issueId: about.checkOf } : about?.issueId ? { issueId: about.issueId } : proto?.ideaId ? { ideaId: proto.ideaId } : about?.ideaId ? { ideaId: about.ideaId } : about?.projectId ? { projectId: about.projectId } : {}).catch(() => null))

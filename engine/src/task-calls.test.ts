@@ -6,9 +6,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
 import { app, workspace } from './db/schema.js'
 import { newId } from './ids.js'
-import { getMock, giveRecording } from './mocks.js'
+import { addService, getMock, giveRecording, listMocks } from './mocks.js'
 import { createProject } from './projects.js'
-import { addCall, callsPrompt, coverCall, linkCall, listCalls, removeCall, setCalls } from './task-calls.js'
+import { addCall, addTaskService, callsPrompt, coverCall, linkCall, listCalls, listTaskServices, removeCall, removeTaskService, setCalls } from './task-calls.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -26,49 +26,51 @@ describe.skipIf(!reachable)('what a task calls', () => {
   })
   afterAll(async () => { rmSync(home, { recursive: true, force: true }); for (const k of ['RECORDINGS_HOME', 'MOCKS_HOME']) delete process.env[k]; await pool.end() })
 
-  it('is listed by the agent from the brief and the code, and the person can add what it missed', async () => {
+  it('is made to one of the app\'s services, set up in its settings; one written differently is the same one, and one the app lacks is refused', async () => {
+    await addService(appId, { name: 'Scanner', standsInFor: 'A scanning vendor (sample)' })
+    await expect(addService(appId, { name: 'scan_ner' })).rejects.toThrow('already one of this app\'s services, as "Scanner"')
+    await expect(addCall(issueId, { service: 'Flags', method: 'GET', path: '/decide' }, 'user')).rejects.toThrow('"Flags" is not one of this app\'s services')
+    await expect(addTaskService(issueId, 'Flags')).rejects.toThrow('add it in Settings')
+    // An agent that finds one in the code sets it up in the app's settings, and says it was for this task.
+    const found = await addTaskService(issueId, 'Flags', 'agent', { create: true, what: 'Feature flags (sample)' })
+    expect(found).toMatchObject([{ key: 'flags', name: 'Flags', standsInFor: 'Feature flags (sample)', status: 'needs_recording', calls: [] }])
+    expect((await listMocks(appId)).map((m) => m.name)).toEqual(['Flags', 'Scanner'])
+    expect((await removeTaskService(issueId, 'flags')).map((s) => s.key)).toEqual([]) // off the task; still one of the app's
+    expect((await listMocks(appId)).map((m) => m.name)).toEqual(['Flags', 'Scanner'])
+  })
+
+  it('lists its calls under their service, however the service is written, and each is on the mock from then on', async () => {
     const listed = await setCalls(issueId, [
-      { service: 'Scanner', method: 'post', path: '/runs', what: 'A job id for the people sent' },
-      { service: 'Scanner', method: 'GET', path: '/runs/{id}/status', what: 'Running, then completed' },
-      { service: 'Flags', method: 'GET', path: '/decide', what: 'Whether the new page is on' },
+      { service: 'scanner', method: 'post', path: '/runs', what: 'A job id for the people sent' },
+      { service: 'SCANNER', method: 'GET', path: '/runs/{id}/status', what: 'Running, then completed' },
     ])
-    expect(listed.map((c) => [c.serviceName, c.method, c.path, c.state, c.by])).toEqual([['Flags', 'GET', '/decide', 'no_mock', 'agent'], ['Scanner', 'POST', '/runs', 'no_mock', 'agent'], ['Scanner', 'GET', '/runs/{id}/status', 'no_mock', 'agent']])
+    expect(listed.map((c) => [c.serviceName, c.service, c.method, c.path, c.state, c.by])).toEqual([['Scanner', 'scanner', 'POST', '/runs', 'answered', 'agent'], ['Scanner', 'scanner', 'GET', '/runs/{id}/status', 'answered', 'agent']])
+    expect((await getMock(appId, 'scanner')).endpoints.map((e) => [e.key, e.method, e.path, e.real])).toEqual([['runs', 'POST', '/runs', null], ['runs-status', 'GET', '/runs/{id}/status', null]])
     const mine = await addCall(issueId, { service: 'Scanner', method: 'GET', path: '/runs/{id}/cost', what: 'What the run cost' }, 'user')
-    expect(mine.find((c) => c.path === '/runs/{id}/cost')).toMatchObject({ by: 'user', state: 'no_mock' })
-    // The agent sets its list again without the flags call: its own row goes, the person's stays.
+    expect(mine.find((c) => c.path === '/runs/{id}/cost')).toMatchObject({ by: 'user', state: 'answered', endpoint: { key: 'runs-cost' } })
+    // The agent sets its list again without the cost call: its own rows are as they were, the person's stays.
     const again = await setCalls(issueId, [{ service: 'Scanner', method: 'POST', path: '/runs' }, { service: 'Scanner', method: 'GET', path: '/runs/{id}/status', what: 'Running, then completed, then failed' }])
     expect(again.map((c) => c.path)).toEqual(['/runs', '/runs/{id}/status', '/runs/{id}/cost'])
-    expect(again[0].what).toBe('A job id for the people sent') // what it needs is kept when it is not said again
+    expect(again[0].what).toBe('A job id for the people sent')
     expect(again[1].what).toBe('Running, then completed, then failed')
-    await expect(addCall(issueId, { service: '', method: 'GET', path: '/x' })).rejects.toThrow('needs the service')
+    expect(await listTaskServices(issueId)).toMatchObject([{ key: 'scanner', calls: [{ path: '/runs' }, { path: '/runs/{id}/status' }, { path: '/runs/{id}/cost' }] }])
   })
 
-  it('makes the service\'s mock for a call that has none, with that call as its first endpoint', async () => {
-    const [start] = await listCalls(issueId)
-    const { calls, mock } = await coverCall(issueId, start.id)
-    expect(mock).toMatchObject({ key: 'scanner', name: 'Scanner', status: 'needs_recording', issue: { id: issueId }, endpoints: [{ key: 'runs', method: 'POST', path: '/runs', real: null }] })
-    expect(calls[0]).toMatchObject({ state: 'answered', mock: { key: 'scanner', status: 'needs_recording' }, endpoint: { key: 'runs', real: null }, linked: false })
-    expect(calls[1]).toMatchObject({ state: 'no_endpoint', mock: { key: 'scanner' }, endpoint: null }) // the mock is there now, and lacks this call
-  })
-
-  it('adds a call to a mock that lacks it, and a real response given for that call is behind it', async () => {
-    const status = (await listCalls(issueId))[1]
-    const { calls } = await coverCall(issueId, status.id)
-    expect(calls[1]).toMatchObject({ state: 'answered', endpoint: { key: 'runs-status', method: 'GET', path: '/runs/{id}/status', what: 'Running, then completed, then failed', real: null } })
-    expect((await coverCall(issueId, status.id)).mock.endpoints).toHaveLength(2) // asked twice, added once
+  it('has a real response given for one call behind that call', async () => {
     await giveRecording(appId, 'scanner', [{ name: 'a poll.json', bytes: new TextEncoder().encode('{"status":"completed"}') }], 'user', 'runs-status')
     expect((await listCalls(issueId))[1].endpoint).toMatchObject({ key: 'runs-status', real: { how: 'given' } })
-    expect((await getMock(appId, 'scanner')).endpoints.map((e) => [e.key, e.real?.how ?? null])).toEqual([['runs', null], ['runs-status', 'given']])
+    expect((await coverCall(issueId, (await listCalls(issueId))[1].id)).mock.endpoints).toHaveLength(3) // already on the mock: nothing is added twice
   })
 
-  it('can be tied by hand to an endpoint its path does not find, and taken off the list', async () => {
+  it('can be tied by hand to another of the mock\'s endpoints, and taken off the list', async () => {
     const cost = (await listCalls(issueId))[2]
     await expect(linkCall(issueId, cost.id, 'nothing')).rejects.toThrow('has no endpoint "nothing"')
     expect((await linkCall(issueId, cost.id, 'runs-status'))[2]).toMatchObject({ state: 'answered', linked: true, endpoint: { key: 'runs-status' } })
-    expect((await linkCall(issueId, cost.id, null))[2]).toMatchObject({ state: 'no_endpoint', linked: false })
-    const prompt = callsPrompt(await listCalls(issueId))
-    expect(prompt).toContain('Scanner: GET /runs/{id}/status — needs: Running, then completed, then failed [answered by its mock, from a real response (given)]')
-    expect(prompt).toContain('Scanner: GET /runs/{id}/cost — needs: What the run cost [its mock lacks this call]')
+    expect((await linkCall(issueId, cost.id, null))[2]).toMatchObject({ state: 'answered', linked: false, endpoint: { key: 'runs-cost' } })
+    const prompt = callsPrompt(await listTaskServices(issueId), [{ key: 'scanner', name: 'Scanner' }, { key: 'flags', name: 'Flags' }])
+    expect(prompt).toContain("The app's services, set up in its settings: Scanner (scanner), Flags (flags)")
+    expect(prompt).toContain('  - GET /runs/{id}/status — needs: Running, then completed, then failed [a real response behind it (given)]')
+    expect(prompt).toContain('  - GET /runs/{id}/cost — needs: What the run cost [from the code, no real response]')
     expect((await removeCall(issueId, cost.id)).map((c) => c.path)).toEqual(['/runs', '/runs/{id}/status'])
   })
 })

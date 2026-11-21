@@ -7,7 +7,7 @@
  */
 import { fakeData, removeData, saveData, setDefaultData, useReal } from './mock-data.js'
 import { setChoice, type Choice } from './mock-places.js'
-import { addCall, listCalls, removeCall, setCalls } from './task-calls.js'
+import { addCall, addTaskService, listTaskServices, removeCall, removeTaskService, setCalls } from './task-calls.js'
 import { getMock, listMocks, needsRecording, saveMock } from './mocks.js'
 import { mainStatus, setMainAddress, setMainStandIn, startMain, stopMain } from './main-running.js'
 import { LEARN_DOCS, listLearning, setLearning, SUMMARY_MAX } from './learn.js'
@@ -263,12 +263,14 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         if (!a.status) throw new PlanError('save needs status: mined or assumed')
         return saveMock(appId, { key: a.key, name: a.name, standsInFor: a.standsInFor, upstream: a.upstream, status: a.status, cmd: a.cmd ?? '', env: a.env ?? {}, files: a.files ?? {}, provenance: a.provenance ?? {}, recording: a.recording, issueId: a.issueId ?? null, endpoints: a.endpoints }, actor)
       })),
-      def('task_calls', 'What a task calls outside the app, listed on its Data step before any mock is thought of: each call is a service, a method, a path and what this task needs from it. Each says where it stands: answered by an endpoint of that service\'s mock (with a real response behind it, or from the code), a mock that lacks this call, or no mock at all. op "list": the task\'s calls. op "set": the whole list as you read it from the brief and the code (calls: [{service, method, path, what}]); your own earlier rows are replaced, the person\'s stay. op "add": one more. op "remove": one, by id.', {
-        op: z.enum(['list', 'set', 'add', 'remove']), issueId: z.string().describe('The task'), id: z.string().optional(),
+      def('task_calls', 'What a task calls outside the app, listed on its Data step before any mock is thought of: each call is a service, a method, a path and what this task needs from it. Each says where it stands: answered by an endpoint of that service\'s mock (with a real response behind it, or from the code), a mock that lacks this call, or no mock at all. op "list": the task\'s services, each with its calls. op "service": a service this task calls (service: one of the app\'s, by its name or key; one the code calls that the app\'s settings do not have is set up there, with what: what it is). A call is only ever made to one of the app\'s services: name it exactly as it is there. op "drop_service": a service this task does not call after all, off its list with its calls. op "set": the whole list as you read it from the brief and the code (calls: [{service, method, path, what}]); your own earlier rows are replaced, the person\'s stay. op "add": one more. op "remove": one, by id.', {
+        op: z.enum(['list', 'service', 'drop_service', 'set', 'add', 'remove']), issueId: z.string().describe('The task'), id: z.string().optional(), service: z.string().optional(), what: z.string().optional().describe('op service, for one the app does not have: what the service is, in a line'),
         calls: z.array(z.object({ service: z.string().describe('The outside service, by the name its mock has or will have: SixtyFour'), method: z.string(), path: z.string().describe('From the service\'s address, with {id} for a part that varies; in words where it is reached by a link the service sends'), what: z.string().optional().describe('What this task needs from it: what must come back, and the cases it has to show') })).optional(),
       }, async (a) => tryIt(async () => {
         await ownIssue(a.issueId)
-        if (a.op === 'list') return listCalls(a.issueId)
+        if (a.op === 'list') return listTaskServices(a.issueId)
+        if (a.op === 'service') { if (!a.service) throw new PlanError('service needs service: its name'); return addTaskService(a.issueId, a.service, actor, { create: true, what: a.what }) }
+        if (a.op === 'drop_service') { if (!a.service) throw new PlanError('drop_service needs service'); return removeTaskService(a.issueId, a.service, actor) }
         if (a.op === 'set') return setCalls(a.issueId, a.calls ?? [], actor)
         if (a.op === 'add') { if (!a.calls?.[0]) throw new PlanError('add needs calls: one call'); return addCall(a.issueId, a.calls[0], actor) }
         if (!a.id) throw new PlanError('remove needs id')

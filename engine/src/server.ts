@@ -96,9 +96,9 @@ import { linearFor } from './linear-home.js'
 import { CATALOGUE } from './catalogue.js'
 import { removeData, renameData, saveData, setDefaultData } from './mock-data.js'
 import { placesTable, setChoice, type Choice } from './mock-places.js'
-import { addCall, clearCalls, coverCall, editCall, linkCall, listCalls, removeCall, type NewCall } from './task-calls.js'
+import { addCall, addTaskService, clearCalls, coverCall, editCall, linkCall, listCalls, listTaskServices, removeCall, removeTaskService, type NewCall } from './task-calls.js'
 import { editEndpoint, listReal, mockHistory, recordingsFor, removeReal, rowOf } from './mocks.js'
-import { exportMock, getMock, giveRecording, listMocks, needsRecording, recordingsOfService, removeMock, setMockDetails, type Needs } from './mocks.js'
+import { exportMock, getMock, giveRecording, listMocks, addService, needsRecording, recordingsOfService, removeMock, setMockDetails, type Needs } from './mocks.js'
 import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role, cleanJobs, cleanStepSkills, describeJobs, usableSkills, writeSharedSkill, type AppJobs } from './skills.js'
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
@@ -446,7 +446,7 @@ export function buildApp(bus: EventBus) {
   // The app's mocks (mocks.ts): Settings › Mocks.
   api.get('/apps/:id/mocks', async (c) => { try { return c.json(await listMocks(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   api.get('/apps/:id/mocks/:key', async (c) => { try { return c.json(await getMock(c.req.param('id'), c.req.param('key'))) } catch (err) { return planError(c, err, 404) } })
-  api.post('/apps/:id/mocks', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { name?: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; issueId?: string; needs?: Needs }; return c.json(await needsRecording(c.req.param('id'), { name: String(b.name ?? ''), standsInFor: b.standsInFor, upstream: b.upstream, env: b.env, issueId: b.issueId ?? null, needs: b.needs }, 'user'), 201) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/mocks', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { name?: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; issueId?: string; needs?: Needs }; return c.json(await addService(c.req.param('id'), { name: String(b.name ?? ''), standsInFor: b.standsInFor, upstream: b.upstream, env: b.env, issueId: b.issueId ?? null, why: b.needs?.why }, 'user'), 201) } catch (err) { return planError(c, err) } })
   api.patch('/apps/:id/mocks/:key', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { name?: string; standsInFor?: string; upstream?: string | null; env?: Record<string, string> }; return c.json(await setMockDetails(c.req.param('id'), c.req.param('key'), b, 'user')) } catch (err) { return planError(c, err) } })
   api.delete('/apps/:id/mocks/:key', async (c) => { try { return c.json(await removeMock(c.req.param('id'), c.req.param('key'), 'user', { files: c.req.query('files') === '1' })) } catch (err) { return planError(c, err) } })
   // What can be changed or taken away on a mock, piece by piece: its real responses on this computer, an endpoint, a data set's name.
@@ -474,6 +474,10 @@ export function buildApp(bus: EventBus) {
     return c.json({ files: r.files, asked: r.issueId }, 201)
   } catch (err) { return planError(c, err) } })
   // What a task calls outside the app (task-calls.ts): its Data step starts from these.
+  // The services a task calls, each one of the app's (set up in its settings), with the task's calls of it.
+  api.get('/issues/:id/services', async (c) => { try { return c.json(await listTaskServices(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
+  api.post('/issues/:id/services', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { service?: string }; return c.json(await addTaskService(c.req.param('id'), String(b.service ?? ''), 'user'), 201) } catch (err) { return planError(c, err) } })
+  api.delete('/issues/:id/services/:service', async (c) => { try { return c.json(await removeTaskService(c.req.param('id'), c.req.param('service'), 'user')) } catch (err) { return planError(c, err) } })
   api.get('/issues/:id/calls', async (c) => { try { return c.json(await listCalls(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/issues/:id/calls', async (c) => { try { return c.json(await addCall(c.req.param('id'), await c.req.json() as NewCall, 'user'), 201) } catch (err) { return planError(c, err) } })
   api.delete('/issues/:id/calls', async (c) => { try { return c.json(await clearCalls(c.req.param('id'), 'user')) } catch (err) { return planError(c, err) } })
