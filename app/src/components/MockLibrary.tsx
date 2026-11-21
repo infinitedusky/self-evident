@@ -23,8 +23,6 @@ const KIND: Record<MockData['kind'], { label: string; tone: Tone }> = {
 }
 const day = (d: string | null) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null)
 const size = (n: number) => (n < 1024 ? `${n} B` : n < 1_048_576 ? `${Math.round(n / 1024)} KB` : `${(n / 1_048_576).toFixed(1)} MB`)
-const envText = (e: Record<string, string>) => Object.entries(e).map(([k, v]) => `${k}=${v}`).join('\n')
-const envOf = (t: string) => Object.fromEntries(t.split('\n').map((l) => l.trim()).filter((l) => l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()]))
 const err = (e: unknown) => { const m = String((e as Error)?.message ?? e); try { return (JSON.parse(m) as { error?: string }).error ?? m } catch { return m } }
 
 export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's Data step: its own table, and what it adds is the task's. None: the app's settings. */ issueId?: string }) {
@@ -85,6 +83,7 @@ function MockCard({ appId, issueId, mock: m, act }: { appId: string; issueId?: s
         <Badge tone={s.tone} dot>{s.label}</Badge>
       </div>
       {m.standsInFor && <p style={{ margin: 0 }}>Stands in for {m.standsInFor}.</p>}
+      <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }} data-component="MockConnection">{m.connection.address ? <>The real service is at <code>{m.connection.address}</code>. </> : 'Its real address is not set. '}{m.connection.addressSetting ? <>The app finds it by <code>{m.connection.addressSetting}</code>{m.connection.keySetting ? <>, with its key in <code>{m.connection.keySetting}</code></> : null}.</> : 'The app\'s setting that holds its address is not set: an agent fills it in from the code when it builds the mock.'}</p>
       <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }}>
         {m.status === 'mined' ? <>Recorded {day(m.recordedAt) ?? 'on a date not kept'}{m.issue ? <> for <Link to={`/tasks/${m.issue.id}`}>{m.issue.identifier}</Link></> : null} · built {day(m.minedAt)}</>
           : m.status === 'assumed' ? <>Written from a guess, before any recording. It shows only that the code handles the guess.</>
@@ -111,7 +110,7 @@ function MockCard({ appId, issueId, mock: m, act }: { appId: string; issueId?: s
                     <button className="btn small" onClick={() => act(async () => { await engine.startLiveSmoke(m.issue!.id, [m.key]); setLive(false) })}>Start the live run</button>
                     <button className="btn quiet small" onClick={() => setLive(false)}>Cancel</button></div>
                 : <div className="row"><span className="faint">Or record the whole exchange:</span><button className="btn quiet small" onClick={() => setLive(true)}>Record it: a live smoke run of {m.issue.identifier}</button></div>)
-                : <p className="faint" style={{ margin: 0 }}>To record it live instead, give it {[!m.upstream && 'the real service\'s address', !Object.keys(m.env).length && 'the variables that point the app at it'].filter(Boolean).join(' and ')}.</p>}
+                : <p className="faint" style={{ margin: 0 }}>To record it live instead, give it {[!m.upstream && 'its real address', !m.connection.addressSetting && 'the app\'s setting that holds that address'].filter(Boolean).join(' and ')} (Edit).</p>}
             </>}
         </div>
       )}
@@ -319,39 +318,45 @@ function History({ appId, mockKey }: { appId: string; mockKey: string }) {
 }
 
 /** A service the app connects to, added in its settings: its name and what it is. What a live run needs is tucked away. A name that is one already there, written differently, is refused. */
-function AddAppService({ onAdd, onCancel }: { onAdd: (b: { name: string; standsInFor?: string; upstream?: string; env?: Record<string, string> }) => Promise<void>; onCancel: () => void }) {
+function AddAppService({ onAdd, onCancel }: { onAdd: (b: { name: string; standsInFor?: string; upstream?: string; addressSetting?: string; keySetting?: string }) => Promise<void>; onCancel: () => void }) {
   const [name, setName] = useState('')
   const [what, setWhat] = useState('')
   const [upstream, setUpstream] = useState('')
-  const [env, setEnv] = useState('')
+  const [addr, setAddr] = useState('')
+  const [key, setKey] = useState('')
   return (
     <div className="mock-edit" style={{ marginBottom: 12 }} data-component="AddAppService">
       <label>The service<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="its name, e.g. SixtyFour" /></label>
       <label>What it is<input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="in a line, e.g. the vendor that scans for exposure" /></label>
-      <details className="mock-provenance">
-        <summary>For recording a live run</summary>
-        <div className="mock-edit">
-          <label>The real service's address<input className="mono" value={upstream} onChange={(e) => setUpstream(e.target.value)} placeholder="https://api.vendor.com" /></label>
-          <label>The variables that point the app at it<textarea className="mono" rows={2} value={env} onChange={(e) => setEnv(e.target.value)} placeholder="VENDOR_BASE_URL={container_url}" /></label>
-        </div>
-      </details>
-      <p className="faint" style={{ margin: 0, fontSize: 13 }}>Its mock is built later, by a task that calls it. A real response is given on the call it answers, on that task's Data step.</p>
-      <div className="row"><button className="btn small" disabled={!name.trim()} onClick={() => void onAdd({ name: name.trim(), ...(what.trim() ? { standsInFor: what.trim() } : {}), ...(upstream.trim() ? { upstream: upstream.trim() } : {}), ...(env.trim() ? { env: envOf(env) } : {}) })}>Add</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
+      <Connection upstream={upstream} setUpstream={setUpstream} addr={addr} setAddr={setAddr} keyName={key} setKeyName={setKey} />
+      <div className="row"><button className="btn small" disabled={!name.trim()} onClick={() => void onAdd({ name: name.trim(), ...(what.trim() ? { standsInFor: what.trim() } : {}), ...(upstream.trim() ? { upstream: upstream.trim() } : {}), ...(addr.trim() ? { addressSetting: addr.trim() } : {}), ...(key.trim() ? { keySetting: key.trim() } : {}) })}>Add</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
     </div>
   )
 }
 
-function EditMock({ mock: m, onSave, onCancel }: { mock: Mock; onSave: (b: { standsInFor: string; upstream: string | null; env: Record<string, string> }) => void; onCancel: () => void }) {
+function EditMock({ mock: m, onSave, onCancel }: { mock: Mock; onSave: (b: { standsInFor: string; upstream: string | null; addressSetting: string | null; keySetting: string | null }) => void; onCancel: () => void }) {
   const [standsInFor, setStandsInFor] = useState(m.standsInFor)
-  const [upstream, setUpstream] = useState(m.upstream ?? '')
-  const [env, setEnv] = useState(envText(m.env))
+  const [upstream, setUpstream] = useState(m.connection.address ?? '')
+  const [addr, setAddr] = useState(m.connection.addressSetting ?? '')
+  const [key, setKey] = useState(m.connection.keySetting ?? '')
   return (
     <div className="mock-edit">
-      <label>Stands in for<input value={standsInFor} onChange={(e) => setStandsInFor(e.target.value)} placeholder="the service and version, e.g. Vendor workflow 3d50b61e, results CSV" /></label>
-      <label>The real service's address<input className="mono" value={upstream} onChange={(e) => setUpstream(e.target.value)} placeholder="https://api.vendor.com: a live run is recorded through it" /></label>
-      <label>The variables that point the app at it<textarea className="mono" rows={3} value={env} onChange={(e) => setEnv(e.target.value)} placeholder={'one a line, e.g.\nVENDOR_BASE_URL={container_url}\n{url} is the mock on this computer; {container_url} is it as a container reaches it'} /></label>
-      <div className="row"><button className="btn small" onClick={() => onSave({ standsInFor, upstream: upstream.trim() || null, env: envOf(env) })}>Save</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
+      <label>What it is<input value={standsInFor} onChange={(e) => setStandsInFor(e.target.value)} placeholder="the service and version, e.g. Vendor workflow 3d50b61e, results CSV" /></label>
+      <Connection upstream={upstream} setUpstream={setUpstream} addr={addr} setAddr={setAddr} keyName={key} setKeyName={setKey} />
+      {Object.keys(m.connection.others).length > 0 && <p className="faint" style={{ margin: 0, fontSize: 13 }}>A mock is also given {Object.entries(m.connection.others).map(([k, v]) => `${k}=${v}`).join(', ')}, set by the agent that built it.</p>}
+      <div className="row"><button className="btn small" onClick={() => onSave({ standsInFor, upstream: upstream.trim() || null, addressSetting: addr.trim() || null, keySetting: key.trim() || null })}>Save</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
     </div>
+  )
+}
+/** How the app connects to the real service: said as it is. Pointing the app at a mock is worked out from these. */
+function Connection({ upstream, setUpstream, addr, setAddr, keyName, setKeyName }: { upstream: string; setUpstream: (v: string) => void; addr: string; setAddr: (v: string) => void; keyName: string; setKeyName: (v: string) => void }) {
+  return (
+    <>
+      <label>Its real address<input className="mono" value={upstream} onChange={(e) => setUpstream(e.target.value)} placeholder="https://api.vendor.com" /></label>
+      <label>The app's setting that holds that address<input className="mono" value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="its name, e.g. VENDOR_BASE_URL" /></label>
+      <label>The app's setting that holds its key <span className="faint">(if it has one)</span><input className="mono" value={keyName} onChange={(e) => setKeyName(e.target.value)} placeholder="its name, e.g. VENDOR_API_KEY: never the key itself" /></label>
+      <p className="faint" style={{ margin: 0, fontSize: 13 }}>These describe the real service. When a mock is used, the app's address setting is pointed at the mock and its key setting given a made-up key, so the real key never reaches a mock. Left empty, an agent fills them in from the code.</p>
+    </>
   )
 }
 
