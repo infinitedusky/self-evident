@@ -1113,6 +1113,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const bus = new EventBus()
   await bus.start()
   const recovered = await runner.recover()
+  setInterval(() => { void runner.reclaim().catch((err) => console.warn(`[engine] could not look for lost builds: ${String(err?.message ?? err).slice(0, 200)}`)) }, 60_000).unref() // a build whose result was lost is made again within a minute or two
   const moved = await migrateStorybookSetup() // the Storybook command and URL, under the integration since 2026-11-09
   if (moved) console.log(`storybook setup moved under the integration for ${moved} app(s)`)
   const stranded = await recoverPlanning()

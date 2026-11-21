@@ -5979,3 +5979,20 @@ Not done: SixtyFour's mock itself (raise it on CEB-90's task with `SIXTYFOUR_BAS
 CSV on the Mocks page; the address `https://api.sixtyfour.ai` is only needed for a live run); the smoke test's own page
 does not show which mocks a run has on (the engine reports it); the Mocks page is not yet linked from a task's
 prototype; mocks in review environments (step 2) and the gate (step 3). Not seen end to end on a real app.
+
+
+## A build the engine lost track of is made again (Sandy, 2026-11-21, from BON-267: "the engine lost the result")
+
+A probe's agent finished and wrote its report. The database connection was reset as the engine recorded it, saying
+so failed the same way, and the sub-task said "running" with nothing behind it for an hour. Only a restart looked
+for such builds.
+
+- **Every minute the engine looks for a build the database calls under way that it is not running** and makes it
+  again, as it does at the start: the run is marked interrupted, the build is queued, and the agent carries on from
+  its own session (`Runner.reclaim`). The build's log says "the engine lost track of this; it is being made again".
+- A build that fails to start has whatever it had running ended first.
+
+Mine to choose: it is made again by itself and not put to the person, as after a restart; a minute of quiet before
+a build is called lost. Not done: the cause, a database statement that fails once when the proxy resets a
+connection, is not retried, so the same loss costs a minute or two and the agent's last turn again; a planning run
+or a conversation lost the same way is not looked for.

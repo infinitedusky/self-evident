@@ -628,6 +628,25 @@ describe.skipIf(!reachable)('runner', () => {
     expect((await runs()).slice(-3).map((e) => [e.type, (e.payload as { ok?: boolean }).ok])).toEqual([['task.testing', undefined], ['task.tested', true], ['task.test_ran', undefined]])
   })
 
+  it('reclaim() makes again a build the engine lost track of while it was up, and leaves alone one it is running', async () => {
+    const { project: p, subIssues: phases } = await createProject({ appId, name: 'lost', issues: [one('T', [{ key: 'l', title: 'L', files: ['l.txt'] }])] })
+    await db.update(project).set({ status: 'running' }).where(eq(project.id, p.id))
+    await db.update(build).set({ status: 'running', attempt: 1, updatedAt: new Date(Date.now() - 5 * 60_000) }).where(eq(build.issueId, phases[0].id))
+    await db.insert(run).values({ id: newId('run'), appId, issueId: phases[0].id, attempt: 1, kind: 'build', agent: 'claude-code', status: 'working', agentSessionId: 'sess-lost' })
+    await git(repoPath, ['branch', p.integrationBranch!, 'main'])
+    let resumed: string | undefined
+    const runner = new Runner({ execute: async (i) => { resumed = i.resumeSessionId; return commits('l')(i) }, sessionsMax: 2 })
+    ;(runner as unknown as { active: Map<string, AbortController> }).active.set(phases[0].id, new AbortController())
+    expect(await runner.reclaim()).not.toContain(phases[0].id) // it is running it: not lost
+    ;(runner as unknown as { active: Map<string, AbortController> }).active.delete(phases[0].id)
+    expect(await runner.reclaim(10 * 60_000)).not.toContain(phases[0].id) // changed too lately to call lost
+    expect(await runner.reclaim()).toContain(phases[0].id)
+    await until(cleaned(p.id))
+    expect(resumed).toBe('sess-lost')
+    const types = (await db.select().from(event).where(eq(event.issueId, phases[0].id))).map((e) => e.type)
+    expect(types).toContain('build.interrupted')
+  })
+
   it('recover() re-queues builds that were running, marks their runs interrupted, and resumes the agent session', async () => {
     const { project: p, subIssues: phases } = await createProject({ appId, name: 'recovery', issues: [one('T', [{ key: 'r', title: 'R', files: ['r.txt'] }])] })
     await db.update(project).set({ status: 'running' }).where(eq(project.id, p.id))

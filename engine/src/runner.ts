@@ -189,6 +189,7 @@ export class Runner {
           if (x.status === 'ready' && !this.active.has(x.id)) {
             this.active.set(x.id, new AbortController())
             this.launch(x.id, p.id).catch(async (err) => {
+              this.active.get(x.id)?.abort() // whatever it had running is ended: reclaim() makes the build again
               this.active.delete(x.id)
               // Saying so must not fail in its turn: nobody awaits this, so a second failure here (the database gone) had nowhere to go.
               try { await this.emit({ ...(await this.context(p.id)).base, issueId: x.id, type: 'build.error', payload: { error: String(err?.message ?? err) } }) }
@@ -614,6 +615,24 @@ export class Runner {
   }
 
   /** On startup: reap stray agents, mark their runs interrupted, re-queue their builds, and resume running projects. */
+  /**
+   * A build the database calls under way that this engine is not running: made again, from where its agent left off.
+   * Found on BON-267 (2026-11-21): the agent finished, the database connection was reset as its result was being
+   * recorded, and nothing looked again, so the task said "running" with nothing behind it until the next restart.
+   * recover() did this only at the start; this is the same, on a timer (server.ts), for whatever is lost while the
+   * engine is up. There is one engine, so what is not in `active` here is running nowhere. `quietMs`: how long since
+   * the build last changed, so one being launched this moment is left alone.
+   */
+  async reclaim(quietMs = 60_000) {
+    const lost = (await db.select().from(build).where(inArray(build.status, ['running', 'merging', 'testing']))).filter((x) => !this.active.has(x.issueId) && Date.now() - (x.updatedAt?.getTime() ?? 0) >= quietMs)
+    for (const x of lost) {
+      await db.update(run).set({ status: 'interrupted', endedAt: new Date(), error: 'lost by the engine' }).where(and(eq(run.issueId, x.issueId), eq(run.status, 'working')))
+      await db.transaction((tx) => setBuild(tx, x.issueId, { status: 'queued', heldReason: 'the engine lost track of this; it is being made again' }, { type: 'build.interrupted', payload: { was: x.status, lost: true } }))
+    }
+    if (lost.length) { console.warn(`[engine] made again, having lost track of them: ${lost.map((x) => x.issueId).join(', ')}`); void this.dispatch() }
+    return lost.map((x) => x.issueId)
+  }
+
   async recover() {
     const running = await db.select().from(project).where(eq(project.status, 'running'))
     const repos = await db.select().from(repo)
