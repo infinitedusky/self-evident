@@ -28,7 +28,7 @@ import { fake, type FakePlan, type FakeReport } from './fake.js'
 import { newId } from './ids.js'
 import { PlanError } from './issues.js'
 import { checkLeaks, keptRefused, LEAKS_SHOWN, type Leak } from './mock-leaks.js'
-import { clip, day, isGiven, mocksHome, readRecording, recordingDir, recordingsOfService, rowOf, workspaceOf, type Row } from './mocks.js'
+import { clip, day, isGiven, mocksHome, readRecording, recordingDir, recordingsFor, recordingsOfService, rowOf, workspaceOf, type Row } from './mocks.js'
 import { cleanEndpoints, keyed } from './mock-endpoints.js'
 import { standInKey } from './stand-ins.js'
 
@@ -99,9 +99,9 @@ function cleanData(given: unknown): Record<string, string> {
 }
 const leaksSay = (leaks: Leak[], count: number) => `${leaks.map((l) => `- ${l.file}: ${l.kind} "${l.excerpt}"`).join('\n')}${count > LEAKS_SHOWN ? `\n…and ${count - LEAKS_SHOWN} more` : ''}`
 /** The newest real response of a service on this computer, or the one named. */
-function realOf(m: Pick<Row, 'appId' | 'key' | 'endpoints' | 'upstream'>, given?: string | null) {
+function realOf(m: Pick<Row, 'appId' | 'key' | 'endpoints' | 'upstream' | 'createdAt'>, given?: string | null) {
   const appId = m.appId, key = m.key
-  const dir = given ? recordingDir(appId, given) : recordingsOfService(appId, key)[0]?.dir
+  const dir = given ? recordingDir(appId, given) : recordingsFor(m)[0]?.dir // its own: never one left by a mock that was removed
   if (!dir) throw new PlanError(`there is no real response of ${key} on this computer: give one, or record a live run`)
   // A recorded run is read under its endpoints' names (mock-endpoints.ts), so a fake of it has the names a server looks for.
   const recorded = readRecording(keyed(dir, cleanEndpoints(m.endpoints), m.upstream))
@@ -207,6 +207,18 @@ export async function setDefaultData(appId: string, key: string, dataKey: string
   await db.transaction(async (tx) => {
     await tx.update(mock).set({ defaultData: dataKey ? standInKey(dataKey) : null, updatedAt: new Date() }).where(eq(mock.id, m.id))
     await appendEvent(tx, { workspaceId, appId, actor, type: 'mock.default_data', payload: { key: m.key, data: dataKey } })
+  })
+  return listData((await rowOf(appId, key))!)
+}
+/** A set's name changed: what a person calls it. Its key, by which runs and tasks choose it, stays. */
+export async function renameData(appId: string, key: string, dataKey: string, name: string, actor = 'user') {
+  const m = await mockOf(appId, key), d = await dataRow(m.id, standInKey(dataKey))
+  if (!d) throw new PlanError(`${m.name} has no data "${dataKey}"`)
+  if (!clip(name, 80)) throw new PlanError('a data set needs a name')
+  const workspaceId = await workspaceOf(appId)
+  await db.transaction(async (tx) => {
+    await tx.update(mockData).set({ name: clip(name, 80), updatedAt: new Date() }).where(eq(mockData.id, d.id))
+    await appendEvent(tx, { workspaceId, appId, actor, type: 'mock.data_renamed', payload: { key: m.key, data: d.key } })
   })
   return listData((await rowOf(appId, key))!)
 }

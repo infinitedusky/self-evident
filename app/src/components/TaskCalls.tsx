@@ -24,7 +24,10 @@ export function TaskCalls({ appId, issueId, mocks, version = 0, onChanged }: { a
     <div className="task-calls" data-component="TaskCalls">
       <div className="task-block-head">
         <h3 className="mock-h3" style={{ margin: 0 }}>What this task calls</h3>
-        <button className="btn quiet small" onClick={() => setAdding(!adding)}>Add a call</button>
+        <span className="row" style={{ display: 'flex', gap: 8 }}>
+          {!!calls?.length && <button className="btn quiet small" onClick={() => { if (window.confirm('Clear this task\'s whole list of calls, yours among them? The mocks are not touched.')) void act(() => engine.clearTaskCalls(issueId)) }}>Clear the list</button>}
+          <button className="btn quiet small" onClick={() => setAdding(!adding)}>Add a call</button>
+        </span>
       </div>
       {error && <div className="empty bad" style={{ margin: '8px 0' }}>{error}</div>}
       {adding && <AddCall names={[...new Set([...mocks.map((m) => m.name), ...(calls ?? []).map((c) => c.serviceName)])]} onAdd={(b) => act(async () => { const r = await engine.addTaskCall(issueId, b); setAdding(false); return r })} onCancel={() => setAdding(false)} />}
@@ -46,6 +49,8 @@ export function TaskCalls({ appId, issueId, mocks, version = 0, onChanged }: { a
                     onCover={() => act(() => engine.coverTaskCall(issueId, c.id))}
                     onLink={(e) => act(() => engine.linkTaskCall(issueId, c.id, e))}
                     onRemove={() => act(() => engine.removeTaskCall(issueId, c.id))}
+                    onEdit={(b) => act(() => engine.editTaskCall(issueId, c.id, b))}
+                    names={[...new Set([...mocks.map((x) => x.name), ...calls.map((x) => x.serviceName)])]}
                     onGive={(files) => act(async () => {
                       // A file is the answer to this call: where nothing answers it yet, the mock is made (or the call added to it) first.
                       let mock = c.mock?.key, endpoint = c.endpoint?.key
@@ -63,8 +68,10 @@ export function TaskCalls({ appId, issueId, mocks, version = 0, onChanged }: { a
   )
 }
 
-function CallRow({ call: c, mock, onCover, onLink, onRemove, onGive }: { call: TaskCall; mock: Mock | null; onCover: () => void; onLink: (endpoint: string | null) => void; onRemove: () => void; onGive: (files: File[]) => void }) {
+function CallRow({ call: c, mock, names, onCover, onLink, onRemove, onEdit, onGive }: { call: TaskCall; mock: Mock | null; names: string[]; onCover: () => void; onLink: (endpoint: string | null) => void; onRemove: () => void; onEdit: (b: { service: string; method: string; path: string; what?: string }) => Promise<void>; onGive: (files: File[]) => void }) {
   const e = c.endpoint
+  const [editing, setEditing] = useState(false)
+  if (editing) return <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><CallForm names={names} start={c} onSave={(b) => void onEdit(b).then(() => setEditing(false))} onCancel={() => setEditing(false)} /></div>
   // A real response is given here, on the call it answers, whatever answers the call now.
   const give = (label: string) => <label className="mock-give-one" style={{ margin: 0 }}><input type="file" multiple aria-label={`A real response of ${c.method} ${c.path}`} onChange={(ev) => { const files = [...(ev.target.files ?? [])]; if (files.length) onGive(files); ev.target.value = '' }} /><span className="btn quiet small">{label}</span></label>
   return (
@@ -104,25 +111,29 @@ function CallRow({ call: c, mock, onCover, onLink, onRemove, onGive }: { call: T
           </>
         )}
       </div>
-      <button className="btn quiet small task-calls-remove" aria-label={`Remove ${c.method} ${c.path}`} title="Take it off this task's list" onClick={onRemove}>×</button>
+      <span className="task-calls-tools"><button className="btn quiet small" aria-label={`Edit ${c.method} ${c.path}`} onClick={() => setEditing(true)}>Edit</button><button className="btn quiet small task-calls-remove" aria-label={`Remove ${c.method} ${c.path}`} title="Take it off this task's list" onClick={onRemove}>×</button></span>
     </div>
   )
 }
 
 function AddCall({ names, onAdd, onCancel }: { names: string[]; onAdd: (b: { service: string; method: string; path: string; what?: string }) => void; onCancel: () => void }) {
-  const [service, setService] = useState('')
-  const [method, setMethod] = useState('GET')
-  const [path, setPath] = useState('')
-  const [what, setWhat] = useState('')
+  return <div style={{ margin: '8px 0 12px' }} data-component="AddCall"><CallForm names={names} label="Add" onSave={onAdd} onCancel={onCancel} /></div>
+}
+/** A call's fields: for a new one, or one being changed. */
+function CallForm({ names, start, label = 'Save', onSave, onCancel }: { names: string[]; start?: TaskCall; label?: string; onSave: (b: { service: string; method: string; path: string; what?: string }) => void; onCancel: () => void }) {
+  const [service, setService] = useState(start?.serviceName ?? '')
+  const [method, setMethod] = useState(start?.method ?? 'GET')
+  const [path, setPath] = useState(start?.path ?? '')
+  const [what, setWhat] = useState(start?.what ?? '')
   return (
-    <div className="mock-edit" style={{ margin: '8px 0 12px' }} data-component="AddCall">
+    <div className="mock-edit" style={{ marginTop: 0 }}>
       <label>The service<input list="task-calls-services" value={service} onChange={(e) => setService(e.target.value)} placeholder="who is called, e.g. SixtyFour" /><datalist id="task-calls-services">{names.map((n) => <option key={n} value={n} />)}</datalist></label>
       <div className="task-calls-call">
         <label>Method<select value={method} onChange={(e) => setMethod(e.target.value)}>{METHODS.map((m) => <option key={m}>{m}</option>)}</select></label>
         <label>The call<input className="mono" value={path} onChange={(e) => setPath(e.target.value)} placeholder="/runs/{id}/status" /></label>
       </div>
       <label>What this task needs from it<input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="what must come back, and the cases it has to show" /></label>
-      <div className="row"><button className="btn small" disabled={!service.trim() || !path.trim()} onClick={() => onAdd({ service: service.trim(), method, path: path.trim(), ...(what.trim() ? { what: what.trim() } : {}) })}>Add</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
+      <div className="row"><button className="btn small" disabled={!service.trim() || !path.trim()} onClick={() => onSave({ service: service.trim(), method, path: path.trim(), what: what.trim() })}>{label}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
     </div>
   )
 }

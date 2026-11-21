@@ -25,7 +25,7 @@
  * the app with a prototype, main and a smoke test, unless the prototype has its own stand-in of the same key.
  */
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, normalize, relative, resolve, sep } from 'node:path'
 import { and, asc, desc, eq, like } from 'drizzle-orm'
@@ -89,6 +89,15 @@ export function recordingsOfService(appId: string, key: string): { dir: string; 
   return out.sort((a, b) => b.at.localeCompare(a.at))
 }
 
+/**
+ * A mock's own real responses: those of its service that came in since the mock was made. One left on this computer
+ * by a mock that was removed is never taken up by the next (Sandy, 2026-11-21: "it feels like there's legacy data
+ * that's hanging around"; she had removed the mock, given nothing, and the new one showed a real response and was
+ * built from it). The leak check still reads every one there is (recordingsOfService): more to check against is
+ * never wrong.
+ */
+export const recordingsFor = (m: Pick<Row, 'appId' | 'key' | 'createdAt'>) => recordingsOfService(m.appId, m.key).filter((r) => !m.createdAt || r.at >= new Date(m.createdAt.getTime() - 1000).toISOString())
+
 /** Its provenance as a note: on the Mocks page, beside an export, and (next) in a pull request. */
 export function provenanceNote(m: Pick<Row, 'name' | 'status' | 'standsInFor' | 'recordedAt' | 'minedAt'> & { provenance: unknown }): string {
   const p = (m.provenance ?? {}) as Provenance
@@ -119,7 +128,7 @@ export interface MockView {
   /** The calls it answers, each with the real response behind it (or none: taken from the code) and its files in the default data; and the data files that are no endpoint's. */ endpoints: EndpointView[]; unlinked: string[]
 }
 async function viewOf(m: Row, ident?: (id: string) => Promise<{ id: string; identifier: string; title: string } | null>): Promise<MockView> {
-  const recs = recordingsOfService(m.appId, m.key)
+  const recs = recordingsFor(m)
   const newest = recs[0]
   const data = await listData(m)
   const unmined = newest && newest.dir !== m.recording && (!m.minedAt || newest.at > m.minedAt.toISOString()) ? { at: newest.at, files: newest.files } : null
@@ -294,12 +303,64 @@ export async function saveMock(appId: string, i: SaveMock, actor = 'agent') {
   return getMock(appId, key).then(({ fileText: _f, ...v }) => v)
 }
 
-export async function removeMock(appId: string, key: string, actor = 'user') {
+/** files: its service's real responses are deleted from this computer with it, every one, so nothing of it is left. */
+export async function removeMock(appId: string, key: string, actor = 'user', opts: { files?: boolean } = {}) {
   const m = await rowOf(appId, key)
-  if (!m) return { removed: false }
+  if (!m) return { removed: false, files: 0 }
   const workspaceId = await workspaceOf(appId)
-  await db.transaction(async (tx) => { await tx.delete(mock).where(eq(mock.id, m.id)); await appendEvent(tx, { workspaceId, appId, actor, type: 'mock.removed', payload: { key: m.key } }) })
-  return { removed: true }
+  const real = opts.files ? recordingsOfService(appId, m.key) : []
+  await db.transaction(async (tx) => { await tx.delete(mock).where(eq(mock.id, m.id)); await appendEvent(tx, { workspaceId, appId, actor, type: 'mock.removed', payload: { key: m.key, files: real.length } }) })
+  for (const r of real) rmSync(r.dir, { recursive: true, force: true })
+  return { removed: true, files: real.length }
+}
+
+/** One real response of a service on this computer, for a person to see what is there and delete it. Never its contents. */
+export interface RealView { /** Its folder, from the recordings home: what it is deleted by. */ id: string; at: string; given: boolean; files: { name: string; bytes: number }[]; /** From before this mock was made: it is not used by it. */ before: boolean; issueId: string | null }
+export async function listReal(appId: string, key: string): Promise<RealView[]> {
+  const m = await rowOf(appId, key)
+  if (!m) throw new PlanError(`this app has no mock "${key}"`)
+  const mine = new Set(recordingsFor(m).map((r) => r.dir))
+  return recordingsOfService(appId, m.key).map((r) => {
+    let files: { name: string; bytes: number }[] = []
+    try { files = readdirSync(r.dir).filter((f) => !f.startsWith('.') && !f.endsWith('.meta.json')).map((f) => ({ name: f, bytes: statSync(join(r.dir, f)).size })) } catch { /* gone meanwhile */ }
+    return { id: relative(recordingsHome(), r.dir), at: r.at, given: isGiven(r.dir), files, before: !mine.has(r.dir), issueId: r.issueId }
+  })
+}
+/** A real response deleted from this computer. Data that serves it as it is goes with it; a fake made from it stays, and can no longer be checked against it. */
+export async function removeReal(appId: string, key: string, id: string, actor = 'user') {
+  const m = await rowOf(appId, key)
+  if (!m) throw new PlanError(`this app has no mock "${key}"`)
+  const dir = recordingDir(appId, id)
+  if (!recordingsOfService(appId, m.key).some((r) => r.dir === dir)) throw new PlanError(`that is not a real response of ${m.name}`)
+  const workspaceId = await workspaceOf(appId)
+  const { mockData } = await import('./db/schema.js')
+  await db.transaction(async (tx) => {
+    const sets = await tx.select().from(mockData).where(eq(mockData.mockId, m.id))
+    for (const d of sets.filter((x) => x.recording === dir)) {
+      if (d.kind === 'real') { await tx.delete(mockData).where(eq(mockData.id, d.id)); if (m.defaultData === d.key) await tx.update(mock).set({ defaultData: null }).where(eq(mock.id, m.id)) }
+      else await tx.update(mockData).set({ recording: null, updatedAt: new Date() }).where(eq(mockData.id, d.id))
+    }
+    if (m.recording === dir) await tx.update(mock).set({ recording: null, updatedAt: new Date() }).where(eq(mock.id, m.id))
+    await appendEvent(tx, { workspaceId, appId, actor, type: 'mock.real_removed', payload: { key: m.key } })
+  })
+  rmSync(dir, { recursive: true, force: true })
+  return listReal(appId, key)
+}
+
+/** One endpoint changed (its method, its path, what it answers with), or taken off the mock. Its data files keep their names: they are its by its key, which does not change. */
+export async function editEndpoint(appId: string, key: string, endpoint: string, i: { method?: string; path?: string; what?: string } | null, actor = 'user') {
+  const m = await rowOf(appId, key)
+  if (!m) throw new PlanError(`this app has no mock "${key}"`)
+  const all = cleanEndpoints(m.endpoints), at = all.findIndex((e) => e.key === standInKey(endpoint))
+  if (at < 0) throw new PlanError(`${m.name} has no endpoint "${endpoint}"`)
+  const next = i === null ? all.filter((_, n) => n !== at) : cleanEndpoints(all.map((e, n) => (n === at ? { ...e, ...(i.method ? { method: i.method } : {}), ...(i.path ? { path: i.path } : {}), ...(i.what !== undefined ? { what: i.what } : {}) } : e)))
+  if (i !== null && next.length !== all.length) throw new PlanError('an endpoint needs a path')
+  const workspaceId = await workspaceOf(appId)
+  await db.transaction(async (tx) => {
+    await tx.update(mock).set({ endpoints: next, updatedAt: new Date() }).where(eq(mock.id, m.id))
+    await appendEvent(tx, { workspaceId, appId, actor, type: i === null ? 'mock.endpoint_removed' : 'mock.endpoint_changed', payload: { key: m.key, endpoint: all[at].key } })
+  })
+  return getMock(appId, key).then(({ fileText: _f, ...v }) => v)
 }
 
 /** A recording came in through the recorder: the mock names it, waiting to be mined. */
@@ -361,7 +422,12 @@ const changeSays = (type: string, p: Record<string, unknown>): string | null => 
     case 'mock.data_saved': return `Data "${p.data}" (${p.kind}) was saved`
     case 'mock.data_removed': return `Data "${p.data}" was removed`
     case 'mock.default_data': return p.data ? `Its default data became "${p.data}"` : 'It was left with no default data'
-    case 'mock.removed': return 'Removed, with its data and every choice made for it'
+    case 'mock.removed': return `Removed, with its data and every choice made for it${Number(p.files) ? `, and its ${p.files} real response${Number(p.files) === 1 ? '' : 's'} deleted from this computer` : ''}`
+    case 'mock.real_removed': return 'A real response was deleted from this computer'
+    case 'mock.endpoint_added': return `The call ${p.method} ${p.path} was added`
+    case 'mock.endpoint_changed': return `The call "${p.endpoint}" was changed`
+    case 'mock.endpoint_removed': return `The call "${p.endpoint}" was taken off`
+    case 'mock.data_renamed': return `Data "${p.data}" was renamed`
     case 'mock.place': return `For ${PLACE_SAYS[String(p.place)] ?? p.place}: ${SOURCE_SAYS[String(p.source)] ?? p.source}${p.data ? ` "${p.data}"` : ''}`
     default: return null
   }

@@ -97,6 +97,26 @@ export async function setCalls(issueId: string, calls: NewCall[], actor = 'agent
   await noted(issueId, t.appId, actor, 'task.calls', { calls: clean.length })
   return listCalls(issueId)
 }
+/** A call changed: the service, the call itself, or what the task needs from it. */
+export async function editCall(issueId: string, id: string, c: Partial<NewCall>, actor = 'user') {
+  const t = await taskOf(issueId)
+  const [r] = await db.select().from(taskCall).where(and(eq(taskCall.id, id), eq(taskCall.issueId, issueId)))
+  if (!r) throw new PlanError('no such call on this task')
+  const v = cleanCall({ service: c.service ?? r.serviceName, method: c.method ?? r.method, path: c.path ?? r.path, what: c.what ?? r.what })
+  const [same] = await db.select().from(taskCall).where(and(eq(taskCall.issueId, issueId), eq(taskCall.service, v.service), eq(taskCall.method, v.method), eq(taskCall.path, v.path)))
+  if (same && same.id !== id) throw new PlanError(`this task already lists ${v.method} ${v.path} to ${v.serviceName}`)
+  // What it was tied to by hand may be another service's, or no longer the same call: found again by its method and path.
+  await db.update(taskCall).set({ ...v, ...(v.service !== r.service || v.method !== r.method || v.path !== r.path ? { endpoint: null } : {}) }).where(eq(taskCall.id, id))
+  await noted(issueId, t.appId, actor, 'task.call_changed', { id })
+  return listCalls(issueId)
+}
+/** The whole list emptied, the person's own among them: to start again. */
+export async function clearCalls(issueId: string, actor = 'user') {
+  const t = await taskOf(issueId)
+  await db.delete(taskCall).where(eq(taskCall.issueId, issueId))
+  await noted(issueId, t.appId, actor, 'task.calls_cleared', {})
+  return listCalls(issueId)
+}
 export async function removeCall(issueId: string, id: string, actor = 'user') {
   const t = await taskOf(issueId)
   await db.delete(taskCall).where(and(eq(taskCall.id, id), eq(taskCall.issueId, issueId)))

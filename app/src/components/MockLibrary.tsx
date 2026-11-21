@@ -9,7 +9,7 @@ import { Badge, type Tone } from './Badge'
 import { Md } from './Md'
 import { MockPlaces } from './MockPlaces'
 import { TaskCalls } from './TaskCalls'
-import { engine, type Mock, type MockChange, type MockData, type MockEndpoint } from '../engine'
+import { engine, type Mock, type MockChange, type MockData, type MockEndpoint, type MockReal } from '../engine'
 
 const STATUS: Record<Mock['status'], { label: string; tone: Tone }> = {
   mined: { label: 'From a real response', tone: 'ok' },
@@ -70,6 +70,7 @@ export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's
 
 function MockCard({ appId, issueId, mock: m, act }: { appId: string; issueId?: string; mock: Mock; act: (fn: () => Promise<unknown>) => Promise<void> }) {
   const [editing, setEditing] = useState(false)
+  const [removing, setRemoving] = useState(false)
   const [live, setLive] = useState(false)
   const s = STATUS[m.status]
   const canRecord = !!(m.issue && m.upstream && Object.keys(m.env).length)
@@ -128,12 +129,14 @@ function MockCard({ appId, issueId, mock: m, act }: { appId: string; issueId?: s
           {m.files.length > 0 && <p className="faint" style={{ fontSize: 13 }}>Files: {m.files.map((f) => `${f.path} (${size(f.bytes)})`).join(', ')}. Run with <code>{m.cmd}</code>.</p>}
         </details>
       )}
+      <RealResponses appId={appId} mock={m} act={act} />
       <History appId={appId} mockKey={m.key} />
+      {removing && <RemoveMock appId={appId} mock={m} onRemove={(files) => act(async () => { await engine.removeMock(appId, m.key, files); setRemoving(false) })} onCancel={() => setRemoving(false)} />}
       {editing && <EditMock mock={m} onSave={(b) => act(async () => { await engine.updateMock(appId, m.key, b); setEditing(false) })} onCancel={() => setEditing(false)} />}
       <div className="row">
         {m.status !== 'needs_recording' && !realDefault && <a className="btn quiet small" href={engine.mockExportUrl(appId, m.key)} download>Export</a>}
         {!editing && <button className="btn quiet small" onClick={() => setEditing(true)}>Edit</button>}
-        <button className="btn quiet small" onClick={() => { if (window.confirm(`Remove the mock of ${m.name}? Its server, its data and every choice made for it in a task go with it. The real responses stay on this computer.`)) void act(() => engine.removeMock(appId, m.key)) }}>Remove</button>
+        {!removing && <button className="btn quiet small" aria-label="Remove the mock" onClick={() => setRemoving(true)}>Remove</button>}
       </div>
     </article>
   )
@@ -168,22 +171,83 @@ function Endpoints({ appId, mock: m, act }: { appId: string; mock: Mock; act: (f
       <strong>Endpoints</strong> <span className="faint">{m.endpoints.length} call{m.endpoints.length === 1 ? '' : 's'}: {real} with a real response behind {real === 1 ? 'it' : 'them'}, {m.endpoints.length - real} taken from the code</span>
       <div className="mock-endpoints" role="table">
         <div className="mock-endpoints-head" role="row"><span role="columnheader">The call</span><span role="columnheader">Answered with</span><span role="columnheader">Where its shape came from</span></div>
-        {m.endpoints.map((e) => <EndpointRow key={e.key} endpoint={e} canGive={!!m.issue} onGive={(files) => act(() => engine.giveRecording(appId, m.key, files, e.key))} />)}
+        {m.endpoints.map((e) => <EndpointRow key={e.key} endpoint={e} canGive={!!m.issue} onGive={(files) => act(() => engine.giveRecording(appId, m.key, files, e.key))}
+          onEdit={(b) => act(() => engine.editMockEndpoint(appId, m.key, e.key, b))}
+          onRemove={() => { if (window.confirm(`Take ${e.method} ${e.path} off the mock of ${m.name}? Its data files stay in the data, no longer tied to a call.`)) void act(() => engine.removeMockEndpoint(appId, m.key, e.key)) }} />)}
       </div>
       {m.unlinked.length > 0 && <p className="mock-data-warn">{m.unlinked.length === 1 ? 'A data file is' : 'Data files are'} no endpoint's, so nothing says which call {m.unlinked.length === 1 ? 'it answers' : 'they answer'}: <code>{m.unlinked.join(', ')}</code>. A file is an endpoint's by its name: <code>{m.endpoints[0].key}.csv</code>, or <code>{m.endpoints[0].key}.more.csv</code> for more of the same.</p>}
     </div>
   )
 }
-function EndpointRow({ endpoint: e, canGive, onGive }: { endpoint: MockEndpoint; canGive: boolean; onGive: (files: File[]) => Promise<void> }) {
+function EndpointRow({ endpoint: e, canGive, onGive, onEdit, onRemove }: { endpoint: MockEndpoint; canGive: boolean; onGive: (files: File[]) => Promise<void>; onEdit: (b: { method: string; path: string; what: string }) => Promise<void>; onRemove: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const [method, setMethod] = useState(e.method)
+  const [path, setPath] = useState(e.path)
+  const [what, setWhat] = useState(e.what ?? '')
+  if (editing) return (
+    <div className="mock-endpoints-row" role="row" style={{ gridTemplateColumns: '1fr' }}>
+      <div className="mock-edit" role="cell" style={{ marginTop: 0 }}>
+        <div className="task-calls-call">
+          <label>Method<select value={method} onChange={(ev) => setMethod(ev.target.value)}>{['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((x) => <option key={x}>{x}</option>)}</select></label>
+          <label>The call<input className="mono" value={path} onChange={(ev) => setPath(ev.target.value)} /></label>
+        </div>
+        <label>What it answers with<input value={what} onChange={(ev) => setWhat(ev.target.value)} /></label>
+        <div className="row"><button className="btn small" aria-label="Save the call" disabled={!path.trim()} onClick={() => void onEdit({ method, path: path.trim(), what: what.trim() }).then(() => setEditing(false))}>Save</button><button className="btn quiet small" onClick={() => { setMethod(e.method); setPath(e.path); setWhat(e.what ?? ''); setEditing(false) }}>Cancel</button></div>
+      </div>
+    </div>
+  )
   return (
     <div className="mock-endpoints-row" role="row">
-      <div role="cell"><span className="mock-method">{e.method}</span> <code>{e.path}</code>{e.what && <div className="faint">{e.what}</div>}</div>
+      <div role="cell"><span className="mock-method">{e.method}</span> <code>{e.path}</code>{e.what && <div className="faint">{e.what}</div>}
+        <div className="row" style={{ marginTop: 4 }}><button className="btn quiet small" aria-label={`Edit the call ${e.method} ${e.path}`} onClick={() => setEditing(true)}>Edit</button><button className="btn quiet small" aria-label={`Remove the call ${e.method} ${e.path}`} onClick={onRemove}>Remove</button></div>
+      </div>
       <div role="cell">{e.files.length ? e.files.map((f) => <code key={f} style={{ display: 'block' }}>{f}</code>) : <span className="faint">What its server makes up</span>}</div>
       <div role="cell">
         {e.real ? <>{e.real.how === 'given' ? 'A real response you gave' : 'A live run, recorded'}, {day(e.real.at)}</> : <span>The code that calls it <span className="faint">(no real response)</span></span>}
         {canGive && <label className="mock-give-one"><input type="file" multiple aria-label={`A real response of ${e.method} ${e.path}`} onChange={(ev) => { const files = [...(ev.target.files ?? [])]; if (files.length) void onGive(files) }} /><span className="btn quiet small">{e.real ? 'Give a newer one' : 'Give a real response'}</span></label>}
       </div>
     </div>
+  )
+}
+
+/** Removing a mock: what goes with it, and whether its real responses are deleted from this computer too. Deleted by default, so nothing of it is left for the next one. */
+function RemoveMock({ appId, mock: m, onRemove, onCancel }: { appId: string; mock: Mock; onRemove: (files: boolean) => Promise<void>; onCancel: () => void }) {
+  const [real, setReal] = useState<MockReal[] | null>(null)
+  const [files, setFiles] = useState(true)
+  useEffect(() => { engine.mockReal(appId, m.key).then(setReal).catch(() => setReal([])) }, [appId, m.key])
+  const n = real?.length ?? 0
+  return (
+    <div className="mock-needs" data-component="RemoveMock">
+      <strong>Remove the mock of {m.name}?</strong>
+      <p style={{ margin: '4px 0' }}>Its server, its endpoints, its data and every choice a task made for it go with it. What tasks list as their calls stays.</p>
+      {real === null ? <p className="muted" style={{ margin: 0 }}>Looking for its real responses…</p>
+        : n > 0 ? <label className="mock-check"><input type="checkbox" checked={files} onChange={(e) => setFiles(e.target.checked)} /> Also delete its {n} real response{n === 1 ? '' : 's'} from this computer</label>
+        : <p className="faint" style={{ margin: 0 }}>It has no real responses on this computer.</p>}
+      {n > 0 && !files && <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }}>Kept, they stay on this computer and are not taken up by a mock made later; they can be deleted from that mock's card.</p>}
+      <div className="row"><button className="btn small" disabled={real === null} onClick={() => void onRemove(files && n > 0)}>Remove it</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
+    </div>
+  )
+}
+
+/** The service's real responses on this computer: what is there and from when, never what is in it. Each can be deleted. Read when it is opened. */
+function RealResponses({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn: () => Promise<unknown>) => Promise<void> }) {
+  const [list, setList] = useState<MockReal[] | null>(null)
+  const load = () => engine.mockReal(appId, m.key).then(setList).catch(() => setList([]))
+  return (
+    <details className="mock-provenance" data-component="RealResponses" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) void load() }}>
+      <summary>Real responses on this computer</summary>
+      {!list ? <p className="muted">Loading…</p> : !list.length ? <p className="muted">None. A real response is given on the call it answers, or recorded in a live run.</p> : (
+        <ul className="mock-history">
+          {list.map((r) => (
+            <li key={r.id}>
+              {r.given ? 'Given' : 'Recorded in a live run'} {day(r.at)}: {r.files.map((f) => `${f.name} (${size(f.bytes)})`).join(', ') || 'no files'}.
+              {r.before && <span className="faint"> From before this mock was made: it is not used.</span>}
+              {' '}<button className="btn quiet small" aria-label={`Delete the real response of ${day(r.at)}`} onClick={() => { if (window.confirm(`Delete this real response of ${m.name} from this computer? It cannot be got back. A fake already made from it stays.`)) void act(async () => { await engine.removeMockReal(appId, m.key, r.id); await load() }) }}>Delete</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </details>
   )
 }
 
@@ -200,6 +264,7 @@ function DataSets({ appId, issueId, mock: m, act }: { appId: string; issueId?: s
               <div className="mock-data-head">
                 <span>{d.name}</span>
                 <Badge tone={KIND[d.kind].tone}>{KIND[d.kind].label}</Badge>
+                <button className="btn quiet small" aria-label={`Rename ${d.name}`} onClick={() => { const name = window.prompt('What to call this data', d.name); if (name?.trim() && name.trim() !== d.name) void act(() => engine.renameMockData(appId, m.key, d.key, name.trim())) }}>Rename</button>
                 {d.isDefault ? <Badge tone="accent">Default</Badge> : <button className="btn quiet small" onClick={() => act(() => engine.setMockDefaultData(appId, m.key, d.key))}>Make default</button>}
                 <button className="btn quiet small" onClick={() => { if (window.confirm(`Remove "${d.name}"?${d.kind === 'real' ? ' The real response itself stays on this computer.' : ''}`)) void act(() => engine.removeMockData(appId, m.key, d.key)) }}>Remove</button>
               </div>

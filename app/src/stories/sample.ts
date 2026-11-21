@@ -722,3 +722,9 @@ export const taskCalls: import('../engine').TaskCall[] = [
   { id: 'tcall_s6', service: 'payments', serviceName: 'Payments (sample)', method: 'POST', path: '/charges', what: 'A charge that succeeds, and one that is declined', by: 'agent', state: 'no_mock', mock: null, endpoint: null, linked: false },
 ]
 
+/** Made up: the real responses of one service on this computer. One is this mock's; one was left by a mock that was removed. */
+export const mockReal: import('../engine').MockReal[] = [
+  { id: 'app_sample/iss_sample1/fraud-scan/given-2026-11-18', at: '2026-11-18T15:20:00Z', given: true, files: [{ name: 'results.csv', bytes: 384_000 }], before: false, issueId: 'iss_sample1' },
+  { id: 'app_sample/iss_sample1/fraud-scan/given-2026-11-10', at: '2026-11-10T09:00:00Z', given: true, files: [{ name: 'export.csv', bytes: 120_500 }], before: true, issueId: 'iss_sample1' },
+]
+
