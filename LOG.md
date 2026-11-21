@@ -5979,3 +5979,70 @@ Not done: SixtyFour's mock itself (raise it on CEB-90's task with `SIXTYFOUR_BAS
 CSV on the Mocks page; the address `https://api.sixtyfour.ai` is only needed for a live run); the smoke test's own page
 does not show which mocks a run has on (the engine reports it); the Mocks page is not yet linked from a task's
 prototype; mocks in review environments (step 2) and the gate (step 3). Not seen end to end on a real app.
+
+## Mocks, reshaped: a server plus data, and a table per task (Sandy, 2026-11-21, a long conversation)
+
+What was merged the day before (#330) treated a mock as one thing made in Settings. Talking it through changed that.
+In her words:
+- "The goal isn't to have a perfect mocking system. The goal is … for any prototype or smoke test, and then
+  especially for any reviewer, it's easy to spin up a demo or a smoke test locally that is pulling in fake data so
+  nothing's exposed and it's just testing whether or not the thing works. Meaning each task … should be set up
+  uniquely to some degree … to begin with, every task could set it up from scratch."
+- "The prototype code and the smoke test that we send need to be exactly the same code that would go live … just
+  pointing at different endpoints."
+- "I don't want to make a 20 minute call and spend 250 credits every single time I want to do a smoke test."
+- "It is a real person. That's why we need a feature that will take the real person and make a fake version of it,
+  kind of like a really rudimentary faker."
+- "A more general setting in which we can say, for a prototype, for smoke, for a reviewer, where is the data coming
+  from? … each one of them are going to come from the same CSV, but for the reviewer, fake it." And any mix: "record
+  and fake for all three … file we provide directly for the reviewer, real API for our own."
+- On Settings: keep it, as the app's defaults; making moves to the task (mine to propose, agreed).
+- On history: changes to the Settings-level defaults are recorded; a task's own are not.
+
+The shape is in SHAPE.md ("A mock is a server plus data"). What we went through and dropped, so it is not proposed
+again: one mock per API with scenarios as a tree of endpoint overrides in a format of ours; Mockoon (Node, no
+Docker) or WireMock (Java) to serve it; a runner of our own. Reading Cloaked's client settled it: a scan is sent in
+chunks, each a job, and each row of a job's CSV must carry back the `tracking_id` sent for that employee (else its
+position, guarded by `work_email`). A fixed answer shows empty screens. A small server in ordinary code does it.
+Also found there: Meridian is the repository's own seed (`make seed`, 250 employees from a fixed seed), so a
+reviewer's checkout already has the people.
+
+Build order, a pull request each: (1) data apart from the server, and the faker; (2) the task's table and the
+app's defaults, story first; (3) for real on CEB-90 with the CSV, through Cloaked's own pipeline; (4) the review
+branch, then the gate.
+
+Not known until built: how the faker does on the real CSV (long text, data packed in cells); how a server gives
+recorded rows to the people it was sent; record-and-fake as one step by itself; how a mock sits in Cloaked's Docker
+for a reviewer.
+
+### Built first: data apart from the server, and the faker (2026-11-21)
+
+- **A mock's data is its own thing** (`mock_data`, `engine/src/mock-data.ts`). The server's files hold no data; it
+  reads what it answers with from the folder `$MOCK_DATA`, given the same file names whether they are real or faked.
+  A set is `real` (a real response's own folder under the recordings home, served as it is; no files in the
+  database, refused by the export), `faked` (made by the faker, checked against what it came from when made, when
+  changed by hand and when exported) or `invented` (written by hand, checked against the newest real responses of
+  that service on this computer; with none to check against, kept only when a person states it holds nothing real,
+  and the note says "not checked"; an agent cannot state it). The first set made is the mock's default
+  (`mock.default_data`); `libraryStandIns(appId, except, pick)` gives each mock its default, or the set a run picks.
+- **The faker** (`engine/src/fake.ts`), pure: reads a file as the leak check does, goes into what is written inside
+  a value (JSON, or a Python-style list or dict, written back in the same style), keeps structure (columns, keys,
+  empties, booleans, small numbers, and what the plan names: `keep`, `keepValues`, `keepHosts`), replaces the rest by
+  kind (email, web address, id, date shifted, long number, short text word for word, long text as "Sample data:"
+  with its lines), the same real value to the same fake one. Lists inside a value lose a few items unless
+  `varyCounts` is false. No fake word may be a word of the real response. A plan cannot keep an email, an address
+  or an id. The salt is made once and kept with the set, so faking again changes nothing the plan did not.
+- **Agents**: a `mock_data` tool (fake, write, use_real, default, remove); the mining messages now ask for a server
+  that reads `$MOCK_DATA` and answers for exactly what it was sent, then a fake, then the people the response lacked.
+- **The page** lists a mock's data with what each is, which is the default, and says when the default is a real
+  response (it then cannot be exported).
+- **Found by the faker's own tests, in the leak check**: a one-letter quoted value (`'x'`) mis-paired every quote
+  after it, and a cell of written-out data was read as one sentence, so its keys in a row counted as a phrase of the
+  response. Both fixed in `mock-leaks.ts`.
+- Proved on two made-up services: one that answers a batch and must carry back each id it was sent (the same server
+  serving the fake, then the real response), and a plain JSON one.
+
+Not done here: the task's table (where a prototype's, a smoke test's and a reviewer's data comes from) and the app's
+default table; the Data step in a task; record-and-fake as one step; a person providing an invented file on the page
+(the engine takes it, `saveData` with `stated`; there is no control for it yet). Not tried on a real response.
+

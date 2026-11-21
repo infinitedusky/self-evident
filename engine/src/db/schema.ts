@@ -441,7 +441,25 @@ export const mock = pgTable('mock', {
   /** The recording it was mined from, or the newest one not mined yet: a folder under the recordings home. */ recording: text('recording'),
   recordedAt: at('recorded_at'), minedAt: at('mined_at'),
   createdAt: createdAt(), updatedAt: at('updated_at'),
+  /** The data it serves unless a run says otherwise: a mock_data key. None: whatever its own files hold. */ defaultData: text('default_data'),
 }, (t) => [uniqueIndex('mock_key').on(t.appId, t.key), inList('mock_status', t.status, MOCK_STATUSES)])
+
+// What a mock answers with, kept apart from its server (mock-data.ts): the server reads it from $MOCK_DATA, and it is
+// the only thing that differs between a prototype, a smoke test and a reviewer's copy. real: a real response served
+// as it is, from its folder under the recordings home, on this computer only (no files here: a real response is never
+// in the database). faked: made from one by the faker (fake.ts) and checked against it. invented: written by hand
+// or given by a person who states it holds nothing real.
+export const MOCK_DATA_KINDS = ['real', 'faked', 'invented'] as const
+export const mockData = pgTable('mock_data', {
+  id: id(), mockId: text('mock_id').notNull().references(() => mock.id, { onDelete: 'cascade' }), key: text('key').notNull(), name: text('name').notNull(),
+  kind: text('kind').notNull(),
+  /** path → text, as the server finds them under $MOCK_DATA. Empty for real. */ files: jsonb('files').$type<Record<string, string>>().notNull().default({}),
+  /** real: the folder served. faked: the real response it was made from. */ recording: text('recording'),
+  /** faked: the plan the faker was given (what is structure), and its salt. */ plan: jsonb('plan').$type<Record<string, unknown>>().notNull().default({}),
+  /** What it was made from, what was kept as structure, when it was checked, who stated what. */ provenance: jsonb('provenance').$type<Record<string, unknown>>().notNull().default({}),
+  /** The task it was made for. None: the app's. */ issueId: text('issue_id').references(() => issue.id, { onDelete: 'set null' }),
+  createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [uniqueIndex('mock_data_key').on(t.mockId, t.key), inList('mock_data_kind', t.kind, MOCK_DATA_KINDS)])
 
 // What an agent learned by reading an app's code (learn.ts): one row per document per app, replaced when it is
 // learned again. summary is for the person and short; body is for agents. sha: the home repository's commit then.

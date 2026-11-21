@@ -61,17 +61,19 @@ export function parseCsv(text: string): string[][] {
   if (cell !== '' || row.length) { row.push(cell); rows.push(row) }
   return rows
 }
-const looksCsv = (text: string) => { const first = text.slice(0, 4000).split(/\r?\n/)[0] ?? ''; return first.split(',').length >= 3 && !/^\s*[[{<]/.test(text) }
+export const looksCsv = (text: string) => { const first = text.slice(0, 4000).split(/\r?\n/)[0] ?? ''; return first.split(',').length >= 3 && !/^\s*[[{<]/.test(text) }
 
-interface Read { values: string[]; shape: string[] }
+interface Read { values: string[]; shape: string[]; /** Values that are data written out (JSON, a Python-style list): read for what is inside them, and for ids anywhere in them, never as a run of words, since their keys would make one. */ inside: string[] }
 /** A value, and what is inside it: JSON in a cell, or quoted strings in a Python-style list. */
 function addValue(v: string, out: Read, depth = 0) {
   const t = v.trim()
   if (!t) return
-  out.values.push(t)
-  if (depth > 2) return
-  if (/^[[{]/.test(t)) { try { walk(JSON.parse(t), out, depth + 1); return } catch { /* not JSON: a repr, perhaps */ } }
-  for (const m of t.matchAll(/'((?:[^'\\]|\\.){2,})'|"((?:[^"\\]|\\.){2,})"/g)) {
+  if (depth > 2) { out.values.push(t); return }
+  if (/^[[{]/.test(t)) { try { const j: unknown = JSON.parse(t); if (j && typeof j === 'object') { out.inside.push(t); walk(j, out, depth + 1); return } } catch { /* not JSON: a repr, perhaps */ } }
+  // Every quoted string is paired, however short, or a one-letter one ('x') would pair the wrong quotes from there on.
+  const quoted = [...t.matchAll(/'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"/g)].filter((m) => (m[1] ?? m[2]).length >= 2)
+  if (quoted.length && /^[[{(]/.test(t)) out.inside.push(t); else out.values.push(t)
+  for (const m of quoted) {
     const inner = m[1] ?? m[2]
     if (/^\s*:/.test(t.slice(m.index! + m[0].length))) out.shape.push(inner) // a key of a dict written out in a cell
     else addValue(inner, out, depth + 1)
@@ -85,14 +87,14 @@ function walk(x: unknown, out: Read, depth = 0) {
 }
 /** A recorded file's values and its shape (keys, column names). */
 export function readRecorded(text: string): Read {
-  const out: Read = { values: [], shape: [] }
+  const out: Read = { values: [], shape: [], inside: [] }
   const t = text.replace(/^﻿/, '')
   try { walk(JSON.parse(t), out); return out } catch { /* not one JSON document */ }
   if (/^\s*[[{]/.test(t) && t.includes('\n')) { // JSON lines
     let all = true
     for (const line of t.split('\n').filter((l) => l.trim())) { try { walk(JSON.parse(line), out) } catch { all = false; break } }
     if (all) return out
-    out.values.length = 0; out.shape.length = 0
+    out.values.length = 0; out.shape.length = 0; out.inside.length = 0
   }
   if (looksCsv(t)) {
     const [head, ...rows] = parseCsv(t)
@@ -118,6 +120,7 @@ export function checkLeaks(recorded: Recorded[], files: MockFile[], kept: string
   let values = 0
   const reads = recorded.map((r) => readRecorded(r.text))
   for (const r of reads) for (const k of r.shape) { shape.add(norm(k)); for (const w of words(k)) shape.add(w) }
+  for (const r of reads) for (const raw of r.inside) for (const a of anywhere(raw)) strong.set(a.v, a.kind)
   for (const r of reads) for (const raw of r.values) {
     values++
     for (const a of anywhere(raw)) strong.set(a.v, a.kind)
@@ -142,7 +145,7 @@ export function checkLeaks(recorded: Recorded[], files: MockFile[], kept: string
     for (const w of ws) if (handles.has(w) && !shape.has(w)) once('value', w)
     // Whole values: the mock read the way the recording was (its cells and strings), and its code's string literals.
     const mine = readRecorded(f.text).values
-    for (const m of f.text.matchAll(/'((?:[^'\\\n]|\\.){4,})'|"((?:[^"\\\n]|\\.){4,})"|`([^`]{4,})`/g)) mine.push(m[1] ?? m[2] ?? m[3])
+    for (const m of f.text.matchAll(/'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`([^`]*)`/g)) { const lit = m[1] ?? m[2] ?? m[3]; if (lit.length >= 4) mine.push(lit) }
     for (const raw of mine) { const v = norm(raw); if (whole.has(v) && !shape.has(v)) once('value', v) }
   }
   return { ok: count === 0, leaks, count, read: { files: recorded.length, values } }

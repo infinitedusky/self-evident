@@ -135,6 +135,7 @@ committed event as it happens, via Postgres `LISTEN/NOTIFY`. Several clients can
 | `src/delete-issue.ts` | Deleting a task with no work on it, with its sub-tasks; one with work is refused (cancel it). |
 | `src/folders.ts` | Choosing an app's repositories by folder: the system's folder dialog, and the git repositories in the folder picked. |
 | `src/mocks.ts`, `src/mock-leaks.ts`, `src/recorder.ts` | The mock library: one mock per outside service per app, started with every prototype, main and smoke test; a live smoke run recorded raw through a proxy; a mined mock refused while any recorded value is in it; provenance; export. |
+| `src/mock-data.ts`, `src/fake.ts` | A mock's data, kept apart from its server and read by it from `$MOCK_DATA`: a real response served as it is (this computer only, never exported), a fake of one, or invented data. The faker makes the fake: a real response's structure kept, every other value replaced by its kind, consistently; the leak check runs on what it makes. One set is the mock's default; a run may pick another. |
 | `src/workbench.ts` | An app's repositories: which is home, and a piece of work's worktree in each of the others. |
 
 `pnpm test` runs the scheduler and landing tests anywhere (landing uses a throwaway git repo) and, when Postgres

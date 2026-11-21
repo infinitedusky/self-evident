@@ -353,6 +353,13 @@ export interface Mock {
   recordedAt: string | null; minedAt: string | null
   /** A newer recording waits to be mined. */ unmined: { at: string; files: number } | null
   /** Where it is in use now: a prototype, main, a smoke test. */ usedBy: string[]
+  /** What it can answer with, kept apart from its server, and which of them it serves unless a run says otherwise. */ data: MockData[]; defaultData: string | null
+}
+/** One set of data a mock can answer with (engine/src/mock-data.ts). real: a real response as it is, on this computer only. faked: made from one by the faker. invented: written by hand, or provided by a person who states it holds nothing real. */
+export interface MockData {
+  key: string; name: string; kind: 'real' | 'faked' | 'invented'; files: { path: string; bytes: number }[]
+  provenance: { from?: { at: string; given: boolean; files: number }; faked?: { replaced: number; kept: number }; kept?: string[]; checked?: { at: string; files: number; values: number; against: number }; stated?: { by: string; at: string } }
+  /** What it is, in a line. */ note: string; /** May it leave this computer? Never a real one. */ shareable: boolean; isDefault: boolean; issueId: string | null; updatedAt: string | null
 }
 /** Where the Storybook that renders them stands, and the screens it has. */
 export interface ScreensView { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean; screens: Screen[]; earlier: number }
@@ -482,6 +489,9 @@ export const engine = {
   /** Ask the agent of the task the newest recording was made for to mine it. */
   mineMock: (appId: string, key: string) => call<{ asked: string }>('POST', `/apps/${appId}/mocks/${key}/mine`),
   /** Where its exported files are downloaded from: the server, its invented data and its provenance. */
+  /** Which data a mock serves unless a run says otherwise. */
+  setMockDefaultData: (appId: string, key: string, data: string | null) => call<MockData[]>('PUT', `/apps/${appId}/mocks/${key}/data/default`, { data }),
+  removeMockData: (appId: string, key: string, data: string) => call<{ removed: boolean }>('DELETE', `/apps/${appId}/mocks/${key}/data/${data}`),
   /** Real responses the person already has (a saved JSON, a results CSV), given instead of a live run; the task's agent mines them. */
   giveRecording: async (appId: string, key: string, files: File[]) => {
     const form = new FormData()

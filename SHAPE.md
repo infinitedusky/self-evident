@@ -826,14 +826,35 @@ Details and sources in `research/`.
   opened, as a draft, titled by the repository's own convention. One they close stays closed until they submit again.
   No agent has a way to submit one.
 
-- **Outside services are mocks, mined from one recording (Sandy, 2026-11-20, "Reviewable pull requests", step 1).**
-  An app keeps one mock per outside service, in a library: what its prototypes, smoke tests, main and (next) review
-  environments are pointed at in place of the real thing. A real response is had once, either given (a file the
-  person already has, such as the results CSV: we know our calls work, so what the app reads is enough) or recorded
-  in a live smoke run, and the engine keeps it raw with the task (never in a repository). Its mock is mined from that: every
-  column, nesting, format and edge case kept, every value invented and marked as sample data, and the states the
-  recording lacked added. A mock carries its provenance (what it stands in for, what it was mined from and when,
-  what is real, what is invented, what it cannot show), and only the invented copy is ever exported.
+- **A mock is a server plus data, and each task says where its data comes from (Sandy, 2026-11-20 and 21,
+  "Reviewable pull requests", step 1).** The goal is not a mocking system: it is that any prototype, any smoke test
+  and above all any reviewer can run the change locally on data that exposes nothing, to see that it works. So:
+  - **The app's code is what goes live.** A mock is a separate small server standing where the outside service
+    stands; only settings differ (its address, a dummy key). No "if mocked" branch, ever.
+  - **A mock is a server and its data, kept apart.** The server behaves as the service does (it is ordinary code,
+    written by the task's agent, so it can do what the service needs, such as answering for exactly what it was
+    sent). The data is what it answers with, read from `$MOCK_DATA`, and is the only thing that changes between
+    places.
+  - **Data has a source and a form.** The source is the real API, a real response (recorded in a live run, or a
+    file the person gives), or a file we provide. The form is as it is (this computer only) or faked. So for each
+    place a task runs (prototype, smoke test, reviewer) the task says one of: real API; record and replay; record
+    and fake; a file we provide (as it is or faked); the app's default. Any combination; a recording made for one
+    place serves the others.
+  - **The faker** makes the fake: it keeps a real response's structure (columns, keys, nesting, empties, sizes,
+    the values that are structure) and replaces every other value by its kind, the same real value becoming the
+    same fake one everywhere. The leak check stands behind it and refuses anything carrying a real value.
+  - **Nothing real leaves this computer.** A reviewer's copy and anything shared by a public link is faked, or a
+    file the person states holds no real data (the provenance says it was stated, not checked).
+  - **Made in tasks, kept by the app.** A task has a Data step beside sketches and the prototype where its agent
+    builds or changes the mock and the task's table is set; skipping it uses the app's defaults. Settings › the
+    app › Mocks holds those defaults (each service's server, default data and default table), the real responses
+    on this computer, provenance, and the history of changes to the defaults. A merged task's mock can become the
+    default.
+  - **Ruled out, and why:** a format of our own for a mock's endpoints with a runner to serve it, scenarios as a
+    tree of per-endpoint overrides, and Mockoon or WireMock underneath. All of it was a mocking system; and the
+    first real service (SixtyFour) answers a batch with rows that must carry back the ids it was sent, which fixed
+    answers cannot do and those tools do only by logic packed into templates. Ordinary code in a small server
+    does it in a few lines.
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 
