@@ -6081,3 +6081,15 @@ The engine always saved a workflow's name, and tells the built-in one by how it 
 built in one go), never by what it is called; the card just had no field for it. Editing a workflow now starts with
 its name (`WorkflowCard`, story `Renaming`); one left empty cannot be saved. Nothing else reads the name.
 
+### Adding a service is one form, and mining is said once (Sandy, 2026-11-21, giving the first real file on Cloaked)
+
+Trying it for real: "the mocks I am a little less clear how to add a csv", then "I need to first 'mine it'". Two steps
+where one would do, and a card that said "The task's agent is mining it" with a "Mine it" button under it.
+- **Add a service** (on a task's Data step) takes the name and, in the same form, a real response the person
+  already has; the address and variables, needed only to record a live run, are under "For recording a live run
+  instead".
+- **One line while it is being built**: a mock whose real response is in and whose agent was asked says so, with
+  "Ask again" for when the agent did not start. The second line (a newer response nobody was asked about) shows only
+  when that is true.
+- A given file's own note (`given.meta.json`) is no longer counted as one of its files.
+

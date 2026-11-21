@@ -48,7 +48,7 @@ export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's
       <h3 className="mock-h3">{issueId ? 'Where its data comes from, for this task' : 'Where the data comes from, unless a task says otherwise'}</h3>
       <MockPlaces key={tick} appId={appId} issueId={issueId} />
       <h3 className="mock-h3">{issueId ? 'The app\'s mocks' : 'Each mock'}</h3>
-      {adding && <AddService onAdd={(b) => act(async () => { await engine.raiseMock(appId, { ...b, issueId }); setAdding(false) })} onCancel={() => setAdding(false)} />}
+      {adding && <AddService onAdd={({ files, ...b }) => act(async () => { const m = await engine.raiseMock(appId, { ...b, issueId }); if (files.length) await engine.giveRecording(appId, m.key, files); setAdding(false) })} onCancel={() => setAdding(false)} />}
       {error && <div className="empty bad" style={{ marginBottom: 12 }}>{error}</div>}
       {list === null ? (error ? null : <p className="muted">Loading…</p>)
         : !list.length ? <div className="empty">{issueId ? 'No mocks yet. Start this step with the agent and it names the outside services the change depends on, or add one with Add a service.' : 'No mocks yet. One is made on a task\'s Data step, when its change depends on an outside service.'}</div>
@@ -85,7 +85,7 @@ function MockCard({ appId, issueId, mock: m, act }: { appId: string; issueId?: s
             {m.needs.key && <li>The key: <code>{m.needs.key}</code>.</li>}
             {m.needs.cost && <li>It costs {m.needs.cost}.</li>}
           </ul>
-          {m.needs.recorded ? <p className="faint" style={{ margin: 0 }}>A real response is in. The task's agent is mining it.</p>
+          {m.needs.recorded ? <div className="row"><span>A real response is in. The task's agent is building the mock from it: its conversation shows how far it is.</span><button className="btn quiet small" title="If the agent did not start, or stopped" onClick={() => act(() => engine.mineMock(appId, m.key))}>Ask again</button></div>
             : !m.issue ? <p className="faint" style={{ margin: 0 }}>It has no task yet, so there is no agent to mine it. A task's agent raises a mock when its change needs one.</p>
             : <>
               <GiveFiles what={m.needs.file} onGive={(files) => act(() => engine.giveRecording(appId, m.key, files))} />
@@ -98,10 +98,10 @@ function MockCard({ appId, issueId, mock: m, act }: { appId: string; issueId?: s
             </>}
         </div>
       )}
-      {m.unmined && (
+      {m.unmined && !m.needs?.recorded && ( // one the agent was already asked about says so above, once
         <div className="row">
-          <span>A recording from {day(m.unmined.at)} ({m.unmined.files} files) waits to be mined.</span>
-          <button className="btn small" onClick={() => act(() => engine.mineMock(appId, m.key))}>Mine it</button>
+          <span>A newer real response, from {day(m.unmined.at)}, has not been used yet.</span>
+          <button className="btn small" onClick={() => act(() => engine.mineMock(appId, m.key))}>Ask the task's agent to use it</button>
         </div>
       )}
 
@@ -217,16 +217,27 @@ function EditMock({ mock: m, onSave, onCancel }: { mock: Mock; onSave: (b: { sta
   )
 }
 
-function AddService({ onAdd, onCancel }: { onAdd: (b: { name: string; standsInFor?: string; upstream?: string; env?: Record<string, string> }) => void; onCancel: () => void }) {
+/** A service added on a task: its name, and in the same form a real response the person already has. What a live run needs is tucked away: it is not needed to make a mock from a file. */
+function AddService({ onAdd, onCancel }: { onAdd: (b: { name: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; files: File[] }) => Promise<void>; onCancel: () => void }) {
   const [name, setName] = useState('')
+  const [files, setFiles] = useState<File[]>([])
   const [upstream, setUpstream] = useState('')
   const [env, setEnv] = useState('')
+  const [busy, setBusy] = useState(false)
+  const add = async () => { setBusy(true); try { await onAdd({ name: name.trim(), files, ...(upstream.trim() ? { upstream: upstream.trim() } : {}), ...(env.trim() ? { env: envOf(env) } : {}) }) } finally { setBusy(false) } }
   return (
-    <div className="mock-edit" style={{ marginBottom: 12 }}>
+    <div className="mock-edit" style={{ marginBottom: 12 }} data-component="AddService">
       <label>The service<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="its name, e.g. SixtyFour" /></label>
-      <label>The real service's address<input className="mono" value={upstream} onChange={(e) => setUpstream(e.target.value)} placeholder="https://api.vendor.com" /></label>
-      <label>The variables that point the app at it<textarea className="mono" rows={2} value={env} onChange={(e) => setEnv(e.target.value)} placeholder="VENDOR_BASE_URL={container_url}" /></label>
-      <div className="row"><button className="btn small" disabled={!name.trim()} onClick={() => onAdd({ name: name.trim(), ...(upstream.trim() ? { upstream: upstream.trim() } : {}), ...(env.trim() ? { env: envOf(env) } : {}) })}>Add</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
+      <label>A real response you already have <span className="faint">(a file it sent: CSV, JSON or other text; you can add one later)</span><input type="file" multiple onChange={(e) => setFiles([...(e.target.files ?? [])])} /></label>
+      <p className="faint" style={{ margin: 0, fontSize: 13 }}>{files.length ? 'It is kept on this computer, never in a repository. The task\'s agent builds the mock from it and makes a fake of it.' : 'With no file, it is listed as needing a real response: you can give one or record a live run later.'}</p>
+      <details className="mock-provenance">
+        <summary>For recording a live run instead</summary>
+        <div className="mock-edit">
+          <label>The real service's address<input className="mono" value={upstream} onChange={(e) => setUpstream(e.target.value)} placeholder="https://api.vendor.com" /></label>
+          <label>The variables that point the app at it<textarea className="mono" rows={2} value={env} onChange={(e) => setEnv(e.target.value)} placeholder="VENDOR_BASE_URL={container_url}" /></label>
+        </div>
+      </details>
+      <div className="row"><button className="btn small" disabled={!name.trim() || busy} onClick={add}>{busy ? 'Adding…' : 'Add'}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
     </div>
   )
 }
