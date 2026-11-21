@@ -29,6 +29,7 @@ import { newId } from './ids.js'
 import { PlanError } from './issues.js'
 import { checkLeaks, keptRefused, LEAKS_SHOWN, type Leak } from './mock-leaks.js'
 import { clip, day, isGiven, mocksHome, readRecording, recordingDir, recordingsOfService, rowOf, workspaceOf, type Row } from './mocks.js'
+import { cleanEndpoints, keyed } from './mock-endpoints.js'
 import { standInKey } from './stand-ins.js'
 
 export type DataKind = (typeof MOCK_DATA_KINDS)[number]
@@ -98,10 +99,12 @@ function cleanData(given: unknown): Record<string, string> {
 }
 const leaksSay = (leaks: Leak[], count: number) => `${leaks.map((l) => `- ${l.file}: ${l.kind} "${l.excerpt}"`).join('\n')}${count > LEAKS_SHOWN ? `\n…and ${count - LEAKS_SHOWN} more` : ''}`
 /** The newest real response of a service on this computer, or the one named. */
-function realOf(appId: string, key: string, given?: string | null) {
+function realOf(m: Pick<Row, 'appId' | 'key' | 'endpoints' | 'upstream'>, given?: string | null) {
+  const appId = m.appId, key = m.key
   const dir = given ? recordingDir(appId, given) : recordingsOfService(appId, key)[0]?.dir
   if (!dir) throw new PlanError(`there is no real response of ${key} on this computer: give one, or record a live run`)
-  const recorded = readRecording(dir)
+  // A recorded run is read under its endpoints' names (mock-endpoints.ts), so a fake of it has the names a server looks for.
+  const recorded = readRecording(keyed(dir, cleanEndpoints(m.endpoints), m.upstream))
   if (!recorded.length) throw new PlanError(`the real response at ${dir} is empty`)
   return { dir, recorded, from: { at: statSync(dir).mtime.toISOString(), given: isGiven(dir), files: recorded.length } }
 }
@@ -126,7 +129,7 @@ export async function useReal(appId: string, key: string, i: { recording?: strin
   const m = await mockOf(appId, key), dk = dataKeyOf(i.dataKey, 'real')
   const old = await dataRow(m.id, dk)
   if (old && old.kind !== 'real') throw new PlanError(`"${dk}" is ${old.kind} data: a real response is kept under another name`)
-  const { dir, from } = realOf(appId, m.key, i.recording)
+  const { dir, from } = realOf(m, i.recording)
   return keep(m, dk, { name: clip(i.name, 80) || old?.name || 'The real response', kind: 'real', files: {}, recording: dir, plan: {}, provenance: { from }, issueId: i.issueId }, actor, old)
 }
 
@@ -140,7 +143,7 @@ export async function fakeData(appId: string, key: string, i: { recording?: stri
   const m = await mockOf(appId, key), dk = dataKeyOf(i.dataKey, 'faked')
   const old = await dataRow(m.id, dk)
   if (old && old.kind !== 'faked') throw new PlanError(`"${dk}" is ${old.kind} data: a fake is kept under another name`)
-  const { dir, recorded, from } = realOf(appId, m.key, i.recording)
+  const { dir, recorded, from } = realOf(m, i.recording)
   const given = (i.plan ?? {}) as FakePlan
   const plan: FakePlan = {
     keep: strings(given.keep, 200), keepValues: strings(given.keepValues, 200), keepHosts: strings(given.keepHosts, 60), text: strings(given.text, 200),
@@ -220,10 +223,10 @@ export async function removeData(appId: string, key: string, dataKey: string, ac
 }
 
 /** The folder a server is given as $MOCK_DATA: a real response's own, or the set's files written out (once per version). */
-export function dataDir(m: Pick<Row, 'appId' | 'key'>, d: Pick<DataRow, 'key' | 'kind' | 'files' | 'recording'>): string {
+export function dataDir(m: Pick<Row, 'appId' | 'key' | 'endpoints' | 'upstream'>, d: Pick<DataRow, 'key' | 'kind' | 'files' | 'recording'>): string {
   if (d.kind === 'real') {
     if (!d.recording || !existsSync(d.recording)) throw new PlanError(`the real response "${d.key}" of ${m.key} is not on this computer: it is never moved with the app. Use faked data, or give the response again`)
-    return d.recording
+    return keyed(d.recording, cleanEndpoints(m.endpoints), m.upstream)
   }
   const dir = join(mocksHome(), m.appId, m.key, 'data', `${d.key}-${createHash('sha256').update(JSON.stringify(d.files)).digest('hex').slice(0, 12)}`)
   if (existsSync(join(dir, '.complete'))) return dir

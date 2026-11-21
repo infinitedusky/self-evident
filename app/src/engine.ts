@@ -354,6 +354,13 @@ export interface Mock {
   /** A newer recording waits to be mined. */ unmined: { at: string; files: number } | null
   /** Where it is in use now: a prototype, main, a smoke test. */ usedBy: string[]
   /** What it can answer with, kept apart from its server, and which of them it serves unless a run says otherwise. */ data: MockData[]; defaultData: string | null
+  /** The calls it answers, and the data files that are no endpoint's (engine/src/mock-endpoints.ts). */ endpoints: MockEndpoint[]; unlinked: string[]
+}
+/** One call the app makes to the service. A response belongs to exactly one endpoint, by its file's name. */
+export interface MockEndpoint {
+  key: string; method: string; path: string; what?: string; file?: string
+  /** The real response behind it on this computer. None: its shape is taken from the code that calls it. */ real: { at: string; how: 'given' | 'recorded' } | null
+  /** Its files in the data the mock serves by default. */ files: string[]
 }
 /** One set of data a mock can answer with (engine/src/mock-data.ts). real: a real response as it is, on this computer only. faked: made from one by the faker. invented: written by hand, or provided by a person who states it holds nothing real. */
 export interface MockData {
@@ -523,9 +530,10 @@ export const engine = {
   setMockDefaultData: (appId: string, key: string, data: string | null) => call<MockData[]>('PUT', `/apps/${appId}/mocks/${key}/data/default`, { data }),
   removeMockData: (appId: string, key: string, data: string) => call<{ removed: boolean }>('DELETE', `/apps/${appId}/mocks/${key}/data/${data}`),
   /** Real responses the person already has (a saved JSON, a results CSV), given instead of a live run; the task's agent mines them. */
-  giveRecording: async (appId: string, key: string, files: File[]) => {
+  giveRecording: async (appId: string, key: string, files: File[], /** The endpoint they are responses of. */ endpoint?: string) => {
     const form = new FormData()
     for (const f of files) form.append('file', f)
+    if (endpoint) form.append('endpoint', endpoint)
     const res = await fetch(`${API}/apps/${appId}/mocks/${key}/recording`, { method: 'POST', body: form })
     const text = await res.text()
     if (!res.ok) throw new Error(text || `${res.status}`)

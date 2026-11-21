@@ -8,7 +8,7 @@ import { Link } from 'react-router'
 import { Badge, type Tone } from './Badge'
 import { Md } from './Md'
 import { MockPlaces } from './MockPlaces'
-import { engine, type Mock, type MockChange, type MockData } from '../engine'
+import { engine, type Mock, type MockChange, type MockData, type MockEndpoint } from '../engine'
 
 const STATUS: Record<Mock['status'], { label: string; tone: Tone }> = {
   mined: { label: 'From a real response', tone: 'ok' },
@@ -105,6 +105,7 @@ function MockCard({ appId, issueId, mock: m, act }: { appId: string; issueId?: s
         </div>
       )}
 
+      {m.status !== 'needs_recording' && <Endpoints appId={appId} mock={m} act={act} />}
       {m.status !== 'needs_recording' && <DataSets appId={appId} issueId={issueId} mock={m} act={act} />}
 
       {m.status !== 'needs_recording' && (
@@ -135,6 +136,39 @@ function GiveFiles({ what, onGive }: { what?: string; onGive: (files: File[]) =>
       <div className="row">
         <input type="file" multiple aria-label="Responses you already have" onChange={(e) => setFiles([...(e.target.files ?? [])])} />
         <button className="btn small" disabled={!files.length || busy} onClick={async () => { setBusy(true); try { await onGive(files) } finally { setBusy(false) } }}>{busy ? 'Giving…' : 'Give it'}</button>
+      </div>
+    </div>
+  )
+}
+
+/** The calls the mock answers: a response belongs to exactly one, and each says whether a real response is behind it or its shape is taken from the code. */
+function Endpoints({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn: () => Promise<unknown>) => Promise<void> }) {
+  const real = m.endpoints.filter((e) => e.real).length
+  if (!m.endpoints.length) return (
+    <div className="mock-data" data-component="MockEndpoints">
+      <strong>Endpoints</strong>
+      <div className="row" style={{ marginTop: 4 }}><span className="faint">Not listed: this mock was built before a mock said which calls it answers and which response answers which.</span>{m.issue && <button className="btn quiet small" onClick={() => act(() => engine.mineMock(appId, m.key))}>Ask the task's agent to list them</button>}</div>
+    </div>
+  )
+  return (
+    <div className="mock-data" data-component="MockEndpoints">
+      <strong>Endpoints</strong> <span className="faint">{m.endpoints.length} call{m.endpoints.length === 1 ? '' : 's'}: {real} with a real response behind {real === 1 ? 'it' : 'them'}, {m.endpoints.length - real} taken from the code</span>
+      <div className="mock-endpoints" role="table">
+        <div className="mock-endpoints-head" role="row"><span role="columnheader">The call</span><span role="columnheader">Answered with</span><span role="columnheader">Where its shape came from</span></div>
+        {m.endpoints.map((e) => <EndpointRow key={e.key} endpoint={e} canGive={!!m.issue} onGive={(files) => act(() => engine.giveRecording(appId, m.key, files, e.key))} />)}
+      </div>
+      {m.unlinked.length > 0 && <p className="mock-data-warn">{m.unlinked.length === 1 ? 'A data file is' : 'Data files are'} no endpoint's, so nothing says which call {m.unlinked.length === 1 ? 'it answers' : 'they answer'}: <code>{m.unlinked.join(', ')}</code>. A file is an endpoint's by its name: <code>{m.endpoints[0].key}.csv</code>, or <code>{m.endpoints[0].key}.more.csv</code> for more of the same.</p>}
+    </div>
+  )
+}
+function EndpointRow({ endpoint: e, canGive, onGive }: { endpoint: MockEndpoint; canGive: boolean; onGive: (files: File[]) => Promise<void> }) {
+  return (
+    <div className="mock-endpoints-row" role="row">
+      <div role="cell"><span className="mock-method">{e.method}</span> <code>{e.path}</code>{e.what && <div className="faint">{e.what}</div>}</div>
+      <div role="cell">{e.files.length ? e.files.map((f) => <code key={f} style={{ display: 'block' }}>{f}</code>) : <span className="faint">What its server makes up</span>}</div>
+      <div role="cell">
+        {e.real ? <>{e.real.how === 'given' ? 'A real response you gave' : 'A live run, recorded'}, {day(e.real.at)}</> : <span>The code that calls it <span className="faint">(no real response)</span></span>}
+        {canGive && <label className="mock-give-one"><input type="file" multiple aria-label={`A real response of ${e.method} ${e.path}`} onChange={(ev) => { const files = [...(ev.target.files ?? [])]; if (files.length) void onGive(files) }} /><span className="btn quiet small">{e.real ? 'Give a newer one' : 'Give a real response'}</span></label>}
       </div>
     </div>
   )

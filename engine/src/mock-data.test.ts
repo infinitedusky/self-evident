@@ -98,7 +98,7 @@ describe.skipIf(!reachable)('a mock\'s data, apart from its server', () => {
     issueId = t.id
     await needsRecording(appId, { name: 'Scanner', issueId, needs: { file: 'the results CSV' } })
     given = (await giveRecording(appId, 'scanner', [{ name: 'results.csv', bytes: new TextEncoder().encode(real) }])).dir
-    await saveMock(appId, { name: 'Scanner', status: 'mined', cmd: 'node server.mjs', env: { SCANNER_BASE_URL: '{url}' }, files: { 'server.mjs': server }, provenance, recording: given, issueId })
+    await saveMock(appId, { name: 'Scanner', status: 'mined', cmd: 'node server.mjs', env: { SCANNER_BASE_URL: '{url}' }, files: { 'server.mjs': server }, provenance, recording: given, issueId, endpoints: [{ key: 'start', method: 'POST', path: '/runs', what: 'a job id' }, { key: 'status', method: 'GET', path: '/runs/{id}/status' }, { key: 'links', method: 'GET', path: '/runs/{id}/links' }, { key: 'results', method: 'GET', path: 'the results file, by the link the service sends' }] })
   })
   afterAll(async () => { rmSync(home, { recursive: true, force: true }); for (const k of ['RECORDINGS_HOME', 'MOCKS_HOME', 'STAND_INS_HOME']) delete process.env[k]; await pool.end() })
 
@@ -233,5 +233,15 @@ describe.skipIf(!reachable)('a mock\'s data, apart from its server', () => {
     expect(await removeData(appId, 'scanner', 'nothing found')).toEqual({ removed: true })
     expect((await getMock(appId, 'scanner')).defaultData).toBeNull()
     expect(readFileSync(join(given, 'results.csv'), 'utf8')).toBe(real) // the real response is where it was, untouched
+  })
+
+  it('ties each response to one endpoint, says which have a real response behind them, and keeps a file given for an endpoint under its name', async () => {
+    const m = await getMock(appId, 'scanner')
+    expect(m.endpoints.map((e) => [e.key, e.method, e.real?.how ?? null, e.files])).toEqual([['start', 'POST', null, []], ['status', 'GET', null, []], ['links', 'GET', null, []], ['results', 'GET', 'given', ['results.csv']]])
+    expect(m.unlinked).toEqual(['added.csv']) // added under a name that is no endpoint's: said, so it can be put right
+    await expect(giveRecording(appId, 'scanner', [{ name: 'x.json', bytes: new TextEncoder().encode('{}') }], 'user', 'cost')).rejects.toThrow('has no endpoint "cost"')
+    const r = await giveRecording(appId, 'scanner', [{ name: 'poll answer.json', bytes: new TextEncoder().encode('{"status":"completed"}') }], 'user', 'status')
+    expect(r.files).toEqual(['status.json'])
+    expect(JSON.parse(readFileSync(join(r.dir, 'given.meta.json'), 'utf8'))).toMatchObject({ endpoint: 'status', files: [{ name: 'status.json', was: 'poll answer.json' }] })
   })
 })

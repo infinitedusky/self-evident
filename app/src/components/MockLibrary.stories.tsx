@@ -51,3 +51,20 @@ export const AddingAService: Story = {
     await expect(c.getByRole('button', { name: 'Add' })).toBeEnabled()
   },
 }
+/** A service with ten calls: one has a real response behind it, one was recorded in a live run, eight are taken from the code. Each says which, and any of them can be given a real response. */
+export const TenEndpoints: Story = {
+  args: { issueId: 'iss_sample1' },
+  beforeEach: withEngine({ mocks: [{ ...mocks[0], endpoints: [
+    ...mocks[0].endpoints,
+    { key: 'cost', method: 'GET', path: '/workflows/runs/{id}/cost', what: 'What the run cost, in credits', real: { at: '2026-11-20T14:00:00Z', how: 'recorded' }, files: ['cost.json'] },
+    ...['cancel', 'retry', 'webhooks', 'account', 'limits'].map((k) => ({ key: k, method: k === 'cancel' || k === 'retry' ? 'POST' : 'GET', path: k === 'cancel' || k === 'retry' ? `/workflows/runs/{id}/${k}` : `/${k}`, what: `(sample) ${k}`, real: null, files: [] })),
+  ] }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('10 calls: 2 with a real response behind them, 8 taken from the code')).toBeInTheDocument()
+  },
+}
+/** A data file that is no endpoint's: said, so it can be put right. */
+export const UnlinkedFile: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], unlinked: ['sample-people.csv'] }] }) }
+/** A mock built before endpoints were listed: it says so, and the task's agent can be asked to list them. */
+export const EndpointsNotListed: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], endpoints: [], unlinked: [] }] }) }

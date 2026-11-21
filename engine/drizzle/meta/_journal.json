@@ -351,6 +351,13 @@
       "when": 1795282320203,
       "tag": "0049_mock_places",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1795284232530,
+      "tag": "0050_mock_endpoints",
+      "breakpoints": true
     }
   ]
 }

@@ -37,6 +37,7 @@ import { PlanError } from './issues.js'
 import { checkLeaks, keptRefused, LEAKS_SHOWN, type Leak } from './mock-leaks.js'
 import { recordingsDir, recordingsHome } from './recordings.js'
 import { dataDir, dataFor, dataNote, exportable, listData, type DataKind, type DataView } from './mock-data.js'
+import { cleanEndpoints, endpointViews, type Endpoint, type EndpointView } from './mock-endpoints.js'
 import { standInKey, type StandIn } from './stand-ins.js'
 
 export type MockStatus = (typeof MOCK_STATUSES)[number]
@@ -115,10 +116,12 @@ export interface MockView {
   /** The newest recording, when it is newer than what the mock was mined from: waiting to be mined. */ unmined: { at: string; files: number } | null
   usedBy: string[]
   /** What it can answer with (mock-data.ts), and which of them it serves unless a run says otherwise. */ data: DataView[]; defaultData: string | null
+  /** The calls it answers, each with the real response behind it (or none: taken from the code) and its files in the default data; and the data files that are no endpoint's. */ endpoints: EndpointView[]; unlinked: string[]
 }
 async function viewOf(m: Row, ident?: (id: string) => Promise<{ id: string; identifier: string; title: string } | null>): Promise<MockView> {
   const recs = recordingsOfService(m.appId, m.key)
   const newest = recs[0]
+  const data = await listData(m)
   const unmined = newest && newest.dir !== m.recording && (!m.minedAt || newest.at > m.minedAt.toISOString()) ? { at: newest.at, files: newest.files } : null
   return {
     key: m.key, name: m.name, status: m.status as MockStatus, standsInFor: m.standsInFor, upstream: m.upstream, env: m.env ?? {}, cmd: m.cmd,
@@ -126,7 +129,8 @@ async function viewOf(m: Row, ident?: (id: string) => Promise<{ id: string; iden
     provenance: prov(m), note: provenanceNote(m), needs: (m.needs as Needs | null) ?? null,
     issue: m.issueId && ident ? await ident(m.issueId) : null,
     recordedAt: m.recordedAt?.toISOString() ?? null, minedAt: m.minedAt?.toISOString() ?? null, unmined, usedBy: usedBy(m.appId, m.key),
-    data: await listData(m), defaultData: m.defaultData,
+    data, defaultData: m.defaultData,
+    ...endpointViews(cleanEndpoints(m.endpoints), m.recording ?? newest?.dir ?? null, (data.find((d) => d.isDefault) ?? data.find((d) => d.kind !== 'real'))?.files.map((f) => f.path) ?? [], m.upstream),
   }
 }
 const identOf = async (id: string) => {
@@ -247,7 +251,7 @@ export function assertNoLeaks(dir: string, files: Record<string, string>, kept: 
   return r.read
 }
 
-export interface SaveMock { key?: string; name: string; standsInFor?: string; upstream?: string; status: 'mined' | 'assumed'; cmd: string; env: Record<string, string>; files: Record<string, string>; provenance: Provenance; /** mined: the recording's folder. */ recording?: string; issueId?: string | null }
+export interface SaveMock { key?: string; name: string; standsInFor?: string; upstream?: string; status: 'mined' | 'assumed'; cmd: string; env: Record<string, string>; files: Record<string, string>; provenance: Provenance; /** mined: the recording's folder. */ recording?: string; issueId?: string | null; /** The calls it answers (mock-endpoints.ts). Left out: as they were. */ endpoints?: Endpoint[] }
 /**
  * A mock written: mined from a recording (refused while any of its values is in the files), or assumed. A mined one
  * replacing a mined one says what changed. Clears what it needed.
@@ -281,7 +285,7 @@ export async function saveMock(appId: string, i: SaveMock, actor = 'agent') {
   }
   if (!provenance.real && i.status === 'assumed') provenance.real = 'nothing: the shape is assumed'
   const workspaceId = await workspaceOf(appId)
-  const values = { name, standsInFor: clip(i.standsInFor ?? old?.standsInFor ?? '', 200), ...(i.upstream ? { upstream: cleanUrl(i.upstream) } : {}), status: i.status, cmd, env, files, provenance: provenance as Record<string, unknown>, needs: null, recording, recordedAt, minedAt: i.status === 'mined' ? new Date() : null, ...(i.issueId ? { issueId: i.issueId } : {}), updatedAt: new Date() }
+  const values = { name, standsInFor: clip(i.standsInFor ?? old?.standsInFor ?? '', 200), ...(i.upstream ? { upstream: cleanUrl(i.upstream) } : {}), status: i.status, cmd, env, files, ...(i.endpoints ? { endpoints: cleanEndpoints(i.endpoints) } : {}), provenance: provenance as Record<string, unknown>, needs: null, recording, recordedAt, minedAt: i.status === 'mined' ? new Date() : null, ...(i.issueId ? { issueId: i.issueId } : {}), updatedAt: new Date() }
   await db.transaction(async (tx) => {
     if (old) await tx.update(mock).set(values).where(eq(mock.id, old.id))
     else await tx.insert(mock).values({ id: newId('run').replace(/^run_/, 'mock_'), appId, key, ...values })
@@ -314,26 +318,30 @@ export async function noteRecording(appId: string, key: string, dir: string, iss
  * recording is, with the task, outside every repository, untouched; given.meta.json says it was given, not recorded,
  * so the miner takes any call not given from the code that makes it and says so in the provenance.
  */
-export async function giveRecording(appId: string, key: string, given: { name: string; bytes: Uint8Array }[], actor = 'user'): Promise<{ dir: string; issueId: string | null; files: string[] }> {
+export async function giveRecording(appId: string, key: string, given: { name: string; bytes: Uint8Array }[], actor = 'user', /** The endpoint they are responses of: kept under its name, so they are its. */ endpoint?: string | null): Promise<{ dir: string; issueId: string | null; files: string[] }> {
   const m = await rowOf(appId, key)
   if (!m) throw new PlanError(`this app has no mock "${key}"`)
   if (!given.length) throw new PlanError('give at least one file: a response the service sent')
   if (given.length > 20) throw new PlanError('20 files at most')
+  const of = endpoint ? cleanEndpoints(m.endpoints).find((e) => e.key === standInKey(endpoint)) : null
+  if (endpoint && !of) throw new PlanError(`${m.name} has no endpoint "${endpoint}"`)
   const names = new Set<string>()
   const files = given.map((f) => {
     if (!f.bytes.length) throw new PlanError(`${f.name} is empty`)
     if (f.bytes.length > RECORDED_FILE_MAX) throw new PlanError(`${f.name} is over ${RECORDED_FILE_MAX / 1e6} MB: too large to check a mock against`)
     if (f.bytes.includes(0)) throw new PlanError(`${f.name} is not text: give a response as the service sent it (JSON, CSV or other text)`)
     let name = (f.name.split(/[\\/]/).pop() ?? '').replace(/[^\w.\- ]+/g, '_').replace(/^\.+/, '').slice(0, 120) || 'response.txt'
+    const was = name
+    if (of) { const ext = /\.[A-Za-z0-9]{1,8}$/.exec(name)?.[0] ?? '.txt'; name = names.size ? `${of.key}.${names.size + 1}${ext}` : `${of.key}${ext}` }
     if (name === 'given.meta.json' || name.endsWith('.meta.json')) name = name.replace(/\.meta\.json$/, '.json')
     while (names.has(name)) name = `1-${name}`
     names.add(name)
-    return { name, bytes: f.bytes }
+    return { name, bytes: f.bytes, was }
   })
   const dir = join(recordingsDir(appId, { issueId: m.issueId }), key, `given-${new Date().toISOString().replace(/[:.]/g, '-')}`)
   mkdirSync(dir, { recursive: true })
   for (const f of files) writeFileSync(join(dir, f.name), f.bytes)
-  writeFileSync(join(dir, 'given.meta.json'), JSON.stringify({ given: true, by: actor, files: files.map((f) => ({ name: f.name, bytes: f.bytes.length })), at: new Date().toISOString(), what: m.needs?.file ?? null }, null, 2))
+  writeFileSync(join(dir, 'given.meta.json'), JSON.stringify({ given: true, by: actor, files: files.map((f) => ({ name: f.name, bytes: f.bytes.length, ...(f.was !== f.name ? { was: f.was } : {}) })), ...(of ? { endpoint: of.key } : {}), at: new Date().toISOString(), what: m.needs?.file ?? null }, null, 2))
   await noteRecording(appId, key, dir, m.issueId, files.length)
   return { dir, issueId: m.issueId, files: files.map((f) => f.name) }
 }
@@ -422,7 +430,7 @@ export async function exportMock(appId: string, key: string, outDir: string, dat
   const data: Record<string, string> = {}
   if (d) { const e = exportable(m, d); checked = checked || e.checked; for (const [p, t] of Object.entries(e.files)) data[join('data', p)] = t }
   const note = provenanceNote(m) + (d ? `\nIts data ("${d.name}"): ${dataNote(d)}\n` : '')
-  const files: Record<string, string> = { ...m.files, ...data, 'PROVENANCE.md': note, 'mock.json': JSON.stringify({ key: m.key, name: m.name, standsInFor: m.standsInFor, status: m.status, cmd: m.cmd, env: m.env, ...(d ? { data: { key: d.key, kind: d.kind, dir: 'data', variable: 'MOCK_DATA' } } : {}) }, null, 2) + '\n' }
+  const files: Record<string, string> = { ...m.files, ...data, 'PROVENANCE.md': note, 'mock.json': JSON.stringify({ key: m.key, name: m.name, standsInFor: m.standsInFor, status: m.status, cmd: m.cmd, env: m.env, endpoints: cleanEndpoints(m.endpoints), ...(d ? { data: { key: d.key, kind: d.kind, dir: 'data', variable: 'MOCK_DATA' } } : {}) }, null, 2) + '\n' }
   for (const [p, t] of Object.entries(files)) { const f = join(outDir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, t) }
   return { dir: outDir, files: Object.keys(files).sort(), checked, data: d?.key ?? null }
 }
