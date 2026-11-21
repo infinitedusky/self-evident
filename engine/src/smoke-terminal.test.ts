@@ -17,7 +17,7 @@ try { await db.execute('select 1') } catch { reachable = false }
 
 describe('who may reach the terminal', () => {
   const ui = 'https://idea.example.test'
-  it('is Self Evident\'s own page: this computer\'s names and the address it is served at, and nothing else', () => {
+  it('is Evident\'s own page: this computer\'s names and the address it is served at, and nothing else', () => {
     expect(ownPage({ method: 'POST', origin: 'https://idea.example.test', contentType: 'application/json' }, ui)).toBe(true)
     expect(ownPage({ method: 'POST', origin: 'http://localhost:5180', contentType: 'application/json; charset=utf-8' }, ui)).toBe(true)
     expect(ownPage({ method: 'GET', site: 'same-origin' }, ui)).toBe(true) // the page's own stream

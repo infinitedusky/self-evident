@@ -103,7 +103,7 @@ export async function leave(plan: Plan, o: Options): Promise<Line[]> {
     if (!p.path || !p.branch || seen.has(p.path)) continue
     seen.add(p.path)
     if (!existsSync(p.path)) { say({ name: p.name, what: `no worktree on this Mac (${p.branch})`, ok: true }); continue }
-    if (!plan.checkouts.find((c) => c.localPath === p.repo)?.fullName) { say({ name: p.name, what: `its app has no GitHub repository in Self Evident, so ${p.branch} stays on this Mac`, ok: false }); continue }
+    if (!plan.checkouts.find((c) => c.localPath === p.repo)?.fullName) { say({ name: p.name, what: `its app has no GitHub repository in Evident, so ${p.branch} stays on this Mac`, ok: false }); continue }
     if (o.except?.includes(p.branch)) { say({ name: p.name, what: `${p.branch} left alone, as asked: it stays on this Mac`, ok: false }); continue }
     try {
       const wip = await hasUncommitted(p.path)
@@ -165,7 +165,7 @@ export async function arrive(plan: Plan, o: Options): Promise<Line[]> {
         say({ name: c.name, what: `cloned to ${c.localPath}`, ok: true })
         continue
       }
-      if (!c.fullName || (await git(c.localPath, ['remote'], { allowFail: true })).stdout === '') continue // only a repository Self Evident was given is fetched
+      if (!c.fullName || (await git(c.localPath, ['remote'], { allowFail: true })).stdout === '') continue // only a repository Evident was given is fetched
       await git(c.localPath, ['fetch', '-q', '--prune', 'origin'])
       const on = (await git(c.localPath, ['symbolic-ref', '--short', '-q', 'HEAD'], { allowFail: true })).stdout
       if (on === c.defaultBranch && !(await hasUncommitted(c.localPath))) await git(c.localPath, ['merge', '-q', '--ff-only', `origin/${c.defaultBranch}`], { allowFail: true })

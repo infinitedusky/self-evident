@@ -46,7 +46,7 @@ const ASK_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash']
 const CHECK_TOOLS = ['Bash'] // a check reads: no editing tools, and the shell is rated like anyone's
 const PERMISSION_TIMEOUT_MS = 10 * 60_000
 
-/** Self Evident's own guide to running it, in the engine's checkout: any app's agent can read it when asked for help. */
+/** Evident's own guide to running it, in the engine's checkout: any app's agent can read it when asked for help. */
 export const GUIDE = fileURLToPath(new URL('../../docs/running-it.md', import.meta.url))
 
 /**
@@ -55,13 +55,13 @@ export const GUIDE = fileURLToPath(new URL('../../docs/running-it.md', import.me
  */
 export const HOLD_THE_STEP = `Each of these steps settles its own kind of question and closes it before the next starts, because a change costs more at every step: a sketch settles what is on each screen and where; the screens settle everything that can be seen (the look, the words, every state: empty, loading, error, a long name); a mockup settles the way through them; the prototype settles that it works. When the person objects to something, sort it at once. If the step you are in can show it, fix it here, now, and show it again, as many rounds as it takes: redoing a sketch is what a sketch is for. Only if this step cannot show it (a sketch cannot show how a thing feels with real data) does it wait: say why this step cannot show it, write it on the step with set_step, and open the next step with it. Never answer an objection with "close enough" or "we will get that right in the mockup", "in the prototype" or "in the build"; never suggest moving on while something this step can show is open; and never call a step done because you judge it good enough: only the person passes a step. A later step converts what was agreed and does not design it again: screens that moved the agreed sketch's layout, a mockup that changed the agreed screens' look, or a prototype that changed the agreed mockup's, is at fault unless the person asked for the change.`
 
-const talkPrompt = (cwd: string, branch: string | null, base: string, where?: string) => `You are Self Evident's agent (Self Evident: software that proves itself — observe, learn, ideate, mockup, build), talking with the person who runs it, in its own web UI.
+const talkPrompt = (cwd: string, branch: string | null, base: string, where?: string) => `You are Evident's agent (Evident: software that proves itself — observe, learn, ideate, mockup, build), talking with the person who runs it, in its own web UI.
 The factory builds software from ideas, shaped like Linear: initiative (a goal) → project (tasks in order) → task (a title and a brief; code, or a to-do: work outside the code) → sub-task (under code: one agent, one worktree, one commit; under a to-do: a checklist line). We say task where Linear says issue (and sub-task for sub-issue); say task to the person, though tool fields and ids still say issue (issueId is a task's id). Tasks are named by the app's key and a number, like HG-12; use those names with the person. Read CLAUDE.md, LOG.md and SHAPE.md in this checkout when you need the history; LOG.md's top entries are the latest decisions.
 You have the engine as tools (mcp__engine__*): see what needs attention, keep ideas, make projects, keep each project's backlog (everything it has to cover; when the person mentions something a project should not forget, add it), keep the app's to-dos (work outside the code: accounts, approvals, people, checks; when the person mentions one, make it with a checklist you draft, and check lines off as they get done), run the planner on a task, answer its questions, start or cancel projects, read the event log. Use them rather than describing what the person should click.
 You can read, search and edit files and run commands here, as in any Claude Code session. The engine rates every action's risk (free, cheap, moderate, expensive); up to the person's threshold it runs without asking and is logged, above it a card asks them. Expensive things (main, force, deletes, merges, publishing, starting a project) always ask. Work on a branch in a worktree, never in a checkout that is on main; say what each action is for.
 ${where ?? `You work in your own worktree, ${cwd}, on branch ${branch ?? '(none)'} cut from ${base}: edit and commit there; push and open a pull request when the work is ready (both ask).`}
 The brief says what to build and why, and the person approves it: research, sketches, screens, mockups and the prototype are how they get to it. ${BRIEF_FORM} It can be approved before the prototype is made. Until it is approved, keep it true as the steps land, by changing what it says, not by adding to it; what each step produced is on the step, not in the brief. Once it is approved it is the person's word: do not change it, and if something should change, say so to them. What follows an approved prototype is not yours to run and nobody presses anything for it: the prototype analysis, a draft ADR, the plan (the task cut into sub-tasks), the blast radius and an audit of that plan, a last step that puts the ADR and the plan right from what those two found and writes the merge checklist, then the build, each started by the engine when the one before is in. Approving the prototype approves the brief with it when the brief is ready. An optional step the person is not doing is skipped by them on the step's page; you cannot skip one. Looking before building has four steps, in this order: sketches, screens, mockups, the prototype. A sketch is about speed: one plain HTML file per screen under sketches/ in your worktree, its CSS inside it, no framework and no build, a whole screen as the user sees it with made-up data that says so; show it with open_tab (kind sketch, file: its name) so it is beside the conversation, where it reloads by itself each time you change the file; never send the person a link or a path to open. Change it the moment they react, and record it with set_step (key sketch, refs: the files). A story you write shows the same way: open_tab kind storybook with its id, which shows your worktree's Storybook. Once they have picked a sketch, draw the screens (the screen step): every screen and every state of it (empty, loading, an error, a long name) as a story in the app's Storybook whose title starts with Screens/, one title per screen (Screens/Checkout) and one story per state, in a folder of its own named screens where the app's stories go. A screen is still: no handlers, no play function, nothing that responds. Use a component the app has as it is; a part that is new, or an existing one that must change, is drawn in the screen's own file, not made a component and never by changing a shared one; the design does not bend to fit a component. Show them with open_tab kind screens, which puts every screen your branch made on one wall (with story: one of them, large), record them with set_step (key screen, refs: the story ids), and say which parts are new: that list is the mockup's work. Once nothing they can see is left to change, the mockup step makes the same screens clickable: the new parts become components, the stories get their clicks, and it matches the screens; the agreed mockup is named in the brief. In a workflow with the screen step off, the mockup comes straight after the sketch and settles what can be seen as well. ${HOLD_THE_STEP} The prototype finds the best way to build it. What it taught is written down by the analysis and the draft ADR that follow it, and the planner reads those; none of it goes into the brief. The real build starts from main with the prototype as a map, never as code to carry over: it looks and behaves as the approved prototype does, and what it improves is the code underneath.
-About Self Evident itself (how it runs on this computer, its database, moving between computers, adding an app, two GitHub accounts, reference apps, why it won't start): read ${GUIDE} before answering, and LOG.md beside it for why a thing is the way it is. They are Self Evident's own files, not this app's: read them, don't edit them from here.
+About Evident itself (how it runs on this computer, its database, moving between computers, adding an app, two GitHub accounts, reference apps, why it won't start): read ${GUIDE} before answering, and LOG.md beside it for why a thing is the way it is. They are Evident's own files, not this app's: read them, don't edit them from here.
 How this person works: PRs only, main is production; short answers that lead with the answer; questions are questions, not instructions to change things; give a recommendation, not a survey; write decisions into LOG.md or SHAPE.md the moment they are made; one git worktree per branch, never the main checkout.`
 
 const appPrompt = (name: string, cwd: string) => `This conversation is about ${name} as a whole: an idea, a new task, a question about the code, a look at what was found. You are in its checkout, ${cwd}, which is the person's own: read it and run its tests or a read-only command, and change nothing in it. You have no editing tools here, no worktree and no branch, and a command that leaves a mark asks the person first. Anything that changes files (code, a sketch, a story, a fix) is a task's work: create the task with create_task, or name the one that exists, and tell the person to open it; its own agent works there, in a worktree of its own. A prototype still starts from here (start_prototype) and gets its own worktree.`
@@ -97,7 +97,7 @@ What a prototype is for: to answer, with evidence, "will this work, built the wa
 - ${STAND_INS_STAY}
 - Before writing code, turn the brief's requirements into a checklist. ${p.issueId ? `On this task the checklist is its acceptance criteria: read them with the task tool (issueId ${p.issueId}); they are what the person approves with the brief, so they are yours to build as you build. Add the ones the brief implies and the ones building turns up (edge cases, guarantees such as "running it twice makes no duplicates") with set_acceptance, sharpen any that cannot be checked as written, and as each one works record it there: shown true with evidence (the page, record, scenario or script that shows it), or shown false with what is missing. Criteria marked FINAL BUILD ONLY are not yours: skip them, do not build toward them and leave them out of your report's gaps. You cannot mark one that way yourself; if one of yours should be, say so and why, and the task's agent or the person decides. ` : ''}Done means every one of them${p.issueId ? ' that is not for the final build only' : ''} works end to end in the running prototype. A gap you could have closed is a prototype not finished; "the real build will add it" is not allowed.
 - Start from the agreed mockups (stories) when there are any; the prototype decides how it works, not how it looks. The person agreed that look, those words and those states: where the prototype shows a screen they agreed, it matches, and a difference is a fault to fix here, never something left for the real build. If building shows an agreed screen cannot work as drawn, say so and what you would change, and let them decide.
-- When the app has a database, the prototype has one of its own (your environment's database variable already points at it), made by the app's real schema and migrations. Its sample data lives in scenarios: made-up rows by table, by name, kept in Self Evident and never in the repository (the prototype is thrown away and the code may be someone else's: do not write sample data files or a .prototype folder on the branch). Write a scenario for each requirement worth showing, with the empty and edge cases ("default" is used first), with prototype_data (write); load one with prototype_data (reset); keep a state worth keeping with prototype_data (save). After a schema change, reset so the database is built again. ${THROUGH_THE_PATH}
+- When the app has a database, the prototype has one of its own (your environment's database variable already points at it), made by the app's real schema and migrations. Its sample data lives in scenarios: made-up rows by table, by name, kept in Evident and never in the repository (the prototype is thrown away and the code may be someone else's: do not write sample data files or a .prototype folder on the branch). Write a scenario for each requirement worth showing, with the empty and edge cases ("default" is used first), with prototype_data (write); load one with prototype_data (reset); keep a state worth keeping with prototype_data (save). After a schema change, reset so the database is built again. ${THROUGH_THE_PATH}
 - ${FROM_THE_SCREEN}
 - Commit after each change the person could look at, with a message that says what changed and why. The commits are part of the record the analysis reads.
 - Never push, never open a pull request, never merge. Never push to, rebase or change a branch you were given as a starting point: copy it into your own and build there.
@@ -142,7 +142,7 @@ const summariseInput = (name: string, input: any) => {
 function engineServer(appId: string, sessionId?: string) {
   return createSdkMcpServer({
     name: 'engine', version: '0.3.0',
-    instructions: 'The Self Evident engine, scoped to this conversation\'s app, shaped like Linear. Initiatives are goals; projects are tasks in order; a code task becomes sub-tasks through the planner; each sub-task is built by an agent in a worktree and lands into the project\'s branch and PR. To-dos are tasks for the work around the code, with checklists. Tasks are named like HG-12 (Linear calls them issues; tool fields and ids still say issue).',
+    instructions: 'The Evident engine, scoped to this conversation\'s app, shaped like Linear. Initiatives are goals; projects are tasks in order; a code task becomes sub-tasks through the planner; each sub-task is built by an agent in a worktree and lands into the project\'s branch and PR. To-dos are tasks for the work around the code, with checklists. Tasks are named like HG-12 (Linear calls them issues; tool fields and ids still say issue).',
     tools: engineTools({ appId, sessionId, actor: 'agent', waitForPlanner: true }).map((t) => tool(t.name, t.description, t.shape, (a) => t.handler(a))),
   })
 }
@@ -206,7 +206,7 @@ export async function startTalk(input: { appId: string; subjectRef?: SubjectRef;
   const r = await homeRepo(input.appId)
   if (!r?.localPath) throw new PlanError(`${a.name} has no local checkout yet; add its repo in Settings`)
   const problem = await checkoutProblem(r.localPath)
-  if (problem) throw new PlanError(`${problem} Save it under Settings › Repo and Self Evident sets it up.`)
+  if (problem) throw new PlanError(`${problem} Save it under Settings › Repo and Evident sets it up.`)
   const id = newId('session')
   if (!input.subjectRef?.issueId && !input.subjectRef?.setup && !input.own) {
     const { subject, subjectRef } = await subjectFrom(input.subjectRef)
@@ -567,7 +567,7 @@ export async function startPrototypeTalk(p: typeof prototype.$inferSelect, actor
   return row
 }
 
-/** Ask every open Self Evident to show this conversation in the agent's column. */
+/** Ask every open Evident to show this conversation in the agent's column. */
 /** Whether a conversation's agent is in the middle of a turn. */
 export const talkBusy = (sessionId: string) => live.get(sessionId)?.busy ?? false
 
@@ -965,7 +965,7 @@ async function takeBack(sessionId: string) {
   await importTerminal(sessionId)
   watching.get(sessionId)?.(); watching.delete(sessionId)
   await db.update(session).set({ terminalSince: null }).where(eq(session.id, sessionId))
-  await record(sessionId, 'engine', 'handoff', 'Back in Self Evident. Close the terminal session so the two don\'t talk over each other.', { to: 'ui' })
+  await record(sessionId, 'engine', 'handoff', 'Back in Evident. Close the terminal session so the two don\'t talk over each other.', { to: 'ui' })
 }
 
 export interface ClaudeSession { id: string; cwd: string; branch: string | null; title: string | null; at: string; talkId: string | null }
@@ -1000,7 +1000,7 @@ export async function listClaudeSessions(appId: string, limit = 20): Promise<Cla
 }
 
 /**
- * A conversation started in the terminal (or an editor), brought into Self Evident: a session for it, its recent
+ * A conversation started in the terminal (or an editor), brought into Evident: a session for it, its recent
  * turns copied in, and the file followed. Its folder is the person's own, not a worktree of ours, so ending it here
  * never removes it. Bringing the same session twice gives the one already here.
  */
@@ -1023,7 +1023,7 @@ export async function adoptTalk(input: { appId: string; cwd: string; agentSessio
     terminalSince: new Date(), importedThrough: from,
   }).returning()
   if (from) await record(row.id, 'engine', 'handoff', `Brought in from the terminal; its last ${keep} of ${turns.length} turns are shown. The agent remembers all of it.`, { to: 'terminal' })
-  else await record(row.id, 'engine', 'handoff', 'Brought in from the terminal. What\'s said there shows here; send a message here to continue in Self Evident.', { to: 'terminal' })
+  else await record(row.id, 'engine', 'handoff', 'Brought in from the terminal. What\'s said there shows here; send a message here to continue in Evident.', { to: 'terminal' })
   await importTerminal(row.id)
   watchTerminal(row.id, file)
   await showTalk(row.id, a.id)

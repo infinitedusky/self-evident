@@ -1,7 +1,7 @@
 <!-- rogs-skills config v1: forge -->
 # Forge
 
-Where this project's code is hosted and how the lifecycle skills push branches, open and review pull requests, wait for CI, and merge. Self Evident wrote it for the app {{FILL: the app's name}}: Set up what's missing under Integrations › tkt writes it again from the app and the repository, and leaves it alone once this line is gone.
+Where this project's code is hosted and how the lifecycle skills push branches, open and review pull requests, wait for CI, and merge. Evident wrote it for the app {{FILL: the app's name}}: Set up what's missing under Integrations › tkt writes it again from the app and the repository, and leaves it alone once this line is gone.
 
 ## Forge
 

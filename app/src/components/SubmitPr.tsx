@@ -48,7 +48,7 @@ export function SubmitPr({ issueId, pr, landed, total, unchecked = 0, draft = tr
             <b>{landed} of {total} sub-task{total === 1 ? ' has' : 's have'} landed.</b>
           </p>
           {ready
-            ? <p className="faint" style={{ margin: '0 0 8px' }}>{auto ? 'A draft is opened by itself once the build is checked and its tests pass. You can also submit it now.' : 'Run your own checks first: the ones only you can do. Self Evident never opens a pull request by itself.'}</p>
+            ? <p className="faint" style={{ margin: '0 0 8px' }}>{auto ? 'A draft is opened by itself once the build is checked and its tests pass. You can also submit it now.' : 'Run your own checks first: the ones only you can do. Evident never opens a pull request by itself.'}</p>
             : <p className="faint" style={{ margin: '0 0 8px' }}>{auto ? 'A draft is opened by itself once they all have, and the build is checked.' : 'It can be submitted once they all have, and you have run your own checks.'}</p>}
           {ready && unchecked > 0 && <p className="submit-pr-warn">{unchecked} acceptance {unchecked === 1 ? 'criterion is' : 'criteria are'} not marked as met by the build.</p>}
           {asking ? (

@@ -1,5 +1,5 @@
 /**
- * My Stuff, the front door: what needs you, what's running, what just happened, in Self Evident. Not Observe: that
+ * My Stuff, the front door: what needs you, what's running, what just happened, in Evident. Not Observe: that
  * is the app's own signals. Everything is a click from here. Refreshes
  * on every event the engine logs (one refetch per burst), so it is never stale by more than a moment.
  */

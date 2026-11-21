@@ -48,7 +48,7 @@ export const storiesLead = (setup: unknown) => { const s = storybookSetup(setup)
 export function storiesNote(setup: unknown): string {
   const s = storybookSetup(setup)
   if (!s.on || !s.outside) return ''
-  return `\n\nThis app's Storybook is kept outside the repository and run by Self Evident for this worktree (the stories tool lists it; open_tab kind storybook shows it). Never install Storybook into the repository, and never commit Storybook's files or its configuration.${s.stories ? ` Where stories go: ${s.stories}` : ''}`
+  return `\n\nThis app's Storybook is kept outside the repository and run by Evident for this worktree (the stories tool lists it; open_tab kind storybook shows it). Never install Storybook into the repository, and never commit Storybook's files or its configuration.${s.stories ? ` Where stories go: ${s.stories}` : ''}`
 }
 
 /**
@@ -143,7 +143,7 @@ async function placeFor(appId: string, sessionId?: string | null) {
 
 /**
  * The address a page frames it at. Storybook 10 lets only localhost frame it (its frame-ancestors header), so when
- * Self Evident is served under a name (UI_URL) a proxy gives each Storybook a name beside it and drops the header:
+ * Evident is served under a name (UI_URL) a proxy gives each Storybook a name beside it and drops the header:
  * STORYBOOK_FRAME is that address with {port} in it (https://sb-{port}.idea.dawn). Unset, or for a Storybook that is
  * not on this machine, it is the Storybook's own address.
  */
@@ -455,7 +455,7 @@ export async function installStorybook(ctx: StorybookContext, deps: StorybookDep
   if (did.length) { // one commit of what the install touched (new or changed since `before`), the person's own changes left as they were
     const paths = (await status()).filter((l) => !before.has(l)).map((l) => l.slice(3))
     const { remote, base } = await remoteAndBase(repo, ctx.app.defaultBranch, run)
-    did.push(await commitOnBase(run, repo, { remote: remote?.name ?? 'origin', base, paths, subject: `Set up Storybook for ${ctx.app.name}`, body: 'Installed by Self Evident to the house standard: Storybook with the screen map add-on, its stylesheet and a first map. Set up Storybook under Integrations › Storybook does it again.' }))
+    did.push(await commitOnBase(run, repo, { remote: remote?.name ?? 'origin', base, paths, subject: `Set up Storybook for ${ctx.app.name}`, body: 'Installed by Evident to the house standard: Storybook with the screen map add-on, its stylesheet and a first map. Set up Storybook under Integrations › Storybook does it again.' }))
   }
   return { did, left }
 }
@@ -463,5 +463,5 @@ export async function installStorybook(ctx: StorybookContext, deps: StorybookDep
 const installDoc = fileURLToPath(new URL('../../docs/integrations/storybook.md', import.meta.url))
 /** The job for the agent when a step could not be done from here: the integration's own document, to finish without asking. */
 export async function installAsk(): Promise<string> {
-  return `Finish setting up Storybook in this repo to the house standard, without asking: these are the standard, not choices. The integration's document follows; its Installation section is the order of steps, and Self Evident has done the ones it said it did.\n\n${await readFile(installDoc, 'utf8')}`
+  return `Finish setting up Storybook in this repo to the house standard, without asking: these are the standard, not choices. The integration's document follows; its Installation section is the order of steps, and Evident has done the ones it said it did.\n\n${await readFile(installDoc, 'utf8')}`
 }

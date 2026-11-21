@@ -5,7 +5,7 @@ import { WIDGET } from '@self-evident/engine/guide-widget'
 import { withEngine } from './mock-engine'
 
 // The tab a visitor sees at the bottom right of a shared prototype: what this is, where to go, what to try, and a box
-// for what they think. It is not part of Self Evident's own screens: the engine adds it to the prototype's pages on
+// for what they think. It is not part of Evident's own screens: the engine adds it to the prototype's pages on
 // the way out (engine/src/share-guide.ts). Here it runs over a made-up page, with a made-up guide; nothing is sent.
 const KEY = 'self-evident-guide'
 const tab = () => document.querySelector('[data-self-evident-guide]')?.shadowRoot as ShadowRoot | undefined

@@ -89,7 +89,7 @@ export function prBody(project: { name: string; content?: string | null; id: str
   const all = landed.length + pending.length
   const building = pending.length ? `**${landed.length} of ${all} sub-task${all === 1 ? ' has' : 's have'} landed: this pull request is still being built, and is not ready to review until they all have.**` : ''
   const ours = [
-    `Built by Self Evident from project \`${project.id}\`: ${project.name}. ${landed.length} of ${all} sub-task${all === 1 ? ' has' : 's have'} landed.`,
+    `Built by Evident from project \`${project.id}\`: ${project.name}. ${landed.length} of ${all} sub-task${all === 1 ? ' has' : 's have'} landed.`,
     written?.trim() && guide ? guide : '',
     record,
     landed.length ? `## What landed, sub-task by sub-task\n\n${landed.map((t) => [`### ${t.identifier} ${t.title}` + (t.sha ? ` (\`${t.sha.slice(0, 7)}\`)` : ''),
@@ -103,8 +103,8 @@ export function prBody(project: { name: string; content?: string | null; id: str
   return [
     building,
     lead,
-    `<details>\n<summary>How this was built (Self Evident's record${written?.trim() && guide ? ': the merge guide, ' : ': '}every criterion and decision, and what each sub-task's builder reported)</summary>\n\n${ours}\n\n</details>`,
-    '🤖 Generated with [Claude Code](https://claude.com/claude-code) via Self Evident',
+    `<details>\n<summary>How this was built (Evident's record${written?.trim() && guide ? ': the merge guide, ' : ': '}every criterion and decision, and what each sub-task's builder reported)</summary>\n\n${ours}\n\n</details>`,
+    '🤖 Generated with [Claude Code](https://claude.com/claude-code) via Evident',
   ].filter(Boolean).join('\n\n')
 }
 

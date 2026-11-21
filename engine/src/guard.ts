@@ -34,7 +34,7 @@ export const READ_ONLY_BASH = /^\s*(git\s+(log|ls-files|show|blame|status|diff)|
 /**
  * Stopping processes by name or by port, which no agent may do: other things run on this computer, the engine that is
  * running the agent among them. Found the hard way (2026-11-14, BON-71): a builder tidying up its own dev servers ran
- * `pkill -f "pnpm dev"; pkill -f "vite"`, which matched Self Evident's own processes. The engine restarted, the
+ * `pkill -f "pnpm dev"; pkill -f "vite"`, which matched Evident's own processes. The engine restarted, the
  * build was interrupted and started again, and four minutes later it did the same, three times over.
  * Stopping what it started, by the pid it kept, is fine: `kill 4321`, `kill $!`, `kill %1`, `kill $(cat x.pid)`.
  */

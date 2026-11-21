@@ -28,7 +28,7 @@ In the repo, a command that names `$PORT` is also run as written; one that does 
 
 ## The standard
 
-Every project's Storybook, checked by Self Evident (`engine/src/storybook.ts`, `checkStorybook`):
+Every project's Storybook, checked by Evident (`engine/src/storybook.ts`, `checkStorybook`):
 
 1. Storybook 10 with a Vite or webpack5 framework (the add-on's peer range is `storybook ^10`).
 2. The screen map add-on, `@zigbang/storybook-addon-story-flow`, as a dev dependency.

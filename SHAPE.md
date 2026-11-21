@@ -198,11 +198,11 @@ Details and sources in `research/`.
   table's hypothesis, baseline, measures and evidence stay as the ticket's own sections. Replaces "an idea is
   exploration; a task means we're going to build this" (2026-10-29). Also decided then: the rigorous build half
   (independent review, verification with evidence, merge gates at the exact head) runs Roger's MIT lifecycle
-  skills from our executor rather than stages of our own; and the plan for all of it is tickets in Self Evident,
+  skills from our executor rather than stages of our own; and the plan for all of it is tickets in Evident,
   project "Tickets first" (LOG.md, "Tickets first").
-- **tkt is the runner; Self Evident is the tracker and the window** (Sandy, 2026-11-07, after the spike: one
+- **tkt is the runner; Evident is the tracker and the window** (Sandy, 2026-11-07, after the spike: one
   ticket from `new` to merged in 19 minutes on this Mac, every stage a rogs skill; LOG.md, "tkt is the runner").
-  Self Evident is where a ticket is born, reviewed and watched; once its brief is approved, tkt builds it: a
+  Evident is where a ticket is born, reviewed and watched; once its brief is approved, tkt builds it: a
   worktree, a herdr tab, start-ticket → work-ticket → review-pr in a fresh session → the person's verification →
   finish-ticket, on whichever harness and model the preset says (Claude Code, or OpenCode for DeepSeek, GPT and the
   rest). The skills read and write the ticket through our API: comments one per heading (the plan, the handoff,
@@ -213,12 +213,12 @@ Details and sources in `research/`.
 - **tkt is switched on per app, as an integration** (Sandy, 2026-11-08: "there are two things that we're talking
   about at the same time … we don't need to configure tkt to make sure it works if we use it … that is very
   different than saying for any specific project we can choose to use tkt or not, and for that we do need an
-  integration"). Two decisions, kept apart. Not babysitting: Self Evident never installs, configures or repairs
+  integration"). Two decisions, kept apart. Not babysitting: Evident never installs, configures or repairs
   tkt; its check repeats tkt's own words and says get tkt working, and the fixing happens in the terminal.
   Choosing: under an app's Integrations, tkt is a runner switched on or off (an integration, not a plugin: plugins
-  here are Claude Code plugins for the factory's own agents). On, tkt builds the app's tickets and Self Evident
+  here are Claude Code plugins for the factory's own agents). On, tkt builds the app's tickets and Evident
   hands none to its own planner; the ticket page says "run by tkt"; tkt's lifecycle (start, approve, review,
-  merge) is listed where Linear's actions are, to become buttons on the ticket page. Self Evident's one piece of
+  merge) is listed where Linear's actions are, to become buttons on the ticket page. Evident's one piece of
   the handshake is the tracker guide, the repo's `docs/agents/issue-tracker.md` filled with the app's id, key and
   URLs, on the app's tkt page and at `GET /api/apps/:id/tracker-guide`.
 - **The loop's stages** (Sandy, 2026-10-29): Observe · Learn · Ideate (ideas and their research) · Plan
@@ -230,9 +230,9 @@ Details and sources in `research/`.
 - **An app says where it is smoke tested, beside where it is prototyped** (Sandy, 2026-11-17: "apps get a smoke
   test configuration setting, and it's like there's a prototype and a smoke test, and they can either be the same
   or they can be different"). The setting, the step and a person's marks are built (`engine/src/smoke.ts`,
-  2026-11-17); watching while they test and testers through a link are not (idea #1 of the Self Evident app).
+  2026-11-17); watching while they test and testers through a link are not (idea #1 of the Evident app).
   - A smoke test is a person checking the built code by hand, for what an agent cannot judge (how it looks, how
-    it feels, speed on a real machine), while Self Evident watches. It is the code about to be reviewed, never the
+    it feels, speed on a real machine), while Evident watches. It is the code about to be reviewed, never the
     prototype's branch, and never production as its users see it.
   - **What is slow for an agent to show is the person's too** (Sandy, 2026-11-18: "we don't have the agent do it
     … That's the whole reason for having the smoke test"): more than about two minutes of running (every page in a
@@ -245,13 +245,13 @@ Details and sources in `research/`.
     marks nothing; the mark stays the person's.
   - **Some checks are commands, so a set-up can be a terminal** (Sandy, 2026-11-18: "a temp folder on the machine
     and a terminal where it runs commands and you see it working"): a real shell in the page, in the build's
-    checkout or a new empty folder; a check's command runs there with a press. Reachable from Self Evident's own
+    checkout or a new empty folder; a check's command runs there with a press. Reachable from Evident's own
     page only.
   - **Where it runs is the app's setting**, one of: the **same as its prototypes** (run locally, made-up data: a
     library and its Storybook); a **staging** environment (a deployed build, a test account, real services in test
     mode; "a fake account in a staging environment"); or **behind a feature flag** in production, on for a test
     account only ("some don't but operate with feature flags").
-  - **How it is brought up is Self Evident's, never the app's repository's** (Sandy, 2026-11-17: "keep any of this
+  - **How it is brought up is Evident's, never the app's repository's** (Sandy, 2026-11-17: "keep any of this
     stuff out of the code base … This is about us being able to test"): a script, a stop script and a seed, in the
     app's settings, so in the database that holds the app (the shared one, or this computer's for an app kept
     local). Agents change it there, not on a branch. The same goes for a prototype's made-up data: its scenarios are rows in
@@ -453,7 +453,7 @@ Details and sources in `research/`.
 - **Shaped like Linear: connect it or run it ourselves** (Sandy, 2026-10-27:
   "we build ours to match Linear and then we can slip it in. We can connect
   it or we can manage it ourselves"). On a team the plan lives in the
-  tracker everyone already uses; solo, Self Evident keeps it. So our plan
+  tracker everyone already uses; solo, Evident keeps it. So our plan
   takes Linear's names and shapes, and the store behind it is either our
   database or a connected Linear workspace (its official SDK and MCP
   server), per app. What Linear has no place for stays ours either way and
@@ -502,14 +502,14 @@ Details and sources in `research/`.
     it sends anything out, and keeps the link it made. This is also the first way into Linear: the full connection
     (Linear as the plan store, above) comes later and builds on the same connection.
 
-- **PostHog finds, Self Evident builds** (Sandy, 2026-10-31: "Can we more tightly integrate what PostHog is doing
-  into Self Evident?"). PostHog's self-driving loop (scouts → reports → PRs → a check after ship) is the closest
+- **PostHog finds, Evident builds** (Sandy, 2026-10-31: "Can we more tightly integrate what PostHog is doing
+  into Evident?"). PostHog's self-driving loop (scouts → reports → PRs → a check after ship) is the closest
   mature version of our Observe, Learn and Check. Its inbox can be read and changed from outside its app (MCP tools
   and the API behind them), so we use it instead of rebuilding it: its reports arrive in Observe; one becomes an
   idea, a task, or is left to PostHog; taking it claims it there; a PR PostHog already opened can be the task's
   build; when our work lands the report is resolved; the task shows what PostHog measured after. What we add is
   the middle: research, briefs, mockups, prototypes, approval and the parallel build, on our own Claude Code.
-  The project and its tasks, in order, are in Self Evident (SE-1 to SE-10).
+  The project and its tasks, in order, are in Evident (SE-1 to SE-10).
 
 - **The code comes with the app** (Sandy, 2026-11-09: "it should have you select the repo or point to the local
   location when you create a new project. If the location is not a repo, create one"). A new app asks where its
@@ -535,11 +535,11 @@ Details and sources in `research/`.
   tracker guide, `docs/agents/forge.md`, `workflow.md`, `domain.md`, `pull-request.md` and the Ticket lifecycle
   block in CLAUDE.md, filled from the app, the repo (remote, base branch, merge style through gh, CI workflows,
   package scripts) and the house profile below; installs tkt's hooks with tkt's own installer (the shared settings
-  file, so Self Evident's agents get them too); commits on the base branch and pushes, since tkt reads the
+  file, so Evident's agents get them too); commits on the base branch and pushes, since tkt reads the
   configuration from there; checks again. Only what cannot be computed goes to the agent, in tkt's words (tkt itself
   missing, whatever `tkt doctor` still flags). The pi warning is not one of them: pi runs tkt's own chat, which
-  Self Evident stands in for. A file is rewritten only while it carries the line "Self Evident wrote it"; take the
-  line out and it is the person's. This amends "tkt is the runner": Self Evident still installs nothing of tkt's by
+  Evident stands in for. A file is rewritten only while it carries the line "Evident wrote it"; take the
+  line out and it is the person's. This amends "tkt is the runner": Evident still installs nothing of tkt's by
   hand, but it writes what tkt reads, and says what it did.
 
 - **Every integration has a default set-up** (Sandy, 2026-11-09: "for all the integrations there has to be a default
@@ -561,7 +561,7 @@ Details and sources in `research/`.
   only points at it; CLAUDE.md created when neither exists); the verification commands from the package scripts
   (`lint && typecheck && test`), one focused check per pnpm workspace package with tests; commits that follow recent
   history; every workflow feature off to begin with (bundles, browser pass, model routing, client notes, plan review,
-  plan presentation, taste pass, changelog, agent verification, autonomous runs, CI review), since Self Evident runs
+  plan presentation, taste pass, changelog, agent verification, autonomous runs, CI review), since Evident runs
   those stages itself; pull requests from `docs/agents/pull-request.md` unless the repo has its own template; the
   forge GitHub only, for now. Decided by Sandy's "set it up" to the proposal of 2026-11-09; the toggles come to the
   app's Settings when wanted.
@@ -570,14 +570,14 @@ Details and sources in `research/`.
   the stuff we need. And if someone needed to make a special change to it, they would do that. But that configuration
   file would then just tell the system what to do, how to incorporate it"; "it can have installation instructions").
   One document per integration says what it is, how it joins an app (a switch, or values with their defaults), what
-  it needs on the machine, what it writes into the repo, how it installs, how to check, what changes in Self Evident
+  it needs on the machine, what it writes into the repo, how it installs, how to check, what changes in Evident
   when it is on, and what goes to the agent when the document cannot do a thing itself. A special change is an edit
   of the document (every app) or of the written file in one repo (that app). Storybook's is the first,
   `docs/integrations/storybook.md`, read by the engine for the agent's job and followed by its installer; the tkt
   seeds in `docs/lifecycle/` are its documents' templates. The rest of the integrations move from the code into
   documents next, and the engine becomes their reader; a check the common forms cannot express (a command's exit
   code, a file containing a line, a URL answering) stays a named check the document points at.
-- **Self Evident pulls from Linear: a ticket becomes an idea** (Sandy, 2026-11-12: "we should be able to create plans
+- **Evident pulls from Linear: a ticket becomes an idea** (Sandy, 2026-11-12: "we should be able to create plans
   and tasks from linear"; 2026-11-20: "bring them in as ideas and then decide whether or not they should be projects
   or tasks"; LOG.md, "Tasks from Linear tickets", "Linear tickets come in as ideas"). On the Ideas page of an app whose
   Linear team is set, the team's open tickets are listed and the ones ticked are brought in, each once, as ideas, with
@@ -589,15 +589,15 @@ Details and sources in `research/`.
   "The ticket, word for word, for every agent"). A ticket from any tracker is kept as an origin: its text, comments,
   links and images, never edited here. The idea, project, task and sub-tasks made from it all have it, and every
   agent on them is given it whole beside its brief, told to say where the brief leaves part of it out.
-- **tkt reads from Self Evident; a switch lets it run on its own against Linear** (Sandy, 2026-11-10: "we want Self
-  Evident to be pulling from Linear and we want TKT to be pulling from Self Evident. But I want to test TKT on its
-  own"). The arrangement stays as in "tkt is the runner; Self Evident is the tracker and the window": tkt's skills read
-  and write the ticket through our API. Linear, where an app uses it, is Self Evident's to talk to, not tkt's. The one
+- **tkt reads from Evident; a switch lets it run on its own against Linear** (Sandy, 2026-11-10: "we want Self
+  Evident to be pulling from Linear and we want TKT to be pulling from Evident. But I want to test TKT on its
+  own"). The arrangement stays as in "tkt is the runner; Evident is the tracker and the window": tkt's skills read
+  and write the ticket through our API. Linear, where an app uses it, is Evident's to talk to, not tkt's. The one
   exception is for seeing tkt by itself: tkt has a second switch per app, "Tickets live in Linear". On, Set up what's
   missing writes the tracker guide for the team Integrations › Linear names (the skills' own Linear guide, its blanks
   and States table filled from Linear), tkt's agents reach Linear through its hosted MCP server (`linear` in the
-  harness, signed in by the person once), and that app's tkt has nothing to do with Self Evident after the file is
-  written. It is a way to test, not the product's shape. Not built: Self Evident pulling from Linear; today it only
+  harness, signed in by the person once), and that app's tkt has nothing to do with Evident after the file is
+  written. It is a way to test, not the product's shape. Not built: Evident pulling from Linear; today it only
   pushes (an issue from an approved brief, comments, state moves).
 - **One conductor per worktree; it deploys agents where needed** (Sandy, 2026-11-10: "I want there to be an agent
   per worktree as the conductor and then it will deploy agents where needed … like a fresh agent for blast radius").
@@ -838,7 +838,7 @@ Direction, not yet built. The work has two halves with a hinge between them.
 
 - **Explore: fast and fun.** Ideas, mockups and prototypes. A conversation and the running thing beside it: no
   approvals, no planner, no projects. The agent works in a throwaway worktree, so it can be trusted widely (asks
-  only before losing work). Self Evident beats VS Code here on feedback, not process: the prototype is live
+  only before losing work). Evident beats VS Code here on feedback, not process: the prototype is live
   beside the conversation, you change it by talking, and you compare versions side by side.
 - **The hinge: "this one."** You look at the prototype and pick it. The agent writes the brief from everything
   gathered: the conversation, the mockups, the prototype. In some workflows **accepting the prototype approves
@@ -857,7 +857,7 @@ only through seams the production code has or should have. Done means every requ
 end; the agent reports one line per requirement, what is not met first. Why: the analysis, the draft ADR and the
 blast radius are read out of the prototype and describe what we intend to build, so a prototype full of shortcuts
 taught them the shortcuts. Speed in exploring is the job of sketches and mockups. The whole mandate is one skill,
-`prototype`, which Self Evident brings to every app and puts on the Prototype step; a skill of that name in Your
+`prototype`, which Evident brings to every app and puts on the Prototype step; a skill of that name in Your
 skills replaces it. The prototype's branch is still not merged: the build starts from the default branch with the
 prototype as its reference.
 

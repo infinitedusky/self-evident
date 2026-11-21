@@ -79,7 +79,7 @@ export function TaskBranches({ issueId, onMoved, onChanged, stamp, at }: { /** T
               <span className="task-branches-kind" aria-hidden="true">●</span>
               <div className="task-branches-body">
                 <div>{s.name}</div>
-                <div className="faint">Save point · {ago(s.createdAt)}{s.auto ? ' · made by Self Evident' : ''}{s.onCurrent ? (s.changesSince ? ` · ${n(s.changesSince, 'change')} since` : ' · nothing changed since') : s.branchName ? ` · on “${s.branchName}”` : ''}</div>
+                <div className="faint">Save point · {ago(s.createdAt)}{s.auto ? ' · made by Evident' : ''}{s.onCurrent ? (s.changesSince ? ` · ${n(s.changesSince, 'change')} since` : ' · nothing changed since') : s.branchName ? ` · on “${s.branchName}”` : ''}</div>
               </div>
               <span className="task-branches-actions">
                 <button className="btn quiet small" disabled={busy} onClick={() => { setAsking({ kind: 'back', save: s }); setAs(''); setReset(false); setError(null) }} aria-label={`Go back to ${s.name}`}>Go back to here</button>

@@ -133,7 +133,7 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
 
 /**
  * A new prototype: its branch and worktree off the app's default branch, its server, and its conversation, shown in
- * every open Self Evident with the prototype beside it. With a brief, the conversation starts building at once.
+ * every open Evident with the prototype beside it. With a brief, the conversation starts building at once.
  */
 /**
  * The test of a full prototype, in one sentence, said the same to every agent that makes, briefs or judges one
@@ -299,7 +299,7 @@ export async function guideAfterReset(id: string, tries = 60) {
   return null
 }
 
-/** The data as it is now, kept as a scenario: in Self Evident, for this prototype or shared with the app. Never in its worktree. */
+/** The data as it is now, kept as a scenario: in Evident, for this prototype or shared with the app. Never in its worktree. */
 export async function savePrototypeData(id: string, name: string, actor = 'person', shared = false) {
   const p = await rowOf(id)
   const { a, dbCfg } = await setupOf(p.appId)

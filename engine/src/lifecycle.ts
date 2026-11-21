@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { ticketKey, ticketUrl, trackerWords } from './linear-home.js'
 import type { ReadText, Run, TktContext, Write } from './tkt.js'
 
-export const OWNED = 'Self Evident wrote it'
+export const OWNED = 'Evident wrote it'
 export const BEGIN = '<!-- rogs-skills:begin config v1 -->'
 export const END = '<!-- rogs-skills:end -->'
 export const FILL = /\{\{FILL: ([^}]*)\}\}/g
@@ -269,7 +269,7 @@ export async function houseConfig(ctx: TktContext, facts: Facts, read: ReadText 
   const skipped: string[] = []
   if (facts.remote && isGitHub(facts.remote.host)) files['forge.md'] = fillAll(await seed('forge.md', read), forgeAnswers(ctx, facts, await seed('forge-github.md', read)))
   else if (!facts.remote) skipped.push('docs/agents/forge.md: the checkout has no git remote, and tkt opens pull requests on a forge; push the repo to GitHub first')
-  else skipped.push(`docs/agents/forge.md: ${facts.remote.host} isn't a forge Self Evident writes yet (GitHub only); /setup-rogs has guides for GitLab and Gitea`)
+  else skipped.push(`docs/agents/forge.md: ${facts.remote.host} isn't a forge Evident writes yet (GitHub only); /setup-rogs has guides for GitLab and Gitea`)
   const wf = await seed('workflow.md', read)
   const full = fillAll('{{FILL: the command, or "not configured"}}', workflowAnswers(ctx, facts)) // the full check, for the one-row table
   files['workflow.md'] = fillAll(wf.replace(FOCUSED_ROW, focusedRows(facts, full)), workflowAnswers(ctx, facts))
@@ -284,7 +284,7 @@ export async function houseConfig(ctx: TktContext, facts: Facts, read: ReadText 
 
 /** `wrote`: files whose bytes changed; `kept`: the person's, left alone; `paths`: everything to commit, relative to the checkout. */
 export interface Written { wrote: string[]; kept: string[]; paths: string[]; blockChanged: boolean }
-/** Writes the files that are Self Evident's (new, or carrying the ownership line) and the block, into the checkout. */
+/** Writes the files that are Evident's (new, or carrying the ownership line) and the block, into the checkout. */
 export async function writeHouse(repoPath: string, appName: string, house: House, deps: { read: ReadText; write: Write }): Promise<Written> {
   const root = repoPath.replace(/\/$/, '')
   const current = async (rel: string) => { try { return await deps.read(`${root}/${rel}`) } catch { return null } }

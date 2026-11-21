@@ -1,6 +1,6 @@
 /**
  * The house configuration: the repo's facts read without failing, every blank in the seeds answered, the files
- * written only where they are Self Evident's, the block placed once.
+ * written only where they are Evident's, the block placed once.
  */
 import { describe, expect, it } from 'vitest'
 import { BEGIN, dropSections, END, FILL, houseConfig, OWNED, pathFilters, repoFacts, writeHouse, type Facts } from './lifecycle.js'
@@ -89,7 +89,7 @@ describe('the house configuration', () => {
     expect(h.files['domain.md']).toContain('One context: `GLOSSARY.md` at the repository root.'); expect(h.files['domain.md']).toContain('`docs/adr/`')
     expect(h.files['pull-request.md']).not.toContain('## Screenshots'); expect(h.files['pull-request.md']).not.toContain('## Changelog'); expect(h.files['pull-request.md']).toContain('## Human verification')
     expect(h.block.startsWith(BEGIN)).toBe(true); expect(h.block.trimEnd().endsWith(END)).toBe(true)
-    expect(h.block).toContain('`issue-tracker.md` (Self Evident, the app Ragdoll Golf (RG)), `forge.md` (GitHub, infinitedusky/ragdoll-golf)'); expect(h.block).toContain('the features that are on: none')
+    expect(h.block).toContain('`issue-tracker.md` (Evident, the app Ragdoll Golf (RG)), `forge.md` (GitHub, infinitedusky/ragdoll-golf)'); expect(h.block).toContain('the features that are on: none')
     expect(h.block).not.toContain('/setup-rogs'); expect(h.skipped).toEqual([])
   })
 
@@ -114,7 +114,7 @@ describe('the house configuration', () => {
     const none = await houseConfig(ctx, facts({ remote: null }))
     expect(none.files['forge.md']).toBeUndefined(); expect(none.skipped[0]).toMatch(/no git remote/); expect(none.block).toContain('`forge.md` (no forge yet)')
     const lab = await houseConfig(ctx, facts({ remote: { name: 'origin', host: 'gitlab.com', fullName: 'rogs/tkt' } }))
-    expect(lab.files['forge.md']).toBeUndefined(); expect(lab.skipped[0]).toMatch(/gitlab\.com isn't a forge Self Evident writes yet/)
+    expect(lab.files['forge.md']).toBeUndefined(); expect(lab.skipped[0]).toMatch(/gitlab\.com isn't a forge Evident writes yet/)
   })
 
   it('drops whole sections and nothing else', () => {
@@ -133,7 +133,7 @@ describe('writing it into the checkout', () => {
     const r = await writeHouse(root, 'Ragdoll Golf', h, f)
     expect(r.wrote).toEqual(['docs/agents/forge.md', 'docs/agents/domain.md', 'docs/agents/pull-request.md']); expect(r.kept).toEqual(['docs/agents/workflow.md'])
     expect(r.paths).toEqual([...r.wrote, 'CLAUDE.md']); expect(r.blockChanged).toBe(true)
-    expect(f.w[`${root}/docs/agents/pull-request.md`].split('\n')[1]).toMatch(/^<!-- Self Evident wrote it for the app Ragdoll Golf: .* -->$/)
+    expect(f.w[`${root}/docs/agents/pull-request.md`].split('\n')[1]).toMatch(/^<!-- Evident wrote it for the app Ragdoll Golf: .* -->$/)
     expect((await writeHouse(root, 'Ragdoll Golf', h, f))).toMatchObject({ wrote: [], blockChanged: false, paths: r.paths }) // again: nothing changed, everything still to commit
     expect(f.w[`${root}/docs/agents/workflow.md`]).toContain('Hand-written.')
     expect(f.w[`${root}/CLAUDE.md`]).toBe(`# Ragdoll Golf\n\n${h.block.trimEnd()}\n`)

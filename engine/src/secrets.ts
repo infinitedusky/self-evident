@@ -47,7 +47,7 @@ async function write(file: string, all: Record<string, string>) {
   const names = Object.keys(all).sort()
   if (!names.length) { await rm(file, { force: true }); return }
   await mkdir(dirname(file), { recursive: true, mode: 0o700 })
-  const text = `# Keys kept by Self Evident for this computer only. One NAME=value a line. Not in any repository or database.\n${names.map((n) => `${n}=${all[n]}`).join('\n')}\n`
+  const text = `# Keys kept by Evident for this computer only. One NAME=value a line. Not in any repository or database.\n${names.map((n) => `${n}=${all[n]}`).join('\n')}\n`
   await writeFile(file, text, { mode: 0o600 })
   await chmod(file, 0o600) // an existing file keeps its mode on write: set it every time
 }

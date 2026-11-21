@@ -28,5 +28,5 @@ finish-ticket       merge, verify, complete the tickets     Status: DONE
 - Every claim (CI is green, reviewed, verified) names the exact head SHA, and that head contains the current base. Only two things carry over to a later head, across clean merges of the base: a human verification step, as `finish-ticket` defines them, and browser-pass captures, as `browser-pass.md` allows.
 - After a plan is approved, "go" or "do it" means `work-ticket`, never a generic implementation flow.
 - When plan presentation is on, `present-plan` shows the settled plan after optional adversarial review. The user approves it in this conversation or with the viewer's Approve button on the current revision, which also means "go"; comments and ending the review never approve it.
-- Self Evident wrote this configuration from the app's settings and the repository: Set up what's missing under Integrations › tkt writes it again.
+- Evident wrote this configuration from the app's settings and the repository: Set up what's missing under Integrations › tkt writes it again.
 <!-- rogs-skills:end -->

@@ -186,7 +186,7 @@ export interface IssueDetail extends Issue {
   madeBy: { sessionId: string; title: string; open: boolean } | null // the conversation that created it, when an agent did
   handover: { text: string | null; sessionId: string; at: string } | null // what that conversation said about it, written when the task's agent starts
   comments: IssueComment[]
-  runner: 'tkt' | null // who builds it once the brief is approved: tkt, or Self Evident's own agents
+  runner: 'tkt' | null // who builds it once the brief is approved: tkt, or Evident's own agents
   project: { id: string; name: string; status: string; solo?: boolean } | null; parent: { id: string; identifier: string; title: string } | null
   build: { status: BuildStatus; attempt: number; heldReason: string | null } | null; questions: Question[]; decisions: Decision[]
   relations: { issueId: string; relatedIssueId: string; type: 'blocks' | 'related' | 'duplicate' }[]

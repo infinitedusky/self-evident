@@ -1,7 +1,7 @@
 <!-- rogs-skills config v1: workflow -->
 # Workflow
 
-How this project runs the ticket lifecycle. Self Evident wrote it for the app {{FILL: the app's name}}: Set up what's missing under Integrations › tkt writes it again from the app and the repository, and leaves it alone once this line is gone.
+How this project runs the ticket lifecycle. Evident wrote it for the app {{FILL: the app's name}}: Set up what's missing under Integrations › tkt writes it again from the app and the repository, and leaves it alone once this line is gone.
 
 ## Features
 

@@ -84,7 +84,7 @@ export function ViewerWindow() {
     const key = viewKey(tab)
     const c = channel()
     if (!c) return
-    document.title = `${NAME[tab.kind]} · Self Evident`
+    document.title = `${NAME[tab.kind]} · Evident`
     c.postMessage({ type: 'here', key } satisfies Msg)
     c.onmessage = (e: MessageEvent<Msg>) => {
       if (e.data.key !== key) return
@@ -95,13 +95,13 @@ export function ViewerWindow() {
     window.addEventListener('pagehide', bye)
     return () => { window.removeEventListener('pagehide', bye); c.close() }
   }, [tab])
-  if (!tab) return <div className="tab-page"><div className="empty">Nothing to show here. <a href="/">Go to Self Evident →</a></div></div>
+  if (!tab) return <div className="tab-page"><div className="empty">Nothing to show here. <a href="/">Go to Evident →</a></div></div>
   const putBack = () => { channel()?.postMessage({ type: 'closed', key: viewKey(tab) } satisfies Msg); window.close(); setOrphan(true) }
   return (
     <div className="viewer-window" data-component="ViewerWindow">
       <div className="viewer-bar">
-        <span className="faint">{orphan ? 'It is showing in Self Evident again. You can close this tab.' : `Detached from Self Evident.`}</span>
-        <button className="btn quiet small" onClick={putBack} title="Close this tab and show it in Self Evident again">↙ Put it back</button>
+        <span className="faint">{orphan ? 'It is showing in Evident again. You can close this tab.' : `Detached from Evident.`}</span>
+        <button className="btn quiet small" onClick={putBack} title="Close this tab and show it in Evident again">↙ Put it back</button>
       </div>
       {one(tab) ? <Body tab={tab} /> : <PagePane path="/mockups"><Body tab={tab} /></PagePane>}
     </div>

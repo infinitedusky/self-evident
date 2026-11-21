@@ -17,7 +17,7 @@ const DESTRUCTIVE = new Set(['cancel_project', 'backlog_drop', 'finish_todo'])
 
 export function instructions(appName: string) {
   return [
-    `Self Evident's engine for the app ${appName}. Self Evident builds software through agents: a project is tasks in order; the planner turns a task into phases; each phase runs as an agent in its own git worktree and lands on the project's branch, which becomes a pull request.`,
+    `Evident's engine for the app ${appName}. Evident builds software through agents: a project is tasks in order; the planner turns a task into phases; each phase runs as an agent in its own git worktree and lands on the project's branch, which becomes a pull request.`,
     '`now` is My Stuff: what needs the person, what is running, what just happened. Start there when asked what to work on.',
     'To-dos are the work around the code (accounts, approvals, people, checks), each with a checklist; a project\'s backlog is what it must not forget. When the person mentions either, keep it here.',
     'A running phase\'s worktree path is in project_graph (phases[].worktreePath): open it in the editor with `code <path>` to look at the work before it lands.',

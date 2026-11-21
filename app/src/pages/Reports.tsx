@@ -6,7 +6,7 @@
  * yourself. Nothing is sent from here.
  *
  * After a stand-up note and a weekly status for the shape, and the Summary page beside it for "written by the agent
- * from what Self Evident knows".
+ * from what Evident knows".
  */
 import { useEffect, useRef, useState } from 'react'
 import { Badge } from '../components/Badge'
@@ -61,7 +61,7 @@ export function Reports() {
         {error && <Badge tone="warn" dot>{error}</Badge>}
       </div>
       <section className="panel report-ask" data-component="ReportAsk">
-        <label className="report-notes"><span className="faint">Anything to add that Self Evident cannot know: a meeting, a review you gave, what is next</span>
+        <label className="report-notes"><span className="faint">Anything to add that Evident cannot know: a meeting, a review you gave, what is next</span>
           <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} aria-label="Anything to add" placeholder="Met with Em about the copy. Tomorrow: start the share sheet." />
         </label>
         <div className="report-periods"><span className="faint">Write the report for</span>

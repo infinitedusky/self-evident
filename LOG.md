@@ -5889,3 +5889,19 @@ Not done: the test checkout is not removed when the task is done (nor is the smo
 a restart starts from the beginning; the build page's graph does not show a run under way; not yet seen on a real
 task (the one that showed this is the first to try it on).
 
+
+## The name is Evident (Sandy, 2026-11-20: "self-evident is a little bit provocative … Evident is a little bit more ambiguous why it would be called that … It also sounds a little bit more like a product"; "I just want it renamed in every place")
+
+Wherever the name is written as words it now reads Evident: the UI, the docs, what the agents are told, and what
+is left on other people's pages (a pull request's "Generated with Claude Code via Evident").
+
+Left as they are, mine to choose: every identifier. The repository (`infinitedusky/self-evident`), the folder that
+holds the keys (`~/.self-evident`), the database (`selfevident`), the package, plugin and MCP server names
+(`self-evident`, so `self-evident:prototype`), the launch agent and the `/__self-evident/` paths. Each needs a move
+on every computer it runs on, and none is read by a person. Nor this log's earlier entries, nor `research/` and
+`ideas/`: they say what was said then.
+
+Not decided: the line under the name ("the thing proves itself" was written for Self Evident); whether the
+identifiers follow. Text already posted under the old name (pull requests, comments) is not changed; nothing of
+ours recognises its own text by the name.
+
