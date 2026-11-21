@@ -5889,3 +5889,21 @@ Not done: the test checkout is not removed when the task is done (nor is the smo
 a restart starts from the beginning; the build page's graph does not show a run under way; not yet seen on a real
 task (the one that showed this is the first to try it on).
 
+
+
+
+## The engine went deaf to its own events, and now notices (Sandy, 2026-11-21: "I type something and nothing comes in, and then if I refresh the page I see it")
+
+The engine hears of each new event on one listening connection to the database, and tells the pages. On this Mac
+the database is reached through a proxy. The proxy's own link dropped and it kept our side open, so the engine's
+connection was dead with no error and no end: it had reconnected six times that morning, said "is back", and the
+seventh loss was never noticed. Every request was still answered, so a reload showed what a page had missed, and
+nothing said anything was wrong. Seen in the database: the engine held no listening connection at all.
+
+- **The listening connection is asked a question every 15 s**, and one that does not answer in 10 s is lost like
+  any other: made again, and every open page told to catch up (`EventBus`, `engine/src/events.ts`).
+- **Making it is given 10 s**, so an attempt that hangs is tried again and does not end the retries.
+
+Mine to choose: a question to the connection and not a library (`pg-listen` does the same, and was last released in
+2020). Not done: the pages are not told when the engine is deaf (they see its pings and think all is well); the
+pool's own connections are dropped by the same proxy and each fails one request.

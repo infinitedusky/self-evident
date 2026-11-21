@@ -25,6 +25,21 @@ describe.skipIf(!reachable)('the event connection', () => {
     await bus.stop()
   }, 15_000)
 
+  it('is made again when it stops answering without a word, as behind a proxy whose own link has gone', async () => {
+    const bus = new EventBus({ beatMs: 100, answerMs: 200 })
+    await bus.start()
+    const hear = (want: number) => new Promise<number>((resolve) => { const on = (n: number) => { if (n === want) { bus.off('event', on); resolve(n) } }; bus.on('event', on) })
+    const back = hear(0)
+    const deaf = (bus as unknown as { client: { query: unknown; removeAllListeners(e: string): void } }).client
+    deaf.removeAllListeners('notification') // it hears nothing more,
+    deaf.query = () => new Promise(() => {}) // answers nothing, and reports no error and no end
+    expect(await back).toBe(0)
+    const heard = hear(-43)
+    await db.execute("select pg_notify('if_events', '-43')")
+    expect(await heard).toBe(-43) // a new connection, listening
+    await bus.stop()
+  }, 15_000)
+
   it('knows its own container from a database elsewhere', () => {
     expect(isLocalDatabase('postgres://ideafactory:ideafactory@localhost:5433/selfevident')).toBe(true)
     expect(isLocalDatabase('postgres://selfevident:x@localhost:15432/selfevident')).toBe(false)
