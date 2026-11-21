@@ -25,11 +25,12 @@ const day = (d: string | null) => (d ? new Date(d).toLocaleDateString('en-GB', {
 const size = (n: number) => (n < 1024 ? `${n} B` : n < 1_048_576 ? `${Math.round(n / 1024)} KB` : `${(n / 1_048_576).toFixed(1)} MB`)
 const envText = (e: Record<string, string>) => Object.entries(e).map(([k, v]) => `${k}=${v}`).join('\n')
 const envOf = (t: string) => Object.fromEntries(t.split('\n').map((l) => l.trim()).filter((l) => l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()]))
-const err = (e: unknown) => String((e as Error)?.message ?? e)
+const err = (e: unknown) => { const m = String((e as Error)?.message ?? e); try { return (JSON.parse(m) as { error?: string }).error ?? m } catch { return m } }
 
 export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's Data step: its own table, and what it adds is the task's. None: the app's settings. */ issueId?: string }) {
   const [list, setList] = useState<Mock[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
   const [tick, setTick] = useState(0) // the table is read again when a mock or its data changes
   const reload = () => engine.mocks(appId).then((l) => { setList(l); setError(null) }).catch((e) => setError(err(e)))
   useEffect(() => { setList(null); void reload() }, [appId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -46,20 +47,22 @@ export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's
     <section className="panel" data-component="MockLibrary">
       <div className="task-block-head">
         <h2 style={{ margin: 0 }}>{issueId ? 'This task\'s data' : 'Mocks'}</h2>
+        {!issueId && <button className="btn quiet small" onClick={() => setAdding(!adding)}>Add a service</button>}
       </div>
       <p className="faint settings-desc" style={{ margin: '6px 0 12px', maxWidth: 760 }}>
-        {issueId ? 'What stands outside the app is mocked, so this task can be tried without calling it. The app\'s own code is what goes live: only its settings point at the mock.' : 'One mock for each outside service this app calls. Its prototypes, smoke tests and main are pointed at the mock instead of the real service. A mock is made in a task, on its Data step, and kept here for the next one.'}{' '}
+        {issueId ? 'What stands outside the app is mocked, so this task can be tried without calling it. The app\'s own code is what goes live: only its settings point at the mock.' : 'The outside services this app connects to, and the mock of each. A task picks its services from these; one found in the code that is not here is added here. Its prototypes, smoke tests and main are pointed at the mock instead of the real service. A mock is built in a task, on its Data step, and kept here for the next one.'}{' '}
         A mock is a small server that behaves as the service does, and, kept apart from it, the data it answers with: a real response as it is, a fake of one, or invented data.
         A real response stays on this computer. Only faked or invented data is ever exported or shared.
       </p>
       {issueId && <TaskCalls appId={appId} issueId={issueId} mocks={list ?? []} version={tick} onChanged={() => { void reload() }} />}
       <h3 className="mock-h3">{issueId ? 'Where its data comes from, for this task' : 'Where the data comes from, unless a task says otherwise'}</h3>
       <MockPlaces key={tick} appId={appId} issueId={issueId} />
-      <h3 className="mock-h3">{issueId ? 'The app\'s mocks' : 'Each mock'}</h3>
+      <h3 className="mock-h3">{issueId ? 'The app\'s mocks' : 'The app\'s services'}</h3>
+      {adding && !issueId && <AddAppService onAdd={(b) => act(async () => { await engine.raiseMock(appId, b); setAdding(false) })} onCancel={() => setAdding(false)} />}
       {error && <div className="empty bad" style={{ marginBottom: 12 }}>{error}</div>}
       {(() => {
         const all = list === null ? (error ? null : <p className="muted">Loading…</p>)
-          : !list.length ? <div className="empty">{issueId ? 'No mocks yet. One is made from a call above.' : 'No mocks yet. One is made on a task\'s Data step, when its change depends on an outside service.'}</div>
+          : !list.length ? <div className="empty">{issueId ? 'No mocks yet. One is made from a call above.' : 'No services yet. Add one here, or a task\'s agent adds it when it finds the code calling one.'}</div>
           : <div className="mock-list">{list.map((m) => <MockCard key={m.key} appId={appId} issueId={issueId} mock={m} act={act} />)}</div>
         // On a task the calls above already show what matters to it: the whole of each mock is one press away.
         return issueId && list?.length ? <details className="mock-all"><summary>Each mock in full ({list.length})</summary>{all}</details> : all
@@ -312,6 +315,29 @@ function History({ appId, mockKey }: { appId: string; mockKey: string }) {
         </ul>
       )}
     </details>
+  )
+}
+
+/** A service the app connects to, added in its settings: its name and what it is. What a live run needs is tucked away. A name that is one already there, written differently, is refused. */
+function AddAppService({ onAdd, onCancel }: { onAdd: (b: { name: string; standsInFor?: string; upstream?: string; env?: Record<string, string> }) => Promise<void>; onCancel: () => void }) {
+  const [name, setName] = useState('')
+  const [what, setWhat] = useState('')
+  const [upstream, setUpstream] = useState('')
+  const [env, setEnv] = useState('')
+  return (
+    <div className="mock-edit" style={{ marginBottom: 12 }} data-component="AddAppService">
+      <label>The service<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="its name, e.g. SixtyFour" /></label>
+      <label>What it is<input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="in a line, e.g. the vendor that scans for exposure" /></label>
+      <details className="mock-provenance">
+        <summary>For recording a live run</summary>
+        <div className="mock-edit">
+          <label>The real service's address<input className="mono" value={upstream} onChange={(e) => setUpstream(e.target.value)} placeholder="https://api.vendor.com" /></label>
+          <label>The variables that point the app at it<textarea className="mono" rows={2} value={env} onChange={(e) => setEnv(e.target.value)} placeholder="VENDOR_BASE_URL={container_url}" /></label>
+        </div>
+      </details>
+      <p className="faint" style={{ margin: 0, fontSize: 13 }}>Its mock is built later, by a task that calls it. A real response is given on the call it answers, on that task's Data step.</p>
+      <div className="row"><button className="btn small" disabled={!name.trim()} onClick={() => void onAdd({ name: name.trim(), ...(what.trim() ? { standsInFor: what.trim() } : {}), ...(upstream.trim() ? { upstream: upstream.trim() } : {}), ...(env.trim() ? { env: envOf(env) } : {}) })}>Add</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
+    </div>
   )
 }
 

@@ -6184,3 +6184,22 @@ was only found as a whole value; and the faker no longer offers a column like `f
 Next: a data agent with instructions of its own, called by the task's agent, that works in three steps and stops
 after each (what the task calls; where each service's data comes from; build what was decided).
 
+### Services are the app's, set up in its settings; a task picks from them (Sandy, 2026-11-21)
+
+"I think we should have a section for services … the agent would say, these are the services we're calling, and then
+for each of those services we're making certain calls." "When you go to add a call, it lets you write anything you
+want in the service, and I don't like the idea that I could write 64 with an underscore and it looks like it's a
+different service." "The services could be configured in the settings, and that way … the app only has certain
+services it can connect to. And if we look at the code and find ones that aren't in the settings, then we set them up
+in the settings."
+- **A service is one of the app's** (it is its mock's row), set up in Settings › Mocks: its name and what it is
+  (`addService`). A name that is one already there written differently (case, spaces, underscores) is refused, with
+  the one it is. "Add a service" is back in Settings.
+- **A task picks its services** (`task_service`): from a list on its Data step, never typed. One the app does not
+  have is added to the app's services from there, under the same check. An agent that finds one in the code sets it
+  up in the app's settings (`task_calls` op service) and it is marked as found for that task.
+- **Calls sit under their service**: a call is added inside a service's block (method, path, what the task needs),
+  and is on that service's mock as an endpoint from then on, so a real response can be given for it at once. A call
+  to a service the app does not have is refused.
+- **The Data step**: Services this task calls (each with its calls), where its data comes from, each mock in full.
+

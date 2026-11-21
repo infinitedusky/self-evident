@@ -193,6 +193,31 @@ export async function needsRecording(appId: string, i: { key?: string; name: str
   return getMock(appId, key).then(({ fileText: _f, ...v }) => v)
 }
 
+/** Two names that are the same service written differently: SixtyFour, sixty_four, "Sixty Four". */
+const alike = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+/** One of the app's services, by its key or by its name however it is written. None: the app has no such service. */
+export async function serviceFor(appId: string, given: string): Promise<Row | null> {
+  const want = alike(given)
+  if (!want) return null
+  const rows = await db.select().from(mock).where(eq(mock.appId, appId))
+  return rows.find((m) => m.key === standInKey(given)) ?? rows.find((m) => alike(m.name) === want || alike(m.key) === want) ?? null
+}
+/**
+ * A service the app connects to, set up in its settings (Sandy, 2026-11-21: "the services could be configured in the
+ * settings, and that way … the app only has certain services it can connect to. And if we look at the code and find
+ * ones that aren't in the settings, then we set them up in the settings"; and "I don't like the idea that I could
+ * write 64 with an underscore and it looks like it's a different service"). A service is its mock's row: there from
+ * when it is named, its mock built later by a task. A name that is one already there, written differently, is
+ * refused with the one it is.
+ */
+export async function addService(appId: string, i: { name: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; issueId?: string | null; why?: string }, actor = 'user') {
+  const name = clip(i.name, 80)
+  if (!standInKey(name)) throw new PlanError('a service needs a name')
+  const there = await serviceFor(appId, name)
+  if (there) throw new PlanError(`that is already one of this app's services, as "${there.name}"`)
+  return needsRecording(appId, { name, standsInFor: i.standsInFor, upstream: i.upstream, env: i.env, issueId: i.issueId ?? null, needs: i.why ? { why: i.why } : undefined }, actor)
+}
+
 /** Its name, what it stands in for, the real service's address and the variables that point the app at it: the person's to set on the page. */
 export async function setMockDetails(appId: string, key: string, i: { name?: string; standsInFor?: string; upstream?: string | null; env?: Record<string, string> }, actor = 'user') {
   const m = await rowOf(appId, key)

@@ -10,7 +10,7 @@ import { newId } from './ids.js'
 import { renameData, saveData } from './mock-data.js'
 import { checkLeaks } from './mock-leaks.js'
 import { placesTable } from './mock-places.js'
-import { editEndpoint, getMock, giveRecording, listReal, mockHistory, removeMock, removeReal } from './mocks.js'
+import { addService, editEndpoint, getMock, giveRecording, listReal, mockHistory, removeMock, removeReal } from './mocks.js'
 import { createProject } from './projects.js'
 import { addCall, clearCalls, coverCall, editCall, listCalls } from './task-calls.js'
 
@@ -42,6 +42,7 @@ describe.skipIf(!reachable)('starting again, and changing or removing each piece
     await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'Dashboard (sample)', key: appId.slice(-6).toUpperCase(), setup: {} })
     const { issues: [t] } = await createProject({ appId, name: 'Scans (sample)', issues: [{ title: 'Show findings (sample)', brief: 'Build it.' }] })
     issueId = t.id
+    await addService(appId, { name: 'Scanner' })
     await addCall(issueId, { service: 'Scanner', method: 'GET', path: '/runs/{id}/results', what: 'One row per person' }, 'user')
   })
   afterAll(async () => { rmSync(home, { recursive: true, force: true }); for (const k of ['RECORDINGS_HOME', 'MOCKS_HOME']) delete process.env[k]; await pool.end() })
@@ -78,11 +79,11 @@ describe.skipIf(!reachable)('starting again, and changing or removing each piece
     await expect(editEndpoint(appId, 'scanner', 'nothing', { what: 'x' })).rejects.toThrow('has no endpoint')
     await saveData(appId, 'scanner', { dataKey: 'nobody', files: { 'runs-results.csv': 'a,b\n' }, stated: true }, 'user')
     expect((await renameData(appId, 'scanner', 'nobody', 'Someone with nothing found'))[0]).toMatchObject({ key: 'nobody', name: 'Someone with nothing found' })
-    // The call changed: what it needs, then the call itself, which is then not the mock's endpoint any more.
+    // The call changed: what it needs, then the call itself.
     const c = await call()
     expect((await editCall(issueId, c.id, { what: 'One row per person, and nobody at all' }))[0]).toMatchObject({ what: 'One row per person, and nobody at all', state: 'answered' })
-    expect((await editCall(issueId, c.id, { path: '/runs/{id}/files' }))[0]).toMatchObject({ path: '/runs/{id}/files', state: 'no_endpoint' })
-    expect((await editEndpoint(appId, 'scanner', 'runs-results', null)).endpoints).toEqual([])
+    expect((await editCall(issueId, c.id, { path: '/runs/{id}/files' }))[0]).toMatchObject({ path: '/runs/{id}/files', state: 'answered', endpoint: { key: 'runs-files' } }) // another call now: on the mock as its own endpoint
+    expect((await editEndpoint(appId, 'scanner', 'runs-results', null)).endpoints.map((e) => e.key)).toEqual(['runs-files'])
     expect((await mockHistory(appId, 'scanner')).map((h) => h.what)).toEqual(expect.arrayContaining(['The call "runs-results" was taken off', 'The call "runs-results" was changed', 'Data "nobody" was renamed']))
     expect(await clearCalls(issueId)).toEqual([])
   })

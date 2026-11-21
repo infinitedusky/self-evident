@@ -19,6 +19,7 @@ export interface MockData {
   mockChanges: import('../engine').MockChange[]
   /** What the sample task calls outside the app. */ taskCalls: import('../engine').TaskCall[]
   /** A service's real responses on this computer. */ mockReal: import('../engine').MockReal[]
+  /** The services the sample task calls. */ taskServices: import('../engine').TaskService[]
   /** The stories under Screens/ and the Storybook that renders them. */ screens: import('../engine').ScreensView & { /** With the earlier tasks' ones, when asked for. */ all?: import('../engine').Screen[] }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[]; earlier?: number; /** With the earlier tasks' ones, when asked for. */ all?: { file: string; changedAt: number }[] }
   /** A task's smoke test; left out, there is nothing for a person on it. */ smoke?: import('../engine').SmokeView
@@ -57,7 +58,7 @@ export const sampleData: MockData = {
   storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [], branch: 'talk/sample', main: false },
   screens: s.screensView,
   mocks: s.mocks,
-  mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls, mockReal: s.mockReal,
+  mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls, mockReal: s.mockReal, taskServices: s.taskServices,
   sketches: { scope: 'sess_sample', branch: 'talk/sample', main: false, dir: 'sketches', sketches: [{ file: 'home.html', changedAt: 1794250000000 }, { file: 'checkout.html', changedAt: 1794240000000 }] },
   prototypes: s.prototypes, prototypeCode: s.prototypeCode,
   claudeSessions: s.claudeSessions,
@@ -140,19 +141,22 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/talks/:id/handoff', () => reply({ command: `cd "/Users/sample/code/sample-shop-worktrees/talk-sample" && claude --resume 00000000-sample --mcp-config '{"mcpServers":{"self-evident":{"type":"http","url":"http://localhost:4000/api/mcp/app_sample"}}}'` })),
     http.get('/api/apps/:id/storybook', () => reply(d.storybook)),
     http.get('/api/apps/:id/mocks', () => reply(d.mocks)),
-    http.get('/api/issues/:id/calls', () => reply(d.taskCalls)),
-    http.post('/api/issues/:id/calls', async ({ request }) => { const b = await request.json() as { service: string; method: string; path: string; what?: string }; d.taskCalls = [...d.taskCalls, { id: `tcall_new${d.taskCalls.length}`, service: b.service.toLowerCase(), serviceName: b.service, method: b.method, path: b.path, what: b.what ?? '', by: 'user', state: 'no_mock', mock: null, endpoint: null, linked: false }]; return reply(d.taskCalls) }),
-    http.delete('/api/issues/:id/calls', () => { d.taskCalls = []; return reply(d.taskCalls) }),
-    http.patch('/api/issues/:id/calls/:call', async ({ params, request }) => { const b = await request.json() as Partial<import('../engine').TaskCall>; d.taskCalls = d.taskCalls.map((c) => (c.id === params.call ? { ...c, ...b } : c)); return reply(d.taskCalls) }),
+    http.post('/api/apps/:id/mocks', async ({ request }) => { const b = await request.json() as { name: string; standsInFor?: string }; const alike = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, ''); const there = d.mocks.find((m) => alike(m.name) === alike(b.name)); if (there) return HttpResponse.json({ error: `that is already one of this app's services, as "${there.name}"` }, { status: 400 }); const m: import('../engine').Mock = { ...d.mocks[d.mocks.length - 1], key: b.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: b.name, standsInFor: b.standsInFor ?? '', status: 'needs_recording', needs: { at: '2026-11-21T10:00:00Z' }, issue: null, files: [], data: [], endpoints: [], unlinked: [], cmd: null }; d.mocks = [...d.mocks, m]; return reply(m) }),
     http.get('/api/apps/:id/mocks/:key/real', () => reply(d.mockReal)),
     http.delete('/api/apps/:id/mocks/:key/real', ({ request }) => { d.mockReal = d.mockReal.filter((r) => r.id !== new URL(request.url).searchParams.get('id')); return reply(d.mockReal) }),
     http.patch('/api/apps/:id/mocks/:key/endpoints/:endpoint', async ({ params, request }) => { const b = await request.json() as { what?: string }; d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: m.endpoints.map((e) => (e.key === params.endpoint ? { ...e, ...b } : e)) } : m)); return reply(d.mocks.find((m) => m.key === params.key)) }),
     http.delete('/api/apps/:id/mocks/:key/endpoints/:endpoint', ({ params }) => { d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: m.endpoints.filter((e) => e.key !== params.endpoint) } : m)); return reply(d.mocks.find((m) => m.key === params.key)) }),
     http.patch('/api/apps/:id/mocks/:key/data/:data', () => reply(d.mocks[0].data)),
     http.delete('/api/apps/:id/mocks/:key', ({ params }) => { d.mocks = d.mocks.filter((m) => m.key !== params.key); return reply({ removed: true, files: 2 }) }),
-    http.delete('/api/issues/:id/calls/:call', ({ params }) => { d.taskCalls = d.taskCalls.filter((c) => c.id !== params.call); return reply(d.taskCalls) }),
-    http.put('/api/issues/:id/calls/:call/endpoint', () => reply(d.taskCalls)),
-    http.post('/api/issues/:id/calls/:call/cover', () => reply({ calls: d.taskCalls, mock: d.mocks[0] })),
+    http.get('/api/issues/:id/services', () => reply(d.taskServices)),
+    http.post('/api/issues/:id/services', async ({ request }) => { const b = await request.json() as { service: string }; const m = d.mocks.find((x) => x.key === b.service || x.name === b.service); if (!m) return HttpResponse.json({ error: `"${b.service}" is not one of this app's services` }, { status: 400 }); if (!d.taskServices.some((x) => x.key === m.key)) d.taskServices = [...d.taskServices, { key: m.key, name: m.name, standsInFor: m.standsInFor, status: m.status, foundFor: null, calls: [] }]; return reply(d.taskServices) }),
+    http.delete('/api/issues/:id/services/:service', ({ params }) => { d.taskServices = d.taskServices.filter((x) => x.key !== params.service); return reply(d.taskServices) }),
+    http.get('/api/issues/:id/calls', () => reply(d.taskServices.flatMap((x) => x.calls))),
+    http.post('/api/issues/:id/calls', async ({ request }) => { const b = await request.json() as { service: string; method: string; path: string; what?: string }; const sv = d.taskServices.find((x) => x.key === b.service); const c: import('../engine').TaskCall = { id: `tcall_new${Date.now()}`, service: b.service, serviceName: sv?.name ?? b.service, method: b.method, path: b.path, what: b.what ?? '', by: 'user', state: 'answered', mock: sv ? { key: sv.key, name: sv.name, status: sv.status } : null, endpoint: { key: 'new', method: b.method, path: b.path, what: b.what, real: null, files: [] }, linked: false }; d.taskServices = d.taskServices.map((x) => (x.key === b.service ? { ...x, calls: [...x.calls, c] } : x)); return reply(d.taskServices.flatMap((x) => x.calls)) }),
+    http.delete('/api/issues/:id/calls', () => { d.taskServices = d.taskServices.map((x) => ({ ...x, calls: [] })); return reply([]) }),
+    http.patch('/api/issues/:id/calls/:call', async ({ params, request }) => { const b = await request.json() as Partial<import('../engine').TaskCall>; d.taskServices = d.taskServices.map((x) => ({ ...x, calls: x.calls.map((c) => (c.id === params.call ? { ...c, ...b, service: c.service } : c)) })); return reply(d.taskServices.flatMap((x) => x.calls)) }),
+    http.put('/api/issues/:id/calls/:call/endpoint', () => reply(d.taskServices.flatMap((x) => x.calls))),
+    http.post('/api/issues/:id/calls/:call/cover', () => reply({ calls: d.taskServices.flatMap((x) => x.calls), mock: d.mocks[0] })),
     http.get('/api/apps/:id/mock-places', ({ request }) => reply(new URL(request.url).searchParams.get('issue') ? d.mockPlacesForTask : d.mockPlaces)),
     http.get('/api/apps/:id/mocks/:key/history', () => reply(d.mockChanges)),
     http.put('/api/apps/:id/mocks/:key/places/:place', () => reply(d.mockPlaces[0].places.prototype)),
