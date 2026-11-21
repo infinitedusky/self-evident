@@ -25,6 +25,7 @@ import { fixedOf, fixedSays } from './addresses.js'
 import { databaseExists, databaseName, databaseUrl, dropDatabase, dropScenarios, listScenarios, rebuild, save, scenarioTables, writeScenario, type PrototypeDb, type Tables } from './prototype-data.js'
 import { endTalk, say, showTalk, startPrototypeTalk } from './talk.js'
 import { listRecordings, recordingsDir, recordingsOf } from './recordings.js'
+import { dropUse, libraryStandIns, noteUse } from './mocks.js'
 import { writeEnvFile, cleanStandIns, envOf, forgetStandIns, homeOf, standInKey, standInsStatus, startStandIns, stopStandIns, withStandIn, type StandIn } from './stand-ins.js'
 
 const STOP_TIMEOUT_MS = Number(process.env.PROTOTYPE_STOP_TIMEOUT_MS ?? 120_000)
@@ -92,12 +93,18 @@ export async function prototypeStatus(id: string) {
   // And does its page call an address fixed to this computer (addresses.ts)? It would load here and nowhere else.
   const fixed = up && url ? await fixedOf(`prototype:${id}`, url, (found) => emit(p, 'prototype.fixed_address', 'engine', { addresses: found, note: fixedSays(found, url) })) : []
   const staleGuide = guideOf(p)?.stale ?? []
-  return { ...(fixed.length ? { fixedAddresses: fixed, fixedNote: fixedSays(fixed, url!) } : {}), ...p, ...data, standIns: standInsStatus(p.id, cleanStandIns(p.standIns)), home: homeOf(p.id), recordings: { dir: recordingsOf(p.appId, p), files: listRecordings(recordingsOf(p.appId, p)).slice(0, 30) }, ...(staleGuide.length ? { guideNote: staleSays(staleGuide) } : {}), ...(hasGuide(p) ? {} : { needsGuide: NO_GUIDE }), /** Its server has never been started: its agent starts it once it is set up. */ ...(p.status === 'stopped' && p.port === null && cmd ? { notStarted: true } : {}), cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
+  return { ...(fixed.length ? { fixedAddresses: fixed, fixedNote: fixedSays(fixed, url!) } : {}), ...p, ...data, standIns: standInsStatus(p.id, await withLibrary(p)), home: homeOf(p.id), recordings: { dir: recordingsOf(p.appId, p), files: listRecordings(recordingsOf(p.appId, p)).slice(0, 30) }, ...(staleGuide.length ? { guideNote: staleSays(staleGuide) } : {}), ...(hasGuide(p) ? {} : { needsGuide: NO_GUIDE }), /** Its server has never been started: its agent starts it once it is set up. */ ...(p.status === 'stopped' && p.port === null && cmd ? { notStarted: true } : {}), cleanup: { stop: !!stopCmd, discard: !!discardCmd }, status: p.status === 'running' && !on ? 'stopped' : p.status, url, up, log: running.get(id)?.log.slice(-40) ?? lastCleanUp.get(id) ?? [], ...(stray.length ? { /** Ports it listens on that it was not given (ports.ts): a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}) }
 }
 
 export async function listPrototypes(appId: string) {
   const rows = await db.select().from(prototype).where(and(eq(prototype.appId, appId), ne(prototype.status, 'discarded'))).orderBy(desc(prototype.createdAt))
   return rows.map((p) => ({ ...p, status: p.status === 'running' && !alive(p.id) ? 'stopped' : p.status, url: p.port ? `http://localhost:${p.port}` : null }))
+}
+
+/** Its own stand-ins, then every mock in the app's library it has none of its own for. */
+async function withLibrary(p: { appId: string; standIns: unknown }) {
+  const own = cleanStandIns(p.standIns)
+  return [...own, ...(await libraryStandIns(p.appId, own.map((s) => s.key)))]
 }
 
 /** Start a prototype's server (again), on its last port when that is free, passed as PORT. A no-op while it runs, unless restart. */
@@ -116,7 +123,9 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
   const port = await freePort(p.port ?? 0)
   const more = await morePorts()
   // Its stand-ins first, each on a port of its own; the server is given the variables that point the app at them.
-  const standIns = cleanStandIns(p.standIns)
+  // The app's mocks are among them (mocks.ts), unless it has a stand-in of its own for that service.
+  const standIns = await withLibrary(p)
+  noteUse(p.id, p.appId, `Prototype: ${p.title}`, standIns.filter((s) => 'mock' in s).map((s) => s.key))
   const pointed = envOf(p.id, standIns, await startStandIns(p.id, standIns, p.path, { ...process.env, ...(await prototypeEnv(p)) }), p.path)
   const envFile = writeEnvFile(p.id, pointed) // for a container: a compose service names it as an env_file once
   // Its own process group, so stopping it also stops what the command started (a package manager's dev server).
@@ -148,7 +157,7 @@ export const DEPLOY_TEST = 'The test: it could be deployed as it stands and made
  */
 export const THROUGH_THE_PATH = 'Seed only what exists before the feature runs (companies, people, settings). What the feature itself makes (what it imports, computes or stores) is never seeded or inserted by hand: it arrives the way it will in production, in through the integration point from a stand-in. A row you wrote where the feature should have written it is a faked layer.'
 /** Where a stand-in lives (stand-ins.ts): said to the prototype's agent, and in the skill. */
-export const STAND_INS_STAY = 'What stands in for something outside the system (a vendor\'s API, another service) is a stand-in of this prototype, set with prototype_stand_in: a command that serves on $PORT and the variables that point the app at it. The engine starts it with the prototype and stops it with it, so it is still there after a restart or a reset. Never start one by hand or keep one, or what it serves, in /tmp. It runs in a folder of its own outside the repository ($PROTOTYPE_HOME), and serves what the real service really sent: the raw recordings kept with this task in $RECORDINGS, real people\'s among them, never on the branch. Look there first; where nothing was recorded, record a real run there if you can, and say plainly what is assumed if you cannot.'
+export const STAND_INS_STAY = 'A service that has a mock in the app\'s library (the mocks tool) is served by it: the engine starts it with the prototype, so set no stand-in of your own for it. Anything else outside the system (a vendor\'s API, another service) is a stand-in of this prototype, set with prototype_stand_in: a command that serves on $PORT and the variables that point the app at it. The engine starts it with the prototype and stops it with it, so it is still there after a restart or a reset. Never start one by hand or keep one, or what it serves, in /tmp. It runs in a folder of its own outside the repository ($PROTOTYPE_HOME), and serves what the real service really sent: the raw recordings kept with this task in $RECORDINGS, real people\'s among them, never on the branch. Look there first; where nothing was recorded, record a real run there if you can, and say plainly what is assumed if you cannot.'
 export const FROM_THE_SCREEN = 'Try each thing the way the person will, from the screen: press the button, submit the form, open the page. Calling a route or running a job by hand shows that part works, not that the path to it does. Say in your report anything you did not try from the screen.'
 /**
  * How thoroughly a prototype is built (Sandy, 2026-11-15: "prototypes can be set as being full or rough").
@@ -204,6 +213,7 @@ async function kill(id: string): Promise<void> {
   const m = running.get(id)
   running.delete(id)
   const standIns = stopStandIns(id) // they stop and start with the server, so a restart brings them back as they are set
+  dropUse(id)
   if (m && m.proc.exitCode === null && m.proc.signalCode === null && m.proc.pid) {
     const gone = new Promise<void>((r) => { m.proc.once('exit', () => r()); setTimeout(r, 3000) })
     try { process.kill(-m.proc.pid, 'SIGTERM') } catch { m.proc.kill('SIGTERM') }

@@ -134,6 +134,7 @@ committed event as it happens, via Postgres `LISTEN/NOTIFY`. Several clients can
 | `src/assets.ts` | Assets: what an app or a project is worked from (a name, a link or path, a note), and what a conversation is told of them. |
 | `src/delete-issue.ts` | Deleting a task with no work on it, with its sub-tasks; one with work is refused (cancel it). |
 | `src/folders.ts` | Choosing an app's repositories by folder: the system's folder dialog, and the git repositories in the folder picked. |
+| `src/mocks.ts`, `src/mock-leaks.ts`, `src/recorder.ts` | The mock library: one mock per outside service per app, started with every prototype, main and smoke test; a live smoke run recorded raw through a proxy; a mined mock refused while any recorded value is in it; provenance; export. |
 | `src/workbench.ts` | An app's repositories: which is home, and a piece of work's worktree in each of the others. |
 
 `pnpm test` runs the scheduler and landing tests anywhere (landing uses a throwaway git repo) and, when Postgres

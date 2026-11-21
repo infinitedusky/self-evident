@@ -342,6 +342,18 @@ export interface TaskBranches { issueId: string; worktrees: { key: string; label
 export interface TaskMoved { now: { id: string; name: string }; setAside: { id: string; name: string; commits: number }; switched: { worktree: string; branch: string }[]; leftAlone: string[]; restarted: number; problems: string[] }
 /** A screen: one title under Screens/ in the app's Storybook, and its states, each a story. */
 export interface Screen { title: string; file: string | null; states: { id: string; name: string }[] }
+/** One mock in an app's library (engine/src/mocks.ts): a stand-in for one outside service, with where it came from. */
+export interface MockProvenance { standsInFor?: string; minedFrom?: string; real?: string; invented?: string; cannotShow?: string[]; covers?: string[]; changed?: string; kept?: string[]; checked?: { at: string; files: number; values: number } }
+export interface Mock {
+  key: string; name: string; status: 'needs_recording' | 'assumed' | 'mined'; standsInFor: string; upstream: string | null
+  env: Record<string, string>; cmd: string | null; files: { path: string; bytes: number }[]
+  provenance: MockProvenance; /** Its provenance as a note, as it is exported. */ note: string
+  /** A new recording is needed: what a real call needs. */ needs: { person?: string; key?: string; cost?: string; why?: string; at?: string; recorded?: string } | null
+  issue: { id: string; identifier: string; title: string } | null
+  recordedAt: string | null; minedAt: string | null
+  /** A newer recording waits to be mined. */ unmined: { at: string; files: number } | null
+  /** Where it is in use now: a prototype, main, a smoke test. */ usedBy: string[]
+}
 /** Where the Storybook that renders them stands, and the screens it has. */
 export interface ScreensView { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean; screens: Screen[]; earlier: number }
 
@@ -386,6 +398,7 @@ export type Attention =
   | { kind: 'checkout_behind'; appName: string; branch: string; path: string; commits: number; why: string; files: string[] }
   /** A nightly check is red: the tasks merged since its last green run, one of which broke it. */
   | { kind: 'nightly_failed'; appId: string; appName: string; name: string; workflow: string; url: string | null; nights: number; since: { id: string; identifier: string; title: string }[] }
+  | { kind: 'needs_recording'; appId: string; appName: string; mock: string; mockKey: string; issueId: string | null; identifier: string | null; issueTitle: string | null; person: string | null; key: string | null; cost: string | null; recorded: boolean }
   | ({ kind: 'overlap'; prNumber: number; title: string; author: string | null; url: string | null; files: string[] } & Where)
 export interface RunningProject {
   projectId: string; projectName: string; appName: string; status: string; integrationBranch: string | null; backlogOpen: number
@@ -460,6 +473,18 @@ export const engine = {
   // session: the conversation in front; its worktree's Storybook when it has one (branch says which), else the app's.
   // story: one to show; the answer says which this Storybook can show for it (itself, another of the same component, or none).
   storybook: (appId: string, session?: string | null, story?: string | null) => call<{ url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean; story?: { asked: string; show: string | null; missing: boolean } }>('GET', `/apps/${appId}/storybook?${new URLSearchParams({ ...(session ? { session } : {}), ...(story ? { story } : {}) })}`),
+  /** The app's mock library (Settings › Mocks). */
+  mocks: (appId: string) => call<Mock[]>('GET', `/apps/${appId}/mocks`),
+  /** A service that needs a mock: raised, with the real service's address and the variables that point the app at it. */
+  raiseMock: (appId: string, body: { name: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; issueId?: string; needs?: Mock['needs'] }) => call<Mock>('POST', `/apps/${appId}/mocks`, body),
+  updateMock: (appId: string, key: string, body: { name?: string; standsInFor?: string; upstream?: string | null; env?: Record<string, string> }) => call<Mock>('PATCH', `/apps/${appId}/mocks/${key}`, body),
+  removeMock: (appId: string, key: string) => call<{ removed: boolean }>('DELETE', `/apps/${appId}/mocks/${key}`),
+  /** Ask the agent of the task the newest recording was made for to mine it. */
+  mineMock: (appId: string, key: string) => call<{ asked: string }>('POST', `/apps/${appId}/mocks/${key}/mine`),
+  /** Where its exported files are downloaded from: the server, its invented data and its provenance. */
+  mockExportUrl: (appId: string, key: string) => `/api/apps/${appId}/mocks/${key}/export`,
+  /** A live smoke run of a task that records these services (their mocks' keys) through the engine. */
+  startLiveSmoke: (issueId: string, live: string[], setup?: string) => call<SmokeView>('POST', `/issues/${issueId}/smoke/start`, { live, ...(setup ? { setup } : {}) }),
   /** A task's screens: the stories under Screens/ that its branch made, by screen, and the Storybook that renders them; `earlier` counts the ones it was handed, which `all` brings back. */
   screens: (appId: string, session?: string | null, all = false) => call<ScreensView>('GET', `/apps/${appId}/screens?${new URLSearchParams({ ...(session ? { session } : {}), ...(all ? { all: '1' } : {}) })}`),
   startStorybook: (appId: string, session?: string | null) => call<unknown>('POST', `/apps/${appId}/storybook/start${session ? `?session=${session}` : ''}`),

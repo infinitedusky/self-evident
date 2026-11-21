@@ -5889,3 +5889,60 @@ Not done: the test checkout is not removed when the task is done (nor is the smo
 a restart starts from the beginning; the build page's graph does not show a run under way; not yet seen on a real
 task (the one that showed this is the first to try it on).
 
+
+
+## Reviewable pull requests, step 1: the mock library (Sandy, 2026-11-20: "This is a critical feature"; from Cloaked, CEB-90)
+
+A pull request is reviewable only if the reviewer can try it on data they can trust. ENT-322's findings arrive only
+from a paid SixtyFour scan, so a fresh checkout shows empty screens; the made-up data and the vendor stand-in lived
+in Self Evident, per prototype. The feature is three steps, each needing the one before: the mock library (this),
+review environments (a `-review` branch per PR carrying the exported mocks), and the gate before review. Steps 2
+and 3 are not built.
+
+**The 18 Nov live run was not kept.** Cloaked's client buffers SixtyFour's CSV, parses it into its own tables and
+drops the body; the recordings folders were empty, and the smoke database has only the parsed fields (the vendor's
+`provider_raw_response_*` and pipeline columns are already gone). So SixtyFour has no mined mock yet: the first job
+is one more live run, recorded this time.
+
+- **The library** (`engine/src/mocks.ts`, table `mock`): one mock per service per app, `needs_recording`,
+  `assumed` or `mined`. Its files (the server and its invented data) are kept in the database, since they hold
+  nothing private, and written to `~/.self-evident/mocks/<app>/<key>/<version>/` when it starts. The recording is
+  never copied; the row names its folder.
+- **The engine records, not the agent** (`engine/src/recorder.ts`). A live smoke run (`POST /issues/:id/smoke/start`
+  with `live: [key]`) points the app's base URL at a proxy that passes every call to the real service and saves each
+  exchange raw in the task's recordings folder (`<key>/<when>/NNN.meta.json`, `.request.*`, `.response.*`), with no
+  key, token or cookie kept. A JSON response's full addresses (download links) are rewritten to go through the
+  proxy, so the CSV that follows is caught too; what is saved is the response as it came. The run is marked
+  `SELF_EVIDENT_RECORDING=1`, and the Cloaked workbench's `up.sh` now runs its one-employee guard for it (a local
+  base URL used to mean a free stand-in).
+- **Mining is the task's agent's**, asked by the engine when the live run stops (`MINE_IT` in `smoke.ts`), or by
+  Mine it on the Mocks page. It saves with the `mock` tool, op `save`, status `mined`.
+- **The leak check** (`engine/src/mock-leaks.ts`) refuses a mined mock while any value of its recording is in it:
+  emails, addresses, ids and long numbers anywhere; two or three word values (names) and any four words in a row of
+  prose anywhere; one-word values as whole values, and inside prose when they look like a handle. Keys and column
+  names (also those of a dict written out in a cell) are shape and never a hit. A value kept because it is shape
+  (a status) is named in `provenance.kept`, shown on the page; an email, an address or a number cannot be kept.
+  Export checks again while the recording is still on this computer.
+- **Provenance** is on every mock and in its export as `PROVENANCE.md`: what it stands in for, what it was mined
+  from and when (in counts, never the person), what is real, what is invented, what it covers, what it cannot show,
+  what changed since the last one (required when a new recording replaces the one it was mined from).
+- **Where it is used**: every prototype, main and smoke test starts the app's mocks as stand-ins
+  (`libraryStandIns`), with their variables in `$STAND_INS_ENV`, unless it has its own stand-in of that key. The
+  smoke test had no stand-ins before; now a plain run calls the mocks and costs nothing.
+- **The trigger**: every prototype's and task's agent is told the library and to check it before building
+  (`mocksPrompt`); a service with no mock, or one out of date, is raised with `mock` op `needs_recording`, with what
+  a real call needs (a consenting person, the key by name, the cost). It shows on Now and on the Mocks page, which
+  starts the live run. Until then an `assumed` mock may stand in, labelled so everywhere.
+- **Export**: `GET /apps/:id/mocks/:key/export`, a tarball of the server, its invented data, `PROVENANCE.md` and
+  `mock.json`. Step 2 will put it on a review branch.
+- **Settings › the app › Mocks** (`app/src/components/MockLibrary.tsx`, stories first): each service, its state, its
+  recording date and task, where it is in use, its provenance and files; record it, mine it, export, edit, remove.
+
+Mine to choose: a mock's files in Postgres (they move between computers with the app) where recordings stay on this
+computer; the recorder as a proxy rather than an agent instruction; mining by the task's own agent (it knows the
+change) rather than an agent of its own; a library mock losing to a prototype's own stand-in of the same key.
+
+Not done: SixtyFour's mock itself (it needs the recorded live run: raise it on CEB-90's task with upstream
+`https://api.sixtyfour.ai` and `SIXTYFOUR_BASE_URL={container_url}`, then press Record it); the smoke test's own page
+does not show which mocks a run has on (the engine reports it); the Mocks page is not yet linked from a task's
+prototype; mocks in review environments (step 2) and the gate (step 3). Not seen end to end on a real app.

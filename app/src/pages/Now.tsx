@@ -134,6 +134,10 @@ function AttentionRow({ a, busy, act }: { a: Attention; busy: string | null; act
       <li><Badge tone="bad">nightly</Badge><div><strong>{a.appName}: {a.name} failed</strong> <span className="faint">{a.nights > 1 ? `${a.nights} runs in a row` : 'last night'} · {a.workflow} on the default branch</span>
         <div className="muted" style={{ fontSize: 13 }}>{a.since.length ? <>Merged since it last passed: {a.since.map((t, i) => <span key={t.id}>{i ? ', ' : ''}<Link to={`/tasks/${t.id}/build`}>{t.identifier} {t.title}</Link></span>)}.</> : 'Nothing of ours merged since it last passed.'}</div></div>
         {a.url ? <a className="btn small" href={a.url} target="_blank" rel="noreferrer">Open the run</a> : <Link className="btn quiet small" to="/settings">Settings</Link>}</li>)
+    case 'needs_recording': return (
+      <li><Badge tone="warn">{a.recorded ? 'mining' : 'recording'}</Badge><div><strong>{a.mock} {a.recorded ? 'was recorded: its mock is being mined' : 'needs a recording'}</strong> <span className="faint">{a.appName}{a.identifier ? <> · for <Link to={`/tasks/${a.issueId}`}>{a.identifier} {a.issueTitle}</Link></> : null}</span>
+        {!a.recorded && (a.person || a.key || a.cost) ? <div className="muted" style={{ fontSize: 13 }}>A real call needs {[a.person, a.key && `the key ${a.key}`, a.cost && `and costs ${a.cost}`].filter(Boolean).join(', ')}.</div> : null}</div>
+        <Link className="btn quiet small" to={`/settings/apps/${a.appId}/mocks`}>Mocks</Link></li>)
     case 'review': return (
       <li><Badge tone="warn">review</Badge><div><strong>#{a.prNumber} {a.title}</strong> <span className="faint">{a.appName}{a.author ? ` · from ${a.author}` : ''} · your review is asked</span></div>
         {a.url ? <a className="btn small" href={a.url} target="_blank" rel="noreferrer">Review</a> : null}</li>)
