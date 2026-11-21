@@ -114,3 +114,19 @@ export const ChangingKind: Story = {
     await expect(saved.style).toBe('checklist'); await expect(afterOf(saved)).toBe('fast')
   },
 }
+/** Editing: its name can be changed, so two workflows are never both "Main"; a name left empty cannot be saved. */
+export const Renaming: Story = {
+  args: { workflow: main, editing: true, onSave: fn() },
+  play: async ({ canvasElement, args }) => {
+    const c = within(canvasElement)
+    const name = c.getByRole('textbox', { name: 'Name' })
+    await expect(name).toHaveValue(main.name)
+    await userEvent.clear(name)
+    await expect(c.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await userEvent.type(name, '  Dashboard changes (sample) ')
+    await userEvent.click(c.getByRole('button', { name: 'Save' }))
+    const saved = (args.onSave as ReturnType<typeof fn>).mock.calls[0][0] as Workflow
+    await expect(saved.name).toBe('Dashboard changes (sample)')
+    await expect(c.getByText('Dashboard changes (sample)')).toBeInTheDocument()
+  },
+}

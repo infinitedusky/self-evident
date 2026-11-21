@@ -101,6 +101,7 @@ export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, 
         </>
       ) : (
         <>
+          <label className="wf-name">Name<input value={w.name} onChange={(e) => setW({ ...w, name: e.target.value })} placeholder="what this workflow is for, e.g. Dashboard changes" /></label>
           <h4 className="wf-h">On the way to an approved prototype</h4>
           <ul className="list">
             {w.steps.map((s, i) => !lead(s) ? null : (
@@ -155,7 +156,7 @@ export function WorkflowCard({ workflow, usedBy, editing: startEditing = false, 
             </>
           )}
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <button className="btn small" onClick={() => { onSave?.(w); setEditing(false) }}>Save</button>
+            <button className="btn small" disabled={!w.name.trim()} onClick={() => { const named = { ...w, name: w.name.trim() }; setW(named); onSave?.(named); setEditing(false) }}>Save</button>
             <button className="btn quiet small" onClick={() => { setW(normalize(workflow)); setEditing(false) }}>Cancel</button>
           </div>
         </>
