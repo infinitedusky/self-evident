@@ -101,7 +101,7 @@ describe('the checks a person has', () => {
 
 describe('how an app is brought up for one', () => {
   const script = 'docker compose -p smoke-$PORT up -d db\npnpm install && pnpm dev --port $PORT'
-  it('is a script, a stop script and a seed of Self Evident\'s own, kept whole in the app\'s settings', () => {
+  it('is a script, a stop script and a seed of Evident\'s own, kept whole in the app\'s settings', () => {
     expect(smokeSetup({ smoke: { cmd: `${script}\n`, stop: ' docker compose -p smoke-$PORT down -v ', seed: 'insert into parent (id) values (1);' } }))
       .toEqual({ where: 'local', cmd: script, stop: 'docker compose -p smoke-$PORT down -v', seed: 'insert into parent (id) values (1);' })
   })

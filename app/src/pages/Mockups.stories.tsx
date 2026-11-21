@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Mockups } from './Mockups'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
 
-// The app's Storybook inside Self Evident, in each state the engine reports for it.
+// The app's Storybook inside Evident, in each state the engine reports for it.
 const meta = { title: 'Pages/Mockups', component: Mockups, parameters: { layout: 'fullscreen' }, render: (a) => <div className="tab-page"><Mockups {...a} /></div> } satisfies Meta<typeof Mockups>
 export default meta
 type Story = StoryObj<typeof meta>

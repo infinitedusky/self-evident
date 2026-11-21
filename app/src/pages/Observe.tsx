@@ -1,6 +1,6 @@
 /**
  * Observe: what the app itself says. Its metrics, from its telemetry, and the status of its promises. Not what is
- * happening in Self Evident (that is My Stuff). Learn then tests hypotheses against what is observed here.
+ * happening in Evident (that is My Stuff). Learn then tests hypotheses against what is observed here.
  */
 import { useCurrentApp } from '../current-app'
 
@@ -14,7 +14,7 @@ export function Observe() {
       </div></div>
       <section className="panel">
         <h2>Metrics</h2>
-        <p style={{ margin: 0 }}>Not connected yet. The app's events go to PostHog, but Self Evident does not read them back. Next: read them through PostHog's query API with the app's own key, starting with a handful of metrics per app, each with its value and trend.</p>
+        <p style={{ margin: 0 }}>Not connected yet. The app's events go to PostHog, but Evident does not read them back. Next: read them through PostHog's query API with the app's own key, starting with a handful of metrics per app, each with its value and trend.</p>
       </section>
       <section className="panel">
         <h2>Promises</h2>

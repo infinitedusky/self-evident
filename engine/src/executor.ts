@@ -17,7 +17,7 @@ export interface RunInput {
   issue: { identifier: string; title: string; brief: string | null }
   /** Where the task came from, word for word (origins.ts, `originPrompt`): the ticket, not the brief's account of it. */
   origin?: string
-  /** The ticket this work is named by outside Self Evident: the team's, else our task id; never the sub-task's (conventions.ts). */
+  /** The ticket this work is named by outside Evident: the team's, else our task id; never the sub-task's (conventions.ts). */
   ticket?: string
   /** The repository's format for a commit's first line, when the app has one. */
   commitFormat?: string

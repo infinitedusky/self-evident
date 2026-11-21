@@ -76,7 +76,7 @@ export const envFileOf = (prototypeId: string) => join(homeOf(prototypeId), 'sta
 export function writeEnvFile(prototypeId: string, env: Record<string, string>): string {
   mkdirSync(homeOf(prototypeId), { recursive: true })
   const file = envFileOf(prototypeId)
-  writeFileSync(file, ['# The variables this prototype\'s stand-ins set. Written by Self Evident at each start: do not edit.', ...Object.entries(env).map(([k, v]) => `${k}=${v.replace(/[\r\n]+/g, ' ')}`)].join('\n') + '\n')
+  writeFileSync(file, ['# The variables this prototype\'s stand-ins set. Written by Evident at each start: do not edit.', ...Object.entries(env).map(([k, v]) => `${k}=${v.replace(/[\r\n]+/g, ' ')}`)].join('\n') + '\n')
   return file
 }
 

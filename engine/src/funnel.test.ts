@@ -6,7 +6,7 @@ import { FUNNEL_PORTS, funnelReady, funnelRefused, ownAddress, takenIn } from '.
 import { guideProxy } from './share-guide.js'
 
 describe('Tailscale Funnel', () => {
-  it('never offers 443, where Self Evident\'s own page is served to the phone', () => {
+  it('never offers 443, where Evident\'s own page is served to the phone', () => {
     expect(FUNNEL_PORTS).not.toContain(443)
   })
 
@@ -28,7 +28,7 @@ describe('Tailscale Funnel', () => {
     expect(takenIn('').size).toBe(0)
   })
 
-  it('refuses Self Evident\'s own page and its engine as what a share reaches', () => {
+  it('refuses Evident\'s own page and its engine as what a share reaches', () => {
     expect(ownAddress('http://127.0.0.1:5180')).toBe(true)
     expect(ownAddress(`http://127.0.0.1:${process.env.PORT ?? 4000}`)).toBe(true)
     expect(ownAddress('http://127.0.0.1:39471')).toBe(false)

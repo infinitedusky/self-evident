@@ -113,7 +113,7 @@ export async function focusFacts(appId: string, opts: { me?: () => Promise<strin
 function prompt(facts: { statedGoals: { initiatives: unknown[]; cycles: unknown[] } }) {
   const stated = facts.statedGoals.initiatives.length > 0 || facts.statedGoals.cycles.length > 0
   return [
-    'You are writing the "What we are focused on" section of a summary page for one app built with Self Evident, a factory where agents plan and build the work.',
+    'You are writing the "What we are focused on" section of a summary page for one app built with Evident, a factory where agents plan and build the work.',
     'Picture the person who owns the app walking in on Monday morning and asking everyone in the room: what are you working on, and remind me where we are headed.',
     '',
     'Write, from the facts below and nothing else:',

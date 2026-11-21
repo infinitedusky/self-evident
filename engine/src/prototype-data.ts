@@ -3,7 +3,7 @@
  * database of its own on the app's development server (`proto_<slug>`), built by the app's own schema command and
  * filled from a scenario: tables of made-up rows, by name.
  *
- * Scenarios are Self Evident's own, kept in its database and never in the app's repository (Sandy, 2026-11-17:
+ * Scenarios are Evident's own, kept in its database and never in the app's repository (Sandy, 2026-11-17:
  * "we don't want that to be part of the repo … The prototype then is essentially getting thrown away, and then
  * we're building the actual thing that's going to be in the PR"). A scenario belongs to one prototype, or to the
  * whole app (shared: every prototype and the smoke test can load it). Before this they were JSON files committed

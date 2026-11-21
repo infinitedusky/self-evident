@@ -266,8 +266,8 @@ export const sampleIntegrations: FactorySettings['integrations'] = [
   {
     key: 'tkt', name: 'tkt', role: 'Runner', does: 'Builds this app’s tickets from their approved briefs: a worktree, a herdr tab, the lifecycle skills on the harness and model its preset says; the plan, the handoff, the review and the completion written back on the ticket.',
     fields: [
-      { key: 'on', label: 'Runs this app’s tasks', kind: 'switch', required: true, states: { on: 'tkt builds this app’s tickets; Self Evident hands none to its own planner', off: 'this app’s tasks go to Self Evident’s own planner and builder' } },
-      { key: 'linear', label: 'Tickets live in Linear', kind: 'switch', states: { on: 'tkt runs on its own for this app: it reads and updates the tickets in Linear, in the team under Integrations › Linear, and never asks Self Evident', off: 'tkt reads this app’s tickets from Self Evident' } },
+      { key: 'on', label: 'Runs this app’s tasks', kind: 'switch', required: true, states: { on: 'tkt builds this app’s tickets; Evident hands none to its own planner', off: 'this app’s tasks go to Evident’s own planner and builder' } },
+      { key: 'linear', label: 'Tickets live in Linear', kind: 'switch', states: { on: 'tkt runs on its own for this app: it reads and updates the tickets in Linear, in the team under Integrations › Linear, and never asks Evident', off: 'tkt reads this app’s tickets from Evident' } },
     ], calls: true, perApp: true, docs: 'https://gitlab.com/rogs/tkt',
     actions: [
       { key: 'start', name: 'Start', does: '`tkt start <ticket>`: a worktree and a tab; start-ticket reads the ticket here, moves it to in progress and plans from the brief.' },
@@ -278,7 +278,7 @@ export const sampleIntegrations: FactorySettings['integrations'] = [
     ],
   },
   {
-    key: 'storybook', name: 'Storybook', role: 'Mockups', does: 'This app’s mockups, as stories: the real ones, after the sketches; Mockups shows them inside Self Evident, the agent opens one to show what it means, and the screen map draws the app as the user walks it.',
+    key: 'storybook', name: 'Storybook', role: 'Mockups', does: 'This app’s mockups, as stories: the real ones, after the sketches; Mockups shows them inside Evident, the agent opens one to show what it means, and the screen map draws the app as the user walks it.',
     fields: [
       { key: 'on', label: 'Mockups in Storybook', kind: 'switch', required: true, states: { on: 'this app’s mockups are stories, checked against the standard', off: 'no Storybook for this app' } },
       { key: 'cmd', label: 'Command', placeholder: 'default: the repo’s storybook script, with --no-open' },
@@ -367,11 +367,11 @@ export const storybookCheck = { ok: true, detail: 'Storybook 10.6.3 in web with 
 export const trackerGuideSample = `<!-- rogs-skills config v1: issue-tracker -->
 # Issue tracker
 
-Where this project's tickets live and how the lifecycle skills read and change them. Written from Self Evident's settings for the app Sample Shop (SS).
+Where this project's tickets live and how the lifecycle skills read and change them. Written from Evident's settings for the app Sample Shop (SS).
 
 ## Tracker
 
-- Kind: Self Evident
+- Kind: Evident
 - Connection: the engine's HTTP API at \`http://localhost:4000/api\`, with \`curl\`. The UI is at \`http://localhost:5180\`. No token.
 - Scope: the app \`Sample Shop\`, id \`app_sample\`, key \`SS\`.
 - Ticket ids: \`SS-<number>\`, matched by \`^SS-[1-9][0-9]*$\`.

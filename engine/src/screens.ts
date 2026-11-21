@@ -6,7 +6,7 @@
  *
  * Seen and rendered are two answers. A screen is rendered by the app's own Storybook, so it uses the components the
  * app has, through the app's own build: it is a story whose title starts with `Screens/`, one title per screen, one
- * story per state. It is seen on a page of Self Evident's own, all of a task's screens on one wall, each story framed
+ * story per state. It is seen on a page of Evident's own, all of a task's screens on one wall, each story framed
  * by its plain address (`iframe.html?id=`), with none of Storybook around it.
  *
  * A task's screens are the ones its branch made or changed, as with its sketches: the story's file is among what

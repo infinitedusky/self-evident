@@ -35,7 +35,7 @@ export function Rail({ here, onOpen, agentOpen, onToggleAgent, appsOpen, onToggl
     </div>
   )
   return (
-    <nav className="rail" data-component="Rail" aria-label="Self Evident">
+    <nav className="rail" data-component="Rail" aria-label="Evident">
       {onToggleApps && <button className="rail-apps-toggle" onClick={onToggleApps} title={`${appsOpen ? 'Hide' : 'Show'} the apps`} aria-label={`${appsOpen ? 'Hide' : 'Show'} the apps`} aria-expanded={!!appsOpen}>{appsOpen ? '‹' : '›'}</button>}
       <button className={`rail-brand ${agentOpen ? 'on' : ''}`} onClick={onToggleAgent} title={`${agentOpen ? 'Hide' : 'Show'} the agent (⌘J)`} aria-label="Toggle the agent">S<i>.</i></button>
       {LOOP.map(button)}

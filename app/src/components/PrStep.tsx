@@ -90,7 +90,7 @@ export function PrStep({ issueId, appId, base }: { issueId: string; appId: strin
       {/* What the team reads first: written for them, or (until it is) our merge guide. Our record is folded under either. */}
       {writing === null && pr?.status !== 'merged' && (
         <p className={v.written ? 'faint' : 'pr-unwritten'} style={{ margin: '0 0 8px', fontSize: 13 }}>
-          {v.written ? 'Its description was written for the team; Self Evident\'s record is folded under it. ' : 'Its description has not been written for the team: it leads with Self Evident\'s merge guide, which reads as our build log. Ask this task\'s agent to write it in the repository\'s style, or write it here. '}
+          {v.written ? 'Its description was written for the team; Evident\'s record is folded under it. ' : 'Its description has not been written for the team: it leads with Evident\'s merge guide, which reads as our build log. Ask this task\'s agent to write it in the repository\'s style, or write it here. '}
           <button className="linkish" onClick={() => setWriting(v.written ?? v.template ?? '')}>{v.written ? 'Edit it' : 'Write it'}</button>
         </p>
       )}

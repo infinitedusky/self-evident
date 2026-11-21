@@ -68,6 +68,6 @@ async function firstCommit(path: string, appName: string): Promise<string> {
   await git(path, ['add', '-A'])
   const staged = (await git(path, ['diff', '--cached', '--name-only'])).stdout.split('\n').filter(Boolean).length
   if (staged === 0) { await git(path, ['commit', '-q', '--allow-empty', '-m', 'Start']); return 'started it with an empty commit' }
-  await git(path, ['commit', '-q', '-m', `The files as found, when ${appName} joined Self Evident`])
+  await git(path, ['commit', '-q', '-m', `The files as found, when ${appName} joined Evident`])
   return [`committed the ${staged} file${staged === 1 ? '' : 's'} as found`, ...extra].join(', ')
 }

@@ -1,12 +1,12 @@
 /**
  * A page that calls an address fixed to this computer (Sandy, 2026-11-20, after an app's set-up gave its frontend
  * `http://localhost:<port>/api`: "the reason I need to make this change seems like something that should be
- * universally set for Self Evident, not just on this project").
+ * universally set for Evident, not just on this project").
  *
  * What is run here is opened at more than one address: its own port, a shared link, the page on a phone. A page
  * whose code names `http://localhost:…` for its API loads at one of them and nowhere else, and when the port is not
  * its own it may be talking to another copy altogether (main, another prototype). Which variable an app reads for
- * that is the app's, so Self Evident cannot set it; it can look, and say so.
+ * that is the app's, so Evident cannot set it; it can look, and say so.
  *
  * When a prototype or a smoke test first answers, its page and the scripts the page names are read once (a few, each
  * capped) for absolute addresses on this computer. What is found is said on the page beside the view, as a port the

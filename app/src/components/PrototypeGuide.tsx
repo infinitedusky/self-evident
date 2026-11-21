@@ -1,7 +1,7 @@
 /**
- * A prototype's guide, beside the prototype inside Self Evident (Sandy, 2026-11-15: "is that only share or should it
+ * A prototype's guide, beside the prototype inside Evident (Sandy, 2026-11-15: "is that only share or should it
  * be included in the embedded prototype viewer as well?"). The same steps whoever opens the shared link sees in the
- * tab at the bottom right (share-guide.ts): where to go and what to try. Here it is Self Evident's own panel over the
+ * tab at the bottom right (share-guide.ts): where to go and what to try. Here it is Evident's own panel over the
  * stage, not put into the prototype's page, so a step can move the embedded view. It folds to a tab in the same
  * corner. No feedback box: the person here has the agent beside them.
  */

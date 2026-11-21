@@ -169,7 +169,7 @@ const ngrok = (target: string, timeoutMs = startTimeout()) => run(ngrokBin(), ['
  */
 const funnelHeld = new Set<number>()
 async function funnel(target: string, o: { own: boolean }, timeoutMs = startTimeout()): Promise<Tunnel> {
-  if (ownAddress(target)) throw new TunnelError('Self Evident\'s own page is never made public: it has no sign-in.')
+  if (ownAddress(target)) throw new TunnelError('Evident\'s own page is never made public: it has no sign-in.')
   const ts = await tailscale()
   if (!ts) throw new TunnelError('Tailscale is not installed on this computer.', false, false, true)
   if (!ts.running) throw new TunnelError('Tailscale is off on this computer: open it and connect, then share again.')

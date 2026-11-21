@@ -90,7 +90,7 @@ const DEFAULT_CATEGORY: Record<string, string> = { 'rea@rea/reverse-engineer-any
 const SHIMS: Record<string, { mcpServers: Record<string, McpServerConfig>; note: string }> = {
   'rea@rea': {
     mcpServers: { rea: { type: 'stdio', command: process.execPath, args: [join(REA_ROOT, 'scripts', 'rea.mjs'), 'mcp'] } },
-    note: "Its tools run from Self Evident's copy of rea-agents: the published plugin leaves its MCP server out (morluto/rea#5062).",
+    note: "Its tools run from Evident's copy of rea-agents: the published plugin leaves its MCP server out (morluto/rea#5062).",
   },
 }
 
@@ -128,9 +128,9 @@ function describe(id: string, path: string, extra: { builtIn: boolean; version?:
   }
 }
 
-/** What is installed: Self Evident's own plugin, then what the installer's record lists. */
+/** What is installed: Evident's own plugin, then what the installer's record lists. */
 export function installed(): Installed[] {
-  const out = [describe('self-evident', OWN_PLUGIN, { builtIn: true, description: "Self Evident's own skills" }), describe(SHARED_ID, sharedPlugin(), { builtIn: true })]
+  const out = [describe('self-evident', OWN_PLUGIN, { builtIn: true, description: "Evident's own skills" }), describe(SHARED_ID, sharedPlugin(), { builtIn: true })]
   const record = readJson(join(PLUGINS_HOME, 'plugins', 'installed_plugins.json'))?.plugins ?? {}
   const markets = readJson(join(PLUGINS_HOME, 'plugins', 'known_marketplaces.json')) ?? {}
   for (const [id, entries] of Object.entries(record as Record<string, { installPath: string; version?: string }[]>)) {
@@ -207,7 +207,7 @@ export function repoPlugins(appId: string, repos: RepoRef[], taken: string[] = [
     if (write) {
       rmSync(path, { recursive: true, force: true })
       mkdirSync(join(path, '.claude-plugin'), { recursive: true })
-      writeFileSync(join(path, '.claude-plugin', 'plugin.json'), JSON.stringify({ name, description: `The skills of ${r.fullName || r.localPath}, as its checkout has them. A copy made by Self Evident: change them in that repository.`, skills: './skills' }, null, 2) + '\n')
+      writeFileSync(join(path, '.claude-plugin', 'plugin.json'), JSON.stringify({ name, description: `The skills of ${r.fullName || r.localPath}, as its checkout has them. A copy made by Evident: change them in that repository.`, skills: './skills' }, null, 2) + '\n')
       for (const k of skills) cpSync(join(src, k.name), join(path, 'skills', k.name), { recursive: true, dereference: true })
     }
     out.push({ name, from: r.fullName || basename(r.localPath), path, skills })
@@ -274,12 +274,12 @@ export async function skillOptions(role: Role, cwd: string, appId: string): Prom
  */
 export type StepSkills = Partial<Record<StepKey | 'build', string[]>>
 
-/** A skill of the person's own with the name of one Self Evident brings replaces it: two of one name would compete on their descriptions. */
+/** A skill of the person's own with the name of one Evident brings replaces it: two of one name would compete on their descriptions. */
 export const yoursFirst = (skills: string[]) => skills.filter((s) => !(s.startsWith('self-evident:') && skills.includes(`${SHARED_ID}:${s.slice('self-evident:'.length)}`)))
 
 /**
  * The skill every prototype is built by (Sandy, 2026-11-13): what a prototype is for, its definition of done, where
- * fakes go, how to report. Self Evident brings one (`self-evident:prototype`); the person's own of that name
+ * fakes go, how to report. Evident brings one (`self-evident:prototype`); the person's own of that name
  * (`shared:prototype`, in Your skills) wins. Null when the session has neither (the plugin switched off).
  */
 export const prototypeSkill = (given: string[]) => [`${SHARED_ID}:prototype`, 'self-evident:prototype'].find((n) => given.includes(n)) ?? null
@@ -369,7 +369,7 @@ export async function installPlugin(marketplace: string, name: string) {
 }
 
 export async function removePlugin(id: string) {
-  if (id === 'self-evident' || id === SHARED_ID) throw new PlanError(`${id === SHARED_ID ? 'Your own skills are' : "Self Evident's own plugin is"} built in; switch it off instead`)
+  if (id === 'self-evident' || id === SHARED_ID) throw new PlanError(`${id === SHARED_ID ? 'Your own skills are' : "Evident's own plugin is"} built in; switch it off instead`)
   const r = await plugin(['uninstall', id])
   if (r.outcome !== 'ok') throw new PlanError(r.message ?? `could not uninstall ${id}`)
 }
