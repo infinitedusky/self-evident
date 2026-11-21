@@ -6117,3 +6117,12 @@ real response behind them.
 
 Not done: a call the app makes that the mock does not have is still found by its failing, not reported by the mock.
 
+### The Mocks page shows what is true now (Sandy, 2026-11-21: "still not sure what I am looking at")
+
+She pasted a card saying "Needs a real response … the task's agent is building the mock" two minutes after the agent
+had saved it: the page read the mocks once and never again. While any mock is being built the page now reads them
+again every few seconds. Also: removing a mock said only that its recordings stay, not that its data and every
+task's choices for it go; and a mock removed and added again showed the removed one's history as its own, with an
+agent's work labelled "in the app's settings". The history now starts where the mock was added again, and removal
+is in it.
+

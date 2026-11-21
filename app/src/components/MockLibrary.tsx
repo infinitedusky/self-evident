@@ -34,6 +34,14 @@ export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's
   const reload = () => engine.mocks(appId).then((l) => { setList(l); setError(null) }).catch((e) => setError(err(e)))
   useEffect(() => { setList(null); void reload() }, [appId]) // eslint-disable-line react-hooks/exhaustive-deps
   const act = async (fn: () => Promise<unknown>) => { try { await fn(); await reload(); setTick((t) => t + 1) } catch (e) { setError(err(e)) } }
+  // While an agent is building a mock, the page is read again every few seconds, so it shows the mock the moment it is saved
+  // and never a state that is already gone. What it shows is compared first: nothing is redrawn while nothing has changed.
+  const building = !!list?.some((m) => m.needs?.recorded)
+  useEffect(() => {
+    if (!building) return
+    const t = setInterval(() => { void engine.mocks(appId).then((l) => setList((was) => { if (JSON.stringify(was) === JSON.stringify(l)) return was; setTick((x) => x + 1); return l })).catch(() => {}) }, 4000)
+    return () => clearInterval(t)
+  }, [building, appId])
   return (
     <section className="panel" data-component="MockLibrary">
       <div className="task-block-head">
@@ -120,7 +128,7 @@ function MockCard({ appId, issueId, mock: m, act }: { appId: string; issueId?: s
       <div className="row">
         {m.status !== 'needs_recording' && !realDefault && <a className="btn quiet small" href={engine.mockExportUrl(appId, m.key)} download>Export</a>}
         {!editing && <button className="btn quiet small" onClick={() => setEditing(true)}>Edit</button>}
-        <button className="btn quiet small" onClick={() => { if (window.confirm(`Remove the mock of ${m.name}? Its recordings stay on this computer.`)) void act(() => engine.removeMock(appId, m.key)) }}>Remove</button>
+        <button className="btn quiet small" onClick={() => { if (window.confirm(`Remove the mock of ${m.name}? Its server, its data and every choice made for it in a task go with it. The real responses stay on this computer.`)) void act(() => engine.removeMock(appId, m.key)) }}>Remove</button>
       </div>
     </article>
   )
@@ -230,7 +238,7 @@ function History({ appId, mockKey }: { appId: string; mockKey: string }) {
       <summary>History</summary>
       {!list ? <p className="muted">Loading…</p> : !list.length ? <p className="muted">Nothing has changed yet.</p> : (
         <ul className="mock-history">
-          {list.map((c, i) => <li key={i}><span className="faint">{new Date(c.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span> {c.what} <span className="faint">· {c.by}{c.issue ? <>, for <Link to={`/tasks/${c.issue.id}`}>{c.issue.identifier}</Link></> : ', in the app\'s settings'}</span></li>)}
+          {list.map((c, i) => <li key={i}><span className="faint">{new Date(c.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span> {c.what} <span className="faint">· {c.by}{c.issue ? <>, for <Link to={`/tasks/${c.issue.id}`}>{c.issue.identifier}</Link></> : c.by === 'you' ? ', in the app\'s settings' : ''}</span></li>)}
         </ul>
       )}
     </details>
