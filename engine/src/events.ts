@@ -54,11 +54,20 @@ export async function latestSeq() {
  * One LISTEN connection per process; emits 'event' with the new seq. The connection can drop (the database is on
  * another machine, reached through a proxy; LOG.md, 2026-11-11): it is made again every two seconds until it holds,
  * and one 'event' is emitted on the way back so every open stream catches up on what it missed.
+ *
+ * It can also die without a word (found 2026-11-21: "I type something and nothing comes in, and then if I refresh the
+ * page I see it"). The proxy keeps our side of the connection open after its own link to the database has gone, so
+ * no error and no end ever arrive: the engine went on answering every request and told no page of anything, for
+ * hours. So the connection is asked a question every BEAT_MS, and one that has not answered in ANSWER_MS is lost
+ * like any other. Making a connection is given CONNECT_MS, for the same reason.
  */
+export const BEAT_MS = 15_000, ANSWER_MS = 10_000, CONNECT_MS = 10_000
 export class EventBus extends EventEmitter {
   private client: pg.Client | null = null
   private stopped = false
   private retry: NodeJS.Timeout | null = null
+  private beat: NodeJS.Timeout | null = null
+  constructor(private every = { beatMs: BEAT_MS, answerMs: ANSWER_MS }) { super() }
 
   async start() {
     this.stopped = false
@@ -66,10 +75,12 @@ export class EventBus extends EventEmitter {
   }
 
   private async connect() {
-    const client = new pg.Client({ connectionString: DATABASE_URL, keepAlive: true })
+    const client = new pg.Client({ connectionString: DATABASE_URL, keepAlive: true, connectionTimeoutMillis: CONNECT_MS })
     const lost = (err?: Error) => {
       if (this.client !== client) return // already replaced
       this.client = null
+      if (this.beat) clearInterval(this.beat)
+      this.beat = null
       client.removeAllListeners()
       client.on('error', () => {}) // a late error on the dead connection must not take the process down
       void client.end().catch(() => {})
@@ -83,6 +94,13 @@ export class EventBus extends EventEmitter {
     this.client = client
     await client.connect()
     await client.query(`listen ${CHANNEL}`)
+    if (this.client !== client) return // lost while it was being made
+    this.beat = setInterval(() => {
+      let late: NodeJS.Timeout | undefined
+      const none = new Promise<never>((_, no) => { late = setTimeout(() => no(new Error(`no answer in ${this.every.answerMs / 1000} s`)), this.every.answerMs) })
+      Promise.race([client.query('select 1'), none]).catch((err: Error) => lost(err)).finally(() => clearTimeout(late))
+    }, this.every.beatMs)
+    this.beat.unref?.()
   }
 
   private again() {
@@ -97,6 +115,8 @@ export class EventBus extends EventEmitter {
     this.stopped = true
     if (this.retry) clearTimeout(this.retry)
     this.retry = null
+    if (this.beat) clearInterval(this.beat)
+    this.beat = null
     const client = this.client
     this.client = null
     await client?.end().catch(() => {})
