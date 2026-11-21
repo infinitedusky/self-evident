@@ -361,6 +361,7 @@ const changeSays = (type: string, p: Record<string, unknown>): string | null => 
     case 'mock.data_saved': return `Data "${p.data}" (${p.kind}) was saved`
     case 'mock.data_removed': return `Data "${p.data}" was removed`
     case 'mock.default_data': return p.data ? `Its default data became "${p.data}"` : 'It was left with no default data'
+    case 'mock.removed': return 'Removed, with its data and every choice made for it'
     case 'mock.place': return `For ${PLACE_SAYS[String(p.place)] ?? p.place}: ${SOURCE_SAYS[String(p.source)] ?? p.source}${p.data ? ` "${p.data}"` : ''}`
     default: return null
   }
@@ -376,6 +377,7 @@ export async function mockHistory(appId: string, key: string, limit = 60): Promi
     const what = changeSays(e.type, p)
     if (!what) continue
     if (e.issueId && !idents.has(e.issueId)) { const t = await identOf(e.issueId); idents.set(e.issueId, t ? { id: t.id, identifier: t.identifier } : null) }
+    if (e.type === 'mock.removed' && out.length) { out.push({ at: e.ts.toISOString(), by: e.actor.startsWith('user') ? 'you' : 'an agent', issue: null, what }); break } // what came before is another mock's history: this one starts where it was added again
     out.push({ at: e.ts.toISOString(), by: e.actor.startsWith('user') ? 'you' : e.actor === 'engine' ? 'the engine' : 'an agent', issue: e.issueId ? idents.get(e.issueId) ?? null : null, what })
     if (out.length >= limit) break
   }
