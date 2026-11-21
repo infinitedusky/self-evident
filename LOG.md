@@ -6146,3 +6146,13 @@ in the app's own database for the task to be tried. The same shape (the task lis
 what satisfies it: the repository's own seed, made-up rows of ours, or nothing yet), built with the review branch,
 since a reviewer's rows have to travel in it.
 
+### A file is given on the call it answers (Sandy, 2026-11-21)
+
+"When I create a new service, at that point it asks me to upload a CSV. The thing is, a service can have multiple
+endpoints, right? So shouldn't the CSV get uploaded per endpoint?" Yes: the service form with its file field was
+from before a mock listed its endpoints. On a task's Data step there is no "Add a service" any more: a service comes
+into being from a call (Add a call, or the agent's list), and every call's row has "Give a real response", whatever
+answers it now. Where nothing does, the mock is made (or the call added to it) first, then the file is kept as that
+call's. A mock that needs a real response and lists its endpoints points at those rows instead of taking a file of
+its own.
+

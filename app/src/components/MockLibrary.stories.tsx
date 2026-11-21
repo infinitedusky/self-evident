@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MockLibrary } from './MockLibrary'
-import { expect, userEvent, within } from 'storybook/test'
+import { expect, within } from 'storybook/test'
 import { withEngine } from '../stories/mock-engine'
 import { mocks, sampleApp } from '../stories/sample'
 
@@ -36,21 +36,8 @@ export const NoTask: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[2], i
 export const DefaultIsReal: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], defaultData: 'real', data: mocks[0].data.map((d) => ({ ...d, isDefault: d.key === 'real' })) }] }) }
 /** A server with no data of its own yet. */
 export const NoDataYet: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], defaultData: null, data: [] }] }) }
-/** On a task's Data step: the task's own table first, then the app's mocks, where a service can be added for this task. */
+/** On a task's Data step: what the task calls first (a service comes into being from a call, and a file is given on the call it answers), then the task's own table, then each mock in full, folded. */
 export const OnATask: Story = { args: { issueId: 'iss_sample2' } }
-/** Adding a service on a task: its name and, in the same form, a real response you already have. The address and variables are only for recording a live run, and are tucked away. */
-export const AddingAService: Story = {
-  args: { issueId: 'iss_sample2' },
-  play: async ({ canvasElement }) => {
-    const c = within(canvasElement)
-    await userEvent.click(await c.findByRole('button', { name: 'Add a service' }))
-    await expect(c.getByRole('textbox', { name: 'The service' })).toBeInTheDocument()
-    await expect(c.getByLabelText(/A real response you already have/)).toBeInTheDocument()
-    await expect(c.getByRole('button', { name: 'Add' })).toBeDisabled()
-    await userEvent.type(c.getByRole('textbox', { name: 'The service' }), 'Payments (sample)')
-    await expect(c.getByRole('button', { name: 'Add' })).toBeEnabled()
-  },
-}
 /** A service with ten calls: one has a real response behind it, one was recorded in a live run, eight are taken from the code. Each says which, and any of them can be given a real response. */
 export const TenEndpoints: Story = {
   args: { issueId: 'iss_sample1' },

@@ -30,7 +30,6 @@ const err = (e: unknown) => String((e as Error)?.message ?? e)
 export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's Data step: its own table, and what it adds is the task's. None: the app's settings. */ issueId?: string }) {
   const [list, setList] = useState<Mock[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [adding, setAdding] = useState(false)
   const [tick, setTick] = useState(0) // the table is read again when a mock or its data changes
   const reload = () => engine.mocks(appId).then((l) => { setList(l); setError(null) }).catch((e) => setError(err(e)))
   useEffect(() => { setList(null); void reload() }, [appId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -47,7 +46,6 @@ export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's
     <section className="panel" data-component="MockLibrary">
       <div className="task-block-head">
         <h2 style={{ margin: 0 }}>{issueId ? 'This task\'s data' : 'Mocks'}</h2>
-        {issueId && <button className="btn quiet small" onClick={() => setAdding(!adding)}>Add a service</button>}
       </div>
       <p className="faint settings-desc" style={{ margin: '6px 0 12px', maxWidth: 760 }}>
         {issueId ? 'What stands outside the app is mocked, so this task can be tried without calling it. The app\'s own code is what goes live: only its settings point at the mock.' : 'One mock for each outside service this app calls. Its prototypes, smoke tests and main are pointed at the mock instead of the real service. A mock is made in a task, on its Data step, and kept here for the next one.'}{' '}
@@ -58,11 +56,10 @@ export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's
       <h3 className="mock-h3">{issueId ? 'Where its data comes from, for this task' : 'Where the data comes from, unless a task says otherwise'}</h3>
       <MockPlaces key={tick} appId={appId} issueId={issueId} />
       <h3 className="mock-h3">{issueId ? 'The app\'s mocks' : 'Each mock'}</h3>
-      {adding && <AddService onAdd={({ files, ...b }) => act(async () => { const m = await engine.raiseMock(appId, { ...b, issueId }); if (files.length) await engine.giveRecording(appId, m.key, files); setAdding(false) })} onCancel={() => setAdding(false)} />}
       {error && <div className="empty bad" style={{ marginBottom: 12 }}>{error}</div>}
       {(() => {
         const all = list === null ? (error ? null : <p className="muted">Loading…</p>)
-          : !list.length ? <div className="empty">{issueId ? 'No mocks yet. Create one from a call above, or add a service.' : 'No mocks yet. One is made on a task\'s Data step, when its change depends on an outside service.'}</div>
+          : !list.length ? <div className="empty">{issueId ? 'No mocks yet. One is made from a call above.' : 'No mocks yet. One is made on a task\'s Data step, when its change depends on an outside service.'}</div>
           : <div className="mock-list">{list.map((m) => <MockCard key={m.key} appId={appId} issueId={issueId} mock={m} act={act} />)}</div>
         // On a task the calls above already show what matters to it: the whole of each mock is one press away.
         return issueId && list?.length ? <details className="mock-all"><summary>Each mock in full ({list.length})</summary>{all}</details> : all
@@ -102,7 +99,9 @@ function MockCard({ appId, issueId, mock: m, act }: { appId: string; issueId?: s
           {m.needs.recorded ? <div className="row"><span>A real response is in. The task's agent is building the mock from it: its conversation shows how far it is.</span><button className="btn quiet small" title="If the agent did not start, or stopped" onClick={() => act(() => engine.mineMock(appId, m.key))}>Ask again</button></div>
             : !m.issue ? <p className="faint" style={{ margin: 0 }}>It has no task yet, so there is no agent to mine it. A task's agent raises a mock when its change needs one.</p>
             : <>
-              <GiveFiles what={m.needs.file} onGive={(files) => act(() => engine.giveRecording(appId, m.key, files))} />
+              {m.endpoints.length
+                ? <p style={{ margin: '8px 0' }}>A real response is given on the call it answers{issueId ? ', under What this task calls above' : ', on the Data step of the task that needs it'}: {m.endpoints.map((e) => `${e.method} ${e.path}`).join(', ')}.</p>
+                : <GiveFiles what={m.needs.file} onGive={(files) => act(() => engine.giveRecording(appId, m.key, files))} />}
               {canRecord ? (live
                 ? <div className="row"><span>This calls {m.name} for real{m.needs.cost ? `, ${m.needs.cost}` : ''}, and the engine keeps what it sends.</span>
                     <button className="btn small" onClick={() => act(async () => { await engine.startLiveSmoke(m.issue!.id, [m.key]); setLive(false) })}>Start the live run</button>
@@ -265,27 +264,3 @@ function EditMock({ mock: m, onSave, onCancel }: { mock: Mock; onSave: (b: { sta
   )
 }
 
-/** A service added on a task: its name, and in the same form a real response the person already has. What a live run needs is tucked away: it is not needed to make a mock from a file. */
-function AddService({ onAdd, onCancel }: { onAdd: (b: { name: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; files: File[] }) => Promise<void>; onCancel: () => void }) {
-  const [name, setName] = useState('')
-  const [files, setFiles] = useState<File[]>([])
-  const [upstream, setUpstream] = useState('')
-  const [env, setEnv] = useState('')
-  const [busy, setBusy] = useState(false)
-  const add = async () => { setBusy(true); try { await onAdd({ name: name.trim(), files, ...(upstream.trim() ? { upstream: upstream.trim() } : {}), ...(env.trim() ? { env: envOf(env) } : {}) }) } finally { setBusy(false) } }
-  return (
-    <div className="mock-edit" style={{ marginBottom: 12 }} data-component="AddService">
-      <label>The service<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="its name, e.g. SixtyFour" /></label>
-      <label>A real response you already have <span className="faint">(a file it sent: CSV, JSON or other text; you can add one later)</span><input type="file" multiple onChange={(e) => setFiles([...(e.target.files ?? [])])} /></label>
-      <p className="faint" style={{ margin: 0, fontSize: 13 }}>{files.length ? 'It is kept on this computer, never in a repository. The task\'s agent builds the mock from it and makes a fake of it.' : 'With no file, it is listed as needing a real response: you can give one or record a live run later.'}</p>
-      <details className="mock-provenance">
-        <summary>For recording a live run instead</summary>
-        <div className="mock-edit">
-          <label>The real service's address<input className="mono" value={upstream} onChange={(e) => setUpstream(e.target.value)} placeholder="https://api.vendor.com" /></label>
-          <label>The variables that point the app at it<textarea className="mono" rows={2} value={env} onChange={(e) => setEnv(e.target.value)} placeholder="VENDOR_BASE_URL={container_url}" /></label>
-        </div>
-      </details>
-      <div className="row"><button className="btn small" disabled={!name.trim() || busy} onClick={add}>{busy ? 'Adding…' : 'Add'}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
-    </div>
-  )
-}

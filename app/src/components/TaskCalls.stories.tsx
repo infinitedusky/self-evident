@@ -17,6 +17,8 @@ export const Calls: Story = {
     await expect(await c.findByText('6 calls to 3 services: 1 answered from a real response, 3 from the code, 2 with nothing to answer them')).toBeInTheDocument()
     await expect(c.getByRole('button', { name: 'Create a mock of Payments (sample)' })).toBeInTheDocument()
     await expect(c.getByRole('button', { name: 'Add it to the mock' })).toBeInTheDocument()
+    // A real response is given on the call it answers: every call has the control, answered or not.
+    await expect(canvasElement.querySelectorAll('input[type=file]')).toHaveLength(6)
   },
 }
 /** Nothing listed yet: the agent lists them when the step is started, or the person adds one. */
