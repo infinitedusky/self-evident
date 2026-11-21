@@ -6126,3 +6126,23 @@ task's choices for it go; and a mock removed and added again showed the removed 
 agent's work labelled "in the app's settings". The history now starts where the mock was added again, and removal
 is in it.
 
+### The Data step starts from what the task calls (Sandy, 2026-11-21)
+
+"The brief, research, sketches, screens and mockup should all let us know by that point. The agent should know what
+endpoints are required. In the data tab, it should list those endpoints, with some information about what it needs
+to do. And then we should be able to … create mocks and link from the mock to the endpoints that are required. And
+you can add additional endpoints if you think they're required and it's not listed."
+- **A task lists its calls** (`task_call`, `engine/src/task-calls.ts`): the service, the method and path, and what
+  this task needs from it. Its agent sets the list from the brief and the code (`task_calls`, op set: its own rows
+  are replaced, the person's stay); the person adds what it missed.
+- **Each call says what answers it**: an endpoint of the service's mock, found by method and path or tied by hand,
+  with a real response behind it or from the code; a mock that lacks the call; or no mock.
+- **From a call**: "Create a mock" makes the service's mock on the task with that call as its first endpoint; "Add it
+  to the mock" adds the call to a mock that lacks it; "Give a real response" gives a file for that one call.
+- **The Data step, top to bottom**: what this task calls, where its data comes from, then each mock in full, folded.
+
+Also said, and next: "this is about mock API, but the other is data fixtures if any are needed": what must already be
+in the app's own database for the task to be tried. The same shape (the task lists what it needs; each need says
+what satisfies it: the repository's own seed, made-up rows of ours, or nothing yet), built with the review branch,
+since a reviewer's rows have to travel in it.
+

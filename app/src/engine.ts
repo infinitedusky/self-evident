@@ -368,6 +368,12 @@ export interface MockData {
   provenance: { from?: { at: string; given: boolean; files: number }; faked?: { replaced: number; kept: number }; kept?: string[]; checked?: { at: string; files: number; values: number; against: number }; stated?: { by: string; at: string } }
   /** What it is, in a line. */ note: string; /** May it leave this computer? Never a real one. */ shareable: boolean; isDefault: boolean; issueId: string | null; updatedAt: string | null
 }
+/** One call a task's change makes outside the app (engine/src/task-calls.ts), and what answers it now. */
+export interface TaskCall {
+  id: string; service: string; serviceName: string; method: string; path: string; /** What this task needs from it. */ what: string; by: 'agent' | 'user'
+  /** answered: an endpoint of the service's mock answers it. no_endpoint: the mock is there and lacks this call. no_mock: the service has no mock. */ state: 'answered' | 'no_endpoint' | 'no_mock'
+  mock: { key: string; name: string; status: Mock['status'] } | null; endpoint: MockEndpoint | null; /** Tied by hand, not found by its method and path. */ linked: boolean
+}
 /** Where a mock's data comes from in each place a task runs (engine/src/mock-places.ts). */
 export type MockPlace = 'prototype' | 'smoke' | 'review'
 /** live: the real service. replay: the newest real response as it is. fake: a fake of it. data: one named set. default: the app's (for the app: the mock's default data). */
@@ -512,6 +518,13 @@ export const engine = {
   /** Ask the agent of the task the newest recording was made for to mine it. */
   mineMock: (appId: string, key: string) => call<{ asked: string }>('POST', `/apps/${appId}/mocks/${key}/mine`),
   /** Where its exported files are downloaded from: the server, its invented data and its provenance. */
+  /** What a task calls outside the app, each with what answers it. */
+  taskCalls: (issueId: string) => call<TaskCall[]>('GET', `/issues/${issueId}/calls`),
+  addTaskCall: (issueId: string, body: { service: string; method: string; path: string; what?: string }) => call<TaskCall[]>('POST', `/issues/${issueId}/calls`, body),
+  removeTaskCall: (issueId: string, id: string) => call<TaskCall[]>('DELETE', `/issues/${issueId}/calls/${id}`),
+  linkTaskCall: (issueId: string, id: string, endpoint: string | null) => call<TaskCall[]>('PUT', `/issues/${issueId}/calls/${id}/endpoint`, { endpoint }),
+  /** Something to answer it: the service's mock made if it has none, the call added to the mock if it lacks it. */
+  coverTaskCall: (issueId: string, id: string) => call<{ calls: TaskCall[]; mock: Mock }>('POST', `/issues/${issueId}/calls/${id}/cover`, {}),
   /** Where each mock's data comes from, place by place: the app's defaults, or a task's. */
   mockPlaces: (appId: string, issueId?: string | null) => call<MockPlacesRow[]>('GET', `/apps/${appId}/mock-places${issueId ? `?issue=${issueId}` : ''}`),
   setMockPlace: (appId: string, key: string, place: MockPlace, body: { source: MockSource; data?: string; issueId?: string | null }) => call<MockPlan>('PUT', `/apps/${appId}/mocks/${key}/places/${place}`, body),

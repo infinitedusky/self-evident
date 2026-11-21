@@ -463,6 +463,18 @@ export const mockData = pgTable('mock_data', {
   createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [uniqueIndex('mock_data_key').on(t.mockId, t.key), inList('mock_data_kind', t.kind, MOCK_DATA_KINDS)])
 
+// A call a task's change makes to something outside the app (task-calls.ts): what the task needs answered, before
+// any mock is thought of. Named by its agent from the brief and the code, or added by the person. `service` is the
+// mock's key it is (or will be) answered by; `endpoint` a link made by hand to one of that mock's endpoints, where
+// the method and path alone do not find it.
+export const taskCall = pgTable('task_call', {
+  id: id(), issueId: text('issue_id').notNull().references(() => issue.id, { onDelete: 'cascade' }),
+  service: text('service').notNull(), serviceName: text('service_name').notNull(), method: text('method').notNull(), path: text('path').notNull(),
+  /** What this task needs from it, in a line: what must come back, and the cases it must show. */ what: text('what').notNull().default(''),
+  endpoint: text('endpoint'), /** agent | user */ by: text('by').notNull().default('agent'),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('task_call_key').on(t.issueId, t.service, t.method, t.path)])
+
 // A task's own choice of where one mock's data comes from in one place (mock-places.ts). No row: the app's default.
 export const MOCK_PLACES = ['prototype', 'smoke', 'review'] as const
 export const MOCK_SOURCES = ['default', 'live', 'replay', 'fake', 'data'] as const

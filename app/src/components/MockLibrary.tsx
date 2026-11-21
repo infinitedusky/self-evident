@@ -8,6 +8,7 @@ import { Link } from 'react-router'
 import { Badge, type Tone } from './Badge'
 import { Md } from './Md'
 import { MockPlaces } from './MockPlaces'
+import { TaskCalls } from './TaskCalls'
 import { engine, type Mock, type MockChange, type MockData, type MockEndpoint } from '../engine'
 
 const STATUS: Record<Mock['status'], { label: string; tone: Tone }> = {
@@ -53,14 +54,19 @@ export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's
         A mock is a small server that behaves as the service does, and, kept apart from it, the data it answers with: a real response as it is, a fake of one, or invented data.
         A real response stays on this computer. Only faked or invented data is ever exported or shared.
       </p>
+      {issueId && <TaskCalls appId={appId} issueId={issueId} mocks={list ?? []} version={tick} onChanged={() => { void reload() }} />}
       <h3 className="mock-h3">{issueId ? 'Where its data comes from, for this task' : 'Where the data comes from, unless a task says otherwise'}</h3>
       <MockPlaces key={tick} appId={appId} issueId={issueId} />
       <h3 className="mock-h3">{issueId ? 'The app\'s mocks' : 'Each mock'}</h3>
       {adding && <AddService onAdd={({ files, ...b }) => act(async () => { const m = await engine.raiseMock(appId, { ...b, issueId }); if (files.length) await engine.giveRecording(appId, m.key, files); setAdding(false) })} onCancel={() => setAdding(false)} />}
       {error && <div className="empty bad" style={{ marginBottom: 12 }}>{error}</div>}
-      {list === null ? (error ? null : <p className="muted">Loading…</p>)
-        : !list.length ? <div className="empty">{issueId ? 'No mocks yet. Start this step with the agent and it names the outside services the change depends on, or add one with Add a service.' : 'No mocks yet. One is made on a task\'s Data step, when its change depends on an outside service.'}</div>
-        : <div className="mock-list">{list.map((m) => <MockCard key={m.key} appId={appId} issueId={issueId} mock={m} act={act} />)}</div>}
+      {(() => {
+        const all = list === null ? (error ? null : <p className="muted">Loading…</p>)
+          : !list.length ? <div className="empty">{issueId ? 'No mocks yet. Create one from a call above, or add a service.' : 'No mocks yet. One is made on a task\'s Data step, when its change depends on an outside service.'}</div>
+          : <div className="mock-list">{list.map((m) => <MockCard key={m.key} appId={appId} issueId={issueId} mock={m} act={act} />)}</div>
+        // On a task the calls above already show what matters to it: the whole of each mock is one press away.
+        return issueId && list?.length ? <details className="mock-all"><summary>Each mock in full ({list.length})</summary>{all}</details> : all
+      })()}
     </section>
   )
 }
