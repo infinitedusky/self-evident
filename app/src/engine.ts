@@ -348,7 +348,7 @@ export interface Mock {
   key: string; name: string; status: 'needs_recording' | 'assumed' | 'mined'; standsInFor: string; upstream: string | null
   env: Record<string, string>; cmd: string | null; files: { path: string; bytes: number }[]
   provenance: MockProvenance; /** Its provenance as a note, as it is exported. */ note: string
-  /** A new recording is needed: what a real call needs. */ needs: { person?: string; key?: string; cost?: string; why?: string; at?: string; recorded?: string } | null
+  /** A new recording is needed: what a real call needs. */ needs: { person?: string; key?: string; cost?: string; why?: string; /** Which real responses would do instead of a live run, as the person would recognise them. */ file?: string; at?: string; recorded?: string } | null
   issue: { id: string; identifier: string; title: string } | null
   recordedAt: string | null; minedAt: string | null
   /** A newer recording waits to be mined. */ unmined: { at: string; files: number } | null
@@ -482,6 +482,15 @@ export const engine = {
   /** Ask the agent of the task the newest recording was made for to mine it. */
   mineMock: (appId: string, key: string) => call<{ asked: string }>('POST', `/apps/${appId}/mocks/${key}/mine`),
   /** Where its exported files are downloaded from: the server, its invented data and its provenance. */
+  /** Real responses the person already has (a saved JSON, a results CSV), given instead of a live run; the task's agent mines them. */
+  giveRecording: async (appId: string, key: string, files: File[]) => {
+    const form = new FormData()
+    for (const f of files) form.append('file', f)
+    const res = await fetch(`${API}/apps/${appId}/mocks/${key}/recording`, { method: 'POST', body: form })
+    const text = await res.text()
+    if (!res.ok) throw new Error(text || `${res.status}`)
+    return JSON.parse(text) as { files: string[]; asked: string | null }
+  },
   mockExportUrl: (appId: string, key: string) => `/api/apps/${appId}/mocks/${key}/export`,
   /** A live smoke run of a task that records these services (their mocks' keys) through the engine. */
   startLiveSmoke: (issueId: string, live: string[], setup?: string) => call<SmokeView>('POST', `/issues/${issueId}/smoke/start`, { live, ...(setup ? { setup } : {}) }),

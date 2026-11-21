@@ -74,13 +74,17 @@ function MockCard({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn
             {m.needs.key && <li>The key: <code>{m.needs.key}</code>.</li>}
             {m.needs.cost && <li>It costs {m.needs.cost}.</li>}
           </ul>
-          {m.needs.recorded ? <p className="faint" style={{ margin: 0 }}>A live run was recorded. The task's agent is mining it.</p>
-            : canRecord ? (live
-              ? <div className="row"><span>This calls {m.name} for real{m.needs.cost ? `, ${m.needs.cost}` : ''}, and the engine keeps what it sends.</span>
-                  <button className="btn small" onClick={() => act(async () => { await engine.startLiveSmoke(m.issue!.id, [m.key]); setLive(false) })}>Start the live run</button>
-                  <button className="btn quiet small" onClick={() => setLive(false)}>Cancel</button></div>
-              : <div className="row"><button className="btn small" onClick={() => setLive(true)}>Record it: a live smoke run of {m.issue!.identifier}</button></div>)
-            : <p className="faint" style={{ margin: 0 }}>To record it, give it {[!m.upstream && 'the real service\'s address', !Object.keys(m.env).length && 'the variables that point the app at it', !m.issue && 'a task to run'].filter(Boolean).join(', ')}.</p>}
+          {m.needs.recorded ? <p className="faint" style={{ margin: 0 }}>A real response is in. The task's agent is mining it.</p>
+            : !m.issue ? <p className="faint" style={{ margin: 0 }}>It has no task yet, so there is no agent to mine it. A task's agent raises a mock when its change needs one.</p>
+            : <>
+              <GiveFiles what={m.needs.file} onGive={(files) => act(() => engine.giveRecording(appId, m.key, files))} />
+              {canRecord ? (live
+                ? <div className="row"><span>This calls {m.name} for real{m.needs.cost ? `, ${m.needs.cost}` : ''}, and the engine keeps what it sends.</span>
+                    <button className="btn small" onClick={() => act(async () => { await engine.startLiveSmoke(m.issue!.id, [m.key]); setLive(false) })}>Start the live run</button>
+                    <button className="btn quiet small" onClick={() => setLive(false)}>Cancel</button></div>
+                : <div className="row"><span className="faint">Or record the whole exchange:</span><button className="btn quiet small" onClick={() => setLive(true)}>Record it: a live smoke run of {m.issue.identifier}</button></div>)
+                : <p className="faint" style={{ margin: 0 }}>To record it live instead, give it {[!m.upstream && 'the real service\'s address', !Object.keys(m.env).length && 'the variables that point the app at it'].filter(Boolean).join(' and ')}.</p>}
+            </>}
         </div>
       )}
       {m.unmined && (
@@ -104,6 +108,21 @@ function MockCard({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn
         <button className="btn quiet small" onClick={() => { if (window.confirm(`Remove the mock of ${m.name}? Its recordings stay on this computer.`)) void act(() => engine.removeMock(appId, m.key)) }}>Remove</button>
       </div>
     </article>
+  )
+}
+
+/** Real responses the person already has: kept with the task, never in a repository, and mined into invented data. */
+function GiveFiles({ what, onGive }: { what?: string; onGive: (files: File[]) => Promise<void> }) {
+  const [files, setFiles] = useState<File[]>([])
+  const [busy, setBusy] = useState(false)
+  return (
+    <div className="mock-give">
+      <span>Have a real response already? {what ? <>For example {what}. </> : null}Give it: it stays on this computer with the task, and the mock gets invented values in its shape.</span>
+      <div className="row">
+        <input type="file" multiple aria-label="Responses you already have" onChange={(e) => setFiles([...(e.target.files ?? [])])} />
+        <button className="btn small" disabled={!files.length || busy} onClick={async () => { setBusy(true); try { await onGive(files) } finally { setBusy(false) } }}>{busy ? 'Giving…' : 'Give it and mine'}</button>
+      </div>
+    </div>
   )
 }
 

@@ -5942,7 +5942,23 @@ Mine to choose: a mock's files in Postgres (they move between computers with the
 computer; the recorder as a proxy rather than an agent instruction; mining by the task's own agent (it knows the
 change) rather than an agent of its own; a library mock losing to a prototype's own stand-in of the same key.
 
-Not done: SixtyFour's mock itself (it needs the recorded live run: raise it on CEB-90's task with upstream
-`https://api.sixtyfour.ai` and `SIXTYFOUR_BASE_URL={container_url}`, then press Record it); the smoke test's own page
+**A response the person already has will do (Sandy, 2026-11-21).** "I have a copy of a CSV that I got back from
+SixtyFour … That CSV is the content that our mock api should return. So the process is to anonymize." And: "does
+every API that you might want to mock have the ability to accept a file? … If it responds with JSON, then I could
+give you a JSON file, or I could reach out to the actual API and record it." And: "we know how our system works. I
+got the file … a csv is sufficient." So a recording is either given or recorded:
+- **Given**: on the Mocks page, the person gives one or more real responses they have (any text body: JSON, CSV,
+  XML). `POST /apps/:id/mocks/:key/recording` keeps them untouched with the task, under `<key>/given-<when>/`, with
+  `given.meta.json` (`giveRecording`); a file that is not text is refused, since the leak check cannot read it. The
+  task's agent is asked to mine it (`MINE_GIVEN`): read the code that calls the service to see how the answer reaches
+  the app, serve those calls as the code expects with the given bodies' shape and invented values, and name in
+  `cannotShow` each call taken from the code rather than given. The same leak check refuses the mock while a value
+  from the files is in it.
+- **Which one**: the agent that raises a mock reads the calling code first and says in `needs.file` which responses
+  would do ("the results CSV a finished workflow links to"), so the person can see they already have one. A live
+  run records the whole exchange, for when the flow itself is in question.
+
+Not done: SixtyFour's mock itself (raise it on CEB-90's task with `SIXTYFOUR_BASE_URL={container_url}`, then give the
+CSV on the Mocks page; the address `https://api.sixtyfour.ai` is only needed for a live run); the smoke test's own page
 does not show which mocks a run has on (the engine reports it); the Mocks page is not yet linked from a task's
 prototype; mocks in review environments (step 2) and the gate (step 3). Not seen end to end on a real app.

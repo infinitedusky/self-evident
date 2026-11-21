@@ -8,7 +8,7 @@ import { app, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createProject } from './projects.js'
 import { checkLeaks } from './mock-leaks.js'
-import { exportMock, getMock, libraryStandIns, LeakError, listMocks, mocksPrompt, needsRecording, noteUse, dropUse, provenanceNote, recordingsOfService, saveMock } from './mocks.js'
+import { exportMock, getMock, giveRecording, isGiven, libraryStandIns, LeakError, listMocks, mocksPrompt, needsRecording, noteUse, dropUse, provenanceNote, recordingsOfService, saveMock } from './mocks.js'
 import { startStandIns, stopStandIns } from './stand-ins.js'
 import { endMocks, mocksFor } from './smoke.js'
 
@@ -119,5 +119,20 @@ describe.skipIf(!reachable)('an app\'s library', () => {
     expect(checkLeaks([{ name: 'r', text: recorded }], files, ['completed']).ok).toBe(true)
     expect(readFileSync(join(out, 'PROVENANCE.md'), 'utf8')).toContain('Mined from: a real response recorded')
     expect(readdirSync(out)).not.toContain('002.response.csv')
+  })
+
+  it('takes a response the person already has instead of a live run, keeps it with the task, and mines a mock against it', async () => {
+    await needsRecording(appId, { name: 'Lookup', issueId, needs: { file: 'the JSON a lookup returns' } })
+    const given = '{"matches":[{"email":"kit.marsh@harbor-sample.com","name":"Kit Marsh","phone":"+1 415 555 0188"}]}'
+    await expect(giveRecording(appId, 'lookup', [{ name: 'shot.png', bytes: new Uint8Array([137, 80, 0, 1]) }])).rejects.toThrow('not text')
+    const r = await giveRecording(appId, 'lookup', [{ name: '../../lookup response.json', bytes: new TextEncoder().encode(given) }])
+    expect(r).toMatchObject({ issueId, files: ['lookup response.json'] })
+    expect(r.dir.startsWith(join(home, 'recordings', appId, issueId, 'lookup'))).toBe(true)
+    expect(isGiven(r.dir)).toBe(true)
+    expect(JSON.parse(readFileSync(join(r.dir, 'given.meta.json'), 'utf8'))).toMatchObject({ given: true, files: [{ name: 'lookup response.json' }], what: 'the JSON a lookup returns' })
+    expect((await getMock(appId, 'lookup')).needs).toMatchObject({ recorded: r.dir })
+    const mine = (data: string) => saveMock(appId, { key: 'lookup', name: 'Lookup', status: 'mined', cmd: 'python3 server.py', env: { LOOKUP_BASE_URL: '{container_url}' }, files: { 'server.py': 'print(1)', 'data.json': data }, provenance: { minedFrom: 'a file the person gave, one match', covers: ['no match', 'one match'], cannotShow: ['the lookup call itself, taken from the code'] }, recording: r.dir })
+    await expect(mine(given)).rejects.toBeInstanceOf(LeakError)
+    expect(await mine('{"matches":[{"email":"sam@acme.example","name":"Sample Person","phone":"+1 555 000 0000"}]}')).toMatchObject({ status: 'mined', needs: null })
   })
 })

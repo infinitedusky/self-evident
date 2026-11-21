@@ -94,7 +94,7 @@ import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError,
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
 import { linearFor } from './linear-home.js'
 import { CATALOGUE } from './catalogue.js'
-import { exportMock, getMock, listMocks, needsRecording, recordingsOfService, removeMock, setMockDetails, type Needs } from './mocks.js'
+import { exportMock, getMock, giveRecording, listMocks, needsRecording, recordingsOfService, removeMock, setMockDetails, type Needs } from './mocks.js'
 import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role, cleanJobs, cleanStepSkills, describeJobs, usableSkills, writeSharedSkill, type AppJobs } from './skills.js'
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
@@ -452,6 +452,15 @@ export function buildApp(bus: EventBus) {
     if (!newest.issueId) return c.json({ error: `the newest recording of ${m.name} is not a task's, so there is no task agent to mine it` }, 409)
     await askToMine(newest.issueId, m.key, newest.dir, newest.files)
     return c.json({ asked: newest.issueId }, 202)
+  } catch (err) { return planError(c, err) } })
+  // Real responses the person already has (a saved JSON, the results CSV), given instead of a live run: kept with the task, then mined by its agent.
+  api.post('/apps/:id/mocks/:key/recording', async (c) => { try {
+    const appId = c.req.param('id'), key = c.req.param('key')
+    const body = await c.req.parseBody({ all: true })
+    const given = ([] as unknown[]).concat(body.file ?? []).filter((f): f is File => typeof f === 'object' && f !== null && 'arrayBuffer' in f)
+    const r = await giveRecording(appId, key, await Promise.all(given.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }))), 'user')
+    if (r.issueId) await askToMine(r.issueId, key, r.dir, r.files.length)
+    return c.json({ files: r.files, asked: r.issueId }, 201)
   } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/mocks/:key/export', async (c) => { try {
     const appId = c.req.param('id'), key = c.req.param('key')

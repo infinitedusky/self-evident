@@ -367,6 +367,8 @@ button.badge { border: 0; cursor: pointer; }
 .settings-desc { font-size: 13px; margin-top: 2px; }
 .mock-list { display: grid; gap: 10px; }
 .mock-card .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.mock-give { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.mock-give input[type=file] { font-size: 13px; max-width: 100%; }
 .mock-needs { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-left: 3px solid var(--bad); border-radius: 6px; font-size: 14px; }
 .mock-needs ul { margin: 4px 0 6px; padding-left: 18px; }
 .mock-provenance { margin-top: 8px; font-size: 14px; }

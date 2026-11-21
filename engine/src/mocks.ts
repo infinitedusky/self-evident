@@ -35,7 +35,7 @@ import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { PlanError } from './issues.js'
 import { checkLeaks, keptRefused, LEAKS_SHOWN, type Leak } from './mock-leaks.js'
-import { recordingsHome } from './recordings.js'
+import { recordingsDir, recordingsHome } from './recordings.js'
 import { standInKey, type StandIn } from './stand-ins.js'
 
 export type MockStatus = (typeof MOCK_STATUSES)[number]
@@ -55,7 +55,7 @@ export interface Provenance {
   /** Values kept as they were recorded because they are shape (a status, a category). Never a person's. */ kept?: string[]
   /** The engine's: the leak check it passed. */ checked?: { at: string; files: number; values: number }
 }
-export interface Needs { /** Who the real call is about, and that they agree. */ person?: string; /** The key or account it needs, by name. */ key?: string; /** What one call costs. */ cost?: string; /** Why a recording is needed now: no mock, or what changed. */ why?: string }
+export interface Needs { /** Who the real call is about, and that they agree. */ person?: string; /** The key or account it needs, by name. */ key?: string; /** What one call costs. */ cost?: string; /** Why a recording is needed now: no mock, or what changed. */ why?: string; /** A real response the person may already have that would do instead of a live run, as the app reads it: "the results CSV a finished workflow links to". */ file?: string }
 
 type Row = typeof mock.$inferSelect
 const prov = (m: Row) => (m.provenance ?? {}) as Provenance
@@ -155,7 +155,7 @@ async function workspaceOf(appId: string) {
 const clip = (s: unknown, n: number) => String(s ?? '').trim().slice(0, n)
 const cleanEnv = (e: unknown) => Object.fromEntries(Object.entries(e && typeof e === 'object' ? e : {}).filter(([k, v]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(k) && typeof v === 'string' && v.trim()).map(([k, v]) => [k, String(v).trim().slice(0, 1000)]).slice(0, 30))
 const cleanUrl = (u: unknown) => { const s = clip(u, 500); if (!s) return null; try { const x = new URL(s); if (!/^https?:$/.test(x.protocol)) throw new Error(); return s } catch { throw new PlanError(`"${s}" is not an address (https://…)`) } }
-const cleanNeeds = (n: unknown): Needs => { const x = (n && typeof n === 'object' ? n : {}) as Record<string, unknown>; const out: Needs = {}; for (const k of ['person', 'key', 'cost', 'why'] as const) { const v = clip(x[k], 400); if (v) out[k] = v } return out }
+const cleanNeeds = (n: unknown): Needs => { const x = (n && typeof n === 'object' ? n : {}) as Record<string, unknown>; const out: Needs = {}; for (const k of ['person', 'key', 'cost', 'why', 'file'] as const) { const v = clip(x[k], 400); if (v) out[k] = v } return out }
 
 /**
  * A service the change depends on has no mock, or its mock is out of date: raised on the task, with what a real
@@ -303,6 +303,38 @@ export async function noteRecording(appId: string, key: string, dir: string, iss
   })
 }
 
+/**
+ * Real responses the person already has (any body the service sent: JSON saved from a call, the results CSV it
+ * links to), given instead of a live run (Sandy, 2026-11-21: "I have a copy of a CSV that I got back from SixtyFour"). Kept as a live
+ * recording is, with the task, outside every repository, untouched; given.meta.json says it was given, not recorded,
+ * so the miner takes any call not given from the code that makes it and says so in the provenance.
+ */
+export async function giveRecording(appId: string, key: string, given: { name: string; bytes: Uint8Array }[], actor = 'user'): Promise<{ dir: string; issueId: string | null; files: string[] }> {
+  const m = await rowOf(appId, key)
+  if (!m) throw new PlanError(`this app has no mock "${key}"`)
+  if (!given.length) throw new PlanError('give at least one file: a response the service sent')
+  if (given.length > 20) throw new PlanError('20 files at most')
+  const names = new Set<string>()
+  const files = given.map((f) => {
+    if (!f.bytes.length) throw new PlanError(`${f.name} is empty`)
+    if (f.bytes.length > RECORDED_FILE_MAX) throw new PlanError(`${f.name} is over ${RECORDED_FILE_MAX / 1e6} MB: too large to check a mock against`)
+    if (f.bytes.includes(0)) throw new PlanError(`${f.name} is not text: give a response as the service sent it (JSON, CSV or other text)`)
+    let name = (f.name.split(/[\\/]/).pop() ?? '').replace(/[^\w.\- ]+/g, '_').replace(/^\.+/, '').slice(0, 120) || 'response.txt'
+    if (name === 'given.meta.json' || name.endsWith('.meta.json')) name = name.replace(/\.meta\.json$/, '.json')
+    while (names.has(name)) name = `1-${name}`
+    names.add(name)
+    return { name, bytes: f.bytes }
+  })
+  const dir = join(recordingsDir(appId, { issueId: m.issueId }), key, `given-${new Date().toISOString().replace(/[:.]/g, '-')}`)
+  mkdirSync(dir, { recursive: true })
+  for (const f of files) writeFileSync(join(dir, f.name), f.bytes)
+  writeFileSync(join(dir, 'given.meta.json'), JSON.stringify({ given: true, by: actor, files: files.map((f) => ({ name: f.name, bytes: f.bytes.length })), at: new Date().toISOString(), what: m.needs?.file ?? null }, null, 2))
+  await noteRecording(appId, key, dir, m.issueId, files.length)
+  return { dir, issueId: m.issueId, files: files.map((f) => f.name) }
+}
+/** Was it given by the person (a file they had), rather than recorded on a live run? */
+export const isGiven = (dir: string) => existsSync(join(dir, 'given.meta.json'))
+
 // ---- running and exporting ------------------------------------------------------------------------------------------
 
 const versionOf = (m: Row) => createHash('sha256').update(JSON.stringify([m.files, m.cmd])).digest('hex').slice(0, 12)
@@ -343,5 +375,5 @@ export async function exportMock(appId: string, key: string, outDir: string): Pr
 /** What a prototype's agent (and a task's) is told of the library, before it builds. */
 export function mocksPrompt(list: Pick<MockView, 'key' | 'name' | 'status' | 'standsInFor' | 'needs' | 'recordedAt' | 'unmined'>[]): string {
   const says = (m: (typeof list)[number]) => `- ${m.name} (${m.key}): ${m.status === 'mined' ? `mined from a recording of ${day(m.recordedAt)}` : m.status === 'assumed' ? 'assumed shape, no recording yet' : 'no mock yet, needs a recording'}${m.needs && m.status !== 'needs_recording' ? '; out of date, needs a new recording' : ''}${m.unmined ? '; a newer recording waits to be mined' : ''}${m.standsInFor ? `. Stands in for ${m.standsInFor}` : ''}`
-  return `\n\nMocks: this app keeps one mock per outside service, in its library (Settings › Mocks), and the engine starts every one that can serve with each prototype, main and smoke test, pointing the app at it by its variables. ${list.length ? `The library:\n${list.map(says).join('\n')}` : 'The library is empty.'}\nBefore you build, name each outside service the change depends on. One that has a mock: use it, and do not set up a stand-in of your own for it. One with no mock, or whose mock is out of date (the change needs fields or calls it lacks): raise it with the mock tool, op needs_recording, saying what a real call needs (a consenting person, a key, the cost); the person makes the call in a live smoke run, the engine records it, and the mock is mined from that. Until then you may write one with op save, status assumed, from the service's documentation or the code that calls it, and say where the shape is assumed. Never put a recorded response, or any value from one, in a mock or the repository.`
+  return `\n\nMocks: this app keeps one mock per outside service, in its library (Settings › Mocks), and the engine starts every one that can serve with each prototype, main and smoke test, pointing the app at it by its variables. ${list.length ? `The library:\n${list.map(says).join('\n')}` : 'The library is empty.'}\nBefore you build, name each outside service the change depends on. One that has a mock: use it, and do not set up a stand-in of your own for it. One with no mock, or whose mock is out of date (the change needs fields or calls it lacks): raise it with the mock tool, op needs_recording, saying what a real call needs (a consenting person, a key, the cost). First read the code that calls the service, to see how its answer reaches the app: say in needs.file which responses would do, in a line the person will recognise (\"the results CSV a finished workflow links to\", \"the JSON a lookup returns\"): they may already have one saved from a real run and can give it on the Mocks page instead of paying for another, and the calls around it are taken from the code. A live run records the whole exchange, so ask for one when the flow itself is in question. Either way the engine keeps it with the task, and the mock is mined from that. Until then you may write one with op save, status assumed, from the service's documentation or the code that calls it, and say where the shape is assumed. Never put a recorded response, or any value from one, in a mock or the repository.`
 }
