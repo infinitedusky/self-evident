@@ -14,7 +14,8 @@ import { newId } from './ids.js'
 import { createProject } from './projects.js'
 import { parseCsv } from './mock-leaks.js'
 import { fakeData, removeData, saveData, setDefaultData, useReal } from './mock-data.js'
-import { exportMock, getMock, giveRecording, libraryStandIns, needsRecording, rowOf, saveMock } from './mocks.js'
+import { placesTable, plansFor, setChoice } from './mock-places.js'
+import { exportMock, getMock, giveRecording, libraryStandIns, mockHistory, needsRecording, rowOf, saveMock } from './mocks.js'
 import { startStandIns, stopStandIns } from './stand-ins.js'
 
 let reachable = true
@@ -43,7 +44,8 @@ const parse = (text) => { const rows = []; let row = [], cell = '', q = false
   if (cell !== '' || row.length) { row.push(cell); rows.push(row) }
   return rows }
 const cell = (c) => (/[",\\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c)
-const [head, ...rows] = parse(fs.readFileSync(path.join(dir, fs.readdirSync(dir).find((f) => f.endsWith('.csv'))), 'utf8'))
+const all = fs.readdirSync(dir).filter((f) => f.endsWith('.csv')).sort().map((f) => parse(fs.readFileSync(path.join(dir, f), 'utf8')))
+const head = all[0][0], rows = all.flatMap((t) => t.slice(1)) // every file there: a fake may have people added beside it
 const email = head.indexOf('work_email'), id = head.indexOf('tracking_id')
 const jobs = new Map()
 http.createServer((req, res) => { let body = ''; req.on('data', (c) => { body += c }); req.on('end', () => {
@@ -128,13 +130,15 @@ describe.skipIf(!reachable)('a mock\'s data, apart from its server', () => {
     expect(JSON.stringify(rows)).not.toMatch(/Rowan|Vale|Northgate|Kit Marsh|rowan-vale/)
   })
 
-  it('takes people added to the fake by hand, and refuses a real value among them', async () => {
+  it('takes people added beside the fake by hand, and refuses a real value among them', async () => {
     const files = await filesOf('faked')
-    const more = `${files['results.csv']}00000000-0000-4000-8000-00000000000a,lots@acme.example,Sample Lots,completed,high,"[{'platform': 'linkedin', 'url': 'https://www.linkedin.com/in/sample-lots', 'followers': 9}]",Sample data: a made-up person with a lot found.\n`
-    await expect(saveData(appId, 'scanner', { dataKey: 'faked', files: { 'results.csv': `${more}x,kit.marsh@northgate-holdings.com,Kit Marsh,completed,low,[],\n` } })).rejects.toThrow(/refused: \d+ values? of the real response/)
-    const d = await saveData(appId, 'scanner', { dataKey: 'faked', files: { 'results.csv': more } })
-    expect(d).toMatchObject({ kind: 'faked', isDefault: true })
-    expect(parseCsv(more)).toHaveLength(4)
+    const added = `${head}\n00000000-0000-4000-8000-00000000000a,lots@acme.example,Sample Lots,completed,high,"[{'platform': 'linkedin', 'url': 'https://www.linkedin.com/in/sample-lots', 'followers': 9}]",Sample data: a made-up person with a lot found.\n`
+    await expect(saveData(appId, 'scanner', { dataKey: 'faked', files: { ...files, 'added.csv': `${added}x,kit.marsh@northgate-holdings.com,Kit Marsh,completed,low,[],\n` } })).rejects.toThrow(/refused: \d+ values? of the real response/)
+    const d = await saveData(appId, 'scanner', { dataKey: 'faked', files: { ...files, 'added.csv': added } })
+    expect(d).toMatchObject({ kind: 'faked', isDefault: true, files: [{ path: 'added.csv' }, { path: 'results.csv' }] })
+    // The fake made again keeps what was added and replaces only its own.
+    await fakeData(appId, 'scanner', { plan: { keep: ['status', 'risk_level', 'platform'], keepHosts: ['linkedin.com'] } })
+    expect(await filesOf('faked')).toEqual({ ...files, 'added.csv': added })
   })
 
   it('serves the real response as it is with the same server, on this computer only', async () => {
@@ -150,11 +154,60 @@ describe.skipIf(!reachable)('a mock\'s data, apart from its server', () => {
     await expect(saveData(appId, 'scanner', { dataKey: 'real', files: { 'a.csv': 'x' } })).rejects.toThrow('is not written over')
   })
 
+  it('gives each place what the task says, the app\'s default otherwise, and never real data to a reviewer', async () => {
+    const row = async (task: string | null = issueId) => (await placesTable(appId, task)).find((r) => r.mock === 'scanner')!
+    expect((await row()).places.smoke).toMatchObject({ how: 'data', data: { key: 'faked' }, from: 'none' }) // nothing chosen: the mock's default
+    expect(await row()).toMatchObject({ canLive: false, data: [{ key: 'faked', kind: 'faked' }, { key: 'real', kind: 'real' }] })
+    // The app: a smoke test replays the real response. A task: its own smoke test gets the fake.
+    await setChoice(appId, 'scanner', 'smoke', { source: 'replay' }, null)
+    expect(await plansFor(appId, 'smoke', issueId)).toMatchObject({ pick: { scanner: 'real' }, real: ['scanner'], live: [] })
+    expect((await row()).places.smoke).toMatchObject({ from: 'app', says: expect.stringContaining('this computer only') })
+    await setChoice(appId, 'scanner', 'smoke', { source: 'fake' }, issueId)
+    expect(await plansFor(appId, 'smoke', issueId)).toMatchObject({ pick: { scanner: 'faked' }, real: [] })
+    expect((await row()).places.smoke).toMatchObject({ from: 'task', own: { source: 'fake' }, app: { source: 'replay' } })
+    expect((await plansFor(appId, 'smoke', null)).real).toEqual(['scanner']) // another task still has the app's
+    // The real service, with no address for it: said, and the default serves meanwhile.
+    await setChoice(appId, 'scanner', 'smoke', { source: 'live' }, issueId)
+    expect((await row()).places.smoke).toMatchObject({ how: 'data', note: expect.stringContaining('address') })
+    await setChoice(appId, 'scanner', 'smoke', null, issueId)
+    expect((await row()).places.smoke).toMatchObject({ from: 'app', own: null })
+    // A reviewer: nothing real can be chosen, and a default that is real stops the copy being made.
+    await expect(setChoice(appId, 'scanner', 'review', { source: 'replay' }, issueId)).rejects.toThrow('never given real data')
+    await expect(setChoice(appId, 'scanner', 'review', { source: 'data', data: 'real' }, issueId)).rejects.toThrow('never leaves this computer')
+    await setDefaultData(appId, 'scanner', 'real')
+    expect((await row()).places.review.blocked).toContain('a real response')
+    await expect(plansFor(appId, 'review', issueId)).rejects.toThrow('a real response')
+    await setChoice(appId, 'scanner', 'review', { source: 'fake' }, issueId)
+    expect((await plansFor(appId, 'review', issueId)).pick).toEqual({ scanner: 'faked' })
+    await setDefaultData(appId, 'scanner', 'faked')
+    await setChoice(appId, 'scanner', 'smoke', null, null)
+    // What changed is kept, the app's own and the task's.
+    const history = await mockHistory(appId, 'scanner')
+    expect(history.map((h) => h.what)).toEqual(expect.arrayContaining(['For a smoke test: the real response, as it is', 'For a reviewer: a fake of the real response', 'Its default data became "real"']))
+    expect(history.find((h) => h.what === 'For a smoke test: the real response, as it is')).toMatchObject({ issue: null, by: 'you' })
+    expect(history.find((h) => h.what === 'For a reviewer: a fake of the real response')?.issue?.id).toBe(issueId)
+  })
+
+  it('makes the fake again by itself when a newer real response comes in, with the plan it has', async () => {
+    await new Promise((r) => setTimeout(r, 30))
+    const newer = await giveRecording(appId, 'scanner', [{ name: 'results.csv', bytes: new TextEncoder().encode(real.replace('Two impersonating accounts were found.', 'Three impersonating accounts were found, one new.')) }])
+    await setChoice(appId, 'scanner', 'prototype', { source: 'fake' }, issueId)
+    expect((await placesTable(appId, issueId)).find((r) => r.mock === 'scanner')!.places.prototype.note).toContain('is faked when this next runs') // said, not made, on a page
+    const m = (await rowOf(appId, 'scanner'))!
+    const before = (await db.select().from(mockData).where(and(eq(mockData.mockId, m.id), eq(mockData.key, 'faked'))))[0]
+    expect(before.recording).toBe(given)
+    expect((await plansFor(appId, 'prototype', issueId)).pick).toEqual({ scanner: 'faked' })
+    const after = (await db.select().from(mockData).where(and(eq(mockData.mockId, m.id), eq(mockData.key, 'faked'))))[0]
+    expect(after.recording).toBe(newer.dir)
+    expect(Object.keys(after.files).sort()).toEqual(['added.csv', 'results.csv'])
+    expect(after.plan).toMatchObject({ keep: ['status', 'risk_level', 'platform'], salt: before.plan.salt })
+  })
+
   it('exports the fake beside the server, and never a real response', async () => {
     await expect(exportMock(appId, 'scanner', join(home, 'export-real'), 'real')).rejects.toThrow('never leaves this computer')
     const out = join(home, 'export')
     const r = await exportMock(appId, 'scanner', out)
-    expect(r).toMatchObject({ checked: true, data: 'faked', files: ['PROVENANCE.md', 'data/results.csv', 'mock.json', 'server.mjs'] })
+    expect(r).toMatchObject({ checked: true, data: 'faked', files: ['PROVENANCE.md', 'data/added.csv', 'data/results.csv', 'mock.json', 'server.mjs'] })
     expect(readFileSync(join(out, 'PROVENANCE.md'), 'utf8')).toContain('Its data ("Faked from the real response"): Faked from a real response the person gave')
     expect(JSON.parse(readFileSync(join(out, 'mock.json'), 'utf8'))).toMatchObject({ data: { key: 'faked', kind: 'faked', dir: 'data', variable: 'MOCK_DATA' } })
     expect(r.files.map((f) => readFileSync(join(out, f), 'utf8')).join('\n')).not.toMatch(/Rowan|Northgate/)
@@ -175,7 +228,7 @@ describe.skipIf(!reachable)('a mock\'s data, apart from its server', () => {
   it('checks invented data against the real responses there are, and lets the default be changed or a set removed', async () => {
     await expect(saveData(appId, 'scanner', { dataKey: 'nothing found', files: { 'results.csv': `${head}\nx,rowan.vale@northgate-holdings.com,Sample,completed,low,[],\n` } })).rejects.toThrow('so it is not invented')
     const d = await saveData(appId, 'scanner', { dataKey: 'nothing found', files: { 'results.csv': `${head}\n00000000-0000-4000-8000-00000000000b,none@acme.example,Sample Nobody,completed,low,[],\n` } })
-    expect(d).toMatchObject({ key: 'nothing-found', kind: 'invented', provenance: { checked: { against: 1 } } })
+    expect(d).toMatchObject({ key: 'nothing-found', kind: 'invented', provenance: { checked: { against: 2 } } }) // both real responses there are now
     expect((await setDefaultData(appId, 'scanner', 'nothing found')).find((x) => x.isDefault)?.key).toBe('nothing-found')
     expect(await removeData(appId, 'scanner', 'nothing found')).toEqual({ removed: true })
     expect((await getMock(appId, 'scanner')).defaultData).toBeNull()

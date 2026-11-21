@@ -344,6 +344,13 @@
       "when": 1795280871064,
       "tag": "0048_mock_data",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1795282320203,
+      "tag": "0049_mock_places",
+      "breakpoints": true
     }
   ]
 }

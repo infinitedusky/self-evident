@@ -31,6 +31,7 @@ import { FUNNEL_PORTS, funnelReady, funnelRefused, ownAddress, sweepFunnel, tail
 import { freeNgrok, ngrokHolders, pausedServices, restoreNgrok, restoreNgrokNow, type Holder } from './ngrok-holders.js'
 import { onPrototypeStopped, prototypeStatus } from './prototype.js'
 import { guideOf, guideProxy, takeFeedback } from './share-guide.js'
+import { realIn } from './mocks.js'
 import { listSketches, readSketch } from './sketches.js'
 import { storybookStatus } from './storybook.js'
 
@@ -84,6 +85,9 @@ async function targetOf(kind: ShareKind, id: string): Promise<{ appId: string; u
   if (kind === 'prototype') {
     const p = await prototypeStatus(id)
     if (p.status !== 'running' || !p.up || !p.url) throw new PlanError('the prototype is not running: start it, then share it')
+    // Real data never leaves this computer (mock-places.ts): a prototype answering with a real response, or calling the real service, is not shared.
+    const real = realIn(id)
+    if (real.length) throw new PlanError(`this prototype has real data from ${real.join(', ')}, which never leaves this computer. On the task's Data step, give its prototype a fake (or data that holds nothing real), restart it, then share it`)
     // Reached through a proxy of ours that adds the tester's guide tab to its pages and takes what they say (share-guide.ts).
     const { server, port } = await guideProxy(p.url, { title: p.title, guide: async () => guideOf(await prototypeStatus(id)), onFeedback: (f) => takeFeedback(id, f) })
     return { appId: p.appId, url: `http://127.0.0.1:${port}`, server }

@@ -3,6 +3,7 @@
  * agent, open what it made, mark it done). A step that waits on another says which, with a link there, so a locked
  * step is never a dead end. The brief's page passes its own body as children.
  */
+import { MockLibrary } from './MockLibrary'
 import { TASK_AGENT_ASKED } from './TaskAgent'
 import { Viewer, type Viewed } from './Viewer'
 import { PrototypeCode } from './PrototypeCode'
@@ -117,6 +118,9 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
             {skipped(s) ? <span>– Skipped: not being done on this {on}.</span> : s.status === 'none' ? <span className="faint">Not started.{on === 'task' && canSkip(row) ? ' It is optional: do it, or skip it. The brief waits until you have said which.' : ''}</span> : <span>{s.status === 'done' ? '✓ ' : '◐ '}{s.detail ?? (s.status === 'done' ? 'Done' : 'Started')}</span>}
             {work?.updatedBy && <span className="faint"> · {work.updatedBy}{work.updatedAt ? `, ${new Date(work.updatedAt).toLocaleDateString()}` : ''}</span>}
           </p>
+
+          {/* The Data step: the task's own table and the app's mocks, there whether or not the step is started, since the table works without an agent. */}
+          {row.key === 'data' && on === 'task' && !skipped(s) && <MockLibrary appId={appId} issueId={subject.id} />}
 
           {row.key === 'prototype' && protos.length > 0 && (
             <ul className="list step-protos">

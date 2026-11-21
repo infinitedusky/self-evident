@@ -376,6 +376,27 @@ button.badge { border: 0; cursor: pointer; }
 .mock-data-head > span:first-child { font-weight: 600; margin-right: auto; }
 .mock-data li p { margin: 4px 0 0; font-size: 13px; }
 .mock-data-warn { margin: 8px 0 0; padding: 6px 10px; border-left: 3px solid var(--warn, var(--bad)); font-size: 13px; }
+.mock-places-grid { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.mock-places-head, .mock-places-row { display: grid; grid-template-columns: minmax(150px, 1fr) repeat(3, minmax(0, 1.25fr)); gap: 12px; padding: 10px 12px; }
+.mock-places-head { font-size: 12px; font-weight: 600; color: var(--ink-soft); background: var(--surface-2, transparent); border-bottom: 1px solid var(--line); }
+.mock-places-row + .mock-places-row { border-top: 1px solid var(--line); }
+.mock-places-row { font-size: 14px; }
+.mock-places-row .faint { font-size: 12px; margin-top: 2px; }
+.mock-places-cell { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.mock-places-cell select { width: 100%; min-width: 0; font-size: 13px; }
+.mock-places-label { display: none; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.mock-places-says { font-size: 13px; }
+.mock-places-note { font-size: 12px; padding-left: 8px; border-left: 3px solid var(--warn); color: var(--ink-soft); }
+.mock-places-blocked { font-size: 12px; padding-left: 8px; border-left: 3px solid var(--bad); }
+.mock-places-foot { font-size: 13px; margin: 8px 0 0; }
+@media (max-width: 760px) {
+  .mock-places-head { display: none; }
+  .mock-places-row { grid-template-columns: 1fr; }
+  .mock-places-label { display: block; }
+}
+.mock-h3 { font-size: 14px; margin: 16px 0 8px; }
+.mock-check { display: flex !important; grid-template-columns: none; gap: 8px; align-items: center; }
+.mock-history { margin: 6px 0 0; padding-left: 18px; font-size: 13px; display: grid; gap: 2px; }
 .mock-needs { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-left: 3px solid var(--bad); border-radius: 6px; font-size: 14px; }
 .mock-needs ul { margin: 4px 0 6px; padding-left: 18px; }
 .mock-provenance { margin-top: 8px; font-size: 14px; }

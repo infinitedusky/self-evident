@@ -660,3 +660,47 @@ export const mocks: import('../engine').Mock[] = [
     note: '# Address lookup (sample): a mock\n\nNot made yet: it needs a recording of the real service.\n',
     needs: { person: 'one consenting person, who agrees to their address being looked up', key: 'ADDRESS_LOOKUP_KEY', cost: 'one lookup, about $0.40', why: 'SS-2 shows the matched address', file: 'the JSON a lookup returns (sample)', at: '2026-11-20T09:00:00Z' }, issue: { id: 'iss_sample2', identifier: 'SS-2', title: 'Totals and analytics' }, recordedAt: null, minedAt: null, unmined: null, usedBy: [], defaultData: null, data: [] },
 ]
+
+/** Made up: where each sample mock's data comes from, as the app has it (no task has changed anything). */
+const placeOf = (mock: string, name: string, place: import('../engine').MockPlace, p: Partial<import('../engine').MockPlan>): import('../engine').MockPlan => ({ mock, name, place, how: 'data', choice: { source: 'default' }, from: 'none', says: '', own: null, app: null, ...p })
+const fakedSays = 'A fake of the real response of 18 Nov 2026', realSays = 'A real response, as it is (18 Nov 2026): this computer only'
+const fraud = { key: 'faked', name: 'Faked from the real response (sample)', kind: 'faked' as const }, fraudReal = { key: 'real', name: 'The real response (sample)', kind: 'real' as const }
+export const mockPlaces: import('../engine').MockPlacesRow[] = [
+  { mock: 'fraud-scan', name: 'Fraud scan vendor (sample)', status: 'mined', canLive: true, real: '2026-11-18T15:20:00Z', data: mockDataSample.map((d) => ({ key: d.key, name: d.name, kind: d.kind })),
+    places: {
+      prototype: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'prototype', { data: fraud, says: fakedSays }),
+      smoke: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'smoke', { data: fraudReal, says: realSays, choice: { source: 'replay' }, from: 'app', app: { source: 'replay' } }),
+      review: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'review', { data: fraud, says: fakedSays, choice: { source: 'fake' }, from: 'app', app: { source: 'fake' } }),
+    } },
+  { mock: 'breach-api', name: 'Breach lookup (sample)', status: 'assumed', canLive: false, real: null, data: [{ key: 'two-breaches', name: 'An address in two breaches (sample)', kind: 'invented' }],
+    places: {
+      prototype: placeOf('breach-api', 'Breach lookup (sample)', 'prototype', { data: { key: 'two-breaches', name: 'An address in two breaches (sample)', kind: 'invented' }, says: '"An address in two breaches (sample)", invented' }),
+      smoke: placeOf('breach-api', 'Breach lookup (sample)', 'smoke', { data: { key: 'two-breaches', name: 'An address in two breaches (sample)', kind: 'invented' }, says: '"An address in two breaches (sample)", invented' }),
+      review: placeOf('breach-api', 'Breach lookup (sample)', 'review', { data: { key: 'two-breaches', name: 'An address in two breaches (sample)', kind: 'invented' }, says: '"An address in two breaches (sample)", invented' }),
+    } },
+  { mock: 'address-lookup', name: 'Address lookup (sample)', status: 'needs_recording', canLive: true, real: null, data: [],
+    places: {
+      prototype: placeOf('address-lookup', 'Address lookup (sample)', 'prototype', { how: 'none', says: 'Nothing yet: it has no mock' }),
+      smoke: placeOf('address-lookup', 'Address lookup (sample)', 'smoke', { how: 'none', says: 'Nothing yet: it has no mock' }),
+      review: placeOf('address-lookup', 'Address lookup (sample)', 'review', { how: 'none', says: 'Nothing yet: it has no mock', blocked: 'Address lookup (sample) has no mock yet' }),
+    } },
+]
+/** Made up: the same table for one task, which calls the real vendor in its smoke test and gives its prototype the person with nothing found. */
+export const mockPlacesForTask: import('../engine').MockPlacesRow[] = [
+  { ...mockPlaces[0], places: {
+    prototype: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'prototype', { data: { key: 'nothing-found', name: 'Someone with nothing found (sample)', kind: 'invented' }, says: '"Someone with nothing found (sample)", invented', choice: { source: 'data', data: 'nothing-found' }, from: 'task', own: { source: 'data', data: 'nothing-found' } }),
+    smoke: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'smoke', { how: 'live', record: true, data: undefined, says: 'The real Fraud scan vendor (sample), every run; what it sends is kept', choice: { source: 'live' }, from: 'task', own: { source: 'live' }, app: { source: 'replay' } }),
+    review: mockPlaces[0].places.review,
+  } },
+  mockPlaces[1], mockPlaces[2],
+]
+/** Made up: what changed on one mock. */
+export const mockChanges: import('../engine').MockChange[] = [
+  { at: '2026-11-21T09:10:00Z', by: 'you', issue: null, what: 'For a smoke test: the real response, as it is' },
+  { at: '2026-11-21T09:08:00Z', by: 'you', issue: null, what: 'For a reviewer: a fake of the real response' },
+  { at: '2026-11-20T10:30:00Z', by: 'an agent', issue: { id: 'iss_sample2', identifier: 'SS-2' }, what: 'Data "nothing-found" (invented) was saved' },
+  { at: '2026-11-20T10:00:00Z', by: 'an agent', issue: { id: 'iss_sample1', identifier: 'SS-1' }, what: 'Data "faked" (faked) was saved' },
+  { at: '2026-11-20T09:55:00Z', by: 'an agent', issue: { id: 'iss_sample1', identifier: 'SS-1' }, what: 'Its server was built from a real response' },
+  { at: '2026-11-18T15:20:00Z', by: 'the engine', issue: { id: 'iss_sample1', identifier: 'SS-1' }, what: 'A real response came in' },
+]
+

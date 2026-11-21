@@ -25,7 +25,7 @@
  * The app imports this module too (`@self-evident/engine/steps`), so the rules live in one place.
  */
 
-export type StepKey = 'idea' | 'research' | 'brief' | 'sketch' | 'screen' | 'mockup' | 'prototype' | 'analysis' | 'adr' | 'risk' | 'audit' | 'final'
+export type StepKey = 'idea' | 'research' | 'brief' | 'sketch' | 'screen' | 'mockup' | 'data' | 'prototype' | 'analysis' | 'adr' | 'risk' | 'audit' | 'final'
 export type On = 'idea' | 'task' | 'project'
 /** What kind of step it is: the idea, first; research; the brief, the parent of the rest; a way of looking (sketch, mockup, prototype); a check, after those, added or removed. */
 export type Place = 'first' | 'before' | 'brief' | 'either' | 'check'
@@ -38,6 +38,7 @@ export const STEPS: StepDef[] = [
   { key: 'sketch', label: 'Sketches', icon: '✏️', what: 'The first look, fast: plain HTML screens to react to and change in moments, before a real story.', place: 'either' },
   { key: 'screen', label: 'Screens', icon: '🖼️', what: 'Every screen and every state, still, exactly as it will look: stories under Screens/, made from the app\'s own components. What can be seen is settled here.', place: 'either' },
   { key: 'mockup', label: 'Mockups', icon: '🎨', what: 'The agreed screens, clickable: stories with made-up data you can move through. The brief points at the agreed one.', place: 'either' },
+  { key: 'data', label: 'Data', icon: '🧪', what: 'What stands outside the app, mocked, and where its data comes from for the prototype, the smoke test and the reviewer: a real response, a fake of one, or invented. Skipped, the app\'s defaults are used.', place: 'either' },
   { key: 'prototype', label: 'Prototype', icon: '🛠️', what: 'The thing built the way we would ship it, with only what is outside the system faked, to show with evidence that it works.', place: 'either' },
   { key: 'analysis', label: 'Prototype analysis', icon: '🔬', what: 'The prototype read by a fresh agent: how it was built, what was faked, what to keep, and how the real build should be cleaner: what repeats, what to refactor, the simpler way.', place: 'check' },
   { key: 'adr', label: 'Draft ADR', icon: '🏛️', what: 'A first pass at the architecture decision, from the analysis and the code: the options, a proposed choice, why. A draft: the planner settles it, and the record is written with the build.', place: 'check' },
@@ -143,7 +144,7 @@ export function validOrder(steps: { key: StepKey }[]): boolean {
 }
 
 /** The default list: the idea, research, sketches, screens, mockups, the prototype, and the brief they feed; no checks; nothing but the brief required. */
-export const DEFAULT_STEPS: WorkflowStep[] = ['idea', 'research', 'sketch', 'screen', 'mockup', 'prototype', 'brief'].map((key) => ({ key: key as StepKey, on: true, required: key === 'brief' }))
+export const DEFAULT_STEPS: WorkflowStep[] = ['idea', 'research', 'sketch', 'screen', 'mockup', 'data', 'prototype', 'brief'].map((key) => ({ key: key as StepKey, on: true, required: key === 'brief' }))
 
 /**
  * The workflow every app starts with, made with the app (Sandy, 2026-10-29: a task's workflow "can't be nothing").
@@ -161,7 +162,7 @@ export const DEFAULT_WORKFLOW: Workflow = { id: 'default', name: DEFAULT_NAME, s
  */
 export function normalize(w: Workflow): Workflow {
   let steps = w.steps.filter((s, i) => STEPS.some((d) => d.key === s.key) && w.steps.findIndex((x) => x.key === s.key) === i)
-  const hadSketch = steps.some((s) => s.key === 'sketch'), hadScreen = steps.some((s) => s.key === 'screen')
+  const hadSketch = steps.some((s) => s.key === 'sketch'), hadScreen = steps.some((s) => s.key === 'screen'), hadData = steps.some((s) => s.key === 'data')
   for (const d of DEFAULT_STEPS) if (!steps.some((s) => s.key === d.key)) steps.push({ ...d, on: d.key === 'idea' || d.key === 'brief' || d.key === 'sketch' })
   if (!hadSketch && steps.findIndex((s) => s.key === 'mockup') < steps.findIndex((s) => s.key === 'sketch')) { // beside its sibling, wherever that sits
     const sketch = steps.find((s) => s.key === 'sketch')!
@@ -172,6 +173,11 @@ export function normalize(w: Workflow): Workflow {
     const screen = steps.find((s) => s.key === 'screen')!
     steps = steps.filter((s) => s.key !== 'screen')
     steps.splice(steps.findIndex((s) => s.key === 'mockup'), 0, screen)
+  }
+  if (!hadData && steps.findIndex((s) => s.key === 'prototype') < steps.findIndex((s) => s.key === 'data')) { // one saved before the Data step (2026-11-21): off, as screens were, right before its prototype
+    const data = steps.find((s) => s.key === 'data')!
+    steps = steps.filter((s) => s.key !== 'data')
+    steps.splice(steps.findIndex((s) => s.key === 'prototype'), 0, data)
   }
   steps = steps.map((s) => (s.key === 'brief' ? { ...s, on: true, required: true } : s.key === 'idea' ? { ...s, on: true } : s))
   // What follows the prototype is the workflow's to choose, check by check (After). A workflow with a prototype lists

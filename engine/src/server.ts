@@ -94,7 +94,9 @@ import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError,
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
 import { linearFor } from './linear-home.js'
 import { CATALOGUE } from './catalogue.js'
-import { removeData, setDefaultData } from './mock-data.js'
+import { removeData, saveData, setDefaultData } from './mock-data.js'
+import { placesTable, setChoice, type Choice } from './mock-places.js'
+import { mockHistory } from './mocks.js'
 import { exportMock, getMock, giveRecording, listMocks, needsRecording, recordingsOfService, removeMock, setMockDetails, type Needs } from './mocks.js'
 import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role, cleanJobs, cleanStepSkills, describeJobs, usableSkills, writeSharedSkill, type AppJobs } from './skills.js'
 
@@ -462,6 +464,20 @@ export function buildApp(bus: EventBus) {
     const r = await giveRecording(appId, key, await Promise.all(given.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }))), 'user')
     if (r.issueId) await askToMine(r.issueId, key, r.dir, r.files.length)
     return c.json({ files: r.files, asked: r.issueId }, 201)
+  } catch (err) { return planError(c, err) } })
+  // Where each mock's data comes from, place by place (mock-places.ts): the app's defaults, or (?issue=) a task's.
+  api.get('/apps/:id/mock-places', async (c) => { try { return c.json(await placesTable(c.req.param('id'), c.req.query('issue') || null)) } catch (err) { return planError(c, err, 404) } })
+  api.put('/apps/:id/mocks/:key/places/:place', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { source?: string; data?: string; issueId?: string | null }; return c.json(await setChoice(c.req.param('id'), c.req.param('key'), c.req.param('place'), b.source ? { source: b.source, data: b.data } as Choice : null, b.issueId || null, 'user')) } catch (err) { return planError(c, err) } })
+  api.get('/apps/:id/mocks/:key/history', async (c) => { try { return c.json(await mockHistory(c.req.param('id'), c.req.param('key'))) } catch (err) { return planError(c, err, 404) } })
+  // Data a person provides and states holds nothing real (a sample written by hand): kept as invented. A file that may hold real data goes to /recording instead, and is faked.
+  api.post('/apps/:id/mocks/:key/data', async (c) => { try {
+    const body = await c.req.parseBody({ all: true })
+    const given = ([] as unknown[]).concat(body.file ?? []).filter((f): f is File => typeof f === 'object' && f !== null && 'arrayBuffer' in f)
+    if (body.stated !== 'yes') return c.json({ error: 'a file is kept as invented data only when you state it holds nothing real; one that may hold real data is given as a real response, and faked' }, 400)
+    const files: Record<string, string> = {}
+    for (const f of given) { const bytes = new Uint8Array(await f.arrayBuffer()); if (bytes.includes(0)) return c.json({ error: `${f.name} is not text` }, 400); files[f.name.split(/[\\/]/).pop() || 'data.txt'] = new TextDecoder().decode(bytes) }
+    const name = String(body.name ?? '').trim() || (given[0]?.name ?? 'provided')
+    return c.json(await saveData(c.req.param('id'), c.req.param('key'), { dataKey: name, name, files, stated: true, issueId: typeof body.issueId === 'string' && body.issueId ? body.issueId : null }, 'user'), 201)
   } catch (err) { return planError(c, err) } })
   // A mock's data (mock-data.ts): which it serves by default, and removing a set. Making one is an agent's (the mock_data tool).
   api.put('/apps/:id/mocks/:key/data/default', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { data?: string | null }; return c.json(await setDefaultData(c.req.param('id'), c.req.param('key'), b.data || null, 'user')) } catch (err) { return planError(c, err) } })

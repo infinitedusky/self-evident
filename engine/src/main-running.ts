@@ -47,6 +47,7 @@ import { git } from './git.js'
 import { PlanError } from './projects.js'
 import { morePorts } from './ports.js'
 import { copyData, databaseExists, databaseName, databaseUrl, dropDatabase, listScenarios, rebuild, type PrototypeDb } from './prototype-data.js'
+import { plansFor } from './mock-places.js'
 import { dropUse, libraryStandIns, noteUse } from './mocks.js'
 import { recordingsDir } from './recordings.js'
 import { patchSetup } from './setup.js'
@@ -86,7 +87,8 @@ async function setupOf(appId: string) {
   const r = await homeRepo(appId)
   const s = (a.setup ?? {}) as { main_url?: string; main_stand_ins?: unknown; prototype_cmd?: string; prototype_stop_cmd?: string; prototype_db?: PrototypeDb }
   const own = cleanStandIns(s.main_stand_ins) // its own, then the app's mocks it has none of its own for (mocks.ts)
-  return { a, repoPath: r?.localPath ?? null, address: s.main_url?.trim() || null, cmd: s.prototype_cmd?.trim() || null, stopCmd: s.prototype_stop_cmd?.trim() || null, dbCfg: s.prototype_db?.url ? s.prototype_db : null, standIns: [...own, ...(await libraryStandIns(appId, own.map((x) => x.key)))], ownStandIns: own }
+  const plans = await plansFor(appId, 'prototype', null) // main is not a task's: the app's own defaults for a prototype (mock-places.ts)
+  return { a, repoPath: r?.localPath ?? null, address: s.main_url?.trim() || null, cmd: s.prototype_cmd?.trim() || null, stopCmd: s.prototype_stop_cmd?.trim() || null, dbCfg: s.prototype_db?.url ? s.prototype_db : null, standIns: [...own, ...(await libraryStandIns(appId, [...own.map((x) => x.key), ...plans.live], plans.pick))], ownStandIns: own, real: plans.real }
 }
 
 /** The default branch as it is now: GitHub's when the checkout has it, else the local one. */
@@ -130,7 +132,7 @@ export async function startMain(appId: string, actor = 'person', opts: { update?
   const forId = opts.for ?? null, SLUG = slugOf(forId)
   const data = tagOf(forId) ? opts.data ?? null : null
   const asIs = !opts.data || JSON.stringify(opts.data) === JSON.stringify(running.get(keyOf(appId, forId))?.data ?? null)
-  const { a, repoPath, address, cmd, dbCfg, standIns } = await setupOf(appId)
+  const { a, repoPath, address, cmd, dbCfg, standIns, real } = await setupOf(appId)
   if (address) return mainStatus(appId, false, forId)
   if (alive(appId, forId) && !opts.update && asIs) return mainStatus(appId, true, forId)
   if (!cmd) throw new PlanError(`${a.name} has no command to start it yet: set how its prototypes are started in Settings, or give the address its main is deployed at`)
@@ -173,7 +175,7 @@ export async function startMain(appId: string, actor = 'person', opts: { update?
   }
   const mine: Record<string, string> = { PROTOTYPE_HOME: homeOf(standKey(appId, forId)), RECORDINGS: recordingsDir(appId), ...(data?.env ?? {}), ...(data?.mode === 'shared' ? { MAIN_SHARED_DB: '1' } : {}), ...(dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, data?.mode === 'shared' ? data.slug : SLUG) } : {}) }
   // Its stand-ins first, each on a port of its own; the server is given the variables that point the app at them.
-  noteUse(standKey(appId, forId), appId, tagOf(forId) ? `Main, beside ${tagOf(forId)}` : 'Main', standIns.filter((x) => 'mock' in x).map((x) => x.key))
+  noteUse(standKey(appId, forId), appId, tagOf(forId) ? `Main, beside ${tagOf(forId)}` : 'Main', standIns.filter((x) => 'mock' in x).map((x) => x.key), real)
   const pointed = envOf(standKey(appId, forId), standIns, await startStandIns(standKey(appId, forId), standIns, path, { ...process.env, ...mine }), path)
   const envFile = writeEnvFile(standKey(appId, forId), pointed)
   const port = await freePort(lastPort.get(keyOf(appId, forId)) ?? 0)

@@ -442,6 +442,7 @@ export const mock = pgTable('mock', {
   recordedAt: at('recorded_at'), minedAt: at('mined_at'),
   createdAt: createdAt(), updatedAt: at('updated_at'),
   /** The data it serves unless a run says otherwise: a mock_data key. None: whatever its own files hold. */ defaultData: text('default_data'),
+  /** The app's defaults for where its data comes from in each place a task runs (mock-places.ts): { prototype, smoke, review }, each { source, data? }. A place left out follows defaultData. */ places: jsonb('places').$type<Record<string, { source: string; data?: string }>>().notNull().default({}),
 }, (t) => [uniqueIndex('mock_key').on(t.appId, t.key), inList('mock_status', t.status, MOCK_STATUSES)])
 
 // What a mock answers with, kept apart from its server (mock-data.ts): the server reads it from $MOCK_DATA, and it is
@@ -460,6 +461,15 @@ export const mockData = pgTable('mock_data', {
   /** The task it was made for. None: the app's. */ issueId: text('issue_id').references(() => issue.id, { onDelete: 'set null' }),
   createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [uniqueIndex('mock_data_key').on(t.mockId, t.key), inList('mock_data_kind', t.kind, MOCK_DATA_KINDS)])
+
+// A task's own choice of where one mock's data comes from in one place (mock-places.ts). No row: the app's default.
+export const MOCK_PLACES = ['prototype', 'smoke', 'review'] as const
+export const MOCK_SOURCES = ['default', 'live', 'replay', 'fake', 'data'] as const
+export const mockChoice = pgTable('mock_choice', {
+  id: id(), mockId: text('mock_id').notNull().references(() => mock.id, { onDelete: 'cascade' }), issueId: text('issue_id').notNull().references(() => issue.id, { onDelete: 'cascade' }),
+  place: text('place').notNull(), source: text('source').notNull(), /** source data: which set. */ data: text('data'),
+  updatedAt: at('updated_at'),
+}, (t) => [uniqueIndex('mock_choice_key').on(t.mockId, t.issueId, t.place), inList('mock_choice_place', t.place, MOCK_PLACES), inList('mock_choice_source', t.source, MOCK_SOURCES)])
 
 // What an agent learned by reading an app's code (learn.ts): one row per document per app, replaced when it is
 // learned again. summary is for the person and short; body is for agents. sha: the home repository's commit then.

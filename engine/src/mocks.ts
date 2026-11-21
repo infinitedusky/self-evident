@@ -28,9 +28,9 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, normalize, relative, resolve, sep } from 'node:path'
-import { and, asc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, like } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, issue, mock, MOCK_STATUSES } from './db/schema.js'
+import { app, event, issue, mock, MOCK_STATUSES } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { PlanError } from './issues.js'
@@ -64,9 +64,11 @@ export const day = (d: Date | string | null | undefined) => (d ? new Date(d).toL
 
 // ---- where each is in use: told by whoever starts one ---------------------------------------------------------------
 
-const uses = new Map<string, { label: string; appId: string; keys: string[] }>()
-/** A prototype, main or a smoke test started with these mocks. */
-export function noteUse(id: string, appId: string, label: string, keys: string[]) { if (keys.length) uses.set(id, { label, appId, keys }); else uses.delete(id) }
+const uses = new Map<string, { label: string; appId: string; keys: string[]; real: string[] }>()
+/** A prototype, main or a smoke test started with these mocks; `real`: the services it has real data from (a real response served as it is, or the service itself). */
+export function noteUse(id: string, appId: string, label: string, keys: string[], real: string[] = []) { if (keys.length || real.length) uses.set(id, { label, appId, keys, real }); else uses.delete(id) }
+/** The services a running thing has real data from: it must not be shared while it has any. */
+export const realIn = (id: string) => uses.get(id)?.real ?? []
 export function dropUse(id: string) { uses.delete(id) }
 const usedBy = (appId: string, key: string) => [...uses.values()].filter((u) => u.appId === appId && u.keys.includes(key)).map((u) => u.label)
 
@@ -337,6 +339,40 @@ export async function giveRecording(appId: string, key: string, given: { name: s
 }
 /** Was it given by the person (a file they had), rather than recorded on a live run? */
 export const isGiven = (dir: string) => existsSync(join(dir, 'given.meta.json'))
+
+/** One change to a mock, said for a person. */
+export interface MockChange { at: string; by: string; /** The task it was made for. None: the app's own (Settings). */ issue: { id: string; identifier: string } | null; what: string }
+const PLACE_SAYS: Record<string, string> = { prototype: 'a prototype', smoke: 'a smoke test', review: 'a reviewer' }
+const SOURCE_SAYS: Record<string, string> = { default: 'its default data', live: 'the real service', replay: 'the real response, as it is', fake: 'a fake of the real response', data: 'the data' }
+const changeSays = (type: string, p: Record<string, unknown>): string | null => {
+  switch (type) {
+    case 'mock.needs_recording': return 'Raised: it needs a real response'
+    case 'mock.saved': return p.status === 'mined' ? 'Its server was built from a real response' : 'Its server was written from an assumed shape'
+    case 'mock.changed': return 'Its name, address or variables were changed'
+    case 'mock.recorded': return 'A real response came in'
+    case 'mock.data_saved': return `Data "${p.data}" (${p.kind}) was saved`
+    case 'mock.data_removed': return `Data "${p.data}" was removed`
+    case 'mock.default_data': return p.data ? `Its default data became "${p.data}"` : 'It was left with no default data'
+    case 'mock.place': return `For ${PLACE_SAYS[String(p.place)] ?? p.place}: ${SOURCE_SAYS[String(p.source)] ?? p.source}${p.data ? ` "${p.data}"` : ''}`
+    default: return null
+  }
+}
+/** What has changed on a mock, newest first: the app's own defaults (no task) and what tasks did to it. Kept in the event stream, so nothing is lost when it is changed again. */
+export async function mockHistory(appId: string, key: string, limit = 60): Promise<MockChange[]> {
+  const rows = await db.select().from(event).where(and(eq(event.appId, appId), like(event.type, 'mock.%'))).orderBy(desc(event.seq)).limit(2000)
+  const out: MockChange[] = []
+  const idents = new Map<string, { id: string; identifier: string } | null>()
+  for (const e of rows) {
+    const p = (e.payload ?? {}) as Record<string, unknown>
+    if (p.key !== standInKey(key)) continue
+    const what = changeSays(e.type, p)
+    if (!what) continue
+    if (e.issueId && !idents.has(e.issueId)) { const t = await identOf(e.issueId); idents.set(e.issueId, t ? { id: t.id, identifier: t.identifier } : null) }
+    out.push({ at: e.ts.toISOString(), by: e.actor.startsWith('user') ? 'you' : e.actor === 'engine' ? 'the engine' : 'an agent', issue: e.issueId ? idents.get(e.issueId) ?? null : null, what })
+    if (out.length >= limit) break
+  }
+  return out
+}
 
 // ---- running and exporting ------------------------------------------------------------------------------------------
 

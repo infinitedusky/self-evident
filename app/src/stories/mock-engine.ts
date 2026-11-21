@@ -15,6 +15,8 @@ export interface MockData {
   summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript; /** A task's own agent, or null when it has none. */ taskTalk: typeof s.talkSession | null; /** The agents it has out. */ taskAgents?: import('../engine').TaskAgentOut[]; /** An idea's own agent, or null when it has none. */ ideaTalk?: typeof s.talkSession | null
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
   /** The app's mock library. */ mocks: import('../engine').Mock[]
+  /** Where each mock's data comes from: the app's defaults, and one task's. */ mockPlaces: import('../engine').MockPlacesRow[]; mockPlacesForTask: import('../engine').MockPlacesRow[]
+  mockChanges: import('../engine').MockChange[]
   /** The stories under Screens/ and the Storybook that renders them. */ screens: import('../engine').ScreensView & { /** With the earlier tasks' ones, when asked for. */ all?: import('../engine').Screen[] }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[]; earlier?: number; /** With the earlier tasks' ones, when asked for. */ all?: { file: string; changedAt: number }[] }
   /** A task's smoke test; left out, there is nothing for a person on it. */ smoke?: import('../engine').SmokeView
@@ -53,6 +55,7 @@ export const sampleData: MockData = {
   storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [], branch: 'talk/sample', main: false },
   screens: s.screensView,
   mocks: s.mocks,
+  mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges,
   sketches: { scope: 'sess_sample', branch: 'talk/sample', main: false, dir: 'sketches', sketches: [{ file: 'home.html', changedAt: 1794250000000 }, { file: 'checkout.html', changedAt: 1794240000000 }] },
   prototypes: s.prototypes, prototypeCode: s.prototypeCode,
   claudeSessions: s.claudeSessions,
@@ -135,6 +138,10 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/talks/:id/handoff', () => reply({ command: `cd "/Users/sample/code/sample-shop-worktrees/talk-sample" && claude --resume 00000000-sample --mcp-config '{"mcpServers":{"self-evident":{"type":"http","url":"http://localhost:4000/api/mcp/app_sample"}}}'` })),
     http.get('/api/apps/:id/storybook', () => reply(d.storybook)),
     http.get('/api/apps/:id/mocks', () => reply(d.mocks)),
+    http.get('/api/apps/:id/mock-places', ({ request }) => reply(new URL(request.url).searchParams.get('issue') ? d.mockPlacesForTask : d.mockPlaces)),
+    http.get('/api/apps/:id/mocks/:key/history', () => reply(d.mockChanges)),
+    http.put('/api/apps/:id/mocks/:key/places/:place', () => reply(d.mockPlaces[0].places.prototype)),
+    http.post('/api/apps/:id/mocks/:key/data', () => reply(d.mocks[0].data[1])),
     http.post('/api/apps/:id/mocks/:key/recording', () => reply({ files: ['response.json'], asked: 'iss_sample2' })),
     http.get('/api/apps/:id/screens', ({ request }) => { const { all, ...rest } = d.screens; return reply(new URL(request.url).searchParams.get('all') === '1' && all ? { ...rest, screens: all } : rest) }),
     http.get('/api/sketches/:scope', ({ request }) => { const { all, ...rest } = d.sketches; return reply(new URL(request.url).searchParams.get('all') === '1' && all ? { ...rest, sketches: all } : rest) }),

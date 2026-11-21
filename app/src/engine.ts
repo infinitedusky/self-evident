@@ -361,6 +361,22 @@ export interface MockData {
   provenance: { from?: { at: string; given: boolean; files: number }; faked?: { replaced: number; kept: number }; kept?: string[]; checked?: { at: string; files: number; values: number; against: number }; stated?: { by: string; at: string } }
   /** What it is, in a line. */ note: string; /** May it leave this computer? Never a real one. */ shareable: boolean; isDefault: boolean; issueId: string | null; updatedAt: string | null
 }
+/** Where a mock's data comes from in each place a task runs (engine/src/mock-places.ts). */
+export type MockPlace = 'prototype' | 'smoke' | 'review'
+/** live: the real service. replay: the newest real response as it is. fake: a fake of it. data: one named set. default: the app's (for the app: the mock's default data). */
+export type MockSource = 'default' | 'live' | 'replay' | 'fake' | 'data'
+export interface MockChoice { source: MockSource; data?: string }
+/** What one place gets now, and whose choice it is. */
+export interface MockPlan {
+  mock: string; name: string; place: MockPlace; how: 'live' | 'data' | 'own' | 'none'
+  data?: { key: string; name: string; kind: MockData['kind'] }; record?: boolean
+  choice: MockChoice; from: 'task' | 'app' | 'none'
+  /** What it comes to, in words. */ says: string; /** What stands in the way of the choice. */ note?: string; /** Reviewer only: why its copy cannot be made. */ blocked?: string
+  /** The task's own choice. */ own: MockChoice | null; /** The app's. */ app: MockChoice | null
+}
+export interface MockPlacesRow { mock: string; name: string; status: Mock['status']; /** Can it be called for real through the recorder? */ canLive: boolean; /** When its newest real response on this computer is from. */ real: string | null; data: { key: string; name: string; kind: MockData['kind'] }[]; places: Record<MockPlace, MockPlan> }
+/** One change to a mock: the app's own (no task), or a task's. */
+export interface MockChange { at: string; by: string; issue: { id: string; identifier: string } | null; what: string }
 /** Where the Storybook that renders them stands, and the screens it has. */
 export interface ScreensView { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean; screens: Screen[]; earlier: number }
 
@@ -489,6 +505,20 @@ export const engine = {
   /** Ask the agent of the task the newest recording was made for to mine it. */
   mineMock: (appId: string, key: string) => call<{ asked: string }>('POST', `/apps/${appId}/mocks/${key}/mine`),
   /** Where its exported files are downloaded from: the server, its invented data and its provenance. */
+  /** Where each mock's data comes from, place by place: the app's defaults, or a task's. */
+  mockPlaces: (appId: string, issueId?: string | null) => call<MockPlacesRow[]>('GET', `/apps/${appId}/mock-places${issueId ? `?issue=${issueId}` : ''}`),
+  setMockPlace: (appId: string, key: string, place: MockPlace, body: { source: MockSource; data?: string; issueId?: string | null }) => call<MockPlan>('PUT', `/apps/${appId}/mocks/${key}/places/${place}`, body),
+  mockHistory: (appId: string, key: string) => call<MockChange[]>('GET', `/apps/${appId}/mocks/${key}/history`),
+  /** Data a person provides and states holds nothing real: kept as invented. */
+  provideMockData: async (appId: string, key: string, files: File[], name: string, issueId?: string | null) => {
+    const form = new FormData()
+    for (const f of files) form.append('file', f)
+    form.append('name', name); form.append('stated', 'yes'); if (issueId) form.append('issueId', issueId)
+    const res = await fetch(`${API}/apps/${appId}/mocks/${key}/data`, { method: 'POST', body: form })
+    const text = await res.text()
+    if (!res.ok) throw new Error(text || `${res.status}`)
+    return JSON.parse(text) as MockData
+  },
   /** Which data a mock serves unless a run says otherwise. */
   setMockDefaultData: (appId: string, key: string, data: string | null) => call<MockData[]>('PUT', `/apps/${appId}/mocks/${key}/data/default`, { data }),
   removeMockData: (appId: string, key: string, data: string) => call<{ removed: boolean }>('DELETE', `/apps/${appId}/mocks/${key}/data/${data}`),
