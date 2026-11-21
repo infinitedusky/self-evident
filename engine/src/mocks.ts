@@ -83,7 +83,7 @@ export function recordingsOfService(appId: string, key: string): { dir: string; 
     const k = join(root, s, key)
     let runs: string[] = []
     try { runs = readdirSync(k) } catch { continue }
-    for (const r of runs) { try { const d = join(k, r); if (!statSync(d).isDirectory()) continue; out.push({ dir: d, at: statSync(d).mtime.toISOString(), files: readdirSync(d).length, issueId: s.startsWith('iss_') ? s : null }) } catch { /* gone */ } }
+    for (const r of runs) { try { const d = join(k, r); if (!statSync(d).isDirectory()) continue; out.push({ dir: d, at: statSync(d).mtime.toISOString(), files: readdirSync(d).filter((f) => f !== 'given.meta.json').length, issueId: s.startsWith('iss_') ? s : null }) } catch { /* gone */ } }
   }
   return out.sort((a, b) => b.at.localeCompare(a.at))
 }

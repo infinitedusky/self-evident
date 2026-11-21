@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MockLibrary } from './MockLibrary'
+import { expect, userEvent, within } from 'storybook/test'
 import { withEngine } from '../stories/mock-engine'
 import { mocks, sampleApp } from '../stories/sample'
 
@@ -13,8 +14,18 @@ type Story = StoryObj<typeof meta>
 export const Library: Story = {}
 /** Nothing yet. */
 export const Empty: Story = { beforeEach: withEngine({ mocks: [] }) }
-/** A live run was recorded; the recording waits to be mined. */
-export const RecordedNotMined: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[2], needs: { ...mocks[2].needs!, recorded: '/sample/recordings' }, unmined: { at: '2026-11-20T14:00:00Z', files: 6 } }] }) }
+/** A real response is in and the task's agent has been asked to build the mock: it says so once, with a way to ask again, and no second button to do the same thing. */
+export const RecordedNotMined: Story = {
+  beforeEach: withEngine({ mocks: [{ ...mocks[2], needs: { ...mocks[2].needs!, recorded: '/sample/recordings' }, unmined: { at: '2026-11-20T14:00:00Z', files: 6 } }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/The task's agent is building the mock from it/)).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Ask again' })).toBeInTheDocument()
+    await expect(c.queryByRole('button', { name: 'Mine it' })).toBeNull()
+  },
+}
+/** A mock that is built, with a newer real response nobody has been asked about: it can be asked for. */
+export const NewerResponseWaiting: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], unmined: { at: '2026-11-21T09:00:00Z', files: 1 } }] }) }
 /** A mined one whose service changed shape: it keeps serving, and needs a new recording. */
 export const OutOfDate: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], needs: { person: 'one consenting person', key: 'FRAUD_SCAN_KEY', cost: 'one scan, about $2', why: 'the vendor added a social_accounts column (sample)' } }] }) }
 /** Raised with no address for the real service: it cannot be recorded live until it has one, but a response the person already has can be given. */
@@ -27,3 +38,16 @@ export const DefaultIsReal: Story = { beforeEach: withEngine({ mocks: [{ ...mock
 export const NoDataYet: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], defaultData: null, data: [] }] }) }
 /** On a task's Data step: the task's own table first, then the app's mocks, where a service can be added for this task. */
 export const OnATask: Story = { args: { issueId: 'iss_sample2' } }
+/** Adding a service on a task: its name and, in the same form, a real response you already have. The address and variables are only for recording a live run, and are tucked away. */
+export const AddingAService: Story = {
+  args: { issueId: 'iss_sample2' },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Add a service' }))
+    await expect(c.getByRole('textbox', { name: 'The service' })).toBeInTheDocument()
+    await expect(c.getByLabelText(/A real response you already have/)).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await userEvent.type(c.getByRole('textbox', { name: 'The service' }), 'Payments (sample)')
+    await expect(c.getByRole('button', { name: 'Add' })).toBeEnabled()
+  },
+}
