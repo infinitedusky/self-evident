@@ -29,7 +29,7 @@ export function TaskCalls({ appId, issueId, mocks, version = 0, onChanged }: { a
       {error && <div className="empty bad" style={{ margin: '8px 0' }}>{error}</div>}
       {adding && <AddCall names={[...new Set([...mocks.map((m) => m.name), ...(calls ?? []).map((c) => c.serviceName)])]} onAdd={(b) => act(async () => { const r = await engine.addTaskCall(issueId, b); setAdding(false); return r })} onCancel={() => setAdding(false)} />}
       {calls === null ? (error ? null : <p className="muted">Loading…</p>)
-        : !calls.length ? <div className="empty" style={{ marginTop: 8 }}>Not listed yet. Start this step with the agent and it lists every call the change makes outside the app, from the brief and the code, with what each has to answer. Or add one with Add a call.</div>
+        : !calls.length ? <div className="empty" style={{ marginTop: 8 }}>Not listed yet. Start this step with the agent and it lists every call the change makes outside the app, from the brief and the code, with what each has to answer. Or add one with Add a call: the service it is made to, the call, and what you need from it. A real response is then given on the call it answers.</div>
         : (
           <>
             <p className="faint" style={{ margin: '4px 0 8px', fontSize: 13 }}>{calls.length} call{calls.length === 1 ? '' : 's'} to {services.length} service{services.length === 1 ? '' : 's'}: {real} answered from a real response, {code} from the code, {none} with nothing to answer {none === 1 ? 'it' : 'them'}</p>
@@ -46,7 +46,14 @@ export function TaskCalls({ appId, issueId, mocks, version = 0, onChanged }: { a
                     onCover={() => act(() => engine.coverTaskCall(issueId, c.id))}
                     onLink={(e) => act(() => engine.linkTaskCall(issueId, c.id, e))}
                     onRemove={() => act(() => engine.removeTaskCall(issueId, c.id))}
-                    onGive={(files) => act(async () => { await engine.giveRecording(appId, c.mock!.key, files, c.endpoint!.key); return engine.taskCalls(issueId) })} />)}
+                    onGive={(files) => act(async () => {
+                      // A file is the answer to this call: where nothing answers it yet, the mock is made (or the call added to it) first.
+                      let mock = c.mock?.key, endpoint = c.endpoint?.key
+                      if (!mock || !endpoint) { const made = (await engine.coverTaskCall(issueId, c.id)).calls.find((x) => x.id === c.id); mock = made?.mock?.key; endpoint = made?.endpoint?.key }
+                      if (!mock || !endpoint) throw new Error(`nothing could be set up to answer ${c.method} ${c.path}`)
+                      await engine.giveRecording(appId, mock, files, endpoint)
+                      return engine.taskCalls(issueId)
+                    })} />)}
                 </div>
               )
             })}
@@ -58,6 +65,8 @@ export function TaskCalls({ appId, issueId, mocks, version = 0, onChanged }: { a
 
 function CallRow({ call: c, mock, onCover, onLink, onRemove, onGive }: { call: TaskCall; mock: Mock | null; onCover: () => void; onLink: (endpoint: string | null) => void; onRemove: () => void; onGive: (files: File[]) => void }) {
   const e = c.endpoint
+  // A real response is given here, on the call it answers, whatever answers the call now.
+  const give = (label: string) => <label className="mock-give-one" style={{ margin: 0 }}><input type="file" multiple aria-label={`A real response of ${c.method} ${c.path}`} onChange={(ev) => { const files = [...(ev.target.files ?? [])]; if (files.length) onGive(files); ev.target.value = '' }} /><span className="btn quiet small">{label}</span></label>
   return (
     <div className="task-calls-row" data-state={c.state}>
       <div>
@@ -70,7 +79,7 @@ function CallRow({ call: c, mock, onCover, onLink, onRemove, onGive }: { call: T
             <div>{e.real ? <><Badge tone="ok">A real response</Badge> {e.real.how === 'given' ? 'you gave' : 'recorded in a live run'}, {day(e.real.at)}</> : <><Badge tone="warn">From the code</Badge> no real response behind it</>}</div>
             <div className="faint">{c.mock?.status === 'needs_recording' ? 'Listed on the mock; its server is not built yet.' : e.files.length ? `Answered with ${e.files.join(', ')}` : 'Answered with what the mock\'s server makes up'}{c.linked ? ' · tied by hand' : ''}</div>
             <div className="row">
-              <label className="mock-give-one" style={{ margin: 0 }}><input type="file" multiple aria-label={`A real response of ${c.method} ${c.path}`} onChange={(ev) => { const files = [...(ev.target.files ?? [])]; if (files.length) onGive(files) }} /><span className="btn quiet small">{e.real ? 'Give a newer one' : 'Give a real response'}</span></label>
+              {give(e.real ? 'Give a newer one' : 'Give a real response')}
               {c.linked && <button className="btn quiet small" onClick={() => onLink(null)}>Untie</button>}
             </div>
           </>
@@ -78,7 +87,8 @@ function CallRow({ call: c, mock, onCover, onLink, onRemove, onGive }: { call: T
           <>
             <div><Badge tone="bad">Not answered</Badge> {c.mock?.name} has a mock, and it lacks this call</div>
             <div className="row">
-              <button className="btn small" onClick={onCover}>Add it to the mock</button>
+              {give('Give a real response')}
+              <button className="btn quiet small" title="Without a real response: its shape is taken from the code" onClick={onCover}>Add it to the mock</button>
               {mock && mock.endpoints.length > 0 && (
                 <select aria-label={`Tie ${c.method} ${c.path} to an endpoint of the mock`} value="" onChange={(ev) => { if (ev.target.value) onLink(ev.target.value) }}>
                   <option value="">or it is one the mock has…</option>
@@ -87,7 +97,12 @@ function CallRow({ call: c, mock, onCover, onLink, onRemove, onGive }: { call: T
               )}
             </div>
           </>
-        ) : <div><Badge tone="bad">Not answered</Badge> {c.serviceName} has no mock</div>}
+        ) : (
+          <>
+            <div><Badge tone="bad">Not answered</Badge> {c.serviceName} has no mock</div>
+            <div className="row">{give('Give a real response')}<span className="faint">Its mock is made with it.</span></div>
+          </>
+        )}
       </div>
       <button className="btn quiet small task-calls-remove" aria-label={`Remove ${c.method} ${c.path}`} title="Take it off this task's list" onClick={onRemove}>×</button>
     </div>
