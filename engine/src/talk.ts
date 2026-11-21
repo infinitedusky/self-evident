@@ -33,6 +33,7 @@ import { prototypeSkill, skillOptions, stepSkillPrompt, withStepDefaults, type S
 import { accountEnv, accountPrefix, configDirFor, configDirOf } from './account.js'
 import { listRecordings, recordingsDir, recordingsPrompt } from './recordings.js'
 import { placesPrompt, placesTable } from './mock-places.js'
+import { callsPrompt, listCalls } from './task-calls.js'
 import { listMocks, mocksPrompt } from './mocks.js'
 import { issueDetail, PlanError, projectGraph } from './projects.js'
 import { putAwayIds } from './apps.js'
@@ -681,6 +682,7 @@ async function open(sessionId: string): Promise<Live> {
   // The app's mock library (mocks.ts), for every agent that builds a prototype or works on a task: it checks it before it builds.
   const mockList = s.appId && (proto || ownTask) ? await listMocks(s.appId).catch(() => []) : []
   const mockPlaces = s.appId && mockList.length ? placesPrompt(await placesTable(s.appId, ownTask?.id ?? proto?.issueId ?? null).catch(() => [])) : ''
+  const taskCalls = ownTask ? callsPrompt(await listCalls(ownTask.id).catch(() => [])) : ''
   // Where the work came from, word for word (origins.ts): the ticket, for every agent on a task, an idea, a project or one of their steps.
   const about = s.subjectRef as SubjectRef | null
   const origin = originPrompt(await originOf(ownTaskId ? { issueId: ownTaskId } : proto?.issueId ? { issueId: proto.issueId } : about?.checkOf ? { issueId: about.checkOf } : about?.issueId ? { issueId: about.issueId } : proto?.ideaId ? { ideaId: proto.ideaId } : about?.ideaId ? { ideaId: about.ideaId } : about?.projectId ? { projectId: about.projectId } : {}).catch(() => null))
@@ -693,7 +695,7 @@ async function open(sessionId: string): Promise<Live> {
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) + prDescriptionNote(a.setup) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + origin + storiesNote(a?.setup) + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) + (recordings && !unwatched ? recordingsPrompt(recordings, listRecordings(recordings).length) : '') + (proto || ownTask ? mocksPrompt(mockList) + mockPlaces : '') },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) + prDescriptionNote(a.setup) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + origin + storiesNote(a?.setup) + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) + (recordings && !unwatched ? recordingsPrompt(recordings, listRecordings(recordings).length) : '') + (proto || ownTask ? mocksPrompt(mockList) + mockPlaces + taskCalls : '') },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...(check || whole ? CHECK_TOOLS : ASK_TOOLS)],

@@ -711,3 +711,14 @@ export const mockChanges: import('../engine').MockChange[] = [
   { at: '2026-11-18T15:20:00Z', by: 'the engine', issue: { id: 'iss_sample1', identifier: 'SS-1' }, what: 'A real response came in' },
 ]
 
+/** Made up: what one task calls outside the app. Three calls to a vendor that has a mock (one answered from a real response, two from the code), one the mock lacks, one to a service whose mock is not built, one to a service with no mock. */
+const fraudMock = { key: 'fraud-scan', name: 'Fraud scan vendor (sample)', status: 'mined' as const }
+export const taskCalls: import('../engine').TaskCall[] = [
+  { id: 'tcall_s1', service: 'fraud-scan', serviceName: 'Fraud scan vendor (sample)', method: 'POST', path: '/workflows/run', what: 'A job id for the employees sent', by: 'agent', state: 'answered', mock: fraudMock, endpoint: mockEndpointsSample[0], linked: false },
+  { id: 'tcall_s2', service: 'fraud-scan', serviceName: 'Fraud scan vendor (sample)', method: 'GET', path: '/workflows/runs/{id}/status', what: 'Running, then completed; this task also shows a run that failed', by: 'agent', state: 'answered', mock: fraudMock, endpoint: mockEndpointsSample[1], linked: false },
+  { id: 'tcall_s3', service: 'fraud-scan', serviceName: 'Fraud scan vendor (sample)', method: 'GET', path: 'the results file, by the link the service sends', what: 'One row for each employee sent: someone with nothing found, someone with a lot', by: 'agent', state: 'answered', mock: fraudMock, endpoint: mockEndpointsSample[3], linked: false },
+  { id: 'tcall_s4', service: 'fraud-scan', serviceName: 'Fraud scan vendor (sample)', method: 'GET', path: '/workflows/runs/{id}/cost', what: 'What the run cost, shown beside the findings', by: 'user', state: 'no_endpoint', mock: fraudMock, endpoint: null, linked: false },
+  { id: 'tcall_s5', service: 'address-lookup', serviceName: 'Address lookup (sample)', method: 'GET', path: '/v1/lookup', what: 'The address a finding points at', by: 'agent', state: 'answered', mock: { key: 'address-lookup', name: 'Address lookup (sample)', status: 'needs_recording' }, endpoint: { key: 'lookup', method: 'GET', path: '/v1/lookup', what: 'The address a finding points at', real: null, files: [] }, linked: false },
+  { id: 'tcall_s6', service: 'payments', serviceName: 'Payments (sample)', method: 'POST', path: '/charges', what: 'A charge that succeeds, and one that is declined', by: 'agent', state: 'no_mock', mock: null, endpoint: null, linked: false },
+]
+

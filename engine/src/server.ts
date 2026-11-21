@@ -96,6 +96,7 @@ import { linearFor } from './linear-home.js'
 import { CATALOGUE } from './catalogue.js'
 import { removeData, saveData, setDefaultData } from './mock-data.js'
 import { placesTable, setChoice, type Choice } from './mock-places.js'
+import { addCall, coverCall, linkCall, listCalls, removeCall, type NewCall } from './task-calls.js'
 import { mockHistory } from './mocks.js'
 import { exportMock, getMock, giveRecording, listMocks, needsRecording, recordingsOfService, removeMock, setMockDetails, type Needs } from './mocks.js'
 import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role, cleanJobs, cleanStepSkills, describeJobs, usableSkills, writeSharedSkill, type AppJobs } from './skills.js'
@@ -465,6 +466,13 @@ export function buildApp(bus: EventBus) {
     if (r.issueId) await askToMine(r.issueId, key, r.dir, r.files.length)
     return c.json({ files: r.files, asked: r.issueId }, 201)
   } catch (err) { return planError(c, err) } })
+  // What a task calls outside the app (task-calls.ts): its Data step starts from these.
+  api.get('/issues/:id/calls', async (c) => { try { return c.json(await listCalls(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
+  api.post('/issues/:id/calls', async (c) => { try { return c.json(await addCall(c.req.param('id'), await c.req.json() as NewCall, 'user'), 201) } catch (err) { return planError(c, err) } })
+  api.delete('/issues/:id/calls/:call', async (c) => { try { return c.json(await removeCall(c.req.param('id'), c.req.param('call'), 'user')) } catch (err) { return planError(c, err) } })
+  api.put('/issues/:id/calls/:call/endpoint', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { endpoint?: string | null }; return c.json(await linkCall(c.req.param('id'), c.req.param('call'), b.endpoint || null, 'user')) } catch (err) { return planError(c, err) } })
+  // Something to answer it: the service's mock made if it has none, and the call added to the mock if it lacks it.
+  api.post('/issues/:id/calls/:call/cover', async (c) => { try { return c.json(await coverCall(c.req.param('id'), c.req.param('call'), 'user')) } catch (err) { return planError(c, err) } })
   // Where each mock's data comes from, place by place (mock-places.ts): the app's defaults, or (?issue=) a task's.
   api.get('/apps/:id/mock-places', async (c) => { try { return c.json(await placesTable(c.req.param('id'), c.req.query('issue') || null)) } catch (err) { return planError(c, err, 404) } })
   api.put('/apps/:id/mocks/:key/places/:place', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { source?: string; data?: string; issueId?: string | null }; return c.json(await setChoice(c.req.param('id'), c.req.param('key'), c.req.param('place'), b.source ? { source: b.source, data: b.data } as Choice : null, b.issueId || null, 'user')) } catch (err) { return planError(c, err) } })

@@ -17,6 +17,7 @@ export interface MockData {
   /** The app's mock library. */ mocks: import('../engine').Mock[]
   /** Where each mock's data comes from: the app's defaults, and one task's. */ mockPlaces: import('../engine').MockPlacesRow[]; mockPlacesForTask: import('../engine').MockPlacesRow[]
   mockChanges: import('../engine').MockChange[]
+  /** What the sample task calls outside the app. */ taskCalls: import('../engine').TaskCall[]
   /** The stories under Screens/ and the Storybook that renders them. */ screens: import('../engine').ScreensView & { /** With the earlier tasks' ones, when asked for. */ all?: import('../engine').Screen[] }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[]; earlier?: number; /** With the earlier tasks' ones, when asked for. */ all?: { file: string; changedAt: number }[] }
   /** A task's smoke test; left out, there is nothing for a person on it. */ smoke?: import('../engine').SmokeView
@@ -55,7 +56,7 @@ export const sampleData: MockData = {
   storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [], branch: 'talk/sample', main: false },
   screens: s.screensView,
   mocks: s.mocks,
-  mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges,
+  mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls,
   sketches: { scope: 'sess_sample', branch: 'talk/sample', main: false, dir: 'sketches', sketches: [{ file: 'home.html', changedAt: 1794250000000 }, { file: 'checkout.html', changedAt: 1794240000000 }] },
   prototypes: s.prototypes, prototypeCode: s.prototypeCode,
   claudeSessions: s.claudeSessions,
@@ -138,6 +139,11 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/talks/:id/handoff', () => reply({ command: `cd "/Users/sample/code/sample-shop-worktrees/talk-sample" && claude --resume 00000000-sample --mcp-config '{"mcpServers":{"self-evident":{"type":"http","url":"http://localhost:4000/api/mcp/app_sample"}}}'` })),
     http.get('/api/apps/:id/storybook', () => reply(d.storybook)),
     http.get('/api/apps/:id/mocks', () => reply(d.mocks)),
+    http.get('/api/issues/:id/calls', () => reply(d.taskCalls)),
+    http.post('/api/issues/:id/calls', async ({ request }) => { const b = await request.json() as { service: string; method: string; path: string; what?: string }; d.taskCalls = [...d.taskCalls, { id: `tcall_new${d.taskCalls.length}`, service: b.service.toLowerCase(), serviceName: b.service, method: b.method, path: b.path, what: b.what ?? '', by: 'user', state: 'no_mock', mock: null, endpoint: null, linked: false }]; return reply(d.taskCalls) }),
+    http.delete('/api/issues/:id/calls/:call', ({ params }) => { d.taskCalls = d.taskCalls.filter((c) => c.id !== params.call); return reply(d.taskCalls) }),
+    http.put('/api/issues/:id/calls/:call/endpoint', () => reply(d.taskCalls)),
+    http.post('/api/issues/:id/calls/:call/cover', () => reply({ calls: d.taskCalls, mock: d.mocks[0] })),
     http.get('/api/apps/:id/mock-places', ({ request }) => reply(new URL(request.url).searchParams.get('issue') ? d.mockPlacesForTask : d.mockPlaces)),
     http.get('/api/apps/:id/mocks/:key/history', () => reply(d.mockChanges)),
     http.put('/api/apps/:id/mocks/:key/places/:place', () => reply(d.mockPlaces[0].places.prototype)),

@@ -409,6 +409,20 @@ button.badge { border: 0; cursor: pointer; }
 .mock-give-one input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .mock-give-one input:focus-visible + .btn { outline: 2px solid var(--accent); }
 @media (max-width: 760px) { .mock-endpoints-head { display: none; } .mock-endpoints-row { grid-template-columns: 1fr; gap: 4px; } }
+.task-calls-service { border: 1px solid var(--line); border-radius: 8px; margin-top: 8px; overflow: hidden; }
+.task-calls-service-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2, transparent); }
+.task-calls-service-head strong { margin-right: auto; }
+.task-calls-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) auto; gap: 12px; padding: 10px 12px; font-size: 14px; align-items: start; }
+.task-calls-row + .task-calls-row { border-top: 1px solid var(--line); }
+.task-calls-row code { overflow-wrap: anywhere; }
+.task-calls-row .faint { font-size: 12px; margin-top: 2px; }
+.task-calls-row .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.task-calls-row select { font-size: 13px; max-width: 100%; }
+.task-calls-what { font-size: 13px; margin-top: 2px; }
+.task-calls-call { display: grid; grid-template-columns: 110px 1fr; gap: 8px; }
+.mock-all { margin-top: 4px; }
+.mock-all > summary { cursor: pointer; color: var(--ink-soft); font-size: 14px; margin-bottom: 8px; }
+@media (max-width: 760px) { .task-calls-row { grid-template-columns: 1fr auto; } .task-calls-row > div:nth-child(2) { grid-column: 1 / -1; order: 3; } }
 .mock-needs { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-left: 3px solid var(--bad); border-radius: 6px; font-size: 14px; }
 .mock-needs ul { margin: 4px 0 6px; padding-left: 18px; }
 .mock-provenance { margin-top: 8px; font-size: 14px; }
