@@ -7,12 +7,17 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge, type Tone } from './Badge'
 import { Md } from './Md'
-import { engine, type Mock } from '../engine'
+import { engine, type Mock, type MockData } from '../engine'
 
 const STATUS: Record<Mock['status'], { label: string; tone: Tone }> = {
-  mined: { label: 'Mined', tone: 'ok' },
+  mined: { label: 'From a real response', tone: 'ok' },
   assumed: { label: 'Assumed shape', tone: 'warn' },
-  needs_recording: { label: 'Needs a recording', tone: 'bad' },
+  needs_recording: { label: 'Needs a real response', tone: 'bad' },
+}
+const KIND: Record<MockData['kind'], { label: string; tone: Tone }> = {
+  real: { label: 'Real · this computer only', tone: 'warn' },
+  faked: { label: 'Faked', tone: 'ok' },
+  invented: { label: 'Invented', tone: 'neutral' },
 }
 const day = (d: string | null) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null)
 const size = (n: number) => (n < 1024 ? `${n} B` : n < 1_048_576 ? `${Math.round(n / 1024)} KB` : `${(n / 1_048_576).toFixed(1)} MB`)
@@ -35,8 +40,8 @@ export function MockLibrary({ appId }: { appId: string }) {
       </div>
       <p className="faint settings-desc" style={{ margin: '6px 0 12px', maxWidth: 760 }}>
         One mock for each outside service this app calls. Its prototypes, smoke tests and main are pointed at the mock instead of the real service.
-        A mock is mined from a real response, recorded once and kept on this computer. It keeps the response's shape and none of its data, and every value in it is invented.
-        Exporting a mock gives the invented copy, never the recording.
+        A mock is a small server that behaves as the service does, and, kept apart from it, the data it answers with: a real response as it is, a fake of one, or invented data.
+        A real response stays on this computer. Only faked or invented data is ever exported or shared.
       </p>
       {adding && <AddService onAdd={(b) => act(async () => { await engine.raiseMock(appId, b); setAdding(false) })} onCancel={() => setAdding(false)} />}
       {error && <div className="empty bad" style={{ marginBottom: 12 }}>{error}</div>}
@@ -52,6 +57,7 @@ function MockCard({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn
   const [live, setLive] = useState(false)
   const s = STATUS[m.status]
   const canRecord = !!(m.issue && m.upstream && Object.keys(m.env).length)
+  const realDefault = m.data.some((d) => d.isDefault && d.kind === 'real')
   return (
     <article className="card mock-card" data-component="MockCard">
       <div className="card-head">
@@ -60,7 +66,7 @@ function MockCard({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn
       </div>
       {m.standsInFor && <p style={{ margin: 0 }}>Stands in for {m.standsInFor}.</p>}
       <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }}>
-        {m.status === 'mined' ? <>Recorded {day(m.recordedAt) ?? 'on a date not kept'}{m.issue ? <> for <Link to={`/tasks/${m.issue.id}`}>{m.issue.identifier}</Link></> : null} · mined {day(m.minedAt)}</>
+        {m.status === 'mined' ? <>Recorded {day(m.recordedAt) ?? 'on a date not kept'}{m.issue ? <> for <Link to={`/tasks/${m.issue.id}`}>{m.issue.identifier}</Link></> : null} · built {day(m.minedAt)}</>
           : m.status === 'assumed' ? <>Written from a guess, before any recording. It shows only that the code handles the guess.</>
           : <>No mock yet{m.issue ? <>, raised on <Link to={`/tasks/${m.issue.id}`}>{m.issue.identifier}</Link></> : null}.</>}
         {' · '}{m.usedBy.length ? <>In use: {m.usedBy.join(', ')}</> : 'Not in use right now'}
@@ -68,7 +74,7 @@ function MockCard({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn
 
       {m.needs && (
         <div className="mock-needs">
-          <strong>{m.status === 'needs_recording' ? 'Needs a recording' : 'Out of date: needs a new recording'}</strong>{m.needs.why ? <>: {m.needs.why}</> : null}
+          <strong>{m.status === 'needs_recording' ? 'Needs a real response' : 'Out of date: needs a new real response'}</strong>{m.needs.why ? <>: {m.needs.why}</> : null}
           <ul>
             {m.needs.person && <li>A real call needs {m.needs.person}.</li>}
             {m.needs.key && <li>The key: <code>{m.needs.key}</code>.</li>}
@@ -94,6 +100,8 @@ function MockCard({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn
         </div>
       )}
 
+      {m.status !== 'needs_recording' && <DataSets appId={appId} mock={m} act={act} />}
+
       {m.status !== 'needs_recording' && (
         <details className="mock-provenance">
           <summary>Provenance</summary>
@@ -103,7 +111,7 @@ function MockCard({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn
       )}
       {editing && <EditMock mock={m} onSave={(b) => act(async () => { await engine.updateMock(appId, m.key, b); setEditing(false) })} onCancel={() => setEditing(false)} />}
       <div className="row">
-        {m.status !== 'needs_recording' && <a className="btn quiet small" href={engine.mockExportUrl(appId, m.key)} download>Export</a>}
+        {m.status !== 'needs_recording' && !realDefault && <a className="btn quiet small" href={engine.mockExportUrl(appId, m.key)} download>Export</a>}
         {!editing && <button className="btn quiet small" onClick={() => setEditing(true)}>Edit</button>}
         <button className="btn quiet small" onClick={() => { if (window.confirm(`Remove the mock of ${m.name}? Its recordings stay on this computer.`)) void act(() => engine.removeMock(appId, m.key)) }}>Remove</button>
       </div>
@@ -117,11 +125,37 @@ function GiveFiles({ what, onGive }: { what?: string; onGive: (files: File[]) =>
   const [busy, setBusy] = useState(false)
   return (
     <div className="mock-give">
-      <span>Have a real response already? {what ? <>For example {what}. </> : null}Give it: it stays on this computer with the task, and the mock gets invented values in its shape.</span>
+      <span>Have a real response already? {what ? <>For example {what}. </> : null}Give it: it stays on this computer with the task, and the task's agent builds the mock and a fake of it.</span>
       <div className="row">
         <input type="file" multiple aria-label="Responses you already have" onChange={(e) => setFiles([...(e.target.files ?? [])])} />
-        <button className="btn small" disabled={!files.length || busy} onClick={async () => { setBusy(true); try { await onGive(files) } finally { setBusy(false) } }}>{busy ? 'Giving…' : 'Give it and mine'}</button>
+        <button className="btn small" disabled={!files.length || busy} onClick={async () => { setBusy(true); try { await onGive(files) } finally { setBusy(false) } }}>{busy ? 'Giving…' : 'Give it'}</button>
       </div>
+    </div>
+  )
+}
+
+/** What the mock can answer with: each set, what it is, and which it serves unless a run says otherwise. */
+function DataSets({ appId, mock: m, act }: { appId: string; mock: Mock; act: (fn: () => Promise<unknown>) => Promise<void> }) {
+  const realDefault = m.data.some((d) => d.isDefault && d.kind === 'real')
+  return (
+    <div className="mock-data" data-component="MockDataSets">
+      <strong>Data</strong>
+      {!m.data.length ? <p className="faint" style={{ margin: '4px 0 0' }}>None yet. Its server answers with whatever its own files hold. A task's agent makes data from a real response, or writes it.</p> : (
+        <ul>
+          {m.data.map((d) => (
+            <li key={d.key}>
+              <div className="mock-data-head">
+                <span>{d.name}</span>
+                <Badge tone={KIND[d.kind].tone}>{KIND[d.kind].label}</Badge>
+                {d.isDefault ? <Badge tone="accent">Default</Badge> : <button className="btn quiet small" onClick={() => act(() => engine.setMockDefaultData(appId, m.key, d.key))}>Make default</button>}
+                <button className="btn quiet small" onClick={() => { if (window.confirm(`Remove "${d.name}"?${d.kind === 'real' ? ' The real response itself stays on this computer.' : ''}`)) void act(() => engine.removeMockData(appId, m.key, d.key)) }}>Remove</button>
+              </div>
+              <p className="faint">{d.note}{d.files.length ? ` Files: ${d.files.map((f) => `${f.path} (${size(f.bytes)})`).join(', ')}.` : ''}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {realDefault && <p className="mock-data-warn">Its default is a real response, so runs here show real data and it cannot be exported or shared. Make a faked set the default to export it.</p>}
     </div>
   )
 }

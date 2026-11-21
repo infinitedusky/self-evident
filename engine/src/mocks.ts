@@ -36,6 +36,7 @@ import { newId } from './ids.js'
 import { PlanError } from './issues.js'
 import { checkLeaks, keptRefused, LEAKS_SHOWN, type Leak } from './mock-leaks.js'
 import { recordingsDir, recordingsHome } from './recordings.js'
+import { dataDir, dataFor, dataNote, exportable, listData, type DataKind, type DataView } from './mock-data.js'
 import { standInKey, type StandIn } from './stand-ins.js'
 
 export type MockStatus = (typeof MOCK_STATUSES)[number]
@@ -57,9 +58,9 @@ export interface Provenance {
 }
 export interface Needs { /** Who the real call is about, and that they agree. */ person?: string; /** The key or account it needs, by name. */ key?: string; /** What one call costs. */ cost?: string; /** Why a recording is needed now: no mock, or what changed. */ why?: string; /** A real response the person may already have that would do instead of a live run, as the app reads it: "the results CSV a finished workflow links to". */ file?: string }
 
-type Row = typeof mock.$inferSelect
+export type Row = typeof mock.$inferSelect
 const prov = (m: Row) => (m.provenance ?? {}) as Provenance
-const day = (d: Date | string | null | undefined) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : null)
+export const day = (d: Date | string | null | undefined) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : null)
 
 // ---- where each is in use: told by whoever starts one ---------------------------------------------------------------
 
@@ -111,6 +112,7 @@ export interface MockView {
   recordedAt: string | null; minedAt: string | null
   /** The newest recording, when it is newer than what the mock was mined from: waiting to be mined. */ unmined: { at: string; files: number } | null
   usedBy: string[]
+  /** What it can answer with (mock-data.ts), and which of them it serves unless a run says otherwise. */ data: DataView[]; defaultData: string | null
 }
 async function viewOf(m: Row, ident?: (id: string) => Promise<{ id: string; identifier: string; title: string } | null>): Promise<MockView> {
   const recs = recordingsOfService(m.appId, m.key)
@@ -122,6 +124,7 @@ async function viewOf(m: Row, ident?: (id: string) => Promise<{ id: string; iden
     provenance: prov(m), note: provenanceNote(m), needs: (m.needs as Needs | null) ?? null,
     issue: m.issueId && ident ? await ident(m.issueId) : null,
     recordedAt: m.recordedAt?.toISOString() ?? null, minedAt: m.minedAt?.toISOString() ?? null, unmined, usedBy: usedBy(m.appId, m.key),
+    data: await listData(m), defaultData: m.defaultData,
   }
 }
 const identOf = async (id: string) => {
@@ -135,7 +138,7 @@ export async function listMocks(appId: string): Promise<MockView[]> {
   const rows = await db.select().from(mock).where(eq(mock.appId, appId)).orderBy(asc(mock.name))
   return Promise.all(rows.map((m) => viewOf(m, identOf)))
 }
-async function rowOf(appId: string, key: string) {
+export async function rowOf(appId: string, key: string) {
   const [m] = await db.select().from(mock).where(and(eq(mock.appId, appId), eq(mock.key, standInKey(key))))
   return m ?? null
 }
@@ -147,12 +150,12 @@ export async function getMock(appId: string, key: string): Promise<MockView & { 
 
 // ---- writing --------------------------------------------------------------------------------------------------------
 
-async function workspaceOf(appId: string) {
+export async function workspaceOf(appId: string) {
   const [a] = await db.select({ workspaceId: app.workspaceId }).from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError('no such app')
   return a.workspaceId
 }
-const clip = (s: unknown, n: number) => String(s ?? '').trim().slice(0, n)
+export const clip = (s: unknown, n: number) => String(s ?? '').trim().slice(0, n)
 const cleanEnv = (e: unknown) => Object.fromEntries(Object.entries(e && typeof e === 'object' ? e : {}).filter(([k, v]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(k) && typeof v === 'string' && v.trim()).map(([k, v]) => [k, String(v).trim().slice(0, 1000)]).slice(0, 30))
 const cleanUrl = (u: unknown) => { const s = clip(u, 500); if (!s) return null; try { const x = new URL(s); if (!/^https?:$/.test(x.protocol)) throw new Error(); return s } catch { throw new PlanError(`"${s}" is not an address (https://…)`) } }
 const cleanNeeds = (n: unknown): Needs => { const x = (n && typeof n === 'object' ? n : {}) as Record<string, unknown>; const out: Needs = {}; for (const k of ['person', 'key', 'cost', 'why', 'file'] as const) { const v = clip(x[k], 400); if (v) out[k] = v } return out }
@@ -346,34 +349,51 @@ export function materialize(m: Pick<Row, 'appId' | 'key' | 'files' | 'cmd'>): st
   mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, '.complete'), '')
   return dir
 }
-const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
+export const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
 
-/** The app's mocks that can serve, as stand-ins: what a prototype, main or a smoke test starts. */
-export async function libraryStandIns(appId: string, except: string[] = []): Promise<(StandIn & { mock: MockStatus })[]> {
+/**
+ * The app's mocks that can serve, as stand-ins: what a prototype, main or a smoke test starts. Each is given its data
+ * as the folder $MOCK_DATA: the set a run picks for it (`pick`, by the mock's key), else its default. `data` says
+ * which, so a run can show when it is on a real response.
+ */
+export async function libraryStandIns(appId: string, except: string[] = [], pick: Record<string, string> = {}): Promise<(StandIn & { mock: MockStatus; data?: { key: string; kind: DataKind } })[]> {
   const rows = await db.select().from(mock).where(eq(mock.appId, appId)).orderBy(asc(mock.key))
-  return rows.filter((m) => m.status !== 'needs_recording' && m.cmd && !except.includes(m.key)).map((m) => ({
-    key: m.key, name: `${m.name} (mock${m.status === 'assumed' ? ', assumed shape' : ''})`, what: m.standsInFor || undefined, mock: m.status as MockStatus,
-    cmd: `cd ${q(materialize(m))} && ${m.cmd}`, env: m.env ?? {},
-  }))
+  const out: (StandIn & { mock: MockStatus; data?: { key: string; kind: DataKind } })[] = []
+  for (const m of rows) {
+    if (m.status === 'needs_recording' || !m.cmd || except.includes(m.key)) continue
+    const d = await dataFor(m, pick[m.key])
+    out.push({
+      key: m.key, name: `${m.name} (mock${m.status === 'assumed' ? ', assumed shape' : ''}${d?.kind === 'real' ? ', a real response' : ''})`, what: m.standsInFor || undefined, mock: m.status as MockStatus,
+      cmd: `cd ${q(materialize(m))} && ${d ? `MOCK_DATA=${q(dataDir(m, d))} ` : ''}${m.cmd}`, env: m.env ?? {},
+      ...(d ? { data: { key: d.key, kind: d.kind as DataKind } } : {}),
+    })
+  }
+  return out
 }
 
 /**
  * Its files as a repository can carry them: the server, its invented data, and PROVENANCE.md and mock.json beside
  * them. Only the invented copy, never the recording; checked against the recording again when it is still here.
  */
-export async function exportMock(appId: string, key: string, outDir: string): Promise<{ dir: string; files: string[]; checked: boolean }> {
+export async function exportMock(appId: string, key: string, outDir: string, dataKey?: string | null): Promise<{ dir: string; files: string[]; checked: boolean; data: string | null }> {
   const m = await rowOf(appId, key)
   if (!m) throw new PlanError(`this app has no mock "${key}"`)
   if (m.status === 'needs_recording') throw new PlanError(`${m.name} has no mock yet: it needs a recording`)
   let checked = false
   if (m.status === 'mined' && m.recording && existsSync(m.recording)) { assertNoLeaks(m.recording, m.files, prov(m).kept); checked = true }
-  const files: Record<string, string> = { ...m.files, 'PROVENANCE.md': provenanceNote(m), 'mock.json': JSON.stringify({ key: m.key, name: m.name, standsInFor: m.standsInFor, status: m.status, cmd: m.cmd, env: m.env }, null, 2) + '\n' }
+  // Its data goes beside the server, in data/: the set named, else its default. Never a real response (exportable refuses one).
+  const d = await dataFor(m, dataKey)
+  const data: Record<string, string> = {}
+  if (d) { const e = exportable(m, d); checked = checked || e.checked; for (const [p, t] of Object.entries(e.files)) data[join('data', p)] = t }
+  const note = provenanceNote(m) + (d ? `\nIts data ("${d.name}"): ${dataNote(d)}\n` : '')
+  const files: Record<string, string> = { ...m.files, ...data, 'PROVENANCE.md': note, 'mock.json': JSON.stringify({ key: m.key, name: m.name, standsInFor: m.standsInFor, status: m.status, cmd: m.cmd, env: m.env, ...(d ? { data: { key: d.key, kind: d.kind, dir: 'data', variable: 'MOCK_DATA' } } : {}) }, null, 2) + '\n' }
   for (const [p, t] of Object.entries(files)) { const f = join(outDir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, t) }
-  return { dir: outDir, files: Object.keys(files).sort(), checked }
+  return { dir: outDir, files: Object.keys(files).sort(), checked, data: d?.key ?? null }
 }
 
 /** What a prototype's agent (and a task's) is told of the library, before it builds. */
-export function mocksPrompt(list: Pick<MockView, 'key' | 'name' | 'status' | 'standsInFor' | 'needs' | 'recordedAt' | 'unmined'>[]): string {
-  const says = (m: (typeof list)[number]) => `- ${m.name} (${m.key}): ${m.status === 'mined' ? `mined from a recording of ${day(m.recordedAt)}` : m.status === 'assumed' ? 'assumed shape, no recording yet' : 'no mock yet, needs a recording'}${m.needs && m.status !== 'needs_recording' ? '; out of date, needs a new recording' : ''}${m.unmined ? '; a newer recording waits to be mined' : ''}${m.standsInFor ? `. Stands in for ${m.standsInFor}` : ''}`
-  return `\n\nMocks: this app keeps one mock per outside service, in its library (Settings › Mocks), and the engine starts every one that can serve with each prototype, main and smoke test, pointing the app at it by its variables. ${list.length ? `The library:\n${list.map(says).join('\n')}` : 'The library is empty.'}\nBefore you build, name each outside service the change depends on. One that has a mock: use it, and do not set up a stand-in of your own for it. One with no mock, or whose mock is out of date (the change needs fields or calls it lacks): raise it with the mock tool, op needs_recording, saying what a real call needs (a consenting person, a key, the cost). First read the code that calls the service, to see how its answer reaches the app: say in needs.file which responses would do, in a line the person will recognise (\"the results CSV a finished workflow links to\", \"the JSON a lookup returns\"): they may already have one saved from a real run and can give it on the Mocks page instead of paying for another, and the calls around it are taken from the code. A live run records the whole exchange, so ask for one when the flow itself is in question. Either way the engine keeps it with the task, and the mock is mined from that. Until then you may write one with op save, status assumed, from the service's documentation or the code that calls it, and say where the shape is assumed. Never put a recorded response, or any value from one, in a mock or the repository.`
+export function mocksPrompt(list: Pick<MockView, 'key' | 'name' | 'status' | 'standsInFor' | 'needs' | 'recordedAt' | 'unmined' | 'data' | 'defaultData'>[]): string {
+  const dataSays = (m: (typeof list)[number]) => (m.data?.length ? `. Data: ${m.data.map((d) => `${d.key} (${d.kind}${d.key === m.defaultData ? ', the default' : ''})`).join(', ')}` : '')
+  const says = (m: (typeof list)[number]) => `- ${m.name} (${m.key}): ${m.status === 'mined' ? `made from a real response of ${day(m.recordedAt)}` : m.status === 'assumed' ? 'assumed shape, no real response yet' : 'no mock yet, needs a real response'}${m.needs && m.status !== 'needs_recording' ? '; out of date, needs a new one' : ''}${m.unmined ? '; a newer real response waits to be used' : ''}${m.standsInFor ? `. Stands in for ${m.standsInFor}` : ''}${dataSays(m)}`
+  return `\n\nMocks: the app's own code is what goes live, and is never changed to be tried; what stands outside it is swapped by settings alone. For each outside service the app keeps a mock: a small server that behaves as the service does, and, apart from it, the data it answers with (read from $MOCK_DATA), which is a real response served as it is (this computer only), a fake of one, or invented. The engine starts every mock that can serve with each prototype, main and smoke test, pointing the app at it by its variables. ${list.length ? `The app has:\n${list.map(says).join('\n')}` : 'The app has none yet.'}\nBefore you build, name each outside service the change depends on. One that has a mock: use it, and do not set up a stand-in of your own for it; where this change needs data it lacks (a person with nothing found, a job that never finishes), add it with mock_data. One with no mock, or whose mock lacks the calls or fields the change needs: raise it with the mock tool, op needs_recording, saying what a real call needs (a consenting person, a key, the cost). First read the code that calls the service, to see how its answer reaches the app: say in needs.file which responses would do, in a line the person will recognise ("the results CSV a finished workflow links to", "the JSON a lookup returns"): they may already have one saved from a real run and can give it instead of paying for another, and the calls around it are taken from the code. A live run records the whole exchange, so ask for one when the flow itself is in question. Until then you may write one with op save, status assumed, from the service's documentation or the code that calls it, and say where the shape is assumed. Never put a real response, or any value from one, in a mock, its data or the repository.`
 }

@@ -94,6 +94,7 @@ import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError,
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
 import { linearFor } from './linear-home.js'
 import { CATALOGUE } from './catalogue.js'
+import { removeData, setDefaultData } from './mock-data.js'
 import { exportMock, getMock, giveRecording, listMocks, needsRecording, recordingsOfService, removeMock, setMockDetails, type Needs } from './mocks.js'
 import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role, cleanJobs, cleanStepSkills, describeJobs, usableSkills, writeSharedSkill, type AppJobs } from './skills.js'
 
@@ -462,6 +463,9 @@ export function buildApp(bus: EventBus) {
     if (r.issueId) await askToMine(r.issueId, key, r.dir, r.files.length)
     return c.json({ files: r.files, asked: r.issueId }, 201)
   } catch (err) { return planError(c, err) } })
+  // A mock's data (mock-data.ts): which it serves by default, and removing a set. Making one is an agent's (the mock_data tool).
+  api.put('/apps/:id/mocks/:key/data/default', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { data?: string | null }; return c.json(await setDefaultData(c.req.param('id'), c.req.param('key'), b.data || null, 'user')) } catch (err) { return planError(c, err) } })
+  api.delete('/apps/:id/mocks/:key/data/:data', async (c) => { try { return c.json(await removeData(c.req.param('id'), c.req.param('key'), c.req.param('data'), 'user')) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/mocks/:key/export', async (c) => { try {
     const appId = c.req.param('id'), key = c.req.param('key')
     const dir = await mkdtemp(join(tmpdir(), 'mock-export-'))

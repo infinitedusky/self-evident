@@ -369,6 +369,13 @@ button.badge { border: 0; cursor: pointer; }
 .mock-card .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
 .mock-give { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
 .mock-give input[type=file] { font-size: 13px; max-width: 100%; }
+.mock-data { margin-top: 10px; font-size: 14px; }
+.mock-data ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 8px; }
+.mock-data li { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; }
+.mock-data-head { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.mock-data-head > span:first-child { font-weight: 600; margin-right: auto; }
+.mock-data li p { margin: 4px 0 0; font-size: 13px; }
+.mock-data-warn { margin: 8px 0 0; padding: 6px 10px; border-left: 3px solid var(--warn, var(--bad)); font-size: 13px; }
 .mock-needs { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-left: 3px solid var(--bad); border-radius: 6px; font-size: 14px; }
 .mock-needs ul { margin: 4px 0 6px; padding-left: 18px; }
 .mock-provenance { margin-top: 8px; font-size: 14px; }

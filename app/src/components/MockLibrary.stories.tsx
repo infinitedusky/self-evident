@@ -9,7 +9,7 @@ const meta = { title: 'Components/MockLibrary', component: MockLibrary, args: { 
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** One mined from a recording and in use, one assumed, one that needs a recording before it can be made. */
+/** One made from a real response, with three sets of data (a fake that is its default, one written by hand, the real response itself), one assumed with data a person provided, one that needs a real response before it can be made. */
 export const Library: Story = {}
 /** Nothing yet. */
 export const Empty: Story = { beforeEach: withEngine({ mocks: [] }) }
@@ -21,3 +21,7 @@ export const OutOfDate: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0]
 export const NoAddressYet: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[2], upstream: null }] }) }
 /** Raised with no task: nobody to mine it yet. */
 export const NoTask: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[2], issue: null }] }) }
+/** Its default is the real response: it serves that here, and cannot be exported until a fake is the default. */
+export const DefaultIsReal: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], defaultData: 'real', data: mocks[0].data.map((d) => ({ ...d, isDefault: d.key === 'real' })) }] }) }
+/** A server with no data of its own yet. */
+export const NoDataYet: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], defaultData: null, data: [] }] }) }
