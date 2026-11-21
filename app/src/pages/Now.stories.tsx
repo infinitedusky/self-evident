@@ -23,6 +23,7 @@ export const EveryKindOfAttention: Story = { beforeEach: withEngine({ now: { ...
   { kind: 'behind_main', files: 'web/checkout/submit.ts\nweb/cart/Cart.tsx', commits: 3, ...where },
   { kind: 'checkout_behind', appName: 'Sample Shop', branch: 'main', path: '/Users/sample/code/sample-shop', commits: 12, why: 'changes that are not committed, in files the new commits change', files: ['web/cart/Cart.tsx'] },
   { kind: 'nightly_failed', appId: 'app_sample', appName: 'Sample Shop', name: 'Docs smoke', workflow: 'nightly.yml', url: 'https://example.com/sample/actions/runs/19', nights: 2, since: [{ id: 'iss_sample4', identifier: 'SS-4', title: 'Postcode lookup (sample)' }, { id: 'iss_sample8', identifier: 'SS-8', title: 'Remember the last address (sample)' }] },
+  { kind: 'needs_recording', appId: 'app_sample', appName: 'Sample Shop', mock: 'Address lookup (sample)', mockKey: 'address-lookup', issueId: 'iss_sample2', identifier: 'SS-2', issueTitle: 'Totals and analytics', person: 'one consenting person', key: 'ADDRESS_LOOKUP_KEY', cost: 'about $0.40', recorded: false },
   { kind: 'overlap', prNumber: 51, title: 'Sample: fix the footer links', author: 'a-teammate', url: 'https://github.com/example/sample-shop/pull/51', files: ['web/checkout/submit.ts'], ...where },
   ...now.needsYou,
 ] } }) }

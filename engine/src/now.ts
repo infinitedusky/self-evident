@@ -4,10 +4,11 @@
  */
 import { smokeOwed, smokeReady } from './smoke.js'
 import { acceptanceOf } from './acceptance.js'
-import { and, asc, desc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, notInArray, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { BEFORE_PLAN, checksOf } from './steps.js'
 import { workflowFor } from './work.js'
+import { mock } from './db/schema.js'
 import { app, build, event, fileClaim, issue, outsidePr, project, pr, question, run, session, step, stepWork, nightly } from './db/schema.js'
 import { leftTo } from './probe-list.js'
 import { putAwayIds } from './apps.js'
@@ -33,6 +34,7 @@ export type Attention =
   | { kind: 'checkout_behind'; appName: string; branch: string; path: string; commits: number; why: string; files: string[] }
   /** A nightly check is red (nightly.ts): the tasks merged since its last green run, one of which broke it. */
   | { kind: 'nightly_failed'; appId: string; appName: string; name: string; workflow: string; url: string | null; nights: number; since: { id: string; identifier: string; title: string }[] }
+  | { kind: 'needs_recording'; appId: string; appName: string; mock: string; mockKey: string; issueId: string | null; identifier: string | null; issueTitle: string | null; /** What a real call needs: a consenting person, a key, the cost. */ person: string | null; key: string | null; cost: string | null; /** A live run was recorded and waits to be mined. */ recorded: boolean }
   | ({ kind: 'overlap'; prNumber: number; title: string; author: string | null; url: string | null; files: string[] } & Where)
 
 /**
@@ -233,6 +235,12 @@ export async function now(appId?: string) {
     const merged = n.greenAt ? prs.filter((q) => q.appId === n.appId && q.status === 'merged' && q.mergedAt && q.mergedAt > n.greenAt! && (!n.ranAt || q.mergedAt <= n.ranAt)) : []
     const since = top.filter((t) => merged.some((q) => (q.issueId ? q.issueId === t.id : q.projectId === t.projectId)) && !['backlog', 'triage', 'canceled', 'duplicate'].includes(t.state))
     needsYou.push({ kind: 'nightly_failed', appId: n.appId, appName: appName(n.appId), name: held.name, workflow: n.workflow, url: n.url, nights: n.failing, since: since.slice(0, 12).map((t) => ({ id: t.id, identifier: name(t), title: t.title })) })
+  }
+  // A service a change depends on that needs a recording (mocks.ts): the person makes the live call.
+  for (const m of (await db.select().from(mock).where(appId ? and(eq(mock.appId, appId), isNotNull(mock.needs)) : isNotNull(mock.needs))).filter((m) => appOf(m.appId))) {
+    const n = (m.needs ?? {}) as { person?: string; key?: string; cost?: string; recorded?: string }
+    const [t] = m.issueId ? await db.select().from(issue).where(eq(issue.id, m.issueId)) : []
+    needsYou.push({ kind: 'needs_recording', appId: m.appId, appName: appName(m.appId), mock: m.name, mockKey: m.key, issueId: t?.id ?? null, identifier: t ? name(t) : null, issueTitle: t?.title ?? null, person: n.person ?? null, key: n.key ?? null, cost: n.cost ?? null, recorded: !!n.recorded })
   }
   for (const o of outside.filter((x) => x.reviewRequested && !x.draft)) needsYou.push({ kind: 'review', appName: appName(o.appId), prNumber: o.number, title: o.title, author: o.author, url: o.url })
   const live = subs.filter((x) => !['done', 'failed', 'cancelled'].includes(status(x.id)) && projects.find((p) => p.id === x.projectId && ['running', 'paused'].includes(p.status)))

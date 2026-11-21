@@ -4,12 +4,14 @@
  */
 import './own-scope.js' // first: the engine's own Doppler scope is not handed to what it starts
 import { stayUp } from './stay-up.js'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { spawn } from 'node:child_process'
 import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
 import { checklistOf } from './checklist.js'
 import { closeTask, closeView, reopenUnclosed } from './close.js'
-import { markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
+import { askToMine, markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
 import { closeTerminal, closeTerminals, openTerminal, ownPage, resizeTerminal, scratchKey, typeInTerminal, watchTerminal } from './smoke-terminal.js'
 import { startLearning, talkBusy } from './talk.js'
 import { serve } from '@hono/node-server'
@@ -22,7 +24,7 @@ import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { deviceJoined, devicesHere, phoneState, remoteIp, servePhone, stopPhone } from './devices.js'
 import { existsSync } from 'node:fs'
-import { relative, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DATABASE_URL, db, pool } from './db/client.js'
 import { ensureDatabase } from './db/ensure.js'
@@ -92,6 +94,7 @@ import { checkIntegration, cleanValues, effectiveIntegrations, IntegrationError,
 import { contextFor, delegateFor, trackerGuide } from './tkt.js'
 import { linearFor } from './linear-home.js'
 import { CATALOGUE } from './catalogue.js'
+import { exportMock, getMock, giveRecording, listMocks, needsRecording, recordingsOfService, removeMock, setMockDetails, type Needs } from './mocks.js'
 import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role, cleanJobs, cleanStepSkills, describeJobs, usableSkills, writeSharedSkill, type AppJobs } from './skills.js'
 
 export const SESSIONS_MAX = Number(process.env.SESSIONS_MAX ?? 4)
@@ -436,6 +439,39 @@ export function buildApp(bus: EventBus) {
   api.get('/apps/:id/storybook', async (c) => { try { return c.json(await storybookStatus(c.req.param('id'), c.req.query('session'), c.req.query('story'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/storybook/start', async (c) => { try { return c.json(await startStorybook(c.req.param('id'), c.req.query('session'))) } catch (err) { return planError(c, err) } })
   // Screens: the stories under Screens/ in the Storybook of the conversation's worktree (?session=), else the app's; ?all=1 with earlier tasks' ones.
+  // The app's mocks (mocks.ts): Settings › Mocks.
+  api.get('/apps/:id/mocks', async (c) => { try { return c.json(await listMocks(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
+  api.get('/apps/:id/mocks/:key', async (c) => { try { return c.json(await getMock(c.req.param('id'), c.req.param('key'))) } catch (err) { return planError(c, err, 404) } })
+  api.post('/apps/:id/mocks', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { name?: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; issueId?: string; needs?: Needs }; return c.json(await needsRecording(c.req.param('id'), { name: String(b.name ?? ''), standsInFor: b.standsInFor, upstream: b.upstream, env: b.env, issueId: b.issueId ?? null, needs: b.needs }, 'user'), 201) } catch (err) { return planError(c, err) } })
+  api.patch('/apps/:id/mocks/:key', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { name?: string; standsInFor?: string; upstream?: string | null; env?: Record<string, string> }; return c.json(await setMockDetails(c.req.param('id'), c.req.param('key'), b, 'user')) } catch (err) { return planError(c, err) } })
+  api.delete('/apps/:id/mocks/:key', async (c) => { try { return c.json(await removeMock(c.req.param('id'), c.req.param('key'), 'user')) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/mocks/:key/mine', async (c) => { try {
+    const appId = c.req.param('id'), m = await getMock(appId, c.req.param('key'))
+    const newest = recordingsOfService(appId, m.key)[0]
+    if (!newest) return c.json({ error: `${m.name} has no recording yet: make a live smoke run of a task that calls it` }, 409)
+    if (!newest.issueId) return c.json({ error: `the newest recording of ${m.name} is not a task's, so there is no task agent to mine it` }, 409)
+    await askToMine(newest.issueId, m.key, newest.dir, newest.files)
+    return c.json({ asked: newest.issueId }, 202)
+  } catch (err) { return planError(c, err) } })
+  // Real responses the person already has (a saved JSON, the results CSV), given instead of a live run: kept with the task, then mined by its agent.
+  api.post('/apps/:id/mocks/:key/recording', async (c) => { try {
+    const appId = c.req.param('id'), key = c.req.param('key')
+    const body = await c.req.parseBody({ all: true })
+    const given = ([] as unknown[]).concat(body.file ?? []).filter((f): f is File => typeof f === 'object' && f !== null && 'arrayBuffer' in f)
+    const r = await giveRecording(appId, key, await Promise.all(given.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }))), 'user')
+    if (r.issueId) await askToMine(r.issueId, key, r.dir, r.files.length)
+    return c.json({ files: r.files, asked: r.issueId }, 201)
+  } catch (err) { return planError(c, err) } })
+  api.get('/apps/:id/mocks/:key/export', async (c) => { try {
+    const appId = c.req.param('id'), key = c.req.param('key')
+    const dir = await mkdtemp(join(tmpdir(), 'mock-export-'))
+    try {
+      await exportMock(appId, key, join(dir, key))
+      const file = join(dir, `${key}.tar.gz`)
+      await new Promise<void>((done, fail) => { const p = spawn('tar', ['-czf', file, '-C', dir, key]); p.on('exit', (code) => (code === 0 ? done() : fail(new Error(`tar exited with ${code}`)))); p.on('error', fail) })
+      return new Response(await readFile(file), { headers: { 'content-type': 'application/gzip', 'content-disposition': `attachment; filename="${key}-mock.tar.gz"` } })
+    } finally { await rm(dir, { recursive: true, force: true }) }
+  } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/screens', async (c) => { try { return c.json(await listScreens(c.req.param('id'), c.req.query('session'), { all: c.req.query('all') === '1' })) } catch (err) { return planError(c, err, 404) } })
   // Sketches: the HTML files under sketches/ in a conversation's worktree (scope: its id) or the app's checkout (scope: the app's id).
   api.get('/sketches/:scope', async (c) => { try { return c.json(await listSketches(c.req.param('scope'), { all: c.req.query('all') === '1' })) } catch (err) { return planError(c, err, 404) } })
@@ -715,7 +751,7 @@ export function buildApp(bus: EventBus) {
     })
     stop()
   })))
-  api.post('/issues/:id/smoke/start', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { clean?: boolean; setup?: string }; return c.json(await startSmoke(t.id, 'user', { clean: body.clean === true, setup: typeof body.setup === 'string' ? body.setup : undefined }), 202) } catch (err) { return planError(c, err) } })
+  api.post('/issues/:id/smoke/start', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { clean?: boolean; setup?: string; live?: unknown }; return c.json(await startSmoke(t.id, 'user', { clean: body.clean === true, setup: typeof body.setup === 'string' ? body.setup : undefined, live: Array.isArray(body.live) ? body.live.filter((x): x is string => typeof x === 'string') : undefined }), 202) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/smoke/stop', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { setup?: string }; await stopSmoke(t.id, typeof body.setup === 'string' ? body.setup : undefined); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err) } })
   // An agent tries one check and says what it saw; it marks nothing (smoke.ts, trySmoke).
   api.post('/issues/:id/smoke/:criterion/try', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json((await trySmoke(t.id, c.req.param('criterion'), 'user')).view) } catch (err) { return planError(c, err, 400) } })

@@ -49,6 +49,10 @@ import { morePorts, straySays, straysOf } from './ports.js'
 import { fixedOf, fixedSays } from './addresses.js'
 import { databaseExists, databaseUrl, dropDatabase, listScenarios, rebuild, type PrototypeDb } from './prototype-data.js'
 import { homeRepo } from './workbench.js'
+import { dropUse, isGiven, libraryStandIns, noteRecording, noteUse } from './mocks.js'
+import { mock } from './db/schema.js'
+import { startRecorder, type Recording } from './recorder.js'
+import { envOf, fill, homeOf, startStandIns, stopStandIns, writeEnvFile } from './stand-ins.js'
 import { scratchKey, terminalOpen } from './smoke-terminal.js'
 
 export type Where = 'local' | 'preview' | 'staging' | 'flag' | 'terminal'
@@ -284,7 +288,8 @@ export const smokeOwed = (criteria: Criterion[]) => smokeChecks(criteria).filter
 /** Of those, how many can be done now: the ones on the pull request wait for it to exist. */
 export const smokeReady = (criteria: Criterion[], hasPr: boolean) => smokeChecks(criteria).filter((c) => c.mark === 'todo' && (c.when === 'here' || (c.when === 'pr' && hasPr))).length
 
-const running = new Map<string, { proc: ChildProcess; log: string[]; given?: number[]; stray?: { at: number; ports: number[] }; stop?: { cmd: string; cwd: string; env: Record<string, string> } }>() // by task and set-up
+export interface Mocks { /** Its stand-ins' key (stand-ins.ts). */ id: string; recorders: Recording[]; on: { key: string; name: string; how: 'mock' | 'assumed' | 'recording' }[] }
+const running = new Map<string, { proc: ChildProcess; log: string[]; given?: number[]; stray?: { at: number; ports: number[] }; stop?: { cmd: string; cwd: string; env: Record<string, string> }; mocks?: Mocks }>() // by task and set-up
 const runKey = (issueId: string, key: string) => `${issueId}:${key}`
 const alive = (issueId: string, key: string) => { const m = running.get(runKey(issueId, key)); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
 const freePort = (want = 0): Promise<number> => new Promise((resolveP, reject) => {
@@ -341,6 +346,7 @@ export async function smokeView(issueId: string) {
       canRun: setup.where === 'local' && !!(setup.cmd ?? proto),
       /** local: there is something to start from nothing: a database of its own, a seed, or a script of its own. */ canClean: setup.where === 'local' && !!(setup.cmd || setup.seed || hasDb),
       log: running.get(runKey(t.id, setup.key))?.log.slice(-30) ?? [],
+      /** While it runs: the app's mocks it is pointed at, and the services it calls for real through a recorder (mocks.ts). */ mocks: on ? running.get(runKey(t.id, setup.key))?.mocks?.on ?? [] : [],
       /** How many of its checks still wait for the person. */ owed: checks.filter((c) => c.setup === setup.key && c.mark === 'todo' && holds(c.when)).length,
     }
   }))
@@ -398,7 +404,61 @@ export async function smokeDataOf(issueId: string, setupKey?: string | null) {
   return { slug: `smoke-${name.toLowerCase()}${first ? '' : `-${named.key}`}`, cmd: named.cmd ?? null, stop: named.stop ?? null, env, beside: `${name}'s smoke test` }
 }
 
-export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean; /** Which set-up (its key); none: the app's first. */ setup?: string } = {}) {
+/**
+ * A smoke run's outside services (mocks.ts): every mock in the app's library that can serve, as stand-ins; and each
+ * service it calls for real (live) through a recorder, so the response is kept with the task. Their variables go to
+ * the script and into $STAND_INS_ENV, for a container's env_file, as a prototype's do. A recorded run is marked
+ * SELF_EVIDENT_RECORDING=1: the base URL is on this computer, but every call reaches the real service and costs.
+ */
+export async function mocksFor(appId: string, issueId: string, key: string, path: string, live: string[], base: Record<string, string>) {
+  const id = `smoke-${issueId}-${key}`.toLowerCase()
+  const lib = await libraryStandIns(appId, live)
+  const ports = await startStandIns(id, lib, path, { ...process.env, ...base })
+  const env: Record<string, string> = envOf(id, lib, ports, path)
+  const held: Mocks = { id, recorders: [], on: lib.map((s) => ({ key: s.key, name: s.name, how: s.mock === 'assumed' ? 'assumed' as const : 'mock' as const })) }
+  try {
+    for (const k of live) {
+      const [m] = await db.select().from(mock).where(and(eq(mock.appId, appId), eq(mock.key, k)))
+      if (!m) throw new PlanError(`this app has no mock "${k}" to record: raise it first (Settings › Mocks), with the real service's address`)
+      if (!m.upstream) throw new PlanError(`${m.name} has no address for the real service: set it on Settings › Mocks before a live run`)
+      if (!Object.keys(m.env ?? {}).length) throw new PlanError(`${m.name} has no variables that point the app at it: set them on Settings › Mocks before a live run`)
+      const rec = await startRecorder({ appId, issueId, key: m.key, upstream: m.upstream })
+      held.recorders.push(rec)
+      held.on.push({ key: m.key, name: m.name, how: 'recording' })
+      for (const [v, val] of Object.entries(m.env ?? {})) env[v] = fill(val, { port: rec.port, home: homeOf(id), dir: rec.dir, worktree: path })
+    }
+  } catch (err) { await endMocks(issueId, held, false); throw err }
+  if (held.recorders.length) env.SELF_EVIDENT_RECORDING = '1'
+  const out: Record<string, string> = { ...env, STAND_INS_ENV: writeEnvFile(id, env) }
+  return { env: out, held }
+}
+/** Stop them; a recorder that kept something says so on its mock, and the task's agent is asked to mine it. */
+export async function endMocks(issueId: string, m: Mocks | undefined, mine = true) {
+  if (!m) return
+  dropUse(m.id)
+  await stopStandIns(m.id)
+  for (const r of m.recorders) {
+    const { dir, exchanges } = await r.stop()
+    if (!dir) continue
+    const t = await getIssue(db, issueId).catch(() => null)
+    if (!t) continue
+    await noteRecording(t.appId, r.key, dir, issueId, exchanges).catch(() => undefined)
+    if (mine) await askToMine(issueId, r.key, dir, exchanges).catch(() => undefined)
+  }
+}
+/** The words the task's agent is given to mine a recording: also what "Mine it" on the Mocks page sends. */
+export const MINE_IT = (name: string, key: string, dir: string, exchanges: number) => `A live run of ${name} was recorded: ${exchanges} call${exchanges === 1 ? '' : 's'}, kept raw in ${dir} (outside every repository; it holds a real person's data). Mine a mock from it now, for the app's library:\n1. Read every file there. Each call is NNN.meta.json (method, address, status; secrets were never kept) with its NNN.request.* and NNN.response.* bodies.\n2. Write a server that answers the same calls the same way on $PORT (stdlib only where you can), and data for it: the same columns, keys, nesting, formats and edge cases the recording showed (empty lists, missing values, large cells, both encodings), with every value replaced by an invented one marked as sample data (.example domains, invented names, "Sample data:" at the start of prose). Add the people the recording did not have: someone with nothing found, someone with one of each, someone with a lot. A link the service sends to fetch next points back at the server.\n3. Save it with the mock tool: op save, key ${key}, status mined, recording ${dir}, the files, cmd, env, and provenance (minedFrom in counts and never naming the person, real, invented, covers, cannotShow; changed when it replaces one). The engine checks the files against the recording and refuses while any recorded value is in them; a value kept on purpose because it is shape (a status) goes in provenance.kept.\nNever copy the recording, or a value from it, into a mock, the repository or a message.`
+/** The same, for a file the person gave (mocks.ts giveRecording): only the response the app reads was kept, not the calls around it. */
+export const MINE_GIVEN = (name: string, key: string, dir: string) => `Real responses from ${name} were given: files the person already had (any body the service sends, JSON, CSV or other text), kept untouched in ${dir} (outside every repository; it holds real people's data). given.meta.json says which files and what they are. Mine a mock from it now, for the app's library:\n1. Work out how the app gets these responses: read the code that calls ${name} (the client, its base-URL variable, what it calls, in what order, what it polls for, where a file's link comes from, how each answer is parsed). The files are what the app reads; any call around them that was not given (start, poll, pages, errors, the link to fetch a file) was not recorded, so take it from that code.\n2. Read each file: its columns or keys, nesting, formats, encodings inside cells (JSON, lists, quoted reprs), empty and large values.\n3. Write a server on $PORT (stdlib only where you can) that answers those calls as the code expects with the same bodies: the same columns and keys, in the same order, with the same formats and edge cases, every value replaced by an invented one marked as sample data (.example domains, invented names, "Sample data:" at the start of prose). Add the people the files did not have: someone with nothing found, someone with one of each, someone with a lot. A link it sends to fetch next points back at the server.\n4. Save it with the mock tool: op save, key ${key}, status mined, recording ${dir}, the files, cmd, env, and provenance: minedFrom (files the person gave, in counts, never naming anyone), real (their shape), invented (every value), covers, and cannotShow, which must name each call taken from the code rather than given. The engine checks the files against it and refuses while any value from them is in the mock; one kept on purpose because it is shape (a status) goes in provenance.kept.\nNever copy a given file, or a value from one, into a mock, the repository or a message.`
+export async function askToMine(issueId: string, key: string, dir: string, exchanges: number) {
+  const t = await getIssue(db, issueId)
+  const [m] = await db.select().from(mock).where(and(eq(mock.appId, t.appId), eq(mock.key, key)))
+  const { ensureTaskTalk, say } = await import('./talk.js') // late: talk.ts reaches here through its tools
+  const talk = await ensureTaskTalk(issueId, 'engine')
+  await say(talk.id, isGiven(dir) ? MINE_GIVEN(m?.name ?? key, key, dir) : MINE_IT(m?.name ?? key, key, dir, exchanges), undefined, { author: 'engine', kind: 'brief', payload: { label: `Mine a mock of ${m?.name ?? key}` } })
+}
+
+export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean; /** Which set-up (its key); none: the app's first. */ setup?: string; /** The services to call for real, by their mock's key: each through a recorder, so what they send is kept (recorder.ts). */ live?: string[] } = {}) {
   const { t, a, repoPath, name, branch, head } = await built(issueId)
   const all = smokeSetups(a.setup)
   const named = opts.setup ? all.find((x) => x.key === opts.setup) : all[0]
@@ -433,15 +493,18 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   const more = await morePorts()
   const env = { ...more.env, ...await smokeEnv(a.id, setup, { port, db: dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : undefined, clean: opts.clean, key: named.key }) }
   if (setup.stop && old) await runStop(setup.stop, old.path, { ...env, PORT: String(old.port) }) // what the last run left up, when the engine has been started again since
+  const mocks = await mocksFor(a.id, t.id, key, path, opts.live ?? [], env)
+  Object.assign(env, mocks.env)
   const proc = spawn('sh', ['-c', cmd], { cwd: path, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   const log: string[] = []
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
   proc.on('exit', (code) => { log.push(`exited${code === null ? '' : ` with ${code}`}`) })
-  running.set(runKey(t.id, key), { proc, log, given: [port, ...more.ports], ...(setup.stop ? { stop: { cmd: setup.stop, cwd: path, env } } : {}) })
+  running.set(runKey(t.id, key), { proc, log, given: [port, ...more.ports], mocks: mocks.held, ...(setup.stop ? { stop: { cmd: setup.stop, cwd: path, env } } : {}) })
+  noteUse(mocks.held.id, a.id, `Smoke test: ${name}`, mocks.held.on.filter((m) => m.how !== 'recording').map((m) => m.key))
   if (old) await db.update(smokeRun).set({ path, sha: head, port, updatedAt: new Date() }).where(eq(smokeRun.id, old.id))
   else await db.insert(smokeRun).values({ id: newId('run').replace(/^run_/, 'smoke_'), appId: a.id, issueId: t.id, setup: key, path, sha: head, port })
-  await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'smoke.started', payload: { sha: head, port, setup: named.key } }))
+  await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'smoke.started', payload: { sha: head, port, setup: named.key, ...(mocks.held.on.length ? { mocks: mocks.held.on } : {}) } }))
   return smokeView(t.id)
 }
 
@@ -450,17 +513,18 @@ export function stopSmoke(issueId: string, key?: string): Promise<void> {
   if (key === undefined) return Promise.all([...running.keys()].filter((k) => k.startsWith(`${issueId}:`)).map((k) => stopOne(issueId, k.slice(issueId.length + 1)))).then(() => {})
   return stopOne(issueId, key)
 }
-function stopOne(issueId: string, key: string): Promise<void> {
+/** mine: a recording it made is handed to the task's agent; not when the engine itself is stopping (the Mocks page offers it after). */
+function stopOne(issueId: string, key: string, mine = true): Promise<void> {
   const m = running.get(runKey(issueId, key))
   running.delete(runKey(issueId, key))
   if (!m) return Promise.resolve()
-  const down = () => (m.stop ? runStop(m.stop.cmd, m.stop.cwd, m.stop.env).then(() => {}) : Promise.resolve()) // the app's stop script, after its process: for what the script left running
+  const down = () => (m.stop ? runStop(m.stop.cmd, m.stop.cwd, m.stop.env).then(() => {}) : Promise.resolve()).then(() => endMocks(issueId, m.mocks, mine)) // the app's stop script, after its process: for what the script left running; then its mocks and recorders
   if (m.proc.exitCode !== null || m.proc.signalCode !== null || !m.proc.pid) return down()
   const gone = new Promise<void>((r) => { m.proc.once('exit', () => r()); setTimeout(r, 3000) })
   try { process.kill(-m.proc.pid, 'SIGTERM') } catch { m.proc.kill('SIGTERM') }
   return gone.then(down)
 }
-export function stopSmokes() { for (const k of [...running.keys()]) { const at = k.lastIndexOf(':'); void stopOne(k.slice(0, at), k.slice(at + 1)) } }
+export function stopSmokes() { for (const k of [...running.keys()]) { const at = k.lastIndexOf(':'); void stopOne(k.slice(0, at), k.slice(at + 1), false) } }
 
 /** A person's word on one check: the build's mark on that criterion, by hand, with their note and the commit it was made on. */
 export async function markSmoke(issueId: string, criterionId: string, input: { pass: boolean; note?: string; /** Not tried, by choice: it stops waiting for the person, and is recorded as skipped, never as passed. */ skip?: boolean }, by = 'user') {

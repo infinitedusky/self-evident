@@ -283,6 +283,9 @@ export const AllAppsIntegrations: Story = { parameters: allAt('integrations') }
 /** One integration's page under All apps. */
 export const AllAppsLinear: Story = { parameters: { route: { path: '/settings/:section/:item', url: '/settings/integrations/linear' } } }
 /** An app's integrations: its overrides and what it inherits. */
+/** Settings › the app › Mocks: its library of mocks, one per outside service (made up). */
+export const AppMocks: Story = { parameters: appPage(sampleApp.id, 'mocks') }
+
 export const AppIntegrations: Story = { parameters: appPage(sampleApp.id, 'integrations') }
 /** One integration's page for an app. */
 export const AppLinear: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/linear` } } }

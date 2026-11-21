@@ -616,3 +616,41 @@ export const prDraftSample: import('../engine').PrView = {
 const sampleScreen = (title: string, states: string[]): import('../engine').Screen => ({ title, file: `./src/screens/${title}.stories.tsx`, states: states.map((name) => ({ id: `screens-${title.toLowerCase()}--${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, name })) })
 export const sampleScreens = [sampleScreen('Checkout', ['Filled', 'Empty', 'Card declined', 'A long name']), sampleScreen('Cart', ['Three items', 'Empty']), sampleScreen('Receipt', ['Paid'])]
 export const screensView: import('../engine').ScreensView = { url: 'http://localhost:6007', frame: '/sample-storybook', configured: true, startable: true, up: true, startedHere: true, log: [], branch: 'talk/sample', main: false, screens: sampleScreens, earlier: 0 }
+
+/** An app's mock library: one mined from a recording, one assumed, one that needs a recording. All made up (sample). */
+const minedNote = `# Fraud scan vendor (sample): a mock
+
+Stands in for: Fraud scan vendor workflow 0a1b2c, results CSV (sample).
+
+Mined from: a real response recorded 18 Nov 2026, one person, 12 profiles, 9 scams, 2 doxxing posts (sample). Mined 20 Nov 2026.
+
+What is real: the 62 columns of the results CSV, its nesting and formats (Python-style lists in cells, empty lists, a 40 KB cell).
+
+What is invented: every value. Values are sample data: .example domains, invented names, prose marked "Sample data:".
+
+It covers:
+- someone with nothing found
+- someone with one of each finding
+- someone with a lot (40 profiles, 30 scams)
+
+What it cannot show:
+- the vendor's queue under load (a scan finishes in two seconds)
+- the real service's latency and failures
+
+Kept as recorded, because they are shape: "completed", "running".
+
+Checked 20 Nov 2026: none of the 2,914 values in the recording's 9 files is in this mock.
+`
+export const mocks: import('../engine').Mock[] = [
+  { key: 'fraud-scan', name: 'Fraud scan vendor (sample)', status: 'mined', standsInFor: 'Fraud scan vendor workflow 0a1b2c, results CSV (sample)', upstream: 'https://api.fraud-scan.example', env: { FRAUD_SCAN_BASE_URL: '{container_url}' }, cmd: 'python3 server.py',
+    files: [{ path: 'data/results.csv', bytes: 84_210 }, { path: 'server.py', bytes: 6_120 }],
+    provenance: { minedFrom: 'one person, 12 profiles, 9 scams, 2 doxxing posts (sample)', real: 'the 62 columns of the results CSV, its nesting and formats', invented: 'every value', covers: ['someone with nothing found', 'someone with one of each finding', 'someone with a lot (40 profiles, 30 scams)'], cannotShow: ['the vendor\'s queue under load (a scan finishes in two seconds)'], kept: ['completed', 'running'], checked: { at: '2026-11-20T10:00:00Z', files: 9, values: 2914 } },
+    note: minedNote, needs: null, issue: { id: 'iss_sample1', identifier: 'SS-1', title: 'Checkout on one page' }, recordedAt: '2026-11-18T15:20:00Z', minedAt: '2026-11-20T10:00:00Z', unmined: null, usedBy: ['Prototype: Findings page (sample)', 'Main'] },
+  { key: 'breach-api', name: 'Breach lookup (sample)', status: 'assumed', standsInFor: 'Breach lookup API v2, /search (sample)', upstream: null, env: { BREACH_API_URL: '{url}' }, cmd: 'node server.mjs',
+    files: [{ path: 'server.mjs', bytes: 2_400 }],
+    provenance: { real: 'nothing: the shape is assumed', invented: 'every value', covers: ['an address with no breaches', 'an address in three breaches'], cannotShow: ['any field the documentation leaves out'] },
+    note: '# Breach lookup (sample): a mock\n\nStands in for: Breach lookup API v2, /search (sample).\n\nMined from: nothing. Its shape is assumed, written before any real response was recorded; it shows only that the code handles the guess.\n', needs: null, issue: null, recordedAt: null, minedAt: null, unmined: null, usedBy: [] },
+  { key: 'address-lookup', name: 'Address lookup (sample)', status: 'needs_recording', standsInFor: 'Address lookup v1 (sample)', upstream: 'https://api.address-lookup.example', env: { ADDRESS_LOOKUP_URL: '{container_url}' }, cmd: null, files: [], provenance: {},
+    note: '# Address lookup (sample): a mock\n\nNot made yet: it needs a recording of the real service.\n',
+    needs: { person: 'one consenting person, who agrees to their address being looked up', key: 'ADDRESS_LOOKUP_KEY', cost: 'one lookup, about $0.40', why: 'SS-2 shows the matched address', file: 'the JSON a lookup returns (sample)', at: '2026-11-20T09:00:00Z' }, issue: { id: 'iss_sample2', identifier: 'SS-2', title: 'Totals and analytics' }, recordedAt: null, minedAt: null, unmined: null, usedBy: [] },
+]
