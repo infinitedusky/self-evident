@@ -79,18 +79,28 @@ function MockCard({ appId, issueId, mock: m, places, act }: { appId: string; iss
   const canRecord = !!(m.issue && m.upstream && Object.keys(m.env).length)
   return (
     <article className="card mock-card" data-component="MockCard">
-      <div className="card-head">
-        <span className="card-title">{m.name}</span>
-        <Badge tone={s.tone} dot>{s.label}</Badge>
+      {/* Its base settings, like a profile: the name first, then each setting on its own line. */}
+      <div className="service-profile" data-component="ServiceProfile">
+        <div className="service-profile-head">
+          <h3>{m.name}</h3>
+          <Badge tone={s.tone} dot>{s.label}</Badge>
+          {!editing && <button className="btn quiet small" style={{ marginLeft: 'auto' }} onClick={() => setEditing(true)}>Edit</button>}
+        </div>
+        {editing ? <EditMock mock={m} onSave={(b) => act(async () => { await engine.updateMock(appId, m.key, b); setEditing(false) })} onCancel={() => setEditing(false)} /> : (
+          <dl data-component="MockConnection">
+            <dt>What it is</dt><dd>{m.standsInFor || <span className="faint">Not said yet</span>}</dd>
+            <dt>Real address</dt><dd>{m.connection.address ? <code>{m.connection.address}</code> : <span className="faint">Not set: needed only to record a live run</span>}</dd>
+            <dt>Variable to override</dt><dd>{m.connection.addressSetting ? <><code>{m.connection.addressSetting}</code> <span className="faint">set to the mock's address when the mock is used</span></> : <span className="faint">Not set: an agent fills it in from the code when it builds the mock</span>}</dd>
+            <dt>Variable for its key</dt><dd>{m.connection.keySetting ? <><code>{m.connection.keySetting}</code> <span className="faint">given a made-up key under a mock</span></> : <span className="faint">None</span>}</dd>
+            <dt>Its mock</dt><dd>
+              {m.status === 'mined' ? <>Recorded {day(m.recordedAt) ?? 'on a date not kept'}{m.issue ? <> for <Link to={`/tasks/${m.issue.id}`}>{m.issue.identifier}</Link></> : null} · built {day(m.minedAt)}</>
+                : m.status === 'assumed' ? <>Written from a guess, before any recording. It shows only that the code handles the guess.</>
+                : <>Not built yet{m.issue ? <>, raised on <Link to={`/tasks/${m.issue.id}`}>{m.issue.identifier}</Link></> : null}.</>}
+              {' · '}{m.usedBy.length ? <>In use: {m.usedBy.join(', ')}</> : 'Not in use right now'}
+            </dd>
+          </dl>
+        )}
       </div>
-      {m.standsInFor && <p style={{ margin: 0 }}>Stands in for {m.standsInFor}.</p>}
-      <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }} data-component="MockConnection">{m.connection.address ? <>The real service is at <code>{m.connection.address}</code>. </> : 'Its real address is not set. '}{m.connection.addressSetting ? <>A mock overrides <code>{m.connection.addressSetting}</code>{m.connection.keySetting ? <>, with a made-up key in <code>{m.connection.keySetting}</code></> : null}.</> : 'The environment variable to override is not set: an agent fills it in from the code when it builds the mock.'}</p>
-      <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }}>
-        {m.status === 'mined' ? <>Recorded {day(m.recordedAt) ?? 'on a date not kept'}{m.issue ? <> for <Link to={`/tasks/${m.issue.id}`}>{m.issue.identifier}</Link></> : null} · built {day(m.minedAt)}</>
-          : m.status === 'assumed' ? <>Written from a guess, before any recording. It shows only that the code handles the guess.</>
-          : <>No mock yet{m.issue ? <>, raised on <Link to={`/tasks/${m.issue.id}`}>{m.issue.identifier}</Link></> : null}.</>}
-        {' · '}{m.usedBy.length ? <>In use: {m.usedBy.join(', ')}</> : 'Not in use right now'}
-      </p>
 
       {m.needs && (
         <div className="mock-needs">
@@ -146,10 +156,8 @@ function MockCard({ appId, issueId, mock: m, places, act }: { appId: string; iss
       <RealResponses appId={appId} mock={m} act={act} />
       <History appId={appId} mockKey={m.key} />
       {removing && <RemoveMock appId={appId} mock={m} onRemove={(files) => act(async () => { await engine.removeMock(appId, m.key, files); setRemoving(false) })} onCancel={() => setRemoving(false)} />}
-      {editing && <EditMock mock={m} onSave={(b) => act(async () => { await engine.updateMock(appId, m.key, b); setEditing(false) })} onCancel={() => setEditing(false)} />}
       <div className="row">
         {m.status !== 'needs_recording' && <a className="btn quiet small" href={engine.mockExportUrl(appId, m.key)} download>Export</a>}
-        {!editing && <button className="btn quiet small" onClick={() => setEditing(true)}>Edit</button>}
         {!removing && <button className="btn quiet small" aria-label="Remove the mock" onClick={() => setRemoving(true)}>Remove</button>}
       </div>
     </article>
@@ -351,17 +359,19 @@ function AddAppService({ onAdd, onCancel }: { onAdd: (b: { name: string; standsI
   )
 }
 
-function EditMock({ mock: m, onSave, onCancel }: { mock: Mock; onSave: (b: { standsInFor: string; upstream: string | null; addressSetting: string | null; keySetting: string | null }) => void; onCancel: () => void }) {
+function EditMock({ mock: m, onSave, onCancel }: { mock: Mock; onSave: (b: { name: string; standsInFor: string; upstream: string | null; addressSetting: string | null; keySetting: string | null }) => void; onCancel: () => void }) {
+  const [name, setName] = useState(m.name)
   const [standsInFor, setStandsInFor] = useState(m.standsInFor)
   const [upstream, setUpstream] = useState(m.connection.address ?? '')
   const [addr, setAddr] = useState(m.connection.addressSetting ?? '')
   const [key, setKey] = useState(m.connection.keySetting ?? '')
   return (
     <div className="mock-edit">
+      <label>Name<input value={name} onChange={(e) => setName(e.target.value)} /></label>
       <label>What it is<input value={standsInFor} onChange={(e) => setStandsInFor(e.target.value)} placeholder="the service and version, e.g. Vendor workflow 3d50b61e, results CSV" /></label>
       <Connection upstream={upstream} setUpstream={setUpstream} addr={addr} setAddr={setAddr} keyName={key} setKeyName={setKey} />
       {Object.keys(m.connection.others).length > 0 && <p className="faint" style={{ margin: 0, fontSize: 13 }}>A mock is also given {Object.entries(m.connection.others).map(([k, v]) => `${k}=${v}`).join(', ')}, set by the agent that built it.</p>}
-      <div className="row"><button className="btn small" onClick={() => onSave({ standsInFor, upstream: upstream.trim() || null, addressSetting: addr.trim() || null, keySetting: key.trim() || null })}>Save</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
+      <div className="row"><button className="btn small" disabled={!name.trim()} onClick={() => onSave({ name: name.trim(), standsInFor, upstream: upstream.trim() || null, addressSetting: addr.trim() || null, keySetting: key.trim() || null })}>Save</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
     </div>
   )
 }
