@@ -24,6 +24,7 @@ import { newId } from './ids.js'
 import { PlanError } from './issues.js'
 import { fakeData, scopeOfRecording, type DataRow } from './mock-data.js'
 import { cleanEndpoints } from './mock-endpoints.js'
+import { servedBy } from './mock-general.js'
 import { served, type Form } from './mock-serve.js'
 import { day, recordingsFor, rowOf, workspaceOf, type Row } from './mocks.js'
 import { standInKey } from './stand-ins.js'
@@ -87,7 +88,9 @@ export async function planOf(m: Row, place: Place, issueId?: string | null, opts
     const s = await served(m, { form, issueId })
     if (s.unfaked.length) note = note ?? `${s.unfaked[0] === '*' ? 'its real response' : `the real response of ${callSays(m, s.unfaked)}`} is not faked yet${form === 'faked' ? ', so nothing of it is served' : ''}: the task's agent makes the fake`
     const kinds = new Set(Object.values(s.per).map((p) => p.kind))
-    if (!s.files.length) plan = m.cmd && m.status !== 'needs_recording' ? { ...base, how: 'own', form, says: 'The mock, answering with what its server makes up' } : { ...base, how: 'none', form, says: 'Nothing yet: its mock is not built' }
+    const by = servedBy(m)
+    if (by !== 'none' && !Object.keys(m.env ?? {}).length) note = note ?? 'its environment variable to override is not set, so the app cannot be pointed at the mock'
+    if (!s.files.length) plan = by === 'written' ? { ...base, how: 'own', form, says: 'The mock, answering with what its server makes up' } : by === 'general' ? { ...base, how: 'own', form, says: 'The mock, with no data yet: a call to it fails until its endpoint has data' } : { ...base, how: 'none', form, says: 'Nothing yet: it has no endpoints' }
     else plan = { ...base, how: 'data', form, real: s.real.length > 0, says: s.real.length ? `The mock, with recorded responses as they are${s.real[0] === '*' ? '' : ` (${s.real.length} of its ${Object.keys(s.per).length} calls)`}: this computer only` : `The mock, with ${kinds.has('faked') || !kinds.has('provided') ? 'faked' : 'provided'} data${kinds.has('faked') && kinds.has('provided') ? ' and data you provided' : ''}` }
     if (form === 'recorded' && !s.real.length && plan.how !== 'none') note = note ?? 'there is no recorded response yet, so nothing real is served'
     if (note) plan.note = note
@@ -96,7 +99,7 @@ export async function planOf(m: Row, place: Place, issueId?: string | null, opts
   if (place === 'review') {
     if (plan.how === 'live') plan.blocked = `a reviewer cannot be given the real ${m.name}`
     else if (plan.real) plan.blocked = `${m.name} would answer a reviewer with a real response, which never leaves this computer`
-    else if (plan.how === 'none') plan.blocked = `${m.name} has no mock yet`
+    else if (plan.how === 'none') plan.blocked = `${m.name} has no endpoints yet`
   }
   return plan
 }

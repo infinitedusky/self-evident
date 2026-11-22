@@ -45,7 +45,7 @@ export function TaskCalls({ appId, issueId, mocks, places = [], version = 0, onC
         : !services.length ? <div className="empty" style={{ marginTop: 8 }}>None listed yet. Start this step with the agent and it names the outside services the change calls, from the brief and the code, then the calls it makes to each. Or add one with Add a service.</div>
         : (
           <>
-            <p className="faint" style={{ margin: '4px 0 8px', fontSize: 13 }}>{services.length} service{services.length === 1 ? '' : 's'}, {calls.length} call{calls.length === 1 ? '' : 's'}: {withData} with data{own ? ` (${own} this task's own)` : ''}, {calls.length - withData - missing} answered with what the server makes up{missing ? `, ${missing} not on ${missing === 1 ? 'its' : 'their'} service yet` : ''}</p>
+            <p className="faint" style={{ margin: '4px 0 8px', fontSize: 13 }}>{services.length} service{services.length === 1 ? '' : 's'}, {calls.length} call{calls.length === 1 ? '' : 's'}: {withData} with data{own ? ` (${own} this task's own)` : ''}, {calls.length - withData - missing} with none yet{missing ? `, ${missing} not on ${missing === 1 ? 'its' : 'their'} service yet` : ''}</p>
             {services.map((s) => <ServiceBlock key={s.key} appId={appId} issueId={issueId} service={s} mock={mocks.find((m) => m.key === s.key) ?? null} places={places.find((p) => p.mock === s.key) ?? null} onData={() => act(async () => {})}
               onRemove={() => { if (window.confirm(`Take ${s.name} off this task's list${s.calls.length ? `, with its ${s.calls.length} call${s.calls.length === 1 ? '' : 's'}` : ''}? It stays one of the app's services.`)) void act(() => engine.removeTaskService(issueId, s.key)) }}
               onAddCall={(b) => act(() => engine.addTaskCall(issueId, { ...b, service: s.key }))}
@@ -71,7 +71,7 @@ function ServiceBlock({ appId, issueId, service: s, mock, places, onData, onRemo
     <div className="task-calls-service" data-service={s.key}>
       <div className="task-calls-service-head">
         <span style={{ marginRight: 'auto' }}><strong>{s.name}</strong>{s.standsInFor && <span className="faint" style={{ fontSize: 12 }}> · {s.standsInFor}</span>}</span>
-        {s.status === 'needs_recording' ? <Badge tone="warn">Its mock is not built yet</Badge> : s.status === 'assumed' ? <Badge tone="warn">A mock of an assumed shape</Badge> : <Badge tone="ok">Has a mock</Badge>}
+        {!mock || mock.served === 'none' ? <Badge tone="warn">No endpoints yet</Badge> : mock.served === 'general' ? <Badge tone="ok">Served from its endpoints</Badge> : s.status === 'assumed' ? <Badge tone="warn">A server of an assumed shape</Badge> : <Badge tone="ok">Has a server written for it</Badge>}
         <button className="btn quiet small" aria-label={`Take ${s.name} off this task`} title="Off this task's list; it stays one of the app's services" onClick={onRemove}>×</button>
       </div>
       {places && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><div><div className="task-calls-sub">What each place is given</div><Sources appId={appId} row={places} issueId={issueId} onChanged={onData} /></div></div>}
@@ -96,7 +96,7 @@ function CallRow({ appId, issueId, call: c, mock, onData, onCover, onLink, onRem
       <div>
         {c.state === 'answered' && e && c.mock ? (
           <>
-            <EndpointDataCell appId={appId} mockKey={c.mock.key} serviceName={c.mock.name} endpoint={e} issueId={issueId} canAsk onChanged={onData} />
+            <EndpointDataCell appId={appId} mockKey={c.mock.key} serviceName={c.mock.name} endpoint={e} issueId={issueId} written={mock?.served === 'written'} canAsk onChanged={onData} />
             {c.linked && <div className="row"><span className="faint">Tied by hand to {e.method} {e.path}</span><button className="btn quiet small" onClick={() => onLink(null)}>Untie</button></div>}
           </>
         ) : (

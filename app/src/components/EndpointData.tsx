@@ -13,9 +13,10 @@ import { engine, type EndpointItem, type MockEndpoint } from '../engine'
 const err = (e: unknown) => { const m = String((e as Error)?.message ?? e); try { return (JSON.parse(m) as { error?: string }).error ?? m } catch { return m } }
 const day = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
-export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, issueId, canAsk, onChanged }: {
+export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, issueId, written = false, canAsk, onChanged }: {
   appId: string; mockKey: string; serviceName: string; endpoint: MockEndpoint
   /** On a task: the app's data is shown until the task has its own. None: the app's settings. */ issueId?: string
+  /** The service has a server written for it, which answers a call that has no data. Otherwise such a call fails. */ written?: boolean
   /** Is there a task whose agent makes the fake of a real response? */ canAsk: boolean; onChanged: () => void | Promise<void>
 }) {
   const [open, setOpen] = useState<null | 'app' | 'task'>(null)
@@ -39,7 +40,7 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   return (
     <div className="endpoint-data" data-component="EndpointData" data-endpoint={e.key}>
       {issueId && item && <div>{own ? <Badge tone="accent">This task's own</Badge> : <span className="faint">From the app's settings</span>}</div>}
-      <ItemSays item={item} canAsk={canAsk} />
+      <ItemSays item={item} canAsk={canAsk} written={written} />
       {said && <div className="faint">{said}</div>}
       {error && <div className="mock-data-warn">{error}</div>}
       {open ? <GiveForm call={call} sensitive={!!e.sensitive} note={open === 'app' && issueId ? `This becomes ${serviceName}'s data in Settings: every task gets it unless it has its own.` : open === 'task' ? 'For this task alone. Other tasks keep the app\'s.' : null} onGive={give(open)} onCancel={() => setOpen(null)} /> : (
@@ -56,8 +57,8 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   )
 }
 
-function ItemSays({ item, canAsk }: { item: EndpointItem | null; canAsk: boolean }) {
-  if (!item) return <div className="faint">No data: answered with what the mock's server makes up.</div>
+function ItemSays({ item, canAsk, written }: { item: EndpointItem | null; canAsk: boolean; written: boolean }) {
+  if (!item) return <div className="faint">{written ? 'No data: answered with what the server written for it makes up.' : 'No data yet: a call to it fails until some is added.'}</div>
   return (
     <>
       {item.recorded && <div><Badge tone="warn">Real · this computer only</Badge> {item.recorded.how === 'given' ? 'A response you gave' : 'Recorded in a live run'}, {day(item.recorded.at)}</div>}

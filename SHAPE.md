@@ -857,6 +857,12 @@ Details and sources in `research/`.
     real). The mock serves the safe form, unless a person turns recorded on for their own prototype or smoke
     test. A reviewer always gets the safe form, and its copy is refused while an endpoint has a real response and
     no fake.
+  - **Creating a service is creating its server.** Self Evident carries one general mock server that serves any
+    service straight from its endpoints: each call is answered with that endpoint's data file. A service is
+    usable once it has an endpoint and the variable that points the app at it; nothing is built, per service or
+    per task. A server written for a service is the exception, for one whose calls depend on each other, and is
+    kept on the service. Either way the server is a plain file that needs nothing of ours, so it can be copied to
+    a reviewer's branch.
   - **A sensitive endpoint keeps no real response.** One that comes in, given or recorded, is faked at once and
     the original deleted, so only a fake is ever stored or served. The cost is that it cannot be faked again
     differently later.
