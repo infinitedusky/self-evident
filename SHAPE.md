@@ -838,6 +838,11 @@ Details and sources in `research/`.
   - **Services are the app's.** The outside services an app connects to are set up in its settings, each with
     its mock; a task picks the ones it calls and lists its calls under each, so one service is never two by a slip
     of the keyboard. One found in the code that the settings lack is added there.
+  - **A service is its real address and the environment variable to override.** The app reads each outside
+    service's address from an environment variable that defaults to the real address, so the code is the same on
+    main, in a prototype, a smoke test and a reviewer's copy, and only the value differs. A mock is that variable
+    set to the mock's address. We do not get in the way on the network, and the app never checks what state it
+    is in. A service whose address is written into the code gets the variable added as part of the task.
   - **A response belongs to an endpoint.** A mock lists the calls the app makes to its service; each data file
     is exactly one endpoint's, by its name; and each endpoint says whether a real response is behind it (given, or
     recorded) or its shape is taken from the code that calls it.

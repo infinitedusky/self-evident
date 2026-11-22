@@ -6215,3 +6215,17 @@ engine works out the rest (`envFromConnection`): the address setting is given th
 agent set it), and the key setting a made-up key, so the real key never reaches a mock. No placeholder is shown to a
 person; an agent still sets the variables directly. A mock's card says the connection in a line.
 
+
+### A service is its real address and the environment variable to override (Sandy, 2026-11-22)
+
+Sandy asked why the engine needs the app's variable at all, and we went round the options. Getting in the way on the
+network (the app calls the real address and we answer it) was ruled out: the app would have to trust a fake
+certificate and "our service has to be there for this to work". An app that checks what state it is in and branches
+was ruled out too: the code a reviewer runs would not be the code that goes live. What is left is the ordinary
+convention, and the rule from now on: **every outside service's address is read from an environment variable that
+defaults to the real address.** The code is the same everywhere and only the value differs. "All we have to do is
+define what the address is, and so we say the real address, and then we say the override variable." The form's
+fields are now named that way (Its real address, The environment variable to override, and optionally the one for
+its key). An agent that finds a service whose address is written into the code adds the variable as part of the
+task; a library with no way to change its address is reported plainly. Mockaroo came up: it points the app the same
+way (its address goes in the same variable), so it could only ever be a source of invented data, not a replacement.

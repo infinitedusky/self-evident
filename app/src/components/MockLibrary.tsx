@@ -83,7 +83,7 @@ function MockCard({ appId, issueId, mock: m, act }: { appId: string; issueId?: s
         <Badge tone={s.tone} dot>{s.label}</Badge>
       </div>
       {m.standsInFor && <p style={{ margin: 0 }}>Stands in for {m.standsInFor}.</p>}
-      <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }} data-component="MockConnection">{m.connection.address ? <>The real service is at <code>{m.connection.address}</code>. </> : 'Its real address is not set. '}{m.connection.addressSetting ? <>The app finds it by <code>{m.connection.addressSetting}</code>{m.connection.keySetting ? <>, with its key in <code>{m.connection.keySetting}</code></> : null}.</> : 'The app\'s setting that holds its address is not set: an agent fills it in from the code when it builds the mock.'}</p>
+      <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }} data-component="MockConnection">{m.connection.address ? <>The real service is at <code>{m.connection.address}</code>. </> : 'Its real address is not set. '}{m.connection.addressSetting ? <>A mock overrides <code>{m.connection.addressSetting}</code>{m.connection.keySetting ? <>, with a made-up key in <code>{m.connection.keySetting}</code></> : null}.</> : 'The environment variable to override is not set: an agent fills it in from the code when it builds the mock.'}</p>
       <p className="faint" style={{ margin: '4px 0 0', fontSize: 13 }}>
         {m.status === 'mined' ? <>Recorded {day(m.recordedAt) ?? 'on a date not kept'}{m.issue ? <> for <Link to={`/tasks/${m.issue.id}`}>{m.issue.identifier}</Link></> : null} · built {day(m.minedAt)}</>
           : m.status === 'assumed' ? <>Written from a guess, before any recording. It shows only that the code handles the guess.</>
@@ -110,7 +110,7 @@ function MockCard({ appId, issueId, mock: m, act }: { appId: string; issueId?: s
                     <button className="btn small" onClick={() => act(async () => { await engine.startLiveSmoke(m.issue!.id, [m.key]); setLive(false) })}>Start the live run</button>
                     <button className="btn quiet small" onClick={() => setLive(false)}>Cancel</button></div>
                 : <div className="row"><span className="faint">Or record the whole exchange:</span><button className="btn quiet small" onClick={() => setLive(true)}>Record it: a live smoke run of {m.issue.identifier}</button></div>)
-                : <p className="faint" style={{ margin: 0 }}>To record it live instead, give it {[!m.upstream && 'its real address', !m.connection.addressSetting && 'the app\'s setting that holds that address'].filter(Boolean).join(' and ')} (Edit).</p>}
+                : <p className="faint" style={{ margin: 0 }}>To record it live instead, give it {[!m.upstream && 'its real address', !m.connection.addressSetting && 'the environment variable to override'].filter(Boolean).join(' and ')} (Edit).</p>}
             </>}
         </div>
       )}
@@ -348,14 +348,14 @@ function EditMock({ mock: m, onSave, onCancel }: { mock: Mock; onSave: (b: { sta
     </div>
   )
 }
-/** How the app connects to the real service: said as it is. Pointing the app at a mock is worked out from these. */
+/** A service's connection: its real address, and the environment variable the app reads that address from, which is the one a mock overrides. */
 function Connection({ upstream, setUpstream, addr, setAddr, keyName, setKeyName }: { upstream: string; setUpstream: (v: string) => void; addr: string; setAddr: (v: string) => void; keyName: string; setKeyName: (v: string) => void }) {
   return (
     <>
       <label>Its real address<input className="mono" value={upstream} onChange={(e) => setUpstream(e.target.value)} placeholder="https://api.vendor.com" /></label>
-      <label>The app's setting that holds that address<input className="mono" value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="its name, e.g. VENDOR_BASE_URL" /></label>
-      <label>The app's setting that holds its key <span className="faint">(if it has one)</span><input className="mono" value={keyName} onChange={(e) => setKeyName(e.target.value)} placeholder="its name, e.g. VENDOR_API_KEY: never the key itself" /></label>
-      <p className="faint" style={{ margin: 0, fontSize: 13 }}>These describe the real service. When a mock is used, the app's address setting is pointed at the mock and its key setting given a made-up key, so the real key never reaches a mock. Left empty, an agent fills them in from the code.</p>
+      <label>The environment variable to override<input className="mono" value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="the one the app reads that address from, e.g. VENDOR_BASE_URL" /></label>
+      <label>The environment variable for its key <span className="faint">(if it has one)</span><input className="mono" value={keyName} onChange={(e) => setKeyName(e.target.value)} placeholder="its name, e.g. VENDOR_API_KEY: never the key itself" /></label>
+      <p className="faint" style={{ margin: 0, fontSize: 13 }}>The app's code is the same everywhere: it reads the service's address from that variable. On main it holds the real address. For a mock the engine sets it to the mock's address, and gives the key's variable a made-up key, so the real key never reaches a mock. Left empty, an agent fills the variables in from the code.</p>
     </>
   )
 }
