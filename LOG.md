@@ -6268,3 +6268,10 @@ endpoint. Because whatever you set in the settings will be the default set." Bui
 
 Not done: the first fake of a real response still needs the task's agent (it says what is structure); the data
 agent is the next piece and will own that. Export carries the app's safe data for every endpoint.
+
+### A service's base settings sit at the top, like a profile (Sandy, 2026-11-22)
+
+"Can we move the base settings to the top and show them like you would a profile where name is at the top?" A
+service's card now opens with its name, then each base setting on a line of its own (what it is, real address,
+variable to override, variable for its key, its mock), with Edit beside the name. Editing happens in that same
+place, and the name can be changed there too (its key, which data and tasks go by, stays).

@@ -382,6 +382,14 @@ button.badge { border: 0; cursor: pointer; }
 .mock-places-row + .mock-places-row { border-top: 1px solid var(--line); }
 .mock-places-row { font-size: 14px; }
 .mock-places-row .faint { font-size: 12px; margin-top: 2px; }
+.service-profile { padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.service-profile-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.service-profile-head h3 { margin: 0; font-size: 18px; }
+.service-profile dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 10px 0 0; font-size: 14px; }
+.service-profile dt { color: var(--ink-soft); font-size: 13px; }
+.service-profile dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.service-profile dd .faint { font-size: 13px; }
+@media (max-width: 760px) { .service-profile dl { grid-template-columns: 1fr; gap: 2px; } .service-profile dd { margin-bottom: 6px; } }
 .mock-sources { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
 .mock-sources-label { font-weight: 600; }
 @media (max-width: 760px) { .mock-sources { grid-template-columns: 1fr; } }
