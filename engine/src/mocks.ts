@@ -30,14 +30,15 @@ import { homedir } from 'node:os'
 import { dirname, join, normalize, relative, resolve, sep } from 'node:path'
 import { and, asc, desc, eq, like } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { app, event, issue, mock, MOCK_STATUSES } from './db/schema.js'
+import { app, event, issue, mock, mockData, MOCK_STATUSES } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { PlanError } from './issues.js'
 import { checkLeaks, keptRefused, LEAKS_SHOWN, type Leak } from './mock-leaks.js'
 import { recordingsDir, recordingsHome } from './recordings.js'
-import { dataDir, dataFor, dataNote, exportable, listData, type DataKind, type DataView } from './mock-data.js'
+import { dataFor, dataNote, exportable, listData, type DataKind, type DataView } from './mock-data.js'
 import { cleanEndpoints, endpointViews, type Endpoint, type EndpointView } from './mock-endpoints.js'
+import { endpointData, scrubSensitive, served, servedDir, type EndpointData, type Form } from './mock-serve.js'
 import { standInKey, type StandIn } from './stand-ins.js'
 
 export type MockStatus = (typeof MOCK_STATUSES)[number]
@@ -126,12 +127,14 @@ export interface MockView {
   usedBy: string[]
   /** How the app connects to the real service: its address, and the app's settings that hold the address and the key. */ connection: Connection
   /** What it can answer with (mock-data.ts), and which of them it serves unless a run says otherwise. */ data: DataView[]; defaultData: string | null
-  /** The calls it answers, each with the real response behind it (or none: taken from the code) and its files in the default data; and the data files that are no endpoint's. */ endpoints: EndpointView[]; unlinked: string[]
+  /** The calls it answers, each with the real response behind it (or none: taken from the code), its files in the default data, and its data (mock-serve.ts): the app's, and a task's own where one was asked about; and the data files that are no endpoint's. */ endpoints: (EndpointView & { data: EndpointData })[]; unlinked: string[]
 }
-async function viewOf(m: Row, ident?: (id: string) => Promise<{ id: string; identifier: string; title: string } | null>): Promise<MockView> {
+async function viewOf(m: Row, ident?: (id: string) => Promise<{ id: string; identifier: string; title: string } | null>, issueId?: string | null): Promise<MockView> {
   const recs = recordingsFor(m)
   const newest = recs[0]
   const data = await listData(m)
+  const views = endpointViews(cleanEndpoints(m.endpoints), m.recording ?? newest?.dir ?? null, (data.find((d) => d.isDefault) ?? data.find((d) => d.kind !== 'real'))?.files.map((f) => f.path) ?? [], m.upstream)
+  const perEndpoint = await endpointData(m, issueId)
   const unmined = newest && newest.dir !== m.recording && (!m.minedAt || newest.at > m.minedAt.toISOString()) ? { at: newest.at, files: newest.files } : null
   return {
     key: m.key, name: m.name, status: m.status as MockStatus, standsInFor: m.standsInFor, upstream: m.upstream, env: m.env ?? {}, cmd: m.cmd,
@@ -140,7 +143,7 @@ async function viewOf(m: Row, ident?: (id: string) => Promise<{ id: string; iden
     issue: m.issueId && ident ? await ident(m.issueId) : null,
     recordedAt: m.recordedAt?.toISOString() ?? null, minedAt: m.minedAt?.toISOString() ?? null, unmined, usedBy: usedBy(m.appId, m.key),
     connection: connectionOf(m), data, defaultData: m.defaultData,
-    ...endpointViews(cleanEndpoints(m.endpoints), m.recording ?? newest?.dir ?? null, (data.find((d) => d.isDefault) ?? data.find((d) => d.kind !== 'real'))?.files.map((f) => f.path) ?? [], m.upstream),
+    endpoints: views.endpoints.map((e) => ({ ...e, data: perEndpoint[e.key] ?? { app: null, task: null } })), unlinked: views.unlinked,
   }
 }
 const identOf = async (id: string) => {
@@ -150,9 +153,9 @@ const identOf = async (id: string) => {
   return { id: t.id, identifier: `${a?.key ?? ''}-${t.number}`, title: t.title }
 }
 
-export async function listMocks(appId: string): Promise<MockView[]> {
+export async function listMocks(appId: string, /** A task: each endpoint also says the task's own data. */ issueId?: string | null): Promise<MockView[]> {
   const rows = await db.select().from(mock).where(eq(mock.appId, appId)).orderBy(asc(mock.name))
-  return Promise.all(rows.map((m) => viewOf(m, identOf)))
+  return Promise.all(rows.map((m) => viewOf(m, identOf, issueId)))
 }
 export async function rowOf(appId: string, key: string) {
   const [m] = await db.select().from(mock).where(and(eq(mock.appId, appId), eq(mock.key, standInKey(key))))
@@ -372,6 +375,7 @@ export async function removeMock(appId: string, key: string, actor = 'user', opt
   const real = opts.files ? recordingsOfService(appId, m.key) : []
   await db.transaction(async (tx) => { await tx.delete(mock).where(eq(mock.id, m.id)); await appendEvent(tx, { workspaceId, appId, actor, type: 'mock.removed', payload: { key: m.key, files: real.length } }) })
   for (const r of real) rmSync(r.dir, { recursive: true, force: true })
+  rmSync(join(mocksHome(), appId, m.key), { recursive: true, force: true }) // its server and the data folders written for its runs: nothing of it is left
   return { removed: true, files: real.length }
 }
 
@@ -394,7 +398,6 @@ export async function removeReal(appId: string, key: string, id: string, actor =
   const dir = recordingDir(appId, id)
   if (!recordingsOfService(appId, m.key).some((r) => r.dir === dir)) throw new PlanError(`that is not a real response of ${m.name}`)
   const workspaceId = await workspaceOf(appId)
-  const { mockData } = await import('./db/schema.js')
   await db.transaction(async (tx) => {
     const sets = await tx.select().from(mockData).where(eq(mockData.mockId, m.id))
     for (const d of sets.filter((x) => x.recording === dir)) {
@@ -409,17 +412,37 @@ export async function removeReal(appId: string, key: string, id: string, actor =
 }
 
 /** One endpoint changed (its method, its path, what it answers with), or taken off the mock. Its data files keep their names: they are its by its key, which does not change. */
-export async function editEndpoint(appId: string, key: string, endpoint: string, i: { method?: string; path?: string; what?: string } | null, actor = 'user') {
+export async function editEndpoint(appId: string, key: string, endpoint: string, i: { method?: string; path?: string; what?: string; sensitive?: boolean } | null, actor = 'user') {
   const m = await rowOf(appId, key)
   if (!m) throw new PlanError(`this app has no mock "${key}"`)
   const all = cleanEndpoints(m.endpoints), at = all.findIndex((e) => e.key === standInKey(endpoint))
   if (at < 0) throw new PlanError(`${m.name} has no endpoint "${endpoint}"`)
-  const next = i === null ? all.filter((_, n) => n !== at) : cleanEndpoints(all.map((e, n) => (n === at ? { ...e, ...(i.method ? { method: i.method } : {}), ...(i.path ? { path: i.path } : {}), ...(i.what !== undefined ? { what: i.what } : {}) } : e)))
+  const next = i === null ? all.filter((_, n) => n !== at) : cleanEndpoints(all.map((e, n) => (n === at ? { ...e, ...(i.method ? { method: i.method } : {}), ...(i.path ? { path: i.path } : {}), ...(i.what !== undefined ? { what: i.what } : {}), ...(i.sensitive !== undefined ? { sensitive: i.sensitive } : {}) } : e)))
   if (i !== null && next.length !== all.length) throw new PlanError('an endpoint needs a path')
   const workspaceId = await workspaceOf(appId)
   await db.transaction(async (tx) => {
     await tx.update(mock).set({ endpoints: next, updatedAt: new Date() }).where(eq(mock.id, m.id))
-    await appendEvent(tx, { workspaceId, appId, actor, type: i === null ? 'mock.endpoint_removed' : 'mock.endpoint_changed', payload: { key: m.key, endpoint: all[at].key } })
+    await appendEvent(tx, { workspaceId, appId, actor, type: i === null ? 'mock.endpoint_removed' : 'mock.endpoint_changed', payload: { key: m.key, endpoint: all[at].key, ...(i?.sensitive !== undefined ? { sensitive: i.sensitive } : {}) } })
+  })
+  // Marked sensitive: what real response of it is on this computer is faked and deleted now.
+  const scrubbed = i?.sensitive ? await scrubSensitive(appId, key, actor) : null
+  return getMock(appId, key).then(({ fileText: _f, ...v }) => ({ ...v, ...(scrubbed?.failed.length ? { scrubFailed: scrubbed.failed } : {}) }))
+}
+/** An endpoint added to a service in the app's settings: a call the app makes to it. */
+export async function addEndpoint(appId: string, key: string, i: { method?: string; path?: string; what?: string; sensitive?: boolean }, actor = 'user') {
+  const m = await rowOf(appId, key)
+  if (!m) throw new PlanError(`this app has no mock "${key}"`)
+  const all = cleanEndpoints(m.endpoints), method = clip(i.method, 10).toUpperCase() || 'GET', path = clip(i.path, 300)
+  if (!path) throw new PlanError('an endpoint needs its path: /runs/{id}/status, or in words where it is reached by a link the service sends')
+  if (all.some((e) => e.method === method && e.path === path)) throw new PlanError(`${m.name} already has ${method} ${path}`)
+  const stem = standInKey(path.replace(/\{[^}]*\}|:[\w-]+/g, '').split('/').filter(Boolean).slice(-2).join('-')) || 'call'
+  let k = stem
+  for (let n = 2; all.some((e) => e.key === k); n++) k = `${stem}-${n}`
+  const next = cleanEndpoints([...all, { key: k, method, path, what: i.what, sensitive: i.sensitive === true }])
+  const workspaceId = await workspaceOf(appId)
+  await db.transaction(async (tx) => {
+    await tx.update(mock).set({ endpoints: next, updatedAt: new Date() }).where(eq(mock.id, m.id))
+    await appendEvent(tx, { workspaceId, appId, actor, type: 'mock.endpoint_added', payload: { key: m.key, endpoint: k, method, path } })
   })
   return getMock(appId, key).then(({ fileText: _f, ...v }) => v)
 }
@@ -432,6 +455,8 @@ export async function noteRecording(appId: string, key: string, dir: string, iss
     if (m) await tx.update(mock).set({ needs: m.status === 'needs_recording' || m.needs ? { ...(m.needs ?? {}), recorded: dir } : m.needs, updatedAt: new Date() }).where(eq(mock.id, m.id))
     await appendEvent(tx, { workspaceId, appId, issueId, actor: 'engine', type: 'mock.recorded', payload: { key, exchanges } })
   })
+  // What came in for a sensitive endpoint is faked and deleted before anything else reads it.
+  if (m && cleanEndpoints(m.endpoints).some((e) => e.sensitive)) await scrubSensitive(appId, key).catch(() => undefined)
 }
 
 /**
@@ -440,7 +465,7 @@ export async function noteRecording(appId: string, key: string, dir: string, iss
  * recording is, with the task, outside every repository, untouched; given.meta.json says it was given, not recorded,
  * so the miner takes any call not given from the code that makes it and says so in the provenance.
  */
-export async function giveRecording(appId: string, key: string, given: { name: string; bytes: Uint8Array }[], actor = 'user', /** The endpoint they are responses of: kept under its name, so they are its. */ endpoint?: string | null): Promise<{ dir: string; issueId: string | null; files: string[] }> {
+export async function giveRecording(appId: string, key: string, given: { name: string; bytes: Uint8Array }[], actor = 'user', /** The endpoint they are responses of: kept under its name, so they are its. */ endpoint?: string | null, /** A task they are for alone, in place of the app's (mock-serve.ts). */ forTask?: string | null): Promise<{ dir: string; issueId: string | null; files: string[] }> {
   const m = await rowOf(appId, key)
   if (!m) throw new PlanError(`this app has no mock "${key}"`)
   if (!given.length) throw new PlanError('give at least one file: a response the service sent')
@@ -463,7 +488,7 @@ export async function giveRecording(appId: string, key: string, given: { name: s
   const dir = join(recordingsDir(appId, { issueId: m.issueId }), key, `given-${new Date().toISOString().replace(/[:.]/g, '-')}`)
   mkdirSync(dir, { recursive: true })
   for (const f of files) writeFileSync(join(dir, f.name), f.bytes)
-  writeFileSync(join(dir, 'given.meta.json'), JSON.stringify({ given: true, by: actor, files: files.map((f) => ({ name: f.name, bytes: f.bytes.length, ...(f.was !== f.name ? { was: f.was } : {}) })), ...(of ? { endpoint: of.key } : {}), at: new Date().toISOString(), what: m.needs?.file ?? null }, null, 2))
+  writeFileSync(join(dir, 'given.meta.json'), JSON.stringify({ given: true, by: actor, files: files.map((f) => ({ name: f.name, bytes: f.bytes.length, ...(f.was !== f.name ? { was: f.was } : {}) })), ...(of ? { endpoint: of.key } : {}), ...(of && forTask ? { forTask } : {}), at: new Date().toISOString(), what: m.needs?.file ?? null }, null, 2))
   await noteRecording(appId, key, dir, m.issueId, files.length)
   return { dir, issueId: m.issueId, files: files.map((f) => f.name) }
 }
@@ -473,7 +498,7 @@ export const isGiven = (dir: string) => existsSync(join(dir, 'given.meta.json'))
 /** One change to a mock, said for a person. */
 export interface MockChange { at: string; by: string; /** The task it was made for. None: the app's own (Settings). */ issue: { id: string; identifier: string } | null; what: string }
 const PLACE_SAYS: Record<string, string> = { prototype: 'a prototype', smoke: 'a smoke test', review: 'a reviewer' }
-const SOURCE_SAYS: Record<string, string> = { default: 'its default data', live: 'the real service', replay: 'the real response, as it is', fake: 'a fake of the real response', data: 'the data' }
+const SOURCE_SAYS: Record<string, string> = { default: 'the default', live: 'the real service', replay: 'the mock, with recorded responses as they are', fake: 'the mock, with faked data', data: 'the mock' }
 const changeSays = (type: string, p: Record<string, unknown>): string | null => {
   switch (type) {
     case 'mock.needs_recording': return 'Raised: it needs a real response'
@@ -488,6 +513,8 @@ const changeSays = (type: string, p: Record<string, unknown>): string | null => 
     case 'mock.endpoint_added': return `The call ${p.method} ${p.path} was added`
     case 'mock.endpoint_changed': return `The call "${p.endpoint}" was changed`
     case 'mock.endpoint_removed': return `The call "${p.endpoint}" was taken off`
+    case 'mock.endpoint_data_removed': return `The data of the call "${p.endpoint}" was removed${p.real ? ', with its real response' : ''}`
+    case 'mock.sensitive_scrubbed': return `Real responses of sensitive calls were faked and deleted${Array.isArray(p.failed) && p.failed.length ? ` (${p.failed.length} could not be faked, and were deleted all the same)` : ''}`
     case 'mock.data_renamed': return `Data "${p.data}" was renamed`
     case 'mock.place': return `For ${PLACE_SAYS[String(p.place)] ?? p.place}: ${SOURCE_SAYS[String(p.source)] ?? p.source}${p.data ? ` "${p.data}"` : ''}`
     default: return null
@@ -526,19 +553,19 @@ export const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
 
 /**
  * The app's mocks that can serve, as stand-ins: what a prototype, main or a smoke test starts. Each is given its data
- * as the folder $MOCK_DATA: the set a run picks for it (`pick`, by the mock's key), else its default. `data` says
- * which, so a run can show when it is on a real response.
+ * as the folder $MOCK_DATA, put together endpoint by endpoint (mock-serve.ts) in the form a run picks for it
+ * (`pick`, by the mock's key): faked unless it says recorded. `data` says when it is on a real response.
  */
-export async function libraryStandIns(appId: string, except: string[] = [], pick: Record<string, string> = {}): Promise<(StandIn & { mock: MockStatus; data?: { key: string; kind: DataKind } })[]> {
+export async function libraryStandIns(appId: string, except: string[] = [], pick: Record<string, { form: Form; issueId?: string | null }> = {}): Promise<(StandIn & { mock: MockStatus; data?: { kind: DataKind } })[]> {
   const rows = await db.select().from(mock).where(eq(mock.appId, appId)).orderBy(asc(mock.key))
-  const out: (StandIn & { mock: MockStatus; data?: { key: string; kind: DataKind } })[] = []
+  const out: (StandIn & { mock: MockStatus; data?: { kind: DataKind } })[] = []
   for (const m of rows) {
     if (m.status === 'needs_recording' || !m.cmd || except.includes(m.key)) continue
-    const d = await dataFor(m, pick[m.key])
+    const s = await served(m, pick[m.key] ?? { form: 'faked' }), dir = servedDir(m, s), real = s.real.length > 0
     out.push({
-      key: m.key, name: `${m.name} (mock${m.status === 'assumed' ? ', assumed shape' : ''}${d?.kind === 'real' ? ', a real response' : ''})`, what: m.standsInFor || undefined, mock: m.status as MockStatus,
-      cmd: `cd ${q(materialize(m))} && ${d ? `MOCK_DATA=${q(dataDir(m, d))} ` : ''}${m.cmd}`, env: m.env ?? {},
-      ...(d ? { data: { key: d.key, kind: d.kind as DataKind } } : {}),
+      key: m.key, name: `${m.name} (mock${m.status === 'assumed' ? ', assumed shape' : ''}${real ? ', a real response' : ''})`, what: m.standsInFor || undefined, mock: m.status as MockStatus,
+      cmd: `cd ${q(materialize(m))} && ${dir ? `MOCK_DATA=${q(dir)} ` : ''}${m.cmd}`, env: m.env ?? {},
+      ...(dir ? { data: { kind: real ? 'real' as const : 'faked' as const } } : {}),
     })
   }
   return out
@@ -554,14 +581,21 @@ export async function exportMock(appId: string, key: string, outDir: string, dat
   if (m.status === 'needs_recording') throw new PlanError(`${m.name} has no mock yet: it needs a recording`)
   let checked = false
   if (m.status === 'mined' && m.recording && existsSync(m.recording)) { assertNoLeaks(m.recording, m.files, prov(m).kept); checked = true }
-  // Its data goes beside the server, in data/: the set named, else its default. Never a real response (exportable refuses one).
-  const d = await dataFor(m, dataKey)
-  const data: Record<string, string> = {}
+  // Its data goes beside the server, in data/: the set named, else each endpoint's safe data as the app has it. Never a real response.
+  const d = dataKey ? await dataFor(m, dataKey) : null
+  const data: Record<string, string> = {}, notes: string[] = []
   if (d) { const e = exportable(m, d); checked = checked || e.checked; for (const [p, t] of Object.entries(e.files)) data[join('data', p)] = t }
-  const note = provenanceNote(m) + (d ? `\nIts data ("${d.name}"): ${dataNote(d)}\n` : '')
-  const files: Record<string, string> = { ...m.files, ...data, 'PROVENANCE.md': note, 'mock.json': JSON.stringify({ key: m.key, name: m.name, standsInFor: m.standsInFor, status: m.status, cmd: m.cmd, env: m.env, endpoints: cleanEndpoints(m.endpoints), ...(d ? { data: { key: d.key, kind: d.kind, dir: 'data', variable: 'MOCK_DATA' } } : {}) }, null, 2) + '\n' }
+  else {
+    const sets = (await db.select().from(mockData).where(eq(mockData.mockId, m.id))).filter((x) => x.kind !== 'real' && !((x.provenance ?? {}) as { scope?: { task?: string } }).scope?.task)
+    const out = await served(m, { form: 'faked' })
+    for (const f of out.files) if (f.text !== undefined) data[join('data', f.name)] = f.text
+    for (const x of sets.filter((x) => Object.entries(x.files).some(([n, t]) => data[join('data', n)] === t))) { checked = exportable(m, x).checked || checked; notes.push(`\nIts data ("${x.name}"): ${dataNote(x)}\n`) } // every fake in it checked once more
+  }
+  const carried = !d && Object.keys(data).length > 0
+  const note = provenanceNote(m) + (d ? `\nIts data ("${d.name}"): ${dataNote(d)}\n` : notes.join(''))
+  const files: Record<string, string> = { ...m.files, ...data, 'PROVENANCE.md': note, 'mock.json': JSON.stringify({ key: m.key, name: m.name, standsInFor: m.standsInFor, status: m.status, cmd: m.cmd, env: m.env, endpoints: cleanEndpoints(m.endpoints), ...(d ? { data: { key: d.key, kind: d.kind, dir: 'data', variable: 'MOCK_DATA' } } : carried ? { data: { kind: 'faked', dir: 'data', variable: 'MOCK_DATA' } } : {}) }, null, 2) + '\n' }
   for (const [p, t] of Object.entries(files)) { const f = join(outDir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, t) }
-  return { dir: outDir, files: Object.keys(files).sort(), checked, data: d?.key ?? null }
+  return { dir: outDir, files: Object.keys(files).sort(), checked, data: d?.key ?? (carried ? 'faked' : null) }
 }
 
 /** What a prototype's agent (and a task's) is told of the library, before it builds. */

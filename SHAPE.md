@@ -846,11 +846,23 @@ Details and sources in `research/`.
   - **A response belongs to an endpoint.** A mock lists the calls the app makes to its service; each data file
     is exactly one endpoint's, by its name; and each endpoint says whether a real response is behind it (given, or
     recorded) or its shape is taken from the code that calls it.
-  - **Data has a source and a form.** The source is the real API, a real response (recorded in a live run, or a
-    file the person gives), or a file we provide. The form is as it is (this computer only) or faked. So for each
-    place a task runs (prototype, smoke test, reviewer) the task says one of: real API; record and replay; record
-    and fake; a file we provide (as it is or faked); the app's default. Any combination; a recording made for one
-    place serves the others.
+  - **A place is given the real service or the mock; where the mock's data comes from is the endpoint's.** For
+    each place a task runs (prototype, smoke test, reviewer) a service is the real one or its mock, and that is
+    the whole choice. Recording is something done, not a source: a real response is given on its endpoint, or
+    recorded in a live run. (Until 2026-11-22 the choice also said record and replay, record and fake, or a named
+    set of data.)
+  - **Data sits on the endpoint.** The app's settings hold each endpoint's data, and a task may put its own in
+    place of it for one endpoint without touching the others. An endpoint's data has up to two forms: recorded (a
+    real response as it came, this computer only) and safe (a fake of it, or a file a person states holds nothing
+    real). The mock serves the safe form, unless a person turns recorded on for their own prototype or smoke
+    test. A reviewer always gets the safe form, and its copy is refused while an endpoint has a real response and
+    no fake.
+  - **A sensitive endpoint keeps no real response.** One that comes in, given or recorded, is faked at once and
+    the original deleted, so only a fake is ever stored or served. The cost is that it cannot be faked again
+    differently later.
+  - **A service reads top to bottom, in Settings and on a task:** what it is and how the app reaches it; what
+    each place is given; its endpoints, each with its data. On a task the same is shown for the services it
+    calls, each part the app's until it is overridden. An endpoint added on a task is added to the service.
   - **The faker** makes the fake: it keeps a real response's structure (columns, keys, nesting, empties, sizes,
     the values that are structure) and replaces every other value by its kind, the same real value becoming the
     same fake one everywhere. The leak check stands behind it and refuses anything carrying a real value.

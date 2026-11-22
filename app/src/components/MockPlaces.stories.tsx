@@ -1,21 +1,39 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { MockPlaces } from './MockPlaces'
-import { withEngine } from '../stories/mock-engine'
+import { expect, within } from 'storybook/test'
+import { Sources } from './MockPlaces'
 import { mockPlaces, mockPlacesForTask, sampleApp } from '../stories/sample'
 
-// Where each mock's data comes from for a prototype, a smoke test and a reviewer. Made up: three invented services.
-const meta = { title: 'Components/MockPlaces', component: MockPlaces, args: { appId: sampleApp.id },
-  render: (a) => <div style={{ maxWidth: 1000 }}><MockPlaces {...a} /></div> } satisfies Meta<typeof MockPlaces>
+// What a prototype, a smoke test and a reviewer are given for one service: the real service, or the mock. Made up: invented services.
+const meta = { title: 'Components/MockPlaces', component: Sources, args: { appId: sampleApp.id, row: mockPlaces[0], onChanged: () => {} },
+  render: (a) => <div style={{ maxWidth: 900 }}><Sources {...a} /></div> } satisfies Meta<typeof Sources>
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** The app's defaults, in its settings: smoke tests replay the real response, a reviewer gets a fake of it. */
-export const AppDefaults: Story = {}
-/** One task's own: its smoke test calls the real vendor, its prototype shows the person with nothing found, and its reviewer follows the app. */
-export const ForATask: Story = { args: { issueId: 'iss_sample2' } }
-/** The mock's default is a real response and nothing says otherwise for a reviewer: the reviewer's copy cannot be made, and says why. */
-export const ReviewerBlocked: Story = { beforeEach: withEngine({ mockPlaces: [{ ...mockPlaces[0], places: { ...mockPlaces[0].places, review: { ...mockPlaces[0].places.review, data: { key: 'real', name: 'The real response (sample)', kind: 'real' }, choice: { source: 'default' }, from: 'none', app: null, says: 'A real response, as it is (18 Nov 2026): this computer only', blocked: 'Fraud scan vendor (sample) would answer a reviewer with a real response, which never leaves this computer: choose a fake, or data that holds nothing real' } } }] }) }
-/** A fake was chosen before there is one: it says what serves meanwhile, and what it is waiting for. */
-export const WaitingForAFake: Story = { args: { issueId: 'iss_sample2' }, beforeEach: withEngine({ mockPlacesForTask: [{ ...mockPlacesForTask[1], real: '2026-11-21T08:00:00Z', places: { ...mockPlacesForTask[1].places, prototype: { ...mockPlacesForTask[1].places.prototype, choice: { source: 'fake' }, from: 'task', own: { source: 'fake' }, note: 'its fake is not made yet: the task\'s agent makes it from the real response' } } }] }) }
-/** An app with no mocks. */
-export const NothingToMock: Story = { beforeEach: withEngine({ mockPlaces: [] }) }
+/** The app's defaults, in its settings: every place on the mock, and the person's own smoke test answered with recorded responses as they are. A reviewer has nothing to choose: always the mock. */
+export const AppDefaults: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const options = (name: string) => within(c.getByRole('combobox', { name })).getAllByRole('option').map((o) => o.textContent)
+    await expect(options('Fraud scan vendor (sample), Prototype')).toEqual(['The mock', 'The real service'])
+    await expect(c.queryByRole('combobox', { name: 'Fraud scan vendor (sample), Reviewer' })).toBeNull() // nothing to choose: always the mock
+    await expect(c.getByRole('checkbox', { name: 'Fraud scan vendor (sample), Smoke test: recorded responses as they are' })).toBeChecked()
+    await expect(c.queryByRole('checkbox', { name: /Reviewer: recorded/ })).toBeNull()
+    await expect(canvasElement.textContent).not.toMatch(/Record and/)
+  },
+}
+/** One task: its smoke test calls the real vendor, by its own choice. Its prototype follows the app, with an Override. */
+export const ForATask: Story = {
+  args: { issueId: 'iss_sample2', row: mockPlacesForTask[0] },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.getByRole('button', { name: 'Override Fraud scan vendor (sample), Prototype' })).toBeInTheDocument()
+    await expect(c.getByRole('combobox', { name: 'Fraud scan vendor (sample), Smoke test' })).toHaveValue('real')
+    await expect(c.getByText(/Every run is a real call/)).toBeInTheDocument()
+  },
+}
+/** An endpoint has a real response and no fake of it yet: nothing of it is served, and a reviewer's copy cannot be made until it is faked. */
+export const ReviewerBlocked: Story = { args: { row: { ...mockPlaces[0], places: { ...mockPlaces[0].places,
+  prototype: { ...mockPlaces[0].places.prototype, how: 'own', says: 'The mock, answering with what its server makes up', note: 'the real response of GET /workflows/runs/{id}/cost is not faked yet, so nothing of it is served: the task\'s agent makes the fake' },
+  review: { ...mockPlaces[0].places.review, how: 'own', says: 'The mock, answering with what its server makes up', blocked: 'the real response of Fraud scan vendor (sample)\'s GET /workflows/runs/{id}/cost has no fake yet, and a reviewer is never given a real one' } } } } }
+/** A service whose mock is not built yet. */
+export const NotBuilt: Story = { args: { row: mockPlaces[2] } }

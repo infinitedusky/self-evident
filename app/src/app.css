@@ -382,6 +382,11 @@ button.badge { border: 0; cursor: pointer; }
 .mock-places-row + .mock-places-row { border-top: 1px solid var(--line); }
 .mock-places-row { font-size: 14px; }
 .mock-places-row .faint { font-size: 12px; margin-top: 2px; }
+.mock-sources { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.mock-sources-label { font-weight: 600; }
+@media (max-width: 760px) { .mock-sources { grid-template-columns: 1fr; } }
+.endpoint-data { display: grid; gap: 4px; min-width: 0; font-size: 13px; }
+.endpoint-data .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
 .mock-places-cell { display: grid; gap: 4px; align-content: start; min-width: 0; }
 .mock-places-cell select { width: 100%; min-width: 0; font-size: 13px; }
 .mock-places-label { display: none; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
@@ -398,7 +403,7 @@ button.badge { border: 0; cursor: pointer; }
 .mock-check { display: flex !important; grid-template-columns: none; gap: 8px; align-items: center; }
 .mock-history { margin: 6px 0 0; padding-left: 18px; font-size: 13px; display: grid; gap: 2px; }
 .mock-endpoints { margin-top: 6px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-.mock-endpoints-head, .mock-endpoints-row { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; padding: 8px 10px; }
+.mock-endpoints-head, .mock-endpoints-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; padding: 8px 10px; }
 .mock-endpoints-head { font-size: 12px; font-weight: 600; color: var(--ink-soft); border-bottom: 1px solid var(--line); }
 .mock-endpoints-row + .mock-endpoints-row { border-top: 1px solid var(--line); }
 .mock-endpoints-row { font-size: 13px; }
@@ -414,6 +419,7 @@ button.badge { border: 0; cursor: pointer; }
 .task-calls-service-head strong { margin-right: auto; }
 .task-calls-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) auto; gap: 12px; padding: 10px 12px; font-size: 14px; align-items: start; }
 .task-calls-row + .task-calls-row { border-top: 1px solid var(--line); }
+.task-calls-sub { font-size: 12px; font-weight: 600; color: var(--ink-soft); margin-bottom: 6px; }
 .task-calls-row code { overflow-wrap: anywhere; }
 .task-calls-row .faint { font-size: 12px; margin-top: 2px; }
 .task-calls-row .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }

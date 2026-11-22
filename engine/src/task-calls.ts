@@ -29,7 +29,7 @@ export interface CallView {
   id: string; service: string; serviceName: string; method: string; path: string; what: string; by: 'agent' | 'user'
   /** answered: an endpoint of the service's mock answers it. no_endpoint: the mock is there and lacks this call. no_mock: the service has no mock. */ state: 'answered' | 'no_endpoint' | 'no_mock'
   /** The mock that answers the service, when there is one. */ mock: { key: string; name: string; status: MockView['status'] } | null
-  /** The endpoint that answers it, with the real response behind it (or none: from the code) and its data files. */ endpoint: EndpointView | null
+  /** The endpoint that answers it, with the real response behind it (or none: from the code) and its data files. */ endpoint: MockView['endpoints'][number] | null
   /** Linked by hand, rather than found by its method and path. */ linked: boolean
 }
 
@@ -70,7 +70,7 @@ async function onTheMock(appId: string, issueId: string, c: { service: string; m
 export async function listCalls(issueId: string): Promise<CallView[]> {
   const t = await taskOf(issueId)
   const rows = await db.select().from(taskCall).where(eq(taskCall.issueId, issueId)).orderBy(asc(taskCall.serviceName), asc(taskCall.createdAt))
-  const mocks = new Map((await listMocks(t.appId)).map((m) => [m.key, m]))
+  const mocks = new Map((await listMocks(t.appId, issueId)).map((m) => [m.key, m]))
   return rows.map((r) => {
     const m = mocks.get(r.service) ?? null
     const byHand = r.endpoint ? m?.endpoints.find((e) => e.key === r.endpoint) ?? null : null

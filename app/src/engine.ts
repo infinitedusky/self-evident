@@ -362,8 +362,15 @@ export interface MockReal { id: string; at: string; given: boolean; files: { nam
 /** One call the app makes to the service. A response belongs to exactly one endpoint, by its file's name. */
 export interface MockEndpoint {
   key: string; method: string; path: string; what?: string; file?: string
+  /** A real response of it is never stored: one that comes in is faked at once and the original deleted. */ sensitive?: boolean
+  /** Its data (engine/src/mock-serve.ts): the app's, set in its settings, and a task's own in place of it, where a task was asked about. */ data: { app: EndpointItem | null; task: EndpointItem | null }
   /** The real response behind it on this computer. None: its shape is taken from the code that calls it. */ real: { at: string; how: 'given' | 'recorded' } | null
   /** Its files in the data the mock serves by default. */ files: string[]
+}
+/** One endpoint's data at one level. recorded: a real response as it came, on this computer only. safe: a fake of it, or a file provided as holding nothing real; what a reviewer gets. */
+export interface EndpointItem {
+  recorded: { id: string; at: string; how: 'given' | 'recorded'; files: string[] } | null
+  safe: { kind: 'faked' | 'provided'; set: string; files: string[]; note: string; stale?: boolean } | null
 }
 /** One set of data a mock can answer with (engine/src/mock-data.ts). real: a real response as it is, on this computer only. faked: made from one by the faker. invented: written by hand, or provided by a person who states it holds nothing real. */
 export interface MockData {
@@ -381,18 +388,18 @@ export interface TaskCall {
 export interface TaskService { key: string; name: string; standsInFor: string; status: Mock['status']; /** The task an agent found it for, in the code. */ foundFor: string | null; calls: TaskCall[] }
 /** Where a mock's data comes from in each place a task runs (engine/src/mock-places.ts). */
 export type MockPlace = 'prototype' | 'smoke' | 'review'
-/** live: the real service. replay: the newest real response as it is. fake: a fake of it. data: one named set. default: the app's (for the app: the mock's default data). */
+/** live: the real service. fake: the mock, each endpoint answering with its faked or provided data. replay: the mock, with recorded responses as they are (a person's own prototype or smoke test only). default: the app's (for the app: the mock, faked). data: from before data sat on the endpoint. */
 export type MockSource = 'default' | 'live' | 'replay' | 'fake' | 'data'
 export interface MockChoice { source: MockSource; data?: string }
 /** What one place gets now, and whose choice it is. */
 export interface MockPlan {
   mock: string; name: string; place: MockPlace; how: 'live' | 'data' | 'own' | 'none'
-  data?: { key: string; name: string; kind: MockData['kind'] }; record?: boolean
+  /** The mock: which form of each endpoint's data it is given. */ form?: 'faked' | 'recorded'; /** It answers with a real response as it is, for at least one call. */ real?: boolean; record?: boolean
   choice: MockChoice; from: 'task' | 'app' | 'none'
   /** What it comes to, in words. */ says: string; /** What stands in the way of the choice. */ note?: string; /** Reviewer only: why its copy cannot be made. */ blocked?: string
   /** The task's own choice. */ own: MockChoice | null; /** The app's. */ app: MockChoice | null
 }
-export interface MockPlacesRow { mock: string; name: string; status: Mock['status']; /** Can it be called for real through the recorder? */ canLive: boolean; /** When its newest real response on this computer is from. */ real: string | null; data: { key: string; name: string; kind: MockData['kind'] }[]; places: Record<MockPlace, MockPlan> }
+export interface MockPlacesRow { mock: string; name: string; status: Mock['status']; /** Can it be called for real through the recorder? */ canLive: boolean; /** When its newest real response on this computer is from. */ real: string | null; places: Record<MockPlace, MockPlan> }
 /** One change to a mock: the app's own (no task), or a task's. */
 export interface MockChange { at: string; by: string; issue: { id: string; identifier: string } | null; what: string }
 /** Where the Storybook that renders them stands, and the screens it has. */
@@ -515,7 +522,7 @@ export const engine = {
   // story: one to show; the answer says which this Storybook can show for it (itself, another of the same component, or none).
   storybook: (appId: string, session?: string | null, story?: string | null) => call<{ url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean; story?: { asked: string; show: string | null; missing: boolean } }>('GET', `/apps/${appId}/storybook?${new URLSearchParams({ ...(session ? { session } : {}), ...(story ? { story } : {}) })}`),
   /** The app's mock library (Settings › Mocks). */
-  mocks: (appId: string) => call<Mock[]>('GET', `/apps/${appId}/mocks`),
+  mocks: (appId: string, /** A task: each endpoint also says the task's own data. */ issueId?: string | null) => call<Mock[]>('GET', `/apps/${appId}/mocks${issueId ? `?issue=${issueId}` : ''}`),
   /** A service that needs a mock: raised, with the real service's address and the variables that point the app at it. */
   raiseMock: (appId: string, body: { name: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; addressSetting?: string; keySetting?: string; issueId?: string; needs?: Mock['needs'] }) => call<Mock>('POST', `/apps/${appId}/mocks`, body),
   updateMock: (appId: string, key: string, body: { name?: string; standsInFor?: string; upstream?: string | null; env?: Record<string, string>; addressSetting?: string | null; keySetting?: string | null }) => call<Mock>('PATCH', `/apps/${appId}/mocks/${key}`, body),
@@ -524,7 +531,20 @@ export const engine = {
   /** A service's real responses on this computer: what is there, never what is in it. */
   mockReal: (appId: string, key: string) => call<MockReal[]>('GET', `/apps/${appId}/mocks/${key}/real`),
   removeMockReal: (appId: string, key: string, id: string) => call<MockReal[]>('DELETE', `/apps/${appId}/mocks/${key}/real?id=${encodeURIComponent(id)}`),
-  editMockEndpoint: (appId: string, key: string, endpoint: string, body: { method?: string; path?: string; what?: string }) => call<Mock>('PATCH', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}`, body),
+  addMockEndpoint: (appId: string, key: string, body: { method: string; path: string; what?: string; sensitive?: boolean }) => call<Mock>('POST', `/apps/${appId}/mocks/${key}/endpoints`, body),
+  /** One endpoint's data: the app's, or (issueId) one task's own in place of it. real: a response the service sent; otherwise the person states it holds nothing real. */
+  giveEndpointData: async (appId: string, key: string, endpoint: string, files: File[], o: { real: boolean; issueId?: string | null }) => {
+    const form = new FormData()
+    for (const f of files) form.append('file', f)
+    form.append('real', String(o.real)); if (o.issueId) form.append('issueId', o.issueId)
+    const res = await fetch(`${API}/apps/${appId}/mocks/${key}/endpoints/${endpoint}/data`, { method: 'POST', body: form })
+    const text = await res.text()
+    if (!res.ok) throw new Error(text || `${res.status}`)
+    return JSON.parse(text) as { kept: 'recorded' | 'faked' | 'provided'; asked: string | null; maybeStructure?: string[] }
+  },
+  /** Taken away at one level: a task's own gone, it gets the app's again. real: the real response behind it is deleted from this computer too. */
+  removeEndpointData: (appId: string, key: string, endpoint: string, o: { issueId?: string | null; real?: boolean } = {}) => call<{ removed: boolean; real: number }>('DELETE', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}/data?${o.issueId ? `issue=${o.issueId}&` : ''}${o.real ? 'real=1' : ''}`),
+  editMockEndpoint: (appId: string, key: string, endpoint: string, body: { method?: string; path?: string; what?: string; sensitive?: boolean }) => call<Mock>('PATCH', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}`, body),
   removeMockEndpoint: (appId: string, key: string, endpoint: string) => call<Mock>('DELETE', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}`),
   renameMockData: (appId: string, key: string, data: string, name: string) => call<MockData[]>('PATCH', `/apps/${appId}/mocks/${key}/data/${data}`, { name }),
   /** Ask the agent of the task the newest recording was made for to mine it. */
