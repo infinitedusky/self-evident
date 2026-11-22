@@ -2,16 +2,25 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { MockLibrary } from './MockLibrary'
 import { expect, userEvent, within } from 'storybook/test'
 import { withEngine } from '../stories/mock-engine'
-import { mocks, sampleApp } from '../stories/sample'
+import { mocks, sampleApp, sensitiveEndpoint, unfakedEndpoint } from '../stories/sample'
 
-// An app's mock library, in its settings. Made up: three invented services, one in each state.
+// An app's services, in its settings. Made up: three invented services, one in each state.
 const meta = { title: 'Components/MockLibrary', component: MockLibrary, args: { appId: sampleApp.id },
   render: (a) => <div style={{ maxWidth: 1000 }}><MockLibrary {...a} /></div> } satisfies Meta<typeof MockLibrary>
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** One made from a real response, with three sets of data (a fake that is its default, one written by hand, the real response itself), one assumed with data a person provided, one that needs a real response before it can be made. */
-export const Library: Story = {}
+/** Each service reads top to bottom: what it is and how the app reaches it, what each place is given, then its endpoints, each with its own data. One has a real response and a fake of it on one endpoint, one has a file a person provided, one is not built yet. */
+export const Library: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect((await c.findAllByText('What each place is given')).length).toBe(3)
+    await expect(c.getByText('4 calls: 1 with data, 3 answered with what the server makes up')).toBeInTheDocument()
+    await expect(c.getByText(/A fake of it: results.csv/)).toBeInTheDocument()
+    await expect(c.getByText(/A file stated to hold nothing real: search.json/)).toBeInTheDocument()
+    await expect(canvasElement.textContent).not.toMatch(/Make default|Record and/) // no named sets, and recording is not a source
+  },
+}
 /** Nothing yet. */
 export const Empty: Story = { beforeEach: withEngine({ mocks: [] }) }
 /** A real response is in and the task's agent has been asked to build the mock: it says so once, with a way to ask again, and no second button to do the same thing. */
@@ -32,28 +41,74 @@ export const OutOfDate: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0]
 export const NoAddressYet: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[2], upstream: null }] }) }
 /** Raised with no task: nobody to mine it yet. */
 export const NoTask: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[2], issue: null }] }) }
-/** Its default is the real response: it serves that here, and cannot be exported until a fake is the default. */
-export const DefaultIsReal: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], defaultData: 'real', data: mocks[0].data.map((d) => ({ ...d, isDefault: d.key === 'real' })) }] }) }
-/** A server with no data of its own yet. */
-export const NoDataYet: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], defaultData: null, data: [] }] }) }
-/** On a task's Data step: what the task calls first (a service comes into being from a call, and a file is given on the call it answers), then the task's own table, then each mock in full, folded. */
+/** No endpoint has data yet: each is answered with what the server makes up, and data can be added to any of them. */
+export const NoDataYet: Story = {
+  beforeEach: withEngine({ mocks: [{ ...mocks[0], endpoints: mocks[0].endpoints.map((e) => ({ ...e, real: null, files: [], data: { app: null, task: null } })) }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('4 calls: 0 with data, 4 answered with what the server makes up')).toBeInTheDocument()
+    await expect(c.getAllByRole('button', { name: /^Add the data of/ })).toHaveLength(4)
+  },
+}
+/** Data is added on the endpoint it answers: a file, and whether the service really sent it or it holds nothing real. Here one a person made up: it is used as it is. It can then be replaced or removed. */
+export const AddingData: Story = {
+  beforeEach: withEngine({ mocks: [mocks[0]] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Add the data of POST /workflows/run' }))
+    await expect(c.getByRole('radio', { name: 'A response the service really sent' })).toBeChecked()
+    await expect(c.getByText(/kept on this computer only, never exported/)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('radio', { name: 'I wrote this, or made it up: it holds nothing real' }))
+    await userEvent.upload(c.getByLabelText('A file for POST /workflows/run'), new File(['{"job_id":"sample"}'], 'start.json', { type: 'application/json' }))
+    await userEvent.click(c.getByRole('button', { name: 'Add it' }))
+    await expect(await c.findByText(/A file stated to hold nothing real: start.json/)).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Remove the data of POST /workflows/run' })).toBeInTheDocument()
+  },
+}
+/** A sensitive endpoint: a real response of it is never stored. One given is faked at once and the original is not kept; the form says so before the file is chosen. */
+export const SensitiveEndpoint: Story = {
+  beforeEach: withEngine({ mocks: [{ ...mocks[0], endpoints: [...mocks[0].endpoints, sensitiveEndpoint] }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('Sensitive')).toBeInTheDocument()
+    await expect(c.getByText(/A fake; the original was not kept: profile.json/)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Replace the data of GET /people/{id}/profile' }))
+    await expect(c.getByText(/This call is sensitive: the file is faked at once and the original is not kept/)).toBeInTheDocument()
+  },
+}
+/** An endpoint is added in the service's settings, and can be marked sensitive as it is. */
+export const AddingAnEndpoint: Story = {
+  beforeEach: withEngine({ mocks: [mocks[0]] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Add an endpoint to Fraud scan vendor (sample)' }))
+    await userEvent.type(c.getByRole('textbox', { name: 'The call' }), '/people/{id}/profile')
+    await userEvent.click(c.getByRole('checkbox', { name: 'Sensitive: never store a real response of it' }))
+    await expect(c.getByText(/it cannot be faked again differently later/)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Add the endpoint' }))
+    await expect(await c.findByText('5 calls: 1 with data, 4 answered with what the server makes up')).toBeInTheDocument()
+    await expect(c.getByText('Sensitive')).toBeInTheDocument()
+  },
+}
+/** A real response with no fake of it yet: it says nothing of it is served until the fake is made. */
+export const NotFakedYet: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], endpoints: [...mocks[0].endpoints, unfakedEndpoint] }] }) }
+/** On a task's Data step: the services the task calls, each with what every place is given and the calls it makes with their data, all as the app has it until the task overrides it; then the app's services as its settings have them, folded. */
 export const OnATask: Story = { args: { issueId: 'iss_sample2' } }
-/** A service with ten calls: one has a real response behind it, one was recorded in a live run, eight are taken from the code. Each says which, and any of them can be given a real response. */
+/** A service with ten calls: two have data, eight are answered with what the server makes up. Any of them can be given data. */
 export const TenEndpoints: Story = {
-  args: { issueId: 'iss_sample1' },
   beforeEach: withEngine({ mocks: [{ ...mocks[0], endpoints: [
     ...mocks[0].endpoints,
-    { key: 'cost', method: 'GET', path: '/workflows/runs/{id}/cost', what: 'What the run cost, in credits', real: { at: '2026-11-20T14:00:00Z', how: 'recorded' }, files: ['cost.json'] },
-    ...['cancel', 'retry', 'webhooks', 'account', 'limits'].map((k) => ({ key: k, method: k === 'cancel' || k === 'retry' ? 'POST' : 'GET', path: k === 'cancel' || k === 'retry' ? `/workflows/runs/{id}/${k}` : `/${k}`, what: `(sample) ${k}`, real: null, files: [] })),
+    { ...unfakedEndpoint, data: { app: { ...unfakedEndpoint.data.app!, safe: { kind: 'faked', set: 'faked-cost', files: ['cost.json'], note: 'Faked (sample).' } }, task: null } },
+    ...['cancel', 'retry', 'webhooks', 'account', 'limits'].map((k) => ({ key: k, method: k === 'cancel' || k === 'retry' ? 'POST' : 'GET', path: k === 'cancel' || k === 'retry' ? `/workflows/runs/{id}/${k}` : `/${k}`, what: `(sample) ${k}`, real: null, files: [], data: { app: null, task: null } })),
   ] }] }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByText('10 calls: 2 with a real response behind them, 8 taken from the code')).toBeInTheDocument()
+    await expect(await c.findByText('10 calls: 2 with data, 8 answered with what the server makes up')).toBeInTheDocument()
   },
 }
 /** A data file that is no endpoint's: said, so it can be put right. */
 export const UnlinkedFile: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], unlinked: ['sample-people.csv'] }] }) }
-/** A mock built before endpoints were listed: it says so, and the task's agent can be asked to list them. */
+/** A mock built before endpoints were listed: none are shown, one can be added, and the named sets of data it had are still there below. */
 export const EndpointsNotListed: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], endpoints: [], unlinked: [] }] }) }
 /** Removing a mock: it says what goes with it, and asks whether its real responses are deleted from this computer too, so nothing is left for the next one to trip over. */
 export const RemovingAMock: Story = {

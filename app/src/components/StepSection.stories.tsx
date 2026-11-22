@@ -142,13 +142,14 @@ export const PrototypeNeedsAGuide: Story = {
     await expect(c.getByRole('button', { name: 'Approve the prototype' })).toBeDisabled()
   },
 }
-/** The Data step, not started: the task's own table of where each mock's data comes from, and the app's mocks, there before any agent is asked. It is optional: skipped, the app's defaults are used. */
+/** The Data step, not started: the services the task calls, with what each place is given and each call's data, there before any agent is asked. It is optional: skipped, the app's defaults are used. */
 export const Data: Story = {
   args: { row: { ...row('research'), key: 'data', required: false, state: { key: 'data', status: 'none' }, waitingOn: null } as typeof all[number] },
   beforeEach: withEngine({ stepWork: null }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByText('Where its data comes from, for this task')).toBeInTheDocument()
-    await expect(await c.findByRole('combobox', { name: 'Fraud scan vendor (sample), Reviewer' })).toBeInTheDocument()
+    await expect((await c.findAllByText('What each place is given'))[0]).toBeInTheDocument()
+    await expect(await c.findByRole('combobox', { name: 'Fraud scan vendor (sample), Smoke test' })).toBeInTheDocument() // this task's own
+    await expect((await c.findAllByRole('button', { name: 'Override Fraud scan vendor (sample), Prototype' }))[0]).toBeInTheDocument() // the app's, until it is overridden
   },
 }

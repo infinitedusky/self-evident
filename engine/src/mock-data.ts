@@ -18,7 +18,7 @@
  * One of them is the mock's default: what it serves unless a run says otherwise.
  */
 import { createHash, randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, normalize, sep } from 'node:path'
 import { and, asc, eq } from 'drizzle-orm'
 import { db } from './db/client.js'
@@ -39,7 +39,17 @@ export const DATA_BYTES_MAX = 16_000_000
 /** How many of a service's real responses an invented set is checked against: the newest. */
 const CHECKED_AGAINST = 5
 
+/** Whose data it is, when it is one endpoint's alone: the app's (Settings), or one task's own, in place of the app's. */
+export interface Scope { endpoint: string; task?: string }
+/** The key such data is kept under. It is found by its scope, never by this name. */
+export const scopeKey = (kind: 'faked' | 'provided', sc: Scope) => standInKey(`${kind}-${sc.endpoint.slice(0, 22)}-${createHash('sha256').update(`${sc.endpoint}|${sc.task ?? ''}`).digest('hex').slice(0, 8)}`)
+/** What a folder of given responses says of itself: the endpoint they are responses of, and the task they are for alone. */
+export function scopeOfRecording(dir: string): Scope | undefined {
+  try { const meta = JSON.parse(readFileSync(join(dir, 'given.meta.json'), 'utf8')) as { endpoint?: string; forTask?: string }; return meta.endpoint ? { endpoint: meta.endpoint, ...(meta.forTask ? { task: meta.forTask } : {}) } : undefined } catch { return undefined }
+}
 export interface DataProvenance {
+  /** One endpoint's data alone, and whose. None: a set across the mock's endpoints (a whole recorded run, faked together). */ scope?: Scope
+  /** faked from a response that was not kept, because its endpoint is sensitive: when. */ discarded?: string
   /** The real response it is, or was made from. */ from?: { at: string; given: boolean; files: number }
   /** faked: the files the faker made. Any other file in the set was added by hand, and is kept when the fake is made again. */ fakedFiles?: string[]
   /** faked: what the faker did. */ faked?: { replaced: number; kept: number; byKind: Record<string, number> }
@@ -62,7 +72,7 @@ export function dataNote(d: Pick<DataRow, 'kind' | 'provenance'>): string {
   const from = p.from ? `a real response ${p.from.given ? 'the person gave' : 'recorded'} ${day(p.from.at)}` : 'a real response'
   if (d.kind === 'real') return `${from[0].toUpperCase()}${from.slice(1)}, served as it is. On this computer only: never exported, never shared.`
   const checked = p.checked ? ` Checked ${day(p.checked.at)}: none of the ${p.checked.values} values of ${p.checked.against === 1 ? 'that response' : `the ${p.checked.against} real responses on this computer`} is in it.` : ''
-  if (d.kind === 'faked') return `Faked from ${from}: its structure is real, and ${p.faked ? `${p.faked.replaced} values were replaced` : 'its values were replaced'}${p.kept?.length ? `. Kept as they were, because they are structure: ${p.kept.slice(0, 20).map((k) => `"${k}"`).join(', ')}` : ''}.${checked}`
+  if (d.kind === 'faked') return `${p.discarded ? 'Faked from a real response that was not kept, because this call is marked sensitive' : `Faked from ${from}`}: its structure is real, and ${p.faked ? `${p.faked.replaced} values were replaced` : 'its values were replaced'}${p.kept?.length ? `. Kept as they were, because they are structure: ${p.kept.slice(0, 20).map((k) => `"${k}"`).join(', ')}` : ''}.${checked}`
   return `${p.stated ? `Provided by ${p.stated.by === 'user' ? 'a person' : p.stated.by}, who states it holds nothing real` : 'Written by hand, invented'}.${checked || (p.stated ? ' Not checked: there is no real response of this service on this computer to check it against.' : '')}`
 }
 function viewOf(d: DataRow, m: Pick<Row, 'defaultData'>): DataView {
@@ -116,7 +126,7 @@ async function keep(m: Row, key: string, values: { name: string; kind: DataKind;
     if (old) await tx.update(mockData).set(set).where(eq(mockData.id, old.id))
     else await tx.insert(mockData).values({ id: newId('run').replace(/^run_/, 'mdata_'), mockId: m.id, key, ...set })
     // A mock with one data set serves it: the first one made is the default.
-    if (!m.defaultData && !old) await tx.update(mock).set({ defaultData: key, updatedAt: new Date() }).where(eq(mock.id, m.id))
+    if (!m.defaultData && !old && !values.provenance.scope?.task) await tx.update(mock).set({ defaultData: key, updatedAt: new Date() }).where(eq(mock.id, m.id))
     await appendEvent(tx, { workspaceId, appId: m.appId, issueId: issueId ?? null, actor, type: 'mock.data_saved', payload: { key: m.key, data: key, kind: values.kind, files: Object.keys(values.files).length } })
   })
   const [fresh] = await db.select().from(mock).where(eq(mock.id, m.id))
@@ -140,10 +150,13 @@ const strings = (x: unknown, max: number) => (Array.isArray(x) ? x.map((v) => cl
  * The salt is made once and kept, so faking the same response again changes nothing that the plan did not.
  */
 export async function fakeData(appId: string, key: string, i: { recording?: string; plan?: FakePlan; dataKey?: string; name?: string; issueId?: string | null } = {}, actor = 'agent'): Promise<{ data: DataView; report: Omit<FakeReport, 'keptValues'> }> {
-  const m = await mockOf(appId, key), dk = dataKeyOf(i.dataKey, 'faked')
+  const m = await mockOf(appId, key)
+  const { dir, recorded, from } = realOf(m, i.recording)
+  // A response given for one endpoint is faked into that endpoint's own data (and a task's own, where it was given for the task alone).
+  const scope = i.dataKey ? undefined : scopeOfRecording(dir)
+  const dk = dataKeyOf(i.dataKey, scope ? scopeKey('faked', scope) : 'faked')
   const old = await dataRow(m.id, dk)
   if (old && old.kind !== 'faked') throw new PlanError(`"${dk}" is ${old.kind} data: a fake is kept under another name`)
-  const { dir, recorded, from } = realOf(m, i.recording)
   const given = (i.plan ?? {}) as FakePlan
   const plan: FakePlan = {
     keep: strings(given.keep, 200), keepValues: strings(given.keepValues, 200), keepHosts: strings(given.keepHosts, 60), text: strings(given.text, 200),
@@ -159,11 +172,38 @@ export async function fakeData(appId: string, key: string, i: { recording?: stri
   if (!r.ok) throw new PlanError(`refused: the fake still carries ${r.count} value${r.count === 1 ? '' : 's'} of the real response. Change the plan (a column in keep that holds someone's, a value in keepValues, a site in keepHosts whose address is the person's), or name a column in text to replace it whole:\n${leaksSay(r.leaks, r.count)}`)
   const { keptValues, ...rest } = report
   const data = await keep(m, dk, {
-    name: clip(i.name, 80) || old?.name || 'Faked from the real response', kind: 'faked', files: cleanData(files), recording: dir, plan: plan as Record<string, unknown>,
-    provenance: { from, fakedFiles: Object.keys(made).sort(), faked: { replaced: report.replaced, kept: report.kept, byKind: report.byKind }, kept: keptValues.slice(0, 200), checked: { at: new Date().toISOString(), files: r.read.files, values: r.read.values, against: 1 } },
-    issueId: i.issueId,
+    name: clip(i.name, 80) || old?.name || (scope ? `Faked: ${scope.endpoint}` : 'Faked from the real response'), kind: 'faked', files: cleanData(files), recording: dir, plan: plan as Record<string, unknown>,
+    provenance: { ...(scope ? { scope } : {}), from, fakedFiles: Object.keys(made).sort(), faked: { replaced: report.replaced, kept: report.kept, byKind: report.byKind }, kept: keptValues.slice(0, 200), checked: { at: new Date().toISOString(), files: r.read.files, values: r.read.values, against: 1 } },
+    issueId: scope?.task ?? i.issueId,
   }, actor, old)
   return { data, report: rest }
+}
+
+/**
+ * A real response of a sensitive endpoint: faked at once, and the original never stored (Sandy, 2026-11-22: "if
+ * they're marked as sensitive, you aren't able to store non-faked"). The plan is the one this endpoint's fake
+ * already had, else the mock's whole-run fake's, else none (everything not plainly structure is replaced). Refused,
+ * with nothing kept at all, while the leak check finds a real value in what the faker made.
+ */
+export async function fakeGiven(appId: string, key: string, i: { endpoint: string; recorded: { name: string; text: string }[]; issueId?: string | null; given?: boolean }, actor = 'user'): Promise<{ data: DataView; maybeStructure: string[] }> {
+  const m = await mockOf(appId, key)
+  const scope: Scope = { endpoint: i.endpoint, ...(i.issueId ? { task: i.issueId } : {}) }
+  const dk = scopeKey('faked', scope)
+  const old = await dataRow(m.id, dk)
+  const base = (old?.kind === 'faked' ? old : await dataRow(m.id, scopeKey('faked', { endpoint: i.endpoint })) ?? await dataRow(m.id, 'faked'))?.plan as FakePlan | undefined
+  const plan: FakePlan = { keep: strings(base?.keep, 200), keepValues: strings(base?.keepValues, 200), keepHosts: strings(base?.keepHosts, 60), text: strings(base?.text, 200), ...(base?.varyCounts === false ? { varyCounts: false } : {}), salt: typeof old?.plan?.salt === 'string' ? old.plan.salt : randomBytes(16).toString('hex') }
+  const { files: made, report } = fake(i.recorded, plan)
+  const nothing = 'Nothing of it was kept: this call is sensitive, so a real response is never stored'
+  if (keptRefused(report.keptValues).length) throw new PlanError(`the plan keeps values that are someone's, not structure. ${nothing}`)
+  const r = checkLeaks(i.recorded, Object.entries(made).map(([path, text]) => ({ path, text })), report.keptValues)
+  if (!r.ok) throw new PlanError(`refused: the fake would still carry ${r.count} value${r.count === 1 ? '' : 's'} of the real response. ${nothing}. Ask the task's agent to say what is structure, then give it again:\n${leaksSay(r.leaks, r.count)}`)
+  const now = new Date().toISOString()
+  const data = await keep(m, dk, {
+    name: old?.name || `Faked: ${i.endpoint}`, kind: 'faked', files: cleanData(made), recording: null, plan: plan as Record<string, unknown>,
+    provenance: { scope, discarded: now, from: { at: now, given: i.given !== false, files: i.recorded.length }, fakedFiles: Object.keys(made).sort(), faked: { replaced: report.replaced, kept: report.kept, byKind: report.byKind }, kept: report.keptValues.slice(0, 200), checked: { at: now, files: r.read.files, values: r.read.values, against: 1 } },
+    issueId: i.issueId,
+  }, actor, old)
+  return { data, maybeStructure: report.maybeStructure }
 }
 
 /**
@@ -172,7 +212,7 @@ export async function fakeData(appId: string, key: string, i: { recording?: stri
  * responses of the service on this computer, and where there is none, only `stated` (a person's word that it holds
  * nothing real) lets it be kept.
  */
-export async function saveData(appId: string, key: string, i: { dataKey: string; name?: string; files: Record<string, string>; stated?: boolean; issueId?: string | null }, actor = 'agent') {
+export async function saveData(appId: string, key: string, i: { dataKey: string; name?: string; files: Record<string, string>; stated?: boolean; issueId?: string | null; /** One endpoint's data alone, and whose. */ scope?: Scope }, actor = 'agent') {
   const m = await mockOf(appId, key), dk = dataKeyOf(i.dataKey, '')
   const old = await dataRow(m.id, dk)
   if (old?.kind === 'real') throw new PlanError(`"${dk}" is a real response: it is not written over. Keep invented data under another name`)
@@ -195,7 +235,7 @@ export async function saveData(appId: string, key: string, i: { dataKey: string;
     values += r.read.values; read += r.read.files
   }
   if (!real.length && !i.stated) throw new PlanError(`there is no real response of ${m.name} on this computer to check this against: it is kept only when a person states it holds nothing real (stated: true, from the person, never assumed)`)
-  const provenance: DataProvenance = { ...(real.length ? { checked: { at: now, files: read, values, against: real.length } } : {}), ...(i.stated ? { stated: { by: actor, at: now } } : {}) }
+  const provenance: DataProvenance = { ...(i.scope ? { scope: i.scope } : old ? (provOf(old).scope ? { scope: provOf(old).scope } : {}) : {}), ...(real.length ? { checked: { at: now, files: read, values, against: real.length } } : {}), ...(i.stated ? { stated: { by: actor, at: now } } : {}) }
   return keep(m, dk, { name: clip(i.name, 80) || old?.name || dk, kind: 'invented', files, recording: null, plan: {}, provenance, issueId: i.issueId }, actor, old)
 }
 

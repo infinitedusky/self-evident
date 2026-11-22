@@ -2,22 +2,50 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, userEvent, within } from 'storybook/test'
 import { TaskCalls } from './TaskCalls'
 import { withEngine } from '../stories/mock-engine'
-import { mocks, sampleApp, taskServices } from '../stories/sample'
+import { mockPlacesForTask, mocks, resultsItem, sampleApp, taskServices } from '../stories/sample'
 
 // The services a task calls, and its calls of each, at the top of its Data step. Made up: three invented services.
-const meta = { title: 'Components/TaskCalls', component: TaskCalls, args: { appId: sampleApp.id, issueId: 'iss_sample2', mocks },
+const meta = { title: 'Components/TaskCalls', component: TaskCalls, args: { appId: sampleApp.id, issueId: 'iss_sample2', mocks, places: mockPlacesForTask },
   render: (a) => <div style={{ maxWidth: 1000 }}><TaskCalls {...a} /></div> } satisfies Meta<typeof TaskCalls>
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** Three of the app's services: one with a mock and four calls (a real response behind one, the code behind two, one the mock lacks), one whose mock is not built yet, one with no calls listed yet. */
+/** Three of the app's services. Each block reads top to bottom: what each place is given (the app's default until the task overrides it), then the calls this task makes, each with its data. One call has this task's own data in place of the app's; one is not on its service yet. */
 export const Services: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByText('3 services, 5 calls: 1 with a real response behind it, 3 taken from the code, 1 not on its mock')).toBeInTheDocument()
+    await expect(await c.findByText("3 services, 5 calls: 1 with data (1 this task's own), 3 answered with what the server makes up, 1 not on its service yet")).toBeInTheDocument()
     await expect(c.getByText('No calls listed yet: which of its endpoints does this task use?')).toBeInTheDocument()
-    // A real response is given on the call it answers: every call has the control.
-    await expect(canvasElement.querySelectorAll('input[type=file]')).toHaveLength(5)
+    await expect(c.getAllByText('What each place is given')).toHaveLength(3)
+    await expect(c.getByText("This task's own")).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: /^Go back to the app's data of GET the results file/ })).toBeInTheDocument()
+  },
+}
+/** A call answered with the app's data: it says so, and Override puts this task's own in place of it, for this task alone. */
+export const OverridingData: Story = {
+  beforeEach: withEngine({ taskServices: [{ ...taskServices[0], calls: taskServices[0].calls.map((c) => (c.id === 'tcall_s3' ? { ...c, endpoint: { ...c.endpoint!, data: { app: resultsItem, task: null } } } : c)) }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText("From the app's settings")).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: /^Override the data of GET the results file/ }))
+    await expect(c.getByText(/For this task alone\. Other tasks keep the app's\./)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('radio', { name: 'I wrote this, or made it up: it holds nothing real' }))
+    await userEvent.upload(c.getByLabelText(/^A file for GET the results file/), new File(['a,b\n1,2\n'], 'mine.csv', { type: 'text/csv' }))
+    await userEvent.click(c.getByRole('button', { name: 'Add it' }))
+    await expect(await c.findByText("This task's own")).toBeInTheDocument()
+  },
+}
+/** A call is picked from the service's endpoints. One it does not have is typed, and the form says it is added to the service in Settings. */
+export const PickingACall: Story = {
+  beforeEach: withEngine({ taskServices: taskServices.slice(0, 1) }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Add a call to Fraud scan vendor (sample)' }))
+    const pick = c.getByRole('combobox', { name: "One of Fraud scan vendor (sample)'s endpoints" })
+    await expect(within(pick).getAllByRole('option').map((o) => o.textContent)).toEqual(['GET /workflows/runs/{id}/links', 'A new one…']) // the service's, less the ones already listed
+    await expect(c.queryByRole('textbox', { name: 'The call' })).toBeNull()
+    await userEvent.selectOptions(pick, '')
+    await expect(c.getByText('This is added to Fraud scan vendor (sample) in Settings, as one of its endpoints.')).toBeInTheDocument()
   },
 }
 /** Nothing listed yet: the agent names the services when the step is started, or the person adds one. */
@@ -48,13 +76,12 @@ export const ANewServiceWrittenDifferently: Story = {
     await expect(await c.findByText('that is already one of this app\'s services, as "Fraud scan vendor (sample)"')).toBeInTheDocument()
   },
 }
-/** A call is added under its service: only the call and what the task needs from it. */
+/** A call is added under its service: one of its endpoints is picked, and only what the task needs from it is written. */
 export const AddingACall: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Add a call to Breach lookup (sample)' }))
-    await expect(c.getByRole('button', { name: 'Add' })).toBeDisabled()
-    await userEvent.type(c.getByRole('textbox', { name: 'The call' }), '/v2/search')
+    await expect(c.getByRole('combobox', { name: "One of Breach lookup (sample)'s endpoints" })).toHaveValue('search')
     await userEvent.type(c.getByRole('textbox', { name: 'What this task needs from it' }), 'An address in no breach, and one in three')
     await userEvent.click(c.getByRole('button', { name: 'Add' }))
     await expect(await c.findByText('Needs: An address in no breach, and one in three')).toBeInTheDocument()

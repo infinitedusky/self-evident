@@ -25,6 +25,7 @@ export interface Endpoint {
   /** As the app calls it, from the service's address: /workflows/runs/{id}/live_status. One reached by a link the service sends (a signed download) says so in words instead. */ path: string
   /** What it answers with, in a line. */ what?: string
   /** Its response's file, when that is not named <key>.<ext>. */ file?: string
+  /** Sensitive (Sandy, 2026-11-22): a real response of it is never stored. One that comes in is faked at once and the original deleted, so only a faked copy is ever kept or served. */ sensitive?: boolean
 }
 export const ENDPOINTS_MAX = 80
 const clip = (s: unknown, n: number) => String(s ?? '').trim().slice(0, n)
@@ -35,7 +36,7 @@ export function cleanEndpoints(given: unknown): Endpoint[] {
   for (const x of given as Record<string, unknown>[]) {
     const key = standInKey(String(x?.key ?? '')), path = clip(x?.path, 300)
     if (!key || !path || out.some((e) => e.key === key)) continue
-    out.push({ key, method: clip(x.method, 10).toUpperCase() || 'GET', path, ...(clip(x.what, 300) ? { what: clip(x.what, 300) } : {}), ...(clip(x.file, 200) ? { file: clip(x.file, 200) } : {}) })
+    out.push({ key, method: clip(x.method, 10).toUpperCase() || 'GET', path, ...(clip(x.what, 300) ? { what: clip(x.what, 300) } : {}), ...(clip(x.file, 200) ? { file: clip(x.file, 200) } : {}), ...(x.sensitive === true ? { sensitive: true } : {}) })
     if (out.length >= ENDPOINTS_MAX) break
   }
   return out

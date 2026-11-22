@@ -6229,3 +6229,42 @@ fields are now named that way (Its real address, The environment variable to ove
 its key). An agent that finds a service whose address is written into the code adds the variable as part of the
 task; a library with no way to change its address is reported plainly. Mockaroo came up: it points the app the same
 way (its address goes in the same variable), so it could only ever be a source of invented data, not a replacement.
+
+### Real or mock per place, and data on the endpoint (Sandy, 2026-11-22)
+
+Looking at the options for where data comes from: "Record and Replay seems like it is describing a step we would do
+in the data tab. We either use real or mock, where the mock comes from is a separate concern." Then the layout: "in
+settings each service has, top to bottom, definition (name, url, env vars), the default data source mock or real,
+then a place to add endpoints where you define endpoints and set the mock data. Then on the data tab all of those
+would be set and you could override." And: "In practice, all this means is that you can now override a single
+endpoint. Because whatever you set in the settings will be the default set." Built that way:
+
+- **The choice per place is the real service or the mock.** For a person's own prototype or smoke test the mock can
+  be told to answer with recorded responses as they are; the default is faked. A reviewer has nothing to choose:
+  always the mock, never anything real. The stored values are the old ones read anew (`live` the real service,
+  `fake` the mock, `replay` the mock with recorded responses), so nothing was migrated; a named set (`data`) is no
+  longer a choice.
+- **Data sits on the endpoint** (`engine/src/mock-serve.ts`). Each endpoint has the app's data and, for a task, the
+  task's own in place of it. What a run is given as `$MOCK_DATA` is put together endpoint by endpoint: safe files
+  written out, recorded ones as links into their recording, so deleting a real response takes it out of everything
+  that served it. Underneath, the data is where it was (the sets of `mock-data.ts`, the recordings on disk): a
+  response given for one endpoint is faked into a set of that endpoint's own, and a task's own carries the task.
+  Named sets are no longer shown, except on a mock that lists no endpoints.
+- **Sensitive endpoints**, asked for while this was being built: "marking specific endpoints as being sensitive …
+  if they're marked as sensitive, you aren't able to store non-faked." A real response of one is faked the moment
+  it arrives (given, or in a live run) and the original deleted; marking an endpoint sensitive does the same to
+  what is already on this computer. The fake uses the plan that endpoint's fake already had, else the mock's, else
+  none, and is refused, with nothing kept, while the leak check finds a real value in it. Because the original is
+  gone it cannot be faked again with a better plan: the form says so.
+- **The pages.** A service in Settings reads top to bottom: definition, what each place is given, endpoints with
+  their data (add, replace, remove; add an endpoint; mark it sensitive), then provenance, real responses and
+  history folded away. A task's Data step shows the same for the services it calls: what each place is given with
+  an Override, and its calls, picked from the service's endpoints, each with its data and an Override (or Add,
+  which becomes the service's data in Settings, and says so). A call the service does not have is added to the
+  service in Settings, and the form says so.
+- **Recording** is a button on the service (a live smoke run of its task), not an option in the table.
+- Removing a mock now also removes its folder under the mocks home (its server and the data folders written for
+  its runs), so nothing of it is left.
+
+Not done: the first fake of a real response still needs the task's agent (it says what is structure); the data
+agent is the next piece and will own that. Export carries the app's safe data for every endpoint.

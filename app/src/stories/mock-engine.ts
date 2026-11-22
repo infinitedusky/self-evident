@@ -144,6 +144,27 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/apps/:id/mocks', async ({ request }) => { const b = await request.json() as { name: string; standsInFor?: string }; const alike = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, ''); const there = d.mocks.find((m) => alike(m.name) === alike(b.name)); if (there) return HttpResponse.json({ error: `that is already one of this app's services, as "${there.name}"` }, { status: 400 }); const m: import('../engine').Mock = { ...d.mocks[d.mocks.length - 1], key: b.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: b.name, standsInFor: b.standsInFor ?? '', status: 'needs_recording', needs: { at: '2026-11-21T10:00:00Z' }, issue: null, files: [], data: [], endpoints: [], unlinked: [], cmd: null }; d.mocks = [...d.mocks, m]; return reply(m) }),
     http.get('/api/apps/:id/mocks/:key/real', () => reply(d.mockReal)),
     http.delete('/api/apps/:id/mocks/:key/real', ({ request }) => { d.mockReal = d.mockReal.filter((r) => r.id !== new URL(request.url).searchParams.get('id')); return reply(d.mockReal) }),
+    http.post('/api/apps/:id/mocks/:key/endpoints', async ({ params, request }) => { const b = await request.json() as { method: string; path: string; what?: string; sensitive?: boolean }; d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: [...m.endpoints, { key: `e${m.endpoints.length + 1}`, method: b.method, path: b.path, what: b.what, ...(b.sensitive ? { sensitive: true } : {}), real: null, files: [], data: { app: null, task: null } }] } : m)); return reply(d.mocks.find((m) => m.key === params.key)) }),
+    // One endpoint's data given: the app's, or one task's own. A sensitive endpoint's real response is faked at once and not kept.
+    http.post('/api/apps/:id/mocks/:key/endpoints/:endpoint/data', async ({ params, request }) => {
+      const f = await request.formData(), real = f.get('real') === 'true', task = !!f.get('issueId')
+      const name = (e: import('../engine').MockEndpoint) => `${e.key}.${((f.get('file') as File | null)?.name ?? 'x.json').split('.').pop()}`
+      const item = (e: import('../engine').MockEndpoint): import('../engine').EndpointItem => (real && !e.sensitive
+        ? { recorded: { id: `sample/given-${e.key}`, at: '2026-11-22T10:00:00Z', how: 'given', files: [name(e)] }, safe: null }
+        : { recorded: null, safe: { kind: real ? 'faked' : 'provided', set: `${real ? 'faked' : 'provided'}-${e.key}`, files: [name(e)], note: real ? 'Faked from a real response that was not kept, because this call is marked sensitive.' : 'Provided by a person, who states it holds nothing real.' } })
+      const put = (e: import('../engine').MockEndpoint) => (e.key === params.endpoint ? { ...e, data: task ? { ...e.data, task: item(e) } : { ...e.data, app: item(e) } } : e)
+      const was = d.mocks.find((m) => m.key === params.key)?.endpoints.find((e) => e.key === params.endpoint)
+      if (!task) d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: m.endpoints.map(put) } : m))
+      d.taskServices = d.taskServices.map((x) => (x.key === params.key ? { ...x, calls: x.calls.map((c) => (c.endpoint ? { ...c, endpoint: put(c.endpoint) } : c)) } : x))
+      return reply({ kept: !real ? 'provided' : was?.sensitive ? 'faked' : 'recorded', asked: real && !was?.sensitive ? 'iss_sample2' : null })
+    }),
+    http.delete('/api/apps/:id/mocks/:key/endpoints/:endpoint/data', ({ params, request }) => {
+      const task = !!new URL(request.url).searchParams.get('issue')
+      const drop = (e: import('../engine').MockEndpoint) => (e.key === params.endpoint ? { ...e, data: task ? { ...e.data, task: null } : { ...e.data, app: null } } : e)
+      if (!task) d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: m.endpoints.map(drop) } : m))
+      d.taskServices = d.taskServices.map((x) => (x.key === params.key ? { ...x, calls: x.calls.map((c) => (c.endpoint ? { ...c, endpoint: drop(c.endpoint) } : c)) } : x))
+      return reply({ removed: true, real: 0 })
+    }),
     http.patch('/api/apps/:id/mocks/:key/endpoints/:endpoint', async ({ params, request }) => { const b = await request.json() as { what?: string }; d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: m.endpoints.map((e) => (e.key === params.endpoint ? { ...e, ...b } : e)) } : m)); return reply(d.mocks.find((m) => m.key === params.key)) }),
     http.delete('/api/apps/:id/mocks/:key/endpoints/:endpoint', ({ params }) => { d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: m.endpoints.filter((e) => e.key !== params.endpoint) } : m)); return reply(d.mocks.find((m) => m.key === params.key)) }),
     http.patch('/api/apps/:id/mocks/:key/data/:data', () => reply(d.mocks[0].data)),
@@ -152,14 +173,28 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/issues/:id/services', async ({ request }) => { const b = await request.json() as { service: string }; const m = d.mocks.find((x) => x.key === b.service || x.name === b.service); if (!m) return HttpResponse.json({ error: `"${b.service}" is not one of this app's services` }, { status: 400 }); if (!d.taskServices.some((x) => x.key === m.key)) d.taskServices = [...d.taskServices, { key: m.key, name: m.name, standsInFor: m.standsInFor, status: m.status, foundFor: null, calls: [] }]; return reply(d.taskServices) }),
     http.delete('/api/issues/:id/services/:service', ({ params }) => { d.taskServices = d.taskServices.filter((x) => x.key !== params.service); return reply(d.taskServices) }),
     http.get('/api/issues/:id/calls', () => reply(d.taskServices.flatMap((x) => x.calls))),
-    http.post('/api/issues/:id/calls', async ({ request }) => { const b = await request.json() as { service: string; method: string; path: string; what?: string }; const sv = d.taskServices.find((x) => x.key === b.service); const c: import('../engine').TaskCall = { id: `tcall_new${Date.now()}`, service: b.service, serviceName: sv?.name ?? b.service, method: b.method, path: b.path, what: b.what ?? '', by: 'user', state: 'answered', mock: sv ? { key: sv.key, name: sv.name, status: sv.status } : null, endpoint: { key: 'new', method: b.method, path: b.path, what: b.what, real: null, files: [] }, linked: false }; d.taskServices = d.taskServices.map((x) => (x.key === b.service ? { ...x, calls: [...x.calls, c] } : x)); return reply(d.taskServices.flatMap((x) => x.calls)) }),
+    http.post('/api/issues/:id/calls', async ({ request }) => { const b = await request.json() as { service: string; method: string; path: string; what?: string }; const sv = d.taskServices.find((x) => x.key === b.service); const c: import('../engine').TaskCall = { id: `tcall_new${Date.now()}`, service: b.service, serviceName: sv?.name ?? b.service, method: b.method, path: b.path, what: b.what ?? '', by: 'user', state: 'answered', mock: sv ? { key: sv.key, name: sv.name, status: sv.status } : null, endpoint: { ...(d.mocks.find((m) => m.key === b.service)?.endpoints.find((e) => e.method === b.method && e.path === b.path) ?? { key: 'new', method: b.method, path: b.path, what: b.what, real: null, files: [], data: { app: null, task: null } }) }, linked: false }; d.taskServices = d.taskServices.map((x) => (x.key === b.service ? { ...x, calls: [...x.calls, c] } : x)); return reply(d.taskServices.flatMap((x) => x.calls)) }),
     http.delete('/api/issues/:id/calls', () => { d.taskServices = d.taskServices.map((x) => ({ ...x, calls: [] })); return reply([]) }),
     http.patch('/api/issues/:id/calls/:call', async ({ params, request }) => { const b = await request.json() as Partial<import('../engine').TaskCall>; d.taskServices = d.taskServices.map((x) => ({ ...x, calls: x.calls.map((c) => (c.id === params.call ? { ...c, ...b, service: c.service } : c)) })); return reply(d.taskServices.flatMap((x) => x.calls)) }),
     http.put('/api/issues/:id/calls/:call/endpoint', () => reply(d.taskServices.flatMap((x) => x.calls))),
     http.post('/api/issues/:id/calls/:call/cover', () => reply({ calls: d.taskServices.flatMap((x) => x.calls), mock: d.mocks[0] })),
     http.get('/api/apps/:id/mock-places', ({ request }) => reply(new URL(request.url).searchParams.get('issue') ? d.mockPlacesForTask : d.mockPlaces)),
     http.get('/api/apps/:id/mocks/:key/history', () => reply(d.mockChanges)),
-    http.put('/api/apps/:id/mocks/:key/places/:place', () => reply(d.mockPlaces[0].places.prototype)),
+    // What a place is given, changed: the real service, the mock, or (a task) back to the app's.
+    http.put('/api/apps/:id/mocks/:key/places/:place', async ({ params, request }) => {
+      const b = await request.json() as { source: import('../engine').MockSource; issueId?: string | null }
+      const place = params.place as import('../engine').MockPlace, task = !!b.issueId
+      const change = (r: import('../engine').MockPlacesRow): import('../engine').MockPlacesRow => {
+        if (r.mock !== params.key) return r
+        const was = r.places[place], mine = b.source === 'default' ? null : { source: b.source }
+        const choice = mine ?? (task ? was.app : null) ?? { source: 'default' as const }
+        const live = choice.source === 'live', recorded = choice.source === 'replay'
+        return { ...r, places: { ...r.places, [place]: { ...was, ...(task ? { own: mine } : { app: mine }), choice, from: mine ? (task ? 'task' : 'app') : task && was.app ? 'app' : 'none', how: live ? 'live' : 'data', form: live ? undefined : recorded ? 'recorded' : 'faked', real: recorded,
+          says: live ? `The real ${r.name}, every run; what it sends is kept` : recorded ? 'The mock, with recorded responses as they are (1 of its 4 calls): this computer only' : 'The mock, with faked data' } } }
+      }
+      if (task) d.mockPlacesForTask = d.mockPlacesForTask.map(change); else d.mockPlaces = d.mockPlaces.map(change)
+      return reply((task ? d.mockPlacesForTask : d.mockPlaces).find((r) => r.mock === params.key)!.places[place])
+    }),
     http.post('/api/apps/:id/mocks/:key/data', () => reply(d.mocks[0].data[1])),
     http.post('/api/apps/:id/mocks/:key/recording', () => reply({ files: ['response.json'], asked: 'iss_sample2' })),
     http.get('/api/apps/:id/screens', ({ request }) => { const { all, ...rest } = d.screens; return reply(new URL(request.url).searchParams.get('all') === '1' && all ? { ...rest, screens: all } : rest) }),

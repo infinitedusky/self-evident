@@ -641,13 +641,20 @@ Kept as recorded, because they are shape: "completed", "running".
 
 Checked 20 Nov 2026: none of the 2,914 values in the recording's 9 files is in this mock.
 `
-/** Made up: the four calls an app makes to one vendor. Only the last has a real response behind it; the rest are taken from the code. */
+/** Made up: the four calls an app makes to one vendor. Only the last has data: a real response the person gave, and a fake of it. The rest are answered with what the server makes up. */
+const none = { app: null, task: null }
+const fakedNote = 'Faked from a real response the person gave 18 Nov 2026: its structure is real, and 2610 values were replaced. Kept as they were, because they are structure: "completed", "running", "high", "low". Checked 20 Nov 2026: none of the 2914 values of that response is in it.'
+export const resultsItem: import('../engine').EndpointItem = { recorded: { id: 'app_sample/iss_sample1/fraud-scan/given-2026-11-18', at: '2026-11-18T15:20:00Z', how: 'given', files: ['results.csv'] }, safe: { kind: 'faked', set: 'faked', files: ['results.csv'], note: fakedNote } }
 export const mockEndpointsSample: import('../engine').MockEndpoint[] = [
-  { key: 'start', method: 'POST', path: '/workflows/run', what: 'A job id for the people sent', real: null, files: [] },
-  { key: 'status', method: 'GET', path: '/workflows/runs/{id}/status', what: 'Running, then completed', real: null, files: [] },
-  { key: 'links', method: 'GET', path: '/workflows/runs/{id}/links', what: 'Where to fetch the results', real: null, files: [] },
-  { key: 'results', method: 'GET', path: 'the results file, by the link the service sends', what: 'One row for each person sent, with what was found', real: { at: '2026-11-18T15:20:00Z', how: 'given' }, files: ['results.csv'] },
+  { key: 'start', method: 'POST', path: '/workflows/run', what: 'A job id for the people sent', real: null, files: [], data: none },
+  { key: 'status', method: 'GET', path: '/workflows/runs/{id}/status', what: 'Running, then completed', real: null, files: [], data: none },
+  { key: 'links', method: 'GET', path: '/workflows/runs/{id}/links', what: 'Where to fetch the results', real: null, files: [], data: none },
+  { key: 'results', method: 'GET', path: 'the results file, by the link the service sends', what: 'One row for each person sent, with what was found', real: { at: '2026-11-18T15:20:00Z', how: 'given' }, files: ['results.csv'], data: { app: resultsItem, task: null } },
 ]
+/** Made up: a call marked sensitive. Its real response was faked as it arrived and not kept. */
+export const sensitiveEndpoint: import('../engine').MockEndpoint = { key: 'profile', method: 'GET', path: '/people/{id}/profile', what: 'Who the person is: name, home address, family', sensitive: true, real: null, files: ['profile.json'], data: { app: { recorded: null, safe: { kind: 'faked', set: 'faked-profile', files: ['profile.json'], note: 'Faked from a real response that was not kept, because this call is marked sensitive: its structure is real, and 41 values were replaced. Checked 22 Nov 2026: none of the 41 values of that response is in it.' } }, task: null } }
+/** Made up: a call with a real response that has no fake yet, so nothing of it is served. */
+export const unfakedEndpoint: import('../engine').MockEndpoint = { key: 'cost', method: 'GET', path: '/workflows/runs/{id}/cost', what: 'What the run cost', real: { at: '2026-11-22T09:00:00Z', how: 'given' }, files: [], data: { app: { recorded: { id: 'app_sample/iss_sample1/fraud-scan/given-2026-11-22', at: '2026-11-22T09:00:00Z', how: 'given', files: ['cost.json'] }, safe: null }, task: null } }
 /** Made up: the data one mock can answer with, one of each kind. */
 export const mockDataSample: import('../engine').MockData[] = [
   { key: 'faked', name: 'Faked from the real response (sample)', kind: 'faked', files: [{ path: 'results.csv', bytes: 84_210 }], provenance: { from: { at: '2026-11-18T15:20:00Z', given: true, files: 1 }, faked: { replaced: 2_610, kept: 304 }, kept: ['completed', 'running', 'high', 'low'], checked: { at: '2026-11-20T10:00:00Z', files: 1, values: 2_914, against: 1 } }, note: 'Faked from a real response the person gave 18 Nov 2026: its structure is real, and 2610 values were replaced. Kept as they were, because they are structure: "completed", "running", "high", "low". Checked 20 Nov 2026: none of the 2914 values of that response is in it.', shareable: true, isDefault: true, issueId: 'iss_sample1', updatedAt: '2026-11-20T10:00:00Z' },
@@ -662,49 +669,39 @@ export const mocks: import('../engine').Mock[] = [
   { key: 'breach-api', name: 'Breach lookup (sample)', status: 'assumed', standsInFor: 'Breach lookup API v2, /search (sample)', upstream: null, env: { BREACH_API_URL: '{url}' }, cmd: 'node server.mjs',
     files: [{ path: 'server.mjs', bytes: 2_400 }],
     provenance: { real: 'nothing: the shape is assumed', invented: 'every value', covers: ['an address with no breaches', 'an address in three breaches'], cannotShow: ['any field the documentation leaves out'] },
-    note: '# Breach lookup (sample): a mock\n\nStands in for: Breach lookup API v2, /search (sample).\n\nMined from: nothing. Its shape is assumed, written before any real response was recorded; it shows only that the code handles the guess.\n', needs: null, issue: null, recordedAt: null, minedAt: null, unmined: null, usedBy: [], defaultData: 'two-breaches', data: [{ key: 'two-breaches', name: 'An address in two breaches (sample)', kind: 'invented', files: [{ path: 'search.json', bytes: 1_840 }], provenance: { stated: { by: 'user', at: '2026-11-20T11:00:00Z' } }, note: 'Provided by a person, who states it holds nothing real. Not checked: there is no real response of this service on this computer to check it against.', shareable: true, isDefault: true, issueId: null, updatedAt: '2026-11-20T11:00:00Z' }], endpoints: [{ key: 'search', method: 'GET', path: '/v2/search', what: 'The breaches an address is in', real: null, files: ['search.json'] }], unlinked: [], connection: { address: null, addressSetting: 'BREACH_API_URL', keySetting: null, others: {} } },
+    note: '# Breach lookup (sample): a mock\n\nStands in for: Breach lookup API v2, /search (sample).\n\nMined from: nothing. Its shape is assumed, written before any real response was recorded; it shows only that the code handles the guess.\n', needs: null, issue: null, recordedAt: null, minedAt: null, unmined: null, usedBy: [], defaultData: 'two-breaches', data: [{ key: 'two-breaches', name: 'An address in two breaches (sample)', kind: 'invented', files: [{ path: 'search.json', bytes: 1_840 }], provenance: { stated: { by: 'user', at: '2026-11-20T11:00:00Z' } }, note: 'Provided by a person, who states it holds nothing real. Not checked: there is no real response of this service on this computer to check it against.', shareable: true, isDefault: true, issueId: null, updatedAt: '2026-11-20T11:00:00Z' }], endpoints: [{ key: 'search', method: 'GET', path: '/v2/search', what: 'The breaches an address is in', real: null, files: ['search.json'], data: { app: { recorded: null, safe: { kind: 'provided', set: 'two-breaches', files: ['search.json'], note: 'Provided by a person, who states it holds nothing real. Not checked: there is no real response of this service on this computer to check it against.' } }, task: null } }], unlinked: [], connection: { address: null, addressSetting: 'BREACH_API_URL', keySetting: null, others: {} } },
   { key: 'address-lookup', name: 'Address lookup (sample)', status: 'needs_recording', standsInFor: 'Address lookup v1 (sample)', upstream: 'https://api.address-lookup.example', env: { ADDRESS_LOOKUP_URL: '{container_url}' }, cmd: null, files: [], provenance: {},
     note: '# Address lookup (sample): a mock\n\nNot made yet: it needs a recording of the real service.\n',
     needs: { person: 'one consenting person, who agrees to their address being looked up', key: 'ADDRESS_LOOKUP_KEY', cost: 'one lookup, about $0.40', why: 'SS-2 shows the matched address', file: 'the JSON a lookup returns (sample)', at: '2026-11-20T09:00:00Z' }, issue: { id: 'iss_sample2', identifier: 'SS-2', title: 'Totals and analytics' }, recordedAt: null, minedAt: null, unmined: null, usedBy: [], defaultData: null, data: [], endpoints: [], unlinked: [], connection: { address: 'https://api.address-lookup.example', addressSetting: 'ADDRESS_LOOKUP_URL', keySetting: null, others: {} } },
 ]
 
-/** Made up: where each sample mock's data comes from, as the app has it (no task has changed anything). */
-const placeOf = (mock: string, name: string, place: import('../engine').MockPlace, p: Partial<import('../engine').MockPlan>): import('../engine').MockPlan => ({ mock, name, place, how: 'data', choice: { source: 'default' }, from: 'none', says: '', own: null, app: null, ...p })
-const fakedSays = 'A fake of the real response of 18 Nov 2026', realSays = 'A real response, as it is (18 Nov 2026): this computer only'
-const fraud = { key: 'faked', name: 'Faked from the real response (sample)', kind: 'faked' as const }, fraudReal = { key: 'real', name: 'The real response (sample)', kind: 'real' as const }
+/** Made up: what each place is given for each sample service, as the app has it (no task has changed anything). */
+const placeOf = (mock: string, name: string, place: import('../engine').MockPlace, p: Partial<import('../engine').MockPlan>): import('../engine').MockPlan => ({ mock, name, place, how: 'data', form: 'faked', real: false, choice: { source: 'default' }, from: 'none', says: 'The mock, with faked data', own: null, app: null, ...p })
+const recordedSays = 'The mock, with recorded responses as they are (1 of its 4 calls): this computer only'
+const three = (mock: string, name: string, p: Partial<import('../engine').MockPlan>, review: Partial<import('../engine').MockPlan> = {}) => ({ prototype: placeOf(mock, name, 'prototype', p), smoke: placeOf(mock, name, 'smoke', p), review: placeOf(mock, name, 'review', { ...p, ...review }) })
 export const mockPlaces: import('../engine').MockPlacesRow[] = [
-  { mock: 'fraud-scan', name: 'Fraud scan vendor (sample)', status: 'mined', canLive: true, real: '2026-11-18T15:20:00Z', data: mockDataSample.map((d) => ({ key: d.key, name: d.name, kind: d.kind })),
+  { mock: 'fraud-scan', name: 'Fraud scan vendor (sample)', status: 'mined', canLive: true, real: '2026-11-18T15:20:00Z',
     places: {
-      prototype: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'prototype', { data: fraud, says: fakedSays }),
-      smoke: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'smoke', { data: fraudReal, says: realSays, choice: { source: 'replay' }, from: 'app', app: { source: 'replay' } }),
-      review: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'review', { data: fraud, says: fakedSays, choice: { source: 'fake' }, from: 'app', app: { source: 'fake' } }),
+      prototype: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'prototype', {}),
+      smoke: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'smoke', { form: 'recorded', real: true, says: recordedSays, choice: { source: 'replay' }, from: 'app', app: { source: 'replay' } }),
+      review: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'review', {}),
     } },
-  { mock: 'breach-api', name: 'Breach lookup (sample)', status: 'assumed', canLive: false, real: null, data: [{ key: 'two-breaches', name: 'An address in two breaches (sample)', kind: 'invented' }],
-    places: {
-      prototype: placeOf('breach-api', 'Breach lookup (sample)', 'prototype', { data: { key: 'two-breaches', name: 'An address in two breaches (sample)', kind: 'invented' }, says: '"An address in two breaches (sample)", invented' }),
-      smoke: placeOf('breach-api', 'Breach lookup (sample)', 'smoke', { data: { key: 'two-breaches', name: 'An address in two breaches (sample)', kind: 'invented' }, says: '"An address in two breaches (sample)", invented' }),
-      review: placeOf('breach-api', 'Breach lookup (sample)', 'review', { data: { key: 'two-breaches', name: 'An address in two breaches (sample)', kind: 'invented' }, says: '"An address in two breaches (sample)", invented' }),
-    } },
-  { mock: 'address-lookup', name: 'Address lookup (sample)', status: 'needs_recording', canLive: true, real: null, data: [],
-    places: {
-      prototype: placeOf('address-lookup', 'Address lookup (sample)', 'prototype', { how: 'none', says: 'Nothing yet: it has no mock' }),
-      smoke: placeOf('address-lookup', 'Address lookup (sample)', 'smoke', { how: 'none', says: 'Nothing yet: it has no mock' }),
-      review: placeOf('address-lookup', 'Address lookup (sample)', 'review', { how: 'none', says: 'Nothing yet: it has no mock', blocked: 'Address lookup (sample) has no mock yet' }),
-    } },
+  { mock: 'breach-api', name: 'Breach lookup (sample)', status: 'assumed', canLive: false, real: null, places: three('breach-api', 'Breach lookup (sample)', { says: 'The mock, with provided data' }) },
+  { mock: 'address-lookup', name: 'Address lookup (sample)', status: 'needs_recording', canLive: true, real: null, places: three('address-lookup', 'Address lookup (sample)', { how: 'none', says: 'Nothing yet: its mock is not built' }, { blocked: 'Address lookup (sample) has no mock yet' }) },
 ]
-/** Made up: the same table for one task, which calls the real vendor in its smoke test and gives its prototype the person with nothing found. */
+/** Made up: the same for one task, which calls the real vendor in its smoke test. Its prototype and its reviewer follow the app. */
 export const mockPlacesForTask: import('../engine').MockPlacesRow[] = [
   { ...mockPlaces[0], places: {
-    prototype: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'prototype', { data: { key: 'nothing-found', name: 'Someone with nothing found (sample)', kind: 'invented' }, says: '"Someone with nothing found (sample)", invented', choice: { source: 'data', data: 'nothing-found' }, from: 'task', own: { source: 'data', data: 'nothing-found' } }),
-    smoke: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'smoke', { how: 'live', record: true, data: undefined, says: 'The real Fraud scan vendor (sample), every run; what it sends is kept', choice: { source: 'live' }, from: 'task', own: { source: 'live' }, app: { source: 'replay' } }),
+    prototype: mockPlaces[0].places.prototype,
+    smoke: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'smoke', { how: 'live', record: true, form: undefined, says: 'The real Fraud scan vendor (sample), every run; what it sends is kept', choice: { source: 'live' }, from: 'task', own: { source: 'live' }, app: { source: 'replay' } }),
     review: mockPlaces[0].places.review,
   } },
   mockPlaces[1], mockPlaces[2],
 ]
 /** Made up: what changed on one mock. */
 export const mockChanges: import('../engine').MockChange[] = [
-  { at: '2026-11-21T09:10:00Z', by: 'you', issue: null, what: 'For a smoke test: the real response, as it is' },
-  { at: '2026-11-21T09:08:00Z', by: 'you', issue: null, what: 'For a reviewer: a fake of the real response' },
+  { at: '2026-11-21T09:10:00Z', by: 'you', issue: null, what: 'For a smoke test: the mock, with recorded responses as they are' },
+  { at: '2026-11-21T09:08:00Z', by: 'you', issue: null, what: 'For a reviewer: the mock, with faked data' },
   { at: '2026-11-20T10:30:00Z', by: 'an agent', issue: { id: 'iss_sample2', identifier: 'SS-2' }, what: 'Data "nothing-found" (invented) was saved' },
   { at: '2026-11-20T10:00:00Z', by: 'an agent', issue: { id: 'iss_sample1', identifier: 'SS-1' }, what: 'Data "faked" (faked) was saved' },
   { at: '2026-11-20T09:55:00Z', by: 'an agent', issue: { id: 'iss_sample1', identifier: 'SS-1' }, what: 'Its server was built from a real response' },
@@ -716,9 +713,9 @@ const fraudMock = { key: 'fraud-scan', name: 'Fraud scan vendor (sample)', statu
 export const taskCalls: import('../engine').TaskCall[] = [
   { id: 'tcall_s1', service: 'fraud-scan', serviceName: 'Fraud scan vendor (sample)', method: 'POST', path: '/workflows/run', what: 'A job id for the employees sent', by: 'agent', state: 'answered', mock: fraudMock, endpoint: mockEndpointsSample[0], linked: false },
   { id: 'tcall_s2', service: 'fraud-scan', serviceName: 'Fraud scan vendor (sample)', method: 'GET', path: '/workflows/runs/{id}/status', what: 'Running, then completed; this task also shows a run that failed', by: 'agent', state: 'answered', mock: fraudMock, endpoint: mockEndpointsSample[1], linked: false },
-  { id: 'tcall_s3', service: 'fraud-scan', serviceName: 'Fraud scan vendor (sample)', method: 'GET', path: 'the results file, by the link the service sends', what: 'One row for each employee sent: someone with nothing found, someone with a lot', by: 'agent', state: 'answered', mock: fraudMock, endpoint: mockEndpointsSample[3], linked: false },
+  { id: 'tcall_s3', service: 'fraud-scan', serviceName: 'Fraud scan vendor (sample)', method: 'GET', path: 'the results file, by the link the service sends', what: 'One row for each employee sent: someone with nothing found, someone with a lot', by: 'agent', state: 'answered', mock: fraudMock, endpoint: { ...mockEndpointsSample[3], data: { app: resultsItem, task: { recorded: null, safe: { kind: 'provided', set: 'provided-results-task', files: ['results.csv'], note: 'Provided by a person, who states it holds nothing real. Checked 21 Nov 2026: none of the 2914 values of that response is in it.' } } } }, linked: false },
   { id: 'tcall_s4', service: 'fraud-scan', serviceName: 'Fraud scan vendor (sample)', method: 'GET', path: '/workflows/runs/{id}/cost', what: 'What the run cost, shown beside the findings', by: 'user', state: 'no_endpoint', mock: fraudMock, endpoint: null, linked: false },
-  { id: 'tcall_s5', service: 'address-lookup', serviceName: 'Address lookup (sample)', method: 'GET', path: '/v1/lookup', what: 'The address a finding points at', by: 'agent', state: 'answered', mock: { key: 'address-lookup', name: 'Address lookup (sample)', status: 'needs_recording' }, endpoint: { key: 'lookup', method: 'GET', path: '/v1/lookup', what: 'The address a finding points at', real: null, files: [] }, linked: false },
+  { id: 'tcall_s5', service: 'address-lookup', serviceName: 'Address lookup (sample)', method: 'GET', path: '/v1/lookup', what: 'The address a finding points at', by: 'agent', state: 'answered', mock: { key: 'address-lookup', name: 'Address lookup (sample)', status: 'needs_recording' }, endpoint: { key: 'lookup', method: 'GET', path: '/v1/lookup', what: 'The address a finding points at', real: null, files: [], data: none }, linked: false },
 ]
 
 /** Made up: the real responses of one service on this computer. One is this mock's; one was left by a mock that was removed. */

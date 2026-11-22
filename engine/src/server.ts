@@ -97,7 +97,8 @@ import { CATALOGUE } from './catalogue.js'
 import { removeData, renameData, saveData, setDefaultData } from './mock-data.js'
 import { placesTable, setChoice, type Choice } from './mock-places.js'
 import { addCall, addTaskService, clearCalls, coverCall, editCall, linkCall, listCalls, listTaskServices, removeCall, removeTaskService, type NewCall } from './task-calls.js'
-import { editEndpoint, listReal, mockHistory, recordingsFor, removeReal, rowOf } from './mocks.js'
+import { giveEndpointData, removeEndpointData } from './mock-serve.js'
+import { addEndpoint, editEndpoint, listReal, mockHistory, recordingsFor, removeReal, rowOf } from './mocks.js'
 import { exportMock, getMock, giveRecording, listMocks, addService, needsRecording, recordingsOfService, removeMock, setMockDetails, type Needs } from './mocks.js'
 import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role, cleanJobs, cleanStepSkills, describeJobs, usableSkills, writeSharedSkill, type AppJobs } from './skills.js'
 
@@ -444,7 +445,7 @@ export function buildApp(bus: EventBus) {
   api.post('/apps/:id/storybook/start', async (c) => { try { return c.json(await startStorybook(c.req.param('id'), c.req.query('session'))) } catch (err) { return planError(c, err) } })
   // Screens: the stories under Screens/ in the Storybook of the conversation's worktree (?session=), else the app's; ?all=1 with earlier tasks' ones.
   // The app's mocks (mocks.ts): Settings › Mocks.
-  api.get('/apps/:id/mocks', async (c) => { try { return c.json(await listMocks(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
+  api.get('/apps/:id/mocks', async (c) => { try { return c.json(await listMocks(c.req.param('id'), c.req.query('issue') || null)) } catch (err) { return planError(c, err, 404) } })
   api.get('/apps/:id/mocks/:key', async (c) => { try { return c.json(await getMock(c.req.param('id'), c.req.param('key'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/mocks', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { name?: string; standsInFor?: string; upstream?: string; env?: Record<string, string>; issueId?: string; needs?: Needs ; addressSetting?: string | null; keySetting?: string | null }; return c.json(await addService(c.req.param('id'), { name: String(b.name ?? ''), standsInFor: b.standsInFor, upstream: b.upstream, env: b.env, addressSetting: b.addressSetting, keySetting: b.keySetting, issueId: b.issueId ?? null, why: b.needs?.why }, 'user'), 201) } catch (err) { return planError(c, err) } })
   api.patch('/apps/:id/mocks/:key', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { name?: string; standsInFor?: string; upstream?: string | null; env?: Record<string, string>; addressSetting?: string | null; keySetting?: string | null }; return c.json(await setMockDetails(c.req.param('id'), c.req.param('key'), b, 'user')) } catch (err) { return planError(c, err) } })
@@ -452,6 +453,17 @@ export function buildApp(bus: EventBus) {
   // What can be changed or taken away on a mock, piece by piece: its real responses on this computer, an endpoint, a data set's name.
   api.get('/apps/:id/mocks/:key/real', async (c) => { try { return c.json(await listReal(c.req.param('id'), c.req.param('key'))) } catch (err) { return planError(c, err, 404) } })
   api.delete('/apps/:id/mocks/:key/real', async (c) => { try { return c.json(await removeReal(c.req.param('id'), c.req.param('key'), c.req.query('id') ?? '', 'user')) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/mocks/:key/endpoints', async (c) => { try { return c.json(await addEndpoint(c.req.param('id'), c.req.param('key'), await c.req.json().catch(() => ({})), 'user'), 201) } catch (err) { return planError(c, err) } })
+  // One endpoint's data (mock-serve.ts): the app's, or (issueId) one task's own in place of it. real: a response the service sent; otherwise the person states it holds nothing real.
+  api.post('/apps/:id/mocks/:key/endpoints/:endpoint/data', async (c) => { try {
+    const appId = c.req.param('id'), key = c.req.param('key')
+    const body = await c.req.parseBody({ all: true })
+    const given = ([] as unknown[]).concat(body.file ?? []).filter((f): f is File => typeof f === 'object' && f !== null && 'arrayBuffer' in f)
+    const r = await giveEndpointData(appId, key, c.req.param('endpoint'), await Promise.all(given.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }))), { real: body.real === 'true', issueId: typeof body.issueId === 'string' && body.issueId ? body.issueId : null }, 'user')
+    if (r.kept === 'recorded' && r.issueId) await askToMine(r.issueId, key, r.dir, r.files)
+    return c.json({ kept: r.kept, asked: r.kept === 'recorded' ? r.issueId : null, ...('maybeStructure' in r ? { maybeStructure: r.maybeStructure } : {}) }, 201)
+  } catch (err) { return planError(c, err) } })
+  api.delete('/apps/:id/mocks/:key/endpoints/:endpoint/data', async (c) => { try { return c.json(await removeEndpointData(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), { issueId: c.req.query('issue') || null, real: c.req.query('real') === '1' }, 'user')) } catch (err) { return planError(c, err) } })
   api.patch('/apps/:id/mocks/:key/endpoints/:endpoint', async (c) => { try { return c.json(await editEndpoint(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), await c.req.json().catch(() => ({})), 'user')) } catch (err) { return planError(c, err) } })
   api.delete('/apps/:id/mocks/:key/endpoints/:endpoint', async (c) => { try { return c.json(await editEndpoint(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), null, 'user')) } catch (err) { return planError(c, err) } })
   api.patch('/apps/:id/mocks/:key/data/:data', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { name?: string }; return c.json(await renameData(c.req.param('id'), c.req.param('key'), c.req.param('data'), String(b.name ?? ''), 'user')) } catch (err) { return planError(c, err) } })
