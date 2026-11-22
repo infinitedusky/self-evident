@@ -25,7 +25,7 @@ describe('the provenance note', () => {
     expect(provenanceNote({ name: 'X', status: 'assumed', standsInFor: '', recordedAt: null, minedAt: null, provenance: {} })).toContain('Its shape is assumed')
   })
   it('tells an agent what the library has', () => {
-    expect(mocksPrompt([{ key: 'vendor', name: 'Vendor', status: 'needs_recording', standsInFor: '', needs: {}, recordedAt: null, unmined: null, data: [], defaultData: null }])).toContain('Vendor (vendor): no mock yet, needs a real response')
+    expect(mocksPrompt([{ key: 'vendor', name: 'Vendor', status: 'needs_recording', standsInFor: '', needs: {}, recordedAt: null, unmined: null, data: [], defaultData: null, served: 'general' }])).toContain('Vendor (vendor): served by the general server, straight from its endpoints\' data')
   })
 })
 

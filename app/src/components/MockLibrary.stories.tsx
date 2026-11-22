@@ -10,6 +10,9 @@ const meta = { title: 'Components/MockLibrary', component: MockLibrary, args: { 
 export default meta
 type Story = StoryObj<typeof meta>
 
+/** Made up: a service a task's agent has raised as needing a real response before the change can be tried. */
+const raised = { ...mocks[2], status: 'needs_recording' as const, needs: { person: 'one consenting person, who agrees to their address being looked up', key: 'ADDRESS_LOOKUP_KEY', cost: 'one lookup, about $0.40', why: 'SS-2 shows the matched address', file: 'the JSON a lookup returns (sample)', at: '2026-11-20T09:00:00Z' } }
+
 /** Each service reads top to bottom: what it is and how the app reaches it, what each place is given, then its endpoints, each with its own data. One has a real response and a fake of it on one endpoint, one has a file a person provided, one is not built yet. */
 export const Library: Story = {
   play: async ({ canvasElement }) => {
@@ -21,11 +24,35 @@ export const Library: Story = {
     await expect(canvasElement.textContent).not.toMatch(/Make default|Record and/) // no named sets, and recording is not a source
   },
 }
+/** A service just added, with no endpoints: nothing is waiting to be built. It says to add an endpoint, and that is all it needs. */
+export const JustAdded: Story = {
+  beforeEach: withEngine({ mocks: [{ ...mocks[2], served: 'none', endpoints: [] }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('No endpoints yet')).toBeInTheDocument()
+    await expect(c.getByText(/Add an endpoint below and it can be served\. Nothing has to be built\./)).toBeInTheDocument()
+    await expect(canvasElement.textContent).not.toMatch(/Not built yet|Not in use right now/)
+    await expect(c.queryByRole('link', { name: 'Export' })).toBeNull()
+  },
+}
+/** A service with an endpoint and no server written for it: it is served straight from its endpoints, and says how many have data. */
+export const ServedFromItsEndpoints: Story = {
+  beforeEach: withEngine({ mocks: [mocks[2]] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('Served from its endpoints')).toBeInTheDocument()
+    await expect(c.getByText(/Served straight from its endpoints: each call is answered with that endpoint's data\. 0 of 1 has data\./)).toBeInTheDocument()
+    await expect(c.getByText('No data yet: a call to it fails until some is added.')).toBeInTheDocument()
+    await expect(c.getByRole('link', { name: 'Export' })).toBeInTheDocument()
+  },
+}
+/** Its variable to override is not set, so the app cannot be pointed at it: said in its profile, where it is set. */
+export const CannotBePointedAt: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[2], pointed: false, env: {}, connection: { ...mocks[2].connection, addressSetting: null } }] }) }
 /** Nothing yet. */
 export const Empty: Story = { beforeEach: withEngine({ mocks: [] }) }
 /** A real response is in and the task's agent has been asked to build the mock: it says so once, with a way to ask again, and no second button to do the same thing. */
 export const RecordedNotMined: Story = {
-  beforeEach: withEngine({ mocks: [{ ...mocks[2], needs: { ...mocks[2].needs!, recorded: '/sample/recordings' }, unmined: { at: '2026-11-20T14:00:00Z', files: 6 } }] }),
+  beforeEach: withEngine({ mocks: [{ ...raised, needs: { ...raised.needs, recorded: '/sample/recordings' }, unmined: { at: '2026-11-20T14:00:00Z', files: 6 } }] }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await expect(await c.findByText(/The task's agent is building the mock from it/)).toBeInTheDocument()
@@ -38,9 +65,9 @@ export const NewerResponseWaiting: Story = { beforeEach: withEngine({ mocks: [{ 
 /** A mined one whose service changed shape: it keeps serving, and needs a new recording. */
 export const OutOfDate: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], needs: { person: 'one consenting person', key: 'FRAUD_SCAN_KEY', cost: 'one scan, about $2', why: 'the vendor added a social_accounts column (sample)' } }] }) }
 /** Raised with no address for the real service: it cannot be recorded live until it has one, but a response the person already has can be given. */
-export const NoAddressYet: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[2], upstream: null }] }) }
+export const NoAddressYet: Story = { beforeEach: withEngine({ mocks: [{ ...raised, upstream: null }] }) }
 /** Raised with no task: nobody to mine it yet. */
-export const NoTask: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[2], issue: null }] }) }
+export const NoTask: Story = { beforeEach: withEngine({ mocks: [{ ...raised, issue: null }] }) }
 /** No endpoint has data yet: each is answered with what the server makes up, and data can be added to any of them. */
 export const NoDataYet: Story = {
   beforeEach: withEngine({ mocks: [{ ...mocks[0], endpoints: mocks[0].endpoints.map((e) => ({ ...e, real: null, files: [], data: { app: null, task: null } })) }] }),

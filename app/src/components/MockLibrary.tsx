@@ -75,7 +75,9 @@ function MockCard({ appId, issueId, mock: m, places, act }: { appId: string; iss
   const [editing, setEditing] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [live, setLive] = useState(false)
-  const s = STATUS[m.status]
+  // How it is served says more than whether anything was "built": a service with endpoints is served as it is.
+  const s: { label: string; tone: Tone } = m.served === 'none' ? { label: 'No endpoints yet', tone: 'warn' } : m.served === 'general' ? (m.pointed ? { label: 'Served from its endpoints', tone: 'ok' } : { label: 'Cannot be pointed at yet', tone: 'warn' }) : STATUS[m.status]
+  const withData = m.endpoints.filter((e) => e.data.app).length
   const canRecord = !!(m.issue && m.upstream && Object.keys(m.env).length)
   return (
     <article className="card mock-card" data-component="MockCard">
@@ -93,10 +95,11 @@ function MockCard({ appId, issueId, mock: m, places, act }: { appId: string; iss
             <dt>Variable to override</dt><dd>{m.connection.addressSetting ? <><code>{m.connection.addressSetting}</code> <span className="faint">set to the mock's address when the mock is used</span></> : <span className="faint">Not set: an agent fills it in from the code when it builds the mock</span>}</dd>
             <dt>Variable for its key</dt><dd>{m.connection.keySetting ? <><code>{m.connection.keySetting}</code> <span className="faint">given a made-up key under a mock</span></> : <span className="faint">None</span>}</dd>
             <dt>Its mock</dt><dd>
-              {m.status === 'mined' ? <>Recorded {day(m.recordedAt) ?? 'on a date not kept'}{m.issue ? <> for <Link to={`/tasks/${m.issue.id}`}>{m.issue.identifier}</Link></> : null} · built {day(m.minedAt)}</>
-                : m.status === 'assumed' ? <>Written from a guess, before any recording. It shows only that the code handles the guess.</>
-                : <>Not built yet{m.issue ? <>, raised on <Link to={`/tasks/${m.issue.id}`}>{m.issue.identifier}</Link></> : null}.</>}
-              {' · '}{m.usedBy.length ? <>In use: {m.usedBy.join(', ')}</> : 'Not in use right now'}
+              {m.served === 'none' ? <>Add an endpoint below and it can be served. Nothing has to be built.</>
+                : m.served === 'general' ? <>Served straight from its endpoints: each call is answered with that endpoint's data. {withData} of {m.endpoints.length} {m.endpoints.length === 1 ? 'has' : 'have'} data.{!m.pointed && <> The app cannot be pointed at it until the variable to override is set.</>}</>
+                : m.status === 'mined' ? <>Served by a server written for it, from a real response recorded {day(m.recordedAt) ?? 'on a date not kept'}{m.issue ? <> for <Link to={`/tasks/${m.issue.id}`}>{m.issue.identifier}</Link></> : null}, built {day(m.minedAt)}.</>
+                : <>Served by a server written for it from a guess, before any real response. It shows only that the code handles the guess.</>}
+              {m.usedBy.length > 0 && <> In use: {m.usedBy.join(', ')}.</>}
             </dd>
           </dl>
         )}
@@ -146,7 +149,7 @@ function MockCard({ appId, issueId, mock: m, places, act }: { appId: string; iss
         : <div className="row"><button className="btn quiet small" aria-label={`Record real responses of ${m.name}`} onClick={() => setLive(true)}>Record real responses: a live smoke run of {m.issue!.identifier}</button></div>)}
       {!m.endpoints.length && m.data.length > 0 && <DataSets appId={appId} issueId={issueId} mock={m} act={act} />}
 
-      {m.status !== 'needs_recording' && (
+      {m.served === 'written' && (
         <details className="mock-provenance">
           <summary>Provenance</summary>
           <Md text={m.note.replace(/^# .*\n+/, '')} />
@@ -157,7 +160,7 @@ function MockCard({ appId, issueId, mock: m, places, act }: { appId: string; iss
       <History appId={appId} mockKey={m.key} />
       {removing && <RemoveMock appId={appId} mock={m} onRemove={(files) => act(async () => { await engine.removeMock(appId, m.key, files); setRemoving(false) })} onCancel={() => setRemoving(false)} />}
       <div className="row">
-        {m.status !== 'needs_recording' && <a className="btn quiet small" href={engine.mockExportUrl(appId, m.key)} download>Export</a>}
+        {m.served !== 'none' && <a className="btn quiet small" href={engine.mockExportUrl(appId, m.key)} download>Export</a>}
         {!removing && <button className="btn quiet small" aria-label="Remove the mock" onClick={() => setRemoving(true)}>Remove</button>}
       </div>
     </article>
@@ -186,11 +189,11 @@ function Endpoints({ appId, mock: m, act }: { appId: string; mock: Mock; act: (f
   return (
     <div className="mock-data" data-component="MockEndpoints">
       <div className="task-block-head">
-        <span><strong>Endpoints</strong> {m.endpoints.length > 0 && <span className="faint">{m.endpoints.length} call{m.endpoints.length === 1 ? '' : 's'}: {withData} with data, {m.endpoints.length - withData} answered with what the server makes up</span>}</span>
+        <span><strong>Endpoints</strong> {m.endpoints.length > 0 && <span className="faint">{m.endpoints.length} call{m.endpoints.length === 1 ? '' : 's'}: {withData} with data, {m.endpoints.length - withData} {m.served === 'written' ? 'answered with what the server makes up' : 'with none yet'}</span>}</span>
         <button className="btn quiet small" aria-label={`Add an endpoint to ${m.name}`} onClick={() => setAdding(!adding)}>Add an endpoint</button>
       </div>
       {adding && <EndpointForm label="Add" onSave={(b) => act(async () => { await engine.addMockEndpoint(appId, m.key, b); setAdding(false) })} onCancel={() => setAdding(false)} />}
-      {!m.endpoints.length ? !adding && <p className="faint" style={{ margin: '4px 0 0' }}>None listed yet. An endpoint is one call the app makes to {m.name}: add each here, or a task's agent lists them from the code.</p> : (
+      {!m.endpoints.length ? !adding && <p className="faint" style={{ margin: '4px 0 0' }}>None listed yet. An endpoint is one call the app makes to {m.name}: add each here, or a task's agent lists them from the code. With one endpoint and its data, the mock can be used.</p> : (
         <div className="mock-endpoints" role="table">
           <div className="mock-endpoints-head" role="row"><span role="columnheader">The call</span><span role="columnheader">Its data</span></div>
           {m.endpoints.map((e) => <EndpointRow key={e.key} appId={appId} mock={m} endpoint={e} act={act} />)}
@@ -212,7 +215,7 @@ function EndpointRow({ appId, mock: m, endpoint: e, act }: { appId: string; mock
         {e.sensitive && <div className="faint">A real response of it is never stored: one that comes in is faked at once.</div>}
         <div className="row" style={{ marginTop: 4 }}><button className="btn quiet small" aria-label={`Edit the call ${e.method} ${e.path}`} onClick={() => setEditing(true)}>Edit</button><button className="btn quiet small" aria-label={`Remove the call ${e.method} ${e.path}`} onClick={() => { if (window.confirm(`Take ${e.method} ${e.path} off ${m.name}? Its data files stay, no longer tied to a call.`)) void act(() => engine.removeMockEndpoint(appId, m.key, e.key)) }}>Remove</button></div>
       </div>
-      <div role="cell"><EndpointDataCell appId={appId} mockKey={m.key} serviceName={m.name} endpoint={e} canAsk={!!m.issue} onChanged={() => act(async () => {})} /></div>
+      <div role="cell"><EndpointDataCell appId={appId} mockKey={m.key} serviceName={m.name} endpoint={e} written={m.served === 'written'} canAsk={!!m.issue} onChanged={() => act(async () => {})} /></div>
     </div>
   )
 }

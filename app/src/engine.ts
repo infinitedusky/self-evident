@@ -346,6 +346,7 @@ export interface Screen { title: string; file: string | null; states: { id: stri
 export interface MockProvenance { standsInFor?: string; minedFrom?: string; real?: string; invented?: string; cannotShow?: string[]; covers?: string[]; changed?: string; kept?: string[]; checked?: { at: string; files: number; values: number } }
 export interface Mock {
   key: string; name: string; status: 'needs_recording' | 'assumed' | 'mined'; standsInFor: string; upstream: string | null
+  /** How it is served: by the general server straight from its endpoints, by a server written for it, or not at all (no endpoints yet). pointed: its variable to override is set, so the app can be pointed at it. */ served: 'general' | 'written' | 'none'; pointed: boolean
   env: Record<string, string>; cmd: string | null; files: { path: string; bytes: number }[]
   provenance: MockProvenance; /** Its provenance as a note, as it is exported. */ note: string
   /** A new recording is needed: what a real call needs. */ needs: { person?: string; key?: string; cost?: string; why?: string; /** Which real responses would do instead of a live run, as the person would recognise them. */ file?: string; at?: string; recorded?: string } | null

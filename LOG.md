@@ -6275,3 +6275,29 @@ agent is the next piece and will own that. Export carries the app's safe data fo
 service's card now opens with its name, then each base setting on a line of its own (what it is, real address,
 variable to override, variable for its key, its mock), with Edit beside the name. Editing happens in that same
 place, and the name can be changed there too (its key, which data and tasks go by, stays).
+
+### Creating a service is creating its server (Sandy, 2026-11-22)
+
+A new service's card said "Its mock: Not built yet. · Not in use right now". "What does building the mock entail?
+It feels like you see something like that and you think, oh, I need to do something, but there's nowhere to do
+anything from … how mocks get used should be really just an issue of creating endpoints and then pointing the
+application at it." And on whether that is per task: "if it's not for every task, then it should be done at the
+settings level … when you create a mock service, we also create the actual server, it then gets injected into the
+reviewer code." Agreed, with one correction to her worry that a reviewer's code would then depend on Self Evident:
+the server is copied to the review branch as a plain file, never linked.
+
+- **A general mock server** (`engine/src/mock-general.ts`): one file with no dependencies that reads a service's
+  endpoints and answers each call with that endpoint's data file from `$MOCK_DATA`. A call to an endpoint with no
+  data fails with 501 and says which; a call that is no endpoint's fails with 404 and lists the ones it has. It
+  accepts any key.
+- **Any service with an endpoint is started with it** by a prototype, main or a smoke test, as long as its variable
+  to override is set. A server an agent wrote for the service is used instead where there is one: that stays the
+  way for a service whose calls depend on each other (a job started, asked about, then answered for what was sent).
+- **"Not built yet" is gone.** A service says how it is served: straight from its endpoints (and how many have
+  data), by a server written for it, or that it has no endpoints yet and needs one added. "Not in use right now"
+  is no longer said; where it is in use is.
+- **Export** of a service without a written server gives the general server, its endpoints and its safe data, with
+  the command that runs them. Putting those on a review branch with one start command is the next step.
+
+This is not the declarative format ruled out earlier: there are no rules or scenarios, only the files already on
+the endpoints, and anything that needs behaviour still gets real code.

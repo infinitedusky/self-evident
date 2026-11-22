@@ -14,7 +14,7 @@ type Story = StoryObj<typeof meta>
 export const Services: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByText("3 services, 5 calls: 1 with data (1 this task's own), 3 answered with what the server makes up, 1 not on its service yet")).toBeInTheDocument()
+    await expect(await c.findByText("3 services, 5 calls: 1 with data (1 this task's own), 3 with none yet, 1 not on its service yet")).toBeInTheDocument()
     await expect(c.getByText('No calls listed yet: which of its endpoints does this task use?')).toBeInTheDocument()
     await expect(c.getAllByText('What each place is given')).toHaveLength(3)
     await expect(c.getByText("This task's own")).toBeInTheDocument()
