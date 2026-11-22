@@ -103,7 +103,7 @@ export const AddingAService: Story = {
     await expect(await c.findByText('Payments (sample)')).toBeInTheDocument()
   },
 }
-/** A service is described by how the app really connects to it: its real address, and the names of the app's settings that hold the address and the key. Nothing about mocks is asked. */
+/** A service is described by how the app really connects to it: its real address, and the environment variable the app reads that address from, which a mock overrides (and the key's variable, if any). No placeholder is asked for. */
 export const TheRealConnection: Story = {
   beforeEach: withEngine({ mocks: [mocks[0]] }),
   play: async ({ canvasElement }) => {
@@ -111,8 +111,8 @@ export const TheRealConnection: Story = {
     await expect(await c.findByText('FRAUD_SCAN_BASE_URL')).toBeInTheDocument()
     await userEvent.click(c.getByRole('button', { name: 'Edit' }))
     await expect(c.getByRole('textbox', { name: 'Its real address' })).toHaveValue('https://api.fraud-scan.example')
-    await expect(c.getByRole('textbox', { name: "The app's setting that holds that address" })).toHaveValue('FRAUD_SCAN_BASE_URL')
-    await expect(c.getByRole('textbox', { name: /The app's setting that holds its key/ })).toHaveValue('FRAUD_SCAN_API_KEY')
+    await expect(c.getByRole('textbox', { name: 'The environment variable to override' })).toHaveValue('FRAUD_SCAN_BASE_URL')
+    await expect(c.getByRole('textbox', { name: /The environment variable for its key/ })).toHaveValue('FRAUD_SCAN_API_KEY')
     await expect(canvasElement.textContent).not.toContain('container_url')
   },
 }
