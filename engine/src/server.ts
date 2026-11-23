@@ -11,7 +11,7 @@ import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
 import { checklistOf } from './checklist.js'
 import { closeTask, closeView, reopenUnclosed } from './close.js'
-import { askToMine, markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
+import { askToMine, keepSmokeDatabase, markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
 import { closeTerminal, closeTerminals, openTerminal, ownPage, resizeTerminal, scratchKey, typeInTerminal, watchTerminal } from './smoke-terminal.js'
 import { startLearning, talkBusy } from './talk.js'
 import { serve } from '@hono/node-server'
@@ -841,7 +841,9 @@ export function buildApp(bus: EventBus) {
     })
     stop()
   })))
-  api.post('/issues/:id/smoke/start', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { clean?: boolean; setup?: string; live?: unknown }; return c.json(await startSmoke(t.id, 'user', { clean: body.clean === true, setup: typeof body.setup === 'string' ? body.setup : undefined, live: Array.isArray(body.live) ? body.live.filter((x): x is string => typeof x === 'string') : undefined }), 202) } catch (err) { return planError(c, err) } })
+  api.post('/issues/:id/smoke/start', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { clean?: boolean; setup?: string; live?: unknown; fixture?: string }; return c.json(await startSmoke(t.id, 'user', { fixture: typeof body.fixture === 'string' && body.fixture ? body.fixture : undefined, clean: body.clean === true, setup: typeof body.setup === 'string' ? body.setup : undefined, live: Array.isArray(body.live) ? body.live.filter((x): x is string => typeof x === 'string') : undefined }), 202) } catch (err) { return planError(c, err) } })
+  // Its database as it is now, kept as a fixture of the app's. real: it holds something real, this computer only.
+  api.post('/issues/:id/smoke/keep', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const b = await c.req.json().catch(() => ({})) as { name?: string; setup?: string; real?: boolean }; return c.json(await keepSmokeDatabase(t.id, { name: String(b.name ?? ''), setup: typeof b.setup === 'string' ? b.setup : undefined, real: b.real === true }, 'user'), 201) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/smoke/stop', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { setup?: string }; await stopSmoke(t.id, typeof body.setup === 'string' ? body.setup : undefined); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err) } })
   // An agent tries one check and says what it saw; it marks nothing (smoke.ts, trySmoke).
   api.post('/issues/:id/smoke/:criterion/try', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json((await trySmoke(t.id, c.req.param('criterion'), 'user')).view) } catch (err) { return planError(c, err, 400) } })

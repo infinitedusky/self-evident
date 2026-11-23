@@ -412,6 +412,7 @@ export const smokeRun = pgTable('smoke_run', {
   id: id(), appId: appId(), issueId: text('issue_id').notNull().references(() => issue.id),
   path: homePath('path').notNull(), sha: text('sha').notNull(), port: integer('port'),
   /** Which of the app's set-ups it is a run of (smoke.ts). */ setup: text('setup').notNull().default('main'),
+  /** The fixture its database was last built from; null: from nothing but the set-up's own seed. */ fixture: text('fixture'),
   createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [uniqueIndex('smoke_run_issue').on(t.issueId, t.setup)])
 
@@ -420,6 +421,7 @@ export const smokeRun = pgTable('smoke_run', {
 export const scenario = pgTable('scenario', {
   id: id(), appId: appId(), scope: text('scope').notNull().default(''), name: text('name').notNull(),
   tables: jsonb('tables').$type<Record<string, unknown[]>>().notNull(),
+  /** Kept from a run that held something real (a real service's answers about a real person): this computer only, never a reviewer's. */ real: boolean('real').notNull().default(false),
   createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [uniqueIndex('scenario_name').on(t.appId, t.scope, t.name)])
 

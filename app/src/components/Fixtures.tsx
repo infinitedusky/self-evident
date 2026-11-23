@@ -71,7 +71,7 @@ function FixtureItem({ appId, fixture: f, used, onRename, onDelete }: { appId: s
   const on = (fn: () => void) => (e: React.MouseEvent) => { e.preventDefault(); fn() }
   return (
     <details className="lv-item" open={used || undefined} data-fixture={f.name} ref={box}>
-      <summary className="lv-item-head"><span className="lv-item-name">{f.name}</span>{used && <Badge tone="accent">This task's</Badge>}<span className="lv-end"><span className="lv-item-meta">{plural(rows, 'row')} in {plural(f.tables.length, 'table')} · {size(f.bytes)}</span>
+      <summary className="lv-item-head"><span className="lv-item-name">{f.name}</span>{f.real && <Badge tone="warn">Real · this computer only</Badge>}{used && <Badge tone="accent">This task's</Badge>}<span className="lv-end"><span className="lv-item-meta">{plural(rows, 'row')} in {plural(f.tables.length, 'table')} · {size(f.bytes)}</span>
         <button className="btn quiet small" type="button" aria-label={`Rename ${f.name}`} onClick={on(() => { setName(f.name); setRenaming(true); if (box.current) box.current.open = true })}>Rename</button>
         <button className="btn quiet small" type="button" aria-label={`Delete ${f.name}`} onClick={on(onDelete)}>Delete</button></span></summary>
       {renaming && (

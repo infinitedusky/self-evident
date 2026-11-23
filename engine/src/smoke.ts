@@ -40,14 +40,14 @@ import { styleOf } from './steps.js'
 import { workflowFor } from './work.js'
 import { landingBranch, modeOf } from './branches.js'
 import { db } from './db/client.js'
-import { app, pr as prTable, project, smokeRun } from './db/schema.js'
+import { app, pr as prTable, project, scenario, smokeRun } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { git, headSha } from './git.js'
 import { newId } from './ids.js'
 import { getIssue, identifier, PlanError } from './issues.js'
 import { morePorts, straySays, straysOf } from './ports.js'
 import { fixedOf, fixedSays } from './addresses.js'
-import { databaseExists, databaseUrl, dropDatabase, listScenarios, rebuild, type PrototypeDb } from './prototype-data.js'
+import { databaseExists, databaseUrl, dropDatabase, listScenarios, rebuild, save, type PrototypeDb } from './prototype-data.js'
 import { homeRepo } from './workbench.js'
 import { fixtureForTask } from './fixtures.js'
 import { plansFor } from './mock-places.js'
@@ -348,6 +348,7 @@ export async function smokeView(issueId: string) {
       up, ...(stray.length ? { /** Ports it listens on that it was not given: a second copy would share them. */ strayPorts: stray, strayNote: straySays(stray) } : {}),
       canRun: setup.where === 'local' && !!(setup.cmd ?? proto),
       /** local: there is something to start from nothing: a database of its own, a seed, or a script of its own. */ canClean: setup.where === 'local' && !!(setup.cmd || setup.seed || hasDb),
+      /** local, with a database of its own: it can be started from a fixture, and kept as one. builtFrom: the fixture its database was last built from (null: the set-up's own seed alone). */ ...(setup.where === 'local' && hasDb ? { data: { builtFrom: run?.fixture ?? null, ran: !!run } } : {}),
       log: running.get(runKey(t.id, setup.key))?.log.slice(-30) ?? [],
       /** While it runs: the app's mocks it is pointed at, and the services it calls for real through a recorder (mocks.ts). */ mocks: on ? running.get(runKey(t.id, setup.key))?.mocks?.on ?? [] : [],
       /** How many of its checks still wait for the person. */ owed: checks.filter((c) => c.setup === setup.key && c.mark === 'todo' && holds(c.when)).length,
@@ -469,7 +470,7 @@ export async function askToMine(issueId: string, key: string, dir: string, excha
   await say(talk.id, isGiven(dir) ? MINE_GIVEN(m?.name ?? key, key, dir) : MINE_IT(m?.name ?? key, key, dir, exchanges), undefined, { author: 'engine', kind: 'brief', payload: { label: `Mine a mock of ${m?.name ?? key}` } })
 }
 
-export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean; /** Which set-up (its key); none: the app's first. */ setup?: string; /** The services to call for real, by their mock's key: each through a recorder, so what they send is kept (recorder.ts). */ live?: string[] } = {}) {
+export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean; /** Which set-up (its key); none: the app's first. */ setup?: string; /** The services to call for real, by their mock's key: each through a recorder, so what they send is kept (recorder.ts). */ live?: string[]; /** Start from this fixture of the app's: its database is dropped and built again from it. */ fixture?: string } = {}) {
   const { t, a, repoPath, name, branch, head } = await built(issueId)
   const all = smokeSetups(a.setup)
   const named = opts.setup ? all.find((x) => x.key === opts.setup) : all[0]
@@ -490,11 +491,16 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   else await git(repoPath, ['worktree', 'add', '--detach', path, head])
   const dbCfg = (a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db?.url ? (a.setup as { prototype_db: PrototypeDb }).prototype_db : null
   const slug = `smoke-${name.toLowerCase()}${first ? '' : `-${named.key}`}`
-  if (dbCfg && opts.clean) await dropDatabase(dbCfg, slug)
+  // Started from a fixture the person chose: checked before anything is dropped, so a wrong name loses nothing.
+  if (opts.fixture && !dbCfg) throw new PlanError(`${a.name} has no database set for its prototypes, so there is nothing to build from a fixture`)
+  if (opts.fixture && !(await listScenarios({ appId: a.id }, path)).includes(opts.fixture)) throw new PlanError(`${a.name} has no fixture "${opts.fixture}"`)
+  if (dbCfg && (opts.clean || opts.fixture)) await dropDatabase(dbCfg, slug)
+  let builtFrom: string | null | undefined // undefined: its database was left as it was
   if (dbCfg && !(await databaseExists(dbCfg, slug))) {
     // The fixture this task's mock data was made for (fixtures.ts), so what the app sends is who the mock answers for; else the app's shared "default", when it has one.
     const names = await listScenarios({ appId: a.id }, path), made = await fixtureForTask(a.id, t.id)
-    const { url } = await rebuild(dbCfg, slug, path, made && names.includes(made) ? made : names.includes('default') ? 'default' : null, { appId: a.id })
+    builtFrom = opts.fixture ?? (made && names.includes(made) ? made : names.includes('default') ? 'default' : null)
+    const { url } = await rebuild(dbCfg, slug, path, builtFrom, { appId: a.id })
     if (setup.seed) { // the app's own seed, from its settings: after the schema, and after the app's shared scenario when it has one
       const c = new pg.Client({ connectionString: url })
       await c.connect()
@@ -517,13 +523,31 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   proc.on('exit', (code) => { log.push(`exited${code === null ? '' : ` with ${code}`}`) })
   running.set(runKey(t.id, key), { proc, log, given: [port, ...more.ports], mocks: mocks.held, ...(setup.stop ? { stop: { cmd: setup.stop, cwd: path, env } } : {}) })
   noteUse(mocks.held.id, a.id, `Smoke test: ${name}`, mocks.held.on.filter((m) => m.how !== 'recording').map((m) => m.key), mocks.held.on.filter((m) => m.how === 'recording' || m.how === 'real').map((m) => m.key))
-  if (old) await db.update(smokeRun).set({ path, sha: head, port, updatedAt: new Date() }).where(eq(smokeRun.id, old.id))
-  else await db.insert(smokeRun).values({ id: newId('run').replace(/^run_/, 'smoke_'), appId: a.id, issueId: t.id, setup: key, path, sha: head, port })
+  if (old) await db.update(smokeRun).set({ path, sha: head, port, ...(builtFrom !== undefined ? { fixture: builtFrom } : {}), updatedAt: new Date() }).where(eq(smokeRun.id, old.id))
+  else await db.insert(smokeRun).values({ id: newId('run').replace(/^run_/, 'smoke_'), appId: a.id, issueId: t.id, setup: key, path, sha: head, port, fixture: builtFrom ?? null })
   await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'smoke.started', payload: { sha: head, port, setup: named.key, ...(mocks.held.on.length ? { mocks: mocks.held.on } : {}) } }))
   return smokeView(t.id)
 }
 
 const smokeFilesDir = (issueId: string, key: string) => join(homeOf(`smoke-${issueId}-${key}`.toLowerCase()), 'test-files')
+
+/**
+ * A smoke test's database as it is now, kept as a fixture of the app's (Sandy, 2026-11-23: "we need to be able to save
+ * the smoke test or prototype database as fixtures. Then when we start the smoke test, we choose which fixture to
+ * use"). real: it holds what a real service sent about a real person, so it is this computer's only.
+ */
+export async function keepSmokeDatabase(issueId: string, i: { name: string; setup?: string; real?: boolean }, actor = 'user') {
+  const { t, a, name } = await built(issueId)
+  const all = smokeSetups(a.setup), named = i.setup ? all.find((x) => x.key === i.setup) : all[0]
+  if (!named) throw new PlanError(`${a.name} has no smoke test set-up "${i.setup}"`)
+  const dbCfg = (a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db?.url ? (a.setup as { prototype_db: PrototypeDb }).prototype_db : null
+  const slug = `smoke-${name.toLowerCase()}${named.key === all[0].key ? '' : `-${named.key}`}`
+  if (!dbCfg || !(await databaseExists(dbCfg, slug))) throw new PlanError('this smoke test has no database yet: run it first')
+  const saved = await save(dbCfg, slug, { appId: a.id }, i.name.trim(), true)
+  await db.update(scenario).set({ real: !!i.real }).where(and(eq(scenario.appId, a.id), eq(scenario.scope, ''), eq(scenario.name, saved.scenario)))
+  await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'smoke.kept_as_fixture', payload: { name: saved.scenario, real: !!i.real, saved: saved.saved } }))
+  return { fixture: saved.scenario, real: !!i.real, saved: saved.saved }
+}
 
 /** Stop one set-up of a task's, or, with no key, every one of them that is up. */
 export function stopSmoke(issueId: string, key?: string): Promise<void> {
