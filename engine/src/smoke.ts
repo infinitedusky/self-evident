@@ -51,7 +51,7 @@ import { databaseExists, databaseUrl, dropDatabase, listScenarios, rebuild, save
 import { homeRepo } from './workbench.js'
 import { fixtureForTask } from './fixtures.js'
 import { plansFor } from './mock-places.js'
-import { placeTestFiles, testFilesSay } from './test-files.js'
+import { placedFiles, placeTestFiles, testFilesSay } from './test-files.js'
 import { dropUse, isGiven, libraryStandIns, noteRecording, noteUse } from './mocks.js'
 import { mock } from './db/schema.js'
 import { startRecorder, type Recording } from './recorder.js'
@@ -349,6 +349,7 @@ export async function smokeView(issueId: string) {
       canRun: setup.where === 'local' && !!(setup.cmd ?? proto),
       /** local: there is something to start from nothing: a database of its own, a seed, or a script of its own. */ canClean: setup.where === 'local' && !!(setup.cmd || setup.seed || hasDb),
       /** local, with a database of its own: it can be started from a fixture, and kept as one. builtFrom: the fixture its database was last built from (null: the set-up's own seed alone). */ ...(setup.where === 'local' && hasDb ? { data: { builtFrom: run?.fixture ?? null, ran: !!run } } : {}),
+      /** local: the fixtures' files it was given when it last started (test-files.ts), and the folder they are in on this computer. */ ...(setup.where === 'local' ? await (async () => { const f = await placedFiles(a.id, t.id, 'smoke', smokeFilesDir(t.id, setup.key)); return f?.files.length ? { files: { dir: f.dir, files: f.files } } : {} })() : {}),
       log: running.get(runKey(t.id, setup.key))?.log.slice(-30) ?? [],
       /** While it runs: the app's mocks it is pointed at, and the services it calls for real through a recorder (mocks.ts). */ mocks: on ? running.get(runKey(t.id, setup.key))?.mocks?.on ?? [] : [],
       /** How many of its checks still wait for the person. */ owed: checks.filter((c) => c.setup === setup.key && c.mark === 'todo' && holds(c.when)).length,
@@ -532,6 +533,18 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
 }
 
 const smokeFilesDir = (issueId: string, key: string) => join(homeOf(`smoke-${issueId}-${key}`.toLowerCase()), 'test-files')
+
+/** The folder of files a smoke test was given, opened in this computer's file manager: a browser's own file dialog cannot be pointed at it. */
+export async function revealSmokeFiles(issueId: string, setupKey?: string) {
+  const { t, a } = await built(issueId)
+  const all = smokeSetups(a.setup), named = setupKey ? all.find((x) => x.key === setupKey) : all[0]
+  if (!named) throw new PlanError(`${a.name} has no smoke test set-up "${setupKey}"`)
+  const dir = smokeFilesDir(t.id, named.key)
+  if (!existsSync(dir)) throw new PlanError('this smoke test has been given no files: add them under Fixtures › Files, then start it')
+  const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open'
+  spawn(cmd, [dir], { stdio: 'ignore', detached: true }).on('error', () => {}).unref()
+  return { opened: dir }
+}
 
 /**
  * A smoke test's database as it is now, kept as a fixture of the app's (Sandy, 2026-11-23: "we need to be able to save
