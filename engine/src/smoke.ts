@@ -51,6 +51,7 @@ import { databaseExists, databaseUrl, dropDatabase, listScenarios, rebuild, type
 import { homeRepo } from './workbench.js'
 import { fixtureForTask } from './fixtures.js'
 import { plansFor } from './mock-places.js'
+import { placeTestFiles, testFilesSay } from './test-files.js'
 import { dropUse, isGiven, libraryStandIns, noteRecording, noteUse } from './mocks.js'
 import { mock } from './db/schema.js'
 import { startRecorder, type Recording } from './recorder.js'
@@ -507,6 +508,8 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   if (setup.stop && old) await runStop(setup.stop, old.path, { ...env, PORT: String(old.port) }) // what the last run left up, when the engine has been started again since
   const mocks = await mocksFor(a.id, t.id, key, path, opts.live ?? [], env)
   Object.assign(env, mocks.env)
+  // What a tester brings to it (test-files.ts): the versions the task says a smoke test uses, in a folder outside every repository.
+  Object.assign(env, { TEST_FILES: (await placeTestFiles(a.id, t.id, 'smoke', smokeFilesDir(t.id, key))).dir })
   const proc = spawn('sh', ['-c', cmd], { cwd: path, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   const log: string[] = []
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
@@ -519,6 +522,8 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type: 'smoke.started', payload: { sha: head, port, setup: named.key, ...(mocks.held.on.length ? { mocks: mocks.held.on } : {}) } }))
   return smokeView(t.id)
 }
+
+const smokeFilesDir = (issueId: string, key: string) => join(homeOf(`smoke-${issueId}-${key}`.toLowerCase()), 'test-files')
 
 /** Stop one set-up of a task's, or, with no key, every one of them that is up. */
 export function stopSmoke(issueId: string, key?: string): Promise<void> {
@@ -569,7 +574,7 @@ const TRY_SCHEMA = { type: 'object', additionalProperties: false, required: ['ve
 const TRY_TOOLS = ['Read', 'Glob', 'Grep', 'LS']
 export const TRY_MINUTES = 6
 
-export const tryPrompt = (i: { text: string; where?: string; how?: string; url: string | null; link?: string | null; pr?: string | null; when: When }) => [
+export const tryPrompt = (i: { text: string; where?: string; how?: string; url: string | null; link?: string | null; pr?: string | null; when: When; /** What a tester brings to it, and where it is (test-files.ts). */ files?: string[] }) => [
   'A person is smoke testing a built task by hand, and has asked you to try one of its checks and say what you saw. You do not mark it: your word is shown beside the check, and the person decides.',
   '',
   `The check: ${i.text}`,
@@ -577,6 +582,7 @@ export const tryPrompt = (i: { text: string; where?: string; how?: string; url: 
   ...(i.where ? [`Where: ${i.where}${i.link ? ` (${i.link})` : ''}`] : []),
   i.url ? `The built code is running at ${i.url}. You are in its checkout, at the commit it runs. Use what is running; do not start another copy.` : 'The built code is not running here. You are in its checkout: try what you can from the code and its commands.',
   ...(i.when === 'pr' && i.pr ? [`It can only be seen on the pull request: ${i.pr} (gh can read it).`] : []),
+  ...(i.files?.length ? ['', ...i.files] : []),
   '',
   'Rules:',
   '- Try it the way the person would: ask the running code (curl, or a headless browser the repository already has), run the command, read what comes back.',
@@ -614,7 +620,8 @@ export async function trySmoke(issueId: string, criterionId: string, actor = 'us
   if (su.where === 'local' && check.when === 'here' && !su.up) throw new PlanError(`${su.name} is not running: run it first, and the agent tries what is up`)
   const runRow = (await db.select().from(smokeRun).where(and(eq(smokeRun.issueId, t.id), eq(smokeRun.setup, su.key))))[0]
   const cwd = runRow?.path && existsSync(runRow.path) ? runRow.path : repoPath ?? tmpdir() // deployed, with no checkout here: it still has the address to ask
-  const prompt = tryPrompt({ text: check.text, where: check.where, how: check.how, url: su.url, link: check.link, pr: pr?.url ?? null, when: check.when })
+  const files = su.where === 'local' ? testFilesSay(await placeTestFiles(a.id, t.id, 'smoke', smokeFilesDir(t.id, su.key))) : []
+  const prompt = tryPrompt({ text: check.text, where: check.where, how: check.how, url: su.url, link: check.link, pr: pr?.url ?? null, when: check.when, files })
   const say = (type: string, payload: Record<string, unknown>) => db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor, type, payload: { criterionId, ...payload } }))
   trying.add(k)
   await say('smoke.trying', {})

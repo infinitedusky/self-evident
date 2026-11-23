@@ -22,6 +22,10 @@ on one task, CEB-90, and its one outside service, SixtyFour.
   for a fixture's people, and a task's smoke test is built from that fixture.
 - **A `service` tool** lets any agent do what the Settings page does.
 
+- **Files** (the second part of Fixtures, after Database): what a tester brings to a task. Each has a fake
+  version and may have a real one; a prototype and a smoke test say which they use and are given them in a folder
+  (`$TEST_FILES`) when they start; a reviewer gets the fake.
+
 ## How to work
 
 - Look at the real page before and after changing it. Story tests only prove text exists.
@@ -49,11 +53,11 @@ on one task, CEB-90, and its one outside service, SixtyFour.
    mock, and fix what breaks.
 5. **The data agent**: one per task, called by the task's agent, in three stop-and-wait steps (list the calls,
    say where data comes from, build what was approved).
-6. **The review branch**: the mock server, endpoints, faked data and fixture on a `<branch>-review` branch with
-   one start command.
+6. **The review branch**: the mock server, endpoints, faked data, fixture and the fake versions of the files on
+   a `<branch>-review` branch with one start command.
 7. **The gate**: a task cannot go to Ready for review until its review copy can be made.
 8. **Clean up when a task closes**: discard its prototypes and their databases, drop its smoke test database,
-   delete its real responses from this computer.
+   delete its real responses and the real versions of its files from this computer.
 9. **Close the data holes**: sharing a prototype that ever ran on real data needs a reset first; check a smoke
    test's evidence cannot reach a pull request after a run on real data; refuse to share a prototype on a
    database that is not its own; make the faker vary small numbers.

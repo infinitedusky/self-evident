@@ -27,6 +27,7 @@ import { databaseExists, databaseName, databaseUrl, dropDatabase, dropScenarios,
 import { endTalk, say, showTalk, startPrototypeTalk } from './talk.js'
 import { listRecordings, recordingsDir, recordingsOf } from './recordings.js'
 import { plansFor } from './mock-places.js'
+import { placeTestFiles } from './test-files.js'
 import { dropUse, libraryStandIns, noteUse } from './mocks.js'
 import { writeEnvFile, cleanStandIns, envOf, forgetStandIns, homeOf, standInKey, standInsStatus, startStandIns, stopStandIns, withStandIn, type StandIn } from './stand-ins.js'
 
@@ -56,7 +57,8 @@ export async function prototypeEnv(p: typeof prototype.$inferSelect): Promise<Re
   const { dbCfg } = await setupOf(p.appId)
   // RECORDINGS: what real services sent back for its task, kept raw (recordings.ts): a stand-in serves from there.
   // PROTOTYPE_HOME: its own folder outside every repository, where its stand-ins run and recorded responses are kept (stand-ins.ts).
-  return { PROTOTYPE_HOME: homeOf(p.id), RECORDINGS: recordingsDir(p.appId, p), ...(dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slugOf(p)) } : {}) }
+  // TEST_FILES: what a tester brings to it (test-files.ts), put in a folder of its own each time it starts.
+  return { PROTOTYPE_HOME: homeOf(p.id), RECORDINGS: recordingsDir(p.appId, p), TEST_FILES: join(homeOf(p.id), 'test-files'), ...(dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slugOf(p)) } : {}) }
 }
 
 async function rowOf(id: string) {
@@ -126,6 +128,7 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
     await rebuild(dbCfg, slugOf(p), p.path, scenario, { appId: p.appId, prototypeId: p.id })
     await db.update(prototype).set({ scenario }).where(eq(prototype.id, id))
   }
+  await placeTestFiles(p.appId, p.issueId ?? null, 'prototype', join(homeOf(p.id), 'test-files')) // the versions its task says a prototype uses
   const port = await freePort(p.port ?? 0)
   const more = await morePorts()
   // Its stand-ins first, each on a port of its own; the server is given the variables that point the app at them.

@@ -5,17 +5,24 @@
  * thing on a task's Data step, beside its fixtures (what is in the app's database) and its services (what answers
  * outside it): a file, and a line saying what to do with it.
  *
- * A test file goes to a reviewer, so what is kept holds nothing real. Whoever adds one says it is made up, or says it
- * is real (Sandy, 2026-11-23: "if it holds something real, then what we should do is have it fake it or clean it"):
- * a real one that is text is faked on the way in (fake.ts) and only the fake is kept, the real file never. A real
- * picture or document cannot be faked here and is refused. Text is also read against every real response of the
- * app's services on this computer; a made-up picture rests on the person's word.
+ * A test file has up to two versions, as a service's endpoint has (Sandy, 2026-11-23: "on the file itself … we would
+ * have a real and a fake version, and we would say which one to use for which environment. And the reviewer
+ * environment can only use the fake one, or if it's already fake, it's just all the same"). Whoever adds one says it
+ * is made up (it is the fake version, and the only one) or real: a real one is kept on this computer only, and where
+ * it is text a fake is made of it at once (fake.ts). A real picture or document has no fake until a made-up one is
+ * added under the same name. Text that is to go to a reviewer is also read against every real response of the app's
+ * services on this computer; a made-up picture rests on the person's word.
  *
- * The app's are for every task; a task has its own beside them. The file is kept on this computer
- * (~/.self-evident/test-files/<app>/<id>/<name>) and its row says what it is.
+ * Each place a task runs says which version it uses: a prototype and a smoke test the fake unless a person turns the
+ * real one on, a reviewer the fake always. When a prototype or a smoke test starts, the versions chosen are put in a
+ * folder of its own outside every repository, and it is told where ($TEST_FILES): the same files, by the same names,
+ * a reviewer will have (Sandy: "I'll be experiencing it just the way the reviewer would").
+ *
+ * The app's are for every task; a task has its own beside them. The files are kept on this computer
+ * (~/.self-evident/test-files/<app>/<id>/<name>, the real version in real/ beside it) and the row says what it is.
  */
 import { randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { and, asc, eq, isNull, or } from 'drizzle-orm'
@@ -40,10 +47,26 @@ const isText = (type: string) => type.startsWith('text/') || type === 'applicati
 /** A file's name as it is kept and given back: no folders, nothing a shell or a header would trip on. */
 const cleanName = (name: string) => name.replace(/^.*[\\/]/, '').replace(/[^\w.() -]+/g, '-').replace(/^\.+/, '').trim().slice(0, 120)
 const pathOf = (appId: string, id: string, name: string) => join(testFilesHome(), appId, id, name)
+const realPathOf = (appId: string, id: string, name: string) => join(testFilesHome(), appId, id, 'real', name)
+export type Version = 'fake' | 'real'
+/** The places a person's own run is in: a reviewer's is not chosen, it is the fake. */
+export const USE_PLACES = ['prototype', 'smoke'] as const
+export type UsePlace = (typeof USE_PLACES)[number]
 
-export interface TestFileView { id: string; name: string; what: string; mediaType: string; bytes: number; /** The app's, for every task, or one task's own. */ scope: 'app' | 'task'; /** Text read against the real responses on this computer; a picture or a document rests on the person's word. */ checked: { at: string; against: number; /** Made from a real file by the faker: how many values were replaced. The real file was not kept. */ faked?: number } | null; /** It is on this computer: one whose file is gone cannot be given to anyone. */ here: boolean }
+export interface TestFileView {
+  id: string; name: string; what: string; mediaType: string; /** Of the version a reviewer gets, else of the real one. */ bytes: number; /** The app's, for every task, or one task's own. */ scope: 'app' | 'task'
+  /** The version a reviewer gets, read against the real responses on this computer when it is text; faked: made from the real version, and how many values were replaced. */ checked: { at: string; against: number; faked?: number } | null
+  /** Which versions are on this computer. fake: made up, or made from the real one. real: this computer only. */ has: { fake: boolean; real: boolean }
+  /** Which version each place uses now. A reviewer: the fake, or nothing while there is none. */ use: Record<UsePlace, Version | null> & { review: 'fake' | null }
+  /** Why the real version has no fake, when one could not be made. */ note?: string
+  /** A version of it is on this computer. */ here: boolean
+}
 type Row = typeof testFile.$inferSelect
-const view = (r: Row): TestFileView => ({ id: r.id, name: r.name, what: r.what, mediaType: r.mediaType, bytes: r.bytes, scope: r.issueId ? 'task' : 'app', checked: r.checked ?? null, here: existsSync(pathOf(r.appId, r.id, r.name)) })
+const usedBy = (r: Row, place: UsePlace, has: { fake: boolean; real: boolean }): Version | null => ((r.use ?? {})[place] === 'real' && has.real ? 'real' : has.fake ? 'fake' : null)
+const view = (r: Row): TestFileView => {
+  const has = { fake: existsSync(pathOf(r.appId, r.id, r.name)), real: existsSync(realPathOf(r.appId, r.id, r.name)) }
+  return { id: r.id, name: r.name, what: r.what, mediaType: r.mediaType, bytes: r.bytes, scope: r.issueId ? 'task' : 'app', checked: r.checked ?? null, has, use: { prototype: usedBy(r, 'prototype', has), smoke: usedBy(r, 'smoke', has), review: has.fake ? 'fake' : null }, ...(r.real?.note && !has.fake ? { note: r.real.note } : {}), here: has.fake || has.real }
+}
 
 /** The app's test files, and (for a task) the task's own after them. */
 export async function listTestFiles(appId: string, issueId?: string | null): Promise<TestFileView[]> {
@@ -70,36 +93,43 @@ async function leaksIn(appId: string, name: string, text: string) {
 }
 
 /**
- * A test file added: for the app, or for one task. `stated`: whoever adds it says it holds nothing real. `real`: it
- * may hold something real, so a fake is made of it and kept in its place; the real file is never written anywhere.
- * One or the other, or it is refused. Text is read against the real responses here as well. One of the same name in
- * the same place is replaced.
+ * A test file added: for the app, or for one task. `stated`: whoever adds it says it holds nothing real, and it is
+ * the version every place gets. `real`: it may hold something real, so it is kept on this computer only and, where
+ * it is text, a fake is made of it for a reviewer. One or the other, or it is refused. Added under the name of one
+ * already there: a real one replaces its real version and the fake made of it; a made-up one replaces the fake and
+ * leaves the real version be.
  */
 export async function addTestFile(appId: string, i: { name: string; bytes: Uint8Array; what?: string; mediaType?: string; issueId?: string | null; stated?: boolean; real?: boolean }, actor = 'user'): Promise<TestFileView> {
   const name = cleanName(i.name)
-  if (!name) throw new PlanError('a test file needs a name, like one-person.csv')
+  if (!name || name === 'README.md') throw new PlanError('a test file needs a name of its own, like one-person.csv')
   if (!i.bytes.length) throw new PlanError(`${name} is empty`)
   if (i.bytes.length > TEST_FILE_MAX) throw new PlanError(`${name} is over ${TEST_FILE_MAX / 1024 / 1024} MB: a test file is something a person uploads by hand`)
   if (!i.stated && !i.real) throw new PlanError('a test file goes to a reviewer: say it holds nothing real, or say it is real and a fake is made of it')
   if (i.issueId) { const [t] = await db.select({ appId: issue.appId }).from(issue).where(eq(issue.id, i.issueId)); if (!t || t.appId !== appId) throw new PlanError('no such task in this app') }
   const type = typeOf(name) === 'application/octet-stream' && i.mediaType ? i.mediaType.slice(0, 100) : typeOf(name)
-  let checked: Row['checked'] = null
-  let faked: number | undefined
-  if (i.real) {
-    if (!isText(type)) throw new PlanError(`${name} is real and is not text, so no fake can be made of it here. Add a made-up one in its place`)
+  // The version a reviewer gets: the file itself when it is made up, the fake made of it when it is real.
+  let safe: Uint8Array | null = i.real ? null : i.bytes
+  let faked: number | undefined, note: string | undefined
+  if (i.real && !isText(type)) note = 'It is not text, so no fake can be made of it here: add a made-up one under the same name'
+  if (i.real && isText(type)) {
     const original = [{ name, text: new TextDecoder().decode(i.bytes) }]
-    const { files: made, report } = fake(original, { salt: randomBytes(16).toString('hex') })
-    const text = made[name] ?? Object.values(made)[0]
-    const r = text ? checkLeaks(original, [{ path: name, text }], report.keptValues) : null
-    // Said by count alone: what was found is someone's, and this is read on a page.
-    if (!r?.ok) throw new PlanError(`refused: the fake of ${name} would still carry ${r?.count ?? 'some'} value${r?.count === 1 ? '' : 's'} of the real file, so nothing was kept. Ask the task's agent to write a made-up one`)
-    i = { ...i, bytes: new TextEncoder().encode(text) }
-    faked = report.replaced
+    try {
+      const { files: made, report } = fake(original, { salt: randomBytes(16).toString('hex') })
+      const text = made[name] ?? Object.values(made)[0]
+      const r = text ? checkLeaks(original, [{ path: name, text }], report.keptValues) : null
+      // Said by count alone: what was found is someone's, and this is read on a page.
+      if (r?.ok) { safe = new TextEncoder().encode(text); faked = report.replaced }
+      else note = `The fake made of it would still carry ${r?.count ?? 'some'} value${r?.count === 1 ? '' : 's'} of the real file, so none was kept: ask the task's agent to write a made-up one under the same name`
+    } catch (err) { note = `No fake could be made of it (${String((err as Error).message).slice(0, 120)}): add a made-up one under the same name` }
   }
-  if (isText(type)) {
-    const r = await leaksIn(appId, name, new TextDecoder().decode(i.bytes))
-    if (r.found.length) throw new PlanError(`refused: ${name} holds ${r.found.length} value${r.found.length === 1 ? '' : 's'} of a real response on this computer. Replace each with an invented one:\n${[...new Set(r.found)].map((f) => `- ${f} (${r.found.filter((x) => x === f).length})`).join('\n')}`)
-    checked = { at: new Date().toISOString(), against: r.against, ...(faked !== undefined ? { faked } : {}) }
+  let checked: Row['checked'] = null
+  if (safe && isText(type)) {
+    const r = await leaksIn(appId, name, new TextDecoder().decode(safe))
+    if (r.found.length) {
+      const says = `${name} holds ${r.found.length} value${r.found.length === 1 ? '' : 's'} of a real response on this computer`
+      if (!i.real) throw new PlanError(`refused: ${says}. Replace each with an invented one, or add it as real:\n${[...new Set(r.found)].map((f) => `- ${f} (${r.found.filter((x) => x === f).length})`).join('\n')}`)
+      safe = null; faked = undefined; note = `The fake made of it still ${says.slice(name.length + 1)}, so none was kept: ask the task's agent to write a made-up one under the same name`
+    } else checked = { at: new Date().toISOString(), against: r.against, ...(faked !== undefined ? { faked } : {}) }
   }
   const scope = i.issueId ? eq(testFile.issueId, i.issueId) : isNull(testFile.issueId)
   const all = await db.select().from(testFile).where(and(eq(testFile.appId, appId), scope))
@@ -108,14 +138,17 @@ export async function addTestFile(appId: string, i: { name: string; bytes: Uint8
   const id = old?.id ?? newId('testFile')
   const dir = join(testFilesHome(), appId, id)
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, name), i.bytes)
+  if (i.real) { mkdirSync(join(dir, 'real'), { recursive: true }); writeFileSync(join(dir, 'real', name), i.bytes); rmSync(join(dir, name), { force: true }) } // the fake of an older real version is not this one's
+  if (safe) writeFileSync(join(dir, name), safe)
   const what = String(i.what ?? old?.what ?? '').trim().slice(0, 300)
+  const real: Row['real'] = i.real ? { bytes: i.bytes.length, at: new Date().toISOString(), ...(note ? { note } : {}) } : old?.real ? { bytes: old.real.bytes, at: old.real.at } : null
+  const set = { what, mediaType: type, bytes: (safe ?? i.bytes).length, checked, real }
   const workspaceId = await workspaceOf(appId)
   const row = await db.transaction(async (tx) => {
     const [r] = old
-      ? await tx.update(testFile).set({ what, mediaType: type, bytes: i.bytes.length, checked, updatedAt: new Date() }).where(eq(testFile.id, id)).returning()
-      : await tx.insert(testFile).values({ id, appId, issueId: i.issueId ?? null, name, what, mediaType: type, bytes: i.bytes.length, checked, createdBy: actor }).returning()
-    await appendEvent(tx, { workspaceId, appId, issueId: i.issueId ?? null, actor, type: old ? 'test_file.replaced' : 'test_file.added', payload: { id, name, bytes: i.bytes.length } })
+      ? await tx.update(testFile).set({ ...set, updatedAt: new Date() }).where(eq(testFile.id, id)).returning()
+      : await tx.insert(testFile).values({ id, appId, issueId: i.issueId ?? null, name, ...set, createdBy: actor }).returning()
+    await appendEvent(tx, { workspaceId, appId, issueId: i.issueId ?? null, actor, type: old ? 'test_file.replaced' : 'test_file.added', payload: { id, name, bytes: i.bytes.length, real: !!i.real, fake: !!safe } })
     return r
   })
   return view(row)
@@ -127,11 +160,13 @@ async function rowOf(appId: string, id: string) {
   return r
 }
 /** What the person does with it, said again. */
-export async function editTestFile(appId: string, id: string, i: { what?: string }, actor = 'user'): Promise<TestFileView> {
+export async function editTestFile(appId: string, id: string, i: { what?: string; /** Which version a place uses: the real one only where there is one. */ use?: Partial<Record<UsePlace, Version>> }, actor = 'user'): Promise<TestFileView> {
   const r = await rowOf(appId, id)
+  const use = { ...(r.use ?? {}) }
+  for (const p of USE_PLACES) { const v = i.use?.[p]; if (v === undefined) continue; if (v !== 'fake' && v !== 'real') throw new PlanError('a place uses the fake version or the real one'); if (v === 'real' && !existsSync(realPathOf(appId, r.id, r.name))) throw new PlanError(`${r.name} has no real version`); use[p] = v }
   const workspaceId = await workspaceOf(appId)
   const [next] = await db.transaction(async (tx) => {
-    const out = await tx.update(testFile).set({ what: String(i.what ?? r.what).trim().slice(0, 300), updatedAt: new Date() }).where(eq(testFile.id, id)).returning()
+    const out = await tx.update(testFile).set({ what: String(i.what ?? r.what).trim().slice(0, 300), use, updatedAt: new Date() }).where(eq(testFile.id, id)).returning()
     await appendEvent(tx, { workspaceId, appId, issueId: r.issueId, actor, type: 'test_file.changed', payload: { id, name: r.name } })
     return out
   })
@@ -147,9 +182,36 @@ export async function removeTestFile(appId: string, id: string, actor = 'user') 
   rmSync(join(testFilesHome(), appId, id), { recursive: true, force: true })
   return { removed: r.name }
 }
-/** Where the file is, to give it to the person: its name and type with it. */
-export async function testFilePath(appId: string, id: string) {
-  const r = await rowOf(appId, id), path = pathOf(appId, r.id, r.name)
-  if (!existsSync(path)) throw new PlanError(`${r.name} is no longer on this computer: add it again`)
-  return { path, name: r.name, mediaType: r.mediaType }
+/** Where a version of the file is, to give it to the person: the one a reviewer gets unless the real one is asked for, or is all there is. */
+export async function testFilePath(appId: string, id: string, version?: Version) {
+  const r = await rowOf(appId, id), fakeAt = pathOf(appId, r.id, r.name), realAt = realPathOf(appId, r.id, r.name)
+  const path = version === 'real' ? realAt : version === 'fake' || existsSync(fakeAt) ? fakeAt : realAt
+  if (!existsSync(path)) throw new PlanError(version ? `${r.name} has no ${version} version on this computer` : `${r.name} is no longer on this computer: add it again`)
+  return { path, name: r.name, mediaType: r.mediaType, version: (path === realAt ? 'real' : 'fake') as Version }
 }
+
+export interface Placed { dir: string; files: { name: string; what: string; version: Version }[]; /** Left out: no version this place may have. */ missing: string[] }
+/**
+ * The files a place gets, put in a folder of its own: each by its name, in the version the place uses, with a
+ * README.md saying what each is for. The folder is made again whole each time, so it is what the page says and no
+ * more. A task's own file takes the place of the app's of the same name. A reviewer's holds no real version, ever.
+ */
+export async function placeTestFiles(appId: string, issueId: string | null, place: UsePlace | 'review', dir: string): Promise<Placed> {
+  const rows = await db.select().from(testFile).where(and(eq(testFile.appId, appId), issueId ? or(isNull(testFile.issueId), eq(testFile.issueId, issueId)) : isNull(testFile.issueId))).orderBy(asc(testFile.createdAt))
+  const byName = new Map<string, Row>()
+  for (const r of [...rows.filter((x) => !x.issueId), ...rows.filter((x) => x.issueId)]) byName.set(r.name, r)
+  rmSync(dir, { recursive: true, force: true })
+  const out: Placed = { dir, files: [], missing: [] }
+  if (!byName.size) return out
+  mkdirSync(dir, { recursive: true })
+  for (const r of byName.values()) {
+    const v = view(r), version = place === 'review' ? v.use.review : v.use[place]
+    if (!version) { out.missing.push(r.name); continue }
+    copyFileSync(version === 'real' ? realPathOf(appId, r.id, r.name) : pathOf(appId, r.id, r.name), join(dir, r.name))
+    out.files.push({ name: r.name, what: r.what, version })
+  }
+  writeFileSync(join(dir, 'README.md'), ['# Test files', '', 'What a tester needs to try this. Put here by Self Evident; changed on the task\'s Data step, not here.', '', ...out.files.map((f) => `- \`${f.name}\`${f.version === 'real' ? ' (REAL: this computer only)' : ''}${f.what ? `: ${f.what}` : ''}`), ''].join('\n'))
+  return out
+}
+/** The same, in words for an agent that tries the task. */
+export const testFilesSay = (p: Placed): string[] => (p.files.length ? [`Test files for this task are in ${p.dir} (what a tester brings to it: upload or import them where the check calls for a file):`, ...p.files.map((f) => `- ${f.name}${f.what ? `: ${f.what}` : ''}`)] : [])

@@ -647,9 +647,11 @@ const fakedNote = 'Faked from a real response the person gave 18 Nov 2026: its s
 export const resultsItem: import('../engine').EndpointItem = { recorded: { id: 'app_sample/iss_sample1/fraud-scan/given-2026-11-18', at: '2026-11-18T15:20:00Z', how: 'given', files: ['results.csv'] }, safe: { kind: 'faked', set: 'faked', files: ['results.csv'], note: fakedNote, columns: ['tracking_id', 'work_email', 'full_name', 'status', 'risk_level', 'profiles', 'person_summary'] } }
 /** Made up: test files. One of the app's (a picture to upload) and two of the sample task's own. */
 export const testFiles: import('../engine').TestFile[] = [
-  { id: 'tfile_sample1', name: 'id-card.png', what: 'Upload it as the ID on the Verify page (sample)', mediaType: 'image/png', bytes: 48_200, scope: 'app', checked: null, here: true },
-  { id: 'tfile_sample2', name: 'one-person.csv', what: 'Import it on the Employees page: one made-up person, the one the mock has findings for (sample)', mediaType: 'text/csv', bytes: 212, scope: 'task', checked: { at: '2026-11-23T09:00:00Z', against: 2 }, here: true },
-  { id: 'tfile_sample3', name: 'notes.pdf', what: '', mediaType: 'application/pdf', bytes: 1_300_000, scope: 'task', checked: null, here: true },
+  { id: 'tfile_sample1', name: 'id-card.png', what: 'Upload it as the ID on the Verify page (sample)', mediaType: 'image/png', bytes: 48_200, scope: 'app', checked: null, has: { fake: true, real: false }, use: { prototype: 'fake', smoke: 'fake', review: 'fake' }, here: true },
+  { id: 'tfile_sample2', name: 'one-person.csv', what: 'Import it on the Employees page: one made-up person, the one the mock has findings for (sample)', mediaType: 'text/csv', bytes: 212, scope: 'task', checked: { at: '2026-11-23T09:00:00Z', against: 2 }, has: { fake: true, real: false }, use: { prototype: 'fake', smoke: 'fake', review: 'fake' }, here: true },
+  { id: 'tfile_sample3', name: 'notes.pdf', what: '', mediaType: 'application/pdf', bytes: 1_300_000, scope: 'task', checked: null, has: { fake: true, real: false }, use: { prototype: 'fake', smoke: 'fake', review: 'fake' }, here: true },
+  { id: 'tfile_sample4', name: 'export.csv', what: 'The export a customer sends, to bring in on the People page (sample)', mediaType: 'text/csv', bytes: 640, scope: 'task', checked: { at: '2026-11-23T09:00:00Z', against: 2, faked: 14 }, has: { fake: true, real: true }, use: { prototype: 'fake', smoke: 'real', review: 'fake' }, here: true },
+  { id: 'tfile_sample5', name: 'passport.png', what: '', mediaType: 'image/png', bytes: 91_000, scope: 'task', checked: null, has: { fake: false, real: true }, use: { prototype: null, smoke: null, review: null }, note: 'It is not text, so no fake can be made of it here: add a made-up one under the same name', here: true },
 ]
 /** Made up: the app's fixtures. One company with its employees, and a small one. */
 export const fixtures: import('../engine').Fixture[] = [

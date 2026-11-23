@@ -8,6 +8,7 @@
  * minutes), opened to its tables and their rows, renamed and deleted. One can also be kept from a prototype's data
  * (its Data panel, "keep as a scenario", shared with the app).
  */
+import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Badge } from './Badge'
 import { engine, type Fixture } from '../engine'
@@ -18,7 +19,7 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
 /** What the one made from the seed is called until it is renamed. */
 const SEED = 'seed'
 
-export function Fixtures({ appId, issueId, version = 0, onChanged }: { appId: string; /** A task: which fixture its runs are built from is said too. */ issueId?: string; /** Read again when it changes. */ version?: number; /** A fixture was made, renamed or deleted: what names it elsewhere is read again. */ onChanged?: () => void | Promise<void> }) {
+export function Fixtures({ appId, issueId, version = 0, files, onChanged }: { appId: string; /** A task: which fixture its runs are built from is said too. */ issueId?: string; /** Read again when it changes. */ version?: number; /** The section's second part, after the database: the files a tester brings (TestFiles). */ files?: React.ReactNode; /** A fixture was made, renamed or deleted: what names it elsewhere is read again. */ onChanged?: () => void | Promise<void> }) {
   const [got, setGot] = useState<Awaited<ReturnType<typeof engine.fixtures>> | null>(null)
   const [making, setMaking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,8 +36,11 @@ export function Fixtures({ appId, issueId, version = 0, onChanged }: { appId: st
   const can = got.make ?? { ok: false, missing: null }
   return (
     <div className="lv-section" data-component="Fixtures">
-      <div className="lv-section-head">
-        <h3>Fixtures{got.fixtures.length > 0 && <span className="lv-count">{got.fixtures.length}</span>}</h3>
+      <div className="lv-section-head"><h3>Fixtures</h3></div>
+      <p className="lv-section-note">Made-up data this is tried on: the database it starts with, and the files a tester adds to it.</p>
+      <div className="lv-group" data-part="database">
+      <div className="lv-group-head">
+        <h4>Database{got.fixtures.length > 0 && <span className="lv-count">{got.fixtures.length}</span>}</h4>
         {got.make && <span className="lv-end"><button className="btn quiet small" disabled={making || !can.ok} title={can.ok ? 'Its schema command and its seed command are run on a database of its own, which is dropped after' : `Not yet: ${can.missing}`} onClick={() => void make()}>{making ? 'Making it…' : 'Make one from the app\'s seed'}</button></span>}
       </div>
       <p className="lv-section-note">
@@ -51,6 +55,8 @@ export function Fixtures({ appId, issueId, version = 0, onChanged }: { appId: st
         : got.fixtures.map((f) => <FixtureItem key={f.name} appId={appId} fixture={f} used={got.used === f.name}
           onRename={(to) => act(async () => { await engine.renameFixture(appId, f.name, to); return null })}
           onDelete={() => { const n = f.madeFor ?? 0; if (window.confirm(`Delete the fixture "${f.name}"?${n ? ` The data of ${plural(n, 'endpoint')} was filled out for its people: that data stays as it is, and no longer says what a task's runs are built from.` : ''}`)) void act(async () => { await engine.deleteFixture(appId, f.name); return null }) }} />)}
+      </div>
+      {files}
     </div>
   )
 }

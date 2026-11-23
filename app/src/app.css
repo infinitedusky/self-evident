@@ -1186,6 +1186,14 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .lv-section-head { display: flex; align-items: baseline; gap: 10px; }
 .lv-section-head h3 { font-size: 17px; margin: 0 auto 0 0; }
 .lv-section-head .lv-count { font-size: 13px; font-weight: 400; color: var(--ink-faint); margin-left: 6px; letter-spacing: 0; }
+/* A section's parts when it has two kinds of thing (Fixtures: Database, Files): headed a step below the section. */
+.lv-group { margin-top: 18px; }
+.lv-section-note + .lv-group { margin-top: 4px; }
+.lv-group-head { display: flex; align-items: baseline; gap: 10px; }
+.lv-group-head h4 { font-size: 14px; font-weight: 600; margin: 0 auto 0 0; }
+.lv-group-head .lv-count { font-size: 13px; font-weight: 400; color: var(--ink-faint); margin-left: 6px; }
+.lv-group-head .lv-end { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.lv-cols select { display: block; margin-top: 2px; max-width: 100%; font: inherit; font-size: 13px; }
 .lv-section-note { margin: 2px 0 12px; font-size: 13px; color: var(--ink-soft); max-width: 640px; }
 .lv-item { border: 1px solid var(--line); border-radius: 8px; margin-top: 8px; overflow: hidden; }
 .lv-item-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; }

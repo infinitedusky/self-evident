@@ -479,7 +479,8 @@ export function buildApp(bus: EventBus) {
   api.patch('/apps/:id/test-files/:file', async (c) => { try { return c.json(await editTestFile(c.req.param('id'), c.req.param('file'), await c.req.json().catch(() => ({})), 'user')) } catch (err) { return planError(c, err) } })
   api.delete('/apps/:id/test-files/:file', async (c) => { try { return c.json(await removeTestFile(c.req.param('id'), c.req.param('file'), 'user')) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/test-files/:file/file', async (c) => { try {
-    const f = await testFilePath(c.req.param('id'), c.req.param('file'))
+    const v = c.req.query('version')
+    const f = await testFilePath(c.req.param('id'), c.req.param('file'), v === 'real' || v === 'fake' ? v : undefined)
     // A picture is shown in the page; anything else is handed over as a file to keep. Never run as a page of ours.
     const inline = /^image\/(png|jpeg|gif|webp)$/.test(f.mediaType) && c.req.query('show') === '1'
     return new Response(await readFile(f.path), { headers: { 'content-type': inline ? f.mediaType : 'application/octet-stream', 'content-disposition': `${inline ? 'inline' : 'attachment'}; filename="${f.name.replace(/"/g, '')}"`, 'x-content-type-options': 'nosniff' } })
