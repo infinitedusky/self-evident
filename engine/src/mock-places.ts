@@ -86,14 +86,15 @@ export async function planOf(m: Row, place: Place, issueId?: string | null, opts
       else try { await fakeData(m.appId, m.key, { recording: newest.dir, plan: whole.plan as Record<string, never>, dataKey: 'faked', issueId: issueId ?? null }, 'engine') } catch (err) { note = `a newer real response could not be faked with the plan it has, so the last fake is used: ${String((err as Error).message).split('\n')[0]}` }
     }
     const s = await served(m, { form, issueId })
-    if (s.unfaked.length) note = note ?? `${s.unfaked[0] === '*' ? 'its real response' : `the real response of ${callSays(m, s.unfaked)}`} is not faked yet${form === 'faked' ? ', so nothing of it is served' : ''}: the task's agent makes the fake`
+    const waiting = s.unfaked[0] === '*' ? 'its real response is not faked yet' : `${s.unfaked.length} call${s.unfaked.length === 1 ? ' has a real response that is' : 's have a real response that is'} not faked yet`
+    if (s.unfaked.length) note = note ?? waiting
     const kinds = new Set(Object.values(s.per).map((p) => p.kind))
     const by = servedBy(m)
     if (by !== 'none' && !Object.keys(m.env ?? {}).length) note = note ?? 'its environment variable to override is not set, so the app cannot be pointed at the mock'
     if (!s.files.length) plan = by === 'written' ? { ...base, how: 'own', form, says: 'The mock, answering with what its server makes up' } : by === 'general' ? { ...base, how: 'own', form, says: 'The mock, with no data yet: a call to it fails until its endpoint has data' } : { ...base, how: 'none', form, says: 'Nothing yet: it has no endpoints' }
     else plan = { ...base, how: 'data', form, real: s.real.length > 0, says: s.real.length ? `The mock, with the real response for ${s.real.length} of its ${Object.keys(s.per).length} calls: this computer only` : `The mock, with ${kinds.has('faked') || !kinds.has('provided') ? 'faked' : 'provided'} data${kinds.has('faked') && kinds.has('provided') ? ' and data you provided' : ''}` }
     if (note) plan.note = note
-    if (place === 'review' && s.unfaked.length) plan.blocked = `${s.unfaked[0] === '*' ? `${m.name}'s real response` : `the real response of ${m.name}'s ${callSays(m, s.unfaked)}`} has no fake yet, and a reviewer is never given a real one`
+    if (place === 'review' && s.unfaked.length) { plan.blocked = `${waiting}, and a reviewer is never given a real one (${s.unfaked[0] === '*' ? m.name : callSays(m, s.unfaked)})`; delete plan.note }
   }
   if (place === 'review') {
     if (plan.how === 'live') plan.blocked = `a reviewer cannot be given the real ${m.name}`

@@ -55,7 +55,7 @@ export const RecordedNotMined: Story = {
   beforeEach: withEngine({ mocks: [{ ...raised, needs: { ...raised.needs, recorded: '/sample/recordings' }, unmined: { at: '2026-11-20T14:00:00Z', files: 6 } }] }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByText(/The task's agent is building the mock from it/)).toBeInTheDocument()
+    await expect(await c.findByText(/The task's agent is making its faked version/)).toBeInTheDocument()
     await expect(c.getByRole('button', { name: 'Ask again' })).toBeInTheDocument()
     await expect(c.queryByRole('button', { name: 'Mine it' })).toBeNull()
   },
@@ -139,8 +139,17 @@ export const TwoSteps: Story = {
 }
 /** A real response with no fake of it yet: it says nothing of it is served until the fake is made. */
 export const NotFakedYet: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], endpoints: [...mocks[0].endpoints, unfakedEndpoint] }] }) }
-/** On a task's Data step: the services the task calls, each with what every place is given and the calls it makes with their data, all as the app has it until the task overrides it; then the app's services as its settings have them, folded. */
-export const OnATask: Story = { args: { issueId: 'iss_sample2' } }
+/** On a task's Data step there is one section: the services the task calls, each with what every place is given and its calls with their data, all as the app has it until the task overrides it. The app's own cards are not repeated under it. */
+export const OnATask: Story = {
+  args: { issueId: 'iss_sample2' },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect((await c.findAllByText('What each place is given')).length).toBe(3) // once per service the task calls, and not again below
+    await expect(canvasElement.querySelector('[data-component="MockCard"]')).toBeNull()
+    await expect(c.getByText(/are in Settings › Mocks/)).toBeInTheDocument()
+    await expect(c.getByText('A job id for the people sent')).toBeInTheDocument() // what the call is, as the service has it
+  },
+}
 /** A service with ten calls: two have data, eight are answered with what the server makes up. Any of them can be given data. */
 export const TenEndpoints: Story = {
   beforeEach: withEngine({ mocks: [{ ...mocks[0], endpoints: [

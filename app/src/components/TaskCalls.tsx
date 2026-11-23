@@ -84,6 +84,7 @@ function ServiceBlock({ appId, issueId, service: s, mock, places, onData, onRemo
       {places && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><div><div className="task-calls-sub">What each place is given</div><Sources appId={appId} row={places} issueId={issueId} onChanged={onData} /></div></div>}
       <div className="task-calls-row" style={{ gridTemplateColumns: '1fr auto', alignItems: 'center' }}><div className="task-calls-sub" style={{ margin: 0 }}>The calls this task makes</div><button className="btn quiet small" aria-label={`Add a call to ${s.name}`} onClick={() => setAdding(!adding)}>Add a call</button></div>
       {adding && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><CallForm label="Add" known={known} steps={(k) => stepsUnder(k).length} serviceName={s.name} onSave={(b) => void onAddCall(b).then(() => setAdding(false))} onCancel={() => setAdding(false)} /></div>}
+      {mock?.needs?.recorded && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><div className="row" style={{ margin: 0 }}><span>A real response is in. The task's agent is {mock.served === 'written' ? 'building the mock from it' : 'making its faked version'}: its conversation shows how far it is.</span><button className="btn quiet small" title="If the agent did not start, or stopped" onClick={() => void engine.mineMock(appId, s.key).then(onData)}>Ask again</button></div></div>}
       {!s.calls.length && !adding && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><span className="faint">No calls listed yet: which of its endpoints does this task use?</span></div>}
       {top.flatMap((c) => [
         <CallRow key={c.id} appId={appId} issueId={issueId} call={c} mock={mock} onData={onData} onCover={() => onCover(c.id)} onLink={(e) => onLink(c.id, e)} onRemove={() => onRemoveCall(c.id)} onEdit={(b) => onEditCall(c.id, b)} />,
@@ -95,6 +96,7 @@ function ServiceBlock({ appId, issueId, service: s, mock, places, onData, onRemo
             : <StepRow key={`step-${e.key}`} appId={appId} issueId={issueId} step={e} parent={parent} mock={mock!} onData={onData} />
         }),
       ])}
+      {known.length > 0 && s.calls.length > 0 && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><span className="faint">{s.name} has {known.length} more endpoint{known.length === 1 ? '' : 's'} this task does not use: {known.map((e) => `${e.method} ${e.path}`).join(', ')}. Add a call picks from them.</span></div>}
     </div>
   )
 }
@@ -122,7 +124,8 @@ function CallRow({ appId, issueId, call: c, parent, mock, onData, onCover, onLin
     <div className="task-calls-row" data-state={c.state} data-step={parent ? 'yes' : undefined}>
       <div className={parent ? 'task-calls-step' : undefined}>
         {parent && e ? <><span className="faint">Next step: </span><span className="mock-method">{c.method}</span> the link in <code>{e.linkField}</code></> : <><span className="mock-method">{c.method}</span> <code>{c.path}</code></>}{e && mock?.endpoints.some((x) => x.follows === e.key) && <> <Badge tone="neutral">Intermediate</Badge></>}{e?.sensitive && <> <Badge tone="warn">Sensitive</Badge></>}{c.by === 'user' && <span className="faint"> · added by you</span>}
-        {c.what ? <div className="task-calls-what">Needs: {c.what}</div> : <div className="faint">Nothing said yet about what it has to answer.</div>}
+        {e?.what && e.what !== c.what && <div className="faint">{e.what}</div>}
+        {c.what ? <div className="task-calls-what">This task needs: {c.what}</div> : !e?.what && <div className="faint">Nothing said yet about what it has to answer.</div>}
       </div>
       <div>
         {c.state === 'answered' && e && c.mock ? (
