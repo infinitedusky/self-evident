@@ -244,4 +244,15 @@ describe.skipIf(!reachable)('a mock\'s data, apart from its server', () => {
     expect(r.files).toEqual(['status.json'])
     expect(JSON.parse(readFileSync(join(r.dir, 'given.meta.json'), 'utf8'))).toMatchObject({ endpoint: 'status', files: [{ name: 'status.json', was: 'poll answer.json' }] })
   })
+
+  it('checks invented data with what the service\'s fakes keep as structure, in a real response that has no fake of its own', async () => {
+    // Made up: a status answer of a run that failed. Nothing was faked from it, so no fake's kept words name "failed".
+    await giveRecording(appId, 'scanner', [{ name: 'failed.json', bytes: new TextEncoder().encode('{"status":"failed","stage":"enrichment","operator":"Marlowe"}') }], 'user', 'status')
+    const row = (status: string, summary = '') => ({ 'results.csv': `${head}\n00000000-0000-4000-8000-00000000000c,none@acme.example,Sample Nobody,${status},low,[],${summary}\n` })
+    // The plan the service's fake was made with keeps the status column: a status is structure in every response of the service.
+    expect(await saveData(appId, 'scanner', { dataKey: 'a failed run', files: row('failed') })).toMatchObject({ kind: 'invented' })
+    // What that plan does not keep is still someone's.
+    await expect(saveData(appId, 'scanner', { dataKey: 'a failed run', files: row('failed', 'Marlowe') })).rejects.toThrow('so it is not invented')
+    await removeData(appId, 'scanner', 'a failed run')
+  })
 })

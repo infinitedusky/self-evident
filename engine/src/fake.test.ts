@@ -75,6 +75,23 @@ describe('the faker', () => {
     expect(Math.abs(t.length - summary.length)).toBeLessThan(40)
   })
 
+  it('replaces a column named as text whole, even where its cell holds a written-out object', () => {
+    // Made up: a cell whose keys are themselves what was found (the sites someone is on), so going into it would keep them.
+    const sources = JSON.stringify({ 'Northgate Staff Directory': { seen: 3 }, 'Denver Alumni Board': { seen: 1 } })
+    const text = ['id,who,sources,detail', `1,Rowan Vale,${cell(sources)},${cell(JSON.stringify({ note: 'ok', found: { 'Northgate Staff Directory': ['a', 'b'] } }))}`].join('\n') + '\n'
+    const kept = parseCsv(fake([{ name: 'r.csv', text }], { salt: 'test' }).files['r.csv'])[1]
+    expect(kept[2]).toContain('Northgate Staff Directory') // gone into: its keys are kept as structure
+    const made = parseCsv(fake([{ name: 'r.csv', text }], { salt: 'test', text: ['sources', 'detail.found'] }).files['r.csv'])[1]
+    expect(made[2].startsWith('Sample data:')).toBe(true)
+    expect(made[2]).not.toMatch(/Northgate|Denver|Alumni/)
+    // A key inside a cell, named by its path: what it holds is replaced whole and the rest of the cell is still gone into.
+    const detail = JSON.parse(made[3]) as { note: string; found: string }
+    expect(Object.keys(detail)).toEqual(['note', 'found'])
+    expect(detail.found.startsWith('Sample data:')).toBe(true)
+    expect(made[3]).not.toContain('Northgate')
+    expect(checkLeaks([{ name: 'r.csv', text }], [{ path: 'r.csv', text: made.join(',') }]).ok).toBe(true)
+  })
+
   it('makes the same real value the same fake one everywhere, and the same again next time', () => {
     const both = fake([{ name: 'results.csv', text: recorded }, { name: 'a.json', text: JSON.stringify({ owner: 'Rowan Vale', people: [{ name: 'Rowan Vale', email: 'rowan.vale@northgate-holdings.com' }] }, null, 2) }], plan).files
     const twice = both['a.json']
