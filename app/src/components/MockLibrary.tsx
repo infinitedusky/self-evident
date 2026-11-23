@@ -55,10 +55,13 @@ export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's
   )
   return (
     <section className="panel" data-component="MockLibrary">
-      <div className="task-block-head">
-        <h2 style={{ margin: 0 }}>{issueId ? 'Data' : 'Mocks'}</h2>
-        {!issueId && <button className="btn quiet small" onClick={() => setAdding(!adding)}>Add a service</button>}
-      </div>
+      {/* On a task the step is already headed Data: it is not said again here. */}
+      {!issueId && (
+        <div className="task-block-head">
+          <h2 style={{ margin: 0 }}>Mocks</h2>
+          <button className="btn quiet small" onClick={() => setAdding(!adding)}>Add a service</button>
+        </div>
+      )}
       {/* What is in the app's own database comes first; then the services outside it, with what they are said at the top of that section. */}
       {list !== null && <Fixtures appId={appId} issueId={issueId} version={tick} />}
       {issueId && <TaskCalls appId={appId} issueId={issueId} mocks={list ?? []} places={places} version={tick} onChanged={() => reload()} intro={intro} />}

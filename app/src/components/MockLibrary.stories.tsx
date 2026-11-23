@@ -148,6 +148,7 @@ export const OnATask: Story = {
     await expect(canvasElement.querySelector('[data-component="MockCard"]')).toBeNull()
     await expect(c.getByText(/its history are in Settings › Mocks/)).toBeInTheDocument()
     await expect(c.getByText('A job id for the people sent')).toBeInTheDocument() // what the call is, as the service has it
+    await expect(c.queryByRole('heading', { name: 'Data' })).toBeNull() // the step is headed Data already
     // Fixtures come first; what the services section is, is said at its top.
     const text = canvasElement.textContent ?? ''
     await expect(text.indexOf('Fixtures')).toBeLessThan(text.indexOf('What the task needs'))
