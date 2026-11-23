@@ -31,11 +31,11 @@ import { standInKey } from './stand-ins.js'
 
 export type Place = (typeof MOCK_PLACES)[number]
 export type Source = (typeof MOCK_SOURCES)[number]
-/** live: the real service. fake: the mock, with faked data. replay: the mock, with recorded responses as they are. default: what the app says; and for the app, the mock with faked data. (data: from before data sat on the endpoint; read as fake.) */
+/** live: the real service. fake: the mock. default: what the app says; and for the app, the mock. (replay and data are from before the choice of data sat on the endpoint; read as fake.) */
 export interface Choice { source: Source; data?: string }
 export const PLACE_NAMES: Record<Place, string> = { prototype: 'Prototype', smoke: 'Smoke test', review: 'Reviewer' }
 /** What may be chosen for a place: nothing real for a reviewer. */
-export const sourcesFor = (place: Place): Source[] => (place === 'review' ? ['default', 'fake'] : ['default', 'live', 'fake', 'replay'])
+export const sourcesFor = (place: Place): Source[] => (place === 'review' ? ['default', 'fake'] : ['default', 'live', 'fake'])
 
 /** What a place gets now. */
 export interface Plan {
@@ -57,8 +57,8 @@ const cleanChoice = (c: unknown): Choice | null => {
 }
 const canLive = (m: Row) => !!m.upstream && Object.keys(m.env ?? {}).length > 0
 const dataOf = async (mockId: string, key: string): Promise<DataRow | null> => (await db.select().from(mockData).where(and(eq(mockData.mockId, mockId), eq(mockData.key, key))))[0] ?? null
-/** The form a choice comes to: recorded only where a person turned it on for their own prototype or smoke test. */
-export const formOf = (c: Choice, place: Place): Form => (c.source === 'replay' && place !== 'review' ? 'recorded' : 'faked')
+/** The form a place is served in: a reviewer always the faked version; a person's own run, what each endpoint says for itself (mock-serve.ts). */
+export const formOf = (_c: Choice, place: Place): Form => (place === 'review' ? 'faked' : 'recorded')
 const callSays = (m: Row, keys: string[]) => { const all = cleanEndpoints(m.endpoints); return keys.map((k) => { const e = all.find((x) => x.key === k); return e ? `${e.method} ${e.path}` : 'its response' }).join(', ') }
 
 /**
@@ -91,8 +91,7 @@ export async function planOf(m: Row, place: Place, issueId?: string | null, opts
     const by = servedBy(m)
     if (by !== 'none' && !Object.keys(m.env ?? {}).length) note = note ?? 'its environment variable to override is not set, so the app cannot be pointed at the mock'
     if (!s.files.length) plan = by === 'written' ? { ...base, how: 'own', form, says: 'The mock, answering with what its server makes up' } : by === 'general' ? { ...base, how: 'own', form, says: 'The mock, with no data yet: a call to it fails until its endpoint has data' } : { ...base, how: 'none', form, says: 'Nothing yet: it has no endpoints' }
-    else plan = { ...base, how: 'data', form, real: s.real.length > 0, says: s.real.length ? `The mock, with recorded responses as they are${s.real[0] === '*' ? '' : ` (${s.real.length} of its ${Object.keys(s.per).length} calls)`}: this computer only` : `The mock, with ${kinds.has('faked') || !kinds.has('provided') ? 'faked' : 'provided'} data${kinds.has('faked') && kinds.has('provided') ? ' and data you provided' : ''}` }
-    if (form === 'recorded' && !s.real.length && plan.how !== 'none') note = note ?? 'there is no recorded response yet, so nothing real is served'
+    else plan = { ...base, how: 'data', form, real: s.real.length > 0, says: s.real.length ? `The mock, with the real response for ${s.real.length} of its ${Object.keys(s.per).length} calls: this computer only` : `The mock, with ${kinds.has('faked') || !kinds.has('provided') ? 'faked' : 'provided'} data${kinds.has('faked') && kinds.has('provided') ? ' and data you provided' : ''}` }
     if (note) plan.note = note
     if (place === 'review' && s.unfaked.length) plan.blocked = `${s.unfaked[0] === '*' ? `${m.name}'s real response` : `the real response of ${m.name}'s ${callSays(m, s.unfaked)}`} has no fake yet, and a reviewer is never given a real one`
   }
@@ -129,6 +128,7 @@ export async function setChoice(appId: string, mockKey: string, place: string, g
   const source = given?.source ?? 'default'
   if (!(MOCK_SOURCES as readonly string[]).includes(source)) throw new PlanError(`a source is one of ${MOCK_SOURCES.join(', ')}`)
   if (source === 'data') throw new PlanError('data sits on the endpoint now: choose the real service (live) or the mock (fake; replay for recorded responses as they are), and give each endpoint its data')
+  if (source === 'replay' && p !== 'review') throw new PlanError('whether a call is answered with its real response or its faked version is set on the endpoint now: choose the mock (fake) here')
   if (!sourcesFor(p).includes(source)) throw new PlanError(`a reviewer is never given real data: for the reviewer the mock answers with faked data`)
   const data: string | null = null
   const workspaceId = await workspaceOf(appId)
@@ -169,5 +169,5 @@ export async function placesTable(appId: string, issueId?: string | null): Promi
 export function placesPrompt(table: PlacesRow[]): string {
   if (!table.length) return ''
   const line = (r: PlacesRow) => `- ${r.name} (${r.mock}): ${MOCK_PLACES.map((p) => `${PLACE_NAMES[p].toLowerCase()}: ${r.places[p].says}${r.places[p].note ? ` (${r.places[p].note})` : ''}${r.places[p].blocked ? ` [cannot be made: ${r.places[p].blocked}]` : ''}`).join('; ')}`
-  return `\nWhere each mock's data comes from for this work, place by place (the person's to set on the task's Data step; you may set it with mock_data, op place, when they ask: source live is the real service, fake the mock with faked data, replay the mock with recorded responses as they are):\n${table.map(line).join('\n')}\nA reviewer is never given real data: what a reviewer's copy carries is a fake, or data that holds nothing real.`
+  return `\nWhere each mock's data comes from for this work, place by place (the person's to set on the task's Data step; you may set it with mock_data, op place, when they ask: source live is the real service, fake the mock; whether one call is answered with its real response is the person's to set on that endpoint):\n${table.map(line).join('\n')}\nA reviewer is never given real data: what a reviewer's copy carries is a fake, or data that holds nothing real.`
 }

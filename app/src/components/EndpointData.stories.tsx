@@ -19,6 +19,17 @@ export const RecordedAndFaked: Story = {
     await expect(c.getByRole('button', { name: /^Remove the data of/ })).toBeInTheDocument()
   },
 }
+/** Which version a person's own runs get is the endpoint's own switch, ticked to begin with: the faked version. Unticked, their prototype and smoke test get the real response. A reviewer always gets the faked one. */
+export const UseFakedVersion: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const box = await c.findByRole('checkbox', { name: /^Use the faked version of GET the results file/ })
+    await expect(box).toBeChecked()
+    await expect(c.getByText(/Your prototype and smoke test get the faked version\. A reviewer always gets the faked one\./)).toBeInTheDocument()
+  },
+}
+/** On a task the switch starts as the app has it and can be set for the task alone, then put back. */
+export const UseFakedVersionOnATask: Story = { args: { issueId: 'iss_sample2', endpoint: { ...mockEndpointsSample[3], data: { ...mockEndpointsSample[3].data, faked: { app: true, task: false } } } } }
 /** No data: the mock's server makes the answer up. Adding data asks for a file and what it is. */
 export const NoData: Story = {
   args: { endpoint: mockEndpointsSample[0] },
@@ -26,7 +37,7 @@ export const NoData: Story = {
     const c = within(canvasElement)
     await userEvent.click(c.getByRole('button', { name: 'Add the data of POST /workflows/run' }))
     await expect(c.getByRole('button', { name: 'Add it' })).toBeDisabled() // until a file is chosen
-    await expect(c.getAllByRole('radio')).toHaveLength(2)
+    await expect(c.getByRole('checkbox', { name: 'This is real data' })).toBeChecked()
   },
 }
 /** A real response with no fake yet: nothing of it is served until the task's agent makes the fake. */

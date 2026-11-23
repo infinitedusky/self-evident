@@ -1,0 +1,1 @@
+ALTER TABLE "task_service" ADD COLUMN "faked" jsonb DEFAULT '{}'::jsonb NOT NULL;

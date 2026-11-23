@@ -97,7 +97,7 @@ import { CATALOGUE } from './catalogue.js'
 import { removeData, renameData, saveData, setDefaultData } from './mock-data.js'
 import { placesTable, setChoice, type Choice } from './mock-places.js'
 import { addCall, addTaskService, clearCalls, coverCall, editCall, linkCall, listCalls, listTaskServices, removeCall, removeTaskService, type NewCall } from './task-calls.js'
-import { giveEndpointData, removeEndpointData } from './mock-serve.js'
+import { giveEndpointData, removeEndpointData, setEndpointFaked } from './mock-serve.js'
 import { addEndpoint, editEndpoint, listReal, mockHistory, recordingsFor, removeReal, rowOf } from './mocks.js'
 import { exportMock, getMock, giveRecording, listMocks, addService, needsRecording, recordingsOfService, removeMock, setMockDetails, type Needs } from './mocks.js'
 import { appSkills, describePlugins, fileSkill, forgetPlugin, installed, installPlugin, pluginOn, removePlugin, ROLES, type AppPlugins, type FactorySettings, type Role, cleanJobs, cleanStepSkills, describeJobs, usableSkills, writeSharedSkill, type AppJobs } from './skills.js'
@@ -463,6 +463,7 @@ export function buildApp(bus: EventBus) {
     if (r.kept === 'recorded' && r.issueId) await askToMine(r.issueId, key, r.dir, r.files)
     return c.json({ kept: r.kept, asked: r.kept === 'recorded' ? r.issueId : null, ...('maybeStructure' in r ? { maybeStructure: r.maybeStructure } : {}) }, 201)
   } catch (err) { return planError(c, err) } })
+  api.put('/apps/:id/mocks/:key/endpoints/:endpoint/faked', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { faked?: boolean | null; issueId?: string | null }; return c.json(await setEndpointFaked(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), b.faked ?? null, b.issueId || null, 'user')) } catch (err) { return planError(c, err) } })
   api.delete('/apps/:id/mocks/:key/endpoints/:endpoint/data', async (c) => { try { return c.json(await removeEndpointData(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), { issueId: c.req.query('issue') || null, real: c.req.query('real') === '1' }, 'user')) } catch (err) { return planError(c, err) } })
   api.patch('/apps/:id/mocks/:key/endpoints/:endpoint', async (c) => { try { return c.json(await editEndpoint(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), await c.req.json().catch(() => ({})), 'user')) } catch (err) { return planError(c, err) } })
   api.delete('/apps/:id/mocks/:key/endpoints/:endpoint', async (c) => { try { return c.json(await editEndpoint(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), null, 'user')) } catch (err) { return planError(c, err) } })

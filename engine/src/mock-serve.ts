@@ -20,9 +20,10 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
-import { asc, eq } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { mock, mockData } from './db/schema.js'
+import { issue, mock, mockData, taskService } from './db/schema.js'
+import { newId } from './ids.js'
 import { appendEvent } from './events.js'
 import { PlanError } from './issues.js'
 import { dataNote, fakeGiven, saveData, scopeKey, scopeOfRecording, type DataProvenance, type DataRow, type Scope } from './mock-data.js'
@@ -37,12 +38,18 @@ export interface EndpointItem {
   /** The real response behind it on this computer. id: its folder from the recordings home. */ recorded: { id: string; at: string; how: 'given' | 'recorded'; files: string[] } | null
   /** What may leave this computer: a fake of the recorded one, or a file provided as holding nothing real. */ safe: { kind: 'faked' | 'provided'; set: string; files: string[]; note: string; /** Faked from a response that is no longer the newest one. */ stale?: boolean } | null
 }
-export interface EndpointData { /** The app's: set in its settings. */ app: EndpointItem | null; /** This task's own, in place of the app's. */ task: EndpointItem | null }
+export interface EndpointData { /** The app's: set in its settings. */ app: EndpointItem | null; /** This task's own, in place of the app's. */ task: EndpointItem | null; /** Do a person's own runs get its faked version? The app's answer (faked unless it says otherwise), and this task's own where it has one. A reviewer always gets the faked one. */ faked: { app: boolean; task: boolean | null } }
 
 const visible = (dir: string) => { try { return readdirSync(dir).filter((f) => !f.startsWith('.') && !f.endsWith('.meta.json')).sort() } catch { return [] as string[] } }
 const prov = (d: DataRow) => (d.provenance ?? {}) as DataProvenance
 const filesOf = (endpoints: Endpoint[], e: string, names: string[]) => names.filter((f) => endpointOfFile(endpoints, f)?.key === e).sort()
 
+/** A task's own answers to "the faked version?", endpoint by endpoint. */
+async function taskFaked(mockId: string, issueId?: string | null): Promise<Record<string, boolean>> {
+  if (!issueId) return {}
+  const [t] = await db.select({ faked: taskService.faked }).from(taskService).where(and(eq(taskService.issueId, issueId), eq(taskService.mockId, mockId)))
+  return t?.faked ?? {}
+}
 interface Read { m: Row; endpoints: Endpoint[]; sets: DataRow[]; recs: { dir: string; at: string; view: string; names: string[]; scope?: Scope; given: boolean }[] }
 async function read(m: Row): Promise<Read> {
   const endpoints = cleanEndpoints(m.endpoints)
@@ -65,8 +72,8 @@ function itemOf(r: Read, e: string, task: string | null): EndpointItem | null {
 }
 /** Every endpoint's data: the app's, and (for a task) the task's own. */
 export async function endpointData(m: Row, issueId?: string | null): Promise<Record<string, EndpointData>> {
-  const r = await read(m)
-  return Object.fromEntries(r.endpoints.map((e) => [e.key, { app: itemOf(r, e.key, null), task: issueId ? itemOf(r, e.key, issueId) : null }]))
+  const r = await read(m), own = await taskFaked(m.id, issueId)
+  return Object.fromEntries(r.endpoints.map((e) => [e.key, { app: itemOf(r, e.key, null), task: issueId ? itemOf(r, e.key, issueId) : null, faked: { app: !e.useReal || !!e.sensitive, task: e.sensitive ? null : own[e.key] ?? null } }]))
 }
 
 export interface Served {
@@ -75,9 +82,13 @@ export interface Served {
   /** Endpoints with a real response and no fake of it yet, where a fake was asked for: nothing is served for them. */ unfaked: string[]
   /** Which kind each endpoint got. */ per: Record<string, { from: 'app' | 'task'; kind: 'recorded' | 'faked' | 'provided' | 'none' }>
 }
-/** What a mock is given to answer with, for one form and (where it is a task's run) that task. */
+/**
+ * What a mock is given to answer with. form faked: every endpoint's faked (or provided) data, as a reviewer and an
+ * export get. form recorded: a person's own run, where each endpoint says for itself whether it is answered with
+ * its real response (the task's own answer, else the app's; faked unless it says otherwise; never for a sensitive one).
+ */
 export async function served(m: Row, o: { form: Form; issueId?: string | null } = { form: 'faked' }): Promise<Served> {
-  const r = await read(m)
+  const r = await read(m), ownFaked = o.form === 'recorded' ? await taskFaked(m.id, o.issueId) : {}
   const out: Served = { files: [], real: [], unfaked: [], per: {} }
   const put = (f: Served['files'][number]) => { out.files = [...out.files.filter((x) => x.name !== f.name), f] }
   const base = r.sets.filter((d) => !prov(d).scope?.task)
@@ -85,8 +96,7 @@ export async function served(m: Row, o: { form: Form; issueId?: string | null } 
   if (!r.endpoints.length) {
     // A mock from before endpoints were listed: its whole real response, or its whole safe set.
     const rec = r.recs.find((x) => !x.scope?.task)
-    if (o.form === 'recorded' && rec?.names.length) { for (const n of rec.names) put({ name: n, link: join(rec.view, n) }); out.real = ['*'] }
-    else if (whole) for (const [n, t] of Object.entries(whole.files)) put({ name: n, text: t })
+    if (whole) for (const [n, t] of Object.entries(whole.files)) put({ name: n, text: t })
     else if (rec?.names.length) out.unfaked = ['*']
     return out
   }
@@ -96,7 +106,8 @@ export async function served(m: Row, o: { form: Form; issueId?: string | null } 
     const item = own ?? itemOf(r, e.key, null), from = own ? 'task' as const : 'app' as const
     if (!item) { out.per[e.key] = { from, kind: 'none' }; continue }
     const level = own ? o.issueId! : null
-    if (o.form === 'recorded' && !e.sensitive && item.recorded) {
+    const real = o.form === 'recorded' && !e.sensitive && !(ownFaked[e.key] ?? !e.useReal)
+    if (real && item.recorded) {
       const rec = r.recs.find((x) => relative(recordingsHome(), x.dir) === item.recorded!.id)!
       for (const n of item.recorded.files) put({ name: n, link: join(rec.view, n) })
       out.real.push(e.key); out.per[e.key] = { from, kind: 'recorded' }
@@ -155,6 +166,35 @@ export async function giveEndpointData(appId: string, key: string, endpoint: str
   if (e.sensitive) { const r = await fakeGiven(appId, key, { endpoint: e.key, recorded: named(e, files), issueId: o.issueId ?? null }, actor); return { kept: 'faked' as const, faked: true, maybeStructure: r.maybeStructure } }
   const r = await giveRecording(appId, key, files, actor, e.key, o.issueId ?? null)
   return { kept: 'recorded' as const, faked: false, dir: r.dir, files: r.files.length, /** Whose agent makes the fake. */ issueId: o.issueId ?? r.issueId }
+}
+
+/**
+ * Whether a person's own runs get an endpoint's faked version: the app's answer (its settings), or one task's own.
+ * null: the task's own taken away, so it follows the app again (for the app: back to faked). A sensitive endpoint
+ * is always faked.
+ */
+export async function setEndpointFaked(appId: string, key: string, endpoint: string, faked: boolean | null, issueId: string | null, actor = 'user') {
+  const { m, e } = await endpointOf(appId, key, endpoint)
+  if (faked === false && e.sensitive) throw new PlanError(`${e.method} ${e.path} is sensitive: it is always answered with its faked version, and no real response of it is kept`)
+  const workspaceId = await workspaceOf(appId)
+  if (issueId) {
+    const [t] = await db.select({ id: issue.id }).from(issue).where(and(eq(issue.id, issueId), eq(issue.appId, appId)))
+    if (!t) throw new PlanError('no such task')
+  }
+  await db.transaction(async (tx) => {
+    if (issueId) {
+      const [row] = await tx.select().from(taskService).where(and(eq(taskService.issueId, issueId), eq(taskService.mockId, m.id)))
+      const next = { ...(row?.faked ?? {}) }
+      if (faked === null) delete next[e.key]; else next[e.key] = faked
+      if (row) await tx.update(taskService).set({ faked: next }).where(eq(taskService.id, row.id))
+      else if (faked !== null) await tx.insert(taskService).values({ id: newId('run').replace(/^run_/, 'tsvc_'), issueId, mockId: m.id, faked: next })
+    } else {
+      const endpoints = cleanEndpoints(m.endpoints).map((x) => { if (x.key !== e.key) return x; const { useReal: _u, ...rest } = x; return faked === false ? { ...rest, useReal: true } : rest })
+      await tx.update(mock).set({ endpoints, updatedAt: new Date() }).where(eq(mock.id, m.id))
+    }
+    await appendEvent(tx, { workspaceId, appId, issueId, actor, type: 'mock.endpoint_faked', payload: { key: m.key, endpoint: e.key, faked } })
+  })
+  return (await endpointData((await rowOf(appId, key))!, issueId))[e.key]
 }
 
 /** One endpoint's data taken away at one level: its safe data, and (real) the real response behind it, deleted from this computer. A task's own gone, the app's is what it gets again. */

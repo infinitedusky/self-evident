@@ -29,7 +29,7 @@ export const OverridingData: Story = {
     await expect(await c.findByText("From the app's settings")).toBeInTheDocument()
     await userEvent.click(c.getByRole('button', { name: /^Override the data of GET the results file/ }))
     await expect(c.getByText(/For this task alone\. Other tasks keep the app's\./)).toBeInTheDocument()
-    await userEvent.click(c.getByRole('radio', { name: 'I wrote this, or made it up: it holds nothing real' }))
+    await userEvent.click(c.getByRole('checkbox', { name: 'This is real data' })) // unticked: it holds nothing real
     await userEvent.upload(c.getByLabelText(/^A file for GET the results file/), new File(['a,b\n1,2\n'], 'mine.csv', { type: 'text/csv' }))
     await userEvent.click(c.getByRole('button', { name: 'Add it' }))
     await expect(await c.findByText("This task's own")).toBeInTheDocument()

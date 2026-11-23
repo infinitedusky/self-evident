@@ -15,6 +15,7 @@ import { createProject } from './projects.js'
 import { parseCsv } from './mock-leaks.js'
 import { fakeData, removeData, saveData, setDefaultData, useReal } from './mock-data.js'
 import { placesTable, plansFor, setChoice } from './mock-places.js'
+import { setEndpointFaked } from './mock-serve.js'
 import { exportMock, getMock, giveRecording, libraryStandIns, mockHistory, needsRecording, rowOf, saveMock } from './mocks.js'
 import { startStandIns, stopStandIns } from './stand-ins.js'
 
@@ -145,6 +146,7 @@ describe.skipIf(!reachable)('a mock\'s data, apart from its server', () => {
     const d = await useReal(appId, 'scanner')
     expect(d).toMatchObject({ key: 'real', kind: 'real', shareable: false, isDefault: false, files: [] })
     expect(d.note).toContain('On this computer only')
+    await setEndpointFaked(appId, 'scanner', 'results', false, null) // the endpoint says: its real response, in a person's own runs
     const r = await run('proto_real', { scanner: { form: 'recorded' } })
     expect(r.s.data).toEqual({ kind: 'real' })
     expect(r.s.name).toContain('a real response')
@@ -152,37 +154,38 @@ describe.skipIf(!reachable)('a mock\'s data, apart from its server', () => {
     expect(rows.map((x) => x[0])).toEqual(sent.map((s) => s.tracking_id)) // still answered for what was sent
     expect(rows[0][2]).toBe('Rowan Vale') // and with what the real response holds
     await expect(saveData(appId, 'scanner', { dataKey: 'real', files: { 'a.csv': 'x' } })).rejects.toThrow('is not written over')
+    await setEndpointFaked(appId, 'scanner', 'results', null, null)
   })
 
   it('gives each place the real service or the mock, the app\'s default otherwise, and never real data to a reviewer', async () => {
     const row = async (task: string | null = issueId) => (await placesTable(appId, task)).find((r) => r.mock === 'scanner')!
-    expect((await row()).places.smoke).toMatchObject({ how: 'data', form: 'faked', real: false, from: 'none', says: 'The mock, with faked data' }) // nothing chosen: the mock, faked
+    expect((await row()).places.smoke).toMatchObject({ how: 'data', real: false, from: 'none', says: 'The mock, with faked data' }) // nothing chosen: the mock, faked
     expect(await row()).toMatchObject({ canLive: false })
-    // The app: a smoke test is served the recorded response as it is. A task: its own smoke test gets the fake.
-    await setChoice(appId, 'scanner', 'smoke', { source: 'replay' }, null)
+    // The endpoint says its real response is used in a person's own runs: a smoke test gets it, a reviewer never does.
+    await setEndpointFaked(appId, 'scanner', 'results', false, null)
     expect(await plansFor(appId, 'smoke', issueId)).toMatchObject({ pick: { scanner: { form: 'recorded', issueId } }, real: ['scanner'], live: [] })
-    expect((await row()).places.smoke).toMatchObject({ from: 'app', real: true, says: expect.stringContaining('this computer only') })
-    await setChoice(appId, 'scanner', 'smoke', { source: 'fake' }, issueId)
-    expect(await plansFor(appId, 'smoke', issueId)).toMatchObject({ pick: { scanner: { form: 'faked' } }, real: [] })
-    expect((await row()).places.smoke).toMatchObject({ from: 'task', own: { source: 'fake' }, app: { source: 'replay' } })
+    expect((await row()).places.smoke).toMatchObject({ real: true, says: expect.stringContaining('this computer only') })
+    expect((await row()).places.review).toMatchObject({ real: false, says: 'The mock, with faked data' })
+    await setEndpointFaked(appId, 'scanner', 'results', true, issueId) // this task: the faked version
+    expect((await plansFor(appId, 'smoke', issueId)).real).toEqual([])
     expect((await plansFor(appId, 'smoke', null)).real).toEqual(['scanner']) // another task still has the app's
+    await setEndpointFaked(appId, 'scanner', 'results', null, issueId)
+    await setEndpointFaked(appId, 'scanner', 'results', null, null)
     // The real service, with no address for it: said, and the mock serves meanwhile.
     await setChoice(appId, 'scanner', 'smoke', { source: 'live' }, issueId)
-    expect((await row()).places.smoke).toMatchObject({ how: 'data', note: expect.stringContaining('address') })
+    expect((await row()).places.smoke).toMatchObject({ how: 'data', from: 'task', own: { source: 'live' }, note: expect.stringContaining('address') })
     await setChoice(appId, 'scanner', 'smoke', null, issueId)
-    expect((await row()).places.smoke).toMatchObject({ from: 'app', own: null })
-    // A reviewer: nothing real can be chosen, a named set is no longer a choice, and its copy is the fake.
+    expect((await row()).places.smoke).toMatchObject({ from: 'none', own: null })
+    // A reviewer: nothing real can be chosen, and its copy is the fake.
     await expect(setChoice(appId, 'scanner', 'review', { source: 'replay' }, issueId)).rejects.toThrow('never given real data')
     await expect(setChoice(appId, 'scanner', 'review', { source: 'live' }, issueId)).rejects.toThrow('never given real data')
     await expect(setChoice(appId, 'scanner', 'review', { source: 'data', data: 'real' }, issueId)).rejects.toThrow('data sits on the endpoint')
     await setChoice(appId, 'scanner', 'review', { source: 'fake' }, issueId)
     expect(await plansFor(appId, 'review', issueId)).toMatchObject({ pick: { scanner: { form: 'faked' } }, real: [] })
-    await setChoice(appId, 'scanner', 'smoke', null, null)
     // What changed is kept, the app's own and the task's.
     const history = await mockHistory(appId, 'scanner')
-    expect(history.map((h) => h.what)).toEqual(expect.arrayContaining(['For a smoke test: the mock, with recorded responses as they are', 'For a reviewer: the mock, with faked data']))
-    expect(history.find((h) => h.what === 'For a smoke test: the mock, with recorded responses as they are')).toMatchObject({ issue: null, by: 'you' })
-    expect(history.find((h) => h.what === 'For a reviewer: the mock, with faked data')?.issue?.id).toBe(issueId)
+    expect(history.map((h) => h.what)).toEqual(expect.arrayContaining(['The call "results" is answered with its real response, in a person\'s own runs', 'The call "results" is answered with its faked version', 'For a reviewer: the mock']))
+    expect(history.find((h) => h.what === 'For a reviewer: the mock')?.issue?.id).toBe(issueId)
   })
 
   it('makes the fake again by itself when a newer real response comes in, with the plan it has', async () => {
@@ -193,7 +196,7 @@ describe.skipIf(!reachable)('a mock\'s data, apart from its server', () => {
     const m = (await rowOf(appId, 'scanner'))!
     const before = (await db.select().from(mockData).where(and(eq(mockData.mockId, m.id), eq(mockData.key, 'faked'))))[0]
     expect(before.recording).toBe(given)
-    expect((await plansFor(appId, 'prototype', issueId)).pick).toMatchObject({ scanner: { form: 'faked' } })
+    expect((await plansFor(appId, 'prototype', issueId)).real).toEqual([])
     const after = (await db.select().from(mockData).where(and(eq(mockData.mockId, m.id), eq(mockData.key, 'faked'))))[0]
     expect(after.recording).toBe(newer.dir)
     expect(Object.keys(after.files).sort()).toEqual(['added.csv', 'results.csv'])

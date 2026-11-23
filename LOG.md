@@ -6381,3 +6381,24 @@ step") and never the step by itself, and the step is shown indented under the ca
 whether or not the task lists it. A step the task does list (an agent named it) sits under its call too, with what
 the task needs of it. The checkbox "Recorded responses as they are" was not clear ("what is this in the data
 source?"): it now reads "Use the real responses, not the faked copies (this computer only)".
+
+### Adding data asks one thing: is it real data (Sandy, 2026-11-22)
+
+"I'm not crazy about the way it said the response that was actually sent." Then, working it through: "one is
+putting a flag on it to say yes, this is actual real data that I'm giving you, and one isn't. And then the question
+is, should I fake it?" The answer is always yes when it is real, so the form asks only the flag: a box, "This is
+real data", ticked to begin with. Real data is kept here and a faked version made; unticked, the file is used as it
+is. Whether a person's own run uses the faked version is the place's switch, which now reads "Use faked version"
+and is ticked unless they turn it off.
+
+### Faked or real is the endpoint's to say; a place only says real service or mock (Sandy, 2026-11-22)
+
+Looking at "Use faked version" on a place: "it matters what endpoint it is … starts to make me feel like that
+should be at an endpoint level." Half of it moved. Real service or mock stays the service's, per place: the app
+reads one address for a service, and a chain of calls cannot start on the real one and continue on the mock. Which
+version of its data a call is answered with is the endpoint's: each endpoint with a real response has its own
+"Use faked version" switch beside its data, ticked to begin with. Unticked, a person's own prototype and smoke test
+get that endpoint's real response; a reviewer always gets the faked one, and a sensitive endpoint has no switch.
+One switch covers both the prototype and the smoke test. A task starts from the app's answer and may set its own,
+and put it back (`task_service.faked`, migration 0053). The stored source `replay` is refused from now on and read
+as the mock where it was already chosen.

@@ -394,6 +394,8 @@ button.badge { border: 0; cursor: pointer; }
 .mock-sources-label { font-weight: 600; }
 @media (max-width: 760px) { .mock-sources { grid-template-columns: 1fr; } }
 .endpoint-data { display: grid; gap: 4px; min-width: 0; font-size: 13px; }
+.endpoint-faked { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.endpoint-faked .faint { font-size: 12px; }
 .endpoint-data .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
 .mock-places-cell { display: grid; gap: 4px; align-content: start; min-width: 0; }
 .mock-places-cell select { width: 100%; min-width: 0; font-size: 13px; }

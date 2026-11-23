@@ -41,6 +41,17 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
     <div className="endpoint-data" data-component="EndpointData" data-endpoint={e.key}>
       {issueId && item && <div>{own ? <Badge tone="accent">This task's own</Badge> : <span className="faint">From the app's settings</span>}</div>}
       <ItemSays item={item} canAsk={canAsk} written={written} />
+      {/* Which version a person's own runs get, where there is a real response to choose: this endpoint's own switch. */}
+      {item?.recorded && !e.sensitive && (() => {
+        const f = e.data.faked ?? { app: true, task: null }, mine = issueId ? f.task : null, on = mine ?? f.app
+        return (
+          <div className="endpoint-faked">
+            <label className="mock-check"><input type="checkbox" aria-label={`Use the faked version of ${call}`} checked={on} onChange={(ev) => void act(() => engine.setEndpointFaked(appId, mockKey, e.key, ev.target.checked, issueId ?? null).then(() => null))} /> Use faked version</label>
+            <span className="faint">{on ? 'Your prototype and smoke test get the faked version.' : 'Your prototype and smoke test get the real response: this computer only.'} A reviewer always gets the faked one.{issueId ? (mine === null ? " The app's setting." : " This task's own.") : ''}</span>
+            {issueId && mine !== null && <button className="btn quiet small" aria-label={`Follow the app again for ${call}`} onClick={() => void act(() => engine.setEndpointFaked(appId, mockKey, e.key, null, issueId).then(() => null))}>Follow the app</button>}
+          </div>
+        )
+      })()}
       {said && <div className="faint">{said}</div>}
       {error && <div className="mock-data-warn">{error}</div>}
       {open ? <GiveForm call={call} sensitive={!!e.sensitive} note={open === 'app' && issueId ? `This becomes ${serviceName}'s data in Settings: every task gets it unless it has its own.` : open === 'task' ? 'For this task alone. Other tasks keep the app\'s.' : null} onGive={give(open)} onCancel={() => setOpen(null)} /> : (
@@ -77,12 +88,11 @@ function GiveForm({ call, sensitive, note, onGive, onCancel }: { call: string; s
   return (
     <div className="mock-edit" data-component="GiveEndpointData">
       <label>What {call} answers with<input type="file" multiple aria-label={`A file for ${call}`} onChange={(ev) => setFiles([...(ev.target.files ?? [])])} /></label>
-      <label className="mock-check"><input type="radio" name={`kind-${call}`} checked={real} onChange={() => setReal(true)} /> A response the service really sent</label>
-      <label className="mock-check"><input type="radio" name={`kind-${call}`} checked={!real} onChange={() => setReal(false)} /> I wrote this, or made it up: it holds nothing real</label>
+      <label className="mock-check"><input type="checkbox" checked={real} onChange={(ev) => setReal(ev.target.checked)} /> This is real data</label>
       <p className="faint" style={{ margin: 0, fontSize: 13 }}>
-        {!real ? 'It is used as it is, and may go to a reviewer. Where a real response of this service is on this computer, it is checked against it.'
-          : sensitive ? 'This call is sensitive: the file is faked at once and the original is not kept. Only the fake is ever stored or served.'
-          : 'It is kept on this computer only, never exported. A fake is made of it, and a reviewer gets the fake.'}
+        {!real ? 'It is used exactly as it is, and may go to a reviewer. Leave the box unticked only for a file that holds nothing real, such as one you made up.'
+          : sensitive ? 'Real data is always faked. This call is sensitive, so the file is faked at once and the original is not kept.'
+          : 'Real data is always faked: the original is kept on this computer only, and a faked version is made of it, which is what a reviewer gets.'}
         {note ? ` ${note}` : ''}
       </p>
       <div className="row"><button className="btn small" disabled={!files.length || busy} onClick={async () => { setBusy(true); try { await onGive(files, real) } finally { setBusy(false) } }}>{busy ? 'Adding…' : 'Add it'}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>

@@ -13,7 +13,7 @@ import { newId } from './ids.js'
 import { createProject } from './projects.js'
 import { fakeData } from './mock-data.js'
 import { placesTable, plansFor, setChoice } from './mock-places.js'
-import { giveEndpointData, removeEndpointData, served, servedDir } from './mock-serve.js'
+import { giveEndpointData, removeEndpointData, served, servedDir, setEndpointFaked } from './mock-serve.js'
 import { addEndpoint, editEndpoint, getMock, listMocks, listReal, mockHistory, removeMock, rowOf, saveMock } from './mocks.js'
 
 let reachable = true
@@ -46,7 +46,7 @@ describe.skipIf(!reachable)('data on the endpoint', () => {
   it('keeps a real response on the endpoint it was given for, and serves nothing of it until it is faked', async () => {
     expect(await giveEndpointData(appId, 'scanner', 'results', [{ name: 'export.csv', bytes: bytes(real) }], { real: true })).toMatchObject({ kept: 'recorded', issueId })
     expect((await data()).results).toMatchObject({ app: { recorded: { how: 'given', files: ['results.csv'] }, safe: null }, task: null })
-    expect((await data()).start).toEqual({ app: null, task: null })
+    expect((await data()).start).toMatchObject({ app: null, task: null, faked: { app: true, task: null } })
     expect(await served(await m(), { form: 'faked' })).toMatchObject({ files: [], unfaked: ['results'], real: [] })
     const row = (await placesTable(appId, issueId))[0]
     expect(row.places.prototype).toMatchObject({ how: 'own', note: expect.stringContaining('GET /runs/{id}/results is not faked yet') })
@@ -54,22 +54,30 @@ describe.skipIf(!reachable)('data on the endpoint', () => {
     await expect(plansFor(appId, 'review', issueId)).rejects.toThrow('a reviewer is never given a real one')
   })
 
-  it('fakes it into that endpoint\'s own data, and serves the fake, or the recorded response where that is turned on', async () => {
+  it('fakes it into that endpoint\'s own data, and serves the fake, or the real response where that endpoint says so', async () => {
     const { data: d } = await fakeData(appId, 'scanner', { plan: { keep: ['status'] } })
     expect(d).toMatchObject({ kind: 'faked', provenance: { scope: { endpoint: 'results' } }, files: [{ path: 'results.csv' }] })
     expect((await data()).results.app).toMatchObject({ recorded: { how: 'given' }, safe: { kind: 'faked', files: ['results.csv'] } })
     const faked = await served(await m(), { form: 'faked' })
     expect(faked).toMatchObject({ real: [], unfaked: [], per: { results: { from: 'app', kind: 'faked' }, start: { kind: 'none' } } })
     expect(text(faked, 'results.csv')).not.toMatch(/Rowan|Northgate/)
+    // A person's own run gets the faked version until the endpoint says otherwise; a reviewer gets it whatever is said.
+    expect((await served(await m(), { form: 'recorded' })).real).toEqual([])
+    expect(await setEndpointFaked(appId, 'scanner', 'results', false, null)).toMatchObject({ faked: { app: false, task: null } })
     const recorded = await served(await m(), { form: 'recorded' })
     expect(recorded).toMatchObject({ real: ['results'], per: { results: { kind: 'recorded' } } })
     expect(text(recorded, 'results.csv')).toBe(real)
     // The folder a server is given: the fake written out, the recorded one a link into its recording.
     expect(lstatSync(join(servedDir(await m(), faked)!, 'results.csv')).isSymbolicLink()).toBe(false)
     expect(lstatSync(join(servedDir(await m(), recorded)!, 'results.csv')).isSymbolicLink()).toBe(true)
-    await setChoice(appId, 'scanner', 'smoke', { source: 'replay' }, issueId)
     expect(await plansFor(appId, 'smoke', issueId)).toMatchObject({ pick: { scanner: { form: 'recorded', issueId } }, real: ['scanner'] })
     expect((await plansFor(appId, 'review', issueId)).real).toEqual([])
+    await expect(setChoice(appId, 'scanner', 'smoke', { source: 'replay' }, issueId)).rejects.toThrow('is set on the endpoint now')
+    // A task says for itself: this one's own runs get the faked version, another task's still follow the app.
+    expect(await setEndpointFaked(appId, 'scanner', 'results', true, issueId)).toMatchObject({ faked: { app: false, task: true } })
+    expect((await plansFor(appId, 'smoke', issueId)).real).toEqual([])
+    expect((await plansFor(appId, 'smoke', otherTask)).real).toEqual(['scanner'])
+    expect(await setEndpointFaked(appId, 'scanner', 'results', null, issueId)).toMatchObject({ faked: { app: false, task: null } })
   })
 
   it('lets a task put its own data in place of the app\'s for one endpoint, and takes it away again', async () => {
@@ -109,6 +117,8 @@ describe.skipIf(!reachable)('data on the endpoint', () => {
   it('fakes and deletes what is already here when an endpoint is marked sensitive', async () => {
     expect((await data()).results.app?.recorded).not.toBeNull()
     await editEndpoint(appId, 'scanner', 'results', { sensitive: true })
+    expect((await data()).results.faked).toEqual({ app: true, task: null }) // always the faked version now
+    await expect(setEndpointFaked(appId, 'scanner', 'results', false, null)).rejects.toThrow('is sensitive')
     expect((await data()).results.app).toMatchObject({ recorded: null, safe: { kind: 'faked' } })
     expect(readdirSync(join(home, 'recordings'), { recursive: true }).filter((f) => String(f).endsWith('.csv'))).toEqual([])
     expect((await served(await m(), { form: 'recorded' })).real).toEqual([])

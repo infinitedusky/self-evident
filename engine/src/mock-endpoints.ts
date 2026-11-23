@@ -26,6 +26,7 @@ export interface Endpoint {
   /** What it answers with, in a line. */ what?: string
   /** Its response's file, when that is not named <key>.<ext>. */ file?: string
   /** A second step (Sandy, 2026-11-22: "it's a child of download-links, a second step … endpoints should be marked as intermediate and then you define the steps"): this call is made to a link that another endpoint's answer gives. follows: that endpoint's key, which is thereby intermediate. linkField: the field of its answer that holds the link (download_url). */ follows?: string; linkField?: string
+  /** A person's own prototype and smoke test are answered with this endpoint's real response, not its faked version (Sandy, 2026-11-22: which data a run gets "should be at an endpoint level"). Unset: the faked version. A reviewer always gets the faked one. */ useReal?: boolean
   /** Sensitive (Sandy, 2026-11-22): a real response of it is never stored. One that comes in is faked at once and the original deleted, so only a faked copy is ever kept or served. */ sensitive?: boolean
 }
 export const ENDPOINTS_MAX = 80
@@ -37,7 +38,7 @@ export function cleanEndpoints(given: unknown): Endpoint[] {
   for (const x of given as Record<string, unknown>[]) {
     const key = standInKey(String(x?.key ?? '')), path = clip(x?.path, 300)
     if (!key || !path || out.some((e) => e.key === key)) continue
-    out.push({ key, method: clip(x.method, 10).toUpperCase() || 'GET', path, ...(clip(x.what, 300) ? { what: clip(x.what, 300) } : {}), ...(clip(x.file, 200) ? { file: clip(x.file, 200) } : {}), ...(x.sensitive === true ? { sensitive: true } : {}), ...(standInKey(String(x.follows ?? '')) && standInKey(String(x.follows)) !== key ? { follows: standInKey(String(x.follows)), ...(clip(x.linkField, 80) ? { linkField: clip(x.linkField, 80) } : {}) } : {}) })
+    out.push({ key, method: clip(x.method, 10).toUpperCase() || 'GET', path, ...(clip(x.what, 300) ? { what: clip(x.what, 300) } : {}), ...(clip(x.file, 200) ? { file: clip(x.file, 200) } : {}), ...(x.sensitive === true ? { sensitive: true } : x.useReal === true ? { useReal: true } : {}), ...(standInKey(String(x.follows ?? '')) && standInKey(String(x.follows)) !== key ? { follows: standInKey(String(x.follows)), ...(clip(x.linkField, 80) ? { linkField: clip(x.linkField, 80) } : {}) } : {}) })
     if (out.length >= ENDPOINTS_MAX) break
   }
   // A step follows an endpoint that is there, and is not itself followed back: one that is not, stands alone.

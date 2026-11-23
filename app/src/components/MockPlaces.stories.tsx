@@ -9,15 +9,14 @@ const meta = { title: 'Components/MockPlaces', component: Sources, args: { appId
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** The app's defaults, in its settings: every place on the mock, and the person's own smoke test answered with recorded responses as they are. A reviewer has nothing to choose: always the mock. */
+/** The app's defaults, in its settings: for each place only the real service or the mock. Which version of its data a call is answered with is set on the endpoint, not here. A reviewer has nothing to choose: always the mock. */
 export const AppDefaults: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     const options = (name: string) => within(c.getByRole('combobox', { name })).getAllByRole('option').map((o) => o.textContent)
     await expect(options('Fraud scan vendor (sample), Prototype')).toEqual(['The mock', 'The real service'])
     await expect(c.queryByRole('combobox', { name: 'Fraud scan vendor (sample), Reviewer' })).toBeNull() // nothing to choose: always the mock
-    await expect(c.getByRole('checkbox', { name: 'Fraud scan vendor (sample), Smoke test: recorded responses as they are' })).toBeChecked()
-    await expect(c.queryByRole('checkbox', { name: /Reviewer: recorded/ })).toBeNull()
+    await expect(c.queryByRole('checkbox')).toBeNull() // faked or real is the endpoint's to say
     await expect(canvasElement.textContent).not.toMatch(/Record and/)
   },
 }
