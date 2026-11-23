@@ -20,8 +20,10 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   /** Is there a task whose agent makes the fake of a real response? */ canAsk: boolean; onChanged: () => void | Promise<void>
 }) {
   const [open, setOpen] = useState<null | 'app' | 'task'>(null)
-  const [filling, setFilling] = useState(false)
-  const [mapping, setMapping] = useState(false)
+  // Fields mapped from a fixture: a table of its database, or one of its files. Which, while the form is open.
+  const [source, setSource] = useState<null | 'table' | 'file'>(null)
+  const filling = source === 'table', mapping = source === 'file'
+  const setFilling = (on: boolean) => setSource(on ? 'table' : null), setMapping = (on: boolean) => setSource(on ? 'file' : null)
   const [error, setError] = useState<string | null>(null)
   const [said, setSaid] = useState<string | null>(null)
   const [faking, setFaking] = useState(false)
@@ -61,6 +63,7 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
         )
       })()}
       {/* The data is a template: a fixture supplies who it is for. */}
+      {source && item?.safe && <div className="mock-edit" style={{ marginBottom: 0 }}><label>Map fields from<select aria-label={`Where the fields of ${call} come from`} value={source} onChange={(ev) => setSource(ev.target.value as 'table' | 'file')}><option value="table">A table of the fixture's database</option><option value="file">One of the fixture's files</option></select></label></div>}
       {filling && item?.safe && <FillForm appId={appId} call={call} columns={item.safe.columns ?? []} was={item.safe.madeFor} onCancel={() => setFilling(false)} onFill={(b) => act(async () => { const r = await engine.assignFixture(appId, mockKey, e.key, { ...b, issueId: own ? issueId : null }); setFilling(false); return `Filled out for ${r.madeFor.who}.` })} />}
       {/* Or a file a tester brings supplies who: only the mapping is kept, and it is worked out for the version of the file each place uses. */}
       {mapping && item?.safe && <FileMapForm appId={appId} issueId={issueId} call={call} columns={item.safe.columns ?? []} was={item.safe.fromFile} onCancel={() => setMapping(false)}
@@ -72,9 +75,8 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
           {issueId && item && !own && <span>From the app's settings</span>}
           {item?.safe && !filling && (item.safe.madeFor ? <span>For <strong>{item.safe.madeFor.who}</strong> of the fixture {item.safe.madeFor.fixture}</span> : !item.safe.fromFile && <span title="The app may send people this has no answer for.">Not made for a fixture's people</span>)}
           {item?.safe?.fromFile && !mapping && <span>Answers for the people in <strong>{item.safe.fromFile.file}</strong></span>}
-          {item?.safe && !mapping && !filling && (!issueId || own || !e.data.task) && <button className="lv-act" aria-label={`Map fields of ${call} from a file`} onClick={() => setMapping(true)}>{item.safe.fromFile ? 'Change the mapping' : 'Map fields from a file'}</button>}
+          {item?.safe && !source && (!issueId || own || !e.data.task) && <button className="lv-act" aria-label={`Map fields of ${call} from a fixture`} title="Set columns of this data from a table of the fixture's database, or from one of its files" onClick={() => setSource(item.safe?.fromFile && !item.safe.madeFor ? 'file' : 'table')}>{item.safe.fromFile || item.safe.madeFor ? 'Change the mapping' : 'Map fields from a fixture'}</button>}
           {item?.recorded && item.safe?.kind === 'faked' && <button className="lv-act" disabled={faking} aria-label={`Make the fake version of ${call} again`} title="From the real response saved here, with what was said to be structure" onClick={() => void makeFake()}>{faking ? 'Making it…' : 'Make the fake again'}</button>}
-          {item?.safe && !filling && (!issueId || own || !e.data.task) && <button className="lv-act" aria-label={`Fill the data of ${call} out for fixture people`} onClick={() => setFilling(true)}>{item.safe.madeFor ? 'Change' : 'Fill out for fixture people'}</button>}
           {!issueId && <button className="lv-act" aria-label={`${item ? 'Replace' : 'Add'} the data of ${call}`} onClick={() => setOpen('app')}>{item ? 'Replace' : 'Add data'}</button>}
           {!issueId && item && <button className="lv-act" aria-label={`Remove the data of ${call}`} onClick={() => remove('app')}>Remove</button>}
           {issueId && own && <button className="lv-act" aria-label={`Replace this task's data of ${call}`} onClick={() => setOpen('task')}>Replace</button>}

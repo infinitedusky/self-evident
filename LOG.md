@@ -6702,3 +6702,14 @@ standing in for it while the task is tried. For when mapping fields cannot make 
 makes as it runs). Open when it is built: how a script reaches a function without the app's code changing, which
 the goal forbids ("the app's code is exactly what goes live"), and whether a reviewer runs it. The Data step shows
 "Data scripts · Coming soon" at its foot; nothing is behind it.
+
+### 2026-11-23: One mapping action, from a table or a file; and what a data script costs
+
+- Sandy: "we need to be able to select a file or a database table." An endpoint's data has one action, "Map fields
+  from a fixture", and the source is chosen in it: a table of the fixture's database (pick the people; their
+  values are written into the data) or one of its files (everyone in the file; worked out when served). The two
+  were separate actions.
+- On data scripts replacing a function of the app, against "the app's code is exactly what goes live". Sandy:
+  "This is a tradeoff for complex data dependence stuff." So: a last resort, after fixtures, files and mapping
+  cannot make the data fit; and a run with an override says which function was replaced, wherever its result is
+  shown.
