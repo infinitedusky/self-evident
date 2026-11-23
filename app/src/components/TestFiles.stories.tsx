@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, userEvent, within } from 'storybook/test'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { TestFiles } from './TestFiles'
 import { withEngine } from '../stories/mock-engine'
 import { sampleApp } from '../stories/sample'
@@ -18,9 +18,9 @@ export const OnATask: Story = {
     await expect(await c.findByText('one-person.csv')).toBeInTheDocument()
     await expect(c.getByText('id-card.png')).toBeInTheDocument()
     await expect(c.getByText("The app's")).toBeInTheDocument()
-    await expect(c.getAllByText("This task's")).toHaveLength(2)
+    await expect(c.getAllByText("This task's")).toHaveLength(4)
     await expect(c.getByText(/Import it on the Employees page/)).toBeInTheDocument()
-    await expect(c.getByText('No context yet.')).toBeInTheDocument()
+    await expect(c.getAllByText('No context yet.').length).toBeGreaterThan(0)
     await expect(c.getByRole('link', { name: 'Download id-card.png' })).toHaveAttribute('download', 'id-card.png')
     await expect(canvasElement.querySelector('.tf-thumb')).not.toBeNull()
   },
@@ -67,16 +67,34 @@ export const Refused: Story = {
     await expect(await c.findByText(/refused: real\.csv holds 2 values of a real response/)).toBeInTheDocument()
   },
 }
-/** A file said to be real is faked on the way in: only the fake is kept, and its line says so. */
+/** A file said to be real is kept on this computer and a fake is made of it: both versions are there to look at. */
 export const AddingARealFile: Story = {
   args: { issueId: 'iss_sample2' }, beforeEach: withEngine({ testFiles: [] }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Add files' }))
     await userEvent.upload(c.getByLabelText('Test files to add'), new File(['first_name,work_email\nSample,sample.person@northwind.example\n'], 'import.csv', { type: 'text/csv' }))
-    await userEvent.click(c.getByRole('radio', { name: /Real: make a fake version/ }))
+    await userEvent.click(c.getByRole('radio', { name: /Real: keep it on this computer and make a fake version/ }))
     await userEvent.click(c.getByRole('button', { name: 'Add it' }))
-    await expect(await c.findByText(/CSV · .* · faked/)).toBeInTheDocument()
+    await expect(await c.findByText('Real · this computer only')).toBeInTheDocument()
+    await expect(c.getByText(/3 values replaced/)).toBeInTheDocument()
+    await expect(c.getByRole('link', { name: 'Download the fake import.csv' })).toBeInTheDocument()
+  },
+}
+/** A file with a real version says which version each place uses: a smoke test can be turned to the real one, a reviewer never. One with no fake yet says a reviewer gets nothing, and takes a made-up one. */
+export const RealAndFake: Story = {
+  args: { issueId: 'iss_sample2' },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const smoke = await c.findByRole('combobox', { name: 'The version of export.csv a smoke test uses' })
+    await expect(smoke).toHaveValue('real')
+    const proto = c.getByRole('combobox', { name: 'The version of export.csv a prototype uses' })
+    await expect(proto).toHaveValue('fake')
+    await userEvent.selectOptions(proto, 'real')
+    await waitFor(() => expect(c.getByRole('combobox', { name: 'The version of export.csv a prototype uses' })).toHaveValue('real'))
+    await expect(c.getByText('No fake yet')).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Add a made-up version' })).toBeInTheDocument()
+    await expect(c.getAllByText('Always: a reviewer is never given anything real')).toHaveLength(2)
   },
 }
 /** What to do with a file is said again, and a file is removed. */

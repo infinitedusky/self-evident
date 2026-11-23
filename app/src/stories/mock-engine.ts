@@ -165,11 +165,14 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       const form = await request.formData(), task = !!form.get('issueId')
       const files = form.getAll('file').filter((f): f is File => typeof f !== 'string')
       if (files.some((f) => f.name === 'real.csv')) return HttpResponse.json({ error: 'refused: real.csv holds 2 values of a real response on this computer. Replace each with an invented one:\n- an email from a real response of Fraud scan vendor (sample) (2)' }, { status: 400 })
-      const made = files.map((f, n) => ({ id: `tfile_new${d.testFiles.length + n}`, name: f.name, what: String(form.get('what') ?? ''), mediaType: f.type || 'application/octet-stream', bytes: f.size, scope: task ? 'task' as const : 'app' as const, checked: /csv|json|text/.test(f.type) ? { at: '2026-11-23T10:00:00Z', against: 2, ...(form.get('real') === 'true' ? { faked: 3 } : {}) } : null, here: true }))
+      const real = form.get('real') === 'true'
+      const made = files.map((f, n) => { const text = /csv|json|text/.test(f.type), fake = !real || text; return { id: `tfile_new${d.testFiles.length + n}`, name: f.name, what: String(form.get('what') ?? ''), mediaType: f.type || 'application/octet-stream', bytes: f.size, scope: task ? 'task' as const : 'app' as const, checked: text ? { at: '2026-11-23T10:00:00Z', against: 2, ...(real ? { faked: 3 } : {}) } : null, has: { fake, real }, use: { prototype: fake ? 'fake' as const : null, smoke: fake ? 'fake' as const : null, review: fake ? 'fake' as const : null }, here: true } })
+      // (sample) One added under the name of one that is there takes its place, keeping a real version it had.
+      d.testFiles = d.testFiles.filter((x) => !made.some((m) => m.name === x.name && !real && x.has.real && (m.has.real = true)) && !made.some((m) => m.name === x.name))
       d.testFiles = [...d.testFiles, ...made]
       return reply(made)
     }),
-    http.patch('/api/apps/:id/test-files/:file', async ({ params, request }) => { const b = await request.json() as { what: string }; d.testFiles = d.testFiles.map((f) => (f.id === params.file ? { ...f, what: b.what } : f)); return reply(d.testFiles.find((f) => f.id === params.file) ?? null) }),
+    http.patch('/api/apps/:id/test-files/:file', async ({ params, request }) => { const b = await request.json() as { what?: string; use?: Record<string, 'fake' | 'real'> }; d.testFiles = d.testFiles.map((f) => (f.id === params.file ? { ...f, what: b.what ?? f.what, use: { ...f.use, ...(b.use ?? {}) } } : f)); return reply(d.testFiles.find((f) => f.id === params.file) ?? null) }),
     http.delete('/api/apps/:id/test-files/:file', ({ params }) => { d.testFiles = d.testFiles.filter((f) => f.id !== params.file); return reply({ removed: String(params.file) }) }),
     // A picture is a small made-up one (a grey square), so a thumbnail has something to show.
     http.get('/api/apps/:id/test-files/:file/file', () => new HttpResponse(Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0)), { headers: { 'content-type': 'image/png' } })),

@@ -9,7 +9,7 @@ import { newId } from './ids.js'
 import { giveEndpointData } from './mock-serve.js'
 import { saveMock } from './mocks.js'
 import { createProject } from './projects.js'
-import { addTestFile, editTestFile, listTestFiles, removeTestFile, testFilePath } from './test-files.js'
+import { addTestFile, editTestFile, listTestFiles, placeTestFiles, removeTestFile, testFilePath, testFilesSay } from './test-files.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -59,14 +59,39 @@ describe.skipIf(!reachable)('test files', () => {
     expect((await listTestFiles(appId, issueId)).some((x) => x.name === 'real.csv')).toBe(false)
   })
 
-  it('makes a fake of a file said to be real and keeps only that; a real picture is refused', async () => {
-    const f = await addTestFile(appId, { name: 'import.csv', bytes: bytes('first_name,last_name,work_email\nMarisol,Okonkwo,marisol.okonkwo@harborline-freight.com\n'), issueId, real: true })
+  it('keeps a real file on this computer with a fake made of it, and each place gets the version it says', async () => {
+    const f = await addTestFile(appId, { name: 'import.csv', bytes: bytes('first_name,last_name,work_email\nMarisol,Okonkwo,marisol.okonkwo@harborline-freight.com\n'), what: 'Import it', issueId, real: true })
+    expect(f).toMatchObject({ has: { fake: true, real: true }, use: { prototype: 'fake', smoke: 'fake', review: 'fake' } })
     expect(f.checked?.faked).toBeGreaterThan(0)
     const kept = readFileSync((await testFilePath(appId, f.id)).path, 'utf8')
     expect(kept.split('\n')[0]).toBe('first_name,last_name,work_email')
     for (const v of ['Marisol', 'Okonkwo', 'harborline']) expect(kept).not.toContain(v)
+    expect(readFileSync((await testFilePath(appId, f.id, 'real')).path, 'utf8')).toContain('Marisol')
+    // A smoke test is turned to the real one; a prototype and a reviewer are not.
+    expect((await editTestFile(appId, f.id, { use: { smoke: 'real' } })).use).toEqual({ prototype: 'fake', smoke: 'real', review: 'fake' })
+    const smoke = await placeTestFiles(appId, issueId, 'smoke', join(home, 'placed-smoke'))
+    expect(smoke.files.find((x) => x.name === 'import.csv')).toMatchObject({ version: 'real', what: 'Import it' })
+    expect(readFileSync(join(smoke.dir, 'import.csv'), 'utf8')).toContain('Marisol')
+    expect(readFileSync(join(smoke.dir, 'README.md'), 'utf8')).toContain('`import.csv` (REAL: this computer only): Import it')
+    for (const place of ['prototype', 'review'] as const) {
+      const p = await placeTestFiles(appId, issueId, place, join(home, `placed-${place}`))
+      expect(readFileSync(join(p.dir, 'import.csv'), 'utf8')).not.toContain('Marisol')
+      expect(p.files.map((x) => x.name).sort()).toEqual(['id-card.png', 'import.csv', 'one person.csv'])
+    }
+    expect(testFilesSay(smoke).join('\n')).toContain('- import.csv: Import it')
     await removeTestFile(appId, f.id)
-    await expect(addTestFile(appId, { name: 'passport.png', bytes: new Uint8Array([1, 2, 3]), real: true })).rejects.toThrow('no fake can be made of it here')
+  })
+
+  it('keeps a real picture with no fake, which a reviewer does not get until a made-up one is added under its name', async () => {
+    const f = await addTestFile(appId, { name: 'passport.png', bytes: new Uint8Array([1, 2, 3]), issueId, real: true })
+    expect(f).toMatchObject({ has: { fake: false, real: true }, use: { prototype: null, smoke: null, review: null } })
+    expect(f.note).toContain('no fake can be made of it here')
+    expect((await placeTestFiles(appId, issueId, 'review', join(home, 'placed-review'))).missing).toEqual(['passport.png'])
+    expect((await editTestFile(appId, f.id, { use: { prototype: 'real' } })).use.prototype).toBe('real')
+    const both = await addTestFile(appId, { name: 'passport.png', bytes: new Uint8Array([9, 9]), issueId, stated: true })
+    expect(both).toMatchObject({ id: f.id, has: { fake: true, real: true }, use: { prototype: 'real', smoke: 'fake', review: 'fake' } })
+    await expect(editTestFile(appId, (await listTestFiles(appId)).find((x) => x.name === 'id-card.png')!.id, { use: { smoke: 'real' } })).rejects.toThrow('has no real version')
+    await removeTestFile(appId, f.id)
   })
 
   it('replaces one of the same name, says again what to do with it, and removes it with its file', async () => {

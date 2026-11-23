@@ -6631,3 +6631,33 @@ specificity of the notes. makes it really hard to understand what the point of t
 
 Not tried on a real file yet: the faker takes no plan here, so a column of fixed words the app needs (a status, a
 role) is replaced like any other.
+
+### 2026-11-23: Files are fixtures, with a real and a fake version, and every run is given them
+
+Sandy: "whatever you upload there is what the prototype, the smoke test, or the review has access to … we build it
+that way on purpose so that when I'm doing the prototype and when I'm doing the smoke test, I'll be experiencing it
+just the way the reviewer would"; "on the file itself, we would say we would have a real and a fake version, and
+we would say which one to use for which environment. And the reviewer environment can only use the fake one, or if
+it's already fake, it's just all the same"; "maybe it belongs in a fixture section where we have database and
+then folder structure or files"; and, on what a file is beside the database fixture: "This file … is not a part
+of Meridian … This is taking the Meridian as the base and saying … the test is to add stuff to it. Here's the stuff
+that you can add."
+
+- **One Fixtures section, two parts: Database and Files.** "Test files" is no longer a section of its own. The
+  database is what the app starts with; the files are what a tester adds to it. Files stay the app's or a task's,
+  not a named database fixture's.
+- **A file has up to two versions**, as an endpoint's data has. Added as made up: that one version, everywhere.
+  Added as real: kept on this computer only (this replaces the entry above, where the real file was never kept),
+  and a fake is made of it at once when it is text. A real picture or document has no fake until a made-up one is
+  added under its name; until then a reviewer does not get that file.
+- **Each place says which version it uses.** A prototype and a smoke test: the fake unless turned to the real one.
+  A reviewer: the fake, always, not offered a choice.
+- **A run is given its files in a folder.** When a prototype or a smoke test starts, the versions chosen are put
+  in a folder of its own outside every repository, with a README.md saying what each is for, and the run is told
+  where: `$TEST_FILES`. Outside the repository, as the smoke test's set-up is (2026-11-17), so nothing of it can be
+  committed. An agent trying a smoke test check is told the folder and what each file is for.
+
+Not done: the review branch does not carry the folder yet (step 6; `placeTestFiles(…, 'review', …)` is what it
+will call). An app that runs in a container sees `$TEST_FILES` only if its start script mounts it. The pages for a
+prototype and a smoke test do not show the folder's path. Sharing a prototype does not yet look at whether it was
+given a real file (step 9). Step 8's cleanup must delete a closed task's real versions.

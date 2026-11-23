@@ -430,6 +430,8 @@ export const testFile = pgTable('test_file', {
   name: text('name').notNull(), /** What the person does with it, in a line. */ what: text('what').notNull().default(''),
   mediaType: text('media_type').notNull().default('application/octet-stream'), bytes: integer('bytes').notNull().default(0),
   /** Text that was read against the real responses on this computer, and how many of them. Not text: null, and it rests on the person's word. */ checked: jsonb('checked').$type<{ at: string; against: number; faked?: number } | null>(),
+  /** The real version, kept on this computer only (in real/ beside the fake): what it is, and why it has no fake when none could be made. */ real: jsonb('real').$type<{ bytes: number; at: string; note?: string } | null>(),
+  /** Which version a person's own run uses, place by place: the fake unless it says real. A reviewer is never asked. */ use: jsonb('use').$type<{ prototype?: 'fake' | 'real'; smoke?: 'fake' | 'real' }>().notNull().default({}),
   createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [index('test_file_app').on(t.appId, t.issueId)])
 
