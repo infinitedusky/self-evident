@@ -6444,3 +6444,15 @@ CSV that you upload is just a template to use to fill out people."
 Not done: a prototype is still built from the scenario chosen in its own panel, so its fixture is the person's to
 match; fixtures cannot be renamed or deleted from this page yet; the two "answers for what it was sent" settings
 were not built and are not needed for CEB-90.
+
+### On the Data step, fixtures come first and the services section explains itself (Sandy, 2026-11-22)
+
+"Fixtures should go above services, and the 'what this calls outside this app' should go at the top of the services
+section." The order is now: fixtures (what is in the app's own database), then the services outside it, with the
+paragraph saying what they are under that section's heading. The same order in Settings › Mocks.
+
+Then the outline she wanted, as she wrote it: Data › Fixtures; Services › What the task needs, then each service
+with Info, Source, Endpoints. The Data step is headed "Data"; the services section "Services", opening with "What
+the task needs"; each service block has Info (what it is, real address, variable to override; changed in
+Settings), Source (what each place is given) and Endpoints (the calls the task makes). Settings calls the same
+part "Source".

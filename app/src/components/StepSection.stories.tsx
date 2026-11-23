@@ -148,7 +148,7 @@ export const Data: Story = {
   beforeEach: withEngine({ stepWork: null }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect((await c.findAllByText('What each place is given'))[0]).toBeInTheDocument()
+    await expect((await c.findAllByText('Source'))[0]).toBeInTheDocument()
     await expect(await c.findByRole('combobox', { name: 'Fraud scan vendor (sample), Smoke test' })).toBeInTheDocument() // this task's own
     await expect((await c.findAllByRole('button', { name: 'Override Fraud scan vendor (sample), Prototype' }))[0]).toBeInTheDocument() // the app's, until it is overridden
   },

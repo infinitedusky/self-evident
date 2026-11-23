@@ -46,27 +46,31 @@ export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's
     const t = setInterval(() => { void engine.mocks(appId, issueId).then((l) => setList((was) => { if (JSON.stringify(was) === JSON.stringify(l)) return was; setTick((x) => x + 1); return l })).catch(() => {}) }, 4000)
     return () => clearInterval(t)
   }, [building, appId, issueId])
-  return (
-    <section className="panel" data-component="MockLibrary">
-      <div className="task-block-head">
-        <h2 style={{ margin: 0 }}>{issueId ? 'This task\'s data' : 'Mocks'}</h2>
-        {!issueId && <button className="btn quiet small" onClick={() => setAdding(!adding)}>Add a service</button>}
-      </div>
-      <p className="faint settings-desc" style={{ margin: '6px 0 12px', maxWidth: 760 }}>
+  const intro = (
+    <p className="faint settings-desc" style={{ margin: '6px 0 12px', maxWidth: 760 }}>
         {issueId ? 'What stands outside the app is mocked, so this task can be tried without calling it. The app\'s own code is what goes live: only an environment variable points it at the mock. Everything here starts as the app has it in Settings, and can be overridden for this task alone.'
           : 'The outside services this app connects to. Each says how the app reaches it, what a prototype, a smoke test and a reviewer are given by default (the real service or its mock), and its endpoints, each with the data its mock answers with. A task picks its services from these and may override any of it for itself.'}{' '}
         A real response stays on this computer. A reviewer only ever gets faked data, or a file stated to hold nothing real.
       </p>
-      {issueId && <TaskCalls appId={appId} issueId={issueId} mocks={list ?? []} places={places} version={tick} onChanged={() => reload()} />}
+  )
+  return (
+    <section className="panel" data-component="MockLibrary">
+      <div className="task-block-head">
+        <h2 style={{ margin: 0 }}>{issueId ? 'Data' : 'Mocks'}</h2>
+        {!issueId && <button className="btn quiet small" onClick={() => setAdding(!adding)}>Add a service</button>}
+      </div>
+      {/* What is in the app's own database comes first; then the services outside it, with what they are said at the top of that section. */}
+      {list !== null && <Fixtures appId={appId} issueId={issueId} version={tick} />}
+      {issueId && <TaskCalls appId={appId} issueId={issueId} mocks={list ?? []} places={places} version={tick} onChanged={() => reload()} intro={intro} />}
       {!issueId && <h3 className="mock-h3">The app's services</h3>}
+      {!issueId && intro}
       {adding && !issueId && <AddAppService onAdd={(b) => act(async () => { await engine.raiseMock(appId, b); setAdding(false) })} onCancel={() => setAdding(false)} />}
       {error && <div className="empty bad" style={{ marginBottom: 12 }}>{error}</div>}
       {/* On a task the services above are the whole of it: nothing is shown twice. What a service is beyond its endpoints (its address, its real responses, its history) is in the app's settings. */}
-      {issueId ? <p className="faint" style={{ margin: '12px 0 0', fontSize: 13 }}>A service's address, its real responses on this computer and its history are in Settings › Mocks.</p>
+      {issueId ? <p className="faint" style={{ margin: '12px 0 0', fontSize: 13 }}>A service's real responses on this computer and its history are in Settings › Mocks.</p>
         : list === null ? (error ? null : <p className="muted">Loading…</p>)
         : !list.length ? <div className="empty">No services yet. Add one here, or a task's agent adds it when it finds the code calling one.</div>
         : <div className="mock-list">{list.map((m) => <MockCard key={m.key} appId={appId} mock={m} places={places.find((p) => p.mock === m.key) ?? null} act={act} />)}</div>}
-      {list !== null && <Fixtures appId={appId} issueId={issueId} version={tick} />}
     </section>
   )
 }
@@ -137,7 +141,7 @@ function MockCard({ appId, issueId, mock: m, places, act }: { appId: string; iss
 
       {places && !issueId && (
         <div className="mock-data" data-component="MockSources">
-          <strong>What each place is given</strong> <span className="faint">unless a task says otherwise</span>
+          <strong>Source</strong> <span className="faint">what each place is given, unless a task says otherwise</span>
           <div style={{ marginTop: 6 }}><Sources appId={appId} row={places} onChanged={() => act(async () => {})} /></div>
         </div>
       )}

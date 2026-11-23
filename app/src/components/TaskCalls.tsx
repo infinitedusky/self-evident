@@ -7,7 +7,7 @@
  * task makes, picked from the service's endpoints, each with its data: the app's until the task puts its own in
  * place of it. A call the service does not have yet is added to the service in Settings, and the form says so.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Badge } from './Badge'
 import { EndpointDataCell } from './EndpointData'
 import { Sources } from './MockPlaces'
@@ -16,7 +16,7 @@ import { engine, type Mock, type MockEndpoint, type MockPlacesRow, type TaskCall
 const err = (e: unknown) => { const m = String((e as Error)?.message ?? e); try { return (JSON.parse(m) as { error?: string }).error ?? m } catch { return m } }
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
-export function TaskCalls({ appId, issueId, mocks, places = [], version = 0, onChanged }: { appId: string; issueId: string; /** The app's services (each is its mock): what can be picked, and the endpoints a call can be tied to. */ mocks: Mock[]; /** What each place is given for each service, for this task. */ places?: MockPlacesRow[]; /** Read again when it changes. */ version?: number; onChanged?: () => void | Promise<void> }) {
+export function TaskCalls({ appId, issueId, mocks, places = [], version = 0, onChanged, intro }: { /** What this section is, said under its heading. */ intro?: ReactNode; appId: string; issueId: string; /** The app's services (each is its mock): what can be picked, and the endpoints a call can be tied to. */ mocks: Mock[]; /** What each place is given for each service, for this task. */ places?: MockPlacesRow[]; /** Read again when it changes. */ version?: number; onChanged?: () => void | Promise<void> }) {
   const [services, setServices] = useState<TaskService[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
@@ -30,12 +30,14 @@ export function TaskCalls({ appId, issueId, mocks, places = [], version = 0, onC
   return (
     <div className="task-calls" data-component="TaskCalls">
       <div className="task-block-head">
-        <h3 className="mock-h3" style={{ margin: 0 }}>Services this task calls</h3>
+        <h3 className="mock-h3" style={{ margin: 0 }}>Services</h3>
         <span style={{ display: 'flex', gap: 8 }}>
           {!!services?.length && <button className="btn quiet small" onClick={() => { if (window.confirm('Take every service and call off this task\'s list? The app\'s services and their mocks are not touched.')) void act(async () => { for (const s of services) await engine.removeTaskService(issueId, s.key) }) }}>Clear the list</button>}
           <button className="btn quiet small" onClick={() => setAdding(!adding)}>Add a service</button>
         </span>
       </div>
+      <div className="task-calls-sub" style={{ marginTop: 8 }}>What the task needs</div>
+      {intro}
       {error && <div className="empty bad" style={{ margin: '8px 0' }}>{error}</div>}
       {adding && <AddService others={others}
         onPick={(key) => act(async () => { await engine.addTaskService(issueId, key); setAdding(false) })}
@@ -77,12 +79,19 @@ function ServiceBlock({ appId, issueId, service: s, mock, places, onData, onRemo
   return (
     <div className="task-calls-service" data-service={s.key}>
       <div className="task-calls-service-head">
-        <span style={{ marginRight: 'auto' }}><strong>{s.name}</strong>{s.standsInFor && <span className="faint" style={{ fontSize: 12 }}> · {s.standsInFor}</span>}</span>
+        <span style={{ marginRight: 'auto' }}><strong>{s.name}</strong></span>
         {!mock || mock.served === 'none' ? <Badge tone="warn">No endpoints yet</Badge> : mock.served === 'general' ? <Badge tone="ok">Served from its endpoints</Badge> : s.status === 'assumed' ? <Badge tone="warn">A server of an assumed shape</Badge> : <Badge tone="ok">Has a server written for it</Badge>}
         <button className="btn quiet small" aria-label={`Take ${s.name} off this task`} title="Off this task's list; it stays one of the app's services" onClick={onRemove}>×</button>
       </div>
-      {places && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><div><div className="task-calls-sub">What each place is given</div><Sources appId={appId} row={places} issueId={issueId} onChanged={onData} /></div></div>}
-      <div className="task-calls-row" style={{ gridTemplateColumns: '1fr auto', alignItems: 'center' }}><div className="task-calls-sub" style={{ margin: 0 }}>The calls this task makes</div><button className="btn quiet small" aria-label={`Add a call to ${s.name}`} onClick={() => setAdding(!adding)}>Add a call</button></div>
+      <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><div><div className="task-calls-sub">Info</div>
+        <dl className="service-info">
+          <dt>What it is</dt><dd>{s.standsInFor || <span className="faint">Not said yet</span>}</dd>
+          <dt>Real address</dt><dd>{mock?.connection.address ? <code>{mock.connection.address}</code> : <span className="faint">Not set</span>}</dd>
+          <dt>Variable to override</dt><dd>{mock?.connection.addressSetting ? <code>{mock.connection.addressSetting}</code> : <span className="faint">Not set: the app cannot be pointed at its mock yet</span>}</dd>
+        </dl>
+        <div className="faint" style={{ fontSize: 12 }}>Changed in Settings › Mocks.</div></div></div>
+      {places && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><div><div className="task-calls-sub">Source</div><Sources appId={appId} row={places} issueId={issueId} onChanged={onData} /></div></div>}
+      <div className="task-calls-row" style={{ gridTemplateColumns: '1fr auto', alignItems: 'center' }}><div className="task-calls-sub" style={{ margin: 0 }}>Endpoints</div><button className="btn quiet small" aria-label={`Add a call to ${s.name}`} onClick={() => setAdding(!adding)}>Add a call</button></div>
       {adding && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><CallForm label="Add" known={known} steps={(k) => stepsUnder(k).length} serviceName={s.name} onSave={(b) => void onAddCall(b).then(() => setAdding(false))} onCancel={() => setAdding(false)} /></div>}
       {mock?.needs?.recorded && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><div className="row" style={{ margin: 0 }}><span>A real response is in. The task's agent is {mock.served === 'written' ? 'building the mock from it' : 'making its faked version'}: its conversation shows how far it is.</span><button className="btn quiet small" title="If the agent did not start, or stopped" onClick={() => void engine.mineMock(appId, s.key).then(onData)}>Ask again</button></div></div>}
       {!s.calls.length && !adding && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><span className="faint">No calls listed yet: which of its endpoints does this task use?</span></div>}
