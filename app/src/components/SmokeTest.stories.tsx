@@ -112,6 +112,17 @@ export const ItsDatabase: Story = {
     await waitFor(() => expect(within(pick).getByRole('option', { name: 'one-person-scanned (real)' })).toBeInTheDocument())
   },
 }
+/** Given files: they are named, a real one marked, and the folder they are in is opened from here, because the app's own Browse button opens the browser's file dialog wherever it likes. */
+export const ItsFiles: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, files: { dir: '/sample/smoke/test-files', files: [{ name: 'one-person.csv', what: 'Import it on the Employees page (sample)', version: 'real' }, { name: 'id-card.png', what: '', version: 'fake' }] } } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('one-person.csv')).toBeInTheDocument()
+    await expect(c.getByText('Real')).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Show the folder' }))
+    await expect(await c.findByText(/Opened\. Drag a file from it onto the app/)).toBeInTheDocument()
+  },
+}
 /** An app smoke tested on staging: nothing to start; an address to open, who to sign in as, and the same checks. */
 export const OnStaging: Story = {
   beforeEach: withEngine({ smoke: { ...smokeSample, where: 'staging', says: 'a deployed build at an address, with a test account', url: 'https://staging.example.test', up: true, running: null, canRun: false, account: 'the test parent (sample)' } }),

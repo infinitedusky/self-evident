@@ -9,7 +9,7 @@ import { newId } from './ids.js'
 import { giveEndpointData } from './mock-serve.js'
 import { saveMock } from './mocks.js'
 import { createProject } from './projects.js'
-import { addTestFile, editTestFile, listTestFiles, placeTestFiles, removeTestFile, testFilePath, testFilesSay } from './test-files.js'
+import { addTestFile, editTestFile, listTestFiles, placedFiles, placeTestFiles, removeTestFile, testFilePath, testFilesSay } from './test-files.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -79,6 +79,9 @@ describe.skipIf(!reachable)('test files', () => {
       expect(p.files.map((x) => x.name).sort()).toEqual(['id-card.png', 'import.csv', 'one person.csv'])
     }
     expect(testFilesSay(smoke).join('\n')).toContain('- import.csv: Import it')
+    // Read back from the folder, for a page: what it was given, and in which version.
+    expect((await placedFiles(appId, issueId, 'smoke', smoke.dir))?.files.find((x) => x.name === 'import.csv')).toMatchObject({ version: 'real', what: 'Import it' })
+    expect(await placedFiles(appId, issueId, 'smoke', join(home, 'never-placed'))).toBeNull()
     await removeTestFile(appId, f.id)
   })
 

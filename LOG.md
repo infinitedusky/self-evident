@@ -6781,3 +6781,11 @@ so the settings say what empty means for the app: for the enterprise dashboard, 
 Found when Empty was chosen and a plain Restart pressed: only "Start from it" used the choice, so the database was
 kept. Now Run, Restart and "Start from it" all start from what the picker says, and the button names it ("Restart
 empty", "Restart from Meridian"). Nothing chosen: its database as it is. The choice is used once.
+
+### 2026-11-23: A smoke test's files are a press away from its page
+
+Sandy: "the browse files button in the smoke test is accessing my local file system, not the files we added to the
+fixture." It is the browser's own file dialog, and a page cannot say where it opens or what it lists. So the smoke
+test's page names the files it was given (a real version marked) and has "Show the folder", which opens their
+folder in this computer's file manager, to drag a file onto the app or pick it from; and "Copy its path", for the
+dialog's go-to-folder. Not done: the same line for a prototype.

@@ -350,6 +350,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     }),
     // (sample) Its database kept as a fixture: said back, and listed among the app's.
     http.post('/api/issues/:id/smoke/keep', async ({ request }) => { const b = await request.json() as { name: string; real?: boolean }; d.fixtures = [...d.fixtures.filter((f) => f.name !== b.name), { name: b.name, real: !!b.real, bytes: 2_400, tables: [{ name: 'employees', rows: 1, columns: ['id', 'first_name'] }] }]; return reply({ fixture: b.name, real: !!b.real, saved: { employees: 1 } }) }),
+    http.post('/api/issues/:id/smoke/files/reveal', () => reply({ opened: '/sample/smoke/test-files' })),
     http.post('/api/issues/:id/smoke/stop', async ({ request }) => {
       const b = await request.json().catch(() => ({})) as { setup?: string }
       if (d.smoke && b.setup && d.smoke.setups) d.smoke = { ...d.smoke, setups: d.smoke.setups.map((x) => (x.key === b.setup ? { ...x, url: null, up: false, running: null } : x)) }

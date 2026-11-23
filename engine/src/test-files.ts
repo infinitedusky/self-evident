@@ -233,5 +233,13 @@ export async function placeTestFiles(appId: string, issueId: string | null, plac
   writeFileSync(join(dir, 'README.md'), ['# Test files', '', 'What a tester needs to try this. Put here by Self Evident; changed on the task\'s Data step, not here.', '', ...out.files.map((f) => `- \`${f.name}\`${f.version === 'real' ? ' (REAL: this computer only)' : ''}${f.what ? `: ${f.what}` : ''}`), ''].join('\n'))
   return out
 }
+/** What a folder a run was given holds now, as it was put there: read back from the folder, nothing written. None: it was given no files. */
+export async function placedFiles(appId: string, issueId: string | null, place: UsePlace, dir: string): Promise<Placed | null> {
+  if (!existsSync(join(dir, 'README.md'))) return null
+  const all = await listTestFiles(appId, issueId)
+  const byName = new Map(all.map((f) => [f.name, f])) // a task's own comes after the app's, and takes its place
+  const files = [...byName.values()].filter((f) => existsSync(join(dir, f.name))).map((f) => ({ name: f.name, what: f.what, version: (f.use[place] ?? 'fake') as Version }))
+  return { dir, files, missing: [] }
+}
 /** The same, in words for an agent that tries the task. */
 export const testFilesSay = (p: Placed): string[] => (p.files.length ? [`Test files for this task are in ${p.dir} (what a tester brings to it: upload or import them where the check calls for a file):`, ...p.files.map((f) => `- ${f.name}${f.what ? `: ${f.what}` : ''}`)] : [])

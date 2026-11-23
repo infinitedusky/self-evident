@@ -115,7 +115,7 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
   }
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
-  const all: SmokeSetupView[] = v.setups?.length ? v.setups : [{ key: 'main', name: 'Smoke test', what: null, where: v.where, says: v.says, account: v.account, flag: v.flag, running: v.running, url: v.url, up: v.up, canRun: v.canRun, canClean: v.canClean, data: v.data, terminal: v.terminal, scratch: v.scratch, log: v.log, owed: v.owed }]
+  const all: SmokeSetupView[] = v.setups?.length ? v.setups : [{ key: 'main', name: 'Smoke test', what: null, where: v.where, says: v.says, account: v.account, flag: v.flag, running: v.running, url: v.url, up: v.up, canRun: v.canRun, canClean: v.canClean, data: v.data, files: v.files, terminal: v.terminal, scratch: v.scratch, log: v.log, owed: v.owed }]
   const many = all.length > 1
   // The one they chose; else the first with something still to check; else the first.
   const su = all.find((x) => x.key === picked) ?? all.find((x) => x.owed > 0) ?? all[0]
@@ -212,6 +212,7 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
         </div>
       )}
       {local && su.data && !!v.head && <SmokeData appId={appId} issueId={issueId} setup={many ? su.key : undefined} data={su.data} busy={busy} from={chosen} onFrom={(f) => setStartFrom((m) => ({ ...m, [su.key]: f }))} onStart={() => act(start)} />}
+      {local && su.files && <SmokeFiles issueId={issueId} setup={many ? su.key : undefined} files={su.files} />}
       {(v.checks.length > 0 || !!v.head) && (
         <div className={`smoke-layout ${cmp ? 'comparing' : ''} ${aside ? 'checks-aside' : ''}`} style={room ? { ['--smoke-room' as string]: `${room}px` } : undefined}>
           <div className="smoke-view" ref={viewRef}>
@@ -328,6 +329,27 @@ function SmokeData({ appId, issueId, setup, data, busy, from, onFrom, onStart }:
       )}
       {said && <div className="faint" role="status">{said}</div>}
       {error && <div className="mock-data-warn">{error}</div>}
+    </div>
+  )
+}
+
+/**
+ * The files a smoke test was given (Fixtures › Files). The app's own Browse button opens the browser's file dialog,
+ * which a page cannot point anywhere, so the folder is one press away here: opened in the file manager, to drag a
+ * file onto the app or to pick it from.
+ */
+function SmokeFiles({ issueId, setup, files }: { issueId: string; setup?: string; files: NonNullable<SmokeSetupView['files']> }) {
+  const [said, setSaid] = useState<string | null>(null)
+  const reveal = async () => { try { await engine.revealSmokeFiles(issueId, setup); setSaid('Opened. Drag a file from it onto the app, or pick it there when the app asks for one.') } catch (e) { setSaid(String((e as Error)?.message ?? e)) } }
+  const copy = async () => { try { await navigator.clipboard.writeText(files.dir); setSaid('Copied. In the file dialog, press ⌘⇧G and paste it.') } catch { setSaid(files.dir) } }
+  return (
+    <div className="smoke-data" data-component="SmokeFiles">
+      <div className="lv-line" style={{ alignItems: 'center' }}>
+        <span>Its files: {files.files.map((f, n) => <span key={f.name} title={f.what || undefined}>{n > 0 && ', '}<code>{f.name}</code>{f.version === 'real' && <> <Badge tone="warn">Real</Badge></>}</span>)}</span>
+        <button className="lv-act" title={files.dir} onClick={() => void reveal()}>Show the folder</button>
+        <button className="lv-act" title={files.dir} onClick={() => void copy()}>Copy its path</button>
+      </div>
+      {said && <div className="faint" role="status">{said}</div>}
     </div>
   )
 }
