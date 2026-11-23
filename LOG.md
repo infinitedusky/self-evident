@@ -6796,3 +6796,12 @@ A prototype or smoke test could show its own chooser of the run's fixture files 
 through the script the frame proxy already puts in each page. Sandy: "Can we add a note and do it afterwards? I
 want to get this built as fast as possible, that I can actually submit the PR." Written into the brief's set-aside
 list; CEB-90's pull request comes first.
+
+### 2026-11-23: The frame is on the page's own host name
+
+Found on CEB-90's smoke test: "Start Security Scan" pressed in the framed app was refused (the app's
+`csrf_missing_cookie`), the same press in a tab of its own was not. The page was open at `127.0.0.1:5180` and the
+engine names the frame `localhost:<port>`. To a browser those are two sites, and it keeps no SameSite cookie for a
+frame of another site, so the app lost the cookie it guards every data-changing request with. The frame is now
+asked for by the host name the page itself is open under (both are this computer). Checked in a browser from both
+addresses: the framed app keeps its cookie.
