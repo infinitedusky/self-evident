@@ -30,5 +30,47 @@ export const OnATask: Story = {
 }
 /** On a task with no data made for a fixture yet. */
 export const OnATaskNothingYet: Story = { args: { issueId: 'iss_sample2' } }
-/** An app with no fixtures: it says how one comes to be. */
-export const None: Story = { beforeEach: withEngine({ fixtures: [] }) }
+/** An app with no fixtures: it says how one comes to be, and one is made from the app's seed in a press. */
+export const None: Story = {
+  beforeEach: withEngine({ fixtures: [] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/No fixtures yet/)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: "Make one from the app's seed" }))
+    await expect(await c.findByText(/Made "seed" from the app's seed: employees 250/)).toBeInTheDocument()
+    await expect(c.getByText('seed')).toBeInTheDocument()
+  },
+}
+/** The app has no seed command yet: the button is there and cannot be pressed, and what is missing is said. */
+export const NoSeedCommandYet: Story = {
+  beforeEach: withEngine({ fixtures: [], fixtureMake: { ok: false, missing: 'the app has no seed command (Settings › the app › Prototype)' } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('button', { name: "Make one from the app's seed" })).toBeDisabled()
+    await expect(c.getByText(/cannot be made from the app's seed yet: the app has no seed command/)).toBeInTheDocument()
+  },
+}
+/** A table's rows are shown as they are: a fixture is made-up data. */
+export const LookingAtRows: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByText('three-people'))
+    await userEvent.click(c.getAllByRole('button', { name: 'Show the rows of employees' }).at(-1)!)
+    const rows = within(await c.findByRole('region', { name: 'The rows of employees' }))
+    await expect(rows.getByText('work_email')).toBeInTheDocument()
+    await expect(rows.getByText('avery.sample@northwind.example')).toBeInTheDocument()
+  },
+}
+/** Renamed: a name of letters, numbers and dashes; what was made for its people follows. */
+export const Renaming: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByText('three-people'))
+    await userEvent.click(c.getByRole('button', { name: 'Rename three-people' }))
+    const box = c.getByRole('textbox', { name: 'A new name for three-people' })
+    await userEvent.clear(box); await userEvent.type(box, 'a-small-team')
+    await userEvent.click(c.getByRole('button', { name: 'Rename' }))
+    await expect(await c.findByText('a-small-team')).toBeInTheDocument()
+    await expect(c.queryByText('three-people')).toBeNull()
+  },
+}

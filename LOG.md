@@ -6509,3 +6509,32 @@ Not done, and not drawn on the real page: the fixture buttons of the mockup (mak
 delete), which are step 3. CEB-90's app has no fixture: its list of shared scenarios is empty, so `ent322-findings` is not shared with the app
 (whether it is one prototype's own was not looked up), and "Fill out for fixture people" has nothing to pick from
 until step 3.
+
+### A fixture is made from the app's seed, opened, renamed and deleted (Sandy, 2026-11-22)
+
+Step 3 of the brief. A fixture is a set of tables: a saved copy of the app's own database, rows by table, with
+their ids. What was missing is anything to do with one on the Data step.
+
+- **An app has a seed command** (`prototype_db.seed_cmd`, in Settings beside the schema command; agents set it
+  with `set_prototype_database`). Asked how a fixture should get its data, Sandy chose this over copying a
+  prototype's database: Self Evident did not know the app's seed, because the app's prototype start script ran it.
+- **"Make one from the app's seed"** (`makeFixtureFromSeed`, `fixtures.ts`): a database of its own is made from
+  nothing, the schema command and then the seed command are run in the app's checkout, what is in it is kept as a
+  fixture shared with the app, named "seed", and the database is dropped. Made again, "seed" is replaced, after a
+  question. Where the app has no seed command, no database or no checkout here, the button cannot be pressed and
+  what is missing is said.
+- **A fixture opens to its tables and a table to its rows** (the first 50, every column, as text). It is made-up
+  data, so it can be read. **Rename** carries along the data filled out for its people and the prototypes built
+  from it; a name taken is refused. **Delete** leaves that data as it is, and says how much of it there is first.
+- **A prototype follows its task's fixture** on its first start, as the smoke test does: the fixture its
+  services' data was made for, else "default". One that already has a database is left alone.
+- Agents have the same through the service tool (`fixture_make`, `fixture_rename`, `fixture_delete`).
+
+Done for real on the app CEB-90 belongs to: its seed command is set, and its seed made a fixture in 18 seconds
+(250 employees, 13 departments, 1 company, 1 tenant, 60 cohort rows, 6,525 score snapshots; 1.5 MB of the 2 MB a
+fixture may be). `ent322-findings` was looked up: it is not a fixture. Two prototypes each have a scenario of
+their own by that name; the one with 250 employees belongs to another task's prototype, and CEB-90's holds only 12
+findings and a scan job.
+
+Not known: whether the app's seed gives the same ids every time. If it does not, making "seed" again breaks the
+tie to data already filled out for its people. Check before step 4 relies on it.

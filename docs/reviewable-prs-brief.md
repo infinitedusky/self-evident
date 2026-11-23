@@ -31,16 +31,17 @@ on one task, CEB-90, and its one outside service, SixtyFour.
 
 ## What is left, in order
 
-1. **Lay out the Data step properly.** It has grown by patches and has no consistent hierarchy. Decide the levels
+1. ~~Lay out the Data step properly.~~ Done 2026-11-22 (LOG.md).
+   Was: It has grown by patches and has no consistent hierarchy. Decide the levels
    (page, section, service, part, row) with one text style each, show it as one story, then apply it. Outline
    agreed: Fixtures; Services (what the task needs; then each service with Info, Source, Endpoints).
-2. **Fix two refusals that block CEB-90's fake** (found by the task's agent):
+2. ~~Fix two refusals that block CEB-90's fake~~ Done 2026-11-22, not yet proved on the real file. Was: (found by the task's agent):
    - A column named as text does not replace a cell holding a JSON object, so the results file cannot be faked.
    - Invented data is refused for fixed words the app needs (statuses, platform names), because it is checked
      without the words a fake was allowed to keep.
-3. **Decide what a fixture is for the person.** Open question from Sandy: what gets added, is it a set of tables?
-   Today a fixture is a snapshot of the app's database (rows by table) saved from a prototype. There is no way to
-   make, look inside, rename or delete one from the Data step, and a prototype does not follow the task's fixture.
+3. ~~Decide what a fixture is for the person.~~ Done 2026-11-22: a fixture is a set of tables, made from the
+   app's seed command in a press on the Data step, opened to its rows, renamed and deleted; a prototype follows
+   its task's fixture on its first start. CEB-90's app has one, "seed" (Meridian, 250 employees).
 4. **Prove it on CEB-90**: fake the results file, fill it out for fixture employees, run the smoke test on the
    mock, and fix what breaks.
 5. **The data agent**: one per task, called by the task's agent, in three stop-and-wait steps (list the calls,

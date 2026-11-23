@@ -1244,3 +1244,10 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
   .lv-fields { gap: 0; } .lv-fields dd { margin-bottom: 6px; }
 }
 .lv-row .endpoint-data { font-size: 14px; }
+
+/* A fixture's rows: a plain table that scrolls both ways inside its part. */
+.fx-rows { overflow: auto; max-height: 320px; border: 1px solid var(--line); border-radius: 6px; margin: 2px 0 4px; }
+.fx-rows table { border-collapse: collapse; font: 12px var(--mono); white-space: nowrap; }
+.fx-rows th, .fx-rows td { padding: 4px 10px; text-align: left; border-bottom: 1px solid var(--line); max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+.fx-rows th { position: sticky; top: 0; background: var(--surface); font-weight: 600; color: var(--ink-soft); }
+.fx-rows tr:last-child td { border-bottom: 0; }

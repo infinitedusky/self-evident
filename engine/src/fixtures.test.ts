@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
 import { app, workspace } from './db/schema.js'
-import { assignFixture, dataColumns, fixtureForTask, fixtureRows, listFixtures, pin } from './fixtures.js'
+import { assignFixture, canMakeFixture, dataColumns, deleteFixture, fixtureForTask, fixtureRows, fixtureSample, listFixtures, makeFixtureFromSeed, pin, renameFixture } from './fixtures.js'
 import { newId } from './ids.js'
 import { fakeData } from './mock-data.js'
 import { parseCsv } from './mock-leaks.js'
@@ -90,5 +90,37 @@ describe.skipIf(!reachable)('fixtures', () => {
   it('builds a task\'s runs from the fixture its data was made for', async () => {
     expect(await fixtureForTask(appId, issueId)).toBe('meridian')
     expect(await fixtureForTask(newId('app'), null)).toBeNull()
+  })
+
+  it('shows a table of a fixture as it is: its first rows, every column, as text', async () => {
+    const r = await fixtureSample(appId, 'meridian', 'employees', 2)
+    expect(r.total).toBe(4)
+    expect([...r.columns].sort()).toEqual(['first_name', 'id', 'last_name', 'metadata', 'work_email']) // in the order the database keeps them
+    const asObjects = r.rows.map((row) => Object.fromEntries(r.columns.map((c, n) => [c, row[n]])))
+    expect(asObjects).toEqual([1, 2].map((n) => ({ id: `00000000-0000-4000-8000-00000000000${n}`, first_name: `Sample${n}`, last_name: 'Person', work_email: `sample${n}@meridian.example`, metadata: `{"n":${n}}` })))
+    await expect(fixtureSample(appId, 'nothing', 'employees')).rejects.toThrow('no fixture')
+  })
+
+  it('renames a fixture and the data filled out for its people follows; a name taken is refused', async () => {
+    await writeScenario({ appId }, 'other', { employees: employees.slice(0, 1) }, true)
+    const before = await fixtureForTask(appId, issueId)
+    await expect(renameFixture(appId, 'meridian', 'other')).rejects.toThrow('already')
+    await expect(renameFixture(appId, 'meridian', 'Not A Name')).rejects.toThrow('letters, numbers and dashes')
+    await renameFixture(appId, 'meridian', 'meridian-group')
+    const list = await listFixtures(appId)
+    expect(list.map((f) => f.name)).toEqual(['meridian-group', 'other'])
+    if (before === 'meridian') { expect(await fixtureForTask(appId, issueId)).toBe('meridian-group'); expect(list[0].madeFor).toBeGreaterThan(0) }
+    await renameFixture(appId, 'meridian-group', 'meridian')
+  })
+
+  it('deletes a fixture, and what was made for it no longer says a task is built from it', async () => {
+    await deleteFixture(appId, 'other')
+    expect((await listFixtures(appId)).map((f) => f.name)).toEqual(['meridian'])
+    await expect(deleteFixture(appId, 'other')).rejects.toThrow('no fixture')
+  })
+
+  it('says what is missing before a fixture can be made from the seed', async () => {
+    expect(await canMakeFixture(appId)).toMatchObject({ ok: false, missing: expect.stringContaining('no database') })
+    await expect(makeFixtureFromSeed(appId)).rejects.toThrow('cannot be made from the seed yet')
   })
 })

@@ -64,7 +64,7 @@ export function MockLibrary({ appId, issueId, needs }: { /** On a task: what its
         </div>
       )}
       {/* What is in the app's own database comes first; then the services outside it, with what they are said at the top of that section. */}
-      {list !== null && <Fixtures appId={appId} issueId={issueId} version={tick} />}
+      {list !== null && <Fixtures appId={appId} issueId={issueId} version={tick} onChanged={() => reload()} />}
       {issueId && <TaskCalls appId={appId} issueId={issueId} mocks={list ?? []} places={places} version={tick} onChanged={() => reload()} intro={intro} needs={needs && <details className="lv-item" data-component="WhatTheTaskNeeds"><summary className="lv-item-head"><span className="lv-item-name">What the task needs</span><span className="lv-item-meta lv-end">The agent's report</span></summary><div className="lv-part">{needs}</div></details>} />}
       {!issueId && <h3 className="mock-h3">The app's services</h3>}
       {!issueId && intro}

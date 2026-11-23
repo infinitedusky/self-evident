@@ -15,6 +15,7 @@ import { and, desc, eq, ne } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, prototype, repo } from './db/schema.js'
 import { homeRepo } from './workbench.js'
+import { fixtureForTask } from './fixtures.js'
 import { appendEvent } from './events.js'
 import { addWorktree, git, removeWorktree } from './git.js'
 import { newId } from './ids.js'
@@ -118,8 +119,10 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
   else if (alive(id)) return prototypeStatus(id)
   const { a, cmd, dbCfg } = await setupOf(p.appId)
   if (!cmd) throw new PlanError(`${a.name} has no prototype command yet: set it in Settings, or work it out from the app and set it with set_prototype_command`)
-  if (dbCfg && !(await databaseExists(dbCfg, slugOf(p)))) { // first start: its database, from the scenario it had, else "default" if there is one
-    const scenario = p.scenario ?? ((await listScenarios({ appId: p.appId, prototypeId: p.id }, p.path)).includes('default') ? 'default' : null)
+  if (dbCfg && !(await databaseExists(dbCfg, slugOf(p)))) { // first start: its database, from the scenario it had, else its task's fixture, else "default" if there is one
+    // Like the task's smoke test: the fixture its services' data was made for, so the app sends the people the mock answers for.
+    const names = await listScenarios({ appId: p.appId, prototypeId: p.id }, p.path), made = await fixtureForTask(p.appId, p.issueId ?? null)
+    const scenario = p.scenario ?? (made && names.includes(made) ? made : names.includes('default') ? 'default' : null)
     await rebuild(dbCfg, slugOf(p), p.path, scenario, { appId: p.appId, prototypeId: p.id })
     await db.update(prototype).set({ scenario }).where(eq(prototype.id, id))
   }
@@ -339,11 +342,11 @@ export async function showPrototypeScenario(id: string, name: string) {
   return { scenario: name, tables }
 }
 
-/** Where this app's prototypes get their databases: its development database server, the variable it reads, its schema command. */
+/** Where this app's prototypes get their databases: its development database server, the variable it reads, its schema command, and the seed command a fixture is made with. */
 export async function setPrototypeDatabase(appId: string, cfg: PrototypeDb) {
   const { a } = await setupOf(appId)
   new URL(cfg.url) // a URL, or it throws
-  const clean: PrototypeDb = { url: cfg.url.trim(), env: cfg.env?.trim() || 'DATABASE_URL', ...(cfg.schema_cmd?.trim() ? { schema_cmd: cfg.schema_cmd.trim() } : {}) }
+  const clean: PrototypeDb = { url: cfg.url.trim(), env: cfg.env?.trim() || 'DATABASE_URL', ...(cfg.schema_cmd?.trim() ? { schema_cmd: cfg.schema_cmd.trim() } : {}), ...(cfg.seed_cmd?.trim() ? { seed_cmd: cfg.seed_cmd.trim() } : {}) }
   await patchSetup(appId, { prototype_db: clean })
   return { prototype_db: clean }
 }
