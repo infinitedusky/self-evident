@@ -28,6 +28,8 @@ import { appendEvent } from './events.js'
 import { PlanError } from './issues.js'
 import { dataNote, fakeData, fakeGiven, saveData, scopeKey, scopeOfRecording, type DataProvenance, type DataRow, type Scope } from './mock-data.js'
 import { looksCsv, parseCsv } from './mock-leaks.js'
+import { csvRecords, withFilePeople, type FromFile } from './mock-file-map.js'
+import { testFileText, type UsePlace } from './test-files.js'
 import { cleanEndpoints, endpointOfExchange, endpointOfFile, exchangesOf, keyed, type Endpoint } from './mock-endpoints.js'
 import { day, giveRecording, isGiven, mocksHome, recordingsFor, rowOf, workspaceOf, type Row } from './mocks.js'
 import { recordingsHome } from './recordings.js'
@@ -37,7 +39,7 @@ export type Form = 'faked' | 'recorded'
 /** One endpoint's data at one level: the app's, or a task's own. */
 export interface EndpointItem {
   /** The real response behind it on this computer. id: its folder from the recordings home. */ recorded: { id: string; at: string; how: 'given' | 'recorded'; files: string[] } | null
-  /** What may leave this computer: a fake of the recorded one, or a file provided as holding nothing real. */ safe: { kind: 'faked' | 'provided'; set: string; files: string[]; note: string; /** The column names of its first file: what can be set from a fixture. */ columns: string[]; /** The fixture person it was made for (fixtures.ts). */ madeFor?: { fixture: string; table: string; who: string; people: number; map: Record<string, string> }; /** Faked from a response that is no longer the newest one. */ stale?: boolean } | null
+  /** What may leave this computer: a fake of the recorded one, or a file provided as holding nothing real. */ safe: { kind: 'faked' | 'provided'; set: string; files: string[]; note: string; /** The column names of its first file: what can be set from a fixture. */ columns: string[]; /** The fixture person it was made for (fixtures.ts). */ madeFor?: { fixture: string; table: string; who: string; people: number; map: Record<string, string> }; /** Fields mapped from a file of the fixtures, worked out when it is served (mock-file-map.ts). */ fromFile?: FromFile; /** Faked from a response that is no longer the newest one. */ stale?: boolean } | null
 }
 export interface EndpointData { /** The app's: set in its settings. */ app: EndpointItem | null; /** This task's own, in place of the app's. */ task: EndpointItem | null; /** Do a person's own runs get its faked version? The app's answer (faked unless it says otherwise), and this task's own where it has one. A reviewer always gets the faked one. */ faked: { app: boolean; task: boolean | null } }
 
@@ -69,7 +71,7 @@ function itemOf(r: Read, e: string, task: string | null): EndpointItem | null {
   if (!rec && !set) return null
   return {
     recorded: rec ? { id: relative(recordingsHome(), rec.dir), at: rec.at, how: rec.given ? 'given' : 'recorded', files: filesOf(r.endpoints, e, rec.names) } : null,
-    safe: set ? { kind: set.kind === 'faked' ? 'faked' : 'provided', set: set.key, files: filesOf(r.endpoints, e, Object.keys(set.files)), note: dataNote(set), columns: columnsOfFirst(set.files, filesOf(r.endpoints, e, Object.keys(set.files))), ...((prov(set) as { madeFor?: NonNullable<EndpointItem['safe']>['madeFor'] }).madeFor ? { madeFor: (prov(set) as { madeFor?: NonNullable<EndpointItem['safe']>['madeFor'] }).madeFor } : {}), ...(set.kind === 'faked' && rec && set.recording && set.recording !== rec.dir ? { stale: true } : {}) } : null,
+    safe: set ? { kind: set.kind === 'faked' ? 'faked' : 'provided', set: set.key, files: filesOf(r.endpoints, e, Object.keys(set.files)), note: dataNote(set), columns: columnsOfFirst(set.files, filesOf(r.endpoints, e, Object.keys(set.files))), ...((prov(set) as { madeFor?: NonNullable<EndpointItem['safe']>['madeFor'] }).madeFor ? { madeFor: (prov(set) as { madeFor?: NonNullable<EndpointItem['safe']>['madeFor'] }).madeFor } : {}), ...((prov(set) as { fromFile?: FromFile }).fromFile ? { fromFile: (prov(set) as { fromFile?: FromFile }).fromFile } : {}), ...(set.kind === 'faked' && rec && set.recording && set.recording !== rec.dir ? { stale: true } : {}) } : null,
   }
 }
 /** Every endpoint's data: the app's, and (for a task) the task's own. */
@@ -89,7 +91,7 @@ export interface Served {
  * export get. form recorded: a person's own run, where each endpoint says for itself whether it is answered with
  * its real response (the task's own answer, else the app's; faked unless it says otherwise; never for a sensitive one).
  */
-export async function served(m: Row, o: { form: Form; issueId?: string | null } = { form: 'faked' }): Promise<Served> {
+export async function served(m: Row, o: { form: Form; issueId?: string | null; /** Where it is served: which version of a mapped file it answers for. Not said: a reviewer's, the fake. */ place?: UsePlace | 'review' } = { form: 'faked' }): Promise<Served> {
   const r = await read(m), ownFaked = o.form === 'recorded' ? await taskFaked(m.id, o.issueId) : {}
   const out: Served = { files: [], real: [], unfaked: [], per: {} }
   const put = (f: Served['files'][number]) => { out.files = [...out.files.filter((x) => x.name !== f.name), f] }
@@ -115,7 +117,12 @@ export async function served(m: Row, o: { form: Form; issueId?: string | null } 
       out.real.push(e.key); out.per[e.key] = { from, kind: 'recorded' }
     } else if (item.safe) {
       const set = r.sets.find((d) => d.key === item.safe!.set && (prov(d).scope?.task ?? null) === level)!
-      for (const n of item.safe.files) put({ name: n, text: set.files[n] })
+      // Fields mapped from a file: the file's people, in the version this place uses, are who it answers for.
+      const p = prov(set) as DataProvenance & { fromFile?: FromFile; madeFor?: unknown; template?: Record<string, string> }
+      const src = p.fromFile ? await testFileText(m.appId, o.issueId ?? null, o.place ?? 'review', p.fromFile.file) : null
+      const people = src ? csvRecords(src.text).rows : []
+      for (const n of item.safe.files) put({ name: n, text: people.length ? withFilePeople(p.template?.[n] ?? set.files[n], set.files[n], people, p.fromFile!.map, !!p.madeFor) : set.files[n] })
+      if (people.length && src!.version === 'real') out.real.push(e.key) // a real person's name is in what it answers with: this computer only
       out.per[e.key] = { from, kind: item.safe.kind }
     } else { out.unfaked.push(e.key); out.per[e.key] = { from, kind: 'none' } }
   }

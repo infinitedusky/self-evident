@@ -198,6 +198,8 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.delete('/api/apps/:id/fixtures/:name', ({ params }) => { d.fixtures = d.fixtures.filter((f) => f.name !== params.name); if (d.fixtureUsed === params.name) d.fixtureUsed = null; return reply({ deleted: params.name }) }),
     http.get('/api/apps/:id/fixtures/:name/:table', ({ params }) => reply({ columns: d.fixtures.find((f) => f.name === params.name)?.tables.find((t) => t.name === params.table)?.columns ?? [], rows: s.fixturePeople })),
     // An endpoint's data filled out for a fixture's people.
+    // (sample) A mapping from a file is said back as it was given.
+    http.put('/api/apps/:id/mocks/:key/endpoints/:endpoint/file-map', async ({ request }) => { const b = await request.json() as { file: string | null; map?: Record<string, string> }; return reply({ fromFile: b.file ? { file: b.file, map: b.map ?? {} } : null }) }),
     http.put('/api/apps/:id/mocks/:key/endpoints/:endpoint/fixture', async ({ params, request }) => {
       const b = await request.json() as { fixture: string; table: string; row: number; count: number; map: Record<string, string>; issueId?: string | null }
       const first = s.fixturePeople[b.row]?.label.split(' · ').slice(0, 2).join(', ') ?? 'someone'

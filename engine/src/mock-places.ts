@@ -85,7 +85,7 @@ export async function planOf(m: Row, place: Place, issueId?: string | null, opts
       if (opts.dry) note = note ?? `a newer real response (${day(newest.at)}) is faked when this next runs`
       else try { await fakeData(m.appId, m.key, { recording: newest.dir, plan: whole.plan as Record<string, never>, dataKey: 'faked', issueId: issueId ?? null }, 'engine') } catch (err) { note = `a newer real response could not be faked with the plan it has, so the last fake is used: ${String((err as Error).message).split('\n')[0]}` }
     }
-    const s = await served(m, { form, issueId })
+    const s = await served(m, { form, issueId, place })
     const waiting = s.unfaked[0] === '*' ? 'its real response is not faked yet' : `${s.unfaked.length} call${s.unfaked.length === 1 ? ' has a real response that is' : 's have a real response that is'} not faked yet`
     if (s.unfaked.length) note = note ?? waiting
     const kinds = new Set(Object.values(s.per).map((p) => p.kind))
@@ -113,7 +113,7 @@ export async function plansFor(appId: string, place: Place, issueId?: string | n
   if (blocked.length && !opts.dry) throw new PlanError(blocked.map((p) => p.blocked).join('; '))
   return {
     plans,
-    /** What each mock is given: its endpoints' data in this form, with this task's own where it has any. */ pick: Object.fromEntries(plans.filter((p) => p.how !== 'live').map((p) => [p.mock, { form: p.form ?? 'faked', issueId: issueId ?? null }])) as Record<string, { form: Form; issueId: string | null }>,
+    /** What each mock is given: its endpoints' data in this form, with this task's own where it has any. */ pick: Object.fromEntries(plans.filter((p) => p.how !== 'live').map((p) => [p.mock, { form: p.form ?? 'faked', issueId: issueId ?? null, place }])) as Record<string, { form: Form; issueId: string | null; place: Place }>,
     /** Called for real: left out of the mocks that are started. */ live: plans.filter((p) => p.how === 'live').map((p) => p.mock),
     /** Of those, the ones whose answers are kept. */ record: plans.filter((p) => p.how === 'live' && p.record).map((p) => p.mock),
     /** Answering with a real response: this must not be shared. */ real: plans.filter((p) => p.how === 'live' || p.real).map((p) => p.mock),

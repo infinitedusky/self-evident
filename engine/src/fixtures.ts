@@ -22,6 +22,8 @@ import type { DataProvenance } from './mock-data.js'
 import { cleanEndpoints } from './mock-endpoints.js'
 import { checkLeaks, looksCsv, parseCsv } from './mock-leaks.js'
 import { endpointData } from './mock-serve.js'
+import type { FromFile } from './mock-file-map.js'
+import { testFileNamed } from './test-files.js'
 import { readRecording, rowOf, workspaceOf } from './mocks.js'
 import { existsSync } from 'node:fs'
 import { standInKey } from './stand-ins.js'
@@ -165,6 +167,42 @@ export function pin(text: string, set: Record<string, string>): { text: string; 
     const pretty = /^\s*[[{]\s*\n/.test(text)
     return { text: JSON.stringify(walk(JSON.parse(text)), null, pretty ? 2 : undefined) + (text.endsWith('\n') ? '\n' : ''), changed }
   } catch { return { text, changed: 0 } }
+}
+
+/**
+ * An endpoint's faked (or provided) data mapped from a file of the fixtures (mock-file-map.ts): which of its columns
+ * are set from which columns of the file, for each person in the file. Only the mapping is kept; it is worked out
+ * when the data is served, from the version of the file that place uses. file null: no longer mapped.
+ */
+export async function mapFromFile(appId: string, key: string, endpoint: string, i: { file: string | null; map?: Record<string, string> }, issueId: string | null, actor = 'user') {
+  const m = await rowOf(appId, key)
+  if (!m) throw new PlanError(`this app has no service "${key}"`)
+  const e = cleanEndpoints(m.endpoints).find((x) => x.key === standInKey(endpoint))
+  if (!e) throw new PlanError(`${m.name} has no endpoint "${endpoint}"`)
+  const item = (await endpointData(m, issueId))[e.key]
+  const safe = (issueId ? item.task : item.app)?.safe
+  if (!safe) throw new PlanError(`${e.method} ${e.path} has no faked or provided data${issueId ? ' of this task\'s own' : ''} yet to map a file onto: the real response is faked first`)
+  const [d] = await db.select().from(mockData).where(and(eq(mockData.mockId, m.id), eq(mockData.key, safe.set)))
+  let fromFile: FromFile | undefined
+  if (i.file) {
+    // The app's data can be mapped from a task's own file: a task without that file is served the data as it is.
+    const f = await testFileNamed(appId, i.file)
+    if (!f) throw new PlanError(`there is no file "${i.file}" among the fixtures' files`)
+    if (!f.columns?.length) throw new PlanError(`${f.name} has no columns to map from: only a CSV has fields`)
+    if (!looksCsv(d.files[safe.files[0]] ?? '')) throw new PlanError(`the data of ${e.method} ${e.path} is not a CSV: a file's people are written as its rows`)
+    const map: Record<string, string> = Object.fromEntries(Object.entries(i.map ?? {}).map(([c, from]) => [c.trim(), String(from ?? '').trim()] as [string, string]).filter(([c]) => c))
+    if (!Object.values(map).some(Boolean)) throw new PlanError('say which columns of the data are set from which columns of the file: { work_email: "email" }')
+    const unknown = Object.values(map).filter((from) => from && !f.columns!.includes(from))
+    if (unknown.length) throw new PlanError(`${f.name} has no column ${unknown.map((u) => `"${u}"`).join(', ')} (it has ${f.columns.slice(0, 12).join(', ')})`)
+    fromFile = { file: f.name, map }
+  }
+  const { fromFile: _was, ...rest } = (d.provenance ?? {}) as DataProvenance & { fromFile?: FromFile }
+  const workspaceId = await workspaceOf(appId)
+  await db.transaction(async (tx) => {
+    await tx.update(mockData).set({ provenance: { ...rest, ...(fromFile ? { fromFile } : {}) }, updatedAt: new Date() }).where(eq(mockData.id, d.id))
+    await appendEvent(tx, { workspaceId, appId, issueId, actor, type: 'mock.data_from_file', payload: { key: m.key, endpoint: e.key, file: fromFile?.file ?? null, columns: Object.keys(fromFile?.map ?? {}) } })
+  })
+  return { fromFile: fromFile ?? null }
 }
 
 /** How many of a fixture's people one endpoint's data is filled out for, at most. */

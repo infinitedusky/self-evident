@@ -22,7 +22,7 @@
  * (~/.self-evident/test-files/<app>/<id>/<name>, the real version in real/ beside it) and the row says what it is.
  */
 import { randomBytes } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { and, asc, eq, isNull, or } from 'drizzle-orm'
@@ -32,7 +32,7 @@ import { appendEvent } from './events.js'
 import { fake } from './fake.js'
 import { newId } from './ids.js'
 import { PlanError } from './issues.js'
-import { checkLeaks } from './mock-leaks.js'
+import { checkLeaks, parseCsv } from './mock-leaks.js'
 import { readRecording, recordingsOfService, workspaceOf } from './mocks.js'
 
 export const testFilesHome = () => process.env.TEST_FILES_HOME ?? join(homedir(), '.self-evident', 'test-files')
@@ -59,13 +59,17 @@ export interface TestFileView {
   /** Which versions are on this computer. fake: made up, or made from the real one. real: this computer only. */ has: { fake: boolean; real: boolean }
   /** Which version each place uses now. A reviewer: the fake, or nothing while there is none. */ use: Record<UsePlace, Version | null> & { review: 'fake' | null }
   /** Why the real version has no fake, when one could not be made. */ note?: string
+  /** A CSV: its column names, which an endpoint's data can be mapped from (mock-file-map.ts). */ columns?: string[]
   /** A version of it is on this computer. */ here: boolean
 }
 type Row = typeof testFile.$inferSelect
+/** A CSV's header: names, never a value. */
+const headOf = (path: string): string[] => { try { return (parseCsv(readFileSync(path, 'utf8').slice(0, 20_000).split(/\r?\n/)[0] ?? '')[0] ?? []).slice(0, 200) } catch { return [] } }
 const usedBy = (r: Row, place: UsePlace, has: { fake: boolean; real: boolean }): Version | null => ((r.use ?? {})[place] === 'real' && has.real ? 'real' : has.fake ? 'fake' : null)
 const view = (r: Row): TestFileView => {
   const has = { fake: existsSync(pathOf(r.appId, r.id, r.name)), real: existsSync(realPathOf(r.appId, r.id, r.name)) }
-  return { id: r.id, name: r.name, what: r.what, mediaType: r.mediaType, bytes: r.bytes, scope: r.issueId ? 'task' : 'app', checked: r.checked ?? null, has, use: { prototype: usedBy(r, 'prototype', has), smoke: usedBy(r, 'smoke', has), review: has.fake ? 'fake' : null }, ...(r.real?.note && !has.fake ? { note: r.real.note } : {}), here: has.fake || has.real }
+  const columns = /csv$/.test(r.mediaType) && (has.fake || has.real) ? headOf(has.fake ? pathOf(r.appId, r.id, r.name) : realPathOf(r.appId, r.id, r.name)) : []
+  return { id: r.id, name: r.name, what: r.what, mediaType: r.mediaType, bytes: r.bytes, scope: r.issueId ? 'task' : 'app', checked: r.checked ?? null, has, use: { prototype: usedBy(r, 'prototype', has), smoke: usedBy(r, 'smoke', has), review: has.fake ? 'fake' : null }, ...(r.real?.note && !has.fake ? { note: r.real.note } : {}), ...(columns.length ? { columns } : {}), here: has.fake || has.real }
 }
 
 /** The app's test files, and (for a task) the task's own after them. */
@@ -188,6 +192,22 @@ export async function testFilePath(appId: string, id: string, version?: Version)
   const path = version === 'real' ? realAt : version === 'fake' || existsSync(fakeAt) ? fakeAt : realAt
   if (!existsSync(path)) throw new PlanError(version ? `${r.name} has no ${version} version on this computer` : `${r.name} is no longer on this computer: add it again`)
   return { path, name: r.name, mediaType: r.mediaType, version: (path === realAt ? 'real' : 'fake') as Version }
+}
+
+/** A file of the app's by its name, whoever's it is (the app's, or any task's own): to say what columns it has. */
+export async function testFileNamed(appId: string, name: string): Promise<TestFileView | null> {
+  const rows = await db.select().from(testFile).where(and(eq(testFile.appId, appId), eq(testFile.name, name)))
+  const r = rows.find((x) => !x.issueId) ?? rows[0]
+  return r ? view(r) : null
+}
+/** A file's text in the version a place uses, by its name: a task's own before the app's. None: no such file, or no version this place may have. */
+export async function testFileText(appId: string, issueId: string | null, place: UsePlace | 'review', name: string): Promise<{ text: string; version: Version } | null> {
+  const rows = await db.select().from(testFile).where(and(eq(testFile.appId, appId), eq(testFile.name, name), issueId ? or(isNull(testFile.issueId), eq(testFile.issueId, issueId)) : isNull(testFile.issueId)))
+  const r = rows.find((x) => x.issueId) ?? rows[0]
+  if (!r) return null
+  const v = view(r), version = place === 'review' ? v.use.review : v.use[place]
+  if (!version) return null
+  return { text: readFileSync(version === 'real' ? realPathOf(appId, r.id, r.name) : pathOf(appId, r.id, r.name), 'utf8'), version }
 }
 
 export interface Placed { dir: string; files: { name: string; what: string; version: Version }[]; /** Left out: no version this place may have. */ missing: string[] }
