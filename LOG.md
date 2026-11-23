@@ -6551,3 +6551,19 @@ like the control. "Let's add a button next to any value that is saved, make fake
   stays), else everything not plainly structure is replaced. It is checked against the real response as always.
 - **Refused, it says what was found**, and offers "Ask the task's agent", who can say what is structure. Nothing
   is made of a refused fake.
+
+### The fill form starts on the people's table, and CEB-90's file has no column to match on (2026-11-22)
+
+Sandy opened "Fill out for fixture people" on CEB-90's faked results file: it offered `score_snapshots (6525)` as
+where the people are, "Starting from 1", and no columns.
+
+- **The form starts on the table that says who someone is** (`peopleTable`, `EndpointData.tsx`): the one with a
+  name and an email among its columns, or named for people; it was simply the largest. The columns guessed for it
+  are guessed again when another table is picked, until the person changes one. An empty list says why and what
+  a line is.
+- **Found, not fixed: the file given cannot be matched to anyone.** The app matches a results row to an employee
+  by `tracking_id` (the employee's id) and checks `work_email` against it; a file with no `tracking_id` column is
+  refused whole (`vendor_csv_missing_tracking_id_column`). The file given for CEB-90 has neither column: `_row_id`,
+  `first_name`, `last_name`, `company`, `job_title`, `Status` and nine of findings. Filling out only sets columns
+  the data has, so it cannot make this file one the app will read. Open, Sandy's to say: give the file the
+  service's download link really returns (which echoes both), or let filling out add a column the template lacks.
