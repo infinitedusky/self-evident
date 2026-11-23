@@ -113,6 +113,12 @@ function GiveForm({ call, sensitive, note, onGive, onCancel }: { call: string; s
   )
 }
 
+/** The table of a fixture its people are in: the one whose columns say who someone is (a name, an email), then one named for people; never simply the largest. */
+export function peopleTable(tables: Fixture['tables']): string {
+  const score = (t: Fixture['tables'][number]) => t.columns.filter((c) => /^(first_name|last_name|full_name|name|work_email|email)$/i.test(c)).length * 2 + (/employee|people|person|user|member|contact|customer|staff/i.test(t.name) ? 3 : 0) + (t.columns.some((c) => /email/i.test(c)) ? 2 : 0)
+  return [...tables].sort((a, b) => score(b) - score(a))[0]?.name ?? ''
+}
+
 /** The data is a template; a fixture supplies who. Pick the fixture, where its people are, who to start from and how many, and which columns of the data are theirs. */
 function FillForm({ appId, call, columns, was, onFill, onCancel }: { appId: string; call: string; columns: string[]; was?: NonNullable<EndpointItem['safe']>['madeFor']; onFill: (b: { fixture: string; table: string; row: number; count: number; map: Record<string, string> }) => Promise<void>; onCancel: () => void }) {
   const [fixtures, setFixtures] = useState<Fixture[] | null>(null)
@@ -122,15 +128,17 @@ function FillForm({ appId, call, columns, was, onFill, onCancel }: { appId: stri
   const [row, setRow] = useState(0)
   const [count, setCount] = useState(String(was?.people ?? 1)) // as typed: it may be empty while it is being changed
   const [map, setMap] = useState<[string, string][]>(Object.entries(was?.map ?? {}))
+  const [touched, setTouched] = useState(!!was) // the columns are the person's once they change one: a guess no longer replaces them
+  const edit = (m: [string, string][]) => { setTouched(true); setMap(m) }
   const [busy, setBusy] = useState(false)
   const fx = fixtures?.find((f) => f.name === fixture), tb = fx?.tables.find((t) => t.name === table)
-  useEffect(() => { void engine.fixtures(appId).then((r) => { setFixtures(r.fixtures); const f = r.fixtures.find((x) => x.name === fixture) ?? r.fixtures[0]; if (f) { setFixture(f.name); setTable((t) => (f.tables.some((x) => x.name === t) ? t : f.tables[0]?.name ?? '')) } }).catch(() => setFixtures([])) }, [appId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void engine.fixtures(appId).then((r) => { setFixtures(r.fixtures); const f = r.fixtures.find((x) => x.name === fixture) ?? r.fixtures[0]; if (f) { setFixture(f.name); setTable((t) => (f.tables.some((x) => x.name === t) ? t : peopleTable(f.tables))) } }).catch(() => setFixtures([])) }, [appId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!fixture || !table) return
     void engine.fixtureRows(appId, fixture, table).then((r) => {
       setRows(r.rows)
-      // Columns the data and the fixture both have, that say who someone is, are theirs to begin with.
-      setMap((m) => (m.length ? m : columns.filter((c) => r.columns.includes(c) && /email|name$/i.test(c)).map((c) => [c, c] as [string, string])))
+      // Columns the data and the fixture both have, that say who someone is, are theirs to begin with: guessed again for another table, until the person changes one.
+      if (!touched) setMap(columns.filter((c) => r.columns.includes(c) && /email|name$/i.test(c)).map((c) => [c, c] as [string, string]))
     }).catch(() => setRows([]))
   }, [appId, fixture, table]) // eslint-disable-line react-hooks/exhaustive-deps
   if (fixtures && !fixtures.length) return <div className="mock-edit"><p className="faint" style={{ margin: 0 }}>This app has no fixtures yet. One is kept from a prototype's data, shared with the app.</p><div className="row"><button className="btn quiet small" onClick={onCancel}>Close</button></div></div>
@@ -140,7 +148,7 @@ function FillForm({ appId, call, columns, was, onFill, onCancel }: { appId: stri
     <div className="mock-edit" data-component="FillFromFixture">
       <p className="faint" style={{ margin: 0, fontSize: 13 }}>This data is the template. Each person chosen gets its rows, with the columns below set from them, so the app sends the people this mock has answers for.</p>
       <div className="task-calls-call">
-        <label>Fixture<select value={fixture} onChange={(e) => { setFixture(e.target.value); setTable(fixtures?.find((f) => f.name === e.target.value)?.tables[0]?.name ?? ''); setRow(0) }}>{(fixtures ?? []).map((f) => <option key={f.name}>{f.name}</option>)}</select></label>
+        <label>Fixture<select value={fixture} onChange={(e) => { setFixture(e.target.value); setTable(peopleTable(fixtures?.find((f) => f.name === e.target.value)?.tables ?? [])); setRow(0) }}>{(fixtures ?? []).map((f) => <option key={f.name}>{f.name}</option>)}</select></label>
         <label>Its people are in<select value={table} onChange={(e) => { setTable(e.target.value); setRow(0) }}>{(fx?.tables ?? []).map((t) => <option key={t.name} value={t.name}>{t.name} ({t.rows})</option>)}</select></label>
       </div>
       <div className="task-calls-call">
@@ -149,15 +157,17 @@ function FillForm({ appId, call, columns, was, onFill, onCancel }: { appId: stri
       </div>
       <div>
         <div className="task-calls-sub">Which columns are theirs</div>
+        <p className="faint" style={{ margin: '0 0 6px', fontSize: 13 }}>Each line sets one column of the data from one column of the person. Include the one the app matches an answer to a person by: an id or an email.</p>
+        {!map.length && <p className="faint" style={{ margin: '0 0 6px', fontSize: 13 }}>None yet: no column of the data has the same name as one of {table || 'the table'}'s. Add the first.</p>}
         {map.map(([d, f], n) => (
           <div className="row" key={n} style={{ marginBottom: 4 }}>
-            <select aria-label={`Data column ${n + 1}`} value={d} onChange={(e) => setMap(map.map((x, i) => (i === n ? [e.target.value, x[1]] : x)))}><option value="">a column of the data…</option>{columns.map((c) => <option key={c}>{c}</option>)}</select>
+            <select aria-label={`Data column ${n + 1}`} value={d} onChange={(e) => edit(map.map((x, i) => (i === n ? [e.target.value, x[1]] : x)))}><option value="">a column of the data…</option>{columns.map((c) => <option key={c}>{c}</option>)}</select>
             <span className="faint">is their</span>
-            <select aria-label={`Fixture column ${n + 1}`} value={f} onChange={(e) => setMap(map.map((x, i) => (i === n ? [x[0], e.target.value] : x)))}><option value="">a column of {table}…</option>{(tb?.columns ?? []).map((c) => <option key={c}>{c}</option>)}</select>
-            <button className="btn quiet small" aria-label={`Remove column ${n + 1}`} onClick={() => setMap(map.filter((_, i) => i !== n))}>×</button>
+            <select aria-label={`Fixture column ${n + 1}`} value={f} onChange={(e) => edit(map.map((x, i) => (i === n ? [x[0], e.target.value] : x)))}><option value="">a column of {table}…</option>{(tb?.columns ?? []).map((c) => <option key={c}>{c}</option>)}</select>
+            <button className="btn quiet small" aria-label={`Remove column ${n + 1}`} onClick={() => edit(map.filter((_, i) => i !== n))}>×</button>
           </div>
         ))}
-        <button className="btn quiet small" onClick={() => setMap([...map, ['', '']])}>Add a column</button>
+        <button className="btn quiet small" onClick={() => edit([...map, ['', '']])}>Add a column</button>
       </div>
       <div className="row"><button className="btn small" aria-label={`Fill the data of ${call} out`} disabled={!ok || busy} onClick={async () => { setBusy(true); try { await onFill({ fixture, table, row, count: people, map: Object.fromEntries(map) }) } finally { setBusy(false) } }}>{busy ? 'Filling…' : 'Fill it out'}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
     </div>

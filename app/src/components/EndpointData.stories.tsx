@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { EndpointDataCell } from './EndpointData'
-import { mockEndpointsSample, resultsItem, sampleApp, sensitiveEndpoint, unfakedEndpoint } from '../stories/sample'
+import { fixtures as sampleFixtures, mockEndpointsSample, resultsItem, sampleApp, sensitiveEndpoint, unfakedEndpoint } from '../stories/sample'
+import { withEngine } from '../stories/mock-engine'
 
 // One endpoint's data, as it is shown wherever the endpoint is. Made up: an invented vendor's calls.
 const meta = { title: 'Components/EndpointData', component: EndpointDataCell, args: { appId: sampleApp.id, mockKey: 'fraud-scan', serviceName: 'Fraud scan vendor (sample)', endpoint: mockEndpointsSample[3], canAsk: true, onChanged: () => {} },
@@ -47,6 +48,19 @@ export const FillOutForFixturePeople: Story = {
     await userEvent.selectOptions(c.getByRole('combobox', { name: 'Starting from' }), '1')
     await userEvent.click(c.getByRole('button', { name: /^Fill the data of GET the results file.* out$/ }))
     await expect(await c.findByText('Filled out for 3 people, from Blake Sample, blake.sample@northwind.example.')).toBeInTheDocument()
+  },
+}
+/** A fixture whose largest table is not its people: the form still starts on the table that says who someone is, with the columns both have. */
+export const PeopleAreNotTheLargestTable: Story = {
+  beforeEach: withEngine({ fixtures: [{ name: 'northwind-company', bytes: 1_480_000, tables: [{ name: 'score_snapshots', rows: 6525, columns: ['id', 'score', 'node_id', 'snapshot_date'] }, ...sampleFixtures[0].tables] }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: /out for fixture people/ }))
+    await waitFor(() => expect(c.getByRole('combobox', { name: 'Its people are in' })).toHaveValue('employees'))
+    await expect(await c.findByRole('combobox', { name: 'Data column 1' })).toHaveValue('work_email')
+    // Another table has none of the data's columns: it says so, and what the person then sets is kept.
+    await userEvent.selectOptions(c.getByRole('combobox', { name: 'Its people are in' }), 'score_snapshots')
+    await expect(await c.findByText(/None yet: no column of the data has the same name/)).toBeInTheDocument()
   },
 }
 /** Data already filled out for fixture people says who, and can be changed. */
