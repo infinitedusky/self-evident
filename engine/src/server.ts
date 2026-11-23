@@ -49,6 +49,7 @@ import { createCycle, createInitiative, listCycles, listInitiatives, updateIniti
 import { getIssue, changeState, commentOnIssue, createIssue, listComments, identifier, listIssues, reorder, resolveIssue, updateIssue } from './issues.js'
 import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
+import { addNote, editNote, listNotes, removeNote } from './notes.js'
 import { deleteReport, editReport, getReport, isWritingReport, listReports, setReportFormat, writeReport, type Period } from './reports.js'
 import { listSketches, readSketch } from './sketches.js'
 import { listScreens } from './screens.js'
@@ -1098,6 +1099,11 @@ export function buildApp(bus: EventBus) {
   api.post('/projects/:id/pause', async (c) => { try { return c.json(await runner.pauseProject(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/projects/:id/resume', async (c) => { try { return c.json(await runner.resumeProject(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/sync', async (c) => c.json(await syncApp(c.req.param('id')))) // GitHub now: PRs, reviews, checks, main
+  // Notes (notes.ts): dated, the app's, attached to the tasks they are about. ?issue= a task's; ?from=&to= days; ?kind=decision.
+  api.get('/apps/:id/notes', async (c) => { try { return c.json(await listNotes(c.req.param('id'), { issueId: c.req.query('issue') || null, from: c.req.query('from') || null, to: c.req.query('to') || null, kind: c.req.query('kind') || null })) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/notes', async (c) => { try { return c.json(await addNote(c.req.param('id'), await c.req.json().catch(() => ({})), 'user'), 201) } catch (err) { return planError(c, err) } })
+  api.patch('/apps/:id/notes/:note', async (c) => { try { return c.json(await editNote(c.req.param('id'), c.req.param('note'), await c.req.json().catch(() => ({})), 'user')) } catch (err) { return planError(c, err) } })
+  api.delete('/apps/:id/notes/:note', async (c) => { try { return c.json(await removeNote(c.req.param('id'), c.req.param('note'), 'user')) } catch (err) { return planError(c, err) } })
   // Reports on an app's work over a period (reports.ts): the end-of-day note, the weekly status. Drafts; nothing is sent.
   api.get('/apps/:id/reports', async (c) => { try { return c.json(await listReports(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/reports', async (c) => { // {period: today|yesterday|this_week|last_week} or {from, to, kind?}; notes?: what the person adds. A model call of a minute or so: 202, report.written or report.failed says when

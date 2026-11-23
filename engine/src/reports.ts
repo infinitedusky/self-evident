@@ -23,13 +23,14 @@ import { git } from './git.js'
 import { ghCli } from './github.js'
 import { newId } from './ids.js'
 import { identifier, PlanError } from './issues.js'
+import { dayOf, listNotes } from './notes.js'
 import { NOISE } from './now.js'
 import { reposOf } from './workbench.js'
 
 export type Kind = 'daily' | 'weekly'
 export type Period = 'today' | 'yesterday' | 'this_week' | 'last_week'
 export const PERIODS: Period[] = ['today', 'yesterday', 'this_week', 'last_week']
-const QUIET = [...NOISE, 'summary.writing', 'summary.written', 'summary.failed', 'report.writing', 'report.written', 'report.failed', 'ui.open', 'run.started', 'run.steps', 'run.result', 'talk.started', 'talk.ended']
+const QUIET = [...NOISE, 'summary.writing', 'summary.written', 'summary.failed', 'report.writing', 'report.written', 'report.failed', 'note.added', 'note.changed', 'note.removed', 'ui.open', 'run.started', 'run.steps', 'run.result', 'talk.started', 'talk.ended']
 const clip = (s: unknown, n: number) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n)}…` : t }
 const day = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
@@ -110,6 +111,8 @@ export async function reportFacts(appId: string, from: Date, to: Date, opts: { m
         openPullRequests: [...waiting.map((p) => ({ number: p.number, url: p.url })), ...myOpen.map((p) => ({ number: p.number, url: p.url, title: p.title, review: p.reviewDecision }))],
         openQuestions: asks.map((q) => clip(q.text, 200)),
       },
+      // What the person wrote down on those days (notes.ts): a conversation and its outcome, a finding, a decision.
+      notes: (await listNotes(appId, { from: dayOf(from), to: dayOf(new Date(+to - 1)) })).reverse().map((n) => ({ on: n.on, kind: n.kind, title: n.title, text: clip(n.body, 1500) || null, tasks: n.tasks.map((t) => t.name) })),
       fromThePerson: opts.notes?.trim() || null,
     },
   }
@@ -136,7 +139,7 @@ export function prompt(kind: Kind, label: string, facts: unknown, format?: strin
     'Name a ticket by `ticket` when the task has one (the team\'s own tracker), else by its `id`. Name a pull request as #number. Name a person only if the facts name them.',
     'Use only the facts below. Never invent a ticket, a pull request number, a person, a date or a number. What is not in the facts did not happen; if nothing happened, say so in one line.',
     'Say outcomes, not the tool\'s workings: "happened" lists steps, briefs, approvals, sub-tasks, save points and agents, which the reader has never heard of. Turn them into what they mean ("prototyped the employee findings page", "wrote the acceptance criteria", "planned the build in 8 parts", "3 of 8 parts built") and leave out what means nothing to them. Do not mention agents or the tool. Sub-task ids are not tickets: do not cite them.',
-    'The commits are raw material: read them for what was done, never list them. `fromThePerson` is what the engineer added themselves: include all of it, in the right section, in their meaning.',
+    'The commits are raw material: read them for what was done, never list them. `fromThePerson` is what the engineer added themselves: include all of it, in the right section, in their meaning. `notes` are what the engineer wrote down on those days (a conversation had and what came of it, a finding, a decision): include each one, said briefly in their meaning, under its ticket when it names one; a decision is said as decided.',
     'Plain text for a chat message: short lines, "-" bullets, no Markdown headings, bold or tables, no closing remark.',
     format?.trim() ? `\nThe engineer's own format and past reports follow. Their shape, section names, tone and level of detail win over the rules above. Copy the shape, never the content: every fact in them is about other days.\n<format>\n${format.trim()}\n</format>` : '',
     '',

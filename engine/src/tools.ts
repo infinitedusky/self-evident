@@ -10,6 +10,7 @@ import { setChoice, type Choice } from './mock-places.js'
 import { addCall, addTaskService, listTaskServices, removeCall, removeTaskService, setCalls } from './task-calls.js'
 import { addEndpoint, addService, editEndpoint, getMock, listMocks, needsRecording, saveMock, setMockDetails } from './mocks.js'
 import { addTestFile, listTestFiles, removeTestFile } from './test-files.js'
+import { addNote, editNote, listNotes, removeNote } from './notes.js'
 import { assignFixture, mapFromFile, deleteFixture, listFixtures, makeFixtureFromSeed, renameFixture } from './fixtures.js'
 import { giveEndpointData, removeEndpointData } from './mock-serve.js'
 import { mainStatus, setMainAddress, setMainStandIn, startMain, stopMain } from './main-running.js'
@@ -343,6 +344,14 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         if (a.op === 'add') { if (!a.name || !a.text) throw new PlanError('add needs name and text'); return addTestFile(appId, { name: a.name, bytes: new TextEncoder().encode(a.text), what: a.what, issueId: a.issueId ?? null, stated: true }, actor) }
         if (!a.id) throw new PlanError('remove needs id')
         return removeTestFile(appId, a.id, actor)
+      })),
+      def('notes', 'Notes the person wants kept, that nothing else records: a conversation they had and what came of it, something found, a decision made along the way. The app\'s, each with the day it is about (a report on that day includes it) and the tasks it is about (each task shows it). Write one when the person asks you to note something, or tells you of a conversation or a decision worth keeping; say what happened and what came of it in plain sentences, and leave out what the code or the ticket already says. op "list": the app\'s notes, newest first (issueId: one task\'s; from, to: days as YYYY-MM-DD; kind "decision": only decisions). op "add": title (a line), body (markdown), on (the day, today unless said), kind ("note" or "decision"), issueIds (the tasks it is about). op "edit": id, and whichever of those change (issueIds replaces the list). op "remove": id.', {
+        op: z.enum(['list', 'add', 'edit', 'remove']), id: z.string().optional(), title: z.string().optional(), body: z.string().optional(), on: z.string().optional(), kind: z.enum(['note', 'decision']).optional(), issueIds: z.array(z.string()).optional(), issueId: z.string().optional(), from: z.string().optional(), to: z.string().optional(),
+      }, async (a) => tryIt(async () => {
+        if (a.op === 'list') return listNotes(appId, { issueId: a.issueId ?? null, from: a.from ?? null, to: a.to ?? null, kind: a.kind ?? null })
+        if (a.op === 'add') { if (!a.title) throw new PlanError('add needs a title'); return addNote(appId, { title: a.title, body: a.body, on: a.on, kind: a.kind, issueIds: a.issueIds ?? (a.issueId ? [a.issueId] : []) }, actor) }
+        if (!a.id) throw new PlanError(`${a.op} needs id`)
+        return a.op === 'edit' ? editNote(appId, a.id, { title: a.title, body: a.body, on: a.on, kind: a.kind, issueIds: a.issueIds }, actor) : removeNote(appId, a.id, actor)
       })),
       def('set_prototype_database', 'Where this app\'s prototypes get their throwaway databases: url, the app\'s development Postgres (any database on that server; each prototype gets its own beside it); env, the variable the app reads (default DATABASE_URL); schema_cmd, a shell command run in the prototype\'s worktree that makes the schema in the database that variable names (the app\'s migrations, or its ORM\'s create/push); seed_cmd, a shell command run the same way after it that fills that database with the app\'s own made-up data, which is what a fixture is made from (service, op fixture_make). Work these out from the app and confirm them with the person first.', { url: z.string(), env: z.string().optional(), schema_cmd: z.string().optional(), seed_cmd: z.string().optional() },
         async (a) => tryIt(() => setPrototypeDatabase(appId, a))),

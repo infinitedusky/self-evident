@@ -19,6 +19,7 @@ export interface MockData {
   mockChanges: import('../engine').MockChange[]
   /** What the sample task calls outside the app. */ taskCalls: import('../engine').TaskCall[]
   /** A service's real responses on this computer. */ mockReal: import('../engine').MockReal[]
+  /** Notes on the app. */ notes: import('../engine').Note[]
   /** The app's fixtures, and the one a task's runs are built from. */ /** Test files: the app's and the sample task's. */ testFiles: import('../engine').TestFile[]; fixtures: import('../engine').Fixture[]; fixtureUsed: string | null; /** Can a fixture be made from the app's seed. */ fixtureMake: { ok: boolean; missing: string | null }
   /** The services the sample task calls. */ taskServices: import('../engine').TaskService[]
   /** The stories under Screens/ and the Storybook that renders them. */ screens: import('../engine').ScreensView & { /** With the earlier tasks' ones, when asked for. */ all?: import('../engine').Screen[] }
@@ -59,7 +60,7 @@ export const sampleData: MockData = {
   storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [], branch: 'talk/sample', main: false },
   screens: s.screensView,
   mocks: s.mocks,
-  mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls, mockReal: s.mockReal, taskServices: s.taskServices, testFiles: s.testFiles, fixtures: s.fixtures, fixtureUsed: null, fixtureMake: { ok: true, missing: null },
+  notes: s.notes, mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls, mockReal: s.mockReal, taskServices: s.taskServices, testFiles: s.testFiles, fixtures: s.fixtures, fixtureUsed: null, fixtureMake: { ok: true, missing: null },
   sketches: { scope: 'sess_sample', branch: 'talk/sample', main: false, dir: 'sketches', sketches: [{ file: 'home.html', changedAt: 1794250000000 }, { file: 'checkout.html', changedAt: 1794240000000 }] },
   prototypes: s.prototypes, prototypeCode: s.prototypeCode,
   claudeSessions: s.claudeSessions,
@@ -295,6 +296,11 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     // Reports: the engine's rules, roughly. Writing one here answers at once.
     http.get('/api/apps/:id/learning', () => reply(d.learning ?? { docs: [], missing: ['What it is', 'The parts', 'Running and testing it', 'What is fragile'], working: null, sessionId: null, stale: 0 })),
     http.post('/api/apps/:id/learn', () => { const now = d.learning ?? { docs: [], missing: [], working: null, sessionId: null, stale: 0 }; d.learning = { ...now, working: { sessionId: 'talk_sample_learn' }, sessionId: 'talk_sample_learn' }; return reply({ sessionId: 'talk_sample_learn', started: true }) }),
+    // Notes: the app's, or (?issue=) the ones about one task.
+    http.get('/api/apps/:id/notes', ({ request }) => { const i = new URL(request.url).searchParams.get('issue'); return reply(d.notes.filter((n) => !i || n.tasks.some((t) => t.id === i))) }),
+    http.post('/api/apps/:id/notes', async ({ request }) => { const b = await request.json() as { on: string; kind: 'note' | 'decision'; title: string; body: string; issueIds: string[] }; const n = { id: `note_new${d.notes.length}`, on: b.on, kind: b.kind, title: b.title, body: b.body, tasks: b.issueIds.map((id) => ({ id, name: id === 'iss_sample2' ? 'SS-2' : 'SS-5', title: 'A task (sample)' })), createdBy: 'user', updatedAt: null }; d.notes = [n, ...d.notes]; return reply(n) }),
+    http.patch('/api/apps/:id/notes/:note', async ({ params, request }) => { const b = await request.json() as Partial<{ on: string; kind: 'note' | 'decision'; title: string; body: string }>; d.notes = d.notes.map((n) => (n.id === params.note ? { ...n, ...Object.fromEntries(Object.entries(b).filter(([k]) => k !== 'issueIds')) } : n)); return reply(d.notes.find((n) => n.id === params.note) ?? null) }),
+    http.delete('/api/apps/:id/notes/:note', ({ params }) => { d.notes = d.notes.filter((n) => n.id !== params.note); return reply({ removed: String(params.note) }) }),
     http.get('/api/apps/:id/reports', () => reply(d.reports ?? { writing: false, format: { daily: '', weekly: '' }, reports: [] })),
     http.post('/api/apps/:id/reports', async ({ params, request }) => {
       const b = await request.json() as { period: string; notes?: string }
