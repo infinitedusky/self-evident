@@ -333,6 +333,8 @@ export interface SmokeView { /** Every set-up of the app; left out, the app has 
 /** What an agent learned from an app's code: a short document each, the part for a person and the part for agents. */
 export interface Learned { key: string; title: string; summary: string; body: string; sha: string | null; updatedAt: string }
 export interface Learning { docs: Learned[]; missing: string[]; working: { sessionId: string } | null; sessionId: string | null; stale: number }
+/** A note (engine/src/notes.ts): something said, found or decided, on a day, about the tasks it names. */
+export interface Note { id: string; on: string; kind: 'note' | 'decision'; title: string; body: string; tasks: { id: string; name: string; title: string }[]; createdBy: string | null; updatedAt: string | null }
 export interface Reports { writing: boolean; format: { daily: string; weekly: string }; reports: Report[] }
 /** A version of a task: the git branch each of its worktrees is on, and (set aside) the task as it was left. */
 export interface TaskBranch { id: string; name: string; current: boolean; fromSave: string | null; createdAt: string; gitBranches: string[]; /** Set aside: what is only on it. */ work: { commits: number; comments: number } | null }
@@ -691,6 +693,11 @@ export const engine = {
   testAgain: (issueId: string) => call<{ started: true; head: string }>('POST', `/issues/${issueId}/test`),
   learning: (appId: string) => call<Learning>('GET', `/apps/${appId}/learning`),
   learn: (appId: string) => call<{ sessionId: string; started: boolean }>('POST', `/apps/${appId}/learn`),
+  /** The app's notes, newest day first; issueId: one task's. */
+  notes: (appId: string, f: { issueId?: string; from?: string; to?: string } = {}) => call<Note[]>('GET', `/apps/${appId}/notes?${new URLSearchParams(Object.entries({ issue: f.issueId, from: f.from, to: f.to }).filter((e): e is [string, string] => !!e[1])).toString()}`),
+  addNote: (appId: string, b: { on: string; kind: 'note' | 'decision'; title: string; body: string; issueIds: string[] }) => call<Note>('POST', `/apps/${appId}/notes`, b),
+  editNote: (appId: string, id: string, b: Partial<{ on: string; kind: 'note' | 'decision'; title: string; body: string; issueIds: string[] }>) => call<Note>('PATCH', `/apps/${appId}/notes/${id}`, b),
+  removeNote: (appId: string, id: string) => call<{ removed: string }>('DELETE', `/apps/${appId}/notes/${id}`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
   writeReport: (appId: string, body: { period: ReportPeriod; notes?: string }) => call<{ writing: boolean }>('POST', `/apps/${appId}/reports`, body),
   editReport: (id: string, body: string) => call<Report>('PUT', `/reports/${id}`, { body }),

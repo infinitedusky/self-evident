@@ -1186,6 +1186,12 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .lv-section-head { display: flex; align-items: baseline; gap: 10px; }
 .lv-section-head h3 { font-size: 17px; margin: 0 auto 0 0; }
 .lv-section-head .lv-count { font-size: 13px; font-weight: 400; color: var(--ink-faint); margin-left: 6px; letter-spacing: 0; }
+/* Notes: a day, what it is about, what was said. */
+.note { padding: 10px 0; border-top: 1px solid var(--line); }
+.note-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.note-day { font-size: 13px; color: var(--ink-faint); min-width: 84px; }
+.note-body { font-size: 14px; margin: 4px 0 4px; }
+.chip { display: inline-flex; align-items: center; gap: 2px; padding: 0 2px 0 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; }
 /* Mapping a response's columns from a file: a line for each column that is overridden, the response's on the left, the file's on the right. */
 .map-cols { display: grid; gap: 4px; }
 .map-col { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: start; }

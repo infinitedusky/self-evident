@@ -6730,3 +6730,20 @@ it what fields are overridden and where they're overridden from". Taken as the l
 response's columns): the form lists only the columns overridden, each picked from a list of the response's columns
 or added as a new one. Under an endpoint's data, a line names the overridden fields and the file or table each
 comes from.
+
+### 2026-11-23: Notes
+
+Sandy: "Do we have anywhere to save notes? I am having a convo and I want to include that I had it and the outcome
+in my daily report"; "you should be able to attach it to a task, and in the task we should have a notes section.
+The date will let us know when to include it in a report"; "This could also be part of the decisions that we make.
+I don't know where those decisions are stored if we want to enumerate them."
+
+- **A note is the app's**: the day it is about, a title, a body, and the tasks it is about (none, one or several).
+  Kept in the database (`note`), so on a computer whose database is its own it stays there.
+- **A task shows the notes attached to it** (its Overview, "Notes"); the Reports page shows them all, by day.
+- **A report includes the notes dated in its period**, each said briefly under its ticket when it names one. The
+  free-text box on the Reports page stays for what is not worth keeping.
+- **A note can be marked a decision**, and decisions can be listed alone. This is for what is settled along the
+  way, in conversation. The planner's decision cards (a question, options, the one chosen: `decision`) are their
+  own thing and are not shown here.
+- Agents have `notes` (list, add, edit, remove), to write one down when asked.

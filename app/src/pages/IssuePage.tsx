@@ -6,6 +6,7 @@
  * A task (a top-level code issue) is laid out like Settings: its own nav down the left (TaskNav), its overview first,
  * then a page per step in its workflow's order, then the build, each at its own address: /tasks/:id/:section.
  */
+import { Notes } from '../components/Notes'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router'
 import Markdown from 'react-markdown'
@@ -194,6 +195,7 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
                 <Link to={`/settings/apps/${i.appId}/workflows`}>Configure the rules</Link>
               </p>
             </section>
+            <Notes appId={i.appId} issueId={i.id} />
             <Comments i={i} />
             <Planner i={i} busy={busy} act={act} />
           </>

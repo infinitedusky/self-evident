@@ -8,6 +8,7 @@
  * After a stand-up note and a weekly status for the shape, and the Summary page beside it for "written by the agent
  * from what Self Evident knows".
  */
+import { Notes } from '../components/Notes'
 import { useEffect, useRef, useState } from 'react'
 import { Badge } from '../components/Badge'
 import { openEvents, API, engine, type Report, type ReportPeriod, type Reports as State } from '../engine'
@@ -69,6 +70,7 @@ export function Reports() {
           {data?.writing && <span className="faint"><span className="dot working" /> Writing… about a minute</span>}
         </div>
       </section>
+      <Notes appId={app.id} />
       <div className="report-layout">
         <section className="panel report-draft" data-component="ReportDraft">
           {report ? (

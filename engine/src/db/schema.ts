@@ -528,6 +528,17 @@ export const prototype = pgTable('prototype', {
   status: text('status').notNull().default('stopped'), createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [index('prototype_app').on(t.appId), inList('prototype_status', t.status, PROTOTYPE_STATUSES)])
 
+// Notes (notes.ts; Sandy, 2026-11-23): what a person wants kept that the engine cannot know. A conversation had and
+// what came of it, a finding, a decision made along the way. Dated, so a report on that day includes it; attached to
+// the tasks it is about, none or several, and shown on each.
+export const note = pgTable('note', {
+  id: id(), appId: appId(), /** The day it is about, as the person's calendar has it: YYYY-MM-DD. */ on: text('on').notNull(),
+  /** note: something that happened or was found. decision: something settled, to be listed with the others. */ kind: text('kind').notNull().default('note'),
+  title: text('title').notNull(), body: text('body').notNull().default(''),
+  /** The tasks it is about. A task deleted is simply no longer shown. */ issueIds: jsonb('issue_ids').$type<string[]>().notNull().default([]),
+  createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [index('note_app').on(t.appId, t.on), inList('note_kind', t.kind, ['note', 'decision'])])
+
 // Reports on an app's work over a period (reports.ts; Sandy, 2026-11-13): the end-of-day note, the weekly status. Written
 // by a model from what happened in the period, in the person's own format, then theirs to edit and send. `facts` is
 // what it was written from; `notes` what the person added that the engine could not know (a meeting, a call).
