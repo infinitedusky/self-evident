@@ -106,11 +106,17 @@ export const AddingACall: Story = {
 export const EditingACall: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await userEvent.click((await c.findAllByRole('button', { name: /^Edit / }))[0])
+    const first = (await c.findAllByRole('button', { name: /^Edit / }))[0]
+    const service = within(first.closest('[data-service]') as HTMLElement)
+    await userEvent.click(first)
+    // Nothing of this service can be taken off while the form is open: a remove there reads as closing it.
+    await expect(service.queryByRole('button', { name: /^Remove / })).toBeNull()
+    await expect(service.queryByRole('button', { name: /^Take .* off this task$/ })).toBeNull()
     const what = c.getByRole('textbox', { name: 'What this task needs from it' })
     await userEvent.clear(what); await userEvent.type(what, 'A job id, and a refusal when nobody is sent (sample)')
     await userEvent.click(c.getByRole('button', { name: 'Save' }))
     await expect(await c.findByText('This task needs: A job id, and a refusal when nobody is sent (sample)')).toBeInTheDocument()
+    await expect(service.getByRole('button', { name: /^Take .* off this task$/ })).toBeInTheDocument()
     await expect(c.getByRole('button', { name: 'Clear the list' })).toBeInTheDocument()
   },
 }

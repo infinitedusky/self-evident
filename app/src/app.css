@@ -1238,6 +1238,8 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 .lv-row[data-step] > :first-child { padding-left: 14px; border-left: 2px solid var(--line); }
 .lv-sub { font-size: 12px; color: var(--ink-faint); margin-top: 1px; }
 .lv-tools { display: flex; gap: 6px; }
+.lv-bin { display: inline-grid; place-items: center; }
+.lv-bin:hover { color: var(--bad, #b3261e); }
 .lv-fields { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 20px; margin: 0; font-size: 14px; }
 .lv-fields dt { color: var(--ink-faint); font-size: 13px; }
 .lv-fields dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
