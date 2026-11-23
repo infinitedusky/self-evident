@@ -6301,3 +6301,26 @@ the server is copied to the review branch as a plain file, never linked.
 
 This is not the declarative format ruled out earlier: there are no rules or scenarios, only the files already on
 the endpoints, and anything that needs behaviour still gets real code.
+
+### The service tool: any agent sets up the app's services, and research adds endpoints (Sandy, 2026-11-22)
+
+"Does the agent have access to like an MCP style thing to add endpoints, so that I can work with the global agent to
+build out the 64 endpoints?" Only partly: the mock tools were shaped around tasks and written servers, so an agent
+could not add an endpoint to a service outside a task, mark one sensitive, or give one endpoint its data. "I think
+we need a settings MCP that any agent can use." And: "if we do it right, then … part of research would be adding
+endpoints."
+
+- **The `service` tool** (`engine/src/tools.ts`), for every agent of the app, the app's own conversation included:
+  list the services; add one (name, what it is, real address, the variable to override, the variable for its key);
+  edit it; add, edit and remove its endpoints; mark one sensitive; give an endpoint data it wrote, for the app or
+  for one task alone; take an endpoint's data away. It calls the same functions as the Settings page.
+- **Two things stay the person's.** An agent may mark an endpoint sensitive and never take it off. It cannot remove
+  a service. And as before, data an agent writes is kept only when it could be checked against a real response of
+  that service; with none on this computer, only the person can provide it. An agent never passes a real response.
+- **Every change is in the service's history**, with who made it and for which task.
+- **Research adds endpoints.** Task, idea and prototype agents are told that the calls they find while researching
+  a change (in the code, in a service's documentation) are added to the service as endpoints, sensitive ones
+  marked, and said in the research notes. The app's own agent is told what services there are and that it can set
+  them up with the person. An idea's agent is now told of the app's services too.
+
+Scoped to services for now, not every app setting.

@@ -144,12 +144,12 @@ const named = (e: Endpoint, files: { name: string; bytes: Uint8Array }[]) => fil
  * endpoint it is faked here and now and not kept. Otherwise the person states it holds nothing real, and it is used
  * as it is (checked against the service's real responses on this computer where there are any).
  */
-export async function giveEndpointData(appId: string, key: string, endpoint: string, files: { name: string; bytes: Uint8Array }[], o: { real: boolean; issueId?: string | null }, actor = 'user') {
+export async function giveEndpointData(appId: string, key: string, endpoint: string, files: { name: string; bytes: Uint8Array }[], o: { real: boolean; issueId?: string | null; /** Not real: a person states it holds nothing real. An agent cannot state that: what it writes is kept only when it could be checked against a real response. */ stated?: boolean }, actor = 'user') {
   const { m, e } = await endpointOf(appId, key, endpoint)
   if (!files.length) throw new PlanError('give at least one file')
   const scope: Scope = { endpoint: e.key, ...(o.issueId ? { task: o.issueId } : {}) }
   if (!o.real) {
-    await saveData(appId, key, { dataKey: scopeKey('provided', scope), name: `Provided: ${e.method} ${e.path}`.slice(0, 80), files: Object.fromEntries(named(e, files).map((f) => [f.name, f.text])), stated: true, issueId: o.issueId ?? null, scope }, actor)
+    await saveData(appId, key, { dataKey: scopeKey('provided', scope), name: `Provided: ${e.method} ${e.path}`.slice(0, 80), files: Object.fromEntries(named(e, files).map((f) => [f.name, f.text])), stated: o.stated !== false, issueId: o.issueId ?? null, scope }, actor)
     return { kept: 'provided' as const, faked: false }
   }
   if (e.sensitive) { const r = await fakeGiven(appId, key, { endpoint: e.key, recorded: named(e, files), issueId: o.issueId ?? null }, actor); return { kept: 'faked' as const, faked: true, maybeStructure: r.maybeStructure } }
