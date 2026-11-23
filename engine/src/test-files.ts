@@ -5,13 +5,16 @@
  * thing on a task's Data step, beside its fixtures (what is in the app's database) and its services (what answers
  * outside it): a file, and a line saying what to do with it.
  *
- * A test file goes to a reviewer, so it holds nothing real. Whoever adds one says so. One that is text (a CSV, JSON)
- * is also read against every real response of the app's services on this computer, and refused while a value of
- * one is in it; a picture or a document cannot be read that way, and rests on the person's word.
+ * A test file goes to a reviewer, so what is kept holds nothing real. Whoever adds one says it is made up, or says it
+ * is real (Sandy, 2026-11-23: "if it holds something real, then what we should do is have it fake it or clean it"):
+ * a real one that is text is faked on the way in (fake.ts) and only the fake is kept, the real file never. A real
+ * picture or document cannot be faked here and is refused. Text is also read against every real response of the
+ * app's services on this computer; a made-up picture rests on the person's word.
  *
  * The app's are for every task; a task has its own beside them. The file is kept on this computer
  * (~/.self-evident/test-files/<app>/<id>/<name>) and its row says what it is.
  */
+import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -19,6 +22,7 @@ import { and, asc, eq, isNull, or } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { issue, mock, mockData, testFile } from './db/schema.js'
 import { appendEvent } from './events.js'
+import { fake } from './fake.js'
 import { newId } from './ids.js'
 import { PlanError } from './issues.js'
 import { checkLeaks } from './mock-leaks.js'
@@ -37,7 +41,7 @@ const isText = (type: string) => type.startsWith('text/') || type === 'applicati
 const cleanName = (name: string) => name.replace(/^.*[\\/]/, '').replace(/[^\w.() -]+/g, '-').replace(/^\.+/, '').trim().slice(0, 120)
 const pathOf = (appId: string, id: string, name: string) => join(testFilesHome(), appId, id, name)
 
-export interface TestFileView { id: string; name: string; what: string; mediaType: string; bytes: number; /** The app's, for every task, or one task's own. */ scope: 'app' | 'task'; /** Text read against the real responses on this computer; a picture or a document rests on the person's word. */ checked: { at: string; against: number } | null; /** It is on this computer: one whose file is gone cannot be given to anyone. */ here: boolean }
+export interface TestFileView { id: string; name: string; what: string; mediaType: string; bytes: number; /** The app's, for every task, or one task's own. */ scope: 'app' | 'task'; /** Text read against the real responses on this computer; a picture or a document rests on the person's word. */ checked: { at: string; against: number; /** Made from a real file by the faker: how many values were replaced. The real file was not kept. */ faked?: number } | null; /** It is on this computer: one whose file is gone cannot be given to anyone. */ here: boolean }
 type Row = typeof testFile.$inferSelect
 const view = (r: Row): TestFileView => ({ id: r.id, name: r.name, what: r.what, mediaType: r.mediaType, bytes: r.bytes, scope: r.issueId ? 'task' : 'app', checked: r.checked ?? null, here: existsSync(pathOf(r.appId, r.id, r.name)) })
 
@@ -66,23 +70,36 @@ async function leaksIn(appId: string, name: string, text: string) {
 }
 
 /**
- * A test file added: for the app, or for one task. `stated`: whoever adds it says it holds nothing real, and it is
- * refused without that. Text is read against the real responses here as well. One of the same name in the same
- * place is replaced.
+ * A test file added: for the app, or for one task. `stated`: whoever adds it says it holds nothing real. `real`: it
+ * may hold something real, so a fake is made of it and kept in its place; the real file is never written anywhere.
+ * One or the other, or it is refused. Text is read against the real responses here as well. One of the same name in
+ * the same place is replaced.
  */
-export async function addTestFile(appId: string, i: { name: string; bytes: Uint8Array; what?: string; mediaType?: string; issueId?: string | null; stated: boolean }, actor = 'user'): Promise<TestFileView> {
+export async function addTestFile(appId: string, i: { name: string; bytes: Uint8Array; what?: string; mediaType?: string; issueId?: string | null; stated?: boolean; real?: boolean }, actor = 'user'): Promise<TestFileView> {
   const name = cleanName(i.name)
   if (!name) throw new PlanError('a test file needs a name, like one-person.csv')
   if (!i.bytes.length) throw new PlanError(`${name} is empty`)
   if (i.bytes.length > TEST_FILE_MAX) throw new PlanError(`${name} is over ${TEST_FILE_MAX / 1024 / 1024} MB: a test file is something a person uploads by hand`)
-  if (!i.stated) throw new PlanError('a test file goes to a reviewer: say it holds nothing real (a made-up person, no real document), or do not add it')
+  if (!i.stated && !i.real) throw new PlanError('a test file goes to a reviewer: say it holds nothing real, or say it is real and a fake is made of it')
   if (i.issueId) { const [t] = await db.select({ appId: issue.appId }).from(issue).where(eq(issue.id, i.issueId)); if (!t || t.appId !== appId) throw new PlanError('no such task in this app') }
   const type = typeOf(name) === 'application/octet-stream' && i.mediaType ? i.mediaType.slice(0, 100) : typeOf(name)
   let checked: Row['checked'] = null
+  let faked: number | undefined
+  if (i.real) {
+    if (!isText(type)) throw new PlanError(`${name} is real and is not text, so no fake can be made of it here. Add a made-up one in its place`)
+    const original = [{ name, text: new TextDecoder().decode(i.bytes) }]
+    const { files: made, report } = fake(original, { salt: randomBytes(16).toString('hex') })
+    const text = made[name] ?? Object.values(made)[0]
+    const r = text ? checkLeaks(original, [{ path: name, text }], report.keptValues) : null
+    // Said by count alone: what was found is someone's, and this is read on a page.
+    if (!r?.ok) throw new PlanError(`refused: the fake of ${name} would still carry ${r?.count ?? 'some'} value${r?.count === 1 ? '' : 's'} of the real file, so nothing was kept. Ask the task's agent to write a made-up one`)
+    i = { ...i, bytes: new TextEncoder().encode(text) }
+    faked = report.replaced
+  }
   if (isText(type)) {
     const r = await leaksIn(appId, name, new TextDecoder().decode(i.bytes))
     if (r.found.length) throw new PlanError(`refused: ${name} holds ${r.found.length} value${r.found.length === 1 ? '' : 's'} of a real response on this computer. Replace each with an invented one:\n${[...new Set(r.found)].map((f) => `- ${f} (${r.found.filter((x) => x === f).length})`).join('\n')}`)
-    checked = { at: new Date().toISOString(), against: r.against }
+    checked = { at: new Date().toISOString(), against: r.against, ...(faked !== undefined ? { faked } : {}) }
   }
   const scope = i.issueId ? eq(testFile.issueId, i.issueId) : isNull(testFile.issueId)
   const all = await db.select().from(testFile).where(and(eq(testFile.appId, appId), scope))

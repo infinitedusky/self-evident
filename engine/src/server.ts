@@ -471,7 +471,7 @@ export function buildApp(bus: EventBus) {
     const body = await c.req.parseBody({ all: true })
     const given = ([] as unknown[]).concat(body.file ?? []).filter((f): f is File => typeof f === 'object' && f !== null && 'arrayBuffer' in f)
     if (!given.length) throw new PlanError('choose a file')
-    const o = { what: typeof body.what === 'string' ? body.what : '', issueId: typeof body.issueId === 'string' && body.issueId ? body.issueId : null, stated: body.stated === 'true' }
+    const o = { what: typeof body.what === 'string' ? body.what : '', issueId: typeof body.issueId === 'string' && body.issueId ? body.issueId : null, stated: body.stated === 'true', real: body.real === 'true' }
     const out = []
     for (const f of given) out.push(await addTestFile(c.req.param('id'), { name: f.name, bytes: new Uint8Array(await f.arrayBuffer()), mediaType: f.type, ...o }, 'user'))
     return c.json(out, 201)

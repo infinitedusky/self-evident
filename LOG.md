@@ -6614,3 +6614,20 @@ id card."
 
 Not done: nothing ties a test file to a mock's answer but the person's care; the smoke test's instructions and the
 review branch do not point at test files yet.
+
+### 2026-11-23: A real test file is faked on the way in
+
+Sandy, on the "This holds nothing real" tick box: "it could be real data, we just need to fake it if it is"; "if it
+holds something real, then what we should do is have it fake it or clean it". And on the notes: "remove the
+specificity of the notes. makes it really hard to understand what the point of this is."
+
+- **Adding asks one thing: made up, or real.** Made up is kept as it is. Real makes a fake version with the same
+  faker the endpoints use and keeps only that; the real file is never written to this computer. Its line says
+  "faked".
+- **Only text can be faked** (a CSV, JSON). A real picture or document is refused, to be replaced by a made-up one.
+- **A fake that still carries a value of the real file is refused**, by count alone, and nothing is kept.
+- **The notes are short.** The section says "Files a tester needs to complete the review." The line on a file is
+  labelled "File Context".
+
+Not tried on a real file yet: the faker takes no plan here, so a column of fixed words the app needs (a status, a
+role) is replaced like any other.

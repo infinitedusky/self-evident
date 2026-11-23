@@ -165,7 +165,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       const form = await request.formData(), task = !!form.get('issueId')
       const files = form.getAll('file').filter((f): f is File => typeof f !== 'string')
       if (files.some((f) => f.name === 'real.csv')) return HttpResponse.json({ error: 'refused: real.csv holds 2 values of a real response on this computer. Replace each with an invented one:\n- an email from a real response of Fraud scan vendor (sample) (2)' }, { status: 400 })
-      const made = files.map((f, n) => ({ id: `tfile_new${d.testFiles.length + n}`, name: f.name, what: String(form.get('what') ?? ''), mediaType: f.type || 'application/octet-stream', bytes: f.size, scope: task ? 'task' as const : 'app' as const, checked: /csv|json|text/.test(f.type) ? { at: '2026-11-23T10:00:00Z', against: 2 } : null, here: true }))
+      const made = files.map((f, n) => ({ id: `tfile_new${d.testFiles.length + n}`, name: f.name, what: String(form.get('what') ?? ''), mediaType: f.type || 'application/octet-stream', bytes: f.size, scope: task ? 'task' as const : 'app' as const, checked: /csv|json|text/.test(f.type) ? { at: '2026-11-23T10:00:00Z', against: 2, ...(form.get('real') === 'true' ? { faked: 3 } : {}) } : null, here: true }))
       d.testFiles = [...d.testFiles, ...made]
       return reply(made)
     }),

@@ -2,8 +2,8 @@
  * Test files (engine/src/test-files.ts): what a person needs in their hands to try a change. A CSV to import, a
  * picture to upload, an ID card: any kind, and as many as it takes. The third section of a task's Data step, after
  * its fixtures (what is in the app's database) and its services (what answers outside it). Each is a file and a
- * line saying what to do with it. They go to a reviewer, so whoever adds one says it holds nothing real; text is
- * also read against the real responses on this computer.
+ * line of context. They go to a reviewer, so whoever adds one says it is made up, or says it is real and a fake is
+ * made of it (text only) and kept in its place.
  *
  * In the app's settings these are the app's, for every task. On a task its own are added beside them.
  */
@@ -30,10 +30,10 @@ export function TestFiles({ appId, issueId, version = 0 }: { appId: string; /** 
         <h3>Test files{list.length > 0 && <span className="lv-count">{list.length}</span>}</h3>
         <span className="lv-end"><button className="btn quiet small" onClick={() => setAdding(!adding)}>Add files</button></span>
       </div>
-      <p className="lv-section-note">What a person needs in their hands to try {issueId ? 'this task' : 'the app'}: a file to import, a picture to upload. Each says what to do with it. They go to a reviewer, so they hold nothing real.</p>
+      <p className="lv-section-note">Files a tester needs to complete the review{issueId ? '' : ' of any task'}.</p>
       {error && <div className="empty bad" style={{ margin: '8px 0', whiteSpace: 'pre-wrap' }}>{error}</div>}
-      {adding && <AddFiles task={!!issueId} onAdd={(files, what) => act(async () => { await engine.addTestFiles(appId, files, { what, issueId: issueId ?? null, stated: true }); setAdding(false) })} onCancel={() => { setAdding(false); setError(null) }} />}
-      {!list.length ? !adding && <div className="empty">None yet. Add what the person trying this has to bring: the CSV they import, the picture they upload. Where a file is about someone the mock also answers for, make it the same made-up person in both.</div>
+      {adding && <AddFiles task={!!issueId} onAdd={(files, what, real) => act(async () => { await engine.addTestFiles(appId, files, { what, issueId: issueId ?? null, stated: !real, real }); setAdding(false) })} onCancel={() => { setAdding(false); setError(null) }} />}
+      {!list.length ? !adding && <div className="empty">None yet.</div>
         : list.map((f) => <FileItem key={f.id} appId={appId} file={f} onTask={!!issueId}
           onWhat={(what) => act(() => engine.editTestFile(appId, f.id, what))}
           onRemove={() => { if (window.confirm(`Remove ${f.name}?${f.scope === 'app' && issueId ? ' It is the app\'s: every task loses it.' : ''}`)) void act(() => engine.removeTestFile(appId, f.id)) }} />)}
@@ -52,7 +52,7 @@ function FileItem({ appId, file: f, onTask, onWhat, onRemove }: { appId: string;
         {onTask && (f.scope === 'task' ? <Badge tone="accent">This task's</Badge> : <span className="lv-item-meta">The app's</span>)}
         {!f.here && <Badge tone="bad">Not on this computer</Badge>}
         <span className="lv-end">
-          <span className="lv-item-meta" title={f.checked ? `Read against ${f.checked.against} real response${f.checked.against === 1 ? '' : 's'} on this computer: nothing of them is in it` : 'Not text, so it cannot be read for real values: it rests on the word of whoever added it'}>{KIND[f.mediaType] ?? 'File'} · {size(f.bytes)}{f.checked ? ' · checked' : ''}</span>
+          <span className="lv-item-meta" title={f.checked?.faked !== undefined ? `Made from a real file: ${f.checked.faked} value${f.checked.faked === 1 ? '' : 's'} replaced. The real file was not kept` : f.checked ? `Read against ${f.checked.against} real response${f.checked.against === 1 ? '' : 's'} on this computer: nothing of them is in it` : 'Not text, so it cannot be read for real values: it rests on the word of whoever added it'}>{KIND[f.mediaType] ?? 'File'} · {size(f.bytes)}{f.checked?.faked !== undefined ? ' · faked' : f.checked ? ' · checked' : ''}</span>
           <button className="btn quiet small" aria-label={`Say what to do with ${f.name}`} onClick={() => { setWhat(f.what); setEditing(!editing) }}>Edit</button>
           <button className="btn quiet small" aria-label={`Remove ${f.name}`} onClick={onRemove}>×</button>
         </span>
@@ -60,28 +60,29 @@ function FileItem({ appId, file: f, onTask, onWhat, onRemove }: { appId: string;
       <div className="lv-part">
         {editing ? (
           <form className="mock-edit" style={{ margin: 0 }} onSubmit={(e) => { e.preventDefault(); void onWhat(what.trim()).then(() => setEditing(false)) }}>
-            <label>What the person does with it<input autoFocus aria-label={`What to do with ${f.name}`} value={what} onChange={(e) => setWhat(e.target.value)} placeholder="Import it on the Employees page" /></label>
+            <label>File Context<input autoFocus aria-label={`What to do with ${f.name}`} value={what} onChange={(e) => setWhat(e.target.value)} placeholder="Import it on the Employees page" /></label>
             <div className="row"><button className="btn small" type="submit">Save</button><button className="btn quiet small" type="button" onClick={() => setEditing(false)}>Cancel</button></div>
           </form>
-        ) : f.what ? <div style={{ fontSize: 14 }}>{f.what}</div> : <div className="lv-sub" style={{ margin: 0 }}>Nothing said yet about what to do with it.</div>}
+        ) : f.what ? <div style={{ fontSize: 14 }}>{f.what}</div> : <div className="lv-sub" style={{ margin: 0 }}>No context yet.</div>}
       </div>
     </div>
   )
 }
 
-/** Files chosen, a line on what to do with them, and the word that they hold nothing real. */
-function AddFiles({ task, onAdd, onCancel }: { task: boolean; onAdd: (files: File[], what: string) => Promise<void>; onCancel: () => void }) {
+/** Files chosen, a line of context, and whether they are made up or real: a real one is faked and only the fake kept. */
+function AddFiles({ task, onAdd, onCancel }: { task: boolean; onAdd: (files: File[], what: string, real: boolean) => Promise<void>; onCancel: () => void }) {
   const [files, setFiles] = useState<File[]>([])
   const [what, setWhat] = useState('')
-  const [stated, setStated] = useState(false)
+  const [kind, setKind] = useState<'made-up' | 'real' | null>(null)
   const [busy, setBusy] = useState(false)
   return (
     <div className="mock-edit" style={{ margin: '0 0 12px' }} data-component="AddTestFiles">
       <label>The files<input type="file" multiple aria-label="Test files to add" onChange={(e) => setFiles([...(e.target.files ?? [])])} /></label>
-      <label>What the person does with {files.length > 1 ? 'them' : 'it'}<input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="Import it on the Employees page" /></label>
-      <label className="mock-check"><input type="checkbox" checked={stated} onChange={(e) => setStated(e.target.checked)} /> {files.length > 1 ? 'These hold' : 'This holds'} nothing real</label>
-      <p className="faint" style={{ margin: 0, fontSize: 13 }}>A made-up person, an invented document. It goes to a reviewer as it is. A CSV or other text is also read against the real responses on this computer, and refused while a value of one is in it; a picture cannot be read that way.{task ? ' Added for this task alone.' : ' Added for every task of the app.'}</p>
-      <div className="row"><button className="btn small" disabled={!files.length || !stated || busy} onClick={async () => { setBusy(true); try { await onAdd(files, what.trim()) } finally { setBusy(false) } }}>{busy ? 'Adding…' : files.length > 1 ? `Add ${files.length} files` : 'Add it'}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
+      <label>File Context<input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="Import it on the Employees page" /></label>
+      <label className="mock-check"><input type="radio" name="tf-kind" checked={kind === 'made-up'} onChange={() => setKind('made-up')} /> Made up: nothing real in {files.length > 1 ? 'them' : 'it'}</label>
+      <label className="mock-check"><input type="radio" name="tf-kind" checked={kind === 'real'} onChange={() => setKind('real')} /> Real: make a fake version and keep only that</label>
+      <p className="faint" style={{ margin: 0, fontSize: 13 }}>{kind === 'real' ? 'Works for a CSV or other text. A real picture or document cannot be faked here.' : 'A reviewer gets these files.'}{task ? ' Added for this task alone.' : ' Added for every task of the app.'}</p>
+      <div className="row"><button className="btn small" disabled={!files.length || !kind || busy} onClick={async () => { setBusy(true); try { await onAdd(files, what.trim(), kind === 'real') } finally { setBusy(false) } }}>{busy ? 'Adding…' : files.length > 1 ? `Add ${files.length} files` : 'Add it'}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
     </div>
   )
 }
