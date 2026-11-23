@@ -649,7 +649,7 @@ export const mockEndpointsSample: import('../engine').MockEndpoint[] = [
   { key: 'start', method: 'POST', path: '/workflows/run', what: 'A job id for the people sent', real: null, files: [], data: none },
   { key: 'status', method: 'GET', path: '/workflows/runs/{id}/status', what: 'Running, then completed', real: null, files: [], data: none },
   { key: 'links', method: 'GET', path: '/workflows/runs/{id}/links', what: 'Where to fetch the results', real: null, files: [], data: none },
-  { key: 'results', method: 'GET', path: 'the results file, by the link the service sends', what: 'One row for each person sent, with what was found', follows: 'links', linkField: 'download_url', real: { at: '2026-11-18T15:20:00Z', how: 'given' }, files: ['results.csv'], data: { app: resultsItem, task: null } },
+  { key: 'results', method: 'GET', path: 'the results file, by the link the service sends', what: 'One row for each person sent, with what was found', follows: 'links', linkField: 'download_url', real: { at: '2026-11-18T15:20:00Z', how: 'given' }, files: ['results.csv'], data: { app: resultsItem, task: null, faked: { app: true, task: null } } },
 ]
 /** Made up: a call marked sensitive. Its real response was faked as it arrived and not kept. */
 export const sensitiveEndpoint: import('../engine').MockEndpoint = { key: 'profile', method: 'GET', path: '/people/{id}/profile', what: 'Who the person is: name, home address, family', sensitive: true, real: null, files: ['profile.json'], data: { app: { recorded: null, safe: { kind: 'faked', set: 'faked-profile', files: ['profile.json'], note: 'Faked from a real response that was not kept, because this call is marked sensitive: its structure is real, and 41 values were replaced. Checked 22 Nov 2026: none of the 41 values of that response is in it.' } }, task: null } }
@@ -677,13 +677,14 @@ export const mocks: import('../engine').Mock[] = [
 
 /** Made up: what each place is given for each sample service, as the app has it (no task has changed anything). */
 const placeOf = (mock: string, name: string, place: import('../engine').MockPlace, p: Partial<import('../engine').MockPlan>): import('../engine').MockPlan => ({ mock, name, place, how: 'data', form: 'faked', real: false, choice: { source: 'default' }, from: 'none', says: 'The mock, with faked data', own: null, app: null, ...p })
-const recordedSays = 'The mock, with recorded responses as they are (1 of its 4 calls): this computer only'
+const recordedSays = 'The mock, with the real response for 1 of its 4 calls: this computer only'
 const three = (mock: string, name: string, p: Partial<import('../engine').MockPlan>, review: Partial<import('../engine').MockPlan> = {}) => ({ prototype: placeOf(mock, name, 'prototype', p), smoke: placeOf(mock, name, 'smoke', p), review: placeOf(mock, name, 'review', { ...p, ...review }) })
+export const realSays = recordedSays
 export const mockPlaces: import('../engine').MockPlacesRow[] = [
   { mock: 'fraud-scan', name: 'Fraud scan vendor (sample)', status: 'mined', canLive: true, real: '2026-11-18T15:20:00Z',
     places: {
       prototype: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'prototype', {}),
-      smoke: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'smoke', { form: 'recorded', real: true, says: recordedSays, choice: { source: 'replay' }, from: 'app', app: { source: 'replay' } }),
+      smoke: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'smoke', {}),
       review: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'review', {}),
     } },
   { mock: 'breach-api', name: 'Breach lookup (sample)', status: 'assumed', canLive: false, real: null, places: three('breach-api', 'Breach lookup (sample)', { says: 'The mock, with provided data' }) },
@@ -693,15 +694,15 @@ export const mockPlaces: import('../engine').MockPlacesRow[] = [
 export const mockPlacesForTask: import('../engine').MockPlacesRow[] = [
   { ...mockPlaces[0], places: {
     prototype: mockPlaces[0].places.prototype,
-    smoke: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'smoke', { how: 'live', record: true, form: undefined, says: 'The real Fraud scan vendor (sample), every run; what it sends is kept', choice: { source: 'live' }, from: 'task', own: { source: 'live' }, app: { source: 'replay' } }),
+    smoke: placeOf('fraud-scan', 'Fraud scan vendor (sample)', 'smoke', { how: 'live', record: true, form: undefined, says: 'The real Fraud scan vendor (sample), every run; what it sends is kept', choice: { source: 'live' }, from: 'task', own: { source: 'live' }, app: null }),
     review: mockPlaces[0].places.review,
   } },
   mockPlaces[1], mockPlaces[2],
 ]
 /** Made up: what changed on one mock. */
 export const mockChanges: import('../engine').MockChange[] = [
-  { at: '2026-11-21T09:10:00Z', by: 'you', issue: null, what: 'For a smoke test: the mock, with recorded responses as they are' },
-  { at: '2026-11-21T09:08:00Z', by: 'you', issue: null, what: 'For a reviewer: the mock, with faked data' },
+  { at: '2026-11-21T09:10:00Z', by: 'you', issue: null, what: 'The call "results" is answered with its real response, in a person\'s own runs' },
+  { at: '2026-11-21T09:08:00Z', by: 'you', issue: null, what: 'For a reviewer: the mock' },
   { at: '2026-11-20T10:30:00Z', by: 'an agent', issue: { id: 'iss_sample2', identifier: 'SS-2' }, what: 'Data "nothing-found" (invented) was saved' },
   { at: '2026-11-20T10:00:00Z', by: 'an agent', issue: { id: 'iss_sample1', identifier: 'SS-1' }, what: 'Data "faked" (faked) was saved' },
   { at: '2026-11-20T09:55:00Z', by: 'an agent', issue: { id: 'iss_sample1', identifier: 'SS-1' }, what: 'Its server was built from a real response' },

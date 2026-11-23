@@ -41,6 +41,17 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
     <div className="endpoint-data" data-component="EndpointData" data-endpoint={e.key}>
       {issueId && item && <div>{own ? <Badge tone="accent">This task's own</Badge> : <span className="faint">From the app's settings</span>}</div>}
       <ItemSays item={item} canAsk={canAsk} written={written} />
+      {/* Which version a person's own runs get, where there is a real response to choose: this endpoint's own switch. */}
+      {item?.recorded && !e.sensitive && (() => {
+        const f = e.data.faked ?? { app: true, task: null }, mine = issueId ? f.task : null, on = mine ?? f.app
+        return (
+          <div className="endpoint-faked">
+            <label className="mock-check"><input type="checkbox" aria-label={`Use the faked version of ${call}`} checked={on} onChange={(ev) => void act(() => engine.setEndpointFaked(appId, mockKey, e.key, ev.target.checked, issueId ?? null).then(() => null))} /> Use faked version</label>
+            <span className="faint">{on ? 'Your prototype and smoke test get the faked version.' : 'Your prototype and smoke test get the real response: this computer only.'} A reviewer always gets the faked one.{issueId ? (mine === null ? " The app's setting." : " This task's own.") : ''}</span>
+            {issueId && mine !== null && <button className="btn quiet small" aria-label={`Follow the app again for ${call}`} onClick={() => void act(() => engine.setEndpointFaked(appId, mockKey, e.key, null, issueId).then(() => null))}>Follow the app</button>}
+          </div>
+        )
+      })()}
       {said && <div className="faint">{said}</div>}
       {error && <div className="mock-data-warn">{error}</div>}
       {open ? <GiveForm call={call} sensitive={!!e.sensitive} note={open === 'app' && issueId ? `This becomes ${serviceName}'s data in Settings: every task gets it unless it has its own.` : open === 'task' ? 'For this task alone. Other tasks keep the app\'s.' : null} onGive={give(open)} onCancel={() => setOpen(null)} /> : (

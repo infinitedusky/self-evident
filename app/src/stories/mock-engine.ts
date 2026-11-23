@@ -158,6 +158,14 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       d.taskServices = d.taskServices.map((x) => (x.key === params.key ? { ...x, calls: x.calls.map((c) => (c.endpoint ? { ...c, endpoint: put(c.endpoint) } : c)) } : x))
       return reply({ kept: !real ? 'provided' : was?.sensitive ? 'faked' : 'recorded', asked: real && !was?.sensitive ? 'iss_sample2' : null })
     }),
+    // Which version a person's own runs get of one endpoint: the app's answer, or a task's own.
+    http.put('/api/apps/:id/mocks/:key/endpoints/:endpoint/faked', async ({ params, request }) => {
+      const b = await request.json() as { faked: boolean | null; issueId?: string | null }
+      const set = (e: import('../engine').MockEndpoint) => { if (e.key !== params.endpoint) return e; const was = e.data.faked ?? { app: true, task: null }; return { ...e, data: { ...e.data, faked: b.issueId ? { ...was, task: b.faked } : { ...was, app: b.faked ?? true } } } }
+      d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: m.endpoints.map(set) } : m))
+      d.taskServices = d.taskServices.map((x) => (x.key === params.key ? { ...x, calls: x.calls.map((c) => (c.endpoint ? { ...c, endpoint: set(c.endpoint) } : c)) } : x))
+      return reply(d.mocks.find((m) => m.key === params.key)?.endpoints.find((e) => e.key === params.endpoint)?.data ?? null)
+    }),
     http.delete('/api/apps/:id/mocks/:key/endpoints/:endpoint/data', ({ params, request }) => {
       const task = !!new URL(request.url).searchParams.get('issue')
       const drop = (e: import('../engine').MockEndpoint) => (e.key === params.endpoint ? { ...e, data: task ? { ...e.data, task: null } : { ...e.data, app: null } } : e)
@@ -188,7 +196,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
         if (r.mock !== params.key) return r
         const was = r.places[place], mine = b.source === 'default' ? null : { source: b.source }
         const choice = mine ?? (task ? was.app : null) ?? { source: 'default' as const }
-        const live = choice.source === 'live', recorded = choice.source === 'replay'
+        const live = choice.source === 'live', recorded = false
         return { ...r, places: { ...r.places, [place]: { ...was, ...(task ? { own: mine } : { app: mine }), choice, from: mine ? (task ? 'task' : 'app') : task && was.app ? 'app' : 'none', how: live ? 'live' : 'data', form: live ? undefined : recorded ? 'recorded' : 'faked', real: recorded,
           says: live ? `The real ${r.name}, every run; what it sends is kept` : recorded ? 'The mock, with recorded responses as they are (1 of its 4 calls): this computer only' : 'The mock, with faked data' } } }
       }

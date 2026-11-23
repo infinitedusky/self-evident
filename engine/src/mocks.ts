@@ -510,7 +510,7 @@ export const isGiven = (dir: string) => existsSync(join(dir, 'given.meta.json'))
 /** One change to a mock, said for a person. */
 export interface MockChange { at: string; by: string; /** The task it was made for. None: the app's own (Settings). */ issue: { id: string; identifier: string } | null; what: string }
 const PLACE_SAYS: Record<string, string> = { prototype: 'a prototype', smoke: 'a smoke test', review: 'a reviewer' }
-const SOURCE_SAYS: Record<string, string> = { default: 'the default', live: 'the real service', replay: 'the mock, with recorded responses as they are', fake: 'the mock, with faked data', data: 'the mock' }
+const SOURCE_SAYS: Record<string, string> = { default: 'the default', live: 'the real service', replay: 'the mock', fake: 'the mock', data: 'the mock' }
 const changeSays = (type: string, p: Record<string, unknown>): string | null => {
   switch (type) {
     case 'mock.needs_recording': return 'Raised: it needs a real response'
@@ -527,6 +527,7 @@ const changeSays = (type: string, p: Record<string, unknown>): string | null => 
     case 'mock.endpoint_removed': return `The call "${p.endpoint}" was taken off`
     case 'mock.endpoint_data_removed': return `The data of the call "${p.endpoint}" was removed${p.real ? ', with its real response' : ''}`
     case 'mock.sensitive_scrubbed': return `Real responses of sensitive calls were faked and deleted${Array.isArray(p.failed) && p.failed.length ? ` (${p.failed.length} could not be faked, and were deleted all the same)` : ''}`
+    case 'mock.endpoint_faked': return p.faked === null ? `The call "${p.endpoint}" follows the app again on which version it is answered with` : `The call "${p.endpoint}" is answered with ${p.faked ? 'its faked version' : 'its real response, in a person\'s own runs'}`
     case 'mock.data_renamed': return `Data "${p.data}" was renamed`
     case 'mock.place': return `For ${PLACE_SAYS[String(p.place)] ?? p.place}: ${SOURCE_SAYS[String(p.source)] ?? p.source}${p.data ? ` "${p.data}"` : ''}`
     default: return null

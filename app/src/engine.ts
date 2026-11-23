@@ -365,7 +365,7 @@ export interface MockEndpoint {
   key: string; method: string; path: string; what?: string; file?: string
   /** A real response of it is never stored: one that comes in is faked at once and the original deleted. */ sensitive?: boolean
   /** A second step: this call is made to a link that another endpoint's answer gives. follows: that endpoint's key (it is thereby intermediate); linkField: the field of its answer holding the link. */ follows?: string; linkField?: string
-  /** Its data (engine/src/mock-serve.ts): the app's, set in its settings, and a task's own in place of it, where a task was asked about. */ data: { app: EndpointItem | null; task: EndpointItem | null }
+  /** Its data (engine/src/mock-serve.ts): the app's, set in its settings, and a task's own in place of it, where a task was asked about. */ data: { app: EndpointItem | null; task: EndpointItem | null; /** Do a person's own runs get its faked version? The app's answer, and this task's own where it has one. A reviewer always gets the faked one. */ faked?: { app: boolean; task: boolean | null } }
   /** The real response behind it on this computer. None: its shape is taken from the code that calls it. */ real: { at: string; how: 'given' | 'recorded' } | null
   /** Its files in the data the mock serves by default. */ files: string[]
 }
@@ -544,6 +544,8 @@ export const engine = {
     if (!res.ok) throw new Error(text || `${res.status}`)
     return JSON.parse(text) as { kept: 'recorded' | 'faked' | 'provided'; asked: string | null; maybeStructure?: string[] }
   },
+  /** Whether a person's own runs get an endpoint's faked version: the app's answer, or (issueId) one task's own. null: the task follows the app again. */
+  setEndpointFaked: (appId: string, key: string, endpoint: string, faked: boolean | null, issueId?: string | null) => call<MockEndpoint['data']>('PUT', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}/faked`, { faked, issueId: issueId ?? null }),
   /** Taken away at one level: a task's own gone, it gets the app's again. real: the real response behind it is deleted from this computer too. */
   removeEndpointData: (appId: string, key: string, endpoint: string, o: { issueId?: string | null; real?: boolean } = {}) => call<{ removed: boolean; real: number }>('DELETE', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}/data?${o.issueId ? `issue=${o.issueId}&` : ''}${o.real ? 'real=1' : ''}`),
   editMockEndpoint: (appId: string, key: string, endpoint: string, body: { method?: string; path?: string; what?: string; sensitive?: boolean; follows?: string | null; linkField?: string }) => call<Mock>('PATCH', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}`, body),

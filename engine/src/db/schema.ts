@@ -441,7 +441,7 @@ export const mock = pgTable('mock', {
   /** The recording it was mined from, or the newest one not mined yet: a folder under the recordings home. */ recording: text('recording'),
   recordedAt: at('recorded_at'), minedAt: at('mined_at'),
   createdAt: createdAt(), updatedAt: at('updated_at'),
-  /** The calls the app makes to the service, each with a key its data files are named by (mock-endpoints.ts): [{ key, method, path, what?, file? }]. */ endpoints: jsonb('endpoints').$type<{ key: string; method: string; path: string; what?: string; file?: string; sensitive?: boolean; follows?: string; linkField?: string }[]>().notNull().default([]),
+  /** The calls the app makes to the service, each with a key its data files are named by (mock-endpoints.ts): [{ key, method, path, what?, file? }]. */ endpoints: jsonb('endpoints').$type<{ key: string; method: string; path: string; what?: string; file?: string; sensitive?: boolean; follows?: string; linkField?: string; useReal?: boolean }[]>().notNull().default([]),
   /** The data it serves unless a run says otherwise: a mock_data key. None: whatever its own files hold. */ defaultData: text('default_data'),
   /** The app's defaults for where its data comes from in each place a task runs (mock-places.ts): { prototype, smoke, review }, each { source, data? }. A place left out follows defaultData. */ places: jsonb('places').$type<Record<string, { source: string; data?: string }>>().notNull().default({}),
 }, (t) => [uniqueIndex('mock_key').on(t.appId, t.key), inList('mock_status', t.status, MOCK_STATUSES)])
@@ -479,6 +479,7 @@ export const taskCall = pgTable('task_call', {
 // row. There from when the service is named for the task, before any call of it is listed.
 export const taskService = pgTable('task_service', {
   id: id(), issueId: text('issue_id').notNull().references(() => issue.id, { onDelete: 'cascade' }), mockId: text('mock_id').notNull().references(() => mock.id, { onDelete: 'cascade' }),
+  /** This task's own answer, endpoint by endpoint, to whether its own runs get the faked version (mock-serve.ts): { endpointKey: true | false }. An endpoint not named follows the app. */ faked: jsonb('faked').$type<Record<string, boolean>>().notNull().default({}),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex('task_service_key').on(t.issueId, t.mockId)])
 

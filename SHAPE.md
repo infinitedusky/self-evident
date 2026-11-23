@@ -854,8 +854,8 @@ Details and sources in `research/`.
   - **Data sits on the endpoint.** The app's settings hold each endpoint's data, and a task may put its own in
     place of it for one endpoint without touching the others. An endpoint's data has up to two forms: recorded (a
     real response as it came, this computer only) and safe (a fake of it, or a file a person states holds nothing
-    real). The mock serves the safe form, unless a person turns recorded on for their own prototype or smoke
-    test. A reviewer always gets the safe form, and its copy is refused while an endpoint has a real response and
+    real). The mock serves the safe form, unless that endpoint says a person's own runs get its real response
+    (one switch on the endpoint, "Use faked version", ticked to begin with; a task may say otherwise for itself). A reviewer always gets the safe form, and its copy is refused while an endpoint has a real response and
     no fake.
   - **Creating a service is creating its server.** Self Evident carries one general mock server that serves any
     service straight from its endpoints: each call is answered with that endpoint's data file. A service is
