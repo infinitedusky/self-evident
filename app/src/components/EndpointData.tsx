@@ -77,12 +77,11 @@ function GiveForm({ call, sensitive, note, onGive, onCancel }: { call: string; s
   return (
     <div className="mock-edit" data-component="GiveEndpointData">
       <label>What {call} answers with<input type="file" multiple aria-label={`A file for ${call}`} onChange={(ev) => setFiles([...(ev.target.files ?? [])])} /></label>
-      <label className="mock-check"><input type="radio" name={`kind-${call}`} checked={real} onChange={() => setReal(true)} /> A response the service really sent</label>
-      <label className="mock-check"><input type="radio" name={`kind-${call}`} checked={!real} onChange={() => setReal(false)} /> I wrote this, or made it up: it holds nothing real</label>
+      <label className="mock-check"><input type="checkbox" checked={real} onChange={(ev) => setReal(ev.target.checked)} /> This is real data</label>
       <p className="faint" style={{ margin: 0, fontSize: 13 }}>
-        {!real ? 'It is used as it is, and may go to a reviewer. Where a real response of this service is on this computer, it is checked against it.'
-          : sensitive ? 'This call is sensitive: the file is faked at once and the original is not kept. Only the fake is ever stored or served.'
-          : 'It is kept on this computer only, never exported. A fake is made of it, and a reviewer gets the fake.'}
+        {!real ? 'It is used exactly as it is, and may go to a reviewer. Leave the box unticked only for a file that holds nothing real, such as one you made up.'
+          : sensitive ? 'Real data is always faked. This call is sensitive, so the file is faked at once and the original is not kept.'
+          : 'Real data is always faked: the original is kept on this computer only, and a faked version is made of it, which is what a reviewer gets.'}
         {note ? ` ${note}` : ''}
       </p>
       <div className="row"><button className="btn small" disabled={!files.length || busy} onClick={async () => { setBusy(true); try { await onGive(files, real) } finally { setBusy(false) } }}>{busy ? 'Adding…' : 'Add it'}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>

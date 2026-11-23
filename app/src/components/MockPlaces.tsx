@@ -45,7 +45,7 @@ function Cell({ row, plan, place, task, onSet }: { row: MockPlacesRow; plan: Moc
         </select>
       ) : <button className="btn quiet small" style={{ justifySelf: 'start' }} aria-label={`Override ${row.name}, ${place.name}`} onClick={() => setOverriding(true)}>Override</button>}
       {choosing && value === 'mock' && !review && (
-        <label className="mock-check" style={{ fontSize: 13 }}><input type="checkbox" aria-label={`${row.name}, ${place.name}: recorded responses as they are`} checked={mine?.source === 'replay'} onChange={(e) => onSet(e.target.checked ? 'replay' : 'fake')} /> <span>Use the real responses, not the faked copies <span className="faint">(this computer only)</span></span></label>
+        <label className="mock-check" style={{ fontSize: 13 }}><input type="checkbox" aria-label={`${row.name}, ${place.name}: use faked version`} checked={mine?.source !== 'replay'} onChange={(e) => onSet(e.target.checked ? 'fake' : 'replay')} /> <span>Use faked version</span></label>
       )}
       <div className="mock-places-says">
         {plan.says}

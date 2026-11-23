@@ -16,8 +16,9 @@ export const AppDefaults: Story = {
     const options = (name: string) => within(c.getByRole('combobox', { name })).getAllByRole('option').map((o) => o.textContent)
     await expect(options('Fraud scan vendor (sample), Prototype')).toEqual(['The mock', 'The real service'])
     await expect(c.queryByRole('combobox', { name: 'Fraud scan vendor (sample), Reviewer' })).toBeNull() // nothing to choose: always the mock
-    await expect(c.getByRole('checkbox', { name: 'Fraud scan vendor (sample), Smoke test: recorded responses as they are' })).toBeChecked()
-    await expect(c.queryByRole('checkbox', { name: /Reviewer: recorded/ })).toBeNull()
+    await expect(c.getByRole('checkbox', { name: 'Fraud scan vendor (sample), Smoke test: use faked version' })).not.toBeChecked() // the app has this one on real responses
+    await expect(c.getByRole('checkbox', { name: 'Fraud scan vendor (sample), Prototype: use faked version' })).toBeChecked()
+    await expect(c.queryByRole('checkbox', { name: /Reviewer: use faked/ })).toBeNull()
     await expect(canvasElement.textContent).not.toMatch(/Record and/)
   },
 }

@@ -83,9 +83,9 @@ export const AddingData: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Add the data of POST /workflows/run' }))
-    await expect(c.getByRole('radio', { name: 'A response the service really sent' })).toBeChecked()
-    await expect(c.getByText(/kept on this computer only, never exported/)).toBeInTheDocument()
-    await userEvent.click(c.getByRole('radio', { name: 'I wrote this, or made it up: it holds nothing real' }))
+    await expect(c.getByRole('checkbox', { name: 'This is real data' })).toBeChecked()
+    await expect(c.getByText(/kept on this computer only, and a faked version is made of it/)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('checkbox', { name: 'This is real data' })) // unticked: it holds nothing real
     await userEvent.upload(c.getByLabelText('A file for POST /workflows/run'), new File(['{"job_id":"sample"}'], 'start.json', { type: 'application/json' }))
     await userEvent.click(c.getByRole('button', { name: 'Add it' }))
     await expect(await c.findByText(/A file stated to hold nothing real: start.json/)).toBeInTheDocument()
@@ -100,7 +100,7 @@ export const SensitiveEndpoint: Story = {
     await expect(await c.findByText('Sensitive')).toBeInTheDocument()
     await expect(c.getByText(/A fake; the original was not kept: profile.json/)).toBeInTheDocument()
     await userEvent.click(c.getByRole('button', { name: 'Replace the data of GET /people/{id}/profile' }))
-    await expect(c.getByText(/This call is sensitive: the file is faked at once and the original is not kept/)).toBeInTheDocument()
+    await expect(c.getByText(/This call is sensitive, so the file is faked at once and the original is not kept/)).toBeInTheDocument()
   },
 }
 /** An endpoint is added in the service's settings, and can be marked sensitive as it is. */

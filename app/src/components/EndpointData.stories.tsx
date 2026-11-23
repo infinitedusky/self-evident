@@ -26,7 +26,7 @@ export const NoData: Story = {
     const c = within(canvasElement)
     await userEvent.click(c.getByRole('button', { name: 'Add the data of POST /workflows/run' }))
     await expect(c.getByRole('button', { name: 'Add it' })).toBeDisabled() // until a file is chosen
-    await expect(c.getAllByRole('radio')).toHaveLength(2)
+    await expect(c.getByRole('checkbox', { name: 'This is real data' })).toBeChecked()
   },
 }
 /** A real response with no fake yet: nothing of it is served until the task's agent makes the fake. */
