@@ -62,7 +62,25 @@ export const NoData: Story = {
   },
 }
 /** A real response with no fake yet: nothing of it is served until the task's agent makes the fake. */
-export const NotFakedYet: Story = { args: { endpoint: unfakedEndpoint } }
+export const NotFakedYet: Story = {
+  args: { endpoint: unfakedEndpoint },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/Not faked yet, so nothing of it is served/)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Make the fake version of GET /workflows/runs/{id}/cost' }))
+    await expect(await c.findByText(/Faked: 41 values replaced, 12 kept as structure/)).toBeInTheDocument()
+  },
+}
+/** The fake still carried something real, so it was refused and nothing was made: what was found is said, and the task's agent can be asked. */
+export const FakeRefused: Story = {
+  args: { endpoint: { ...unfakedEndpoint, key: 'refused' } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: /^Make the fake version of/ }))
+    await expect(await c.findByText(/the fake still carries 2 values of the real response/)).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: /^Ask the task's agent to make the fake/ })).toBeInTheDocument()
+  },
+}
 /** A sensitive endpoint: only a fake is kept, and the original was never stored. */
 export const Sensitive: Story = { args: { endpoint: sensitiveEndpoint } }
 /** On a task, answered with the app's data: it says so, and can be overridden for this task alone. */

@@ -23,6 +23,7 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   const [filling, setFilling] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [said, setSaid] = useState<string | null>(null)
+  const [faking, setFaking] = useState(false)
   const own = issueId ? e.data.task : null
   const item = own ?? e.data.app
   const call = `${e.method} ${e.path}`
@@ -33,6 +34,11 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
     if (r.kept === 'recorded') return r.asked ? 'Kept on this computer. The task\'s agent is making the fake.' : 'Kept on this computer. It is faked once a task takes this service up.'
     return null
   })
+  // The fake of the saved real response, made now. Refused while something real is still in it: then it is the task's agent's to say what is structure.
+  const makeFake = async () => {
+    setFaking(true)
+    try { await act(async () => { const r = await engine.fakeEndpoint(appId, mockKey, e.key, own?.recorded ? issueId : null); return `Faked: ${r.replaced} value${r.replaced === 1 ? '' : 's'} replaced, ${r.kept} kept as structure. Checked against the real response.` }) } finally { setFaking(false) }
+  }
   const remove = (level: 'app' | 'task') => {
     const it = level === 'task' ? own : e.data.app
     const what = level === 'task' ? `Go back to the app's data for ${call}? This task's own is removed` : `Remove the data of ${call}?`
@@ -40,7 +46,8 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   }
   return (
     <div className="endpoint-data" data-component="EndpointData" data-endpoint={e.key}>
-      <ItemSays item={item} canAsk={canAsk} written={written} own={!!own} />
+      <ItemSays item={item} written={written} own={!!own} />
+      {item?.recorded && !item.safe && <div className="row"><button className="btn small" disabled={faking} aria-label={`Make the fake version of ${call}`} onClick={() => void makeFake()}>{faking ? 'Making it…' : 'Make fake version'}</button></div>}
       {/* Which version a person's own runs get, where there is a real response to choose: this endpoint's own switch. */}
       {item?.recorded && !e.sensitive && (() => {
         const f = e.data.faked ?? { app: true, task: null }, mine = issueId ? f.task : null, on = mine ?? f.app
@@ -55,11 +62,12 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
       {/* The data is a template: a fixture supplies who it is for. */}
       {filling && item?.safe && <FillForm appId={appId} call={call} columns={item.safe.columns ?? []} was={item.safe.madeFor} onCancel={() => setFilling(false)} onFill={(b) => act(async () => { const r = await engine.assignFixture(appId, mockKey, e.key, { ...b, issueId: own ? issueId : null }); setFilling(false); return `Filled out for ${r.madeFor.who}.` })} />}
       {said && <div className="faint">{said}</div>}
-      {error && <div className="mock-data-warn">{error}</div>}
+      {error && <div className="mock-data-warn" style={{ whiteSpace: 'pre-wrap' }}>{error}{/^refused/.test(error) && canAsk && <div className="lv-line" style={{ marginTop: 4 }}><span>The task's agent can say which of these is structure and make it.</span><button className="lv-act" aria-label={`Ask the task's agent to make the fake of ${call}`} onClick={() => void act(async () => { await engine.mineMock(appId, mockKey); return 'Asked. Its conversation shows how far it is.' })}>Ask the task's agent</button></div>}</div>}
       {open ? <GiveForm call={call} sensitive={!!e.sensitive} note={open === 'app' && issueId ? `This becomes ${serviceName}'s data in Settings: every task gets it unless it has its own.` : open === 'task' ? 'For this task alone. Other tasks keep the app\'s.' : null} onGive={give(open)} onCancel={() => setOpen(null)} /> : (
         <div className="lv-line">
           {issueId && item && !own && <span>From the app's settings</span>}
           {item?.safe && !filling && (item.safe.madeFor ? <span>For <strong>{item.safe.madeFor.who}</strong> of the fixture {item.safe.madeFor.fixture}</span> : <span title="The app may send people this has no answer for.">Not made for a fixture's people</span>)}
+          {item?.recorded && item.safe?.kind === 'faked' && <button className="lv-act" disabled={faking} aria-label={`Make the fake version of ${call} again`} title="From the real response saved here, with what was said to be structure" onClick={() => void makeFake()}>{faking ? 'Making it…' : 'Make the fake again'}</button>}
           {item?.safe && !filling && (!issueId || own || !e.data.task) && <button className="lv-act" aria-label={`Fill the data of ${call} out for fixture people`} onClick={() => setFilling(true)}>{item.safe.madeFor ? 'Change' : 'Fill out for fixture people'}</button>}
           {!issueId && <button className="lv-act" aria-label={`${item ? 'Replace' : 'Add'} the data of ${call}`} onClick={() => setOpen('app')}>{item ? 'Replace' : 'Add data'}</button>}
           {!issueId && item && <button className="lv-act" aria-label={`Remove the data of ${call}`} onClick={() => remove('app')}>Remove</button>}
@@ -73,13 +81,13 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   )
 }
 
-function ItemSays({ item, canAsk, written, own }: { item: EndpointItem | null; canAsk: boolean; written: boolean; /** It is the task's own, in place of the app's. */ own: boolean }) {
+function ItemSays({ item, written, own }: { item: EndpointItem | null; written: boolean; /** It is the task's own, in place of the app's. */ own: boolean }) {
   if (!item) return <div className="faint">{written ? 'No data: answered with what the server written for it makes up.' : 'No data yet: a call to it fails until some is added.'}</div>
   return (
     <>
       {item.recorded && <div><Badge tone="warn">Real · this computer only</Badge> {item.recorded.how === 'given' ? 'A response you gave' : 'Recorded in a live run'}, {day(item.recorded.at)}{own && !item.safe && <> <Badge tone="accent">This task's own</Badge></>}</div>}
       {item.safe && <div><Badge tone={item.safe.kind === 'faked' ? 'ok' : 'neutral'}>{item.safe.kind === 'faked' ? 'Faked' : 'Provided'}</Badge> <span title={item.safe.note}>{item.safe.kind === 'faked' ? (item.recorded ? 'A fake of it' : 'A fake; the original was not kept') : 'A file stated to hold nothing real'}: {item.safe.files.join(', ')}</span>{own && <> <Badge tone="accent">This task's own</Badge></>}</div>}
-      {item.recorded && !item.safe && <div className="mock-data-warn">Not faked yet, so nothing of it is served. {canAsk ? 'The task\'s agent makes the fake.' : 'It is faked once a task takes this service up.'}</div>}
+      {item.recorded && !item.safe && <div className="mock-data-warn">Not faked yet, so nothing of it is served.</div>}
       {item.safe?.stale && <div className="faint">The fake is of an older response than the one above.</div>}
     </>
   )

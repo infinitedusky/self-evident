@@ -149,7 +149,7 @@ const strings = (x: unknown, max: number) => (Array.isArray(x) ? x.map((v) => cl
  * while a real value is still in it; the plan is what to change (a column kept that holds someone's, a site kept).
  * The salt is made once and kept, so faking the same response again changes nothing that the plan did not.
  */
-export async function fakeData(appId: string, key: string, i: { recording?: string; plan?: FakePlan; dataKey?: string; name?: string; issueId?: string | null } = {}, actor = 'agent'): Promise<{ data: DataView; report: Omit<FakeReport, 'keptValues'> }> {
+export async function fakeData(appId: string, key: string, i: { recording?: string; plan?: FakePlan; /** No plan given: the one its fake already has, else the app's fake of that endpoint's, else the service's whole-run fake's. For a person's press, who writes no plan. */ samePlan?: boolean; dataKey?: string; name?: string; issueId?: string | null } = {}, actor = 'agent'): Promise<{ data: DataView; report: Omit<FakeReport, 'keptValues'> }> {
   const m = await mockOf(appId, key)
   const { dir, recorded, from } = realOf(m, i.recording)
   // A response given for one endpoint is faked into that endpoint's own data (and a task's own, where it was given for the task alone).
@@ -157,7 +157,8 @@ export async function fakeData(appId: string, key: string, i: { recording?: stri
   const dk = dataKeyOf(i.dataKey, scope ? scopeKey('faked', scope) : 'faked')
   const old = await dataRow(m.id, dk)
   if (old && old.kind !== 'faked') throw new PlanError(`"${dk}" is ${old.kind} data: a fake is kept under another name`)
-  const given = (i.plan ?? {}) as FakePlan
+  const base = i.plan || !i.samePlan ? null : (old ?? (scope ? await dataRow(m.id, scopeKey('faked', { endpoint: scope.endpoint })) : null) ?? await dataRow(m.id, 'faked'))?.plan
+  const given = (i.plan ?? base ?? {}) as FakePlan
   const plan: FakePlan = {
     keep: strings(given.keep, 200), keepValues: strings(given.keepValues, 200), keepHosts: strings(given.keepHosts, 60), text: strings(given.text, 200),
     ...(given.varyCounts === false ? { varyCounts: false } : {}), salt: typeof old?.plan?.salt === 'string' ? old.plan.salt : randomBytes(16).toString('hex'),

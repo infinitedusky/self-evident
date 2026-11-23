@@ -26,7 +26,7 @@ import { issue, mock, mockData, taskService } from './db/schema.js'
 import { newId } from './ids.js'
 import { appendEvent } from './events.js'
 import { PlanError } from './issues.js'
-import { dataNote, fakeGiven, saveData, scopeKey, scopeOfRecording, type DataProvenance, type DataRow, type Scope } from './mock-data.js'
+import { dataNote, fakeData, fakeGiven, saveData, scopeKey, scopeOfRecording, type DataProvenance, type DataRow, type Scope } from './mock-data.js'
 import { looksCsv, parseCsv } from './mock-leaks.js'
 import { cleanEndpoints, endpointOfExchange, endpointOfFile, exchangesOf, keyed, type Endpoint } from './mock-endpoints.js'
 import { day, giveRecording, isGiven, mocksHome, recordingsFor, rowOf, workspaceOf, type Row } from './mocks.js'
@@ -237,6 +237,22 @@ function dropReal(r: Read, e: Endpoint, task: string | null | 'all'): number {
     n++
   }
   return n
+}
+
+/**
+ * An endpoint's saved real response faked now, at a person's press (Sandy, 2026-11-22: "add a button next to any
+ * value that is saved, make fake version"). The task's own response where it has one, else the app's. No plan is
+ * written: the one its fake already had is used again, else everything not plainly structure is replaced. Refused,
+ * with what was found, while the leak check still finds a real value in it; then the task's agent says what is
+ * structure, which a person cannot be asked to.
+ */
+export async function fakeEndpoint(appId: string, key: string, endpoint: string, issueId: string | null, actor = 'user') {
+  const { m, e } = await endpointOf(appId, key, endpoint)
+  const d = (await endpointData(m, issueId))[e.key]
+  const item = issueId && d.task?.recorded ? d.task : d.app
+  if (!item?.recorded) throw new PlanError(`${e.method} ${e.path} has no real response saved to make a fake of`)
+  const { report } = await fakeData(appId, key, { recording: item.recorded.id, samePlan: true, issueId: item === d.task ? issueId : null }, actor)
+  return { data: (await endpointData(m, issueId))[e.key], replaced: report.replaced, kept: report.kept }
 }
 
 /**

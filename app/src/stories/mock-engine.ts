@@ -192,6 +192,14 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       return reply({ madeFor, changed: b.count })
     }),
     // Which version a person's own runs get of one endpoint: the app's answer, or a task's own.
+    // The saved real response of an endpoint, faked at a press. (sample) One named "refused" is, as a fake that still carries something real would be.
+    http.post('/api/apps/:id/mocks/:key/endpoints/:endpoint/fake', ({ params }) => {
+      if (params.endpoint === 'refused') return HttpResponse.json({ error: 'refused: the fake still carries 2 values of the real response. Change the plan (a column in keep that holds someone\'s), or name a column in text to replace it whole:\n  results.csv: "Sample Person (sample)" in person_summary' }, { status: 400 })
+      const set = (e: import('../engine').MockEndpoint) => { const it = e.data.task?.recorded ? 'task' : 'app'; const was = e.data[it]; return e.key !== params.endpoint || !was?.recorded ? e : { ...e, data: { ...e.data, [it]: { ...was, safe: { kind: 'faked' as const, set: `faked-${e.key}`, files: was.recorded.files, note: 'Faked from the real response (sample).', columns: [] } } } } }
+      d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: m.endpoints.map(set) } : m))
+      d.taskServices = d.taskServices.map((x) => (x.key === params.key ? { ...x, calls: x.calls.map((c) => (c.endpoint ? { ...c, endpoint: set(c.endpoint) } : c)) } : x))
+      return reply({ data: d.mocks.find((m) => m.key === params.key)?.endpoints.find((e) => e.key === params.endpoint)?.data ?? null, replaced: 41, kept: 12 })
+    }),
     http.put('/api/apps/:id/mocks/:key/endpoints/:endpoint/faked', async ({ params, request }) => {
       const b = await request.json() as { faked: boolean | null; issueId?: string | null }
       const set = (e: import('../engine').MockEndpoint) => { if (e.key !== params.endpoint) return e; const was = e.data.faked ?? { app: true, task: null }; return { ...e, data: { ...e.data, faked: b.issueId ? { ...was, task: b.faked } : { ...was, app: b.faked ?? true } } } }
