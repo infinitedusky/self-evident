@@ -17,7 +17,7 @@ const raised = { ...mocks[2], status: 'needs_recording' as const, needs: { perso
 export const Library: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect((await c.findAllByText('What each place is given')).length).toBe(3)
+    await expect((await c.findAllByText('Source')).length).toBe(3)
     await expect(c.getByText('4 calls: 1 with data, 3 answered with what the server makes up')).toBeInTheDocument()
     await expect(c.getByText(/A fake of it: results.csv/)).toBeInTheDocument()
     await expect(c.getByText(/A file stated to hold nothing real: search.json/)).toBeInTheDocument()
@@ -144,14 +144,19 @@ export const OnATask: Story = {
   args: { issueId: 'iss_sample2' },
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect((await c.findAllByText('What each place is given')).length).toBe(3) // once per service the task calls, and not again below
+    await expect((await c.findAllByText('Source')).length).toBe(3) // once per service the task calls, and not again below
     await expect(canvasElement.querySelector('[data-component="MockCard"]')).toBeNull()
-    await expect(c.getByText(/are in Settings › Mocks/)).toBeInTheDocument()
+    await expect(c.getByText(/its history are in Settings › Mocks/)).toBeInTheDocument()
     await expect(c.getByText('A job id for the people sent')).toBeInTheDocument() // what the call is, as the service has it
     // Fixtures come first; what the services section is, is said at its top.
     const text = canvasElement.textContent ?? ''
-    await expect(text.indexOf('Fixtures')).toBeLessThan(text.indexOf('Services this task calls'))
-    await expect(text.indexOf('Services this task calls')).toBeLessThan(text.indexOf('What stands outside the app is mocked'))
+    await expect(text.indexOf('Fixtures')).toBeLessThan(text.indexOf('What the task needs'))
+    await expect(text.indexOf('What the task needs')).toBeLessThan(text.indexOf('What stands outside the app is mocked'))
+    // Each service: its info, its source, its endpoints, in that order.
+    const block = canvasElement.querySelector('.task-calls-service')?.textContent ?? ''
+    await expect(block.indexOf('Info')).toBeLessThan(block.indexOf('Source'))
+    await expect(block.indexOf('Source')).toBeLessThan(block.indexOf('Endpoints'))
+    await expect(c.getAllByText('https://api.fraud-scan.example').length).toBeGreaterThan(0)
   },
 }
 /** A service with ten calls: two have data, eight are answered with what the server makes up. Any of them can be given data. */

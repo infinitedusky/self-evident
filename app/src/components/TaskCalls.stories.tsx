@@ -16,7 +16,7 @@ export const Services: Story = {
     const c = within(canvasElement)
     await expect(await c.findByText("3 services, 5 calls: 1 with data (1 this task's own), 3 with none yet, 1 not on its service yet")).toBeInTheDocument()
     await expect(c.getByText('No calls listed yet: which of its endpoints does this task use?')).toBeInTheDocument()
-    await expect(c.getAllByText('What each place is given')).toHaveLength(3)
+    await expect(c.getAllByText('Source')).toHaveLength(3)
     await expect(c.getByText("This task's own")).toBeInTheDocument()
     await expect(c.getByRole('button', { name: /^Go back to the app's data of GET the results file/ })).toBeInTheDocument()
   },

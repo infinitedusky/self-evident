@@ -430,6 +430,9 @@ button.badge { border: 0; cursor: pointer; }
 .task-calls-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) auto; gap: 12px; padding: 10px 12px; font-size: 14px; align-items: start; }
 .task-calls-row + .task-calls-row { border-top: 1px solid var(--line); }
 .task-calls-step { padding-left: 20px; border-left: 2px solid var(--line); }
+.service-info { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; margin: 0 0 4px; font-size: 13px; }
+.service-info dt { color: var(--ink-soft); }
+.service-info dd { margin: 0; overflow-wrap: anywhere; }
 .task-calls-sub { font-size: 12px; font-weight: 600; color: var(--ink-soft); margin-bottom: 6px; }
 .task-calls-row code { overflow-wrap: anywhere; }
 .task-calls-row .faint { font-size: 12px; margin-top: 2px; }
