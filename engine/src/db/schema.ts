@@ -429,7 +429,7 @@ export const testFile = pgTable('test_file', {
   id: id(), appId: appId(), /** null: the app's, for every task. */ issueId: text('issue_id').references(() => issue.id, { onDelete: 'cascade' }),
   name: text('name').notNull(), /** What the person does with it, in a line. */ what: text('what').notNull().default(''),
   mediaType: text('media_type').notNull().default('application/octet-stream'), bytes: integer('bytes').notNull().default(0),
-  /** Text that was read against the real responses on this computer, and how many of them. Not text: null, and it rests on the person's word. */ checked: jsonb('checked').$type<{ at: string; against: number } | null>(),
+  /** Text that was read against the real responses on this computer, and how many of them. Not text: null, and it rests on the person's word. */ checked: jsonb('checked').$type<{ at: string; against: number; faked?: number } | null>(),
   createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [index('test_file_app').on(t.appId, t.issueId)])
 

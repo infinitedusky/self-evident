@@ -59,6 +59,16 @@ describe.skipIf(!reachable)('test files', () => {
     expect((await listTestFiles(appId, issueId)).some((x) => x.name === 'real.csv')).toBe(false)
   })
 
+  it('makes a fake of a file said to be real and keeps only that; a real picture is refused', async () => {
+    const f = await addTestFile(appId, { name: 'import.csv', bytes: bytes('first_name,last_name,work_email\nMarisol,Okonkwo,marisol.okonkwo@harborline-freight.com\n'), issueId, real: true })
+    expect(f.checked?.faked).toBeGreaterThan(0)
+    const kept = readFileSync((await testFilePath(appId, f.id)).path, 'utf8')
+    expect(kept.split('\n')[0]).toBe('first_name,last_name,work_email')
+    for (const v of ['Marisol', 'Okonkwo', 'harborline']) expect(kept).not.toContain(v)
+    await removeTestFile(appId, f.id)
+    await expect(addTestFile(appId, { name: 'passport.png', bytes: new Uint8Array([1, 2, 3]), real: true })).rejects.toThrow('no fake can be made of it here')
+  })
+
   it('replaces one of the same name, says again what to do with it, and removes it with its file', async () => {
     const [first] = (await listTestFiles(appId, issueId)).filter((x) => x.scope === 'task')
     const again = await addTestFile(appId, { name: 'one person.csv', bytes: bytes('first_name\nSample\n'), issueId, stated: true })
