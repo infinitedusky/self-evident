@@ -226,11 +226,21 @@ export async function saveData(appId: string, key: string, i: { dataKey: string;
   }
   const real = recordingsOfService(appId, m.key).slice(0, CHECKED_AGAINST)
   // What is structure for this service is already known: what the mock's server and its fakes were allowed to keep.
-  const kept = [...new Set([...(((m.provenance ?? {}) as { kept?: string[] }).kept ?? []), ...(await rowsOf(m.id)).flatMap((d) => provOf(d).kept ?? [])])]
+  const rows = await rowsOf(m.id)
+  const kept = [...new Set([...(((m.provenance ?? {}) as { kept?: string[] }).kept ?? []), ...rows.flatMap((d) => provOf(d).kept ?? [])])]
+  // A fake's kept words are only the ones in the response it was made from. The same plans say what is structure in
+  // every other response of the service too (a status that only a failed run has, a platform one person is on), so
+  // each response is read with them: what they would keep there is not someone's. What is someone's is never kept.
+  const plans = rows.filter((d) => d.kind === 'faked').map((d) => (d.plan ?? {}) as FakePlan)
+  const all = (f: (p: FakePlan) => string[] | undefined) => [...new Set(plans.flatMap((p) => strings(f(p), 200) ?? []))]
+  const plan: FakePlan = { keep: all((p) => p.keep), keepValues: all((p) => p.keepValues), keepHosts: all((p) => p.keepHosts), varyCounts: false, salt: 'check' }
+  const planned = !!(plan.keep!.length || plan.keepValues!.length || plan.keepHosts!.length)
   let values = 0, read = 0
   for (const rec of real) {
     const recorded = readRecording(rec.dir)
-    const r = checkLeaks(recorded, mine, kept)
+    const there = planned ? fake(recorded, plan).report.keptValues : []
+    const structure = [...kept, ...there.filter((v) => !keptRefused([v]).length)]
+    const r = checkLeaks(recorded, mine, structure)
     if (!r.ok) throw new PlanError(`refused: ${r.count} value${r.count === 1 ? '' : 's'} of a real response of ${m.name} ${r.count === 1 ? 'is' : 'are'} in it, so it is not invented. Replace each, or fake that response instead:\n${leaksSay(r.leaks, r.count)}`)
     values += r.read.values; read += r.read.files
   }

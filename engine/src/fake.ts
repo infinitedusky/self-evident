@@ -27,7 +27,7 @@ export interface FakePlan {
   /** Columns or keys whose values are structure, kept as they are: a name ("status"), or a path ("findings.severity"). */ keep?: string[]
   /** Values kept wherever they are (a status, a category), whatever column they are in. */ keepValues?: string[]
   /** Hosts of web addresses kept, because which site it is is structure ("linkedin.com"); the rest of the address is still faked. */ keepHosts?: string[]
-  /** Columns or keys always replaced whole with sample text. */ text?: string[]
+  /** Columns or keys always replaced whole with sample text, whatever they hold: a cell or key holding a written-out object or list becomes text too, keys and all. */ text?: string[]
   /** false: lists inside a value keep their length. */ varyCounts?: boolean
   /** Makes the same real value the same fake one each time this response is faked. Never leaves this computer. */ salt?: string
 }
@@ -254,7 +254,8 @@ export function fake(recorded: { name: string; text: string }[], plan: FakePlan 
     const t = raw.trim()
     if (!t) return raw
     const lead = raw.slice(0, raw.indexOf(t)), tail = raw.slice(raw.indexOf(t) + t.length)
-    if (depth < 9 && /^[[{(]/.test(t)) { // as deep as the leak check reads (mock-leaks.ts)
+    // A column or key named as text is replaced whole, whatever it holds: a written-out object there is not gone into, since its keys may be what was found.
+    if (depth < 9 && /^[[{(]/.test(t) && !onPath(textPaths, path)) { // as deep as the leak check reads (mock-leaks.ts)
       try { const n = parseLiteral(t); walk(n, path, depth + 1, level + 1); return lead + write(n, styleOf(t)) + tail } catch { /* not one written-out value */ }
       // Something like one (it has quoted strings): those and its long numbers, where they stand. Anything else that merely opens with a bracket, "(1)." or "[draft] a note", is a plain value.
       if (/["']/.test(t)) return lead + t.replace(/'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"|\d{7,}/g, (m, a: string | undefined, b: string | undefined, at: number) => {
@@ -282,10 +283,14 @@ export function fake(recorded: { name: string; text: string }[], plan: FakePlan 
       for (const x of n.items) walk(x, path, depth, level + 1)
       return
     }
-    for (const [k, v] of n.items) {
+    for (const pair of n.items) {
+      const [k, v] = pair
       // A key is structure, unless it is itself someone's (an email or an id used as a key).
       if (k.t === 'str' && PERSONAL.test(k.v)) { const r = leaf(k.v, path); if (r.kind) { k.v = r.v; k.raw = quote(r.v, k.q); count(r.kind) } }
-      walk(v, k.t === 'str' ? [...path, k.v] : path, depth, level + 1)
+      const at = k.t === 'str' ? [...path, k.v] : path
+      // A key named as text that holds an object or a list: replaced whole with sample text, keys and all.
+      if (k.t === 'str' && (v.t === 'dict' || v.t === 'list') && onPath(textPaths, at)) { const made = prose(write(v, { item: ', ', kv: ': ', indent: 0 })); pair[1] = { t: 'str', v: made, raw: quote(made, k.q), q: k.q }; count('text'); continue }
+      walk(v, at, depth, level + 1)
     }
   }
 

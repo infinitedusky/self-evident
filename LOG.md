@@ -6469,3 +6469,20 @@ results file is refused because three cells hold JSON objects whose keys name pr
 structure, and a column named as text does not replace an object cell); and invented data is refused for the fixed
 words the app needs (statuses, platform and channel names), because it is checked against every real response of
 the service without the words a fake of them was allowed to keep.
+
+### The two refusals that blocked CEB-90's fake (2026-11-22)
+
+Both were reproduced in a test with made-up data before they were changed. CEB-90 and its results file are on
+another computer, so neither is proved on the real file yet: that is step 4.
+
+- **A column or key named as text is replaced whole, whatever it holds** (`fake.ts`). A cell holding a written-out
+  object was gone into all the same, and its keys kept as structure, so naming the column in `text` did nothing.
+  Now the cell becomes sample text, keys and all; a key named by its path (`detail.found`) that holds an object or a
+  list is replaced the same way and the rest of its cell is still gone into. The cell is then no longer an object,
+  so the tool tells an agent to name one only where the app does not read inside it.
+- **Invented data is checked with what the service's fake plans keep, in every real response** (`mock-data.ts`). A
+  fake's kept words are only the ones in the response it was made from, so a status that only another response has
+  ("failed") was refused as someone's. Each real response is now read with the plans of the service's fakes (their
+  keep, keepValues and keepHosts together), and what they would keep there is structure. What is someone's (an
+  email, an id, prose) is never kept, as before. A service with no fake has no plan, and nothing changes for it:
+  the results file has to be faked first, which the first fix allows.
