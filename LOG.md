@@ -6538,3 +6538,16 @@ findings and a scan job.
 
 Not known: whether the app's seed gives the same ids every time. If it does not, making "seed" again breaks the
 tie to data already filled out for its people. Check before step 4 relies on it.
+
+### A saved real response has "Make fake version" on its own row (Sandy, 2026-11-22)
+
+"How do I make the faked version of the CSV? … I choose use faked version, but how am I supposed to make it?" There
+was no way: the fake was the task's agent's to make, the row only said so, and the box "Use faked version" looked
+like the control. "Let's add a button next to any value that is saved, make fake version."
+
+- **The button is on the row of every saved real response** (`fakeEndpoint`, `mock-serve.ts`): one with no fake
+  yet has "Make fake version" under "Not faked yet"; one with a fake has "Make the fake again" among its words.
+- **A person writes no plan.** The plan its fake already had is used again (so what an agent said is structure
+  stays), else everything not plainly structure is replaced. It is checked against the real response as always.
+- **Refused, it says what was found**, and offers "Ask the task's agent", who can say what is structure. Nothing
+  is made of a refused fake.

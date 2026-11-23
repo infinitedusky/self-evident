@@ -8,12 +8,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, workspace } from './db/schema.js'
+import { eq } from 'drizzle-orm'
+import { app, mockData, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { createProject } from './projects.js'
 import { fakeData } from './mock-data.js'
 import { placesTable, plansFor, setChoice } from './mock-places.js'
-import { giveEndpointData, removeEndpointData, served, servedDir, setEndpointFaked } from './mock-serve.js'
+import { fakeEndpoint, giveEndpointData, removeEndpointData, served, servedDir, setEndpointFaked } from './mock-serve.js'
 import { addEndpoint, editEndpoint, getMock, listMocks, listReal, mockHistory, removeMock, rowOf, saveMock } from './mocks.js'
 
 let reachable = true
@@ -52,6 +53,22 @@ describe.skipIf(!reachable)('data on the endpoint', () => {
     expect(row.places.prototype).toMatchObject({ how: 'own', note: '1 call has a real response that is not faked yet' })
     expect(row.places.review.blocked).toBe('1 call has a real response that is not faked yet, and a reviewer is never given a real one (GET /runs/{id}/results)')
     await expect(plansFor(appId, 'review', issueId)).rejects.toThrow('a reviewer is never given a real one')
+  })
+
+  it('makes the fake at a person\'s press, with no plan written, and again with the plan it had', async () => {
+    await expect(fakeEndpoint(appId, 'scanner', 'start', null)).rejects.toThrow('no real response saved')
+    const first = await fakeEndpoint(appId, 'scanner', 'results', null)
+    expect(first.data.app).toMatchObject({ recorded: { how: 'given' }, safe: { kind: 'faked', files: ['results.csv'] } })
+    const made = text(await served(await m(), { form: 'faked' }), 'results.csv')!
+    expect(made).not.toMatch(/Rowan|Northgate/)
+    // Pressed again, nothing changes: the same salt and the same plan.
+    await fakeEndpoint(appId, 'scanner', 'results', null)
+    expect(text(await served(await m(), { form: 'faked' }), 'results.csv')).toBe(made)
+    // A plan an agent wrote is kept when a person makes it again.
+    await fakeData(appId, 'scanner', { plan: { keep: ['status'] } })
+    await fakeEndpoint(appId, 'scanner', 'results', null)
+    const [row] = (await db.select().from(mockData).where(eq(mockData.mockId, (await m()).id))).filter((x) => x.kind === 'faked')
+    expect((row.plan as { keep?: string[] }).keep).toEqual(['status'])
   })
 
   it('fakes it into that endpoint\'s own data, and serves the fake, or the real response where that endpoint says so', async () => {
