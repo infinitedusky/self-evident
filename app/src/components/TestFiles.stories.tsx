@@ -21,6 +21,7 @@ export const OnATask: Story = {
     await expect(c.getAllByText("This task's")).toHaveLength(2)
     await expect(c.getByText(/Import it on the Employees page/)).toBeInTheDocument()
     await expect(c.getByText('No context yet.')).toBeInTheDocument()
+    await expect(c.getByRole('link', { name: 'Download id-card.png' })).toHaveAttribute('download', 'id-card.png')
     await expect(canvasElement.querySelector('.tf-thumb')).not.toBeNull()
   },
 }
