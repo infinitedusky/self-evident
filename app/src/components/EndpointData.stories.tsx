@@ -118,6 +118,24 @@ export const NotFakedYet: Story = {
     await expect(await c.findByText(/Faked: 41 values replaced, 12 kept as structure/)).toBeInTheDocument()
   },
 }
+/** A real response is given and the task's agent is asked for the fake: a banner with a spinner says it is under way, where the data will appear, and the line that reads like a failure is not shown meanwhile. */
+export const TheAgentIsMakingTheFake: Story = {
+  args: { endpoint: unfakedEndpoint },
+  beforeEach: () => { sessionStorage.clear() },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Replace the data of GET /workflows/runs/{id}/cost' }))
+    await userEvent.upload(c.getByLabelText('A file for GET /workflows/runs/{id}/cost'), new File(['{"cost": 12}'], 'cost.json', { type: 'application/json' }))
+    await userEvent.click(c.getByRole('button', { name: 'Add it' }))
+    const banner = await c.findByRole('status')
+    await expect(banner).toHaveTextContent("The task's agent is making the fake version…")
+    await expect(banner).toHaveTextContent('This usually takes a minute or two')
+    await expect(banner.querySelector('.working-spin')).not.toBeNull()
+    await expect(c.queryByText(/Not faked yet, so nothing of it is served/)).toBeNull()
+    await expect(c.queryByRole('button', { name: /^Make the fake version of/ })).toBeNull() // it is being made: not offered twice
+    sessionStorage.clear() // the next story starts with nothing under way
+  },
+}
 /** The fake still carried something real, so it was refused and nothing was made: what was found is said, and the task's agent can be asked. */
 export const FakeRefused: Story = {
   args: { endpoint: { ...unfakedEndpoint, key: 'refused' } },
