@@ -21,7 +21,7 @@ import { newId } from './ids.js'
 import { PlanError } from './projects.js'
 
 /** How an app's prototypes get a database: its development server (any database on it), the variable the app reads, and how its schema is made. */
-export interface PrototypeDb { url: string; env?: string; schema_cmd?: string }
+export interface PrototypeDb { url: string; env?: string; schema_cmd?: string; /** Fills a database the schema command made with the app's own made-up data: what a fixture is made from. */ seed_cmd?: string }
 
 // Migration bookkeeping the schema command writes itself: never saved into a scenario.
 const BOOKKEEPING = new Set(['schema_version', 'schema_migrations', 'alembic_version', '__drizzle_migrations', '_prisma_migrations', 'knex_migrations', 'knex_migrations_lock', 'flyway_schema_history'])
@@ -63,14 +63,14 @@ export async function databaseExists(cfg: PrototypeDb, slug: string) {
   return admin(cfg, async (c) => (await c.query('select 1 from pg_database where datname = $1', [databaseName(slug)])).rowCount === 1)
 }
 
-function runSchema(cmd: string, cwd: string, env: Record<string, string>) {
+function runSchema(cmd: string, cwd: string, env: Record<string, string>, what = 'schema') {
   return new Promise<void>((resolveP, reject) => {
     const proc = spawn('sh', ['-c', cmd], { cwd, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
     const out: string[] = []
     const keep = (b: Buffer) => { out.push(b.toString()); if (out.length > 200) out.shift() }
     proc.stdout.on('data', keep); proc.stderr.on('data', keep)
     proc.on('error', reject)
-    proc.on('exit', (code) => code === 0 ? resolveP() : reject(new PlanError(`the schema command failed (exit ${code}): ${out.join('').trim().split('\n').slice(-12).join('\n')}`)))
+    proc.on('exit', (code) => code === 0 ? resolveP() : reject(new PlanError(`the ${what} command failed (exit ${code}): ${out.join('').trim().split('\n').slice(-12).join('\n')}`)))
   })
 }
 
@@ -170,6 +170,18 @@ export async function rebuild(cfg: PrototypeDb, slug: string, worktree: string, 
   const c = new pg.Client({ connectionString: url })
   await c.connect()
   try { return { url, loaded: await load(c, tables) } } finally { await c.end() }
+}
+
+/**
+ * A database made from nothing by the app's own commands: its schema, then its seed, both run in `worktree`. What a
+ * fixture is made from (fixtures.ts). The caller saves it and drops it.
+ */
+export async function buildSeeded(cfg: PrototypeDb, slug: string, worktree: string) {
+  if (!cfg.seed_cmd) throw new PlanError('the app has no seed command')
+  const env = { [cfg.env ?? 'DATABASE_URL']: databaseUrl(cfg, slug) }
+  await createDatabase(cfg, slug)
+  if (cfg.schema_cmd) await runSchema(cfg.schema_cmd, worktree, env)
+  await runSchema(cfg.seed_cmd, worktree, env, 'seed')
 }
 
 /**

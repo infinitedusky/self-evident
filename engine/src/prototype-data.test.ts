@@ -14,6 +14,7 @@ import { db, pool } from './db/client.js'
 import { app, repo, workspace } from './db/schema.js'
 import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
+import { listFixtures, makeFixtureFromSeed } from './fixtures.js'
 import { databaseExists, databaseUrl, listScenarios } from './prototype-data.js'
 import { discardPrototype, prototypeStatus, resetPrototypeData, savePrototypeData, setPrototypeCommand, setPrototypeDatabase, showPrototypeScenario, startPrototype, stopPrototypes, writePrototypeScenario } from './prototype.js'
 
@@ -96,5 +97,27 @@ describe.skipIf(!reachable)('prototype data', () => {
     await discardPrototype(p.id)
     expect(await databaseExists(cfg, slug)).toBe(false)
     expect(await listScenarios({ appId, prototypeId: p.id })).toEqual(['one-tote']) // its own went with it; what was shared with the app stays
+  })
+
+  it('makes a fixture from the app\'s seed on a database of its own, which is dropped after', async () => {
+    await expect(makeFixtureFromSeed(appId, 'seeded')).rejects.toThrow('no seed command')
+    const SEED = `NODE_PATH=${nodeModules} node -e "const pg=require('pg');const c=new pg.Client({connectionString:process.env.SHOP_DB});c.connect().then(()=>c.query(\\"insert into product (id, name) values (7, 'Sample lamp'), (8, 'Sample rug')\\")).then(()=>c.end())"`
+    await setPrototypeDatabase(appId, { ...cfg, seed_cmd: SEED })
+    const admin = new pg.Client({ connectionString: TEST_DATABASE_URL }); await admin.connect()
+    const scratch = async () => (await admin.query("select datname from pg_database where datname like 'proto_fixture_%'")).rows.length
+    try {
+      const before = await scratch()
+      expect(await makeFixtureFromSeed(appId, 'seeded')).toEqual({ name: 'seeded', tables: { product: 2 } }) // the schema's bookkeeping is not kept
+      expect(await scratch()).toBe(before)
+      expect((await listFixtures(appId)).find((f) => f.name === 'seeded')).toMatchObject({ tables: [{ name: 'product', rows: 2 }] })
+      // A prototype can be built from it like any shared scenario, with the seed's ids.
+      const p = await startPrototype({ appId, title: 'From the seed' })
+      expect((await resetPrototypeData(p.id, 'seeded')).loaded).toEqual({ product: 2 })
+      await discardPrototype(p.id)
+      // A seed that fails says so, and leaves no database behind.
+      await setPrototypeDatabase(appId, { ...cfg, seed_cmd: 'echo no such table >&2; exit 3' })
+      await expect(makeFixtureFromSeed(appId, 'broken')).rejects.toThrow(/the seed command failed \(exit 3\): no such table/)
+      expect(await scratch()).toBe(before)
+    } finally { await admin.end(); await setPrototypeDatabase(appId, cfg) }
   })
 })

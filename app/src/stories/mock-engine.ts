@@ -19,7 +19,7 @@ export interface MockData {
   mockChanges: import('../engine').MockChange[]
   /** What the sample task calls outside the app. */ taskCalls: import('../engine').TaskCall[]
   /** A service's real responses on this computer. */ mockReal: import('../engine').MockReal[]
-  /** The app's fixtures, and the one a task's runs are built from. */ fixtures: import('../engine').Fixture[]; fixtureUsed: string | null
+  /** The app's fixtures, and the one a task's runs are built from. */ fixtures: import('../engine').Fixture[]; fixtureUsed: string | null; /** Can a fixture be made from the app's seed. */ fixtureMake: { ok: boolean; missing: string | null }
   /** The services the sample task calls. */ taskServices: import('../engine').TaskService[]
   /** The stories under Screens/ and the Storybook that renders them. */ screens: import('../engine').ScreensView & { /** With the earlier tasks' ones, when asked for. */ all?: import('../engine').Screen[] }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[]; earlier?: number; /** With the earlier tasks' ones, when asked for. */ all?: { file: string; changedAt: number }[] }
@@ -59,7 +59,7 @@ export const sampleData: MockData = {
   storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [], branch: 'talk/sample', main: false },
   screens: s.screensView,
   mocks: s.mocks,
-  mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls, mockReal: s.mockReal, taskServices: s.taskServices, fixtures: s.fixtures, fixtureUsed: null,
+  mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls, mockReal: s.mockReal, taskServices: s.taskServices, fixtures: s.fixtures, fixtureUsed: null, fixtureMake: { ok: true, missing: null },
   sketches: { scope: 'sess_sample', branch: 'talk/sample', main: false, dir: 'sketches', sketches: [{ file: 'home.html', changedAt: 1794250000000 }, { file: 'checkout.html', changedAt: 1794240000000 }] },
   prototypes: s.prototypes, prototypeCode: s.prototypeCode,
   claudeSessions: s.claudeSessions,
@@ -159,7 +159,26 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       d.taskServices = d.taskServices.map((x) => (x.key === params.key ? { ...x, calls: x.calls.map((c) => (c.endpoint ? { ...c, endpoint: put(c.endpoint) } : c)) } : x))
       return reply({ kept: !real ? 'provided' : was?.sensitive ? 'faked' : 'recorded', asked: real && !was?.sensitive ? 'iss_sample2' : null })
     }),
-    http.get('/api/apps/:id/fixtures', () => reply({ fixtures: d.fixtures, used: d.fixtureUsed })),
+    http.get('/api/apps/:id/fixtures', () => reply({ fixtures: d.fixtures, used: d.fixtureUsed, make: d.fixtureMake })),
+    // Made from the seed (at once here; minutes for real), looked into, renamed, deleted.
+    http.post('/api/apps/:id/fixtures', async ({ request }) => {
+      const b = await request.json().catch(() => ({})) as { name?: string }, name = b.name ?? 'seed'
+      if (!d.fixtureMake.ok) return HttpResponse.json({ error: `a fixture cannot be made from the seed yet: ${d.fixtureMake.missing}` }, { status: 400 })
+      d.fixtures = [...d.fixtures.filter((f) => f.name !== name), { ...s.fixtures[0], name, madeFor: 0 }].sort((x, y) => x.name.localeCompare(y.name))
+      return reply({ name, tables: Object.fromEntries(s.fixtures[0].tables.map((t) => [t.name, t.rows])) })
+    }),
+    http.get('/api/apps/:id/fixtures/:name/:table/rows', ({ params }) => {
+      const t = d.fixtures.find((f) => f.name === params.name)?.tables.find((x) => x.name === params.table)
+      if (!t) return HttpResponse.json({ error: 'no such table' }, { status: 404 })
+      return reply({ columns: t.columns, total: t.rows, rows: s.fixturePeople.slice(0, Math.min(t.rows, 4)).map((p, n) => t.columns.map((c) => (c === 'id' ? p.label.split(' · ')[2] ?? String(n + 1) : c === 'first_name' ? p.label.split(' ')[0] : c === 'last_name' ? 'Sample' : c === 'work_email' ? p.label.split(' · ')[1] ?? '' : `${c} ${n + 1} (sample)`))) })
+    }),
+    http.patch('/api/apps/:id/fixtures/:name', async ({ params, request }) => {
+      const to = ((await request.json()) as { name: string }).name
+      if (d.fixtures.some((f) => f.name === to)) return HttpResponse.json({ error: `this app has a fixture "${to}" already` }, { status: 400 })
+      d.fixtures = d.fixtures.map((f) => (f.name === params.name ? { ...f, name: to } : f)); if (d.fixtureUsed === params.name) d.fixtureUsed = to
+      return reply({ name: to })
+    }),
+    http.delete('/api/apps/:id/fixtures/:name', ({ params }) => { d.fixtures = d.fixtures.filter((f) => f.name !== params.name); if (d.fixtureUsed === params.name) d.fixtureUsed = null; return reply({ deleted: params.name }) }),
     http.get('/api/apps/:id/fixtures/:name/:table', ({ params }) => reply({ columns: d.fixtures.find((f) => f.name === params.name)?.tables.find((t) => t.name === params.table)?.columns ?? [], rows: s.fixturePeople })),
     // An endpoint's data filled out for a fixture's people.
     http.put('/api/apps/:id/mocks/:key/endpoints/:endpoint/fixture', async ({ params, request }) => {

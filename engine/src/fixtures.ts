@@ -14,7 +14,7 @@
  */
 import { and, eq } from 'drizzle-orm'
 import { db } from './db/client.js'
-import { mock, mockData, scenario } from './db/schema.js'
+import { app, mock, mockData, prototype, scenario } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { csvCell, fake, type FakePlan } from './fake.js'
 import { PlanError } from './issues.js'
@@ -25,15 +25,115 @@ import { endpointData } from './mock-serve.js'
 import { readRecording, rowOf, workspaceOf } from './mocks.js'
 import { existsSync } from 'node:fs'
 import { standInKey } from './stand-ins.js'
+import { newId } from './ids.js'
+import { buildSeeded, dropDatabase, save, type PrototypeDb } from './prototype-data.js'
+import { homeRepo } from './workbench.js'
 
-export interface FixtureView { name: string; bytes: number; tables: { name: string; rows: number; columns: string[] }[] }
+export interface FixtureView { name: string; bytes: number; tables: { name: string; rows: number; columns: string[] }[]; /** How many endpoints' data is filled out for its people: what a rename carries along and a delete leaves behind. */ madeFor: number }
 const shared = (appId: string) => db.select().from(scenario).where(and(eq(scenario.appId, appId), eq(scenario.scope, '')))
 const columnsOf = (rows: unknown[]) => (rows[0] && typeof rows[0] === 'object' ? Object.keys(rows[0] as object) : [])
 
 /** The app's fixtures: its shared scenarios, each with its tables and how many rows they hold. Never the rows. */
 export async function listFixtures(appId: string): Promise<FixtureView[]> {
-  return (await shared(appId)).map((s) => ({ name: s.name, bytes: JSON.stringify(s.tables).length, tables: Object.entries(s.tables).filter(([, r]) => r.length).map(([name, r]) => ({ name, rows: r.length, columns: columnsOf(r) })).sort((a, b) => b.rows - a.rows) })).sort((a, b) => a.name.localeCompare(b.name))
+  const tied = await madeForRows(appId)
+  return (await shared(appId)).map((s) => ({ name: s.name, madeFor: tied.filter((d) => d.madeFor.fixture === s.name).length, bytes: JSON.stringify(s.tables).length, tables: Object.entries(s.tables).filter(([, r]) => r.length).map(([name, r]) => ({ name, rows: r.length, columns: columnsOf(r) })).sort((a, b) => b.rows - a.rows) })).sort((a, b) => a.name.localeCompare(b.name))
 }
+/** Every set of endpoint data of the app that was filled out for a fixture's people. */
+async function madeForRows(appId: string) {
+  const out: { id: string; provenance: DataProvenance & { madeFor: MadeFor }; madeFor: MadeFor }[] = []
+  for (const m of await db.select().from(mock).where(eq(mock.appId, appId))) {
+    for (const d of await db.select().from(mockData).where(eq(mockData.mockId, m.id))) {
+      const p = (d.provenance ?? {}) as DataProvenance & { madeFor?: MadeFor }
+      if (p.madeFor) out.push({ id: d.id, provenance: p as DataProvenance & { madeFor: MadeFor }, madeFor: p.madeFor })
+    }
+  }
+  return out
+}
+
+const NAME = /^[a-z0-9][a-z0-9-]*$/i
+const dbOf = async (appId: string) => {
+  const [a] = await db.select().from(app).where(eq(app.id, appId))
+  if (!a) throw new PlanError(`no app ${appId}`)
+  const cfg = (a.setup as { prototype_db?: PrototypeDb } | null)?.prototype_db
+  return { a, cfg: cfg?.url ? cfg : null }
+}
+/** Can a fixture be made from the app's seed, and if not, what is missing: said to the person where the button would be. */
+export async function canMakeFixture(appId: string): Promise<{ ok: boolean; missing: string | null }> {
+  const { cfg } = await dbOf(appId)
+  if (!cfg) return { ok: false, missing: 'the app has no database set for its prototypes (Settings › the app › Prototype)' }
+  if (!cfg.seed_cmd) return { ok: false, missing: 'the app has no seed command (Settings › the app › Prototype)' }
+  if (!(await homeRepo(appId))?.localPath) return { ok: false, missing: 'the app\'s repository is not on this computer' }
+  return { ok: true, missing: null }
+}
+const making = new Set<string>()
+/**
+ * A fixture made from the app's own seed (Sandy, 2026-11-22: "Add a seed command"): a database of its own is made
+ * from nothing, the app's schema command and then its seed command are run in the app's checkout, what is in it is
+ * kept as a fixture shared with the app, and the database is dropped. Nothing of a prototype or a task is touched.
+ * Made again under the same name, the fixture is replaced: its ids are whatever the seed gives, so a seed with
+ * fixed ids keeps the data that was filled out for its people true.
+ */
+export async function makeFixtureFromSeed(appId: string, name = 'seed', actor = 'user') {
+  if (!NAME.test(name)) throw new PlanError('a fixture name is letters, numbers and dashes, like "meridian"')
+  const can = await canMakeFixture(appId)
+  if (!can.ok) throw new PlanError(`a fixture cannot be made from the seed yet: ${can.missing}`)
+  if (making.has(appId)) throw new PlanError('a fixture is being made from the seed already: it takes a few minutes')
+  const { cfg } = await dbOf(appId), path = (await homeRepo(appId))!.localPath!
+  const slug = `fixture_${newId('scenario').slice(-8)}`
+  making.add(appId)
+  try {
+    await buildSeeded(cfg!, slug, path)
+    const saved = await save(cfg!, slug, { appId }, name, true)
+    if (!Object.keys(saved.saved).length) throw new PlanError('the seed command ran and left every table empty: nothing to keep')
+    const workspaceId = await workspaceOf(appId)
+    await db.transaction((tx) => appendEvent(tx, { workspaceId, appId, issueId: null, actor, type: 'fixture.made', payload: { name, tables: saved.saved } }))
+    return { name, tables: saved.saved }
+  } finally { making.delete(appId); await dropDatabase(cfg!, slug).catch(() => {}) }
+}
+
+/** A fixture under another name. The data filled out for its people, and the prototypes built from it, go on naming it. */
+export async function renameFixture(appId: string, name: string, to: string, actor = 'user') {
+  if (!NAME.test(to)) throw new PlanError('a fixture name is letters, numbers and dashes, like "meridian"')
+  const all = await shared(appId), fx = all.find((s) => s.name === name)
+  if (!fx) throw new PlanError(`this app has no fixture "${name}"`)
+  if (to === name) return { name }
+  if (all.some((s) => s.name === to)) throw new PlanError(`this app has a fixture "${to}" already`)
+  const tied = (await madeForRows(appId)).filter((d) => d.madeFor.fixture === name)
+  const workspaceId = await workspaceOf(appId)
+  await db.transaction(async (tx) => {
+    await tx.update(scenario).set({ name: to, updatedAt: new Date() }).where(eq(scenario.id, fx.id))
+    for (const d of tied) await tx.update(mockData).set({ provenance: { ...d.provenance, madeFor: { ...d.madeFor, fixture: to } } }).where(eq(mockData.id, d.id))
+    // A prototype built from it by that name follows, unless the name is one of its own scenarios.
+    const own = new Set((await tx.select({ scope: scenario.scope }).from(scenario).where(and(eq(scenario.appId, appId), eq(scenario.name, name)))).map((r) => r.scope))
+    for (const p of await tx.select({ id: prototype.id }).from(prototype).where(and(eq(prototype.appId, appId), eq(prototype.scenario, name)))) if (!own.has(p.id)) await tx.update(prototype).set({ scenario: to }).where(eq(prototype.id, p.id))
+    await appendEvent(tx, { workspaceId, appId, issueId: null, actor, type: 'fixture.renamed', payload: { from: name, to, data: tied.length } })
+  })
+  return { name: to }
+}
+
+/** A fixture removed. Data that was filled out for its people stays as it is, and no longer says a task's runs are built from it. */
+export async function deleteFixture(appId: string, name: string, actor = 'user') {
+  const fx = (await shared(appId)).find((s) => s.name === name)
+  if (!fx) throw new PlanError(`this app has no fixture "${name}"`)
+  const workspaceId = await workspaceOf(appId)
+  await db.transaction(async (tx) => {
+    await tx.delete(scenario).where(eq(scenario.id, fx.id))
+    await appendEvent(tx, { workspaceId, appId, issueId: null, actor, type: 'fixture.deleted', payload: { name } })
+  })
+  return { deleted: name }
+}
+
+/** A table of a fixture as it is: its first rows, every column, each value as text and cut short. Fixtures are made-up data. */
+export async function fixtureSample(appId: string, name: string, table: string, limit = 50): Promise<{ columns: string[]; rows: string[][]; total: number }> {
+  const fx = (await shared(appId)).find((s) => s.name === name)
+  if (!fx) throw new PlanError(`this app has no fixture "${name}"`)
+  const rows = (fx.tables[table] ?? []) as Record<string, unknown>[]
+  if (!rows.length) throw new PlanError(`the fixture "${name}" has no rows in "${table}"`)
+  const columns = columnsOf(rows)
+  const text = (v: unknown) => { const t = v === null || v === undefined ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v); return t.length > 120 ? `${t.slice(0, 120)}…` : t }
+  return { columns, rows: rows.slice(0, Math.max(1, Math.min(200, limit))).map((r) => columns.map((c) => text(r[c]))), total: rows.length }
+}
+
 const LABEL = /^(id|external_id|.*name|.*email|title|slug|key|code)$/i
 /** One table's rows as a person picks from them: each by its place in the table, with the columns that say who or what it is. Fixtures are made-up data. */
 export async function fixtureRows(appId: string, name: string, table: string): Promise<{ columns: string[]; rows: { index: number; label: string; values: Record<string, string> }[] }> {
