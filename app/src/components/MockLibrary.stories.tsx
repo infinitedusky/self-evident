@@ -148,6 +148,10 @@ export const OnATask: Story = {
     await expect(canvasElement.querySelector('[data-component="MockCard"]')).toBeNull()
     await expect(c.getByText(/are in Settings › Mocks/)).toBeInTheDocument()
     await expect(c.getByText('A job id for the people sent')).toBeInTheDocument() // what the call is, as the service has it
+    // Fixtures come first; what the services section is, is said at its top.
+    const text = canvasElement.textContent ?? ''
+    await expect(text.indexOf('Fixtures')).toBeLessThan(text.indexOf('Services this task calls'))
+    await expect(text.indexOf('Services this task calls')).toBeLessThan(text.indexOf('What stands outside the app is mocked'))
   },
 }
 /** A service with ten calls: two have data, eight are answered with what the server makes up. Any of them can be given data. */

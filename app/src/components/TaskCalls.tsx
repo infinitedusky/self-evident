@@ -7,7 +7,7 @@
  * task makes, picked from the service's endpoints, each with its data: the app's until the task puts its own in
  * place of it. A call the service does not have yet is added to the service in Settings, and the form says so.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Badge } from './Badge'
 import { EndpointDataCell } from './EndpointData'
 import { Sources } from './MockPlaces'
@@ -16,7 +16,7 @@ import { engine, type Mock, type MockEndpoint, type MockPlacesRow, type TaskCall
 const err = (e: unknown) => { const m = String((e as Error)?.message ?? e); try { return (JSON.parse(m) as { error?: string }).error ?? m } catch { return m } }
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
-export function TaskCalls({ appId, issueId, mocks, places = [], version = 0, onChanged }: { appId: string; issueId: string; /** The app's services (each is its mock): what can be picked, and the endpoints a call can be tied to. */ mocks: Mock[]; /** What each place is given for each service, for this task. */ places?: MockPlacesRow[]; /** Read again when it changes. */ version?: number; onChanged?: () => void | Promise<void> }) {
+export function TaskCalls({ appId, issueId, mocks, places = [], version = 0, onChanged, intro }: { /** What this section is, said under its heading. */ intro?: ReactNode; appId: string; issueId: string; /** The app's services (each is its mock): what can be picked, and the endpoints a call can be tied to. */ mocks: Mock[]; /** What each place is given for each service, for this task. */ places?: MockPlacesRow[]; /** Read again when it changes. */ version?: number; onChanged?: () => void | Promise<void> }) {
   const [services, setServices] = useState<TaskService[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
@@ -36,6 +36,7 @@ export function TaskCalls({ appId, issueId, mocks, places = [], version = 0, onC
           <button className="btn quiet small" onClick={() => setAdding(!adding)}>Add a service</button>
         </span>
       </div>
+      {intro}
       {error && <div className="empty bad" style={{ margin: '8px 0' }}>{error}</div>}
       {adding && <AddService others={others}
         onPick={(key) => act(async () => { await engine.addTaskService(issueId, key); setAdding(false) })}
