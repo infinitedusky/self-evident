@@ -6912,3 +6912,9 @@ Sandy gave CEB-90's results call a newer real response, over one that already ha
 progress component never showed up". The fake was being made (it arrived 85 seconds later); the banner was cancelled
 the moment it was set, because the page still showed the old response's fake and took it for the new one. The banner
 now remembers which real response the page showed when the agent was asked, and holds until the page shows another.
+### Taking a call off a task is a bin, and not offered beside an open form (2026-11-23)
+
+Sandy took a call off CEB-90 by mistake: with a call's edit form open, the × of the rows around it read as "close this".
+On the task's Data step, a call's and a service's remove is now a bin, and while a call of a service is being edited or
+added none of that service's removes show. Taking a single call off still does not ask first (a service does); the other
+× buttons in the app are as they were.

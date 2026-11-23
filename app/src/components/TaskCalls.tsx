@@ -68,6 +68,10 @@ function ServiceBlock({ appId, issueId, service: s, mock, places, onData, onRemo
   onCover: (id: string) => void; onLink: (id: string, endpoint: string | null) => void
 }) {
   const [adding, setAdding] = useState(false)
+  // The call being edited. While one is, or one is being added, nothing here can be taken off: a remove beside an open
+  // form reads as closing the form (Sandy, 2026-11-23, after taking one off by mistake).
+  const [editing, setEditing] = useState<string | null>(null)
+  const busy = adding || editing !== null
   // The service's endpoints this task does not list yet: what a call is picked from.
   const eps = mock?.endpoints ?? []
   // A call with a next step is one thing to a task: the step comes with the call it follows, and sits under it.
@@ -83,7 +87,7 @@ function ServiceBlock({ appId, issueId, service: s, mock, places, onData, onRemo
         <span className="lv-item-name">{s.name}</span>
         <span className="lv-end">
           {!mock || mock.served === 'none' ? <Badge tone="warn" dot>No endpoints yet</Badge> : mock.served === 'general' ? <Badge tone="ok" dot>Served from its endpoints</Badge> : s.status === 'assumed' ? <Badge tone="warn" dot>A server of an assumed shape</Badge> : <Badge tone="ok" dot>Has a server written for it</Badge>}
-          <button className="btn quiet small" aria-label={`Take ${s.name} off this task`} title="Off this task's list; it stays one of the app's services" onClick={onRemove}>×</button>
+          {!busy && <button className="btn quiet small lv-bin" aria-label={`Take ${s.name} off this task`} title="Off this task's list; it stays one of the app's services" onClick={onRemove}><Bin /></button>}
         </span>
       </div>
       <div className="lv-part">
@@ -101,12 +105,12 @@ function ServiceBlock({ appId, issueId, service: s, mock, places, onData, onRemo
       {mock?.needs?.recorded && <div className="lv-row" data-cols="1"><div className="lv-note"><span>A real response is in. The task's agent is {mock.served === 'written' ? 'building the mock from it' : 'making its faked version'}: its conversation shows how far it is.</span><button className="lv-act" title="If the agent did not start, or stopped" onClick={() => void engine.mineMock(appId, s.key).then(onData)}>Ask again</button></div></div>}
       {!s.calls.length && !adding && <div className="lv-row" data-cols="1"><span className="faint">No calls listed yet: which of its endpoints does this task use?</span></div>}
       {top.flatMap((c) => [
-        <CallRow key={c.id} appId={appId} issueId={issueId} call={c} mock={mock} onData={onData} onCover={() => onCover(c.id)} onLink={(e) => onLink(c.id, e)} onRemove={() => onRemoveCall(c.id)} onEdit={(b) => onEditCall(c.id, b)} />,
+        <CallRow key={c.id} appId={appId} issueId={issueId} call={c} mock={mock} onData={onData} onCover={() => onCover(c.id)} onLink={(e) => onLink(c.id, e)} onRemove={() => onRemoveCall(c.id)} onEdit={(b) => onEditCall(c.id, b)} editing={editing === c.id} onEditing={(on) => setEditing(on ? c.id : null)} still={busy} />,
         ...(c.endpoint ? stepsUnder(c.endpoint.key) : []).map((e) => {
           const own = listed(e.key), parent = eps.find((x) => x.key === e.follows)!
           // A step the task lists itself says what the task needs of it; one it does not comes with the call above all the same.
           return own
-            ? <CallRow key={own.id} appId={appId} issueId={issueId} call={own} parent={parent} mock={mock} onData={onData} onCover={() => onCover(own.id)} onLink={(x) => onLink(own.id, x)} onRemove={() => onRemoveCall(own.id)} onEdit={(b) => onEditCall(own.id, b)} />
+            ? <CallRow key={own.id} appId={appId} issueId={issueId} call={own} parent={parent} mock={mock} onData={onData} onCover={() => onCover(own.id)} onLink={(x) => onLink(own.id, x)} onRemove={() => onRemoveCall(own.id)} onEdit={(b) => onEditCall(own.id, b)} editing={editing === own.id} onEditing={(on) => setEditing(on ? own.id : null)} still={busy} />
             : <StepRow key={`step-${e.key}`} appId={appId} issueId={issueId} step={e} parent={parent} mock={mock!} onData={onData} />
         }),
       ])}
@@ -131,9 +135,8 @@ function StepRow({ appId, issueId, step: e, parent, mock, onData }: { appId: str
   )
 }
 
-function CallRow({ appId, issueId, call: c, parent, mock, onData, onCover, onLink, onRemove, onEdit }: { appId: string; issueId: string; call: TaskCall; /** The endpoint this call is a next step of, when that one is on the task's list: it sits under it. */ parent?: MockEndpoint; mock: Mock | null; onData: () => Promise<void>; onCover: () => void; onLink: (endpoint: string | null) => void; onRemove: () => void; onEdit: (b: CallFields) => Promise<void> }) {
+function CallRow({ appId, issueId, call: c, parent, mock, onData, onCover, onLink, onRemove, onEdit, editing, onEditing: setEditing, still }: { appId: string; issueId: string; call: TaskCall; /** The endpoint this call is a next step of, when that one is on the task's list: it sits under it. */ parent?: MockEndpoint; mock: Mock | null; onData: () => Promise<void>; onCover: () => void; onLink: (endpoint: string | null) => void; onRemove: () => void; onEdit: (b: CallFields) => Promise<void>; editing: boolean; onEditing: (on: boolean) => void; /** A call of this service is being edited or added: no remove shows until that is done. */ still: boolean }) {
   const e = c.endpoint
-  const [editing, setEditing] = useState(false)
   const by = c.by === 'user' ? <span> · added by you</span> : null // who listed it, at the end of what is said of it
   if (editing) return <div className="lv-row" data-cols="1"><CallForm start={c} onSave={(b) => void onEdit(b).then(() => setEditing(false))} onCancel={() => setEditing(false)} /></div>
   return (
@@ -166,7 +169,7 @@ function CallRow({ appId, issueId, call: c, parent, mock, onData, onCover, onLin
           </>
         )}
       </div>
-      <span className="lv-tools"><button className="btn quiet small" aria-label={`Edit ${c.method} ${c.path}`} onClick={() => setEditing(true)}>Edit</button><button className="btn quiet small" aria-label={`Remove ${c.method} ${c.path}`} title="Take it off this task's list" onClick={onRemove}>×</button></span>
+      <span className="lv-tools"><button className="btn quiet small" aria-label={`Edit ${c.method} ${c.path}`} onClick={() => setEditing(true)}>Edit</button>{!still && <button className="btn quiet small lv-bin" aria-label={`Remove ${c.method} ${c.path}`} title="Take it off this task's list" onClick={onRemove}><Bin /></button>}</span>
     </div>
   )
 }
@@ -225,4 +228,9 @@ function CallForm({ start, label = 'Save', known = [], steps, serviceName, onSav
       <div className="row"><button className="btn small" disabled={!picked && !path.trim()} onClick={() => onSave(picked ? { method: picked.method, path: picked.path, what: what.trim() } : { method, path: path.trim(), what: what.trim() })}>{label}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
     </div>
   )
+}
+
+/** Taking something off a list is a bin, not a ×: a × beside a form reads as "close". */
+function Bin() {
+  return <svg aria-hidden width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 4.5h11M6.5 4.5V3a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 .5.5v1.5M4 4.5l.6 8.1a1 1 0 0 0 1 .9h4.8a1 1 0 0 0 1-.9l.6-8.1M6.7 7v4M9.3 7v4" /></svg>
 }
