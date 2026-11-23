@@ -364,6 +364,7 @@ export interface MockReal { id: string; at: string; given: boolean; files: { nam
 export interface MockEndpoint {
   key: string; method: string; path: string; what?: string; file?: string
   /** A real response of it is never stored: one that comes in is faked at once and the original deleted. */ sensitive?: boolean
+  /** A second step: this call is made to a link that another endpoint's answer gives. follows: that endpoint's key (it is thereby intermediate); linkField: the field of its answer holding the link. */ follows?: string; linkField?: string
   /** Its data (engine/src/mock-serve.ts): the app's, set in its settings, and a task's own in place of it, where a task was asked about. */ data: { app: EndpointItem | null; task: EndpointItem | null }
   /** The real response behind it on this computer. None: its shape is taken from the code that calls it. */ real: { at: string; how: 'given' | 'recorded' } | null
   /** Its files in the data the mock serves by default. */ files: string[]
@@ -532,7 +533,7 @@ export const engine = {
   /** A service's real responses on this computer: what is there, never what is in it. */
   mockReal: (appId: string, key: string) => call<MockReal[]>('GET', `/apps/${appId}/mocks/${key}/real`),
   removeMockReal: (appId: string, key: string, id: string) => call<MockReal[]>('DELETE', `/apps/${appId}/mocks/${key}/real?id=${encodeURIComponent(id)}`),
-  addMockEndpoint: (appId: string, key: string, body: { method: string; path: string; what?: string; sensitive?: boolean }) => call<Mock>('POST', `/apps/${appId}/mocks/${key}/endpoints`, body),
+  addMockEndpoint: (appId: string, key: string, body: { method: string; path?: string; what?: string; sensitive?: boolean; follows?: string | null; linkField?: string }) => call<Mock>('POST', `/apps/${appId}/mocks/${key}/endpoints`, body),
   /** One endpoint's data: the app's, or (issueId) one task's own in place of it. real: a response the service sent; otherwise the person states it holds nothing real. */
   giveEndpointData: async (appId: string, key: string, endpoint: string, files: File[], o: { real: boolean; issueId?: string | null }) => {
     const form = new FormData()
@@ -545,7 +546,7 @@ export const engine = {
   },
   /** Taken away at one level: a task's own gone, it gets the app's again. real: the real response behind it is deleted from this computer too. */
   removeEndpointData: (appId: string, key: string, endpoint: string, o: { issueId?: string | null; real?: boolean } = {}) => call<{ removed: boolean; real: number }>('DELETE', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}/data?${o.issueId ? `issue=${o.issueId}&` : ''}${o.real ? 'real=1' : ''}`),
-  editMockEndpoint: (appId: string, key: string, endpoint: string, body: { method?: string; path?: string; what?: string; sensitive?: boolean }) => call<Mock>('PATCH', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}`, body),
+  editMockEndpoint: (appId: string, key: string, endpoint: string, body: { method?: string; path?: string; what?: string; sensitive?: boolean; follows?: string | null; linkField?: string }) => call<Mock>('PATCH', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}`, body),
   removeMockEndpoint: (appId: string, key: string, endpoint: string) => call<Mock>('DELETE', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}`),
   renameMockData: (appId: string, key: string, data: string, name: string) => call<MockData[]>('PATCH', `/apps/${appId}/mocks/${key}/data/${data}`, { name }),
   /** Ask the agent of the task the newest recording was made for to mine it. */

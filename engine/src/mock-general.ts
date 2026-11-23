@@ -40,7 +40,12 @@ const dataDir = process.env.MOCK_DATA || path.join(here, 'data')
 const TYPES = { '.json': 'application/json', '.csv': 'text/csv', '.xml': 'application/xml', '.html': 'text/html', '.txt': 'text/plain', '.jsonl': 'application/x-ndjson', '.ndjson': 'application/x-ndjson' }
 const parts = (p) => p.replace(/[?#].*$/, '').split('/').filter(Boolean)
 const wild = (s) => /^(\\{[^}]*\\}|:[\\w-]+|\\*)$/.test(s)
-const find = (method, url) => { const got = parts(url); return endpoints.find((e) => e.method === method && e.path.startsWith('/') && (() => { const want = parts(e.path); return want.length === got.length && want.every((w, i) => wild(w) || w === got[i]) })()) }
+// A second step: a call made to a link an earlier answer gives. The earlier (intermediate) answer is given a link back
+// to this server, at /__step/<key>, in place of whatever link its data holds; the step is answered there.
+const STEP = '/__step/'
+const stepsOf = (e) => endpoints.filter((x) => x.follows === e.key)
+const relink = (v, field, url) => Array.isArray(v) ? v.map((x) => relink(x, field, url)) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, k === field && typeof x === 'string' ? url : relink(x, field, url)])) : v
+const find = (method, url) => { const got = parts(url); if (url.startsWith(STEP)) return endpoints.find((e) => e.follows && e.key === got[1]); return endpoints.find((e) => e.method === method && e.path.startsWith('/') && (() => { const want = parts(e.path); return want.length === got.length && want.every((w, i) => wild(w) || w === got[i]) })()) }
 const fileOf = (e) => { let names = []; try { names = fs.readdirSync(dataDir).sort() } catch { return null }
   return (e.file && names.includes(e.file) ? e.file : null) ?? names.find((n) => n.startsWith(e.key + '.') && n.split('.').length === 2) ?? names.find((n) => n.startsWith(e.key + '.')) ?? null }
 const send = (res, status, type, body) => { res.writeHead(status, { 'content-type': type, 'access-control-allow-origin': '*' }); res.end(body) }
@@ -54,6 +59,15 @@ http.createServer((req, res) => {
     const e = find(method, req.url || '/')
     if (!e) { console.log(method + ' ' + req.url + ' -> 404 (not one of its endpoints)'); return sorry(res, 404, 'this mock has no endpoint ' + method + ' ' + (req.url || '/') + '. It has: ' + endpoints.map((x) => x.method + ' ' + x.path).join(', ')) }
     const f = fileOf(e)
+    const steps = stepsOf(e).filter((x) => x.linkField)
+    if (steps.length) {
+      // Intermediate: its own data with each link pointed back here; with no data, just the links.
+      const here = 'http://' + (req.headers.host || '127.0.0.1') + STEP
+      let body = Object.fromEntries(steps.map((x) => [x.linkField, here + x.key]))
+      if (f) { try { body = steps.reduce((v, x) => relink(v, x.linkField, here + x.key), JSON.parse(fs.readFileSync(path.join(dataDir, f), 'utf8'))) } catch { /* not JSON: the links alone */ } }
+      console.log(method + ' ' + req.url + ' -> ' + (f || 'its links') + ' (intermediate: ' + steps.map((x) => x.key).join(', ') + ')')
+      return send(res, 200, 'application/json', JSON.stringify(body))
+    }
     if (!f) { console.log(method + ' ' + req.url + ' -> 501 (no data)'); return sorry(res, 501, 'this mock has no data for ' + e.method + ' ' + e.path + ' yet') }
     console.log(method + ' ' + req.url + ' -> ' + f)
     send(res, 200, TYPES[path.extname(f).toLowerCase()] || 'text/plain', fs.readFileSync(path.join(dataDir, f)))
@@ -62,7 +76,7 @@ http.createServer((req, res) => {
 `
 
 /** What the program reads of a service: its endpoints, as they are. */
-export const endpointsFile = (endpoints: Endpoint[]) => JSON.stringify(endpoints.map((e) => ({ key: e.key, method: e.method, path: e.path, ...(e.file ? { file: e.file } : {}) })), null, 2) + '\n'
+export const endpointsFile = (endpoints: Endpoint[]) => JSON.stringify(endpoints.map((e) => ({ key: e.key, method: e.method, path: e.path, ...(e.file ? { file: e.file } : {}), ...(e.follows ? { follows: e.follows, ...(e.linkField ? { linkField: e.linkField } : {}) } : {}) })), null, 2) + '\n'
 /** The program's files for one service, as they are run and exported. */
 export const generalFiles = (m: Pick<Row, 'endpoints'>): Record<string, string> => ({ 'server.mjs': GENERAL_SERVER, 'endpoints.json': endpointsFile(cleanEndpoints(m.endpoints)) })
 /** Written to a folder of their own (once per version); returns it. */

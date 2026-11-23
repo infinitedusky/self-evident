@@ -649,7 +649,7 @@ export const mockEndpointsSample: import('../engine').MockEndpoint[] = [
   { key: 'start', method: 'POST', path: '/workflows/run', what: 'A job id for the people sent', real: null, files: [], data: none },
   { key: 'status', method: 'GET', path: '/workflows/runs/{id}/status', what: 'Running, then completed', real: null, files: [], data: none },
   { key: 'links', method: 'GET', path: '/workflows/runs/{id}/links', what: 'Where to fetch the results', real: null, files: [], data: none },
-  { key: 'results', method: 'GET', path: 'the results file, by the link the service sends', what: 'One row for each person sent, with what was found', real: { at: '2026-11-18T15:20:00Z', how: 'given' }, files: ['results.csv'], data: { app: resultsItem, task: null } },
+  { key: 'results', method: 'GET', path: 'the results file, by the link the service sends', what: 'One row for each person sent, with what was found', follows: 'links', linkField: 'download_url', real: { at: '2026-11-18T15:20:00Z', how: 'given' }, files: ['results.csv'], data: { app: resultsItem, task: null } },
 ]
 /** Made up: a call marked sensitive. Its real response was faked as it arrived and not kept. */
 export const sensitiveEndpoint: import('../engine').MockEndpoint = { key: 'profile', method: 'GET', path: '/people/{id}/profile', what: 'Who the person is: name, home address, family', sensitive: true, real: null, files: ['profile.json'], data: { app: { recorded: null, safe: { kind: 'faked', set: 'faked-profile', files: ['profile.json'], note: 'Faked from a real response that was not kept, because this call is marked sensitive: its structure is real, and 41 values were replaced. Checked 22 Nov 2026: none of the 41 values of that response is in it.' } }, task: null } }

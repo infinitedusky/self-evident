@@ -414,15 +414,18 @@ export async function removeReal(appId: string, key: string, id: string, actor =
 }
 
 /** One endpoint changed (its method, its path, what it answers with), or taken off the mock. Its data files keep their names: they are its by its key, which does not change. */
-export async function editEndpoint(appId: string, key: string, endpoint: string, i: { method?: string; path?: string; what?: string; sensitive?: boolean } | null, actor = 'user') {
+export async function editEndpoint(appId: string, key: string, endpoint: string, i: { method?: string; path?: string; what?: string; sensitive?: boolean; /** The endpoint whose answer gives this one's link; null: it stands alone again. */ follows?: string | null; linkField?: string } | null, actor = 'user') {
   const m = await rowOf(appId, key)
   if (!m) throw new PlanError(`this app has no mock "${key}"`)
   const all = cleanEndpoints(m.endpoints), at = all.findIndex((e) => e.key === standInKey(endpoint))
   if (at < 0) throw new PlanError(`${m.name} has no endpoint "${endpoint}"`)
   // Sensitive is a person's to take away: an agent may mark an endpoint sensitive, never the reverse.
   if (i?.sensitive === false && all[at].sensitive && !actor.startsWith('user')) throw new PlanError('only the person can take sensitive off an endpoint: ask them to, in Settings')
-  const next = i === null ? all.filter((_, n) => n !== at) : cleanEndpoints(all.map((e, n) => (n === at ? { ...e, ...(i.method ? { method: i.method } : {}), ...(i.path ? { path: i.path } : {}), ...(i.what !== undefined ? { what: i.what } : {}), ...(i.sensitive !== undefined ? { sensitive: i.sensitive } : {}) } : e)))
+  // A step's path is said from what it follows, unless one is given.
+  if (i?.follows && !i.path) { const parent = all.find((e) => e.key === standInKey(i!.follows!)), field = i.linkField ?? all[at].linkField; if (parent && field) i = { ...i, path: `the link in ${field} that ${parent.method} ${parent.path} answers with` } }
+  const next = i === null ? all.filter((_, n) => n !== at) : cleanEndpoints(all.map((e, n) => (n === at ? { ...e, ...(i.method ? { method: i.method } : {}), ...(i.path ? { path: i.path } : {}), ...(i.what !== undefined ? { what: i.what } : {}), ...(i.sensitive !== undefined ? { sensitive: i.sensitive } : {}), ...(i.follows !== undefined ? { follows: i.follows ?? '', linkField: i.follows ? i.linkField ?? e.linkField : '' } : i.linkField !== undefined ? { linkField: i.linkField } : {}) } : e)))
   if (i !== null && next.length !== all.length) throw new PlanError('an endpoint needs a path')
+  if (i?.follows) { const now = next[at]; if (!now.follows) throw new PlanError(`${m.name} has no endpoint "${i.follows}" for this one to follow (and two endpoints cannot follow each other)`); if (!now.linkField) throw new PlanError('a step needs the field of the answer that holds its link: download_url') }
   const workspaceId = await workspaceOf(appId)
   await db.transaction(async (tx) => {
     await tx.update(mock).set({ endpoints: next, updatedAt: new Date() }).where(eq(mock.id, m.id))
@@ -433,16 +436,21 @@ export async function editEndpoint(appId: string, key: string, endpoint: string,
   return getMock(appId, key).then(({ fileText: _f, ...v }) => ({ ...v, ...(scrubbed?.failed.length ? { scrubFailed: scrubbed.failed } : {}) }))
 }
 /** An endpoint added to a service in the app's settings: a call the app makes to it. */
-export async function addEndpoint(appId: string, key: string, i: { method?: string; path?: string; what?: string; sensitive?: boolean }, actor = 'user') {
+export async function addEndpoint(appId: string, key: string, i: { method?: string; path?: string; what?: string; sensitive?: boolean; follows?: string | null; linkField?: string }, actor = 'user') {
   const m = await rowOf(appId, key)
   if (!m) throw new PlanError(`this app has no mock "${key}"`)
-  const all = cleanEndpoints(m.endpoints), method = clip(i.method, 10).toUpperCase() || 'GET', path = clip(i.path, 300)
+  const all = cleanEndpoints(m.endpoints), method = clip(i.method, 10).toUpperCase() || 'GET'
+  // A step has no path of its own: it is the link its parent's answer gives.
+  const parent = i.follows ? all.find((e) => e.key === standInKey(i.follows!)) : null
+  if (i.follows && !parent) throw new PlanError(`${m.name} has no endpoint "${i.follows}" for this one to follow`)
+  if (parent && !clip(i.linkField, 80)) throw new PlanError('a step needs the field of the answer that holds its link: download_url')
+  const path = clip(i.path, 300) || (parent ? `the link in ${clip(i.linkField, 80)} that ${parent.method} ${parent.path} answers with` : '')
   if (!path) throw new PlanError('an endpoint needs its path: /runs/{id}/status, or in words where it is reached by a link the service sends')
   if (all.some((e) => e.method === method && e.path === path)) throw new PlanError(`${m.name} already has ${method} ${path}`)
-  const stem = standInKey(path.replace(/\{[^}]*\}|:[\w-]+/g, '').split('/').filter(Boolean).slice(-2).join('-')) || 'call'
+  const stem = (parent ? standInKey(`${parent.key}-${clip(i.linkField, 80)}`) : '') || standInKey(path.replace(/\{[^}]*\}|:[\w-]+/g, '').split('/').filter(Boolean).slice(-2).join('-')) || 'call'
   let k = stem
   for (let n = 2; all.some((e) => e.key === k); n++) k = `${stem}-${n}`
-  const next = cleanEndpoints([...all, { key: k, method, path, what: i.what, sensitive: i.sensitive === true }])
+  const next = cleanEndpoints([...all, { key: k, method, path, what: i.what, sensitive: i.sensitive === true, ...(parent ? { follows: parent.key, linkField: i.linkField } : {}) }])
   const workspaceId = await workspaceOf(appId)
   await db.transaction(async (tx) => {
     await tx.update(mock).set({ endpoints: next, updatedAt: new Date() }).where(eq(mock.id, m.id))
