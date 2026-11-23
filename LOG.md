@@ -6918,3 +6918,22 @@ Sandy took a call off CEB-90 by mistake: with a call's edit form open, the × of
 On the task's Data step, a call's and a service's remove is now a bin, and while a call of a service is being edited or
 added none of that service's removes show. Taking a single call off still does not ask first (a service does); the other
 × buttons in the app are as they were.
+### 2026-11-23: The faker keeps what a record says
+
+Found on CEB-90's first scan against the mock: all 86 findings came in with no status, so the page showed none as
+live. The faker had replaced the words `live` and `reported` like any other word. Sandy: "we have to update Faker
+so that it's only changing identifying fields … if there's a record that says live, it should just change the link
+or the name on it, but it doesn't change the actual content of that record which would include live."
+
+- **A word of state is kept wherever it stands alone in lowercase**: live, reported, completed, pending, failed,
+  high, medium, low and the like (a fixed list in fake.ts). None is anyone's.
+- **A key whose values are a small vocabulary is kept**: said at least four times across the response, in at most
+  six different lowercase words. The report names such keys (`keptAsStructure`).
+- **Never** a word that is part of an email or a web address in the response, a key that by its name is someone's
+  (name, handle, user, title, company…), or a column the plan names as text.
+- Tried on CEB-90's real response, counts only: statuses come through as live and reported in every list, the
+  leak check passes, and the two kept values are those two words. (A few findings fewer in each list, as before:
+  the faker shortens lists so the outline is not the real one.)
+
+A fake made before this keeps its replaced words until it is made again ("Make the fake again" on the endpoint).
+Capitalised values (a platform's name) are still replaced unless the plan keeps them.
