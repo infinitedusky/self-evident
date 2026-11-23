@@ -6713,3 +6713,11 @@ the goal forbids ("the app's code is exactly what goes live"), and whether a rev
   "This is a tradeoff for complex data dependence stuff." So: a last resort, after fixtures, files and mapping
   cannot make the data fit; and a run with an override says which function was replaced, wherever its result is
   shown.
+
+### 2026-11-23: The file mapping lists every column of the response
+
+Sandy: "I should see the fields in the response on the left and the fields in the [file] on the right." The form
+had a text box per line, which showed only what matched what was typed. Now every column of the response is listed,
+each set "as faked", from a column of the file, or left empty; a column the response lacks is added below them
+(CEB-90's sample response has no `work_email` or `tracking_id`, because the service echoes the columns it is sent
+and the sample was made from a run that was not sent them).

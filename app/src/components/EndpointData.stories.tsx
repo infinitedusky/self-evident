@@ -78,16 +78,13 @@ export const MapFieldsFromAFile: Story = {
     const file = await c.findByRole('combobox', { name: 'File' })
     await waitFor(() => expect(within(file).getAllByRole('option').map((o) => o.textContent)).toEqual(['one-person.csv', 'export.csv']))
     await userEvent.selectOptions(file, 'export.csv')
-    await userEvent.click(c.getByRole('button', { name: 'Add a column' }))
-    const boxes = c.getAllByRole('combobox', { name: /^Data column/ })
-    await userEvent.type(boxes[boxes.length - 1], 'work_email')
-    const from = c.getAllByRole('combobox', { name: /^File column/ })
-    await userEvent.selectOptions(from[from.length - 1], 'email')
-    await userEvent.click(c.getByRole('button', { name: 'Add a column' }))
-    const more = c.getAllByRole('combobox', { name: /^Data column/ })
-    await userEvent.type(more[more.length - 1], 'tracking_id')
-    const last = c.getAllByRole('combobox', { name: /^File column/ })
-    await userEvent.selectOptions(last[last.length - 1], '')
+    // Every column of the response is listed, each as faked until it is set from the file.
+    await expect(await c.findByRole('combobox', { name: 'What status is set from' })).toHaveDisplayValue('as faked')
+    await userEvent.selectOptions(c.getByRole('combobox', { name: 'What work_email is set from' }), 'email')
+    await userEvent.selectOptions(c.getByRole('combobox', { name: 'What tracking_id is set from' }), '')
+    // One the response lacks is added.
+    await userEvent.click(c.getByRole('button', { name: 'Add a column the response lacks' }))
+    await userEvent.type(c.getByRole('textbox', { name: 'New column 1' }), 'department')
     await userEvent.click(c.getByRole('button', { name: /^Save the mapping/ }))
     await expect(await c.findByText('It answers for the people in export.csv.')).toBeInTheDocument()
   },
