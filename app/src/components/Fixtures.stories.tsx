@@ -65,8 +65,7 @@ export const LookingAtRows: Story = {
 export const Renaming: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await userEvent.click(await c.findByText('three-people'))
-    await userEvent.click(c.getByRole('button', { name: 'Rename three-people' }))
+    await userEvent.click(await c.findByRole('button', { name: 'Rename three-people' })) // on the fixture's own line; it opens to the form
     const box = c.getByRole('textbox', { name: 'A new name for three-people' })
     await userEvent.clear(box); await userEvent.type(box, 'a-small-team')
     await userEvent.click(c.getByRole('button', { name: 'Rename' }))
