@@ -1193,3 +1193,39 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .origin summary { cursor: pointer; list-style-position: outside; }
 .origin-comments { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .origin-comments li { border-left: 2px solid var(--line); padding-left: 10px; }
+
+/* The Data step's levels (Sandy, 2026-11-22: one hierarchy, one text style a level). Page › section › item › part › row.
+   A section is ruled off and headed; an item (a fixture, a service) is a bordered block with its name; a part (Info,
+   Source, Endpoints) is a quiet label over its rows; a row is body text with a faint second line. Nothing is boxed twice. */
+.lv-section { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); }
+.lv-section:first-child, h2 + .lv-section { margin-top: 0; padding-top: 0; border-top: 0; }
+.lv-section-head { display: flex; align-items: baseline; gap: 10px; }
+.lv-section-head h3 { font-size: 17px; margin: 0 auto 0 0; }
+.lv-section-head .lv-count { font-size: 13px; font-weight: 400; color: var(--ink-faint); margin-left: 6px; letter-spacing: 0; }
+.lv-section-note { margin: 2px 0 12px; font-size: 13px; color: var(--ink-soft); max-width: 640px; }
+.lv-item { border: 1px solid var(--line); border-radius: 8px; margin-top: 8px; overflow: hidden; }
+.lv-item-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; }
+.lv-item-name { font-size: 15px; font-weight: 600; }
+.lv-item-meta { font-size: 13px; color: var(--ink-faint); }
+.lv-item-head .lv-end { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+details.lv-item > summary { cursor: pointer; list-style: none; } details.lv-item > summary::-webkit-details-marker { display: none; }
+details.lv-item > summary .lv-item-name::before { content: '▸'; display: inline-block; width: 16px; color: var(--ink-faint); font-weight: 400; }
+details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
+.lv-part { padding: 12px 14px; border-top: 1px solid var(--line); }
+.lv-part-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.lv-part-label { font-size: 12px; font-weight: 600; color: var(--ink-soft); margin-right: auto; }
+.lv-part-label .lv-count { font-weight: 400; color: var(--ink-faint); margin-left: 6px; }
+.lv-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) auto; gap: 14px; padding: 8px 0; font-size: 14px; align-items: start; }
+.lv-row + .lv-row { border-top: 1px solid var(--line); }
+.lv-row:last-child { padding-bottom: 0; }
+.lv-row code, .lv-fields code { font: 12px var(--mono); overflow-wrap: anywhere; }
+.lv-row[data-step] > :first-child { padding-left: 14px; border-left: 2px solid var(--line); }
+.lv-sub { font-size: 12px; color: var(--ink-faint); margin-top: 1px; }
+.lv-tools { display: flex; gap: 6px; }
+.lv-fields { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 20px; margin: 0; font-size: 14px; }
+.lv-fields dt { color: var(--ink-faint); font-size: 13px; }
+.lv-fields dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.lv-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; font-size: 14px; }
+.lv-cols > div > strong { display: block; font-weight: 500; }
+.lv-part .md-text { font-size: 14px; } .lv-part .md-text > :first-child { margin-top: 0; }
+@media (max-width: 760px) { .lv-row { grid-template-columns: 1fr auto; } .lv-row > :nth-child(2) { grid-column: 1 / -1; order: 3; } .lv-cols, .lv-fields { grid-template-columns: 1fr; gap: 8px; } }
