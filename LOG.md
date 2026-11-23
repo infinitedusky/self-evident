@@ -6818,3 +6818,18 @@ fake it says so and points at the task's conversation. The same banner shows whi
 Found the same hour, not changed: asked for the fake of a new real response, CEB-90's agent also wrote a server for
 the service ("served: written"), which answers for whoever it is sent. The brief says no server is written per
 service; the agent's instructions for a fake still follow the older way. For step 5.
+
+### 2026-11-23: A fake made again under its own name stays its endpoint's
+
+Found on CEB-90: the task's agent worked for eight minutes, said the fake was made, and the endpoint still read
+"Not faked yet, so nothing of it is served". The fake was there. The agent had made it again by naming the data set,
+and `fakeData` drops the scope (which endpoint, which task) whenever a name is given, so the endpoint could no
+longer find it. Fixed: a set made again under its own name keeps the scope it had, or takes the one its real
+response says when the name is that endpoint's own. CEB-90's row was put right by hand (its scope set back).
+
+### 2026-11-23: A service saved again keeps what its endpoints had
+
+Found the same hour on CEB-90: the download step was no longer drawn under the call it follows. The agent had saved
+the service with its endpoints listed plainly, and saving replaced the list whole, so the step lost what it follows
+and the field its link is in. A list said again now keeps, for an endpoint it still has: that it is a next step,
+what it is, and that it is sensitive (which a list can never take off). CEB-90's endpoint was put right by hand.

@@ -45,6 +45,21 @@ export function cleanEndpoints(given: unknown): Endpoint[] {
   for (const e of out) if (e.follows && (!out.some((p) => p.key === e.follows) || out.find((p) => p.key === e.follows)?.follows === e.key)) { delete e.follows; delete e.linkField }
   return out
 }
+/**
+ * A service's endpoints said again whole (an agent saving the service): what an endpoint already had and the new
+ * list does not mention is kept. That it is a next step of another (follows, linkField) and that it is sensitive are
+ * a person's settings; a list written without them is not a decision to drop them (found 2026-11-23: a saved mock
+ * turned a download step back into a plain call). Sensitive is never taken off this way.
+ */
+export function keepingWhatWasSet(given: unknown, was: unknown): Endpoint[] {
+  const before = cleanEndpoints(was)
+  const list = (Array.isArray(given) ? given : []).map((x) => {
+    const g = (x && typeof x === 'object' ? x : {}) as Record<string, unknown>, old = before.find((e) => e.key === standInKey(String(g.key ?? '')))
+    if (!old) return g
+    return { ...g, ...(g.follows === undefined && old.follows ? { follows: old.follows, linkField: g.linkField ?? old.linkField } : {}), ...(old.sensitive ? { sensitive: true } : g.sensitive === undefined && g.useReal === undefined && old.useReal ? { useReal: true } : {}), ...(g.what === undefined && old.what ? { what: old.what } : {}) }
+  })
+  return cleanEndpoints(list)
+}
 /** Is this file that endpoint's? */
 export const isFileOf = (e: Endpoint, name: string) => name === e.file || name.startsWith(`${e.key}.`)
 /** Which endpoint a data file answers, if any. An outright `file` wins over a name that happens to start alike. */
