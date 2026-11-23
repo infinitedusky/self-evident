@@ -6456,3 +6456,16 @@ with Info, Source, Endpoints. The Data step is headed "Data"; the services secti
 the task needs"; each service block has Info (what it is, real address, variable to override; changed in
 Settings), Source (what each place is given) and Endpoints (the calls the task makes). Settings calls the same
 part "Source".
+
+### The Data step: one heading, and its agent's report at the top of the services (Sandy, 2026-11-22)
+
+"You have Data as the page name, then another section that again says data": the inner heading is gone on a task.
+And the agent's report ("What this task calls outside the app …") is what she meant by what goes at the top of the
+services section: it is shown there, under "What the task needs", in a block that folds away, and no longer below
+the whole panel.
+
+That report, for CEB-90, names two things the engine refuses that it should not, to fix next: a fake of the given
+results file is refused because three cells hold JSON objects whose keys name providers (the faker keeps keys as
+structure, and a column named as text does not replace an object cell); and invented data is refused for the fixed
+words the app needs (statuses, platform and channel names), because it is checked against every real response of
+the service without the words a fake of them was allowed to keep.

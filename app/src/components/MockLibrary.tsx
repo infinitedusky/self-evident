@@ -5,7 +5,7 @@
  * real responses and its history are folded away below. With a task (its Data step) the page starts from the
  * services the task calls, where each of these can be overridden for the task alone.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { Badge, type Tone } from './Badge'
 import { Md } from './Md'
@@ -29,7 +29,7 @@ const day = (d: string | null) => (d ? new Date(d).toLocaleDateString('en-GB', {
 const size = (n: number) => (n < 1024 ? `${n} B` : n < 1_048_576 ? `${Math.round(n / 1024)} KB` : `${(n / 1_048_576).toFixed(1)} MB`)
 const err = (e: unknown) => { const m = String((e as Error)?.message ?? e); try { return (JSON.parse(m) as { error?: string }).error ?? m } catch { return m } }
 
-export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's Data step: its own table, and what it adds is the task's. None: the app's settings. */ issueId?: string }) {
+export function MockLibrary({ appId, issueId, needs }: { /** On a task: what its agent wrote of what the task calls and where that stands, shown at the top of the services. */ needs?: ReactNode; appId: string; /** On a task's Data step: its own table, and what it adds is the task's. None: the app's settings. */ issueId?: string }) {
   const [list, setList] = useState<Mock[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
@@ -64,7 +64,7 @@ export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's
       )}
       {/* What is in the app's own database comes first; then the services outside it, with what they are said at the top of that section. */}
       {list !== null && <Fixtures appId={appId} issueId={issueId} version={tick} />}
-      {issueId && <TaskCalls appId={appId} issueId={issueId} mocks={list ?? []} places={places} version={tick} onChanged={() => reload()} intro={intro} />}
+      {issueId && <TaskCalls appId={appId} issueId={issueId} mocks={list ?? []} places={places} version={tick} onChanged={() => reload()} intro={needs ? <details className="step-full" open data-component="WhatTheTaskNeeds"><summary>What the task's agent found</summary>{needs}</details> : intro} />}
       {!issueId && <h3 className="mock-h3">The app's services</h3>}
       {!issueId && intro}
       {adding && !issueId && <AddAppService onAdd={(b) => act(async () => { await engine.raiseMock(appId, b); setAdding(false) })} onCancel={() => setAdding(false)} />}
