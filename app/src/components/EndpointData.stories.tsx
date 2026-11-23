@@ -78,20 +78,27 @@ export const MapFieldsFromAFile: Story = {
     const file = await c.findByRole('combobox', { name: 'File' })
     await waitFor(() => expect(within(file).getAllByRole('option').map((o) => o.textContent)).toEqual(['one-person.csv', 'export.csv']))
     await userEvent.selectOptions(file, 'export.csv')
-    // Every column of the response is listed, each as faked until it is set from the file.
-    await expect(await c.findByRole('combobox', { name: 'What status is set from' })).toHaveDisplayValue('as faked')
-    await userEvent.selectOptions(c.getByRole('combobox', { name: 'What work_email is set from' }), 'email')
-    await userEvent.selectOptions(c.getByRole('combobox', { name: 'What tracking_id is set from' }), '')
-    // One the response lacks is added.
-    await userEvent.click(c.getByRole('button', { name: 'Add a column the response lacks' }))
-    await userEvent.type(c.getByRole('textbox', { name: 'New column 1' }), 'department')
+    // Only the columns to override are listed. A line picks one of the response's columns from a list of them all…
+    await userEvent.click(c.getByRole('button', { name: 'Add a column' }))
+    const col = c.getByRole('combobox', { name: 'Response column 1' })
+    await expect(within(col).getAllByRole('option').map((o) => o.textContent)).toEqual(['a column of the response…', 'tracking_id', 'work_email', 'full_name', 'status', 'risk_level', 'profiles', 'person_summary', '＋ a new column…'])
+    await userEvent.selectOptions(col, 'work_email')
+    await userEvent.selectOptions(c.getByRole('combobox', { name: 'File column 1' }), 'email')
+    // …or names one the response lacks.
+    await userEvent.click(c.getByRole('button', { name: 'Add a column' }))
+    await userEvent.selectOptions(c.getByRole('combobox', { name: 'Response column 2' }), '＋ a new column…')
+    await userEvent.type(c.getByRole('textbox', { name: 'Name of new column 2' }), 'department')
+    await expect(within(c.getByRole('combobox', { name: 'Response column 2' })).queryByRole('option', { name: 'work_email' })).toBeNull() // taken by the first line
     await userEvent.click(c.getByRole('button', { name: /^Save the mapping/ }))
     await expect(await c.findByText('It answers for the people in export.csv.')).toBeInTheDocument()
   },
 }
 /** Mapped: the cell says whose people it answers for. */
 export const MappedFromAFile: Story = { args: { issueId: 'iss_sample2', endpoint: { ...mockEndpointsSample[3], data: { ...mockEndpointsSample[3].data, app: { ...resultsItem, safe: { ...resultsItem.safe!, fromFile: { file: 'export.csv', map: { work_email: 'email', tracking_id: '' } } } } } } },
-  play: async ({ canvasElement }) => { const c = within(canvasElement); await expect(await c.findByText('export.csv')).toBeInTheDocument(); await expect(c.getByText('Change the mapping')).toBeInTheDocument() } }
+  play: async ({ canvasElement }) => { const c = within(canvasElement); await expect((await c.findAllByText('export.csv')).length).toBeGreaterThan(0); await expect(c.getByText('Change the mapping')).toBeInTheDocument()
+    // Under the data: which fields the mapping overrides, and from where.
+    const said = canvasElement.querySelector('[data-overridden="file"]')!
+    await expect(said.textContent).toBe('Overridden fields, from export.csv: work_email ← email, tracking_id (empty)') } }
 export const NoData: Story = {
   args: { endpoint: mockEndpointsSample[0] },
   play: async ({ canvasElement }) => {

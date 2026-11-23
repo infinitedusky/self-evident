@@ -1186,13 +1186,11 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .lv-section-head { display: flex; align-items: baseline; gap: 10px; }
 .lv-section-head h3 { font-size: 17px; margin: 0 auto 0 0; }
 .lv-section-head .lv-count { font-size: 13px; font-weight: 400; color: var(--ink-faint); margin-left: 6px; letter-spacing: 0; }
-/* Mapping a response's columns from a file: every column on the left, what it is set from on the right. */
-.map-cols { display: grid; gap: 3px; }
-.map-col { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: center; }
-.map-col code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--ink-soft); }
-.map-col[data-set] code { color: var(--ink); font-weight: 600; }
+/* Mapping a response's columns from a file: a line for each column that is overridden, the response's on the left, the file's on the right. */
+.map-cols { display: grid; gap: 4px; }
+.map-col { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: start; }
+.map-col-name { display: grid; gap: 3px; min-width: 0; }
 .map-col select, .map-col input { min-width: 0; width: 100%; font: inherit; font-size: 13px; }
-.map-col:not([data-set]) select { color: var(--ink-faint); }
 /* A section's parts when it has two kinds of thing (Fixtures: Database, Files): headed a step below the section. */
 .lv-group { margin-top: 18px; }
 .lv-section-note + .lv-group { margin-top: 4px; }
