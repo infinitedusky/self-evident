@@ -528,6 +528,7 @@ const changeSays = (type: string, p: Record<string, unknown>): string | null => 
     case 'mock.endpoint_data_removed': return `The data of the call "${p.endpoint}" was removed${p.real ? ', with its real response' : ''}`
     case 'mock.sensitive_scrubbed': return `Real responses of sensitive calls were faked and deleted${Array.isArray(p.failed) && p.failed.length ? ` (${p.failed.length} could not be faked, and were deleted all the same)` : ''}`
     case 'mock.endpoint_faked': return p.faked === null ? `The call "${p.endpoint}" follows the app again on which version it is answered with` : `The call "${p.endpoint}" is answered with ${p.faked ? 'its faked version' : 'its real response, in a person\'s own runs'}`
+    case 'mock.data_for_fixture': return `The data of the call "${p.endpoint}" was made for a person of the fixture "${p.fixture}"`
     case 'mock.data_renamed': return `Data "${p.data}" was renamed`
     case 'mock.place': return `For ${PLACE_SAYS[String(p.place)] ?? p.place}: ${SOURCE_SAYS[String(p.source)] ?? p.source}${p.data ? ` "${p.data}"` : ''}`
     default: return null

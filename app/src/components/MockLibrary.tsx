@@ -10,6 +10,7 @@ import { Link } from 'react-router'
 import { Badge, type Tone } from './Badge'
 import { Md } from './Md'
 import { EndpointDataCell } from './EndpointData'
+import { Fixtures } from './Fixtures'
 import { Sources } from './MockPlaces'
 import { TaskCalls } from './TaskCalls'
 import { engine, type Mock, type MockChange, type MockData, type MockEndpoint, type MockPlacesRow, type MockReal } from '../engine'
@@ -65,6 +66,7 @@ export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's
         : list === null ? (error ? null : <p className="muted">Loading…</p>)
         : !list.length ? <div className="empty">No services yet. Add one here, or a task's agent adds it when it finds the code calling one.</div>
         : <div className="mock-list">{list.map((m) => <MockCard key={m.key} appId={appId} mock={m} places={places.find((p) => p.mock === m.key) ?? null} act={act} />)}</div>}
+      {list !== null && <Fixtures appId={appId} issueId={issueId} version={tick} />}
     </section>
   )
 }

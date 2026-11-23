@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, userEvent, within } from 'storybook/test'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { EndpointDataCell } from './EndpointData'
 import { mockEndpointsSample, resultsItem, sampleApp, sensitiveEndpoint, unfakedEndpoint } from '../stories/sample'
 
@@ -30,6 +30,27 @@ export const UseFakedVersion: Story = {
 }
 /** On a task the switch starts as the app has it and can be set for the task alone, then put back. */
 export const UseFakedVersionOnATask: Story = { args: { issueId: 'iss_sample2', endpoint: { ...mockEndpointsSample[3], data: { ...mockEndpointsSample[3].data, faked: { app: true, task: false } } } } }
+/** The data is a template, and a fixture supplies who it is for: pick the fixture, how many people, who to start from, and which columns of the data are theirs. The app then sends the people this mock has answers for. */
+export const FillOutForFixturePeople: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/Not made for a fixture's people/)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: /^Fill the data of GET the results file.* out for fixture people/ }))
+    await waitFor(() => expect(c.getByRole('combobox', { name: 'Fixture' })).toHaveValue('northwind-company')) // once the app's fixtures are read
+    await expect(await c.findByRole('combobox', { name: 'Data column 1' })).toHaveValue('work_email') // a column both have, that says who someone is
+    await userEvent.click(c.getByRole('button', { name: 'Add a column' }))
+    await userEvent.selectOptions(c.getByRole('combobox', { name: 'Data column 2' }), 'tracking_id')
+    await userEvent.selectOptions(c.getByRole('combobox', { name: 'Fixture column 2' }), 'id')
+    const many = c.getByRole('spinbutton', { name: 'How many people' })
+    await userEvent.clear(many); await userEvent.type(many, '3')
+    await waitFor(() => expect(within(c.getByRole('combobox', { name: 'Starting from' })).getAllByRole('option')).toHaveLength(4))
+    await userEvent.selectOptions(c.getByRole('combobox', { name: 'Starting from' }), '1')
+    await userEvent.click(c.getByRole('button', { name: /^Fill the data of GET the results file.* out$/ }))
+    await expect(await c.findByText('Filled out for 3 people, from Blake Sample, blake.sample@northwind.example.')).toBeInTheDocument()
+  },
+}
+/** Data already filled out for fixture people says who, and can be changed. */
+export const MadeForFixturePeople: Story = { args: { endpoint: { ...mockEndpointsSample[3], data: { ...mockEndpointsSample[3].data, app: { ...resultsItem, safe: { ...resultsItem.safe!, madeFor: { fixture: 'northwind-company', table: 'employees', who: '3 people, from Blake Sample, blake.sample@northwind.example', people: 3, map: { tracking_id: 'id', work_email: 'work_email' } } } } } } } }
 /** No data: the mock's server makes the answer up. Adding data asks for a file and what it is. */
 export const NoData: Story = {
   args: { endpoint: mockEndpointsSample[0] },

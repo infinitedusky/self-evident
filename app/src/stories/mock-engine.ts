@@ -19,6 +19,7 @@ export interface MockData {
   mockChanges: import('../engine').MockChange[]
   /** What the sample task calls outside the app. */ taskCalls: import('../engine').TaskCall[]
   /** A service's real responses on this computer. */ mockReal: import('../engine').MockReal[]
+  /** The app's fixtures, and the one a task's runs are built from. */ fixtures: import('../engine').Fixture[]; fixtureUsed: string | null
   /** The services the sample task calls. */ taskServices: import('../engine').TaskService[]
   /** The stories under Screens/ and the Storybook that renders them. */ screens: import('../engine').ScreensView & { /** With the earlier tasks' ones, when asked for. */ all?: import('../engine').Screen[] }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[]; earlier?: number; /** With the earlier tasks' ones, when asked for. */ all?: { file: string; changedAt: number }[] }
@@ -58,7 +59,7 @@ export const sampleData: MockData = {
   storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [], branch: 'talk/sample', main: false },
   screens: s.screensView,
   mocks: s.mocks,
-  mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls, mockReal: s.mockReal, taskServices: s.taskServices,
+  mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls, mockReal: s.mockReal, taskServices: s.taskServices, fixtures: s.fixtures, fixtureUsed: null,
   sketches: { scope: 'sess_sample', branch: 'talk/sample', main: false, dir: 'sketches', sketches: [{ file: 'home.html', changedAt: 1794250000000 }, { file: 'checkout.html', changedAt: 1794240000000 }] },
   prototypes: s.prototypes, prototypeCode: s.prototypeCode,
   claudeSessions: s.claudeSessions,
@@ -157,6 +158,19 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       if (!task) d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: m.endpoints.map(put) } : m))
       d.taskServices = d.taskServices.map((x) => (x.key === params.key ? { ...x, calls: x.calls.map((c) => (c.endpoint ? { ...c, endpoint: put(c.endpoint) } : c)) } : x))
       return reply({ kept: !real ? 'provided' : was?.sensitive ? 'faked' : 'recorded', asked: real && !was?.sensitive ? 'iss_sample2' : null })
+    }),
+    http.get('/api/apps/:id/fixtures', () => reply({ fixtures: d.fixtures, used: d.fixtureUsed })),
+    http.get('/api/apps/:id/fixtures/:name/:table', ({ params }) => reply({ columns: d.fixtures.find((f) => f.name === params.name)?.tables.find((t) => t.name === params.table)?.columns ?? [], rows: s.fixturePeople })),
+    // An endpoint's data filled out for a fixture's people.
+    http.put('/api/apps/:id/mocks/:key/endpoints/:endpoint/fixture', async ({ params, request }) => {
+      const b = await request.json() as { fixture: string; table: string; row: number; count: number; map: Record<string, string>; issueId?: string | null }
+      const first = s.fixturePeople[b.row]?.label.split(' · ').slice(0, 2).join(', ') ?? 'someone'
+      const madeFor = { fixture: b.fixture, table: b.table, who: b.count === 1 ? first : `${b.count} people, from ${first}`, people: b.count, map: b.map }
+      const set = (e: import('../engine').MockEndpoint) => (e.key !== params.endpoint ? e : { ...e, data: { ...e.data, ...(b.issueId && e.data.task?.safe ? { task: { ...e.data.task, safe: { ...e.data.task.safe, madeFor } } } : e.data.app?.safe ? { app: { ...e.data.app, safe: { ...e.data.app.safe, madeFor } } } : {}) } })
+      d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: m.endpoints.map(set) } : m))
+      d.taskServices = d.taskServices.map((x) => (x.key === params.key ? { ...x, calls: x.calls.map((c) => (c.endpoint ? { ...c, endpoint: set(c.endpoint) } : c)) } : x))
+      d.fixtureUsed = b.fixture
+      return reply({ madeFor, changed: b.count })
     }),
     // Which version a person's own runs get of one endpoint: the app's answer, or a task's own.
     http.put('/api/apps/:id/mocks/:key/endpoints/:endpoint/faked', async ({ params, request }) => {

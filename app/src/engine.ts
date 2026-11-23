@@ -372,8 +372,10 @@ export interface MockEndpoint {
 /** One endpoint's data at one level. recorded: a real response as it came, on this computer only. safe: a fake of it, or a file provided as holding nothing real; what a reviewer gets. */
 export interface EndpointItem {
   recorded: { id: string; at: string; how: 'given' | 'recorded'; files: string[] } | null
-  safe: { kind: 'faked' | 'provided'; set: string; files: string[]; note: string; stale?: boolean } | null
+  safe: { kind: 'faked' | 'provided'; set: string; files: string[]; note: string; stale?: boolean; /** The column names of its data: what can be set from a fixture. */ columns?: string[]; /** The fixture people it was filled out for. */ madeFor?: { fixture: string; table: string; who: string; people: number; map: Record<string, string> } } | null
 }
+/** One of the app's fixtures (engine/src/fixtures.ts): made-up rows for its own database, by table. Never the rows. */
+export interface Fixture { name: string; bytes: number; tables: { name: string; rows: number; columns: string[] }[] }
 /** One set of data a mock can answer with (engine/src/mock-data.ts). real: a real response as it is, on this computer only. faked: made from one by the faker. invented: written by hand, or provided by a person who states it holds nothing real. */
 export interface MockData {
   key: string; name: string; kind: 'real' | 'faked' | 'invented'; files: { path: string; bytes: number }[]
@@ -544,6 +546,10 @@ export const engine = {
     if (!res.ok) throw new Error(text || `${res.status}`)
     return JSON.parse(text) as { kept: 'recorded' | 'faked' | 'provided'; asked: string | null; maybeStructure?: string[] }
   },
+  fixtures: (appId: string, issueId?: string | null) => call<{ fixtures: Fixture[]; /** The fixture a task's runs are built from. */ used: string | null }>('GET', `/apps/${appId}/fixtures${issueId ? `?issue=${issueId}` : ''}`),
+  fixtureRows: (appId: string, name: string, table: string) => call<{ columns: string[]; rows: { index: number; label: string; values: Record<string, string> }[] }>('GET', `/apps/${appId}/fixtures/${encodeURIComponent(name)}/${encodeURIComponent(table)}`),
+  /** An endpoint's data filled out for a fixture's people: count of them from one row on, the columns in map set from each. */
+  assignFixture: (appId: string, key: string, endpoint: string, body: { fixture: string; table: string; row: number; count: number; map: Record<string, string>; issueId?: string | null }) => call<{ madeFor: { fixture: string; who: string; people: number }; changed: number }>('PUT', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}/fixture`, body),
   /** Whether a person's own runs get an endpoint's faked version: the app's answer, or (issueId) one task's own. null: the task follows the app again. */
   setEndpointFaked: (appId: string, key: string, endpoint: string, faked: boolean | null, issueId?: string | null) => call<MockEndpoint['data']>('PUT', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}/faked`, { faked, issueId: issueId ?? null }),
   /** Taken away at one level: a task's own gone, it gets the app's again. real: the real response behind it is deleted from this computer too. */

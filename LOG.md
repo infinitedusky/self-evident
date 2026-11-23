@@ -6416,3 +6416,31 @@ card with the same endpoints again. "We are duplicating info here, we can have t
   names the service's endpoints the task does not use.
 - A place no longer spells out which call's real response has no fake: it says how many, since the endpoint says it
   in full, and a reviewer's block says it once.
+
+### Fixtures: the data is a template, the fixture supplies who (Sandy, 2026-11-22)
+
+Checking CEB-90's set-up against the app's code: a smoke test would find nothing, because the app accepts a result
+row only when it carries the id of an employee it just sent, and the general server answers with a fixed file. I
+proposed two settings so the mock could answer for what it was sent. Sandy: "did we do all this work to get a
+generalized mock system in place, and now we're just going to build an ad hoc one?" and then the better answer:
+"I'm not testing to see how our mock properly returns the right users … the mock should also mock what is sent.
+Send the same users that we have results for in our mock." And: "you'd use the fixture to create the fake data. The
+CSV that you upload is just a template to use to fill out people."
+
+- **A fixture is one of the app's shared scenarios** (`prototype-data.ts`): made-up rows by table, saved with their
+  ids, so the ids do not change. Nothing new is stored. They are listed in Settings › Mocks and on a task's Data
+  step, with their tables and row counts (`engine/src/fixtures.ts`).
+- **An endpoint's faked or provided data can be filled out for fixture people.** Pick the fixture, the table its
+  people are in, who to start from and how many, and which columns of the data are theirs (`tracking_id` is their
+  `id`, `work_email` their `work_email`). Each person gets the template's rows with those columns set; where the
+  real response the fake came from is still here, each person after the first gets it faked afresh, so they do not
+  all read alike. Filling out again starts from the template, not from the last filling. Checked against the real
+  response.
+- **A task's smoke test database is built from the fixture its data was made for**, else the app's shared
+  "default" as before. So what the app sends is who the mock answers for.
+- Agents have the same through the service tool (`fixtures`, `endpoint_fixture`), and are told to do this where an
+  app matches what comes back to what it sent, instead of writing a server.
+
+Not done: a prototype is still built from the scenario chosen in its own panel, so its fixture is the person's to
+match; fixtures cannot be renamed or deleted from this page yet; the two "answers for what it was sent" settings
+were not built and are not needed for CEB-90.
