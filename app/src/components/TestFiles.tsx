@@ -53,6 +53,7 @@ function FileItem({ appId, file: f, onTask, onWhat, onRemove }: { appId: string;
         {!f.here && <Badge tone="bad">Not on this computer</Badge>}
         <span className="lv-end">
           <span className="lv-item-meta" title={f.checked?.faked !== undefined ? `Made from a real file: ${f.checked.faked} value${f.checked.faked === 1 ? '' : 's'} replaced. The real file was not kept` : f.checked ? `Read against ${f.checked.against} real response${f.checked.against === 1 ? '' : 's'} on this computer: nothing of them is in it` : 'Not text, so it cannot be read for real values: it rests on the word of whoever added it'}>{KIND[f.mediaType] ?? 'File'} · {size(f.bytes)}{f.checked?.faked !== undefined ? ' · faked' : f.checked ? ' · checked' : ''}</span>
+          {f.here && <a className="btn quiet small" href={engine.testFileUrl(appId, f.id)} download={f.name} aria-label={`Download ${f.name}`}>Download</a>}
           <button className="btn quiet small" aria-label={`Say what to do with ${f.name}`} onClick={() => { setWhat(f.what); setEditing(!editing) }}>Edit</button>
           <button className="btn quiet small" aria-label={`Remove ${f.name}`} onClick={onRemove}>×</button>
         </span>
