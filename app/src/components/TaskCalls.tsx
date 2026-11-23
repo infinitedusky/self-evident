@@ -66,7 +66,14 @@ function ServiceBlock({ appId, issueId, service: s, mock, places, onData, onRemo
 }) {
   const [adding, setAdding] = useState(false)
   // The service's endpoints this task does not list yet: what a call is picked from.
-  const known = (mock?.endpoints ?? []).filter((e) => !s.calls.some((c) => c.endpoint?.key === e.key))
+  const eps = mock?.endpoints ?? []
+  // A call with a next step is one thing to a task: the step comes with the call it follows, and sits under it.
+  const stepsUnder = (k: string): MockEndpoint[] => eps.filter((e) => e.follows === k).flatMap((e) => [e, ...stepsUnder(e.key)])
+  const listed = (k?: string) => (k ? s.calls.find((c) => c.endpoint?.key === k) : undefined)
+  const under = (e?: MockEndpoint | null): boolean => { const p = e?.follows ? eps.find((x) => x.key === e.follows) : null; return !!p && (!!listed(p.key) || under(p)) }
+  const top = s.calls.filter((c) => !under(c.endpoint))
+  // The service's endpoints this task does not list yet: what a call is picked from. A step is never picked by itself.
+  const known = eps.filter((e) => !listed(e.key) && !e.follows)
   return (
     <div className="task-calls-service" data-service={s.key}>
       <div className="task-calls-service-head">
@@ -76,21 +83,45 @@ function ServiceBlock({ appId, issueId, service: s, mock, places, onData, onRemo
       </div>
       {places && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><div><div className="task-calls-sub">What each place is given</div><Sources appId={appId} row={places} issueId={issueId} onChanged={onData} /></div></div>}
       <div className="task-calls-row" style={{ gridTemplateColumns: '1fr auto', alignItems: 'center' }}><div className="task-calls-sub" style={{ margin: 0 }}>The calls this task makes</div><button className="btn quiet small" aria-label={`Add a call to ${s.name}`} onClick={() => setAdding(!adding)}>Add a call</button></div>
-      {adding && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><CallForm label="Add" known={known} serviceName={s.name} onSave={(b) => void onAddCall(b).then(() => setAdding(false))} onCancel={() => setAdding(false)} /></div>}
+      {adding && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><CallForm label="Add" known={known} steps={(k) => stepsUnder(k).length} serviceName={s.name} onSave={(b) => void onAddCall(b).then(() => setAdding(false))} onCancel={() => setAdding(false)} /></div>}
       {!s.calls.length && !adding && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><span className="faint">No calls listed yet: which of its endpoints does this task use?</span></div>}
-      {s.calls.map((c) => <CallRow key={c.id} appId={appId} issueId={issueId} call={c} mock={mock} onData={onData} onCover={() => onCover(c.id)} onLink={(e) => onLink(c.id, e)} onRemove={() => onRemoveCall(c.id)} onEdit={(b) => onEditCall(c.id, b)} />)}
+      {top.flatMap((c) => [
+        <CallRow key={c.id} appId={appId} issueId={issueId} call={c} mock={mock} onData={onData} onCover={() => onCover(c.id)} onLink={(e) => onLink(c.id, e)} onRemove={() => onRemoveCall(c.id)} onEdit={(b) => onEditCall(c.id, b)} />,
+        ...(c.endpoint ? stepsUnder(c.endpoint.key) : []).map((e) => {
+          const own = listed(e.key), parent = eps.find((x) => x.key === e.follows)!
+          // A step the task lists itself says what the task needs of it; one it does not comes with the call above all the same.
+          return own
+            ? <CallRow key={own.id} appId={appId} issueId={issueId} call={own} parent={parent} mock={mock} onData={onData} onCover={() => onCover(own.id)} onLink={(x) => onLink(own.id, x)} onRemove={() => onRemoveCall(own.id)} onEdit={(b) => onEditCall(own.id, b)} />
+            : <StepRow key={`step-${e.key}`} appId={appId} issueId={issueId} step={e} parent={parent} mock={mock!} onData={onData} />
+        }),
+      ])}
     </div>
   )
 }
 
-function CallRow({ appId, issueId, call: c, mock, onData, onCover, onLink, onRemove, onEdit }: { appId: string; issueId: string; call: TaskCall; mock: Mock | null; onData: () => Promise<void>; onCover: () => void; onLink: (endpoint: string | null) => void; onRemove: () => void; onEdit: (b: CallFields) => Promise<void> }) {
+/** A next step that came with the call above it: the link that call's answer gives, with this step's own data. */
+function StepRow({ appId, issueId, step: e, parent, mock, onData }: { appId: string; issueId: string; step: MockEndpoint; parent: MockEndpoint; mock: Mock; onData: () => Promise<void> }) {
+  return (
+    <div className="task-calls-row" data-step="yes">
+      <div className="task-calls-step">
+        <span className="faint">Next step: </span><span className="mock-method">{e.method}</span> the link in <code>{e.linkField}</code>{e.sensitive && <> <Badge tone="warn">Sensitive</Badge></>}
+        {e.what && <div className="task-calls-what">{e.what}</div>}
+        <div className="faint">Comes with {parent.method} {parent.path}: it is called on the link that answers with.</div>
+      </div>
+      <div><EndpointDataCell appId={appId} mockKey={mock.key} serviceName={mock.name} endpoint={e} issueId={issueId} written={mock.served === 'written'} canAsk onChanged={onData} /></div>
+      <span className="task-calls-tools" />
+    </div>
+  )
+}
+
+function CallRow({ appId, issueId, call: c, parent, mock, onData, onCover, onLink, onRemove, onEdit }: { appId: string; issueId: string; call: TaskCall; /** The endpoint this call is a next step of, when that one is on the task's list: it sits under it. */ parent?: MockEndpoint; mock: Mock | null; onData: () => Promise<void>; onCover: () => void; onLink: (endpoint: string | null) => void; onRemove: () => void; onEdit: (b: CallFields) => Promise<void> }) {
   const e = c.endpoint
   const [editing, setEditing] = useState(false)
   if (editing) return <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><CallForm start={c} onSave={(b) => void onEdit(b).then(() => setEditing(false))} onCancel={() => setEditing(false)} /></div>
   return (
-    <div className="task-calls-row" data-state={c.state}>
-      <div>
-        <span className="mock-method">{c.method}</span> <code>{c.path}</code>{e?.sensitive && <> <Badge tone="warn">Sensitive</Badge></>}{c.by === 'user' && <span className="faint"> · added by you</span>}
+    <div className="task-calls-row" data-state={c.state} data-step={parent ? 'yes' : undefined}>
+      <div className={parent ? 'task-calls-step' : undefined}>
+        {parent && e ? <><span className="faint">Next step: </span><span className="mock-method">{c.method}</span> the link in <code>{e.linkField}</code></> : <><span className="mock-method">{c.method}</span> <code>{c.path}</code></>}{e && mock?.endpoints.some((x) => x.follows === e.key) && <> <Badge tone="neutral">Intermediate</Badge></>}{e?.sensitive && <> <Badge tone="warn">Sensitive</Badge></>}{c.by === 'user' && <span className="faint"> · added by you</span>}
         {c.what ? <div className="task-calls-what">Needs: {c.what}</div> : <div className="faint">Nothing said yet about what it has to answer.</div>}
       </div>
       <div>
@@ -148,7 +179,7 @@ function AddService({ others, onPick, onNew, onCancel }: { others: Mock[]; onPic
 
 interface CallFields { method: string; path: string; what: string }
 /** A call's fields: one of the service's endpoints picked from its list, or a new one, which is added to the service in Settings. Its service is where it sits, never typed. */
-function CallForm({ start, label = 'Save', known = [], serviceName, onSave, onCancel }: { start?: TaskCall; label?: string; /** The service's endpoints not yet on the task's list. */ known?: MockEndpoint[]; serviceName?: string; onSave: (b: CallFields) => void; onCancel: () => void }) {
+function CallForm({ start, label = 'Save', known = [], steps, serviceName, onSave, onCancel }: { start?: TaskCall; label?: string; /** The service's endpoints not yet on the task's list. */ known?: MockEndpoint[]; /** How many next steps come with one of them. */ steps?: (key: string) => number; serviceName?: string; onSave: (b: CallFields) => void; onCancel: () => void }) {
   const [pick, setPick] = useState(!start && known.length ? known[0].key : '')
   const [method, setMethod] = useState(start?.method ?? 'GET')
   const [path, setPath] = useState(start?.path ?? '')
@@ -158,7 +189,7 @@ function CallForm({ start, label = 'Save', known = [], serviceName, onSave, onCa
     <div className="mock-edit" style={{ marginTop: 0 }}>
       {!start && known.length > 0 && (
         <label>One of {serviceName}'s endpoints<select value={pick} onChange={(e) => setPick(e.target.value)}>
-          {known.map((e) => <option key={e.key} value={e.key}>{e.method} {e.path}</option>)}
+          {known.map((e) => { const n = steps?.(e.key) ?? 0; return <option key={e.key} value={e.key}>{e.method} {e.path}{n ? ` (with its next step${n === 1 ? '' : 's'})` : ''}</option> })}
           <option value="">A new one…</option>
         </select></label>
       )}

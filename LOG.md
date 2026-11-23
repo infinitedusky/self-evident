@@ -6343,3 +6343,41 @@ something and then you define the steps."
 
 This takes away one of the two reasons SixtyFour needs a written server. The other stays: its results must be
 answered for exactly the people a job was sent.
+
+### Reviewable pull requests: what is left, with clean-up and the data holes (Sandy, 2026-11-22)
+
+Talking through where real data sits and where it leaves this computer, Sandy assumed a prototype's and a smoke
+test's database are removed when they are done with, "same thing … when we close a task". They are not: a
+prototype's database is dropped only when it is discarded (not when stopped), a smoke test's only when a run is
+started clean, and closing or merging a task removes nothing. "Put the cleanup into the list of things we want to do
+for this." The list, in the order agreed so far:
+
+1. **Prove it on CEB-90**: SixtyFour set up with the app's agent, the real results given, the fake made, its server
+   written, and a smoke test run on the mock.
+2. **The data agent**: one per task, called by the task's agent, in three stop-and-wait steps (list the calls, say
+   where each service's data comes from, build only what was approved).
+3. **The review branch**: the mock server, endpoints and faked data on a `<branch>-review` branch with one start
+   command.
+4. **The gate**: a task cannot go to Ready for review until its review copy can be made.
+5. **Fixtures**: what must be in the app's own database.
+6. **Clean up when a task closes**: discard its prototypes (dropping their databases), drop its smoke test's
+   database, and delete its real responses from this computer, with what will go shown to the person first.
+
+Data holes found in the same conversation, to close alongside:
+
+- A prototype that ran on recorded responses keeps the real findings in its database; the block on sharing looks
+  only at what its mocks serve now. Sharing should need a reset first.
+- Not verified: whether a smoke test's evidence is kept out of a pull request when the run used real data.
+- A prototype connected to a database that is not its own local one should not be shareable.
+- An agent that makes a fake reads the real response, so it goes to the model provider and into the conversation's
+  transcript. A sensitive endpoint avoids this (the engine fakes it and no agent sees it).
+- The faker keeps numbers under seven digits, so counts could still point at one person.
+
+### On a task, a call's next step comes with it (Sandy, 2026-11-22)
+
+"Let's make the dependent call be one endpoint you add to the task, and have it indented like it is in settings."
+On a task's Data step a call with a next step is one thing to add: the picker offers the call ("with its next
+step") and never the step by itself, and the step is shown indented under the call, with its own data to override,
+whether or not the task lists it. A step the task does list (an agent named it) sits under its call too, with what
+the task needs of it. The checkbox "Recorded responses as they are" was not clear ("what is this in the data
+source?"): it now reads "Use the real responses, not the faked copies (this computer only)".
