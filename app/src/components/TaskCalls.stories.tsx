@@ -86,7 +86,7 @@ export const ACallWithANextStep: Story = {
     await userEvent.click(c.getByRole('button', { name: 'Add' }))
     await expect(await c.findByText('Intermediate')).toBeInTheDocument()
     await expect(c.getByText(/Comes with GET \/workflows\/runs\/\{id\}\/links/)).toBeInTheDocument()
-    const rows = [...canvasElement.querySelectorAll('.task-calls-row')].map((r) => r.textContent ?? '')
+    const rows = [...canvasElement.querySelectorAll('.lv-row')].map((r) => r.textContent ?? '')
     await expect(rows.findIndex((t) => t.includes('Next step:'))).toBe(rows.findIndex((t) => t.includes('Intermediate')) + 1) // right under the call it follows
     await expect(c.getByText(/A fake of it: results.csv/)).toBeInTheDocument() // the step's own data, the app's until overridden
   },

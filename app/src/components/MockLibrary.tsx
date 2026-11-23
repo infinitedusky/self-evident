@@ -47,14 +47,15 @@ export function MockLibrary({ appId, issueId, needs }: { /** On a task: what its
     return () => clearInterval(t)
   }, [building, appId, issueId])
   const intro = (
-    <p className="faint settings-desc" style={{ margin: '6px 0 12px', maxWidth: 760 }}>
+    <p className={issueId ? 'lv-section-note' : 'faint settings-desc'} style={issueId ? { maxWidth: 760 } : { margin: '6px 0 12px', maxWidth: 760 }}>
         {issueId ? 'What stands outside the app is mocked, so this task can be tried without calling it. The app\'s own code is what goes live: only an environment variable points it at the mock. Everything here starts as the app has it in Settings, and can be overridden for this task alone.'
           : 'The outside services this app connects to. Each says how the app reaches it, what a prototype, a smoke test and a reviewer are given by default (the real service or its mock), and its endpoints, each with the data its mock answers with. A task picks its services from these and may override any of it for itself.'}{' '}
         A real response stays on this computer. A reviewer only ever gets faked data, or a file stated to hold nothing real.
       </p>
   )
   return (
-    <section className="panel" data-component="MockLibrary">
+    // On a task the step's panel is the box: this is not boxed again inside it.
+    <section className={issueId ? 'lv-root' : 'panel lv-root'} data-component="MockLibrary">
       {/* On a task the step is already headed Data: it is not said again here. */}
       {!issueId && (
         <div className="task-block-head">
@@ -64,13 +65,13 @@ export function MockLibrary({ appId, issueId, needs }: { /** On a task: what its
       )}
       {/* What is in the app's own database comes first; then the services outside it, with what they are said at the top of that section. */}
       {list !== null && <Fixtures appId={appId} issueId={issueId} version={tick} />}
-      {issueId && <TaskCalls appId={appId} issueId={issueId} mocks={list ?? []} places={places} version={tick} onChanged={() => reload()} intro={needs ? <details className="step-full" open data-component="WhatTheTaskNeeds"><summary>What the task's agent found</summary>{needs}</details> : intro} />}
+      {issueId && <TaskCalls appId={appId} issueId={issueId} mocks={list ?? []} places={places} version={tick} onChanged={() => reload()} intro={intro} needs={needs && <details className="lv-item" data-component="WhatTheTaskNeeds"><summary className="lv-item-head"><span className="lv-item-name">What the task needs</span><span className="lv-item-meta lv-end">The agent's report</span></summary><div className="lv-part">{needs}</div></details>} />}
       {!issueId && <h3 className="mock-h3">The app's services</h3>}
       {!issueId && intro}
       {adding && !issueId && <AddAppService onAdd={(b) => act(async () => { await engine.raiseMock(appId, b); setAdding(false) })} onCancel={() => setAdding(false)} />}
       {error && <div className="empty bad" style={{ marginBottom: 12 }}>{error}</div>}
       {/* On a task the services above are the whole of it: nothing is shown twice. What a service is beyond its endpoints (its address, its real responses, its history) is in the app's settings. */}
-      {issueId ? <p className="faint" style={{ margin: '12px 0 0', fontSize: 13 }}>A service's real responses on this computer and its history are in Settings › Mocks.</p>
+      {issueId ? <p className="lv-sub" style={{ margin: '14px 0 0' }}>A service's real responses on this computer and its history are in Settings › Mocks.</p>
         : list === null ? (error ? null : <p className="muted">Loading…</p>)
         : !list.length ? <div className="empty">No services yet. Add one here, or a task's agent adds it when it finds the code calling one.</div>
         : <div className="mock-list">{list.map((m) => <MockCard key={m.key} appId={appId} mock={m} places={places.find((p) => p.mock === m.key) ?? null} act={act} />)}</div>}

@@ -16,7 +16,7 @@ import { engine, type Mock, type MockEndpoint, type MockPlacesRow, type TaskCall
 const err = (e: unknown) => { const m = String((e as Error)?.message ?? e); try { return (JSON.parse(m) as { error?: string }).error ?? m } catch { return m } }
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
-export function TaskCalls({ appId, issueId, mocks, places = [], version = 0, onChanged, intro }: { /** What this section is, said under its heading. */ intro?: ReactNode; appId: string; issueId: string; /** The app's services (each is its mock): what can be picked, and the endpoints a call can be tied to. */ mocks: Mock[]; /** What each place is given for each service, for this task. */ places?: MockPlacesRow[]; /** Read again when it changes. */ version?: number; onChanged?: () => void | Promise<void> }) {
+export function TaskCalls({ appId, issueId, mocks, places = [], version = 0, onChanged, intro, needs }: { /** What this section is, said under its heading, where the agent has not reported yet. */ intro?: ReactNode; /** The agent's report of what the task needs, folded away at the top. */ needs?: ReactNode; appId: string; issueId: string; /** The app's services (each is its mock): what can be picked, and the endpoints a call can be tied to. */ mocks: Mock[]; /** What each place is given for each service, for this task. */ places?: MockPlacesRow[]; /** Read again when it changes. */ version?: number; onChanged?: () => void | Promise<void> }) {
   const [services, setServices] = useState<TaskService[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
@@ -28,16 +28,17 @@ export function TaskCalls({ appId, issueId, mocks, places = [], version = 0, onC
   const withData = calls.filter(has).length, own = calls.filter((c) => c.endpoint?.data.task).length, missing = calls.filter((c) => c.state !== 'answered').length
   const others = mocks.filter((m) => !(services ?? []).some((s) => s.key === m.key))
   return (
-    <div className="task-calls" data-component="TaskCalls">
-      <div className="task-block-head">
-        <h3 className="mock-h3" style={{ margin: 0 }}>Services</h3>
-        <span style={{ display: 'flex', gap: 8 }}>
+    <div className="lv-section task-calls" data-component="TaskCalls">
+      <div className="lv-section-head">
+        <h3>Services</h3>
+        <span className="lv-end">
           {!!services?.length && <button className="btn quiet small" onClick={() => { if (window.confirm('Take every service and call off this task\'s list? The app\'s services and their mocks are not touched.')) void act(async () => { for (const s of services) await engine.removeTaskService(issueId, s.key) }) }}>Clear the list</button>}
           <button className="btn quiet small" onClick={() => setAdding(!adding)}>Add a service</button>
         </span>
       </div>
-      <div className="task-calls-sub" style={{ marginTop: 8 }}>What the task needs</div>
-      {intro}
+      {/* With the agent's report the section says what it is in a line and the report follows; without one, the fuller paragraph stands in for both. */}
+      {needs ? <p className="lv-section-note">What this task calls outside the app. Each is mocked, so the task can be tried without calling it.</p> : intro}
+      {needs}
       {error && <div className="empty bad" style={{ margin: '8px 0' }}>{error}</div>}
       {adding && <AddService others={others}
         onPick={(key) => act(async () => { await engine.addTaskService(issueId, key); setAdding(false) })}
@@ -47,7 +48,7 @@ export function TaskCalls({ appId, issueId, mocks, places = [], version = 0, onC
         : !services.length ? <div className="empty" style={{ marginTop: 8 }}>None listed yet. Start this step with the agent and it names the outside services the change calls, from the brief and the code, then the calls it makes to each. Or add one with Add a service.</div>
         : (
           <>
-            <p className="faint" style={{ margin: '4px 0 8px', fontSize: 13 }}>{services.length} service{services.length === 1 ? '' : 's'}, {calls.length} call{calls.length === 1 ? '' : 's'}: {withData} with data{own ? ` (${own} this task's own)` : ''}, {calls.length - withData - missing} with none yet{missing ? `, ${missing} not on ${missing === 1 ? 'its' : 'their'} service yet` : ''}</p>
+            <p className="lv-sub" style={{ margin: '10px 0 0' }}>{services.length} service{services.length === 1 ? '' : 's'}, {calls.length} call{calls.length === 1 ? '' : 's'}: {withData} with data{own ? ` (${own} this task's own)` : ''}, {calls.length - withData - missing} with none yet{missing ? `, ${missing} not on ${missing === 1 ? 'its' : 'their'} service yet` : ''}</p>
             {services.map((s) => <ServiceBlock key={s.key} appId={appId} issueId={issueId} service={s} mock={mocks.find((m) => m.key === s.key) ?? null} places={places.find((p) => p.mock === s.key) ?? null} onData={() => act(async () => {})}
               onRemove={() => { if (window.confirm(`Take ${s.name} off this task's list${s.calls.length ? `, with its ${s.calls.length} call${s.calls.length === 1 ? '' : 's'}` : ''}? It stays one of the app's services.`)) void act(() => engine.removeTaskService(issueId, s.key)) }}
               onAddCall={(b) => act(() => engine.addTaskCall(issueId, { ...b, service: s.key }))}
@@ -77,24 +78,28 @@ function ServiceBlock({ appId, issueId, service: s, mock, places, onData, onRemo
   // The service's endpoints this task does not list yet: what a call is picked from. A step is never picked by itself.
   const known = eps.filter((e) => !listed(e.key) && !e.follows)
   return (
-    <div className="task-calls-service" data-service={s.key}>
-      <div className="task-calls-service-head">
-        <span style={{ marginRight: 'auto' }}><strong>{s.name}</strong></span>
-        {!mock || mock.served === 'none' ? <Badge tone="warn">No endpoints yet</Badge> : mock.served === 'general' ? <Badge tone="ok">Served from its endpoints</Badge> : s.status === 'assumed' ? <Badge tone="warn">A server of an assumed shape</Badge> : <Badge tone="ok">Has a server written for it</Badge>}
-        <button className="btn quiet small" aria-label={`Take ${s.name} off this task`} title="Off this task's list; it stays one of the app's services" onClick={onRemove}>×</button>
+    <div className="lv-item" data-service={s.key}>
+      <div className="lv-item-head">
+        <span className="lv-item-name">{s.name}</span>
+        <span className="lv-end">
+          {!mock || mock.served === 'none' ? <Badge tone="warn" dot>No endpoints yet</Badge> : mock.served === 'general' ? <Badge tone="ok" dot>Served from its endpoints</Badge> : s.status === 'assumed' ? <Badge tone="warn" dot>A server of an assumed shape</Badge> : <Badge tone="ok" dot>Has a server written for it</Badge>}
+          <button className="btn quiet small" aria-label={`Take ${s.name} off this task`} title="Off this task's list; it stays one of the app's services" onClick={onRemove}>×</button>
+        </span>
       </div>
-      <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><div><div className="task-calls-sub">Info</div>
-        <dl className="service-info">
+      <div className="lv-part">
+        <div className="lv-part-head"><span className="lv-part-label">Info</span><span className="lv-sub" style={{ margin: 0 }}>Changed in Settings › Mocks</span></div>
+        <dl className="lv-fields">
           <dt>What it is</dt><dd>{s.standsInFor || <span className="faint">Not said yet</span>}</dd>
           <dt>Real address</dt><dd>{mock?.connection.address ? <code>{mock.connection.address}</code> : <span className="faint">Not set</span>}</dd>
           <dt>Variable to override</dt><dd>{mock?.connection.addressSetting ? <code>{mock.connection.addressSetting}</code> : <span className="faint">Not set: the app cannot be pointed at its mock yet</span>}</dd>
         </dl>
-        <div className="faint" style={{ fontSize: 12 }}>Changed in Settings › Mocks.</div></div></div>
-      {places && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><div><div className="task-calls-sub">Source</div><Sources appId={appId} row={places} issueId={issueId} onChanged={onData} /></div></div>}
-      <div className="task-calls-row" style={{ gridTemplateColumns: '1fr auto', alignItems: 'center' }}><div className="task-calls-sub" style={{ margin: 0 }}>Endpoints</div><button className="btn quiet small" aria-label={`Add a call to ${s.name}`} onClick={() => setAdding(!adding)}>Add a call</button></div>
-      {adding && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><CallForm label="Add" known={known} steps={(k) => stepsUnder(k).length} serviceName={s.name} onSave={(b) => void onAddCall(b).then(() => setAdding(false))} onCancel={() => setAdding(false)} /></div>}
-      {mock?.needs?.recorded && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><div className="row" style={{ margin: 0 }}><span>A real response is in. The task's agent is {mock.served === 'written' ? 'building the mock from it' : 'making its faked version'}: its conversation shows how far it is.</span><button className="btn quiet small" title="If the agent did not start, or stopped" onClick={() => void engine.mineMock(appId, s.key).then(onData)}>Ask again</button></div></div>}
-      {!s.calls.length && !adding && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><span className="faint">No calls listed yet: which of its endpoints does this task use?</span></div>}
+      </div>
+      {places && <div className="lv-part"><div className="lv-part-head"><span className="lv-part-label">Source</span></div><Sources appId={appId} row={places} issueId={issueId} onChanged={onData} /></div>}
+      <div className="lv-part">
+      <div className="lv-part-head"><span className="lv-part-label">Endpoints{eps.length > 0 && <span className="lv-count">{s.calls.length} of its {eps.filter((e) => !e.follows || listed(e.key)).length}</span>}</span><button className="btn quiet small" aria-label={`Add a call to ${s.name}`} onClick={() => setAdding(!adding)}>Add a call</button></div>
+      {adding && <div className="lv-row" data-cols="1"><CallForm label="Add" known={known} steps={(k) => stepsUnder(k).length} serviceName={s.name} onSave={(b) => void onAddCall(b).then(() => setAdding(false))} onCancel={() => setAdding(false)} /></div>}
+      {mock?.needs?.recorded && <div className="lv-row" data-cols="1"><div className="lv-note"><span>A real response is in. The task's agent is {mock.served === 'written' ? 'building the mock from it' : 'making its faked version'}: its conversation shows how far it is.</span><button className="lv-act" title="If the agent did not start, or stopped" onClick={() => void engine.mineMock(appId, s.key).then(onData)}>Ask again</button></div></div>}
+      {!s.calls.length && !adding && <div className="lv-row" data-cols="1"><span className="faint">No calls listed yet: which of its endpoints does this task use?</span></div>}
       {top.flatMap((c) => [
         <CallRow key={c.id} appId={appId} issueId={issueId} call={c} mock={mock} onData={onData} onCover={() => onCover(c.id)} onLink={(e) => onLink(c.id, e)} onRemove={() => onRemoveCall(c.id)} onEdit={(b) => onEditCall(c.id, b)} />,
         ...(c.endpoint ? stepsUnder(c.endpoint.key) : []).map((e) => {
@@ -105,7 +110,8 @@ function ServiceBlock({ appId, issueId, service: s, mock, places, onData, onRemo
             : <StepRow key={`step-${e.key}`} appId={appId} issueId={issueId} step={e} parent={parent} mock={mock!} onData={onData} />
         }),
       ])}
-      {known.length > 0 && s.calls.length > 0 && <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><span className="faint">{s.name} has {known.length} more endpoint{known.length === 1 ? '' : 's'} this task does not use: {known.map((e) => `${e.method} ${e.path}`).join(', ')}. Add a call picks from them.</span></div>}
+      {known.length > 0 && s.calls.length > 0 && <div className="lv-sub">{s.name} has {known.length} more endpoint{known.length === 1 ? '' : 's'} this task does not use: {known.map((e) => `${e.method} ${e.path}`).join(', ')}. Add a call picks from them.</div>}
+      </div>
     </div>
   )
 }
@@ -113,14 +119,14 @@ function ServiceBlock({ appId, issueId, service: s, mock, places, onData, onRemo
 /** A next step that came with the call above it: the link that call's answer gives, with this step's own data. */
 function StepRow({ appId, issueId, step: e, parent, mock, onData }: { appId: string; issueId: string; step: MockEndpoint; parent: MockEndpoint; mock: Mock; onData: () => Promise<void> }) {
   return (
-    <div className="task-calls-row" data-step="yes">
-      <div className="task-calls-step">
+    <div className="lv-row" data-step="yes">
+      <div>
         <span className="faint">Next step: </span><span className="mock-method">{e.method}</span> the link in <code>{e.linkField}</code>{e.sensitive && <> <Badge tone="warn">Sensitive</Badge></>}
-        {e.what && <div className="task-calls-what">{e.what}</div>}
-        <div className="faint">Comes with {parent.method} {parent.path}: it is called on the link that answers with.</div>
+        {e.what && <div className="lv-sub">{e.what}</div>}
+        <div className="lv-sub">Comes with {parent.method} {parent.path}: it is called on the link that answers with.</div>
       </div>
       <div><EndpointDataCell appId={appId} mockKey={mock.key} serviceName={mock.name} endpoint={e} issueId={issueId} written={mock.served === 'written'} canAsk onChanged={onData} /></div>
-      <span className="task-calls-tools" />
+      <span className="lv-tools" />
     </div>
   )
 }
@@ -128,13 +134,14 @@ function StepRow({ appId, issueId, step: e, parent, mock, onData }: { appId: str
 function CallRow({ appId, issueId, call: c, parent, mock, onData, onCover, onLink, onRemove, onEdit }: { appId: string; issueId: string; call: TaskCall; /** The endpoint this call is a next step of, when that one is on the task's list: it sits under it. */ parent?: MockEndpoint; mock: Mock | null; onData: () => Promise<void>; onCover: () => void; onLink: (endpoint: string | null) => void; onRemove: () => void; onEdit: (b: CallFields) => Promise<void> }) {
   const e = c.endpoint
   const [editing, setEditing] = useState(false)
-  if (editing) return <div className="task-calls-row" style={{ gridTemplateColumns: '1fr' }}><CallForm start={c} onSave={(b) => void onEdit(b).then(() => setEditing(false))} onCancel={() => setEditing(false)} /></div>
+  const by = c.by === 'user' ? <span> · added by you</span> : null // who listed it, at the end of what is said of it
+  if (editing) return <div className="lv-row" data-cols="1"><CallForm start={c} onSave={(b) => void onEdit(b).then(() => setEditing(false))} onCancel={() => setEditing(false)} /></div>
   return (
-    <div className="task-calls-row" data-state={c.state} data-step={parent ? 'yes' : undefined}>
-      <div className={parent ? 'task-calls-step' : undefined}>
-        {parent && e ? <><span className="faint">Next step: </span><span className="mock-method">{c.method}</span> the link in <code>{e.linkField}</code></> : <><span className="mock-method">{c.method}</span> <code>{c.path}</code></>}{e && mock?.endpoints.some((x) => x.follows === e.key) && <> <Badge tone="neutral">Intermediate</Badge></>}{e?.sensitive && <> <Badge tone="warn">Sensitive</Badge></>}{c.by === 'user' && <span className="faint"> · added by you</span>}
-        {e?.what && e.what !== c.what && <div className="faint">{e.what}</div>}
-        {c.what ? <div className="task-calls-what">This task needs: {c.what}</div> : !e?.what && <div className="faint">Nothing said yet about what it has to answer.</div>}
+    <div className="lv-row" data-state={c.state} data-step={parent ? 'yes' : undefined}>
+      <div>
+        {parent && e ? <><span className="faint">Next step: </span><span className="mock-method">{c.method}</span> the link in <code>{e.linkField}</code></> : <><span className="mock-method">{c.method}</span> <code>{c.path}</code></>}{e && mock?.endpoints.some((x) => x.follows === e.key) && <> <Badge tone="neutral">Intermediate</Badge></>}{e?.sensitive && <> <Badge tone="warn">Sensitive</Badge></>}
+        {e?.what && e.what !== c.what && <div className="lv-sub">{e.what}{!c.what && by}</div>}
+        {c.what ? <div className="lv-sub">This task needs: {c.what}{by}</div> : !e?.what && <div className="lv-sub">Nothing said yet about what it has to answer.{by}</div>}
       </div>
       <div>
         {c.state === 'answered' && e && c.mock ? (
@@ -159,7 +166,7 @@ function CallRow({ appId, issueId, call: c, parent, mock, onData, onCover, onLin
           </>
         )}
       </div>
-      <span className="task-calls-tools"><button className="btn quiet small" aria-label={`Edit ${c.method} ${c.path}`} onClick={() => setEditing(true)}>Edit</button><button className="btn quiet small task-calls-remove" aria-label={`Remove ${c.method} ${c.path}`} title="Take it off this task's list" onClick={onRemove}>×</button></span>
+      <span className="lv-tools"><button className="btn quiet small" aria-label={`Edit ${c.method} ${c.path}`} onClick={() => setEditing(true)}>Edit</button><button className="btn quiet small" aria-label={`Remove ${c.method} ${c.path}`} title="Take it off this task's list" onClick={onRemove}>×</button></span>
     </div>
   )
 }

@@ -151,10 +151,10 @@ export const OnATask: Story = {
     await expect(c.queryByRole('heading', { name: 'Data' })).toBeNull() // the step is headed Data already
     // Fixtures come first; what the services section is, is said at its top.
     const text = canvasElement.textContent ?? ''
-    await expect(text.indexOf('Fixtures')).toBeLessThan(text.indexOf('What the task needs'))
-    await expect(text.indexOf('What the task needs')).toBeLessThan(text.indexOf('What stands outside the app is mocked'))
+    await expect(text.indexOf('Fixtures')).toBeLessThan(text.indexOf('Services'))
+    await expect(text.indexOf('Services')).toBeLessThan(text.indexOf('What stands outside the app is mocked'))
     // Each service: its info, its source, its endpoints, in that order.
-    const block = canvasElement.querySelector('.task-calls-service')?.textContent ?? ''
+    const block = canvasElement.querySelector('.lv-item[data-service]')?.textContent ?? ''
     await expect(block.indexOf('Info')).toBeLessThan(block.indexOf('Source'))
     await expect(block.indexOf('Source')).toBeLessThan(block.indexOf('Endpoints'))
     await expect(c.getAllByText('https://api.fraud-scan.example').length).toBeGreaterThan(0)
