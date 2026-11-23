@@ -27,6 +27,12 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   const [error, setError] = useState<string | null>(null)
   const [said, setSaid] = useState<string | null>(null)
   const [faking, setFaking] = useState(false)
+  // A real response was given and the task's agent was asked for the fake of it: that takes a minute or more, and
+  // nothing else on the page says it is under way. Kept for the tab, so it survives the cell being drawn again.
+  const askedKey = `fake-asked:${appId}:${mockKey}:${e.key}:${issueId ?? ''}`
+  const [askedAt, setAskedAt] = useState<number | null>(() => { try { const v = Number(sessionStorage.getItem(askedKey)); return v && Date.now() - v < 30 * 60_000 ? v : null } catch { return null } })
+  const asked = (at: number | null) => { setAskedAt(at); try { if (at) sessionStorage.setItem(askedKey, String(at)); else sessionStorage.removeItem(askedKey) } catch { /* not kept */ } }
+  const [, setNow] = useState(0)
   const own = issueId ? e.data.task : null
   const item = own ?? e.data.app
   const call = `${e.method} ${e.path}`
@@ -34,7 +40,7 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   const give = (level: 'app' | 'task') => (files: File[], real: boolean) => act(async () => {
     const r = await engine.giveEndpointData(appId, mockKey, e.key, files, { real, issueId: level === 'task' ? issueId : null })
     if (r.kept === 'faked') return `Faked. The original was not kept.${r.maybeStructure?.length ? ` These look like structure and were replaced all the same: ${r.maybeStructure.join(', ')}.` : ''}`
-    if (r.kept === 'recorded') return r.asked ? 'Kept on this computer. The task\'s agent is making the fake.' : 'Kept on this computer. It is faked once a task takes this service up.'
+    if (r.kept === 'recorded') { if (r.asked) { asked(Date.now()); return null } return 'Kept on this computer. It is faked once a task takes this service up.' }
     return null
   })
   // The fake of the saved real response, made now. Refused while something real is still in it: then it is the task's agent's to say what is structure.
@@ -47,10 +53,19 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
     const what = level === 'task' ? `Go back to the app's data for ${call}? This task's own is removed` : `Remove the data of ${call}?`
     if (window.confirm(`${what}${it?.recorded ? (level === 'task' ? ', and its real response is deleted from this computer.' : ' Its real response is deleted from this computer too.') : level === 'task' ? '.' : ''}`)) void act(() => engine.removeEndpointData(appId, mockKey, e.key, { issueId: level === 'task' ? issueId : null, real: true }).then(() => null))
   }
+  // Under way until the fake of the response just given is there: none yet, or the one there is of an older response.
+  const waiting = askedAt !== null && !!item?.recorded && (!item.safe || !!item.safe.stale)
+  const slow = waiting && Date.now() - askedAt! > 5 * 60_000
+  useEffect(() => { if (askedAt !== null && !waiting && item?.safe) asked(null) }, [askedAt, waiting, item?.safe]) // eslint-disable-line react-hooks/exhaustive-deps
+  // While it waits, the page is asked again now and then: the fake arrives without anyone pressing anything.
+  useEffect(() => { if (!waiting) return; const t = setInterval(() => { setNow(Date.now()); void onChanged() }, 5000); return () => clearInterval(t) }, [waiting]) // eslint-disable-line react-hooks/exhaustive-deps
+  const working = faking || (waiting && !slow)
   return (
     <div className="endpoint-data" data-component="EndpointData" data-endpoint={e.key}>
-      <ItemSays item={item} written={written} own={!!own} />
-      {item?.recorded && !item.safe && <div className="row"><button className="btn small" disabled={faking} aria-label={`Make the fake version of ${call}`} onClick={() => void makeFake()}>{faking ? 'Making it…' : 'Make fake version'}</button></div>}
+      <ItemSays item={item} written={written} own={!!own} working={working} />
+      {working && <div className="working-banner" role="status"><span className="working-spin" aria-hidden="true" /><div><strong>{faking ? 'Making the fake version…' : 'The task\'s agent is making the fake version…'}</strong><div>{faking ? 'Every value that is someone\'s is being replaced, then checked against the real response.' : 'The real response is kept on this computer. This usually takes a minute or two, and this updates by itself when the fake is ready.'}</div></div></div>}
+      {slow && <div className="mock-data-warn" role="status">The fake has not arrived after five minutes. The task's conversation shows how far its agent got; or make it here with "Make fake version".<button className="lv-act" style={{ marginLeft: 8 }} onClick={() => asked(null)}>Dismiss</button></div>}
+      {item?.recorded && !item.safe && !(waiting && !slow) && <div className="row"><button className="btn small" disabled={faking} aria-label={`Make the fake version of ${call}`} onClick={() => void makeFake()}>{faking ? 'Making it…' : 'Make fake version'}</button></div>}
       {/* Which version a person's own runs get, where there is a real response to choose: this endpoint's own switch. */}
       {item?.recorded && !e.sensitive && (() => {
         const f = e.data.faked ?? { app: true, task: null }, mine = issueId ? f.task : null, on = mine ?? f.app
@@ -89,7 +104,7 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   )
 }
 
-function ItemSays({ item, written, own }: { item: EndpointItem | null; written: boolean; /** It is the task's own, in place of the app's. */ own: boolean }) {
+function ItemSays({ item, written, own, working = false }: { item: EndpointItem | null; written: boolean; /** It is the task's own, in place of the app's. */ own: boolean; /** The fake is being made now: what is missing is not said as if it had failed. */ working?: boolean }) {
   if (!item) return <div className="faint">{written ? 'No data: answered with what the server written for it makes up.' : 'No data yet: a call to it fails until some is added.'}</div>
   return (
     <>
@@ -98,8 +113,8 @@ function ItemSays({ item, written, own }: { item: EndpointItem | null; written: 
       {/* What the mapping changes in that data, said where the data is: which fields, and from where. */}
       {item.safe?.fromFile && <div className="lv-sub" style={{ margin: 0 }} data-overridden="file" title={Object.entries(item.safe.fromFile.map).map(([c, from]) => `${c} ← ${from || '(left empty)'}`).join('\n')}>Overridden fields, from <strong>{item.safe.fromFile.file}</strong>: {Object.entries(item.safe.fromFile.map).map(([c, from], n) => <span key={c}>{n > 0 && ', '}<code>{c}</code>{from && from !== c ? <> ← {from}</> : !from ? ' (empty)' : null}</span>)}</div>}
       {item.safe?.madeFor && <div className="lv-sub" style={{ margin: 0 }} data-overridden="table" title={Object.entries(item.safe.madeFor.map).map(([c, from]) => `${c} ← ${from}`).join('\n')}>Overridden fields, from <strong>{item.safe.madeFor.table}</strong> of {item.safe.madeFor.fixture}: {Object.entries(item.safe.madeFor.map).map(([c, from], n) => <span key={c}>{n > 0 && ', '}<code>{c}</code>{from !== c ? <> ← {from}</> : null}</span>)}</div>}
-      {item.recorded && !item.safe && <div className="mock-data-warn">Not faked yet, so nothing of it is served.</div>}
-      {item.safe?.stale && <div className="faint">The fake is of an older response than the one above.</div>}
+      {item.recorded && !item.safe && !working && <div className="mock-data-warn">Not faked yet, so nothing of it is served.</div>}
+      {item.safe?.stale && !working && <div className="faint">The fake is of an older response than the one above.</div>}
     </>
   )
 }

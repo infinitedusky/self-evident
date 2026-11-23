@@ -6805,3 +6805,16 @@ engine names the frame `localhost:<port>`. To a browser those are two sites, and
 frame of another site, so the app lost the cookie it guards every data-changing request with. The frame is now
 asked for by the host name the page itself is open under (both are this computer). Checked in a browser from both
 addresses: the framed app keeps its cookie.
+
+### 2026-11-23: A fake being made says so, large
+
+Sandy: "When we add a record and the agent is making a fake, we need that to have more prominent processing
+animation. It looks like it failed, only a tiny bit of black text says that it is doing it." While the task's agent
+makes the fake of a real response just given, the endpoint's data shows a banner with a spinner and a moving bar,
+where the fake will appear; "Not faked yet, so nothing of it is served" and the Make fake version button are not
+shown meanwhile. The cell asks again every few seconds, so the fake arrives by itself. After five minutes with no
+fake it says so and points at the task's conversation. The same banner shows while "Make fake version" runs.
+
+Found the same hour, not changed: asked for the fake of a new real response, CEB-90's agent also wrote a server for
+the service ("served: written"), which answers for whoever it is sent. The brief says no server is written per
+service; the agent's instructions for a fake still follow the older way. For step 5.

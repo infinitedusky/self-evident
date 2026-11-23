@@ -1186,6 +1186,14 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .lv-section-head { display: flex; align-items: baseline; gap: 10px; }
 .lv-section-head h3 { font-size: 17px; margin: 0 auto 0 0; }
 .lv-section-head .lv-count { font-size: 13px; font-weight: 400; color: var(--ink-faint); margin-left: 6px; letter-spacing: 0; }
+/* Something is being made and will take a while: said where it will appear, large enough not to be missed. */
+.working-banner { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 8px; background: color-mix(in srgb, var(--accent) 9%, transparent); font-size: 13px; position: relative; overflow: hidden; }
+.working-banner strong { display: block; font-size: 14px; }
+.working-banner::after { content: ''; position: absolute; left: 0; bottom: 0; height: 2px; width: 40%; background: var(--accent); animation: working-slide 1.4s ease-in-out infinite; }
+.working-spin { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); animation: working-turn .8s linear infinite; }
+@keyframes working-turn { to { transform: rotate(360deg); } }
+@keyframes working-slide { 0% { left: -40%; } 100% { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .working-spin, .working-banner::after { animation: none; } }
 /* A smoke test's database: what it was built from, and the fixtures it can start from. */
 .smoke-data { margin: 0 0 10px; font-size: 13px; }
 .smoke-data select { font: inherit; font-size: 13px; max-width: 220px; }
