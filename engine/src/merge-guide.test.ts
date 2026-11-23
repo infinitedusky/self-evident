@@ -106,7 +106,7 @@ describe('the merge guide', () => {
     expect(body).toContain('whole test run is once per task'); expect(body).not.toContain('tested on the merged commit')
     expect(body).not.toMatch(/^Built by Evident/); expect(body.indexOf('Built by Evident from project `proj_x`')).toBeGreaterThan(fold) // which project of ours it is belongs to our record, not the top
     expect(prBody({ id: 'proj_x', name: 'Orders (sample)', content: 'Long project text.' }, [], [])).toMatch(/^Long project text\./) // without a guide the project's own words lead
-    expect(prBody({ id: 'proj_x', name: 'Orders (sample)', content: 'Long project text.' }, [], [])).toContain('<details>') // our record is folded whatever leads
+    expect(prBody({ id: 'proj_x', name: 'Orders (sample)', content: 'Long project text.' }, [], [])).toContain('## Fine print\n\n<details>') // our record is folded whatever leads
   })
 
   it('every check is asked for a summary for the person, apart from the report for the next agent', () => {
