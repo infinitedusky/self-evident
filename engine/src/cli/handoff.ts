@@ -40,7 +40,7 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 function plist(label: string, args: string[], o: { cwd?: string; path?: string; log: string }): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Written by Self Evident (pnpm arrive). No secrets here: they come from Doppler. -->
+<!-- Written by Evident (pnpm arrive). No secrets here: they come from Doppler. -->
 <plist version="1.0">
 <dict>
   <key>Label</key><string>${label}</string>
@@ -146,7 +146,7 @@ async function startEngine(): Promise<void> {
 
 const report = (lines: Line[]) => { const bad = lines.filter((l) => !l.ok); if (bad.length) console.log(`\n${bad.length} not moved; see the ✗ lines above.`) }
 
-const program = new Command('handoff').description('Move Self Evident between Macs')
+const program = new Command('handoff').description('Move Evident between Macs')
 
 program.command('check').description('what leaving would send, without changing anything').action(async () => {
   const plan = await readPlan()

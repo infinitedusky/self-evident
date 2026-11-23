@@ -359,7 +359,7 @@ export const nightly = pgTable('nightly', {
   greenAt: at('green_at'), greenSha: text('green_sha'), error: text('error'), checkedAt: at('checked_at').notNull().defaultNow(),
 }, (t) => [uniqueIndex('nightly_app_key').on(t.appId, t.key)])
 
-// Pull requests Self Evident did not open (a teammate's, or the person's own by hand), kept from GitHub by the sync:
+// Pull requests Evident did not open (a teammate's, or the person's own by hand), kept from GitHub by the sync:
 // a review requested from the person shows in My Stuff, and one that touches files our open work claims is flagged.
 export const outsidePr = pgTable('outside_pr', {
   id: bigserial('id', { mode: 'number' }).primaryKey(), appId: appId(), repoId: text('repo_id').notNull().references(() => repo.id),

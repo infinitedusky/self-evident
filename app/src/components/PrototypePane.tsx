@@ -124,7 +124,7 @@ function Frame({ p, path, onNavigate, onStop, onRestart, onTalk, data }: { p: Pr
   useEffect(() => { if (!cmp) { setAway(false); theirs.setAt(null) } }, [!!cmp])
   /** A step of its guide: both views go there. */
   const go = (to: string) => { const next = to.startsWith('/') ? to : `/${to}`; mine.setAt(base + next); if (cmp) theirs.setAt(cmpBase + next) }
-  /** Main's own tab, detached: Self Evident's page around it, so it still counts as being looked at. */
+  /** Main's own tab, detached: Evident's page around it, so it still counts as being looked at. */
   const detachMain = () => { window.open(`${window.location.origin}/view?tab=${encodeURIComponent(JSON.stringify({ kind: 'main', path: mainSrc.startsWith(cmpBase) ? mainSrc.slice(cmpBase.length) || '/' : '/' }))}`, '_blank'); setAway(true) }
   const width = DEVICES.find((d) => d.id === device)?.width
   const sized = width ? { width, maxWidth: '100%' } : undefined

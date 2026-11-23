@@ -1,4 +1,4 @@
-# Self Evident app
+# Evident app
 
 The minimal UI: the **ideas board** (building / testing / parked), an **idea page** (the bet, its telemetry, the loop
 it ran, its evidence — from the database, once connected), **graph** (the top level: every step of every plan in an app on one canvas, dependencies as edges, dashed
@@ -38,9 +38,9 @@ export const OneIssue: Story = { parameters: { route: { path: '/issues/:id', url
 
 ## The screen map
 
-Storybook also draws the app as a map of its screens: **Self Evident/Map** in the sidebar (`?path=/docs/self-evident-map--docs`),
+Storybook also draws the app as a map of its screens: **Evident/Map** in the sidebar (`?path=/docs/self-evident-map--docs`),
 from `src/stories/flows/self-evident.flow.json` through `@zigbang/storybook-addon-story-flow`. Each node is a page as the
 user sees it, its states the page's stories, each edge what you tap. To add a screen, add a node with the page's story
 ids and the edges in and out; whole screens only, never a card or a form on its own. `.storybook/story-flow.css` keeps the
 titles in their strip when zoomed out; the flow files are excluded from the story tests in `vite.config.ts`. The same
-standard is what Self Evident's Storybook integration checks in every app's repo.
+standard is what Evident's Storybook integration checks in every app's repo.

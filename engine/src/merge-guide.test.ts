@@ -89,9 +89,9 @@ describe('the merge guide', () => {
     const body = prBody({ id: 'proj_x', name: 'Orders (sample)' }, [{ identifier: 'XX-3', title: 'Stream it', summary: 'Done.' }], [], [], mergeGuide([task]), mergeRecord([task]), written)
     expect(body.startsWith(written)).toBe(true)
     const fold = body.indexOf('<details>')
-    for (const ours of ['Built by Self Evident', '## Merge guide', 'XX-3 Stream it', '**Every acceptance criterion**']) expect(body.indexOf(ours)).toBeGreaterThan(fold)
-    expect(body.slice(0, fold)).not.toMatch(/XX-\d|proj_x|Self Evident/) // nothing of ours above the fold
-    expect(body.trimEnd().endsWith('via Self Evident')).toBe(true)
+    for (const ours of ['Built by Evident', '## Merge guide', 'XX-3 Stream it', '**Every acceptance criterion**']) expect(body.indexOf(ours)).toBeGreaterThan(fold)
+    expect(body.slice(0, fold)).not.toMatch(/XX-\d|proj_x|Evident/) // nothing of ours above the fold
+    expect(body.trimEnd().endsWith('via Evident')).toBe(true)
   })
 
   it('heads each task when a pull request carries several; the pull request opens with it and folds the rest away', () => {
@@ -104,7 +104,7 @@ describe('the merge guide', () => {
     expect(body.indexOf('## Merge guide')).toBeLessThan(fold)
     for (const inside of ['**Every acceptance criterion**', 'Opens everywhere.', '## What landed, sub-task by sub-task', '### XX-3 Stream it']) { expect(body.indexOf(inside)).toBeGreaterThan(fold); expect(body.indexOf(inside)).toBeLessThan(body.indexOf('</details>')) }
     expect(body).toContain('whole test run is once per task'); expect(body).not.toContain('tested on the merged commit')
-    expect(body).not.toMatch(/^Built by Self Evident/); expect(body.indexOf('Built by Self Evident from project `proj_x`')).toBeGreaterThan(fold) // which project of ours it is belongs to our record, not the top
+    expect(body).not.toMatch(/^Built by Evident/); expect(body.indexOf('Built by Evident from project `proj_x`')).toBeGreaterThan(fold) // which project of ours it is belongs to our record, not the top
     expect(prBody({ id: 'proj_x', name: 'Orders (sample)', content: 'Long project text.' }, [], [])).toMatch(/^Long project text\./) // without a guide the project's own words lead
     expect(prBody({ id: 'proj_x', name: 'Orders (sample)', content: 'Long project text.' }, [], [])).toContain('<details>') // our record is folded whatever leads
   })

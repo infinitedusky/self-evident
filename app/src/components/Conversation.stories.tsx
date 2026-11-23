@@ -93,5 +93,5 @@ export const InTheTerminal: Story = { beforeEach: withEngine({ transcript: t({ m
   msg(8, 'engine', 'handoff', 'Continued in the terminal. What\'s said there shows here; send a message here to bring it back.', { to: 'terminal' }),
   msg(9, 'user', 'text', 'Sample: let SS-6 go first instead', { via: 'terminal' }),
   msg(10, 'agent', 'text', 'Swapped: SS-6 builds next, then SS-5.', { via: 'terminal' }),
-  msg(11, 'engine', 'handoff', 'Back in Self Evident. Close the terminal session so the two don\'t talk over each other.', { to: 'ui' }),
+  msg(11, 'engine', 'handoff', 'Back in Evident. Close the terminal session so the two don\'t talk over each other.', { to: 'ui' }),
 ] }) }) }

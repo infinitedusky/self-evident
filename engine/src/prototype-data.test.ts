@@ -70,7 +70,7 @@ describe.skipIf(!reachable)('prototype data', () => {
 
     const saved = await savePrototypeData(p.id, 'three-products')
     expect(saved.saved).toEqual({ product: 3, line_item: 1 })
-    // Kept in Self Evident, for this prototype: nothing is written into its worktree, so nothing of it can be committed.
+    // Kept in Evident, for this prototype: nothing is written into its worktree, so nothing of it can be committed.
     expect(saved).toMatchObject({ scenario: 'three-products', shared: false })
     expect(((await showPrototypeScenario(p.id, 'three-products')).tables.product as { name: string }[]).map((r) => r.name)).toContain('Sample pen')
     expect(existsSync(join(p.path, '.prototype', 'scenarios', 'three-products'))).toBe(false)

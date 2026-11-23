@@ -1,6 +1,6 @@
-# Running Self Evident on a computer
+# Running Evident on a computer
 
-How Self Evident is set up on a computer, how to move between computers, and what to do when it doesn't start. For
+How Evident is set up on a computer, how to move between computers, and what to do when it doesn't start. For
 the person who runs it and for an agent asked to help with it. The decisions behind each part are in
 [LOG.md](../LOG.md) under the headings named here; this page is how things are now.
 
@@ -15,7 +15,7 @@ the person who runs it and for an agent asked to help with it. The decisions beh
 `pnpm dev` at the repository root starts the engine and the page with live reload. The engine applies database
 migrations when it starts. `GET /api/health` answers `{"ok":true}` when the engine can reach its database.
 
-A computer runs Self Evident in one of two ways. They differ only in where the database is.
+A computer runs Evident in one of two ways. They differ only in where the database is.
 
 ## Way 1: its own database (the default)
 
@@ -85,7 +85,7 @@ pnpm handoff check  # what leaving would send; changes nothing
 uncommitted in each open conversation's worktree as "Handoff: work in progress, from <computer>", pushes each
 branch, sends the histories, and lets go of the engine. `--except <branch…>` leaves branches on this computer.
 
-`pnpm arrive` pulls and installs Self Evident, clones each app's checkout if it is missing or fetches it, makes
+`pnpm arrive` pulls and installs Evident, clones each app's checkout if it is missing or fetches it, makes
 each conversation's worktree again from its branch, brings the histories in, writes the two launchd agents and
 starts the engine. `--force` takes the engine from a computer that is gone.
 
@@ -158,7 +158,7 @@ repositories", below).
 | Local checkout | The folder the repository is cloned in on this computer. A folder that isn't a repository yet becomes one. |
 | GitHub repo | `owner/name`, never a clone address. Optional. |
 
-Self Evident's git commands (fetch, worktrees, commits, pushes) run in the checkout and use the remote it was
+Evident's git commands (fetch, worktrees, commits, pushes) run in the checkout and use the remote it was
 cloned with, whatever account that is. The GitHub repo field adds what goes through the `gh` tool: opening pull
 requests, reading reviews and checks, and the sync every two minutes. Those use the account `gh` is signed in as.
 Leave the field empty and everything stays local; you push by hand.
@@ -183,7 +183,7 @@ git -C REPO config user.email "the address that account's commits carry"
 ssh-add --apple-use-keychain ~/.ssh/id_ed25519_second   # a key with a passphrase: the engine cannot type it
 ```
 
-Git in that checkout then uses the second account without any switching. For Self Evident to open pull requests
+Git in that checkout then uses the second account without any switching. For Evident to open pull requests
 there too, `gh` must be signed in as that account and active (`gh auth login`, `gh auth switch -u <account>`);
 with the GitHub repo field filled and `gh` on the other account, the sync and pull requests for that app fail.
 
@@ -277,6 +277,6 @@ engine's environment picks one and skips the others.
 Where the computer has **Tailscale** (see "From a phone"), sharing tries it before ngrok: a public link at the
 computer's own Tailscale name, on port 8443 or 10000, so **two things at once**, with no notice page. It needs
 Funnel allowed on the Tailscale account; if it is not, the share panel gives the link that allows it. The address
-shows the computer's name. Port 443 is never used for a share: it is where Self Evident's own page is served to the
+shows the computer's name. Port 443 is never used for a share: it is where Evident's own page is served to the
 phone, and that page is never public. `SHARE_TUNNEL=funnel` uses only Tailscale. The first link from a computer can
 take a few minutes to answer everywhere, while its name spreads.

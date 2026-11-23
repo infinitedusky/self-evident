@@ -1,7 +1,7 @@
 <!-- rogs-skills config v1: domain -->
 # Domain docs
 
-How skills read this project's domain language and recorded decisions. Self Evident wrote it for the app {{FILL: the app's name}}: Set up what's missing under Integrations › tkt writes it again from the app and the repository, and leaves it alone once this line is gone.
+How skills read this project's domain language and recorded decisions. Evident wrote it for the app {{FILL: the app's name}}: Set up what's missing under Integrations › tkt writes it again from the app and the repository, and leaves it alone once this line is gone.
 
 ## Glossary
 

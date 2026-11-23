@@ -1,5 +1,5 @@
 /**
- * Notes (engine/src/notes.ts): what a person wants kept that Self Evident cannot know. A conversation had and what
+ * Notes (engine/src/notes.ts): what a person wants kept that Evident cannot know. A conversation had and what
  * came of it, something found, a decision made along the way. Each has the day it is about, so a report on that day
  * includes it, and the tasks it is about, none or several.
  *

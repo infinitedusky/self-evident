@@ -291,9 +291,9 @@ export const AppIntegrations: Story = { parameters: appPage(sampleApp.id, 'integ
 export const AppLinear: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/linear` } } }
 /** tkt for an app, on and working: the check ran by itself, and the tracker guide to copy into the repo. */
 export const AppTkt: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/tkt` } }, beforeEach: withEngine({ check: { ok: true, detail: 'tkt v0.21.0; doctor passes in /code/sample-shop; the tracker guide points at SS here.' } }) }
-/** tkt on but broken: tkt doctor's own line, then "get tkt working"; Self Evident does nothing else about it. */
+/** tkt on but broken: tkt doctor's own line, then "get tkt working"; Evident does nothing else about it. */
 export const AppTktBroken: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/tkt` } }, beforeEach: withEngine({ check: { ok: false, detail: 'tkt doctor: fail  herdr  herdr is not installed. Get tkt working: https://gitlab.com/rogs/tkt' } }) }
-/** tkt off for an app: its tasks go to Self Evident's own planner; nothing is checked. */
+/** tkt off for an app: its tasks go to Evident's own planner; nothing is checked. */
 export const AppTktOff: Story = { parameters: { route: { path: '/settings/apps/:id/:section/:item', url: `/settings/apps/${sampleApp.id}/integrations/tkt` } }, beforeEach: withEngine({ appSettings: { ...appSettings, integrations: { ...appSettings.integrations, tkt: { on: { value: null, from: null } } }, status: { ...appSettings.status, tkt: { state: 'off', missing: [], keyVar: null } } } }) }
 /** tkt under All apps: switched on per app, so this page only says what it does. */
 export const AllAppsTkt: Story = { parameters: { route: { path: '/settings/:section/:item', url: '/settings/integrations/tkt' } } }
@@ -340,7 +340,7 @@ export const RemovedApps: Story = {
   },
 }
 
-/** How an app is brought up for a smoke test: a script, a stop script and a seed, kept in Self Evident and never in the app's repository (made-up sample). */
+/** How an app is brought up for a smoke test: a script, a stop script and a seed, kept in Evident and never in the app's repository (made-up sample). */
 export const AppSmokeTestSetUp: Story = {
   parameters: appPage(sampleApp.id, 'prototype'),
   beforeEach: withEngine({ apps: [{ ...sampleApp, setup: { ...sampleApp.setup, smoke: { where: 'local', what: 'The dashboard, signed in as the test admin (sample)', cmd: 'docker compose -p smoke-$PORT up -d db\npnpm install && pnpm dev --port $PORT', stop: 'docker compose -p smoke-$PORT down -v', seed: "insert into parent (id, name) values (1, 'Sample Parent');" } } }] }),

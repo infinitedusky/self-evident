@@ -64,7 +64,7 @@ export function RemovedApps({ apps, onRestore, onDelete }: {
               </div>
               {asking === a.id && (
                 <form className="remove-app-ask" onSubmit={(e) => { e.preventDefault(); if (typed.trim() === a.name) void run(a.id, () => onDelete(a.id, typed)) }}>
-                  <div>This erases {a.name} from Self Evident: {holds(a).toLowerCase()}, and its history. It cannot be undone.</div>
+                  <div>This erases {a.name} from Evident: {holds(a).toLowerCase()}, and its history. It cannot be undone.</div>
                   {a.kept.length > 0 && <div className="faint" style={{ fontSize: 13 }}>Stays where it is: {a.kept.map((k, i) => <span key={k}>{i ? ', ' : ''}<span className="mono">{k}</span></span>)}.</div>}
                   <label>Type <b>{a.name}</b> to delete it<input value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus aria-label={`Type ${a.name} to delete it`} /></label>
                   <div style={{ display: 'flex', gap: 6 }}>

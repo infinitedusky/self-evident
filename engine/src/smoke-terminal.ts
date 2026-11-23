@@ -37,7 +37,7 @@ export const shellEnv = (from: NodeJS.ProcessEnv, more: Record<string, string> =
   ({ ...Object.fromEntries(Object.entries(from).filter(([k, v]) => v !== undefined && !OWN.test(k)) as [string, string][]), ...more, TERM: 'xterm-256color' })
 
 /**
- * Whether a request comes from Self Evident's own page. A shell must not be reachable from any other site open in
+ * Whether a request comes from Evident's own page. A shell must not be reachable from any other site open in
  * the same browser: a page elsewhere can send a request to localhost, and its Origin says so. JSON is asked for on
  * anything that changes something, since another site cannot send that without asking first.
  */

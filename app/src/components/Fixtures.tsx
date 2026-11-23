@@ -1,6 +1,6 @@
 /**
  * The app's fixtures (engine/src/fixtures.ts): what is in the app's own database when it is tried. Each is a set of
- * made-up rows by table, kept in Self Evident with the ids it was saved with, so a mock's data can be filled out
+ * made-up rows by table, kept in Evident with the ids it was saved with, so a mock's data can be filled out
  * for its people. On a task it also says which fixture the task's runs are built from: the one its data was made
  * for.
  *

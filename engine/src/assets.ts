@@ -5,7 +5,7 @@
  *
  * An app has assets; a project has its own on top. Every conversation in the app is told the app's, and one about a
  * project or a task in a project is told that project's too, so "the designs are here" is said once, not in every
- * conversation. Self Evident keeps where a thing is, never a copy of it.
+ * conversation. Evident keeps where a thing is, never a copy of it.
  */
 import { and, asc, eq, isNull, or, sql } from 'drizzle-orm'
 import { db } from './db/client.js'

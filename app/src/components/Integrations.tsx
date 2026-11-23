@@ -6,7 +6,7 @@
  *
  * A per-app integration (tkt, the runner) has a switch instead of values: on for an app, it runs that app's tasks.
  * Its check runs by itself when the page opens, says in the tool's own words what is wrong, and leaves fixing it
- * outside Self Evident; the tracker guide is the one thing Self Evident hands over, the file the skills read to
+ * outside Evident; the tracker guide is the one thing Evident hands over, the file the skills read to
  * find the app here.
  */
 import { useEffect, useState } from 'react'
@@ -50,7 +50,7 @@ export function Integrations({ base, item, integrations, values, status, keys, o
       <h2>Integrations</h2>
       <p className="muted settings-lead">{scope === 'app'
         ? 'What this app connects to, and who runs its tasks. Each uses the values set under All apps unless this app overrides them.'
-        : 'What Self Evident connects to, through each service\'s own API. Set once here; an app can override any value. A runner is switched on per app.'}</p>
+        : 'What Evident connects to, through each service\'s own API. Set once here; an app can override any value. A runner is switched on per app.'}</p>
       <ul className="integrations-list">
         {integrations.map((i) => {
           const st = i.perApp && scope === 'workspace' ? { label: 'Per app', tone: 'neutral' as Tone } : standing(i, status[i.key])
@@ -192,7 +192,7 @@ function Page({ i, base, values, status, kept, onKeys, scope, appId, all, onSave
       <p className="muted settings-lead">{i.does}</p>
       <p className="settings-desc">{switched
         ? <>Switched on under an app's Integrations.{i.fields.some((f) => f.kind !== 'switch') && <> Its {i.fields.filter((f) => f.kind !== 'switch').map((f) => f.label.toLowerCase()).join(' and ')} have defaults read from the app's repo; set them there only when the defaults are wrong.</>}</>
-        : <>Set under each app's Integrations: {i.fields.map((f) => f.label.toLowerCase()).join(' and ')}. The check reads the app's repo.</>} Installed and kept working outside Self Evident{i.docs && <>: <a href={i.docs} target="_blank" rel="noreferrer">{i.key === 'storybook' ? 'the screen map add-on' : `about ${i.name}`} ↗</a></>}.</p>
+        : <>Set under each app's Integrations: {i.fields.map((f) => f.label.toLowerCase()).join(' and ')}. The check reads the app's repo.</>} Installed and kept working outside Evident{i.docs && <>: <a href={i.docs} target="_blank" rel="noreferrer">{i.key === 'storybook' ? 'the screen map add-on' : `about ${i.name}`} ↗</a></>}.</p>
       {actions}
     </section>
   )
@@ -240,7 +240,7 @@ function Page({ i, base, values, status, kept, onKeys, scope, appId, all, onSave
                 : i.key === 'tkt' ? <>Whether {i.name} can run this app's tickets from here: the runner on the engine's PATH, a local checkout with the tracker guide pointing at this app, and its own doctor passing there. </>
                 : outside ? <>Whether this app's Storybook answers and lists its stories. It is kept outside the repo: nothing in the repo is read, and nothing is installed into it. </>
                 : <>Whether this app's Storybook meets the standard: Storybook 10 in the checkout, the screen map add-on installed and wired, its stylesheet imported, the flow files kept out of the story tests, and a map; then whether it is answering at the URL. </>}
-              Installed and kept working outside Self Evident{i.docs && <>: <a href={i.docs} target="_blank" rel="noreferrer">{i.key === 'storybook' ? 'the screen map add-on' : `about ${i.name}`} ↗</a></>}.
+              Installed and kept working outside Evident{i.docs && <>: <a href={i.docs} target="_blank" rel="noreferrer">{i.key === 'storybook' ? 'the screen map add-on' : `about ${i.name}`} ↗</a></>}.
             </p>
           )}
           {i.calls && (
@@ -266,7 +266,7 @@ function Page({ i, base, values, status, kept, onKeys, scope, appId, all, onSave
   )
 }
 
-/** The repo's docs/agents/issue-tracker.md for this app, filled in by the engine: Self Evident's half of the handshake with tkt's skills. */
+/** The repo's docs/agents/issue-tracker.md for this app, filled in by the engine: Evident's half of the handshake with tkt's skills. */
 function TrackerGuide({ appId, name }: { appId: string; name: string }) {
   const [text, setText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -279,7 +279,7 @@ function TrackerGuide({ appId, name }: { appId: string; name: string }) {
     <div className="settings-group" data-component="TrackerGuide">
       <div className="integration-section-head"><h3 className="settings-h3">The tracker guide</h3>{text && <button className="btn quiet" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>}</div>
       <p className="faint settings-desc" style={{ margin: '0 0 6px' }}>
-        How {name}'s skills find this app here. Set up what's missing writes it into the repo as <span className="mono">docs/agents/issue-tracker.md</span>, with the rest of the lifecycle configuration (the forge, the workflow, the domain docs, the pull request template, the block in CLAUDE.md); this is the copy to paste when you would rather do it by hand. Everything about {name} itself stays outside Self Evident.
+        How {name}'s skills find this app here. Set up what's missing writes it into the repo as <span className="mono">docs/agents/issue-tracker.md</span>, with the rest of the lifecycle configuration (the forge, the workflow, the domain docs, the pull request template, the block in CLAUDE.md); this is the copy to paste when you would rather do it by hand. Everything about {name} itself stays outside Evident.
       </p>
       {error ? <div className="bad">{error}</div> : text ? <details><summary className="faint">Show the file</summary><pre className="guide">{text}</pre></details> : <p className="muted" style={{ margin: 0 }}>Loading…</p>}
     </div>

@@ -18,7 +18,7 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
   return JSON.parse(text) as T
 }
 
-const program = new Command('se').description('Self Evident engine, shaped like Linear: initiative → project (tasks in order) → task → sub-task → step')
+const program = new Command('se').description('Evident engine, shaped like Linear: initiative → project (tasks in order) → task → sub-task → step')
 
 program.command('migrate').description('apply database migrations').action(async () => { await import('../db/migrate.js') })
 
@@ -76,7 +76,7 @@ talk.command('share').argument('[dir]', 'the folder the Claude Code session runs
     const appId = opts.app ?? (await appFor(cwd))?.id
     if (!appId) { console.error(`No app has ${cwd} in its repo; pass --app <id>.`); process.exitCode = 1; return }
     const s = await api<{ id: string; subject: string | null }>('POST', '/talks/adopt', { appId, cwd, agentSessionId: opts.session })
-    console.log(`In Self Evident now: ${s.subject ?? s.id}. What's said in either place shows in the other; whoever speaks next has it.`)
+    console.log(`In Evident now: ${s.subject ?? s.id}. What's said in either place shows in the other; whoever speaks next has it.`)
   })
 talk.command('resume').argument('<sessionId>', 'the conversation (sess_…), from the UI').description('print the command that continues a UI conversation in this terminal')
   .action(async (id: string) => { const r = await api<{ command: string }>('POST', `/talks/${id}/handoff`); console.log(r.command) })

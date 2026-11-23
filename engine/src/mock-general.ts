@@ -2,7 +2,7 @@
  * The general mock server (Sandy, 2026-11-22: "how mocks get used should be really just an issue of creating
  * endpoints and then pointing the application at it … the act of creating a service is also creating the server").
  *
- * One small program that comes with Self Evident and serves any service: it reads the service's endpoints and
+ * One small program that comes with Evident and serves any service: it reads the service's endpoints and
  * answers each call with that endpoint's data file from $MOCK_DATA. So a service is usable the moment it has an
  * endpoint and the variable that points the app at it; nothing is written for it, and there is no state in which
  * a service waits to be "built".
@@ -12,7 +12,7 @@
  * one, it is used instead.
  *
  * The program is one file with no dependencies, so it can be copied as it is to wherever the app is run: an export,
- * and (next) a reviewer's branch, which never needs Self Evident.
+ * and (next) a reviewer's branch, which never needs Evident.
  */
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -26,7 +26,7 @@ export type ServedBy = 'general' | 'written' | 'none'
 export const servedBy = (m: Pick<Row, 'cmd' | 'status' | 'endpoints'>): ServedBy => (m.cmd && m.status !== 'needs_recording' ? 'written' : cleanEndpoints(m.endpoints).length ? 'general' : 'none')
 
 /** The program. It listens on $PORT, reads endpoints.json beside it and its data from $MOCK_DATA, and accepts any key. */
-export const GENERAL_SERVER = `// A general mock server, from Self Evident. One file, no dependencies: node server.mjs
+export const GENERAL_SERVER = `// A general mock server, from Evident. One file, no dependencies: node server.mjs
 // It answers each call listed in endpoints.json with that endpoint's data file from the folder $MOCK_DATA
 // (<key>.<ext>, or the file the endpoint names). It holds no data of its own and accepts any key.
 import http from 'node:http'

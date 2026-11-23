@@ -1,5 +1,5 @@
 /**
- * Mockups: the current app's Storybook, inside Self Evident. It is Storybook and says so; the point is not leaving
+ * Mockups: the current app's Storybook, inside Evident. It is Storybook and says so; the point is not leaving
  * the app to see a page in every state. It is the Storybook of the conversation in front: started in that
  * conversation's worktree, so a story the agent just wrote is there before anything merges (Sandy, 2026-11-09: "we
  * need the screens to match the worktree"); with no conversation, or a branch without a Storybook, the app's own.

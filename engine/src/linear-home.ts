@@ -1,7 +1,7 @@
 /**
  * Linear as the home of an app's tickets (Sandy, 2026-11-10: "I want to setup linear integration with both", then
  * "Linear is the home"). With tkt's "Tickets live in Linear" switch on, tkt's skills read and change the tickets in
- * Linear through its hosted MCP server, and Self Evident makes the issue from an approved brief as before. Here: what
+ * Linear through its hosted MCP server, and Evident makes the issue from an approved brief as before. Here: what
  * the tracker guide needs to know about the team, read with the key Integrations › Linear already names, and the guide's
  * States section worked out from the team's own states.
  */
@@ -105,4 +105,4 @@ interface Tracked { app: { key: string; name: string }; uiUrl: string; linear?: 
 export const ticketKey = (ctx: Tracked) => ctx.linear?.team.key ?? ctx.app.key
 export const ticketUrl = (ctx: Tracked, id: string) => (ctx.linear ? `https://linear.app/${ctx.linear.slug}/issue/${id}` : `${ctx.uiUrl}/tasks/${id}`)
 /** The tracker and project in a few words, for the Ticket lifecycle block. */
-export const trackerWords = (ctx: Tracked) => (ctx.linear ? `Linear, the team ${ctx.linear.team.name} (${ctx.linear.team.key})` : `Self Evident, the app ${ctx.app.name} (${ctx.app.key})`)
+export const trackerWords = (ctx: Tracked) => (ctx.linear ? `Linear, the team ${ctx.linear.team.name} (${ctx.linear.team.key})` : `Evident, the app ${ctx.app.name} (${ctx.app.key})`)

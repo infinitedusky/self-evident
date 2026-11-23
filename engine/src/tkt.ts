@@ -1,10 +1,10 @@
 /**
  * tkt, Roger Gonzalez's runner, as an integration switched on per app (Sandy, 2026-11-08: "for any specific project
  * we can choose to use tkt or not … for that we do need a plugin or something, an integration"). On, tkt builds the
- * app's tickets from their approved briefs and its skills write back here; Self Evident hands nothing to its own
- * planner. Off, the app's tasks are tracked, or run by Self Evident's agents as before.
+ * app's tickets from their approved briefs and its skills write back here; Evident hands nothing to its own
+ * planner. Off, the app's tasks are tracked, or run by Evident's agents as before.
  *
- * Self Evident never installs or repairs tkt itself (SHAPE.md, "tkt is the runner"), but it writes, in one press,
+ * Evident never installs or repairs tkt itself (SHAPE.md, "tkt is the runner"), but it writes, in one press,
  * everything tkt and the lifecycle skills read from the repo: the tracker guide (here, from
  * docs/tracker-self-evident.md, with the app's id, key and URLs; or, when the app's tickets live in Linear, from
  * docs/lifecycle/tracker-linear.md with the team, linear-home.ts), the rest of the lifecycle configuration
@@ -46,7 +46,7 @@ export interface TktApp { id: string; key: string; name: string; defaultBranch?:
  * the switch is on but Linear cannot be reached as set; nothing is written until it can.
  */
 export interface TktContext { app: TktApp; repoPath: string | null; engineUrl: string; uiUrl: string; linear?: LinearHome; trackerProblem?: string }
-const home = (ctx: TktContext) => (ctx.linear ? 'Linear' : 'Self Evident')
+const home = (ctx: TktContext) => (ctx.linear ? 'Linear' : 'Evident')
 const where = (ctx: TktContext) => (ctx.linear ? `${ctx.linear.team.key} in Linear` : `${ctx.app.key} here`)
 /** What is wrong with a guide's Tracker section for this app, or null: `{ kind }` for another tracker, 'app' for another app or team. */
 function guideMismatch(ctx: TktContext, guide: string): { kind: string | null } | 'app' | null {
@@ -128,7 +128,7 @@ export async function trackerGuide(ctx: TktContext, read: ReadText = readText): 
     '<!-- rogs-skills config v1: issue-tracker -->',
     '# Issue tracker',
     '',
-    `Where this project's tickets live and how the lifecycle skills read and change them. Written from Self Evident's settings for the app ${ctx.app.name} (${ctx.app.key}); the app's page under Integrations › tkt gives a fresh copy.`,
+    `Where this project's tickets live and how the lifecycle skills read and change them. Written from Evident's settings for the app ${ctx.app.name} (${ctx.app.key}); the app's page under Integrations › tkt gives a fresh copy.`,
     '',
     '## Tracker',
     '',
@@ -178,7 +178,7 @@ async function linearGuide(ctx: TktContext, l: LinearHome, read: ReadText): Prom
     '<!-- rogs-skills config v1: issue-tracker -->',
     '# Issue tracker',
     '',
-    `Where this project's tickets live and how the lifecycle skills read and change them. Written from Self Evident's settings for the app ${ctx.app.name}, whose tickets live in Linear (team ${l.team.key}); the app's page under Integrations › tkt gives a fresh copy.`,
+    `Where this project's tickets live and how the lifecycle skills read and change them. Written from Evident's settings for the app ${ctx.app.name}, whose tickets live in Linear (team ${l.team.key}); the app's page under Integrations › tkt gives a fresh copy.`,
     '',
     '## Tracker',
     '',
@@ -244,7 +244,7 @@ const CONVENTIONS = [
 ]
 
 // Set up what's missing (Sandy, 2026-11-09: "can we add a step with tkt where it auto configures anything missing?"; then,
-// when the first version sent a yes/no list back: "we need a way to do it fast and consistent"). Self Evident writes the
+// when the first version sent a yes/no list back: "we need a way to do it fast and consistent"). Evident writes the
 // whole lifecycle configuration itself (lifecycle.ts), installs tkt's hooks with tkt's own installer, commits to the base
 // branch and checks again, in one press. The agent gets only what cannot be computed: tkt itself, what doctor still flags.
 
@@ -264,7 +264,7 @@ async function guideProblem(ctx: TktContext, read: ReadText): Promise<string | n
 
 /**
  * `tkt doctor`'s fail and warn lines with their hints, one string each. Left out: the pane warning (not a set-up
- * matter) and the pi one (pi runs tkt's own chat, which Self Evident stands in for).
+ * matter) and the pi one (pi runs tkt's own chat, which Evident stands in for).
  */
 export async function doctorFindings(exec: Run, repoPath: string): Promise<string[]> {
   let out: string[]
@@ -284,12 +284,12 @@ export async function doctorFindings(exec: Run, repoPath: string): Promise<strin
   return found
 }
 
-/** The job for the agent: the check's words, what Self Evident already did, tkt doctor's findings with their hints. */
+/** The job for the agent: the check's words, what Evident already did, tkt doctor's findings with their hints. */
 export function setupAsk(ctx: TktContext, detail: string, findings: string[]): string {
   const where = ctx.repoPath ?? 'the app\'s checkout'
   return [
-    `Self Evident's tkt check for ${ctx.app.name} (${ctx.app.key}) says: ${detail}`,
-    `Set up what is missing so tkt runs this app's tickets from ${where}. Self Evident has written the agent docs already (docs/agents/, the Ticket lifecycle block) and asked tkt to install its hooks; what is left is tkt's own. Confirm an install on this machine with me before doing it.`,
+    `Evident's tkt check for ${ctx.app.name} (${ctx.app.key}) says: ${detail}`,
+    `Set up what is missing so tkt runs this app's tickets from ${where}. Evident has written the agent docs already (docs/agents/, the Ticket lifecycle block) and asked tkt to install its hooks; what is left is tkt's own. Confirm an install on this machine with me before doing it.`,
     `- tkt itself, when it is missing: a release build through its install.sh (https://gitlab.com/rogs/tkt), on the engine's PATH (~/.local/bin here), so \`tkt --version\` answers.`,
     `- Then \`tkt doctor\` in the checkout, and every line it flags, each following its own hint${findings.length ? ', today:' : '.'}`,
     ...findings.map((f) => `    ${f}`),
@@ -345,19 +345,19 @@ export async function setupTkt(ctx: TktContext, deps: Deps = {}): Promise<Setup>
   paths.push(...written.paths)
   const changed = [...written.wrote, ...(written.blockChanged ? [`the Ticket lifecycle block in ${house.blockFile}`] : [])]
   if (changed.length) did.push(`Wrote ${list(changed)}, from the app, the repo and the house profile.`)
-  did.push(...written.kept.map((k) => `Left ${k} alone: it isn't Self Evident's (no "${OWNED}" line).`))
+  did.push(...written.kept.map((k) => `Left ${k} alone: it isn't Evident's (no "${OWNED}" line).`))
   did.push(...house.skipped.map((s) => `Skipped ${s}.`))
   const tktThere = await exec('tkt', ['--version']).then(() => true, () => false)
   if (tktThere) {
     const before = await doctorFindings(exec, ctx.repoPath)
     if (before.some((f) => f.startsWith('warn claude_hooks:'))) {
-      try { await exec('tkt', ['hook', 'claude', '--install', '--shared'], ctx.repoPath); paths.push('.claude/settings.json'); did.push('Installed tkt\'s Claude Code hooks in .claude/settings.json (the shared file, so they are committed and Self Evident\'s agents get them).') } catch (e) { did.push(`tkt hook claude --install --shared failed: ${lines(e).slice(-1)[0] ?? 'no output'}.`) }
+      try { await exec('tkt', ['hook', 'claude', '--install', '--shared'], ctx.repoPath); paths.push('.claude/settings.json'); did.push('Installed tkt\'s Claude Code hooks in .claude/settings.json (the shared file, so they are committed and Evident\'s agents get them).') } catch (e) { did.push(`tkt hook claude --install --shared failed: ${lines(e).slice(-1)[0] ?? 'no output'}.`) }
     }
     if (before.some((f) => f.startsWith('warn opencode_plugin:'))) {
       try { await exec('tkt', ['hook', 'tmp', '--install'], ctx.repoPath); did.push('Installed tkt\'s OpenCode plugin (tkt\'s own file under ~/.config/opencode).') } catch (e) { did.push(`tkt hook tmp --install failed: ${lines(e).slice(-1)[0] ?? 'no output'}.`) }
     }
   }
-  did.push(await commitOnBase(exec, ctx.repoPath, { remote: facts.remote?.name ?? 'origin', base: facts.base, paths, subject: `Set up the ticket lifecycle for ${ctx.app.name} (${ctx.app.key})`, body: 'Written by Self Evident from the app\'s settings and the repository, so tkt and the lifecycle skills find the app there. Set up what\'s missing under Integrations › tkt writes it again.' }))
+  did.push(await commitOnBase(exec, ctx.repoPath, { remote: facts.remote?.name ?? 'origin', base: facts.base, paths, subject: `Set up the ticket lifecycle for ${ctx.app.name} (${ctx.app.key})`, body: 'Written by Evident from the app\'s settings and the repository, so tkt and the lifecycle skills find the app there. Set up what\'s missing under Integrations › tkt writes it again.' }))
   const check = await checkTkt(ctx, deps)
   if (check.ok) return { done: true, did, ask: null, detail: check.detail }
   const findings = tktThere ? await doctorFindings(exec, ctx.repoPath) : []

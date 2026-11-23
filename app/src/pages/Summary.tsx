@@ -1,5 +1,5 @@
 /**
- * Summary: the page a person reads walking in. Written by the agent from everything Self Evident knows about the app,
+ * Summary: the page a person reads walking in. Written by the agent from everything Evident knows about the app,
  * rewritten daily when something has moved, or on asking. Sections in order of building: what we are focused on
  * (who is on what, goals near, mid, long) first; the state of the app, observability highlights, learnings and open
  * questions to come. Every line links the rows it was written from.
@@ -66,7 +66,7 @@ export function Summary() {
         <div>
           <h1>📰 Summary<span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span></h1>
           <p className="muted" style={{ margin: '4px 0 0', maxWidth: 760 }}>
-            Written by the agent from what Self Evident knows: goals, projects, tasks, to-dos, pull requests, the last week.
+            Written by the agent from what Evident knows: goals, projects, tasks, to-dos, pull requests, the last week.
             {f ? <> Written {ago(f.createdAt)}{f.trigger === 'schedule' ? ' on schedule' : ''}.</> : null}
             {f && data?.stale && !data.writing ? <> Things have moved since.</> : null} It rewrites itself daily when something has moved.
           </p>

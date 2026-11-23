@@ -17,7 +17,7 @@ export const SavedTwice: Story = {
     const c = within(canvasElement)
     await expect(await c.findByText('Proto before review (sample)')).toBeInTheDocument()
     await expect(c.getByText(/4 changes since/)).toBeInTheDocument()
-    await expect(c.getByText(/made by Self Evident/)).toBeInTheDocument()
+    await expect(c.getByText(/made by Evident/)).toBeInTheDocument()
     await expect(c.getByText(/Set aside · started from “Before the wallet idea \(sample\)” · 3 commits and 1 comment only here/)).toBeInTheDocument()
     await expect(c.getByLabelText('Working on Main')).toBeInTheDocument() // the one you are on is the first row
   },

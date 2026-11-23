@@ -4,9 +4,9 @@
  * computer public at its Tailscale name: `https://<computer>.<tailnet>.ts.net:8443`. It goes out on the ordinary
  * HTTPS port, so it gets through where Cloudflare's tunnel does not, and it shows the visitor no notice page.
  *
- * Funnel allows three public ports: 443, 8443 and 10000. **443 is never used here**: it is where Self Evident's own
+ * Funnel allows three public ports: 443, 8443 and 10000. **443 is never used here**: it is where Evident's own
  * page is served to the phone (devices.ts), which has no sign-in, and a Funnel on that port would make whatever is
- * served there public. So two things at once, on 8443 and 10000. Self Evident's own page and its engine are refused
+ * served there public. So two things at once, on 8443 and 10000. Evident's own page and its engine are refused
  * as targets outright.
  *
  * Run in the foreground (`tailscale funnel --https=8443 <target>`): the address lasts as long as the process does,
@@ -57,7 +57,7 @@ export function funnelRefused(all: string): string | null {
   return link ? `Tailscale's public links (Funnel) are not switched on for this account yet. Open ${link}, allow it, then share again.` : null
 }
 
-/** A local address a share must never reach: Self Evident's own page or its engine. Neither has a sign-in. */
+/** A local address a share must never reach: Evident's own page or its engine. Neither has a sign-in. */
 export function ownAddress(target: string): boolean {
   const port = Number(new URL(target).port)
   return port === 5180 || port === Number(process.env.PORT ?? 4000) || (!!process.env.UI_URL && port === Number(new URL(process.env.UI_URL).port || 0))
