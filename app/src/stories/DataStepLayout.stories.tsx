@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, within } from 'storybook/test'
 import { Badge } from '../components/Badge'
 
-// A mockup, for approval before the Data step is rebuilt to it (docs/reviewable-prs-brief.md, step 1). Nothing here
-// works: it shows the levels of the page and the one text style each has. Everything is made up (an invented vendor
+// The mockup the Data step was rebuilt to (docs/reviewable-prs-brief.md, step 1): Fixtures, TaskCalls and EndpointData
+// now use these levels. Nothing here works: it shows the levels of the page and the one text style each has. Everything is made up (an invented vendor
 // and company). The fixture buttons (make one from the seed, open, rename, delete) are step 3's proposal, drawn so
 // their place can be judged.
 const Btn = ({ children }: { children: string }) => <button className="btn quiet small" type="button">{children}</button>

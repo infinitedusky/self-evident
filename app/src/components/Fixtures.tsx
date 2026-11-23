@@ -14,23 +14,29 @@ export function Fixtures({ appId, issueId, version = 0 }: { appId: string; /** A
   const [got, setGot] = useState<{ fixtures: Fixture[]; used: string | null } | null>(null)
   useEffect(() => { engine.fixtures(appId, issueId).then(setGot).catch(() => setGot({ fixtures: [], used: null })) }, [appId, issueId, version])
   if (!got) return null
+  const rows = (f: Fixture) => f.tables.reduce((n, t) => n + t.rows, 0)
   return (
-    <div data-component="Fixtures">
-      <h3 className="mock-h3">Fixtures</h3>
-      <p className="faint" style={{ margin: '0 0 8px', fontSize: 13, maxWidth: 760 }}>
-        What is in the app's own database when it is tried: made-up rows, with ids that stay the same. A mock's data is filled out for a fixture's people, so the app sends the people the mock has answers for.
+    <div className="lv-section" data-component="Fixtures">
+      <div className="lv-section-head"><h3>Fixtures{got.fixtures.length > 0 && <span className="lv-count">{got.fixtures.length}</span>}</h3></div>
+      <p className="lv-section-note">
+        What is in the app's own database when it is tried: made-up rows, with ids that stay the same, so a mock's data can be filled out for a fixture's people.
         {issueId && <> {got.used ? <>This task's smoke test is built from <strong>{got.used}</strong>, the fixture its data was made for.</> : 'No data of this task is made for a fixture yet, so its smoke test is built from the app\'s default.'}</>}
       </p>
-      {!got.fixtures.length ? <div className="empty">No fixtures yet. One is kept from a prototype's data: fill the prototype's database (the app's own seed will do), then keep it as a scenario shared with the app.</div> : (
-        <ul className="mock-history">
-          {got.fixtures.map((f) => (
-            <li key={f.name}>
-              <strong>{f.name}</strong> {got.used === f.name && <Badge tone="accent">This task's</Badge>} <span className="faint">{size(f.bytes)}</span>
-              <div className="faint">{f.tables.slice(0, 8).map((t) => `${t.name}: ${t.rows}`).join(' · ')}{f.tables.length > 8 ? ` · and ${f.tables.length - 8} more tables` : ''}</div>
-            </li>
-          ))}
-        </ul>
-      )}
+      {!got.fixtures.length ? <div className="empty">No fixtures yet. One is kept from a prototype's data: fill the prototype's database (the app's own seed will do), then keep it as a scenario shared with the app.</div>
+        : got.fixtures.map((f) => (
+          <details className="lv-item" key={f.name} open={got.used === f.name}>
+            <summary className="lv-item-head"><span className="lv-item-name">{f.name}</span>{got.used === f.name && <Badge tone="accent">This task's</Badge>}<span className="lv-item-meta lv-end">{rows(f)} row{rows(f) === 1 ? '' : 's'} in {f.tables.length} table{f.tables.length === 1 ? '' : 's'} · {size(f.bytes)}</span></summary>
+            <div className="lv-part">
+              <div className="lv-part-head"><span className="lv-part-label">Tables</span></div>
+              {f.tables.map((t) => (
+                <div className="lv-row" data-cols="2" key={t.name}>
+                  <div><code>{t.name}</code>{t.columns.length > 0 && <div className="lv-sub">{t.columns.slice(0, 5).join(', ')}{t.columns.length > 5 ? ` and ${t.columns.length - 5} more` : ''}</div>}</div>
+                  <span className="lv-item-meta">{t.rows} row{t.rows === 1 ? '' : 's'}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+        ))}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, within } from 'storybook/test'
+import { expect, userEvent, within } from 'storybook/test'
 import { Fixtures } from './Fixtures'
 import { withEngine } from '../stories/mock-engine'
 import { sampleApp } from '../stories/sample'
@@ -10,12 +10,13 @@ const meta = { title: 'Components/Fixtures', component: Fixtures, args: { appId:
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** In the app's settings: each fixture with its tables and how many rows they hold. Never the rows. */
+/** In the app's settings: each fixture opens to its tables, their columns and how many rows they hold. Never the rows. */
 export const InSettings: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByText('northwind-company')).toBeInTheDocument()
-    await expect(c.getByText('employees: 250 · departments: 13 · companies: 1')).toBeInTheDocument()
+    await userEvent.click(await c.findByText('northwind-company')) // a fixture opens to its tables
+    await expect(c.getAllByText('employees')[0]).toBeVisible()
+    await expect(c.getByText('250 rows')).toBeVisible()
   },
 }
 /** On a task whose data was made for a fixture: its smoke test is built from that one, and it says so. */

@@ -6486,3 +6486,26 @@ another computer, so neither is proved on the real file yet: that is step 4.
   keep, keepValues and keepHosts together), and what they would keep there is structure. What is someone's (an
   email, an id, prose) is never kept, as before. A service with no fake has no plan, and nothing changes for it:
   the results file has to be faked first, which the first fix allows.
+
+### The Data step is rebuilt to the mockup's levels (2026-11-22)
+
+Step 1 of the brief, applied to the real page and looked at on CEB-90 at two widths. Sandy has not approved the
+look yet: it is on the branch `data-levels` for her to see.
+
+- **The levels are the mockup's** (`DataStepLayout.stories.tsx`): Fixtures and Services are sections, ruled off
+  and headed; a fixture and a service are the same kind of block; Info, Source and Endpoints are parts; a call is
+  a row. On a task the page is no longer a panel inside the step's panel, and Source has no box of its own.
+- **What stacks is decided by the width of the Data step, not of the window** (a container query). Beside the
+  agent's pane the step is about 340px wide while the window is 1500, so the window's width said "wide" and three
+  columns were squeezed into it, words breaking one to a line. The mockup had the same fault.
+- **An endpoint's data is two lines, not five.** What it is (its badge and file, and "This task's own"), then one
+  faint line: where it is from, who it is made for, and what can be done, as underlined words in place of boxed
+  buttons. The same cell in Settings › Mocks.
+- **The agent's report is "What the task needs", folded shut**, with its headings set at the size of a part. Open,
+  it pushed the services a screen down and its headings were larger than the section's.
+- **A fixture opens to its tables**, each with its first columns and its row count.
+
+Not done, and not drawn on the real page: the fixture buttons of the mockup (make one from the seed, rename,
+delete), which are step 3. CEB-90's app has no fixture: its list of shared scenarios is empty, so `ent322-findings` is not shared with the app
+(whether it is one prototype's own was not looked up), and "Fill out for fixture people" has nothing to pick from
+until step 3.
