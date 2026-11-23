@@ -144,7 +144,7 @@ function write(n: Node, s: Style, depth = 0): string {
 
 // ---- the faker ----------------------------------------------------------------------------------------------------
 
-const csvCell = (c: string) => (/[",\r\n]/.test(c) || /^\s|\s$/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)
+export const csvCell = (c: string) => (/[",\r\n]/.test(c) || /^\s|\s$/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)
 
 export function fake(recorded: { name: string; text: string }[], plan: FakePlan = {}): { files: Record<string, string>; report: FakeReport } {
   const salt = plan.salt ?? 'self-evident'

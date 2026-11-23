@@ -867,6 +867,12 @@ Details and sources in `research/`.
     download), that call is a step of the endpoint, not an endpoint with a path of its own: it names the endpoint
     it follows and the field that holds the link. The endpoint followed is intermediate. The general server
     answers it with a link back to itself and the step from the step's own data.
+  - **The mock does not work out who was sent; the app sends who the mock has answers for.** Where an app matches
+    what comes back to what it sent (an id, an email), the mock stays a fixed file and the app's own database is
+    set up with the people that file is for. A fixture is that database content: one of the app's shared
+    scenarios, made-up rows with ids that do not change. An endpoint's faked data is a template, filled out for a
+    fixture's people: the columns the app matches on are set from each person, the rest is faked. A task's smoke
+    test is built from the fixture its data was made for. No server is written for this.
   - **A sensitive endpoint keeps no real response.** One that comes in, given or recorded, is faked at once and
     the original deleted, so only a fake is ever stored or served. The cost is that it cannot be faked again
     differently later.

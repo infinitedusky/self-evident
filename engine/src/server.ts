@@ -97,6 +97,7 @@ import { CATALOGUE } from './catalogue.js'
 import { removeData, renameData, saveData, setDefaultData } from './mock-data.js'
 import { placesTable, setChoice, type Choice } from './mock-places.js'
 import { addCall, addTaskService, clearCalls, coverCall, editCall, linkCall, listCalls, listTaskServices, removeCall, removeTaskService, type NewCall } from './task-calls.js'
+import { assignFixture, fixtureForTask, fixtureRows, listFixtures } from './fixtures.js'
 import { giveEndpointData, removeEndpointData, setEndpointFaked } from './mock-serve.js'
 import { addEndpoint, editEndpoint, listReal, mockHistory, recordingsFor, removeReal, rowOf } from './mocks.js'
 import { exportMock, getMock, giveRecording, listMocks, addService, needsRecording, recordingsOfService, removeMock, setMockDetails, type Needs } from './mocks.js'
@@ -463,6 +464,10 @@ export function buildApp(bus: EventBus) {
     if (r.kept === 'recorded' && r.issueId) await askToMine(r.issueId, key, r.dir, r.files)
     return c.json({ kept: r.kept, asked: r.kept === 'recorded' ? r.issueId : null, ...('maybeStructure' in r ? { maybeStructure: r.maybeStructure } : {}) }, 201)
   } catch (err) { return planError(c, err) } })
+  // Fixtures (fixtures.ts): the app's shared scenarios, a table's rows to pick a person from, and an endpoint's data made for one of them.
+  api.get('/apps/:id/fixtures', async (c) => { try { const issueId = c.req.query('issue') || null; return c.json({ fixtures: await listFixtures(c.req.param('id')), used: await fixtureForTask(c.req.param('id'), issueId) }) } catch (err) { return planError(c, err, 404) } })
+  api.get('/apps/:id/fixtures/:name/:table', async (c) => { try { return c.json(await fixtureRows(c.req.param('id'), c.req.param('name'), c.req.param('table'))) } catch (err) { return planError(c, err, 404) } })
+  api.put('/apps/:id/mocks/:key/endpoints/:endpoint/fixture', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { fixture?: string; table?: string; row?: number; count?: number; map?: Record<string, string>; issueId?: string | null }; return c.json(await assignFixture(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), { fixture: String(b.fixture ?? ''), table: String(b.table ?? ''), row: b.row, count: b.count, map: b.map ?? {} }, b.issueId || null, 'user')) } catch (err) { return planError(c, err) } })
   api.put('/apps/:id/mocks/:key/endpoints/:endpoint/faked', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { faked?: boolean | null; issueId?: string | null }; return c.json(await setEndpointFaked(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), b.faked ?? null, b.issueId || null, 'user')) } catch (err) { return planError(c, err) } })
   api.delete('/apps/:id/mocks/:key/endpoints/:endpoint/data', async (c) => { try { return c.json(await removeEndpointData(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), { issueId: c.req.query('issue') || null, real: c.req.query('real') === '1' }, 'user')) } catch (err) { return planError(c, err) } })
   api.patch('/apps/:id/mocks/:key/endpoints/:endpoint', async (c) => { try { return c.json(await editEndpoint(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), await c.req.json().catch(() => ({})), 'user')) } catch (err) { return planError(c, err) } })

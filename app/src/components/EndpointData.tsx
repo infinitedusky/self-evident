@@ -6,9 +6,9 @@
  * endpoint faked at once and not kept), or one the person states holds nothing real. Everything here can be
  * replaced and removed.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Badge } from './Badge'
-import { engine, type EndpointItem, type MockEndpoint } from '../engine'
+import { engine, type EndpointItem, type Fixture, type MockEndpoint } from '../engine'
 
 const err = (e: unknown) => { const m = String((e as Error)?.message ?? e); try { return (JSON.parse(m) as { error?: string }).error ?? m } catch { return m } }
 const day = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -20,6 +20,7 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   /** Is there a task whose agent makes the fake of a real response? */ canAsk: boolean; onChanged: () => void | Promise<void>
 }) {
   const [open, setOpen] = useState<null | 'app' | 'task'>(null)
+  const [filling, setFilling] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [said, setSaid] = useState<string | null>(null)
   const own = issueId ? e.data.task : null
@@ -52,6 +53,13 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
           </div>
         )
       })()}
+      {/* The data is a template: a fixture supplies who it is for. */}
+      {item?.safe && (filling
+        ? <FillForm appId={appId} call={call} columns={item.safe.columns ?? []} was={item.safe.madeFor} onCancel={() => setFilling(false)} onFill={(b) => act(async () => { const r = await engine.assignFixture(appId, mockKey, e.key, { ...b, issueId: own ? issueId : null }); setFilling(false); return `Filled out for ${r.madeFor.who}.` })} />
+        : <div className="endpoint-faked">
+            {item.safe.madeFor ? <span>For <strong>{item.safe.madeFor.who}</strong> <span className="faint">of the fixture {item.safe.madeFor.fixture}</span></span> : <span className="faint">Not made for a fixture's people: the app may send people this has no answer for.</span>}
+            {(!issueId || own || !e.data.task) && <button className="btn quiet small" aria-label={`Fill the data of ${call} out for fixture people`} onClick={() => setFilling(true)}>{item.safe.madeFor ? 'Change' : 'Fill out for fixture people'}</button>}
+          </div>)}
       {said && <div className="faint">{said}</div>}
       {error && <div className="mock-data-warn">{error}</div>}
       {open ? <GiveForm call={call} sensitive={!!e.sensitive} note={open === 'app' && issueId ? `This becomes ${serviceName}'s data in Settings: every task gets it unless it has its own.` : open === 'task' ? 'For this task alone. Other tasks keep the app\'s.' : null} onGive={give(open)} onCancel={() => setOpen(null)} /> : (
@@ -96,6 +104,57 @@ function GiveForm({ call, sensitive, note, onGive, onCancel }: { call: string; s
         {note ? ` ${note}` : ''}
       </p>
       <div className="row"><button className="btn small" disabled={!files.length || busy} onClick={async () => { setBusy(true); try { await onGive(files, real) } finally { setBusy(false) } }}>{busy ? 'Adding…' : 'Add it'}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
+    </div>
+  )
+}
+
+/** The data is a template; a fixture supplies who. Pick the fixture, where its people are, who to start from and how many, and which columns of the data are theirs. */
+function FillForm({ appId, call, columns, was, onFill, onCancel }: { appId: string; call: string; columns: string[]; was?: NonNullable<EndpointItem['safe']>['madeFor']; onFill: (b: { fixture: string; table: string; row: number; count: number; map: Record<string, string> }) => Promise<void>; onCancel: () => void }) {
+  const [fixtures, setFixtures] = useState<Fixture[] | null>(null)
+  const [fixture, setFixture] = useState(was?.fixture ?? '')
+  const [table, setTable] = useState(was?.table ?? '')
+  const [rows, setRows] = useState<{ index: number; label: string }[]>([])
+  const [row, setRow] = useState(0)
+  const [count, setCount] = useState(String(was?.people ?? 1)) // as typed: it may be empty while it is being changed
+  const [map, setMap] = useState<[string, string][]>(Object.entries(was?.map ?? {}))
+  const [busy, setBusy] = useState(false)
+  const fx = fixtures?.find((f) => f.name === fixture), tb = fx?.tables.find((t) => t.name === table)
+  useEffect(() => { void engine.fixtures(appId).then((r) => { setFixtures(r.fixtures); const f = r.fixtures.find((x) => x.name === fixture) ?? r.fixtures[0]; if (f) { setFixture(f.name); setTable((t) => (f.tables.some((x) => x.name === t) ? t : f.tables[0]?.name ?? '')) } }).catch(() => setFixtures([])) }, [appId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!fixture || !table) return
+    void engine.fixtureRows(appId, fixture, table).then((r) => {
+      setRows(r.rows)
+      // Columns the data and the fixture both have, that say who someone is, are theirs to begin with.
+      setMap((m) => (m.length ? m : columns.filter((c) => r.columns.includes(c) && /email|name$/i.test(c)).map((c) => [c, c] as [string, string])))
+    }).catch(() => setRows([]))
+  }, [appId, fixture, table]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (fixtures && !fixtures.length) return <div className="mock-edit"><p className="faint" style={{ margin: 0 }}>This app has no fixtures yet. One is kept from a prototype's data, shared with the app.</p><div className="row"><button className="btn quiet small" onClick={onCancel}>Close</button></div></div>
+  const people = Math.floor(Number(count))
+  const ok = !!fx && !!tb && people >= 1 && people <= 200 && map.length > 0 && map.every(([d, f]) => d && f)
+  return (
+    <div className="mock-edit" data-component="FillFromFixture">
+      <p className="faint" style={{ margin: 0, fontSize: 13 }}>This data is the template. Each person chosen gets its rows, with the columns below set from them, so the app sends the people this mock has answers for.</p>
+      <div className="task-calls-call">
+        <label>Fixture<select value={fixture} onChange={(e) => { setFixture(e.target.value); setTable(fixtures?.find((f) => f.name === e.target.value)?.tables[0]?.name ?? ''); setRow(0) }}>{(fixtures ?? []).map((f) => <option key={f.name}>{f.name}</option>)}</select></label>
+        <label>Its people are in<select value={table} onChange={(e) => { setTable(e.target.value); setRow(0) }}>{(fx?.tables ?? []).map((t) => <option key={t.name} value={t.name}>{t.name} ({t.rows})</option>)}</select></label>
+      </div>
+      <div className="task-calls-call">
+        <label>How many people<input type="number" min={1} max={200} value={count} onChange={(e) => setCount(e.target.value)} /></label>
+        <label>Starting from<select value={row} onChange={(e) => setRow(Number(e.target.value))}>{rows.map((r) => <option key={r.index} value={r.index}>{r.label}</option>)}</select></label>
+      </div>
+      <div>
+        <div className="task-calls-sub">Which columns are theirs</div>
+        {map.map(([d, f], n) => (
+          <div className="row" key={n} style={{ marginBottom: 4 }}>
+            <select aria-label={`Data column ${n + 1}`} value={d} onChange={(e) => setMap(map.map((x, i) => (i === n ? [e.target.value, x[1]] : x)))}><option value="">a column of the data…</option>{columns.map((c) => <option key={c}>{c}</option>)}</select>
+            <span className="faint">is their</span>
+            <select aria-label={`Fixture column ${n + 1}`} value={f} onChange={(e) => setMap(map.map((x, i) => (i === n ? [x[0], e.target.value] : x)))}><option value="">a column of {table}…</option>{(tb?.columns ?? []).map((c) => <option key={c}>{c}</option>)}</select>
+            <button className="btn quiet small" aria-label={`Remove column ${n + 1}`} onClick={() => setMap(map.filter((_, i) => i !== n))}>×</button>
+          </div>
+        ))}
+        <button className="btn quiet small" onClick={() => setMap([...map, ['', '']])}>Add a column</button>
+      </div>
+      <div className="row"><button className="btn small" aria-label={`Fill the data of ${call} out`} disabled={!ok || busy} onClick={async () => { setBusy(true); try { await onFill({ fixture, table, row, count: people, map: Object.fromEntries(map) }) } finally { setBusy(false) } }}>{busy ? 'Filling…' : 'Fill it out'}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
     </div>
   )
 }

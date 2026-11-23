@@ -644,7 +644,14 @@ Checked 20 Nov 2026: none of the 2,914 values in the recording's 9 files is in t
 /** Made up: the four calls an app makes to one vendor. Only the last has data: a real response the person gave, and a fake of it. The rest are answered with what the server makes up. */
 const none = { app: null, task: null }
 const fakedNote = 'Faked from a real response the person gave 18 Nov 2026: its structure is real, and 2610 values were replaced. Kept as they were, because they are structure: "completed", "running", "high", "low". Checked 20 Nov 2026: none of the 2914 values of that response is in it.'
-export const resultsItem: import('../engine').EndpointItem = { recorded: { id: 'app_sample/iss_sample1/fraud-scan/given-2026-11-18', at: '2026-11-18T15:20:00Z', how: 'given', files: ['results.csv'] }, safe: { kind: 'faked', set: 'faked', files: ['results.csv'], note: fakedNote } }
+export const resultsItem: import('../engine').EndpointItem = { recorded: { id: 'app_sample/iss_sample1/fraud-scan/given-2026-11-18', at: '2026-11-18T15:20:00Z', how: 'given', files: ['results.csv'] }, safe: { kind: 'faked', set: 'faked', files: ['results.csv'], note: fakedNote, columns: ['tracking_id', 'work_email', 'full_name', 'status', 'risk_level', 'profiles', 'person_summary'] } }
+/** Made up: the app's fixtures. One company with its employees, and a small one. */
+export const fixtures: import('../engine').Fixture[] = [
+  { name: 'northwind-company', bytes: 1_480_000, tables: [{ name: 'employees', rows: 250, columns: ['id', 'first_name', 'last_name', 'work_email', 'title', 'department_id'] }, { name: 'departments', rows: 13, columns: ['id', 'name'] }, { name: 'companies', rows: 1, columns: ['id', 'name'] }] },
+  { name: 'three-people', bytes: 4_200, tables: [{ name: 'employees', rows: 3, columns: ['id', 'first_name', 'last_name', 'work_email'] }] },
+]
+export const fixturePeople = ['Avery', 'Blake', 'Casey', 'Devon'].map((n, index) => ({ index, label: `${n} Sample · ${n.toLowerCase()}.sample@northwind.example · 00000000-0000-4000-8000-00000000000${index + 1}`, values: { id: `00000000-0000-4000-8000-00000000000${index + 1}`, work_email: `${n.toLowerCase()}.sample@northwind.example` } }))
+
 export const mockEndpointsSample: import('../engine').MockEndpoint[] = [
   { key: 'start', method: 'POST', path: '/workflows/run', what: 'A job id for the people sent', real: null, files: [], data: none },
   { key: 'status', method: 'GET', path: '/workflows/runs/{id}/status', what: 'Running, then completed', real: null, files: [], data: none },

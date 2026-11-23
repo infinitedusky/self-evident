@@ -27,6 +27,7 @@ import { newId } from './ids.js'
 import { appendEvent } from './events.js'
 import { PlanError } from './issues.js'
 import { dataNote, fakeGiven, saveData, scopeKey, scopeOfRecording, type DataProvenance, type DataRow, type Scope } from './mock-data.js'
+import { looksCsv, parseCsv } from './mock-leaks.js'
 import { cleanEndpoints, endpointOfExchange, endpointOfFile, exchangesOf, keyed, type Endpoint } from './mock-endpoints.js'
 import { day, giveRecording, isGiven, mocksHome, recordingsFor, rowOf, workspaceOf, type Row } from './mocks.js'
 import { recordingsHome } from './recordings.js'
@@ -36,7 +37,7 @@ export type Form = 'faked' | 'recorded'
 /** One endpoint's data at one level: the app's, or a task's own. */
 export interface EndpointItem {
   /** The real response behind it on this computer. id: its folder from the recordings home. */ recorded: { id: string; at: string; how: 'given' | 'recorded'; files: string[] } | null
-  /** What may leave this computer: a fake of the recorded one, or a file provided as holding nothing real. */ safe: { kind: 'faked' | 'provided'; set: string; files: string[]; note: string; /** Faked from a response that is no longer the newest one. */ stale?: boolean } | null
+  /** What may leave this computer: a fake of the recorded one, or a file provided as holding nothing real. */ safe: { kind: 'faked' | 'provided'; set: string; files: string[]; note: string; /** The column names of its first file: what can be set from a fixture. */ columns: string[]; /** The fixture person it was made for (fixtures.ts). */ madeFor?: { fixture: string; table: string; who: string; people: number; map: Record<string, string> }; /** Faked from a response that is no longer the newest one. */ stale?: boolean } | null
 }
 export interface EndpointData { /** The app's: set in its settings. */ app: EndpointItem | null; /** This task's own, in place of the app's. */ task: EndpointItem | null; /** Do a person's own runs get its faked version? The app's answer (faked unless it says otherwise), and this task's own where it has one. A reviewer always gets the faked one. */ faked: { app: boolean; task: boolean | null } }
 
@@ -59,6 +60,7 @@ async function read(m: Row): Promise<Read> {
 }
 const newest = (a: DataRow, b: DataRow) => (b.updatedAt ?? b.createdAt ?? new Date(0)).getTime() - (a.updatedAt ?? a.createdAt ?? new Date(0)).getTime()
 
+const columnsOfFirst = (files: Record<string, string>, names: string[]): string[] => { const t = files[names[0]] ?? ''; if (looksCsv(t)) return parseCsv(t.slice(0, 200_000).split(/\r?\n/)[0] ?? '')[0] ?? []; try { const v = JSON.parse(t) as unknown; const o = Array.isArray(v) ? v[0] : v; return o && typeof o === 'object' ? Object.keys(o as object).slice(0, 200) : [] } catch { return [] } }
 function itemOf(r: Read, e: string, task: string | null): EndpointItem | null {
   const rec = r.recs.find((x) => (x.scope?.task ?? null) === task && filesOf(r.endpoints, e, x.names).length)
   const mine = r.sets.filter((d) => (prov(d).scope?.task ?? null) === task && filesOf(r.endpoints, e, Object.keys(d.files ?? {})).length)
@@ -67,7 +69,7 @@ function itemOf(r: Read, e: string, task: string | null): EndpointItem | null {
   if (!rec && !set) return null
   return {
     recorded: rec ? { id: relative(recordingsHome(), rec.dir), at: rec.at, how: rec.given ? 'given' : 'recorded', files: filesOf(r.endpoints, e, rec.names) } : null,
-    safe: set ? { kind: set.kind === 'faked' ? 'faked' : 'provided', set: set.key, files: filesOf(r.endpoints, e, Object.keys(set.files)), note: dataNote(set), ...(set.kind === 'faked' && rec && set.recording && set.recording !== rec.dir ? { stale: true } : {}) } : null,
+    safe: set ? { kind: set.kind === 'faked' ? 'faked' : 'provided', set: set.key, files: filesOf(r.endpoints, e, Object.keys(set.files)), note: dataNote(set), columns: columnsOfFirst(set.files, filesOf(r.endpoints, e, Object.keys(set.files))), ...((prov(set) as { madeFor?: NonNullable<EndpointItem['safe']>['madeFor'] }).madeFor ? { madeFor: (prov(set) as { madeFor?: NonNullable<EndpointItem['safe']>['madeFor'] }).madeFor } : {}), ...(set.kind === 'faked' && rec && set.recording && set.recording !== rec.dir ? { stale: true } : {}) } : null,
   }
 }
 /** Every endpoint's data: the app's, and (for a task) the task's own. */

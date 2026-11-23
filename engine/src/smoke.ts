@@ -49,6 +49,7 @@ import { morePorts, straySays, straysOf } from './ports.js'
 import { fixedOf, fixedSays } from './addresses.js'
 import { databaseExists, databaseUrl, dropDatabase, listScenarios, rebuild, type PrototypeDb } from './prototype-data.js'
 import { homeRepo } from './workbench.js'
+import { fixtureForTask } from './fixtures.js'
 import { plansFor } from './mock-places.js'
 import { dropUse, isGiven, libraryStandIns, noteRecording, noteUse } from './mocks.js'
 import { mock } from './db/schema.js'
@@ -490,7 +491,9 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   const slug = `smoke-${name.toLowerCase()}${first ? '' : `-${named.key}`}`
   if (dbCfg && opts.clean) await dropDatabase(dbCfg, slug)
   if (dbCfg && !(await databaseExists(dbCfg, slug))) {
-    const { url } = await rebuild(dbCfg, slug, path, (await listScenarios({ appId: a.id }, path)).includes('default') ? 'default' : null, { appId: a.id }) // the app's shared "default" scenario, when it has one
+    // The fixture this task's mock data was made for (fixtures.ts), so what the app sends is who the mock answers for; else the app's shared "default", when it has one.
+    const names = await listScenarios({ appId: a.id }, path), made = await fixtureForTask(a.id, t.id)
+    const { url } = await rebuild(dbCfg, slug, path, made && names.includes(made) ? made : names.includes('default') ? 'default' : null, { appId: a.id })
     if (setup.seed) { // the app's own seed, from its settings: after the schema, and after the app's shared scenario when it has one
       const c = new pg.Client({ connectionString: url })
       await c.connect()
