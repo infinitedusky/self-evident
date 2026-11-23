@@ -6851,3 +6851,57 @@ ours recognises its own text by the name.
 
 Done again on 2026-11-23: the change above was pull request #329, which was never merged, so the name stayed
 Self Evident for three days and everything written since said so. Redone on that day's main with the same rule.
+### The review branch comes before the data agent (2026-11-23)
+
+Sandy: step 4 is done, and "can we swap 6 and 5?". The brief's order is now: prove it on CEB-90 (done), the review
+branch, the data agent. CEB-90's data was made by hand and by its task's agent, so its pull request needs the review
+copy and not the agent that would make such data for the next task. Still open from step 4: the smoke run that proved
+the import and scan answered the results call with the real response; the faked version has not been through a scan.
+
+### A review copy, made by hand for CEB-90 (2026-11-23)
+
+Decided by Sandy: the fixture is chosen when the review branch is made (CEB-90: start empty); the branch is on the
+app's own repository and is never merged; CEB-90 uses the server its agent wrote, and moving it to the general
+server is to be done and tested after. Asked, not decided: whether the data should be downloaded from somewhere
+hosted and not kept on the branch. Built so either works: the data is one folder the start command reads from one
+setting.
+
+What it took by hand, which is what the tool has to do:
+
+1. Ask the engine what a reviewer is served (`served(m, {form: 'faked', place: 'review'})`) and copy that folder,
+   following links. Check it once more against the real response, independently of the faker's own check: no
+   email, link, phone number, date, sentence or name of the real one was in it.
+2. A branch off the task's branch, `<branch>-review`, with one folder, `review/`: the mock's server and that data,
+   the fake versions of the task's files, the fixture (here a seed of one empty company), a Compose file layered
+   over the app's own, a start and a stop command, and a README saying what to try.
+3. What the smoke test borrows from this computer has to come along: the start script, the Compose changes and
+   the demo sign-in live outside the app's repository, and the database is this computer's. The review copy has
+   its own of each, and its own database in its own Compose project.
+4. Every service of the stack is given the mock's address and a key that is not one, over whatever the checkout's
+   own `.env` holds, so a reviewer with a real key in theirs still never calls the vendor.
+5. Found on the first start: the app's image binds `::`, which without `--reload` is IPv6 only, and nginx could not
+   reach it. The review copy binds `0.0.0.0`.
+6. Proved as the reviewer would: started with the one command, the made-up person imported, the scan run. 34
+   findings stored (20 fake profiles live; 14 scams, 2 live and 12 reported), none of them carrying the real
+   person's name. This was the faked data's first scan.
+
+Not pushed. Open: the demo sign-in is now a file on a branch of the app's repository, which its tooling had kept
+out on purpose; and the branch holds data.
+
+The review branch's name (Sandy, 2026-11-23): `REVIEW-` up front, then the pull request's branch name with the task's
+id moved to the end, so a reviewer sees at once which pull request it goes with: `REVIEW-<name>-<task id>`. It is
+only a branch, with no pull request of its own; the pull request's "Run it yourself" section names it.
+
+### The pull request explains its review copy (2026-11-23)
+
+Sandy: above the record of how the change was built, the description needs "a canned explanation of what the review
+is … how we're allowing them to have a review and why they should understand that it's identical", perhaps with a
+diff. Written by hand on CEB-90's pull request as a section, "How the review copy works", which the tool is to fill
+in the same way: (1) it is the pull request's code at a named commit plus one folder, with a link to GitHub's
+comparison of the two branches as the proof (only added files, all in that folder); (2) a table of what the folder
+adds and why each is needed; (3) what it cannot show; (4) how it is kept in step when the pull request moves on.
+The first and last depend on the review branch being remade whenever the task's branch changes, which nothing does yet.
+
+Its shape on the page (Sandy, 2026-11-23): a section "Review" holding "Run it yourself" and, folded shut under it,
+"How the review copy works". The engine's own record of how the change was built stays folded and now closes the
+description under a last heading, "Fine print".

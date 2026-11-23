@@ -47,14 +47,16 @@ on one task, CEB-90, and its one outside service, SixtyFour.
    app's seed command in a press on the Data step, opened to its rows, renamed and deleted; a prototype follows
    its task's fixture on its first start. CEB-90's app has one, "seed" (Meridian, 250 employees).
    Also now on the Data step: **Test files** (2026-11-23), what a person needs in their hands to try the change.
-4. **Prove it on CEB-90**, as a reviewer would do it (LOG.md, "What the results file is, and what it is not"): a
-   test file with one made-up person to import, and the mock's results file for that same person, tied by email.
-   Was: **Prove it on CEB-90**: fake the results file, fill it out for fixture employees, run the smoke test on the
-   mock, and fix what breaks.
-5. **The data agent**: one per task, called by the task's agent, in three stop-and-wait steps (list the calls,
-   say where data comes from, build what was approved).
-6. **The review branch**: the mock server, endpoints, faked data, fixture and the fake versions of the files on
+4. ~~Prove it on CEB-90.~~ Done 2026-11-23, on Sandy's word: a one-person file imported and scanned in the smoke
+   test against the mock, findings stored and shown. That run answered the results call with the real response;
+   the faked version has not been through a scan yet, so the review branch's first run is also its first proof.
+   Was: as a reviewer would do it (LOG.md, "What the results file is, and what it is not"): a test file with one
+   made-up person to import, and the mock's results file for that same person, tied by email.
+5. **The review branch**: the mock server, endpoints, faked data, fixture and the fake versions of the files on
    a `<branch>-review` branch with one start command.
+6. **The data agent** (after the review branch since 2026-11-23: CEB-90's data exists, so its pull request
+   does not wait on this): one per task, called by the task's agent, in three stop-and-wait steps (list the calls,
+   say where data comes from, build what was approved).
 7. **The gate**: a task cannot go to Ready for review until its review copy can be made.
 8. **Clean up when a task closes**: discard its prototypes and their databases, drop its smoke test database,
    delete its real responses and the real versions of its files from this computer.
@@ -79,7 +81,7 @@ on one task, CEB-90, and its one outside service, SixtyFour.
   test; it can catch a file field being opened and show a chooser of the run's fixture files (File Context, Real
   badge), handing the one picked to the app as the dialog would, with "something else on this computer" falling
   through. Misses apps that use a newer file API. Only where the proxy is in front; whether a reviewer's set-up
-  runs it is step 6's question. Until then: "Show the folder" on the smoke test's page.
+  runs it is the review branch's question. Until then: "Show the folder" on the smoke test's page.
 
 ## Known test noise
 

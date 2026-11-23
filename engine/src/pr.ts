@@ -103,6 +103,9 @@ export function prBody(project: { name: string; content?: string | null; id: str
   return [
     building,
     lead,
+    // Our own record closes the description under a heading of its own, so a reader knows the description proper has
+    // ended (Sandy, 2026-11-23: "in a final section called like fine print").
+    '## Fine print',
     `<details>\n<summary>How this was built (Evident's record${written?.trim() && guide ? ': the merge guide, ' : ': '}every criterion and decision, and what each sub-task's builder reported)</summary>\n\n${ours}\n\n</details>`,
     '🤖 Generated with [Claude Code](https://claude.com/claude-code) via Evident',
   ].filter(Boolean).join('\n\n')
