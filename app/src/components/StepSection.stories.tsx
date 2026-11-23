@@ -142,6 +142,20 @@ export const PrototypeNeedsAGuide: Story = {
     await expect(c.getByRole('button', { name: 'Approve the prototype' })).toBeDisabled()
   },
 }
+/** The Data step with its agent's report: what the task calls and where that stands sits at the top of the services, under "What the task needs", and can be folded away. It is not shown again below the panel. */
+export const DataWithItsReport: Story = {
+  args: { row: { ...row('research'), key: 'data', required: false, state: { key: 'data', status: 'started' }, waitingOn: null } as typeof all[number] },
+  beforeEach: withEngine({ stepWork: { key: 'data', status: 'started', detail: null, summary: '', body: '## What this task calls outside the app\n\nOne service (sample), four calls in order.', refs: [], updatedBy: 'agent', updatedAt: '2026-11-22T10:00:00Z' } as never }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('One service (sample), four calls in order.')).toBeInTheDocument()
+    await expect(c.getAllByText('What this task calls outside the app')).toHaveLength(1)
+    const text = canvasElement.textContent ?? ''
+    await expect(text.indexOf('What the task needs')).toBeLessThan(text.indexOf('One service (sample)'))
+    await expect(text.indexOf('One service (sample)')).toBeLessThan(text.indexOf('Info'))
+    await expect(canvasElement.querySelector('[data-component="WhatTheTaskNeeds"]')?.tagName).toBe('DETAILS')
+  },
+}
 /** The Data step, not started: the services the task calls, with what each place is given and each call's data, there before any agent is asked. It is optional: skipped, the app's defaults are used. */
 export const Data: Story = {
   args: { row: { ...row('research'), key: 'data', required: false, state: { key: 'data', status: 'none' }, waitingOn: null } as typeof all[number] },

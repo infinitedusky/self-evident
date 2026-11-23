@@ -42,6 +42,8 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   const [pane, setPane] = useState<'view' | 'code' | 'notes'>('view')
   const [error, setError] = useState<string | null>(null)
   const s = row.state
+  // The Data step shows what its agent wrote inside its panel, at the top of the services: not again below it.
+  const dataInside = row.key === 'data' && on === 'task' && row.state.status !== 'skipped'
   // What there is to look at, right on the step's page: the task's sketches, its Storybook at the first story named, its prototype.
   const proto = protos.find((p) => p.status !== 'discarded')
   // The agent can send the person here to one file or story (?file=, ?story=): that one shows, else the first the step recorded.
@@ -120,7 +122,8 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
           </p>
 
           {/* The Data step: the task's own table and the app's mocks, there whether or not the step is started, since the table works without an agent. */}
-          {row.key === 'data' && on === 'task' && !skipped(s) && <MockLibrary appId={appId} issueId={subject.id} />}
+          {/* What its agent wrote goes inside it, at the top of the services, not below the whole panel. */}
+          {row.key === 'data' && on === 'task' && !skipped(s) && <MockLibrary appId={appId} issueId={subject.id} needs={work?.summary?.trim() || work?.body ? <div className="md step-body"><Markdown remarkPlugins={[remarkGfm]}>{[work.summary?.trim(), work.body].filter(Boolean).join('\n\n')}</Markdown></div> : undefined} />}
 
           {row.key === 'prototype' && protos.length > 0 && (
             <ul className="list step-protos">
@@ -135,13 +138,13 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
           {work && work.refs.length > 0 && (
             <p style={{ margin: '8px 0' }}>{work.refs.map((story) => <button key={story} className="btn quiet small" style={{ marginRight: 6 }} onClick={() => ws?.open({ kind: 'storybook', story })}>{story}</button>)}</p>
           )}
-          {work?.summary?.trim() && (
+          {dataInside ? null : work?.summary?.trim() && (
             <div className="step-summary" data-component="StepSummary" aria-label="What you need to know">
               <h3>What you need to know</h3>
               <div className="md"><Markdown remarkPlugins={[remarkGfm]}>{work.summary}</Markdown></div>
             </div>
           )}
-          {work?.body && (work.summary?.trim()
+          {!dataInside && work?.body && (work.summary?.trim()
             ? <details className="step-full"><summary>The full report <span className="faint">{words(work.body)} words, written for the next agent</span></summary><div className="md step-body"><Markdown remarkPlugins={[remarkGfm]}>{work.body}</Markdown></div></details>
             : <>
                 {words(work.body) > 400 && <p className="faint step-nosummary">This report is {words(work.body)} words and has no summary. Ask the task's agent: “summarize the {label(row.key, on).toLowerCase()} for me”.</p>}
