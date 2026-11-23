@@ -72,6 +72,11 @@ export function MockLibrary({ appId, issueId, needs }: { /** On a task: what its
       {adding && !issueId && <AddAppService onAdd={(b) => act(async () => { await engine.raiseMock(appId, b); setAdding(false) })} onCancel={() => setAdding(false)} />}
       {error && <div className="empty bad" style={{ marginBottom: 12 }}>{error}</div>}
       {/* On a task the services above are the whole of it: nothing is shown twice. What a service is beyond its endpoints (its address, its real responses, its history) is in the app's settings. */}
+      {/* Not built (LOG.md, 2026-11-23): a place is held for it so the Data step shows the whole of what it will be. */}
+      {issueId && <div className="lv-section" data-component="DataScripts">
+        <div className="lv-section-head"><h3>Data scripts</h3><span className="lv-end"><Badge tone="neutral">Coming soon</Badge></span></div>
+        <p className="lv-section-note">Custom logic for a test, where mapping fields is not enough: a script that stands in for one function of the app.</p>
+      </div>}
       {issueId ? <p className="lv-sub" style={{ margin: '14px 0 0' }}>A service's real responses on this computer and its history are in Settings › Mocks.</p>
         : list === null ? (error ? null : <p className="muted">Loading…</p>)
         : !list.length ? <div className="empty">No services yet. Add one here, or a task's agent adds it when it finds the code calling one.</div>

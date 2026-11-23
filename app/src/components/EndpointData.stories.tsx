@@ -66,6 +66,33 @@ export const PeopleAreNotTheLargestTable: Story = {
 /** Data already filled out for fixture people says who, and can be changed. */
 export const MadeForFixturePeople: Story = { args: { endpoint: { ...mockEndpointsSample[3], data: { ...mockEndpointsSample[3].data, app: { ...resultsItem, safe: { ...resultsItem.safe!, madeFor: { fixture: 'northwind-company', table: 'employees', who: '3 people, from Blake Sample, blake.sample@northwind.example', people: 3, map: { tracking_id: 'id', work_email: 'work_email' } } } } } } } }
 /** No data: the mock's server makes the answer up. Adding data asks for a file and what it is. */
+/** A file a tester brings supplies who the data is for: a column the data lacks is added from the file, and one is left empty. */
+export const MapFieldsFromAFile: Story = {
+  args: { issueId: 'iss_sample2' },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: /^Map fields of .* from a file$/ }))
+    // Only files with columns are offered: the CSVs, not the pictures.
+    const file = await c.findByRole('combobox', { name: 'File' })
+    await waitFor(() => expect(within(file).getAllByRole('option').map((o) => o.textContent)).toEqual(['one-person.csv', 'export.csv']))
+    await userEvent.selectOptions(file, 'export.csv')
+    await userEvent.click(c.getByRole('button', { name: 'Add a column' }))
+    const boxes = c.getAllByRole('combobox', { name: /^Data column/ })
+    await userEvent.type(boxes[boxes.length - 1], 'work_email')
+    const from = c.getAllByRole('combobox', { name: /^File column/ })
+    await userEvent.selectOptions(from[from.length - 1], 'email')
+    await userEvent.click(c.getByRole('button', { name: 'Add a column' }))
+    const more = c.getAllByRole('combobox', { name: /^Data column/ })
+    await userEvent.type(more[more.length - 1], 'tracking_id')
+    const last = c.getAllByRole('combobox', { name: /^File column/ })
+    await userEvent.selectOptions(last[last.length - 1], '')
+    await userEvent.click(c.getByRole('button', { name: /^Save the mapping/ }))
+    await expect(await c.findByText('It answers for the people in export.csv.')).toBeInTheDocument()
+  },
+}
+/** Mapped: the cell says whose people it answers for. */
+export const MappedFromAFile: Story = { args: { issueId: 'iss_sample2', endpoint: { ...mockEndpointsSample[3], data: { ...mockEndpointsSample[3].data, app: { ...resultsItem, safe: { ...resultsItem.safe!, fromFile: { file: 'export.csv', map: { work_email: 'email', tracking_id: '' } } } } } } },
+  play: async ({ canvasElement }) => { const c = within(canvasElement); await expect(await c.findByText('export.csv')).toBeInTheDocument(); await expect(c.getByText('Change the mapping')).toBeInTheDocument() } }
 export const NoData: Story = {
   args: { endpoint: mockEndpointsSample[0] },
   play: async ({ canvasElement }) => {

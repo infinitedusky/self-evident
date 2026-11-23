@@ -152,6 +152,9 @@ export const OnATask: Story = {
     // Fixtures come first; what the services section is, is said at its top.
     const text = canvasElement.textContent ?? ''
     await expect(text.indexOf('Fixtures')).toBeLessThan(text.indexOf('Services'))
+    // Last, a place held for what is not built yet.
+    await expect(text.indexOf('Services')).toBeLessThan(text.indexOf('Data scripts'))
+    await expect(c.getByText('Coming soon')).toBeInTheDocument()
     await expect(text.indexOf('Services')).toBeLessThan(text.indexOf('What stands outside the app is mocked'))
     // Each service: its info, its source, its endpoints, in that order.
     const block = canvasElement.querySelector('.lv-item[data-service]')?.textContent ?? ''

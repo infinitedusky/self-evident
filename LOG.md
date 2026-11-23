@@ -6661,3 +6661,44 @@ Not done: the review branch does not carry the folder yet (step 6; `placeTestFil
 will call). An app that runs in a container sees `$TEST_FILES` only if its start script mounts it. The pages for a
 prototype and a smoke test do not show the folder's path. Sharing a prototype does not yet look at whether it was
 given a real file (step 9). Step 8's cleanup must delete a closed task's real versions.
+
+### 2026-11-23: An endpoint's fields can be mapped from a file
+
+Sandy, on a file with a real and a fake version meeting a mock that answers with one fixed file: "on the endpoint
+be able to select fields from either Meridian or a file … it's basically map fields from the fixture, and you can
+get it from wherever you want. So if you tried to do it with a PDF, there would be no fields, but if it's a CSV, you
+have fields. That means you can fake the data, but map certain fields to the fixture."
+
+- **An endpoint's response is faked data with some fields mapped from a fixture**: a database table (the fill-out
+  form, as before) or, now, a CSV among the fixtures' files. "Map fields from a file" on the endpoint's data: pick
+  the file, say which columns of the data come from which of its columns. A column the data lacks is added; one
+  can be left empty (CEB-90's `tracking_id`, an id the app only makes when the person is brought in, so the app
+  matches the row by `work_email`).
+- **Only the mapping is kept.** It is worked out each time the mock's data is served, from the version of the file
+  that place uses: a prototype or smoke test set to the real file is answered for the real person, a reviewer for
+  the fake one. Nothing real is stored in a mock's data. A run answered for a real person counts as on real data
+  (not shared).
+- **With a database fixture too**: data filled out for a fixture's people keeps those rows, and the file's people
+  come after them. Without one, the file's people are all it answers for.
+- Agents: `service` op `endpoint_file`.
+
+Considered and left: the mock taking who it answers for from what the app sent it. Not needed while the app matches
+by email; it would be a third source in the same mapping.
+
+Not done: tried on CEB-90. A run on the real file writes the real person into the mock's served folder on this
+computer (`~/.self-evident/mocks/<app>/<service>/data/served-…`), which step 8's cleanup must remove. JSON data is
+not mapped, only CSV.
+
+### 2026-11-23: Data scripts, noted and not built
+
+Sandy: "the last thing we need is like custom scripts that can be used to override things if need be, or to add
+custom logic where we're mapping different fields of the data … it would be a data script and you would map it
+onto some function in the actual application. It'll be like a function override essentially … the function that in
+this case would take the ID, we override that to use the email address, even though the real application didn't
+have that … let's add that later."
+
+A third kind of thing on the Data step, after fixtures and services: a script mapped onto one function of the app,
+standing in for it while the task is tried. For when mapping fields cannot make made-up data fit (an id the app
+makes as it runs). Open when it is built: how a script reaches a function without the app's code changing, which
+the goal forbids ("the app's code is exactly what goes live"), and whether a reviewer runs it. The Data step shows
+"Data scripts · Coming soon" at its foot; nothing is behind it.

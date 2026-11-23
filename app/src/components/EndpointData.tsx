@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Badge } from './Badge'
-import { engine, type EndpointItem, type Fixture, type MockEndpoint } from '../engine'
+import { engine, type EndpointItem, type Fixture, type MockEndpoint, type TestFile } from '../engine'
 
 const err = (e: unknown) => { const m = String((e as Error)?.message ?? e); try { return (JSON.parse(m) as { error?: string }).error ?? m } catch { return m } }
 const day = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -21,6 +21,7 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
 }) {
   const [open, setOpen] = useState<null | 'app' | 'task'>(null)
   const [filling, setFilling] = useState(false)
+  const [mapping, setMapping] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [said, setSaid] = useState<string | null>(null)
   const [faking, setFaking] = useState(false)
@@ -61,12 +62,17 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
       })()}
       {/* The data is a template: a fixture supplies who it is for. */}
       {filling && item?.safe && <FillForm appId={appId} call={call} columns={item.safe.columns ?? []} was={item.safe.madeFor} onCancel={() => setFilling(false)} onFill={(b) => act(async () => { const r = await engine.assignFixture(appId, mockKey, e.key, { ...b, issueId: own ? issueId : null }); setFilling(false); return `Filled out for ${r.madeFor.who}.` })} />}
+      {/* Or a file a tester brings supplies who: only the mapping is kept, and it is worked out for the version of the file each place uses. */}
+      {mapping && item?.safe && <FileMapForm appId={appId} issueId={issueId} call={call} columns={item.safe.columns ?? []} was={item.safe.fromFile} onCancel={() => setMapping(false)}
+        onSave={(b) => act(async () => { const r = await engine.mapFromFile(appId, mockKey, e.key, { ...b, issueId: own ? issueId : null }); setMapping(false); return r.fromFile ? `It answers for the people in ${r.fromFile.file}.` : 'No longer mapped from a file.' })} />}
       {said && <div className="faint">{said}</div>}
       {error && <div className="mock-data-warn" style={{ whiteSpace: 'pre-wrap' }}>{error}{/^refused/.test(error) && canAsk && <div className="lv-line" style={{ marginTop: 4 }}><span>The task's agent can say which of these is structure and make it.</span><button className="lv-act" aria-label={`Ask the task's agent to make the fake of ${call}`} onClick={() => void act(async () => { await engine.mineMock(appId, mockKey); return 'Asked. Its conversation shows how far it is.' })}>Ask the task's agent</button></div>}</div>}
       {open ? <GiveForm call={call} sensitive={!!e.sensitive} note={open === 'app' && issueId ? `This becomes ${serviceName}'s data in Settings: every task gets it unless it has its own.` : open === 'task' ? 'For this task alone. Other tasks keep the app\'s.' : null} onGive={give(open)} onCancel={() => setOpen(null)} /> : (
         <div className="lv-line">
           {issueId && item && !own && <span>From the app's settings</span>}
-          {item?.safe && !filling && (item.safe.madeFor ? <span>For <strong>{item.safe.madeFor.who}</strong> of the fixture {item.safe.madeFor.fixture}</span> : <span title="The app may send people this has no answer for.">Not made for a fixture's people</span>)}
+          {item?.safe && !filling && (item.safe.madeFor ? <span>For <strong>{item.safe.madeFor.who}</strong> of the fixture {item.safe.madeFor.fixture}</span> : !item.safe.fromFile && <span title="The app may send people this has no answer for.">Not made for a fixture's people</span>)}
+          {item?.safe?.fromFile && !mapping && <span>Answers for the people in <strong>{item.safe.fromFile.file}</strong></span>}
+          {item?.safe && !mapping && !filling && (!issueId || own || !e.data.task) && <button className="lv-act" aria-label={`Map fields of ${call} from a file`} onClick={() => setMapping(true)}>{item.safe.fromFile ? 'Change the mapping' : 'Map fields from a file'}</button>}
           {item?.recorded && item.safe?.kind === 'faked' && <button className="lv-act" disabled={faking} aria-label={`Make the fake version of ${call} again`} title="From the real response saved here, with what was said to be structure" onClick={() => void makeFake()}>{faking ? 'Making it…' : 'Make the fake again'}</button>}
           {item?.safe && !filling && (!issueId || own || !e.data.task) && <button className="lv-act" aria-label={`Fill the data of ${call} out for fixture people`} onClick={() => setFilling(true)}>{item.safe.madeFor ? 'Change' : 'Fill out for fixture people'}</button>}
           {!issueId && <button className="lv-act" aria-label={`${item ? 'Replace' : 'Add'} the data of ${call}`} onClick={() => setOpen('app')}>{item ? 'Replace' : 'Add data'}</button>}
@@ -170,6 +176,48 @@ function FillForm({ appId, call, columns, was, onFill, onCancel }: { appId: stri
         <button className="btn quiet small" onClick={() => edit([...map, ['', '']])}>Add a column</button>
       </div>
       <div className="row"><button className="btn small" aria-label={`Fill the data of ${call} out`} disabled={!ok || busy} onClick={async () => { setBusy(true); try { await onFill({ fixture, table, row, count: people, map: Object.fromEntries(map) }) } finally { setBusy(false) } }}>{busy ? 'Filling…' : 'Fill it out'}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
+    </div>
+  )
+}
+
+/** A file a tester brings supplies who the data is for. Pick the file and say which columns of the data come from which of its columns; a column the data lacks is added, and one can be left empty. */
+function FileMapForm({ appId, issueId, call, columns, was, onSave, onCancel }: { appId: string; issueId?: string; call: string; columns: string[]; was?: NonNullable<EndpointItem['safe']>['fromFile']; onSave: (b: { file: string | null; map?: Record<string, string> }) => Promise<void>; onCancel: () => void }) {
+  const [files, setFiles] = useState<TestFile[] | null>(null)
+  const [file, setFile] = useState(was?.file ?? '')
+  const [map, setMap] = useState<[string, string][]>(Object.entries(was?.map ?? {}))
+  const [touched, setTouched] = useState(!!was)
+  const [busy, setBusy] = useState(false)
+  const edit = (m: [string, string][]) => { setTouched(true); setMap(m) }
+  const f = files?.find((x) => x.name === file)
+  // Columns the data and the file both have, that say who someone is, are theirs to begin with.
+  const guess = (x?: TestFile) => columns.filter((c) => x?.columns?.includes(c) && /email|name$/i.test(c)).map((c) => [c, c] as [string, string])
+  useEffect(() => { void engine.testFiles(appId, issueId).then((l) => { const withColumns = l.filter((x) => x.columns?.length); setFiles(withColumns); const first = withColumns.find((x) => x.name === file) ?? withColumns[0]; if (first) { setFile(first.name); if (!touched) setMap(guess(first)) } }).catch(() => setFiles([])) }, [appId, issueId]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (files && !files.length) return <div className="mock-edit"><p className="faint" style={{ margin: 0 }}>There is no CSV among the fixtures' files yet. Add one under Fixtures › Files: only a file with columns has fields to map.</p><div className="row"><button className="btn quiet small" onClick={onCancel}>Close</button></div></div>
+  const ok = !!f && map.length > 0 && map.every(([d]) => d.trim()) && map.some(([, from]) => from)
+  const save = async (b: { file: string | null; map?: Record<string, string> }) => { setBusy(true); try { await onSave(b) } finally { setBusy(false) } }
+  return (
+    <div className="mock-edit" data-component="MapFromFile">
+      <p className="faint" style={{ margin: 0, fontSize: 13 }}>This data is the template. Each person in the file gets its rows, with the columns below set from them, so the mock answers for whoever the tester brings in.{f?.has.real ? ' A place set to the real version is answered for the real person; a reviewer always for the fake.' : ''}</p>
+      <label>File<select value={file} onChange={(e) => { setFile(e.target.value); if (!touched) setMap(guess(files?.find((x) => x.name === e.target.value))) }}>{(files ?? []).map((x) => <option key={x.id} value={x.name}>{x.name}</option>)}</select></label>
+      <div>
+        <div className="task-calls-sub">Which columns come from the file</div>
+        <p className="faint" style={{ margin: '0 0 6px', fontSize: 13 }}>Include the one the app matches an answer to a person by. A column the data does not have is added.</p>
+        <datalist id={`cols-${call}`}>{columns.map((c) => <option key={c} value={c} />)}</datalist>
+        {map.map(([d, from], n) => (
+          <div className="row" key={n} style={{ marginBottom: 4 }}>
+            <input aria-label={`Data column ${n + 1}`} list={`cols-${call}`} placeholder="a column of the data" value={d} onChange={(e) => edit(map.map((x, i) => (i === n ? [e.target.value, x[1]] : x)))} style={{ minWidth: 0, flex: 1 }} />
+            <span className="faint">is its</span>
+            <select aria-label={`File column ${n + 1}`} value={from} onChange={(e) => edit(map.map((x, i) => (i === n ? [x[0], e.target.value] : x)))}><option value="">(left empty)</option>{(f?.columns ?? []).map((c) => <option key={c}>{c}</option>)}</select>
+            <button className="btn quiet small" aria-label={`Remove column ${n + 1}`} onClick={() => edit(map.filter((_, i) => i !== n))}>×</button>
+          </div>
+        ))}
+        <button className="btn quiet small" onClick={() => edit([...map, ['', f?.columns?.[0] ?? '']])}>Add a column</button>
+      </div>
+      <div className="row">
+        <button className="btn small" aria-label={`Save the mapping of ${call}`} disabled={!ok || busy} onClick={() => void save({ file, map: Object.fromEntries(map.map(([d, from]) => [d.trim(), from])) })}>{busy ? 'Saving…' : 'Save the mapping'}</button>
+        {was && <button className="btn quiet small" disabled={busy} onClick={() => void save({ file: null })}>Stop mapping</button>}
+        <button className="btn quiet small" onClick={onCancel}>Cancel</button>
+      </div>
     </div>
   )
 }

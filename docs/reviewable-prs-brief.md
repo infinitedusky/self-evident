@@ -68,6 +68,11 @@ on one task, CEB-90, and its one outside service, SixtyFour.
   not have, so the fixture's rows are filled in from an example or two before any prototype. A Fixtures feature,
   not a Services one. "Fill out for fixture people" on an endpoint was reaching for it in the wrong place.
 
+- **Data scripts** (Sandy, 2026-11-23): custom logic for a test where mapping fields is not enough. A script is
+  mapped onto one function of the app and stands in for it: a function override. The case that raised it: the app
+  matches a results row to a person by an id; the override would match by email, for an app that had no such
+  fallback of its own. The Data step holds a "Data scripts" section marked Coming soon.
+
 ## Known test noise
 
 `github.test.ts` (stacked PRs) fails on main. Some runner tests fail only in full runs. The stories "Compared With
