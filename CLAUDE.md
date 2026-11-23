@@ -1,6 +1,6 @@
-# Self Evident — the thing proves itself
+# Evident — the thing proves itself
 
-The product is **Self Evident** (repository `infinitedusky/self-evident`; it was `idea-factory`, then briefly `olimb`, on 2026-10-22). The loop it runs is observe → learn → ideate (with research) → plan (projects and tasks; a task is built from an approved brief) → build, which is the nav.
+The product is **Evident** (repository `infinitedusky/self-evident`; it was `idea-factory`, then briefly `olimb`, then Self Evident until 2026-11-20; the repository, the `~/.self-evident` folder and the `selfevident` database keep that name). The loop it runs is observe → learn → ideate (with research) → plan (projects and tasks; a task is built from an approved brief) → build, which is the nav.
 
 Start here: read [LOG.md](LOG.md) (where things stand, decisions, next step)
 and [SHAPE.md](SHAPE.md) (what we're building). Research is in `research/`.

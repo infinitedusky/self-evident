@@ -24,7 +24,7 @@ describe('readerGuard', () => {
 })
 
 describe('stopping processes', () => {
-  // The four commands BON-71's builder really ran on 2026-11-14, each of which took Self Evident down with it.
+  // The four commands BON-71's builder really ran on 2026-11-14, each of which took Evident down with it.
   const ran = ['grep -c labelz apps/playground/src/App.tsx; pkill -f "pnpm dev" ; pkill -f "vite" ; sleep 1', 'pkill -f "vite --port 5180"; cat > /tmp/x.mjs', 'pkill -f "pnpm --parallel" ; pkill -f "node.*vite" ; (pnpm preview > /tmp/p.log 2>&1 &)']
   it('by name or by port is refused, however it is spelled', () => {
     for (const c of [...ran, 'killall node', 'kill -9 $(lsof -ti:5173)', 'kill `pgrep -f vite`', 'lsof -ti:4173 | xargs kill -9', 'pgrep -f storybook | xargs kill', 'npx kill-port 5173', 'ps aux | grep vite | awk \'{print $2}\' | xargs kill'])

@@ -91,11 +91,11 @@ const plain = (branch: string, slugs: string[]) => {
 }
 const unique = (want: string, taken: string[]) => { if (!taken.includes(want)) return want; for (let n = 2; ; n++) if (!taken.includes(`${want}-${n}`)) return `${want}-${n}` }
 
-/** Commit everything in a worktree, as whoever git is set up as there (else as Self Evident). Hooks are not run: this is a save, not a change to review. */
+/** Commit everything in a worktree, as whoever git is set up as there (else as Evident). Hooks are not run: this is a save, not a change to review. */
 async function commitTree(path: string, message: string) {
   if (!(await hasUncommitted(path))) return
   await git(path, ['add', '-A'])
-  const who = (await git(path, ['config', 'user.email'], { allowFail: true })).stdout ? [] : ['-c', 'user.name=Self Evident', '-c', 'user.email=self-evident@localhost']
+  const who = (await git(path, ['config', 'user.email'], { allowFail: true })).stdout ? [] : ['-c', 'user.name=Evident', '-c', 'user.email=self-evident@localhost']
   await git(path, [...who, 'commit', '-q', '--no-verify', '-m', message])
 }
 

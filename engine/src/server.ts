@@ -116,7 +116,7 @@ export function buildApp(bus: EventBus) {
   const api = new Hono()
 
   api.get('/', (c) => c.json({
-    engine: 'Self Evident',
+    engine: 'Evident',
     model: 'Shaped like Linear: initiative (a goal) → project (tasks in order, one branch, one PR) → task (Linear\'s issue: the routes and ids say issue; code, or a to-do; HG-12) → sub-task (under code: one agent, one worktree, one commit, its build; under a to-do: a checklist line) → step (the builder\'s todo list). Cycles hold the tasks of a stretch of time.',
     routes: {
       'GET /health': 'database reachable?', 'POST /devices/serve': 'put the page on the Tailscale network (this computer\'s page only); the same answer as GET /devices, plus enable (a page on Tailscale) when the account must allow serving first', 'POST /devices/serve/stop': 'take it off again', 'GET /devices': '{tailscale: missing | off | ready, address, remote, devices} — the page\'s address on the Tailscale network (null when not served), whether the one asking came over it, and the other devices with the page open: ip, name, kind (phone | computer), since',
@@ -816,9 +816,9 @@ export function buildApp(bus: EventBus) {
   }
   // The smoke test (smoke.ts): the checks left to a person on a built task, where it runs, and their marks.
   api.get('/issues/:id/smoke', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err, 404) } })
-  // The smoke test's terminal (smoke-terminal.ts): a shell on this computer, so only Self Evident's own page may reach it.
+  // The smoke test's terminal (smoke-terminal.ts): a shell on this computer, so only Evident's own page may reach it.
   const term = async (c: any, fn: (issueId: string, /** The terminal: a set-up's own, or its throwaway one. */ key: string, body: Record<string, unknown>, which: { setup: string; scratch: boolean }) => unknown) => {
-    if (!ownPage({ origin: c.req.header('origin'), site: c.req.header('sec-fetch-site'), contentType: c.req.header('content-type'), method: c.req.method })) return c.json({ error: 'the terminal takes requests from Self Evident\'s own page only' }, 403)
+    if (!ownPage({ origin: c.req.header('origin'), site: c.req.header('sec-fetch-site'), contentType: c.req.header('content-type'), method: c.req.method })) return c.json({ error: 'the terminal takes requests from Evident\'s own page only' }, 403)
     try {
       const t = await resolveIssue(db, c.req.param('id'))
       const body = c.req.method === 'GET' ? {} : await c.req.json().catch(() => ({})) as Record<string, unknown>

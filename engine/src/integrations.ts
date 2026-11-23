@@ -35,13 +35,13 @@ export interface Integration {
 
 export const INTEGRATIONS: Integration[] = [
   {
-    // tkt (gitlab.com/rogs/tkt), the runner: on for an app, it builds the app's tickets and Self Evident hands none to
+    // tkt (gitlab.com/rogs/tkt), the runner: on for an app, it builds the app's tickets and Evident hands none to
     // its own planner. Nothing of tkt's is configured here (SHAPE.md, "tkt is the runner"); the check says what is wrong.
     key: 'tkt', name: 'tkt', role: 'Runner', does: 'Builds this app\'s tickets from their approved briefs: a worktree, a herdr tab, the lifecycle skills on the harness and model its preset says; the plan, the handoff, the review and the completion written back on the ticket',
     fields: [
-      { key: 'on', label: 'Runs this app\'s tasks', kind: 'switch', required: true, states: { on: 'tkt builds this app\'s tickets; Self Evident hands none to its own planner', off: 'this app\'s tasks go to Self Evident\'s own planner and builder' } },
+      { key: 'on', label: 'Runs this app\'s tasks', kind: 'switch', required: true, states: { on: 'tkt builds this app\'s tickets; Evident hands none to its own planner', off: 'this app\'s tasks go to Evident\'s own planner and builder' } },
       // Where tkt reads the tickets (Sandy, 2026-11-10: "Linear is the home"). The team and the key are Linear's own, under Integrations › Linear.
-      { key: 'linear', label: 'Tickets live in Linear', kind: 'switch', states: { on: 'tkt runs on its own for this app: it reads and updates the tickets in Linear, in the team under Integrations › Linear, and never asks Self Evident', off: 'tkt reads this app\'s tickets from Self Evident' } },
+      { key: 'linear', label: 'Tickets live in Linear', kind: 'switch', states: { on: 'tkt runs on its own for this app: it reads and updates the tickets in Linear, in the team under Integrations › Linear, and never asks Evident', off: 'tkt reads this app\'s tickets from Evident' } },
     ],
     calls: true, perApp: true, docs: 'https://gitlab.com/rogs/tkt',
     actions: [
@@ -55,7 +55,7 @@ export const INTEGRATIONS: Integration[] = [
   {
     // Storybook, per app (SHAPE.md: the home of the design system, stories and mockups). Its command and URL were
     // plain app setup until 2026-11-09; the check reads the repo for the screen-map standard (storybook.ts).
-    key: 'storybook', name: 'Storybook', role: 'Mockups', does: 'This app\'s mockups, as stories: the real ones, after the sketches; Mockups shows them inside Self Evident, the agent opens one to show what it means, and the screen map draws the app as the user walks it',
+    key: 'storybook', name: 'Storybook', role: 'Mockups', does: 'This app\'s mockups, as stories: the real ones, after the sketches; Mockups shows them inside Evident, the agent opens one to show what it means, and the screen map draws the app as the user walks it',
     fields: [ // the switch is the integration; the command and URL have defaults read from the repo (storybookDefaults), set here only when those are wrong
       { key: 'on', label: 'Mockups in Storybook', kind: 'switch', required: true, states: { on: 'this app\'s mockups are stories, checked against the standard', off: 'no Storybook for this app' } },
       { key: 'cmd', label: 'Command', placeholder: 'default: the repo\'s storybook script, with --no-open' },
@@ -181,7 +181,7 @@ export async function checkIntegration(key: string, values: Record<string, strin
   const st = integrationStatus(i, values, env)
   if (key === 'tkt') {
     if (!local?.tkt) throw new IntegrationError('tkt is switched on per app: check it from an app\'s Integrations')
-    if (st.state === 'off') return { ok: false, detail: 'tkt is off for this app: its tasks go to Self Evident\'s own planner.' }
+    if (st.state === 'off') return { ok: false, detail: 'tkt is off for this app: its tasks go to Evident\'s own planner.' }
     return checkTkt(local.tkt.ctx, local.tkt.deps)
   }
   if (key === 'storybook') {
@@ -243,7 +243,7 @@ export async function setupIntegration(key: string, values: Record<string, strin
     const d = await storybookDefaults(ctx.repoPath) // the installer may have just made the script the defaults come from
     const check = await checkStorybook({ ...ctx, url: ctx.url ?? d?.url ?? null, cmd: ctx.cmd ?? d?.cmd ?? null }, local.storybook.deps)
     if (check.ok && !inst.left.length) return { done: true, did: inst.did, ask: null, detail: check.detail }
-    const ask = [`Self Evident's Storybook check for ${ctx.app.name} says: ${check.detail}`, ...(inst.left.length ? ['Left from the install:', ...inst.left.map((l) => `- ${l}`)] : []), '', await installAsk()].join('\n')
+    const ask = [`Evident's Storybook check for ${ctx.app.name} says: ${check.detail}`, ...(inst.left.length ? ['Left from the install:', ...inst.left.map((l) => `- ${l}`)] : []), '', await installAsk()].join('\n')
     return { done: false, did: inst.did, ask, detail: check.detail }
   }
   throw new IntegrationError(`nothing to set up for ${i.name}`)

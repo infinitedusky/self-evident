@@ -100,12 +100,12 @@ describe('leave, then arrive on the other Mac', () => {
     expect((await git(w.path, ['status', '--porcelain'])).stdout).toBe('?? model.glb')
   })
 
-  it('never pushes or fetches for an app whose GitHub repository Self Evident was not given', async () => {
+  it('never pushes or fetches for an app whose GitHub repository Evident was not given', async () => {
     const w = await world()
     const plan: Plan = { ...w.plan, checkouts: [{ ...w.plan.checkouts[0], fullName: null }] }
     await writeFile(join(w.path, 'client.txt'), 'theirs\n')
     const left = await leave(plan, w.on('desk'))
-    expect(left[0]).toEqual({ name: 'RG · Swing', what: 'its app has no GitHub repository in Self Evident, so talk/abc123 stays on this Mac', ok: false })
+    expect(left[0]).toEqual({ name: 'RG · Swing', what: 'its app has no GitHub repository in Evident, so talk/abc123 stays on this Mac', ok: false })
     expect((await git(w.github, ['branch', '--list', 'talk/abc123'])).stdout).toBe('')
     const laptop = join(w.root, 'elsewhere'); await git(w.root, ['clone', '-q', w.github, laptop])
     await writeFile(join(laptop, 'new.txt'), 'n\n'); await git(laptop, ['add', '-A']); await git(laptop, ['commit', '-q', '-m', 'upstream moved']); await git(laptop, ['push', '-q'])

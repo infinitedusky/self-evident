@@ -17,7 +17,7 @@ const groups: StepGroup[] = [
     ] },
     { key: 'prototype', icon: '🛠️', label: 'Prototype', needs: ['The brief', 'The agreed mockup'], leaves: ['A branch that runs', 'A guide to try it'], done: 'You approved it.', stages: [
       { key: 'prepare', by: 'engine', what: 'A worktree and a port of its own.' },
-      { key: 'do', by: 'agent', what: 'Builds it the way we would ship it.', skills: [skill('self-evident:prototype', 'Self Evident', { fixed: true })] },
+      { key: 'do', by: 'agent', what: 'Builds it the way we would ship it.', skills: [skill('self-evident:prototype', 'Evident', { fixed: true })] },
       { key: 'report', by: 'agent', what: 'One line per requirement, what is not met first.' },
     ] },
   ] },

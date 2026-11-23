@@ -349,7 +349,7 @@ button.badge { border: 0; cursor: pointer; }
 .sub-issues .sub-issue.done > div a, .sub-issues .sub-issue.canceled > div a { color: var(--ink-soft); }
 .chip-order { display: inline-flex; gap: 2px; } .chip-order button { padding: 0 3px; }
 
-/* Settings: a side list (Self Evident, then each app) and the chosen page; groups instead of one long form. */
+/* Settings: a side list (Evident, then each app) and the chosen page; groups instead of one long form. */
 .settings { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; align-items: start; }
 .settings-side { position: sticky; top: 20px; display: grid; gap: 2px; }
 .settings-side .link { display: block; padding: 7px 10px; border-radius: 8px; text-decoration: none; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -1,19 +1,19 @@
-# What owns what: Self Evident, tkt, and the two together
+# What owns what: Evident, tkt, and the two together
 
 Three ways to run the same loop, drawn so the ownership is visible (Sandy, 2026-11-08: "what owns what and how the
-two are being used together … Self Evident on its own without tkt, tkt on its own including tkt web without Self
-Evident, and then Self Evident with tkt as an integration"). The fixed point in every picture: **tickets live in
+two are being used together … Evident on its own without tkt, tkt on its own including tkt web without Self
+Evident, and then Evident with tkt as an integration"). The fixed point in every picture: **tickets live in
 the tracker, never in tkt.** tkt keeps only what it knows about a running ticket (preset, session, tab, stage) in
 the repo's `.git/tkt/state`; its board reads tickets through the agent, from wherever `docs/agents/issue-tracker.md`
 says they live. tkt's own fit diagram is in its `docs/lifecycle.md`; these agree with it.
 
-## 1. Self Evident on its own
+## 1. Evident on its own
 
 ```mermaid
 flowchart LR
   you([You])
-  subgraph se[Self Evident, on this machine]
-    ui[Self Evident UI<br/>observe · learn · ideate · plan · build]
+  subgraph se[Evident, on this machine]
+    ui[Evident UI<br/>observe · learn · ideate · plan · build]
     engine[Engine]
     db[(Postgres<br/>ideas, projects, tickets, briefs,<br/>approvals, comments, events)]
     agents[[Its own agents: talk, planner, builder<br/>Claude Code with MCP tools into the engine]]
@@ -44,7 +44,7 @@ flowchart LR
   class gh,tel,lin,conf ext
 ```
 
-Everything is Self Evident's: the tickets, the approval, the planner and builder, the worktrees, the build rows
+Everything is Evident's: the tickets, the approval, the planner and builder, the worktrees, the build rows
 and steps, the window. GitHub holds the code. The Linear integration is half there: its connection check is built (the solid
 arrow), the mirror actions, create an issue, comment, move, are not (dotted). Confluence is the same.
 
@@ -99,13 +99,13 @@ by the same slash commands you could type. Linear is reached two ways, neither t
 hosted MCP server from the harness, and Linear's own GitHub integration attaches a pull request to the issue whose
 id is in the branch name.
 
-## 3. Self Evident with tkt switched on (ours)
+## 3. Evident with tkt switched on (ours)
 
 ```mermaid
 flowchart LR
   you([You])
-  subgraph se[Self Evident]
-    ui[Self Evident UI<br/>the ticket page is the window]
+  subgraph se[Evident]
+    ui[Evident UI<br/>the ticket page is the window]
     engine[Engine<br/>the tracker API]
     db[(Postgres<br/>tickets, briefs, approvals, the comments<br/>the skills write, events)]
     own[[Its own planner and builder<br/>stand down for this app]]
@@ -116,7 +116,7 @@ flowchart LR
     herdr[herdr]
     wt[worktrunk]
     agent[[Claude Code or OpenCode<br/>running a lifecycle skill]]
-    cfg[docs/agents/issue-tracker.md<br/>the tracker guide Self Evident fills]
+    cfg[docs/agents/issue-tracker.md<br/>the tracker guide Evident fills]
   end
   gh[(GitHub<br/>branches, PRs)]
   lin[(Linear<br/>the client's issues, if it has them)]
@@ -144,22 +144,22 @@ flowchart LR
   class gh,lin ext
 ```
 
-Self Evident is the tracker: tickets, briefs, approvals and the skills' comments live in its database, and the
-skills reach them over plain HTTP through the guide Self Evident fills. tkt still owns the run, as in picture 2,
-and nothing of it is copied into Self Evident. The two touch at exactly two points: the guide in the repo, and the
-check on the app's tkt page. The only path to Linear is Self Evident's Linear integration: the connection check
+Evident is the tracker: tickets, briefs, approvals and the skills' comments live in its database, and the
+skills reach them over plain HTTP through the guide Evident fills. tkt still owns the run, as in picture 2,
+and nothing of it is copied into Evident. The two touch at exactly two points: the guide in the repo, and the
+check on the app's tkt page. The only path to Linear is Evident's Linear integration: the connection check
 today, the mirror of each ticket (create, comment, move) once built. No arrow runs from tkt or the skills to Linear:
-the tracker file names Self Evident, and the skills use only the connection it names. tkt web would
+the tracker file names Evident, and the skills use only the connection it names. tkt web would
 still work here, reading our tickets the way the skills do; we are not using it.
 
 ## What owns what
 
-| | Self Evident alone | tkt alone | Self Evident + tkt |
+| | Evident alone | tkt alone | Evident + tkt |
 |---|---|---|---|
-| Tickets live in | Self Evident's Postgres | the tracker named in `docs/agents/issue-tracker.md`: Linear, GitHub Issues, Kaneo, markdown files | Self Evident's Postgres, as the tracker |
+| Tickets live in | Evident's Postgres | the tracker named in `docs/agents/issue-tracker.md`: Linear, GitHub Issues, Kaneo, markdown files | Evident's Postgres, as the tracker |
 | Who writes tickets | you, ideas becoming tasks, the talk agent | you in the tracker's own UI, or create-ticket from the chat | the same as alone, plus the skills' comments |
 | Who moves a ticket's state | the planner and builder runs, the GitHub sync | the skills, never tkt | the skills, through our API |
 | The run: worktree, tab, session, stage | the engine's build rows, runs and steps | tkt, in `.git/tkt/state` | tkt, in `.git/tkt/state` |
 | Code and PRs | GitHub | the forge: GitHub, GitLab or Gitea | GitHub |
-| The window | Self Evident's UI | tkt web, the terminal, the plan viewer | Self Evident's ticket page; tkt web optional |
-| Linear, and what talks to it | Self Evident's Linear integration: the check is built, the mirror (create, comment, move) is not | Linear is the tracker: the skills reach it through its hosted MCP server, and Linear's GitHub integration attaches PRs by branch name; tkt never talks to it | only Self Evident's Linear integration, as a mirror of our tickets; the skills and tkt have no path to it |
+| The window | Evident's UI | tkt web, the terminal, the plan viewer | Evident's ticket page; tkt web optional |
+| Linear, and what talks to it | Evident's Linear integration: the check is built, the mirror (create, comment, move) is not | Linear is the tracker: the skills reach it through its hosted MCP server, and Linear's GitHub integration attaches PRs by branch name; tkt never talks to it | only Evident's Linear integration, as a mirror of our tickets; the skills and tkt have no path to it |

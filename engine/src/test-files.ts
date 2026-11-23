@@ -230,7 +230,7 @@ export async function placeTestFiles(appId: string, issueId: string | null, plac
     copyFileSync(version === 'real' ? realPathOf(appId, r.id, r.name) : pathOf(appId, r.id, r.name), join(dir, r.name))
     out.files.push({ name: r.name, what: r.what, version })
   }
-  writeFileSync(join(dir, 'README.md'), ['# Test files', '', 'What a tester needs to try this. Put here by Self Evident; changed on the task\'s Data step, not here.', '', ...out.files.map((f) => `- \`${f.name}\`${f.version === 'real' ? ' (REAL: this computer only)' : ''}${f.what ? `: ${f.what}` : ''}`), ''].join('\n'))
+  writeFileSync(join(dir, 'README.md'), ['# Test files', '', 'What a tester needs to try this. Put here by Evident; changed on the task\'s Data step, not here.', '', ...out.files.map((f) => `- \`${f.name}\`${f.version === 'real' ? ' (REAL: this computer only)' : ''}${f.what ? `: ${f.what}` : ''}`), ''].join('\n'))
   return out
 }
 /** What a folder a run was given holds now, as it was put there: read back from the folder, nothing written. None: it was given no files. */

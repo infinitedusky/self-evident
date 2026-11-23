@@ -6833,3 +6833,21 @@ Found the same hour on CEB-90: the download step was no longer drawn under the c
 the service with its endpoints listed plainly, and saving replaced the list whole, so the step lost what it follows
 and the field its link is in. A list said again now keeps, for an endpoint it still has: that it is a next step,
 what it is, and that it is sensitive (which a list can never take off). CEB-90's endpoint was put right by hand.
+
+## The name is Evident (Sandy, 2026-11-20: "self-evident is a little bit provocative … Evident is a little bit more ambiguous why it would be called that … It also sounds a little bit more like a product"; "I just want it renamed in every place")
+
+Wherever the name is written as words it now reads Evident: the UI, the docs, what the agents are told, and what
+is left on other people's pages (a pull request's "Generated with Claude Code via Evident").
+
+Left as they are, mine to choose: every identifier. The repository (`infinitedusky/self-evident`), the folder that
+holds the keys (`~/.self-evident`), the database (`selfevident`), the package, plugin and MCP server names
+(`self-evident`, so `self-evident:prototype`), the launch agent and the `/__self-evident/` paths. Each needs a move
+on every computer it runs on, and none is read by a person. Nor this log's earlier entries, nor `research/` and
+`ideas/`: they say what was said then.
+
+Not decided: the line under the name ("the thing proves itself" was written for Self Evident); whether the
+identifiers follow. Text already posted under the old name (pull requests, comments) is not changed; nothing of
+ours recognises its own text by the name.
+
+Done again on 2026-11-23: the change above was pull request #329, which was never merged, so the name stayed
+Self Evident for three days and everything written since said so. Redone on that day's main with the same rule.

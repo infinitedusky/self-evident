@@ -2,7 +2,7 @@
  * The repository's own conventions for what a build leaves on GitHub: the branch's name and the commits' first lines
  * (the pull request's title is pr.ts). Found on CEB-79 (2026-11-18): the repository had a naming skill, and every
  * commit still came out as `feat(CEB-84): …`, because the builder was told only "commit with a clear message" and
- * knew only our own numbers: CEB-84 was a sub-task of ours, which means nothing outside Self Evident.
+ * knew only our own numbers: CEB-84 was a sub-task of ours, which means nothing outside Evident.
  *
  * Two settings beside `setup.pr_title`, set by the app's agent from the repository's rules (set_pr_rules) or by
  * hand under Settings › Landing:

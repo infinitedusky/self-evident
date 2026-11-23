@@ -8,7 +8,7 @@ import { checkTkt, defaultDelegate, GUIDE_PATH, section, setupTkt, tktOn, tracke
 
 const tkt = INTEGRATIONS.find((i) => i.key === 'tkt')!
 const ctx: TktContext = { app: { id: 'app_x1', key: 'SCR', name: 'tkt scratch' }, repoPath: '/code/scratch', engineUrl: 'http://localhost:4000/api', uiUrl: 'http://localhost:5180' }
-const goodGuide = `<!-- rogs-skills config v1: issue-tracker -->\n# Issue tracker\n\n## Tracker\n\n- Kind: Self Evident\n- Scope: the app \`tkt scratch\`, id \`app_x1\`, key \`SCR\`.\n- Ticket ids: \`SCR-<number>\`\n`
+const goodGuide = `<!-- rogs-skills config v1: issue-tracker -->\n# Issue tracker\n\n## Tracker\n\n- Kind: Evident\n- Scope: the app \`tkt scratch\`, id \`app_x1\`, key \`SCR\`.\n- Ticket ids: \`SCR-<number>\`\n`
 const enoent = () => Object.assign(new Error('spawn tkt ENOENT'), { code: 'ENOENT' })
 /** A tkt that answers --version and doctor as told; anything else is a surprise. */
 const fakeTkt = (doctor: 'ok' | string = 'ok'): Run => async (file, args) => {
@@ -57,10 +57,10 @@ describe('the check', () => {
   it('wants a local checkout', async () => {
     expect((await checkTkt({ ...ctx, repoPath: null }, { run: fakeTkt(), read: files({}) })).detail).toMatch(/No local checkout under Repo/)
   })
-  it('wants the tracker guide in the repo, pointing at Self Evident and at this app', async () => {
+  it('wants the tracker guide in the repo, pointing at Evident and at this app', async () => {
     const read = (guide?: string) => files(guide === undefined ? {} : { [`/code/scratch/${GUIDE_PATH}`]: guide })
     expect((await checkTkt(ctx, { run: fakeTkt(), read: read() })).detail).toBe(`${GUIDE_PATH} isn't in the repo. Copy the tracker guide below into it.`)
-    expect((await checkTkt(ctx, { run: fakeTkt(), read: read('## Tracker\n- Kind: Linear\n- Team: SHOP') })).detail).toMatch(/points at another tracker \(Linear\), not Self Evident/)
+    expect((await checkTkt(ctx, { run: fakeTkt(), read: read('## Tracker\n- Kind: Linear\n- Team: SHOP') })).detail).toMatch(/points at another tracker \(Linear\), not Evident/)
     expect((await checkTkt(ctx, { run: fakeTkt(), read: read(goodGuide.replace('app_x1', 'app_other')) })).detail).toMatch(/names another app, not SCR \(app_x1\)/)
     expect((await checkTkt(ctx, { run: fakeTkt(), read: read(goodGuide.replace(/SCR/g, 'HG')) })).detail).toMatch(/names another app/)
   })
@@ -87,7 +87,7 @@ describe('the tracker guide', () => {
     expect(g).toContain('`http://localhost:5180`')
     expect(g).toContain('the app `tkt scratch`, id `app_x1`, key `SCR`')
     expect(g).toContain('`SCR-<number>`, matched by `^SCR-[1-9][0-9]*$`')
-    expect(g).toContain('Kind: Self Evident')
+    expect(g).toContain('Kind: Evident')
     for (const op of ['resolve', 'load', 'search', 'list-in-flight', 'list-ready', 'metadata', 'create', 'update', 'relate', 'comment', 'transition', 'attach']) expect(g).toContain(`### ${op}\n`)
     expect(g.match(/^Capability: /gm)?.length).toBe(12)
   })
@@ -154,11 +154,11 @@ describe('set up what\'s missing', () => {
     expect(r.did).toEqual([
       `Wrote ${GUIDE_PATH}, pointing at SCR here.`,
       'Wrote docs/agents/forge.md, docs/agents/workflow.md, docs/agents/domain.md, docs/agents/pull-request.md and the Ticket lifecycle block in CLAUDE.md, from the app, the repo and the house profile.',
-      'Installed tkt\'s Claude Code hooks in .claude/settings.json (the shared file, so they are committed and Self Evident\'s agents get them).',
+      'Installed tkt\'s Claude Code hooks in .claude/settings.json (the shared file, so they are committed and Evident\'s agents get them).',
       'Installed tkt\'s OpenCode plugin (tkt\'s own file under ~/.config/opencode).',
       'Committed to main and pushed (abc1234).',
     ])
-    expect(mc.files[guidePath]).toContain('Kind: Self Evident'); expect(mc.files[guidePath]).toContain('app_x1')
+    expect(mc.files[guidePath]).toContain('Kind: Evident'); expect(mc.files[guidePath]).toContain('app_x1')
     expect(mc.files[`${root}/docs/agents/forge.md`]).toContain('- Repository: infinitedusky/scratch\n- Remote: origin\n')
     expect(mc.files[`${root}/docs/agents/workflow.md`]).toContain('| Full check | npm run test |'); expect(mc.files[`${root}/docs/agents/workflow.md`]).toContain('one test: `npx vitest run <file>`')
     expect(mc.files[`${root}/CLAUDE.md`]).toContain('## Ticket lifecycle'); expect(mc.files[`${root}/CLAUDE.md`]).toContain('`forge.md` (GitHub, infinitedusky/scratch)')
@@ -175,7 +175,7 @@ describe('set up what\'s missing', () => {
     const r = await setupTkt(ctx, mc)
     expect(mc.files[`${root}/docs/agents/workflow.md`]).toBe(mine)
     expect(mc.files[`${root}/CLAUDE.md`]).toMatch(/^# Scratch\n\n<!-- rogs-skills:begin config v1 -->\n## Ticket lifecycle/); expect(mc.files[`${root}/CLAUDE.md`]).not.toContain('\nold\n')
-    expect(r.did).toContain('Left docs/agents/workflow.md alone: it isn\'t Self Evident\'s (no "Self Evident wrote it" line).')
+    expect(r.did).toContain('Left docs/agents/workflow.md alone: it isn\'t Evident\'s (no "Evident wrote it" line).')
     expect(r.did.at(-1)).toMatch(/^Written in the checkout, which is on feature, not main: it needs to land on main/)
     expect(mc.cmds.some((c) => c.startsWith('git commit') || c.startsWith('git push'))).toBe(false)
     expect(r.done).toBe(true) // the files are there, so doctor passes; landing them on main is the one thing left
@@ -203,7 +203,7 @@ describe('set up what\'s missing', () => {
     expect(r.done).toBe(false)
     expect(r.did[0]).toBe(`Wrote ${GUIDE_PATH}, pointing at SCR here.`); expect(r.did[1]).toMatch(/^Wrote docs\/agents\/forge\.md/)
     expect(r.ask).toContain("says: tkt isn't on the engine's PATH"); expect(r.ask).toContain('install.sh'); expect(r.ask).toContain('each following its own hint.')
-    expect(r.ask).toContain('Self Evident has written the agent docs already')
+    expect(r.ask).toContain('Evident has written the agent docs already')
     expect(mc.cmds.some((c) => c.startsWith('tkt hook'))).toBe(false)
   })
 

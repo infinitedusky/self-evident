@@ -86,7 +86,7 @@ export async function startRecorder(i: { appId: string; issueId?: string | null;
     } catch (err) {
       Object.assign(meta, { status: 502, ms: Date.now() - started, error: (err as Error).message })
       res.writeHead(502, { 'content-type': 'text/plain' })
-      res.end(`Self Evident's recorder could not reach ${target}: ${(err as Error).message}`)
+      res.end(`Evident's recorder could not reach ${target}: ${(err as Error).message}`)
     }
     writeFileSync(join(dir, `${no}-${slugOf(req.url ?? '/')}.meta.json`), JSON.stringify(meta, null, 2))
   }

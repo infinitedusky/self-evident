@@ -1,7 +1,7 @@
 /**
  * The GitHub sync: what happened on GitHub that the engine did not do. Every two minutes (and on demand), per repo:
  * - our pull requests: merged or closed, the review decision, the CI checks, whether GitHub can merge them;
- * - pull requests Self Evident did not open (a teammate's): kept in `outside_pr`, with a review requested from the
+ * - pull requests Evident did not open (a teammate's): kept in `outside_pr`, with a review requested from the
  *   person and the files each one changes, so My Stuff can say "review this" and "this touches what you're building";
  * - main moving: the default branch is fetched and merged into every open project's branch, under the same lock
  *   landing uses. A conflict is not resolved here: it becomes a "needs you" with the files.
@@ -229,7 +229,7 @@ async function sayCheckout(a: typeof app.$inferSelect, path: string, pulled: Pul
 
 /**
  * The checkout this engine is running from: never pulled by the sync. New engine code restarts the engine, which
- * cuts off whatever is building, so Self Evident's own main moves only when someone chooses the moment.
+ * cuts off whatever is building, so Evident's own main moves only when someone chooses the moment.
  */
 export const ownCheckout = (repoPath: string, running = fileURLToPath(import.meta.url)) => running.startsWith(resolve(repoPath) + sep)
 

@@ -22,7 +22,7 @@ describe('prepareCheckout', () => {
     expect(r).toEqual({ branch: 'main', note: 'Made it a git repository on main, committed the 2 files as found.' })
     expect(await branchOf(p)).toBe('main'); expect(await commits(p)).toBe('1')
     expect((await git(p, ['status', '--porcelain'])).stdout).toBe('')
-    expect((await git(p, ['log', '-1', '--format=%s'])).stdout).toBe('The files as found, when Ragdoll Golf joined Self Evident')
+    expect((await git(p, ['log', '-1', '--format=%s'])).stdout).toBe('The files as found, when Ragdoll Golf joined Evident')
   })
 
   it('keeps node_modules out when nothing says what to ignore yet', async () => {

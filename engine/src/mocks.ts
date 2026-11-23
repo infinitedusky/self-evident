@@ -4,7 +4,7 @@
  *
  * Why: a pull request is reviewable only if the reviewer can try it on data they can trust, and ENT-322's findings
  * come only from a paid vendor scan, so a fresh checkout shows empty screens. The made-up data and the vendor
- * stand-in we used lived in Self Evident, per prototype, and a stand-in built on a guessed shape shows only that the
+ * stand-in we used lived in Evident, per prototype, and a stand-in built on a guessed shape shows only that the
  * code handles the guess. Stand-ins, recordings and scenarios were three separate things per prototype or task.
  *
  * Mock mining: a real response, recorded once (recorder.ts) and kept privately with the task (recordings.ts),

@@ -1,9 +1,9 @@
-# Tracker guide: Self Evident
+# Tracker guide: Evident
 
 A tracker guide in the format of the rogs-skills `setup-rogs` guides (`tracker-linear.md`, `tracker-local.md`, …), so
 `/setup-rogs` can write a repository's `docs/agents/issue-tracker.md` from it, or a person can, by filling the
-`{{FILL: …}}` values. Self Evident is where tickets are born, reviewed and watched; tkt and the lifecycle skills
-build them and write back here (SHAPE.md, "tkt is the runner; Self Evident is the tracker and the window"). The
+`{{FILL: …}}` values. Evident is where tickets are born, reviewed and watched; tkt and the lifecycle skills
+build them and write back here (SHAPE.md, "tkt is the runner; Evident is the tracker and the window"). The
 engine fills it for an app itself (`engine/src/tkt.ts`, `trackerGuide`): an app's page under Integrations › tkt
 shows the finished `docs/agents/issue-tracker.md` to copy, and `GET /api/apps/:id/tracker-guide` serves it.
 
@@ -11,8 +11,8 @@ shows the finished `docs/agents/issue-tracker.md` to copy, and `GET /api/apps/:i
 
 For setup only; this section is not copied into the project.
 
-- Detect: the repository is an app in a running Self Evident (`GET <engine>/api/apps` lists it with this
-  repository's path under `repos[].localPath`), or the user names Self Evident.
+- Detect: the repository is an app in a running Evident (`GET <engine>/api/apps` lists it with this
+  repository's path under `repos[].localPath`), or the user names Evident.
 - Connection: the engine's HTTP API, by default `http://localhost:4000/api`. Plain `curl`; no token on a local
   engine, so nothing secret goes in the file. Every call works from any harness and any worktree.
 - Connection check: `curl -sf <engine>/api/health` prints `{"ok":true}`, and `curl -sf '<engine>/api/apps'` lists the
@@ -20,14 +20,14 @@ For setup only; this section is not copied into the project.
 - Discover: states are fixed words (below); there are no labels; members are free text; projects come from
   `GET <engine>/api/projects?app=<app id>`.
 - The hinge: a ticket is built from an approved brief. `briefApprovedBy` is set on a ticket whose brief a person
-  approved in Self Evident; a ticket whose brief is not approved is not ready, whatever its state, and the engine
+  approved in Evident; a ticket whose brief is not approved is not ready, whatever its state, and the engine
   refuses to mark it done.
 - Gaps: `relate` is a fallback (description lines; the API reads relations but does not write them yet); `attach`
   is unsupported (the forge holds captures).
 
 ## Tracker
 
-- Kind: Self Evident
+- Kind: Evident
 - Connection: the engine's HTTP API at `{{FILL: the engine URL, by default http://localhost:4000/api}}`, with `curl`.
   The UI is at `{{FILL: the UI URL, by default http://localhost:5180}}`. No token.
 - Scope: the app `{{FILL: the app's name}}`, id `{{FILL: app_…}}`, key `{{FILL: the key}}`. Every list call passes
@@ -65,7 +65,7 @@ Capability: Supported
 ### search
 
 `curl -sf '<engine>/issues?app=<app id>&q=<term>'` searches title, description and brief, open and closed tickets
-alike (Self Evident keeps no archive), one page, in the app's order. One call per term or synonym; match the terms
+alike (Evident keeps no archive), one page, in the app's order. One call per term or synonym; match the terms
 against titles yourself as well.
 
 Capability: Supported
@@ -79,7 +79,7 @@ Capability: Supported
 ### list-ready
 
 `curl -sf '<engine>/issues?app=<app id>&state=todo,backlog,triage&top=1'`, then keep the tickets whose
-`briefApprovedBy` is set: those are ready. The rest are being reviewed in Self Evident; say so, never start one.
+`briefApprovedBy` is set: those are ready. The rest are being reviewed in Evident; say so, never start one.
 
 Capability: Supported
 
@@ -102,8 +102,8 @@ curl -sf -X POST <engine>/issues -H 'content-type: application/json' \
 
 Returns the ticket with `id` and `number`; the identifier is `<key>-<number>`. Its URL is `<UI>/tasks/<key>-<number>`.
 The brief is the ticket body in the usual shape (Problem, Soft scope, Acceptance criteria, Dependencies); a person
-approves it in Self Evident before anyone starts the ticket. When the app's rules start everything as an idea, the
-call fails and its message says so: ask the user to capture the idea in Self Evident instead.
+approves it in Evident before anyone starts the ticket. When the app's rules start everything as an idea, the
+call fails and its message says so: ask the user to capture the idea in Evident instead.
 
 Capability: Supported
 

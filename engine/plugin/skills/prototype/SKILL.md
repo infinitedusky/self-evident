@@ -1,6 +1,6 @@
 ---
 name: prototype
-description: Use when building a prototype for a task, idea or project in Self Evident (the Prototype step), when writing a prototype agent's brief, or when deciding whether a prototype is ready for the person to approve. Defines what a prototype is for, its definition of done, where fakes are allowed, and how to report on it honestly.
+description: Use when building a prototype for a task, idea or project in Evident (the Prototype step), when writing a prototype agent's brief, or when deciding whether a prototype is ready for the person to approve. Defines what a prototype is for, its definition of done, where fakes are allowed, and how to report on it honestly.
 ---
 
 # Prototype
@@ -57,7 +57,7 @@ approach altogether) is the prototype analysis's job, and the build follows what
    shape is identical). When nothing real can be had, write the stand-in from the best reference and say plainly that
    the shape is assumed.
 3. **It runs as the app runs.** Started by the app's prototype command, on the app's real database engine, with the
-   app's own services; rebuilt from a named scenario. Scenarios are made-up rows kept in Self Evident, never files
+   app's own services; rebuilt from a named scenario. Scenarios are made-up rows kept in Evident, never files
    on the branch: write one with `prototype_data` (write), keep the current data with it (save), load one with it
    (reset). Keep scenarios that show each requirement, including empty and edge cases (nothing found, many found,
    re-run). Do not add sample data files or a `.prototype` folder to the repository.
@@ -81,7 +81,7 @@ approach altogether) is the prototype analysis's job, and the build follows what
 7. **It has a guide** (`set_guide`). A one-line intro saying what this is and that the data is made up, then steps
    in the order to try them. Each step has a path that opens on the prototype (or a run command, for something with
    no screen) and, in a sentence a stranger could follow, what to try and what they should see. Together the steps
-   cover every acceptance criterion the prototype shows. Self Evident checks every path, so write it after the data
+   cover every acceptance criterion the prototype shows. Evident checks every path, so write it after the data
    is in place, using that data's real ids; after a data rebuild that changes ids, write it again. The prototype
    cannot be said done or approved without one.
 
@@ -99,7 +99,7 @@ Evident reads the running page for addresses fixed to this computer and says so 
 fix the set-up, not the page.
 
 **A stand-in is part of the prototype.** Set each one with `prototype_stand_in`: a command that serves on `$PORT`,
-and the variables that point the app at it. Self Evident starts it with the prototype and stops it with it, so it is
+and the variables that point the app at it. Evident starts it with the prototype and stops it with it, so it is
 still there after a restart or a data reset. Never start one by hand or keep one, or what it serves, in `/tmp`: the
 next start loses it, and the prototype no longer works. It runs in a folder of its own outside the repository
 (`$PROTOTYPE_HOME`), and a stub program the repository already keeps can be run from there. Where the app runs in

@@ -107,7 +107,7 @@ export function smokeSetup(setup: unknown, key?: string | null): SmokeSetup {
 }
 
 /**
- * The smoke test's set-up is Self Evident's own, never the app's repository's (Sandy, 2026-11-17: "one main reason
+ * The smoke test's set-up is Evident's own, never the app's repository's (Sandy, 2026-11-17: "one main reason
  * for doing this is to keep any of this stuff out of the code base because we don't want this stuff to be versioned
  * or part of a code base that we're working with for a client … This is about us being able to test"). So the
  * script that brings the environment up, the one that takes it down and the SQL that fills its database are kept in

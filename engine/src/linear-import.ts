@@ -1,6 +1,6 @@
 /**
  * Linear tickets brought in (Sandy, 2026-11-12: "we should be able to create plans and tasks from linear"). The other
- * direction from the Linear integration's declared actions: here Self Evident reads. A team's open tickets are listed
+ * direction from the Linear integration's declared actions: here Evident reads. A team's open tickets are listed
  * for an app, the person ticks the ones to bring in, and each becomes an idea (Sandy, 2026-11-20: "bring them in as
  * ideas and then decide whether or not they should be projects or tasks … it might be that they should be a project
  * with tasks. For one ticket"): its title, its description, and where it came from (`source: 'linear'`,

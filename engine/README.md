@@ -1,4 +1,4 @@
-# Self Evident engine
+# Evident engine
 
 The core is shaped like Linear (since 2026-10-27), so a connected Linear workspace can hold the plan later:
 **initiative → project → task → sub-task → step.** What Linear calls an issue we call a **task** (and a sub-issue a

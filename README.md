@@ -1,4 +1,4 @@
-# Self Evident
+# Evident
 
 🔭🧠💡✏️🔨 **Observe · Learn · Ideate · Mockup · Build.** An open-source factory that turns ideas into software and makes
 each one prove itself with telemetry. Agents plan, build and open the PRs; the running app's signal decides what was worth
@@ -37,7 +37,7 @@ comparisons that shaped it (Lightsprint, InDusk, PostHog). The engine and the we
 `engine/README.md` has the details (the API, the CLI, what each file is for).
 
 The first app built through it is Homework Gate, a home system that opens a student's screen time when the
-homework is done *and understood*. Self Evident is built the same way it builds anything else: it is an app inside itself.
+homework is done *and understood*. Evident is built the same way it builds anything else: it is an app inside itself.
 
 ## Working rules
 

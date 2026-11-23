@@ -1,5 +1,5 @@
 /**
- * Self Evident as a tracker: a ticket is found by its identifier, searched for by its words, listed by state, and
+ * Evident as a tracker: a ticket is found by its identifier, searched for by its words, listed by state, and
  * carries comments one per heading, the way the tkt skills write them (the plan, the handoff, the completion).
  */
 import { eq } from 'drizzle-orm'

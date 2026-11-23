@@ -1,7 +1,7 @@
 {
   "$schema": "https://zigbang.github.io/storybook-addon-story-flow/flow.schema.json",
-  "epic": "Self Evident",
-  "title": "Self Evident/Map",
+  "epic": "Evident",
+  "title": "Evident/Map",
   "scenarios": [
     { "id": "loop", "label": "The loop: observe, learn, ideate, plan, build" },
     { "id": "idea", "label": "An idea becomes a project" },

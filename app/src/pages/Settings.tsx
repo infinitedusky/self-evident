@@ -156,7 +156,7 @@ function FactoryPage({ section, item }: { section: string; item?: string }) {
     <>
       {section === 'plugins' && <section className="panel" data-component="Plugins">
         <h2>Plugins</h2>
-        <p className="muted settings-lead">What the factory installs to give its agents more to work with: skills, tools, or both. Each is a Claude Code plugin, installed for Self Evident only (not your own Claude Code). The builder gets none; it builds what the plan says.</p>
+        <p className="muted settings-lead">What the factory installs to give its agents more to work with: skills, tools, or both. Each is a Claude Code plugin, installed for Evident only (not your own Claude Code). The builder gets none; it builds what the plan says.</p>
         {s.plugins.filter((p) => p.id !== 'shared').map((p) => <PluginBlock key={p.id} p={p} catalogue={s.catalogue} act={act} />)}
         <AddPlugin onAdded={load} />
       </section>}
@@ -634,7 +634,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
             </>
           : (su.where ?? 'local') === 'local'
           ? <>
-              <p className="faint" style={{ gridColumn: '1 / -1', margin: 0 }}>These are kept here, in Self Evident, and never written into the app's repository. An agent can change them; a build is told to change them here and not on its branch.</p>
+              <p className="faint" style={{ gridColumn: '1 / -1', margin: 0 }}>These are kept here, in Evident, and never written into the app's repository. An agent can change them; a build is told to change them here and not on its branch.</p>
               <label style={{ gridColumn: '1 / -1' }}>Script <span className="faint">(optional: else the prototype's command)</span><textarea className="mono" aria-label={n ? `${su.name || "Set-up"} script` : "Smoke test script"} rows={Math.min(14, Math.max(3, (su.cmd ?? '').split('\n').length + 1))} value={su.cmd ?? ''} onChange={(e) => putSmoke(n, { cmd: e.target.value })} placeholder={'docker compose -p smoke-$PORT up -d db\npsql "$DATABASE_URL" -f "$SMOKE_SEED"\npnpm install && pnpm dev --port $PORT'} /></label>
               <label style={{ gridColumn: '1 / -1' }}>Stop script <span className="faint">(optional: for what the script leaves running)</span><textarea className="mono" aria-label={n ? `${su.name || "Set-up"} stop script` : "Smoke test stop script"} rows={2} value={su.stop ?? ''} onChange={(e) => putSmoke(n, { stop: e.target.value })} placeholder="docker compose -p smoke-$PORT down -v" /></label>
               <label style={{ gridColumn: '1 / -1' }}>Seed <span className="faint">(optional: SQL of made-up rows. Run on a new database of the app's own; a script finds it at $SMOKE_SEED)</span><textarea className="mono" aria-label={n ? `${su.name || "Set-up"} seed` : "Smoke test seed"} rows={Math.min(14, Math.max(3, (su.seed ?? '').split('\n').length + 1))} value={su.seed ?? ''} onChange={(e) => putSmoke(n, { seed: e.target.value })} placeholder={"insert into parent (id, name) values (1, 'Sample Parent');"} /></label>

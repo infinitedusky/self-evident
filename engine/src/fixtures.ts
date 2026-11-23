@@ -4,7 +4,7 @@
  * in our mock"; "we have Meridian … one of the Meridian people we assign as the person for the fake results from
  * the CSV that I submitted … once we have fixtures, then we can link the fixtures to the mocks").
  *
- * A fixture is one of the app's shared scenarios (prototype-data.ts): made-up rows by table, kept in Self Evident,
+ * A fixture is one of the app's shared scenarios (prototype-data.ts): made-up rows by table, kept in Evident,
  * with the ids they were saved with. Because those ids do not change, an endpoint's faked data can be made for a
  * fixture's person: the columns the app matches on (an id, an email) are set from that person's row, and the rest
  * stays faked. The mock then answers with a fixed file and the app, started on that fixture, sends the people the

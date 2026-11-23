@@ -1,10 +1,10 @@
 /**
  * Nightly checks (Sandy, 2026-11-19, on Bonkei's every-page docs smoke running on every pull request: "I feel like
- * this should be a nightly check"; asked whether Self Evident can allow it: "great lets do that"; and "the schedule
+ * this should be a nightly check"; asked whether Evident can allow it: "great lets do that"; and "the schedule
  * would be set in github and we would just be able to select it").
  *
  * A slow suite leaves the pull request and runs on a schedule on the default branch: the nightly build. The schedule
- * is the repository's own (a workflow with `schedule:` in `.github/workflows/`); Self Evident runs nothing. An app
+ * is the repository's own (a workflow with `schedule:` in `.github/workflows/`); Evident runs nothing. An app
  * names the workflow as one of the things its builds are held to, with "nightly" as when (held.ts), picked from the
  * workflows its checkout has. The engine then reads that workflow's last runs on the default branch with `gh`, with
  * the GitHub sync, and keeps one row for each: passed or failed, how many runs in a row have failed, and the last
