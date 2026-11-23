@@ -73,6 +73,14 @@ on one task, CEB-90, and its one outside service, SixtyFour.
   matches a results row to a person by an id; the override would match by email, for an app that had no such
   fallback of its own. The Data step holds a "Data scripts" section marked Coming soon.
 
+- **The fixture's files in place of the browser's file dialog** (Sandy, 2026-11-23: "there's no way to run this
+  as if it's being run from a mock file system?"). The app's Browse button opens the browser's own dialog, which a
+  page cannot point anywhere. The engine's frame proxy already puts a script in every page of a prototype or smoke
+  test; it can catch a file field being opened and show a chooser of the run's fixture files (File Context, Real
+  badge), handing the one picked to the app as the dialog would, with "something else on this computer" falling
+  through. Misses apps that use a newer file API. Only where the proxy is in front; whether a reviewer's set-up
+  runs it is step 6's question. Until then: "Show the folder" on the smoke test's page.
+
 ## Known test noise
 
 `github.test.ts` (stacked PRs) fails on main. Some runner tests fail only in full runs. The stories "Compared With

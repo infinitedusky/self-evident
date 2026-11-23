@@ -6789,3 +6789,10 @@ fixture." It is the browser's own file dialog, and a page cannot say where it op
 test's page names the files it was given (a real version marked) and has "Show the folder", which opens their
 folder in this computer's file manager, to drag a file onto the app or pick it from; and "Copy its path", for the
 dialog's go-to-folder. Not done: the same line for a prototype.
+
+### 2026-11-23: A chooser of the fixture's files, set aside
+
+A prototype or smoke test could show its own chooser of the run's fixture files when the app asks for a file,
+through the script the frame proxy already puts in each page. Sandy: "Can we add a note and do it afterwards? I
+want to get this built as fast as possible, that I can actually submit the PR." Written into the brief's set-aside
+list; CEB-90's pull request comes first.
