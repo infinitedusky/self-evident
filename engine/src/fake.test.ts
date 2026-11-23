@@ -114,7 +114,8 @@ describe('the faker', () => {
     const r = fake([{ name: 'results.csv', text: recorded }], { keep: ['work_email', 'status'], salt: 'test' })
     expect(parseCsv(r.files['results.csv'])[1][1]).toMatch(/\.example$/)
     expect(r.report.refusedKeep).toEqual(['work_email'])
-    expect(r.report.maybeStructure).toEqual(['risk_level']) // every value one plain word, and replaced: perhaps to keep
+    expect(r.report.maybeStructure).toEqual([]) // risk_level is words of state (high, low): kept without being asked, so nothing is left to suggest
+    expect(r.report.keptValues).toEqual(expect.arrayContaining(['high', 'low']))
     expect(r.report.byKind).toMatchObject({ email: 2, id: 2 })
   })
 
@@ -127,5 +128,40 @@ describe('the faker', () => {
     expect(y.n).not.toBe(12345678)
     expect(lines).toContain('{"user": "') // its spacing kept
     expect(fake([{ name: 'note.txt', text: 'Rowan Vale\nrowan.vale@northgate-holdings.com' }], { salt: 'test' }).files['note.txt']).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+\n[a-z.]+@[a-z]+\.example$/)
+  })
+
+  describe('what a record says is kept, who it is about is not', () => {
+    const finding = (n: number, status: string, kind: string, handle: string) => ({ status, kind, handle, name_shown: 'Rowan Vale', url: `https://social.example-site.com/u/${handle}/post/${n}`, note: 'Seen once' })
+    const items = [finding(1, 'live', 'clone', 'rowanvale'), finding(2, 'reported', 'clone', 'rowanvale'), finding(3, 'live', 'parody', 'rvale'), finding(4, 'reported', 'clone', 'rowanvale'), finding(5, 'live', 'parody', 'rvale'), finding(6, 'live', 'clone', 'rowanvale')]
+    const text = `work_email,profiles,Status\nrowan.vale@northgate-holdings.com,${cell(JSON.stringify(items))},completed\n`
+    const made = () => { const r = fake([{ name: 'results.csv', text }], { salt: 'test', varyCounts: false }); return { r, out: JSON.parse(parseCsv(r.files['results.csv'])[1][1]) as ReturnType<typeof finding>[] } }
+
+    it('keeps a word of state wherever it stands, with no plan', () => {
+      const { r, out } = made()
+      expect(out.map((f) => f.status)).toEqual(['live', 'reported', 'live', 'reported', 'live', 'live'])
+      expect(r.report.keptValues).toEqual(expect.arrayContaining(['live', 'reported']))
+      expect(parseCsv(r.files['results.csv'])[1][2]).toBe('completed') // said once, and still a word of state
+    })
+    it('keeps a key whose values are a small vocabulary said again and again, and says which', () => {
+      const { r, out } = made()
+      expect(out.map((f) => f.kind)).toEqual(['clone', 'clone', 'parody', 'clone', 'parody', 'clone'])
+      expect(r.report.keptAsStructure).toEqual(['profiles.kind', 'profiles.status'])
+    })
+    it('still replaces a handle said again and again: its key is someone\'s, and it is in their web addresses', () => {
+      const { r, out } = made()
+      for (const f of out) { expect(f.handle).not.toMatch(/rowanvale|rvale/); expect(f.url).not.toMatch(/rowanvale|rvale/); expect(f.name_shown).not.toBe('Rowan Vale') }
+      expect(r.files['results.csv']).not.toMatch(/rowan|northgate/i)
+      expect(checkLeaks([{ name: 'results.csv', text }], [{ path: 'results.csv', text: r.files['results.csv'] }], r.report.keptValues).ok).toBe(true)
+    })
+    it('does not take a repeated lowercase word for a vocabulary when it is part of someone\'s address, whatever its key', () => {
+      const rows = [1, 2, 3, 4].map((n) => ({ tag: 'rvale', url: `https://social.example-site.com/u/rvale/${n}` }))
+      const r = fake([{ name: 'x.json', text: JSON.stringify(rows) }], { salt: 'test', varyCounts: false })
+      expect(r.files['x.json']).not.toContain('rvale')
+      expect(r.report.keptAsStructure).toBeUndefined()
+    })
+    it('does not keep a word of state inside a column the plan names as text', () => {
+      const r = fake([{ name: 'x.json', text: JSON.stringify([{ status: 'live' }]) }], { salt: 'test', text: ['status'] })
+      expect(r.files['x.json']).not.toContain('"live"')
+    })
   })
 })

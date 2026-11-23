@@ -10,6 +10,12 @@
  * - keeps the structure: every column and key in order, the nesting, which values are empty, each long text's
  *   lines and rough length, booleans, nulls and small numbers, and whatever the plan says is structure (a status
  *   column, a category);
+ * - keeps what a record says, as opposed to who it is about (Sandy, 2026-11-23: "it's only changing identifying
+ *   fields … if there's a record that says live, it should just change the link or the name on it, but it doesn't
+ *   change the actual content of that record which would include live"): a word of state wherever it stands (live,
+ *   reported, completed, high), and any key whose values across the response are a small set of lowercase words
+ *   said again and again, which is a vocabulary and not anyone's. Never a word that is part of an email or a web
+ *   address in the response, and never a key that by its name is someone's;
  * - replaces every other value by its kind: an email, a web address, an id, a date (shifted), a long number or
  *   phone (same format, other digits), a short text (word for word, keeping its capitals and punctuation), a long
  *   text (sample text marked "Sample data:");
@@ -37,6 +43,7 @@ export interface FakeReport {
   /** What was kept because the plan said so: these go to the leak check as kept, and into the provenance. */ keptValues: string[]
   /** Columns or keys the plan kept but that held something personal (an email, an address, an id): faked anyway. */ refusedKeep: string[]
   /** Columns or keys whose values all look like structure (one short word each) and were replaced: perhaps to keep. Names only. */ maybeStructure: string[]
+  /** Columns or keys kept without the plan saying so, because their values are a small vocabulary said again and again. Names only. */ keptAsStructure?: string[]
 }
 
 const STOP = new Set(['true', 'false', 'null', 'none', 'nan', 'n/a', 'undefined', 'yes', 'no', ''])
@@ -45,6 +52,11 @@ const EMAIL = /^[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}$/u
 const WEB = /^https?:\/\/[^\s"'<>`|\\]+$/i
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const PERSONAL = /@[\p{L}\p{N}.-]+\.\p{L}{2,}|https?:\/\/|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/iu
+// Words of state: what a record says of itself, never who it is about. Kept wherever one stands alone, in lowercase.
+const STATE = new Set(['live', 'reported', 'active', 'inactive', 'pending', 'completed', 'complete', 'failed', 'success', 'succeeded', 'error', 'running', 'queued', 'done', 'open', 'closed', 'resolved', 'removed', 'deleted', 'verified', 'unverified', 'confirmed', 'unconfirmed', 'suspected', 'unknown', 'critical', 'high', 'medium', 'moderate', 'low', 'info', 'enabled', 'disabled', 'public', 'private', 'found', 'missing', 'new', 'archived'])
+// A key that by its name is someone's: its values are never taken for a vocabulary, however often they repeat.
+const SOMEONES = /name|address|city|state$|street|zip|postal|country|locality|region|company|employer|organi[sz]ation|title|handle|user|login|nick|alias|owner|author|account|email|phone|url|link|id$/i
+const WORD = /^[a-z][a-z_-]{1,23}$/
 // Plain, neutral words: a fake is plainly a fake, and none is anyone's name.
 const POOL = ['amber', 'basalt', 'cedar', 'delta', 'ember', 'fallow', 'garnet', 'harbor', 'indigo', 'juniper', 'kelp', 'larch', 'meadow', 'nimbus', 'ochre', 'pebble', 'quartz', 'russet', 'sorrel', 'thistle', 'umber', 'vale', 'willow', 'yarrow', 'zinnia', 'alder', 'birch', 'cobalt', 'dune', 'elm', 'fjord', 'glade', 'heath', 'iris', 'jade', 'knoll', 'lichen', 'moss', 'nettle', 'opal', 'pine', 'quill', 'reed', 'slate', 'tarn', 'upland', 'vetch', 'wren', 'aster', 'bramble', 'clover', 'drift', 'fern', 'gorse', 'hazel', 'islet', 'kale', 'linden', 'marsh', 'oat', 'plume', 'rowan', 'sedge', 'teasel']
 
@@ -157,10 +169,17 @@ export function fake(recorded: { name: string; text: string }[], plan: FakePlan 
   const pool = POOL.filter((w) => !real.has(w))
   if (pool.length < 8) throw new Error('the faker has too few words that are not in the response to make a fake of it')
 
-  const report: FakeReport = { files: 0, replaced: 0, kept: 0, byKind: {}, keptValues: [], refusedKeep: [], maybeStructure: [] }
-  const keptValues = new Set<string>(), refused = new Set<string>()
-  const fields = new Map<string, { n: number; plain: number; faked: number; lower: number }>()
-  const cache = new Map<string, string>()
+  let report: FakeReport = { files: 0, replaced: 0, kept: 0, byKind: {}, keptValues: [], refusedKeep: [], maybeStructure: [] }
+  let keptValues = new Set<string>(), refused = new Set<string>()
+  let fields = new Map<string, { n: number; plain: number; faked: number; lower: number }>()
+  let cache = new Map<string, string>()
+  // Read once before anything is made: what each key holds across the whole response, and every word that is part
+  // of someone's email or web address. From these, which keys are a vocabulary (see `vocabulary`).
+  let reading = true
+  const said = new Map<string, { n: number; values: Map<string, number> }>()
+  const theirs = new Set<string>()
+  let vocab = new Map<string, Set<string>>()
+  const structure = new Set<string>()
 
   const bytes = (what: string, v: string) => createHash('sha256').update(`${salt}\0${what}\0${v}`).digest()
   /** The at-th word of a run of words made for a value: a new run of hash every 15, so long text does not repeat. */
@@ -224,6 +243,19 @@ export function fake(recorded: { name: string; text: string }[], plan: FakePlan 
   const leaf = (t: string, path: string[]): { v: string; kind: string | null } => {
     const lowT = t.toLowerCase()
     if (STOP.has(lowT) || /^[-+]?\d{1,6}(\.\d+)?%?$/.test(t)) return { v: t, kind: null }
+    const at = path.join('.').toLowerCase()
+    if (reading) {
+      const f = said.get(at) ?? { n: 0, values: new Map<string, number>() }
+      f.n++; if (f.values.size < 40) f.values.set(t, (f.values.get(t) ?? 0) + 1)
+      said.set(at, f)
+      // The words of an email (before and after the @, but not ".com") and of a web address's path are someone's.
+      if (EMAIL.test(t)) for (const w of t.toLowerCase().replace(/\.[a-z]{2,}$/, '').match(/[a-z]{3,}/g) ?? []) theirs.add(w)
+      else if (WEB.test(t)) for (const w of t.toLowerCase().replace(/^https?:\/\/[^/]*/, '').match(/[a-z]{3,}/g) ?? []) theirs.add(w)
+    } else if (!onPath(textPaths, path) && ((STATE.has(t) && !theirs.has(t)) || vocab.get(at)?.has(t))) {
+      // What the record says, not who it is about: kept, and said as kept so the leak check does not take it for a leak.
+      keptValues.add(t); if (vocab.get(at)?.has(t)) structure.add(path.join('.'))
+      return { v: t, kind: null }
+    }
     if (keepValues.has(lowT) || onPath(keep, path)) {
       if (!PERSONAL.test(t) && t.length <= 40 && (t.match(/\d/g) ?? []).length < 7) { keptValues.add(t); return { v: t, kind: null } }
       refused.add(path.join('.') || t.slice(0, 20))
@@ -294,6 +326,22 @@ export function fake(recorded: { name: string; text: string }[], plan: FakePlan 
     }
   }
 
+  /**
+   * The keys that are a vocabulary: said at least four times across the response, in at most six different values
+   * and no more than half as many values as times, every value one lowercase word, none of them part of someone's
+   * email or web address (nor containing such a word, nor contained in one), and the key not someone's by its name.
+   */
+  const vocabulary = () => {
+    const out = new Map<string, Set<string>>()
+    for (const [k, f] of said) {
+      const vals = [...f.values.keys()], key = k.split('.').pop() ?? ''
+      if (f.n < 4 || vals.length > 6 || vals.length * 2 > f.n || SOMEONES.test(key)) continue
+      if (!vals.every((v) => WORD.test(v) && ![...theirs].some((w) => w === v || (w.length >= 4 && v.includes(w)) || (v.length >= 4 && w.includes(v))))) continue
+      out.set(k, new Set(vals))
+    }
+    return out
+  }
+  const pass = () => {
   const files: Record<string, string> = {}
   for (const r of recorded) {
     report.files++
@@ -320,10 +368,18 @@ export function fake(recorded: { name: string; text: string }[], plan: FakePlan 
     }
     files[r.name] = bom + (whole() ?? lines() ?? csv() ?? t.split('\n').map((line) => value(line, [], 0)).join('\n'))
   }
+  return files
+  }
+  pass() // read
+  vocab = vocabulary(); reading = false
+  report = { files: 0, replaced: 0, kept: 0, byKind: {}, keptValues: [], refusedKeep: [], maybeStructure: [] }
+  keptValues = new Set(); refused = new Set(); fields = new Map(); cache = new Map()
+  const files = pass() // made
   report.keptValues = [...keptValues].sort()
   report.refusedKeep = [...refused].sort()
   // Never a column that by its name is someone's (a first name is one plain word too), and never one whose values begin with a capital, as a name does.
   const someones = /name|address|city|state|street|zip|postal|country|locality|region|company|employer|organi[sz]ation|title|handle|user|owner|author/i
   report.maybeStructure = [...fields].filter(([k, f]) => f.n > 0 && f.plain === f.n && f.faked === f.n && f.lower === f.n && !someones.test(k)).map(([k]) => k).sort()
+  if (structure.size) report.keptAsStructure = [...structure].sort()
   return { files, report }
 }
