@@ -251,7 +251,12 @@ export async function fakeEndpoint(appId: string, key: string, endpoint: string,
   const d = (await endpointData(m, issueId))[e.key]
   const item = issueId && d.task?.recorded ? d.task : d.app
   if (!item?.recorded) throw new PlanError(`${e.method} ${e.path} has no real response saved to make a fake of`)
-  const { report } = await fakeData(appId, key, { recording: item.recorded.id, samePlan: true, issueId: item === d.task ? issueId : null }, actor)
+  // A refusal lists what was found for the agent that reads the recording. A person reads this on a page, where a real value is never shown: they get how much, not what.
+  const { report } = await fakeData(appId, key, { recording: item.recorded.id, samePlan: true, issueId: item === d.task ? issueId : null }, actor).catch((err: unknown) => {
+    const said = /^refused: the fake still carries (\d+) values? of the real response/.exec((err as Error).message)
+    if (said && err instanceof PlanError) throw new PlanError(`refused: the fake still carries ${said[1]} value${said[1] === '1' ? '' : 's'} of the real response, so nothing was made. Something that is someone's sits in a place the faker took for structure`)
+    throw err
+  })
   return { data: (await endpointData(m, issueId))[e.key], replaced: report.replaced, kept: report.kept }
 }
 

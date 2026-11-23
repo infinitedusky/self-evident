@@ -19,7 +19,7 @@ export interface MockData {
   mockChanges: import('../engine').MockChange[]
   /** What the sample task calls outside the app. */ taskCalls: import('../engine').TaskCall[]
   /** A service's real responses on this computer. */ mockReal: import('../engine').MockReal[]
-  /** The app's fixtures, and the one a task's runs are built from. */ fixtures: import('../engine').Fixture[]; fixtureUsed: string | null; /** Can a fixture be made from the app's seed. */ fixtureMake: { ok: boolean; missing: string | null }
+  /** The app's fixtures, and the one a task's runs are built from. */ /** Test files: the app's and the sample task's. */ testFiles: import('../engine').TestFile[]; fixtures: import('../engine').Fixture[]; fixtureUsed: string | null; /** Can a fixture be made from the app's seed. */ fixtureMake: { ok: boolean; missing: string | null }
   /** The services the sample task calls. */ taskServices: import('../engine').TaskService[]
   /** The stories under Screens/ and the Storybook that renders them. */ screens: import('../engine').ScreensView & { /** With the earlier tasks' ones, when asked for. */ all?: import('../engine').Screen[] }
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[]; earlier?: number; /** With the earlier tasks' ones, when asked for. */ all?: { file: string; changedAt: number }[] }
@@ -59,7 +59,7 @@ export const sampleData: MockData = {
   storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [], branch: 'talk/sample', main: false },
   screens: s.screensView,
   mocks: s.mocks,
-  mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls, mockReal: s.mockReal, taskServices: s.taskServices, fixtures: s.fixtures, fixtureUsed: null, fixtureMake: { ok: true, missing: null },
+  mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls, mockReal: s.mockReal, taskServices: s.taskServices, testFiles: s.testFiles, fixtures: s.fixtures, fixtureUsed: null, fixtureMake: { ok: true, missing: null },
   sketches: { scope: 'sess_sample', branch: 'talk/sample', main: false, dir: 'sketches', sketches: [{ file: 'home.html', changedAt: 1794250000000 }, { file: 'checkout.html', changedAt: 1794240000000 }] },
   prototypes: s.prototypes, prototypeCode: s.prototypeCode,
   claudeSessions: s.claudeSessions,
@@ -159,6 +159,20 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       d.taskServices = d.taskServices.map((x) => (x.key === params.key ? { ...x, calls: x.calls.map((c) => (c.endpoint ? { ...c, endpoint: put(c.endpoint) } : c)) } : x))
       return reply({ kept: !real ? 'provided' : was?.sensitive ? 'faked' : 'recorded', asked: real && !was?.sensitive ? 'iss_sample2' : null })
     }),
+    // Test files: the app's alone in its settings, the task's own with them on a task. (sample) A file named real.csv is refused, as text with a real value in it would be.
+    http.get('/api/apps/:id/test-files', ({ request }) => reply(d.testFiles.filter((f) => f.scope === 'app' || !!new URL(request.url).searchParams.get('issue')))),
+    http.post('/api/apps/:id/test-files', async ({ request }) => {
+      const form = await request.formData(), task = !!form.get('issueId')
+      const files = form.getAll('file').filter((f): f is File => typeof f !== 'string')
+      if (files.some((f) => f.name === 'real.csv')) return HttpResponse.json({ error: 'refused: real.csv holds 2 values of a real response on this computer. Replace each with an invented one:\n- an email from a real response of Fraud scan vendor (sample) (2)' }, { status: 400 })
+      const made = files.map((f, n) => ({ id: `tfile_new${d.testFiles.length + n}`, name: f.name, what: String(form.get('what') ?? ''), mediaType: f.type || 'application/octet-stream', bytes: f.size, scope: task ? 'task' as const : 'app' as const, checked: /csv|json|text/.test(f.type) ? { at: '2026-11-23T10:00:00Z', against: 2 } : null, here: true }))
+      d.testFiles = [...d.testFiles, ...made]
+      return reply(made)
+    }),
+    http.patch('/api/apps/:id/test-files/:file', async ({ params, request }) => { const b = await request.json() as { what: string }; d.testFiles = d.testFiles.map((f) => (f.id === params.file ? { ...f, what: b.what } : f)); return reply(d.testFiles.find((f) => f.id === params.file) ?? null) }),
+    http.delete('/api/apps/:id/test-files/:file', ({ params }) => { d.testFiles = d.testFiles.filter((f) => f.id !== params.file); return reply({ removed: String(params.file) }) }),
+    // A picture is a small made-up one (a grey square), so a thumbnail has something to show.
+    http.get('/api/apps/:id/test-files/:file/file', () => new HttpResponse(Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0)), { headers: { 'content-type': 'image/png' } })),
     http.get('/api/apps/:id/fixtures', () => reply({ fixtures: d.fixtures, used: d.fixtureUsed, make: d.fixtureMake })),
     // Made from the seed (at once here; minutes for real), looked into, renamed, deleted.
     http.post('/api/apps/:id/fixtures', async ({ request }) => {

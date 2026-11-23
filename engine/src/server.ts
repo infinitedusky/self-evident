@@ -98,6 +98,7 @@ import { removeData, renameData, saveData, setDefaultData } from './mock-data.js
 import { placesTable, setChoice, type Choice } from './mock-places.js'
 import { addCall, addTaskService, clearCalls, coverCall, editCall, linkCall, listCalls, listTaskServices, removeCall, removeTaskService, type NewCall } from './task-calls.js'
 import { assignFixture, canMakeFixture, deleteFixture, fixtureForTask, fixtureRows, fixtureSample, listFixtures, makeFixtureFromSeed, renameFixture } from './fixtures.js'
+import { addTestFile, editTestFile, listTestFiles, removeTestFile, testFilePath } from './test-files.js'
 import { fakeEndpoint, giveEndpointData, removeEndpointData, setEndpointFaked } from './mock-serve.js'
 import { addEndpoint, editEndpoint, listReal, mockHistory, recordingsFor, removeReal, rowOf } from './mocks.js'
 import { exportMock, getMock, giveRecording, listMocks, addService, needsRecording, recordingsOfService, removeMock, setMockDetails, type Needs } from './mocks.js'
@@ -464,6 +465,25 @@ export function buildApp(bus: EventBus) {
     if (r.kept === 'recorded' && r.issueId) await askToMine(r.issueId, key, r.dir, r.files)
     return c.json({ kept: r.kept, asked: r.kept === 'recorded' ? r.issueId : null, ...('maybeStructure' in r ? { maybeStructure: r.maybeStructure } : {}) }, 201)
   } catch (err) { return planError(c, err) } })
+  // Test files (test-files.ts): what a person needs in their hands to try a change. The app's, and a task's own.
+  api.get('/apps/:id/test-files', async (c) => { try { return c.json(await listTestFiles(c.req.param('id'), c.req.query('issue') || null)) } catch (err) { return planError(c, err, 404) } })
+  api.post('/apps/:id/test-files', async (c) => { try {
+    const body = await c.req.parseBody({ all: true })
+    const given = ([] as unknown[]).concat(body.file ?? []).filter((f): f is File => typeof f === 'object' && f !== null && 'arrayBuffer' in f)
+    if (!given.length) throw new PlanError('choose a file')
+    const o = { what: typeof body.what === 'string' ? body.what : '', issueId: typeof body.issueId === 'string' && body.issueId ? body.issueId : null, stated: body.stated === 'true' }
+    const out = []
+    for (const f of given) out.push(await addTestFile(c.req.param('id'), { name: f.name, bytes: new Uint8Array(await f.arrayBuffer()), mediaType: f.type, ...o }, 'user'))
+    return c.json(out, 201)
+  } catch (err) { return planError(c, err) } })
+  api.patch('/apps/:id/test-files/:file', async (c) => { try { return c.json(await editTestFile(c.req.param('id'), c.req.param('file'), await c.req.json().catch(() => ({})), 'user')) } catch (err) { return planError(c, err) } })
+  api.delete('/apps/:id/test-files/:file', async (c) => { try { return c.json(await removeTestFile(c.req.param('id'), c.req.param('file'), 'user')) } catch (err) { return planError(c, err) } })
+  api.get('/apps/:id/test-files/:file/file', async (c) => { try {
+    const f = await testFilePath(c.req.param('id'), c.req.param('file'))
+    // A picture is shown in the page; anything else is handed over as a file to keep. Never run as a page of ours.
+    const inline = /^image\/(png|jpeg|gif|webp)$/.test(f.mediaType) && c.req.query('show') === '1'
+    return new Response(await readFile(f.path), { headers: { 'content-type': inline ? f.mediaType : 'application/octet-stream', 'content-disposition': `${inline ? 'inline' : 'attachment'}; filename="${f.name.replace(/"/g, '')}"`, 'x-content-type-options': 'nosniff' } })
+  } catch (err) { return planError(c, err, 404) } })
   // Fixtures (fixtures.ts): the app's shared scenarios, a table's rows to pick a person from, and an endpoint's data made for one of them.
   api.get('/apps/:id/fixtures', async (c) => { try { const issueId = c.req.query('issue') || null; return c.json({ fixtures: await listFixtures(c.req.param('id')), used: await fixtureForTask(c.req.param('id'), issueId), make: await canMakeFixture(c.req.param('id')) }) } catch (err) { return planError(c, err, 404) } })
   // Made from the app's seed (minutes: its schema and seed commands run), looked into, renamed, deleted.

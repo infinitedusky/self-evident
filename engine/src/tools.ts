@@ -9,6 +9,7 @@ import { fakeData, removeData, saveData, setDefaultData, useReal } from './mock-
 import { setChoice, type Choice } from './mock-places.js'
 import { addCall, addTaskService, listTaskServices, removeCall, removeTaskService, setCalls } from './task-calls.js'
 import { addEndpoint, addService, editEndpoint, getMock, listMocks, needsRecording, saveMock, setMockDetails } from './mocks.js'
+import { addTestFile, listTestFiles, removeTestFile } from './test-files.js'
 import { assignFixture, deleteFixture, listFixtures, makeFixtureFromSeed, renameFixture } from './fixtures.js'
 import { giveEndpointData, removeEndpointData } from './mock-serve.js'
 import { mainStatus, setMainAddress, setMainStandIn, startMain, stopMain } from './main-running.js'
@@ -333,6 +334,15 @@ export function engineTools(opts: ToolScope): EngineTool[] {
           if (a.action === 'show') { if (!a.scenario) throw new PlanError('show needs a scenario name'); return showPrototypeScenario(a.prototypeId, a.scenario) }
           return resetPrototypeData(a.prototypeId, a.scenario ?? null, actor)
         })),
+      def('test_files', 'The files a person needs in their hands to try a change: a CSV to import, a picture to upload. The third kind of thing on a task\'s Data step, beside its fixtures (what is in the app\'s database) and its services (what answers outside it). Each is a file and a line saying what to do with it, and goes to a reviewer with the review copy, so it holds nothing real: invented people, example.com addresses. op "list": the app\'s and (issueId) the task\'s own. op "add": a text file you write (name with its extension, text, what: what the person does with it, like "Import this on the Employees page"); issueId: for that task alone, else for every task of the app. It is read against the real responses on this computer and refused while a value of one is in it. Where the file is about someone the mock also answers for, use the same made-up person in both (the same email), so what the person brings in is what the mock has an answer for. A picture or a document is the person\'s to add on the page. op "remove": one, by id.', {
+        op: z.enum(['list', 'add', 'remove']), issueId: z.string().optional(), name: z.string().optional(), text: z.string().optional(), what: z.string().optional(), id: z.string().optional(),
+      }, async (a) => tryIt(async () => {
+        if (a.issueId) await ownIssue(a.issueId)
+        if (a.op === 'list') return listTestFiles(appId, a.issueId ?? null)
+        if (a.op === 'add') { if (!a.name || !a.text) throw new PlanError('add needs name and text'); return addTestFile(appId, { name: a.name, bytes: new TextEncoder().encode(a.text), what: a.what, issueId: a.issueId ?? null, stated: true }, actor) }
+        if (!a.id) throw new PlanError('remove needs id')
+        return removeTestFile(appId, a.id, actor)
+      })),
       def('set_prototype_database', 'Where this app\'s prototypes get their throwaway databases: url, the app\'s development Postgres (any database on that server; each prototype gets its own beside it); env, the variable the app reads (default DATABASE_URL); schema_cmd, a shell command run in the prototype\'s worktree that makes the schema in the database that variable names (the app\'s migrations, or its ORM\'s create/push); seed_cmd, a shell command run the same way after it that fills that database with the app\'s own made-up data, which is what a fixture is made from (service, op fixture_make). Work these out from the app and confirm them with the person first.', { url: z.string(), env: z.string().optional(), schema_cmd: z.string().optional(), seed_cmd: z.string().optional() },
         async (a) => tryIt(() => setPrototypeDatabase(appId, a))),
       def('smoke_setup', 'How this app is brought up for a smoke test (a person trying the built code by hand): its set-ups, each with a key, a name, what it is for, its script, its stop script and the SQL that fills its database, whole. An app can have several (a library: its docs site, and a demo app that exercises it); a check left to a person names the one it needs. These are Self Evident\'s own, kept in the app\'s settings and never in the repository.', {},

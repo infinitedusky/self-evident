@@ -423,6 +423,16 @@ export const scenario = pgTable('scenario', {
   createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [uniqueIndex('scenario_name').on(t.appId, t.scope, t.name)])
 
+// A test file: something a person needs in their hands to try a change (test-files.ts): a CSV to import, an image to
+// upload, an ID card. Made-up only. The file itself is on this computer, not here: this row says what it is and whose.
+export const testFile = pgTable('test_file', {
+  id: id(), appId: appId(), /** null: the app's, for every task. */ issueId: text('issue_id').references(() => issue.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(), /** What the person does with it, in a line. */ what: text('what').notNull().default(''),
+  mediaType: text('media_type').notNull().default('application/octet-stream'), bytes: integer('bytes').notNull().default(0),
+  /** Text that was read against the real responses on this computer, and how many of them. Not text: null, and it rests on the person's word. */ checked: jsonb('checked').$type<{ at: string; against: number } | null>(),
+  createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [index('test_file_app').on(t.appId, t.issueId)])
+
 // A mock: an app's stand-in for one outside service, kept in the app's library (mocks.ts) and used by its prototypes,
 // smoke tests, main and review environments. Its files are invented data and the server that serves them, never a
 // recording (those stay in the recordings folder, on this computer). One row per service.
