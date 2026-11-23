@@ -30,8 +30,12 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   // A real response was given and the task's agent was asked for the fake of it: that takes a minute or more, and
   // nothing else on the page says it is under way. Kept for the tab, so it survives the cell being drawn again.
   const askedKey = `fake-asked:${appId}:${mockKey}:${e.key}:${issueId ?? ''}`
-  const [askedAt, setAskedAt] = useState<number | null>(() => { try { const v = Number(sessionStorage.getItem(askedKey)); return v && Date.now() - v < 30 * 60_000 ? v : null } catch { return null } })
-  const asked = (at: number | null) => { setAskedAt(at); try { if (at) sessionStorage.setItem(askedKey, String(at)); else sessionStorage.removeItem(askedKey) } catch { /* not kept */ } }
+  // With the time goes the real response the cell showed when it was asked ("at|id"): until the cell shows another,
+  // what it has is from before, and a fake there is the old one's, not the one being made.
+  const kept = (): [number, string] | null => { try { const [at, ...was] = (sessionStorage.getItem(askedKey) ?? '').split('|'); const v = Number(at); return v && Date.now() - v < 30 * 60_000 ? [v, was.join('|')] : null } catch { return null } }
+  const [askedAt, setAskedAt] = useState<number | null>(() => kept()?.[0] ?? null)
+  const [askedWas, setAskedWas] = useState<string>(() => kept()?.[1] ?? '')
+  const asked = (at: number | null, was = '') => { setAskedAt(at); setAskedWas(was); try { if (at) sessionStorage.setItem(askedKey, `${at}|${was}`); else sessionStorage.removeItem(askedKey) } catch { /* not kept */ } }
   const [, setNow] = useState(0)
   const own = issueId ? e.data.task : null
   const item = own ?? e.data.app
@@ -40,7 +44,7 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   const give = (level: 'app' | 'task') => (files: File[], real: boolean) => act(async () => {
     const r = await engine.giveEndpointData(appId, mockKey, e.key, files, { real, issueId: level === 'task' ? issueId : null })
     if (r.kept === 'faked') return `Faked. The original was not kept.${r.maybeStructure?.length ? ` These look like structure and were replaced all the same: ${r.maybeStructure.join(', ')}.` : ''}`
-    if (r.kept === 'recorded') { if (r.asked) { asked(Date.now()); return null } return 'Kept on this computer. It is faked once a task takes this service up.' }
+    if (r.kept === 'recorded') { if (r.asked) { asked(Date.now(), item?.recorded?.id ?? ''); return null } return 'Kept on this computer. It is faked once a task takes this service up.' }
     return null
   })
   // The fake of the saved real response, made now. Refused while something real is still in it: then it is the task's agent's to say what is structure.
@@ -54,7 +58,10 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
     if (window.confirm(`${what}${it?.recorded ? (level === 'task' ? ', and its real response is deleted from this computer.' : ' Its real response is deleted from this computer too.') : level === 'task' ? '.' : ''}`)) void act(() => engine.removeEndpointData(appId, mockKey, e.key, { issueId: level === 'task' ? issueId : null, real: true }).then(() => null))
   }
   // Under way until the fake of the response just given is there: none yet, or the one there is of an older response.
-  const waiting = askedAt !== null && !!item?.recorded && (!item.safe || !!item.safe.stale)
+  // A response given over one that already had a fake: the cell still shows the old pair for a moment, and that fake
+  // must not read as the new one arrived (Sandy, 2026-11-23: "the status in progress component never showed up").
+  const before = askedAt !== null && (item?.recorded?.id ?? '') === askedWas
+  const waiting = askedAt !== null && (before || (!!item?.recorded && (!item.safe || !!item.safe.stale)))
   const slow = waiting && Date.now() - askedAt! > 5 * 60_000
   useEffect(() => { if (askedAt !== null && !waiting && item?.safe) asked(null) }, [askedAt, waiting, item?.safe]) // eslint-disable-line react-hooks/exhaustive-deps
   // While it waits, the page is asked again now and then: the fake arrives without anyone pressing anything.

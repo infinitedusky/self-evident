@@ -136,6 +136,22 @@ export const TheAgentIsMakingTheFake: Story = {
     sessionStorage.clear() // the next story starts with nothing under way
   },
 }
+/** A real response given over one that already has a fake: the banner shows all the same, and the old fake does not pass for the new one. */
+export const ReplacingAResponseThatHasAFake: Story = {
+  beforeEach: () => { sessionStorage.clear() },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('Faked')).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: /^Replace the data of/ }))
+    await userEvent.upload(c.getByLabelText(/^A file for /), new File(['a,b,c\n1,2,3'], 'results.csv', { type: 'text/csv' }))
+    await userEvent.click(c.getByRole('button', { name: 'Add it' }))
+    const banner = await c.findByRole('status')
+    await expect(banner).toHaveTextContent("The task's agent is making the fake version…")
+    await new Promise((r) => setTimeout(r, 300)) // it stays: the fake on the page is the old one's
+    await expect(c.getByRole('status')).toHaveTextContent("The task's agent is making the fake version…")
+    sessionStorage.clear()
+  },
+}
 /** The fake still carried something real, so it was refused and nothing was made: what was found is said, and the task's agent can be asked. */
 export const FakeRefused: Story = {
   args: { endpoint: { ...unfakedEndpoint, key: 'refused' } },

@@ -6905,3 +6905,10 @@ The first and last depend on the review branch being remade whenever the task's 
 Its shape on the page (Sandy, 2026-11-23): a section "Review" holding "Run it yourself" and, folded shut under it,
 "How the review copy works". The engine's own record of how the change was built stays folded and now closes the
 description under a last heading, "Fine print".
+
+### The "making the fake" banner shows when a response is replaced (2026-11-23)
+
+Sandy gave CEB-90's results call a newer real response, over one that already had a fake, and "the status in
+progress component never showed up". The fake was being made (it arrived 85 seconds later); the banner was cancelled
+the moment it was set, because the page still showed the old response's fake and took it for the new one. The banner
+now remembers which real response the page showed when the agent was asked, and holds until the page shows another.
