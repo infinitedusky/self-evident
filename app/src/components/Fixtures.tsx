@@ -8,7 +8,7 @@
  * minutes), opened to its tables and their rows, renamed and deleted. One can also be kept from a prototype's data
  * (its Data panel, "keep as a scenario", shared with the app).
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Badge } from './Badge'
 import { engine, type Fixture } from '../engine'
 
@@ -60,21 +60,25 @@ function FixtureItem({ appId, fixture: f, used, onRename, onDelete }: { appId: s
   const [name, setName] = useState(f.name)
   const [shown, setShown] = useState<string | null>(null) // the table whose rows are shown
   const rows = f.tables.reduce((n, t) => n + t.rows, 0)
+  const box = useRef<HTMLDetailsElement>(null)
+  // Rename and Delete are the fixture's, so they sit on its own line beside its name, not over its tables. A press there does not fold it.
+  const on = (fn: () => void) => (e: React.MouseEvent) => { e.preventDefault(); fn() }
   return (
-    <details className="lv-item" open={used || undefined} data-fixture={f.name}>
-      <summary className="lv-item-head"><span className="lv-item-name">{f.name}</span>{used && <Badge tone="accent">This task's</Badge>}<span className="lv-item-meta lv-end">{plural(rows, 'row')} in {plural(f.tables.length, 'table')} · {size(f.bytes)}</span></summary>
-      <div className="lv-part">
-        <div className="lv-part-head">
-          <span className="lv-part-label">Tables</span>
-          {!renaming && <><button className="btn quiet small" aria-label={`Rename ${f.name}`} onClick={() => { setName(f.name); setRenaming(true) }}>Rename</button><button className="btn quiet small" aria-label={`Delete ${f.name}`} onClick={onDelete}>Delete</button></>}
-        </div>
-        {renaming && (
-          <form className="mock-edit" style={{ margin: '0 0 10px' }} onSubmit={(e) => { e.preventDefault(); void onRename(name.trim()).then(() => setRenaming(false)) }}>
+    <details className="lv-item" open={used || undefined} data-fixture={f.name} ref={box}>
+      <summary className="lv-item-head"><span className="lv-item-name">{f.name}</span>{used && <Badge tone="accent">This task's</Badge>}<span className="lv-end"><span className="lv-item-meta">{plural(rows, 'row')} in {plural(f.tables.length, 'table')} · {size(f.bytes)}</span>
+        <button className="btn quiet small" type="button" aria-label={`Rename ${f.name}`} onClick={on(() => { setName(f.name); setRenaming(true); if (box.current) box.current.open = true })}>Rename</button>
+        <button className="btn quiet small" type="button" aria-label={`Delete ${f.name}`} onClick={on(onDelete)}>Delete</button></span></summary>
+      {renaming && (
+        <div className="lv-part">
+          <form className="mock-edit" style={{ margin: 0 }} onSubmit={(e) => { e.preventDefault(); void onRename(name.trim()).then(() => setRenaming(false)) }}>
             <label>Its name<input autoFocus className="mono" aria-label={`A new name for ${f.name}`} value={name} onChange={(e) => setName(e.target.value)} placeholder="letters, numbers and dashes, like northwind-company" /></label>
             <p className="faint" style={{ margin: 0, fontSize: 13 }}>Data filled out for its people{(f.madeFor ?? 0) > 0 ? ` (${plural(f.madeFor!, 'endpoint')})` : ''} and prototypes built from it follow the new name.</p>
             <div className="row"><button className="btn small" type="submit" disabled={!/^[a-z0-9][a-z0-9-]*$/i.test(name.trim()) || name.trim() === f.name}>Rename</button><button className="btn quiet small" type="button" onClick={() => setRenaming(false)}>Cancel</button></div>
           </form>
-        )}
+        </div>
+      )}
+      <div className="lv-part">
+        <div className="lv-part-head"><span className="lv-part-label">Tables</span></div>
         {f.tables.map((t) => (
           <div key={t.name}>
             <div className="lv-row" data-cols="2">
