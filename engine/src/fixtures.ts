@@ -31,14 +31,14 @@ import { newId } from './ids.js'
 import { buildSeeded, dropDatabase, save, type PrototypeDb } from './prototype-data.js'
 import { homeRepo } from './workbench.js'
 
-export interface FixtureView { name: string; bytes: number; tables: { name: string; rows: number; columns: string[] }[]; /** How many endpoints' data is filled out for its people: what a rename carries along and a delete leaves behind. */ madeFor: number }
+export interface FixtureView { name: string; bytes: number; tables: { name: string; rows: number; columns: string[] }[]; /** How many endpoints' data is filled out for its people: what a rename carries along and a delete leaves behind. */ madeFor: number; /** Kept from a run that held something real: this computer only. */ real: boolean }
 const shared = (appId: string) => db.select().from(scenario).where(and(eq(scenario.appId, appId), eq(scenario.scope, '')))
 const columnsOf = (rows: unknown[]) => (rows[0] && typeof rows[0] === 'object' ? Object.keys(rows[0] as object) : [])
 
 /** The app's fixtures: its shared scenarios, each with its tables and how many rows they hold. Never the rows. */
 export async function listFixtures(appId: string): Promise<FixtureView[]> {
   const tied = await madeForRows(appId)
-  return (await shared(appId)).map((s) => ({ name: s.name, madeFor: tied.filter((d) => d.madeFor.fixture === s.name).length, bytes: JSON.stringify(s.tables).length, tables: Object.entries(s.tables).filter(([, r]) => r.length).map(([name, r]) => ({ name, rows: r.length, columns: columnsOf(r) })).sort((a, b) => b.rows - a.rows) })).sort((a, b) => a.name.localeCompare(b.name))
+  return (await shared(appId)).map((s) => ({ name: s.name, real: s.real, madeFor: tied.filter((d) => d.madeFor.fixture === s.name).length, bytes: JSON.stringify(s.tables).length, tables: Object.entries(s.tables).filter(([, r]) => r.length).map(([name, r]) => ({ name, rows: r.length, columns: columnsOf(r) })).sort((a, b) => b.rows - a.rows) })).sort((a, b) => a.name.localeCompare(b.name))
 }
 /** Every set of endpoint data of the app that was filled out for a fixture's people. */
 async function madeForRows(appId: string) {

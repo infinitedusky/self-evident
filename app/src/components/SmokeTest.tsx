@@ -47,7 +47,7 @@ import { Framed, Nav, useTrail } from './Trail'
 import { Md } from './Md'
 import { useCompare } from '../main-running'
 import { CompareWith, comparedSays } from './CompareMain'
-import { API, engine, openEvents, type SmokeCheck, type SmokeSetupView, type SmokeView } from '../engine'
+import { API, engine, openEvents, type Fixture, type SmokeCheck, type SmokeSetupView, type SmokeView } from '../engine'
 
 const WHEN = { here: 'Here, on the built code', pr: 'On the pull request', after: 'After it is merged', nightly: 'Left to the nightly run' } as const
 
@@ -113,7 +113,7 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
   }
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
-  const all: SmokeSetupView[] = v.setups?.length ? v.setups : [{ key: 'main', name: 'Smoke test', what: null, where: v.where, says: v.says, account: v.account, flag: v.flag, running: v.running, url: v.url, up: v.up, canRun: v.canRun, canClean: v.canClean, terminal: v.terminal, scratch: v.scratch, log: v.log, owed: v.owed }]
+  const all: SmokeSetupView[] = v.setups?.length ? v.setups : [{ key: 'main', name: 'Smoke test', what: null, where: v.where, says: v.says, account: v.account, flag: v.flag, running: v.running, url: v.url, up: v.up, canRun: v.canRun, canClean: v.canClean, data: v.data, terminal: v.terminal, scratch: v.scratch, log: v.log, owed: v.owed }]
   const many = all.length > 1
   // The one they chose; else the first with something still to check; else the first.
   const su = all.find((x) => x.key === picked) ?? all.find((x) => x.owed > 0) ?? all[0]
@@ -206,6 +206,7 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
           {su.scratch && <button className="btn quiet small" aria-pressed={scratchOn} disabled={busy} title="A terminal in a new empty folder, thrown away when you close it" onClick={() => (scratchOn ? closeTerm(true) : setTerm((t) => ({ ...t, [`${su.key}@temp`]: true })))}>{scratchOn ? 'Close scratch terminal' : 'Scratch terminal'}</button>}
         </div>
       )}
+      {local && su.data && !!v.head && <SmokeData appId={appId} issueId={issueId} setup={many ? su.key : undefined} data={su.data} busy={busy} onStart={(fixture) => act(() => engine.startSmoke(issueId, false, many ? su.key : undefined, fixture))} />}
       {(v.checks.length > 0 || !!v.head) && (
         <div className={`smoke-layout ${cmp ? 'comparing' : ''} ${aside ? 'checks-aside' : ''}`} style={room ? { ['--smoke-room' as string]: `${room}px` } : undefined}>
           <div className="smoke-view" ref={viewRef}>
@@ -277,5 +278,51 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
       {local && termOn && <SmokeTerminal key={`${su.key}:own`} issueId={issueId} setup={su.key} send={send} />}
       {scratchOn && <SmokeTerminal key={`${su.key}:scratch`} issueId={issueId} setup={su.key} scratch send={termOn ? null : send} />}
     </section>
+  )
+}
+
+/**
+ * A smoke test's database (Sandy, 2026-11-23: "we need to be able to save the smoke test or prototype database as
+ * fixtures. Then when we start the smoke test, we choose which fixture to use"): what it was built from, started
+ * again from one of the app's fixtures, and kept as a fixture as it is now.
+ */
+function SmokeData({ appId, issueId, setup, data, busy, onStart }: { appId: string; issueId: string; setup?: string; data: NonNullable<SmokeSetupView['data']>; busy: boolean; onStart: (fixture: string) => Promise<void> }) {
+  const [fixtures, setFixtures] = useState<Fixture[]>([])
+  const [from, setFrom] = useState('')
+  const [keeping, setKeeping] = useState(false)
+  const [name, setName] = useState('')
+  const [real, setReal] = useState(false)
+  const [said, setSaid] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const read = () => engine.fixtures(appId).then((r) => setFixtures(r.fixtures)).catch(() => setFixtures([]))
+  useEffect(() => { void read() }, [appId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const keep = async () => {
+    try { setError(null); const r = await engine.keepSmokeDatabase(issueId, { name: name.trim(), setup, real }); setSaid(`Kept as the fixture "${r.fixture}"${r.real ? ', marked real: this computer only' : ''}.`); setKeeping(false); setName(''); setReal(false); await read() }
+    catch (e) { const m = String((e as Error)?.message ?? e); try { setError((JSON.parse(m) as { error?: string }).error ?? m) } catch { setError(m) } }
+  }
+  return (
+    <div className="smoke-data" data-component="SmokeData">
+      <div className="lv-line" style={{ alignItems: 'center' }}>
+        <span>Its database: {!data.ran ? 'not built yet' : data.builtFrom ? <>built from the fixture <strong>{data.builtFrom}</strong>, and whatever has been done in it since</> : 'built from the smoke test\'s own seed, and whatever has been done in it since'}</span>
+        <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+          <select aria-label="A fixture to start the smoke test from" value={from} onChange={(e) => setFrom(e.target.value)}>
+            <option value="">Start from a fixture…</option>
+            {fixtures.map((f) => <option key={f.name} value={f.name}>{f.name}{f.real ? ' (real)' : ''}</option>)}
+          </select>
+          <button className="btn quiet small" disabled={busy || !from} title="Its database is dropped and built again from the fixture" onClick={() => { if (!data.ran || window.confirm(`Start from "${from}"? The smoke test's database as it is now is dropped. Keep it as a fixture first to come back to it.`)) void onStart(from).then(() => setFrom('')) }}>Start from it</button>
+        </span>
+        {data.ran && !keeping && <button className="lv-act" onClick={() => { setKeeping(true); setSaid(null) }}>Keep its database as a fixture</button>}
+      </div>
+      {keeping && (
+        <form className="mock-edit" style={{ margin: '6px 0 0' }} onSubmit={(e) => { e.preventDefault(); void keep() }}>
+          <label>The fixture's name<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="one-person-scanned" /></label>
+          <label className="mock-check"><input type="checkbox" checked={real} onChange={(e) => setReal(e.target.checked)} /> It holds something real: a real person, or what a real service sent about one</label>
+          <p className="faint" style={{ margin: 0, fontSize: 13 }}>Letters, numbers and dashes. One of the same name is replaced. A real one is kept on this computer only and is never a reviewer's.</p>
+          <div className="row"><button className="btn small" type="submit" disabled={!/^[A-Za-z0-9][A-Za-z0-9-]*$/.test(name.trim())}>Keep it</button><button className="btn quiet small" type="button" onClick={() => { setKeeping(false); setError(null) }}>Cancel</button></div>
+        </form>
+      )}
+      {said && <div className="faint" role="status">{said}</div>}
+      {error && <div className="mock-data-warn">{error}</div>}
+    </div>
   )
 }

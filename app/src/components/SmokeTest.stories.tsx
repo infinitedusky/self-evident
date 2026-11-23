@@ -86,6 +86,25 @@ export const NotRunning: Story = {
   beforeEach: withEngine({ smoke: { ...smokeSample, url: null, up: false, running: null } }),
   play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('button', { name: 'Run it' })).toBeEnabled() },
 }
+/** With a database of its own: it says what the database was built from, starts again from one of the app's fixtures, and keeps the database as it is now as a fixture, marked real when it holds something real. */
+export const ItsDatabase: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, data: { builtFrom: null, ran: true } } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/built from the smoke test's own seed/)).toBeInTheDocument()
+    const start = c.getByRole('button', { name: 'Start from it' })
+    await expect(start).toBeDisabled() // until a fixture is chosen
+    const pick = c.getByRole('combobox', { name: 'A fixture to start the smoke test from' })
+    await waitFor(() => expect(within(pick).getAllByRole('option').map((o) => o.textContent)).toEqual(['Start from a fixture…', 'northwind-company', 'three-people']))
+    // Kept as a fixture, and said to hold something real.
+    await userEvent.click(c.getByRole('button', { name: 'Keep its database as a fixture' }))
+    await userEvent.type(c.getByRole('textbox', { name: "The fixture's name" }), 'one-person-scanned')
+    await userEvent.click(c.getByRole('checkbox', { name: /It holds something real/ }))
+    await userEvent.click(c.getByRole('button', { name: 'Keep it' }))
+    await expect(await c.findByText('Kept as the fixture "one-person-scanned", marked real: this computer only.')).toBeInTheDocument()
+    await waitFor(() => expect(within(pick).getByRole('option', { name: 'one-person-scanned (real)' })).toBeInTheDocument())
+  },
+}
 /** An app smoke tested on staging: nothing to start; an address to open, who to sign in as, and the same checks. */
 export const OnStaging: Story = {
   beforeEach: withEngine({ smoke: { ...smokeSample, where: 'staging', says: 'a deployed build at an address, with a test account', url: 'https://staging.example.test', up: true, running: null, canRun: false, account: 'the test parent (sample)' } }),

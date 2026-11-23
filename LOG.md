@@ -6747,3 +6747,24 @@ I don't know where those decisions are stored if we want to enumerate them."
   way, in conversation. The planner's decision cards (a question, options, the one chosen: `decision`) are their
   own thing and are not shown here.
 - Agents have `notes` (list, add, edit, remove), to write one down when asked.
+
+### 2026-11-23: A run chooses the fixture it starts from, and its database can be kept as one
+
+Sandy: "the mockup, the smoke test, and the prototype for this were built before we had the data … what we need to
+do is basically replace that with the data set that we built"; "I don't know if we want to define it at the data
+level. The data is just what's there and available to it"; "we need to be able to save the smoke test or prototype
+database as fixtures. Then when we start the smoke test, we choose which fixture to use."
+
+- **The Data step is the library; the run chooses.** No task-level "uses this fixture" setting. A smoke test's page
+  says what its database was built from, and "Start from a fixture" drops the database and builds it again from
+  the one chosen. Restart leaves the database as it is, as before.
+- **A smoke test's database is kept as a fixture** from the same line, by name. A prototype's already could be
+  (kept as a scenario shared with the app).
+- **A fixture can be real.** One kept from a run that held a real person, or what a real service sent about one, is
+  marked so when it is kept: "Real · this computer only". Nothing uses the mark yet; the review branch (step 6)
+  must leave such a fixture out.
+- **"Empty" and "a prior run" are fixtures like any other**, not kinds of their own.
+
+Not done: nothing checks that a fixture marked made-up holds nothing real. The app's own smoke script decides which
+company is signed in to; for the enterprise dashboard that was fixed to one company and is changed in its settings
+to follow the database. A prototype has no "start from" line of this kind; it loads a scenario from its Data tab.

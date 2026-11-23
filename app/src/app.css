@@ -1186,6 +1186,9 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .lv-section-head { display: flex; align-items: baseline; gap: 10px; }
 .lv-section-head h3 { font-size: 17px; margin: 0 auto 0 0; }
 .lv-section-head .lv-count { font-size: 13px; font-weight: 400; color: var(--ink-faint); margin-left: 6px; letter-spacing: 0; }
+/* A smoke test's database: what it was built from, and the fixtures it can start from. */
+.smoke-data { margin: 0 0 10px; font-size: 13px; }
+.smoke-data select { font: inherit; font-size: 13px; max-width: 220px; }
 /* Notes: a day, what it is about, what was said. */
 .note { padding: 10px 0; border-top: 1px solid var(--line); }
 .note-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
