@@ -42,7 +42,7 @@ export const PickingACall: Story = {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Add a call to Fraud scan vendor (sample)' }))
     const pick = c.getByRole('combobox', { name: "One of Fraud scan vendor (sample)'s endpoints" })
-    await expect(within(pick).getAllByRole('option').map((o) => o.textContent)).toEqual(['GET /workflows/runs/{id}/links', 'A new one…']) // the service's, less the ones already listed
+    await expect(within(pick).getAllByRole('option').map((o) => o.textContent)).toEqual(['GET /workflows/runs/{id}/links (with its next step)', 'A new one…']) // the service's, less the ones already listed; a step is never picked by itself
     await expect(c.queryByRole('textbox', { name: 'The call' })).toBeNull()
     await userEvent.selectOptions(pick, '')
     await expect(c.getByText('This is added to Fraud scan vendor (sample) in Settings, as one of its endpoints.')).toBeInTheDocument()
@@ -74,6 +74,21 @@ export const ANewServiceWrittenDifferently: Story = {
     await userEvent.type(c.getByRole('textbox', { name: 'A service the app does not have yet' }), 'fraud_scan vendor (SAMPLE)')
     await userEvent.click(c.getByRole('button', { name: 'Add to the app and this task' }))
     await expect(await c.findByText('that is already one of this app\'s services, as "Fraud scan vendor (sample)"')).toBeInTheDocument()
+  },
+}
+/** A call with a next step is one thing to add: picking it brings the step with it, shown under it as it is in Settings, with the step's own data. The step is not listed or picked by itself. */
+export const ACallWithANextStep: Story = {
+  beforeEach: withEngine({ taskServices: [{ ...taskServices[0], calls: taskServices[0].calls.filter((c) => c.id === 'tcall_s1') }] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Add a call to Fraud scan vendor (sample)' }))
+    await userEvent.selectOptions(c.getByRole('combobox', { name: "One of Fraud scan vendor (sample)'s endpoints" }), 'links')
+    await userEvent.click(c.getByRole('button', { name: 'Add' }))
+    await expect(await c.findByText('Intermediate')).toBeInTheDocument()
+    await expect(c.getByText(/Comes with GET \/workflows\/runs\/\{id\}\/links/)).toBeInTheDocument()
+    const rows = [...canvasElement.querySelectorAll('.task-calls-row')].map((r) => r.textContent ?? '')
+    await expect(rows.findIndex((t) => t.includes('Next step:'))).toBe(rows.findIndex((t) => t.includes('Intermediate')) + 1) // right under the call it follows
+    await expect(c.getByText(/A fake of it: results.csv/)).toBeInTheDocument() // the step's own data, the app's until overridden
   },
 }
 /** A call is added under its service: one of its endpoints is picked, and only what the task needs from it is written. */

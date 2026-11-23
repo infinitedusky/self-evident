@@ -6372,3 +6372,12 @@ Data holes found in the same conversation, to close alongside:
 - An agent that makes a fake reads the real response, so it goes to the model provider and into the conversation's
   transcript. A sensitive endpoint avoids this (the engine fakes it and no agent sees it).
 - The faker keeps numbers under seven digits, so counts could still point at one person.
+
+### On a task, a call's next step comes with it (Sandy, 2026-11-22)
+
+"Let's make the dependent call be one endpoint you add to the task, and have it indented like it is in settings."
+On a task's Data step a call with a next step is one thing to add: the picker offers the call ("with its next
+step") and never the step by itself, and the step is shown indented under the call, with its own data to override,
+whether or not the task lists it. A step the task does list (an agent named it) sits under its call too, with what
+the task needs of it. The checkbox "Recorded responses as they are" was not clear ("what is this in the data
+source?"): it now reads "Use the real responses, not the faked copies (this computer only)".
