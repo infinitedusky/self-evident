@@ -57,10 +57,23 @@ export function Nav({ t, home, src, of }: { t: Trail; home: string; src: string;
 const frames = new Map<string, Promise<string | null>>()
 const known = new Map<string, string | null>() // what the engine said, for a view opened again
 /** The proxy in front of `origin`, asked of the engine once a page; null for an address it does not stand in front of. */
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]'])
+/**
+ * The frame's address, by the name this page itself is open under. The engine says "localhost"; a page open at
+ * 127.0.0.1 is then another site to the browser, which keeps no SameSite cookie for a frame of another site, so the
+ * app in the frame loses the cookie it guards its uploads with and refuses them (found 2026-11-23: an import pressed
+ * in the frame was refused, the same press in a tab of its own was not). Both names are this computer, so the frame
+ * is asked for by the page's.
+ */
+export function onThisHost(frame: string | null, page: string = window.location.hostname): string | null {
+  if (!frame) return frame
+  try { const u = new URL(frame); if (LOOPBACK.has(u.hostname) && LOOPBACK.has(page) && u.hostname !== page) { u.hostname = page; return u.origin } } catch { /* as it was said */ }
+  return frame
+}
 const frameOf = (origin: string) => {
   let p = frames.get(origin)
   if (!p) {
-    p = fetch(`${API}/frame?url=${encodeURIComponent(origin)}`).then((r) => (r.ok ? r.json() : { frame: null })).then((x: { frame: string | null }) => x.frame).catch(() => null)
+    p = fetch(`${API}/frame?url=${encodeURIComponent(origin)}`).then((r) => (r.ok ? r.json() : { frame: null })).then((x: { frame: string | null }) => onThisHost(x.frame)).catch(() => null)
     p.then((f) => known.set(origin, f))
     frames.set(origin, p)
   }

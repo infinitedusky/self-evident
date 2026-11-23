@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, userEvent, within } from 'storybook/test'
-import { Nav, useTrail } from './Trail'
+import { Nav, useTrail, onThisHost } from './Trail'
 
 /** One view's bar, alone: where it is, and its way back and forward. Made-up addresses (sample). */
 function One({ of }: { of?: string }) {
@@ -54,5 +54,17 @@ export const FollowsTheView: Story = {
     await expect(c.getByRole('button', { name: 'Back' })).toBeDisabled()
     await userEvent.click(c.getByRole('button', { name: 'Forward' }))
     await expect(address).toHaveValue('/orders/7')
+  },
+}
+
+/** The frame is asked for by the name the page itself is open under: at 127.0.0.1 a frame on "localhost" is another site to the browser, and the app in it loses its cookies. An address that is not this computer is left as it is. */
+export const TheFrameIsOnThePagesHost: Story = {
+  play: async () => {
+    await expect(onThisHost('http://localhost:61575', '127.0.0.1')).toBe('http://127.0.0.1:61575')
+    await expect(onThisHost('http://localhost:61575', 'localhost')).toBe('http://localhost:61575')
+    await expect(onThisHost('http://127.0.0.1:61575', 'localhost')).toBe('http://localhost:61575')
+    await expect(onThisHost('http://localhost:61575', 'my-mac.example')).toBe('http://localhost:61575')
+    await expect(onThisHost('https://preview.example', '127.0.0.1')).toBe('https://preview.example')
+    await expect(onThisHost(null, '127.0.0.1')).toBeNull()
   },
 }
