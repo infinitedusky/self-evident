@@ -37,7 +37,7 @@ import { PlanError } from './issues.js'
 import { checkLeaks, keptRefused, LEAKS_SHOWN, type Leak } from './mock-leaks.js'
 import { recordingsDir, recordingsHome } from './recordings.js'
 import { dataFor, dataNote, exportable, listData, type DataKind, type DataView } from './mock-data.js'
-import { cleanEndpoints, endpointViews, type Endpoint, type EndpointView } from './mock-endpoints.js'
+import { cleanEndpoints, endpointViews, type Endpoint, type EndpointView, keepingWhatWasSet } from './mock-endpoints.js'
 import { GENERAL_CMD, generalFiles, materializeGeneral, servedBy, type ServedBy } from './mock-general.js'
 import { endpointData, scrubSensitive, served, servedDir, type EndpointData, type Form } from './mock-serve.js'
 import { standInKey, type StandIn } from './stand-ins.js'
@@ -360,7 +360,7 @@ export async function saveMock(appId: string, i: SaveMock, actor = 'agent') {
   }
   if (!provenance.real && i.status === 'assumed') provenance.real = 'nothing: the shape is assumed'
   const workspaceId = await workspaceOf(appId)
-  const values = { name, standsInFor: clip(i.standsInFor ?? old?.standsInFor ?? '', 200), ...(i.upstream ? { upstream: cleanUrl(i.upstream) } : {}), status: i.status, cmd, env, files, ...(i.endpoints ? { endpoints: cleanEndpoints(i.endpoints) } : {}), provenance: provenance as Record<string, unknown>, needs: null, recording, recordedAt, minedAt: i.status === 'mined' ? new Date() : null, ...(i.issueId ? { issueId: i.issueId } : {}), updatedAt: new Date() }
+  const values = { name, standsInFor: clip(i.standsInFor ?? old?.standsInFor ?? '', 200), ...(i.upstream ? { upstream: cleanUrl(i.upstream) } : {}), status: i.status, cmd, env, files, ...(i.endpoints ? { endpoints: keepingWhatWasSet(i.endpoints, old?.endpoints) } : {}), provenance: provenance as Record<string, unknown>, needs: null, recording, recordedAt, minedAt: i.status === 'mined' ? new Date() : null, ...(i.issueId ? { issueId: i.issueId } : {}), updatedAt: new Date() }
   await db.transaction(async (tx) => {
     if (old) await tx.update(mock).set(values).where(eq(mock.id, old.id))
     else await tx.insert(mock).values({ id: newId('run').replace(/^run_/, 'mock_'), appId, key, ...values })

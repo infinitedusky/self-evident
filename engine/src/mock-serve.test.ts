@@ -75,6 +75,10 @@ describe.skipIf(!reachable)('data on the endpoint', () => {
     const { data: d } = await fakeData(appId, 'scanner', { plan: { keep: ['status'] } })
     expect(d).toMatchObject({ kind: 'faked', provenance: { scope: { endpoint: 'results' } }, files: [{ path: 'results.csv' }] })
     expect((await data()).results.app).toMatchObject({ recorded: { how: 'given' }, safe: { kind: 'faked', files: ['results.csv'] } })
+    // Made again by naming the set (as an agent does): it is still that endpoint's, so the endpoint still shows its fake.
+    const again = await fakeData(appId, 'scanner', { dataKey: d.key, plan: { keep: ['status'] } })
+    expect(again.data).toMatchObject({ key: d.key, provenance: { scope: { endpoint: 'results' } } })
+    expect((await data()).results.app?.safe).toMatchObject({ kind: 'faked', files: ['results.csv'] })
     const faked = await served(await m(), { form: 'faked' })
     expect(faked).toMatchObject({ real: [], unfaked: [], per: { results: { from: 'app', kind: 'faked' }, start: { kind: 'none' } } })
     expect(text(faked, 'results.csv')).not.toMatch(/Rowan|Northgate/)

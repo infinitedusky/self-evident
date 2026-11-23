@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { cleanEndpoints, endpointFor, endpointOfFile, endpointViews, exchangesOf, keyed } from './mock-endpoints.js'
+import { cleanEndpoints, endpointFor, endpointOfFile, endpointViews, exchangesOf, keyed, keepingWhatWasSet } from './mock-endpoints.js'
 
 const endpoints = cleanEndpoints([
   { key: 'Start', method: 'post', path: '/runs', what: 'a job id' },
@@ -63,4 +63,18 @@ describe('a mock\'s endpoints', () => {
     expect(keyed(dir, endpoints, 'https://api.vendor.example/v1')).toBe(view) // made once
     expect(keyed(join(home, 'given'), endpoints)).toBe(join(home, 'given')) // given files are already under their own names
   })
+
+describe('a service\'s endpoints said again whole', () => {
+  const was = [{ key: 'links', method: 'GET', path: '/runs/{id}/links' }, { key: 'file', method: 'GET', path: 'the link in download_url', follows: 'links', linkField: 'download_url', what: 'One row a person' }, { key: 'profile', method: 'GET', path: '/me', sensitive: true }]
+  it('keeps that an endpoint is a next step, what it is, and that it is sensitive, when the new list does not say', () => {
+    const next = keepingWhatWasSet([{ key: 'links', method: 'GET', path: '/runs/{id}/links' }, { key: 'file', method: 'GET', path: 'the link in download_url' }, { key: 'profile', method: 'GET', path: '/me', sensitive: false }, { key: 'new', method: 'POST', path: '/runs' }], was)
+    expect(next.find((e) => e.key === 'file')).toMatchObject({ follows: 'links', linkField: 'download_url', what: 'One row a person' })
+    expect(next.find((e) => e.key === 'profile')?.sensitive).toBe(true) // never taken off by a list
+    expect(next.find((e) => e.key === 'new')).toMatchObject({ method: 'POST', path: '/runs' })
+  })
+  it('lets the new list say otherwise where it does say: a step made to stand alone, or to follow another', () => {
+    expect(keepingWhatWasSet([{ key: 'links', method: 'GET', path: '/runs/{id}/links' }, { key: 'file', method: 'GET', path: '/files/{id}', follows: null }], was).find((e) => e.key === 'file')?.follows).toBeUndefined()
+  })
+})
+
 })

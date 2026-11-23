@@ -153,9 +153,13 @@ export async function fakeData(appId: string, key: string, i: { recording?: stri
   const m = await mockOf(appId, key)
   const { dir, recorded, from } = realOf(m, i.recording)
   // A response given for one endpoint is faked into that endpoint's own data (and a task's own, where it was given for the task alone).
-  const scope = i.dataKey ? undefined : scopeOfRecording(dir)
-  const dk = dataKeyOf(i.dataKey, scope ? scopeKey('faked', scope) : 'faked')
+  const given0 = scopeOfRecording(dir)
+  const dk = dataKeyOf(i.dataKey, given0 ? scopeKey('faked', given0) : 'faked')
   const old = await dataRow(m.id, dk)
+  // Made again under its own name (an agent names the set it is remaking): it is still that endpoint's, and that
+  // task's. Without its scope the endpoint no longer finds it, and the page says "not faked yet" over a fake that is
+  // there (found 2026-11-23). A name of the agent's own choosing, for a whole-run fake, has no scope, as before.
+  const scope = !i.dataKey ? given0 : (old ? provOf(old).scope : undefined) ?? (given0 && scopeKey('faked', given0) === dk ? given0 : undefined)
   if (old && old.kind !== 'faked') throw new PlanError(`"${dk}" is ${old.kind} data: a fake is kept under another name`)
   const base = i.plan || !i.samePlan ? null : (old ?? (scope ? await dataRow(m.id, scopeKey('faked', { endpoint: scope.endpoint })) : null) ?? await dataRow(m.id, 'faked'))?.plan
   const given = (i.plan ?? base ?? {}) as FakePlan
