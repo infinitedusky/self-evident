@@ -36,7 +36,7 @@ export const FillOutForFixturePeople: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await expect(await c.findByText(/Not made for a fixture's people/)).toBeInTheDocument()
-    await userEvent.click(c.getByRole('button', { name: /^Fill the data of GET the results file.* out for fixture people/ }))
+    await userEvent.click(c.getByRole('button', { name: /^Map fields of GET the results file.* from a fixture$/ }))
     await waitFor(() => expect(c.getByRole('combobox', { name: 'Fixture' })).toHaveValue('northwind-company')) // once the app's fixtures are read
     await expect(await c.findByRole('combobox', { name: 'Data column 1' })).toHaveValue('work_email') // a column both have, that says who someone is
     await userEvent.click(c.getByRole('button', { name: 'Add a column' }))
@@ -55,7 +55,7 @@ export const PeopleAreNotTheLargestTable: Story = {
   beforeEach: withEngine({ fixtures: [{ name: 'northwind-company', bytes: 1_480_000, tables: [{ name: 'score_snapshots', rows: 6525, columns: ['id', 'score', 'node_id', 'snapshot_date'] }, ...sampleFixtures[0].tables] }] }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await userEvent.click(await c.findByRole('button', { name: /out for fixture people/ }))
+    await userEvent.click(await c.findByRole('button', { name: /from a fixture$/ }))
     await waitFor(() => expect(c.getByRole('combobox', { name: 'Its people are in' })).toHaveValue('employees'))
     await expect(await c.findByRole('combobox', { name: 'Data column 1' })).toHaveValue('work_email')
     // Another table has none of the data's columns: it says so, and what the person then sets is kept.
@@ -71,7 +71,9 @@ export const MapFieldsFromAFile: Story = {
   args: { issueId: 'iss_sample2' },
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await userEvent.click(await c.findByRole('button', { name: /^Map fields of .* from a file$/ }))
+    await userEvent.click(await c.findByRole('button', { name: /^Map fields of .* from a fixture$/ }))
+    // One action, and the source is chosen in it: a table of the database, or a file.
+    await userEvent.selectOptions(c.getByRole('combobox', { name: /^Where the fields of/ }), 'file')
     // Only files with columns are offered: the CSVs, not the pictures.
     const file = await c.findByRole('combobox', { name: 'File' })
     await waitFor(() => expect(within(file).getAllByRole('option').map((o) => o.textContent)).toEqual(['one-person.csv', 'export.csv']))
