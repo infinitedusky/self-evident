@@ -863,6 +863,10 @@ Details and sources in `research/`.
     per task. A server written for a service is the exception, for one whose calls depend on each other, and is
     kept on the service. Either way the server is a plain file that needs nothing of ours, so it can be copied to
     a reviewer's branch.
+  - **A call can have a next step.** Where the app calls a link that an endpoint's answer gives (a signed
+    download), that call is a step of the endpoint, not an endpoint with a path of its own: it names the endpoint
+    it follows and the field that holds the link. The endpoint followed is intermediate. The general server
+    answers it with a link back to itself and the step from the step's own data.
   - **A sensitive endpoint keeps no real response.** One that comes in, given or recorded, is faked at once and
     the original deleted, so only a fake is ever stored or served. The cost is that it cannot be faked again
     differently later.

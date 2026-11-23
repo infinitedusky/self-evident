@@ -6324,3 +6324,22 @@ endpoints."
   them up with the person. An idea's agent is now told of the app's services too.
 
 Scoped to services for now, not every app setting.
+
+### A call can have a next step; the endpoint it follows is intermediate (Sandy, 2026-11-22)
+
+An endpoint on SixtyFour read "GET The download_url the links answer gives (a signed file link)". "This is a strange
+endpoint … is it something that gets pushed to us?" It is the app fetching the file from a link the previous answer
+held. "Ahh so then it's a child of download-links, a second step … endpoints should be marked as intermediate or
+something and then you define the steps."
+
+- An endpoint may say it **follows** another, and the **field** of that answer which holds its link. It has no
+  path of its own; the endpoint it follows is shown as Intermediate, with the step right under it as "Next step".
+- In Settings the endpoint form has "A next step: it is called on a link another endpoint's answer gives": pick the
+  endpoint, name the field. The service tool takes the same (`follows`, `linkField`).
+- **The general server follows the chain**: it answers the intermediate call with that field pointed back at
+  itself (its own data kept otherwise; with none, just the link), and answers the step from the step's data. A
+  signed link in recorded data is therefore never followed.
+- Removing the endpoint it follows leaves a step standing alone; two endpoints cannot follow each other.
+
+This takes away one of the two reasons SixtyFour needs a written server. The other stays: its results must be
+answered for exactly the people a job was sent.

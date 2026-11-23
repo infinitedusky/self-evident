@@ -70,6 +70,32 @@ describe.skipIf(!reachable)('the general mock server', () => {
     expect(JSON.parse(readFileSync(join(out, 'endpoints.json'), 'utf8'))).toEqual([{ key: 'decide', method: 'POST', path: '/decide' }, { key: 'users-flags', method: 'GET', path: '/users/{id}/flags' }])
   })
 
+  it('follows a second step: an intermediate answer is given a link back to the mock, and the step is answered from its own data', async () => {
+    await addEndpoint(appId, 'flags', { method: 'GET', path: '/exports/{id}/links', what: 'Where the file is' })
+    await expect(addEndpoint(appId, 'flags', { method: 'GET', follows: 'exports-links' })).rejects.toThrow('needs the field of the answer that holds its link')
+    const m = await addEndpoint(appId, 'flags', { method: 'GET', follows: 'exports-links', linkField: 'download_url', what: 'The file' })
+    const step = m.endpoints.at(-1)!
+    expect(step).toMatchObject({ key: 'exports-links-download-url', follows: 'exports-links', linkField: 'download_url', path: 'the link in download_url that GET /exports/{id}/links answers with' })
+    await giveEndpointData(appId, 'flags', step.key, [{ name: 'export.csv', bytes: new TextEncoder().encode('flag,on\nnew-findings-page,true\n') }], { real: false })
+    const start = async (id: string) => { const [s] = await libraryStandIns(appId); return (await startStandIns(id, [s], home)).flags }
+    let port = await start('proto_steps')
+    try {
+      // With no data of its own, the intermediate call answers with just the link.
+      const links = await (await up(`http://127.0.0.1:${port}/exports/9/links`)).json() as { download_url: string }
+      expect(links).toEqual({ download_url: `http://127.0.0.1:${port}/__step/${step.key}` })
+      const file = await fetch(links.download_url)
+      expect(file.headers.get('content-type')).toBe('text/csv')
+      expect(await file.text()).toBe('flag,on\nnew-findings-page,true\n')
+    } finally { await stopStandIns('proto_steps') }
+    // With data, its shape is kept and only the link is pointed back: a signed link in it is never followed.
+    await giveEndpointData(appId, 'flags', 'exports-links', [{ name: 'links.json', bytes: new TextEncoder().encode(JSON.stringify([{ download_url: 'https://files.example/x?sig=sample', row_count: 1 }])) }], { real: false })
+    port = await start('proto_steps2')
+    try { expect(await (await up(`http://127.0.0.1:${port}/exports/9/links`)).json()).toEqual([{ download_url: `http://127.0.0.1:${port}/__step/${step.key}`, row_count: 1 }]) } finally { await stopStandIns('proto_steps2') }
+    // The endpoint it follows removed, it stands alone again.
+    const { editEndpoint } = await import('./mocks.js')
+    expect((await editEndpoint(appId, 'flags', 'exports-links', null)).endpoints.find((e) => e.key === step.key)?.follows).toBeUndefined()
+  })
+
   it('is not started for a service the app cannot be pointed at, and gives way to a server written for the service', async () => {
     await addService(appId, { name: 'Lookup' })
     await addEndpoint(appId, 'lookup', { method: 'GET', path: '/v1/lookup' })

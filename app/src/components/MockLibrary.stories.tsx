@@ -117,6 +117,26 @@ export const AddingAnEndpoint: Story = {
     await expect(c.getByText('Sensitive')).toBeInTheDocument()
   },
 }
+/** A call made in two steps: one endpoint answers with a link, and the next step is called on that link. The first is marked intermediate and the step sits under it. A step is added by picking the endpoint it follows and the field that holds the link. */
+export const TwoSteps: Story = {
+  beforeEach: withEngine({ mocks: [mocks[0]] }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('Intermediate')).toBeInTheDocument()
+    await expect(c.getByText('Called on the link that GET /workflows/runs/{id}/links answers with.')).toBeInTheDocument()
+    const rows = [...canvasElement.querySelectorAll('[data-component="MockEndpoints"] .mock-endpoints-row')].map((r) => r.textContent ?? '')
+    await expect(rows.findIndex((t) => t.includes('Next step:'))).toBe(rows.findIndex((t) => t.includes('Intermediate')) + 1) // right under the endpoint it follows
+    await userEvent.click(c.getByRole('button', { name: 'Add an endpoint to Fraud scan vendor (sample)' }))
+    await userEvent.click(c.getByRole('checkbox', { name: /A next step: it is called on a link another endpoint's answer gives/ }))
+    await expect(c.queryByRole('textbox', { name: 'The call' })).toBeNull() // a step has no path of its own
+    await userEvent.selectOptions(c.getByRole('combobox', { name: 'The endpoint whose answer gives the link' }), 'start')
+    await expect(c.getByRole('button', { name: 'Add the endpoint' })).toBeDisabled() // until the field is named
+    await userEvent.type(c.getByRole('textbox', { name: 'The field of that answer that holds the link' }), 'receipt_url')
+    await userEvent.click(c.getByRole('button', { name: 'Add the endpoint' }))
+    await expect(await c.findByText('Called on the link that POST /workflows/run answers with.')).toBeInTheDocument()
+    await expect(c.getAllByText('Intermediate')).toHaveLength(2)
+  },
+}
 /** A real response with no fake of it yet: it says nothing of it is served until the fake is made. */
 export const NotFakedYet: Story = { beforeEach: withEngine({ mocks: [{ ...mocks[0], endpoints: [...mocks[0].endpoints, unfakedEndpoint] }] }) }
 /** On a task's Data step: the services the task calls, each with what every place is given and the calls it makes with their data, all as the app has it until the task overrides it; then the app's services as its settings have them, folded. */

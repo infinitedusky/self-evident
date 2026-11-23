@@ -192,26 +192,37 @@ function Endpoints({ appId, mock: m, act }: { appId: string; mock: Mock; act: (f
         <span><strong>Endpoints</strong> {m.endpoints.length > 0 && <span className="faint">{m.endpoints.length} call{m.endpoints.length === 1 ? '' : 's'}: {withData} with data, {m.endpoints.length - withData} {m.served === 'written' ? 'answered with what the server makes up' : 'with none yet'}</span>}</span>
         <button className="btn quiet small" aria-label={`Add an endpoint to ${m.name}`} onClick={() => setAdding(!adding)}>Add an endpoint</button>
       </div>
-      {adding && <EndpointForm label="Add" onSave={(b) => act(async () => { await engine.addMockEndpoint(appId, m.key, b); setAdding(false) })} onCancel={() => setAdding(false)} />}
+      {adding && <EndpointForm label="Add" others={m.endpoints} onSave={(b) => act(async () => { await engine.addMockEndpoint(appId, m.key, b); setAdding(false) })} onCancel={() => setAdding(false)} />}
       {!m.endpoints.length ? !adding && <p className="faint" style={{ margin: '4px 0 0' }}>None listed yet. An endpoint is one call the app makes to {m.name}: add each here, or a task's agent lists them from the code. With one endpoint and its data, the mock can be used.</p> : (
         <div className="mock-endpoints" role="table">
           <div className="mock-endpoints-head" role="row"><span role="columnheader">The call</span><span role="columnheader">Its data</span></div>
-          {m.endpoints.map((e) => <EndpointRow key={e.key} appId={appId} mock={m} endpoint={e} act={act} />)}
+          {/* A second step sits under the endpoint whose answer gives its link. */}
+          {inSteps(m.endpoints).map((e) => <EndpointRow key={e.key} appId={appId} mock={m} endpoint={e} act={act} />)}
         </div>
       )}
       {m.unlinked.length > 0 && m.endpoints.length > 0 && <p className="mock-data-warn">{m.unlinked.length === 1 ? 'A data file is' : 'Data files are'} no endpoint's, so nothing says which call {m.unlinked.length === 1 ? 'it answers' : 'they answer'}: <code>{m.unlinked.join(', ')}</code>. A file is an endpoint's by its name: <code>{m.endpoints[0].key}.csv</code>, or <code>{m.endpoints[0].key}.more.csv</code> for more of the same.</p>}
     </div>
   )
 }
+/** The endpoints in the order they are called: each one's steps right after it. */
+const inSteps = (all: MockEndpoint[]): MockEndpoint[] => { const under = (k: string): MockEndpoint[] => all.filter((e) => e.follows === k).flatMap((e) => [e, ...under(e.key)]); return all.filter((e) => !e.follows || !all.some((p) => p.key === e.follows)).flatMap((e) => [e, ...under(e.key)]) }
 function EndpointRow({ appId, mock: m, endpoint: e, act }: { appId: string; mock: Mock; endpoint: MockEndpoint; act: (fn: () => Promise<unknown>) => Promise<void> }) {
   const [editing, setEditing] = useState(false)
-  if (editing) return <div className="mock-endpoints-row" role="row" style={{ gridTemplateColumns: '1fr' }}><div role="cell"><EndpointForm start={e} label="Save" onSave={(b) => {
+  const parent = e.follows ? m.endpoints.find((p) => p.key === e.follows) : null
+  const steps = m.endpoints.filter((x) => x.follows === e.key)
+  if (editing) return <div className="mock-endpoints-row" role="row" style={{ gridTemplateColumns: '1fr' }}><div role="cell"><EndpointForm start={e} others={m.endpoints.filter((x) => x.key !== e.key && x.follows !== e.key)} label="Save" onSave={(b) => {
     if (b.sensitive && !e.sensitive && e.data.app?.recorded && !window.confirm(`Mark ${e.method} ${e.path} sensitive? Its real response on this computer is faked, where it has no fake yet, and deleted. It cannot be got back.`)) return Promise.resolve()
     return act(async () => { await engine.editMockEndpoint(appId, m.key, e.key, b); setEditing(false) })
   }} onCancel={() => setEditing(false)} /></div></div>
   return (
-    <div className="mock-endpoints-row" role="row">
-      <div role="cell"><span className="mock-method">{e.method}</span> <code>{e.path}</code>{e.sensitive && <> <Badge tone="warn">Sensitive</Badge></>}{e.what && <div className="faint">{e.what}</div>}
+    <div className="mock-endpoints-row" role="row" data-step={parent ? 'yes' : undefined}>
+      <div role="cell" style={parent ? { paddingLeft: 20, borderLeft: '2px solid var(--line)' } : undefined}>
+        {parent
+          ? <><span className="faint">Next step: </span><span className="mock-method">{e.method}</span> the link in <code>{e.linkField}</code></>
+          : <><span className="mock-method">{e.method}</span> <code>{e.path}</code></>}
+        {steps.length > 0 && <> <Badge tone="neutral">Intermediate</Badge></>}{e.sensitive && <> <Badge tone="warn">Sensitive</Badge></>}{e.what && <div className="faint">{e.what}</div>}
+        {parent && <div className="faint">Called on the link that {parent.method} {parent.path} answers with.</div>}
+        {steps.length > 0 && <div className="faint">Its answer gives the link for the next step.{m.served === 'general' ? ' The mock points that link back at itself.' : ''}</div>}
         {e.sensitive && <div className="faint">A real response of it is never stored: one that comes in is faked at once.</div>}
         <div className="row" style={{ marginTop: 4 }}><button className="btn quiet small" aria-label={`Edit the call ${e.method} ${e.path}`} onClick={() => setEditing(true)}>Edit</button><button className="btn quiet small" aria-label={`Remove the call ${e.method} ${e.path}`} onClick={() => { if (window.confirm(`Take ${e.method} ${e.path} off ${m.name}? Its data files stay, no longer tied to a call.`)) void act(() => engine.removeMockEndpoint(appId, m.key, e.key)) }}>Remove</button></div>
       </div>
@@ -219,22 +230,39 @@ function EndpointRow({ appId, mock: m, endpoint: e, act }: { appId: string; mock
     </div>
   )
 }
-/** An endpoint's fields: the call, what it answers with, and whether it is sensitive. */
-function EndpointForm({ start, label, onSave, onCancel }: { start?: MockEndpoint; label: string; onSave: (b: { method: string; path: string; what: string; sensitive: boolean }) => Promise<void>; onCancel: () => void }) {
+/** An endpoint's fields: the call (or, for a second step, the endpoint whose answer gives its link), what it answers with, and whether it is sensitive. */
+interface EndpointFields { method: string; path?: string; what: string; sensitive: boolean; follows: string | null; linkField?: string }
+function EndpointForm({ start, others = [], label, onSave, onCancel }: { start?: MockEndpoint; /** The endpoints it could follow. */ others?: MockEndpoint[]; label: string; onSave: (b: EndpointFields) => Promise<void>; onCancel: () => void }) {
   const [method, setMethod] = useState(start?.method ?? 'GET')
-  const [path, setPath] = useState(start?.path ?? '')
+  const [path, setPath] = useState(start?.follows ? '' : start?.path ?? '')
   const [what, setWhat] = useState(start?.what ?? '')
   const [sensitive, setSensitive] = useState(!!start?.sensitive)
+  const [step, setStep] = useState(!!start?.follows)
+  const [follows, setFollows] = useState(start?.follows ?? others[0]?.key ?? '')
+  const [linkField, setLinkField] = useState(start?.linkField ?? '')
+  const ok = step ? !!follows && !!linkField.trim() : !!path.trim()
   return (
     <div className="mock-edit" style={{ marginTop: 0 }} data-component="EndpointForm">
-      <div className="task-calls-call">
-        <label>Method<select value={method} onChange={(ev) => setMethod(ev.target.value)}>{['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((x) => <option key={x}>{x}</option>)}</select></label>
-        <label>The call<input className="mono" value={path} onChange={(ev) => setPath(ev.target.value)} placeholder="/runs/{id}/status" /></label>
-      </div>
+      {others.length > 0 && <label className="mock-check"><input type="checkbox" checked={step} onChange={(ev) => setStep(ev.target.checked)} /> A next step: it is called on a link another endpoint's answer gives</label>}
+      {step ? (
+        <>
+          <div className="task-calls-call">
+            <label>Method<select value={method} onChange={(ev) => setMethod(ev.target.value)}>{['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((x) => <option key={x}>{x}</option>)}</select></label>
+            <label>The endpoint whose answer gives the link<select value={follows} onChange={(ev) => setFollows(ev.target.value)}>{others.map((o) => <option key={o.key} value={o.key}>{o.method} {o.path}</option>)}</select></label>
+          </div>
+          <label>The field of that answer that holds the link<input className="mono" value={linkField} onChange={(ev) => setLinkField(ev.target.value)} placeholder="download_url" /></label>
+          <p className="faint" style={{ margin: 0, fontSize: 13 }}>That endpoint becomes intermediate: the mock answers it with a link back to itself in that field, and answers this step from this step's own data.</p>
+        </>
+      ) : (
+        <div className="task-calls-call">
+          <label>Method<select value={method} onChange={(ev) => setMethod(ev.target.value)}>{['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((x) => <option key={x}>{x}</option>)}</select></label>
+          <label>The call<input className="mono" value={path} onChange={(ev) => setPath(ev.target.value)} placeholder="/runs/{id}/status" /></label>
+        </div>
+      )}
       <label>What it answers with<input value={what} onChange={(ev) => setWhat(ev.target.value)} placeholder="in a line" /></label>
       <label className="mock-check"><input type="checkbox" checked={sensitive} onChange={(ev) => setSensitive(ev.target.checked)} /> Sensitive: never store a real response of it</label>
       {sensitive && <p className="faint" style={{ margin: 0, fontSize: 13 }}>A real response that comes in, given or recorded, is faked at once and the original deleted. Only the fake is ever stored or served, so it cannot be faked again differently later.</p>}
-      <div className="row"><button className="btn small" aria-label={label === 'Save' ? 'Save the call' : 'Add the endpoint'} disabled={!path.trim()} onClick={() => void onSave({ method, path: path.trim(), what: what.trim(), sensitive })}>{label}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
+      <div className="row"><button className="btn small" aria-label={label === 'Save' ? 'Save the call' : 'Add the endpoint'} disabled={!ok} onClick={() => void onSave(step ? { method, what: what.trim(), sensitive, follows, linkField: linkField.trim(), ...(start?.follows ? {} : { path: '' }) } : { method, path: path.trim(), what: what.trim(), sensitive, follows: null })}>{label}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
     </div>
   )
 }
