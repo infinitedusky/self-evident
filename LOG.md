@@ -6402,3 +6402,17 @@ get that endpoint's real response; a reviewer always gets the faked one, and a s
 One switch covers both the prototype and the smoke test. A task starts from the app's answer and may set its own,
 and put it back (`task_service.faked`, migration 0053). The stored source `replay` is refused from now on and read
 as the mock where it was already chosen.
+
+### A task's Data step is one section; nothing is shown twice (Sandy, 2026-11-22)
+
+A screenshot of CEB-90's Data step: the services the task calls with their calls, and under it the app's SixtyFour
+card with the same endpoints again. "We are duplicating info here, we can have this all in one endpoints section."
+
+- On a task the app's own cards are no longer shown under the task's services. A line says where the rest of a
+  service is (its address, its real responses, its history: Settings › Mocks).
+- A call on a task shows what the call is as the service has it, where before it said "Nothing said yet"; what the
+  task needs of it is shown as "This task needs".
+- A service block on a task says when a real response is in and its agent is working on it, with Ask again, and
+  names the service's endpoints the task does not use.
+- A place no longer spells out which call's real response has no fake: it says how many, since the endpoint says it
+  in full, and a reviewer's block says it once.

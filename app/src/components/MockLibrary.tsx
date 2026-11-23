@@ -60,13 +60,11 @@ export function MockLibrary({ appId, issueId }: { appId: string; /** On a task's
       {!issueId && <h3 className="mock-h3">The app's services</h3>}
       {adding && !issueId && <AddAppService onAdd={(b) => act(async () => { await engine.raiseMock(appId, b); setAdding(false) })} onCancel={() => setAdding(false)} />}
       {error && <div className="empty bad" style={{ marginBottom: 12 }}>{error}</div>}
-      {(() => {
-        const all = list === null ? (error ? null : <p className="muted">Loading…</p>)
-          : !list.length ? <div className="empty">{issueId ? 'No mocks yet. One is made from a call above.' : 'No services yet. Add one here, or a task\'s agent adds it when it finds the code calling one.'}</div>
-          : <div className="mock-list">{list.map((m) => <MockCard key={m.key} appId={appId} issueId={issueId} mock={m} places={places.find((p) => p.mock === m.key) ?? null} act={act} />)}</div>
-        // On a task the services above already show what matters to it: each as the app's settings have it is one press away.
-        return issueId && list?.length ? <details className="mock-all"><summary>The app's services, as its settings have them ({list.length})</summary>{all}</details> : all
-      })()}
+      {/* On a task the services above are the whole of it: nothing is shown twice. What a service is beyond its endpoints (its address, its real responses, its history) is in the app's settings. */}
+      {issueId ? <p className="faint" style={{ margin: '12px 0 0', fontSize: 13 }}>A service's address, its real responses on this computer and its history are in Settings › Mocks.</p>
+        : list === null ? (error ? null : <p className="muted">Loading…</p>)
+        : !list.length ? <div className="empty">No services yet. Add one here, or a task's agent adds it when it finds the code calling one.</div>
+        : <div className="mock-list">{list.map((m) => <MockCard key={m.key} appId={appId} mock={m} places={places.find((p) => p.mock === m.key) ?? null} act={act} />)}</div>}
     </section>
   )
 }
@@ -107,13 +105,13 @@ function MockCard({ appId, issueId, mock: m, places, act }: { appId: string; iss
 
       {m.needs && (
         <div className="mock-needs">
-          <strong>{m.status === 'needs_recording' ? 'Needs a real response' : 'Out of date: needs a new real response'}</strong>{m.needs.why ? <>: {m.needs.why}</> : null}
+          <strong>{m.needs.recorded ? 'A real response is in' : m.status === 'needs_recording' ? 'Needs a real response' : 'Out of date: needs a new real response'}</strong>{m.needs.why ? <>: {m.needs.why}</> : null}
           <ul>
             {m.needs.person && <li>A real call needs {m.needs.person}.</li>}
             {m.needs.key && <li>The key: <code>{m.needs.key}</code>.</li>}
             {m.needs.cost && <li>It costs {m.needs.cost}.</li>}
           </ul>
-          {m.needs.recorded ? <div className="row"><span>A real response is in. The task's agent is building the mock from it: its conversation shows how far it is.</span><button className="btn quiet small" title="If the agent did not start, or stopped" onClick={() => act(() => engine.mineMock(appId, m.key))}>Ask again</button></div>
+          {m.needs.recorded ? <div className="row"><span>The task's agent is {m.served === 'written' ? 'building the mock from it' : 'making its faked version'}: its conversation shows how far it is.</span><button className="btn quiet small" title="If the agent did not start, or stopped" onClick={() => act(() => engine.mineMock(appId, m.key))}>Ask again</button></div>
             : !m.issue ? <p className="faint" style={{ margin: 0 }}>It has no task yet, so there is no agent to mine it. A task's agent raises a mock when its change needs one.</p>
             : <>
               {m.endpoints.length

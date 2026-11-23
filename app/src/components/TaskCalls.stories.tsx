@@ -99,7 +99,7 @@ export const AddingACall: Story = {
     await expect(c.getByRole('combobox', { name: "One of Breach lookup (sample)'s endpoints" })).toHaveValue('search')
     await userEvent.type(c.getByRole('textbox', { name: 'What this task needs from it' }), 'An address in no breach, and one in three')
     await userEvent.click(c.getByRole('button', { name: 'Add' }))
-    await expect(await c.findByText('Needs: An address in no breach, and one in three')).toBeInTheDocument()
+    await expect(await c.findByText('This task needs: An address in no breach, and one in three')).toBeInTheDocument()
   },
 }
 /** A call being edited, and the whole list can be cleared, to start again. */
@@ -110,7 +110,7 @@ export const EditingACall: Story = {
     const what = c.getByRole('textbox', { name: 'What this task needs from it' })
     await userEvent.clear(what); await userEvent.type(what, 'A job id, and a refusal when nobody is sent (sample)')
     await userEvent.click(c.getByRole('button', { name: 'Save' }))
-    await expect(await c.findByText('Needs: A job id, and a refusal when nobody is sent (sample)')).toBeInTheDocument()
+    await expect(await c.findByText('This task needs: A job id, and a refusal when nobody is sent (sample)')).toBeInTheDocument()
     await expect(c.getByRole('button', { name: 'Clear the list' })).toBeInTheDocument()
   },
 }

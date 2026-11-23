@@ -49,8 +49,8 @@ describe.skipIf(!reachable)('data on the endpoint', () => {
     expect((await data()).start).toMatchObject({ app: null, task: null, faked: { app: true, task: null } })
     expect(await served(await m(), { form: 'faked' })).toMatchObject({ files: [], unfaked: ['results'], real: [] })
     const row = (await placesTable(appId, issueId))[0]
-    expect(row.places.prototype).toMatchObject({ how: 'own', note: expect.stringContaining('GET /runs/{id}/results is not faked yet') })
-    expect(row.places.review.blocked).toContain('has no fake yet')
+    expect(row.places.prototype).toMatchObject({ how: 'own', note: '1 call has a real response that is not faked yet' })
+    expect(row.places.review.blocked).toBe('1 call has a real response that is not faked yet, and a reviewer is never given a real one (GET /runs/{id}/results)')
     await expect(plansFor(appId, 'review', issueId)).rejects.toThrow('a reviewer is never given a real one')
   })
 
