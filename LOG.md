@@ -6567,3 +6567,50 @@ where the people are, "Starting from 1", and no columns.
   `first_name`, `last_name`, `company`, `job_title`, `Status` and nine of findings. Filling out only sets columns
   the data has, so it cannot make this file one the app will read. Open, Sandy's to say: give the file the
   service's download link really returns (which echoes both), or let filling out add a column the template lacks.
+
+### What the results file is, and what it is not (Sandy, 2026-11-23)
+
+A long turn of working out what we are doing with CEB-90's results CSV, written down so it is not worked out again.
+
+- **The CSV is an example of enrichment, not somebody in the fixture.** "These 250 people are the baseline, the
+  CSV is an example of how you would enrich those … there should be no thinking that the CSV is somehow actually
+  applying to one of these people." The fill form started from "which person is this file for", which is the wrong
+  question.
+- **The migration applies to the database, not the fixture.** A prototype's or smoke test's schema is made by the
+  task's own migrations, then the fixture's rows are loaded. CEB-90's migration adds two tables and changes none,
+  so the fixture loads as it is and the new tables fill when the feature runs. Findings put straight into a fixture
+  would show without the task's code having run. Not tested: a migration that adds a required column to a table
+  the fixture has rows for.
+- **A scan is for a list of people, one or many, in runs of at most 50**, and the app drops a results row whose
+  id it did not send. So one fixed file for all 250 is not what the mock should answer with.
+- **What a reviewer does**: imports one made-up person from a file they are given, the app scans that person, and
+  the mock answers with a results file written for that same person. An imported person gets a new id, so the two
+  are tied by email: the app takes a row with an empty `tracking_id` whose `work_email` matches (its own recovery
+  path). Not run yet.
+- **A fixture grown from an example or two is its own feature, and a Fixtures one.** "It very much might be the
+  case that we're building a new feature and that feature requires the database to have seeded data, but we don't
+  have that data. So we enrich the fixture … we give one or two examples, like a one or two shot example, and then
+  have the whole database get updated … it's not a part of the services part of the data. It's part of the fixture.
+  It's a pre-prototype fixture mutation of some sort." What "Fill out for fixture people" was reaching for belongs
+  there. Not built; added to the brief.
+
+### Test files: the third section of the Data step (Sandy, 2026-11-23)
+
+"The one thing that's not a part of this data is the smoke test assets. Things that are required to test. In this
+case a CSV that has the person who we're also enriching." "It could be more than one, an image for instance and an
+id card."
+
+- **A test file is a file and a line saying what to do with it** (`test-files.ts`, table `test_file`): any kind,
+  as many as it takes. The app's are for every task; a task has its own beside them. The file is kept on this
+  computer (`~/.self-evident/test-files`), its row in the database.
+- **It holds nothing real, because it goes to a reviewer.** Whoever adds one says so, or it is refused. Text (a
+  CSV, JSON) is also read against the real responses of the app's services on this computer and refused while a
+  value of one is in it. A picture or a document cannot be read that way and rests on the person's word.
+- **On the page**: "Test files" after Services on a task's Data step and after the app's services in Settings ›
+  Mocks. A picture is shown small; a file is downloaded by its name. Agents have `test_files` (list, add text,
+  remove), and are told to use the same made-up person in a test file and in the mock's answer.
+- **A refusal shown on a page says what was found by its kind and never quotes it.** True of test files, and now
+  of "Make fake version" too, whose refusal had passed the agent's list of real values through to the page.
+
+Not done: nothing ties a test file to a mock's answer but the person's care; the smoke test's instructions and the
+review branch do not point at test files yet.

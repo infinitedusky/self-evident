@@ -13,6 +13,7 @@ import { EndpointDataCell } from './EndpointData'
 import { Fixtures } from './Fixtures'
 import { Sources } from './MockPlaces'
 import { TaskCalls } from './TaskCalls'
+import { TestFiles } from './TestFiles'
 import { engine, type Mock, type MockChange, type MockData, type MockEndpoint, type MockPlacesRow, type MockReal } from '../engine'
 
 const STATUS: Record<Mock['status'], { label: string; tone: Tone }> = {
@@ -66,6 +67,8 @@ export function MockLibrary({ appId, issueId, needs }: { /** On a task: what its
       {/* What is in the app's own database comes first; then the services outside it, with what they are said at the top of that section. */}
       {list !== null && <Fixtures appId={appId} issueId={issueId} version={tick} onChanged={() => reload()} />}
       {issueId && <TaskCalls appId={appId} issueId={issueId} mocks={list ?? []} places={places} version={tick} onChanged={() => reload()} intro={intro} needs={needs && <details className="lv-item" data-component="WhatTheTaskNeeds"><summary className="lv-item-head"><span className="lv-item-name">What the task needs</span><span className="lv-item-meta lv-end">The agent's report</span></summary><div className="lv-part">{needs}</div></details>} />}
+      {/* Then what the person trying it brings: on a task after its services, in settings after the app's. */}
+      {issueId && list !== null && <TestFiles appId={appId} issueId={issueId} />}
       {!issueId && <h3 className="mock-h3">The app's services</h3>}
       {!issueId && intro}
       {adding && !issueId && <AddAppService onAdd={(b) => act(async () => { await engine.raiseMock(appId, b); setAdding(false) })} onCancel={() => setAdding(false)} />}
@@ -75,6 +78,7 @@ export function MockLibrary({ appId, issueId, needs }: { /** On a task: what its
         : list === null ? (error ? null : <p className="muted">Loading…</p>)
         : !list.length ? <div className="empty">No services yet. Add one here, or a task's agent adds it when it finds the code calling one.</div>
         : <div className="mock-list">{list.map((m) => <MockCard key={m.key} appId={appId} mock={m} places={places.find((p) => p.mock === m.key) ?? null} act={act} />)}</div>}
+      {!issueId && list !== null && <TestFiles appId={appId} />}
     </section>
   )
 }

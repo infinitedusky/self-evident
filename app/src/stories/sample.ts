@@ -645,6 +645,12 @@ Checked 20 Nov 2026: none of the 2,914 values in the recording's 9 files is in t
 const none = { app: null, task: null }
 const fakedNote = 'Faked from a real response the person gave 18 Nov 2026: its structure is real, and 2610 values were replaced. Kept as they were, because they are structure: "completed", "running", "high", "low". Checked 20 Nov 2026: none of the 2914 values of that response is in it.'
 export const resultsItem: import('../engine').EndpointItem = { recorded: { id: 'app_sample/iss_sample1/fraud-scan/given-2026-11-18', at: '2026-11-18T15:20:00Z', how: 'given', files: ['results.csv'] }, safe: { kind: 'faked', set: 'faked', files: ['results.csv'], note: fakedNote, columns: ['tracking_id', 'work_email', 'full_name', 'status', 'risk_level', 'profiles', 'person_summary'] } }
+/** Made up: test files. One of the app's (a picture to upload) and two of the sample task's own. */
+export const testFiles: import('../engine').TestFile[] = [
+  { id: 'tfile_sample1', name: 'id-card.png', what: 'Upload it as the ID on the Verify page (sample)', mediaType: 'image/png', bytes: 48_200, scope: 'app', checked: null, here: true },
+  { id: 'tfile_sample2', name: 'one-person.csv', what: 'Import it on the Employees page: one made-up person, the one the mock has findings for (sample)', mediaType: 'text/csv', bytes: 212, scope: 'task', checked: { at: '2026-11-23T09:00:00Z', against: 2 }, here: true },
+  { id: 'tfile_sample3', name: 'notes.pdf', what: '', mediaType: 'application/pdf', bytes: 1_300_000, scope: 'task', checked: null, here: true },
+]
 /** Made up: the app's fixtures. One company with its employees, and a small one. */
 export const fixtures: import('../engine').Fixture[] = [
   { name: 'northwind-company', bytes: 1_480_000, tables: [{ name: 'employees', rows: 250, columns: ['id', 'first_name', 'last_name', 'work_email', 'title', 'department_id'] }, { name: 'departments', rows: 13, columns: ['id', 'name'] }, { name: 'companies', rows: 1, columns: ['id', 'name'] }] },

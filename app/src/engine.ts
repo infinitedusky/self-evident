@@ -374,6 +374,8 @@ export interface EndpointItem {
   recorded: { id: string; at: string; how: 'given' | 'recorded'; files: string[] } | null
   safe: { kind: 'faked' | 'provided'; set: string; files: string[]; note: string; stale?: boolean; /** The column names of its data: what can be set from a fixture. */ columns?: string[]; /** The fixture people it was filled out for. */ madeFor?: { fixture: string; table: string; who: string; people: number; map: Record<string, string> } } | null
 }
+/** A test file (engine/src/test-files.ts): something a person needs in their hands to try a change, and what to do with it. Made-up only. */
+export interface TestFile { id: string; name: string; what: string; mediaType: string; bytes: number; /** The app's, for every task, or one task's own. */ scope: 'app' | 'task'; /** Text read against the real responses on this computer; a picture or a document rests on the person's word. */ checked: { at: string; against: number } | null; here: boolean }
 /** One of the app's fixtures (engine/src/fixtures.ts): made-up rows for its own database, by table. Never the rows. */
 export interface Fixture { name: string; bytes: number; tables: { name: string; rows: number; columns: string[] }[]; /** How many endpoints' data is filled out for its people. */ madeFor?: number }
 /** One set of data a mock can answer with (engine/src/mock-data.ts). real: a real response as it is, on this computer only. faked: made from one by the faker. invented: written by hand, or provided by a person who states it holds nothing real. */
@@ -547,6 +549,22 @@ export const engine = {
     return JSON.parse(text) as { kept: 'recorded' | 'faked' | 'provided'; asked: string | null; maybeStructure?: string[] }
   },
   fixtures: (appId: string, issueId?: string | null) => call<{ fixtures: Fixture[]; /** The fixture a task's runs are built from. */ used: string | null; /** Can one be made from the app's seed, and what is missing if not. */ make?: { ok: boolean; missing: string | null } }>('GET', `/apps/${appId}/fixtures${issueId ? `?issue=${issueId}` : ''}`),
+  /** The app's test files and (for a task) the task's own. */
+  testFiles: (appId: string, issueId?: string | null) => call<TestFile[]>('GET', `/apps/${appId}/test-files${issueId ? `?issue=${issueId}` : ''}`),
+  /** Files added as test files, with what the person does with them. stated: they hold nothing real. */
+  addTestFiles: async (appId: string, files: File[], o: { what: string; issueId?: string | null; stated: boolean }) => {
+    const form = new FormData()
+    for (const f of files) form.append('file', f)
+    form.append('what', o.what); form.append('stated', String(o.stated)); if (o.issueId) form.append('issueId', o.issueId)
+    const res = await fetch(`${API}/apps/${appId}/test-files`, { method: 'POST', body: form })
+    const text = await res.text()
+    if (!res.ok) throw new Error(text || `${res.status}`)
+    return JSON.parse(text) as TestFile[]
+  },
+  editTestFile: (appId: string, id: string, what: string) => call<TestFile>('PATCH', `/apps/${appId}/test-files/${id}`, { what }),
+  removeTestFile: (appId: string, id: string) => call<{ removed: string }>('DELETE', `/apps/${appId}/test-files/${id}`),
+  /** Where a test file is fetched from: to keep, or (a picture, show) to look at. */
+  testFileUrl: (appId: string, id: string, show = false) => `${API}/apps/${appId}/test-files/${id}/file${show ? '?show=1' : ''}`,
   /** A fixture made from the app's own seed: its schema and seed commands run on a database of its own. Minutes. */
   makeFixture: (appId: string, name?: string) => call<{ name: string; tables: Record<string, number> }>('POST', `/apps/${appId}/fixtures`, name ? { name } : {}),
   /** A table of a fixture as it is: its first rows, as text. */

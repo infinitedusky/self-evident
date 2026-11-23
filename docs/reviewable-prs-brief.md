@@ -42,7 +42,10 @@ on one task, CEB-90, and its one outside service, SixtyFour.
 3. ~~Decide what a fixture is for the person.~~ Done 2026-11-22: a fixture is a set of tables, made from the
    app's seed command in a press on the Data step, opened to its rows, renamed and deleted; a prototype follows
    its task's fixture on its first start. CEB-90's app has one, "seed" (Meridian, 250 employees).
-4. **Prove it on CEB-90**: fake the results file, fill it out for fixture employees, run the smoke test on the
+   Also now on the Data step: **Test files** (2026-11-23), what a person needs in their hands to try the change.
+4. **Prove it on CEB-90**, as a reviewer would do it (LOG.md, "What the results file is, and what it is not"): a
+   test file with one made-up person to import, and the mock's results file for that same person, tied by email.
+   Was: **Prove it on CEB-90**: fake the results file, fill it out for fixture employees, run the smoke test on the
    mock, and fix what breaks.
 5. **The data agent**: one per task, called by the task's agent, in three stop-and-wait steps (list the calls,
    say where data comes from, build what was approved).
@@ -54,6 +57,12 @@ on one task, CEB-90, and its one outside service, SixtyFour.
 9. **Close the data holes**: sharing a prototype that ever ran on real data needs a reset first; check a smoke
    test's evidence cannot reach a pull request after a run on real data; refuse to share a prototype on a
    database that is not its own; make the faker vary small numbers.
+
+## Set aside, to build in its own right
+
+- **A fixture grown from one or two examples** (Sandy, 2026-11-23): a new feature needs seeded data the app does
+  not have, so the fixture's rows are filled in from an example or two before any prototype. A Fixtures feature,
+  not a Services one. "Fill out for fixture people" on an endpoint was reaching for it in the wrong place.
 
 ## Known test noise
 
