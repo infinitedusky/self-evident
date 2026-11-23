@@ -106,6 +106,8 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
     return () => window.clearTimeout(t)
   }, [v, load])
   const act = async (fn: () => Promise<SmokeView>) => { setBusy(true); setError(null); try { setV(await fn()) } catch (e: any) { setError(String(e.message ?? e)) } finally { setBusy(false) } }
+  // What the next start is from, set-up by set-up: nothing chosen leaves its database as it is. Run, Restart and "Start from it" all go by it.
+  const [startFrom, setStartFrom] = useState<Record<string, string>>({})
   const mark = async () => {
     if (!marking) return
     setBusy(true); setError(null)
@@ -119,6 +121,9 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
   const su = all.find((x) => x.key === picked) ?? all.find((x) => x.owed > 0) ?? all[0]
   const shown = many ? v.checks.filter((c) => (c.setup ?? all[0].key) === su.key) : v.checks
   const local = su.where === 'local'
+  const chosen = startFrom[su.key] ?? '', fromSays = chosen === EMPTY ? 'empty' : `from ${chosen}`
+  // One start for every button: from what is chosen, asked first when there is a database to lose; the choice is used once.
+  const start = async (): Promise<SmokeView> => { if (chosen && su.data?.ran && !window.confirm(`Start ${fromSays}? The smoke test's database as it is now is dropped. Keep it as a fixture first to come back to it.`)) return v; const r = await engine.startSmoke(issueId, false, many ? su.key : undefined, chosen || undefined); setStartFrom((x) => ({ ...x, [su.key]: '' })); return r }
   const shell = su.where === 'terminal'
   const termOn = !!su.terminal && (term[su.key] ?? su.terminal.open)
   const scratchOn = !!su.scratch && (term[`${su.key}@temp`] ?? su.scratch.open)
@@ -206,14 +211,14 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
           {su.scratch && <button className="btn quiet small" aria-pressed={scratchOn} disabled={busy} title="A terminal in a new empty folder, thrown away when you close it" onClick={() => (scratchOn ? closeTerm(true) : setTerm((t) => ({ ...t, [`${su.key}@temp`]: true })))}>{scratchOn ? 'Close scratch terminal' : 'Scratch terminal'}</button>}
         </div>
       )}
-      {local && su.data && !!v.head && <SmokeData appId={appId} issueId={issueId} setup={many ? su.key : undefined} data={su.data} busy={busy} onStart={(fixture) => act(() => engine.startSmoke(issueId, false, many ? su.key : undefined, fixture))} />}
+      {local && su.data && !!v.head && <SmokeData appId={appId} issueId={issueId} setup={many ? su.key : undefined} data={su.data} busy={busy} from={chosen} onFrom={(f) => setStartFrom((m) => ({ ...m, [su.key]: f }))} onStart={() => act(start)} />}
       {(v.checks.length > 0 || !!v.head) && (
         <div className={`smoke-layout ${cmp ? 'comparing' : ''} ${aside ? 'checks-aside' : ''}`} style={room ? { ['--smoke-room' as string]: `${room}px` } : undefined}>
           <div className="smoke-view" ref={viewRef}>
             {local && !su.url && (
               <div className="empty">
                 {v.head ? (su.canRun
-                  ? <>The built code is not running. <button className="btn small" disabled={busy} onClick={() => void act(() => engine.startSmoke(issueId, false, many ? su.key : undefined))}>Run it</button>{su.canClean && <> <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true, many ? su.key : undefined))}>Start clean</button></>}</>
+                  ? <>The built code is not running. <button className="btn small" disabled={busy} onClick={() => void act(() => start())}>{chosen ? `Run it ${fromSays}` : 'Run it'}</button>{su.canClean && <> <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true, many ? su.key : undefined))}>Start clean</button></>}</>
                   : <>This app has no command to run it yet. Say how its prototypes are started, in Settings › Prototype, and the smoke test uses the same.</>)
                   : <>Nothing is built yet: the smoke test runs the task's branch once there is one.</>}
               </div>
@@ -224,7 +229,7 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
                 <div className="smoke-bar">
                   {local ? (cmp ? null : <Nav t={mine} home={home} src={src} />) : <code className="smoke-address">{src}</code>}
                   <a className="btn quiet small" href={src} target="_blank" rel="noreferrer">Open in a new tab</a>
-                  {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.startSmoke(issueId, false, many ? su.key : undefined))}>{behind ? 'Run the new commit' : 'Restart'}</button>}
+                  {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => start())}>{behind ? `Run the new commit${chosen ? ` ${fromSays}` : ''}` : chosen ? `Restart ${fromSays}` : 'Restart'}</button>}
                   {local && su.canClean && <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true, many ? su.key : undefined))}>Start clean</button>}
                   {local && <CompareWith c={compare} beside={`smoke:${issueId}:${su.key}`} onStop={() => theirs.setAt(null)} />}
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.stopSmoke(issueId, many ? su.key : undefined))}>Stop</button>}
@@ -286,9 +291,8 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
  * fixtures. Then when we start the smoke test, we choose which fixture to use"): what it was built from, started
  * again from one of the app's fixtures, and kept as a fixture as it is now.
  */
-function SmokeData({ appId, issueId, setup, data, busy, onStart }: { appId: string; issueId: string; setup?: string; data: NonNullable<SmokeSetupView['data']>; busy: boolean; onStart: (fixture: string) => Promise<void> }) {
+function SmokeData({ appId, issueId, setup, data, busy, from, onFrom, onStart }: { appId: string; issueId: string; setup?: string; data: NonNullable<SmokeSetupView['data']>; busy: boolean; /** What the next start is from: a fixture's name, EMPTY, or '' for its database as it is. */ from: string; onFrom: (f: string) => void; onStart: () => Promise<void> }) {
   const [fixtures, setFixtures] = useState<Fixture[]>([])
-  const [from, setFrom] = useState('')
   const [keeping, setKeeping] = useState(false)
   const [name, setName] = useState('')
   const [real, setReal] = useState(false)
@@ -305,12 +309,12 @@ function SmokeData({ appId, issueId, setup, data, busy, onStart }: { appId: stri
       <div className="lv-line" style={{ alignItems: 'center' }}>
         <span>Its database: {!data.ran ? 'not built yet' : data.builtFrom ? <>built from the fixture <strong>{data.builtFrom}</strong>, and whatever has been done in it since</> : 'built from the smoke test\'s own seed, and whatever has been done in it since'}</span>
         <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
-          <select aria-label="What to start the smoke test from" value={from} onChange={(e) => setFrom(e.target.value)}>
-            <option value="">Start from…</option>
+          <select aria-label="What to start the smoke test from" value={from} onChange={(e) => onFrom(e.target.value)}>
+            <option value="">Start from: its database as it is</option>
             <option value={EMPTY}>Empty: no fixture, only this smoke test's seed</option>
             {fixtures.map((f) => <option key={f.name} value={f.name}>{f.name}{f.real ? ' (real)' : ''}</option>)}
           </select>
-          <button className="btn quiet small" disabled={busy || !from} title="Its database is dropped and built again: from the fixture chosen, or with nothing in it but what the smoke test's own seed adds (Settings › Smoke test)" onClick={() => { if (!data.ran || window.confirm(`Start ${from === EMPTY ? 'empty' : `from "${from}"`}? The smoke test's database as it is now is dropped. Keep it as a fixture first to come back to it.`)) void onStart(from).then(() => setFrom('')) }}>Start from it</button>
+          <button className="btn quiet small" disabled={busy || !from} title="Its database is dropped and built again: from the fixture chosen, or with nothing in it but what the smoke test's own seed adds (Settings › Smoke test). Run and Restart go by this choice too" onClick={() => void onStart()}>Start from it</button>
         </span>
         {data.ran && !keeping && <button className="lv-act" onClick={() => { setKeeping(true); setSaid(null) }}>Keep its database as a fixture</button>}
       </div>

@@ -6775,3 +6775,9 @@ Sandy: "we need to have an 'empty' database option … or maybe we create an emp
 "Start from…" on a smoke test offers **Empty** above the fixtures. The database is dropped and built again from no
 fixture, then the smoke test's own seed runs. That seed is already in the app's settings (Settings › Smoke test),
 so the settings say what empty means for the app: for the enterprise dashboard, one company with no employees.
+
+### 2026-11-23: Every start of a smoke test goes by what is chosen
+
+Found when Empty was chosen and a plain Restart pressed: only "Start from it" used the choice, so the database was
+kept. Now Run, Restart and "Start from it" all start from what the picker says, and the button names it ("Restart
+empty", "Restart from Meridian"). Nothing chosen: its database as it is. The choice is used once.

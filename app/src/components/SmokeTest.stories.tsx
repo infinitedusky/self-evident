@@ -95,7 +95,14 @@ export const ItsDatabase: Story = {
     const start = c.getByRole('button', { name: 'Start from it' })
     await expect(start).toBeDisabled() // until a fixture is chosen
     const pick = c.getByRole('combobox', { name: 'What to start the smoke test from' })
-    await waitFor(() => expect(within(pick).getAllByRole('option').map((o) => o.textContent)).toEqual(['Start from…', "Empty: no fixture, only this smoke test's seed", 'northwind-company', 'three-people']))
+    await waitFor(() => expect(within(pick).getAllByRole('option').map((o) => o.textContent)).toEqual(['Start from: its database as it is', "Empty: no fixture, only this smoke test's seed", 'northwind-company', 'three-people']))
+    // What is chosen is what every start is from: Restart says so, so a plain restart is not taken for it.
+    await userEvent.selectOptions(pick, '(empty)')
+    await expect(c.getByRole('button', { name: 'Restart empty' })).toBeInTheDocument()
+    await userEvent.selectOptions(pick, 'three-people')
+    await expect(c.getByRole('button', { name: 'Restart from three-people' })).toBeInTheDocument()
+    await userEvent.selectOptions(pick, '')
+    await expect(c.getByRole('button', { name: 'Restart' })).toBeInTheDocument()
     // Kept as a fixture, and said to hold something real.
     await userEvent.click(c.getByRole('button', { name: 'Keep its database as a fixture' }))
     await userEvent.type(c.getByRole('textbox', { name: "The fixture's name" }), 'one-person-scanned')
