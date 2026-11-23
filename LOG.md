@@ -6768,3 +6768,10 @@ database as fixtures. Then when we start the smoke test, we choose which fixture
 Not done: nothing checks that a fixture marked made-up holds nothing real. The app's own smoke script decides which
 company is signed in to; for the enterprise dashboard that was fixed to one company and is changed in its settings
 to follow the database. A prototype has no "start from" line of this kind; it loads a scenario from its Data tab.
+
+### 2026-11-23: A smoke test can start empty
+
+Sandy: "we need to have an 'empty' database option … or maybe we create an empty version in the settings?" Both:
+"Start from…" on a smoke test offers **Empty** above the fixtures. The database is dropped and built again from no
+fixture, then the smoke test's own seed runs. That seed is already in the app's settings (Settings › Smoke test),
+so the settings say what empty means for the app: for the enterprise dashboard, one company with no employees.

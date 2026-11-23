@@ -341,7 +341,8 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/issues/:id/smoke/terminal/resize', () => reply({ ok: true })),
     http.post('/api/issues/:id/smoke/terminal/close', async ({ request }) => { const b = await request.json().catch(() => ({})) as { scratch?: boolean }; if (b.scratch) { if (d.smoke) d.smoke = { ...d.smoke, scratch: { open: false } }; return reply(d.smoke) } if (d.smoke) d.smoke = { ...d.smoke, terminal: { folder: d.smoke.terminal?.folder ?? 'build', open: false }, ...(d.smoke.where === 'terminal' ? { up: false } : {}) }; return reply(d.smoke) }),
     http.post('/api/issues/:id/smoke/start', async ({ request }) => {
-      const b = await request.json().catch(() => ({})) as { clean?: boolean; setup?: string; fixture?: string }
+      const b = await request.json().catch(() => ({})) as { clean?: boolean; setup?: string; fixture?: string; empty?: boolean }
+      if (b.empty) b.fixture = undefined
       if (d.smoke && b.fixture) d.smoke = { ...d.smoke, ...(d.smoke.setups ? { setups: d.smoke.setups.map((x) => (x.data ? { ...x, data: { builtFrom: b.fixture!, ran: true } } : x)) } : {}), ...((d.smoke as { data?: unknown }).data ? { data: { builtFrom: b.fixture, ran: true } } : {}) }
       if (d.smoke && b.setup && d.smoke.setups) d.smoke = { ...d.smoke, setups: d.smoke.setups.map((x, n) => (x.key === b.setup ? { ...x, url: `http://localhost:${6500 + n}`, up: true, running: d.smoke!.head } : x)) }
       else if (d.smoke) d.smoke = { ...d.smoke, url: 'http://localhost:6500', up: true, running: d.smoke.head, log: b.clean ? ['started clean (sample)'] : d.smoke.log }

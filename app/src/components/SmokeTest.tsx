@@ -47,7 +47,7 @@ import { Framed, Nav, useTrail } from './Trail'
 import { Md } from './Md'
 import { useCompare } from '../main-running'
 import { CompareWith, comparedSays } from './CompareMain'
-import { API, engine, openEvents, type Fixture, type SmokeCheck, type SmokeSetupView, type SmokeView } from '../engine'
+import { API, EMPTY, engine, openEvents, type Fixture, type SmokeCheck, type SmokeSetupView, type SmokeView } from '../engine'
 
 const WHEN = { here: 'Here, on the built code', pr: 'On the pull request', after: 'After it is merged', nightly: 'Left to the nightly run' } as const
 
@@ -305,11 +305,12 @@ function SmokeData({ appId, issueId, setup, data, busy, onStart }: { appId: stri
       <div className="lv-line" style={{ alignItems: 'center' }}>
         <span>Its database: {!data.ran ? 'not built yet' : data.builtFrom ? <>built from the fixture <strong>{data.builtFrom}</strong>, and whatever has been done in it since</> : 'built from the smoke test\'s own seed, and whatever has been done in it since'}</span>
         <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
-          <select aria-label="A fixture to start the smoke test from" value={from} onChange={(e) => setFrom(e.target.value)}>
-            <option value="">Start from a fixture…</option>
+          <select aria-label="What to start the smoke test from" value={from} onChange={(e) => setFrom(e.target.value)}>
+            <option value="">Start from…</option>
+            <option value={EMPTY}>Empty: no fixture, only this smoke test's seed</option>
             {fixtures.map((f) => <option key={f.name} value={f.name}>{f.name}{f.real ? ' (real)' : ''}</option>)}
           </select>
-          <button className="btn quiet small" disabled={busy || !from} title="Its database is dropped and built again from the fixture" onClick={() => { if (!data.ran || window.confirm(`Start from "${from}"? The smoke test's database as it is now is dropped. Keep it as a fixture first to come back to it.`)) void onStart(from).then(() => setFrom('')) }}>Start from it</button>
+          <button className="btn quiet small" disabled={busy || !from} title="Its database is dropped and built again: from the fixture chosen, or with nothing in it but what the smoke test's own seed adds (Settings › Smoke test)" onClick={() => { if (!data.ran || window.confirm(`Start ${from === EMPTY ? 'empty' : `from "${from}"`}? The smoke test's database as it is now is dropped. Keep it as a fixture first to come back to it.`)) void onStart(from).then(() => setFrom('')) }}>Start from it</button>
         </span>
         {data.ran && !keeping && <button className="lv-act" onClick={() => { setKeeping(true); setSaid(null) }}>Keep its database as a fixture</button>}
       </div>

@@ -94,8 +94,8 @@ export const ItsDatabase: Story = {
     await expect(await c.findByText(/built from the smoke test's own seed/)).toBeInTheDocument()
     const start = c.getByRole('button', { name: 'Start from it' })
     await expect(start).toBeDisabled() // until a fixture is chosen
-    const pick = c.getByRole('combobox', { name: 'A fixture to start the smoke test from' })
-    await waitFor(() => expect(within(pick).getAllByRole('option').map((o) => o.textContent)).toEqual(['Start from a fixture…', 'northwind-company', 'three-people']))
+    const pick = c.getByRole('combobox', { name: 'What to start the smoke test from' })
+    await waitFor(() => expect(within(pick).getAllByRole('option').map((o) => o.textContent)).toEqual(['Start from…', "Empty: no fixture, only this smoke test's seed", 'northwind-company', 'three-people']))
     // Kept as a fixture, and said to hold something real.
     await userEvent.click(c.getByRole('button', { name: 'Keep its database as a fixture' }))
     await userEvent.type(c.getByRole('textbox', { name: "The fixture's name" }), 'one-person-scanned')

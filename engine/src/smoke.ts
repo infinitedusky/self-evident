@@ -470,7 +470,7 @@ export async function askToMine(issueId: string, key: string, dir: string, excha
   await say(talk.id, isGiven(dir) ? MINE_GIVEN(m?.name ?? key, key, dir) : MINE_IT(m?.name ?? key, key, dir, exchanges), undefined, { author: 'engine', kind: 'brief', payload: { label: `Mine a mock of ${m?.name ?? key}` } })
 }
 
-export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean; /** Which set-up (its key); none: the app's first. */ setup?: string; /** The services to call for real, by their mock's key: each through a recorder, so what they send is kept (recorder.ts). */ live?: string[]; /** Start from this fixture of the app's: its database is dropped and built again from it. */ fixture?: string } = {}) {
+export async function startSmoke(issueId: string, actor = 'user', opts: { /** Start from nothing: its database made again and filled, and the script told so ($SMOKE_CLEAN). */ clean?: boolean; /** Which set-up (its key); none: the app's first. */ setup?: string; /** The services to call for real, by their mock's key: each through a recorder, so what they send is kept (recorder.ts). */ live?: string[]; /** Start from this fixture of the app's: its database is dropped and built again from it. */ fixture?: string; /** Start empty: its database is dropped and built again from no fixture at all, only the set-up's own seed (in the app's settings), which says what empty is for this app. */ empty?: boolean } = {}) {
   const { t, a, repoPath, name, branch, head } = await built(issueId)
   const all = smokeSetups(a.setup)
   const named = opts.setup ? all.find((x) => x.key === opts.setup) : all[0]
@@ -494,12 +494,14 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   // Started from a fixture the person chose: checked before anything is dropped, so a wrong name loses nothing.
   if (opts.fixture && !dbCfg) throw new PlanError(`${a.name} has no database set for its prototypes, so there is nothing to build from a fixture`)
   if (opts.fixture && !(await listScenarios({ appId: a.id }, path)).includes(opts.fixture)) throw new PlanError(`${a.name} has no fixture "${opts.fixture}"`)
-  if (dbCfg && (opts.clean || opts.fixture)) await dropDatabase(dbCfg, slug)
+  if (opts.empty && opts.fixture) throw new PlanError('start from a fixture, or empty: not both')
+  if (opts.empty && !dbCfg) throw new PlanError(`${a.name} has no database set for its prototypes, so there is nothing to start empty`)
+  if (dbCfg && (opts.clean || opts.fixture || opts.empty)) await dropDatabase(dbCfg, slug)
   let builtFrom: string | null | undefined // undefined: its database was left as it was
   if (dbCfg && !(await databaseExists(dbCfg, slug))) {
     // The fixture this task's mock data was made for (fixtures.ts), so what the app sends is who the mock answers for; else the app's shared "default", when it has one.
     const names = await listScenarios({ appId: a.id }, path), made = await fixtureForTask(a.id, t.id)
-    builtFrom = opts.fixture ?? (made && names.includes(made) ? made : names.includes('default') ? 'default' : null)
+    builtFrom = opts.empty ? null : opts.fixture ?? (made && names.includes(made) ? made : names.includes('default') ? 'default' : null)
     const { url } = await rebuild(dbCfg, slug, path, builtFrom, { appId: a.id })
     if (setup.seed) { // the app's own seed, from its settings: after the schema, and after the app's shared scenario when it has one
       const c = new pg.Client({ connectionString: url })
