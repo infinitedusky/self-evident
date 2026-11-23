@@ -6721,3 +6721,12 @@ had a text box per line, which showed only what matched what was typed. Now ever
 each set "as faked", from a column of the file, or left empty; a column the response lacks is added below them
 (CEB-90's sample response has no `work_email` or `tracking_id`, because the service echoes the columns it is sent
 and the sample was made from a run that was not sent them).
+
+### 2026-11-23: The mapping lists only what it overrides, and the data says what is overridden
+
+Sandy: "what if the file or the table has like a thousand rows? … you choose which rows you want to override, but
+you can either choose a row or you can add a new one"; and "underneath that, say … Overridden fields and then have
+it what fields are overridden and where they're overridden from". Taken as the lines of the mapping form (the
+response's columns): the form lists only the columns overridden, each picked from a list of the response's columns
+or added as a new one. Under an endpoint's data, a line names the overridden fields and the file or table each
+comes from.

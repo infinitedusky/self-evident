@@ -95,6 +95,9 @@ function ItemSays({ item, written, own }: { item: EndpointItem | null; written: 
     <>
       {item.recorded && <div><Badge tone="warn">Real · this computer only</Badge> {item.recorded.how === 'given' ? 'A response you gave' : 'Recorded in a live run'}, {day(item.recorded.at)}{own && !item.safe && <> <Badge tone="accent">This task's own</Badge></>}</div>}
       {item.safe && <div><Badge tone={item.safe.kind === 'faked' ? 'ok' : 'neutral'}>{item.safe.kind === 'faked' ? 'Faked' : 'Provided'}</Badge> <span title={item.safe.note}>{item.safe.kind === 'faked' ? (item.recorded ? 'A fake of it' : 'A fake; the original was not kept') : 'A file stated to hold nothing real'}: {item.safe.files.join(', ')}</span>{own && <> <Badge tone="accent">This task's own</Badge></>}</div>}
+      {/* What the mapping changes in that data, said where the data is: which fields, and from where. */}
+      {item.safe?.fromFile && <div className="lv-sub" style={{ margin: 0 }} data-overridden="file" title={Object.entries(item.safe.fromFile.map).map(([c, from]) => `${c} ← ${from || '(left empty)'}`).join('\n')}>Overridden fields, from <strong>{item.safe.fromFile.file}</strong>: {Object.entries(item.safe.fromFile.map).map(([c, from], n) => <span key={c}>{n > 0 && ', '}<code>{c}</code>{from && from !== c ? <> ← {from}</> : !from ? ' (empty)' : null}</span>)}</div>}
+      {item.safe?.madeFor && <div className="lv-sub" style={{ margin: 0 }} data-overridden="table" title={Object.entries(item.safe.madeFor.map).map(([c, from]) => `${c} ← ${from}`).join('\n')}>Overridden fields, from <strong>{item.safe.madeFor.table}</strong> of {item.safe.madeFor.fixture}: {Object.entries(item.safe.madeFor.map).map(([c, from], n) => <span key={c}>{n > 0 && ', '}<code>{c}</code>{from !== c ? <> ← {from}</> : null}</span>)}</div>}
       {item.recorded && !item.safe && <div className="mock-data-warn">Not faked yet, so nothing of it is served.</div>}
       {item.safe?.stale && <div className="faint">The fake is of an older response than the one above.</div>}
     </>
@@ -182,55 +185,53 @@ function FillForm({ appId, call, columns, was, onFill, onCancel }: { appId: stri
   )
 }
 
-/** A file a tester brings supplies who the data is for. Every column of the response is listed with what it is set from: left as it is faked, a column of the file, or left empty. A column the response lacks can be added. */
-const KEEP = '\u0000keep'
+/** A file a tester brings supplies who the data is for. Only the columns to override are listed: each line picks a column of the response, or names a new one it lacks, and says which column of the file it is set from (or that it is left empty). */
+interface MapLine { col: string; /** Not one of the response's: its name is typed. */ fresh: boolean; from: string }
 function FileMapForm({ appId, issueId, call, columns, was, onSave, onCancel }: { appId: string; issueId?: string; call: string; columns: string[]; was?: NonNullable<EndpointItem['safe']>['fromFile']; onSave: (b: { file: string | null; map?: Record<string, string> }) => Promise<void>; onCancel: () => void }) {
   const [files, setFiles] = useState<TestFile[] | null>(null)
   const [file, setFile] = useState(was?.file ?? '')
-  // The response's own columns, each with where it comes from; then columns added to it.
-  const [from, setFrom] = useState<Record<string, string>>(Object.fromEntries(Object.entries(was?.map ?? {}).filter(([c]) => columns.includes(c))))
-  const [added, setAdded] = useState<[string, string][]>(Object.entries(was?.map ?? {}).filter(([c]) => !columns.includes(c)))
+  const [lines, setLines] = useState<MapLine[]>(Object.entries(was?.map ?? {}).map(([col, from]) => ({ col, fresh: !columns.includes(col), from })))
   const [touched, setTouched] = useState(!!was)
   const [busy, setBusy] = useState(false)
   const f = files?.find((x) => x.name === file)
   // Columns the response and the file both have, that say who someone is, are theirs to begin with.
-  const guess = (x?: TestFile) => Object.fromEntries(columns.filter((c) => x?.columns?.includes(c) && /email|name$/i.test(c)).map((c) => [c, c]))
-  useEffect(() => { void engine.testFiles(appId, issueId).then((l) => { const withColumns = l.filter((x) => x.columns?.length); setFiles(withColumns); const first = withColumns.find((x) => x.name === file) ?? withColumns[0]; if (first) { setFile(first.name); if (!touched) setFrom(guess(first)) } }).catch(() => setFiles([])) }, [appId, issueId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const guess = (x?: TestFile): MapLine[] => columns.filter((c) => x?.columns?.includes(c) && /email|name$/i.test(c)).map((c) => ({ col: c, fresh: false, from: c }))
+  useEffect(() => { void engine.testFiles(appId, issueId).then((l) => { const withColumns = l.filter((x) => x.columns?.length); setFiles(withColumns); const first = withColumns.find((x) => x.name === file) ?? withColumns[0]; if (first) { setFile(first.name); if (!touched) setLines(guess(first)) } }).catch(() => setFiles([])) }, [appId, issueId]) // eslint-disable-line react-hooks/exhaustive-deps
   if (files && !files.length) return <div className="mock-edit"><p className="faint" style={{ margin: 0 }}>There is no CSV among the fixtures' files yet. Add one under Fixtures › Files: only a file with columns has fields to map.</p><div className="row"><button className="btn quiet small" onClick={onCancel}>Close</button></div></div>
-  const map = { ...from, ...Object.fromEntries(added.map(([c, v]) => [c.trim(), v]).filter(([c]) => c)) }
-  const ok = !!f && added.every(([c]) => c.trim()) && Object.values(map).some(Boolean)
+  const edit = (n: number, to: Partial<MapLine>) => { setTouched(true); setLines(lines.map((x, i) => (i === n ? { ...x, ...to } : x))) }
+  const named = lines.filter((l) => l.col.trim())
+  const ok = !!f && lines.length > 0 && named.length === lines.length && new Set(named.map((l) => l.col.trim())).size === named.length && lines.some((l) => l.from)
   const save = async (b: { file: string | null; map?: Record<string, string> }) => { setBusy(true); try { await onSave(b) } finally { setBusy(false) } }
-  const choices = <><option value="">(left empty)</option>{(f?.columns ?? []).map((c) => <option key={c} value={c}>{c}</option>)}</>
-  const set = (c: string, v: string) => { setTouched(true); setFrom((m) => { const { [c]: _was, ...rest } = m; return v === KEEP ? rest : { ...rest, [c]: v } }) }
-  const editAdded = (m: [string, string][]) => { setTouched(true); setAdded(m) }
+  const free = (mine: string) => columns.filter((c) => c === mine || !lines.some((l) => !l.fresh && l.col === c))
   return (
     <div className="mock-edit" data-component="MapFromFile">
       <p className="faint" style={{ margin: 0, fontSize: 13 }}>This data is the template. Each row of the file is a person, and each gets the template's rows with the columns below set from them, so the mock answers for whoever the tester brings in.{f?.has.real ? ' A place set to the real version is answered for the real person; a reviewer always for the fake.' : ''}</p>
-      <label>File<select value={file} onChange={(e) => { setFile(e.target.value); if (!touched) setFrom(guess(files?.find((x) => x.name === e.target.value))) }}>{(files ?? []).map((x) => <option key={x.id} value={x.name}>{x.name}</option>)}</select></label>
+      <label>File<select value={file} onChange={(e) => { setFile(e.target.value); if (!touched) setLines(guess(files?.find((x) => x.name === e.target.value))) }}>{(files ?? []).map((x) => <option key={x.id} value={x.name}>{x.name}</option>)}</select></label>
       <div>
-        <div className="task-calls-sub">The response's columns, and what each is set from</div>
-        <p className="faint" style={{ margin: '0 0 6px', fontSize: 13 }}>Set the ones that say who a row is about, and the one the app matches an answer to a person by. The rest stay as faked.</p>
+        <div className="task-calls-sub">Columns set from the file</div>
+        <p className="faint" style={{ margin: '0 0 6px', fontSize: 13 }}>Only these are changed; every other column of the response stays as faked. Include the one the app matches an answer to a person by.</p>
         <div className="map-cols">
-          {columns.map((c) => (
-            <div className="map-col" key={c} data-set={c in from ? 'yes' : undefined}>
-              <code title={c}>{c}</code>
-              <select aria-label={`What ${c} is set from`} value={c in from ? from[c] : KEEP} onChange={(e) => set(c, e.target.value)}><option value={KEEP}>as faked</option>{choices}</select>
-            </div>
-          ))}
-          {added.map(([c, v], n) => (
-            <div className="map-col" key={`new-${n}`} data-set="yes">
-              <input aria-label={`New column ${n + 1}`} placeholder="a new column" value={c} onChange={(e) => editAdded(added.map((x, i) => (i === n ? [e.target.value, x[1]] : x)))} />
+          {lines.map((l, n) => (
+            <div className="map-col" key={n}>
+              <span className="map-col-name">
+                <select aria-label={`Response column ${n + 1}`} value={l.fresh ? '\u0000new' : l.col} onChange={(e) => edit(n, e.target.value === '\u0000new' ? { fresh: true, col: '' } : { fresh: false, col: e.target.value })}>
+                  {!l.fresh && !l.col && <option value="">a column of the response…</option>}
+                  {free(l.fresh ? '' : l.col).map((c) => <option key={c} value={c}>{c}</option>)}
+                  <option value={'\u0000new'}>＋ a new column…</option>
+                </select>
+                {l.fresh && <input autoFocus aria-label={`Name of new column ${n + 1}`} placeholder="its name, as the app reads it" value={l.col} onChange={(e) => edit(n, { col: e.target.value })} />}
+              </span>
               <span className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
-                <select aria-label={`What new column ${n + 1} is set from`} value={v} onChange={(e) => editAdded(added.map((x, i) => (i === n ? [x[0], e.target.value] : x)))}>{choices}</select>
-                <button className="btn quiet small" aria-label={`Remove new column ${n + 1}`} onClick={() => editAdded(added.filter((_, i) => i !== n))}>×</button>
+                <select aria-label={`File column ${n + 1}`} value={l.from} onChange={(e) => edit(n, { from: e.target.value })}><option value="">(left empty)</option>{(f?.columns ?? []).map((c) => <option key={c} value={c}>{c}</option>)}</select>
+                <button className="btn quiet small" aria-label={`Remove column ${n + 1}`} onClick={() => { setTouched(true); setLines(lines.filter((_, i) => i !== n)) }}>×</button>
               </span>
             </div>
           ))}
         </div>
-        <button className="btn quiet small" style={{ marginTop: 6 }} title="One the app reads and this response does not have" onClick={() => editAdded([...added, ['', f?.columns?.[0] ?? '']])}>Add a column the response lacks</button>
+        <button className="btn quiet small" style={{ marginTop: 6 }} onClick={() => { setTouched(true); setLines([...lines, { col: '', fresh: false, from: f?.columns?.[0] ?? '' }]) }}>Add a column</button>
       </div>
       <div className="row">
-        <button className="btn small" aria-label={`Save the mapping of ${call}`} disabled={!ok || busy} onClick={() => void save({ file, map })}>{busy ? 'Saving…' : 'Save the mapping'}</button>
+        <button className="btn small" aria-label={`Save the mapping of ${call}`} disabled={!ok || busy} onClick={() => void save({ file, map: Object.fromEntries(lines.map((l) => [l.col.trim(), l.from])) })}>{busy ? 'Saving…' : 'Save the mapping'}</button>
         {was && <button className="btn quiet small" disabled={busy} onClick={() => void save({ file: null })}>Stop mapping</button>}
         <button className="btn quiet small" onClick={onCancel}>Cancel</button>
       </div>
