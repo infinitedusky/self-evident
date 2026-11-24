@@ -95,4 +95,11 @@ describe('what the data agent is told', () => {
     expect(p).toContain('you proposed step 1 and are waiting for the person')
     expect(p).toContain('never enters a message')
   })
+  it('knows an endpoint has a response per fixture, and that setting who one answers for makes no response', () => {
+    const p = dataPrompt({ id: 'iss_1', title: 'A scan (sample)' }, 'ABC-9', round())
+    expect(p).toContain('a default response and may have a different one for any fixture')
+    expect(p).toContain('say which fixtures this task will be tried from')
+    expect(p).toContain('a response for one fixture (the same ops with response: the fixture\'s name')
+    expect(p).toContain('an override of who, not a way to make a response')
+  })
 })

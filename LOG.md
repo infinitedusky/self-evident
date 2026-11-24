@@ -7492,3 +7492,19 @@ the build. Every agent is told an open one is not decided and not to guess its a
 Looked at for real on a scratch database (made, then dropped): an open decision and a made one added through the
 routes, the task's Context page opened in a browser. Not done: no agent has been run against an open decision, so
 whether it holds back from guessing is untested.
+
+## The agents know of a response per fixture (2026-11-24)
+
+Sandy asked whether the data agent had the new model as context. It did not: the `service` tool could give, map and
+remove only an endpoint's default, and the data agent's step 3 still taught "an endpoint's data filled out for a
+fixture's people" as the way to handle a fixture, which is the mapping-as-the-answer Sandy had just ruled out.
+
+- **`service` takes `response`** (a fixture's name; left out, the default) on `endpoint_data`, `endpoint_fixture`
+  and `endpoint_data_remove`, and says what a response is. A name that is no fixture of the app's is refused.
+- **The data agent's step 2** now starts from which fixtures the task is tried from, and whether the default serves
+  them all or one needs a response of its own because its content must differ. **Step 3** builds those, and says
+  that setting who a response answers for is an override, never a way to make one.
+- The task's own agent's note says the same in a line.
+
+Not done: an agent still cannot give a real response (a person does, on the endpoint), so a fixture's response made
+from a real one starts with the person; no live round of the data agent has used any of this.
