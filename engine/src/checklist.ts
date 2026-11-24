@@ -14,7 +14,7 @@ import { acceptanceOf, type Criterion } from './acceptance.js'
 import { getIssue } from './issues.js'
 import { inForce, type Covered } from './requirements.js'
 import { buildOf, styleOf, type Build } from './steps.js'
-import { CHECK_TITLE, FINISH_TITLE, MAX_ROUNDS, OLD_PROBE_TITLE } from './verify.js'
+import { CHECK_TITLE, FINISH_TITLE, isRound, MAX_ROUNDS, OLD_PROBE_TITLE, RECHECK_TITLE } from './verify.js'
 import { PROBE_FIX_TITLE, PROBE_PREFIX } from './probes.js'
 import { smokeChecks } from './smoke.js'
 import { workflowFor } from './work.js'
@@ -39,7 +39,12 @@ export interface FlowNode {
   /** What it follows. Null: a sub-task of the build, which keeps the dependencies its plan gave it. */
   after: string[] | null
 }
-export interface Checklist { /** The whole test run as it last was; absent when the app has no test command. */ tests?: { ok: boolean | null; at: string | null; flaky: boolean; output?: string; running: boolean; canRun: boolean }; build: Build; stages: Stage[]; items: Item[]; met: number; unmet: number; total: number; flow: FlowNode[] }
+/**
+ * The check, for the press that asks for it again (runner.checkAgain): how many items are not checked yet, whether it
+ * can be asked for now and why not, and whether one asked for is under way.
+ */
+export interface CheckAgain { unchecked: number; canRun: boolean; running: boolean; why?: string }
+export interface Checklist { /** The check of what is not checked yet, asked for again. */ check: CheckAgain; /** Left to the person: theirs to show, in the smoke test. */ person: number; /** Not checked yet: no mark, and not left to anyone. Never a failure. */ unchecked: number; /** The whole test run as it last was; absent when the app has no test command. */ tests?: { ok: boolean | null; at: string | null; flaky: boolean; output?: string; running: boolean; canRun: boolean }; build: Build; stages: Stage[]; items: Item[]; met: number; unmet: number; total: number; flow: FlowNode[] }
 
 const FIX = 'Fix what the whole test run found'
 const kindOf = (title: string) => (title.startsWith(CHECK_TITLE) ? 'check' : title.startsWith(FINISH_TITLE) ? 'finish' : [OLD_PROBE_TITLE, PROBE_PREFIX, PROBE_FIX_TITLE].some((t) => title.startsWith(t)) ? 'probe' : title.startsWith(FIX) ? 'fix' : 'build')
@@ -53,17 +58,21 @@ function of(subs: { status: string }[]): StageState {
   return subs.some((s) => WORKING.includes(s.status) || s.status === 'done') ? 'doing' : 'todo'
 }
 
-export function stagesOf(i: { subs: { title: string; status: string }[]; build: Build; unmet: number; total: number; met: number; hasTests: boolean; /** The whole test run, last: true passed, false failed, null not run. */ tested: boolean | null; /** The run is going now. */ testing?: boolean; /** The checks left to a person (smoke.ts): how many wait, how many they failed, of how many. */ byHand?: { todo: number; failed: number; total: number } }): Stage[] {
+export function stagesOf(i: { subs: { title: string; status: string }[]; build: Build; unmet: number; total: number; met: number; /** Items with no mark that nobody was handed: added or changed since the check, or left out of its answer. They keep the check open. */ unchecked?: number; hasTests: boolean; /** The whole test run, last: true passed, false failed, null not run. */ tested: boolean | null; /** The run is going now. */ testing?: boolean; /** The checks left to a person (smoke.ts): how many wait, how many they failed, of how many. */ byHand?: { todo: number; failed: number; total: number } }): Stage[] {
   const by = (k: string) => i.subs.filter((s) => kindOf(s.title) === k)
   const builders = by('build'), checks = by('check'), finishes = by('finish'), probes = by('probe'), fixes = by('fix')
   const built = of(builders)
   const loop = of([...checks, ...finishes])
-  const rounds = checks.length
+  const rounds = checks.filter((s) => isRound(s.title)).length
   const stuck = loop === 'done' && i.unmet > 0 && finishes.length >= MAX_ROUNDS
+  // Checked, and something on the list has no mark: the step is open again until it has one (Sandy, 2026-11-23).
+  const open = loop === 'done' && rounds > 0 ? i.unchecked ?? 0 : 0
+  const rechecking = checks.some((s) => s.title.startsWith(RECHECK_TITLE) && s.status !== 'done' && s.status !== 'failed')
+  const notYet = open ? `${open} not checked yet` : ''
   const stages: Stage[] = [
     { key: 'build', label: 'Build', state: built, detail: built === 'todo' ? 'not built yet' : i.build === 'one' ? (built === 'done' ? 'built in one go' : built === 'failed' ? 'the build failed' : 'building, in one go') : `${builders.filter((s) => s.status === 'done').length} of ${builders.length} sub-tasks` },
-    { key: 'check', label: 'Check', state: stuck ? 'failed' : loop === 'done' && i.unmet > 0 ? 'doing' : loop,
-      detail: !rounds ? (i.total ? `${i.total} to check` : 'nothing on the list') : stuck ? `${i.unmet} still not done after ${MAX_ROUNDS} rounds: yours` : loop === 'done' && !i.unmet ? `${i.met} of ${i.total} met${rounds > 1 ? `, in ${rounds} rounds` : ''}` : `round ${rounds}${i.unmet ? `: ${i.unmet} not done, sent back` : ''}` },
+    { key: 'check', label: 'Check', state: stuck ? 'failed' : loop === 'done' && (i.unmet > 0 || open) ? 'doing' : loop,
+      detail: !rounds ? (rechecking ? 'checking what is not checked yet' : i.total ? `${i.total} to check` : 'nothing on the list') : stuck ? `${i.unmet} still not done after ${MAX_ROUNDS} rounds: yours${notYet ? `; ${notYet}` : ''}` : rechecking ? 'checking what is not checked yet' : loop === 'done' && !i.unmet && open ? `open again: ${notYet}` : loop === 'done' && !i.unmet ? `${i.met} of ${i.total} met${rounds > 1 ? `, in ${rounds} rounds` : ''}` : `round ${rounds}${i.unmet ? `: ${i.unmet} not done, sent back` : ''}${notYet ? `; ${notYet}` : ''}` },
     { key: 'probe', label: 'Probe', state: of(probes), detail: of(probes) === 'done' ? `probed${probes.some((s) => s.title.startsWith(PROBE_FIX_TITLE)) ? ', and what the probes found was fixed' : ': nothing to send back'}` : of(probes) === 'failed' ? 'a probe could not be run' : of(probes) === 'doing' ? (probes.some((s) => s.title.startsWith(PROBE_FIX_TITLE) && s.status !== 'done') ? 'fixing what the probes found' : 'agents that did not build it are trying it') : 'after the check' },
   ]
   if (i.hasTests) {
@@ -74,7 +83,7 @@ export function stagesOf(i: { subs: { title: string; status: string }[]; build: 
   const h = i.byHand
   // Always a stage, so it does not vanish when the check verifies everything itself (Sandy, 2026-11-17: "I might want
   // to look anyway … let it stay"): with nothing left to the person it is done, and still theirs to open and try.
-  if (h && !h.total) stages.push({ key: 'smoke', label: 'Smoke test', state: loop === 'done' && !i.unmet && rounds > 0 ? 'done' : 'todo', detail: loop === 'done' && !i.unmet && rounds > 0 ? 'nothing left to you; look anyway' : 'yours, after the check' })
+  if (h && !h.total) stages.push({ key: 'smoke', label: 'Smoke test', state: loop === 'done' && !i.unmet && !open && rounds > 0 ? 'done' : 'todo', detail: loop === 'done' && !i.unmet && !open && rounds > 0 ? 'nothing left to you; look anyway' : 'yours, after the check' })
   if (h?.total) {
     const ready = of(i.subs) === 'done' // nothing is building: it is the person's turn
     stages.push({ key: 'smoke', label: 'Smoke test', state: h.failed ? 'failed' : !h.todo ? 'done' : ready ? 'doing' : 'todo',
@@ -115,6 +124,15 @@ export function flowOf(i: { subs: { id: string; title: string; status: string; s
   return out
 }
 
+/** Why the check cannot be asked for again now; null when it can. Pure, and the runner's own answer (checkAgain). */
+export function whyNotCheck(i: { unchecked: number; /** Its sub-tasks, not the canceled ones. */ subs: number; /** One of them has not landed: still to build, building, or failed. */ going: boolean; /** The whole test run is under way. */ testing?: boolean }): string | null {
+  if (!i.subs) return 'nothing is built yet: the check comes after the build, by itself'
+  if (i.going) return 'a sub-task has not landed yet: the check is of what is built'
+  if (i.testing) return 'the whole test run is under way: wait for it'
+  if (!i.unchecked) return 'everything on the list is checked, or left to you: there is nothing not checked yet'
+  return null
+}
+
 const criterionItem = (c: Criterion): Item => ({
   id: c.id, kind: 'criterion', text: c.text,
   mark: c.built === true ? 'met' : c.built === false ? 'unmet' : c.builtEvidence ? 'person' : 'unchecked',
@@ -135,7 +153,7 @@ export async function checklistOf(issueId: string): Promise<Checklist | null> {
     ...acceptanceOf(t).map(criterionItem),
     ...required.map((r): Item => {
       const c = held.find((x) => x.key === r.key)
-      return { id: `req_${r.key}`, kind: 'requirement', text: r.name, what: r.what, mark: c?.built === false ? 'unmet' : c?.built === true ? (c.applies ? 'met' : 'na') : 'unchecked', evidence: c?.how || undefined }
+      return { id: `req_${r.key}`, kind: 'requirement', text: r.name, what: r.what, mark: c?.built === false ? 'unmet' : c?.built === true ? (c.applies ? 'met' : 'na') : c?.left ? 'person' : 'unchecked', evidence: c?.how || undefined }
     }),
   ]
   const subs = await db.select({ id: issue.id, title: issue.title, state: issue.state, sortOrder: issue.sortOrder }).from(issue).where(eq(issue.parentId, t.id))
@@ -149,11 +167,16 @@ export async function checklistOf(issueId: string): Promise<Checklist | null> {
   const met = items.filter((x) => x.mark === 'met' || x.mark === 'na').length, reports = new Set(required.filter((r) => r.blocks === false).map((r) => `req_${r.key}`)), unmet = items.filter((x) => x.mark === 'unmet' && !reports.has(x.id)).length // one set to report only holds nothing
   const b = buildOf(w)
   const statusOf = (id: string) => builds.find((x) => x.issueId === id)?.status ?? 'queued'
-  const stages = stagesOf({ subs: live.map((s) => ({ title: s.title, status: builds.find((x) => x.issueId === s.id)?.status ?? 'queued' })), build: b, unmet, met, total: items.length, hasTests, testing, tested: last ? (last.payload as { ok?: boolean }).ok === true : null,
+  const notChecked = items.filter((x) => x.mark === 'unchecked').length, person = items.filter((x) => x.mark === 'person').length
+  const stages = stagesOf({ subs: live.map((s) => ({ title: s.title, status: builds.find((x) => x.issueId === s.id)?.status ?? 'queued' })), build: b, unmet, met, unchecked: notChecked, total: items.length, hasTests, testing, tested: last ? (last.payload as { ok?: boolean }).ok === true : null,
       byHand: (() => { const h = smokeChecks(acceptanceOf(t)); return { todo: h.filter((x) => x.mark === 'todo').length, failed: h.filter((x) => x.mark === 'fail').length, total: h.length } })() })
   const ran = last?.payload as { ok?: boolean; flaky?: boolean; tail?: string } | undefined
   /** The whole test run as it last was, and whether it can be asked for again: every sub-task in, none going. The runner says no to the rest (a check or a probe still to come). */
   const tests = hasTests ? { ok: ran ? ran.ok === true : null, at: last?.ts ? new Date(last.ts).toISOString() : null, flaky: ran?.flaky === true, output: ran && ran.ok !== true ? (ran.tail ?? '').slice(-8000) : undefined, running: testing,
     canRun: !testing && live.length > 0 && live.every((s) => statusOf(s.id) === 'done') } : undefined
-  return { tests, build: b, items, met, unmet, total: items.length, stages, flow: flowOf({ subs: live.map((x) => ({ id: x.id, title: x.title, status: statusOf(x.id), sortOrder: x.sortOrder })), stages, build: b }) }
+  // The check again, of what is not checked yet: once everything it has is built and nothing is going.
+  const going = live.some((s) => statusOf(s.id) !== 'done')
+  const check: CheckAgain = { unchecked: notChecked, running: live.some((s) => s.title.startsWith(RECHECK_TITLE) && !['done', 'failed', 'cancelled'].includes(statusOf(s.id))),
+    ...(() => { const why = whyNotCheck({ unchecked: notChecked, subs: live.length, going, testing }); return why ? { canRun: false, why } : { canRun: true } })() }
+  return { check, person, unchecked: notChecked, tests, build: b, items, met, unmet, total: items.length, stages, flow: flowOf({ subs: live.map((x) => ({ id: x.id, title: x.title, status: statusOf(x.id), sortOrder: x.sortOrder })), stages, build: b }) }
 }

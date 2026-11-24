@@ -32,10 +32,24 @@ export const ReadyToSubmit: Story = {
     await expect(args.onChanged).toHaveBeenCalled()
   },
 }
-/** Acceptance criteria nobody has checked against the build: said before it is submitted. */
+/** Criteria added or changed since the build was checked (made up): said as not checked yet, never as not met, with where to run the check. */
 export const CriteriaNotChecked: Story = {
-  args: { unchecked: 3 },
-  play: async ({ canvasElement }) => { await expect(within(canvasElement).getByText(/3 acceptance criteria are not marked as met by the build/)).toBeInTheDocument() },
+  args: { unchecked: 3, checkAt: '/tasks/iss_sample20/checklist' },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.getByText(/3 acceptance criteria are not checked yet/)).toBeInTheDocument()
+    await expect(c.queryByText(/not met by the build/)).toBeNull()
+    await expect(c.getByRole('link', { name: 'Run the check' })).toHaveAttribute('href', '/tasks/iss_sample20/checklist')
+  },
+}
+/** Criteria the build does not meet, and one not checked yet (made up): two lines, two counts. */
+export const CriteriaNotMet: Story = {
+  args: { failed: 2, unchecked: 1 },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.getByText(/2 acceptance criteria are not met by the build/)).toBeInTheDocument()
+    await expect(c.getByText(/1 acceptance criterion is not checked yet/)).toBeInTheDocument()
+  },
 }
 /** Submitted: where it is, and that later landings update it. */
 export const Submitted: Story = {

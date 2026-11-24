@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Criterion } from './acceptance.js'
 import { DEFAULT_REQUIREMENTS } from './requirements.js'
-import { afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, LEAVE_LONG_RUNS, numbered, readVerdicts, reqId, requirementsChecked, unmetOf } from './verify.js'
+import { afterBuild, afterDescription, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, fromDescription, isRound, MAX_ROUNDS, LEAVE_LONG_RUNS, numbered, readVerdicts, RECHECK_TITLE, reqId, requirementsChecked, uncheckedReq, unmetOf } from './verify.js'
 import { ONE_GO_TITLE, oneGoBrief, oneGoProposal, validateProposal } from './planner.js'
 
 const at = '2026-11-16T00:00:00.000Z'
@@ -41,6 +41,49 @@ describe('what comes next once a task is built', () => {
     expect(on(['A', 'B'], 0, { loop: false })).toEqual({ do: 'check', round: 1 })
     expect(on(['A', 'B', C], 3, { loop: false, listed: false })).toEqual({ do: 'test' })
     expect(on(['A'], 0, { loop: false, listed: false, testCmd: false })).toEqual({ do: 'done' })
+  })
+})
+
+describe('the check asked for again, of what is not checked yet', () => {
+  const B = ONE_GO_TITLE, C = CHECK_TITLE, F = FINISH_TITLE, R = RECHECK_TITLE, P = 'Probe: Try to break it'
+  const on = (titles: string[], unmet = 0, more: Partial<Parameters<typeof afterBuild>[0]> = {}) => afterBuild({ titles, listed: true, unmet, commands: true, probe: 'done', last: titles[titles.length - 1], ...more })
+  it('is a check, and not one of the rounds', () => {
+    expect(R.startsWith(C)).toBe(true); expect(isRound(C)).toBe(true); expect(isRound(numbered(C, 2))).toBe(true); expect(isRound(R)).toBe(false); expect(isRound(numbered(R, 2))).toBe(false)
+  })
+  it('with nothing found not done, nothing else is run again: no code changed', () => {
+    expect(on([B, C, P, R])).toEqual({ do: 'done' })
+    expect(on([B, C, P, R], 0, { last: undefined })).toEqual({ do: 'test' }) // the whole run, asked for by a person, is still the whole run
+    expect(on(['A', C, R], 0, { loop: false })).toEqual({ do: 'done' }) // Legacy: checked, and nothing is sent back
+  })
+  it('what it found not done is sent back and looked at again, as a round is; the rounds are not miscounted', () => {
+    expect(on([B, C, P, R], 1)).toEqual({ do: 'finish', round: 1 })
+    expect(on([B, C, P, R, F], 1)).toEqual({ do: 'check', round: 2 })
+    expect(on([B, C, P, R, F, numbered(C, 2)], 0)).toEqual({ do: 'test' }) // the code changed: the whole run again
+    expect(on([B, R], 0)).toEqual({ do: 'check', round: 1 }) // asked for before the first check: the first check still comes
+  })
+  it('its brief names only what it is given, says they were added since, and carries the description for what is judged from it', () => {
+    const risks = { key: 'risks', name: 'Risks', what: 'The pull request says what this change could break.', on: true }
+    const b = checkTaskBrief([criteria[1]], [risks], { added: true, description: '## Risks\n\nThe orders query is shared (sample).' })
+    expect(b).toMatch(/^This task was built and checked\. The items below were added or changed after that check/); expect(b).toContain('[ac_2]'); expect(b).not.toContain('[ac_1]')
+    expect(b).toContain('[req_risks] Risks:'); expect(b).toContain('as it is written now'); expect(b).toContain('The orders query is shared (sample).')
+    expect(checkTaskBrief([], [risks], { added: true })).toContain('No description has been written for the pull request yet')
+    expect(checkTaskBrief([criteria[1]], [], { added: true, description: 'x' })).not.toContain('as it is written now') // nothing here is judged from it
+  })
+  it('a changed description takes the mark off the requirements judged from it, and off no other', () => {
+    const required = [...DEFAULT_REQUIREMENTS, { key: 'changelog', name: 'Changelog', what: 'The PR names the changelog entry.', on: true }]
+    expect(required.filter(fromDescription).map((r) => r.key)).toEqual(['test_plan', 'risks', 'changelog'])
+    const held = [{ key: 'tests', name: 'Tests', applies: true, how: 'export.test', built: true }, { key: 'test_plan', name: 'Test plan', applies: true, how: 'the description lists three pages', built: true }, { key: 'risks', name: 'Risks', applies: true, how: 'left to you', left: true }, { key: 'changelog', name: 'Changelog', applies: true, how: '' }]
+    const out = afterDescription(required, held)
+    expect(out.reopened).toEqual(['test_plan', 'risks'])
+    expect(out.held).toEqual([held[0], { key: 'test_plan', name: 'Test plan', applies: true, how: '' }, { key: 'risks', name: 'Risks', applies: true, how: '' }, held[3]])
+    expect(out.held.map(uncheckedReq)).toEqual([false, true, true, true]); expect(uncheckedReq(undefined)).toBe(true); expect(uncheckedReq(held[2])).toBe(false) // left to the person is handed, not unchecked
+  })
+  it('a requirement the check leaves to a person is handed to them: not a mark, and not "not checked yet"', () => {
+    const required = DEFAULT_REQUIREMENTS.filter((r) => r.key === 'test_plan')
+    const [c] = requirementsChecked(required, [{ key: 'test_plan', name: 'Test plan', applies: true, how: 'missing', built: false }], [{ id: 'req_test_plan', met: null, evidence: 'Read the Test plan section on the pull request' }])
+    expect(c).toEqual({ key: 'test_plan', name: 'Test plan', applies: true, how: 'Read the Test plan section on the pull request', left: true })
+    const [d] = requirementsChecked(required, [c], [{ id: 'req_test_plan', met: true, evidence: 'the description lists three pages' }])
+    expect(d).toEqual({ key: 'test_plan', name: 'Test plan', applies: true, how: 'the description lists three pages', built: true })
   })
 })
 

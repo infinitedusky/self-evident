@@ -45,6 +45,50 @@ export const NothingOnIt: Story = {
   play: async ({ canvasElement }) => { const c = within(canvasElement); await expect(c.getByText('nothing on it')).toBeInTheDocument(); await expect(c.getByRole('link', { name: 'the brief' })).toBeInTheDocument() },
 }
 
+// A criterion added after the build's check (made up): everything else met, one line with no mark yet.
+const openAgain: Checklist = { ...checklistSample, met: 7, unmet: 0, unchecked: 1, person: 0, total: 8, check: { unchecked: 1, canRun: true, running: false },
+  items: [...checklistSample.items.map((x) => (x.mark === 'unmet' || x.mark === 'person' ? { ...x, mark: 'met' as const, evidence: 'checkout-decline.test (sample)' } : x)), { id: 'ac_sample_added', kind: 'criterion' as const, text: 'A declined card can be tried again without reloading (sample)', mark: 'unchecked' as const, evidence: 'checkout-retry.test (sample)' }],
+  stages: [{ key: 'build', label: 'Build', state: 'done', detail: 'built in one go' }, { key: 'check', label: 'Check', state: 'doing', detail: 'open again: 1 not checked yet' }, { key: 'probe', label: 'Probe', state: 'done', detail: 'probed: nothing to send back' }, { key: 'test', label: 'Tests', state: 'done', detail: 'the whole run passed' }] }
+/**
+ * A criterion was added after the build's check (made up). It reads "not checked yet", never as not done: the count
+ * says so apart from what is met, the Check step is open again, and the check can be run for it alone.
+ */
+export const OpenAgain: Story = {
+  args: { checklist: openAgain, onCheckAgain: fn(async () => ({ started: true })) },
+  play: async ({ canvasElement, args }) => {
+    const c = within(canvasElement)
+    await expect(c.getByText('7 of 8 met, 1 not checked yet')).toBeInTheDocument()
+    await expect(c.getByRole('heading', { name: /Checklist/ })).not.toHaveTextContent('not done') // not checked yet is not a failure
+    await expect(c.getByText('open again: 1 not checked yet')).toBeInTheDocument()
+    const items = c.getAllByRole('listitem').filter((li) => li.className.includes('checklist-item'))
+    await expect(items[0].className).toContain('unchecked'); await expect(within(items[0]).getByLabelText('not checked yet')).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Run the check' }))
+    await expect(args.onCheckAgain).toHaveBeenCalledTimes(1)
+  },
+}
+/** The check asked for is under way (made up): it says so, and there is nothing to press until it lands. */
+export const CheckingAgain: Story = {
+  args: { checklist: { ...openAgain, check: { unchecked: 1, canRun: false, running: true, why: 'a sub-task has not landed yet: the check is of what is built' }, stages: openAgain.stages.map((s) => (s.key === 'check' ? { ...s, detail: 'checking what is not checked yet' } : s)) }, onCheckAgain: fn(async () => ({})) },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.getByText('checking what is not checked yet')).toBeInTheDocument()
+    await expect(c.queryByRole('button', { name: 'Run the check' })).toBeNull()
+  },
+}
+/** Something is not checked yet and the check cannot be run now (made up): the button is there, off, and says why. */
+export const CheckWaits: Story = {
+  args: { checklist: { ...openAgain, check: { unchecked: 1, canRun: false, running: false, why: 'the whole test run is under way: wait for it' } }, onCheckAgain: fn(async () => ({})) },
+  play: async ({ canvasElement }) => {
+    const b = within(canvasElement).getByRole('button', { name: 'Run the check' })
+    await expect(b).toBeDisabled(); await expect(b).toHaveAttribute('title', expect.stringContaining('test run is under way'))
+  },
+}
+/** All four marks at once (made up): met, not done, yours and not checked yet are each counted apart. */
+export const EveryMark: Story = {
+  args: { checklist: { ...checklistSample, unchecked: 1, person: 1, met: 3, unmet: 2, total: 7, check: { unchecked: 1, canRun: false, running: false, why: 'a sub-task has not landed yet: the check is of what is built' }, items: checklistSample.items.map((x, i) => (i === 0 ? { ...x, mark: 'unchecked' as const, evidence: 'checkout.test (sample)' } : x)) } },
+  play: async ({ canvasElement }) => { await expect(within(canvasElement).getByText('3 of 7 met, 2 not done, 1 yours to judge, 1 not checked yet')).toBeInTheDocument() },
+}
+
 const failedRun: Checklist = { ...checklistSample, met: 7, unmet: 0,
   tests: { ok: false, at: new Date(Date.now() - 5 * 3_600_000).toISOString(), flaky: false, running: false, canRun: true, output: 'What failed:\n FAIL  src/checkout.test.ts [ src/checkout.test.ts ]\n\nThe end of the output:\nError: Cannot find module \'./generated/config.json\' (sample)\n Test Files  12 failed (12)' },
   stages: [{ key: 'build', label: 'Build', state: 'done', detail: 'built in one go' }, { key: 'check', label: 'Check', state: 'done', detail: '7 of 7 met' }, { key: 'probe', label: 'Probe', state: 'done', detail: 'probed: nothing to send back' }, { key: 'test', label: 'Tests', state: 'failed', detail: 'the whole run failed' }] }

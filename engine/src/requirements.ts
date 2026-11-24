@@ -12,7 +12,7 @@
 import { heldOf, JUDGED } from './held.js'
 
 export interface Requirement { key: string; name: string; what: string; on: boolean; /** false: an unmet one is reported (the list, the pull request) and the build is not sent back for it. Absent: it blocks. */ blocks?: boolean }
-export interface Covered { key: string; name: string; applies: boolean; how: string; /** The check after the build (verify.ts): true, the build meets it; false, it does not. Absent: not checked. */ built?: boolean }
+export interface Covered { key: string; name: string; applies: boolean; how: string; /** The check after the build (verify.ts): true, the build meets it; false, it does not. Absent: not checked. */ built?: boolean; /** The check left it to the person: only they can show it (what the pull request says, before there is one). Not a mark. */ left?: boolean }
 
 /** What an app starts with (held.ts ships them). An app rewords or switches one; it does not copy the list. */
 export const DEFAULT_REQUIREMENTS: Requirement[] = JUDGED.map((d) => ({ key: d.key, name: d.name, what: d.runs, on: d.on }))
@@ -46,5 +46,5 @@ export const notYet = (how?: string | null) => /\b(not yet|no (pr|pull request) 
 export const reqMet = (c: Covered) => c.built === true && !notYet(c.how)
 
 export function coveredLines(list: Covered[]): string {
-  return list.map((c) => (c.built !== false && c.how && notYet(c.how) ? `- ⬜ **${c.name}**: not yet. ${c.how}` : c.built === false ? `- ❌ **${c.name}**: not done. ${c.how}`.trimEnd() : !c.how ? `- ⬜ **${c.name}**: ${c.built === undefined ? 'not checked yet.' : 'met.'}` : c.applies ? `- ✅ **${c.name}**: ${c.how}` : `- ➖ **${c.name}** does not apply: ${c.how.replace(/^does not apply:?\s*/i, '')}`)).join('\n')
+  return list.map((c) => (c.left && c.built === undefined ? `- 👀 **${c.name}**: left for a person. ${c.how}`.trimEnd() : c.built !== false && c.how && notYet(c.how) ? `- ⬜ **${c.name}**: not yet. ${c.how}` : c.built === false ? `- ❌ **${c.name}**: not done. ${c.how}`.trimEnd() : !c.how ? `- ⬜ **${c.name}**: ${c.built === undefined ? 'not checked yet.' : 'met.'}` : c.applies ? `- ✅ **${c.name}**: ${c.how}` : `- ➖ **${c.name}** does not apply: ${c.how.replace(/^does not apply:?\s*/i, '')}`)).join('\n')
 }

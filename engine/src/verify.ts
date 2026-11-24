@@ -21,6 +21,15 @@ import { notYet, type Covered, type Requirement } from './requirements.js'
 /** The sub-tasks' titles: how the engine knows them, and counts the rounds. */
 export const CHECK_TITLE = 'Check it against its acceptance criteria'
 export const FINISH_TITLE = 'Finish what the check found'
+/**
+ * The check again, of only what is not checked yet (Sandy, 2026-11-23: a criterion added after the build's check "sat
+ * unmarked and looked like a failure; the Check step stayed done"). Asked for by a person's press or the task's agent
+ * (runner.checkAgain). It starts with CHECK_TITLE, so it is run, read and drawn as a check; it is not one of the
+ * rounds, which count what was sent back.
+ */
+export const RECHECK_TITLE = `${CHECK_TITLE}: what is not checked yet`
+/** A check that is one of the rounds: not one asked for of what was added since. */
+export const isRound = (title: string) => title.startsWith(CHECK_TITLE) && !title.startsWith(RECHECK_TITLE)
 /** Until 2026-11-18 one agent tried to break it and cleaned up, in a sub-task of this title. A task that has one is not probed again by the engine's own probes. */
 export const OLD_PROBE_TITLE = 'Try to break it, and clean up'
 /** How many times what the check found is sent back to be done before a person is asked (Sandy: "3 is good"). */
@@ -50,8 +59,10 @@ export const LEAVE_LONG_RUNS = `${EYES_AND_CI} Leave long runs to the person. Af
 /** One line per item, each with the id its verdict is reported under. */
 const requirementItems = (reqs: Requirement[]) => reqs.map((r) => `- [${reqId(r.key)}] ${r.name}: ${r.what}`).join('\n')
 
-export const checkTaskBrief = (criteria: Criterion[], requirements: Requirement[] = [], again?: { round: number }, /** The app's smoke test set-ups, when it has more than one: what a person can have brought up to check by hand. */ setups: { key: string; name: string; what?: string }[] = [], /** What this app's settings leave to its CI on the pull request, and to its nightly run (probe-list.ts, `leftTo`). */ left: { pr?: { name: string; runs: string }[]; nightly?: { name: string; runs: string }[] } = {}) => [
-  again
+export const checkTaskBrief = (criteria: Criterion[], requirements: Requirement[] = [], again?: { round: number } | { /** Only what is not checked yet: added or changed since the build's check. */ added: true; /** The pull request's description as written so far, for an item judged from it. */ description?: string | null }, /** The app's smoke test set-ups, when it has more than one: what a person can have brought up to check by hand. */ setups: { key: string; name: string; what?: string }[] = [], /** What this app's settings leave to its CI on the pull request, and to its nightly run (probe-list.ts, `leftTo`). */ left: { pr?: { name: string; runs: string }[]; nightly?: { name: string; runs: string }[] } = {}) => [
+  again && 'added' in again
+    ? 'This task was built and checked. The items below were added or changed after that check, so nothing has been said about them yet. Check each against what is built now, at the head of the branch, by the same rules as the first check.'
+    : again
     ? `Check ${again.round}: the last check found these not done, and they were sent back. Check each again against what is built now.`
     : 'Every other sub-task of this task is merged. Check what was built against the list below, so the person who approves the pull request does not have to.',
   '',
@@ -70,6 +81,7 @@ export const checkTaskBrief = (criteria: Criterion[], requirements: Requirement[
   '- Stop any server you start.',
   ...(criteria.length ? ['', 'The task\'s acceptance criteria:', acceptanceLines(criteria)] : []),
   ...(requirements.length ? ['', 'What this app requires of every change:', requirementItems(requirements)] : []),
+  ...(again && 'added' in again && requirements.some(fromDescription) ? ['', again.description?.trim() ? `The pull request's description, as it is written now (an item about what the pull request says is judged from this):\n\n${again.description.trim().slice(0, 12_000)}` : 'No description has been written for the pull request yet. An item about what the pull request says is met null, for the person, with "when" "pr".'] : []),
   '',
   'End your summary with this block and nothing after it: one entry for every item above, valid JSON.',
   '',
@@ -131,12 +143,34 @@ export function requirementsChecked(required: Requirement[], held: Covered[] | n
     if (!v) return base
     const na = v.met === true && /^does not apply\b/i.test(v.evidence)
     // Marked met, with evidence that says it is still to come, is not met: it stays unchecked, with what was said.
-    return { ...base, name: r.name, applies: !na, how: v.evidence || base.how, ...(v.met === null || (v.met === true && notYet(v.evidence)) ? {} : { built: v.met }) }
+    if (v.met === true && notYet(v.evidence)) return { ...base, name: r.name, applies: !na, how: v.evidence || base.how }
+    const { built: _b, left: _l, ...kept } = base // this check's word replaces the last one's
+    return { ...kept, name: r.name, applies: !na, how: v.evidence || base.how, ...(v.met === null ? { left: true } : { built: v.met }) }
   })
 }
 
 /** Whether a criterion still wants checking: no mark from the build, and no note leaving it to a person. */
 export const unchecked = (c: Criterion) => c.built === undefined && !c.builtEvidence
+/** The same for a requirement: no mark, and not left to the person. One the task holds nothing about is not checked yet. */
+export const uncheckedReq = (c: Covered | undefined) => !c || (c.built === undefined && !c.left)
+
+/**
+ * Whether a requirement is judged from what the pull request says (the engine's own Test plan and Risks, and an app's
+ * that speaks of the pull request). Changing the description takes the check's mark off these: it was a mark on other words.
+ */
+export const fromDescription = (r: { key: string; what?: string }) => r.key === 'test_plan' || r.key === 'risks' || /\b(pull request|PR)\b/.test(r.what ?? '')
+/** The task's requirements once its pull request's description has changed: the ones judged from it are not checked yet. The rest, and what nobody had checked, are as they were. */
+export function afterDescription(required: Requirement[], held: Covered[] | null | undefined): { held: Covered[]; reopened: string[] } {
+  const keys = new Set(required.filter(fromDescription).map((r) => r.key))
+  const reopened: string[] = []
+  const out = (held ?? []).map((c) => {
+    if (!keys.has(c.key) || (c.built === undefined && !c.left)) return c
+    reopened.push(c.key)
+    const { built: _b, left: _l, ...rest } = c
+    return { ...rest, how: '' }
+  })
+  return { held: out, reopened }
+}
 
 /** What a check left not done, for the finish: the criteria and the requirements the build did not meet. A requirement set to report only is not sent back. */
 export function unmetOf(criteria: Criterion[], requirements: Covered[] | null | undefined, required: Requirement[]): Unmet[] {
@@ -155,9 +189,10 @@ export type Next =
  * the canceled ones), whether there is a list to check, how much of it the last check left not done, and where the
  * agents' probes stand (probes.ts, nextProbe).
  */
-export function afterBuild(i: { titles: string[]; listed: boolean; unmet: number; /** Whether the engine has commands to run last (the test run, the app's own). */ commands: boolean; /** The agents' probes: one to run, what they found to send back, sent back three times already, or nothing more. */ probe?: 'run' | 'fix' | 'stuck' | 'done'; /** false: a Legacy task (planned into sub-tasks): one check of its criteria, as before, and no finish or probe. */ loop?: boolean }): Next {
-  const checks = i.titles.filter((t) => t.startsWith(CHECK_TITLE)).length
+export function afterBuild(i: { titles: string[]; listed: boolean; unmet: number; /** The sub-task that has just landed, when one has. After a check asked for of what was added, with nothing found not done, nothing else is run again: no code changed. */ last?: string; /** Whether the engine has commands to run last (the test run, the app's own). */ commands: boolean; /** The agents' probes: one to run, what they found to send back, sent back three times already, or nothing more. */ probe?: 'run' | 'fix' | 'stuck' | 'done'; /** false: a Legacy task (planned into sub-tasks): one check of its criteria, as before, and no finish or probe. */ loop?: boolean }): Next {
+  const checks = i.titles.filter(isRound).length
   const finishes = i.titles.filter((t) => t.startsWith(FINISH_TITLE)).length
+  if (i.last?.startsWith(RECHECK_TITLE) && (i.loop === false || (i.unmet === 0 && checks > 0))) return { do: 'done' }
   if (i.loop === false) return i.listed && checks === 0 ? { do: 'check', round: 1 } : i.commands ? { do: 'test' } : { do: 'done' }
   if (i.listed) {
     if (checks === 0) return { do: 'check', round: 1 }

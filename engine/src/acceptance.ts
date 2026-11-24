@@ -66,6 +66,13 @@ const MAX = 60
 const line = (s: unknown, n = 600) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
 export const acceptanceOf = (i: { acceptance?: unknown }) => (Array.isArray(i.acceptance) ? i.acceptance : []) as Criterion[]
 
+/**
+ * What the build's check, a person by hand or an agent's try said of a criterion is said of its statement and of how
+ * it is checked. When either changes, none of it stands: the criterion is not checked yet (Sandy, 2026-11-23). A mark
+ * given in the same change is applied after, and stays.
+ */
+function unmark(x: Criterion) { delete x.built; delete x.builtEvidence; delete x.builtWhere; delete x.builtWhen; delete x.builtSetup; delete x.byHand; delete x.tried }
+
 /** The change applied to a list: pure, so it can be tested without a database. Says whether what the person approves changed. */
 export function applyAcceptance(list: Criterion[], c: AcceptanceChange, by: string, now = new Date()): { list: Criterion[]; changed: boolean } {
   let out = list.map((x) => ({ ...x }))
@@ -77,8 +84,8 @@ export function applyAcceptance(list: Criterion[], c: AcceptanceChange, by: stri
   for (const u of c.update ?? []) {
     const x = out.find((y) => y.id === u.id)
     if (!x) throw new PlanError(`no acceptance criterion ${u.id}`)
-    if (u.text !== undefined) { const t = line(u.text); if (!t) throw new PlanError('a criterion needs its statement; remove it instead'); if (t !== x.text) { x.text = t; changed = true } }
-    if (u.check !== undefined) { const k = line(u.check) || undefined; if (k !== x.check) { x.check = k; changed = true } }
+    if (u.text !== undefined) { const t = line(u.text); if (!t) throw new PlanError('a criterion needs its statement; remove it instead'); if (t !== x.text) { x.text = t; changed = true; unmark(x) } }
+    if (u.check !== undefined) { const k = line(u.check) || undefined; if (k !== x.check) { x.check = k; changed = true; unmark(x) } }
     if (u.shown !== undefined) { if (u.shown === null) delete x.shown; else x.shown = u.shown }
     if (u.evidence !== undefined) { const e = line(u.evidence, 1000); if (e) x.evidence = e; else delete x.evidence }
     if (u.built !== undefined) { if (u.built === null) { delete x.built; delete x.builtEvidence } else x.built = u.built }
@@ -116,7 +123,12 @@ export async function setAcceptance(issueId: string, change: AcceptanceChange, a
     const [a] = await tx.select().from(app).where(eq(app.id, i.appId))
     await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: i.projectId, issueId, actor, type: 'issue.updated', payload: { number: i.number, changed: ['acceptance'], criteria: list.length } })
     if (reopened) await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: i.projectId, issueId, actor, type: 'brief.unapproved', payload: { title: i.title, why: 'its acceptance criteria changed' } })
-    return { acceptance: list, ...(reopened ? { note: 'The brief was approved; its acceptance criteria changed, so it asks for the person\'s approval again.' } : {}) }
+    // A task whose build has been checked, with a criterion now unmarked: the Check step is open again until it is run for it.
+    const was = acceptanceOf(i), open = list.filter((c) => c.built === undefined && !c.builtEvidence)
+    const checked = was.some((c) => c.built !== undefined || !!c.builtEvidence)
+    const recheck = checked && open.some((c) => { const b = was.find((x) => x.id === c.id); return !b || b.built !== undefined || !!b.builtEvidence })
+    if (recheck) await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: i.projectId, issueId, actor, type: 'task.check_reopened', payload: { why: 'a criterion was added or changed after the check', criteria: open.map((c) => c.id) } })
+    return { acceptance: list, ...(recheck ? { check: `The build was checked before this change, so ${open.length === 1 ? 'one criterion is' : `${open.length} criteria are`} not checked yet. That is not a failure and not a pass: run the check again for ${open.length === 1 ? 'it' : 'them'} (check_again, or "Run the check" on the task's Check step).` } : {}), ...(reopened ? { note: 'The brief was approved; its acceptance criteria changed, so it asks for the person\'s approval again.' } : {}) }
   })
 }
 

@@ -71,7 +71,7 @@ export function PrStep({ issueId, appId, base }: { issueId: string; appId: strin
       {!pr || pr.status === 'closed' ? (
         <>
           {v.byHand > 0 && <p className="submit-pr-warn">{v.byHand} check{v.byHand === 1 ? '' : 's'} of yours still wait{v.byHand === 1 ? 's' : ''} in <Link to={`${base}/smoke`}>the smoke test</Link>.</p>}
-          <SubmitPr issueId={issueId} pr={pr ? { number: pr.number, url: pr.url, status: pr.status } : null} landed={v.landed} total={v.total} unchecked={v.unchecked} draft={v.draft} auto={v.auto} onChanged={() => void load()} />
+          <SubmitPr issueId={issueId} pr={pr ? { number: pr.number, url: pr.url, status: pr.status } : null} landed={v.landed} total={v.total} unchecked={v.unchecked} failed={v.failed ?? 0} checkAt={`${base}/checklist`} draft={v.draft} auto={v.auto} onChanged={() => void load()} />
         </>
       ) : pr.status === 'draft' ? (
         <div className="pr-act">

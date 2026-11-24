@@ -18,11 +18,12 @@ import { branchOf, issueBranch, issueStart, landingBranch, modeOf, stackBase } f
 import { newId } from './ids.js'
 import { commentOnIssue, identifier, setState } from './issues.js'
 import { commandRun, CutOff, land, wholeRun, withLock } from './landing.js'
+import { whyNotCheck } from './checklist.js'
 import { agentProbes, builderHeld, commandFixBrief, commandProbes, leftTo, reviewerSkills, nextProbe, PROBE_FIX_TITLE, PROBE_PREFIX, probeBrief, probeFixBrief, probeOfTitle, probesOf, probeTitle, resultOf, TESTS_KEY, withResult, BUILT_IN, type ProbeResult } from './probes.js'
 import { skillOptions } from './skills.js'
 import { guideTasks, mergeGuide, mergeRecord } from './merge-guide.js'
 import { acceptanceOf, setAcceptance } from './acceptance.js'
-import { unchecked, afterBuild, CHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, numbered, OLD_PROBE_TITLE, readVerdicts, reqId, requirementsChecked, unmetOf, verdictChange } from './verify.js'
+import { unchecked, uncheckedReq, afterBuild, CHECK_TITLE, RECHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, numbered, OLD_PROBE_TITLE, readVerdicts, reqId, requirementsChecked, unmetOf, verdictChange } from './verify.js'
 import { inForce, type Covered } from './requirements.js'
 import { smokeOwed , smokeSetups } from './smoke.js'
 import { ONE_GO_TITLE } from './planner.js'
@@ -381,6 +382,40 @@ export class Runner {
     })
   }
 
+  /**
+   * The check again, of only what is not checked yet (Sandy, 2026-11-23: "Run the check again: a button on the Check
+   * step and a tool for the task's agent. It checks only what isn't checked yet, on the current head, with the same
+   * rules and evidence as the build's check, and either marks each item or hands it to the Smoke page"). A criterion
+   * added or changed since the check, a requirement whose mark the pull request's new description took off, or one
+   * the check's answer left out. One more sub-task that only looks, after everything the task has; its verdicts are
+   * read as any check's are. What it finds not done is sent back as the rounds are.
+   */
+  async checkAgain(taskId: string, actor = 'user'): Promise<{ started: true; checking: number; subTask: string }> {
+    return withLock(`check:${taskId}`, async () => {
+      const [t] = await db.select().from(issue).where(eq(issue.id, taskId))
+      if (!t) throw new PlanError(`no task ${taskId}`)
+      if (t.parentId || t.kind !== 'code') throw new PlanError('the check is of a whole task, not a sub-task')
+      if (!t.projectId) throw new PlanError('the check is of a task that has been built; this one has not')
+      const { p, a, base } = await this.context(t.projectId)
+      const setup = (a.setup ?? {}) as AppSetup
+      const subs = (await db.select({ id: issue.id, title: issue.title, state: issue.state, sortOrder: issue.sortOrder }).from(issue).where(eq(issue.parentId, taskId))).filter((s) => s.state !== 'canceled' && s.state !== 'duplicate').sort((x, y) => x.sortOrder - y.sortOrder)
+      const builds = subs.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, subs.map((s) => s.id))) : []
+      const list = await this.listOf(taskId)
+      const criteria = list.criteria.filter(unchecked)
+      const required = list.required.filter((r) => uncheckedReq(list.held?.find((c) => c.key === r.key)))
+      const why = whyNotCheck({ unchecked: criteria.length + required.length, subs: subs.length, going: subs.some((s) => builds.find((b) => b.issueId === s.id)?.status !== 'done'), testing: !!this.testing.get(p.id) })
+      if (why) throw new PlanError(why)
+      if (['closed', 'stopped', 'superseded'].includes(p.status)) throw new PlanError(`its project is ${p.status}: nothing more is run on it`)
+      const n = subs.filter((s) => s.title.startsWith(RECHECK_TITLE)).length + 1
+      const row = await addSubTask(taskId, { title: numbered(RECHECK_TITLE, n), brief: checkTaskBrief(criteria, required, { added: true, description: t.prBody }, smokeSetups(setup), { pr: leftTo(setup, 'pr'), nightly: leftTo(setup, 'nightly') }), after: subs.slice(-1).map((s) => s.id) }, 'engine')
+      // A project whose work had all landed has work again: it runs until this lands, and is landed again by the same pass that landed it before.
+      if (p.status === 'landed') await db.update(project).set({ status: 'running', updatedAt: new Date() }).where(eq(project.id, p.id))
+      await this.emit({ ...base, issueId: taskId, actor, type: 'task.check_again', payload: { criteria: criteria.map((c) => c.id), requirements: required.map((r) => r.key) } })
+      void this.dispatch()
+      return { started: true as const, checking: criteria.length + required.length, subTask: row.id }
+    })
+  }
+
   /** What a task is checked against: its acceptance criteria, and the app's requirements in force for its project. */
   private async listOf(taskId: string) {
     const [task] = await db.select().from(issue).where(eq(issue.id, taskId))
@@ -435,7 +470,7 @@ export class Runner {
       const probeFixes = subs.filter((s) => s.title.startsWith(PROBE_FIX_TITLE)).length
       const probing = nextProbe(agents, list.probed, probeFixes)
       const commands = list.loop ? commandProbes(setup) : setup.test_cmd ? commandProbes({ test_cmd: setup.test_cmd }) : []
-      const next = afterBuild({ titles: subs.map((s) => s.title), listed: list.loop ? list.criteria.length + list.required.length > 0 : list.criteria.some(unchecked), unmet: unmet.length, commands: commands.length > 0, probe: probing.do, loop: list.loop })
+      const next = afterBuild({ ...(again ? {} : { last: subs[subs.length - 1]?.title }), titles: subs.map((s) => s.title), listed: list.loop ? list.criteria.length + list.required.length > 0 : list.criteria.some(unchecked), unmet: unmet.length, commands: commands.length > 0, probe: probing.do, loop: list.loop })
       // What is added now follows what there is: the first check, every sub-task of the build; anything later, the last one.
       const first = !subs.some((s) => [CHECK_TITLE, FINISH_TITLE, OLD_PROBE_TITLE, PROBE_PREFIX, PROBE_FIX_TITLE, FIX_TITLE].some((t) => s.title.startsWith(t)))
       const after = first ? subs.map((s) => s.id) : subs.slice(-1).map((s) => s.id)

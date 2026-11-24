@@ -6973,3 +6973,55 @@ Not done: the review copy is not checked a second time against the real response
 the check made when each fake was made); the gate (step 7) does not ask for it yet; nothing remakes it when
 someone other than the engine pushes to the pull request's branch, until the next update from here.
 
+
+## Proven work: from test plan to production (Sandy, 2026-11-23, from Cloaked's CEB-90)
+
+"In an age of AI, the signals reviewers used to trust mean nothing: every PR arrives with hundreds of tests and a
+green CI, and many of those tests check nothing." CEB-90 showed five gaps: 186 new tests and nothing proving any had
+been red; a criterion added after the build's check that sat unmarked and looked like a failure; a deploy item on the
+Smoke page beside the person's own checks; a description written by hand three times with no way to see the evidence
+before it was public; and the worst failure the change can have visible only in telemetry, which nothing here reads
+after a merge.
+
+The whole of it is one document, kept as Sandy gave it: [docs/proven-work.md](docs/proven-work.md). It replaces the
+separate requests of the same day about the gate, smoke tests, mutation testing and evidence. The flow, in order:
+prototype → **test plan** (approved) → **test phase** (every test writable now, run red) → **build sub-tasks** (each
+writes its deferred tests red, then its code green) → **Check** → **smoke test** (before merge only) → **pull request
+finalizing** (the trajectory, mutation testing, the review environment, the gate, the evidence drafted; results wait
+for the person) → push and mark ready → review, merge → **release checks** at deploy → **watch** (telemetry against
+the task's promises; Done after a quiet window).
+
+Built in five parts, each a pull request of its own: 1 the Check step tells the truth; 2 smoke, release, watch;
+3 test-first builds; 4 the Pull request step finalizes (waits for the review tool, which it calls and whose page it
+changes); 5 Watch (needs 2). The Test plan step goes after the Data step, both after the prototype.
+
+### 1. The Check step tells the truth (2026-11-23)
+
+A criterion's build mark was already three-valued in the data (met, not met, none) and the pages folded "none" into
+whatever was nearest: the pull request step counted every criterion "not marked as met", the merge guide said one
+nobody had looked at was "left for you", and a Check stage whose rounds had ended stayed done whatever was added.
+
+- **Met, not met, not checked yet**, and a fourth that is nobody's failure, **left to the person**. Counted apart
+  on the checklist ("7 of 8 met, 1 not checked yet"), on the pull request step (two lines: not met; not checked yet,
+  with where to run the check) and in the merge guide ("1 is left for you. 1 is not checked yet."; 👀 for the
+  person's, ⬜ "Not checked yet" for the other).
+- **The Check stage is done only when nothing on the list is without a mark**: every criterion and requirement met,
+  not met with evidence (and sent back), or left to the person. Otherwise it reads "open again: N not checked yet",
+  and a smoke test with nothing left to the person is not called done either.
+- **What reopens it.** A criterion added after the check has no mark, so it is not checked yet. Changing a
+  criterion's statement or how it is checked takes its marks off (the build's, the person's by hand, an agent's
+  try): they were said of other words (`unmark`, acceptance.ts). Changing the pull request's description takes the
+  mark off the requirements judged from it: Test plan, Risks, and any of the app's own whose sentence speaks of the
+  pull request (`fromDescription`, `afterDescription`, verify.ts). `set_acceptance` says so in its answer.
+- **Run the check** (`runner.checkAgain`; `POST /issues/:id/check`; the button on the Check stage; `check_again` for
+  the task's agent). One more sub-task that only looks, given only what is not checked yet and, where a requirement
+  is judged from it, the description as written. Its verdicts are read as any check's. It is not one of the rounds
+  (`isRound`): what it finds not done is sent back as a round is; with nothing found, nothing else is run again,
+  since no code changed. A project that had landed runs again until it lands.
+- **A requirement the check leaves to a person** is kept as left (`Covered.left`), shown as theirs, and does not
+  hold the Check stage open. Before, it had no mark and no owner.
+
+Not done: a requirement left to the person is shown on the checklist but cannot be marked on the Smoke page, which
+lists criteria only (part 2 moves what the person checks there). The check is not run again by itself when a
+criterion is added: it is a press, or the agent's tool. Adding a criterion still takes the brief's approval back, as
+before; the check can be run without it.

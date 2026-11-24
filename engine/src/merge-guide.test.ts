@@ -20,12 +20,17 @@ const task: GuideTask = {
 
 describe('the merge guide', () => {
   it('opens with what to act on, then lists only what is not met or left for the person: what the build met is a count', () => {
-    const g = taskGuide(task)
-    expect(g.indexOf('**Not finished:** 1 sub-task still to land (XX-4). **1 of 3 acceptance criteria are not met.** 1 of 3 acceptance criteria were checked against the build and met. 1 is left for you.')).toBe(0)
+    // Three states, and a fourth that is nobody's failure: met, not met, left for the person, not checked yet.
+    const four: GuideTask = { ...task, acceptance: [...task.acceptance, { id: 'ac_4', text: 'The download button reads well (sample)', builtEvidence: 'Open /export: the button should say what it downloads', by: 'engine', at }] }
+    const g = taskGuide(four)
+    expect(g.indexOf('**Not finished:** 1 sub-task still to land (XX-4). **1 of 4 acceptance criteria are not met.** 1 of 4 acceptance criteria were checked against the build and met. 1 is left for you. 1 is not checked yet.')).toBe(0)
     expect(g).toContain('**What it does:** People can download their orders as a file (sample).')
     const check = g.slice(g.indexOf('**For you to check**'))
-    expect(check.indexOf('❌ Running it twice')).toBeLessThan(check.indexOf('⬜ Works on a phone'))
+    expect(check.indexOf('❌ Running it twice')).toBeLessThan(check.indexOf('👀 The download button')); expect(check.indexOf('👀 The download button')).toBeLessThan(check.indexOf('⬜ Not checked yet: Works on a phone'))
     expect(check).toContain('Missing: the second run adds a row'); expect(check).toContain('How: open /export at 390px')
+    expect(taskGuide(task)).toContain('were checked against the build and met. 1 is not checked yet.'); expect(taskGuide(task)).not.toContain('left for you') // one nobody has looked at is not said to be the person's
+    const rec = taskRecord(four)
+    expect(rec).toContain('- ⬜ Works on a phone (sample). Not checked yet. How to check: open /export at 390px'); expect(rec).toContain('- 👀 The download button reads well (sample). For a person: Open /export')
     expect(g).not.toContain('The file has every order') // met: counted, not listed
     expect(g).toContain('**Decisions**\n\n- CSV or spreadsheet? (sample) → **CSV**'); expect(g).not.toContain('Opens everywhere') // the reason is in the record
     expect(g).toContain('**Risk:** The orders query is shared with the dashboard')
