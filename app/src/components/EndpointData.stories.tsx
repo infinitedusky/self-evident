@@ -77,6 +77,20 @@ export const AFilePerFixture: Story = {
     await expect(c.getByText(/250 people, from Blake Sample/)).toBeInTheDocument()
   },
 }
+/** A file of one fixture's own: added beside the data there is, which stays; a run started from that fixture is served it. Only a made-up file can be one. */
+export const AddAFileForAFixture: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: /^Add a file of .* for a fixture$/ }))
+    const forWhich = await c.findByRole('combobox', { name: 'Which fixture it is for' })
+    await waitFor(() => expect(within(forWhich).getAllByRole('option').length).toBeGreaterThan(1))
+    await expect(c.getByRole('checkbox', { name: 'This is real data' })).toBeDisabled()
+    await expect(c.getByText(/written for that fixture's people, a row each/)).toBeInTheDocument()
+    await userEvent.upload(c.getByLabelText(/^A file for /), new File(['tracking_id,work_email\nx,y@sample.example\n'], 'company.csv', { type: 'text/csv' }))
+    await userEvent.click(c.getByRole('button', { name: 'Add it' }))
+    await expect(await c.findByText(/^Added as the data for .+: a run started from that fixture is served it\.$/)).toBeInTheDocument()
+  },
+}
 /** No data: the mock's server makes the answer up. Adding data asks for a file and what it is. */
 /** A file a tester brings supplies who the data is for: a column the data lacks is added from the file, and one is left empty. */
 export const MapFieldsFromAFile: Story = {

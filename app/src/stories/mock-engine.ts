@@ -156,7 +156,12 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/apps/:id/mocks/:key/endpoints', async ({ params, request }) => { const b = await request.json() as { method: string; path?: string; what?: string; sensitive?: boolean; follows?: string; linkField?: string }; d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: [...m.endpoints, { key: `e${m.endpoints.length + 1}`, method: b.method, path: b.path || `the link in ${b.linkField} that ${m.endpoints.find((e) => e.key === b.follows)?.method} ${m.endpoints.find((e) => e.key === b.follows)?.path} answers with`, what: b.what, ...(b.sensitive ? { sensitive: true } : {}), ...(b.follows ? { follows: b.follows, linkField: b.linkField } : {}), real: null, files: [], data: { app: null, task: null } }] } : m)); return reply(d.mocks.find((m) => m.key === params.key)) }),
     // One endpoint's data given: the app's, or one task's own. A sensitive endpoint's real response is faked at once and not kept.
     http.post('/api/apps/:id/mocks/:key/endpoints/:endpoint/data', async ({ params, request }) => {
-      const f = await request.formData(), real = f.get('real') === 'true', task = !!f.get('issueId')
+      const f = await request.formData(), real = f.get('real') === 'true', task = !!f.get('issueId'), forFixture = f.get('fixture') as string | null
+      if (forFixture) { // a file of one fixture's own: kept beside the endpoint's data, which stays as it is
+        const add = (e: import('../engine').MockEndpoint) => (e.key === params.endpoint && e.data.app?.safe ? { ...e, data: { ...e.data, app: { ...e.data.app, safe: { ...e.data.app.safe, also: [...(e.data.app.safe.also ?? []), { set: `provided-${e.key}-for-${forFixture}`, fixture: forFixture, who: '250 rows' }] } } } } : e)
+        d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: m.endpoints.map(add) } : m))
+        return reply({ kept: 'provided', asked: null })
+      }
       const name = (e: import('../engine').MockEndpoint) => `${e.key}.${((f.get('file') as File | null)?.name ?? 'x.json').split('.').pop()}`
       const item = (e: import('../engine').MockEndpoint): import('../engine').EndpointItem => (real && !e.sensitive
         ? { recorded: { id: `sample/given-${e.key}`, at: '2026-11-22T10:00:00Z', how: 'given', files: [name(e)] }, safe: null }
