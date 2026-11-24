@@ -40,12 +40,12 @@ export const DATA_BYTES_MAX = 16_000_000
 const CHECKED_AGAINST = 5
 
 /** Whose data it is, when it is one endpoint's alone: the app's (Settings), or one task's own, in place of the app's. */
-export interface Scope { endpoint: string; task?: string }
+export interface Scope { endpoint: string; task?: string; /** The fixture it is the response for: served to a run that starts from it. None: the default response. */ fixture?: string }
 /** The key such data is kept under. It is found by its scope, never by this name. */
-export const scopeKey = (kind: 'faked' | 'provided', sc: Scope) => standInKey(`${kind}-${sc.endpoint.slice(0, 22)}-${createHash('sha256').update(`${sc.endpoint}|${sc.task ?? ''}`).digest('hex').slice(0, 8)}`)
+export const scopeKey = (kind: 'faked' | 'provided', sc: Scope) => standInKey(`${kind}-${sc.endpoint.slice(0, 22)}-${createHash('sha256').update(`${sc.endpoint}|${sc.task ?? ''}${sc.fixture ? `|${sc.fixture}` : ''}`).digest('hex').slice(0, 8)}${sc.fixture ? `-for-${sc.fixture.slice(0, 30)}` : ''}`)
 /** What a folder of given responses says of itself: the endpoint they are responses of, and the task they are for alone. */
 export function scopeOfRecording(dir: string): Scope | undefined {
-  try { const meta = JSON.parse(readFileSync(join(dir, 'given.meta.json'), 'utf8')) as { endpoint?: string; forTask?: string }; return meta.endpoint ? { endpoint: meta.endpoint, ...(meta.forTask ? { task: meta.forTask } : {}) } : undefined } catch { return undefined }
+  try { const meta = JSON.parse(readFileSync(join(dir, 'given.meta.json'), 'utf8')) as { endpoint?: string; forTask?: string; forFixture?: string }; return meta.endpoint ? { endpoint: meta.endpoint, ...(meta.forTask ? { task: meta.forTask } : {}), ...(meta.forFixture ? { fixture: meta.forFixture } : {}) } : undefined } catch { return undefined }
 }
 export interface DataProvenance {
   /** One endpoint's data alone, and whose. None: a set across the mock's endpoints (a whole recorded run, faked together). */ scope?: Scope
@@ -190,9 +190,9 @@ export async function fakeData(appId: string, key: string, i: { recording?: stri
  * already had, else the mock's whole-run fake's, else none (everything not plainly structure is replaced). Refused,
  * with nothing kept at all, while the leak check finds a real value in what the faker made.
  */
-export async function fakeGiven(appId: string, key: string, i: { endpoint: string; recorded: { name: string; text: string }[]; issueId?: string | null; given?: boolean }, actor = 'user'): Promise<{ data: DataView; maybeStructure: string[] }> {
+export async function fakeGiven(appId: string, key: string, i: { endpoint: string; recorded: { name: string; text: string }[]; issueId?: string | null; given?: boolean; /** The fixture it is the response for. */ fixture?: string | null }, actor = 'user'): Promise<{ data: DataView; maybeStructure: string[] }> {
   const m = await mockOf(appId, key)
-  const scope: Scope = { endpoint: i.endpoint, ...(i.issueId ? { task: i.issueId } : {}) }
+  const scope: Scope = { endpoint: i.endpoint, ...(i.issueId ? { task: i.issueId } : {}), ...(i.fixture ? { fixture: i.fixture } : {}) }
   const dk = scopeKey('faked', scope)
   const old = await dataRow(m.id, dk)
   const base = (old?.kind === 'faked' ? old : await dataRow(m.id, scopeKey('faked', { endpoint: i.endpoint })) ?? await dataRow(m.id, 'faked'))?.plan as FakePlan | undefined

@@ -1393,3 +1393,9 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 .context-rejected > summary { cursor: pointer; }
 .context .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
 .task-nav-mark.wide { width: 14px; font-size: 12px; }
+
+/* An endpoint's responses: the default, and one per fixture (EndpointData.tsx) */
+.endpoint-responses { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 6px; }
+.endpoint-response { font: inherit; font-size: 12px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
+.endpoint-response.on { background: var(--surface); border-color: currentColor; font-weight: 600; }
+.endpoint-responses select { font-size: 12px; max-width: 220px; }

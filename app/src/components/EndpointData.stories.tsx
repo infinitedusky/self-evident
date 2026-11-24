@@ -65,30 +65,40 @@ export const PeopleAreNotTheLargestTable: Story = {
 }
 /** Data already filled out for fixture people says who, and can be changed. */
 export const MadeForFixturePeople: Story = { args: { endpoint: { ...mockEndpointsSample[3], data: { ...mockEndpointsSample[3].data, app: { ...resultsItem, safe: { ...resultsItem.safe!, madeFor: { fixture: 'northwind-company', table: 'employees', who: '3 people, from Blake Sample, blake.sample@northwind.example', people: 3, map: { tracking_id: 'id', work_email: 'work_email' } } } } } } } }
-/** An endpoint with a file per fixture: the one shown says whose it is, and the others are named, with the rule that the fixture a run starts from picks. */
-export const AFilePerFixture: Story = {
-  args: { endpoint: { ...mockEndpointsSample[3], data: { ...mockEndpointsSample[3].data, app: { ...resultsItem, safe: { ...resultsItem.safe!, madeFor: { fixture: 'northwind-company', table: 'employees', who: '250 people, from Blake Sample, blake.sample@northwind.example', people: 250, map: { tracking_id: 'id', work_email: 'work_email' } }, also: [{ set: 'faked-results-for-harbor', fixture: 'harbor-sample', who: '3 people, from Sam Example, sam@harbor.example' }, { set: 'faked-results', fixture: null, who: null }] } } } } },
+/** A response per fixture: the default, then one for each fixture that has its own. Choosing one shows that response, and everything on the cell is then of it. */
+export const AResponsePerFixture: Story = {
+  args: { endpoint: { ...mockEndpointsSample[3], data: { ...mockEndpointsSample[3].data, responses: [{ fixture: 'northwind-company', app: { fixture: 'northwind-company', recorded: null, safe: { kind: 'provided', set: 'provided-results-for-northwind-company', files: ['results.csv'], note: 'Provided by a person, who states it holds nothing real.', columns: ['tracking_id', 'work_email'] } }, task: null }] } } },
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    const also = await c.findByLabelText('Its other data, by fixture')
-    await expect(also).toHaveTextContent('The fixture a run starts from picks the data.')
-    await expect(also).toHaveTextContent('harbor-sample (3 people, from Sam Example, sam@harbor.example)')
-    await expect(also).toHaveTextContent('any other fixture, or none')
-    await expect(c.getByText(/250 people, from Blake Sample/)).toBeInTheDocument()
+    const tabs = within(await c.findByRole('tablist', { name: /^Responses of / }))
+    await expect(tabs.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Default', 'northwind-company'])
+    await expect(tabs.getByRole('tab', { name: 'Default' })).toHaveAttribute('aria-selected', 'true')
+    await expect(c.getByText(/A fake of it/)).toBeInTheDocument()
+    await userEvent.click(tabs.getByRole('tab', { name: 'northwind-company' }))
+    await expect(await c.findByText(/A file stated to hold nothing real: results\.csv/)).toBeInTheDocument()
+    await expect(c.queryByText(/A fake of it/)).toBeNull()
+    await userEvent.click(tabs.getByRole('tab', { name: 'Default' }))
+    await expect(await c.findByText(/A fake of it/)).toBeInTheDocument()
   },
 }
-/** A file of one fixture's own: added beside the data there is, which stays; a run started from that fixture is served it. Only a made-up file can be one. */
-export const AddAFileForAFixture: Story = {
+/** A response added for a fixture that has none: the fixture is chosen, the cell says a run from it gets the default until it has its own, and a file is given as for any response, real or made up. On a task it is that task's own. */
+export const AddAResponseForAFixture: Story = {
+  args: { issueId: 'iss_sample2' },
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await userEvent.click(await c.findByRole('button', { name: /^Add a file of .* for a fixture$/ }))
-    const forWhich = await c.findByRole('combobox', { name: 'Which fixture it is for' })
-    await waitFor(() => expect(within(forWhich).getAllByRole('option').length).toBeGreaterThan(1))
-    await expect(c.getByRole('checkbox', { name: 'This is real data' })).toBeDisabled()
-    await expect(c.getByText(/written for that fixture's people, a row each/)).toBeInTheDocument()
+    await userEvent.click(await c.findByRole('button', { name: /^Add a response of .* for a fixture$/ }))
+    const which = await c.findByRole('combobox', { name: /^The fixture to add a response of / })
+    await waitFor(() => expect(within(which).getAllByRole('option').length).toBeGreaterThan(1))
+    await userEvent.selectOptions(which, 'northwind-company')
+    await expect(await c.findByText(/yet: a run started from it is served the default/)).toBeInTheDocument()
+    await expect(c.getByRole('tab', { name: 'northwind-company' })).toHaveAttribute('aria-selected', 'true')
+    await userEvent.click(c.getByRole('button', { name: /^Add the data of / }))
+    await expect(c.getByText(/This is the response for the fixture northwind-company.*For this task alone\./)).toBeInTheDocument()
+    await expect(c.getByRole('checkbox', { name: 'This is real data' })).toBeEnabled() // real, to be faked, or made up: as for any response
+    await userEvent.click(c.getByRole('checkbox', { name: 'This is real data' }))
     await userEvent.upload(c.getByLabelText(/^A file for /), new File(['tracking_id,work_email\nx,y@sample.example\n'], 'company.csv', { type: 'text/csv' }))
     await userEvent.click(c.getByRole('button', { name: 'Add it' }))
-    await expect(await c.findByText(/^Added as the data for .+: a run started from that fixture is served it\.$/)).toBeInTheDocument()
+    await expect(await c.findByText('Added as the response for northwind-company: a run started from that fixture is served it.')).toBeInTheDocument()
   },
 }
 /** No data: the mock's server makes the answer up. Adding data asks for a file and what it is. */

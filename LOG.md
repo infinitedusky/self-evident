@@ -7412,3 +7412,32 @@ Whose a response is has two parts today, the endpoint and the task (`Scope`); th
 be: recorded, faked, its own answer to "the faked version?". Also not done: two files for one fixture are not
 refused (the newer is served); a fixture's file is removed only with the rest; the page shows one response at a
 time and names the others in a line.
+
+## A response per fixture, built as that (Sandy, 2026-11-24)
+
+The two merges before this (#401, #402) answered a different question with field mapping, and Sandy said so: "What
+you seem to be doing is trying to come up with some way to map things together to solve that problem. What I'm
+arguing for is don't … do that. Instead, allow an endpoint to have responses per fixture so I can … say do it this
+way for this fixture, do it this way for that fixture … and this is the default." And where: "It shouldn't have to
+be done in the settings. The settings are really about setting defaults … it's really in the tasks." And of the two
+places: "the task data and the mock in the settings should pretty much be identical. Just one is going to override
+the other."
+
+- **Whose a response is has three parts** (`Scope`, mock-data.ts): the endpoint, the task (none: the app's), and now
+  the fixture (none: the default). So a fixture's response is whatever the default can be: a real response kept
+  here and its fake, or a file provided; with its own removal, its own fake, and a task's own over the app's.
+- **A run is served its fixture's response, else the default** (`itemOf`): a task's own for that fixture, the task's
+  default, the app's for that fixture, the app's default.
+- **Any endpoint**, not only one that answers with people.
+- **One control, the same in Settings and on a task's Data step** (`EndpointData.tsx`): Default, then a tab for each
+  fixture that has a response, then "+ For a fixture". What is chosen is what the rest of the cell shows and
+  changes. On a task, a response added for a fixture is that task's own.
+- **Mapping fields is only what it was**: an override of who a response answers for, on the response chosen. It
+  makes no response. On a fixture's own response it is row by row and adds no row.
+- Taken out: the choice by `madeFor` (`pickForFixture`), the copy a mapping used to make for another fixture, the
+  "Add for a fixture" button that took made-up files only.
+
+Not done: a mapping from a tester's file is of the default response only; "use the faked version" is one answer for
+an endpoint, not one for each response; agents' tools name no response, so the data agent works on defaults; the
+Data step does not yet say which response a run from the fixture chosen on the smoke page will be served; nothing
+has been tried on the real page or with Meridian.
