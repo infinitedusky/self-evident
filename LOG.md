@@ -7387,3 +7387,28 @@ would serve; a fixture's file cannot be removed from the page; `fixtureForTask` 
 data was made for when the person picks none; a server written by hand that writes over what it is sent (CEB-90's)
 gets the right file but may still overwrite its people. Meridian's own file is not made yet: Sandy wants it without
 the deep enrichment that makes one person's rows large ("we don't need any of that").
+
+## A response per fixture (Sandy, 2026-11-24)
+
+The file-per-fixture work (#401) only made a copy of one template with other people in it. Sandy, on why that is not
+enough: a template is one person at full depth, so all 250 of a company would come out as that person's shape ("how
+many of those people we want to have doxing, how many people we don't"); and then the model: "we just want to be
+able to have multiple responses … a response per fixture. And then in that response, we can do whatever we want. We
+can make it fake or not fake. We can have its own CSV."
+
+So: **an endpoint has a response for any fixture, and may have one for each fixture; each is a whole response.**
+
+Built now, the made-up half:
+- **"Add for a fixture"** on an endpoint's data: a file given as that fixture's own, kept beside the data there is.
+  A run started from the fixture is served it (`pickForFixture`).
+- **Its fields are mapped row by row.** A file given for a fixture has its rows already, one for each person, mixed
+  as its writer chose. Mapping from the fixture sets the chosen columns of the first row from the first person and
+  so on, adds no row, and leaves what else each row says.
+- The limit of 200 people on a mapping is 2000.
+
+Not done, and next: **a real response per fixture, faked** (refused for now: "a file for one fixture is made up").
+Whose a response is has two parts today, the endpoint and the task (`Scope`); the fixture is marked on the side
+(`madeFor`). Making the fixture a third part of that is what lets a fixture's response be anything the main one can
+be: recorded, faked, its own answer to "the faked version?". Also not done: two files for one fixture are not
+refused (the newer is served); a fixture's file is removed only with the rest; the page shows one response at a
+time and names the others in a line.

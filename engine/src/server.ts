@@ -465,7 +465,9 @@ export function buildApp(bus: EventBus) {
     const appId = c.req.param('id'), key = c.req.param('key')
     const body = await c.req.parseBody({ all: true })
     const given = ([] as unknown[]).concat(body.file ?? []).filter((f): f is File => typeof f === 'object' && f !== null && 'arrayBuffer' in f)
-    const r = await giveEndpointData(appId, key, c.req.param('endpoint'), await Promise.all(given.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }))), { real: body.real === 'true', issueId: typeof body.issueId === 'string' && body.issueId ? body.issueId : null }, 'user')
+    const fixture = typeof body.fixture === 'string' && body.fixture ? body.fixture : null
+    if (fixture && !(await listFixtures(appId)).some((f) => f.name === fixture)) throw new PlanError(`this app has no fixture "${fixture}"`)
+    const r = await giveEndpointData(appId, key, c.req.param('endpoint'), await Promise.all(given.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }))), { real: body.real === 'true', issueId: typeof body.issueId === 'string' && body.issueId ? body.issueId : null, fixture }, 'user')
     if (r.kept === 'recorded' && r.issueId) await askToMine(r.issueId, key, r.dir, r.files)
     return c.json({ kept: r.kept, asked: r.kept === 'recorded' ? r.issueId : null, ...('maybeStructure' in r ? { maybeStructure: r.maybeStructure } : {}) }, 201)
   } catch (err) { return planError(c, err) } })

@@ -13,7 +13,7 @@ import { looksCsv, parseCsv } from './mock-leaks.js'
 
 /** data column ← the file's column. '': the column is there and left empty (one the app wants present, and fills by other means). */
 export interface FromFile { file: string; map: Record<string, string> }
-export const FILE_PEOPLE_MAX = 200
+export const FILE_PEOPLE_MAX = 2000
 
 /** A CSV's rows as records by its header; none for anything else. */
 export function csvRecords(text: string): { columns: string[]; rows: Record<string, string>[] } {

@@ -206,8 +206,8 @@ export async function mapFromFile(appId: string, key: string, endpoint: string, 
 }
 
 /** How many of a fixture's people one endpoint's data is filled out for, at most. */
-export const PEOPLE_MAX = 200
-export interface MadeFor { fixture: string; table: string; /** Who, as the fixture names them: made-up. */ who: string; /** How many of the fixture's people it was filled out for. */ people: number; /** data column ← fixture column */ map: Record<string, string> }
+export const PEOPLE_MAX = 2000
+export interface MadeFor { /** A file given as this fixture's own, with a row for each of its people already: columns are set row by row, and no row is added. */ given?: boolean; fixture: string; table: string; /** Who, as the fixture names them: made-up. */ who: string; /** How many of the fixture's people it was filled out for. */ people: number; /** data column ← fixture column */ map: Record<string, string> }
 /**
  * An endpoint's faked (or provided) data made for a fixture's people (Sandy, 2026-11-22: "you'd use the fixture to
  * create the fake data. The CSV that you upload is just a template to use to fill out people"). The data is the
@@ -244,9 +244,18 @@ export async function assignFixture(appId: string, key: string, endpoint: string
   // The template is the data as it was before it was first filled out: filling it out again starts from that, not from the last filling.
   const template = { ...Object.fromEntries(safe.files.map((f) => [f, files[f]])), ...(prov.template ?? {}) }
   const real = d.kind === 'faked' && d.recording && existsSync(d.recording) ? readRecording(d.recording) : null
+  // A file given as this fixture's own has its rows already, written for its people one by one: the mapped columns
+  // are set row by row (the first row from the first person), and what else each row says is left as it was given.
+  const rowwise = !fresh && !!(prov as { madeFor?: MadeFor }).madeFor?.given
   let changed = 0, seen = 0
   for (const f of safe.files) {
     const cols = dataColumns(template[f]); seen += Object.keys(map).filter((c) => cols.includes(c)).length
+    if (rowwise && looksCsv(template[f])) {
+      const [head, ...own] = parseCsv(template[f]), eol = template[f].includes('\r\n') ? '\r\n' : '\n'
+      const out = own.filter((x) => x.length === head.length).map((r, n) => { const row = [...r], set = sets[n]; if (set) { for (const [c, v] of Object.entries(set)) { const at = head.indexOf(c); if (at >= 0) row[at] = v } changed++ } return row })
+      files[f] = [head, ...out].map((r) => r.map(csvCell).join(',')).join(eol) + eol
+      continue
+    }
     if (!looksCsv(template[f])) { const r = pin(template[f], sets[0]); files[f] = r.text; changed += r.changed; continue }
     const [head, ...own] = parseCsv(template[f]), eol = template[f].includes('\r\n') ? '\r\n' : '\n'
     const original = real?.find((x) => x.name === f)
@@ -266,7 +275,7 @@ export async function assignFixture(appId: string, key: string, endpoint: string
   }
   const label = (row: Record<string, unknown>) => [[row.first_name, row.last_name].filter(Boolean).join(' ') || row.name || row.full_name, row.work_email || row.email].filter(Boolean).join(', ') || `row ${rows.indexOf(row) + 1} of ${i.table}`
   const who = people.length === 1 ? String(label(people[0])) : `${people.length} people, from ${String(label(people[0]))}`
-  const madeFor: MadeFor = { fixture: fx.name, table: i.table, who, people: people.length, map }
+  const madeFor: MadeFor = { ...(rowwise ? { given: true } : {}), fixture: fx.name, table: i.table, who, people: people.length, map }
   const set = sets[0]
   const workspaceId = await workspaceOf(appId)
   await db.transaction(async (tx) => {

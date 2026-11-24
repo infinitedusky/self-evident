@@ -181,12 +181,23 @@ const named = (e: Endpoint, files: { name: string; bytes: Uint8Array }[]) => fil
  * endpoint it is faked here and now and not kept. Otherwise the person states it holds nothing real, and it is used
  * as it is (checked against the service's real responses on this computer where there are any).
  */
-export async function giveEndpointData(appId: string, key: string, endpoint: string, files: { name: string; bytes: Uint8Array }[], o: { real: boolean; issueId?: string | null; /** Not real: a person states it holds nothing real. An agent cannot state that: what it writes is kept only when it could be checked against a real response. */ stated?: boolean }, actor = 'user') {
+export async function giveEndpointData(appId: string, key: string, endpoint: string, files: { name: string; bytes: Uint8Array }[], o: { real: boolean; issueId?: string | null; /** The file is this fixture's own: served to a run that starts from it. Made-up files only. */ fixture?: string | null; /** Not real: a person states it holds nothing real. An agent cannot state that: what it writes is kept only when it could be checked against a real response. */ stated?: boolean }, actor = 'user') {
   const { m, e } = await endpointOf(appId, key, endpoint)
   if (!files.length) throw new PlanError('give at least one file')
   const scope: Scope = { endpoint: e.key, ...(o.issueId ? { task: o.issueId } : {}) }
+  // A file of one fixture's own (Sandy, 2026-11-24: "I was expecting that I would have a different file that I would
+  // add that would be for a different fixture"): kept beside the endpoint's other data, and served to a run that
+  // starts from that fixture (pickForFixture). It is written, row by row, for that fixture's people, so it is made up.
+  if (o.fixture && o.real) throw new PlanError('a file for one fixture is made up, written for that fixture\'s people. A real response is given for any fixture and faked first')
   if (!o.real) {
-    await saveData(appId, key, { dataKey: scopeKey('provided', scope), name: `Provided: ${e.method} ${e.path}`.slice(0, 80), files: Object.fromEntries(named(e, files).map((f) => [f.name, f.text])), stated: o.stated !== false, issueId: o.issueId ?? null, scope }, actor)
+    const given = Object.fromEntries(named(e, files).map((f) => [f.name, f.text]))
+    const dataKey = o.fixture ? `${scopeKey('provided', scope)}-for-${standInKey(o.fixture)}` : scopeKey('provided', scope)
+    await saveData(appId, key, { dataKey, name: `Provided${o.fixture ? ` for ${o.fixture}` : ''}: ${e.method} ${e.path}`.slice(0, 80), files: given, stated: o.stated !== false, issueId: o.issueId ?? null, scope }, actor)
+    if (o.fixture) {
+      const first = Object.values(given)[0] ?? '', rows = looksCsv(first) ? Math.max(0, parseCsv(first).length - 1) : 1
+      const [d] = (await db.select().from(mockData).where(eq(mockData.mockId, m.id))).filter((x) => (prov(x).scope?.endpoint === e.key) && (prov(x).scope?.task ?? null) === (o.issueId ?? null) && x.key.endsWith(`-for-${standInKey(o.fixture!)}`)).sort(newest)
+      if (d) await db.update(mockData).set({ provenance: { ...(d.provenance ?? {}), madeFor: { fixture: o.fixture, table: '', who: `${rows} row${rows === 1 ? '' : 's'}`, people: rows, map: {}, given: true } } }).where(eq(mockData.id, d.id))
+    }
     return { kept: 'provided' as const, faked: false }
   }
   if (e.sensitive) { const r = await fakeGiven(appId, key, { endpoint: e.key, recorded: named(e, files), issueId: o.issueId ?? null }, actor); return { kept: 'faked' as const, faked: true, maybeStructure: r.maybeStructure } }

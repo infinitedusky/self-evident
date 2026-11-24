@@ -112,6 +112,25 @@ describe.skipIf(!reachable)('fixtures', () => {
     await db.delete(mockData).where(like(mockData.key, '%-for-northwind'))
   })
 
+  it('takes a file as one fixture\'s own, serves it to a run from that fixture, and maps its fields row by row', async () => {
+    const m = async () => (await rowOf(appId, 'scanner'))!
+    const rowsFor = async (fixture: string | null) => parseCsv((await served(await m(), { form: 'faked', fixture })).files.find((f) => f.name === 'results.csv')!.text!).slice(1)
+    const before = await rowsFor(null)
+    const own = `${head}\nx1,a@sample.example,One Sample,completed,"Nothing found."\nx2,b@sample.example,Two Sample,completed,"Two fake profiles."\nx3,c@sample.example,Three Sample,completed,"A doxxing post."\n`
+    await expect(giveEndpointData(appId, 'scanner', 'results', [{ name: 'company.csv', bytes: new TextEncoder().encode(own) }], { real: true, fixture: 'meridian' })).rejects.toThrow('a file for one fixture is made up')
+    await giveEndpointData(appId, 'scanner', 'results', [{ name: 'company.csv', bytes: new TextEncoder().encode(own) }], { real: false, fixture: 'meridian' })
+    expect((await rowsFor('meridian')).map((r) => r[4])).toEqual(['Nothing found.', 'Two fake profiles.', 'A doxxing post.'])
+    expect(await rowsFor(null)).toEqual(before) // the data for no fixture is as it was
+    // Its fields mapped from the fixture: each row takes one person, in order, and keeps what else it says. No row is added.
+    const r = await assignFixture(appId, 'scanner', 'results', { fixture: 'meridian', table: 'employees', row: 0, count: 4, map: { tracking_id: 'id', work_email: 'work_email' } }, null)
+    expect(r.fresh).toBe(false)
+    const rows = await rowsFor('meridian')
+    expect(rows.map((x) => x[1])).toEqual(['sample1@meridian.example', 'sample2@meridian.example', 'sample3@meridian.example'])
+    expect(rows.map((x) => x[0])).toEqual(employees.slice(0, 3).map((e) => e.id))
+    expect(rows.map((x) => x[4])).toEqual(['Nothing found.', 'Two fake profiles.', 'A doxxing post.'])
+    await db.delete(mockData).where(like(mockData.key, 'provided-%-for-meridian')) // put back as it was for the tests below
+  })
+
   it('builds a task\'s runs from the fixture its data was made for', async () => {
     expect(await fixtureForTask(appId, issueId)).toBe('meridian')
     expect(await fixtureForTask(newId('app'), null)).toBeNull()
