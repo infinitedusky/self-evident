@@ -412,7 +412,7 @@ export interface SmokeView { /** The one set-up's files, as on SmokeSetupView. *
 export interface Learned { key: string; title: string; summary: string; body: string; sha: string | null; updatedAt: string }
 export interface Learning { docs: Learned[]; missing: string[]; working: { sessionId: string } | null; sessionId: string | null; stale: number }
 /** A note (engine/src/notes.ts): something said, found or decided, on a day, about the tasks it names. */
-export interface Note { id: string; on: string; kind: 'note' | 'decision'; title: string; body: string; tasks: { id: string; name: string; title: string }[]; createdBy: string | null; updatedAt: string | null }
+export interface Note { id: string; on: string; kind: 'note' | 'decision'; title: string; /** A decision asked as a question in a Context: its answer. */ answer?: string | null; body: string; tasks: { id: string; name: string; title: string }[]; createdBy: string | null; updatedAt: string | null }
 /** Who a Context is of: an idea, a task or a project (docs/context-brief.md). */
 export type ContextSubject = { kind: 'ideas' | 'issues' | 'projects'; id: string }
 /** A reference doc in a Context: a ticket kept as its tracker has it, text pasted in, or a file brought in. */
@@ -429,8 +429,8 @@ export interface ContextDoc {
 }
 /** A note or a decision in a Context. They are the app's notes (engine/src/notes.ts): dated, and in the reports. */
 export interface ContextNote {
-  id: string; kind: 'note' | 'decision'; /** A decision an agent proposed waits for the person; a note is always settled. */ status: 'settled' | 'proposed' | 'rejected'
-  /** A note: what it is about. A decision: the decision, in one statement. */ title: string; /** A note: what was said. A decision: why, if said. */ body: string
+  id: string; kind: 'note' | 'decision'; /** A decision: open (asked, no answer yet), proposed (an agent's answer, waiting for the person), settled, or rejected. A note is always settled. */ status: 'settled' | 'proposed' | 'rejected' | 'open'
+  /** A note: what it is about. A decision: its question (empty for one made before questions were asked). */ title: string; /** A decision's answer: none while it is open. A note has none. */ answer: string | null; /** A note: what was said. A decision: why, if said. */ body: string
   on: string; addedBy: string | null; fromProject: boolean; /** Other tasks it is also about. */ alsoAbout: { id: string; name: string; title: string }[]
 }
 export interface ContextView {
@@ -830,9 +830,9 @@ export const engine = {
   /** A ticket, as its tracker has it now. */
   refreshContextDoc: (s: ContextSubject, id: string) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/docs/${id}/refresh`),
   removeContextDoc: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/docs/${id}`),
-  addContextNote: (s: ContextSubject, b: { kind: 'note' | 'decision'; title: string; body: string; on?: string }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/notes`, b),
+  addContextNote: (s: ContextSubject, b: { kind: 'note' | 'decision'; title: string; /** A decision's: left out, it is open. */ answer?: string; body: string; on?: string }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/notes`, b),
   /** status: accept a proposed decision (settled) or reject it. */
-  editContextNote: (s: ContextSubject, id: string, b: Partial<{ title: string; body: string; on: string; status: 'settled' | 'rejected' }>) => call<ContextView>('PATCH', `/${s.kind}/${s.id}/context/notes/${id}`, b),
+  editContextNote: (s: ContextSubject, id: string, b: Partial<{ title: string; answer: string; body: string; on: string; status: 'settled' | 'rejected' }>) => call<ContextView>('PATCH', `/${s.kind}/${s.id}/context/notes/${id}`, b),
   removeContextNote: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/notes/${id}`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
   writeReport: (appId: string, body: { period: ReportPeriod; notes?: string }) => call<{ writing: boolean }>('POST', `/apps/${appId}/reports`, body),

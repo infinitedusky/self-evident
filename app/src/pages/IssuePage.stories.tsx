@@ -219,9 +219,9 @@ export const ItsContext: Story = {
     const c = within(canvasElement)
     await expect(await c.findByText('For you to decide')).toBeVisible()
     await expect(c.getByText(/From Linear, SHOP-41 · the work came from it/)).toBeVisible()
-    const link = await c.findByRole('link', { name: /Context.*1 for you to decide/ })
+    const link = await c.findByRole('link', { name: /Context.*2 for you to decide/ }) // an answer proposed, and a question with none
     await expect(link.className).toContain('active')
-    await userEvent.click(c.getByRole('button', { name: 'Accept: Only cards used in the last 12 months are offered (sample)' }))
-    await waitFor(() => expect(c.getByRole('link', { name: /Context/ })).not.toHaveTextContent('for you to decide'))
+    await userEvent.click(c.getByRole('button', { name: 'Accept: Which saved cards are offered? (sample)' }))
+    await waitFor(() => expect(c.getByRole('link', { name: /Context/ })).toHaveTextContent('1 for you to decide'))
   },
 }

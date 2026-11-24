@@ -1393,3 +1393,7 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 .context-rejected > summary { cursor: pointer; }
 .context .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
 .task-nav-mark.wide { width: 14px; font-size: 12px; }
+/* A decision: its question, then its answer. Side by side where there is room. */
+.context-qa { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); column-gap: 20px; align-items: baseline; }
+.context-q { font-size: 14px; color: var(--ink-soft); }
+@container (max-width: 560px) { .context-qa { grid-template-columns: 1fr; } }

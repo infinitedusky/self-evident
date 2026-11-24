@@ -7339,6 +7339,10 @@ in `server.ts`, `app/src/components/Context.tsx` (+ stories), `TaskNav`, `IssueP
 dropped), with a made-up app. An idea's context filled through the routes, the idea converted to a project, and
 the task, idea and project pages opened in a browser.
 
+**An HTML page is a reference doc too** (Sandy, 2026-11-24: "HTML should be allowed", for a Claude artifact or a
+mock-up saved from the browser). Kept as the file it was, like a PDF: the agent that needs it opens it, and it is
+not edited here or given in full.
+
 **Not done:**
 
 - A ticket was not brought in from the real Linear (the scratch app had no Linear set). `keepTicket` is tested
@@ -7348,3 +7352,29 @@ the task, idea and project pages opened in a browser.
 - No app-level context (Sandy expects one later).
 - A page address that names a section (`/ideas/<id>/context`) opened the tab on its overview when I loaded it
   directly; clicking Context in the nav works. Not looked into: it may be how tabs restore, for any section.
+
+## A decision is a question and its answer (Sandy, 2026-11-24: "the decisions section should be key value, question answer … we can put unmade decisions in and then make them later and make sure that we make them")
+
+**Decided** (Sandy, asked): a decision in Context is a question with an answer, and why if there is one. One with
+no answer yet is **open**. Open ones are shown and counted, and nothing is held up by them: no gate on the brief or
+the build. Every agent is told an open one is not decided and not to guess its answer.
+
+**Built** (Sandy approved the story with "merge this"):
+
+- **For you to decide**, at the top of Context, holds two kinds: a question with no answer (Answer it, or Not
+  needed, which drops it) and an answer an agent proposed (Accept, Reject, Answer it yourself). The nav counts both.
+- **Decisions** lists the made ones, the question on the left and the answer on the right, with why and when.
+- **Add a decision** asks for the question and the answer; leaving the answer empty adds it to decide later.
+- A rejected answer is kept as before. "Ask the question again" puts the question back with no answer.
+- A decision made as one statement (before this, or with "A decision" on the Reports page) shows as an answer with
+  no question. Given a question in its Edit, it becomes one.
+- `note` gained `answer` and the state `open` (migration `0059_decision_answer`). Only made decisions reach the
+  app's notes and a report, which gives each as its question and answer.
+- **Agents**: the `context` tool gained `ask` (a question with no answer; any agent may), and `propose` and
+  `decide` now take the question and the answer. An answer to a question already open goes onto that question. The
+  prompt lists what is decided, then "Not decided yet: do not guess one … where your work turns on one, say so
+  and ask, or propose an answer", then answers proposed and answers turned down.
+
+Looked at for real on a scratch database (made, then dropped): an open decision and a made one added through the
+routes, the task's Context page opened in a browser. Not done: no agent has been run against an open decision, so
+whether it holds back from guessing is untested.
