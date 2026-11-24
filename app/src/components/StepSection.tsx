@@ -14,7 +14,8 @@ import remarkGfm from 'remark-gfm'
 import { canSkip, finished, label, needsApproval, ready, skipped, step, type On, type Row, type StepState } from '@self-evident/engine/steps'
 import { Badge } from './Badge'
 import { askStep } from './StepsPanel'
-import { engine, type Prototype, type StepSubject, type StepWork } from '../engine'
+import { engine, type Prototype, type StepSubject, type StepWork, type Trajectory } from '../engine'
+import { TrajectoryView } from './TrajectoryView'
 import { useWorkspace } from '../workspace'
 
 const words = (t: string) => t.trim().split(/\s+/).length
@@ -44,6 +45,11 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   const s = row.state
   // The Data step shows what its agent wrote inside its panel, at the top of the services: not again below it.
   const dataInside = row.key === 'data' && on === 'task' && row.state.status !== 'skipped'
+  // The Test plan step shows its plan as the trajectory: the table with what the engine saw of each row, not the same table again as text.
+  const [trajectory, setTrajectory] = useState<Trajectory | null>(null)
+  const planStep = row.key === 'testplan' && on === 'task'
+  useEffect(() => { if (planStep) void engine.trajectory(subject.id).then(setTrajectory).catch(() => setTrajectory(null)) }, [planStep, subject.id, s.status, s.detail, s.approved?.at]) // eslint-disable-line react-hooks/exhaustive-deps
+  const planInside = planStep && !!trajectory?.plan
   // What there is to look at, right on the step's page: the task's sketches, its Storybook at the first story named, its prototype.
   const proto = protos.find((p) => p.status !== 'discarded')
   // The agent can send the person here to one file or story (?file=, ?story=): that one shows, else the first the step recorded.
@@ -117,7 +123,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
         <>
           {row.key === 'prototype' && on === 'task' && !small && !s.approved && !skipped(s) && s.status !== 'none' && <p className="faint" style={{ fontSize: 13, margin: '0 0 8px' }}>Approving the prototype is the last thing you press. It approves the brief with it, when the brief is ready, and then the analysis, the ADR, the plan, the blast radius, the audit, the final ADR and plan, and the build follow by themselves.</p>}
           <p className="step-status">
-            {skipped(s) ? <span>– Skipped: not being done on this {on}.</span> : s.status === 'none' ? <span className="faint">Not started.{on === 'task' && canSkip(row) ? ' It is optional: do it, or skip it. The brief waits until you have said which.' : ''}</span> : <span>{s.status === 'done' ? '✓ ' : '◐ '}{s.detail ?? (s.status === 'done' ? 'Done' : 'Started')}</span>}
+            {skipped(s) ? <span>– Skipped: not being done on this {on}.</span> : s.status === 'none' ? <span className="faint">Not started.{planStep ? (canSkip(row) ? ' Its agent writes it once the brief is approved. Skip it and the task is built as before, with no test plan.' : ' Its agent writes it once the brief is approved; the build waits for it.') : on === 'task' && canSkip(row) ? ' It is optional: do it, or skip it. The brief waits until you have said which.' : ''}</span> : <span>{s.status === 'done' ? '✓ ' : '◐ '}{s.detail ?? (s.status === 'done' ? 'Done' : 'Started')}</span>}
             {work?.updatedBy && <span className="faint"> · {work.updatedBy}{work.updatedAt ? `, ${new Date(work.updatedAt).toLocaleDateString()}` : ''}</span>}
           </p>
 
@@ -125,6 +131,8 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
           {/* What its agent wrote goes inside it, at the top of the services, not below the whole panel. */}
           {row.key === 'data' && on === 'task' && !skipped(s) && <MockLibrary appId={appId} issueId={subject.id} needs={work?.summary?.trim() || work?.body ? <div className="md step-body"><Markdown remarkPlugins={[remarkGfm]}>{[work.summary?.trim(), work.body].filter(Boolean).join('\n\n')}</Markdown></div> : undefined} />}
 
+          {planStep && !skipped(s) && trajectory?.plan && <TrajectoryView view={trajectory} />}
+          {planStep && !s.approved && !skipped(s) && trajectory?.plan && <p className="faint" style={{ fontSize: 13, margin: '0 0 8px' }}>Approving it starts the build: a test phase that writes these tests and sees them fail, then each slice. The engine runs every test itself, and a row counts only when it was seen to fail before its code and pass after.</p>}
           {row.key === 'prototype' && protos.length > 0 && (
             <ul className="list step-protos">
               {protos.map((p) => (
@@ -138,13 +146,13 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
           {work && work.refs.length > 0 && (
             <p style={{ margin: '8px 0' }}>{work.refs.map((story) => <button key={story} className="btn quiet small" style={{ marginRight: 6 }} onClick={() => ws?.open({ kind: 'storybook', story })}>{story}</button>)}</p>
           )}
-          {dataInside ? null : work?.summary?.trim() && (
+          {dataInside || planInside ? null : work?.summary?.trim() && (
             <div className="step-summary" data-component="StepSummary" aria-label="What you need to know">
               <h3>What you need to know</h3>
               <div className="md"><Markdown remarkPlugins={[remarkGfm]}>{work.summary}</Markdown></div>
             </div>
           )}
-          {!dataInside && work?.body && (work.summary?.trim()
+          {!dataInside && !planInside && work?.body && (work.summary?.trim()
             ? <details className="step-full"><summary>The full report <span className="faint">{words(work.body)} words, written for the next agent</span></summary><div className="md step-body"><Markdown remarkPlugins={[remarkGfm]}>{work.body}</Markdown></div></details>
             : <>
                 {words(work.body) > 400 && <p className="faint step-nosummary">This report is {words(work.body)} words and has no summary. Ask the task's agent: “summarize the {label(row.key, on).toLowerCase()} for me”.</p>}

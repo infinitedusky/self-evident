@@ -10,6 +10,7 @@ import { spawn } from 'node:child_process'
 import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
 import { checklistOf } from './checklist.js'
+import { sealTestPlan, trajectoryView } from './trajectory.js'
 import { closeTask, closeView, reopenUnclosed } from './close.js'
 import { acceptSmoke, askToMine, keepSmokeDatabase, markRelease, revealSmokeFiles, markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
 import { closeTerminal, closeTerminals, openTerminal, ownPage, resizeTerminal, scratchKey, typeInTerminal, watchTerminal } from './smoke-terminal.js'
@@ -749,6 +750,8 @@ export function buildApp(bus: EventBus) {
     const { approve = true } = await c.req.json<{ approve?: boolean }>().catch(() => ({ approve: true }))
     try {
       const row = await approveStep(c.req.param('id'), c.req.param('key') as never, 'user', approve)
+      // The test plan approved: the plan as it stands is what the build is held to, and the build starts from it.
+      if (approve && c.req.param('key') === 'testplan') { await sealTestPlan(c.req.param('id')); void maybeBuild(c.req.param('id')); void advanceChecks(c.req.param('id')).catch(() => {}) } // and where the plan is read before the build (a staged workflow), that line carries on
       if (approve && c.req.param('key') === 'prototype') await autoSave(c.req.param('id'), 'prototype_approved') // a point to come back to, before the checks and the brief move on
       // One approval, not two (Sandy, 2026-11-14: "I approve the brief, which basically ends with the prototype"): approving the
       // prototype approves the brief with it when the brief is ready for that. Where it is not (not written, a step still
@@ -780,7 +783,7 @@ export function buildApp(bus: EventBus) {
       if (!autoBuild(a?.setup)) return
       const v = await stepsOf({ issueId })
       if (checksOwed(v.states, v.resolved.workflow).length) return // the prototype's checks first; they call back here when they are in
-      await runner.buildTask(issueId, 'engine')
+      await runner.buildTask(issueId, 'engine') // with a test plan on its workflow, this sends its agent out and waits for the person's approval (runner.buildTask)
     } catch (err) { console.error(`[engine] building ${issueId} by itself: ${err instanceof Error ? err.message : err}`) }
   }
   onChecksDone((issueId) => void maybeBuild(issueId))
@@ -863,6 +866,8 @@ export function buildApp(bus: EventBus) {
       return c.json({ ...view, sentBack })
     } catch (err) { return planError(c, err) }
   })
+  // A task's test trajectory (trajectory.ts): the plan its build is held to, and every run of every row the engine has made.
+  api.get('/issues/:id/trajectory', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await trajectoryView(t.id)) } catch (err) { return planError(c, err, 404) } })
   api.get('/issues/:id/checklist', async (c) => { // where a checklist task stands: its stages and each item's mark; null for a staged task
     try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await checklistOf(t.id)) } catch (err) { return planError(c, err, 404) }
   })

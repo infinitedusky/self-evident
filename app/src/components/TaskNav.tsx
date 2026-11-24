@@ -21,7 +21,7 @@ export function after(r: Row, _rows: Row[], on: On) {
 export function briefStands(rows: Row[], on: On) {
   const b = rows.find((r) => r.key === 'brief')
   if (!b || finished(b.state, on)) return null
-  const owed = rows.filter((r) => r.key !== 'brief' && r.required && step(r.key).place !== 'check' && !finished(r.state, on)) // the brief does not wait for the prototype's checks
+  const owed = rows.filter((r) => r.key !== 'brief' && r.required && step(r.key).place !== 'check' && step(r.key).place !== 'plan' && !finished(r.state, on)) // the brief does not wait for the prototype's checks, nor for the test plan, which is made from it
   if (owed.length) return `waits on ${owed.map((r) => label(r.key, on)).join(', ')}`
   const open = on === 'task' ? rows.filter((r) => canSkip(r) && !settled(r.state, on)) : [] // an optional step is done or skipped, never just left
   if (open.length) return `do or skip ${open.map((r) => label(r.key, on)).join(', ')}`

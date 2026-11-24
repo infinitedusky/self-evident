@@ -1074,6 +1074,15 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .pr-write textarea { width: 100%; font-family: var(--mono, monospace); font-size: 13px; }
 .smoke-accept { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
 .smoke-accept.accepted { border-color: var(--ok, #2f855a); }
+.trajectory-lead { margin: 0 0 10px; font-size: 14px; }
+.trajectory-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 0 0 12px; }
+.trajectory-table th { text-align: left; font-weight: 500; color: var(--muted, #667085); padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); }
+.trajectory-table td { vertical-align: top; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
+.trajectory-meta { font-size: 12px; }
+.trajectory-runs { letter-spacing: 1px; white-space: nowrap; }
+.trajectory-list { margin: 0 0 12px; padding-left: 22px; display: grid; gap: 6px; font-size: 14px; }
+.trajectory pre { white-space: pre-wrap; font-size: 12px; margin: 4px 0; }
+.trajectory .ok { color: var(--ok); }
 .release-checks { margin: 0 0 14px; }
 .release-list { margin: 0 0 12px; padding-left: 22px; display: grid; gap: 10px; font-size: 14px; }
 .release-list.watch { list-style: disc; }

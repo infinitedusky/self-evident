@@ -595,6 +595,19 @@ export const smokeSample: import('../engine').SmokeView = {
   ],
 }
 
+// A task's test trajectory (made up): two slices, four tests, one of them deferred and one a regression guard. Not approved, nothing run.
+const trajectoryRows: import('../engine').TestRow[] = [
+  { id: 'T1', asserts: 'GET /export returns every order of the customer (sample)', level: 'integration', criteria: ['ac_1'], test: 'tests/export.test.ts', writableAt: 'tests', passesAt: 'file' },
+  { id: 'T2', asserts: 'the query returns orders newest first (sample)', level: 'unit', criteria: ['ac_1'], test: 'tests/orders-query.test.ts', writableAt: 'tests', passesAt: 'query' },
+  { id: 'T3', asserts: 'a second export adds no rows (sample)', level: 'integration', criteria: ['ac_2'], test: 'tests/export-twice.test.ts', writableAt: 'file', passesAt: 'file', deferred: { why: 'it calls the writer the query slice introduces (sample)', code: 'it("adds no rows", () => { expect(writeTwice()).toBe(0) })' } },
+  { id: 'T4', asserts: 'the orders page still lists orders (sample)', level: 'component', criteria: [], test: 'tests/orders-page.test.tsx', writableAt: 'tests', passesAt: 'tests', guard: 'the query it reads is being changed (sample)' },
+]
+export const trajectorySample: import('../engine').Trajectory = {
+  plan: { slices: [{ key: 'query', title: 'The orders query (sample)', what: 'Read every order of a customer, newest first.' }, { key: 'file', title: 'The export file (sample)', what: 'Write the rows as CSV and serve it.' }], rows: trajectoryRows },
+  approved: false, changed: false, holds: false, proven: 0, total: 4, canRun: true, stray: [],
+  rows: trajectoryRows.map((r) => ({ ...r, state: 'planned' as const, says: 'not run yet', runs: [] })),
+}
+
 // A task's pull request as a step (made up): not submitted yet, with what it will open with.
 export const prSample: import('../engine').PrView = {
   issueId: 'iss_sample20', pr: null,
