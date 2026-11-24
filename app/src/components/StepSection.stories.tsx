@@ -173,13 +173,17 @@ export const DataWithItsReport: Story = {
     await expect(canvasElement.querySelector('[data-component="WhatTheTaskNeeds"]')?.tagName).toBe('DETAILS')
   },
 }
-/** The Data step, not started: the services the task calls, with what each place is given and each call's data, there before any agent is asked. It is optional: skipped, the app's defaults are used. */
+/** The Data step, not started: the services the task calls, with what each place is given and each call's data, there before any agent is asked. It is optional: skipped, the app's defaults are used. Its page is long, so Approve and Skip are at its top, and it can be approved as it stands without being started first. */
 export const Data: Story = {
   args: { row: { ...row('research'), key: 'data', required: false, state: { key: 'data', status: 'none' }, waitingOn: null } as typeof all[number] },
   beforeEach: withEngine({ stepWork: null }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await expect((await c.findAllByText('Source'))[0]).toBeInTheDocument()
+    const head = within(canvasElement.querySelector('.card-head') as HTMLElement)
+    await expect(head.getByRole('button', { name: 'Approve' })).toBeEnabled()
+    await expect(head.getByRole('button', { name: 'Skip this step' })).toBeEnabled()
+    await expect(c.getAllByRole('button', { name: 'Skip this step' })).toHaveLength(1) // at the top only, not again under the whole page
     await expect(await c.findByRole('combobox', { name: 'Fraud scan vendor (sample), Smoke test' })).toBeInTheDocument() // this task's own
     await expect((await c.findAllByRole('button', { name: 'Override Fraud scan vendor (sample), Prototype' }))[0]).toBeInTheDocument() // the app's, until it is overridden
   },
