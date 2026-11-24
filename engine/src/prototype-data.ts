@@ -144,7 +144,11 @@ async function load(c: pg.Client, scenario: Tables) {
       if (!tables.has(table)) throw new PlanError(`the scenario has rows for ${table}, but the database has no table ${table}`)
       const rows = scenario[table]
       if (!rows.length) continue
-      await c.query(`insert into ${ident(table)} select * from jsonb_populate_recordset(null::${ident(table)}, $1::jsonb) on conflict do nothing`, [JSON.stringify(rows)])
+      // Only the columns that take a value: one the database works out itself (generated) refuses any, and a fixture
+      // kept from a database has every column. An identity column keeps the row's own id.
+      const cols = (await c.query<{ c: string }>("select column_name as c from information_schema.columns where table_schema = 'public' and table_name = $1 and is_generated = 'NEVER' order by ordinal_position", [table])).rows.map((r) => ident(r.c)).join(', ')
+      try { await c.query(`insert into ${ident(table)} (${cols}) overriding system value select ${cols} from jsonb_populate_recordset(null::${ident(table)}, $1::jsonb) on conflict do nothing`, [JSON.stringify(rows)]) }
+      catch (err) { throw new PlanError(`the rows for ${table} could not be loaded: ${(err as Error).message}`) }
       loaded[table] = rows.length
     }
     await c.query('commit')

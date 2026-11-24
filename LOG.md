@@ -7348,3 +7348,20 @@ the task, idea and project pages opened in a browser.
 - No app-level context (Sandy expects one later).
 - A page address that names a section (`/ideas/<id>/context`) opened the tab on its overview when I loaded it
   directly; clicking Context in the nav works. Not looked into: it may be how tabs restore, for any section.
+
+## A fixture loads into a database with computed columns (2026-11-24)
+
+Sandy could not start CEB-90's smoke test from the fixture "Meridian". The cause was not who is signed in, as we
+both guessed: the load itself failed. A fixture kept from a database has every column, and the loader put every
+column back, including one the database works out itself (`employees.composite_risk_score`, generated), which
+Postgres refuses. The start answered with a bare server error, so the page said nothing useful.
+
+- **Only the columns that take a value are loaded** (`prototype-data.ts`, `load`): generated ones are left to the
+  database; an identity column keeps the row's own id.
+- **The review copy's `fixture.sql` does the same**, reading the columns from the database it is run on
+  (`fixtureSql`): it would have failed on a reviewer's machine the same way.
+- **A load that fails says which table and why**, as a refusal a page can show.
+- The loader's test database has a generated column now, and its scenario carries a value for it.
+
+With it, the Cloaked workbench's `before-start` hook ran for the first time (it gave `DEMO_TENANT_ID`), and the
+two smoke set-ups' scripts use what it gives. Tried from a throwaway process, not yet from the page.

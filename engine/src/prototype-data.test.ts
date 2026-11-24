@@ -23,7 +23,7 @@ try { await db.execute('select 1') } catch { reachable = false }
 
 const nodeModules = fileURLToPath(new URL('../node_modules', import.meta.url))
 // The app's schema, made the way an app's migrations would: bookkeeping included.
-const SCHEMA = `NODE_PATH=${nodeModules} node -e "const pg=require('pg');const c=new pg.Client({connectionString:process.env.SHOP_DB});c.connect().then(()=>c.query('create table product (id serial primary key, name text not null); create table line_item (id serial primary key, product_id int not null references product(id), qty int not null); create table schema_version (version int primary key); insert into schema_version values (1)')).then(()=>c.end())"`
+const SCHEMA = `NODE_PATH=${nodeModules} node -e "const pg=require('pg');const c=new pg.Client({connectionString:process.env.SHOP_DB});c.connect().then(()=>c.query('create table product (id serial primary key, name text not null); create table line_item (id serial primary key, product_id int not null references product(id), qty int not null, total int generated always as (qty * 2) stored); create table schema_version (version int primary key); insert into schema_version values (1)')).then(()=>c.end())"`
 // Its server says which database it was given.
 const SERVER = `node -e "require('http').createServer((q, s) => s.end(process.env.SHOP_DB)).listen(process.env.PORT)"`
 const until = async (ok: () => Promise<boolean>) => { for (let i = 0; i < 50; i++) { if (await ok()) return true; await new Promise((r) => setTimeout(r, 100)) } return false }
@@ -39,7 +39,7 @@ describe.skipIf(!reachable)('prototype data', () => {
     repoPath = join(dir, 'repo')
     const scenario = join(repoPath, '.prototype', 'scenarios', 'default')
     await mkdir(scenario, { recursive: true })
-    await writeFile(join(scenario, 'line_item.json'), JSON.stringify([{ id: 1, product_id: 2, qty: 3 }]))
+    await writeFile(join(scenario, 'line_item.json'), JSON.stringify([{ id: 1, product_id: 2, qty: 3, total: 6 }])) // as a fixture kept from a database has it: the column the database works out is there too
     await writeFile(join(scenario, 'product.json'), JSON.stringify([{ id: 1, name: 'Sample mug' }, { id: 2, name: 'Sample tote' }]))
     await commitAll(repoPath, 'init')
     await db.insert(workspace).values({ id: wsId, name: 'proto data test' })

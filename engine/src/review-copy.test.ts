@@ -51,9 +51,10 @@ describe('the mocks of a review copy', () => {
 describe('a fixture as a file', () => {
   it('writes each table\'s rows for a database that has the schema, skipping empty tables', () => {
     const sql = fixtureSql('Meridian', { employees: [{ id: 1, name: "O'Neil" }], empty: [], companies: [{ id: 'c1' }] })
-    expect(sql.indexOf('"companies"')).toBeLessThan(sql.indexOf('"employees"'))
-    expect(sql).toContain(`insert into "employees" select * from jsonb_populate_recordset(null::"employees", $fx$[{"id":1,"name":"O'Neil"}]$fx$::jsonb) on conflict do nothing;`)
-    expect(sql).not.toContain('"empty"')
+    expect(sql.indexOf("'companies'")).toBeGreaterThan(-1)
+    expect(sql.indexOf("'companies'")).toBeLessThan(sql.indexOf("'employees'"))
+    expect(sql).toContain(`table_name = 'employees' and is_generated = 'NEVER'; execute format('insert into %I (%s) overriding system value select %s from jsonb_populate_recordset(null::%I, %L::jsonb) on conflict do nothing', 'employees', cols, cols, 'employees', $fx$[{"id":1,"name":"O'Neil"}]$fx$); end $load$;`)
+    expect(sql).not.toContain("'empty'")
     expect(sql).toContain("set local session_replication_role = 'replica';")
   })
   it('quotes rows that hold its own quoting', () => {

@@ -88,6 +88,7 @@ export function mocksCompose(mocks: ReviewMock[]): string {
 
 const ident = (s: string) => `"${s.replace(/"/g, '""')}"`
 /** A fixture's rows as SQL for a database that already has the app's schema: what prototype-data.ts's load does, written down. */
+const lit = (s: string) => `'${s.replace(/'/g, "''")}'`
 export function fixtureSql(name: string, tables: Tables): string {
   const out = [`-- The fixture "${name}", from Evident: made-up rows for a database that already has the app's tables.`, 'begin;', "set local session_replication_role = 'replica';"]
   for (const t of Object.keys(tables).sort()) {
@@ -95,7 +96,10 @@ export function fixtureSql(name: string, tables: Tables): string {
     if (!rows.length) continue
     const json = JSON.stringify(rows)
     let tag = 'fx'; while (json.includes(`$${tag}$`)) tag += 'x'
-    out.push(`insert into ${ident(t)} select * from jsonb_populate_recordset(null::${ident(t)}, $${tag}$${json}$${tag}$::jsonb) on conflict do nothing;`)
+    let run = 'load'; while (json.includes(`$${run}$`)) run += 'x'
+    // Only the columns that take a value, read from the database it is run on: one it works out itself (generated)
+    // refuses any, and a fixture kept from a database has every column (as prototype-data.ts loads one).
+    out.push(`do $${run}$ declare cols text; begin select string_agg(quote_ident(column_name), ', ' order by ordinal_position) into cols from information_schema.columns where table_schema = 'public' and table_name = ${lit(t)} and is_generated = 'NEVER'; execute format('insert into %I (%s) overriding system value select %s from jsonb_populate_recordset(null::%I, %L::jsonb) on conflict do nothing', ${lit(t)}, cols, cols, ${lit(t)}, $${tag}$${json}$${tag}$); end $${run}$;`)
   }
   out.push('commit;',
     '-- Serial columns move past the rows just loaded.',
