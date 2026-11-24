@@ -56,6 +56,7 @@ export interface DataProvenance {
   /** Values left as they were because they are structure. */ kept?: string[]
   /** When it was last checked against a real response, and how much of one. */ checked?: { at: string; files: number; values: number; against: number }
   /** invented: a person said it holds nothing real. */ stated?: { by: string; at: string }
+  /** The names its files were given under, by the name each is kept under (which is the endpoint's key, for the mock), and who gave them. */ given?: { names: Record<string, string>; by: string }
 }
 export interface DataView {
   key: string; name: string; kind: DataKind
@@ -217,7 +218,7 @@ export async function fakeGiven(appId: string, key: string, i: { endpoint: strin
  * responses of the service on this computer, and where there is none, only `stated` (a person's word that it holds
  * nothing real) lets it be kept.
  */
-export async function saveData(appId: string, key: string, i: { dataKey: string; name?: string; files: Record<string, string>; stated?: boolean; issueId?: string | null; /** One endpoint's data alone, and whose. */ scope?: Scope }, actor = 'agent') {
+export async function saveData(appId: string, key: string, i: { dataKey: string; name?: string; files: Record<string, string>; stated?: boolean; issueId?: string | null; /** One endpoint's data alone, and whose. */ scope?: Scope; /** The name each file was given under, by the name it is kept under. */ was?: Record<string, string> }, actor = 'agent') {
   const m = await mockOf(appId, key), dk = dataKeyOf(i.dataKey, '')
   const old = await dataRow(m.id, dk)
   if (old?.kind === 'real') throw new PlanError(`"${dk}" is a real response: it is not written over. Keep invented data under another name`)
@@ -250,7 +251,7 @@ export async function saveData(appId: string, key: string, i: { dataKey: string;
     values += r.read.values; read += r.read.files
   }
   if (!real.length && !i.stated) throw new PlanError(`there is no real response of ${m.name} on this computer to check this against: it is kept only when a person states it holds nothing real (stated: true, from the person, never assumed)`)
-  const provenance: DataProvenance = { ...(i.scope ? { scope: i.scope } : old ? (provOf(old).scope ? { scope: provOf(old).scope } : {}) : {}), ...(real.length ? { checked: { at: now, files: read, values, against: real.length } } : {}), ...(i.stated ? { stated: { by: actor, at: now } } : {}) }
+  const provenance: DataProvenance = { ...(i.scope ? { scope: i.scope } : old ? (provOf(old).scope ? { scope: provOf(old).scope } : {}) : {}), ...(real.length ? { checked: { at: now, files: read, values, against: real.length } } : {}), ...(i.stated ? { stated: { by: actor, at: now } } : {}), ...(i.was && Object.keys(i.was).length ? { given: { names: i.was, by: actor } } : {}) }
   return keep(m, dk, { name: clip(i.name, 80) || old?.name || dk, kind: 'invented', files, recording: null, plan: {}, provenance, issueId: i.issueId }, actor, old)
 }
 
