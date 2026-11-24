@@ -24,6 +24,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { git } from './git.js'
+import { MUTANTS_MAX } from './mutation-setup.js'
 import { classifyRun, TEST_FILE } from './trajectory.js'
 
 export type Lang = 'py' | 'js'
@@ -195,7 +196,6 @@ export const sh: Sh = (cmd, cwd, timeoutMs) => new Promise((resolveP) => {
   })
 })
 
-export const MUTANTS_MAX = 150
 export const BUDGET_MS = 25 * 60_000
 
 /**
@@ -264,8 +264,4 @@ export function fromReport(report: unknown, changed: Map<string, number[]>, test
   return { tool: 'app', found, tried: found, caught, survivors, invalid, files: touched.size, tests }
 }
 
-/** How an app's mutation testing is set (its settings, `mutation`): off, its own tool, how the covering tests are run, how many breaks at most. */
-export function mutationSetup(setup: unknown): { off: boolean; tool: { cmd: string; report: string } | null; testCmd: string | null; max: number } {
-  const v = ((setup ?? {}) as { mutation?: { off?: boolean; tool?: { cmd?: string; report?: string }; test_cmd?: string; max?: number } }).mutation ?? {}
-  return { off: v.off === true, tool: v.tool?.cmd?.trim() && v.tool.report?.trim() ? { cmd: v.tool.cmd.trim(), report: v.tool.report.trim() } : null, testCmd: v.test_cmd?.trim() || null, max: Number.isFinite(v.max) && Number(v.max) > 0 ? Math.min(2000, Math.floor(Number(v.max))) : MUTANTS_MAX }
-}
+export { mutationSetup, MUTANTS_MAX } from './mutation-setup.js'

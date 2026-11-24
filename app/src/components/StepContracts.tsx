@@ -8,10 +8,11 @@
  * row per state). It took the place of "Skills by workflow step", the skills by job and the requirements list.
  * A reading view until handlers are given: then skills are added and removed where an agent works, and probes are
  * switched, set to block or to report only, edited (the app's own), added and removed where the engine verifies,
- * and nowhere else.
+ * and nowhere else. The pull request's Verify lists what its finalizing does and the checks that hold its press;
+ * only mutation testing there is an app's to switch and set (Sandy, 2026-11-24).
  */
 import { Fragment, useState } from 'react'
-import type { ProbeChange, ProbeView, RunsWhen, StageKey, StepGroup } from '@self-evident/engine/contracts'
+import type { FinalizeChange, FinalizeRow, ProbeChange, ProbeView, RunsWhen, StageKey, StepGroup } from '@self-evident/engine/contracts'
 import { Badge } from './Badge'
 
 const STAGE: Record<StageKey, string> = { prepare: 'Prepare', do: 'Do', verify: 'Verify', report: 'Report' }
@@ -44,6 +45,8 @@ export interface StepContractsProps {
   /** A step's skills, as they are after a change. */
   onSkills?: (step: string, names: string[]) => void
   onProbe?: (change: ProbeChange) => void
+  /** Mutation testing on the pull request, switched or set. */
+  onFinalize?: (change: FinalizeChange) => void
   /** A row its workflow switches (`from`): switched for that workflow, or (null) left to the app again. */
   onWorkflow?: (key: string, on: boolean | null) => void
   /** Each probe's latest trial on past work, by its key. */
@@ -62,7 +65,7 @@ export interface WorkflowView { file: string; name: string; scheduled: boolean; 
 /** A probe as it was when tried, and what it said of each merged task. */
 export interface TrialView { status: 'running' | 'done' | 'failed'; runs: string; tasks: number; when?: string; costUsd?: string | null; error?: string | null; results: { identifier: string; title: string; pr: number | null; pass: boolean | null; evidence: string; findings: string[] }[] }
 
-export function StepContracts({ groups, open = [], usable = [], onSkills, onProbe, onWorkflow, trials = {}, onTry, tryOn = 0, nightly = {}, workflows = [] }: StepContractsProps) {
+export function StepContracts({ groups, open = [], usable = [], onSkills, onProbe, onFinalize, onWorkflow, trials = {}, onTry, tryOn = 0, nightly = {}, workflows = [] }: StepContractsProps) {
   return (
     <div className="step-contracts" data-component="StepContracts">
       {groups.map((g) => (
@@ -71,6 +74,7 @@ export function StepContracts({ groups, open = [], usable = [], onSkills, onProb
           {g.steps.map((s) => {
             const skills = s.stages.flatMap((t) => (t.skills ?? []).map((k) => ({ ...k, stage: t.key })))
             const probes = s.stages.flatMap((t) => t.probes ?? []).filter((p) => p.on)
+            const finalize = s.stages.flatMap((t) => t.finalize ?? []), gates = finalize.filter((r) => r.group === 'gate').length
             return (
               <details key={s.key} className="step-contract" open={open.includes(s.key) || undefined}>
                 <summary aria-label={s.label}>
@@ -78,7 +82,9 @@ export function StepContracts({ groups, open = [], usable = [], onSkills, onProb
                   <span className="step-contract-attached">
                     {skills.map((k) => <span key={`${k.stage}:${k.name}`} className={`badge ${k.missing ? 'warn' : 'accent'}`} title={`${STAGE[k.stage]}${k.from ? `: from ${k.from}` : ''}`}>{STAGE[k.stage]} · {k.label}{k.missing ? ' · missing' : ''}</span>)}
                     {probes.length > 0 && <Badge>{probes.length} probe{probes.length === 1 ? '' : 's'}</Badge>}
-                    {!skills.length && !probes.length && <span className="faint">nothing attached</span>}
+                    {gates > 0 && <Badge>{gates} gate check{gates === 1 ? '' : 's'}</Badge>}
+                    {finalize.some((r) => r.set && !r.on) && <Badge>mutation testing off</Badge>}
+                    {!skills.length && !probes.length && !finalize.length && <span className="faint">nothing attached</span>}
                   </span>
                 </summary>
                 <dl className="fields step-contract-body">
@@ -87,11 +93,11 @@ export function StepContracts({ groups, open = [], usable = [], onSkills, onProb
                   <dt>Done when</dt><dd>{s.done}</dd>
                 </dl>
                 <ol className="step-stages">
-                  {s.stages.map((t) => {
+                  {s.stages.map((t, n) => {
                     const chosen = (t.skills ?? []).filter((k) => !k.fixed).map((k) => k.name)
                     const rest = usable.filter((u) => !(t.skills ?? []).some((k) => k.name === u.name))
                     return (
-                      <li key={t.key} aria-label={`${s.label}, ${STAGE[t.key]}`}>
+                      <li key={`${t.key}:${n}`} aria-label={`${s.label}, ${STAGE[t.key]}`}>
                         <div className="step-stage-head"><strong>{STAGE[t.key]}</strong><span className="faint">{BY[t.by]}</span></div>
                         <div className="step-stage-what">
                           <span>{t.what}</span>
@@ -109,6 +115,7 @@ export function StepContracts({ groups, open = [], usable = [], onSkills, onProb
                               </select>}
                             </div>
                           ) : null}
+                          {t.finalize ? <Finalizing rows={t.finalize} onFinalize={onFinalize} /> : null}
                           {t.probes ? <Probes step={s.label} probes={t.probes} onProbe={onProbe} onWorkflow={onWorkflow} trials={trials} onTry={onTry} tryOn={tryOn} nightly={nightly} workflows={workflows} /> : null}
                         </div>
                       </li>
@@ -260,5 +267,78 @@ function Probes({ step, probes, onProbe, onWorkflow, trials = {}, onTry, tryOn =
       {onProbe && !adding && <button type="button" className="linkish small" aria-label={`Add a probe to ${step}`} onClick={() => { setAdding(true); setEditing(null) }}>Add a probe</button>}
       {onProbe && adding && <ProbeForm start={NEW} workflows={workflows} onCancel={() => setAdding(false)} onSave={(d) => { const when = d.kind === 'command' ? d.when : 'build'; onProbe({ op: 'add', name: d.name, kind: d.kind, runs: d.runs, ...(d.blocks && when !== 'nightly' ? {} : { blocks: false }), ...(when !== 'build' ? { when } : {}) }); setAdding(false) }} />}
     </>
+  )
+}
+
+const FINALIZE_GROUPS: { key: FinalizeRow['group']; title: string; says: string }[] = [
+  { key: 'step', title: 'The finalizing', says: 'In this order, on the branch\'s head. What these find is named in the evidence; only the gate checks hold the press.' },
+  { key: 'gate', title: 'Gate checks', says: 'Each must pass before Push and mark ready for review.' },
+]
+type MutationDraft = { testCmd: string; prepare: string; max: string; tool: string; report: string }
+
+/**
+ * What the pull request's finalizing does and what its press waits on: one row each, in the order they run, then the
+ * gate. After a branch protection page (GitHub: the required checks listed, each one fixed by the rule). Mutation
+ * testing is the one row an app switches and sets; how it is set is said under its row, set or not.
+ */
+function Finalizing({ rows, onFinalize }: { rows: FinalizeRow[]; onFinalize?: (change: FinalizeChange) => void }) {
+  const [editing, setEditing] = useState(false)
+  return (
+    <table className="step-probes">
+      {FINALIZE_GROUPS.filter((g) => rows.some((r) => r.group === g.key)).map((g) => (
+        <tbody key={g.key} aria-label={g.title}>
+          <tr className="step-probe-group"><th colSpan={5} scope="rowgroup">{g.title} <span className="faint">{g.says}</span></th></tr>
+          {rows.filter((r) => r.group === g.key).map((r) => (
+            <Fragment key={r.key}>
+              <tr className={r.on ? undefined : 'off'} title={r.fixed}>
+                {onFinalize && <th scope="row" className="step-probe-switch"><input type="checkbox" aria-label={`Run ${r.name}`} checked={r.on} disabled={!r.set} onChange={(e) => onFinalize({ off: !e.target.checked })} /></th>}
+                <td>{r.name}</td>
+                <td className="faint">{r.what}</td>
+                <td>{!r.on ? <Badge>off</Badge> : r.group === 'gate' || r.key === 'gate' ? <Badge tone="warn">holds the press</Badge> : <Badge>reports</Badge>}</td>
+                {onFinalize && <td className="step-probe-acts">{r.set && !editing && <button type="button" className="linkish" aria-label="Edit how mutation testing is run" onClick={() => setEditing(true)}>Edit</button>}</td>}
+              </tr>
+              {r.set && <tr className="step-probe-trial-row"><td colSpan={5}>
+                {onFinalize && editing
+                  ? <MutationForm set={r.set} onCancel={() => setEditing(false)} onSave={(c) => { onFinalize(c); setEditing(false) }} />
+                  : <MutationSet set={r.set} />}
+              </td></tr>}
+            </Fragment>
+          ))}
+        </tbody>
+      ))}
+    </table>
+  )
+}
+
+/** How mutation testing is set, in a line or two: what makes the breaks, how the tests are run against each, and what is run first. */
+function MutationSet({ set }: { set: NonNullable<FinalizeRow['set']> }) {
+  return (
+    <div className="step-probe-night step-finalize-set" aria-label="How mutation testing is set">
+      <div>{set.tool ? <>The app's own tool: <span className="mono">{set.tool.cmd}</span>, its report read from <span className="mono">{set.tool.report}</span>.</> : <>The engine's own breaks, at most {set.max} a run, in Python, TypeScript and JavaScript.</>}</div>
+      {!set.tool && <div>{set.testCmd ? <>Its tests are run by <span className="mono">{set.testCmd}</span></> : <span className="faint">Its tests are run as each test file the branch changed, by the app's test command.</span>}</div>}
+      <div>{set.prepare ? <>Run first in its checkout: <span className="mono">{set.prepare}</span></> : <span className="faint">Nothing is run in its checkout first. If the tests need something installed, say what here.</span>}</div>
+    </div>
+  )
+}
+
+function MutationForm({ set, onSave, onCancel }: { set: NonNullable<FinalizeRow['set']>; onSave: (c: FinalizeChange) => void; onCancel: () => void }) {
+  const [d, setD] = useState<MutationDraft>({ testCmd: set.testCmd ?? '', prepare: set.prepare ?? '', max: String(set.max), tool: set.tool?.cmd ?? '', report: set.tool?.report ?? '' })
+  const max = Number(d.max)
+  const ready = Number.isInteger(max) && max > 0 && !!d.tool.trim() === !!d.report.trim()
+  const field = (key: keyof MutationDraft, label: string, placeholder: string, more: { mono?: boolean; type?: string } = { mono: true }) => (
+    <label className="step-finalize-field"><span>{label}</span><input aria-label={label} type={more.type} className={more.mono ? 'mono' : undefined} placeholder={placeholder} value={d[key]} onChange={(e) => setD({ ...d, [key]: e.target.value })} /></label>
+  )
+  return (
+    <form className="step-finalize-form" aria-label="How mutation testing is run" onSubmit={(e) => { e.preventDefault(); if (ready) onSave({ testCmd: d.testCmd.trim(), prepare: d.prepare.trim(), max: max === set.maxDefault ? null : max, tool: d.tool.trim() ? { cmd: d.tool.trim(), report: d.report.trim() } : null }) }}>
+      {field('testCmd', 'How its tests are run', 'e.g. pytest -q {files}')}
+      <p className="faint step-probe-says">{'{files}'} is replaced by the test files the pull request added or changed. Left empty, each is run by the app's test command.</p>
+      {field('prepare', 'Run first in its checkout', 'e.g. uv sync && pnpm install')}
+      <p className="faint step-probe-says">The finalizing has a checkout of its own, kept from one run to the next. This is run there before the tests.</p>
+      {field('max', 'Most breaks tried', String(set.maxDefault), { type: 'number' })}
+      {field('tool', 'The app\'s own tool', 'e.g. npx stryker run')}
+      {field('report', 'Where it writes its report', 'e.g. reports/mutation/mutation.json')}
+      <p className="faint step-probe-says">With a tool of its own, the engine makes no breaks: it reads the tool's report (Stryker's format) and keeps what falls on the changed lines.</p>
+      <div><button type="submit" className="small" disabled={!ready}>Save</button> <button type="button" className="linkish small" onClick={onCancel}>Cancel</button></div>
+    </form>
   )
 }

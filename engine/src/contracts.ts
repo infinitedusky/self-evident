@@ -5,22 +5,31 @@
  * Verify; nothing else about a step is an app's to change.
  *
  * `contractsOf` lays an app's own choices over the contracts, for Settings › Skills: only the steps its workflow
- * uses, the skills chosen for each, and the one list of what a build is held to (held.ts).
+ * uses, the skills chosen for each, the one list of what a build is held to (held.ts), and what the pull request's
+ * finalizing does and is gated on (finalize.ts), with the one part of it an app sets: mutation testing.
  *
  * Nothing here needs the database: the web UI imports it (`@self-evident/engine/contracts`).
  */
 import { applyHeldChange, heldOf, TESTS_KEY, type HeldChange, type Resolved, type RunsWhen } from './held.js'
 export type { RunsWhen }
+import { applyFinalizeChange, finalizePrepare, mutationSetup, MUTANTS_MAX, type FinalizeChange, type MutationSetup } from './mutation-setup.js'
+export { applyFinalizeChange, type FinalizeChange }
+import { GATE_NAMES } from './pr-gate.js'
 import { normalize, step, STEPS, styleOf, type StepKey, type Workflow } from './steps.js'
 
 export type StageKey = 'prepare' | 'do' | 'verify' | 'report'
 export type By = 'engine' | 'agent' | 'person'
-export type ContractKey = Exclude<StepKey, 'idea'> | 'build' | 'smoke'
+export type ContractKey = Exclude<StepKey, 'idea'> | 'build' | 'smoke' | 'pr'
 /** How a probe reaches its verdict: a command's exit code, the check's agent judging a sentence, a skill run by a fresh agent that edits nothing, or one the engine brings. */
 export type ProbeViewKind = 'command' | 'judged' | 'skill' | 'built-in'
 export interface AttachedSkill { name: string; label: string; from: string; missing?: boolean; /** Every app has it here; it is not the app's to remove. */ fixed?: boolean }
 export interface ProbeView { key: string; name: string; kind: ProbeViewKind; runs: string; blocks: boolean; on: boolean; /** A command the build does not run: left to the repository's CI on the pull request (`runs` is the check's name), or to its nightly run (`runs` is the workflow's file). */ when?: RunsWhen; /** The app's own: it can be removed. */ own: boolean; /** Its name and what it runs can be changed here. */ editable?: boolean; /** One the engine ships that this app has switched or reworded: it can be put back. */ changed?: boolean; /** The workflow that has the last word on whether it is on, by name. Switching it here switches it for that workflow. */ from?: string; /** Why it cannot be switched here, when it cannot. */ fixed?: string }
-export interface Stage { key: StageKey; by: By; what: string; skills?: AttachedSkill[]; probes?: ProbeView[] }
+/**
+ * One thing the pull request's finalizing does (finalize.ts), or one check of its gate (pr-gate.ts). A step's finding is
+ * named in the evidence and holds nothing; a gate check holds the press. Only mutation testing is an app's to set.
+ */
+export interface FinalizeRow { key: string; name: string; what: string; group: 'step' | 'gate'; on: boolean; /** Why it cannot be switched here. */ fixed?: string; /** Mutation testing's settings, on its row. */ set?: MutationSetup & { prepare: string | null; /** The cap the engine ships. */ maxDefault: number } }
+export interface Stage { key: StageKey; by: By; what: string; skills?: AttachedSkill[]; probes?: ProbeView[]; finalize?: FinalizeRow[] }
 export interface StepContract { key: ContractKey; icon: string; label: string; needs: string[]; leaves: string[]; done: string; stages: Stage[] }
 export interface StepGroup { title: string; steps: StepContract[] }
 
@@ -44,14 +53,50 @@ export const CONTRACTS: Record<ContractKey, Fixed> = {
   audit: { needs: ['The plan', 'The brief', 'The draft ADR'], leaves: ['An audit'], done: 'The report is recorded.', stages: [agent('Reads the plan against the brief, the ADR, the code and the prototype.'), report(READ)] },
   final: { needs: ['The blast radius', 'The audit'], leaves: ['The final ADR and plan', 'The merge checklist'], done: 'The plan is put right.', stages: [agent('Puts the ADR and the plan right from what the checks found.'), report(READ)] },
   testplan: { needs: ['The approved brief', 'Its acceptance criteria', 'The prototype and its reports, when there are any'], leaves: ['The test trajectory: every test the build commits to', 'The slices the build is cut into'], done: 'You approved it.', stages: [agent('Reads the code and writes the table: what each test proves, its level, its criterion, where it is written and where it turns green; what cannot be written up front, with why.'), { key: 'do', by: 'person', what: 'You read it and approve it: the build is made from it.' }] },
-  build: { needs: ['The approved brief', 'Its acceptance criteria', 'The ticket'], leaves: ['Commits on the task\'s branch', 'A draft pull request'], done: 'Every blocking probe passes, in at most three rounds.', stages: [
+  build: { needs: ['The approved brief', 'Its acceptance criteria', 'The ticket'], leaves: ['Commits on the task\'s branch', 'A draft pull request'], done: 'Every blocking probe passes, in at most three rounds, and every planned test was seen to fail and then to pass.', stages: [
     { key: 'prepare', by: 'engine', what: 'Cuts the branch by the app\'s naming, and holds commits to its format.' },
-    agent('Writes the code and its tests, and commits. It is told everything Verify will hold it to, and has the reviewers\' skills.'),
+    agent('With a test plan: the tests that can be written first, each seen to fail, then a slice at a time until its tests pass. Without one: the code and its tests. It commits, is told everything Verify will hold it to, and has the reviewers\' skills.'),
     { key: 'verify', by: 'engine', what: 'Runs each probe on what was built. A probe changes nothing: what one finds goes back to a builder.' },
     report('What changed, why, and how it was verified.'),
   ] },
   smoke: { needs: ['The built branch', 'A set-up to try it in'], leaves: ['Your mark on each check'], done: 'You marked every check.', stages: [{ key: 'prepare', by: 'engine', what: 'Brings up the set-up each check needs.' }, { key: 'do', by: 'person', what: 'You try what only a person can judge.' }] },
+  pr: { needs: ['The built branch', 'Your accepted smoke test'], leaves: ['The breaks no test caught, each named', 'The evidence, drafted for the description', 'The pull request, ready for review'], done: 'Every gate check passes and you pushed it.', stages: [
+    { key: 'verify', by: 'engine', what: 'Finalizes when you accept the smoke test, on this computer and never in the team\'s CI. Nothing reaches GitHub from it.' },
+    { key: 'do', by: 'person', what: 'You send a fix after what it found, or leave it with a reason; then you push and mark it ready for review.' },
+  ] },
 }
+/** The finalizing's steps, in the order they run (finalize.ts runs them by these). */
+export const FINALIZE_STEPS = [
+  { key: 'trajectory', name: 'The trajectory holds' },
+  { key: 'mutation', name: 'Mutation testing of the changed lines' },
+  { key: 'review', name: 'The review copy, built on the head' },
+  { key: 'gate', name: 'The gate checks' },
+  { key: 'evidence', name: 'The evidence drafted' },
+] as const
+const WHAT: Record<(typeof FINALIZE_STEPS)[number]['key'], string> = {
+  trajectory: 'every planned test was seen to fail, then to pass; a task with no test plan says so',
+  mutation: 'a small break in each line the branch changed, run against its tests; each one no test catches is named',
+  review: 'the reviewer\'s copy with nothing real in it; behind the head, it is made again when you push',
+  gate: 'the six below',
+  evidence: 'what the others found, written for the description and sent only when you push',
+}
+const ALWAYS = 'Always run.'
+const HOLDS = 'Always checked: it holds the press.'
+/** The finalizing, in the order it runs, then the gate's checks in the order the page lists them. The names are finalize.ts's and pr-gate.ts's. */
+export function finalizingOf(setup: unknown): FinalizeRow[] {
+  const m = mutationSetup(setup)
+  const gate = (key: keyof typeof GATE_NAMES, name: string, what: string): FinalizeRow => ({ key: `gate:${key}`, name, what, group: 'gate', on: true, fixed: HOLDS })
+  return [
+    ...FINALIZE_STEPS.map((x): FinalizeRow => ({ key: x.key, name: x.name, what: WHAT[x.key], group: 'step', ...(x.key === 'mutation' ? { on: !m.off, set: { ...m, prepare: finalizePrepare(setup), maxDefault: MUTANTS_MAX } } : { on: true, fixed: ALWAYS }) })),
+    gate('github', GATE_NAMES.github, 'the pull request\'s own checks, read from GitHub'),
+    gate('commands', GATE_NAMES.commands, 'the tests and every command the build is held to'),
+    gate('title', GATE_NAMES.title, 'the app\'s title rule and the task\'s ticket'),
+    gate('description', GATE_NAMES.description, 'the app\'s form for a description'),
+    gate('rollback', GATE_NAMES.rollback, 'what the description says of taking it back, against the blast radius'),
+    gate('smoke', GATE_NAMES.smoke, 'your marks on the Smoke page, on this head'),
+  ]
+}
+
 /** The steps that take skills: every one an agent does. */
 export const TAKES_SKILLS = (Object.keys(CONTRACTS) as ContractKey[]).filter((k) => CONTRACTS[k].stages.some((s) => s.key === 'do' && s.by === 'agent'))
 
@@ -90,12 +135,13 @@ export function contractsOf(i: ContractsInput): StepGroup[] {
       ...s,
       ...(s.key === 'do' && s.by === 'agent' ? { skills: skillsOf(key) } : {}),
       ...(key === 'build' && s.key === 'verify' ? { probes: heldTo(i.setup, i.workflow) } : {}),
+      ...(key === 'pr' && s.key === 'verify' ? { finalize: finalizingOf(i.setup) } : {}),
     })) }
   }
   const before = STEPS.filter((s) => s.key !== 'idea' && (!on || on.has(s.key))).map((s) => contract(s.key as ContractKey, step(s.key).icon, step(s.key).label))
   return [
     { title: 'Before the build', steps: before },
-    { title: 'The build', steps: [contract('build', '🧱', 'Build'), contract('smoke', '👀', 'Smoke test')] },
+    { title: 'The build', steps: [contract('build', '🧱', 'Build'), contract('smoke', '👀', 'Smoke test'), contract('pr', '🔀', 'Pull request')] },
   ]
 }
 
