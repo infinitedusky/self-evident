@@ -766,3 +766,20 @@ export const reviewCopyMadeSample: import('../engine').ReviewCopyView = {
   ...reviewCopySample,
   made: { from: '4f1c2aa9d0b7e6c5a4f3e2d1c0b9a8f7e6d5c4b3', fixture: null, try: 'Import `review/files/people.csv` (one made-up person) and start a scan.\nOpen that person: the findings card shows each finding (sample).', services: [{ key: 'vendor', name: 'Sample Vendor', files: 3 }], files: ['people.csv'], at: '2026-11-23T15:00:00.000Z', sha: '9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b', pushed: true, inStep: true },
 }
+
+/** A task's data agent, never asked (sample). */
+export const dataAgentSample: import('../engine').DataAgentView = { state: 'none', step: 1, proposal: null, approved: [], asked: null, change: null, sessionId: null, busy: false }
+const dataAsked = { text: 'The change sends each imported person to Sample Vendor for a scan and reads the results back (sample).', by: 'the task\'s agent', at: '2026-11-23T15:00:00.000Z' }
+const dataStep1: import('../engine').DataProposal = { step: 1, services: [], at: '2026-11-23T15:04:00.000Z', summary: '**Sample Vendor** (`vendor`), three calls:\n\n- `POST /runs`: starts a scan for the people sent; must return a run id.\n- `GET /runs/{id}`: the run\'s status; must show running, then done.\n- `GET /runs/{id}/results`: a link to the results file; must cover a person with findings and one with none.\n\nNot sure of: whether a failed run is also read (sample).' }
+const dataStep2: import('../engine').DataProposal = { step: 2, services: ['vendor'], at: '2026-11-23T15:20:00.000Z', summary: '**Sample Vendor**\n\n| Call | What answers it | Made from |\n|---|---|---|\n| `POST /runs` | made-up data I write | the client code: nothing real to be had |\n| `GET /runs/{id}` | made-up data I write | the client code |\n| `GET /runs/{id}/results` | a fake of a real response | **a results file you give on that call**; it holds people\'s details, so I mark it sensitive |\n\n**A file for the tester**: `people.csv`, one made-up person to import.\n\n**Database**: starts empty; no fixture needed (sample).' }
+const dataStep3: import('../engine').DataProposal = { step: 3, services: [], at: '2026-11-23T15:41:00.000Z', summary: 'Built for **Sample Vendor**: its three endpoints; made-up data for `POST /runs` and `GET /runs/{id}`; `people.csv` (one made-up person).\n\n**Still yours to do**: give the results file on `GET /runs/{id}/results`. Until then that call has nothing to answer with (sample).' }
+/** Asked, and working on its first step (sample). */
+export const dataAgentWorkingSample: import('../engine').DataAgentView = { state: 'working', step: 1, proposal: null, approved: [], asked: dataAsked, change: null, sessionId: 'session_data_sample', busy: true }
+/** Stopped after step 1: the calls it found wait for the person (sample). */
+export const dataAgentStep1Sample: import('../engine').DataAgentView = { ...dataAgentWorkingSample, state: 'proposed', proposal: dataStep1, busy: false }
+/** Stopped after step 2: where each call's data will come from (sample). */
+export const dataAgentStep2Sample: import('../engine').DataAgentView = { ...dataAgentWorkingSample, state: 'proposed', step: 2, proposal: dataStep2, approved: [dataStep1], busy: false }
+/** Stopped after step 3: what it built, and what is still the person's to do (sample). */
+export const dataAgentStep3Sample: import('../engine').DataAgentView = { ...dataAgentWorkingSample, state: 'proposed', step: 3, proposal: dataStep3, approved: [dataStep1, dataStep2], busy: false }
+/** All three approved (sample). */
+export const dataAgentDoneSample: import('../engine').DataAgentView = { ...dataAgentWorkingSample, state: 'done', step: 3, proposal: null, approved: [dataStep1, dataStep2, dataStep3], busy: false }

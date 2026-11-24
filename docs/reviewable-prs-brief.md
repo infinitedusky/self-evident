@@ -56,9 +56,9 @@ on one task, CEB-90, and its one outside service, SixtyFour.
    from the task's PR step, as `REVIEW-<branch>-<task id>`, with the pull request's Review section written from it.
    Was: the mock server, endpoints, faked data, fixture and the fake versions of the files on
    a `<branch>-review` branch with one start command.
-6. **The data agent** (after the review branch since 2026-11-23: CEB-90's data exists, so its pull request
-   does not wait on this): one per task, called by the task's agent, in three stop-and-wait steps (list the calls,
-   say where data comes from, build what was approved).
+6. ~~The data agent.~~ Built 2026-11-23 (LOG.md, "The data agent"), not yet run on a real task: one per task,
+   asked by the task's agent, in three steps (list the calls, say where data comes from, build what was approved),
+   each approved by the person on the Data step.
 7. **The gate**: a task cannot go to Ready for review until its review copy can be made.
 8. **Clean up when a task closes**: discard its prototypes and their databases, drop its smoke test database,
    delete its real responses and the real versions of its files from this computer.

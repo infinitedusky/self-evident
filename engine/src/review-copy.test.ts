@@ -83,7 +83,7 @@ describe('what a reviewer reads', () => {
   it('the folder\'s README says how to start it, what to try and that nothing is real', () => {
     const r = readme(made, kit, 'A change')
     expect(r).toContain('# Review copy of ENT-1 (pull request #12)')
-    expect(r).toContain('git fetch origin REVIEW-ent-1-a-change-ABC-9 && git checkout -B REVIEW-ent-1-a-change-ABC-9 FETCH_HEAD\n./review/start.sh')
+    expect(r).toContain('git fetch origin\ngit checkout REVIEW-ent-1-a-change-ABC-9\n./review/start.sh')
     expect(r).toContain('1. **Import** the file\n2. Open the person\n3. **See** the card')
     expect(r).toContain('Nothing. Vendor is answered by a mock')
     expect(r).toContain('Its database starts empty.')
@@ -97,6 +97,8 @@ describe('what a reviewer reads', () => {
     expect(s).toContain('<details>\n<summary><b>How the review copy works</b>')
     expect(s).toContain('https://github.com/acme/app/compare/ABC-9-ent-1-a-change...REVIEW-ent-1-a-change-ABC-9')
     expect(s).toContain('this branch at `abcdef012`')
+    expect(s).toContain('```\ngit fetch origin\ngit checkout REVIEW-ent-1-a-change-ABC-9\n./review/start.sh\n```')
+    expect(s).toContain('git checkout -B REVIEW-ent-1-a-change-ABC-9 origin/REVIEW-ent-1-a-change-ABC-9')
     expect(s).toContain('| `review/start.sh`, `review/stop.sh` | The one command, and its undo |')
     expect(s).toContain('- Sign-in: you are signed in already.')
     expect(s.indexOf('### Run it yourself')).toBeLessThan(s.indexOf('<details>'))

@@ -35,6 +35,7 @@ export interface MockData {
   /** What was learned from the app's code; nothing yet when left out. */ learning?: import('../engine').Learning
   /** Why submitting a pull request fails, when it should. */ submitPrError?: string
   /** A task's pull request as a step; not submitted (prSample) when left out. */ prView?: import('../engine').PrView
+  /** A task's data agent; never asked (dataAgentSample) when left out. */ dataAgent?: import('../engine').DataAgentView
   /** A task's review copy; not made yet (reviewCopySample) when left out. */ reviewCopy?: import('../engine').ReviewCopyView
   /** Making it is refused, with this. */ reviewCopyError?: string
   /** A task's save points and task branches; none when left out. */ taskBranches?: import('../engine').TaskBranches; /** Why a move fails, when it should. */ moveError?: string
@@ -382,6 +383,10 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/issues/:id/checklist', () => reply(d.checklist ?? null)),
     // The pull request step: the engine's rules, roughly. Submitting opens a draft; marking it ready opens it.
     http.get('/api/issues/:id/pr', () => reply(d.prView ?? s.prSample)),
+    http.get('/api/issues/:id/data-agent', () => reply(d.dataAgent ?? s.dataAgentSample)),
+    http.post('/api/issues/:id/data-agent', async ({ request }) => { const b = await request.json() as { message?: string }; if (!b.message?.trim()) return HttpResponse.json({ error: 'say what the task needs of its data' }, { status: 400 }); d.dataAgent = { ...s.dataAgentWorkingSample, asked: { text: b.message, by: 'you', at: '2026-11-23T15:00:00.000Z' } }; return reply(d.dataAgent) }),
+    http.post('/api/issues/:id/data-agent/approve', () => { const v = d.dataAgent ?? s.dataAgentSample; if (v.state !== 'proposed' || !v.proposal) return HttpResponse.json({ error: 'the data agent has nothing waiting to be approved' }, { status: 400 }); d.dataAgent = v.step === 3 ? { ...v, state: 'done', approved: [...v.approved, v.proposal], proposal: null } : { ...v, state: 'working', step: (v.step + 1) as 2 | 3, approved: [...v.approved, v.proposal], proposal: null, busy: true }; return reply(d.dataAgent) }),
+    http.post('/api/issues/:id/data-agent/change', async ({ request }) => { const b = await request.json() as { text?: string }; const v = d.dataAgent ?? s.dataAgentSample; if (!b.text?.trim()) return HttpResponse.json({ error: 'say what to change' }, { status: 400 }); d.dataAgent = { ...v, state: 'working', proposal: null, change: b.text, busy: true }; return reply(d.dataAgent) }),
     http.get('/api/issues/:id/review-copy', () => reply(d.reviewCopy ?? s.reviewCopySample)),
     http.post('/api/issues/:id/review-copy', async ({ request }) => {
       if (d.reviewCopyError) return HttpResponse.json({ error: d.reviewCopyError }, { status: 400 })

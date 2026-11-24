@@ -58,7 +58,7 @@ export async function ownerOf(sessionId: string | null | undefined): Promise<{ i
   if (!sessionId) return null
   const [s] = await db.select({ ref: session.subjectRef, worktreePath: session.worktreePath }).from(session).where(eq(session.id, sessionId))
   const ref = s?.ref as { issueId?: string; checkOf?: string; ideaId?: string; app?: boolean } | null
-  const issueId = ref?.issueId ?? ref?.checkOf
+  const issueId = ref?.issueId ?? ref?.checkOf ?? (ref as { dataOf?: string } | null)?.dataOf
   if (issueId) return { issueId }
   if (ref?.ideaId && s?.worktreePath && !ref.app) return { ideaId: ref.ideaId }
   const [p] = await db.select({ issueId: prototype.issueId, ideaId: prototype.ideaId }).from(prototype).where(eq(prototype.sessionId, sessionId))
