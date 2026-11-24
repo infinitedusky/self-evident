@@ -570,7 +570,7 @@ export const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
  * as the folder $MOCK_DATA, put together endpoint by endpoint (mock-serve.ts) in the form a run picks for it
  * (`pick`, by the mock's key): faked unless it says recorded. `data` says when it is on a real response.
  */
-export async function libraryStandIns(appId: string, except: string[] = [], pick: Record<string, { form: Form; issueId?: string | null; place?: 'prototype' | 'smoke' | 'review' }> = {}): Promise<(StandIn & { mock: MockStatus; data?: { kind: DataKind } })[]> {
+export async function libraryStandIns(appId: string, except: string[] = [], pick: Record<string, { form: Form; issueId?: string | null; place?: 'prototype' | 'smoke' | 'review'; fixture?: string | null }> = {}): Promise<(StandIn & { mock: MockStatus; data?: { kind: DataKind } })[]> {
   const rows = await db.select().from(mock).where(eq(mock.appId, appId)).orderBy(asc(mock.key))
   const out: (StandIn & { mock: MockStatus; data?: { kind: DataKind } })[] = []
   for (const m of rows) {
