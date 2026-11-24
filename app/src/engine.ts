@@ -146,6 +146,17 @@ export interface ProjectSummary { id: string; name: string; status: string; crea
 /** What was said on a pull request: a comment, a review (with its verdict), or a comment on a line. */
 export interface PrComment { id: string; kind: 'comment' | 'review' | 'line'; author: string; body: string; at: string; url: string | null; state?: string; path?: string; line?: number | null }
 /** A task's pull request as a step (the engine's pr-view.ts). */
+/** A step the data agent finished: what it proposes (steps 1 and 2) or what it built (step 3). */
+export interface DataProposal { step: 1 | 2 | 3; summary: string; /** Step 2: the services it will build for. */ services: string[]; at: string }
+/** A task's data agent (engine data-agent.ts): one round of three steps, each approved by the person before the next. */
+export interface DataAgentView {
+  /** none: never asked. working: on `step`. proposed: stopped, waiting for the person. done: all three approved. */
+  state: 'none' | 'working' | 'proposed' | 'done'; step: 1 | 2 | 3
+  proposal: DataProposal | null; approved: DataProposal[]
+  asked: { text: string; by: string; at: string } | null
+  /** What the person asked to be changed in the step it is on. */ change: string | null
+  sessionId: string | null; busy: boolean
+}
 /** A task's review copy (engine review-copy.ts): a branch a reviewer checks out and starts with one command, on made-up data. */
 export interface ReviewCopyView {
   /** The branch a reviewer checks out. Null: the task has no pull request yet. */ branch: string | null
@@ -509,7 +520,7 @@ export interface TalkSession { id: string; appId: string | null; cwd: string | n
 /** One line of what a run read, did or said. */
 export interface RunLine { seq: number; at: string; type: string; text?: string; tool?: string; input?: Record<string, unknown>; error?: string; subIssues?: unknown[]; minutes?: number }
 export interface RunLog { runId: string; status: string | null; working: boolean; startedAt: string | null; endedAt: string | null; costUsd: number | null; lines: RunLine[] }
-export interface TaskAgentOut { /** Its conversation; none for the planner, which is a run (runId). */ sessionId: string | null; runId?: string; /** What came of it, once it is back. */ detail?: string; failed?: boolean; kind: 'prototype' | 'check' | 'planner' | /** The agent an idea came from (Learn's). */ 'source'; what: string; icon?: string; title: string; prototypeId?: string; check?: string; busy: boolean; /** Stopped on the person: what it asked to be allowed and has no answer to. */ asking?: { requestId: string; tool: string; what: string; risk: string; since: string } | null }
+export interface TaskAgentOut { /** Its conversation; none for the planner, which is a run (runId). */ sessionId: string | null; runId?: string; /** What came of it, once it is back. */ detail?: string; failed?: boolean; kind: 'prototype' | 'check' | 'planner' | /** The task's data agent (engine data-agent.ts). */ 'data' | /** The agent an idea came from (Learn's). */ 'source'; what: string; icon?: string; title: string; prototypeId?: string; check?: string; busy: boolean; /** Stopped on the person: what it asked to be allowed and has no answer to. */ asking?: { requestId: string; tool: string; what: string; risk: string; since: string } | null }
 export interface TalkMessage { id: number; sessionId: string; author: 'user' | 'agent' | 'tool' | 'engine'; kind: 'text' | 'brief' | 'tool_call' | 'tool_result' | 'permission' | 'auto' | 'result' | 'error' | 'handoff'; body: string; payload: Record<string, any> | null; sentAt: string | null }
 /** A Claude Code session run on an app in a terminal or an editor; `talkId` when it's already a conversation here. */
 export interface ClaudeSession { id: string; cwd: string; branch: string | null; title: string | null; at: string; talkId: string | null }
@@ -724,6 +735,10 @@ export const engine = {
   setReportFormat: (appId: string, f: { daily?: string; weekly?: string }) => call<{ daily: string; weekly: string }>('PUT', `/apps/${appId}/report-format`, f),
   prView: (issueId: string) => call<PrView>('GET', `/issues/${issueId}/pr`),
   setPrMessage: (issueId: string, body: string) => call<{ written: string | null }>('PUT', `/issues/${issueId}/pr/message`, { body }),
+  dataAgent: (issueId: string) => call<DataAgentView>('GET', `/issues/${issueId}/data-agent`),
+  askDataAgent: (issueId: string, message: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent`, { message }),
+  approveDataStep: (issueId: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent/approve`),
+  changeDataStep: (issueId: string, text: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent/change`, { text }),
   reviewCopy: (issueId: string, fresh = false) => call<ReviewCopyView>('GET', `/issues/${issueId}/review-copy${fresh ? '?fresh=1' : ''}`),
   makeReviewCopy: (issueId: string, body: { fixture: string | null; try: string }) => call<ReviewCopyView>('POST', `/issues/${issueId}/review-copy`, body),
   updatePr: (issueId: string) => call<{ number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/update`),

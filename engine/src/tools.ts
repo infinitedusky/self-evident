@@ -31,6 +31,7 @@ import { convertIdea, guardComplete, guardDirect, listWorkflows, setStep, stepsO
 import { STEPS } from './steps.js'
 import { answerQuestion, finishPlanning, preparePlanning } from './planner.js'
 import { createProject, issueDetail, listProjects, PlanError, projectGraph, addSubTask } from './projects.js'
+import { callerOf, DATA_TOOLS, refusal } from './data-agent.js'
 import { delegateFor } from './tkt.js'
 import { runner } from './runner.js'
 import { listStories } from './storybook.js'
@@ -215,6 +216,10 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         async (a) => tryIt(() => listStories(appId, a.match, sessionId))),
       def('agents_out', 'For a task\'s or an idea\'s own agent: the agents it has out (a prototype\'s builder, a fresh agent on each check) and, when the idea came from Learn, the Learn agent that kept it, each with its sessionId, its state (working, idle, or waiting for the person to allow something, with what), and the last thing it said.', {},
         async () => tryIt(() => { if (!sessionId) throw new PlanError('this needs a conversation'); return agentsOut(sessionId) })),
+      def('data_agent', 'For a task\'s own agent (and anyone setting a task up): ask the task\'s data agent for what the task needs outside its own code: the outside services it calls and what answers each call, the files a tester brings, the rows its database starts from. It is a separate agent with its own instructions and the only one that changes them. It works in three steps (what the task calls; where each call\'s data comes from; build what was approved) and stops after each for the person, who approves on the task\'s Data step. op "ask" (default): issueId and message, saying what the change does and what it needs; started if the task has none; returns at once, and what it says comes back to you as a message. op "state": where it stands (its step, what it proposed, what was approved).', { issueId: z.string(), op: z.enum(['ask', 'state']).optional(), message: z.string().optional() },
+        async (a) => tryIt(async () => { await ownIssue(a.issueId); const d = await import('./data-agent.js'); if (a.op === 'state') return d.dataAgent(a.issueId); const from = (await d.callerOf(sessionId)).kind === 'task' ? sessionId : null; return d.askDataAgent(a.issueId, a.message ?? '', { from, actor }) })),
+      def('data_step', 'For a task\'s data agent only: its three steps. op "state": the step you are on, what you proposed, what the person approved and what they asked to change. op "propose": you have finished the step you are on (step: 1, 2 or 3) and stop for the person; summary is what they read to approve it, in Markdown, short; step 2 also gives services, the keys of every service you will build for, which step 3 is held to. After proposing, end your turn.', { op: z.enum(['state', 'propose']), step: z.number().optional(), summary: z.string().optional(), services: z.array(z.string()).optional() },
+        async (a) => tryIt(async () => { if (!sessionId) throw new PlanError('this needs a conversation'); const d = await import('./data-agent.js'); const c = await d.callerOf(sessionId); if (c.kind !== 'data') throw new PlanError('data_step is the data agent\'s own: ask it with data_agent'); if (a.op === 'state') return c.round; return d.proposeStep(sessionId, { step: a.step ?? 0, summary: a.summary ?? '', services: a.services }) })),
       def('tell_agent', 'For a task\'s own agent: say something to an agent this task has out, like a change the person wants in the prototype. agent: its sessionId, or prototype, or a check\'s key (analysis, adr, risk, audit), or learn (the agent the idea came from: it has read the codebase, so ask it before reading the code from nothing). It starts from your message, so write it in full. Returns at once; its answer comes back to you as a message when it finishes.', { agent: z.string(), message: z.string() },
         async (a) => tryIt(() => { if (!sessionId) throw new PlanError('this needs a conversation'); return tellAgent(sessionId, a.agent, a.message) })),
       def('read_agent', 'For a task\'s own agent: the recent conversation of an agent this task has out: what was said to it (by you, or by the person directly) and what it said. last: how many messages (default 20).', { agent: z.string(), last: z.number().optional() },
@@ -425,5 +430,7 @@ export function engineTools(opts: ToolScope): EngineTool[] {
   ]
   // A change the person can see: the workspace's following tab goes to its page (follow.ts).
   const parse = (r: ToolResult) => { try { return JSON.parse(r.content[0]?.text ?? '') } catch { return null } }
-  return tools.map((t) => (FOLLOWED.has(t.name) ? { ...t, handler: async (a: any) => { const r = await t.handler(a); if (!r.isError) await follow(appId, sessionId ?? null, t.name, a ?? {}, parse(r)); return r } } : t))
+  // The wall around a task's data (data-agent.ts): a task's own agent reads it and asks its data agent; the data agent changes it one approved step at a time.
+  const walled = tools.map((t) => (DATA_TOOLS[t.name] ? { ...t, handler: async (a: any) => { const no = refusal(await callerOf(sessionId), t.name, a ?? {}); return no ? { ...text(`refused: ${no}`), isError: true } : t.handler(a) } } : t))
+  return walled.map((t) => (FOLLOWED.has(t.name) ? { ...t, handler: async (a: any) => { const r = await t.handler(a); if (!r.isError) await follow(appId, sessionId ?? null, t.name, a ?? {}, parse(r)); return r } } : t))
 }

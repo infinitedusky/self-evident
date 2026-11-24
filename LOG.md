@@ -6979,3 +6979,33 @@ fetched to FETCH_HEAD worked in any clone but read as a trick. Because the branc
 it says how to take it afresh when it was checked out before. The enterprise kit's empty company is now "Sample
 Company": the name it had was a real company's.
 
+### The data agent (2026-11-23)
+
+Brief step 6 (`engine/src/data-agent.ts`; the panel at the top of a task's Data step). Decided by Sandy today, each
+asked as a question before building:
+
+- **The person approves each step, on the Data step.** The agent proposes; the panel shows what it proposes with
+  Approve and "Say what to change". Evident refuses its building tools until step 2 is approved.
+- **Only the data agent changes a task's data.** A task's own agent reads the calls, services, data and test files
+  and asks the data agent for any change (the `data_agent` tool); its own changing calls are refused with that
+  pointer. The app's own agent, a prototype's agent and a person's own session are as they were.
+- **What it may build in step 3**: services and endpoints; fakes of real responses; made-up data it writes itself;
+  test files and an endpoint's data filled out for a fixture.
+
+How it works:
+
+- One per task: a conversation of its own in the task's folder, which it only reads (no editing tools), listed
+  among the task's agents as Data. Started the first time it is asked, by the task's agent or by the person.
+- Three steps, a stop after each: 1, what the task calls (it sets the task's services and calls); 2, where each
+  call's data comes from (it changes nothing, and names the services it will build for); 3, build, then say what it
+  built and what is still the person's to do. Approving the third ends the round; asked again, it starts over.
+- Where it stands is read from the task's events (`data_agent.asked`, `.proposed`, `.approved`, `.change`). Nothing
+  else keeps it, and there is no new table.
+- The wall, by step: step 1 allows only the task's calls; step 2 nothing; step 3 the building tools, and only for
+  the services named in the approved step 2. While a step waits for the person, nothing.
+- It is not given the folder of real responses, and its instructions say a real value never enters a summary, a
+  message or data it writes.
+
+Not proved yet: no live round has been run. The steps, the wall and the page are tested as code and as stories; the
+first real task that asks it is the proof. Not walled: a prototype's own agent can still set up a service.
+
