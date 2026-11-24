@@ -9,7 +9,8 @@
  *   answer yet is unanswered. It is a decision record like any other and sits with them, first, marked Unanswered
  *   (Sandy, 2026-11-24: "they should be actual decision records, just not completed … incomplete or unanswered").
  *   An agent that was not told the answer in conversation proposes one, which the person accepts or rejects there.
- *   Either kind can be marked as waiting on someone the person has asked. The nav counts what is unanswered;
+ *   Either kind can be marked as waiting on someone the person has asked. A decision can carry its background:
+ *   the story of why it is a question, shown in full while it is unanswered and folded once it is answered. The nav counts what is unanswered;
  *   nothing is held up by it.
  * - Notes: what was said or found, by day. These and the decisions are the app's notes (Notes.tsx), so a report
  *   includes them.
@@ -92,6 +93,7 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
         {!settled.length && !waiting.length && open !== 'decision' && <div className="empty">None yet.</div>}
         {waiting.map((n) => (
           <div className="context-row context-qa context-unmade" key={n.id} data-note={n.id} data-unanswered={n.waitingOn ? 'waiting' : n.status}>
+            {n.background && open !== n.id && open !== `edit:${n.id}` && <Background text={n.background} open />}
             <div className="context-q">{n.title}</div>
             <div>
               <div className="context-detail">
@@ -102,6 +104,8 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
               {n.status === 'proposed' && n.body && <div className="context-why"><span className="faint">Why: </span><Md text={n.body} inline /></div>}
               {open === `wait:${n.id}`
                 ? <WaitingForm start={n.waitingOn ?? ''} busy={busy} onSave={(to) => act(() => engine.editContextNote(subject, n.id, { waitingOn: to }))} onCancel={() => setOpen(null)} />
+                : open === `edit:${n.id}`
+                  ? <DecisionForm start={n} asking busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, b.answer ? { ...b, status: 'settled' } : { title: b.title, background: b.background }))} onCancel={() => setOpen(null)} />
                 : open === n.id
                   ? <DecisionForm start={n} answering busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, { ...b, status: 'settled' }))} onCancel={() => setOpen(null)} />
                   : (
@@ -111,6 +115,7 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
                       <button className={`btn small ${n.status === 'proposed' ? 'quiet' : ''}`} disabled={busy} aria-label={`Answer: ${n.title}`} onClick={() => setOpen(n.id)}>{n.status === 'proposed' ? 'Answer it yourself' : 'Answer it'}</button>
                       {!n.waitingOn && <button className="btn quiet small" disabled={busy} aria-label={`Waiting on someone: ${n.title}`} title="You have asked someone and are waiting for their answer" onClick={() => setOpen(`wait:${n.id}`)}>Waiting on someone</button>}
                       {n.waitingOn && <button className="btn quiet small" disabled={busy} aria-label={`No longer waiting: ${n.title}`} onClick={() => act(() => engine.editContextNote(subject, n.id, { waitingOn: '' }))}>No longer waiting</button>}
+                      <button className="btn quiet small" disabled={busy} aria-label={`Edit the question: ${n.title}`} title="Its question and its background; give an answer too, or leave it unanswered" onClick={() => setOpen(`edit:${n.id}`)}>Edit</button>
                       {n.status === 'open' && <button className="btn quiet small" disabled={busy} aria-label={`Not needed: ${n.title}`} onClick={() => { if (window.confirm(`Drop the question "${n.title}"? It will not be asked again.`)) void act(() => engine.removeContextNote(subject, n.id)) }}>Not needed</button>}
                     </div>
                   )}
@@ -199,6 +204,7 @@ function DecisionRow({ n, onEdit }: { n: ContextNote; onEdit?: () => void }) {
   const made = n.status === 'settled'
   return (
     <div className={`context-row ${n.title ? 'context-qa' : ''}`} data-note={n.id}>
+      {n.background && <Background text={n.background} />}
       {n.title && <div className="context-q">{n.title}</div>}
       <div>
         {made ? <div className="context-title">{n.answer}</div> : <div className="context-detail">{n.status === 'proposed' ? `Unanswered: the agent proposes "${n.answer}"` : n.waitingOn ? `Unanswered: waiting on ${n.waitingOn}` : 'Unanswered'}</div>}
@@ -212,17 +218,29 @@ function DecisionRow({ n, onEdit }: { n: ContextNote; onEdit?: () => void }) {
   )
 }
 
-/** A decision asked, made or changed. Adding one, the answer may be left empty: it then waits to be decided. */
-function DecisionForm({ start, answering, busy, onSave, onCancel, onRemove }: { start?: ContextNote; /** An open or proposed one being answered: the answer is what is asked for. */ answering?: boolean; busy: boolean; onSave: (b: { title: string; answer: string; body: string; on: string }) => void; onCancel: () => void; onRemove?: () => void }) {
-  const [d, setD] = useState({ title: start?.title ?? '', answer: start?.answer ?? '', body: start?.body ?? '', on: answering ? today() : start?.on ?? today() })
-  const needs = !!start // one already made, or being answered, has an answer
+/** A decision's background: the story of why it is a question. In full while it is unanswered; folded once it is answered. */
+function Background({ text, open }: { text: string; open?: boolean }) {
   return (
-    <form className="mock-edit context-form" data-component="ContextDecisionForm" onSubmit={(e) => { e.preventDefault(); onSave({ title: d.title.trim(), answer: d.answer.trim(), body: d.body.trim(), on: d.on }) }}>
-      <label>The question<input autoFocus={!answering} value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} placeholder="What happens to a card when it is removed?" /></label>
+    <details className="context-bg" open={open} data-component="ContextBackground">
+      <summary className="context-detail">Background</summary>
+      <Md text={text} className="context-text" />
+    </details>
+  )
+}
+
+/** A decision asked, made or changed. Adding one, the answer may be left empty: it then waits to be decided. */
+function DecisionForm({ start, answering, asking, busy, onSave, onCancel, onRemove }: { start?: ContextNote; /** An open or proposed one being answered: the answer is what is asked for. */ answering?: boolean; /** An unanswered one edited: its question and background, and an answer if one is given now. */ asking?: boolean; busy: boolean; onSave: (b: { title: string; answer: string; body: string; background: string; on: string }) => void; onCancel: () => void; onRemove?: () => void }) {
+  const [d, setD] = useState({ title: start?.title ?? '', answer: asking ? '' : start?.answer ?? '', body: asking ? '' : start?.body ?? '', background: start?.background ?? '', on: answering ? today() : start?.on ?? today() })
+  const needs = !!start && !asking // one already made, or being answered, has an answer
+  // Always the same four, in the order they are thought (Sandy: "background should be above the question"): what led to the question, the question, the answer, why that answer.
+  return (
+    <form className="mock-edit context-form" data-component="ContextDecisionForm" onSubmit={(e) => { e.preventDefault(); onSave({ title: d.title.trim(), answer: d.answer.trim(), body: d.answer.trim() ? d.body.trim() : '', background: d.background.trim(), on: d.on }) }}>
+      <label>Background (optional): what led to the question, and what turns on it<textarea autoFocus={!start} rows={3} value={d.background} onChange={(e) => setD({ ...d, background: e.target.value })} placeholder="The story, and anything to read. Whoever answers it, and every agent, is given this." /></label>
+      <label>The question<input autoFocus={!!start && !answering} value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} placeholder="What happens to a card when it is removed?" /></label>
       <label>{needs ? 'The answer' : 'The answer (leave it empty to answer later)'}<input autoFocus={answering} value={d.answer} onChange={(e) => setD({ ...d, answer: e.target.value })} placeholder="It is deleted at the provider, not hidden here" /></label>
-      <label>Why (optional)<textarea rows={2} value={d.body} onChange={(e) => setD({ ...d, body: e.target.value })} /></label>
+      <label>Why this answer (optional)<textarea rows={2} value={d.body} onChange={(e) => setD({ ...d, body: e.target.value })} placeholder={d.answer.trim() ? 'The reason it was decided this way' : 'Once there is an answer: the reason it was decided this way'} /></label>
       <div className="row">
-        <button className="btn small" type="submit" disabled={busy || (!d.title.trim() && !d.answer.trim()) || (needs && !d.answer.trim()) || (!needs && !d.title.trim())}>{busy ? 'Saving…' : !needs && !d.answer.trim() ? 'Add it, unanswered' : 'Save the decision'}</button>
+        <button className="btn small" type="submit" disabled={busy || (!d.title.trim() && !d.answer.trim()) || (needs && !d.answer.trim()) || (!needs && !d.title.trim())}>{busy ? 'Saving…' : d.answer.trim() || needs ? 'Save the decision' : start ? 'Save it, unanswered' : 'Add it, unanswered'}</button>
         {onRemove && <button className="btn quiet small" type="button" onClick={onRemove}>Delete</button>}
         <button className="btn quiet small" type="button" onClick={onCancel}>Cancel</button>
       </div>

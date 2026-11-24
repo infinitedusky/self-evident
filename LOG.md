@@ -7546,6 +7546,28 @@ record as a made one; only the page set it apart, and that read as a temporary s
 
 The words "open" and "proposed" stay in the code and the database as the two unanswered states.
 
+## A decision has a background: why it is a question (Sandy, 2026-11-24: "some place where we can tell a story about why it's an open question")
+
+Built, not merged. Two different whys, kept apart (Sandy: "I take Why to be the reason why we made the decision,
+not the reason we're asking the question"):
+
+- **Background** (`note.background`, migration `0061_decision_background`, Markdown): what led to the question,
+  what turns on it, what to read.
+- **Why this answer** (`note.body`, as before): the reason for the answer.
+
+**The form is always the same four fields, in this order** (Sandy: "we're missing the why and the answer";
+"background should be above the question"): Background, The question, The answer, Why this answer. Adding one,
+answering one and editing one all show all four; the answer may be left empty, and the decision is then
+unanswered. An unanswered decision has **Edit**, which changes its question and background and answers it only if
+an answer is typed.
+
+On the page a decision's background sits above its question, across both columns: open to read while the decision
+is unanswered, folded under "Background" once it is answered. Every agent is given it with the decision, and a
+report is given it with each open decision. An agent that asks a question says why in `background`.
+
+Not done: a background is text only. Pointing it at a reference doc in the same Context is done in words ("see the
+vault notes"), not as a link.
+
 ### Screens are looked at in light and in dark (2026-11-24)
 
 Sandy, on the Screens page: "the same way I can do phone, tablet, desktop, there should be a light or dark mode
