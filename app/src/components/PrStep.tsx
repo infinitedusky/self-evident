@@ -6,6 +6,8 @@
  * Top to bottom, the order a person asks in: where it stands and what it waits on; the one thing to press now
  * (submit it, or mark the draft ready for review); its message, as it will open or as GitHub has it; what was said
  * on it, oldest first. Submitting and marking ready each ask once more before they act: both are seen by the team.
+ * Marking it ready is the finalizing's press (Finalize.tsx; Sandy, 2026-11-23: "Push and mark ready for review: a
+ * separate button, enabled only when the gate checks pass"), and on one that is ready, so is updating it.
  * After GitHub's own pull request page, kept to what is decided here; reviewing and merging stay on GitHub.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -15,7 +17,8 @@ import { Md } from './Md'
 import { ReviewCopy } from './ReviewCopy'
 import { SubmitPr } from './SubmitPr'
 import { ReleaseChecks } from './ReleaseChecks'
-import { API, engine, openEvents, type PrComment, type PrView } from '../engine'
+import { Finalize } from './Finalize'
+import { API, engine, openEvents, type FinalizeView, type PrComment, type PrView } from '../engine'
 
 const TONE: Record<string, Tone> = { draft: 'neutral', open: 'accent', closed: 'warn', merged: 'ok' }
 const SAYS: Record<string, string> = { draft: 'Draft', open: 'Open, ready for review', closed: 'Closed', merged: 'Merged' }
@@ -26,22 +29,22 @@ const when = (at: string) => { const d = new Date(at); return at && !Number.isNa
 export function PrStep({ issueId, appId, base }: { issueId: string; appId: string; /** The task's address, for the links on from here. */ base: string }) {
   const [v, setV] = useState<PrView | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [asking, setAsking] = useState(false)
   const [busy, setBusy] = useState(false)
   const [sent, setSent] = useState(false) // show what the next update sends, when GitHub's is behind
   const [writing, setWriting] = useState<string | null>(null) // the description for the team, while it is being written here
   const timer = useRef<number | undefined>(undefined)
-  const load = useCallback(() => engine.prView(issueId).then((x) => { setV(x); setError(null) }).catch((e) => setError(problemOf(e))), [issueId])
+  const [f, setF] = useState<FinalizeView | null>(null)
+  const load = useCallback(() => { void engine.finalize(issueId).then(setF).catch(() => setF(null)); return engine.prView(issueId).then((x) => { setV(x); setError(null) }).catch((e) => setError(problemOf(e))) }, [issueId])
   useEffect(() => {
     void load()
     const es = openEvents(`${API}/events?since=now&app=${appId}`)
     const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(() => void load(), 400) }
-    for (const t of ['pr.opened', 'pr.updated', 'pr.submitted', 'pr.ready', 'pr.left_closed', 'build.status', 'smoke.marked', 'task.checked']) es.addEventListener(t, bump)
+    for (const t of ['pr.opened', 'pr.updated', 'pr.submitted', 'pr.ready', 'pr.left_closed', 'build.status', 'smoke.marked', 'smoke.accepted', 'task.checked', 'task.test_ran', 'finalize.started', 'finalize.step', 'finalize.done', 'finalize.failed', 'finalize.survivor', 'finalize.fix', 'pr.sent', 'pr.read_back', 'pr.edited_there']) es.addEventListener(t, bump)
     return () => { es.close(); window.clearTimeout(timer.current) }
   }, [issueId, appId, load])
-  const ready = async () => { setBusy(true); setError(null); try { await engine.markPrReady(issueId); setAsking(false); await load() } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
   const [updated, setUpdated] = useState(false)
-  const update = async () => { setBusy(true); setError(null); setUpdated(false); try { await engine.updatePr(issueId); setSent(false); await load(); setUpdated(true) } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
+  // A draft is brought up to date as it stands; one that is ready goes through the finalizing's gate (the engine's pushReady). `theirs`: what stands when it was edited on GitHub and here.
+  const update = async (theirs?: 'keep' | 'replace') => { setBusy(true); setError(null); setUpdated(false); try { if (v?.pr?.status === 'open') await engine.sendPr(issueId, theirs); else await engine.updatePr(issueId, theirs); setSent(false); await load(); setUpdated(true) } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
   const saveMessage = async () => { if (writing === null) return; setBusy(true); setError(null); try { await engine.setPrMessage(issueId, writing); setWriting(null); await load() } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
@@ -77,16 +80,20 @@ export function PrStep({ issueId, appId, base }: { issueId: string; appId: strin
       ) : pr.status === 'draft' ? (
         <div className="pr-act">
           <p style={{ margin: '0 0 6px' }}>It is a draft: your team can see it, and nobody is asked to review it yet.{v.byHand > 0 ? <> {v.byHand} check{v.byHand === 1 ? '' : 's'} of yours still wait{v.byHand === 1 ? 's' : ''} in <Link to={`${base}/smoke`}>the smoke test</Link>.</> : ''}</p>
-          {asking ? (
-            <div className="submit-pr-ask" role="group" aria-label="Mark it ready for review">
-              <div>This takes #{pr.number} out of draft. Its reviewers are asked, and it can be merged once they approve.</div>
-              <div><button className="btn small" disabled={busy} onClick={() => void ready()}>{busy ? 'Marking it ready…' : 'Mark it ready'}</button> <button className="btn quiet small" disabled={busy} onClick={() => setAsking(false)}>Not yet</button></div>
-            </div>
-          ) : <button className="btn" onClick={() => { setAsking(true); setError(null) }}>Ready for review</button>}
+          <p className="faint" style={{ margin: 0, fontSize: 13 }}>Marking it ready is the finalizing's press, below: it is there once the gate passes.</p>
         </div>
       ) : pr.status === 'open' ? (
         <p className="pr-act faint">It is ready for review. Reviewing and merging are done on GitHub; what is said there shows below.</p>
       ) : <p className="pr-act faint">It is merged. Nothing more is sent to it.</p>}
+
+      {/* The finalizing: what was measured, what stands in the way, and the one press that sends it. */}
+      {f && pr?.status !== 'merged' && v.total > 0 && v.landed === v.total && (
+        <Finalize v={f} base={base} number={pr?.number ?? null}
+          onStart={async () => { setF(await engine.startFinalize(issueId)) }}
+          onFix={async (kind, id) => { setF(await engine.fixFinalize(issueId, kind, id)) }}
+          onAccept={async (id, i) => { setF(await engine.acceptSurvivor(issueId, id, i)) }}
+          onSend={async () => { await engine.sendPr(issueId); await load() }} />
+      )}
 
       {/* What whoever deploys owes, and what is watched after: the same steps the description carries. */}
       <ReleaseChecks release={v.release ?? []} watch={v.watch ?? []} onMark={async (id, done, note) => { await engine.markRelease(issueId, id, done, note); await load() }} />
@@ -110,12 +117,25 @@ export function PrStep({ issueId, appId, base }: { issueId: string; appId: strin
         </div>
       )}
       {/* An open one is brought up to date by a press: its title and description as they stand, with no new commit needed. */}
-      {live && (
+      {live && v.editedThere === 'theirs' && <p className="faint" role="note" style={{ margin: '0 0 8px', fontSize: 13 }}>Its description was edited on GitHub since it was last sent from here. The next update reads those edits back first, and keeps them.</p>}
+      {live && v.editedThere === 'both' && (
+        <div className="submit-pr-ask" role="group" aria-label="Edited on GitHub and here" style={{ margin: '0 0 8px' }}>
+          <div>Its description was edited on GitHub since it was last sent from here, and it was edited here too. Nothing is written over until you say which stands.</div>
+          <div><button className="btn quiet small" disabled={busy} onClick={() => void update('keep')} title="GitHub's description becomes the one here. What was written here since it was last sent is dropped.">Keep GitHub's</button> <button className="btn quiet small" disabled={busy} onClick={() => void update('replace')} title="The description here is sent over the one on GitHub.">Send this one over it</button></div>
+        </div>
+      )}
+      {live && pr?.status === 'draft' && (
         <p className={v.behind ? 'pr-unwritten' : 'faint'} style={{ margin: '0 0 8px', fontSize: 13 }}>
           {v.behind ? 'GitHub has an earlier version of its title or description. ' : updated ? 'GitHub has it as it stands here. ' : 'GitHub has it as it stands here, as far as its title and description go. '}
-          <button className="btn quiet small" disabled={busy} onClick={() => void update()} title="Sends its title and description to GitHub as they stand now, and pushes its branch. Its draft state is left as it is.">{busy ? 'Updating…' : 'Update pull request'}</button>
+          <button className="btn quiet small" disabled={busy || v.editedThere === 'both'} onClick={() => void update()} title="Sends its title and description to GitHub as they stand now, and pushes its branch. Its draft state is left as it is, and the evidence it carries is the evidence you last sent.">{busy ? 'Updating…' : 'Update pull request'}</button>
           {v.behind && <> <button className="linkish" onClick={() => setSent(!sent)}>{sent ? 'Show what GitHub has' : 'Show what will be sent'}</button></>}
           {updated && !v.behind && <span role="status"> Updated.</span>}
+        </p>
+      )}
+      {live && pr?.status === 'open' && (
+        <p className={v.behind ? 'pr-unwritten' : 'faint'} style={{ margin: '0 0 8px', fontSize: 13 }}>
+          {v.behind ? 'GitHub has an earlier version of its title or description. It is ready for review, so an update goes through the gate: Update pull request, in the finalizing above. ' : 'GitHub has it as it stands here, as far as its title and description go. '}
+          {v.behind && <button className="linkish" onClick={() => setSent(!sent)}>{sent ? 'Show what GitHub has' : 'Show what will be sent'}</button>}
         </p>
       )}
       {shown ? (

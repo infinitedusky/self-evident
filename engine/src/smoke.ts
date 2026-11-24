@@ -333,7 +333,7 @@ const freePort = (want = 0): Promise<number> => new Promise((resolveP, reject) =
 const answers = (url: string) => fetch(url, { signal: AbortSignal.timeout(1500) }).then((r) => r.status < 500).catch(() => false)
 
 /** The task, its app, and the branch its build is on, with the commit that branch is at (null: nothing built yet). */
-async function built(issueId: string) {
+export async function built(issueId: string) {
   const t = await getIssue(db, issueId)
   if (t.parentId || t.kind !== 'code') throw new PlanError('a smoke test is of a whole task, not a sub-task')
   const [a] = await db.select().from(app).where(eq(app.id, t.appId))
@@ -632,8 +632,8 @@ export function whyNotAccept(i: { head: string | null; /** Checks of the person'
  * The person accepts the smoke test: they have tried the built code and it is what goes to review (Sandy, 2026-11-23:
  * "Smoke test: the person tries the built code and accepts it. Before merge only"; "Accepting the smoke test starts
  * the Pull request finalizing"). Kept as an event with the commit it was said on, so a branch that has moved since
- * shows the acceptance as stale. What is owed at deploy does not hold it. The finalizing it starts is not built yet:
- * it will be started from here.
+ * shows the acceptance as stale. What is owed at deploy does not hold it. The finalizing it starts is finalize.ts:
+ * whoever calls this starts it (the server's route), so nothing here knows of the runner.
  */
 export async function acceptSmoke(issueId: string, by = 'user') {
   const view = await smokeView(issueId)

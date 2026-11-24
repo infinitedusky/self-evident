@@ -5,6 +5,8 @@
  */
 import { originOf, originPrompt } from './origins.js'
 import { and, asc, desc, eq, inArray, notInArray } from 'drizzle-orm'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 import { db } from './db/client.js'
@@ -30,7 +32,7 @@ import { inForce, type Covered } from './requirements.js'
 import { deploySteps, smokeOwed , smokeSetups } from './smoke.js'
 import { ONE_GO_TITLE } from './planner.js'
 import { workflowFor } from './work.js'
-import { ensureProjectPr, prDraft, prTitle, prBody , prAuto } from './pr.js'
+import { editsThere, ensureProjectPr, markOf, prDraft, prTitle, prBody , prAuto, writtenFrom, type Sent } from './pr.js'
 import { keepInStep, reviewSectionFor } from './review-copy.js'
 import { addSubTask, projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
 import { finishPlanning, preparePlanning, type Propose } from './planner.js'
@@ -96,8 +98,11 @@ export class Runner {
   private backlogWaits = new Set<string>() // project.backlog_open said once per set of open issues
 
   private openPr: typeof ensureProjectPr
-  constructor(opts: { execute?: Execute; sessionsMax?: number; propose?: Propose; /** What opens or updates a pull request: GitHub's, unless a test stands in for it. */ openPr?: typeof ensureProjectPr } = {}) {
+  /** A pull request's description as GitHub has it now, to see whether it was edited there. Null: not asked (a test stands in for GitHub and gives none). */
+  private readThere: ((repoPath: string, fullName: string, number: number) => Promise<string>) | null
+  constructor(opts: { execute?: Execute; sessionsMax?: number; propose?: Propose; /** What opens or updates a pull request: GitHub's, unless a test stands in for it. */ openPr?: typeof ensureProjectPr; readThere?: (repoPath: string, fullName: string, number: number) => Promise<string> } = {}) {
     this.openPr = opts.openPr ?? ensureProjectPr
+    this.readThere = opts.readThere ?? (opts.openPr ? null : (repoPath, fullName, number) => execFileP(process.env.GH_BIN ?? 'gh', ['pr', 'view', String(number), '-R', fullName, '--json', 'body', '--jq', '.body'], { cwd: repoPath, maxBuffer: 20_000_000, timeout: 30_000 }).then((x) => x.stdout))
     this.execute = opts.execute ?? runTask
     this.sessionsMax = opts.sessionsMax ?? SESSIONS_MAX
     this.propose = opts.propose
@@ -535,6 +540,8 @@ export class Runner {
     if (next.do === 'done' || !failed.length) {
       // Built, checked, probed and tested: its draft pull request is opened, so what can only be seen on one can be (smoke.ts, when: pr).
       if (prAuto(setup)) await withLock(`land:${projectId}`, () => this.updatePr(projectId, mode === 'issue' ? taskId : undefined, 'auto')).catch((err) => this.emit({ ...pb, issueId: taskId, type: 'pr.error', payload: { error: String(err?.message ?? err) } }))
+      // One finalized before (or whose smoke test is accepted) is finalized again on its new head: a fix has landed, and the results on its page are of what would be sent (finalize.ts).
+      await (await import('./finalize.js')).afterBuilt(taskId, this.finalizeDeps()).catch(() => null)
       return
     }
     const fixes = (outcome as { fixes: number }).fixes
@@ -815,7 +822,7 @@ export class Runner {
    * The project's PR (one per project), or an issue's (stacked: against the issue before it while that PR is open,
    * else main). Opened at the first landing, updated after every one.
    */
-  private async updatePr(projectId: string, issueId?: string, submit: boolean | 'auto' | 'preview' = false, /** Sent once more after its review copy was made again: not a second time round. */ again = false): Promise<void | { title: string; body: string; head: string; base: string; landed: number; pending: string[] }> {
+  private async updatePr(projectId: string, issueId?: string, submit: boolean | 'auto' | 'preview' = false, /** Sent once more after its review copy was made again: not a second time round. */ again = false, /** A person's press, and what they chose when the description was edited both on GitHub and here. */ press: { theirs?: 'keep' | 'replace' } | null = null): Promise<void | { title: string; body: string; head: string; base: string; landed: number; pending: string[] }> {
     const preview = submit === 'preview' // only what it would open with: nothing is pushed, opened or recorded
     if (preview) submit = false
     const { p, a, r, base } = await this.context(projectId)
@@ -827,6 +834,26 @@ export class Runner {
     if (!preview && !submit && (!had || had.status === 'closed' || had.status === 'merged')) return
     if (auto && had && (had.status === 'closed' || had.status === 'merged')) return // one the person closed stays closed
     if (auto && had) submit = false // it is open already: this is an update like any other
+    // Edits made on GitHub are read back before an update, never written over silently (pr.ts, editsThere). Only there:
+    // they become the description here. There and here: a person's press must say which; anything else sends the rest
+    // and leaves GitHub's description as it is.
+    let theirBody: string | null = null
+    if (!preview && issueId && had?.number && had.status !== 'closed' && had.status !== 'merged' && this.readThere && r?.fullName) {
+      const last = await this.lastSent(issueId)
+      const there = last ? await this.readThere(r.localPath!, r.fullName, had.number).catch(() => null) : null
+      if (last && there !== null) {
+        const [now] = await db.select({ prBody: issue.prBody }).from(issue).where(eq(issue.id, issueId))
+        const edits = editsThere(last, there, now?.prBody ?? '')
+        if (edits === 'theirs' || (edits === 'both' && press?.theirs === 'keep')) {
+          await db.update(issue).set({ prBody: writtenFrom(there) || null, updatedAt: new Date() }).where(eq(issue.id, issueId))
+          await this.emit({ ...base, issueId, type: 'pr.read_back', payload: { number: had.number, over: edits === 'both' } })
+        } else if (edits === 'both' && press?.theirs !== 'replace') {
+          if (press) throw new PlanError(`#${had.number}'s description was edited on GitHub since it was last sent from here, and it was edited here too. Say which stands: keep GitHub's (what was written here since is dropped), or send this one over it.`)
+          theirBody = there
+          await this.emit({ ...base, issueId, type: 'pr.edited_there', payload: { number: had.number } })
+        }
+      }
+    }
     const g: Graph = (await projectGraph(projectId))!
     const mine = issueId ? g.subIssues.filter((x) => x.parentId === issueId) : g.subIssues
     const done = mine.filter((x) => x.status === 'done')
@@ -854,13 +881,13 @@ export class Runner {
     const guide = mergeGuide(guided)
     // A task with a review copy on GitHub says how to run it, in the engine's own words (review-copy.ts).
     const review = t ? await reviewSectionFor(t.id) : null
-    const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog, guide, mergeRecord(guided), t ? (t as { prBody?: string | null }).prBody ?? null : null, review, deploySteps(guided.flatMap((q) => q.acceptance)))
+    const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog, guide, mergeRecord(guided), t ? (t as { prBody?: string | null }).prBody ?? null : null, review, deploySteps(guided.flatMap((q) => q.acceptance)), t ? await (await import('./finalize.js')).sentEvidence(t.id).catch(() => '') : '')
     if (preview) return { title, body, head, base: stack.base, landed: landed.length, pending: open.map((x) => x.identifier) }
     if (!r?.fullName) return
     if (auto && submit && (open.length || !mine.some((x) => x.status === 'done'))) return // not whole yet: nothing is opened
     if (submit && open.length) throw new PlanError(`${open.length} sub-task${open.length === 1 ? ' has' : 's have'} still to land (${open.map((x) => x.identifier).join(', ')}): the pull request is submitted once they all have`)
     if (submit && !landed.length) throw new PlanError('nothing has landed yet: there is nothing to submit')
-    const result = await this.openPr({ repoPath: r.localPath!, fullName: r.fullName, integrationBranch: head, base: stack.base, title, body, draft: submit === 'auto' ? true : prDraft(a.setup), reopen: submit === true })
+    const result = await this.openPr({ repoPath: r.localPath!, fullName: r.fullName, integrationBranch: head, base: stack.base, title, body: theirBody ?? body, draft: submit === 'auto' ? true : prDraft(a.setup), reopen: submit === true })
     const existing = prs.find((q) => (issueId ? q.issueId === issueId : !q.issueId))
     if (result.closed) { // the person closed it: the work goes on, on its branch; the pull request stays theirs to reopen
       if (existing && existing.status !== 'closed') await db.update(prTable).set({ status: 'closed' }).where(eq(prTable.id, existing.id))
@@ -870,12 +897,24 @@ export class Runner {
     if (!existing) await db.insert(prTable).values({ id: newId('pr'), appId: a.id, projectId, issueId: issueId ?? null, repoId: r.id, number: result.number, url: result.url, headBranch: head, baseBranch: stack.base, status: submit === 'auto' || prDraft(a.setup) ? 'draft' : 'open', openedAt: new Date() })
     else await db.update(prTable).set({ baseBranch: stack.base, number: result.number, url: result.url, ...(submit ? { status: submit === 'auto' || prDraft(a.setup) ? 'draft' : 'open' } : {}) }).where(eq(prTable.id, existing.id))
     if (submit) await this.emit({ ...base, ...(issueId ? { issueId } : {}), actor: submit === 'auto' ? 'engine' : 'user', type: 'pr.submitted', payload: { number: result.number, url: result.url, draft: submit === 'auto' || prDraft(a.setup), ...(submit === 'auto' ? { auto: true } : {}) } })
-    await this.emit({ ...base, ...(issueId ? { issueId } : {}), type: result.created ? 'pr.opened' : 'pr.updated', payload: { number: result.number, url: result.url, landed: landed.length, base: stack.base } })
+    await this.emit({ ...base, ...(issueId ? { issueId } : {}), type: result.created ? 'pr.opened' : 'pr.updated', payload: { number: result.number, url: result.url, landed: landed.length, base: stack.base, ...(t && theirBody === null ? { sent: { body: markOf(body), written: markOf((t as { prBody?: string | null }).prBody ?? '') } satisfies Sent } : {}) } })
     // The branch a reviewer runs follows the pull request's: made again from its new head, and the description then names that commit.
     if (t && !again) {
       const moved = await keepInStep(t.id).catch(async (err) => { await this.emit({ ...base, issueId: t.id, type: 'review_copy.behind', payload: { reason: String((err as Error).message).split('\n')[0].slice(0, 400) } }); return false })
       if (moved) await this.updatePr(projectId, issueId, false, true)
     }
+  }
+
+  /** What the engine last sent as a task's pull request description, as marks (pr.ts, Sent). Null: nothing recorded. */
+  private async lastSent(issueId: string): Promise<Sent | null> {
+    const rows = await db.select({ payload: event.payload }).from(event).where(and(eq(event.issueId, issueId), inArray(event.type, ['pr.opened', 'pr.updated']))).orderBy(desc(event.seq)).limit(20)
+    const got = rows.map((x) => (x.payload as { sent?: Sent }).sent).find((s) => s?.body)
+    return got ?? null
+  }
+
+  /** What finalize.ts asks of the runner (its Deps). */
+  finalizeDeps() {
+    return { preview: (p: string, i?: string) => this.previewPr(p, i), submit: (p: string, i?: string) => this.submitPr(p, i), refresh: (p: string, i?: string, o?: { theirs?: 'keep' | 'replace' }) => this.refreshPr(p, i, o ?? {}), dispatch: () => { void this.dispatch() } }
   }
 
   /** What a task's pull request would open with now, or be updated to: its title and message. Nothing is pushed or opened. Null when there is no checkout to read. */
@@ -888,12 +927,12 @@ export class Runner {
    * waiting for the next sub-task to land (asked for from a client app, 2026-11-20: a description written after
    * submitting had no way to GitHub but a new commit). Refused when there is none open: that is submitting.
    */
-  async refreshPr(projectId: string, issueId?: string) {
+  async refreshPr(projectId: string, issueId?: string, /** A person's press: what they chose when it was edited both on GitHub and here. */ press: { theirs?: 'keep' | 'replace' } = {}) {
     const find = async () => (await db.select().from(prTable).where(eq(prTable.projectId, projectId))).filter((q) => (issueId ? q.issueId === issueId : !q.issueId))[0]
     const had = await find()
     if (!had?.number) throw new PlanError('there is no pull request to update yet: submit it first')
     if (had.status === 'closed' || had.status === 'merged') throw new PlanError(`#${had.number} is ${had.status}: ${had.status === 'closed' ? 'submit it again to reopen it' : 'nothing more is sent to it'}`)
-    await withLock(`land:${projectId}`, () => this.updatePr(projectId, issueId, false))
+    await withLock(`land:${projectId}`, () => this.updatePr(projectId, issueId, false, false, press))
     return find()
   }
 
@@ -927,4 +966,5 @@ export class Runner {
   }
 }
 
+const execFileP = promisify(execFile)
 export const runner = new Runner()

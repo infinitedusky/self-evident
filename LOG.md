@@ -7139,3 +7139,78 @@ Not done: it has not run on a real task; the first one will show what the plan's
 by default, as said. A changed plan that is approved again does not add sub-tasks for new slices to a build under
 way. The Evidence the pull request shows from all this (red before green, tests by level, criteria to tests) is part
 4. `set_step` can still mark the step done with no plan, and approving that builds the old way.
+
+### 4. The Pull request step finalizes; the person decides (2026-11-23)
+
+"The PR went out with a description written by hand three times, the review instructions lost once, and no way to
+see the evidence before it was public." Sandy, the same day, on whether the review work was far enough along to start:
+"I think the review work is far enough."
+
+- **Accepting the smoke test starts it** (`finalize.ts`; the route that accepts starts it, so smoke.ts knows nothing
+  of the runner). Five steps, each said as it goes on the task's Pull request step (`Finalize`): the trajectory
+  holds; mutation testing; the review copy; the gate; the evidence drafted. On this computer, never in a team's CI.
+  It can also be run from the page, and runs again by itself when a task finalized before is built and tested again
+  (`afterBuilt`, called where the runner opens the automatic draft).
+- **Nothing it does reaches GitHub.** The results wait for the person. This is kept true in one place: a pull
+  request's description carries only the evidence the person last sent (`finalize.sent`, `sentEvidence`), never a
+  draft. The automatic draft pull request (2026-11-17) is as it was: a draft, opened once the task is built and
+  tested, with no evidence in it.
+- **Mutation testing** (`mutation.ts`) is of the lines the pull request added or changed, in its source files only
+  (not tests, stories, migrations, config), against the tests that cover them: the test plan's files and the test
+  files the branch touches. The mutator is the engine's own and reads lines, not a syntax tree, so it works on
+  Python, TypeScript and JavaScript with nothing installed: a boundary moved, a comparison turned round, a condition
+  joined the other way or not negated, an arithmetic sign, a boolean, a number nudged by one, a return emptied.
+  Never inside a string or a comment. The tests are run once with nothing changed and must pass; then each break in
+  turn, in a checkout of the head that is the engine's own (`<repo>-worktrees/finalize--<task>`), the file put back
+  after each. Out of the score, and said: a break the code will not load with; a survivor on a decorator's flag or a
+  limit nudged by one (set aside as equivalent by the engine, listed apart); one the person says no test could
+  tell. At most 150 breaks and 25 minutes, spread evenly, and it says when it tried fewer than it found. An app with
+  a tool of its own names it (`mutation.tool`: a command and the report it writes, in Stryker's form) and its report
+  is read instead, cut to the changed lines. Other settings: `mutation.off`, `mutation.test_cmd` (with {files}),
+  `mutation.max`, `finalize.prepare` (what the checkout needs installed).
+- **Every survivor is named**: file, line, what became what, the line as written, and what it means in words ("no
+  test checks the value exactly at this limit").
+- **The gate** (`pr-gate.ts`, six checks, each pure): GitHub's checks green; the app's held commands as they last
+  ran, on the head (ones left to the pull request are read from GitHub's checks by name); the title fits the app's
+  rule and carries the team's ticket, and not our id; the description has every heading of the app's form, in
+  order, with something under it, and nothing of ours in it (our name, our ids, how we built it); the rollback
+  agrees with the blast radius (a one-way door called revertable fails, and so does one the description does not
+  mention); the smoke test accepted with none of the person's checks open. The cheap ones are read afresh every
+  time the page is: the description is often written after the finalizing ran.
+- **The evidence** (`evidence.ts`) is drafted from what was measured and nothing else, in the order a reviewer can
+  trust it: tests by level; red before green, N of N, with a folded table of each test, where it was seen to fail
+  and where it passed; criteria to tests, or how else each is proven; deferrals and guards with their reasons;
+  mutation's score and each survivor; and last, in a line, that everything else still passes. It is the engine's
+  block in the description, between marks, under the writer's own "Evidence" or "Testing" heading when they have
+  one, else in a section at the end. Slices are named by what they build: nothing of ours is in it.
+- **What the person can do with the results**: "Fix this" on a survivor, a planned test not proven, failing
+  commands or failing GitHub checks sends a sub-task after it (`fixThis`), and the finalizing runs again when it
+  lands. A survivor can be left as it is with a reason, which goes into the evidence, or called equivalent, which
+  takes it out of the score. A description or a title that fails the gate is theirs or the task's agent's to put
+  right: no sub-task is offered, because a builder has no way to write one.
+- **Push and mark ready** (`pushReady`; `POST /issues/:id/pr/send`) is the one press: refused unless the finalizing
+  is of the head and no gate check fails or waits. It marks the evidence as sent, pushes the branch and sends the
+  title and description (submitting if there is none), makes the review copy again from that head and sends it,
+  then takes a draft out of draft. The "Ready for review" button it replaces is gone from the step. On a pull
+  request that is ready, the same press is "Update pull request", through the same gate. A draft is still brought
+  up to date by the old button, with the evidence last sent.
+- **Survivors do not hold the press.** The gate is the six checks, as written. An open survivor is named in the
+  evidence as not caught. Neither does a trajectory that does not hold: its exceptions are named.
+- **Edits made on GitHub are read back** (`editsThere`, `writtenFrom`, pr.ts; the runner's `updatePr`). Each send
+  records a mark of the body and of the description it was made from. Before the next: edited only there, it
+  becomes the description here (without the engine's own blocks) and is sent as they have it; edited there and
+  here, a person's press must say which stands ("Keep GitHub's", "Send this one over it"), and an update nobody
+  pressed for sends the branch and leaves GitHub's description alone.
+
+No migration: the finalizing is events (`finalize.started`, `.step`, `.done` with the facts the evidence is drafted
+from, `.failed`, `.survivor`, `.fix`, `.sent`).
+
+Not done: it has not run on a real task, and CEB-90 was built before test plans, so its first finalizing will say
+"built without a test plan". The review copy's step builds one that does not exist yet without sending it, but one
+already on GitHub and behind the head is only reported, and made again at the press: making it locally would take
+the Review section out of the description until then. "Its checks run" is what making it already refuses (anything
+real in what a reviewer is served); a kit has no checks of its own to run. A push to the pull request's branch by
+someone else does not start the finalizing: only a build here does. A title edited on GitHub is not read back,
+only the description. Equivalence is two rules and the person's word; "a value already returned" is not detected.
+The mutator reads lines and knows nothing of types or syntax, so it makes fewer kinds of break than Stryker or
+mutmut would. The task's agent has no tool to read the results.

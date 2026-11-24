@@ -185,7 +185,29 @@ export interface PrView {
   /** What is owed at deploy, in order; and what is watched after. */ release?: ReleaseCheck[]; watch?: WatchCheck[]
   draft: boolean; auto: boolean
   canSubmit: boolean; waits: string[]; canReady: boolean
+  /** Its description was edited on GitHub since it was last sent from here. theirs: only there, and the next update reads it back. both: here too, and an update asks which stands. */ editedThere?: 'none' | 'theirs' | 'both'
   comments: PrComment[]; problem: string | null
+}
+/** One step of a pull request's finalizing (the engine's finalize.ts). */
+export interface FinalizeStep { key: 'trajectory' | 'mutation' | 'review' | 'gate' | 'evidence'; name: string; state: 'waiting' | 'running' | 'pass' | 'fail' | 'skipped'; says: string }
+/** A sub-task sent after one thing the finalizing found. */
+export interface FinalizeFix { subTask: string; title: string; landed: boolean }
+/** A break mutation testing made that no test caught: where, what changed, and what that means in words. */
+export interface Survivor { id: string; file: string; line: number; op: string; from: string; to: string; means: string; code: string; /** Set aside by the engine as one no test could tell, with why. */ equivalent?: string; /** What the person said of it. */ accepted: { reason: string; equivalent?: boolean; by?: string; at?: string } | null; fix: FinalizeFix | null }
+export interface GateCheck { key: 'github' | 'commands' | 'title' | 'description' | 'rollback' | 'smoke'; name: string; state: 'pass' | 'fail' | 'wait' | 'none'; says: string; details?: string[]; /** A sub-task could put it right. */ fix?: string; sent: FinalizeFix | null }
+/** A pull request's finalizing: what ran, what it found, and whether its results can be sent. Nothing in it has reached GitHub unless `sent` says so. */
+export interface FinalizeView {
+  state: 'none' | 'running' | 'done' | 'failed' | 'cut'
+  sha: string | null; head: string | null; /** The branch has moved since it ran. */ stale: boolean; error: string | null
+  steps: FinalizeStep[]
+  /** Planned tests not proven. */ unproven: { id: string; test: string; says: string; fix: FinalizeFix | null }[]
+  mutation: { tool: 'evident' | 'app'; found: number; tried: number; caught: number; invalid: number; files: number; tests: string[]; partial?: string; meaningful: number; percent: number | null; survivors: Survivor[] } | null
+  gate: GateCheck[]
+  /** The Evidence section as it would be sent now (Markdown). */ evidence: string
+  /** The evidence the pull request carries now; `same`: it is what would be sent. */ sent: { sha: string | null; at: string; same: boolean } | null
+  canStart: boolean; startWaits: string | null
+  /** ready: push and mark ready. update: it is ready already, and this updates it. Null: merged. */ press: 'ready' | 'update' | null
+  canPush: boolean; pushWaits: string[]
 }
 export interface TaskPr { number: number | null; url: string | null; status: string }
 export interface IssueRow { id: string; identifier: string; number: number; title: string; description: string | null; state: IssueState; sortOrder: number; priority: number; project: { id: string; name: string; status: string; solo?: boolean } | null; builds: Record<string, number>; planning: string | null; pr?: TaskPr | null }
@@ -769,7 +791,13 @@ export const engine = {
   changeDataStep: (issueId: string, text: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent/change`, { text }),
   reviewCopy: (issueId: string, fresh = false) => call<ReviewCopyView>('GET', `/issues/${issueId}/review-copy${fresh ? '?fresh=1' : ''}`),
   makeReviewCopy: (issueId: string, body: { fixture: string | null; try: string }) => call<ReviewCopyView>('POST', `/issues/${issueId}/review-copy`, body),
-  updatePr: (issueId: string) => call<{ number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/update`),
+  updatePr: (issueId: string, theirs?: 'keep' | 'replace') => call<{ number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/update`, theirs ? { theirs } : {}),
+  // The pull request's finalizing (the engine's finalize.ts): what it found; run again; a survivor left as it is; a sub-task sent after one thing; and the one press that sends the results.
+  finalize: (issueId: string) => call<FinalizeView>('GET', `/issues/${issueId}/finalize`),
+  startFinalize: (issueId: string) => call<FinalizeView>('POST', `/issues/${issueId}/finalize`),
+  acceptSurvivor: (issueId: string, survivor: string, i: { reason?: string; equivalent?: boolean; undo?: boolean }) => call<FinalizeView>('POST', `/issues/${issueId}/finalize/survivors/${survivor}`, i),
+  fixFinalize: (issueId: string, kind: 'survivor' | 'row' | 'gate', id: string) => call<FinalizeView>('POST', `/issues/${issueId}/finalize/fix`, { kind, id }),
+  sendPr: (issueId: string, theirs?: 'keep' | 'replace') => call<{ number: number | null; url: string | null; status: string | null; ready: boolean; review: string | null }>('POST', `/issues/${issueId}/pr/send`, theirs ? { theirs } : {}),
   markPrReady: (issueId: string) => call<{ number: number; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/ready`),
   setTeamNames: (issueId: string, names: { ticket?: string | null; title?: string | null }) => call<{ teamTicket: string | null; teamTitle: string | null; ticket: string | null; ticketFrom: string | null; ticketMissing: boolean }>('PUT', `/issues/${issueId}/team`, names),
   submitPr: (issueId: string) => call<{ id: string; number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/submit`),
@@ -913,6 +941,7 @@ export const EVENT_TYPES = [
   'land.committed', 'land.tested', 'land.landed', 'land.conflict', 'land.retry', 'pr.opened', 'pr.updated', 'pr.error',
   'task.tested', 'task.testing', 'task.test_ran', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked', 'learn.written', 'smoke.started', 'smoke.marked', 'smoke.skipped', 'smoke.trying', 'smoke.tried', 'task.smoke_waiting',
   'task.check_again', 'task.check_reopened', 'smoke.accepted', 'release.marked', 'trajectory.run', 'trajectory.cannot_run', 'trajectory.error',
+  'finalize.started', 'finalize.step', 'finalize.done', 'finalize.failed', 'finalize.survivor', 'finalize.fix', 'finalize.sent', 'pr.sent', 'pr.read_back', 'pr.edited_there',
 ]
 
 const LIVE_POLL_MS = 20_000
