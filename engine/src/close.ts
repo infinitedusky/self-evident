@@ -80,6 +80,7 @@ export async function closeTask(issueId: string, by = 'user') {
   const [a] = await db.select().from(app).where(eq(app.id, t.appId))
   await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor: by, type: 'task.closed', payload: { pr: f.pr?.number ?? null, skipped: f.checks.filter((c) => c.mark === 'skip').length } }))
   const closed = t.projectId ? await settleProject(t.projectId, by) : false
+  void import('./hooks.js').then((h) => h.afterwards(a.id, 'task-closed', { BRANCH: t.branch ?? '' }, { issueId: t.id })) // the app's own tidying, if it hooked any (hooks.ts)
   return { id: row.id, state: 'done' as const, projectClosed: closed }
 }
 

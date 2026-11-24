@@ -52,6 +52,7 @@ import { fixedOf, fixedSays } from './addresses.js'
 import { databaseExists, databaseUrl, dropDatabase, listScenarios, rebuild, save, type PrototypeDb } from './prototype-data.js'
 import { homeRepo } from './workbench.js'
 import { fixtureForTask } from './fixtures.js'
+import { afterwards, beforeStart } from './hooks.js'
 import { plansFor } from './mock-places.js'
 import { placedFiles, placeTestFiles, testFilesSay } from './test-files.js'
 import { dropUse, isGiven, libraryStandIns, noteRecording, noteUse } from './mocks.js'
@@ -326,7 +327,7 @@ export const smokeOwed = (criteria: Criterion[]) => smokeChecks(criteria).filter
 export const smokeReady = (criteria: Criterion[], hasPr: boolean) => smokeChecks(criteria).filter((c) => c.mark === 'todo' && (c.when === 'here' || (c.when === 'pr' && hasPr))).length
 
 export interface Mocks { /** Its stand-ins' key (stand-ins.ts). */ id: string; recorders: Recording[]; on: { key: string; name: string; /** real: a real response served as it is. recording: the real service, kept as it comes. */ how: 'mock' | 'assumed' | 'real' | 'recording' }[] }
-const running = new Map<string, { proc: ChildProcess; log: string[]; given?: number[]; stray?: { at: number; ports: number[] }; stop?: { cmd: string; cwd: string; env: Record<string, string> }; mocks?: Mocks }>() // by task and set-up
+const running = new Map<string, { proc: ChildProcess; log: string[]; given?: number[]; stray?: { at: number; ports: number[] }; stop?: { cmd: string; cwd: string; env: Record<string, string> }; mocks?: Mocks; /** For the app's after-stop hook: what it was started with. */ hook?: { appId: string; env: Record<string, string> } }>() // by task and set-up
 const runKey = (issueId: string, key: string) => `${issueId}:${key}`
 const alive = (issueId: string, key: string) => { const m = running.get(runKey(issueId, key)); return !!m && m.proc.exitCode === null && m.proc.signalCode === null }
 const freePort = (want = 0): Promise<number> => new Promise((resolveP, reject) => {
@@ -560,12 +561,14 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   Object.assign(env, mocks.env)
   // What a tester brings to it (test-files.ts): the versions the task says a smoke test uses, in a folder outside every repository.
   Object.assign(env, { TEST_FILES: (await placeTestFiles(a.id, t.id, 'smoke', smokeFilesDir(t.id, key))).dir })
+  // The app's own hook (hooks.ts), last: it sees what the script will be run with, and what it prints is laid over it.
+  try { Object.assign(env, await beforeStart(a.id, env, { issueId: t.id, place: 'smoke' })) } catch (err) { await endMocks(t.id, mocks.held, false); throw err }
   const proc = spawn('sh', ['-c', cmd], { cwd: path, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   const log: string[] = []
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
   proc.on('exit', (code) => { log.push(`exited${code === null ? '' : ` with ${code}`}`) })
-  running.set(runKey(t.id, key), { proc, log, given: [port, ...more.ports], mocks: mocks.held, ...(setup.stop ? { stop: { cmd: setup.stop, cwd: path, env } } : {}) })
+  running.set(runKey(t.id, key), { proc, log, given: [port, ...more.ports], mocks: mocks.held, hook: { appId: a.id, env }, ...(setup.stop ? { stop: { cmd: setup.stop, cwd: path, env } } : {}) })
   noteUse(mocks.held.id, a.id, `Smoke test: ${name}`, mocks.held.on.filter((m) => m.how !== 'recording').map((m) => m.key), mocks.held.on.filter((m) => m.how === 'recording' || m.how === 'real').map((m) => m.key))
   if (old) await db.update(smokeRun).set({ path, sha: head, port, ...(builtFrom !== undefined ? { fixture: builtFrom } : {}), updatedAt: new Date() }).where(eq(smokeRun.id, old.id))
   else await db.insert(smokeRun).values({ id: newId('run').replace(/^run_/, 'smoke_'), appId: a.id, issueId: t.id, setup: key, path, sha: head, port, fixture: builtFrom ?? null })
@@ -615,7 +618,7 @@ function stopOne(issueId: string, key: string, mine = true): Promise<void> {
   const m = running.get(runKey(issueId, key))
   running.delete(runKey(issueId, key))
   if (!m) return Promise.resolve()
-  const down = () => (m.stop ? runStop(m.stop.cmd, m.stop.cwd, m.stop.env).then(() => {}) : Promise.resolve()).then(() => endMocks(issueId, m.mocks, mine)) // the app's stop script, after its process: for what the script left running; then its mocks and recorders
+  const down = () => (m.stop ? runStop(m.stop.cmd, m.stop.cwd, m.stop.env).then(() => {}) : Promise.resolve()).then(() => endMocks(issueId, m.mocks, mine)).then(() => { if (m.hook) afterwards(m.hook.appId, 'after-stop', m.hook.env, { issueId, place: 'smoke' }) }) // the app's stop script, after its process: for what the script left running; then its mocks and recorders
   if (m.proc.exitCode !== null || m.proc.signalCode !== null || !m.proc.pid) return down()
   const gone = new Promise<void>((r) => { m.proc.once('exit', () => r()); setTimeout(r, 3000) })
   try { process.kill(-m.proc.pid, 'SIGTERM') } catch { m.proc.kill('SIGTERM') }

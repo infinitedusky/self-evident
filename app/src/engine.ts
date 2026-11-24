@@ -157,6 +157,15 @@ export interface DataAgentView {
   /** What the person asked to be changed in the step it is on. */ change: string | null
   sessionId: string | null; busy: boolean
 }
+/**
+ * An app's workbench folder and its hooks (engine hooks.ts): a folder on this computer, outside the app's repositories,
+ * that holds what is ours about working on the app. A hook is a script in its `hooks/` folder named for a point in
+ * what Evident does; Evident runs it there.
+ */
+export interface HookRun { at: string; ok: boolean; /** The task it ran for, as CEB-90; none for the app itself. */ task: string | null; /** prototype, smoke: where it ran. */ place: string | null; /** Its last lines. */ out: string[]; /** before-start: the names of the settings it gave the start script (never their values). */ gave?: string[] }
+export interface HookView { point: string; /** When Evident runs it, in a sentence. */ when: string; /** What it is run with. */ given: string[]; /** What Evident does with what it prints or how it ends. */ then: string; /** Its file in the folder; none: nothing is hooked here. */ file: string | null; text: string | null; last: HookRun | null }
+export interface WorkbenchView { dir: string | null; /** The folder is on this computer. */ found: boolean; hooks: HookView[]; /** What else of the app's is in the folder and named in its settings (the review kit). */ also: { what: string; path: string }[] }
+
 /** A task's review copy (engine review-copy.ts): a branch a reviewer checks out and starts with one command, on made-up data. */
 export interface ReviewCopyView {
   /** The branch a reviewer checks out. Null: the task has no pull request yet. */ branch: string | null
@@ -789,6 +798,8 @@ export const engine = {
   askDataAgent: (issueId: string, message: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent`, { message }),
   approveDataStep: (issueId: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent/approve`),
   changeDataStep: (issueId: string, text: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent/change`, { text }),
+  workbench: (appId: string) => call<WorkbenchView>('GET', `/apps/${appId}/workbench`),
+  setWorkbench: (appId: string, dir: string | null) => call<WorkbenchView>('PUT', `/apps/${appId}/workbench`, { dir }),
   reviewCopy: (issueId: string, fresh = false) => call<ReviewCopyView>('GET', `/issues/${issueId}/review-copy${fresh ? '?fresh=1' : ''}`),
   makeReviewCopy: (issueId: string, body: { fixture: string | null; try: string }) => call<ReviewCopyView>('POST', `/issues/${issueId}/review-copy`, body),
   updatePr: (issueId: string, theirs?: 'keep' | 'replace') => call<{ number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/update`, theirs ? { theirs } : {}),
