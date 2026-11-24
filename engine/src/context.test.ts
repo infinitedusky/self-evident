@@ -138,7 +138,7 @@ describe.skipIf(!reachable)('context', () => {
     expect(await contextCount({ issueId: t })).toEqual({ count: 0, proposed: 1, waiting: 1 })
     expect(await contextPrompt({ issueId: t })).toContain('- Can an app card be used on the web? (sample) [the person asked Em and is waiting for the answer]')
     const { facts } = await reportFacts(appId, new Date('2026-11-24T00:00:00'), new Date('2026-11-25T00:00:00'), { me: async () => 'sam' })
-    expect(facts.openDecisions).toContainEqual({ question: 'Can an app card be used on the web? (sample)', askedOn: '2026-11-20', waitingOn: 'Em', proposedAnswer: null, tasks: [expect.stringMatching(/-\d+$/)] })
+    expect(facts.openDecisions).toContainEqual({ question: 'Can an app card be used on the web? (sample)', askedOn: '2026-11-20', waitingOn: 'Em', background: null, proposedAnswer: null, tasks: [expect.stringMatching(/-\d+$/)] })
     expect(facts.openDecisions.some((d) => d.question === 'Is the list sorted? (sample)' && d.waitingOn === null)).toBe(true)
     expect(facts.openDecisions.every((d) => d.question !== 'What is shown of a saved card? (sample)')).toBe(true) // a made one is not open
     expect((await editContextNote({ issueId: t }, q.id, { waitingOn: '' })).notes.find((n) => n.id === q.id)!.waitingOn).toBeNull()
@@ -153,6 +153,28 @@ describe.skipIf(!reachable)('context', () => {
     expect(await contextCount({ issueId: t })).toEqual({ count: 1, proposed: 0, waiting: 1 })
     expect(await contextPrompt({ issueId: t })).toContain('- Is the list sorted? (sample) → By last use [the person asked the vendor and is waiting for the answer]')
     expect((await editContextNote({ issueId: t }, p.id, { status: 'settled' })).notes.find((n) => n.id === p.id)).toMatchObject({ status: 'settled', waitingOn: null })
+  })
+
+  it('keeps a decision\'s background, the story of why it is a question, apart from why its answer is the answer', async () => {
+    const t = (await createProject({ appId, name: 'Background (sample)', issues: [{ title: 'A task with a story (sample)', brief: 'Build it.' }] })).issues[0].id
+    const story = 'The app saves cards with one vendor and the web with another.\n\nSupport gets asked weekly. See the vault notes.'
+    let v = (await addContextNote({ issueId: t }, { kind: 'decision', title: 'Can an app card be used on the web? (sample)', background: story })).view
+    const q = v.notes[0]
+    expect(q).toMatchObject({ status: 'open', background: story, body: '' })
+    expect(await contextPrompt({ issueId: t })).toContain('- Can an app card be used on the web? (sample)\n  Background: The app saves cards with one vendor and the web with another.\n  Support gets asked weekly. See the vault notes.')
+    const { facts } = await reportFacts(appId, new Date('2026-11-24T00:00:00'), new Date('2026-11-25T00:00:00'), { me: async () => 'sam' })
+    expect(facts.openDecisions.find((d) => d.question === 'Can an app card be used on the web? (sample)')!.background).toBe(story)
+    // Answering it keeps the story; why the answer is the answer is said apart.
+    v = await editContextNote({ issueId: t }, q.id, { answer: 'Not yet', body: 'Two vendors, no shared vault.' })
+    expect(v.notes[0]).toMatchObject({ status: 'settled', answer: 'Not yet', body: 'Two vendors, no shared vault.', background: story })
+    expect(await contextPrompt({ issueId: t })).toMatch(/→ Not yet Why: Two vendors, no shared vault\.\n  Background: The app saves cards/)
+    expect((await editContextNote({ issueId: t }, q.id, { background: '' })).notes[0].background).toBeNull()
+    // An agent asking says why it asks: that is the question's background.
+    const tool = engineTools({ appId, actor: 'agent' }).find((x) => x.name === 'context')!
+    await tool.handler({ op: 'ask', issueId: t, title: 'Is an expired card listed? (sample)', background: 'The list is built from the vault, which still returns them.' })
+    expect((await contextOf({ issueId: t })).notes.find((n) => n.title.startsWith('Is an expired'))).toMatchObject({ status: 'open', addedBy: 'agent', background: 'The list is built from the vault, which still returns them.', body: '' })
+    const n = (await addContextNote({ issueId: t }, { title: 'A plain note (sample)' })).view.notes.find((x) => x.kind === 'note')!
+    await expect(editContextNote({ issueId: t }, n.id, { background: 'x' })).rejects.toThrow('only a decision')
   })
 
   it('shows a decision made as one statement as an answer with no question, and takes a question when it is given one', async () => {

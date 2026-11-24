@@ -233,7 +233,7 @@ export const AnswerAnOpenDecision: Story = {
     const save = c.getByRole('button', { name: 'Save the decision' })
     await expect(save).toBeDisabled() // until it has an answer
     await userEvent.type(c.getByRole('textbox', { name: 'The answer' }), 'It is shown, greyed out')
-    await userEvent.type(c.getByRole('textbox', { name: 'Why (optional)' }), 'So nobody wonders where it went.')
+    await userEvent.type(c.getByRole('textbox', { name: 'Why this answer (optional)' }), 'So nobody wonders where it went.')
     await userEvent.click(save)
     const decisions = section(canvasElement, 'decisions')
     await expect(await decisions.findByText('It is shown, greyed out')).toBeVisible()
@@ -270,6 +270,29 @@ export const WaitingOnSomeone: Story = {
   },
 }
 
+/** A decision's background: the story of why it is a question. Open to read while the decision is unanswered, folded once it is answered. The form is always the same four fields: the question, its background, the answer, why that answer. */
+export const TheStoryBehindAQuestion: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await c.findByText('2 unanswered')
+    await expect(c.getByText(/The app saves cards with one vendor and the web checkout with another/)).toBeVisible() // unanswered: in full
+    await expect(c.getByText(/Design first drew the whole number/)).not.toBeVisible() // answered: folded
+    await userEvent.click(c.getByRole('button', { name: 'Add a decision' }))
+    await userEvent.type(c.getByRole('textbox', { name: 'The question' }), 'Do we keep cards of closed accounts? (sample)')
+    await userEvent.type(c.getByRole('textbox', { name: /^Background/ }), 'Legal asked last spring and nobody answered.')
+    for (const name of ['The question', /^Background/, /^The answer/, 'Why this answer (optional)']) await expect(c.getByRole('textbox', { name })).toBeVisible() // always the same four
+    await userEvent.click(c.getByRole('button', { name: 'Add it, unanswered' }))
+    await expect(await c.findByText('Legal asked last spring and nobody answered.')).toBeVisible()
+    // The story can be added to a question already asked, without answering it.
+    await userEvent.click(c.getByRole('button', { name: 'Edit the question: What is shown when a saved card has expired? (sample)' }))
+    for (const name of ['The question', /^Background/, /^The answer/, 'Why this answer (optional)']) await expect(c.getByRole('textbox', { name })).toBeVisible()
+    await userEvent.type(c.getByRole('textbox', { name: /^Background/ }), 'The vault still returns expired cards.')
+    await userEvent.click(c.getByRole('button', { name: 'Save it, unanswered' }))
+    await expect(await c.findByText('The vault still returns expired cards.')).toBeVisible()
+    await expect(c.getByRole('button', { name: 'Answer: What is shown when a saved card has expired? (sample)' })).toBeVisible() // still unanswered
+  },
+}
+
 /** A decision put in to answer later: a question with no answer. It is a decision like the rest, marked Unanswered. */
 export const AddOneToDecideLater: Story = {
   beforeEach: withEngine({ context: { issues: emptyContext } }),
@@ -292,7 +315,7 @@ export const AddADecision: Story = {
     await userEvent.click(await c.findByRole('button', { name: 'Add a decision' }))
     await userEvent.type(c.getByRole('textbox', { name: 'The question' }), 'Can a card be renamed? (sample)')
     await userEvent.type(c.getByRole('textbox', { name: /^The answer/ }), 'No')
-    await userEvent.type(c.getByRole('textbox', { name: 'Why (optional)' }), 'Nobody asked for it.')
+    await userEvent.type(c.getByRole('textbox', { name: 'Why this answer (optional)' }), 'Nobody asked for it.')
     await userEvent.click(c.getByRole('button', { name: 'Save the decision' }))
     const decisions = section(canvasElement, 'decisions')
     await expect(await decisions.findByText('Can a card be renamed? (sample)')).toBeVisible()

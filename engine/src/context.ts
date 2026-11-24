@@ -96,7 +96,7 @@ export async function contextOf(s: Subject) {
     docs: docs.map(({ row, origin: o, originating, fromProject }) => o
       ? { id: row?.id ?? o.id, title: o.title, description: row?.description ?? null, from: 'ticket' as const, ticket: { originating, origin: originView(o)! }, fileName: null, body: null, kept: false, chars: originChars(o), inFull: originating || !!row?.inFull, addedBy: row?.createdBy ?? null, addedAt: (row?.createdAt ?? o.createdAt).toISOString(), fromProject }
       : { id: row!.id, title: row!.title, description: row!.description, from: row!.kind as 'pasted' | 'file', ticket: null, fileName: row!.fileName, body: row!.body, kept: !!row!.filePath, chars: row!.body?.length ?? 0, inFull: row!.inFull, addedBy: row!.createdBy, addedAt: row!.createdAt.toISOString(), fromProject }),
-    notes: notes.map(({ row: r, fromProject }) => ({ id: r.id, kind: r.kind as 'note' | 'decision', status: r.status as NoteStatus, ...qa(r), waitingOn: ['open', 'proposed'].includes(r.status) ? r.waitingOn : null, body: r.body, on: r.on, addedBy: r.createdBy, fromProject,
+    notes: notes.map(({ row: r, fromProject }) => ({ id: r.id, kind: r.kind as 'note' | 'decision', status: r.status as NoteStatus, ...qa(r), background: r.background, waitingOn: ['open', 'proposed'].includes(r.status) ? r.waitingOn : null, body: r.body, on: r.on, addedBy: r.createdBy, fromProject,
       alsoAbout: fromProject ? [] : (r.issueIds ?? []).flatMap((id) => { const t = tasks.find((x) => x.id === id); return t ? [{ id: t.id, name: identifier(a?.key ?? '', t.number), title: t.title }] : [] }) })),
   }
 }
@@ -227,7 +227,7 @@ async function noteOf(f: Found, id: string) {
  * conversation (`agreed`); otherwise it is proposed, and waits for the person. An answer to a question that is already
  * open here goes onto that question.
  */
-export async function addContextNote(s: Subject, i: { kind?: string; title?: string; answer?: string; body?: string; on?: string; agreed?: boolean }, actor = 'user') {
+export async function addContextNote(s: Subject, i: { kind?: string; title?: string; answer?: string; body?: string; /** A decision's: why it is a question. */ background?: string; on?: string; agreed?: boolean }, actor = 'user') {
   const f = await found(s)
   const decision = i.kind === 'decision'
   const title = line(i.title, 200)
@@ -242,20 +242,20 @@ export async function addContextNote(s: Subject, i: { kind?: string; title?: str
     const asked = same.find((n) => n.status === 'open')
     if (asked && !answer) { if (agent) throw new PlanError('that is already asked and waits for the person'); return { status, view: await contextOf(s) } }
     if (asked) { // the answer goes onto the question that was waiting
-      await editNote(f.appId, asked.id, { answer, body: i.body ?? asked.body, status, ...(status === 'settled' ? { on: i.on ?? dayOf(new Date()) } : {}) }, actor)
+      await editNote(f.appId, asked.id, { answer, body: i.body ?? asked.body, background: i.background?.trim() ? i.background : undefined, status, ...(status === 'settled' ? { on: i.on ?? dayOf(new Date()) } : {}) }, actor)
       return { status, view: await contextOf(s) }
     }
   }
-  await addNote(f.appId, { title, answer, body: i.body, on: i.on, kind: decision ? 'decision' : 'note', status, ...('issueId' in f.key ? { issueIds: [f.key.issueId] } : 'ideaId' in f.key ? { ideaIds: [f.key.ideaId] } : { projectIds: [f.key.projectId] }) }, actor)
+  await addNote(f.appId, { title, answer, body: i.body, background: decision ? i.background : undefined, on: i.on, kind: decision ? 'decision' : 'note', status, ...('issueId' in f.key ? { issueIds: [f.key.issueId] } : 'ideaId' in f.key ? { ideaIds: [f.key.ideaId] } : { projectIds: [f.key.projectId] }) }, actor)
   return { status, view: await contextOf(s) }
 }
 
 /** Its words or its day changed; an open decision answered; or a proposed answer accepted (settled) or turned down (rejected). */
-export async function editContextNote(s: Subject, id: string, i: { title?: string; answer?: string; body?: string; on?: string; status?: string; /** An open decision: who the person asked and is waiting on; empty: nobody now. */ waitingOn?: string | null }, actor = 'user') {
+export async function editContextNote(s: Subject, id: string, i: { title?: string; answer?: string; body?: string; background?: string; on?: string; status?: string; /** An open decision: who the person asked and is waiting on; empty: nobody now. */ waitingOn?: string | null }, actor = 'user') {
   const f = await found(s)
   const r = await noteOf(f, id)
   const decision = r.kind === 'decision'
-  if ((i.status !== undefined || i.answer !== undefined) && !decision) throw new PlanError('only a decision has an answer, and is accepted or rejected')
+  if ((i.status !== undefined || i.answer !== undefined || i.background !== undefined) && !decision) throw new PlanError('only a decision has an answer, and is accepted or rejected')
   if (i.status !== undefined && actor.startsWith('agent')) throw new PlanError('accepting or rejecting a proposed decision is the person\'s')
   const legacy = decision && r.status === 'settled' && !r.answer // one statement, kept as its title
   if (i.waitingOn !== undefined && !(decision && ['open', 'proposed'].includes(r.status))) throw new PlanError('only a decision with no answer yet waits on someone')
@@ -268,10 +268,10 @@ export async function editContextNote(s: Subject, id: string, i: { title?: strin
   if (legacy && (answer !== undefined || i.title !== undefined)) {
     // Given a question and an answer, it becomes one; given only new words, it stays the statement it was.
     const question = line(i.title, 200)
-    await editNote(f.appId, r.id, question ? { title: question, answer: answer || r.title, body: i.body, on: i.on } : { title: answer || r.title, body: i.body, on: i.on }, actor)
+    await editNote(f.appId, r.id, question ? { title: question, answer: answer || r.title, body: i.body, background: i.background, on: i.on } : { title: answer || r.title, body: i.body, background: i.background, on: i.on }, actor)
     return contextOf(s)
   }
-  await editNote(f.appId, r.id, { title: i.title === undefined ? undefined : line(i.title, 200), answer, body: i.body, on: i.on, status, waitingOn: ['open', 'proposed'].includes(will) ? i.waitingOn : null }, actor) // once it has an answer it waits on nobody
+  await editNote(f.appId, r.id, { title: i.title === undefined ? undefined : line(i.title, 200), answer, body: i.body, background: i.background, on: i.on, status, waitingOn: ['open', 'proposed'].includes(will) ? i.waitingOn : null }, actor) // once it has an answer it waits on nobody
   return contextOf(s)
 }
 
@@ -312,9 +312,10 @@ export async function contextPrompt(s: { issueId?: string; ideaId?: string; proj
   const settled = of('decision', 'settled'), proposed = of('decision', 'proposed'), rejected = of('decision', 'rejected'), undecided = of('decision', 'open'), said = of('note', 'settled')
   const why = (r: NoteRow) => (r.body ? ` Why: ${r.body.replace(/\s+/g, ' ')}` : '')
   const asked = (r: NoteRow) => (r.waitingOn && ['open', 'proposed'].includes(r.status) ? ` [the person asked ${r.waitingOn} and is waiting for the answer]` : '')
-  const decision = ({ row: r, fromProject }: (typeof notes)[number]) => `- ${r.answer ? `${r.title} → ${r.answer}` : r.title}${why(r)}${asked(r)}${from(fromProject)}`
+  const background = (r: NoteRow) => (r.background ? `\n  Background: ${r.background.trim().replace(/\n+/g, '\n  ')}` : '')
+  const decision = ({ row: r, fromProject }: (typeof notes)[number]) => `- ${r.answer ? `${r.title} → ${r.answer}` : r.title}${why(r)}${asked(r)}${from(fromProject)}${background(r)}`
   if (settled.length) out.push('### Decisions', '', 'Each a question and the answer the person settled on. Work to each one. Do not reopen them, argue with them or ask about them again; if one makes the work impossible, say so plainly and stop.', '', ...settled.map(decision), '')
-  if (undecided.length) out.push('### Not decided yet', '', 'Questions with no answer. Do not guess one and do not work as if one were given. Where your work does not turn on one, carry on. Where it does, say so plainly to the person and ask, or propose an answer.', '', ...undecided.map(({ row: r, fromProject }) => `- ${r.title}${r.body ? ` (${r.body.replace(/\s+/g, ' ')})` : ''}${asked(r)}${from(fromProject)}`), '')
+  if (undecided.length) out.push('### Not decided yet', '', 'Questions with no answer. Do not guess one and do not work as if one were given. Where your work does not turn on one, carry on. Where it does, say so plainly to the person and ask, or propose an answer.', '', ...undecided.map(({ row: r, fromProject }) => `- ${r.title}${r.body ? ` (${r.body.replace(/\s+/g, ' ')})` : ''}${asked(r)}${from(fromProject)}${background(r)}`), '')
   if (proposed.length) out.push('### Answers proposed, waiting for the person', '', 'Not settled. Do not work as if they were, and do not propose them again.', '', ...proposed.map(decision), '')
   if (rejected.length) out.push('### Answers proposed and turned down by the person', '', 'Do not do these, and do not propose them again.', '', ...rejected.map(decision), '')
   if (said.length) out.push('### Notes', '', 'What was said or found along the way.', '', ...said.map(({ row: r, fromProject }) => `**${r.title}** (${r.on})${from(fromProject)}${r.body ? `\n\n${r.body.trim()}` : ''}`).flatMap((t) => [t, '']))
