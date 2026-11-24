@@ -1077,6 +1077,9 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .pr-status { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 0 0 10px; }
 .pr-branches { font-size: 12px; margin-left: 4px; }
 .pr-act { margin: 0 0 14px; }
+.review-copy { margin: 0 0 18px; }
+.review-copy-holds { margin: 0 0 10px; padding-left: 20px; font-size: 13px; display: grid; gap: 2px; }
+.review-copy .pr-write select { max-width: 420px; }
 .pr-step > .submit-pr { border: 0; padding: 0; margin: 0 0 14px; box-shadow: none; background: none; }
 .pr-step > .submit-pr > h2 { display: none; }
 .pr-message { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; max-height: 420px; overflow-y: auto; }

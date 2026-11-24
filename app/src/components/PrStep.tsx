@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge, type Tone } from './Badge'
 import { Md } from './Md'
+import { ReviewCopy } from './ReviewCopy'
 import { SubmitPr } from './SubmitPr'
 import { API, engine, openEvents, type PrComment, type PrView } from '../engine'
 
@@ -85,6 +86,9 @@ export function PrStep({ issueId, appId, base }: { issueId: string; appId: strin
       ) : pr.status === 'open' ? (
         <p className="pr-act faint">It is ready for review. Reviewing and merging are done on GitHub; what is said there shows below.</p>
       ) : <p className="pr-act faint">It is merged. Nothing more is sent to it.</p>}
+
+      {/* What a reviewer runs: made here, and named by the description below once it is. */}
+      {live && <ReviewCopy issueId={issueId} appId={appId} onChanged={() => void load()} />}
 
       <h3 className="settings-h3">Message <span className="faint" style={{ fontWeight: 400 }}>{shown?.from ?? ''}</span></h3>
       {/* What the team reads first: written for them, or (until it is) our merge guide. Our record is folded under either. */}

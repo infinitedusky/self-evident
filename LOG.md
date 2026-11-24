@@ -6937,3 +6937,39 @@ or the name on it, but it doesn't change the actual content of that record which
 
 A fake made before this keeps its replaced words until it is made again ("Make the fake again" on the endpoint).
 Capitalised values (a platform's name) are still replaced unless the plan keeps them.
+
+### The review branch is made by the tool (2026-11-23)
+
+Brief step 5, built from the six by-hand steps above (`engine/src/review-copy.ts`; the task's PR step, "Review copy").
+
+- **The branch is the pull request's pushed head plus one commit that adds `review/`.** Made again whole each time
+  and pushed over the branch of that name, so GitHub's comparison of the two always shows only added files in that
+  folder. The engine never touches a local branch of that name (a person may have it checked out): it commits in a
+  worktree of its own and pushes the commit.
+- **The app's own part is a kit**: a folder on this computer named in the app's settings (`setup.review.kit`),
+  holding how the app starts for a reviewer (start and stop commands, what it layers over the app's own, a sign-in)
+  and a `kit.json` saying what each file is, what a reviewer needs and what the copy cannot show. Evident does not
+  know how an app starts; the kit does. For the enterprise dashboard it sits beside the prototype's tooling.
+- **Evident adds the rest**: each service's mock and what a reviewer is served (the faked form), `mocks.env`
+  (each service's settings pointed at its mock, with a key that is not one), `mocks.compose.yml`, the fake
+  versions of the test files, the fixture as `fixture.sql` when one is chosen, a README and `made.json`.
+- **Nothing about it is kept in Evident's database.** Where it stands is read back from the branch: `made.json`
+  says the commit it was made from, the fixture and what to try. In step means that commit is the pull request's head.
+- **The fixture and what to try are chosen when it is made** (the form on the PR step); made again, they stay as
+  they were unless changed. A fixture marked real is not offered.
+- **The pull request's Review section is the engine's**: written from `made.json` and the kit, put in place of a
+  section the writer called "Review" or "Run it yourself", else at the description's end, above Fine print.
+- **Kept in step**: when the engine updates a pull request that has a review copy, the copy is made again from the
+  new head and the description sent once more, naming the new commit.
+- Refused: while any service would answer with a real response; when the pull request's own branch has a `review/`
+  folder; for a mock started with anything but python or node.
+
+Proved on CEB-90 without pushing: the tool's copy held the same data and files as the hand-made one, on the pull
+request's new head (it had moved one commit, so the hand-made branch was already behind). Started with the one
+command, the made-up person imported, the scan run: 41 findings stored (20 fake profiles, 14 scams, 7 doxxing
+posts). This was also the first scan of the fake that has doxxing posts.
+
+Not done: the review copy is not checked a second time against the real response when it is made (it relies on
+the check made when each fake was made); the gate (step 7) does not ask for it yet; nothing remakes it when
+someone other than the engine pushes to the pull request's branch, until the next update from here.
+
