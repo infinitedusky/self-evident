@@ -7365,3 +7365,25 @@ Postgres refuses. The start answered with a bare server error, so the page said 
 
 With it, the Cloaked workbench's `before-start` hook ran for the first time (it gave `DEMO_TENANT_ID`), and the
 two smoke set-ups' scripts use what it gives. Tried from a throwaway process, not yet from the page.
+
+## An endpoint's data, a file per fixture; the fixture picks (Sandy, 2026-11-24)
+
+With Meridian's smoke test up, Sandy wanted a mock response with a row for each of its 250 people, and asked:
+"should the endpoints be connected to whatever fixture you're on, or should you be able to do multiple of the same
+endpoint tied to different fixtures?" The second. Until now an endpoint had one made-up file (and a task's own), and
+filling it out for a fixture's people changed that one file, so the data decided the fixture and never the reverse.
+
+- **An endpoint holds several files**, each made for one fixture's people, or for none.
+- **The fixture a run starts from picks** (`pickForFixture`, mock-serve.ts): the file made for it; else one made for
+  no fixture; else the order there was. Started empty: one made for no fixture first. A prototype (its scenario), a
+  smoke test (what its database was built from) and a review copy (its fixture) all say which.
+- **Filling out for a fixture adds a file** beside the one it was made from, which is left as it is; filling out
+  again for the same fixture changes that fixture's file. (`assignFixture` says `fresh`.)
+- **Where the fixture is not known** (the Data step's own view, an export), nothing changes: the order alone.
+- The page names an endpoint's other files by fixture, and says the rule.
+
+Not done: the Data step and the smoke page do not yet show, for a fixture chosen there, which file each endpoint
+would serve; a fixture's file cannot be removed from the page; `fixtureForTask` still takes the first fixture any
+data was made for when the person picks none; a server written by hand that writes over what it is sent (CEB-90's)
+gets the right file but may still overwrite its people. Meridian's own file is not made yet: Sandy wants it without
+the deep enrichment that makes one person's rows large ("we don't need any of that").

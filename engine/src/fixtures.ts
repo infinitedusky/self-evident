@@ -232,10 +232,13 @@ export async function assignFixture(appId: string, key: string, endpoint: string
   if (!Object.keys(map).length) throw new PlanError('say which columns of the data are set from which columns of the fixture: { tracking_id: "id", work_email: "work_email" }')
   const setOf = (row: Record<string, unknown>) => { const set: Record<string, string> = {}; for (const [dataCol, fxCol] of Object.entries(map)) { const v = row[fxCol]; if (v === null || v === undefined || typeof v === 'object') throw new PlanError(`the fixture's "${fxCol}" holds nothing to set "${dataCol}" from`); set[dataCol] = String(v) } return set }
   const sets = people.map(setOf)
-  const item = (await endpointData(m, issueId))[e.key]
+  // The file already made for this fixture, to fill out again; else the one made for no fixture, as the template of a new file.
+  const item = (await endpointData(m, issueId, fx.name))[e.key]
   const safe = (issueId ? item.task : item.app)?.safe
   if (!safe) throw new PlanError(`${e.method} ${e.path} has no faked or provided data${issueId ? ' of this task\'s own' : ''} yet to make for a fixture: the real response is faked first`)
   const [d] = await db.select().from(mockData).where(and(eq(mockData.mockId, m.id), eq(mockData.key, safe.set)))
+  // Made for another fixture, or for none: it is left as it is, and this fixture gets a file of its own (Sandy, 2026-11-24).
+  const fresh = safe.madeFor?.fixture !== fx.name
   const files = { ...d.files }
   const prov = (d.provenance ?? {}) as DataProvenance & { template?: Record<string, string> }
   // The template is the data as it was before it was first filled out: filling it out again starts from that, not from the last filling.
@@ -267,10 +270,16 @@ export async function assignFixture(appId: string, key: string, endpoint: string
   const set = sets[0]
   const workspaceId = await workspaceOf(appId)
   await db.transaction(async (tx) => {
-    await tx.update(mockData).set({ files, plan: { ...(d.plan ?? {}), set }, provenance: { ...(d.provenance ?? {}), madeFor, template }, updatedAt: new Date() }).where(eq(mockData.id, d.id))
+    if (fresh) {
+      const mine = Object.fromEntries(safe.files.map((f) => [f, files[f]])) // this endpoint's files only: the rest of a set across endpoints stays where it is
+      const base = `${d.key.replace(/-for-[a-z0-9-]+$/, '')}-for-${standInKey(fx.name)}`.slice(0, 120)
+      const taken = new Set((await tx.select({ key: mockData.key }).from(mockData).where(eq(mockData.mockId, m.id))).map((x) => x.key))
+      let k = base; for (let n = 2; taken.has(k); n++) k = `${base}-${n}`
+      await tx.insert(mockData).values({ id: newId('run').replace(/^run_/, 'mdata_'), mockId: m.id, key: k, name: `${d.name} (for ${fx.name})`.slice(0, 200), kind: d.kind, files: mine, recording: d.recording, plan: { ...(d.plan ?? {}), set }, provenance: { ...(d.provenance ?? {}), scope: { ...((d.provenance as DataProvenance | null)?.scope ?? {}), endpoint: e.key, ...(issueId ? { task: issueId } : {}) }, madeFor, template }, issueId })
+    } else await tx.update(mockData).set({ files, plan: { ...(d.plan ?? {}), set }, provenance: { ...(d.provenance ?? {}), madeFor, template }, updatedAt: new Date() }).where(eq(mockData.id, d.id))
     await appendEvent(tx, { workspaceId, appId, issueId, actor, type: 'mock.data_for_fixture', payload: { key: m.key, endpoint: e.key, fixture: fx.name, people: people.length, columns: Object.keys(set) } })
   })
-  return { madeFor, changed }
+  return { madeFor, changed, fresh }
 }
 
 /** The fixture a task's runs are built from: the one its services' data was made for (the task's own data first, then the app's). None: nothing says. */

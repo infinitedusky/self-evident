@@ -304,7 +304,7 @@ export async function makeReviewCopy(issueId: string, i: { /** The fixture its d
   if ((await git(repo, ['cat-file', '-e', `${head}:review`], { allowFail: true })).code === 0) throw new PlanError('the pull request\'s own branch already has a review/ folder, and a review copy would write over it')
 
   // What a reviewer is served, by each service: refused (plansFor throws) while any of it would be real.
-  const { plans, pick } = await plansFor(c.a.id, 'review', c.t.id)
+  const { plans, pick } = await plansFor(c.a.id, 'review', c.t.id, { fixture }) // the fixture it starts from picks each endpoint's data
   const mocks: ReviewMock[] = []
   for (const p of plans) {
     if (p.how === 'none') continue

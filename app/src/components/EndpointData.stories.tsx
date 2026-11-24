@@ -65,6 +65,18 @@ export const PeopleAreNotTheLargestTable: Story = {
 }
 /** Data already filled out for fixture people says who, and can be changed. */
 export const MadeForFixturePeople: Story = { args: { endpoint: { ...mockEndpointsSample[3], data: { ...mockEndpointsSample[3].data, app: { ...resultsItem, safe: { ...resultsItem.safe!, madeFor: { fixture: 'northwind-company', table: 'employees', who: '3 people, from Blake Sample, blake.sample@northwind.example', people: 3, map: { tracking_id: 'id', work_email: 'work_email' } } } } } } } }
+/** An endpoint with a file per fixture: the one shown says whose it is, and the others are named, with the rule that the fixture a run starts from picks. */
+export const AFilePerFixture: Story = {
+  args: { endpoint: { ...mockEndpointsSample[3], data: { ...mockEndpointsSample[3].data, app: { ...resultsItem, safe: { ...resultsItem.safe!, madeFor: { fixture: 'northwind-company', table: 'employees', who: '250 people, from Blake Sample, blake.sample@northwind.example', people: 250, map: { tracking_id: 'id', work_email: 'work_email' } }, also: [{ set: 'faked-results-for-harbor', fixture: 'harbor-sample', who: '3 people, from Sam Example, sam@harbor.example' }, { set: 'faked-results', fixture: null, who: null }] } } } } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const also = await c.findByLabelText('Its other data, by fixture')
+    await expect(also).toHaveTextContent('The fixture a run starts from picks the data.')
+    await expect(also).toHaveTextContent('harbor-sample (3 people, from Sam Example, sam@harbor.example)')
+    await expect(also).toHaveTextContent('any other fixture, or none')
+    await expect(c.getByText(/250 people, from Blake Sample/)).toBeInTheDocument()
+  },
+}
 /** No data: the mock's server makes the answer up. Adding data asks for a file and what it is. */
 /** A file a tester brings supplies who the data is for: a column the data lacks is added from the file, and one is left empty. */
 export const MapFieldsFromAFile: Story = {

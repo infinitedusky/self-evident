@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, workspace } from './db/schema.js'
+import { like } from 'drizzle-orm'
+import { app, mockData, workspace } from './db/schema.js'
 import { assignFixture, canMakeFixture, dataColumns, deleteFixture, fixtureForTask, fixtureRows, fixtureSample, listFixtures, makeFixtureFromSeed, pin, renameFixture } from './fixtures.js'
 import { newId } from './ids.js'
 import { fakeData } from './mock-data.js'
@@ -85,6 +86,30 @@ describe.skipIf(!reachable)('fixtures', () => {
     expect(rows.flat().join(' ')).not.toMatch(/Rowan|Northgate/)
     await assignFixture(appId, 'scanner', 'results', { fixture: 'meridian', table: 'employees', row: 3, count: 10, map }, null)
     expect((await rowsServed()).slice(1).map((r) => r[1])).toEqual(['sample4@meridian.example']) // from the template again, and only the people there are
+  })
+
+  it('keeps a file per fixture beside the one it was made from, and the fixture a run starts from picks which is served', async () => {
+    const m = async () => (await rowOf(appId, 'scanner'))!
+    const emails = async (fixture: string | null | undefined) => parseCsv((await served(await m(), { form: 'faked', fixture })).files.find((f) => f.name === 'results.csv')!.text!).slice(1).map((r) => r[1])
+    // The file it was made from is still there, for no fixture: a run started empty gets it, with nobody of meridian's in it.
+    const plain = await emails(null)
+    expect(plain).toHaveLength(1)
+    expect(plain[0]).not.toMatch(/meridian\.example/)
+    expect(await emails('meridian')).toEqual(['sample4@meridian.example'])
+    // A second fixture gets a file of its own; the first's is left as it was.
+    await writeScenario({ appId }, 'northwind', { employees: [{ id: '00000000-0000-4000-9000-000000000001', first_name: 'North', last_name: 'Person', work_email: 'north1@northwind.example' }] }, true)
+    expect(await assignFixture(appId, 'scanner', 'results', { fixture: 'northwind', table: 'employees', row: 0, map: { tracking_id: 'id', work_email: 'work_email' } }, null)).toMatchObject({ fresh: true, madeFor: { fixture: 'northwind' } })
+    expect(await emails('northwind')).toEqual(['north1@northwind.example'])
+    expect(await emails('meridian')).toEqual(['sample4@meridian.example'])
+    expect(await emails(null)).toEqual(plain)
+    expect(await emails('a fixture with no file of its own')).toEqual(plain) // falls back to the one made for no fixture
+    // Filling out again for a fixture that has a file changes that file, and makes no third.
+    expect((await assignFixture(appId, 'scanner', 'results', { fixture: 'northwind', table: 'employees', row: 0, map: { tracking_id: 'id', work_email: 'work_email' } }, null)).fresh).toBe(false)
+    const safe = (await listMocks(appId))[0].endpoints[0].data.app!.safe!
+    expect([safe.madeFor?.fixture ?? null, ...(safe.also ?? []).map((a) => a.fixture)].sort((a, b) => String(a).localeCompare(String(b)))).toEqual(['meridian', 'northwind', null].sort((a, b) => String(a).localeCompare(String(b))))
+    // Put back as it was for the tests below: the second fixture and its file are taken away.
+    await deleteFixture(appId, 'northwind')
+    await db.delete(mockData).where(like(mockData.key, '%-for-northwind'))
   })
 
   it('builds a task\'s runs from the fixture its data was made for', async () => {
