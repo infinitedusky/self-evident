@@ -477,7 +477,7 @@ export async function noteRecording(appId: string, key: string, dir: string, iss
  * recording is, with the task, outside every repository, untouched; given.meta.json says it was given, not recorded,
  * so the miner takes any call not given from the code that makes it and says so in the provenance.
  */
-export async function giveRecording(appId: string, key: string, given: { name: string; bytes: Uint8Array }[], actor = 'user', /** The endpoint they are responses of: kept under its name, so they are its. */ endpoint?: string | null, /** A task they are for alone, in place of the app's (mock-serve.ts). */ forTask?: string | null): Promise<{ dir: string; issueId: string | null; files: string[] }> {
+export async function giveRecording(appId: string, key: string, given: { name: string; bytes: Uint8Array }[], actor = 'user', /** The endpoint they are responses of: kept under its name, so they are its. */ endpoint?: string | null, /** A task they are for alone, in place of the app's (mock-serve.ts). */ forTask?: string | null, /** The fixture they are the response for. */ forFixture?: string | null): Promise<{ dir: string; issueId: string | null; files: string[] }> {
   const m = await rowOf(appId, key)
   if (!m) throw new PlanError(`this app has no mock "${key}"`)
   if (!given.length) throw new PlanError('give at least one file: a response the service sent')
@@ -500,7 +500,7 @@ export async function giveRecording(appId: string, key: string, given: { name: s
   const dir = join(recordingsDir(appId, { issueId: m.issueId }), key, `given-${new Date().toISOString().replace(/[:.]/g, '-')}`)
   mkdirSync(dir, { recursive: true })
   for (const f of files) writeFileSync(join(dir, f.name), f.bytes)
-  writeFileSync(join(dir, 'given.meta.json'), JSON.stringify({ given: true, by: actor, files: files.map((f) => ({ name: f.name, bytes: f.bytes.length, ...(f.was !== f.name ? { was: f.was } : {}) })), ...(of ? { endpoint: of.key } : {}), ...(of && forTask ? { forTask } : {}), at: new Date().toISOString(), what: m.needs?.file ?? null }, null, 2))
+  writeFileSync(join(dir, 'given.meta.json'), JSON.stringify({ given: true, by: actor, files: files.map((f) => ({ name: f.name, bytes: f.bytes.length, ...(f.was !== f.name ? { was: f.was } : {}) })), ...(of ? { endpoint: of.key } : {}), ...(of && forTask ? { forTask } : {}), ...(of && forFixture ? { forFixture } : {}), at: new Date().toISOString(), what: m.needs?.file ?? null }, null, 2))
   await noteRecording(appId, key, dir, m.issueId, files.length)
   return { dir, issueId: m.issueId, files: files.map((f) => f.name) }
 }

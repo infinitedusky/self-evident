@@ -20,7 +20,11 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   /** Is there a task whose agent makes the fake of a real response? */ canAsk: boolean; onChanged: () => void | Promise<void>
 }) {
   const [open, setOpen] = useState<null | 'app' | 'task'>(null)
-  const [forFixture, setForFixture] = useState(false) // the form is open to add a file of one fixture's own, beside the data there is
+  // A response per fixture (Sandy, 2026-11-24: "do it this way for this fixture, do it this way for that fixture … and
+  // this is the default"). Which one the cell shows and changes: one fixture's, or (null) the default. Everything
+  // below is of that response, and it is the same here as in the app's settings: a task's own overrides the app's.
+  const [resp, setResp] = useState<string | null>(null)
+  const [picking, setPicking] = useState<Fixture[] | null>(null) // the app's fixtures, while one is chosen to add a response for
   // Fields mapped from a fixture: a table of its database, or one of its files. Which, while the form is open.
   const [source, setSource] = useState<null | 'table' | 'file'>(null)
   const filling = source === 'table', mapping = source === 'file'
@@ -38,26 +42,29 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   const [askedWas, setAskedWas] = useState<string>(() => kept()?.[1] ?? '')
   const asked = (at: number | null, was = '') => { setAskedAt(at); setAskedWas(was); try { if (at) sessionStorage.setItem(askedKey, `${at}|${was}`); else sessionStorage.removeItem(askedKey) } catch { /* not kept */ } }
   const [, setNow] = useState(0)
-  const own = issueId ? e.data.task : null
-  const item = own ?? e.data.app
+  const view = resp ? e.data.responses?.find((x) => x.fixture === resp) ?? { app: null, task: null } : e.data
+  const own = issueId ? view.task : null
+  const item = own ?? view.app
+  const fixturesWith = [...new Set([...(e.data.responses ?? []).map((x) => x.fixture), ...(resp ? [resp] : [])])].sort()
   const call = `${e.method} ${e.path}`
   const act = async (fn: () => Promise<string | null | void>) => { try { setError(null); setSaid((await fn()) ?? null); setOpen(null); await onChanged() } catch (x) { setError(err(x)) } }
-  const give = (level: 'app' | 'task') => (files: File[], real: boolean, fixture?: string) => act(async () => {
-    const r = await engine.giveEndpointData(appId, mockKey, e.key, files, { real, issueId: level === 'task' ? issueId : null, fixture })
-    if (fixture) return `Added as the data for ${fixture}: a run started from that fixture is served it.`
+  const give = (level: 'app' | 'task') => (files: File[], real: boolean) => act(async () => {
+    const r = await engine.giveEndpointData(appId, mockKey, e.key, files, { real, issueId: level === 'task' ? issueId : null, fixture: resp })
+    if (resp && r.kept === 'provided') return `Added as the response for ${resp}: a run started from that fixture is served it.`
     if (r.kept === 'faked') return `Faked. The original was not kept.${r.maybeStructure?.length ? ` These look like structure and were replaced all the same: ${r.maybeStructure.join(', ')}.` : ''}`
     if (r.kept === 'recorded') { if (r.asked) { asked(Date.now(), item?.recorded?.id ?? ''); return null } return 'Kept on this computer. It is faked once a task takes this service up.' }
     return null
   })
   // The fake of the saved real response, made now. Refused while something real is still in it: then it is the task's agent's to say what is structure.
+  const pick = (f: string | null) => { setResp(f); setPicking(null); setOpen(null); setSource(null); setSaid(null); setError(null) }
   const makeFake = async () => {
     setFaking(true)
-    try { await act(async () => { const r = await engine.fakeEndpoint(appId, mockKey, e.key, own?.recorded ? issueId : null); return `Faked: ${r.replaced} value${r.replaced === 1 ? '' : 's'} replaced, ${r.kept} kept as structure. Checked against the real response.` }) } finally { setFaking(false) }
+    try { await act(async () => { const r = await engine.fakeEndpoint(appId, mockKey, e.key, own?.recorded ? issueId : null, resp); return `Faked: ${r.replaced} value${r.replaced === 1 ? '' : 's'} replaced, ${r.kept} kept as structure. Checked against the real response.` }) } finally { setFaking(false) }
   }
   const remove = (level: 'app' | 'task') => {
-    const it = level === 'task' ? own : e.data.app
+    const it = level === 'task' ? own : view.app
     const what = level === 'task' ? `Go back to the app's data for ${call}? This task's own is removed` : `Remove the data of ${call}?`
-    if (window.confirm(`${what}${it?.recorded ? (level === 'task' ? ', and its real response is deleted from this computer.' : ' Its real response is deleted from this computer too.') : level === 'task' ? '.' : ''}`)) void act(() => engine.removeEndpointData(appId, mockKey, e.key, { issueId: level === 'task' ? issueId : null, real: true }).then(() => null))
+    if (window.confirm(`${what}${it?.recorded ? (level === 'task' ? ', and its real response is deleted from this computer.' : ' Its real response is deleted from this computer too.') : level === 'task' ? '.' : ''}`)) void act(() => engine.removeEndpointData(appId, mockKey, e.key, { issueId: level === 'task' ? issueId : null, real: true, fixture: resp }).then(() => null))
   }
   // Under way until the fake of the response just given is there: none yet, or the one there is of an older response.
   // A response given over one that already had a fake: the cell still shows the old pair for a moment, and that fake
@@ -71,7 +78,14 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
   const working = faking || (waiting && !slow)
   return (
     <div className="endpoint-data" data-component="EndpointData" data-endpoint={e.key}>
-      <ItemSays item={item} written={written} own={!!own} working={working} />
+      <div className="endpoint-responses" role="tablist" aria-label={`Responses of ${call}`}>
+        <button role="tab" aria-selected={!resp} className={`endpoint-response ${!resp ? 'on' : ''}`} title="What every run is served, unless the fixture it starts from has a response of its own" onClick={() => pick(null)}>Default</button>
+        {fixturesWith.map((f) => <button key={f} role="tab" aria-selected={resp === f} className={`endpoint-response ${resp === f ? 'on' : ''}`} title={`What a run started from the fixture ${f} is served`} onClick={() => pick(f)}>{f}</button>)}
+        {picking
+          ? <select aria-label={`The fixture to add a response of ${call} for`} value="" onChange={(ev) => { if (ev.target.value) pick(ev.target.value) }}><option value="">{picking.some((f) => !fixturesWith.includes(f.name)) ? 'For which fixture…' : 'Every fixture has one'}</option>{picking.filter((f) => !fixturesWith.includes(f.name)).map((f) => <option key={f.name} value={f.name}>{f.name}</option>)}</select>
+          : <button className="lv-act" aria-label={`Add a response of ${call} for a fixture`} title="A different response for one fixture: its own file, real and faked or made up. A run started from that fixture is served it." onClick={() => void engine.fixtures(appId).then((r) => setPicking(r.fixtures)).catch(() => setPicking([]))}>+ For a fixture</button>}
+      </div>
+      {resp && !item ? <div className="faint">No response for <strong>{resp}</strong> yet: a run started from it is served the default. Add data to give it its own.</div> : <ItemSays item={item} written={written} own={!!own} working={working} />}
       {working && <div className="working-banner" role="status"><span className="working-spin" aria-hidden="true" /><div><strong>{faking ? 'Making the fake version…' : 'The task\'s agent is making the fake version…'}</strong><div>{faking ? 'Every value that is someone\'s is being replaced, then checked against the real response.' : 'The real response is kept on this computer. This usually takes a minute or two, and this updates by itself when the fake is ready.'}</div></div></div>}
       {slow && <div className="mock-data-warn" role="status">The fake has not arrived after five minutes. The task's conversation shows how far its agent got; or make it here with "Make fake version".<button className="lv-act" style={{ marginLeft: 8 }} onClick={() => asked(null)}>Dismiss</button></div>}
       {item?.recorded && !item.safe && !(waiting && !slow) && <div className="row"><button className="btn small" disabled={faking} aria-label={`Make the fake version of ${call}`} onClick={() => void makeFake()}>{faking ? 'Making it…' : 'Make fake version'}</button></div>}
@@ -88,27 +102,25 @@ export function EndpointDataCell({ appId, mockKey, serviceName, endpoint: e, iss
       })()}
       {/* The data is a template: a fixture supplies who it is for. */}
       {source && item?.safe && <div className="mock-edit" style={{ marginBottom: 0 }}><label>Map fields from<select aria-label={`Where the fields of ${call} come from`} value={source} onChange={(ev) => setSource(ev.target.value as 'table' | 'file')}><option value="table">A table of the fixture's database</option><option value="file">One of the fixture's files</option></select></label></div>}
-      {filling && item?.safe && <FillForm appId={appId} call={call} columns={item.safe.columns ?? []} was={item.safe.madeFor} onCancel={() => setFilling(false)} onFill={(b) => act(async () => { const r = await engine.assignFixture(appId, mockKey, e.key, { ...b, issueId: own ? issueId : null }); setFilling(false); return `Filled out for ${r.madeFor.who}.` })} />}
+      {filling && item?.safe && <FillForm appId={appId} call={call} columns={item.safe.columns ?? []} was={item.safe.madeFor} onCancel={() => setFilling(false)} onFill={(b) => act(async () => { const r = await engine.assignFixture(appId, mockKey, e.key, { ...b, issueId: own ? issueId : null, response: resp }); setFilling(false); return `Filled out for ${r.madeFor.who}.` })} />}
       {/* Or a file a tester brings supplies who: only the mapping is kept, and it is worked out for the version of the file each place uses. */}
       {mapping && item?.safe && <FileMapForm appId={appId} issueId={issueId} call={call} columns={item.safe.columns ?? []} was={item.safe.fromFile} onCancel={() => setMapping(false)}
         onSave={(b) => act(async () => { const r = await engine.mapFromFile(appId, mockKey, e.key, { ...b, issueId: own ? issueId : null }); setMapping(false); return r.fromFile ? `It answers for the people in ${r.fromFile.file}.` : 'No longer mapped from a file.' })} />}
       {said && <div className="faint">{said}</div>}
       {error && <div className="mock-data-warn" style={{ whiteSpace: 'pre-wrap' }}>{error}{/^refused/.test(error) && canAsk && <div className="lv-line" style={{ marginTop: 4 }}><span>The task's agent can say which of these is structure and make it.</span><button className="lv-act" aria-label={`Ask the task's agent to make the fake of ${call}`} onClick={() => void act(async () => { await engine.mineMock(appId, mockKey); return 'Asked. Its conversation shows how far it is.' })}>Ask the task's agent</button></div>}</div>}
-      {open ? <GiveForm appId={appId} forFixture={forFixture} call={call} sensitive={!!e.sensitive} note={open === 'app' && issueId ? `This becomes ${serviceName}'s data in Settings: every task gets it unless it has its own.` : open === 'task' ? 'For this task alone. Other tasks keep the app\'s.' : null} onGive={give(open)} onCancel={() => setOpen(null)} /> : (
+      {open ? <GiveForm call={call} sensitive={!!e.sensitive} note={resp ? `This is the response for the fixture ${resp}: a run started from it is served this. The default is left as it is.${open === 'task' ? ' For this task alone.' : ''}` : open === 'app' && issueId ? `This becomes ${serviceName}'s data in Settings: every task gets it unless it has its own.` : open === 'task' ? 'For this task alone. Other tasks keep the app\'s.' : null} onGive={give(open)} onCancel={() => setOpen(null)} /> : (
         <div className="lv-line">
           {issueId && item && !own && <span>From the app's settings</span>}
-          {item?.safe && !filling && (item.safe.madeFor ? (item.safe.madeFor.given && !Object.keys(item.safe.madeFor.map).length ? <span>The fixture {item.safe.madeFor.fixture}'s own file (<strong>{item.safe.madeFor.who}</strong>)</span> : <span>For <strong>{item.safe.madeFor.who}</strong> of the fixture {item.safe.madeFor.fixture}</span>) : !item.safe.fromFile && <span title="The app may send people this has no answer for.">Not made for a fixture's people</span>)}
+          {item?.safe && !filling && (item.safe.madeFor ? <span>For <strong>{item.safe.madeFor.who}</strong> of the fixture {item.safe.madeFor.fixture}</span> : !item.safe.fromFile && <span title="The app may send people this has no answer for.">Not made for a fixture's people</span>)}
           {item?.safe?.fromFile && !mapping && <span>Answers for the people in <strong>{item.safe.fromFile.file}</strong></span>}
-          {item?.safe?.also?.length ? <span aria-label="Its other data, by fixture" title="An endpoint can hold a file for each fixture. Fill this one out for another fixture to add one.">The fixture a run starts from picks the data. Also here: {item.safe.also.map((a, n) => <span key={a.set}>{n ? '; ' : ''}{a.fixture ? <>{a.fixture}{a.who ? ` (${a.who})` : ''}</> : 'any other fixture, or none'}</span>)}</span> : null}
           {item?.safe && !source && (!issueId || own || !e.data.task) && <button className="lv-act" aria-label={`Map fields of ${call} from a fixture`} title="Set columns of this data from a table of the fixture's database, or from one of its files" onClick={() => setSource(item.safe?.fromFile && !item.safe.madeFor ? 'file' : 'table')}>{item.safe.fromFile || item.safe.madeFor ? 'Change the mapping' : 'Map fields from a fixture'}</button>}
           {item?.recorded && item.safe?.kind === 'faked' && <button className="lv-act" disabled={faking} aria-label={`Make the fake version of ${call} again`} title="From the real response saved here, with what was said to be structure" onClick={() => void makeFake()}>{faking ? 'Making it…' : 'Make the fake again'}</button>}
-          {!issueId && <button className="lv-act" aria-label={`${item ? 'Replace' : 'Add'} the data of ${call}`} onClick={() => { setForFixture(false); setOpen('app') }}>{item ? 'Replace' : 'Add data'}</button>}
-          {item?.safe && (!issueId || own) && <button className="lv-act" aria-label={`Add a file of ${call} for a fixture`} title="A different file for one fixture: its own rows, a row for each of its people. A run started from that fixture is served it." onClick={() => { setForFixture(true); setOpen(own ? 'task' : 'app') }}>Add for a fixture</button>}
+          {!issueId && <button className="lv-act" aria-label={`${item ? 'Replace' : 'Add'} the data of ${call}`} onClick={() => setOpen('app')}>{item ? 'Replace' : 'Add data'}</button>}
           {!issueId && item && <button className="lv-act" aria-label={`Remove the data of ${call}`} onClick={() => remove('app')}>Remove</button>}
           {issueId && own && <button className="lv-act" aria-label={`Replace this task's data of ${call}`} onClick={() => setOpen('task')}>Replace</button>}
           {issueId && own && <button className="lv-act" aria-label={`Go back to the app's data of ${call}`} onClick={() => remove('task')}>Back to the app's</button>}
           {issueId && !own && item && <button className="lv-act" aria-label={`Override the data of ${call} for this task`} onClick={() => setOpen('task')}>Override</button>}
-          {issueId && !own && !item && <button className="lv-act" aria-label={`Add the data of ${call}`} onClick={() => setOpen('app')}>Add data</button>}
+          {issueId && !own && !item && <button className="lv-act" aria-label={`Add the data of ${call}`} title={resp ? 'For this task: its own response for this fixture' : undefined} onClick={() => setOpen(resp ? 'task' : 'app')}>Add data</button>}
         </div>
       )}
     </div>
@@ -131,27 +143,21 @@ function ItemSays({ item, written, own, working = false }: { item: EndpointItem 
 }
 
 /** A file for one endpoint, and what it is: a response the service sent, or something that holds nothing real. */
-function GiveForm({ appId, forFixture, call, sensitive, note, onGive, onCancel }: { appId: string; /** Add a file of one fixture's own, beside the data there is. */ forFixture: boolean; call: string; sensitive: boolean; note: string | null; onGive: (files: File[], real: boolean, fixture?: string) => Promise<void>; onCancel: () => void }) {
+function GiveForm({ call, sensitive, note, onGive, onCancel }: { call: string; sensitive: boolean; note: string | null; onGive: (files: File[], real: boolean) => Promise<void>; onCancel: () => void }) {
   const [files, setFiles] = useState<File[]>([])
-  const [realTicked, setReal] = useState(true)
+  const [real, setReal] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [fixtures, setFixtures] = useState<Fixture[]>([])
-  const [fixture, setFixture] = useState('')
-  useEffect(() => { if (forFixture) void engine.fixtures(appId).then((r) => { setFixtures(r.fixtures); setFixture((f) => f || r.fixtures[0]?.name || '') }).catch(() => setFixtures([])) }, [appId, forFixture])
-  const real = forFixture ? false : realTicked // a fixture's own file is written for its people: made up
   return (
     <div className="mock-edit" data-component="GiveEndpointData">
       <label>What {call} answers with<input type="file" multiple aria-label={`A file for ${call}`} onChange={(ev) => setFiles([...(ev.target.files ?? [])])} /></label>
-      {forFixture && <label>For the fixture<select aria-label="Which fixture it is for" value={fixture} onChange={(ev) => setFixture(ev.target.value)}>{!fixtures.length && <option value="">This app has no fixture yet</option>}{fixtures.map((f) => <option key={f.name} value={f.name}>{f.name}</option>)}</select></label>}
-      <label className="mock-check"><input type="checkbox" checked={real} disabled={forFixture} onChange={(ev) => setReal(ev.target.checked)} /> This is real data</label>
+      <label className="mock-check"><input type="checkbox" checked={real} onChange={(ev) => setReal(ev.target.checked)} /> This is real data</label>
       <p className="faint" style={{ margin: 0, fontSize: 13 }}>
-        {forFixture ? 'A different file for this one fixture, written for that fixture\'s people, a row each: who has nothing, who has a little, who has a lot is as the file says. It is kept beside the data there is, and a run started from this fixture is served it. Then map its fields from the fixture, so each row carries one of its people. It holds nothing real, and may go to a reviewer.'
-          : !real ? 'It is used exactly as it is, and may go to a reviewer. Leave the box unticked only for a file that holds nothing real, such as one you made up.'
+        {!real ? 'It is used exactly as it is, and may go to a reviewer. Leave the box unticked only for a file that holds nothing real, such as one you made up.'
           : sensitive ? 'Real data is always faked. This call is sensitive, so the file is faked at once and the original is not kept.'
           : 'Real data is always faked: the original is kept on this computer only, and a faked version is made of it, which is what a reviewer gets.'}
         {note ? ` ${note}` : ''}
       </p>
-      <div className="row"><button className="btn small" disabled={!files.length || busy || (forFixture && !fixture)} onClick={async () => { setBusy(true); try { await onGive(files, real, forFixture ? fixture : undefined) } finally { setBusy(false) } }}>{busy ? 'Adding…' : 'Add it'}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
+      <div className="row"><button className="btn small" disabled={!files.length || busy} onClick={async () => { setBusy(true); try { await onGive(files, real) } finally { setBusy(false) } }}>{busy ? 'Adding…' : 'Add it'}</button><button className="btn quiet small" onClick={onCancel}>Cancel</button></div>
     </div>
   )
 }

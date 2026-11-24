@@ -38,10 +38,11 @@ import { standInKey } from './stand-ins.js'
 export type Form = 'faked' | 'recorded'
 /** One endpoint's data at one level: the app's, or a task's own. */
 export interface EndpointItem {
+  /** Which response this is: one fixture's, or (null) the default. */ fixture: string | null
   /** The real response behind it on this computer. id: its folder from the recordings home. */ recorded: { id: string; at: string; how: 'given' | 'recorded'; files: string[] } | null
-  /** What may leave this computer: a fake of the recorded one, or a file provided as holding nothing real. */ safe: { kind: 'faked' | 'provided'; set: string; files: string[]; note: string; /** Its other files, each for another fixture's people or for none: what a start from that fixture is served instead. */ also?: { set: string; fixture: string | null; who: string | null }[]; /** The column names of its first file: what can be set from a fixture. */ columns: string[]; /** The fixture person it was made for (fixtures.ts). */ madeFor?: { fixture: string; table: string; who: string; people: number; map: Record<string, string> }; /** Fields mapped from a file of the fixtures, worked out when it is served (mock-file-map.ts). */ fromFile?: FromFile; /** Faked from a response that is no longer the newest one. */ stale?: boolean } | null
+  /** What may leave this computer: a fake of the recorded one, or a file provided as holding nothing real. */ safe: { kind: 'faked' | 'provided'; set: string; files: string[]; note: string; /** The column names of its first file: what can be set from a fixture. */ columns: string[]; /** The fixture person it was made for (fixtures.ts). */ madeFor?: { fixture: string; table: string; who: string; people: number; map: Record<string, string> }; /** Fields mapped from a file of the fixtures, worked out when it is served (mock-file-map.ts). */ fromFile?: FromFile; /** Faked from a response that is no longer the newest one. */ stale?: boolean } | null
 }
-export interface EndpointData { /** The app's: set in its settings. */ app: EndpointItem | null; /** This task's own, in place of the app's. */ task: EndpointItem | null; /** Do a person's own runs get its faked version? The app's answer (faked unless it says otherwise), and this task's own where it has one. A reviewer always gets the faked one. */ faked: { app: boolean; task: boolean | null } }
+export interface EndpointData { /** The app's: set in its settings. */ app: EndpointItem | null; /** This task's own, in place of the app's. */ task: EndpointItem | null; /** Do a person's own runs get its faked version? The app's answer (faked unless it says otherwise), and this task's own where it has one. A reviewer always gets the faked one. */ faked: { app: boolean; task: boolean | null }; /** Its responses for one fixture each, beside the default above: the app's and this task's own. */ responses: { fixture: string; app: EndpointItem | null; task: EndpointItem | null }[] }
 
 const visible = (dir: string) => { try { return readdirSync(dir).filter((f) => !f.startsWith('.') && !f.endsWith('.meta.json')).sort() } catch { return [] as string[] } }
 const prov = (d: DataRow) => (d.provenance ?? {}) as DataProvenance
@@ -64,37 +65,41 @@ const newest = (a: DataRow, b: DataRow) => (b.updatedAt ?? b.createdAt ?? new Da
 
 const columnsOfFirst = (files: Record<string, string>, names: string[]): string[] => { const t = files[names[0]] ?? ''; if (looksCsv(t)) return parseCsv(t.slice(0, 200_000).split(/\r?\n/)[0] ?? '')[0] ?? []; try { const v = JSON.parse(t) as unknown; const o = Array.isArray(v) ? v[0] : v; return o && typeof o === 'object' ? Object.keys(o as object).slice(0, 200) : [] } catch { return [] } }
 /**
- * Which of an endpoint's data files is served (Sandy, 2026-11-24: "should you be able to do multiple of the same
- * endpoint tied to different fixtures?"). An endpoint may hold several: each made for one fixture's people, or for
- * none. The fixture a run starts from picks: the file made for it; else one made for no fixture; else whatever the
- * order gives. Started empty (null), a file made for no fixture comes first. Not said (undefined): the order alone,
- * as before there was a choice. `ordered` is the candidates, best first by the rules that were already there.
+ * A response per fixture (Sandy, 2026-11-24: "allow an endpoint to have responses per fixture … do it this way for
+ * this fixture, do it this way for that fixture … and this is the default"). An endpoint has a default response and
+ * may have one for any fixture, at each level (the app's, and a task's own). Each is a whole response: a real one
+ * kept here, its fake, or a file provided. Whose a response is, is its scope: the endpoint, the task (none: the
+ * app's) and the fixture (none: the default). A run started from a fixture gets that fixture's, else the default.
  */
-export function pickForFixture<T>(ordered: T[], fixtureOf: (x: T) => string | null, fixture: string | null | undefined): T | undefined {
-  if (fixture === undefined) return ordered[0]
-  return (fixture ? ordered.find((x) => fixtureOf(x) === fixture) : undefined) ?? ordered.find((x) => fixtureOf(x) === null) ?? ordered[0]
+const fxOf = (s?: Scope) => s?.fixture ?? null
+const levelOf = (s: Scope | undefined, task: string | null) => (s?.task ?? null) === task
+/** The fixtures an endpoint has a response for, at one level. */
+function fixturesOf(r: Read, e: string, task: string | null): string[] {
+  const of = [...r.recs.filter((x) => levelOf(x.scope, task) && filesOf(r.endpoints, e, x.names).length).map((x) => fxOf(x.scope)), ...r.sets.filter((d) => levelOf(prov(d).scope, task) && filesOf(r.endpoints, e, Object.keys(d.files ?? {})).length).map((d) => fxOf(prov(d).scope))]
+  return [...new Set(of.filter((f): f is string => !!f))].sort()
 }
-const madeForOf = (d: DataRow) => (prov(d) as { madeFor?: NonNullable<NonNullable<EndpointItem['safe']>['madeFor']> }).madeFor ?? null
-
-function itemOf(r: Read, e: string, task: string | null, fixture?: string | null): EndpointItem | null {
-  const rec = r.recs.find((x) => (x.scope?.task ?? null) === task && filesOf(r.endpoints, e, x.names).length)
-  const mine = r.sets.filter((d) => (prov(d).scope?.task ?? null) === task && filesOf(r.endpoints, e, Object.keys(d.files ?? {})).length)
+/** One response of an endpoint at one level. With a fixture: that fixture's where it has one, else the default (exact: else none). */
+function itemOf(r: Read, e: string, task: string | null, fixture?: string | null, exact = false): EndpointItem | null {
+  const which = fixture && (exact || fixturesOf(r, e, task).includes(fixture)) ? fixture : null
+  const rec = r.recs.find((x) => levelOf(x.scope, task) && fxOf(x.scope) === which && filesOf(r.endpoints, e, x.names).length)
+  const mine = r.sets.filter((d) => levelOf(prov(d).scope, task) && fxOf(prov(d).scope) === which && filesOf(r.endpoints, e, Object.keys(d.files ?? {})).length)
   // The endpoint's own data first, then the mock's default set, then whatever was made last.
-  const scoped = mine.filter((d) => prov(d).scope?.endpoint === e).sort(newest), dflt = mine.find((d) => d.key === r.m.defaultData), rest = [...mine].sort(newest)
-  const ordered = [...new Set(task ? rest : [...scoped, ...(dflt ? [dflt] : []), ...rest])]
-  const set = pickForFixture(ordered, (d) => madeForOf(d)?.fixture ?? null, fixture)
-  // The endpoint's other files, by the fixture each is for: what a different start would be served.
-  const also = ordered.filter((d) => d !== set).map((d) => ({ set: d.key, fixture: madeForOf(d)?.fixture ?? null, who: madeForOf(d)?.who ?? null }))
+  const set = task || which ? mine.sort(newest)[0] : mine.filter((d) => prov(d).scope?.endpoint === e).sort(newest)[0] ?? mine.find((d) => d.key === r.m.defaultData) ?? mine.sort(newest)[0]
   if (!rec && !set) return null
   return {
+    fixture: which,
     recorded: rec ? { id: relative(recordingsHome(), rec.dir), at: rec.at, how: rec.given ? 'given' : 'recorded', files: filesOf(r.endpoints, e, rec.names) } : null,
-    safe: set ? { ...(also.length ? { also } : {}), kind: set.kind === 'faked' ? 'faked' : 'provided', set: set.key, files: filesOf(r.endpoints, e, Object.keys(set.files)), note: dataNote(set), columns: columnsOfFirst(set.files, filesOf(r.endpoints, e, Object.keys(set.files))), ...((prov(set) as { madeFor?: NonNullable<EndpointItem['safe']>['madeFor'] }).madeFor ? { madeFor: (prov(set) as { madeFor?: NonNullable<EndpointItem['safe']>['madeFor'] }).madeFor } : {}), ...((prov(set) as { fromFile?: FromFile }).fromFile ? { fromFile: (prov(set) as { fromFile?: FromFile }).fromFile } : {}), ...(set.kind === 'faked' && rec && set.recording && set.recording !== rec.dir ? { stale: true } : {}) } : null,
+    safe: set ? { kind: set.kind === 'faked' ? 'faked' : 'provided', set: set.key, files: filesOf(r.endpoints, e, Object.keys(set.files)), note: dataNote(set), columns: columnsOfFirst(set.files, filesOf(r.endpoints, e, Object.keys(set.files))), ...((prov(set) as { madeFor?: NonNullable<EndpointItem['safe']>['madeFor'] }).madeFor ? { madeFor: (prov(set) as { madeFor?: NonNullable<EndpointItem['safe']>['madeFor'] }).madeFor } : {}), ...((prov(set) as { fromFile?: FromFile }).fromFile ? { fromFile: (prov(set) as { fromFile?: FromFile }).fromFile } : {}), ...(rec && set.kind === 'faked' && set.recording !== rec.dir ? { stale: true } : {}) } : null,
   }
 }
-/** Every endpoint's data: the app's, and (for a task) the task's own. */
-export async function endpointData(m: Row, issueId?: string | null, /** The fixture in play: which of each endpoint's files is shown as served. Not said: the order alone. */ fixture?: string | null): Promise<Record<string, EndpointData>> {
+/** Every endpoint's data: the default response (or, with a fixture, the one a run from it is served), the app's and (for a task) the task's own; and its responses for one fixture each. */
+export async function endpointData(m: Row, issueId?: string | null, /** The fixture in play: each endpoint's response for it, where it has one, else its default. */ fixture?: string | null): Promise<Record<string, EndpointData>> {
   const r = await read(m), own = await taskFaked(m.id, issueId)
-  return Object.fromEntries(r.endpoints.map((e) => [e.key, { app: itemOf(r, e.key, null, fixture), task: issueId ? itemOf(r, e.key, issueId, fixture) : null, faked: { app: !e.useReal || !!e.sensitive, task: e.sensitive ? null : own[e.key] ?? null } }]))
+  const one = (e: string, fx: string | null | undefined, exact: boolean) => ({ app: itemOf(r, e, null, fx, exact), task: issueId ? itemOf(r, e, issueId, fx, exact) : null })
+  return Object.fromEntries(r.endpoints.map((e) => [e.key, {
+    ...one(e.key, fixture, false), faked: { app: !e.useReal || !!e.sensitive, task: e.sensitive ? null : own[e.key] ?? null },
+    responses: [...new Set([...fixturesOf(r, e.key, null), ...(issueId ? fixturesOf(r, e.key, issueId) : [])])].sort().map((f) => ({ fixture: f, ...one(e.key, f, true) })),
+  }]))
 }
 
 export interface Served {
@@ -181,27 +186,16 @@ const named = (e: Endpoint, files: { name: string; bytes: Uint8Array }[]) => fil
  * endpoint it is faked here and now and not kept. Otherwise the person states it holds nothing real, and it is used
  * as it is (checked against the service's real responses on this computer where there are any).
  */
-export async function giveEndpointData(appId: string, key: string, endpoint: string, files: { name: string; bytes: Uint8Array }[], o: { real: boolean; issueId?: string | null; /** The file is this fixture's own: served to a run that starts from it. Made-up files only. */ fixture?: string | null; /** Not real: a person states it holds nothing real. An agent cannot state that: what it writes is kept only when it could be checked against a real response. */ stated?: boolean }, actor = 'user') {
+export async function giveEndpointData(appId: string, key: string, endpoint: string, files: { name: string; bytes: Uint8Array }[], o: { real: boolean; issueId?: string | null; /** The response is this fixture's: served to a run that starts from it. None: the default. */ fixture?: string | null; /** Not real: a person states it holds nothing real. An agent cannot state that: what it writes is kept only when it could be checked against a real response. */ stated?: boolean }, actor = 'user') {
   const { m, e } = await endpointOf(appId, key, endpoint)
   if (!files.length) throw new PlanError('give at least one file')
-  const scope: Scope = { endpoint: e.key, ...(o.issueId ? { task: o.issueId } : {}) }
-  // A file of one fixture's own (Sandy, 2026-11-24: "I was expecting that I would have a different file that I would
-  // add that would be for a different fixture"): kept beside the endpoint's other data, and served to a run that
-  // starts from that fixture (pickForFixture). It is written, row by row, for that fixture's people, so it is made up.
-  if (o.fixture && o.real) throw new PlanError('a file for one fixture is made up, written for that fixture\'s people. A real response is given for any fixture and faked first')
+  const scope: Scope = { endpoint: e.key, ...(o.issueId ? { task: o.issueId } : {}), ...(o.fixture ? { fixture: o.fixture } : {}) }
   if (!o.real) {
-    const given = Object.fromEntries(named(e, files).map((f) => [f.name, f.text]))
-    const dataKey = o.fixture ? `${scopeKey('provided', scope)}-for-${standInKey(o.fixture)}` : scopeKey('provided', scope)
-    await saveData(appId, key, { dataKey, name: `Provided${o.fixture ? ` for ${o.fixture}` : ''}: ${e.method} ${e.path}`.slice(0, 80), files: given, stated: o.stated !== false, issueId: o.issueId ?? null, scope }, actor)
-    if (o.fixture) {
-      const first = Object.values(given)[0] ?? '', rows = looksCsv(first) ? Math.max(0, parseCsv(first).length - 1) : 1
-      const [d] = (await db.select().from(mockData).where(eq(mockData.mockId, m.id))).filter((x) => (prov(x).scope?.endpoint === e.key) && (prov(x).scope?.task ?? null) === (o.issueId ?? null) && x.key.endsWith(`-for-${standInKey(o.fixture!)}`)).sort(newest)
-      if (d) await db.update(mockData).set({ provenance: { ...(d.provenance ?? {}), madeFor: { fixture: o.fixture, table: '', who: `${rows} row${rows === 1 ? '' : 's'}`, people: rows, map: {}, given: true } } }).where(eq(mockData.id, d.id))
-    }
+    await saveData(appId, key, { dataKey: scopeKey('provided', scope), name: `Provided${o.fixture ? ` for ${o.fixture}` : ''}: ${e.method} ${e.path}`.slice(0, 80), files: Object.fromEntries(named(e, files).map((f) => [f.name, f.text])), stated: o.stated !== false, issueId: o.issueId ?? null, scope }, actor)
     return { kept: 'provided' as const, faked: false }
   }
-  if (e.sensitive) { const r = await fakeGiven(appId, key, { endpoint: e.key, recorded: named(e, files), issueId: o.issueId ?? null }, actor); return { kept: 'faked' as const, faked: true, maybeStructure: r.maybeStructure } }
-  const r = await giveRecording(appId, key, files, actor, e.key, o.issueId ?? null)
+  if (e.sensitive) { const r = await fakeGiven(appId, key, { endpoint: e.key, recorded: named(e, files), issueId: o.issueId ?? null, fixture: o.fixture ?? null }, actor); return { kept: 'faked' as const, faked: true, maybeStructure: r.maybeStructure } }
+  const r = await giveRecording(appId, key, files, actor, e.key, o.issueId ?? null, o.fixture ?? null)
   return { kept: 'recorded' as const, faked: false, dir: r.dir, files: r.files.length, /** Whose agent makes the fake. */ issueId: o.issueId ?? r.issueId }
 }
 
@@ -235,13 +229,13 @@ export async function setEndpointFaked(appId: string, key: string, endpoint: str
 }
 
 /** One endpoint's data taken away at one level: its safe data, and (real) the real response behind it, deleted from this computer. A task's own gone, the app's is what it gets again. */
-export async function removeEndpointData(appId: string, key: string, endpoint: string, o: { issueId?: string | null; real?: boolean } = {}, actor = 'user') {
+export async function removeEndpointData(appId: string, key: string, endpoint: string, o: { issueId?: string | null; real?: boolean; /** Which response: one fixture's. None: the default. */ fixture?: string | null } = {}, actor = 'user') {
   const { m, e } = await endpointOf(appId, key, endpoint)
-  const r = await read(m), task = o.issueId ?? null
+  const r = await read(m), task = o.issueId ?? null, fx = o.fixture ?? null
   const workspaceId = await workspaceOf(appId)
   let sets = 0, real = 0
   await db.transaction(async (tx) => {
-    for (const d of r.sets.filter((x) => (prov(x).scope?.task ?? null) === task)) {
+    for (const d of r.sets.filter((x) => levelOf(prov(x).scope, task) && fxOf(prov(x).scope) === fx)) {
       const mine = filesOf(r.endpoints, e.key, Object.keys(d.files))
       if (!mine.length) continue
       const rest = Object.fromEntries(Object.entries(d.files).filter(([n]) => !mine.includes(n)))
@@ -249,16 +243,17 @@ export async function removeEndpointData(appId: string, key: string, endpoint: s
       else { await tx.delete(mockData).where(eq(mockData.id, d.id)); if (m.defaultData === d.key) await tx.update(mock).set({ defaultData: null }).where(eq(mock.id, m.id)) }
       sets++
     }
-    await appendEvent(tx, { workspaceId, appId, issueId: task, actor, type: 'mock.endpoint_data_removed', payload: { key: m.key, endpoint: e.key, real: !!o.real } })
+    await appendEvent(tx, { workspaceId, appId, issueId: task, actor, type: 'mock.endpoint_data_removed', payload: { key: m.key, endpoint: e.key, real: !!o.real, ...(fx ? { fixture: fx } : {}) } })
   })
-  if (o.real) real = dropReal(r, e, task)
+  if (o.real) real = dropReal(r, e, task, fx)
   return { removed: sets + real > 0, real }
 }
 /** An endpoint's real responses deleted from this computer, at one level (or every level): a folder given for it goes whole; from a recorded run, that call's files. */
-function dropReal(r: Read, e: Endpoint, task: string | null | 'all'): number {
+function dropReal(r: Read, e: Endpoint, task: string | null | 'all', fixture: string | null | 'all' = null): number {
   let n = 0
   for (const rec of r.recs) {
     if (task !== 'all' && (rec.scope?.task ?? null) !== task) continue
+    if (fixture !== 'all' && fxOf(rec.scope) !== fixture) continue
     if (!filesOf(r.endpoints, e.key, rec.names).length) continue
     const calls = exchangesOf(rec.dir)
     if (!calls.length) {
@@ -281,9 +276,10 @@ function dropReal(r: Read, e: Endpoint, task: string | null | 'all'): number {
  * with what was found, while the leak check still finds a real value in it; then the task's agent says what is
  * structure, which a person cannot be asked to.
  */
-export async function fakeEndpoint(appId: string, key: string, endpoint: string, issueId: string | null, actor = 'user') {
+export async function fakeEndpoint(appId: string, key: string, endpoint: string, issueId: string | null, actor = 'user', /** Which response: one fixture's. None: the default. */ fixture: string | null = null) {
   const { m, e } = await endpointOf(appId, key, endpoint)
-  const d = (await endpointData(m, issueId))[e.key]
+  const all = (await endpointData(m, issueId))[e.key]
+  const d = fixture ? all.responses.find((x) => x.fixture === fixture) ?? { app: null, task: null } : all
   const item = issueId && d.task?.recorded ? d.task : d.app
   if (!item?.recorded) throw new PlanError(`${e.method} ${e.path} has no real response saved to make a fake of`)
   // A refusal lists what was found for the agent that reads the recording. A person reads this on a page, where a real value is never shown: they get how much, not what.
@@ -306,16 +302,16 @@ export async function scrubSensitive(appId: string, key: string, actor = 'engine
   if (!m) return out
   const r = await read(m)
   for (const e of r.endpoints.filter((x) => x.sensitive)) {
-    const levels = [...new Set(r.recs.filter((x) => filesOf(r.endpoints, e.key, x.names).length).map((x) => x.scope?.task ?? null))]
-    for (const task of levels) {
-      const rec = r.recs.find((x) => (x.scope?.task ?? null) === task && filesOf(r.endpoints, e.key, x.names).length)!
-      const safe = itemOf(r, e.key, task)?.safe
+    const levels = [...new Map(r.recs.filter((x) => filesOf(r.endpoints, e.key, x.names).length).map((x) => [`${x.scope?.task ?? ''}|${fxOf(x.scope) ?? ''}`, { task: x.scope?.task ?? null, fx: fxOf(x.scope) }])).values()]
+    for (const { task, fx } of levels) {
+      const rec = r.recs.find((x) => levelOf(x.scope, task) && fxOf(x.scope) === fx && filesOf(r.endpoints, e.key, x.names).length)!
+      const safe = itemOf(r, e.key, task, fx, true)?.safe
       if (!safe || safe.stale) {
-        try { await fakeGiven(appId, key, { endpoint: e.key, recorded: filesOf(r.endpoints, e.key, rec.names).map((n) => ({ name: n, text: readFileSync(join(rec.view, n), 'utf8') })), issueId: task, given: rec.given }, actor); out.faked.push(e.key) }
+        try { await fakeGiven(appId, key, { endpoint: e.key, recorded: filesOf(r.endpoints, e.key, rec.names).map((n) => ({ name: n, text: readFileSync(join(rec.view, n), 'utf8') })), issueId: task, fixture: fx, given: rec.given }, actor); out.faked.push(e.key) }
         catch (err) { out.failed.push({ endpoint: e.key, why: String((err as Error).message).split('\n')[0] }) }
       }
     }
-    if (levels.length) dropReal(r, e, 'all')
+    if (levels.length) dropReal(r, e, 'all', 'all')
   }
   if (out.faked.length || out.failed.length) { const workspaceId = await workspaceOf(appId); await db.transaction((tx) => appendEvent(tx, { workspaceId, appId, actor, type: 'mock.sensitive_scrubbed', payload: { key: m.key, faked: out.faked, failed: out.failed.map((f) => f.endpoint) } })) }
   return out

@@ -4,13 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { like } from 'drizzle-orm'
-import { app, mockData, workspace } from './db/schema.js'
+import { app, workspace } from './db/schema.js'
 import { assignFixture, canMakeFixture, dataColumns, deleteFixture, fixtureForTask, fixtureRows, fixtureSample, listFixtures, makeFixtureFromSeed, pin, renameFixture } from './fixtures.js'
 import { newId } from './ids.js'
 import { fakeData } from './mock-data.js'
 import { parseCsv } from './mock-leaks.js'
-import { giveEndpointData, served } from './mock-serve.js'
+import { fakeEndpoint, giveEndpointData, removeEndpointData, served } from './mock-serve.js'
 import { listMocks, rowOf, saveMock } from './mocks.js'
 import { createProject } from './projects.js'
 import { writeScenario } from './prototype-data.js'
@@ -88,47 +87,57 @@ describe.skipIf(!reachable)('fixtures', () => {
     expect((await rowsServed()).slice(1).map((r) => r[1])).toEqual(['sample4@meridian.example']) // from the template again, and only the people there are
   })
 
-  it('keeps a file per fixture beside the one it was made from, and the fixture a run starts from picks which is served', async () => {
+  it('an endpoint has a response per fixture, each a whole response; a run is served its fixture\'s, else the default', async () => {
     const m = async () => (await rowOf(appId, 'scanner'))!
-    const emails = async (fixture: string | null | undefined) => parseCsv((await served(await m(), { form: 'faked', fixture })).files.find((f) => f.name === 'results.csv')!.text!).slice(1).map((r) => r[1])
-    // The file it was made from is still there, for no fixture: a run started empty gets it, with nobody of meridian's in it.
-    const plain = await emails(null)
-    expect(plain).toHaveLength(1)
-    expect(plain[0]).not.toMatch(/meridian\.example/)
-    expect(await emails('meridian')).toEqual(['sample4@meridian.example'])
-    // A second fixture gets a file of its own; the first's is left as it was.
-    await writeScenario({ appId }, 'northwind', { employees: [{ id: '00000000-0000-4000-9000-000000000001', first_name: 'North', last_name: 'Person', work_email: 'north1@northwind.example' }] }, true)
-    expect(await assignFixture(appId, 'scanner', 'results', { fixture: 'northwind', table: 'employees', row: 0, map: { tracking_id: 'id', work_email: 'work_email' } }, null)).toMatchObject({ fresh: true, madeFor: { fixture: 'northwind' } })
-    expect(await emails('northwind')).toEqual(['north1@northwind.example'])
-    expect(await emails('meridian')).toEqual(['sample4@meridian.example'])
-    expect(await emails(null)).toEqual(plain)
-    expect(await emails('a fixture with no file of its own')).toEqual(plain) // falls back to the one made for no fixture
-    // Filling out again for a fixture that has a file changes that file, and makes no third.
-    expect((await assignFixture(appId, 'scanner', 'results', { fixture: 'northwind', table: 'employees', row: 0, map: { tracking_id: 'id', work_email: 'work_email' } }, null)).fresh).toBe(false)
-    const safe = (await listMocks(appId))[0].endpoints[0].data.app!.safe!
-    expect([safe.madeFor?.fixture ?? null, ...(safe.also ?? []).map((a) => a.fixture)].sort((a, b) => String(a).localeCompare(String(b)))).toEqual(['meridian', 'northwind', null].sort((a, b) => String(a).localeCompare(String(b))))
-    // Put back as it was for the tests below: the second fixture and its file are taken away.
-    await deleteFixture(appId, 'northwind')
-    await db.delete(mockData).where(like(mockData.key, '%-for-northwind'))
-  })
+    const rowsFor = async (fixture: string | null, task?: string) => parseCsv((await served(await m(), { form: 'faked', fixture, issueId: task })).files.find((f) => f.name === 'results.csv')!.text!).slice(1)
+    const responses = async (task?: string) => (await listMocks(appId, task))[0].endpoints[0].data.responses
+    const csv = (text: string) => [{ name: 'company.csv', bytes: new TextEncoder().encode(text) }]
+    const dflt = await rowsFor(null)
+    await writeScenario({ appId }, 'northwind', { employees: [1, 2].map((n) => ({ id: `00000000-0000-4000-9000-00000000000${n}`, first_name: `North${n}`, last_name: 'Person', work_email: `north${n}@northwind.example` })) }, true)
 
-  it('takes a file as one fixture\'s own, serves it to a run from that fixture, and maps its fields row by row', async () => {
-    const m = async () => (await rowOf(appId, 'scanner'))!
-    const rowsFor = async (fixture: string | null) => parseCsv((await served(await m(), { form: 'faked', fixture })).files.find((f) => f.name === 'results.csv')!.text!).slice(1)
-    const before = await rowsFor(null)
-    const own = `${head}\nx1,a@sample.example,One Sample,completed,"Nothing found."\nx2,b@sample.example,Two Sample,completed,"Two fake profiles."\nx3,c@sample.example,Three Sample,completed,"A doxxing post."\n`
-    await expect(giveEndpointData(appId, 'scanner', 'results', [{ name: 'company.csv', bytes: new TextEncoder().encode(own) }], { real: true, fixture: 'meridian' })).rejects.toThrow('a file for one fixture is made up')
-    await giveEndpointData(appId, 'scanner', 'results', [{ name: 'company.csv', bytes: new TextEncoder().encode(own) }], { real: false, fixture: 'meridian' })
-    expect((await rowsFor('meridian')).map((r) => r[4])).toEqual(['Nothing found.', 'Two fake profiles.', 'A doxxing post.'])
-    expect(await rowsFor(null)).toEqual(before) // the data for no fixture is as it was
-    // Its fields mapped from the fixture: each row takes one person, in order, and keeps what else it says. No row is added.
-    const r = await assignFixture(appId, 'scanner', 'results', { fixture: 'meridian', table: 'employees', row: 0, count: 4, map: { tracking_id: 'id', work_email: 'work_email' } }, null)
-    expect(r.fresh).toBe(false)
-    const rows = await rowsFor('meridian')
-    expect(rows.map((x) => x[1])).toEqual(['sample1@meridian.example', 'sample2@meridian.example', 'sample3@meridian.example'])
-    expect(rows.map((x) => x[0])).toEqual(employees.slice(0, 3).map((e) => e.id))
-    expect(rows.map((x) => x[4])).toEqual(['Nothing found.', 'Two fake profiles.', 'A doxxing post.'])
-    await db.delete(mockData).where(like(mockData.key, 'provided-%-for-meridian')) // put back as it was for the tests below
+    // A made-up response for one fixture, written row by row as its writer chose. The default is as it was.
+    await giveEndpointData(appId, 'scanner', 'results', csv(`${head}\nx1,a@sample.example,One Sample,completed,"Nothing found."\nx2,b@sample.example,Two Sample,completed,"Two fake profiles."\nx3,c@sample.example,Three Sample,completed,"A doxxing post."\n`), { real: false, fixture: 'northwind' })
+    expect((await rowsFor('northwind')).map((r) => r[4])).toEqual(['Nothing found.', 'Two fake profiles.', 'A doxxing post.'])
+    expect(await rowsFor(null)).toEqual(dflt)
+    expect(await rowsFor('meridian')).toEqual(dflt) // no response of its own: the default
+    expect((await listMocks(appId))[0].endpoints[0].data.app?.fixture).toBeNull()
+    expect((await responses()).map((x) => [x.fixture, x.app?.safe?.kind])).toEqual([['northwind', 'provided']])
+
+    // A real response for another fixture: kept here, then faked, like the default's. Nothing of it is served until then.
+    await giveEndpointData(appId, 'scanner', 'results', [{ name: 'export2.csv', bytes: new TextEncoder().encode(`${head}\n9d2e6a1b-3c4d-4f5a-8b6c-1d2e3f4a5b6c,quinn.hart@harbor-works.com,Quinn Hart,completed,"Quinn Hart leads operations at Harbor Works in Tulsa."\n`) }], { real: true, fixture: 'meridian' })
+    const given = (await responses()).find((x) => x.fixture === 'meridian')!
+    expect(given.app?.recorded?.how).toBe('given')
+    expect(given.app?.safe).toBeNull()
+    await fakeEndpoint(appId, 'scanner', 'results', null, 'user', 'meridian')
+    const mer = await rowsFor('meridian')
+    expect(mer).toHaveLength(1)
+    expect(mer.flat().join(' ')).not.toMatch(/Quinn|Harbor/)
+    expect(mer).not.toEqual(dflt)
+    expect(await rowsFor(null)).toEqual(dflt)
+    expect((await responses()).map((x) => [x.fixture, x.app?.safe?.kind])).toEqual([['meridian', 'faked'], ['northwind', 'provided']])
+
+    // Mapping fields is of the response chosen, and on a fixture's own it is row by row: no row added, the rest as written.
+    await assignFixture(appId, 'scanner', 'results', { fixture: 'northwind', table: 'employees', row: 0, count: 5, map: { tracking_id: 'id', work_email: 'work_email' }, response: 'northwind' }, null)
+    const north = await rowsFor('northwind')
+    expect(north.map((r) => r[1])).toEqual(['north1@northwind.example', 'north2@northwind.example', 'c@sample.example'])
+    expect(north.map((r) => r[4])).toEqual(['Nothing found.', 'Two fake profiles.', 'A doxxing post.'])
+    expect(await rowsFor(null)).toEqual(dflt)
+
+    // A task's own response for a fixture is what that task gets; every other task keeps the app's.
+    await giveEndpointData(appId, 'scanner', 'results', csv(`${head}\nt1,t@sample.example,Task Sample,completed,"This task's own."\n`), { real: false, issueId, fixture: 'northwind' })
+    expect((await rowsFor('northwind', issueId)).map((r) => r[4])).toEqual(['This task\'s own.'])
+    expect(await rowsFor('northwind')).toHaveLength(3)
+    expect((await responses(issueId)).find((x) => x.fixture === 'northwind')).toMatchObject({ app: { fixture: 'northwind' }, task: { fixture: 'northwind' } })
+
+    // Taken away one by one: the task's, then the app's (back to the default), then the other with its real response.
+    await removeEndpointData(appId, 'scanner', 'results', { issueId, fixture: 'northwind' })
+    expect(await rowsFor('northwind', issueId)).toHaveLength(3)
+    await removeEndpointData(appId, 'scanner', 'results', { fixture: 'northwind' })
+    expect(await rowsFor('northwind')).toEqual(dflt)
+    await removeEndpointData(appId, 'scanner', 'results', { fixture: 'meridian', real: true })
+    expect(await responses()).toEqual([])
+    expect(await rowsFor(null)).toEqual(dflt)
+    await deleteFixture(appId, 'northwind')
   })
 
   it('builds a task\'s runs from the fixture its data was made for', async () => {
