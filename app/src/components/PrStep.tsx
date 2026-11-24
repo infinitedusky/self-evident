@@ -14,6 +14,7 @@ import { Badge, type Tone } from './Badge'
 import { Md } from './Md'
 import { ReviewCopy } from './ReviewCopy'
 import { SubmitPr } from './SubmitPr'
+import { ReleaseChecks } from './ReleaseChecks'
 import { API, engine, openEvents, type PrComment, type PrView } from '../engine'
 
 const TONE: Record<string, Tone> = { draft: 'neutral', open: 'accent', closed: 'warn', merged: 'ok' }
@@ -86,6 +87,9 @@ export function PrStep({ issueId, appId, base }: { issueId: string; appId: strin
       ) : pr.status === 'open' ? (
         <p className="pr-act faint">It is ready for review. Reviewing and merging are done on GitHub; what is said there shows below.</p>
       ) : <p className="pr-act faint">It is merged. Nothing more is sent to it.</p>}
+
+      {/* What whoever deploys owes, and what is watched after: the same steps the description carries. */}
+      <ReleaseChecks release={v.release ?? []} watch={v.watch ?? []} onMark={async (id, done, note) => { await engine.markRelease(issueId, id, done, note); await load() }} />
 
       {/* What a reviewer runs: made here, and named by the description below once it is. */}
       {live && <ReviewCopy issueId={issueId} appId={appId} onChanged={() => void load()} />}

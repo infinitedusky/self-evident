@@ -10,7 +10,7 @@
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, build, event, issue, project } from './db/schema.js'
-import { acceptanceOf, type Criterion } from './acceptance.js'
+import { acceptanceOf, proofOf, type Criterion } from './acceptance.js'
 import { getIssue } from './issues.js'
 import { inForce, type Covered } from './requirements.js'
 import { buildOf, styleOf, type Build } from './steps.js'
@@ -22,7 +22,7 @@ import { workflowFor } from './work.js'
 export type StageKey = 'build' | 'check' | 'probe' | 'test' | 'smoke'
 export type StageState = 'todo' | 'doing' | 'done' | 'failed'
 export interface Stage { key: StageKey; label: string; state: StageState; /** A few words: how far, or what is wrong. */ detail: string }
-export interface Item { id: string; kind: 'criterion' | 'requirement'; text: string; /** For a requirement, what it means here. */ what?: string; mark: 'met' | 'unmet' | 'person' | 'na' | 'unchecked'; evidence?: string }
+export interface Item { id: string; kind: 'criterion' | 'requirement'; text: string; /** For a requirement, what it means here. */ what?: string; mark: 'met' | 'unmet' | 'person' | 'na' | 'unchecked' | /** Owed at deploy, by whoever deploys. */ 'release' | /** Watched in production after the deploy. */ 'watch'; evidence?: string }
 /**
  * One node of a checklist task's flow, for its graph: a sub-task that exists, or a stage still to come (Sandy,
  * 2026-11-17: "we should always show the workflow in nodes before it starts … the build and then a line that would
@@ -44,7 +44,7 @@ export interface FlowNode {
  * can be asked for now and why not, and whether one asked for is under way.
  */
 export interface CheckAgain { unchecked: number; canRun: boolean; running: boolean; why?: string }
-export interface Checklist { /** The check of what is not checked yet, asked for again. */ check: CheckAgain; /** Left to the person: theirs to show, in the smoke test. */ person: number; /** Not checked yet: no mark, and not left to anyone. Never a failure. */ unchecked: number; /** The whole test run as it last was; absent when the app has no test command. */ tests?: { ok: boolean | null; at: string | null; flaky: boolean; output?: string; running: boolean; canRun: boolean }; build: Build; stages: Stage[]; items: Item[]; met: number; unmet: number; total: number; flow: FlowNode[] }
+export interface Checklist { /** Owed at deploy, and watched after it: on the list, and not checked before the merge. `total` does not count them. */ release: number; watch: number; /** The check of what is not checked yet, asked for again. */ check: CheckAgain; /** Left to the person: theirs to show, in the smoke test. */ person: number; /** Not checked yet: no mark, and not left to anyone. Never a failure. */ unchecked: number; /** The whole test run as it last was; absent when the app has no test command. */ tests?: { ok: boolean | null; at: string | null; flaky: boolean; output?: string; running: boolean; canRun: boolean }; build: Build; stages: Stage[]; items: Item[]; met: number; unmet: number; total: number; flow: FlowNode[] }
 
 const FIX = 'Fix what the whole test run found'
 const kindOf = (title: string) => (title.startsWith(CHECK_TITLE) ? 'check' : title.startsWith(FINISH_TITLE) ? 'finish' : [OLD_PROBE_TITLE, PROBE_PREFIX, PROBE_FIX_TITLE].some((t) => title.startsWith(t)) ? 'probe' : title.startsWith(FIX) ? 'fix' : 'build')
@@ -135,8 +135,8 @@ export function whyNotCheck(i: { unchecked: number; /** Its sub-tasks, not the c
 
 const criterionItem = (c: Criterion): Item => ({
   id: c.id, kind: 'criterion', text: c.text,
-  mark: c.built === true ? 'met' : c.built === false ? 'unmet' : c.builtEvidence ? 'person' : 'unchecked',
-  evidence: c.builtEvidence ?? (c.built === undefined ? c.check : undefined),
+  mark: proofOf(c) === 'watch' ? 'watch' : proofOf(c) === 'release' ? (c.built === true ? 'met' : 'release') : c.built === true ? 'met' : c.built === false ? 'unmet' : c.builtEvidence || c.kind === 'smoke' ? 'person' : 'unchecked',
+  evidence: proofOf(c) === 'release' && c.byHand ? c.byHand.note || 'Done at deploy.' : c.builtEvidence ?? (c.built === undefined ? c.check : undefined),
 })
 
 /** Where the task stands; null when its workflow is not a checklist (or it is a sub-task). */
@@ -164,11 +164,13 @@ export async function checklistOf(issueId: string): Promise<Checklist | null> {
   const [mark] = await db.select({ type: event.type }).from(event).where(and(eq(event.issueId, t.id), inArray(event.type, ['task.testing', 'task.test_ran', 'task.test_error']))).orderBy(desc(event.seq)).limit(1)
   const testing = mark?.type === 'task.testing'
   const hasTests = !!(a?.setup as { test_cmd?: string } | null)?.test_cmd
-  const met = items.filter((x) => x.mark === 'met' || x.mark === 'na').length, reports = new Set(required.filter((r) => r.blocks === false).map((r) => `req_${r.key}`)), unmet = items.filter((x) => x.mark === 'unmet' && !reports.has(x.id)).length // one set to report only holds nothing
+  const doneAtDeploy = new Set(acceptanceOf(t).filter((c) => proofOf(c) === 'release').map((c) => c.id)), met = items.filter((x) => (x.mark === 'met' || x.mark === 'na') && !doneAtDeploy.has(x.id)).length, reports = new Set(required.filter((r) => r.blocks === false).map((r) => `req_${r.key}`)), unmet = items.filter((x) => x.mark === 'unmet' && !reports.has(x.id)).length // one set to report only holds nothing
   const b = buildOf(w)
   const statusOf = (id: string) => builds.find((x) => x.issueId === id)?.status ?? 'queued'
   const notChecked = items.filter((x) => x.mark === 'unchecked').length, person = items.filter((x) => x.mark === 'person').length
-  const stages = stagesOf({ subs: live.map((s) => ({ title: s.title, status: builds.find((x) => x.issueId === s.id)?.status ?? 'queued' })), build: b, unmet, met, unchecked: notChecked, total: items.length, hasTests, testing, tested: last ? (last.payload as { ok?: boolean }).ok === true : null,
+  const release = items.filter((x) => x.mark === 'release').length, watch = items.filter((x) => x.mark === 'watch').length
+  const total = items.length - doneAtDeploy.size - watch // what is checked before the merge: the rest is owed later, and never read as missing
+  const stages = stagesOf({ subs: live.map((s) => ({ title: s.title, status: builds.find((x) => x.issueId === s.id)?.status ?? 'queued' })), build: b, unmet, met, unchecked: notChecked, total, hasTests, testing, tested: last ? (last.payload as { ok?: boolean }).ok === true : null,
       byHand: (() => { const h = smokeChecks(acceptanceOf(t)); return { todo: h.filter((x) => x.mark === 'todo').length, failed: h.filter((x) => x.mark === 'fail').length, total: h.length } })() })
   const ran = last?.payload as { ok?: boolean; flaky?: boolean; tail?: string } | undefined
   /** The whole test run as it last was, and whether it can be asked for again: every sub-task in, none going. The runner says no to the rest (a check or a probe still to come). */
@@ -178,5 +180,5 @@ export async function checklistOf(issueId: string): Promise<Checklist | null> {
   const going = live.some((s) => statusOf(s.id) !== 'done')
   const check: CheckAgain = { unchecked: notChecked, running: live.some((s) => s.title.startsWith(RECHECK_TITLE) && !['done', 'failed', 'cancelled'].includes(statusOf(s.id))),
     ...(() => { const why = whyNotCheck({ unchecked: notChecked, subs: live.length, going, testing }); return why ? { canRun: false, why } : { canRun: true } })() }
-  return { check, person, unchecked: notChecked, tests, build: b, items, met, unmet, total: items.length, stages, flow: flowOf({ subs: live.map((x) => ({ id: x.id, title: x.title, status: statusOf(x.id), sortOrder: x.sortOrder })), stages, build: b }) }
+  return { release, watch, check, person, unchecked: notChecked, tests, build: b, items, met, unmet, total, stages, flow: flowOf({ subs: live.map((x) => ({ id: x.id, title: x.title, status: statusOf(x.id), sortOrder: x.sortOrder })), stages, build: b }) }
 }

@@ -11,7 +11,7 @@ import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
 import { checklistOf } from './checklist.js'
 import { closeTask, closeView, reopenUnclosed } from './close.js'
-import { askToMine, keepSmokeDatabase, revealSmokeFiles, markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
+import { acceptSmoke, askToMine, keepSmokeDatabase, markRelease, revealSmokeFiles, markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
 import { closeTerminal, closeTerminals, openTerminal, ownPage, resizeTerminal, scratchKey, typeInTerminal, watchTerminal } from './smoke-terminal.js'
 import { startLearning, talkBusy } from './talk.js'
 import { serve } from '@hono/node-server'
@@ -848,6 +848,10 @@ export function buildApp(bus: EventBus) {
   api.post('/issues/:id/smoke/files/reveal', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const b = await c.req.json().catch(() => ({})) as { setup?: string }; return c.json(await revealSmokeFiles(t.id, typeof b.setup === 'string' ? b.setup : undefined)) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/smoke/stop', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const body = await c.req.json().catch(() => ({})) as { setup?: string }; await stopSmoke(t.id, typeof body.setup === 'string' ? body.setup : undefined); return c.json(await smokeView(t.id)) } catch (err) { return planError(c, err) } })
   // An agent tries one check and says what it saw; it marks nothing (smoke.ts, trySmoke).
+  // The person accepts the smoke test: the built code is what goes to review (smoke.ts, acceptSmoke).
+  api.post('/issues/:id/smoke/accept', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json(await acceptSmoke(t.id, 'user')) } catch (err) { return planError(c, err) } })
+  // A release check, said done (or not, with why) by whoever deployed (smoke.ts, markRelease).
+  api.post('/issues/:id/release/:criterion', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const b = await c.req.json().catch(() => ({})) as { done?: boolean; note?: string }; if (typeof b.done !== 'boolean') return c.json({ error: 'done is true or false' }, 400); return c.json(await markRelease(t.id, c.req.param('criterion'), { done: b.done, note: b.note }, 'user')) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/smoke/:criterion/try', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); return c.json((await trySmoke(t.id, c.req.param('criterion'), 'user')).view) } catch (err) { return planError(c, err, 400) } })
   api.post('/issues/:id/smoke/:criterion', async (c) => {
     const body = await c.req.json<{ pass?: boolean; note?: string; skip?: boolean }>().catch(() => ({} as { pass?: boolean; note?: string; skip?: boolean }))

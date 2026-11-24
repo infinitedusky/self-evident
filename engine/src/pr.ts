@@ -90,6 +90,23 @@ export function withReview(written: string, section: string): string {
   return [lines.slice(0, at).join('\n').trim(), section, lines.slice(end).join('\n').trim()].filter(Boolean).join('\n\n')
 }
 
+/**
+ * A description with the engine's deploy steps in it (smoke.ts, deploySteps): under the heading the writer gave for
+ * what a deploy needs ("Merge Danger", "Deploy steps", "At deploy", "Release checks"), before what they wrote there;
+ * else in a section of its own at the end. The engine's block is between its own marks, so an update replaces it and
+ * leaves the writer's words. With no steps, a block left from before is taken out.
+ */
+const DEPLOY_HEADING = /^##+\s+(merge danger|deploy(ment)?( steps| notes| checklist)?|at deploy|release( checks| steps| notes)?|before (you )?(merge|deploy)(ing)?)\s*:?\s*$/i
+export function withDeploy(written: string, steps: string): string {
+  const clean = written.replace(/\n*<!-- evident:deploy -->[\s\S]*?<!-- \/evident:deploy -->\n*/g, '\n\n').replace(/\n{3,}/g, '\n\n').trim()
+  if (!steps) return clean.replace(/\n*## At deploy\s*$/i, '').trim()
+  const lines = clean.split('\n')
+  let fenced = false, at = -1
+  for (let i = 0; i < lines.length; i++) { if (/^\s*```/.test(lines[i])) fenced = !fenced; if (!fenced && DEPLOY_HEADING.test(lines[i])) { at = i; break } }
+  if (at < 0) return [clean, '## At deploy', steps].filter(Boolean).join('\n\n')
+  return [lines.slice(0, at + 1).join('\n').trim(), steps, lines.slice(at + 1).join('\n').trim()].filter(Boolean).join('\n\n')
+}
+
 export interface Landed { identifier: string; title: string; summary?: string | null; costUsd?: number | null; sha?: string | null }
 
 /**
@@ -99,9 +116,10 @@ export interface Landed { identifier: string; title: string; summary?: string | 
  * description leads, every criterion and decision, and what each sub-task's builder reported (a client's pull
  * request, 2026-11-20: the description was 511 lines of our build log, opening with our project's id).
  */
-export function prBody(project: { name: string; content?: string | null; id: string }, landed: Landed[], pending: { identifier: string; title: string }[], backlog: { title: string; state: string; reason: string | null }[] = [], /** The merge guide, for whoever approves it (merge-guide.ts): short. */ guide = '', /** Everything the guide left out: folded away, with what landed. */ record = '', /** The description written for the team, when the task has one: it leads, and the guide joins the fold. */ written: string | null = null, /** The Review section, when the task has a review copy (review-copy.ts): the engine's own, in the description proper. */ review: string | null = null): string {
+export function prBody(project: { name: string; content?: string | null; id: string }, landed: Landed[], pending: { identifier: string; title: string }[], backlog: { title: string; state: string; reason: string | null }[] = [], /** The merge guide, for whoever approves it (merge-guide.ts): short. */ guide = '', /** Everything the guide left out: folded away, with what landed. */ record = '', /** The description written for the team, when the task has one: it leads, and the guide joins the fold. */ written: string | null = null, /** The Review section, when the task has a review copy (review-copy.ts): the engine's own, in the description proper. */ review: string | null = null, /** What is owed at deploy, in order (smoke.ts, deploySteps): the engine's own, under the description's own heading for it. */ deploy = ''): string {
   const said = written?.trim() || guide || project.content?.trim() || ''
-  const lead = review ? withReview(said, review) : said
+  const reviewed = review ? withReview(said, review) : said
+  const lead = deploy || /<!-- evident:deploy -->/.test(reviewed) ? withDeploy(reviewed, deploy) : reviewed
   const all = landed.length + pending.length
   const building = pending.length ? `**${landed.length} of ${all} sub-task${all === 1 ? ' has' : 's have'} landed: this pull request is still being built, and is not ready to review until they all have.**` : ''
   const ours = [

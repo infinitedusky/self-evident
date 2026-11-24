@@ -25,6 +25,20 @@ export const NotSubmitted: Story = {
   },
 }
 
+/** What is owed at deploy and what is watched after (made up): on the step, in order, and said done by whoever deploys. */
+export const OwedAtDeploy: Story = {
+  beforeEach: withEngine({ prView: { ...prDraftSample, release: [{ id: 'ac_r1', text: 'EXPORT_BUCKET is set in each environment (sample)', how: 'the deploy config has it (sample)' }], watch: [{ id: 'ac_w1', text: 'export.finished appears in production within a day (sample)' }] } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('At deploy')).toBeInTheDocument()
+    await expect(c.getByText('1 owed')).toBeInTheDocument()
+    await expect(c.getByText('Watched after the deploy')).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Done' }))
+    await expect(await c.findByText('all done')).toBeInTheDocument()
+    await expect(c.getByText(/Done, said you/)).toBeInTheDocument()
+  },
+}
+
 /** Still building, with checks of the person's own waiting: it says what it waits on and cannot be submitted. */
 export const NotReadyYet: Story = {
   beforeEach: withEngine({ prView: { ...prSample, landed: 1, total: 3, byHand: 2, canSubmit: false, waits: ['2 of its 3 sub-tasks have still to land.'] } }),

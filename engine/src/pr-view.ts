@@ -15,14 +15,14 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { eq, inArray } from 'drizzle-orm'
-import { acceptanceOf } from './acceptance.js'
+import { acceptanceOf, later } from './acceptance.js'
 import { db } from './db/client.js'
 import { app, build, issue, pr as prTable, project } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { getIssue, identifier, PlanError } from './issues.js'
 import { needsTicket, teamTicket, ticketRequired } from './ticket.js'
 import { prAuto, prDescription, prDraft } from './pr.js'
-import { smokeOwed } from './smoke.js'
+import { releaseChecks, smokeOwed, watchChecks } from './smoke.js'
 import { inForce, type Covered } from './requirements.js'
 import { afterDescription, unchecked as notChecked } from './verify.js'
 import { workflowFor } from './work.js'
@@ -83,7 +83,7 @@ export async function prView(issueId: string, deps: { gh?: Gh; preview: (project
   const landed = live.filter((s) => builds.find((b) => b.issueId === s.id)?.status === 'done').length
   const criteria = acceptanceOf(t)
   // Three counts, never one (Sandy, 2026-11-23: "Not checked yet" is never shown as a failure): what the build failed, what has no mark yet, what waits for the person.
-  const failed = criteria.filter((c) => c.built === false).length, unchecked = criteria.filter(notChecked).length, byHand = smokeOwed(criteria)
+  const failed = criteria.filter((c) => c.built === false && !later(c)).length, unchecked = criteria.filter(notChecked).length, byHand = smokeOwed(criteria)
   const message = t.projectId ? await deps.preview(t.projectId, mine ? t.id : undefined).catch(() => null) : null
   let onGithub: PrOnGithub | null = null, comments: PrComment[] = [], problem: string | null = null
   if (row?.number && r?.fullName) {
@@ -108,6 +108,7 @@ export async function prView(issueId: string, deps: { gh?: Gh; preview: (project
     /** The app opens pull requests as drafts; and opens one by itself once the task is built and checked. */ draft: prDraft(a?.setup), auto: prAuto(a?.setup),
     /** It can be submitted now (a new one, or the closed one again); else why not. */ canSubmit: !liveNow && pr?.status !== 'merged' && waits.length === 0, waits,
     /** It is a draft: the person can mark it ready for review. */ canReady: pr?.status === 'draft',
+    /** What is owed at deploy, in order, each with whether whoever deployed has said it is done; and what is watched after. */ release: releaseChecks(criteria), watch: watchChecks(criteria),
     comments, problem,
   }
 }

@@ -43,6 +43,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge } from './Badge'
 import { SmokeTerminal } from './SmokeTerminal'
+import { SmokeAccept } from './SmokeAccept'
 import { Framed, Nav, useTrail } from './Trail'
 import { Md } from './Md'
 import { useCompare } from '../main-running'
@@ -194,6 +195,7 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
       {sent !== null && sent > 0 && <p className="smoke-sent" role="status">Sent back: {sent} that failed, with what you saw. It is fixed, checked again, and comes back to you here.</p>}
       {sent === 0 && done && !v.failed && <p className="smoke-sent ok" role="status">All of it holds. The task carries on to its pull request.</p>}
       {v.checks.length === 0 && <p className="muted" style={{ margin: '0 0 10px' }}>Nothing is left to you on this task: an agent checked every criterion, and what it saw is on {v.staged ? <Link to={`${base}/brief`}>the brief</Link> : <Link to={`${base}/checklist`}>the checklist</Link>}.{v.head ? ' You can still bring it up and look for yourself.' : ''}</p>}
+      {!!v.head && v.canAccept !== undefined && <SmokeAccept base={base} accepted={v.accepted ?? null} canAccept={!!v.canAccept} waits={v.acceptWaits} release={v.release} onAccept={async () => { setV(await engine.acceptSmoke(issueId)) }} />}
       {(v.checks.length > 0 || !!v.head) && many && (
         <>
           <div className="smoke-setups" role="tablist" aria-label="Set-ups">
@@ -262,7 +264,7 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
           </div>
           {!aside && <div className="smoke-groups">
             {many && shown.length === 0 && v.checks.length > 0 && <p className="muted" style={{ margin: 0 }}>No check on this task needs {su.name}.</p>}
-            {(['here', 'pr', 'after', 'nightly'] as const).map((when) => {
+            {(['here', 'pr', 'nightly'] as const).map((when) => { // what can only be done after the merge is a release check: on the pull request step, never here
               const mine = shown.filter((c) => (c.when ?? 'here') === when)
               if (!mine.length) return null
               const waits = when === 'pr' && !v.pr
@@ -273,7 +275,6 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
                     ? <p className="faint smoke-when-says">{v.pr.url ? <a href={v.pr.url} target="_blank" rel="noreferrer">Pull request #{v.pr.number}</a> : <>Pull request #{v.pr.number}</>}: these can only be seen there.</p>
                     : <p className="faint smoke-when-says">These can only be seen on the pull request, and this task has none yet. It is opened as a draft once the build is done and checked, or from <Link to={`${base}/build`}>the build page</Link>.</p>)}
                   {when === 'nightly' && <p className="faint smoke-when-says">The repository runs these every night on its default branch. Nobody tries them here and they do not hold the task; a red night shows under what needs you.</p>}
-                  {when === 'after' && <p className="faint smoke-when-says">These can only be seen once it is merged. They do not hold the task; mark them when you have looked.</p>}
                   <ol className={`smoke-checks ${waits ? 'waiting' : ''}`} aria-label={WHEN[when]}>{mine.map((c) => row(c, waits))}</ol>
                 </div>
               )

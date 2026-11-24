@@ -7025,3 +7025,35 @@ Not done: a requirement left to the person is shown on the checklist but cannot 
 lists criteria only (part 2 moves what the person checks there). The check is not run again by itself when a
 criterion is added: it is a press, or the agent's tool. Adding a criterion still takes the brief's approval back, as
 before; the check can be run without it.
+
+### 2. Three kinds of check: smoke, release, watch (2026-11-23)
+
+On CEB-90 "SIXTYFOUR_WORKFLOW_ID is set in each environment" sat on the Smoke page beside the person's own checks,
+under "After it is merged". It is not theirs and not before the merge.
+
+- **A criterion says how it is proven when not by a test** (`Criterion.kind`, acceptance.ts): **smoke** (the person,
+  on the built code, before the merge), **release** (true only at deploy: configuration in each environment, a
+  migration run, monitors applied), **watch** (production health after the deploy). Whoever writes the criterion says
+  (`set_acceptance`, kind); the person changes it on the brief (a select in a criterion's edit form, a badge on the
+  row). It asks for no new approval: it is who proves it and when, not what must be true. One the check says can
+  only be seen after the merge (`when: after`) is a release check, and old ones read as that (`proofOf`).
+- **The Smoke page is before the merge only.** Its "After it is merged" group is gone. A criterion tagged smoke is
+  the person's from the start; the check is told to leave it to them with where to look. Release and watch criteria
+  are not given to the check at all, and none of the three keeps the Check stage open: each has an owner.
+- **Release checks are deploy steps on the pull request**, numbered, in the order written (`deploySteps`, smoke.ts;
+  `withDeploy`, pr.ts): under the description's own heading for them ("Merge Danger", "Deploy steps", "At deploy",
+  "Release checks"), before what the writer said there, else in a section "At deploy" at its end. The block is
+  between marks of ours, so an update replaces it and nothing of the writer's.
+- **And they are listed on the task as owed** (the pull request step, `ReleaseChecks`): whoever deploys says each is
+  done, or not done with why (`markRelease`; `POST /issues/:id/release/:criterion`). A task is not closed while one
+  is owed (close.ts). The checklist and the merge guide count them apart ("2 are owed at deploy. 1 is watched after
+  the deploy."), outside "N of M met".
+- **Accepting the smoke test is a press of its own** (`acceptSmoke`; `POST /issues/:id/smoke/accept`; `SmokeAccept`
+  on the Smoke page): once none of the person's checks wait or failed and nothing is unchecked. Kept as the event
+  `smoke.accepted` with the commit it was said on; a branch that has moved since shows it as accepted before, and
+  asks again. What is owed at deploy does not hold it.
+
+Not done: the acceptance starts nothing yet. The Pull request finalizing it starts is part 4, and is hung on
+`smoke.accepted`. Watch criteria are only listed (on the pull request step): reading them from telemetry is part 5.
+A requirement the check leaves to the person (part 1) is still not markable on the Smoke page. The agents that write
+criteria are told about the tags by `set_acceptance`'s own description, not yet by the planner's prompt.

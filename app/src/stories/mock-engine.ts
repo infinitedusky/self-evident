@@ -359,6 +359,15 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       else if (d.smoke) d.smoke = { ...d.smoke, url: null, up: false, running: null }
       return reply(d.smoke)
     }),
+    http.post('/api/issues/:id/smoke/accept', () => { if (d.smoke) d.smoke = { ...d.smoke, accepted: { by: 'user', at: '2026-11-23T12:00:00.000Z', sha: d.smoke.head } }; return reply(d.smoke) }),
+    http.post('/api/issues/:id/release/:criterion', async ({ params, request }) => {
+      const b = await request.json() as { done: boolean; note?: string }
+      if (!b.done && !b.note?.trim()) return HttpResponse.json({ error: 'say what stands in the way: a release check that is not done is usually why production is wrong' }, { status: 400 })
+      const v = d.prView ?? s.prSample
+      const release = (v.release ?? []).map((r) => (r.id === params.criterion ? { ...r, done: b.done, note: b.note ?? '', by: 'user', at: '2026-11-23T12:00:00.000Z' } : r))
+      d.prView = { ...v, release }
+      return reply({ release })
+    }),
     http.post('/api/issues/:id/smoke/:criterion/try', ({ params }) => { // the agent says at once here; the real one takes a few minutes
       if (d.smoke) d.smoke = { ...d.smoke, checks: d.smoke.checks.map((c) => (c.id === params.criterion ? { ...c, tried: { verdict: 'holds' as const, note: 'Opened it headless: the edge dips under the lip (sample)', sha: d.smoke!.head, at: '2026-11-18T12:00:00.000Z' } } : c)) }
       return reply(d.smoke)

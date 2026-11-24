@@ -7,7 +7,12 @@
  * After the acceptance criteria on a user story, and a pull request's checklist for the marks.
  */
 import { useEffect, useState } from 'react'
-import { engine, type AcceptanceChange, type Criterion } from '../engine'
+import { engine, type AcceptanceChange, type Criterion, type Proof } from '../engine'
+
+// How a criterion is proven when it is not by a test (the engine's acceptance module, Proof). Whoever writes the criterion says; the person can change it here.
+const PROOFS: Proof[] = ['smoke', 'release', 'watch']
+const PROOF_LABEL: Record<Proof, string> = { smoke: 'Smoke', release: 'Release', watch: 'Watch' }
+const PROOF_SAYS: Record<Proof, string> = { smoke: 'you check it on the built code, before the merge', release: 'done at deploy, by whoever deploys', watch: 'watched in production, after the deploy' }
 
 const BUILT = { met: ['✓', 'The final build meets it'], not: ['✗', 'The final build does not meet it'], open: ['○', 'Not checked against the final build yet'] } as const
 const builtOf = (c: Criterion) => (c.built === true ? 'met' : c.built === false ? 'not' : 'open')
@@ -21,7 +26,7 @@ const MANY = 8
 export function Acceptance({ issueId, items, approved, prototype = true, onChanged }: { issueId: string; items: Criterion[]; /** The brief is approved: a change here asks for approval again. */ approved?: boolean; /** false: the task has no prototype (the step is skipped or not in its workflow), so there is no prototype column. */ prototype?: boolean; onChanged?: () => void }) {
   const [list, setList] = useState(items)
   const [editing, setEditing] = useState<string | null>(null)
-  const [draft, setDraft] = useState({ text: '', check: '', buildOnly: false, why: '' })
+  const [draft, setDraft] = useState<{ text: string; check: string; buildOnly: boolean; why: string; kind: Proof | '' }>({ text: '', check: '', buildOnly: false, why: '', kind: '' })
   const [fresh, setFresh] = useState({ text: '', check: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -55,16 +60,20 @@ export function Acceptance({ issueId, items, approved, prototype = true, onChang
               {prototype && <span className={`acceptance-mark ${s}`} title={MARK[s][1]} aria-label={`Prototype: ${MARK[s][1]}`}>{MARK[s][0]}</span>}
               <button className={`acceptance-mark ${builtOf(c)}`} disabled={busy} onClick={() => void change({ update: [{ id: c.id, built: NEXT[builtOf(c)] }] })} title={`${BUILT[builtOf(c)][1]}${c.builtEvidence ? `: ${c.builtEvidence}` : ''}. Click to change.`} aria-label={`Final build: ${BUILT[builtOf(c)][1]} (${c.text})`}>{BUILT[builtOf(c)][0]}</button>
               {editing === c.id ? (
-                <form className="acceptance-edit" onSubmit={async (e) => { e.preventDefault(); if (await change({ update: [{ id: c.id, text: draft.text, check: draft.check || null, buildOnly: draft.buildOnly, why: draft.buildOnly ? draft.why || null : null }] })) setEditing(null) }}>
+                <form className="acceptance-edit" onSubmit={async (e) => { e.preventDefault(); if (await change({ update: [{ id: c.id, text: draft.text, check: draft.check || null, buildOnly: draft.buildOnly, why: draft.buildOnly ? draft.why || null : null, ...((draft.kind || null) !== (c.kind ?? null) ? { kind: draft.kind || null } : {}) }] })) setEditing(null) }}>
                   <input autoFocus value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })} aria-label="Criterion" />
                   <input value={draft.check} onChange={(e) => setDraft({ ...draft, check: e.target.value })} aria-label="How we will know" placeholder="How we will know: a page, a scenario, a test" />
+                  <label className="acceptance-kind">How it is proven <select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as Proof | '' })} aria-label="How it is proven">
+                    <option value="">By the build: a test, a file or a command</option>
+                    {PROOFS.map((k) => <option key={k} value={k}>{PROOF_LABEL[k]}: {PROOF_SAYS[k]}</option>)}
+                  </select></label>
                   {prototype && <label className="acceptance-skip"><input type="checkbox" checked={draft.buildOnly} onChange={(e) => setDraft({ ...draft, buildOnly: e.target.checked })} /> For the final build only: the prototype skips it</label>}
                   {prototype && draft.buildOnly && <input value={draft.why} onChange={(e) => setDraft({ ...draft, why: e.target.value })} aria-label="Why the prototype skips it" placeholder="Why the prototype skips it" />}
                   <div><button className="btn small" disabled={busy || !draft.text.trim()}>Save</button> <button type="button" className="btn quiet small" onClick={() => setEditing(null)}>Cancel</button></div>
                 </form>
               ) : (
                 <div className="acceptance-body">
-                  <div>{c.text}</div>
+                  <div>{c.text}{c.kind && <> <span className={`badge acceptance-proof ${c.kind}`} title={PROOF_SAYS[c.kind]}>{PROOF_LABEL[c.kind]}</span></>}</div>
                   {c.check ? <div className="faint">How we will know: {c.check}</div> : <div className="acceptance-warn">No way to check it yet</div>}
                   {prototype && c.buildOnly && <div className="acceptance-build">Final build only: the prototype skips it{c.why ? `. ${c.why}` : ''}</div>}
                   {prototype && c.evidence && !c.buildOnly && <div className="faint">Prototype, {s === 'not' ? 'missing' : 'seen'}: {c.evidence}</div>}
@@ -72,7 +81,7 @@ export function Acceptance({ issueId, items, approved, prototype = true, onChang
                 </div>
               )}
               {editing !== c.id && <span className="acceptance-actions">
-                <button className="btn quiet small" disabled={busy} onClick={() => { setDraft({ text: c.text, check: c.check ?? '', buildOnly: !!c.buildOnly, why: c.why ?? '' }); setEditing(c.id) }} aria-label={`Edit: ${c.text}`}>Edit</button>
+                <button className="btn quiet small" disabled={busy} onClick={() => { setDraft({ text: c.text, check: c.check ?? '', buildOnly: !!c.buildOnly, why: c.why ?? '', kind: c.kind ?? '' }); setEditing(c.id) }} aria-label={`Edit: ${c.text}`}>Edit</button>
                 <button className="icon-btn" disabled={busy} onClick={() => void change({ remove: [c.id] })} title="Remove it" aria-label={`Remove: ${c.text}`}>×</button>
               </span>}
             </li>
