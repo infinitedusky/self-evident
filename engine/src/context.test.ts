@@ -8,7 +8,7 @@ import { db, pool } from './db/client.js'
 import { app, workspace } from './db/schema.js'
 import { createIdea } from './ideas.js'
 import { newId } from './ids.js'
-import { listNotes } from './notes.js'
+import { addNote, listNotes } from './notes.js'
 import { keepOrigin } from './origins.js'
 import { createProject } from './projects.js'
 import { engineTools } from './tools.js'
@@ -71,35 +71,73 @@ describe.skipIf(!reachable)('context', () => {
     const prompt = await contextPrompt({ issueId: other })
     const path = prompt.match(/\(a PDF, (\/[^)]+\.pdf)\)/)![1]
     expect(existsSync(path)).toBe(true)
-    await expect(addFile({ issueId: other }, { name: 'photo.png', type: 'image/png', bytes: Buffer.from('x') })).rejects.toThrow('not a text, Markdown or PDF file')
+    // An HTML page is kept as the file too, and an agent is told where it is.
+    const h = await addFile({ issueId: other }, { name: 'mockup.html', type: 'text/html', bytes: Buffer.from('<h1>Made up</h1>') })
+    const page = h.docs.find((d) => d.fileName === 'mockup.html')!
+    expect(page).toMatchObject({ title: 'mockup', body: null, kept: true })
+    await expect(editDoc({ issueId: other }, page.id, { body: 'changed' })).rejects.toThrow('an HTML page is kept as the file it was')
+    const kept = (await contextPrompt({ issueId: other })).match(/\(an HTML page, (\/[^)]+\.html)\)/)![1]
+    expect(readFileSync(kept, 'utf8')).toBe('<h1>Made up</h1>')
+    await expect(addFile({ issueId: other }, { name: 'photo.png', type: 'image/png', bytes: Buffer.from('x') })).rejects.toThrow('not a text, Markdown, PDF or HTML file')
   })
 
-  it('keeps a person\'s decision as settled, an agent\'s as proposed unless the person agreed, and tells every agent which is which', async () => {
-    await addContextNote({ issueId: task }, { kind: 'decision', title: 'Show last four digits only (sample)', body: 'The vault returns no more.' })
-    expect((await addContextNote({ issueId: task }, { kind: 'decision', title: 'Delete at the provider (sample)', agreed: true }, 'agent')).status).toBe('settled')
-    expect((await addContextNote({ issueId: task }, { kind: 'decision', title: 'Offer cards of the last year only (sample)' }, 'agent')).status).toBe('proposed')
-    await expect(addContextNote({ issueId: task }, { kind: 'decision', title: 'Offer cards of the last year only (sample)' }, 'agent')).rejects.toThrow('already proposed')
+  it('keeps a decision as a question and its answer: a person\'s settled, an agent\'s proposed unless the person agreed, and tells every agent which is which', async () => {
+    await addContextNote({ issueId: task }, { kind: 'decision', title: 'What is shown of a saved card? (sample)', answer: 'Its last four digits only', body: 'The vault returns no more.' })
+    expect((await addContextNote({ issueId: task }, { kind: 'decision', title: 'What happens to a removed card? (sample)', answer: 'It is deleted at the provider', agreed: true }, 'agent')).status).toBe('settled')
+    expect((await addContextNote({ issueId: task }, { kind: 'decision', title: 'Which cards are offered? (sample)', answer: 'Those of the last year' }, 'agent')).status).toBe('proposed')
+    await expect(addContextNote({ issueId: task }, { kind: 'decision', title: 'Which cards are offered? (sample)', answer: 'All of them' }, 'agent')).rejects.toThrow('already proposed')
+    await expect(addContextNote({ issueId: task }, { kind: 'decision', title: ' ', answer: 'Yes' })).rejects.toThrow('needs its question')
     expect(await contextCount({ issueId: task })).toEqual({ count: 3, proposed: 1 }) // a doc and two settled decisions
     const v = await contextOf({ issueId: task })
     const proposed = v.notes.find((n) => n.status === 'proposed')!
-    expect(proposed).toMatchObject({ kind: 'decision', addedBy: 'agent' })
+    expect(proposed).toMatchObject({ kind: 'decision', addedBy: 'agent', title: 'Which cards are offered? (sample)', answer: 'Those of the last year' })
     let prompt = await contextPrompt({ issueId: task })
-    expect(prompt).toMatch(/### Decisions[\s\S]*Do not reopen them[\s\S]*- Show last four digits only \(sample\) Why: The vault returns no more\./)
-    expect(prompt).toMatch(/### Proposed, waiting for the person[\s\S]*- Offer cards of the last year only \(sample\)/)
-    // Only the person accepts or rejects; a rejected one is kept, and is not proposed again.
+    expect(prompt).toMatch(/### Decisions[\s\S]*Do not reopen them[\s\S]*- What is shown of a saved card\? \(sample\) → Its last four digits only Why: The vault returns no more\./)
+    expect(prompt).toMatch(/### Answers proposed, waiting for the person[\s\S]*- Which cards are offered\? \(sample\) → Those of the last year/)
+    // Only the person accepts or rejects; a rejected answer is kept, and is not proposed again.
     await expect(editContextNote({ issueId: task }, proposed.id, { status: 'settled' }, 'agent')).rejects.toThrow('is the person\'s')
     await editContextNote({ issueId: task }, proposed.id, { status: 'rejected' })
     prompt = await contextPrompt({ issueId: task })
-    expect(prompt).toMatch(/### Proposed and turned down by the person[\s\S]*- Offer cards of the last year only \(sample\)/)
-    await expect(addContextNote({ issueId: task }, { kind: 'decision', title: 'offer cards of the last year only (sample)' }, 'agent')).rejects.toThrow('already turned that decision down')
-    // The app's notes and a report hold only what is settled.
-    expect((await listNotes(appId, { issueId: task })).map((n) => n.title).sort()).toEqual(['Delete at the provider (sample)', 'Show last four digits only (sample)'])
+    expect(prompt).toMatch(/### Answers proposed and turned down by the person[\s\S]*- Which cards are offered\? \(sample\) → Those of the last year/)
+    await expect(addContextNote({ issueId: task }, { kind: 'decision', title: 'which cards are offered? (sample)', answer: 'those of the last year' }, 'agent')).rejects.toThrow('already turned that answer down')
+    // The app's notes and a report hold only what is settled, each with its answer.
+    expect((await listNotes(appId, { issueId: task })).map((n) => [n.title, n.answer]).sort()).toEqual([['What happens to a removed card? (sample)', 'It is deleted at the provider'], ['What is shown of a saved card? (sample)', 'Its last four digits only']])
     expect((await editContextNote({ issueId: task }, proposed.id, { status: 'settled' })).notes.filter((n) => n.status === 'settled')).toHaveLength(3)
+  })
+
+  it('holds a decision that is not made yet: asked, counted, told to agents as not decided, and made by answering it', async () => {
+    const t = (await createProject({ appId, name: 'Open ones (sample)', issues: [{ title: 'A task with a question (sample)', brief: 'Build it.' }] })).issues[0].id
+    expect((await addContextNote({ issueId: t }, { kind: 'decision', title: 'Do we support gift cards? (sample)' })).status).toBe('open')
+    expect((await addContextNote({ issueId: t }, { kind: 'decision', title: 'What is shown for an expired card? (sample)', body: 'The list depends on it.' }, 'agent')).status).toBe('open') // an agent may ask
+    await expect(addContextNote({ issueId: t }, { kind: 'decision', title: 'Do we support gift cards? (sample)' }, 'agent')).rejects.toThrow('already asked')
+    expect(await contextCount({ issueId: t })).toEqual({ count: 0, proposed: 2 })
+    expect(await listNotes(appId, { issueId: t })).toEqual([]) // nothing decided: nothing for a report
+    const prompt = await contextPrompt({ issueId: t })
+    expect(prompt).toMatch(/### Not decided yet[\s\S]*Do not guess one[\s\S]*- Do we support gift cards\? \(sample\)\n- What is shown for an expired card\? \(sample\) \(The list depends on it\.\)/)
+    expect(prompt).not.toContain('### Decisions')
+    // An agent's answer to an open question goes onto that question, proposed; the person's own answer makes it.
+    expect((await addContextNote({ issueId: t }, { kind: 'decision', title: 'do we support gift cards? (sample)', answer: 'Not in this task' }, 'agent')).status).toBe('proposed')
+    let v = await contextOf({ issueId: t })
+    expect(v.notes.filter((n) => n.kind === 'decision')).toHaveLength(2)
+    const open = v.notes.find((n) => n.status === 'open')!
+    await expect(editContextNote({ issueId: t }, open.id, { status: 'settled' })).rejects.toThrow('made by giving its answer')
+    v = await editContextNote({ issueId: t }, open.id, { answer: 'Shown, greyed out' })
+    expect(v.notes.find((n) => n.id === open.id)).toMatchObject({ status: 'settled', answer: 'Shown, greyed out' })
+    expect(await contextCount({ issueId: t })).toEqual({ count: 1, proposed: 1 })
+  })
+
+  it('shows a decision made as one statement as an answer with no question, and takes a question when it is given one', async () => {
+    const t = (await createProject({ appId, name: 'Statements (sample)', issues: [{ title: 'A task from before (sample)', brief: 'Build it.' }] })).issues[0].id
+    const n = await addNote(appId, { title: 'Test on an empty company first (sample)', kind: 'decision', issueIds: [t] }) // as the Reports page makes one
+    expect((await contextOf({ issueId: t })).notes).toMatchObject([{ title: '', answer: 'Test on an empty company first (sample)', status: 'settled' }])
+    expect(await contextPrompt({ issueId: t })).toContain('- Test on an empty company first (sample)\n')
+    const v = await editContextNote({ issueId: t }, n.id, { title: 'Where is it tested first? (sample)', answer: 'On an empty company' })
+    expect(v.notes).toMatchObject([{ title: 'Where is it tested first? (sample)', answer: 'On an empty company' }])
   })
 
   it('shows a task its project\'s, marked, and does not let it be changed from the task', async () => {
     await addDoc({ projectId }, { title: 'Design principles (sample)', body: 'One page, no steps.', inFull: true })
-    await addContextNote({ projectId }, { kind: 'decision', title: 'One page on a phone too (sample)' })
+    await addContextNote({ projectId }, { kind: 'decision', title: 'One page on a phone too? (sample)', answer: 'Yes' })
     await addContextNote({ projectId }, { title: 'Talked with the team (sample)', body: 'Mobile gets its own ticket.' })
     const own = await contextOf({ projectId })
     expect(own).toMatchObject({ on: 'project', project: null })
@@ -107,11 +145,11 @@ describe.skipIf(!reachable)('context', () => {
     const v = await contextOf({ issueId: task })
     const doc = v.docs.find((d) => d.title === 'Design principles (sample)')!
     expect(doc.fromProject).toBe(true)
-    expect(v.notes.filter((n) => n.fromProject).map((n) => n.title).sort()).toEqual(['One page on a phone too (sample)', 'Talked with the team (sample)'])
+    expect(v.notes.filter((n) => n.fromProject).map((n) => n.title).sort()).toEqual(['One page on a phone too? (sample)', 'Talked with the team (sample)'])
     await expect(editDoc({ issueId: task }, doc.id, { title: 'Mine now' })).rejects.toThrow('no such doc in this context')
     await expect(editContextNote({ issueId: task }, v.notes.find((n) => n.fromProject)!.id, { title: 'Mine now' })).rejects.toThrow('no such note in this context')
     const prompt = await contextPrompt({ issueId: task })
-    expect(prompt).toContain('- One page on a phone too (sample) (from the project)')
+    expect(prompt).toContain('- One page on a phone too? (sample) → Yes (from the project)')
     expect(prompt).toContain('### Reference, in full: Design principles (sample) (from the project)\n\nOne page, no steps.')
     expect(prompt).toContain('**Talked with the team (sample)**')
   })
@@ -133,7 +171,7 @@ describe.skipIf(!reachable)('context', () => {
     const i = await createIdea({ appId, title: 'Saved cards, the idea (sample)' })
     await db.execute(`update idea set origin_id = '${o.id}' where id = '${i.id}'`)
     await addDoc({ ideaId: i.id }, { title: 'Support requests (sample)', body: 'Please remember my card.' })
-    await addContextNote({ ideaId: i.id }, { kind: 'decision', title: 'No card is saved without asking (sample)' })
+    await addContextNote({ ideaId: i.id }, { kind: 'decision', title: 'Is a card saved without asking? (sample)', answer: 'No' })
     const v = await contextOf({ ideaId: i.id })
     expect(v).toMatchObject({ on: 'idea', docs: [{ id: o.id, from: 'ticket', inFull: true, ticket: { originating: true } }, { title: 'Support requests (sample)' }] })
     await expect(removeDoc({ ideaId: i.id }, o.id)).rejects.toThrow('the ticket the work came from stays')
@@ -142,7 +180,7 @@ describe.skipIf(!reachable)('context', () => {
     const out = await convertIdea(i.id, 'task')
     const moved = await contextOf({ issueId: out.issueId })
     expect(moved.docs.map((d) => d.title)).toEqual(['Ticket SHOP-41 (sample)', 'Support requests (sample)'])
-    expect(moved.notes.map((n) => n.title)).toEqual(['No card is saved without asking (sample)'])
+    expect(moved.notes.map((n) => [n.title, n.answer])).toEqual([['Is a card saved without asking? (sample)', 'No']])
     expect(await contextOf({ ideaId: i.id })).toMatchObject({ docs: [{ id: o.id }], notes: [] })
   })
 
@@ -151,11 +189,13 @@ describe.skipIf(!reachable)('context', () => {
     const call = async (args: Record<string, unknown>) => JSON.parse((await tool.handler(args)).content[0].text)
     const t = (await createProject({ appId, name: 'Tooling (sample)', issues: [{ title: 'A task for the tool (sample)', brief: 'Build it.' }] })).issues[0].id
     expect(await call({ op: 'note', issueId: t, title: 'Found a slow call (sample)', body: 'Two seconds.' })).toEqual({ noted: 'Found a slow call (sample)' })
-    expect(await call({ op: 'propose', issueId: t, title: 'Cache the first call (sample)' })).toMatchObject({ proposed: 'Cache the first call (sample)' })
-    expect(await call({ op: 'decide', issueId: t, title: 'Keep the vault as it is (sample)' })).toEqual({ recorded: 'Keep the vault as it is (sample)', as: 'settled' })
+    expect(await call({ op: 'ask', issueId: t, title: 'Is the first call cached? (sample)' })).toMatchObject({ asked: 'Is the first call cached? (sample)' })
+    expect(await call({ op: 'propose', issueId: t, title: 'Is the first call cached? (sample)', answer: 'Yes, for an hour' })).toMatchObject({ proposed: 'Yes, for an hour' })
+    expect(await call({ op: 'decide', issueId: t, title: 'Is the vault changed? (sample)', answer: 'No, it stays as it is' })).toEqual({ recorded: 'No, it stays as it is', to: 'Is the vault changed? (sample)', as: 'settled' })
+    expect((await tool.handler({ op: 'decide', issueId: t, title: 'A question with no answer (sample)' })).isError).toBe(true)
     await call({ op: 'doc', issueId: t, title: 'What I read (sample)', description: 'The guide, in short.', body: 'It is slow at first.' })
     const v = await call({ op: 'read', issueId: t })
-    expect(v.notes.map((n: { status: string; addedBy: string }) => [n.status, n.addedBy])).toEqual([['settled', 'agent'], ['proposed', 'agent'], ['settled', 'agent']])
+    expect(v.notes.map((n: { status: string; addedBy: string; answer: string | null }) => [n.status, n.addedBy, n.answer])).toEqual([['settled', 'agent', null], ['proposed', 'agent', 'Yes, for an hour'], ['settled', 'agent', 'No, it stays as it is']])
     expect(v.docs).toMatchObject([{ title: 'What I read (sample)', addedBy: 'agent', inFull: false }])
     expect((await tool.handler({ op: 'note', title: 'About nothing (sample)' })).isError).toBe(true) // it says which idea, task or project
   })

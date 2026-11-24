@@ -856,7 +856,7 @@ const otherTicket: import('../engine').OriginView = {
 }
 const vaultNotes = '## What the vault returns (made up)\n\n- `last4`, `expiry`, `brand`\n- Never the full number, never the security code\n\nA card is removed with `DELETE /cards/:id`. A removed card cannot be brought back.'
 const ctxDoc = (d: Partial<import('../engine').ContextDoc> & { id: string; title: string }): import('../engine').ContextDoc => ({ description: null, from: 'pasted', ticket: null, fileName: null, body: null, chars: (d.body ?? '').length, inFull: false, addedBy: 'user', addedAt: '2026-11-22T10:00:00Z', fromProject: false, ...d })
-const ctxNote = (n: Partial<import('../engine').ContextNote> & { id: string; title: string }): import('../engine').ContextNote => ({ kind: 'note', status: 'settled', body: '', on: '2026-11-22', addedBy: 'user', fromProject: false, alsoAbout: [], ...n })
+const ctxNote = (n: Partial<import('../engine').ContextNote> & { id: string; title: string }): import('../engine').ContextNote => ({ kind: 'note', status: 'settled', answer: null, body: '', on: '2026-11-22', addedBy: 'user', fromProject: false, alsoAbout: [], ...n })
 export const contextLimits = { doc: 200_000, inFull: 20_000 }
 export const taskContext: import('../engine').ContextView = {
   on: 'task', project: { id: 'proj_checkout', name: 'One-page checkout (sample)' }, limits: contextLimits,
@@ -868,11 +868,12 @@ export const taskContext: import('../engine').ContextView = {
     ctxDoc({ id: 'cdoc_proj1', title: 'Checkout design principles (sample)', description: 'The four rules the one-page checkout is designed to.', body: '1. One page, no steps.\n2. Nothing asked twice.\n3. The total is always in view.\n4. An error is said beside what caused it.', inFull: true, fromProject: true, addedAt: '2026-11-18T10:00:00Z' }),
   ],
   notes: [
-    ctxNote({ id: 'note_ctx1', kind: 'decision', status: 'proposed', title: 'Only cards used in the last 12 months are offered (sample)', body: 'Older ones are often expired, and the vault charges to check each.', on: '2026-11-24', addedBy: 'agent' }),
-    ctxNote({ id: 'note_ctx2', kind: 'decision', title: 'A saved card shows its last four digits and its expiry, nothing more (sample)', body: 'The vault never returns more, and support asked for no more.', on: '2026-11-21' }),
-    ctxNote({ id: 'note_ctx3', kind: 'decision', title: 'A removed card is deleted at the provider, not hidden here (sample)', on: '2026-11-23', addedBy: 'agent' }),
-    ctxNote({ id: 'note_ctxp1', kind: 'decision', title: 'The checkout is one page on a phone too (sample)', on: '2026-11-18', fromProject: true }),
-    ctxNote({ id: 'note_ctx4', kind: 'decision', status: 'rejected', title: 'Save every card without asking (sample)', body: 'One less box to tick.', on: '2026-11-22', addedBy: 'agent' }),
+    ctxNote({ id: 'note_ctx1', kind: 'decision', status: 'proposed', title: 'Which saved cards are offered? (sample)', answer: 'Only the ones used in the last 12 months', body: 'Older ones are often expired, and the vault charges to check each.', on: '2026-11-24', addedBy: 'agent' }),
+    ctxNote({ id: 'note_ctx2', kind: 'decision', title: 'What is shown of a saved card? (sample)', answer: 'Its last four digits and its expiry, nothing more', body: 'The vault never returns more, and support asked for no more.', on: '2026-11-21' }),
+    ctxNote({ id: 'note_ctx3', kind: 'decision', title: 'What happens to a card when it is removed? (sample)', answer: 'It is deleted at the provider, not hidden here', on: '2026-11-23', addedBy: 'agent' }),
+    ctxNote({ id: 'note_ctxp1', kind: 'decision', title: 'Is the checkout one page on a phone too? (sample)', answer: 'Yes', on: '2026-11-18', fromProject: true }),
+    ctxNote({ id: 'note_ctx4', kind: 'decision', status: 'rejected', title: 'Is a card saved without asking? (sample)', answer: 'Yes, every card', body: 'One less box to tick.', on: '2026-11-22', addedBy: 'agent' }),
+    ctxNote({ id: 'note_ctx7', kind: 'decision', status: 'open', title: 'What is shown when a saved card has expired? (sample)', on: '2026-11-24' }),
     ctxNote({ id: 'note_ctx5', title: 'Talked with Em about mobile (sample)', body: 'Support hears the same request from people on phones.\n\nOutcome: mobile gets a ticket of its own; not done under this task.', on: '2026-11-23', alsoAbout: [{ id: 'iss_sample5', name: 'SS-5', title: 'Submit an order (sample)' }] }),
     ctxNote({ id: 'note_ctx6', title: 'The vault is slow on its first call (sample)', body: 'About two seconds, then fast. Found while reading its guide.', on: '2026-11-22', addedBy: 'agent' }),
   ],

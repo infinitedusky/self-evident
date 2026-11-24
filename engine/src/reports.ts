@@ -112,7 +112,7 @@ export async function reportFacts(appId: string, from: Date, to: Date, opts: { m
         openQuestions: asks.map((q) => clip(q.text, 200)),
       },
       // What the person wrote down on those days (notes.ts): a conversation and its outcome, a finding, a decision.
-      notes: (await listNotes(appId, { from: dayOf(from), to: dayOf(new Date(+to - 1)) })).reverse().map((n) => ({ on: n.on, kind: n.kind, title: n.title, text: clip(n.body, 1500) || null, tasks: n.tasks.map((t) => t.name) })),
+      notes: (await listNotes(appId, { from: dayOf(from), to: dayOf(new Date(+to - 1)) })).reverse().map((n) => ({ on: n.on, kind: n.kind, title: n.answer ? `${n.title} ${n.answer}`.trim() : n.title, text: clip(n.body, 1500) || null, tasks: n.tasks.map((t) => t.name) })),
       fromThePerson: opts.notes?.trim() || null,
     },
   }

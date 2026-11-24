@@ -539,9 +539,10 @@ export const note = pgTable('note', {
   title: text('title').notNull(), body: text('body').notNull().default(''),
   /** The tasks it is about. A task deleted is simply no longer shown. */ issueIds: jsonb('issue_ids').$type<string[]>().notNull().default([]),
   /** The ideas and projects whose Context it is in (context.ts): an idea's go with it when it becomes a task or a project. */ ideaIds: jsonb('idea_ids').$type<string[]>().notNull().default([]), projectIds: jsonb('project_ids').$type<string[]>().notNull().default([]),
-  /** A decision an agent proposed waits for the person (proposed), who accepts it (settled) or turns it down (rejected: kept, so it is not proposed again). */ status: text('status').notNull().default('settled'),
+  /** A decision is a question (title) and its answer (Sandy, 2026-11-24). No answer yet: it is open. One made before questions were asked has only its title, a statement. */ answer: text('answer'),
+  /** A decision: open (asked, not answered); proposed (an agent's answer, waiting for the person), who accepts it (settled) or turns it down (rejected: kept, so it is not proposed again). */ status: text('status').notNull().default('settled'),
   createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
-}, (t) => [index('note_app').on(t.appId, t.on), inList('note_kind', t.kind, ['note', 'decision']), inList('note_status', t.status, ['settled', 'proposed', 'rejected'])])
+}, (t) => [index('note_app').on(t.appId, t.on), inList('note_kind', t.kind, ['note', 'decision']), inList('note_status', t.status, ['settled', 'proposed', 'rejected', 'open'])])
 
 // Reference docs in a Context (context.ts; Sandy, 2026-11-24): what an idea, a project or a task is to be read against.
 // Text pasted in, a file brought in, or another ticket kept as an origin. The ticket the work came from is not a row:

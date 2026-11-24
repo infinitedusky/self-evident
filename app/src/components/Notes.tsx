@@ -49,7 +49,7 @@ export function Notes({ appId, issueId, version = 0 }: { appId: string; /** A ta
               <div className="note-head">
                 <span className="note-day">{dayLabel(n.on)}</span>
                 {n.kind === 'decision' && <Badge tone="accent">Decision</Badge>}
-                <strong>{n.title}</strong>
+                <strong>{n.title}</strong>{n.answer && <span>{n.answer}</span>}
                 <button className="btn quiet small" style={{ marginLeft: 'auto' }} aria-label={`Edit the note ${n.title}`} onClick={() => setOpen(n.id)}>Edit</button>
               </div>
               {n.body && <Md text={n.body} className="note-body" />}

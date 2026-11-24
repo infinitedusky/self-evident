@@ -22,7 +22,11 @@ export const OnATask: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await expect(await c.findByText('For you to decide')).toBeVisible()
-    await expect(c.getByText('Only cards used in the last 12 months are offered (sample)')).toBeVisible()
+    const ask = within(canvasElement.querySelector('[data-component="ContextProposed"]') as HTMLElement)
+    await expect(ask.getByText('Which saved cards are offered? (sample)')).toBeVisible() // the agent proposes an answer
+    await expect(ask.getByText('Only the ones used in the last 12 months')).toBeVisible()
+    await expect(ask.getByText('What is shown when a saved card has expired? (sample)')).toBeVisible() // asked, not answered
+    await expect(ask.getByText(/No answer yet/)).toBeVisible()
     const docs = section(canvasElement, 'docs')
     await expect(docs.getByText(/From Linear, SHOP-41 · the work came from it/)).toBeVisible()
     await expect(docs.getAllByText('Every agent, in full')).toHaveLength(2) // the ticket, and the project's principles
@@ -32,8 +36,10 @@ export const OnATask: Story = {
     const order = [...canvasElement.querySelectorAll('.context-h')].map((h) => h.textContent?.replace(/\d+$/, '').trim())
     await expect(order).toEqual(['For you to decide', 'Reference docs', 'Decisions', 'Notes'])
     const decisions = section(canvasElement, 'decisions')
+    await expect(decisions.getByText('What happens to a card when it is removed? (sample)')).toBeVisible() // the question
+    await expect(decisions.getByText('It is deleted at the provider, not hidden here')).toBeVisible() // and its answer
     await expect(decisions.getByText(/Recorded by the agent once you agreed/)).toBeVisible()
-    await expect(decisions.getByText('1 proposed and rejected')).toBeVisible()
+    await expect(decisions.getByText('1 answer proposed and rejected')).toBeVisible()
     const notes = section(canvasElement, 'notes')
     await expect(notes.getByRole('link', { name: 'SS-5' })).toBeVisible()
     await expect(notes.getByText(/added by the agent/)).toBeVisible()
@@ -67,7 +73,7 @@ export const OnAProject: Story = {
     const c = within(canvasElement)
     await expect(await c.findByText('Checkout design principles (sample)')).toBeVisible()
     await expect(c.queryByText(/From the project/)).toBeNull()
-    await expect(c.getByRole('button', { name: 'Edit: The checkout is one page on a phone too (sample)' })).toBeVisible()
+    await expect(c.getByRole('button', { name: 'Edit: Is the checkout one page on a phone too? (sample)' })).toBeVisible()
   },
 }
 
@@ -154,6 +160,19 @@ export const ImportAPdf: Story = {
   },
 }
 
+/** An HTML page (a mock-up, an artifact saved from Claude) is kept as the file too: an agent reads its markup when it needs it. */
+export const ImportAnHtmlPage: Story = {
+  beforeEach: withEngine({ context: { issues: emptyContext } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await c.findByRole('button', { name: 'Import a file' })
+    await userEvent.upload(c.getByLabelText('A file to import'), new File(['<h1>Made up</h1>'], 'checkout-mockup.html', { type: 'text/html' }))
+    await userEvent.click(await c.findByText('checkout-mockup'))
+    await expect(c.getByText(/An HTML page, kept on this computer as the file it was/)).toBeVisible()
+    await expect(c.queryByRole('checkbox', { name: /Give it to every agent in full/ })).toBeNull()
+  },
+}
+
 /** Another ticket, by its id: kept like the first, and this one can be taken out again. */
 export const AddATicket: Story = {
   play: async ({ canvasElement }) => {
@@ -178,39 +197,74 @@ export const ATicketThatCannotBeRead: Story = {
   },
 }
 
-/** Accepting what the agent proposed: it joins the decisions, and nothing is left to decide. */
+/** Accepting the answer the agent proposed: it joins the decisions, and one question is left to decide. */
 export const AcceptAProposal: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await userEvent.click(await c.findByRole('button', { name: 'Accept: Only cards used in the last 12 months are offered (sample)' }))
-    await waitFor(() => expect(c.queryByText('For you to decide')).toBeNull())
-    await expect(section(canvasElement, 'decisions').getByText('Only cards used in the last 12 months are offered (sample)')).toBeVisible()
+    await userEvent.click(await c.findByRole('button', { name: 'Accept: Which saved cards are offered? (sample)' }))
+    await waitFor(() => expect(c.queryByRole('button', { name: /^Accept:/ })).toBeNull())
+    await expect(section(canvasElement, 'decisions').getByText('Only the ones used in the last 12 months')).toBeVisible()
+    await expect(c.getByText('For you to decide')).toBeVisible() // the open question is still there
   },
 }
 
-/** Rejecting it: kept, folded under the decisions, so the agents are told it was turned down and do not propose it again. It can be accepted after all, or deleted. */
+/** Rejecting it: kept, folded under the decisions, so the agents are told it was turned down and do not propose it again. It can be accepted after all, the question asked again with no answer, or deleted. */
 export const RejectAProposal: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await userEvent.click(await c.findByRole('button', { name: 'Reject: Only cards used in the last 12 months are offered (sample)' }))
+    await userEvent.click(await c.findByRole('button', { name: 'Reject: Which saved cards are offered? (sample)' }))
     const decisions = section(canvasElement, 'decisions')
-    await userEvent.click(await decisions.findByText('2 proposed and rejected'))
+    await userEvent.click(await decisions.findByText('2 answers proposed and rejected'))
     await expect(decisions.getByText(/does not propose it again/)).toBeVisible()
-    await expect(decisions.getByRole('button', { name: 'Accept after all: Save every card without asking (sample)' })).toBeVisible()
+    await expect(decisions.getByRole('button', { name: 'Accept after all: Is a card saved without asking? (sample)' })).toBeVisible()
+    await userEvent.click(decisions.getByRole('button', { name: 'Ask again: Which saved cards are offered? (sample)' }))
+    await expect(await c.findByRole('button', { name: 'Answer: Which saved cards are offered? (sample)' })).toBeVisible()
   },
 }
 
-/** A decision of the person's own: one statement, and why if there is a why. */
+/** An open decision answered: the answer is asked for, with why; it then sits with the decisions, and nothing is left to decide once the other is accepted. */
+export const AnswerAnOpenDecision: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Answer: What is shown when a saved card has expired? (sample)' }))
+    const save = c.getByRole('button', { name: 'Save the decision' })
+    await expect(save).toBeDisabled() // until it has an answer
+    await userEvent.type(c.getByRole('textbox', { name: 'The answer' }), 'It is shown, greyed out')
+    await userEvent.type(c.getByRole('textbox', { name: 'Why (optional)' }), 'So nobody wonders where it went.')
+    await userEvent.click(save)
+    const decisions = section(canvasElement, 'decisions')
+    await expect(await decisions.findByText('It is shown, greyed out')).toBeVisible()
+    await expect(c.queryByRole('button', { name: 'Answer: What is shown when a saved card has expired? (sample)' })).toBeNull()
+  },
+}
+
+/** A decision put in to make later: a question with no answer. It waits under For you to decide. */
+export const AddOneToDecideLater: Story = {
+  beforeEach: withEngine({ context: { issues: emptyContext } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Add a decision' }))
+    await userEvent.type(c.getByRole('textbox', { name: 'The question' }), 'Do we support gift cards? (sample)')
+    await userEvent.click(c.getByRole('button', { name: 'Add it, to decide later' }))
+    await expect(await c.findByText('For you to decide')).toBeVisible()
+    await expect(c.getByRole('button', { name: 'Answer: Do we support gift cards? (sample)' })).toBeVisible()
+    await expect(section(canvasElement, 'decisions').getByText('None made yet.')).toBeVisible()
+    await expect(c.getByRole('button', { name: 'Not needed: Do we support gift cards? (sample)' })).toBeVisible() // or it is dropped
+  },
+}
+
+/** A decision made on the spot: the question and its answer together, and why if there is a why. */
 export const AddADecision: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Add a decision' }))
-    await userEvent.type(c.getByRole('textbox', { name: 'The decision, in one statement' }), 'An expired card is shown, greyed out (sample)')
-    await userEvent.type(c.getByRole('textbox', { name: 'Why (optional)' }), 'So nobody wonders where it went.')
+    await userEvent.type(c.getByRole('textbox', { name: 'The question' }), 'Can a card be renamed? (sample)')
+    await userEvent.type(c.getByRole('textbox', { name: /^The answer/ }), 'No')
+    await userEvent.type(c.getByRole('textbox', { name: 'Why (optional)' }), 'Nobody asked for it.')
     await userEvent.click(c.getByRole('button', { name: 'Save the decision' }))
     const decisions = section(canvasElement, 'decisions')
-    await expect(await decisions.findByText('An expired card is shown, greyed out (sample)')).toBeVisible()
-    await expect(decisions.getByText('So nobody wonders where it went.')).toBeVisible()
+    await expect(await decisions.findByText('Can a card be renamed? (sample)')).toBeVisible()
+    await expect(decisions.getByText('Nobody asked for it.')).toBeVisible()
   },
 }
 
@@ -226,16 +280,16 @@ export const AddANote: Story = {
   },
 }
 
-/** A decision changed, from its Edit. What comes from the project has no Edit here. */
+/** A decision's answer changed, from its Edit. What comes from the project has no Edit here. */
 export const EditADecision: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByText('The checkout is one page on a phone too (sample)')).toBeVisible()
-    await expect(c.queryByRole('button', { name: 'Edit: The checkout is one page on a phone too (sample)' })).toBeNull()
-    await userEvent.click(c.getByRole('button', { name: 'Edit: A removed card is deleted at the provider, not hidden here (sample)' }))
-    const t = c.getByRole('textbox', { name: 'The decision, in one statement' })
-    await userEvent.clear(t); await userEvent.type(t, 'A removed card is deleted everywhere (sample)')
+    await expect(await c.findByText('Is the checkout one page on a phone too? (sample)')).toBeVisible()
+    await expect(c.queryByRole('button', { name: 'Edit: Is the checkout one page on a phone too? (sample)' })).toBeNull()
+    await userEvent.click(c.getByRole('button', { name: 'Edit: What happens to a card when it is removed? (sample)' }))
+    const t = c.getByRole('textbox', { name: 'The answer' })
+    await userEvent.clear(t); await userEvent.type(t, 'It is deleted everywhere')
     await userEvent.click(c.getByRole('button', { name: 'Save the decision' }))
-    await expect(await c.findByText('A removed card is deleted everywhere (sample)')).toBeVisible()
+    await expect(await c.findByText('It is deleted everywhere')).toBeVisible()
   },
 }
