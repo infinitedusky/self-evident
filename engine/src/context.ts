@@ -241,7 +241,13 @@ export async function addContextNote(s: Subject, i: { kind?: string; title?: str
     if (agent && status === 'proposed' && same.some((n) => n.status === 'proposed')) throw new PlanError('an answer to that is already proposed and waits for the person')
     // The question it answers, if it is already here unanswered: asked with no answer, or (for an answer the person gave or agreed to) with an answer an agent proposed.
     const asked = same.find((n) => n.status === 'open') ?? (status === 'settled' ? same.find((n) => n.status === 'proposed') : undefined)
-    if (asked && !answer) { if (agent) throw new PlanError('that is already asked and waits for the person'); return { status, view: await contextOf(s) } }
+    if (asked && !answer) {
+      // Asked again with more to say about it: that is added to the question that is there, not a second question.
+      const more = { ...(i.background?.trim() ? { background: i.background } : {}), ...((i.options ?? i.body)?.trim() ? { options: i.options ?? i.body } : {}) }
+      if (Object.keys(more).length) await editNote(f.appId, asked.id, more, actor)
+      else if (agent) throw new PlanError('that is already asked and waits for the person; to change its words, its background or its options, use op "update" with its id')
+      return { status, view: await contextOf(s) }
+    }
     if (asked) { // the answer goes onto the question that was waiting
       await editNote(f.appId, asked.id, { answer, body: i.body ?? asked.body, background: i.background?.trim() ? i.background : undefined, options: i.options?.trim() ? i.options : undefined, status, ...(status === 'settled' ? { on: i.on ?? dayOf(new Date()) } : {}) }, actor)
       return { status, view: await contextOf(s) }
@@ -275,6 +281,22 @@ export async function editContextNote(s: Subject, id: string, i: { title?: strin
     return contextOf(s)
   }
   await editNote(f.appId, r.id, { title: i.title === undefined ? undefined : line(i.title, 200), answer, body: i.body, background: i.background, options: i.options, on: i.on, status, waitingOn: ['open', 'proposed'].includes(will) ? i.waitingOn : null }, actor) // once it has an answer it waits on nobody
+  return contextOf(s)
+}
+
+/**
+ * A decision's question brought up to date by an agent: its background and its options, on any decision, and its
+ * words while it is unanswered. Never its answer or its state: those are the person's, or go through `addContextNote`
+ * with the person's agreement.
+ */
+export async function updateQuestion(s: Subject, id: string, i: { title?: string; background?: string; options?: string }, actor = 'agent') {
+  const f = await found(s)
+  const r = await noteOf(f, id)
+  if (r.kind !== 'decision') throw new PlanError('only a decision has a question, a background and options')
+  if (i.title !== undefined && !['open', 'proposed'].includes(r.status)) throw new PlanError('that decision is made: its question is not reworded. Its background and its options can still be changed.')
+  if (i.title !== undefined && !line(i.title, 200)) throw new PlanError('a decision needs its question')
+  if (i.title === undefined && i.background === undefined && i.options === undefined) throw new PlanError('give what changes: title, background or options')
+  await editNote(f.appId, r.id, { title: i.title === undefined ? undefined : line(i.title, 200), background: i.background, options: i.options }, actor)
   return contextOf(s)
 }
 
@@ -334,7 +356,7 @@ export async function contextPrompt(s: { issueId?: string; ideaId?: string; proj
     }
     out.push('')
   }
-  const how = opts.canWrite === false ? '' : `\nThe \`context\` tool adds to it (${'issueId' in f.key ? `issueId ${f.key.issueId}` : 'ideaId' in f.key ? `ideaId ${f.key.ideaId}` : `projectId ${f.key.projectId}`}): a note of something found or said, a doc, a decision. A decision is a question and its answer. When something needs deciding and you have no answer to offer, ask it: it waits for the person. Record an answer as decided only when the person has given it or agreed to it in this conversation, in their own words. When you have an answer to suggest and they have not said yes, propose it: it waits for them, and is not settled until they accept it.\n`
+  const how = opts.canWrite === false ? '' : `\nThe \`context\` tool adds to it (${'issueId' in f.key ? `issueId ${f.key.issueId}` : 'ideaId' in f.key ? `ideaId ${f.key.ideaId}` : `projectId ${f.key.projectId}`}): a note of something found or said, a doc, a decision. A decision is a question and its answer. When something needs deciding and you have no answer to offer, ask it: it waits for the person. A question already here is brought up to date in place (its background, its options, its words while unanswered), never asked a second time. Record an answer as decided only when the person has given it or agreed to it in this conversation, in their own words. When you have an answer to suggest and they have not said yes, propose it: it waits for them, and is not settled until they accept it.\n`
   if (!out.length) return how ? `\n## Context\n\nNothing has been put in this ${f.on}'s context yet beyond what is above.\n${how}` : ''
   return ['', `## Context: what the person has put beside this ${f.on}`, '', ...out].join('\n') + how
 }

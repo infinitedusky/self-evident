@@ -7651,3 +7651,17 @@ in `background`, never the options. Text given with a question and nothing else 
 options. That is all of Sandy's today, whose backgrounds were options and recommendations put there by the two
 migrations before. Some of that text also says where the question came from ("The PRD says…"); it moves whole, and
 that part is Sandy's to cut back up into Background. A person's own background is left where it is.
+
+## An agent can bring a question that is already there up to date (from a task's agent, passed on by Sandy, 2026-11-24: "The Context tool can only create entries. Writing to a question that's already there is refused ('already asked'), and I can't edit or remove one")
+
+The agent wanted to fill in background and options on questions it had asked earlier and drop "Open:" from their
+titles, and could only offer to ask all of them again for Sandy to reject the old ones.
+
+- The `context` tool gained **`update`**: by a decision's id (from `read`), its background and its options on any
+  decision, and its question's words while it is unanswered. An empty string clears one. It cannot give or change
+  an answer, or accept or reject.
+- **`ask` in the same words as a question already there**, with a background or options, adds those to that
+  question. With nothing new it is still refused, and the refusal now names `update`.
+- The prompt says a question already here is brought up to date in place, never asked a second time.
+
+An agent still cannot remove a decision: dropping one is the person's (Not needed).
