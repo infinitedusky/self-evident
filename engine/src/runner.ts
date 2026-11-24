@@ -25,7 +25,7 @@ import { guideTasks, mergeGuide, mergeRecord } from './merge-guide.js'
 import { acceptanceOf, setAcceptance } from './acceptance.js'
 import { unchecked, uncheckedReq, afterBuild, CHECK_TITLE, RECHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, numbered, OLD_PROBE_TITLE, readVerdicts, reqId, requirementsChecked, unmetOf, verdictChange } from './verify.js'
 import { inForce, type Covered } from './requirements.js'
-import { smokeOwed , smokeSetups } from './smoke.js'
+import { deploySteps, smokeOwed , smokeSetups } from './smoke.js'
 import { ONE_GO_TITLE } from './planner.js'
 import { workflowFor } from './work.js'
 import { ensureProjectPr, prDraft, prTitle, prBody , prAuto } from './pr.js'
@@ -841,7 +841,7 @@ export class Runner {
     const guide = mergeGuide(guided)
     // A task with a review copy on GitHub says how to run it, in the engine's own words (review-copy.ts).
     const review = t ? await reviewSectionFor(t.id) : null
-    const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog, guide, mergeRecord(guided), t ? (t as { prBody?: string | null }).prBody ?? null : null, review)
+    const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog, guide, mergeRecord(guided), t ? (t as { prBody?: string | null }).prBody ?? null : null, review, deploySteps(guided.flatMap((q) => q.acceptance)))
     if (preview) return { title, body, head, base: stack.base, landed: landed.length, pending: open.map((x) => x.identifier) }
     if (!r?.fullName) return
     if (auto && submit && (open.length || !mine.some((x) => x.status === 'done'))) return // not whole yet: nothing is opened

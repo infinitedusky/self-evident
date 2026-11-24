@@ -15,7 +15,7 @@
  * together and the ones that failed run again; then the commands the engine runs itself, the test run among them
  * (runner.ts). `afterBuild` says which comes next, from what has been done. A check and a probe change nothing.
  */
-import { acceptanceLines, type AcceptanceChange, type Criterion } from './acceptance.js'
+import { acceptanceLines, later, proofOf, type AcceptanceChange, type Criterion } from './acceptance.js'
 import { notYet, type Covered, type Requirement } from './requirements.js'
 
 /** The sub-tasks' titles: how the engine knows them, and counts the rounds. */
@@ -79,7 +79,9 @@ export const checkTaskBrief = (criteria: Criterion[], requirements: Requirement[
   '- A requirement that does not apply to this change (no new behaviour to trace, nothing a person does differently) is met: true, with "does not apply:" and why as its evidence.',
   '- evidence is one line, under 160 characters: the test, file or command that shows it; for something not done, what is missing.',
   '- Stop any server you start.',
-  ...(criteria.length ? ['', 'The task\'s acceptance criteria:', acceptanceLines(criteria)] : []),
+  '- An item marked SMOKE is the person\'s to check on the built code: met is null, "when" is "here" (or "pr" when it is about what the pull request says), with "where" and what passing looks like. Look at one case if it is quick, to write that well; do not mark it met.',
+  '- An item that can only be true at deploy (a variable set in each environment, a migration run there, a monitor applied) is not yours and not the smoke test\'s: met is null, "when" is "after", and the evidence is the step for whoever deploys, in a line. It becomes a deploy step on the pull request.',
+  ...(criteria.filter((c) => !later(c)).length ? ['', 'The task\'s acceptance criteria:', acceptanceLines(criteria.filter((c) => !later(c)))] : []),
   ...(requirements.length ? ['', 'What this app requires of every change:', requirementItems(requirements)] : []),
   ...(again && 'added' in again && requirements.some(fromDescription) ? ['', again.description?.trim() ? `The pull request's description, as it is written now (an item about what the pull request says is judged from this):\n\n${again.description.trim().slice(0, 12_000)}` : 'No description has been written for the pull request yet. An item about what the pull request says is met null, for the person, with "when" "pr".'] : []),
   '',
@@ -130,7 +132,7 @@ export function readVerdicts(summary: string | null | undefined, ids: string[]):
 /** The verdicts on criteria as a change to them: met or not with its evidence; left for a person, the note alone. */
 export const verdictChange = (verdicts: Verdict[]): AcceptanceChange => ({
   update: verdicts.filter((v) => !v.id.startsWith(REQ)).map((v) => (v.met === null
-    ? { id: v.id, built: null, builtEvidence: v.evidence || 'Left for a person to judge.', builtWhere: v.where ?? null, builtWhen: v.when ?? null, builtSetup: v.setup ?? null }
+    ? { id: v.id, built: null, builtEvidence: v.evidence || 'Left for a person to judge.', builtWhere: v.where ?? null, builtWhen: v.when ?? null, builtSetup: v.setup ?? null, ...(v.when === 'after' ? { kind: 'release' as const } : {}) }
     : { id: v.id, built: v.met, builtEvidence: v.evidence || null })),
 })
 
@@ -150,7 +152,7 @@ export function requirementsChecked(required: Requirement[], held: Covered[] | n
 }
 
 /** Whether a criterion still wants checking: no mark from the build, and no note leaving it to a person. */
-export const unchecked = (c: Criterion) => c.built === undefined && !c.builtEvidence
+export const unchecked = (c: Criterion) => c.built === undefined && !c.builtEvidence && !proofOf(c) // one tagged smoke is the person's from the start; release and watch are nobody's before the merge
 /** The same for a requirement: no mark, and not left to the person. One the task holds nothing about is not checked yet. */
 export const uncheckedReq = (c: Covered | undefined) => !c || (c.built === undefined && !c.left)
 

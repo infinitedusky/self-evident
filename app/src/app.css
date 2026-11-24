@@ -886,6 +886,10 @@ button.acceptance-mark { cursor: pointer; border-radius: 6px; } button.acceptanc
 .acceptance-build { font-size: 13px; color: var(--accent); }
 .acceptance-skip { display: flex; gap: 6px; align-items: center; font-size: 13px; }
 .acceptance-skip input { margin: 0; width: auto; }
+.acceptance-kind { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.acceptance-kind select { width: auto; flex: 1; min-width: 0; }
+.acceptance-proof { font-size: 11px; vertical-align: 1px; }
+.acceptance-proof.release, .acceptance-proof.watch { color: var(--accent); }
 .acceptance-actions { flex: none; display: flex; gap: 2px; align-items: center; }
 .acceptance-edit { flex: 1; min-width: 0; display: grid; gap: 6px; }
 .acceptance-edit input, .acceptance-add input { margin: 0; }
@@ -1068,6 +1072,14 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .pr-write { margin: 0 0 12px; }
 .pr-write label { display: grid; gap: 4px; font-size: 13px; }
 .pr-write textarea { width: 100%; font-family: var(--mono, monospace); font-size: 13px; }
+.smoke-accept { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+.smoke-accept.accepted { border-color: var(--ok, #2f855a); }
+.release-checks { margin: 0 0 14px; }
+.release-list { margin: 0 0 12px; padding-left: 22px; display: grid; gap: 10px; font-size: 14px; }
+.release-list.watch { list-style: disc; }
+.release-list li.done strong { font-weight: 500; }
+.release-acts, .release-why { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+.release-why input { flex: 1; min-width: 0; }
 .pr-waits { margin: 0 0 10px; padding: 8px 12px 8px 28px; border-left: 3px solid var(--warn, #b7791f); border-radius: 6px; font-size: 13px; }
 .team-names .team-ticket { cursor: pointer; border: 0; font: inherit; font-size: 12px; }
 .team-names.open { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; flex-basis: 100%; margin-top: 4px; }

@@ -20,8 +20,30 @@ import { appendEvent } from './events.js'
 import { newId } from './ids.js'
 import { getIssue, PlanError } from './issues.js'
 
+/**
+ * How a criterion is proven when it is not by a test (Sandy, 2026-11-23, "Three kinds of check: smoke, release, watch").
+ * - smoke: what the person checks on the built code to accept it, before the merge (a live run, how a screen looks,
+ *   what the pull request says). Only these are on the Smoke page.
+ * - release: what must be true for it to go live and can only be done there (configuration in each environment, a
+ *   migration run, monitors applied). Never on the Smoke page and never holding the smoke test: it is a deploy step
+ *   on the pull request, owed by whoever deploys.
+ * - watch: production health after the deploy. Nobody checks it before the merge; it is read from telemetry.
+ * Absent: proven by the build (a test, a file, a command), which the check after the build looks at.
+ * Whoever writes the criterion says which; the person can change it. It is not what must be true, so changing it asks
+ * for no new approval.
+ */
+export type Proof = 'smoke' | 'release' | 'watch'
+export const PROOFS: Proof[] = ['smoke', 'release', 'watch']
+export const PROOF_SAYS: Record<Proof, string> = {
+  smoke: 'you check it on the built code, before the merge',
+  release: 'done at deploy, by whoever deploys',
+  watch: 'watched in production, after the deploy',
+}
+
 export interface Criterion {
   id: string
+  /** How it is proven when not by the build's own tests (Proof). Read through proofOf: one the check said can only be seen after the merge is a release check too. */
+  kind?: Proof
   /** What must be true, as one statement a person can check. */
   text: string
   /** How we will know: the page, the scenario, the test or the script that shows it. */
@@ -54,11 +76,15 @@ export interface Criterion {
   by: string
   at: string
 }
+/** How a criterion is proven, when not by the build: its tag, or for one the check left for after the merge (before there were tags), release. */
+export const proofOf = (c: Criterion): Proof | undefined => c.kind ?? (c.builtWhen === 'after' ? 'release' : undefined)
+/** Not checked before the merge at all: owed at deploy, or watched after it. Neither the check's nor the smoke test's. */
+export const later = (c: Criterion) => proofOf(c) === 'release' || proofOf(c) === 'watch'
 export interface Tried { verdict: 'holds' | 'fails' | 'unsure'; note: string; sha: string | null; at: string }
 export interface AcceptanceChange {
-  add?: { text: string; check?: string; shown?: boolean; evidence?: string; buildOnly?: boolean; why?: string; /** Where a person goes to see it in the built code: a path of the app, or a story's id (builtWhere). */ where?: string }[]
+  add?: { text: string; check?: string; shown?: boolean; evidence?: string; buildOnly?: boolean; why?: string; /** Where a person goes to see it in the built code: a path of the app, or a story's id (builtWhere). */ where?: string; kind?: Proof }[]
   // built and builtEvidence are only ever updated: nothing is built when a criterion is written
-  update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null; built?: boolean | null; builtEvidence?: string | null; builtWhere?: string | null; builtSetup?: string | null; builtWhen?: Criterion['builtWhen'] | null; tried?: Tried | null; byHand?: Criterion['byHand'] | null }[]
+  update?: { id: string; text?: string; check?: string | null; shown?: boolean | null; evidence?: string | null; buildOnly?: boolean; why?: string | null; built?: boolean | null; builtEvidence?: string | null; builtWhere?: string | null; builtSetup?: string | null; builtWhen?: Criterion['builtWhen'] | null; tried?: Tried | null; byHand?: Criterion['byHand'] | null; /** How it is proven; null: by the build. */ kind?: Proof | null }[]
   remove?: string[]
 }
 
@@ -95,6 +121,7 @@ export function applyAcceptance(list: Criterion[], c: AcceptanceChange, by: stri
     if (u.builtWhen !== undefined) { if (u.builtWhen === 'pr' || u.builtWhen === 'after' || u.builtWhen === 'here' || u.builtWhen === 'nightly') x.builtWhen = u.builtWhen; else delete x.builtWhen }
     if (u.tried !== undefined) { if (u.tried) x.tried = { verdict: u.tried.verdict, note: line(u.tried.note, 600), sha: u.tried.sha ?? null, at: u.tried.at }; else delete x.tried }
     if (u.byHand !== undefined) { if (u.byHand) x.byHand = { pass: !!u.byHand.pass, note: line(u.byHand.note, 600), sha: u.byHand.sha ?? null, at: u.byHand.at, by: u.byHand.by, ...(u.byHand.skipped ? { skipped: true } : {}) }; else delete x.byHand }
+    if (u.kind !== undefined) { if (u.kind && PROOFS.includes(u.kind)) x.kind = u.kind; else delete x.kind } // who proves it and when, not what must be true: no new approval
     if (u.buildOnly !== undefined) { if (u.buildOnly) x.buildOnly = true; else { delete x.buildOnly; delete x.why } } // which half proves it, not what must be true: no new approval
     if (u.why !== undefined) { const w = line(u.why); if (w && x.buildOnly) x.why = w; else delete x.why }
     x.by = by; x.at = now.toISOString()
@@ -103,7 +130,7 @@ export function applyAcceptance(list: Criterion[], c: AcceptanceChange, by: stri
     const text = line(a.text)
     if (!text) throw new PlanError('a criterion needs its statement')
     if (out.some((x) => x.text.toLowerCase() === text.toLowerCase())) continue // said already
-    out.push({ id: newId('run').replace(/^run_/, 'ac_'), text, ...(line(a.check) ? { check: line(a.check) } : {}), ...(a.shown !== undefined ? { shown: a.shown } : {}), ...(line(a.evidence, 1000) ? { evidence: line(a.evidence, 1000) } : {}), ...(a.buildOnly ? { buildOnly: true, ...(line(a.why) ? { why: line(a.why) } : {}) } : {}), ...(line(a.where, 300) ? { builtWhere: line(a.where, 300) } : {}), by, at: now.toISOString() })
+    out.push({ id: newId('run').replace(/^run_/, 'ac_'), text, ...(line(a.check) ? { check: line(a.check) } : {}), ...(a.shown !== undefined ? { shown: a.shown } : {}), ...(line(a.evidence, 1000) ? { evidence: line(a.evidence, 1000) } : {}), ...(a.buildOnly ? { buildOnly: true, ...(line(a.why) ? { why: line(a.why) } : {}) } : {}), ...(line(a.where, 300) ? { builtWhere: line(a.where, 300) } : {}), ...(a.kind && PROOFS.includes(a.kind) ? { kind: a.kind } : {}), by, at: now.toISOString() })
     changed = true
   }
   if (out.length > MAX) throw new PlanError(`${MAX} acceptance criteria at most: merge the ones that say the same thing`)
@@ -124,7 +151,7 @@ export async function setAcceptance(issueId: string, change: AcceptanceChange, a
     await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: i.projectId, issueId, actor, type: 'issue.updated', payload: { number: i.number, changed: ['acceptance'], criteria: list.length } })
     if (reopened) await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: i.projectId, issueId, actor, type: 'brief.unapproved', payload: { title: i.title, why: 'its acceptance criteria changed' } })
     // A task whose build has been checked, with a criterion now unmarked: the Check step is open again until it is run for it.
-    const was = acceptanceOf(i), open = list.filter((c) => c.built === undefined && !c.builtEvidence)
+    const was = acceptanceOf(i), open = list.filter((c) => c.built === undefined && !c.builtEvidence && !proofOf(c))
     const checked = was.some((c) => c.built !== undefined || !!c.builtEvidence)
     const recheck = checked && open.some((c) => { const b = was.find((x) => x.id === c.id); return !b || b.built !== undefined || !!b.builtEvidence })
     if (recheck) await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: i.projectId, issueId, actor, type: 'task.check_reopened', payload: { why: 'a criterion was added or changed after the check', criteria: open.map((c) => c.id) } })
@@ -134,5 +161,5 @@ export async function setAcceptance(issueId: string, change: AcceptanceChange, a
 
 /** The criteria as the lines an agent is given: each with its id, how it is checked, and what the prototype showed. */
 export function acceptanceLines(list: Criterion[]): string {
-  return list.map((c) => `- [${c.id}] ${c.text}${c.check ? ` (how we will know: ${c.check})` : ''}${c.buildOnly ? ` · FINAL BUILD ONLY, the prototype skips it${c.why ? `: ${c.why}` : ''}` : ''}${c.shown === true ? ` · shown in the prototype${c.evidence ? `: ${c.evidence}` : ''}` : c.shown === false ? ` · NOT shown in the prototype${c.evidence ? `: ${c.evidence}` : ''}` : ''}${c.built === true ? ` · met by the build${c.builtEvidence ? `: ${c.builtEvidence}` : ''}` : c.built === false ? ` · NOT met by the build${c.builtEvidence ? `: ${c.builtEvidence}` : ''}` : ''}`).join('\n')
+  return list.map((c) => `- [${c.id}] ${c.text}${c.check ? ` (how we will know: ${c.check})` : ''}${proofOf(c) ? ` · ${proofOf(c)!.toUpperCase()}: ${PROOF_SAYS[proofOf(c)!]}` : ''}${c.buildOnly ? ` · FINAL BUILD ONLY, the prototype skips it${c.why ? `: ${c.why}` : ''}` : ''}${c.shown === true ? ` · shown in the prototype${c.evidence ? `: ${c.evidence}` : ''}` : c.shown === false ? ` · NOT shown in the prototype${c.evidence ? `: ${c.evidence}` : ''}` : ''}${c.built === true ? ` · met by the build${c.builtEvidence ? `: ${c.builtEvidence}` : ''}` : c.built === false ? ` · NOT met by the build${c.builtEvidence ? `: ${c.builtEvidence}` : ''}` : ''}`).join('\n')
 }

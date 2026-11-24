@@ -34,7 +34,9 @@ import pg from 'pg'
 import { and, eq } from 'drizzle-orm'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { accountEnv } from './account.js'
-import { acceptanceOf, setAcceptance, type Criterion, type Tried } from './acceptance.js'
+import { acceptanceOf, later, proofOf, setAcceptance, type Criterion, type Tried } from './acceptance.js'
+import { event } from './db/schema.js'
+import { desc, inArray } from 'drizzle-orm'
 import { builderGuard, guardOptions, STOP_ONLY_YOURS } from './guard.js'
 import { styleOf } from './steps.js'
 import { workflowFor } from './work.js'
@@ -200,6 +202,7 @@ export const WHENS: When[] = ['here', 'pr', 'after', 'nightly']
 export const holds = (when: When) => when === 'here' || when === 'pr'
 /** When, from what the check said; for one written before checks said when, from its own words. */
 export function whenOf(c: Criterion): When {
+  if (proofOf(c) === 'release') return 'after'
   if (c.builtWhen) return c.builtWhen
   const said = `${c.builtWhere ?? ''} ${c.built === undefined ? c.builtEvidence ?? '' : ''}`
   return /\b(pull request|PR)\b|pkg\.pr\.new|\bCI\b/.test(said) ? 'pr' : 'here'
@@ -267,7 +270,34 @@ export const byHand = (c: Criterion) => !!c.byHand || (c.built === undefined && 
  * to the other ones"): there, every criterion no agent has marked is the person's to check by hand, with the ones
  * they already marked.
  */
-export const forPerson = (c: Criterion, staged: boolean) => byHand(c) || (staged && c.built === undefined)
+export const forPerson = (c: Criterion, staged: boolean) => !later(c) && (byHand(c) || (c.kind === 'smoke' && c.built === undefined) || (staged && c.built === undefined))
+
+/**
+ * What is owed at deploy, by whoever deploys (Sandy, 2026-11-23: "Release (at deploy): what must be true for it to
+ * go live and can only be done there … Never on the Smoke page, never holding the smoke test. Written into the PR's
+ * Merge Danger as deploy steps, in order, and listed on the task as owed by whoever deploys"). The criteria tagged
+ * release, and the ones a check said can only be seen after the merge, in the order they were written. Pure.
+ */
+export interface ReleaseCheck { id: string; text: string; /** The step, in a line: what the check said, else how the criterion says it is known. */ how?: string; /** Whoever deployed said it is done (or that it is not, with why). Absent: owed. */ done?: boolean; note?: string; by?: string; at?: string }
+export function releaseChecks(criteria: Criterion[]): ReleaseCheck[] {
+  return criteria.filter((c) => proofOf(c) === 'release').map((c) => {
+    const how = (c.byHand ? c.check : c.builtEvidence ?? c.check)?.replace(/^(for a person|needs a person|at deploy)[:,]?\s*/i, '')
+    return { id: c.id, text: c.text, ...(how ? { how } : {}), ...(c.byHand && c.built !== undefined ? { done: c.built, note: c.byHand.note, by: c.byHand.by, at: c.byHand.at } : {}) }
+  })
+}
+/** What is watched in production after the deploy: nobody checks these before the merge. Pure. */
+export const watchChecks = (criteria: Criterion[]) => criteria.filter((c) => proofOf(c) === 'watch').map((c) => ({ id: c.id, text: c.text, ...(c.check ? { how: c.check } : {}) }))
+
+/**
+ * The deploy steps as the pull request carries them: numbered, in order, between marks of the engine's own so the
+ * next update replaces them and nothing the writer said. Empty when there are none.
+ */
+export const DEPLOY_OPEN = '<!-- evident:deploy -->', DEPLOY_CLOSE = '<!-- /evident:deploy -->'
+export function deploySteps(criteria: Criterion[]): string {
+  const steps = releaseChecks(criteria)
+  if (!steps.length) return ''
+  return [DEPLOY_OPEN, `**At deploy, in order** (${steps.length === 1 ? 'this is' : 'these are'} owed by whoever deploys; nothing before the merge checks ${steps.length === 1 ? 'it' : 'them'}):`, '', ...steps.map((s, i) => `${i + 1}. ${s.text.replace(/\.$/, '')}.${s.how ? ` ${s.how.replace(/\.$/, '')}.` : ''}`), DEPLOY_CLOSE].join('\n')
+}
 
 /** The checks, from the task's criteria. Pure. `head` is the commit the branch is at, when it is known. */
 export function smokeChecks(criteria: Criterion[], head: string | null = null, staged = false): SmokeCheck[] {
@@ -356,6 +386,10 @@ export async function smokeView(issueId: string) {
     }
   }))
   const { key: _k, name: _n, what: _w, owed: _o, ...first } = setups[0]
+  const [last] = await db.select({ payload: event.payload, actor: event.actor, ts: event.ts }).from(event).where(and(eq(event.issueId, t.id), inArray(event.type, ['smoke.accepted']))).orderBy(desc(event.seq)).limit(1)
+  const sha = (last?.payload as { sha?: string | null } | undefined)?.sha ?? null
+  const accepted = last ? { by: last.actor, at: new Date(last.ts).toISOString(), sha, ...(head && sha !== head ? { stale: true } : {}) } : null
+  const why = whyNotAccept({ head, owed: checks.filter((c) => c.mark === 'todo' && holds(c.when)).length, failed: checks.filter((c) => c.mark === 'fail').length, unchecked: staged ? 0 : acceptanceOf(t).filter((c) => c.built === undefined && !c.builtEvidence && !proofOf(c)).length })
   // Each check's place as an address on the set-up it needs, while that has one: a link to press, never a port to work out.
   const linked = checks.map((c) => {
     const base = setups.find((s) => s.key === c.setup)?.url
@@ -364,6 +398,9 @@ export async function smokeView(issueId: string) {
   })
   return {
     /** A staged task: the checks are every criterion no agent marked, not what a check after the build left. */ staged,
+    /** The person has accepted the smoke test (acceptSmoke): by whom, when, and on which commit. stale: the branch has moved since. Null: not accepted. */ accepted,
+    /** It can be accepted now; else why not. */ canAccept: !why, acceptWaits: why,
+    /** What is owed at deploy and what is watched after: neither is checked here. */ release: releaseChecks(acceptanceOf(t)), watch: watchChecks(acceptanceOf(t)),
     ...first, // the app's first set-up, as the view was when an app had one
     branch, head, /** Its pull request, when there is one: a preview is of it. */ pr,
     /** Every set-up of the app, each with where it is and whether it is up; a check names the one it needs. */ setups,
@@ -582,11 +619,52 @@ function stopOne(issueId: string, key: string, mine = true): Promise<void> {
 }
 export function stopSmokes() { for (const k of [...running.keys()]) { const at = k.lastIndexOf(':'); void stopOne(k.slice(0, at), k.slice(at + 1), false) } }
 
+/** Why the smoke test cannot be accepted now; null when it can. Pure. */
+export function whyNotAccept(i: { head: string | null; /** Checks of the person's that still wait, before the merge. */ owed: number; failed: number; /** Criteria the check has not looked at. */ unchecked: number }): string | null {
+  if (!i.head) return 'nothing is built yet'
+  if (i.failed) return `${i.failed} check${i.failed === 1 ? '' : 's'} failed by hand: ${i.failed === 1 ? 'it is' : 'they are'} sent back, and come${i.failed === 1 ? 's' : ''} back to you`
+  if (i.owed) return `${i.owed} check${i.owed === 1 ? '' : 's'} of yours still wait${i.owed === 1 ? 's' : ''}: mark ${i.owed === 1 ? 'it' : 'each'}, or skip ${i.owed === 1 ? 'it' : 'them'}`
+  if (i.unchecked) return `${i.unchecked} ${i.unchecked === 1 ? 'criterion is' : 'criteria are'} not checked yet: run the check first`
+  return null
+}
+
+/**
+ * The person accepts the smoke test: they have tried the built code and it is what goes to review (Sandy, 2026-11-23:
+ * "Smoke test: the person tries the built code and accepts it. Before merge only"; "Accepting the smoke test starts
+ * the Pull request finalizing"). Kept as an event with the commit it was said on, so a branch that has moved since
+ * shows the acceptance as stale. What is owed at deploy does not hold it. The finalizing it starts is not built yet:
+ * it will be started from here.
+ */
+export async function acceptSmoke(issueId: string, by = 'user') {
+  const view = await smokeView(issueId)
+  if (!view.canAccept) throw new PlanError(`the smoke test cannot be accepted yet: ${view.acceptWaits}`)
+  const { t, a, head } = await built(issueId)
+  await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor: by, type: 'smoke.accepted', payload: { sha: head, checks: view.checks.length, release: view.release.length } }))
+  return smokeView(issueId)
+}
+
+/**
+ * Whoever deployed says a release check is done, or that it is not, with why. The task's own record: nothing here
+ * can see the environment.
+ */
+export async function markRelease(issueId: string, criterionId: string, input: { done: boolean; note?: string }, by = 'user') {
+  const { t, a, head } = await built(issueId)
+  const c = acceptanceOf(t).find((x) => x.id === criterionId)
+  if (!c) throw new PlanError(`no acceptance criterion ${criterionId} on this task`)
+  if (proofOf(c) !== 'release') throw new PlanError('that criterion is not a release check: only what is done at deploy is marked here')
+  const note = (input.note ?? '').replace(/\s+/g, ' ').trim().slice(0, 600)
+  if (!input.done && !note) throw new PlanError('say what stands in the way: a release check that is not done is usually why production is wrong')
+  await setAcceptance(t.id, { update: [{ id: c.id, kind: 'release', built: input.done, byHand: { pass: input.done, note, sha: head, at: new Date().toISOString(), by } }] }, by)
+  await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor: by, type: 'release.marked', payload: { criterionId: c.id, done: input.done, note } }))
+  return { release: releaseChecks(acceptanceOf(await getIssue(db, t.id))) }
+}
+
 /** A person's word on one check: the build's mark on that criterion, by hand, with their note and the commit it was made on. */
 export async function markSmoke(issueId: string, criterionId: string, input: { pass: boolean; note?: string; /** Not tried, by choice: it stops waiting for the person, and is recorded as skipped, never as passed. */ skip?: boolean }, by = 'user') {
   const { t, a, head, pr, staged } = await built(issueId)
   const c = acceptanceOf(t).find((x) => x.id === criterionId)
   if (!c) throw new PlanError(`no acceptance criterion ${criterionId} on this task`)
+  if (later(c)) throw new PlanError(proofOf(c) === 'release' ? 'that one is a release check: it is done at deploy by whoever deploys, and marked on the pull request step, not in the smoke test' : 'that one is watched in production after the deploy: nobody marks it in the smoke test')
   if (!forPerson(c, staged)) throw new PlanError(staged ? 'that criterion is not one for a person here: an agent has already marked it. Change its mark on the brief\'s page' : 'that criterion is not one for a person: the check after the build did not leave it to them')
   if (whenOf(c) === 'pr' && !pr && !input.skip) throw new PlanError('that one is checked on the pull request, and this task has none yet')
   const note = (input.note ?? '').replace(/\s+/g, ' ').trim().slice(0, 600)

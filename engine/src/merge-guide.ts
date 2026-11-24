@@ -12,7 +12,7 @@
 import { and, eq, inArray, isNotNull } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { decision, issue, stepWork } from './db/schema.js'
-import { acceptanceOf, type Criterion } from './acceptance.js'
+import { acceptanceOf, later, proofOf, type Criterion } from './acceptance.js'
 import { coveredLines, notYet, type Covered } from './requirements.js'
 
 export interface GuideTask {
@@ -48,19 +48,23 @@ export const GUIDE_MAX = 1500
  * ones that are not met, or that only a person can judge, are listed. Three decisions, one line of risk. Pure.
  */
 export function taskGuide(t: GuideTask, opts: { heading?: boolean } = {}): string {
-  const met = t.acceptance.filter((c) => c.built === true)
-  const unmet = t.acceptance.filter((c) => c.built === false)
-  const open = t.acceptance.filter((c) => c.built === undefined)
+  // What is owed at deploy or watched after it is not checked before the merge: counted apart, never as met, not met or left for the reviewer.
+  const now = t.acceptance.filter((c) => !later(c)), atDeploy = t.acceptance.filter((c) => proofOf(c) === 'release'), watched = t.acceptance.filter((c) => proofOf(c) === 'watch')
+  const afterwards = [atDeploy.length ? `${count(atDeploy.length, 'is', 'are')} owed at deploy.` : '', watched.length ? `${count(watched.length, 'is', 'are')} watched after the deploy.` : ''].filter(Boolean).join(' ')
+  const met = now.filter((c) => c.built === true)
+  const unmet = now.filter((c) => c.built === false)
+  const open = now.filter((c) => c.built === undefined)
   // Of what has no mark: left to a person by the check, or not looked at yet. The second is never said as the first, nor as a failure.
   const yours = open.filter((c) => c.builtEvidence), unlooked = open.filter((c) => !c.builtEvidence)
-  const all = t.acceptance.length
+  const all = now.length
   const act = [
     t.pending.length ? `**Not finished:** ${count(t.pending.length, 'sub-task', 'sub-tasks')} still to land (${clip(t.pending.join(', '), 80)}).` : '',
     unmet.length ? `**${unmet.length} of ${count(all, 'acceptance criterion is', 'acceptance criteria are')} not met.**` : '',
-    !all ? 'This task has no acceptance criteria, so nothing was checked against a list.'
+    !all ? (t.acceptance.length ? 'None of this task\'s acceptance criteria can be checked before the merge.' : 'This task has no acceptance criteria, so nothing was checked against a list.')
       : !unmet.length && !open.length ? `All ${count(all, 'acceptance criterion was', 'acceptance criteria were')} checked against the build and met.`
       : !met.length && !unmet.length && !open.some((c) => c.builtEvidence) ? `The ${count(all, 'acceptance criterion has', 'acceptance criteria have')} not been checked against the build yet.`
       : `${met.length} of ${all} acceptance criteria were checked against the build and met.${yours.length ? ` ${count(yours.length, 'is', 'are')} left for you.` : ''}${unlooked.length ? ` ${count(unlooked.length, 'is', 'are')} not checked yet.` : ''}`,
+    afterwards,
   ].filter(Boolean).join(' ')
   const row = (c: Criterion) => c.built === false
     ? `- ❌ ${clip(c.text, 110)}${c.builtEvidence ? ` Missing: ${clip(c.builtEvidence, 110)}` : ''}`
@@ -92,10 +96,11 @@ export function taskGuide(t: GuideTask, opts: { heading?: boolean } = {}): strin
 
 /** Everything the guide left out, for one task: every criterion with its mark, every decision with its reason, the risks, the requirements. */
 export function taskRecord(t: GuideTask, opts: { heading?: boolean } = {}): string {
-  const met = t.acceptance.filter((c) => c.built === true)
-  const unmet = t.acceptance.filter((c) => c.built === false)
-  const open = t.acceptance.filter((c) => c.built === undefined)
+  const met = t.acceptance.filter((c) => !later(c) && c.built === true)
+  const unmet = t.acceptance.filter((c) => !later(c) && c.built === false)
+  const open = t.acceptance.filter((c) => !later(c) && c.built === undefined)
   const row = (c: Criterion) => {
+    if (later(c)) return `- ${proofOf(c) === 'release' ? (c.built === true ? '✅' : '🚀') : '📈'} ${one(c.text)}. ${proofOf(c) === 'release' ? (c.built === true ? `Done at deploy${c.byHand?.note ? `: ${one(c.byHand.note)}` : '.'}` : `At deploy${c.builtEvidence || c.check ? `: ${one(c.builtEvidence ?? c.check!)}` : ', by whoever deploys.'}`) : `Watched after the deploy${c.check ? `: ${one(c.check)}` : '.'}`}`.replace(/\.\./g, '.')
     const mark = c.built === true ? '✅' : c.built === false ? '❌' : c.builtEvidence ? '👀' : '⬜'
     const how = c.builtEvidence ? ` ${c.byHand && c.built !== undefined ? (c.built ? 'Checked by hand' : 'Failed by hand') : c.built === false ? 'Missing' : c.built === true ? 'Seen' : 'For a person'}: ${one(c.builtEvidence)}` : `${c.built === undefined ? ' Not checked yet.' : ''}${c.check ? ` How to check: ${one(c.check)}` : ''}`
     return `- ${mark} ${one(c.text)}.${how}`.replace(/\.\./g, '.')
@@ -104,7 +109,7 @@ export function taskRecord(t: GuideTask, opts: { heading?: boolean } = {}): stri
     opts.heading ? `### ${t.identifier} ${t.title}` : '',
     t.checklist?.trim() ? `**Before you merge**\n\n${t.checklist.trim().split('\n').map((l) => l.trim()).filter(Boolean).map((l) => `- [ ] ${l.replace(/^([-*]|\d+\.)\s+(\[.\]\s*)?/, '')}`).join('\n')}` : '',
     t.description?.trim() ? `**What it does**\n\n${t.description.trim()}` : '',
-    t.acceptance.length ? `**Every acceptance criterion**\n\n${[...unmet, ...open, ...met].map(row).join('\n')}` : '',
+    t.acceptance.length ? `**Every acceptance criterion**\n\n${[...unmet, ...open, ...met, ...t.acceptance.filter(later)].map(row).join('\n')}` : '',
     t.adr?.trim() || t.decisions.length ? `**Decisions made**\n\n${[t.adr?.trim() ? bullets(t.adr) : '', ...t.decisions.map((d) => `- ${one(d.question)} → **${one(d.chosen)}**${d.why?.trim() ? `. ${one(d.why)}` : ''}`)].filter(Boolean).join('\n')}` : '',
     t.risk?.trim() ? `**Risks, and how we would know**\n\n${bullets(t.risk)}` : '',
     t.requirements?.length ? `**What this app requires of every change**\n\n${coveredLines(t.requirements)}` : '',

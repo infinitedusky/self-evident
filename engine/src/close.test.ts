@@ -1,7 +1,7 @@
 /** When a task can be closed: its pull request merged, and every check left to a person passed or skipped. Sample data. */
 import { describe, expect, it } from 'vitest'
 import { taskWaits, type CloseFacts } from './close.js'
-import { smokeChecks } from './smoke.js'
+import { releaseChecks, smokeChecks } from './smoke.js'
 
 const marks = (...m: ('todo' | 'pass' | 'fail' | 'skip')[]) => m.map((mark) => ({ mark }))
 const ok: CloseFacts = { state: 'in_review', pr: { number: 12, status: 'merged' }, checks: marks('pass', 'skip') }
@@ -29,8 +29,11 @@ describe('taskWaits', () => {
 describe('a skipped check', () => {
   const at = '2026-11-18T00:00:00Z'
   it('reads as skipped, not as passed, and no longer waits', () => {
-    const c = { id: 'ac_1', text: 'The release note is on the site (sample)', by: 'user', at, builtWhen: 'after' as const, built: true, builtEvidence: 'Skipped, not tried: nothing to release yet (sample)', byHand: { pass: true, note: 'nothing to release yet (sample)', sha: null, at, by: 'user', skipped: true } }
+    const c = { id: 'ac_1', text: 'The release note is on the site (sample)', by: 'user', at, builtWhen: 'pr' as const, built: true, builtEvidence: 'Skipped, not tried: nothing to release yet (sample)', byHand: { pass: true, note: 'nothing to release yet (sample)', sha: null, at, by: 'user', skipped: true } }
     expect(smokeChecks([c as never])[0]).toMatchObject({ mark: 'skip', note: 'Skipped, not tried: nothing to release yet (sample)' })
     expect(smokeChecks([{ ...c, byHand: { ...c.byHand, skipped: undefined } } as never])[0].mark).toBe('pass')
+    // One marked in the smoke test when what came after the merge was still listed there: it is a release check now, and stays done.
+    expect(smokeChecks([{ ...c, builtWhen: 'after' } as never])).toEqual([]); expect(releaseChecks([{ ...c, builtWhen: 'after' } as never])[0]).toMatchObject({ done: true, note: 'nothing to release yet (sample)' })
+    expect(taskWaits({ state: 'in_review', pr: { number: 12, status: 'merged' }, checks: [], release: 1 })).toEqual(['1 release check is owed at deploy and not said done.'])
   })
 })

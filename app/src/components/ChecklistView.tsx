@@ -15,8 +15,9 @@ import type { Checklist, ChecklistItem, ChecklistStage } from '../engine'
 const MARK: Record<ChecklistItem['mark'], { icon: string; says: string }> = {
   unmet: { icon: '❌', says: 'not done' }, person: { icon: '👀', says: 'yours to judge' }, unchecked: { icon: '⬜', says: 'not checked yet' },
   met: { icon: '✅', says: 'met' }, na: { icon: '➖', says: 'does not apply' },
+  release: { icon: '🚀', says: 'at deploy' }, watch: { icon: '📈', says: 'watched after the deploy' },
 }
-const ORDER: ChecklistItem['mark'][] = ['unmet', 'person', 'unchecked', 'met', 'na']
+const ORDER: ChecklistItem['mark'][] = ['unmet', 'person', 'unchecked', 'met', 'na', 'release', 'watch']
 export const STAGE_MARK: Record<ChecklistStage['state'], string> = { todo: '○', doing: '◐', done: '✓', failed: '✕' }
 const TONE: Record<ChecklistStage['state'], 'neutral' | 'accent' | 'ok' | 'bad'> = { todo: 'neutral', doing: 'accent', done: 'ok', failed: 'bad' }
 
@@ -32,7 +33,7 @@ export function ChecklistView({ checklist: c, base, onTestAgain, onCheckAgain }:
   const k = c.check
   // Each state counted apart (Sandy, 2026-11-23): what has no mark yet is never folded into what is not done.
   const person = c.person ?? c.items.filter((x) => x.mark === 'person').length, unchecked = c.unchecked ?? c.items.filter((x) => x.mark === 'unchecked').length
-  const counts = [`${c.met} of ${c.total} met`, c.unmet ? `${c.unmet} not done` : '', person ? `${person} yours to judge` : '', unchecked ? `${unchecked} not checked yet` : ''].filter(Boolean).join(', ')
+  const counts = [`${c.met} of ${c.total} met`, c.unmet ? `${c.unmet} not done` : '', person ? `${person} yours to judge` : '', unchecked ? `${unchecked} not checked yet` : '', c.release ? `${c.release} at deploy` : '', c.watch ? `${c.watch} watched after` : ''].filter(Boolean).join(', ')
   const again = async () => { if (!onTestAgain) return; setAsking(true); setError(null); try { await onTestAgain() } catch (err) { setError(err instanceof Error ? err.message : String(err)) } finally { setAsking(false) } }
   const t = c.tests
   const sorted = (kind: ChecklistItem['kind']) => c.items.filter((x) => x.kind === kind).sort((a, b) => ORDER.indexOf(a.mark) - ORDER.indexOf(b.mark))
@@ -41,7 +42,7 @@ export function ChecklistView({ checklist: c, base, onTestAgain, onCheckAgain }:
       <span className="checklist-mark" title={MARK[x.mark].says} aria-label={MARK[x.mark].says}>{MARK[x.mark].icon}</span>
       <div>
         <div><strong>{x.text}</strong>{x.what && <span className="faint"> {x.what}</span>}</div>
-        {x.evidence && <div className="faint checklist-evidence">{x.mark === 'unmet' ? 'Missing: ' : x.mark === 'unchecked' ? 'How: ' : x.mark === 'person' ? '' : 'Seen: '}{x.evidence}</div>}
+        {x.evidence && <div className="faint checklist-evidence">{x.mark === 'unmet' ? 'Missing: ' : x.mark === 'unchecked' ? 'How: ' : x.mark === 'person' ? '' : x.mark === 'release' ? 'At deploy, by whoever deploys: ' : x.mark === 'watch' ? 'Watched in production: ' : 'Seen: '}{x.evidence}</div>}
       </div>
     </li>
   )

@@ -89,6 +89,19 @@ export const EveryMark: Story = {
   play: async ({ canvasElement }) => { await expect(within(canvasElement).getByText('3 of 7 met, 2 not done, 1 yours to judge, 1 not checked yet')).toBeInTheDocument() },
 }
 
+/** Some of the list is owed later (made up): a release check and a watched one are on it, counted apart, and never read as missing from what was met. */
+export const OwedLater: Story = {
+  args: { checklist: { ...openAgain, met: 7, total: 7, unchecked: 0, release: 1, watch: 1, check: { unchecked: 0, canRun: false, running: false },
+    items: [...openAgain.items.filter((x) => x.mark !== 'unchecked'), { id: 'ac_sample_r', kind: 'criterion' as const, text: 'CHECKOUT_KEY is set in each environment (sample)', mark: 'release' as const, evidence: 'the deploy config has it (sample)' }, { id: 'ac_sample_w', kind: 'criterion' as const, text: 'checkout.paid appears in production within a day (sample)', mark: 'watch' as const, evidence: 'the event count is above zero (sample)' }],
+    stages: openAgain.stages.map((s) => (s.key === 'check' ? { ...s, state: 'done' as const, detail: '7 of 7 met' } : s)) } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.getByText('7 of 7 met, 1 at deploy, 1 watched after')).toBeInTheDocument()
+    await expect(c.getByLabelText('at deploy')).toBeInTheDocument(); await expect(c.getByLabelText('watched after the deploy')).toBeInTheDocument()
+    await expect(c.getByText(/At deploy, by whoever deploys: the deploy config has it/)).toBeInTheDocument()
+  },
+}
+
 const failedRun: Checklist = { ...checklistSample, met: 7, unmet: 0,
   tests: { ok: false, at: new Date(Date.now() - 5 * 3_600_000).toISOString(), flaky: false, running: false, canRun: true, output: 'What failed:\n FAIL  src/checkout.test.ts [ src/checkout.test.ts ]\n\nThe end of the output:\nError: Cannot find module \'./generated/config.json\' (sample)\n Test Files  12 failed (12)' },
   stages: [{ key: 'build', label: 'Build', state: 'done', detail: 'built in one go' }, { key: 'check', label: 'Check', state: 'done', detail: '7 of 7 met' }, { key: 'probe', label: 'Probe', state: 'done', detail: 'probed: nothing to send back' }, { key: 'test', label: 'Tests', state: 'failed', detail: 'the whole run failed' }] }

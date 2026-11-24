@@ -88,4 +88,18 @@ export const FinalBuildOnly: Story = {
   },
 }
 /** The brief is already approved: a change here asks for the approval again, and says so. */
+/** How each is proven, when not by a test (made up): one the person checks before the merge, one owed at deploy, one watched after. The person can change it. */
+export const HowItIsProven: Story = {
+  args: { items: [{ ...acceptance[0], kind: 'smoke' as const }, { ...acceptance[1], text: 'CHECKOUT_KEY is set in each environment (sample)', kind: 'release' as const }, { ...acceptance[2], text: 'checkout.paid appears in production within a day (sample)', kind: 'watch' as const }, acceptance[3]] },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.getByText('Smoke')).toHaveAttribute('title', 'you check it on the built code, before the merge')
+    await expect(c.getByText('Release')).toBeInTheDocument(); await expect(c.getByText('Watch')).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: `Edit: ${acceptance[3].text}` }))
+    const how = c.getByLabelText('How it is proven')
+    await expect(how).toHaveValue('')
+    await userEvent.selectOptions(how, 'release')
+    await expect(how).toHaveValue('release')
+  },
+}
 export const AfterApproval: Story = { args: { approved: true } }

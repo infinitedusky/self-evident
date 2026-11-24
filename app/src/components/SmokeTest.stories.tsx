@@ -180,19 +180,33 @@ export const WhereInWords: Story = {
 const mixed = [
   { ...smokeSample.checks[0], when: 'here' as const },
   { id: 'ac_s8', text: 'The preview comment has an install line that works (sample)', when: 'pr' as const, where: 'the pull request on GitHub (sample)', how: 'Copy the line from the bot\'s comment into a fresh app: it should install and draw a diagram (sample)', mark: 'todo' as const },
-  { id: 'ac_s9', text: 'The release notes name it (sample)', when: 'after' as const, how: 'Open the next release on GitHub: this change is in its list (sample)', mark: 'todo' as const },
 ]
-/** Checks that can be done at different times: here now; on the pull request, which is not open yet, so those wait; after the merge, which hold nothing. */
+const owedAtDeploy = [{ id: 'ac_s9', text: 'EDGES_FLAG is set in each environment (sample)', how: 'the deploy config has it (sample)' }]
+/** Checks that can be done at different times: here now; on the pull request, which is not open yet, so those wait. What can only be done at deploy is not a check here: it is said under the acceptance, and is on the pull request step. */
 export const AtDifferentTimes: Story = {
-  beforeEach: withEngine({ smoke: { ...smokeSample, checks: mixed, owed: 2, pr: null } }),
+  beforeEach: withEngine({ smoke: { ...smokeSample, checks: mixed, owed: 2, pr: null, accepted: null, canAccept: false, acceptWaits: '2 checks of yours still wait: mark each, or skip them', release: owedAtDeploy } }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await expect(await c.findByRole('group', { name: 'Here, on the built code' })).toBeInTheDocument()
     const onPr = within(c.getByRole('group', { name: 'On the pull request' }))
     await expect(onPr.getByText(/this task has none yet/)).toBeInTheDocument()
     await expect(onPr.getByRole('button', { name: 'Pass' })).toBeDisabled() // nothing to look at until there is one
-    await expect(within(c.getByRole('group', { name: 'After it is merged' })).getByText(/do not hold the task/)).toBeInTheDocument()
+    await expect(c.queryByRole('group', { name: 'After it is merged' })).toBeNull(); await expect(c.queryByText(/EDGES_FLAG/)).toBeNull() // before the merge only
+    const accept = within(c.getByRole('group', { name: 'Accept the smoke test' }))
+    await expect(accept.getByText(/1 release check is owed at deploy/)).toBeInTheDocument()
+    await expect(accept.getByRole('button', { name: 'Accept the smoke test' })).toBeDisabled()
     await expect(within(c.getByRole('group', { name: 'Here, on the built code' })).getByRole('button', { name: 'Pass' })).toBeEnabled()
+  },
+}
+/** Every check marked (made up): the smoke test is accepted with one press, and says by whom and on which commit. */
+export const AcceptIt: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, checks: smokeSample.checks.map((c) => ({ ...c, mark: 'pass' as const, note: 'Checked by hand: it holds.' })), owed: 0, accepted: null, canAccept: true, acceptWaits: null, release: [] } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Accept the smoke test' }))
+    const accept = within(c.getByRole('group', { name: 'Accept the smoke test' }))
+    await expect(await accept.findByText(/Accepted by you/)).toBeInTheDocument()
+    await expect(accept.getByText('abc1234')).toBeInTheDocument()
   },
 }
 /** A criterion the app leaves to its nightly run: listed in a group of its own, and it holds nothing. Sample data. */

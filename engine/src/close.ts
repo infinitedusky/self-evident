@@ -19,11 +19,11 @@ import { app, issue, pr, project } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { changeState, getIssue, PlanError } from './issues.js'
 import { leftTo } from './probe-list.js'
-import { smokeChecks, type SmokeCheck } from './smoke.js'
+import { releaseChecks, smokeChecks, type SmokeCheck } from './smoke.js'
 import { styleOf } from './steps.js'
 import { guardComplete, workflowFor } from './work.js'
 
-export interface CloseFacts { state: string; pr: { number: number | null; status: string } | null; checks: (Pick<SmokeCheck, 'mark'> & { when?: SmokeCheck['when'] })[]; /** Checks of the repository's CI this app holds a build to (held.ts, `pr`) that are failing on the pull request. */ ci?: string[] }
+export interface CloseFacts { state: string; pr: { number: number | null; status: string } | null; checks: (Pick<SmokeCheck, 'mark'> & { when?: SmokeCheck['when'] })[]; /** Checks of the repository's CI this app holds a build to (held.ts, `pr`) that are failing on the pull request. */ ci?: string[]; /** Release checks nobody has said are done at deploy (smoke.ts, releaseChecks). */ release?: number }
 const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`
 
 /** What stands between a task and being closed; empty when it can be. Pure. */
@@ -38,6 +38,7 @@ export function taskWaits(f: CloseFacts): string[] {
   const todo = f.checks.filter((c) => c.mark === 'todo' && c.when !== 'nightly').length, failed = f.checks.filter((c) => c.mark === 'fail').length
   if (todo) waits.push(`${n(todo, 'check of yours is', 'checks of yours are')} not passed or skipped.`)
   if (failed) waits.push(`${n(failed, 'check', 'checks')} failed by hand.`)
+  if (f.release) waits.push(`${n(f.release, 'release check is', 'release checks are')} owed at deploy and not said done.`)
   return waits
 }
 
@@ -54,13 +55,13 @@ async function facts(issueId: string) {
   const pull = prs.find((x) => x.issueId === t.id) ?? prs.find((x) => !x.issueId) ?? null // its own when each task has one, else its project's
   const staged = styleOf((await workflowFor(db, { issueId: t.id })).workflow) !== 'checklist'
   const [a] = await db.select({ setup: app.setup }).from(app).where(eq(app.id, t.appId))
-  return { t, f: { state: t.state, pr: pull ? { number: pull.number, status: pull.status } : null, checks: smokeChecks(acceptanceOf(t), null, staged), ci: pull ? ciFailing(a?.setup, pull.signals) : [] } satisfies CloseFacts }
+  return { t, f: { state: t.state, pr: pull ? { number: pull.number, status: pull.status } : null, checks: smokeChecks(acceptanceOf(t), null, staged), ci: pull ? ciFailing(a?.setup, pull.signals) : [], release: releaseChecks(acceptanceOf(t)).filter((x) => x.done !== true).length } satisfies CloseFacts }
 }
 
 /** What a task still waits on before it can be closed, from rows already read (Build's list: one lookup a task). */
 export async function waitsOf(t: typeof issue.$inferSelect, pull: { number: number | null; status: string; signals?: unknown } | null, setup?: unknown): Promise<string[]> {
   const staged = styleOf((await workflowFor(db, { issueId: t.id })).workflow) !== 'checklist'
-  return taskWaits({ state: t.state, pr: pull, checks: smokeChecks(acceptanceOf(t), null, staged), ci: pull ? ciFailing(setup, pull.signals) : [] })
+  return taskWaits({ state: t.state, pr: pull, checks: smokeChecks(acceptanceOf(t), null, staged), ci: pull ? ciFailing(setup, pull.signals) : [], release: releaseChecks(acceptanceOf(t)).filter((x) => x.done !== true).length })
 }
 
 /** Whether a task can be closed now, and if not, what it waits on. */

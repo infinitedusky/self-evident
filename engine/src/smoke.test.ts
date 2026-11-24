@@ -13,7 +13,10 @@ import { app, event, issue, pr as prTable, project, repo, workspace } from './db
 import { newId } from './ids.js'
 import { createProject } from './projects.js'
 import { oneGoBrief } from './planner.js'
-import { addressOf, placeIn, byHand, markSmoke, previewUrl, runStop, setSmokeSetup, smokeChecks, smokeEnv, smokeOwed, smokeReady, smokeSetup, smokeSetupOf, smokeSetups, smokeView, startSmoke, stopSmoke, trySmoke, whenOf, forPerson } from './smoke.js'
+import { addressOf, placeIn, byHand, markSmoke, previewUrl, runStop, setSmokeSetup, smokeChecks, smokeEnv, smokeOwed, smokeReady, smokeSetup, smokeSetupOf, smokeSetups, smokeView, startSmoke, stopSmoke, trySmoke, whenOf, forPerson, deploySteps, markRelease, releaseChecks, watchChecks, whyNotAccept } from './smoke.js'
+import { prBody, withDeploy } from './pr.js'
+import { taskGuide, taskRecord } from './merge-guide.js'
+import { unchecked } from './verify.js'
 import { checkTaskBrief, readVerdicts, verdictChange } from './verify.js'
 
 const at = '2026-11-17T00:00:00.000Z'
@@ -65,12 +68,14 @@ describe('the checks a person has', () => {
     expect(forPerson(list[1], true)).toBe(false) // an agent's mark is not theirs to overwrite from here
   })
 
-  it('each says when it can be done: here, on the pull request, or after the merge; only the first two hold the task', () => {
+  it('each says when it can be done: here or on the pull request; what can only be done after the merge is a release check, and is not on the Smoke page', () => {
     expect(checkTaskBrief(criteria)).toContain('"pr" if it needs the pull request to exist')
     const v = readVerdicts('```acceptance\n[{"id":"ac_1","met":null,"when":"here","where":"/export","evidence":"open it"},{"id":"ac_2","met":null,"when":"pr","evidence":"the bot\'s comment has an install line that works"},{"id":"ac_3","met":null,"when":"after","evidence":"the release notes name it"}]\n```', criteria.map((c) => c.id))
     expect(v.map((x) => x.when)).toEqual(['here', 'pr', 'after'])
     const { list } = applyAcceptance(criteria.map(({ built: _b, builtEvidence: _e, ...c }) => c), verdictChange(v), 'engine')
-    expect(smokeChecks(list).map((c) => c.when)).toEqual(['here', 'pr', 'after'])
+    expect(smokeChecks(list).map((c) => c.when)).toEqual(['here', 'pr'])
+    expect(list.map((c) => c.kind)).toEqual([undefined, undefined, 'release']) // the check said "after": it is owed at deploy
+    expect(releaseChecks(list)).toEqual([{ id: 'ac_3', text: list[2].text, how: 'the release notes name it' }])
     expect(smokeOwed(list)).toBe(2) // the one for after the merge holds nothing
     expect([smokeReady(list, false), smokeReady(list, true)]).toEqual([1, 2]) // the one on the pull request waits for there to be one
     // One written before checks said when: read from its own words.
@@ -96,6 +101,59 @@ describe('the checks a person has', () => {
     expect(stage({ todo: 2, failed: 0, total: 2 }, [...subs.slice(0, 2), { title: 'Try to break it, and clean up', status: 'running' }])).toMatchObject({ state: 'todo', detail: '2 for you, once it is built and checked' })
     expect(stage({ todo: 0, failed: 1, total: 2 })).toMatchObject({ state: 'failed', detail: '1 failed by hand, sent back' })
     expect(stage({ todo: 0, failed: 0, total: 2 })).toMatchObject({ state: 'done', detail: '2 checked by hand' })
+  })
+})
+
+describe('three kinds of check: smoke, release, watch', () => {
+  const tagged: Criterion[] = [
+    { id: 'ac_1', text: 'The file has every order (sample)', check: 'export.test.ts', built: true, builtEvidence: 'export.test.ts passes', by: 'engine', at },
+    { id: 'ac_2', text: 'A real export opens in a spreadsheet (sample)', check: 'download one and open it', kind: 'smoke', by: 'agent', at },
+    { id: 'ac_3', text: 'EXPORT_BUCKET is set in each environment (sample)', check: 'the deploy config has it', kind: 'release', by: 'agent', at },
+    { id: 'ac_4', text: 'Migration 0042 has been run (sample).', kind: 'release', by: 'agent', at },
+    { id: 'ac_5', text: 'export.finished appears in production within a day (sample)', check: 'the event count is above zero', kind: 'watch', by: 'agent', at },
+  ]
+  it('only what the person checks before the merge is on the Smoke page: one tagged smoke is theirs from the start; release and watch never are', () => {
+    expect(smokeChecks(tagged).map((c) => [c.id, c.mark, c.when])).toEqual([['ac_2', 'todo', 'here']])
+    expect(smokeOwed(tagged)).toBe(1)
+    expect(tagged.map((c) => forPerson(c, true))).toEqual([false, true, false, false, false]) // on a staged task too
+    expect(tagged.map(unchecked)).toEqual([false, false, false, false, false]) // none of them keeps the Check step open: each has an owner
+    expect(watchChecks(tagged)).toEqual([{ id: 'ac_5', text: tagged[4].text, how: 'the event count is above zero' }])
+  })
+  it('the check is not given what is owed later, and is told a smoke one is the person\'s and a deploy-only one is a release check', () => {
+    const b = checkTaskBrief(tagged)
+    expect(b).toContain('[ac_2]'); expect(b).toContain('· SMOKE: you check it on the built code, before the merge')
+    expect(b).not.toContain('[ac_3]'); expect(b).not.toContain('[ac_5]')
+    expect(b).toContain('An item marked SMOKE is the person\'s'); expect(b).toContain('"when" is "after"'); expect(b).toContain('It becomes a deploy step on the pull request')
+  })
+  it('release checks are deploy steps on the pull request, in order, under the description\'s own heading for them', () => {
+    const steps = deploySteps(tagged)
+    expect(steps).toBe('<!-- evident:deploy -->\n**At deploy, in order** (these are owed by whoever deploys; nothing before the merge checks them):\n\n1. EXPORT_BUCKET is set in each environment (sample). the deploy config has it.\n2. Migration 0042 has been run (sample).\n<!-- /evident:deploy -->')
+    expect(deploySteps(tagged.slice(0, 2))).toBe('')
+    const written = '## Summary\n\nWhat.\n\n## Merge Danger\n\nOne-way door: fix forward.\n\n## Test plan\n\nHow.'
+    const once = withDeploy(written, steps)
+    expect(once).toBe(`## Summary\n\nWhat.\n\n## Merge Danger\n\n${steps}\n\nOne-way door: fix forward.\n\n## Test plan\n\nHow.`)
+    expect(withDeploy(once, steps)).toBe(once) // sent again: replaced, not added twice, and the writer's words are kept
+    expect(withDeploy(once, '')).toBe(written) // none left: the engine's block goes
+    expect(withDeploy('## Summary\n\nWhat.', steps)).toBe(`## Summary\n\nWhat.\n\n## At deploy\n\n${steps}`) // no heading for it: a section of its own
+    expect(withDeploy(withDeploy('## Summary\n\nWhat.', steps), '')).toBe('## Summary\n\nWhat.')
+    expect(withDeploy('```\n## Merge Danger\n```\n\n## Deploy steps\n\nNone.', steps)).toContain(`## Deploy steps\n\n${steps}\n\nNone.`) // a heading inside a code block is not one
+    const body = prBody({ id: 'prj_sample', name: 'Export (sample)' }, [], [], [], '## Merge guide\n\nGuide.', '', written, null, steps)
+    expect(body.indexOf('## Merge Danger')).toBeLessThan(body.indexOf('1. EXPORT_BUCKET')); expect(body.indexOf('1. EXPORT_BUCKET')).toBeLessThan(body.indexOf('## Fine print'))
+    expect(prBody({ id: 'prj_sample', name: 'Export (sample)' }, [], [], [], '', '', written)).not.toContain('evident:deploy')
+  })
+  it('the merge guide counts them apart: not met, not missing, not the reviewer\'s', () => {
+    const g = taskGuide({ identifier: 'XX-1', title: 'Export (sample)', acceptance: tagged, decisions: [], pending: [] })
+    expect(g.indexOf('1 of 2 acceptance criteria were checked against the build and met. 1 is not checked yet. 2 are owed at deploy. 1 is watched after the deploy.')).toBe(0)
+    expect(g).not.toContain('EXPORT_BUCKET') // not in "for you to check": it is in the deploy steps
+    const r = taskRecord({ identifier: 'XX-1', title: 'Export (sample)', acceptance: tagged, decisions: [], pending: [] })
+    expect(r).toContain('- 🚀 EXPORT_BUCKET is set in each environment (sample). At deploy: the deploy config has it'); expect(r).toContain('- 📈 export.finished appears in production within a day (sample). Watched after the deploy: the event count is above zero')
+  })
+  it('the smoke test is accepted once nothing of the person\'s waits before the merge; what is owed at deploy does not hold it', () => {
+    expect(whyNotAccept({ head: null, owed: 0, failed: 0, unchecked: 0 })).toBe('nothing is built yet')
+    expect(whyNotAccept({ head: 'abc', owed: 2, failed: 0, unchecked: 0 })).toContain('2 checks of yours still wait')
+    expect(whyNotAccept({ head: 'abc', owed: 0, failed: 1, unchecked: 0 })).toContain('1 check failed by hand')
+    expect(whyNotAccept({ head: 'abc', owed: 0, failed: 0, unchecked: 1 })).toContain('not checked yet: run the check first')
+    expect(whyNotAccept({ head: 'abc', owed: 0, failed: 0, unchecked: 0 })).toBeNull()
   })
 })
 
@@ -219,19 +277,26 @@ describe.skipIf(!reachable)('a person marks a check', () => {
     const { project: p, issues: [t] } = await createProject({ appId, name: 'Close (sample)', issues: [{ title: 'Edges (sample)', brief: 'Build it.' }] })
     const { acceptance } = await setAcceptance(t.id, { add: [{ text: 'The tunnel reads as a tunnel (sample)' }, { text: 'The release note is on the site (sample)' }] })
     const [look, note] = acceptance.map((c) => c.id)
-    await setAcceptance(t.id, { update: [{ id: look, built: null, builtEvidence: 'open the Tunnel story' }, { id: note, built: null, builtEvidence: 'open the site', builtWhen: 'after' }] }, 'engine')
+    const { acceptance: [, , env] } = await setAcceptance(t.id, { add: [{ text: 'EXPORT_BUCKET is set in each environment (sample)', kind: 'release', check: 'the deploy config has it' }] })
+    await setAcceptance(t.id, { update: [{ id: look, built: null, builtEvidence: 'open the Tunnel story' }, { id: note, built: null, builtEvidence: 'open the site', builtWhen: 'pr' }] }, 'engine')
     await db.update(issue).set({ state: 'in_review', briefApprovedBy: 'Sam (sample)', briefApprovedAt: new Date() }).where(eq(issue.id, t.id))
     await db.update(project).set({ status: 'landed' }).where(eq(project.id, p.id))
     const prId = newId('pr')
     await db.insert(prTable).values({ id: prId, appId, projectId: p.id, issueId: t.id, number: 31, url: 'https://github.test/sample/pull/31', status: 'open' })
-    expect(await closeView(t.id)).toEqual({ can: false, waits: ['Pull request #31 is not merged.', '2 checks of yours are not passed or skipped.'] })
+    expect(await closeView(t.id)).toEqual({ can: false, waits: ['Pull request #31 is not merged.', '2 checks of yours are not passed or skipped.', '1 release check is owed at deploy and not said done.'] })
+    // A release check is never the smoke test's: not listed there, not marked there, and it does not hold its acceptance.
+    await expect(markSmoke(t.id, env.id, { pass: true })).rejects.toThrow('release check')
+    expect((await smokeView(t.id)).release).toEqual([{ id: env.id, text: 'EXPORT_BUCKET is set in each environment (sample)', how: 'the deploy config has it' }])
     await expect(closeTask(t.id)).rejects.toThrow(/cannot be closed yet/)
     await markSmoke(t.id, look, { pass: true })
     const skipped = await markSmoke(t.id, note, { pass: false, skip: true, note: 'nothing to release yet (sample)' }) // no note is needed to skip; one given is kept
     expect(skipped.checks.map((c) => [c.mark, c.note])).toEqual([['pass', 'Checked by hand: it holds.'], ['skip', 'Skipped, not tried: nothing to release yet (sample)']])
     expect(skipped).toMatchObject({ owed: 0, failed: 0, marked: { id: note, skipped: true } })
-    expect((await closeView(t.id)).waits).toEqual(['Pull request #31 is not merged.'])
+    expect((await closeView(t.id)).waits).toEqual(['Pull request #31 is not merged.', '1 release check is owed at deploy and not said done.'])
     await db.update(prTable).set({ status: 'merged' }).where(eq(prTable.id, prId))
+    await expect(markRelease(t.id, env.id, { done: false })).rejects.toThrow('say what stands in the way')
+    await expect(markRelease(t.id, look, { done: true })).rejects.toThrow('not a release check')
+    expect((await markRelease(t.id, env.id, { done: true, note: 'set in staging and production (sample)' }, 'Sam (sample)')).release[0]).toMatchObject({ done: true, note: 'set in staging and production (sample)', by: 'Sam (sample)' })
     expect((await db.select().from(issue).where(eq(issue.id, t.id)))[0].state).toBe('in_review') // merged, and still not done: that is the person's
     expect(await closeView(t.id)).toEqual({ can: true, waits: [] })
     expect(await closeTask(t.id)).toEqual({ id: t.id, state: 'done', projectClosed: true })
