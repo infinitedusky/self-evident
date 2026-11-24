@@ -12,6 +12,7 @@ import { Badge } from '../components/Badge'
 import { Integrations } from '../components/Integrations'
 import { WorkflowSettings } from '../components/WorkflowSettings'
 import { MockLibrary } from '../components/MockLibrary'
+import { Workbench } from '../components/Workbench'
 import type { Workflow } from '@self-evident/engine/steps'
 import { engine, type AppHolds, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type SmokeSetupSetting, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo, type Trial } from '../engine'
 import { useCurrentApp } from '../current-app'
@@ -37,7 +38,7 @@ const newSmokeKey = (list: SmokeSetupSetting[]) => { let n = list.length + 1; wh
 
 export const APP_SECTIONS = [
   { key: 'repo', label: 'Repo' }, { key: 'agents', label: 'Agents' }, { key: 'plugins', label: 'Plugins' }, { key: 'skills', label: 'Skills' }, { key: 'landing', label: 'Landing' },
-  { key: 'prototype', label: 'Prototype' }, { key: 'mocks', label: 'Mocks' }, { key: 'integrations', label: 'Integrations' }, { key: 'workflows', label: 'Workflow rules' }, { key: 'remove', label: 'Remove' },
+  { key: 'prototype', label: 'Prototype' }, { key: 'workbench', label: 'Workbench' }, { key: 'mocks', label: 'Mocks' }, { key: 'integrations', label: 'Integrations' }, { key: 'workflows', label: 'Workflow rules' }, { key: 'remove', label: 'Remove' },
 ] as const
 
 export function Settings() {
@@ -505,6 +506,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
     } catch (e) { setError(err(e)) } finally { setBusy(false) }
   }
   if (section === 'workflows') return <WorkflowSettings appId={app.id} />
+  if (section === 'workbench') return <Workbench appId={app.id} />
   if (section === 'mocks') return <MockLibrary appId={app.id} />
   if (section === 'integrations') return info && factory
     ? <Integrations base={`/settings/apps/${app.id}/integrations`} item={item} integrations={factory.integrations} values={info.integrations} status={info.status} keys={info.keys} onKeys={() => void load()} scope="app" appId={app.id}

@@ -7253,3 +7253,31 @@ seems like a very Cloaked specific setup." Right: being signed in at all is that
 Not done: the workbench's own script still signs in as a fixed company, so Meridian is still unusable in the main
 set-up until that script reads the database or `$FIXTURE`. Open with Sandy: whether an app's own scripts like that
 one get a place in Settings ("workbench scripts"), instead of living only in a folder the set-ups call.
+
+## Hooks: an app's own scripts, run at Evident's points, kept in its workbench folder (Sandy, 2026-11-24)
+
+After `$FIXTURE`, the question was where an app's own part lives. I offered two shapes: a section in Settings that is
+a window onto the app's workbench folder, or hooks kept in Evident's settings. Sandy: "I think both. That hook idea
+is really cool … evident has a bunch of different lifecycle events that we can hook into. But they would be defined,
+they would be stored … in the workbench … You don't want them in the repo itself."
+
+- **The workbench folder** is an app setting (`setup.workbench.dir`): a folder on this computer outside the app's
+  repositories. (The word already meant "an app's repositories worked on together", workbench.ts. Here it is the
+  folder of ours beside them. Not renamed; said once.)
+- **A hook is a file in its `hooks/`, named for a point** (`before-start`, any extension), found by name: nothing
+  is registered. Evident runs it and knows nothing of what it does (`engine/src/hooks.ts`).
+- **Three points to begin with**, each where Evident already acts:
+  - `before-start`: before a prototype's command or a smoke test's script, with what that script will be given
+    (`$PLACE`, `$FIXTURE`, the database, `$PORT`, `$TASK`). Lines it prints as `NAME=value` are laid over the
+    script's settings. A failure starts nothing, and says why.
+  - `after-stop`, `task-closed`: nothing waits on them; a failure is recorded.
+- **Every run is an event** (`hook.ran`): the point, whether it worked, the names of what it gave and never the
+  values, and on a failure its last lines. No table.
+- **Settings › Workbench** (per app; story first, `Workbench.stories.tsx`): the folder, every point hooked or not
+  with what it is given and what follows, the script to read, its last run.
+
+Not done: a script is read in Settings and changed in the folder, not in the page; a review copy runs on a
+reviewer's computer, so no hook runs for it (its kit is its own part); a hook's output is not checked for anything
+real before its last lines are kept; the smoke set-ups' scripts, seed and the prototype command still live in their
+own settings and were not moved into the folder; no agent tool reads or writes hooks; more points (a fixture
+loaded, a review copy made, a build finished) are added when something needs one.

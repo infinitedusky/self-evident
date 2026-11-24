@@ -37,6 +37,7 @@ export interface MockData {
   /** Why submitting a pull request fails, when it should. */ submitPrError?: string
   /** A task's pull request as a step; not submitted (prSample) when left out. */ prView?: import('../engine').PrView
   /** A task's data agent; never asked (dataAgentSample) when left out. */ dataAgent?: import('../engine').DataAgentView
+  /** An app's workbench folder and hooks; workbenchSample when left out. */ workbench?: import('../engine').WorkbenchView
   /** A task's review copy; not made yet (reviewCopySample) when left out. */ reviewCopy?: import('../engine').ReviewCopyView
   /** A pull request's finalizing; never run (finalizeNoneSample) when left out. */ finalize?: import('../engine').FinalizeView
   /** Making it is refused, with this. */ reviewCopyError?: string
@@ -396,6 +397,13 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/issues/:id/finalize/survivors/:survivor', async ({ params, request }) => { const b = await request.json() as { reason?: string; equivalent?: boolean; undo?: boolean }; const v = d.finalize ?? s.finalizeSample; if (!b.undo && !b.reason?.trim()) return HttpResponse.json({ error: 'say why it is left as it is: the reason goes into the evidence, for the reviewer' }, { status: 400 }); d.finalize = { ...v, mutation: v.mutation && { ...v.mutation, survivors: v.mutation.survivors.map((x) => (x.id === params.survivor ? { ...x, accepted: b.undo ? null : { reason: b.reason!, ...(b.equivalent ? { equivalent: true } : {}), by: 'user' } } : x)) } }; return reply(d.finalize) }),
     http.post('/api/issues/:id/finalize/fix', async ({ request }) => { const b = await request.json() as { kind: string; id: string }; const v = d.finalize ?? s.finalizeSample; const fix = { subTask: 'iss_fix_sample', title: 'Fix what the finalizing found (sample)', landed: false }; d.finalize = { ...v, mutation: v.mutation && { ...v.mutation, survivors: v.mutation.survivors.map((x) => (b.kind === 'survivor' && x.id === b.id ? { ...x, fix } : x)) }, gate: v.gate.map((c) => (b.kind === 'gate' && c.key === b.id ? { ...c, sent: fix } : c)) }; return reply(d.finalize) }),
     http.post('/api/issues/:id/pr/send', () => { const f = d.finalize ?? s.finalizeNoneSample; if (!f.canPush) return HttpResponse.json({ error: `it cannot be sent yet. ${f.pushWaits.join(' ')}` }, { status: 400 }); const v = d.prView ?? s.prSample; const pr = v.pr ?? { number: 412, url: 'https://example.com/pull/412', status: 'draft' as const, title: v.message?.title ?? '', body: v.message?.body ?? '', review: null, mergeable: 'mergeable', checks: [], updatedAt: '2026-11-23T12:00:00Z' }; const body = `${v.message?.body ?? pr.body}\n\n## Evidence\n\n${f.evidence}`; d.prView = { ...v, behind: false, canSubmit: false, canReady: false, editedThere: 'none', pr: { ...pr, status: 'open', body }, message: v.message && { ...v.message, body } }; d.finalize = { ...f, press: 'update', sent: { sha: f.sha, at: '2026-11-23T12:00:00Z', same: true } }; return reply({ number: pr.number, url: pr.url, status: 'open', ready: true, review: null }) }),
+    http.get('/api/apps/:id/workbench', () => reply(d.workbench ?? s.workbenchSample)),
+    http.put('/api/apps/:id/workbench', async ({ request }) => {
+      const b = await request.json() as { dir?: string | null }
+      if (b.dir && /nowhere/.test(b.dir)) return HttpResponse.json({ error: `there is no folder at ${b.dir} on this computer` }, { status: 400 })
+      d.workbench = b.dir ? { ...s.workbenchSample, dir: b.dir } : s.workbenchNoneSample
+      return reply(d.workbench)
+    }),
     http.get('/api/issues/:id/review-copy', () => reply(d.reviewCopy ?? s.reviewCopySample)),
     http.post('/api/issues/:id/review-copy', async ({ request }) => {
       if (d.reviewCopyError) return HttpResponse.json({ error: d.reviewCopyError }, { status: 400 })
