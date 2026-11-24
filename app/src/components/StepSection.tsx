@@ -67,7 +67,8 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   const waitsOnApproval = row.waitingOn === 'brief' && on === 'task' && waitingState?.status === 'done'
   // The steps whose work is kept as a step. A task's brief is on the task itself (its page passes it in); an idea's rough draft is a step like the others.
   const own = row.key !== 'idea' && !(row.key === 'brief' && on === 'task')
-  const approves = own && subject.kind === 'issues' && needsApproval(row.key, on) // a person approves it, here
+  const approves = own && (subject.kind === 'issues' || subject.kind === 'ideas') && needsApproval(row.key, on) // a person approves it, here: a task's steps, and an idea's
+  const approve = (yes = true) => (subject.kind === 'ideas' ? engine.approveIdeaStep(subject.id, row.key, yes) : engine.approveStep(subject.id, row.key, yes))
   useEffect(() => {
     setAsked(false)
     if (own && s.status !== 'none') engine.step(subject, row.key).then(setWork).catch((e) => { if (row.key === 'prototype') setWork(null); else setError(err(e)) }) // a prototype's step has notes for the brief too
@@ -102,8 +103,8 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
         {row.required ? <Badge tone={finished(s, on) ? 'ok' : 'warn'}>required</Badge> : skipped(s) ? <Badge>skipped</Badge> : <span className="faint" style={{ fontSize: 13 }}>optional</span>}
         {/* The check mark is the person's: the agent can only say a step is ready (Sandy, 2026-11-10: "an approve button for each step"). */}
         {/* The Data step's page is its services and their data, there before anything is started: it is approved as it stands (Sandy, 2026-11-24: "the data tab doesn't have an approve button at the top. A skip, you know"). */}
-        {approves && !s.approved && (s.status !== 'none' || dataStep) && !skipped(s) && !row.waitingOn && <button className={ready(s, on) && !s.needs ? 'btn small' : 'btn quiet small'} disabled={busy || !!s.needs} onClick={() => act(async () => { if (s.status === 'none') await engine.setStep(subject, row.key, { status: 'started' }); return engine.approveStep(subject.id, row.key) })} title={row.key === 'prototype' && on === 'task' ? 'Your last press: it approves the brief too when the brief is ready, and the analysis, the ADR, the plan, its audit and the build follow by themselves' : 'Approve this step: it gets its check, and the steps after it can go on'}>{row.key === 'prototype' && on === 'task' ? 'Approve the prototype' : 'Approve'}</button>}
-        {approves && s.approved && <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.approveStep(subject.id, row.key, false))} title="Take the approval back">Withdraw</button>}
+        {approves && !s.approved && (s.status !== 'none' || dataStep) && !skipped(s) && !row.waitingOn && <button className={ready(s, on) && !s.needs ? 'btn small' : 'btn quiet small'} disabled={busy || !!s.needs} onClick={() => act(async () => { if (s.status === 'none') await engine.setStep(subject, row.key, { status: 'started' }); return approve() })} title={row.key === 'prototype' && on === 'task' ? 'Your last press: it approves the brief too when the brief is ready, and the analysis, the ADR, the plan, its audit and the build follow by themselves' : 'Approve this step: it gets its check, and the steps after it can go on'}>{row.key === 'prototype' && on === 'task' ? 'Approve the prototype' : 'Approve'}</button>}
+        {approves && s.approved && <button className="btn quiet small" disabled={busy} onClick={() => act(() => approve(false))} title="Take the approval back">Withdraw</button>}
         {dataStep && canSkip(row) && !finished(s, on) && !skipped(s) && !row.waitingOn && <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'skipped' }))} title="Say this optional step is not being done on this task: the app's defaults are used">Skip this step</button>}
       </div>
       {s.needs && !s.approved && <p className="smoke-stale" role="note">{s.needs}</p>}

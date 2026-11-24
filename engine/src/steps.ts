@@ -235,7 +235,9 @@ export interface Row { key: StepKey; required: boolean; position: number | null;
  * approval finishes it. The checks (prototype analysis, ADR, blast radius, audit) are reports, so they are
  * finished when done and stand approved with the brief. An idea's and a project's steps keep done as finished.
  */
-export const needsApproval = (key: StepKey, on: On) => on === 'task' && key !== 'idea' && step(key).place !== 'check'
+// An idea's steps too (Sandy, 2026-11-24: research on an idea "just gives itself a check. I don't like that. I want to
+// be able to approve it"): all but its rough draft, which is only ever a draft until the idea becomes a task.
+export const needsApproval = (key: StepKey, on: On) => (on === 'task' || (on === 'idea' && key !== 'brief')) && key !== 'idea' && step(key).place !== 'check'
 /** Finished: done, and approved where a person approves it. */
 export const finished = (s: StepState, on: On) => s.status === 'done' && (!needsApproval(s.key, on) || !!s.approved)
 /**

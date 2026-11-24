@@ -104,6 +104,16 @@ export const IdeaPrototype: Story = {
     await expect(c.queryByRole('button', { name: 'Ask the agent to carry on' })).toBeNull()
   },
 }
+/** An idea's research the agent says is ready (made up): it is not finished by the agent's word. The person approves it, as on a task, and until then it reads "ready for you". */
+export const IdeaResearchToApprove: Story = {
+  args: { subject: { kind: 'ideas', id: 'idea_sample1' }, on: 'idea', base: '/ideas/idea_sample1', row: { ...row('research'), required: false, state: { key: 'research', status: 'done', detail: 'How checkout is built today (sample)' }, waitingOn: null } as typeof all[number] },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('ready for you')).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Approve' })).toBeEnabled()
+    await expect(c.queryByText(/approved by/)).toBeNull()
+  },
+}
 const draftRow = { ...row('research'), key: 'brief', required: false, state: { key: 'brief', status: 'done', detail: 'Rough draft: one page for address and payment; likely a task (sample)' }, waitingOn: null } as typeof all[number]
 /** An idea's rough draft (made up): what the agent wrote shows, under its one-line status, and nothing asks to start it or carry it on. */
 export const IdeaRoughDraft: Story = {

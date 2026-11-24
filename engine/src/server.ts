@@ -38,7 +38,7 @@ import { createIdea, getIdea, listIdeas, projectFromIdea } from './ideas.js'
 import { advanceChecks, onChecksDone, onPlanWanted, resumeChecks } from './checks.js'
 import { checksOwed, step } from './steps.js'
 import { writeHandover } from './handover.js'
-import { skipUntouched, approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, speedIntoWorkflows, ensureMain, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
+import { skipUntouched, approveBrief, approveIdeaStep, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, speedIntoWorkflows, ensureMain, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
 import { adoptTalk, answerPermission, busyAmong, releaseTalks, closeTalk, closeTalks, endTalk, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, runLog, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, setupTalk, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
@@ -753,6 +753,10 @@ export function buildApp(bus: EventBus) {
       try { return c.json(await setStep(subject(kind, c.req.param('id')), c.req.param('key') as never, await c.req.json(), 'user')) } catch (err) { return planError(c, err) }
     })
   }
+  api.post('/ideas/:id/steps/:key/approve', async (c) => {
+    const { approve = true } = await c.req.json<{ approve?: boolean }>().catch(() => ({ approve: true }))
+    try { return c.json(await approveIdeaStep(c.req.param('id'), c.req.param('key') as never, 'user', approve)) } catch (err) { return planError(c, err) }
+  })
   api.post('/issues/:id/steps/:key/approve', async (c) => {
     const { approve = true } = await c.req.json<{ approve?: boolean }>().catch(() => ({ approve: true }))
     try {
