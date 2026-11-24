@@ -1098,6 +1098,17 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .pr-status { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 0 0 10px; }
 .pr-branches { font-size: 12px; margin-left: 4px; }
 .pr-act { margin: 0 0 14px; }
+.data-agent { margin: 0 0 22px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }
+.data-agent-steps { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0 0 10px; padding: 0; font-size: 13px; }
+.data-agent-steps li { display: flex; align-items: center; gap: 6px; color: var(--muted, #777); }
+.data-agent-steps li .n { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); font-size: 12px; }
+.data-agent-steps li.now { color: inherit; font-weight: 600; }
+.data-agent-steps li.now .n { border-color: currentColor; }
+.data-agent-steps li.done .n { background: var(--line); }
+.data-agent-proposal { margin: 10px 0; padding: 10px 12px; border-left: 3px solid var(--warn, #b7791f); border-radius: 6px; }
+.data-agent-proposal-h { font-weight: 600; margin: 0 0 6px; display: flex; gap: 8px; align-items: baseline; }
+.data-agent-proposal-h .faint { font-weight: 400; font-size: 13px; }
+.data-agent-approved { margin: 0 0 6px; }
 .review-copy { margin: 0 0 18px; }
 .review-copy-holds { margin: 0 0 10px; padding-left: 20px; font-size: 13px; display: grid; gap: 2px; }
 .review-copy .pr-write select { max-width: 420px; }

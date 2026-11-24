@@ -34,6 +34,8 @@ import { accountEnv, accountPrefix, configDirFor, configDirOf } from './account.
 import { listRecordings, recordingsDir, recordingsPrompt } from './recordings.js'
 import { placesPrompt, placesTable } from './mock-places.js'
 import { callsPrompt, listTaskServices } from './task-calls.js'
+import { DATA_AGENT_NOTE, dataPrompt, dataSession, roundOf } from './data-agent.js'
+import { identifier as taskIdent } from './issues.js'
 import { listMocks, mocksPrompt, servicesPrompt } from './mocks.js'
 import { issueDetail, PlanError, projectGraph } from './projects.js'
 import { putAwayIds } from './apps.js'
@@ -185,7 +187,7 @@ async function record(sessionId: string, author: string, kind: string, body: str
 }
 
 /** `issueId` pins a task's own agent; `checkOf` and `check` mark a fresh agent out on one check of that task (checks.ts). */
-export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string; checkOf?: string; check?: StepKey; setup?: string; /** Reading the app's code to write its documents (learn.ts); one per app at a time. */ learn?: 'codebase'; /** About the app as a whole: in its checkout, reading, with no worktree. */ app?: boolean }
+export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string; checkOf?: string; check?: StepKey; /** The task this conversation is the data agent of (data-agent.ts). */ dataOf?: string; setup?: string; /** Reading the app's code to write its documents (learn.ts); one per app at a time. */ learn?: 'codebase'; /** About the app as a whole: in its checkout, reading, with no worktree. */ app?: boolean }
 
 /** What a conversation is about, from where it started: a project's title, an idea's title, or nothing yet. */
 async function subjectFrom(ref?: SubjectRef): Promise<{ subject: string | null; subjectRef: SubjectRef | null }> {
@@ -331,7 +333,9 @@ export async function taskAgents(issueId: string) {
     return { sessionId: s.id, kind: 'check' as const, what: d.label, icon: d.icon, title: s.subject ?? d.label, check: d.key, busy: live.get(s.id)?.busy ?? false, asking: askingOf(s.id) }
   })
   const [t] = await db.select({ ideaId: issue.ideaId }).from(issue).where(eq(issue.id, issueId))
-  return [...building, ...checking, ...(await plannerOut(issueId)), ...(await sourceAgents(t?.ideaId))]
+  const d = await dataSession(issueId)
+  const data = d ? [{ sessionId: d.id, kind: 'data' as const, what: 'Data', icon: '🧪', title: d.subject ?? 'Data', busy: live.get(d.id)?.busy ?? false, asking: askingOf(d.id) }] : []
+  return [...building, ...data, ...checking, ...(await plannerOut(issueId)), ...(await sourceAgents(t?.ideaId))]
 }
 
 /**
@@ -372,6 +376,7 @@ export async function conductorOf(sessionId: string): Promise<{ id: string; what
   const [s] = await db.select().from(session).where(eq(session.id, sessionId))
   const ref = s?.subjectRef as SubjectRef | null
   if (!ref) return null
+  if (ref.dataOf) { const c = await taskTalk(ref.dataOf); return c && c.id !== sessionId ? { id: c.id, what: 'Data' } : null }
   if (ref.checkOf && ref.check) { const c = await taskTalk(ref.checkOf); return c && c.id !== sessionId ? { id: c.id, what: step(ref.check).label } : null }
   const [p] = await db.select().from(prototype).where(eq(prototype.sessionId, sessionId))
   if (!p) return null
@@ -505,7 +510,7 @@ export async function takeReply(sessionId: string): Promise<{ from: string; what
   const [said] = await db.select({ body: sessionMessage.body }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, sessionId), eq(sessionMessage.author, 'agent'), eq(sessionMessage.kind, 'text'), sql`${sessionMessage.id} > ${asks[0].id}`)).orderBy(desc(sessionMessage.id)).limit(1)
   const [s] = await db.select().from(session).where(eq(session.id, sessionId))
   const ref = s?.subjectRef as SubjectRef | null
-  return { from: (asks[asks.length - 1].payload as { from: string }).from, what: ref?.check ? step(ref.check).label : ref?.prototypeId ? 'Prototype' : ref?.learn ? 'Learn' : s?.subject ?? 'An', said: said?.body ?? null }
+  return { from: (asks[asks.length - 1].payload as { from: string }).from, what: ref?.dataOf ? 'Data' : ref?.check ? step(ref.check).label : ref?.prototypeId ? 'Prototype' : ref?.learn ? 'Learn' : s?.subject ?? 'An', said: said?.body ?? null }
 }
 
 async function reportBack(sessionId: string) {
@@ -669,6 +674,9 @@ async function open(sessionId: string): Promise<Live> {
   const handover = ownTask ? await writeHandover(ownTask.id).then((r) => r.handover, () => ownTask.handover ?? null) : null
   const [madeIn] = handover?.text ? await db.select().from(session).where(eq(session.id, handover.sessionId)) : []
   const check = (s.subjectRef as SubjectRef | null)?.check
+  // A task's data agent (data-agent.ts): its own instructions, the task's calls and the app's services in front of it, and nothing it can edit.
+  const dataOfId = (s.subjectRef as SubjectRef | null)?.dataOf
+  const [dataTask] = dataOfId ? await db.select().from(issue).where(eq(issue.id, dataOfId)) : []
   const ownIdeaId = s.worktreePath && !(s.subjectRef as SubjectRef | null)?.app ? (s.subjectRef as SubjectRef | null)?.ideaId : undefined
   const [ownIdeaRow] = ownIdeaId ? await db.select().from(idea).where(eq(idea.id, ownIdeaId)) : []
   const whole = !!(s.subjectRef as SubjectRef | null)?.app && !s.worktreePath // about the app as a whole: it reads the app's checkout
@@ -680,12 +688,12 @@ async function open(sessionId: string): Promise<Live> {
   // What real services sent back for this work, kept raw outside the repository (recordings.ts): the task's, else the idea's, else the app's.
   const recordings = s.appId ? recordingsDir(s.appId, proto ? { issueId: proto.issueId, ideaId: proto.ideaId } : { issueId: ownTaskId ?? (s.subjectRef as SubjectRef | null)?.checkOf, ideaId: (s.subjectRef as SubjectRef | null)?.ideaId }) : null
   // The app's mock library (mocks.ts), for every agent that builds a prototype or works on a task: it checks it before it builds.
-  const mockList = s.appId && (proto || ownTask || ownIdeaRow || whole) ? await listMocks(s.appId).catch(() => []) : []
-  const mockPlaces = s.appId && mockList.length ? placesPrompt(await placesTable(s.appId, ownTask?.id ?? proto?.issueId ?? null).catch(() => [])) : ''
-  const taskCalls = ownTask ? callsPrompt(await listTaskServices(ownTask.id).catch(() => []), mockList.map((m) => ({ key: m.key, name: m.name }))) : ''
+  const mockList = s.appId && (proto || ownTask || ownIdeaRow || whole || dataTask) ? await listMocks(s.appId).catch(() => []) : []
+  const mockPlaces = s.appId && mockList.length ? placesPrompt(await placesTable(s.appId, ownTask?.id ?? dataTask?.id ?? proto?.issueId ?? null).catch(() => [])) : ''
+  const taskCalls = ownTask || dataTask ? callsPrompt(await listTaskServices((ownTask ?? dataTask)!.id).catch(() => []), mockList.map((m) => ({ key: m.key, name: m.name })), !dataTask) : ''
   // Where the work came from, word for word (origins.ts): the ticket, for every agent on a task, an idea, a project or one of their steps.
   const about = s.subjectRef as SubjectRef | null
-  const origin = originPrompt(await originOf(ownTaskId ? { issueId: ownTaskId } : proto?.issueId ? { issueId: proto.issueId } : about?.checkOf ? { issueId: about.checkOf } : about?.issueId ? { issueId: about.issueId } : proto?.ideaId ? { ideaId: proto.ideaId } : about?.ideaId ? { ideaId: about.ideaId } : about?.projectId ? { projectId: about.projectId } : {}).catch(() => null))
+  const origin = originPrompt(await originOf(ownTaskId ? { issueId: ownTaskId } : about?.dataOf ? { issueId: about.dataOf } : proto?.issueId ? { issueId: proto.issueId } : about?.checkOf ? { issueId: about.checkOf } : about?.issueId ? { issueId: about.issueId } : proto?.ideaId ? { ideaId: proto.ideaId } : about?.ideaId ? { ideaId: about.ideaId } : about?.projectId ? { projectId: about.projectId } : {}).catch(() => null))
   const q = query({
     prompt: input.it,
     options: {
@@ -695,10 +703,10 @@ async function open(sessionId: string): Promise<Live> {
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (ownTask && a ? taskPrompt(ownTask, a.key) + prDescriptionNote(a.setup) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + origin + storiesNote(a?.setup) + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) + (recordings && !unwatched ? recordingsPrompt(recordings, listRecordings(recordings).length) : '') + (proto || ownTask || ownIdeaRow ? mocksPrompt(mockList) + mockPlaces + taskCalls : whole && a ? servicesPrompt(mockList) : '') },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (dataTask && a ? dataPrompt(dataTask, taskIdent(a.key, dataTask.number), await roundOf(dataTask.id)) : '') + (ownTask && a ? taskPrompt(ownTask, a.key) + DATA_AGENT_NOTE + prDescriptionNote(a.setup) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + origin + storiesNote(a?.setup) + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) + (recordings && !unwatched ? recordingsPrompt(recordings, listRecordings(recordings).length) : '') + (proto || ownTask || ownIdeaRow ? mocksPrompt(mockList) + mockPlaces + taskCalls : whole && a ? servicesPrompt(mockList) : '') },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
-      tools: [...READ_TOOLS, ...(check || whole ? CHECK_TOOLS : ASK_TOOLS)],
+      tools: [...READ_TOOLS, ...(check || whole || dataTask ? CHECK_TOOLS : ASK_TOOLS)],
       allowedTools: READ_TOOLS, // everything else is rated by the hook (the hook sees every call; allowedTools would not)
       permissionMode: 'default',
       // The gate: rate the call; up to the person's threshold allow it and log it; above, ask (which lands in canUseTool).
