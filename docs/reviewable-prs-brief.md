@@ -52,7 +52,9 @@ on one task, CEB-90, and its one outside service, SixtyFour.
    the faked version has not been through a scan yet, so the review branch's first run is also its first proof.
    Was: as a reviewer would do it (LOG.md, "What the results file is, and what it is not"): a test file with one
    made-up person to import, and the mock's results file for that same person, tied by email.
-5. **The review branch**: the mock server, endpoints, faked data, fixture and the fake versions of the files on
+5. ~~The review branch.~~ Done 2026-11-23 (LOG.md, "The review branch is made by the tool"): made and made again
+   from the task's PR step, as `REVIEW-<branch>-<task id>`, with the pull request's Review section written from it.
+   Was: the mock server, endpoints, faked data, fixture and the fake versions of the files on
    a `<branch>-review` branch with one start command.
 6. **The data agent** (after the review branch since 2026-11-23: CEB-90's data exists, so its pull request
    does not wait on this): one per task, called by the task's agent, in three stop-and-wait steps (list the calls,

@@ -146,6 +146,19 @@ export interface ProjectSummary { id: string; name: string; status: string; crea
 /** What was said on a pull request: a comment, a review (with its verdict), or a comment on a line. */
 export interface PrComment { id: string; kind: 'comment' | 'review' | 'line'; author: string; body: string; at: string; url: string | null; state?: string; path?: string; line?: number | null }
 /** A task's pull request as a step (the engine's pr-view.ts). */
+/** A task's review copy (engine review-copy.ts): a branch a reviewer checks out and starts with one command, on made-up data. */
+export interface ReviewCopyView {
+  /** The branch a reviewer checks out. Null: the task has no pull request yet. */ branch: string | null
+  pr: { branch: string; head: string | null; number: number | null } | null
+  /** As last made. pushed: GitHub has it. inStep: it holds the pull request's head. */
+  made: { from: string; fixture: string | null; try: string; services: { key: string; name: string; files: number }[]; files: string[]; at: string; sha: string; pushed: boolean; inStep: boolean } | null
+  /** A branch of that name exists that Evident did not make: making it replaces it. */ byHand: boolean
+  compare: string | null
+  /** The app's own part of a review copy. Null: it has none. */ kit: { dir: string; start: string } | null
+  /** The fixtures it may start from: none that holds something real. */ fixtures: string[]
+  services: { key: string; name: string; says: string; blocked: string | null }[]
+  /** Why it cannot be made as things stand. Empty: it can. */ waits: string[]
+}
 export interface PrView {
   issueId: string
   /** As GitHub has it now, or as last known when `problem` is set. Null: not submitted. */
@@ -711,6 +724,8 @@ export const engine = {
   setReportFormat: (appId: string, f: { daily?: string; weekly?: string }) => call<{ daily: string; weekly: string }>('PUT', `/apps/${appId}/report-format`, f),
   prView: (issueId: string) => call<PrView>('GET', `/issues/${issueId}/pr`),
   setPrMessage: (issueId: string, body: string) => call<{ written: string | null }>('PUT', `/issues/${issueId}/pr/message`, { body }),
+  reviewCopy: (issueId: string, fresh = false) => call<ReviewCopyView>('GET', `/issues/${issueId}/review-copy${fresh ? '?fresh=1' : ''}`),
+  makeReviewCopy: (issueId: string, body: { fixture: string | null; try: string }) => call<ReviewCopyView>('POST', `/issues/${issueId}/review-copy`, body),
   updatePr: (issueId: string) => call<{ number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/update`),
   markPrReady: (issueId: string) => call<{ number: number; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/ready`),
   setTeamNames: (issueId: string, names: { ticket?: string | null; title?: string | null }) => call<{ teamTicket: string | null; teamTitle: string | null; ticket: string | null; ticketFrom: string | null; ticketMissing: boolean }>('PUT', `/issues/${issueId}/team`, names),

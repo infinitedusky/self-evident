@@ -75,6 +75,21 @@ export async function ensureProjectPr(i: PrInput & { reopen?: boolean }): Promis
   return { number, url, created: true }
 }
 
+/**
+ * A description with the engine's Review section in it: in place of a section the writer gave that name (or "Run it
+ * yourself", the heading it had before), else at its end. What the writer said there is replaced: the commands and
+ * the branch are facts the engine holds, and must not be a guess.
+ */
+export function withReview(written: string, section: string): string {
+  const lines = written.split('\n')
+  const at = lines.findIndex((l) => /^##\s+(review|run it yourself)\s*$/i.test(l))
+  if (at < 0) return [written.trim(), section].filter(Boolean).join('\n\n')
+  let end = lines.length
+  let fenced = false
+  for (let i = at + 1; i < lines.length; i++) { if (/^\s*```/.test(lines[i])) fenced = !fenced; if (!fenced && /^##\s/.test(lines[i])) { end = i; break } }
+  return [lines.slice(0, at).join('\n').trim(), section, lines.slice(end).join('\n').trim()].filter(Boolean).join('\n\n')
+}
+
 export interface Landed { identifier: string; title: string; summary?: string | null; costUsd?: number | null; sha?: string | null }
 
 /**
@@ -84,8 +99,9 @@ export interface Landed { identifier: string; title: string; summary?: string | 
  * description leads, every criterion and decision, and what each sub-task's builder reported (a client's pull
  * request, 2026-11-20: the description was 511 lines of our build log, opening with our project's id).
  */
-export function prBody(project: { name: string; content?: string | null; id: string }, landed: Landed[], pending: { identifier: string; title: string }[], backlog: { title: string; state: string; reason: string | null }[] = [], /** The merge guide, for whoever approves it (merge-guide.ts): short. */ guide = '', /** Everything the guide left out: folded away, with what landed. */ record = '', /** The description written for the team, when the task has one: it leads, and the guide joins the fold. */ written: string | null = null): string {
-  const lead = written?.trim() || guide || project.content?.trim() || ''
+export function prBody(project: { name: string; content?: string | null; id: string }, landed: Landed[], pending: { identifier: string; title: string }[], backlog: { title: string; state: string; reason: string | null }[] = [], /** The merge guide, for whoever approves it (merge-guide.ts): short. */ guide = '', /** Everything the guide left out: folded away, with what landed. */ record = '', /** The description written for the team, when the task has one: it leads, and the guide joins the fold. */ written: string | null = null, /** The Review section, when the task has a review copy (review-copy.ts): the engine's own, in the description proper. */ review: string | null = null): string {
+  const said = written?.trim() || guide || project.content?.trim() || ''
+  const lead = review ? withReview(said, review) : said
   const all = landed.length + pending.length
   const building = pending.length ? `**${landed.length} of ${all} sub-task${all === 1 ? ' has' : 's have'} landed: this pull request is still being built, and is not ready to review until they all have.**` : ''
   const ours = [

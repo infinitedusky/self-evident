@@ -28,6 +28,7 @@ import { smokeOwed , smokeSetups } from './smoke.js'
 import { ONE_GO_TITLE } from './planner.js'
 import { workflowFor } from './work.js'
 import { ensureProjectPr, prDraft, prTitle, prBody , prAuto } from './pr.js'
+import { keepInStep, reviewSectionFor } from './review-copy.js'
 import { addSubTask, projectGraph, PlanError, setBuild, tickAll, type Graph } from './projects.js'
 import { finishPlanning, preparePlanning, type Propose } from './planner.js'
 import { BEFORE_PLAN, checksOwed, styleOf } from './steps.js'
@@ -766,7 +767,7 @@ export class Runner {
    * The project's PR (one per project), or an issue's (stacked: against the issue before it while that PR is open,
    * else main). Opened at the first landing, updated after every one.
    */
-  private async updatePr(projectId: string, issueId?: string, submit: boolean | 'auto' | 'preview' = false): Promise<void | { title: string; body: string; head: string; base: string; landed: number; pending: string[] }> {
+  private async updatePr(projectId: string, issueId?: string, submit: boolean | 'auto' | 'preview' = false, /** Sent once more after its review copy was made again: not a second time round. */ again = false): Promise<void | { title: string; body: string; head: string; base: string; landed: number; pending: string[] }> {
     const preview = submit === 'preview' // only what it would open with: nothing is pushed, opened or recorded
     if (preview) submit = false
     const { p, a, r, base } = await this.context(projectId)
@@ -803,7 +804,9 @@ export class Runner {
     const open = mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled')
     const guided = await guideTasks((t ? [t] : issues).map((q) => ({ id: q.id, identifier: q.identifier, title: q.title })), open.map((x) => ({ parentId: x.parentId ?? null, identifier: x.identifier }))).catch(() => [])
     const guide = mergeGuide(guided)
-    const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog, guide, mergeRecord(guided), t ? (t as { prBody?: string | null }).prBody ?? null : null)
+    // A task with a review copy on GitHub says how to run it, in the engine's own words (review-copy.ts).
+    const review = t ? await reviewSectionFor(t.id) : null
+    const body = prBody(intro, landed, mine.filter((x) => x.status !== 'done' && x.status !== 'cancelled').map((x) => ({ identifier: x.identifier, title: x.title })), issueId ? [] : g.backlog, guide, mergeRecord(guided), t ? (t as { prBody?: string | null }).prBody ?? null : null, review)
     if (preview) return { title, body, head, base: stack.base, landed: landed.length, pending: open.map((x) => x.identifier) }
     if (!r?.fullName) return
     if (auto && submit && (open.length || !mine.some((x) => x.status === 'done'))) return // not whole yet: nothing is opened
@@ -820,6 +823,11 @@ export class Runner {
     else await db.update(prTable).set({ baseBranch: stack.base, number: result.number, url: result.url, ...(submit ? { status: submit === 'auto' || prDraft(a.setup) ? 'draft' : 'open' } : {}) }).where(eq(prTable.id, existing.id))
     if (submit) await this.emit({ ...base, ...(issueId ? { issueId } : {}), actor: submit === 'auto' ? 'engine' : 'user', type: 'pr.submitted', payload: { number: result.number, url: result.url, draft: submit === 'auto' || prDraft(a.setup), ...(submit === 'auto' ? { auto: true } : {}) } })
     await this.emit({ ...base, ...(issueId ? { issueId } : {}), type: result.created ? 'pr.opened' : 'pr.updated', payload: { number: result.number, url: result.url, landed: landed.length, base: stack.base } })
+    // The branch a reviewer runs follows the pull request's: made again from its new head, and the description then names that commit.
+    if (t && !again) {
+      const moved = await keepInStep(t.id).catch(async (err) => { await this.emit({ ...base, issueId: t.id, type: 'review_copy.behind', payload: { reason: String((err as Error).message).split('\n')[0].slice(0, 400) } }); return false })
+      if (moved) await this.updatePr(projectId, issueId, false, true)
+    }
   }
 
   /** What a task's pull request would open with now, or be updated to: its title and message. Nothing is pushed or opened. Null when there is no checkout to read. */

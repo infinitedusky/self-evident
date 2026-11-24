@@ -35,6 +35,8 @@ export interface MockData {
   /** What was learned from the app's code; nothing yet when left out. */ learning?: import('../engine').Learning
   /** Why submitting a pull request fails, when it should. */ submitPrError?: string
   /** A task's pull request as a step; not submitted (prSample) when left out. */ prView?: import('../engine').PrView
+  /** A task's review copy; not made yet (reviewCopySample) when left out. */ reviewCopy?: import('../engine').ReviewCopyView
+  /** Making it is refused, with this. */ reviewCopyError?: string
   /** A task's save points and task branches; none when left out. */ taskBranches?: import('../engine').TaskBranches; /** Why a move fails, when it should. */ moveError?: string
   /** What a run read and said, for the planner's tab. */ runLog?: import('../engine').RunLog
   /** What is public right now, by "kind:id". */ shares?: Record<string, import('../engine').Shared>; /** Why making a link fails, when it should. */ shareError?: string; /** ngrok's one address is held by these, until the person frees it. */ ngrokHolders?: import('../engine').NgrokHolder[]; /** What the guide tab of a shared prototype is given. */ visitorGuide?: { title: string; guide: import('../engine').Guide | null }
@@ -371,6 +373,13 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/issues/:id/checklist', () => reply(d.checklist ?? null)),
     // The pull request step: the engine's rules, roughly. Submitting opens a draft; marking it ready opens it.
     http.get('/api/issues/:id/pr', () => reply(d.prView ?? s.prSample)),
+    http.get('/api/issues/:id/review-copy', () => reply(d.reviewCopy ?? s.reviewCopySample)),
+    http.post('/api/issues/:id/review-copy', async ({ request }) => {
+      if (d.reviewCopyError) return HttpResponse.json({ error: d.reviewCopyError }, { status: 400 })
+      const b = await request.json() as { fixture?: string | null; try?: string }; const v = d.reviewCopy ?? s.reviewCopySample
+      d.reviewCopy = { ...v, byHand: false, made: { ...s.reviewCopyMadeSample.made!, from: v.pr?.head ?? '', fixture: b.fixture ?? null, try: b.try ?? '', pushed: true, inStep: true } }
+      return reply(d.reviewCopy)
+    }),
     http.put('/api/issues/:id/pr/message', async ({ request }) => { const b = await request.json() as { body?: string }; const v = d.prView ?? s.prSample; const written = b.body?.trim() || null; d.prView = { ...v, written, message: v.message && { ...v.message, body: written ? `${written}\n\n<details><summary>How this was built (sample)</summary>\n\nOur record (sample)\n\n</details>` : v.message.body } }; return reply({ written }) }),
     http.post('/api/issues/:id/pr/update', () => { const v = d.prView ?? s.prSample; if (!v.pr || v.pr.status === 'closed' || v.pr.status === 'merged') return HttpResponse.json({ error: 'there is no pull request to update yet: submit it first' }, { status: 400 }); d.prView = { ...v, behind: false, pr: { ...v.pr, title: v.message?.title ?? v.pr.title, body: v.message?.body ?? v.pr.body } }; return reply({ number: v.pr.number, url: v.pr.url, status: v.pr.status }) }),
     http.post('/api/issues/:id/pr/ready', () => { const v = d.prView ?? s.prSample; if (!v.pr) return HttpResponse.json({ error: 'there is no pull request to mark ready: submit it first' }, { status: 400 }); d.prView = { ...v, canReady: false, pr: { ...v.pr, status: 'open' } }; return reply({ number: v.pr.number, url: v.pr.url, status: 'open' }) }),

@@ -753,3 +753,16 @@ export const taskServices: import('../engine').TaskService[] = [
   { key: 'breach-api', name: 'Breach lookup (sample)', standsInFor: 'Breach lookup API v2, /search (sample)', status: 'assumed', foundFor: null, calls: [] },
 ]
 
+
+/** A task's review copy, not made yet: everything it would hold is made up, so it can be (sample). */
+export const reviewCopySample: import('../engine').ReviewCopyView = {
+  branch: 'REVIEW-edges-that-tunnel-SS-20', pr: { branch: 'SS-20-edges-that-tunnel', head: '4f1c2aa9d0b7e6c5a4f3e2d1c0b9a8f7e6d5c4b3', number: 41 },
+  made: null, byHand: false, compare: 'https://github.com/sample-org/sample-app/compare/SS-20-edges-that-tunnel...REVIEW-edges-that-tunnel-SS-20',
+  kit: { dir: '/sample/tools/review', start: './review/start.sh' }, fixtures: ['Meridian (sample)', 'Two teams (sample)'],
+  services: [{ key: 'vendor', name: 'Sample Vendor', says: 'The mock, with faked data', blocked: null }], waits: [],
+}
+/** The same, made and pushed, on the pull request's head (sample). */
+export const reviewCopyMadeSample: import('../engine').ReviewCopyView = {
+  ...reviewCopySample,
+  made: { from: '4f1c2aa9d0b7e6c5a4f3e2d1c0b9a8f7e6d5c4b3', fixture: null, try: 'Import `review/files/people.csv` (one made-up person) and start a scan.\nOpen that person: the findings card shows each finding (sample).', services: [{ key: 'vendor', name: 'Sample Vendor', files: 3 }], files: ['people.csv'], at: '2026-11-23T15:00:00.000Z', sha: '9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b', pushed: true, inStep: true },
+}
