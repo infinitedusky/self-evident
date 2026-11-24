@@ -24,7 +24,10 @@ export function Workbench({ appId }: { appId: string }) {
   const [shown, setShown] = useState<string | null>(null)
   const take = (x: WorkbenchView) => { setV(x); setDir(x.dir ?? '') }
   useEffect(() => { engine.workbench(appId).then(take).catch((e) => setError(problemOf(e))) }, [appId])
-  const save = async () => { setBusy(true); setError(null); try { take(await engine.setWorkbench(appId, dir.trim() || null)) } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
+  const put = async (to: string | null) => { setBusy(true); setError(null); try { take(await engine.setWorkbench(appId, to)) } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
+  const save = () => put(dir.trim() || null)
+  // The computer's own folder dialog, as for a repository (it opens on the computer Evident runs on). Choosing is saving.
+  const choose = async () => { setBusy(true); setError(null); try { const f = await engine.chooseFolder(v?.dir ?? undefined); if (f.path) { setDir(f.path); await put(f.path) } } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
   if (!v) return error ? <div className="empty bad">{error}</div> : <p className="muted">Loading…</p>
   const changed = dir.trim() !== (v.dir ?? '')
   return (
@@ -32,8 +35,9 @@ export function Workbench({ appId }: { appId: string }) {
       <h2>Workbench</h2>
       <p className="faint" style={{ marginTop: 0 }}>A folder on this computer, outside the app's repositories, for what is ours about working on this app: scripts, a review kit, mockups. Nothing in it goes into the app's code.</p>
       <div className="workbench-dir">
-        <label>The folder<input className="mono" value={dir} disabled={busy} onChange={(e) => setDir(e.target.value)} placeholder="/Users/you/code/app-workbench" /></label>
-        <button className="btn small" disabled={busy || !changed} onClick={() => void save()}>{busy ? 'Saving…' : 'Save'}</button>
+        <label>The folder<input className="mono" value={dir} disabled={busy} onChange={(e) => setDir(e.target.value)} placeholder="Choose it, or type its path" /></label>
+        <button className="btn small" disabled={busy} onClick={() => void choose()}>Choose a folder…</button>
+        {changed && <button className="btn quiet small" disabled={busy} onClick={() => void save()}>{busy ? 'Saving…' : dir.trim() ? 'Save' : 'Take it away'}</button>}
         {v.dir && !changed && (v.found ? <Badge tone="ok">On this computer</Badge> : <Badge tone="warn">Not on this computer</Badge>)}
       </div>
       {error && <p className="bad" role="alert">{error}</p>}

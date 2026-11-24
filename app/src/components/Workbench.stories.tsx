@@ -31,20 +31,21 @@ export const OneHooked: Story = {
   },
 }
 
-/** No folder named yet: the points are still listed, so a person sees what could be hooked; naming a folder that is not there is refused. */
+/** No folder named yet: the points are still listed, so a person sees what could be hooked; a typed path that is not there is refused; the computer's folder dialog chooses and saves one. */
 export const NoFolderYet: Story = {
   beforeEach: withEngine({ workbench: workbenchNoneSample }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await expect(await c.findByText('Name the folder to hook into any of these.')).toBeInTheDocument()
     await expect(c.getAllByText('Not hooked')).toHaveLength(3)
-    await expect(c.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await expect(c.queryByRole('button', { name: 'Save' })).toBeNull() // nothing typed: only the dialog is offered
     await userEvent.type(c.getByLabelText('The folder'), '/Users/sample/nowhere')
     await userEvent.click(c.getByRole('button', { name: 'Save' }))
     await expect(await c.findByRole('alert')).toHaveTextContent('there is no folder at /Users/sample/nowhere on this computer')
-    await userEvent.clear(c.getByLabelText('The folder'))
-    await userEvent.type(c.getByLabelText('The folder'), '/Users/sample/code/sample-workbench')
-    await userEvent.click(c.getByRole('button', { name: 'Save' }))
+    // The computer's folder dialog: what is chosen there is saved at once.
+    await userEvent.click(c.getByRole('button', { name: 'Choose a folder…' }))
+    await expect(await c.findByText('On this computer')).toBeInTheDocument()
+    await expect(c.getByLabelText('The folder')).toHaveValue('/code')
     await expect(await c.findByText('Hooked')).toBeInTheDocument()
   },
 }
