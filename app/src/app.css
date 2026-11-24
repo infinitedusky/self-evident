@@ -1417,3 +1417,7 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 @container (max-width: 560px) { .context-qa { grid-template-columns: 1fr; } }
 .context-unmade .context-q { color: var(--ink); font-weight: 600; }
 .context-unmade .badge { margin-right: 4px; }
+/* A section of Context folds to its heading: the name is the button, the counts stay beside it. */
+.context-fold { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; }
+.context-fold-mark { width: 14px; font-size: 14px; color: var(--ink-soft); }
+.context-section.folded { margin-top: 14px; }
