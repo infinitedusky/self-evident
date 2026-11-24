@@ -239,7 +239,8 @@ export async function addContextNote(s: Subject, i: { kind?: string; title?: str
     const same = (await notesOf(f.appId, f.key)).filter((n) => n.kind === 'decision' && n.title.toLowerCase() === title.toLowerCase())
     if (agent && answer && same.some((n) => n.status === 'rejected' && (n.answer ?? '').toLowerCase() === answer.toLowerCase())) throw new PlanError('the person already turned that answer down; do not propose it again')
     if (agent && status === 'proposed' && same.some((n) => n.status === 'proposed')) throw new PlanError('an answer to that is already proposed and waits for the person')
-    const asked = same.find((n) => n.status === 'open')
+    // The question it answers, if it is already here unanswered: asked with no answer, or (for an answer the person gave or agreed to) with an answer an agent proposed.
+    const asked = same.find((n) => n.status === 'open') ?? (status === 'settled' ? same.find((n) => n.status === 'proposed') : undefined)
     if (asked && !answer) { if (agent) throw new PlanError('that is already asked and waits for the person'); return { status, view: await contextOf(s) } }
     if (asked) { // the answer goes onto the question that was waiting
       await editNote(f.appId, asked.id, { answer, body: i.body ?? asked.body, background: i.background?.trim() ? i.background : undefined, status, ...(status === 'settled' ? { on: i.on ?? dayOf(new Date()) } : {}) }, actor)

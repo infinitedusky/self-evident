@@ -125,6 +125,10 @@ describe.skipIf(!reachable)('context', () => {
     v = await editContextNote({ issueId: t }, open.id, { answer: 'Shown, greyed out' })
     expect(v.notes.find((n) => n.id === open.id)).toMatchObject({ status: 'settled', answer: 'Shown, greyed out' })
     expect(await contextCount({ issueId: t })).toEqual({ count: 1, proposed: 1, waiting: 0 })
+    // An answer the person agreed to goes onto the question that had a proposed answer: one decision, not two.
+    expect((await addContextNote({ issueId: t }, { kind: 'decision', title: 'Do we support gift cards? (sample)', answer: 'No, a later task', agreed: true }, 'agent')).status).toBe('settled')
+    v = await contextOf({ issueId: t })
+    expect(v.notes.filter((n) => n.kind === 'decision').map((n) => [n.status, n.answer]).sort()).toEqual([['settled', 'No, a later task'], ['settled', 'Shown, greyed out']])
   })
 
   it('marks an open decision as waiting on someone, counts it apart, tells agents and a report, and forgets it once answered', async () => {

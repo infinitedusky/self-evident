@@ -7605,3 +7605,22 @@ A decision with no answer has no "why this answer", so what is said beside it is
 - The page no longer shows a `body` beside an unanswered decision; there is none.
 
 Built, not merged.
+
+## A "proposed" decision with no answer is an unanswered question (Sandy, 2026-11-24, pasting one: "background has default, there is text above in Why")
+
+Found in Sandy's data: eight decisions an agent "proposed" on the first day, when a decision was one statement.
+Each has its options and a recommendation in `body` and no answer. Since decisions became question and answer, the
+page showed them as "The agent proposes:" with nothing after it, the options as "Why", and a form with an empty
+Background and nowhere for that text.
+
+- Migration `0063_proposed_without_answer_is_open`: a proposed decision with no answer becomes unanswered, and its
+  `body` becomes its background where it has none. A proposed decision that has an answer is left alone.
+- **One decision, not two**: an answer the person gave or agreed to now goes onto the question when that question
+  is already here with an agent's proposed answer. Before, only a question with no answer at all was matched, so
+  the agent recording "decide" left the proposed one behind as a duplicate.
+
+Left as they are: those eight titles still begin "Open: " (the agent's own way of saying unanswered, before there
+was a state for it), and one of them ("do new executives join the group automatically…") already has an answered
+copy made the old way; the unanswered copy is still there for Sandy to drop with Not needed.
+
+Built, not merged.

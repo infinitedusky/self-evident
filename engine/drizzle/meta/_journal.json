@@ -442,6 +442,13 @@
       "when": 1795551281366,
       "tag": "0062_asked_why_is_background",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1795551503075,
+      "tag": "0063_proposed_without_answer_is_open",
+      "breakpoints": true
     }
   ]
 }
