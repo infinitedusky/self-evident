@@ -7353,6 +7353,120 @@ not edited here or given in full.
 - A page address that names a section (`/ideas/<id>/context`) opened the tab on its overview when I loaded it
   directly; clicking Context in the nav works. Not looked into: it may be how tabs restore, for any section.
 
+## A fixture loads into a database with computed columns (2026-11-24)
+
+Sandy could not start CEB-90's smoke test from the fixture "Meridian". The cause was not who is signed in, as we
+both guessed: the load itself failed. A fixture kept from a database has every column, and the loader put every
+column back, including one the database works out itself (`employees.composite_risk_score`, generated), which
+Postgres refuses. The start answered with a bare server error, so the page said nothing useful.
+
+- **Only the columns that take a value are loaded** (`prototype-data.ts`, `load`): generated ones are left to the
+  database; an identity column keeps the row's own id.
+- **The review copy's `fixture.sql` does the same**, reading the columns from the database it is run on
+  (`fixtureSql`): it would have failed on a reviewer's machine the same way.
+- **A load that fails says which table and why**, as a refusal a page can show.
+- The loader's test database has a generated column now, and its scenario carries a value for it.
+
+With it, the Cloaked workbench's `before-start` hook ran for the first time (it gave `DEMO_TENANT_ID`), and the
+two smoke set-ups' scripts use what it gives. Tried from a throwaway process, not yet from the page.
+
+## An endpoint's data, a file per fixture; the fixture picks (Sandy, 2026-11-24)
+
+With Meridian's smoke test up, Sandy wanted a mock response with a row for each of its 250 people, and asked:
+"should the endpoints be connected to whatever fixture you're on, or should you be able to do multiple of the same
+endpoint tied to different fixtures?" The second. Until now an endpoint had one made-up file (and a task's own), and
+filling it out for a fixture's people changed that one file, so the data decided the fixture and never the reverse.
+
+- **An endpoint holds several files**, each made for one fixture's people, or for none.
+- **The fixture a run starts from picks** (`pickForFixture`, mock-serve.ts): the file made for it; else one made for
+  no fixture; else the order there was. Started empty: one made for no fixture first. A prototype (its scenario), a
+  smoke test (what its database was built from) and a review copy (its fixture) all say which.
+- **Filling out for a fixture adds a file** beside the one it was made from, which is left as it is; filling out
+  again for the same fixture changes that fixture's file. (`assignFixture` says `fresh`.)
+- **Where the fixture is not known** (the Data step's own view, an export), nothing changes: the order alone.
+- The page names an endpoint's other files by fixture, and says the rule.
+
+Not done: the Data step and the smoke page do not yet show, for a fixture chosen there, which file each endpoint
+would serve; a fixture's file cannot be removed from the page; `fixtureForTask` still takes the first fixture any
+data was made for when the person picks none; a server written by hand that writes over what it is sent (CEB-90's)
+gets the right file but may still overwrite its people. Meridian's own file is not made yet: Sandy wants it without
+the deep enrichment that makes one person's rows large ("we don't need any of that").
+
+## A response per fixture (Sandy, 2026-11-24)
+
+The file-per-fixture work (#401) only made a copy of one template with other people in it. Sandy, on why that is not
+enough: a template is one person at full depth, so all 250 of a company would come out as that person's shape ("how
+many of those people we want to have doxing, how many people we don't"); and then the model: "we just want to be
+able to have multiple responses … a response per fixture. And then in that response, we can do whatever we want. We
+can make it fake or not fake. We can have its own CSV."
+
+So: **an endpoint has a response for any fixture, and may have one for each fixture; each is a whole response.**
+
+Built now, the made-up half:
+- **"Add for a fixture"** on an endpoint's data: a file given as that fixture's own, kept beside the data there is.
+  A run started from the fixture is served it (`pickForFixture`).
+- **Its fields are mapped row by row.** A file given for a fixture has its rows already, one for each person, mixed
+  as its writer chose. Mapping from the fixture sets the chosen columns of the first row from the first person and
+  so on, adds no row, and leaves what else each row says.
+- The limit of 200 people on a mapping is 2000.
+
+Not done, and next: **a real response per fixture, faked** (refused for now: "a file for one fixture is made up").
+Whose a response is has two parts today, the endpoint and the task (`Scope`); the fixture is marked on the side
+(`madeFor`). Making the fixture a third part of that is what lets a fixture's response be anything the main one can
+be: recorded, faked, its own answer to "the faked version?". Also not done: two files for one fixture are not
+refused (the newer is served); a fixture's file is removed only with the rest; the page shows one response at a
+time and names the others in a line.
+
+## A response per fixture, built as that (Sandy, 2026-11-24)
+
+The two merges before this (#401, #402) answered a different question with field mapping, and Sandy said so: "What
+you seem to be doing is trying to come up with some way to map things together to solve that problem. What I'm
+arguing for is don't … do that. Instead, allow an endpoint to have responses per fixture so I can … say do it this
+way for this fixture, do it this way for that fixture … and this is the default." And where: "It shouldn't have to
+be done in the settings. The settings are really about setting defaults … it's really in the tasks." And of the two
+places: "the task data and the mock in the settings should pretty much be identical. Just one is going to override
+the other."
+
+- **Whose a response is has three parts** (`Scope`, mock-data.ts): the endpoint, the task (none: the app's), and now
+  the fixture (none: the default). So a fixture's response is whatever the default can be: a real response kept
+  here and its fake, or a file provided; with its own removal, its own fake, and a task's own over the app's.
+- **A run is served its fixture's response, else the default** (`itemOf`): a task's own for that fixture, the task's
+  default, the app's for that fixture, the app's default.
+- **Any endpoint**, not only one that answers with people.
+- **One control, the same in Settings and on a task's Data step** (`EndpointData.tsx`): Default, then a tab for each
+  fixture that has a response, then "+ For a fixture". What is chosen is what the rest of the cell shows and
+  changes. On a task, a response added for a fixture is that task's own.
+- **Mapping fields is only what it was**: an override of who a response answers for, on the response chosen. It
+  makes no response. On a fixture's own response it is row by row and adds no row.
+- Taken out: the choice by `madeFor` (`pickForFixture`), the copy a mapping used to make for another fixture, the
+  "Add for a fixture" button that took made-up files only.
+
+Not done: a mapping from a tester's file is of the default response only; "use the faked version" is one answer for
+an endpoint, not one for each response; agents' tools name no response, so the data agent works on defaults; the
+Data step does not yet say which response a run from the fixture chosen on the smoke page will be served; nothing
+has been tried on the real page or with Meridian.
+
+### The pull request has a step on Settings › Skills (2026-11-24)
+
+Sandy, reading the Verify stage of the build on Settings › Skills: "there should be more sections here, based on what
+we added in section four". The page stopped at the smoke test, so nothing of the finalizing could be seen or set.
+
+- **A Pull request step after the Smoke test** (`CONTRACTS.pr`, contracts.ts): Verify, by the engine, then Do, by
+  the person. Its Verify lists the finalizing's five steps in the order they run, then the six gate checks
+  (`finalizingOf`). A step reports and a gate check holds the press; the page says which on each row. The names are
+  the ones the finalizing and the gate use (`FINALIZE_STEPS`, `GATE_NAMES`), so they cannot drift.
+- **Only mutation testing is an app's to change there.** It is switched, and set: how its tests are run (`{files}`),
+  what is run first in its checkout, the most breaks tried, or the app's own tool and its report
+  (`applyFinalizeChange`, mutation-setup.ts; kept as before in `setup.mutation` and `setup.finalize.prepare`). How it
+  is set is said under its row whether or not anything is set, because an app that needs its checkout prepared and
+  has not said how fails the step. The gate checks are fixed: an app does not switch off what holds a pull request.
+- **The build's Verify list was not split.** Its probes run at one moment on one commit; smoke, release and watch
+  are per criterion and set on the brief.
+- The build's own words now say a test plan's build is a test phase then slices, and its done-when names the
+  trajectory.
+
+Not done: no agent tool sets the mutation settings; the page does not say whether the command given would run (no
+"Try" as probes have); the trajectory and review copy steps cannot be switched off for an app that has neither.
 ## A decision is a question and its answer (Sandy, 2026-11-24: "the decisions section should be key value, question answer … we can put unmade decisions in and then make them later and make sure that we make them")
 
 **Decided** (Sandy, asked): a decision in Context is a question with an answer, and why if there is one. One with

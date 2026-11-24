@@ -1205,6 +1205,14 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .step-probe-night { font-size: 12px; }
 .step-probe-night .trial-fail { color: var(--bad, #b42318); }
 .step-probe-says { flex-basis: 100%; margin: 0; font-size: 12px; }
+.step-probes th.step-probe-switch { padding: 3px 24px 3px 0; font-weight: 400; vertical-align: baseline; }
+.step-probes .badge { white-space: nowrap; }
+.step-finalize-set { display: flex; flex-direction: column; gap: 2px; }
+.step-finalize-form { display: flex; flex-direction: column; gap: 6px; max-width: 640px; padding: 4px 0 8px; }
+.step-finalize-field { display: grid; grid-template-columns: 190px 1fr; gap: 8px; align-items: center; font-size: 13px; }
+.step-finalize-field input { margin: 0; }
+.step-finalize-form .step-probe-says { margin-left: 198px; }
+@media (max-width: 640px) { .step-finalize-field { grid-template-columns: 1fr; } .step-finalize-form .step-probe-says { margin-left: 0; } }
 .step-probe-trial summary { cursor: pointer; color: var(--ink-soft, inherit); }
 .step-probe-trial .trial-fail { color: var(--bad, #b42318); }
 .step-probe-trial ul { list-style: none; margin: 4px 0 0; padding: 0 0 0 14px; }
@@ -1393,6 +1401,12 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 .context-rejected > summary { cursor: pointer; }
 .context .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
 .task-nav-mark.wide { width: 14px; font-size: 12px; }
+
+/* An endpoint's responses: the default, and one per fixture (EndpointData.tsx) */
+.endpoint-responses { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 6px; }
+.endpoint-response { font: inherit; font-size: 12px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
+.endpoint-response.on { background: var(--surface); border-color: currentColor; font-weight: 600; }
+.endpoint-responses select { font-size: 12px; max-width: 220px; }
 /* A decision: its question, then its answer. Side by side where there is room. */
 .context-qa { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); column-gap: 20px; align-items: baseline; }
 .context-q { font-size: 14px; color: var(--ink-soft); }

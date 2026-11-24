@@ -5,6 +5,16 @@
  * the rollback agrees with the blast radius (a one-way door is never called revertable); the person's smoke checks
  * done"). Each check here is pure: what it is given, and what it says. finalize.ts gathers the facts.
  */
+/** Each check's name, as the page and Settings › Skills say it. */
+export const GATE_NAMES = {
+  title: 'The title fits the app\'s rule and carries the team\'s ticket',
+  description: 'The description follows the app\'s form, every section filled, nothing of ours above the fold',
+  rollback: 'The rollback agrees with the blast radius',
+  github: 'GitHub\'s checks are green',
+  commands: 'The app\'s held commands pass on the head',
+  smoke: 'Your smoke checks are done',
+} as const
+
 export interface GateCheck {
   key: 'github' | 'commands' | 'title' | 'description' | 'rollback' | 'smoke'
   name: string
@@ -18,7 +28,7 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** The title against the app's rule (`setup.pr_title`), and the team's ticket in it. */
 export function titleCheck(i: { template: string | null; title: string; ticket: string | null; ticketRequired: boolean; ours: string }): GateCheck {
-  const name = 'The title fits the app\'s rule and carries the team\'s ticket'
+  const name = GATE_NAMES.title
   const title = i.title.trim()
   if (!title) return { key: 'title', name, state: 'fail', says: 'It has no title.' }
   const wrong: string[] = []
@@ -55,7 +65,7 @@ const empty = (body: string) => { const t = body.replace(/<!--[\s\S]*?-->/g, '')
  * (the evidence, the deploy steps, the review section) are not the writer's and are not read here.
  */
 export function descriptionCheck(i: { template: string | null; written: string | null; /** Our ids for the task and its sub-tasks. */ ours: string[]; /** The team's ticket: it may look like one of ours and is theirs. */ ticket?: string | null }): GateCheck {
-  const name = 'The description follows the app\'s form, every section filled, nothing of ours above the fold'
+  const name = GATE_NAMES.description
   const written = (i.written ?? '').replace(/<!-- evident:(\w+) -->[\s\S]*?<!-- \/evident:\1 -->/g, '').trim()
   if (!written) return { key: 'description', name, state: 'fail', says: 'Its description has not been written for the team: it would lead with Evident\'s merge guide, which reads as our build log. Write it on this page, or ask the task\'s agent to.' }
   const wrong: string[] = []
@@ -91,7 +101,7 @@ export const oneWayLine = (text: string) => text.split('\n').map((l) => l.replac
 
 /** The description's rollback against the blast radius: a one-way door is never called revertable. */
 export function rollbackCheck(i: { written: string | null; /** All the blast radius wrote, with the merge checklist and the decisions: where a one-way door is said. */ risk: string | null }): GateCheck {
-  const name = 'The rollback agrees with the blast radius'
+  const name = GATE_NAMES.rollback
   const door = i.risk ? oneWayLine(i.risk) : null
   if (!i.risk?.trim()) return { key: 'rollback', name, state: 'none', says: 'This task has no blast radius to hold the rollback against.' }
   const says = revertableLines(i.written ?? '')
@@ -102,7 +112,7 @@ export function rollbackCheck(i: { written: string | null; /** All the blast rad
 
 /** GitHub's own checks on the pull request. */
 export function githubCheck(pr: { status: string; checks: { name: string; state: 'pass' | 'fail' | 'pending' | 'skipped' }[] } | null, problem?: string | null): GateCheck {
-  const name = 'GitHub\'s checks are green'
+  const name = GATE_NAMES.github
   if (problem) return { key: 'github', name, state: 'wait', says: problem }
   if (!pr) return { key: 'github', name, state: 'none', says: 'It is not on GitHub yet, so nothing has been run there. They are read once it is.' }
   const failing = pr.checks.filter((c) => c.state === 'fail'), pending = pr.checks.filter((c) => c.state === 'pending')
@@ -113,7 +123,7 @@ export function githubCheck(pr: { status: string; checks: { name: string; state:
 
 /** The app's held commands on the head: each as it last ran, and on which commit. */
 export function commandsCheck(i: { head: string | null; ran: { name: string; runs: string; pass: boolean; /** The commit it ran on, when known. */ sha?: string | null; detail?: string }[] }): GateCheck {
-  const name = 'The app\'s held commands pass on the head'
+  const name = GATE_NAMES.commands
   if (!i.ran.length) return { key: 'commands', name, state: 'none', says: 'This app holds no commands of its own.' }
   const failed = i.ran.filter((r) => !r.pass)
   if (failed.length) return { key: 'commands', name, state: 'fail', says: `${failed.map((f) => f.name).join(', ')} ${failed.length === 1 ? 'fails' : 'fail'}.`, details: failed.map((f) => `\`${f.runs}\`${f.detail ? `: ${f.detail.trim().split('\n').slice(-3).join(' ').slice(-300)}` : ''}`), fix: `${failed.length === 1 ? 'A command' : 'Commands'} this app holds every change to ${failed.length === 1 ? 'fails' : 'fail'} on this branch:\n\n${failed.map((f) => `\`${f.runs}\`\n\n${(f.detail ?? '').slice(-1500)}`).join('\n\n')}\n\nFix what makes ${failed.length === 1 ? 'it' : 'each'} fail. Do not change the command or what it checks.` }
@@ -124,7 +134,7 @@ export function commandsCheck(i: { head: string | null; ran: { name: string; run
 
 /** The person's own checks, on the Smoke page. */
 export function smokeCheck(i: { owed: number; failed: number; accepted: { sha: string | null } | null; head: string | null }): GateCheck {
-  const name = 'Your smoke checks are done'
+  const name = GATE_NAMES.smoke
   if (i.failed) return { key: 'smoke', name, state: 'fail', says: `${i.failed} of your checks failed by hand, and ${i.failed === 1 ? 'is' : 'are'} sent back.` }
   if (i.owed) return { key: 'smoke', name, state: 'fail', says: `${i.owed} of your checks still wait${i.owed === 1 ? 's' : ''} on the Smoke page.` }
   if (!i.accepted) return { key: 'smoke', name, state: 'fail', says: 'The smoke test has not been accepted.' }
