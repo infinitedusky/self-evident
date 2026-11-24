@@ -7215,6 +7215,73 @@ only the description. Equivalence is two rules and the person's word; "a value a
 The mutator reads lines and knows nothing of types or syntax, so it makes fewer kinds of break than Stryker or
 mutmut would. The task's agent has no tool to read the results.
 
+## ENT-322 a fourth time, as the test of the new tools (Sandy, 2026-11-23: "rebuild 322 once more as a test using all our new tools")
+
+Started 2026-11-24, once the finalizing (#393) was in. A new task, **CEB-111**, beside CEB-90, which is left as it
+is with its pull request. Decided with Sandy: it is done again **from the Data step**, and set up from this session,
+not by the app's agent.
+
+- **Copied from CEB-90:** the brief, word for word but for the sentence that says which build it is, **not
+  approved** (approving the prototype approves it); all 38 criteria with their checks, `buildOnly` and `why`; the
+  team ticket and title; the Research, Sketch and Mockup steps, done and **not approved** (the approvals are the
+  person's). The sketch's file was copied into the new talk's worktree.
+- **Tagged, which CEB-90's never were:** the live run on a real person, the card's looks and the pull request's
+  rollback text are `smoke`; the workflow id in each environment is `release`.
+- **Done again:** Data (the data agent's first live round), the prototype, the test plan, the build in red then
+  green, the check, the smoke test, the finalizing, the review branch.
+- **Not copied on purpose:** CEB-90's calls and services on the task (none are set: its agent has to ask the data
+  agent), its prototype, its marks.
+
+Known before it starts: the mockup's pictures are stories in CEB-90's prototype worktree, so the new prototype has
+to bring them over or the Mockup step shows nothing; every criterion is recorded as written by the person, because
+the copy went in through the person's route; watch (section 5 of the proven-work note) is not built, so nothing is
+tagged `watch`.
+
+## A script is told its fixture; what it makes of it is the app's (Sandy, 2026-11-24)
+
+CEB-90's smoke test could not be used with the fixture "Meridian": the rows load, but the set-up's script signs the
+tester in as another company, so none of them show. I proposed a setting for "sign-in follows the fixture". Sandy:
+"this stuff starts to seem very specific to this scenario … this idea that we're automatically logged in, to me,
+seems like a very Cloaked specific setup." Right: being signed in at all is that app's workbench, not Evident.
+
+- **Evident says which fixture, and nothing more.** A smoke test's script and a prototype's command are run with
+  `$FIXTURE`: the name of the app's fixture the database was built from, empty when none (set only where the app has
+  a database of its own). A review kit's files have `{{fixture}}` beside its other names.
+- **Who is signed in, and anything else an app does with a fixture, is the app's script's.** Nothing of it is a
+  setting of Evident's.
+
+Not done: the workbench's own script still signs in as a fixed company, so Meridian is still unusable in the main
+set-up until that script reads the database or `$FIXTURE`. Open with Sandy: whether an app's own scripts like that
+one get a place in Settings ("workbench scripts"), instead of living only in a folder the set-ups call.
+
+## Hooks: an app's own scripts, run at Evident's points, kept in its workbench folder (Sandy, 2026-11-24)
+
+After `$FIXTURE`, the question was where an app's own part lives. I offered two shapes: a section in Settings that is
+a window onto the app's workbench folder, or hooks kept in Evident's settings. Sandy: "I think both. That hook idea
+is really cool … evident has a bunch of different lifecycle events that we can hook into. But they would be defined,
+they would be stored … in the workbench … You don't want them in the repo itself."
+
+- **The workbench folder** is an app setting (`setup.workbench.dir`): a folder on this computer outside the app's
+  repositories. (The word already meant "an app's repositories worked on together", workbench.ts. Here it is the
+  folder of ours beside them. Not renamed; said once.)
+- **A hook is a file in its `hooks/`, named for a point** (`before-start`, any extension), found by name: nothing
+  is registered. Evident runs it and knows nothing of what it does (`engine/src/hooks.ts`).
+- **Three points to begin with**, each where Evident already acts:
+  - `before-start`: before a prototype's command or a smoke test's script, with what that script will be given
+    (`$PLACE`, `$FIXTURE`, the database, `$PORT`, `$TASK`). Lines it prints as `NAME=value` are laid over the
+    script's settings. A failure starts nothing, and says why.
+  - `after-stop`, `task-closed`: nothing waits on them; a failure is recorded.
+- **Every run is an event** (`hook.ran`): the point, whether it worked, the names of what it gave and never the
+  values, and on a failure its last lines. No table.
+- **Settings › Workbench** (per app; story first, `Workbench.stories.tsx`): the folder, every point hooked or not
+  with what it is given and what follows, the script to read, its last run.
+
+Not done: a script is read in Settings and changed in the folder, not in the page; a review copy runs on a
+reviewer's computer, so no hook runs for it (its kit is its own part); a hook's output is not checked for anything
+real before its last lines are kept; the smoke set-ups' scripts, seed and the prototype command still live in their
+own settings and were not moved into the folder; no agent tool reads or writes hooks; more points (a fixture
+loaded, a review copy made, a build finished) are added when something needs one.
+
 ## Context: a section above the brief, on an idea, a project and a task (Sandy, 2026-11-24; brief in docs/context-brief.md)
 
 Built from the brief, story first. Sandy approved the layout and the four points below as one ("looks good").

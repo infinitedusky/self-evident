@@ -1352,6 +1352,16 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 .finalize-evidence summary { cursor: pointer; font-weight: 500; }
 .finalize-press { margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
 
+/* An app's workbench folder and its hooks (Workbench.tsx) */
+.workbench-dir { display: flex; align-items: flex-end; gap: 10px; margin: 0 0 10px; }
+.workbench-dir label { flex: 1; max-width: 560px; }
+.workbench-hooks { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.workbench-hooks > li { border-top: 1px solid var(--line, #e5e5e5); padding-top: 10px; display: grid; gap: 3px; }
+.workbench-hook-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.workbench-point { font-weight: 600; font-size: 14px; }
+.workbench-hook-says { font-size: 13px; }
+.workbench-last { font-size: 13px; margin-top: 4px; }
+.workbench-script { margin: 6px 0 0; padding: 8px 10px; font-size: 12px; overflow-x: auto; background: var(--code-bg, rgba(127,127,127,.12)); border-radius: 6px; white-space: pre-wrap; }
 /* Context (Context.tsx): the page, a section, how agents get it, a row, a row's detail. One text style each. */
 .context-lede { margin: 0 0 4px; font-size: 14px; }
 .context-section { margin-top: 22px; }

@@ -15,6 +15,7 @@ import { and, desc, eq, ne } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, prototype, repo } from './db/schema.js'
 import { homeRepo } from './workbench.js'
+import { afterwards, beforeStart } from './hooks.js'
 import { fixtureForTask } from './fixtures.js'
 import { appendEvent } from './events.js'
 import { addWorktree, git, removeWorktree } from './git.js'
@@ -138,7 +139,10 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
   const pointed = envOf(p.id, standIns, await startStandIns(p.id, standIns, p.path, { ...process.env, ...(await prototypeEnv(p)) }), p.path)
   const envFile = writeEnvFile(p.id, pointed) // for a container: a compose service names it as an env_file once
   // Its own process group, so stopping it also stops what the command started (a package manager's dev server).
-  const proc = spawn('sh', ['-c', cmd], { cwd: p.path, env: { ...process.env, ...(await prototypeEnv(p)), ...pointed, STAND_INS_ENV: envFile, PORT: String(port), ...more.env, BROWSER: 'none', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+  const env: Record<string, string> = { ...(await prototypeEnv(p)), ...pointed, STAND_INS_ENV: envFile, ...(dbCfg ? { FIXTURE: (await rowOf(id)).scenario ?? '' } : {}), PORT: String(port), ...more.env, BROWSER: 'none', CI: '1' }
+  // The app's own hook (hooks.ts), last: what it prints is laid over what the command is run with. A failure starts nothing.
+  try { Object.assign(env, await beforeStart(p.appId, env, { issueId: p.issueId ?? null, place: 'prototype' })) } catch (err) { await cleanUp(p); throw err }
+  const proc = spawn('sh', ['-c', cmd], { cwd: p.path, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   const log: string[] = []
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
@@ -265,7 +269,7 @@ export async function stopPrototype(id: string, actor = 'person') {
   sayStopped(id)
   await kill(id)
   await cleanUp(p)
-  if (p.status === 'running') { await db.update(prototype).set({ status: 'stopped', updatedAt: new Date() }).where(eq(prototype.id, id)); await emit(p, 'prototype.stopped', actor) }
+  if (p.status === 'running') { await db.update(prototype).set({ status: 'stopped', updatedAt: new Date() }).where(eq(prototype.id, id)); await emit(p, 'prototype.stopped', actor); afterwards(p.appId, 'after-stop', await prototypeEnv(p), { issueId: p.issueId ?? null, place: 'prototype' }) }
   return prototypeStatus(id)
 }
 

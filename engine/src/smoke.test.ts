@@ -191,6 +191,9 @@ describe('how an app is brought up for one', () => {
       expect(env).toEqual({ DATABASE_URL: 'postgres://sample.test/smoke', PORT: '6511', BROWSER: 'none', CI: '1', SMOKE_SEED: join(home, 'app_sample', 'seed.sql'), SMOKE_CLEAN: '1' })
       expect(await readFile(env.SMOKE_SEED!, 'utf8')).toBe('insert into parent (id) values (1);\n')
       const bare = await smokeEnv('app_sample', { where: 'local' }, { port: 6511 })
+      expect(bare.FIXTURE).toBeUndefined() // no database of its own: no fixture to speak of
+      expect((await smokeEnv('app_sample', { where: 'local' }, { port: 6511, fixture: 'northwind' })).FIXTURE).toBe('northwind')
+      expect((await smokeEnv('app_sample', { where: 'local' }, { port: 6511, fixture: null })).FIXTURE).toBe('') // started empty: said, as nothing
       expect(bare).toEqual({ PORT: '6511', BROWSER: 'none', CI: '1' })
       expect(existsSync(join(home, 'app_sample', 'seed.sql'))).toBe(false)
       // The stop script runs where the start one did, with what it had; one that fails is not an error.

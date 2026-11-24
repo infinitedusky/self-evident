@@ -114,7 +114,7 @@ export interface Kit {
   /** What each of its files is, for the reader: name (or names) to a line. */ files: Record<string, string>
 }
 export const kitDirOf = (setup: unknown): string | null => ((setup as { review?: { kit?: string } } | null)?.review?.kit ?? '').trim() || null
-export interface Vars { ticket: string; task: string; project: string; pr: string; branch: string; review_branch: string }
+export interface Vars { ticket: string; task: string; project: string; pr: string; branch: string; review_branch: string; /** The fixture its database starts from; empty: none. */ fixture?: string }
 const fillVars = (text: string, v: Vars) => text.replace(/\{\{(\w+)\}\}/g, (all, k: string) => (v as unknown as Record<string, string>)[k] ?? all)
 /** The app's kit, read from its folder with the task's names filled in. */
 export function readKit(dir: string, v: Vars): Kit {
@@ -228,7 +228,7 @@ async function context(issueId: string) {
   const ticket = (await teamTicket(t))?.ticket ?? ticketOf({ identifier: task, sourceRef: t.sourceRef })
   const branch = row?.headBranch ?? null
   const review = branch ? reviewBranch(branch, task) : null
-  const vars: Vars | null = branch && review ? { ticket, task, project: `${ticket.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-review`, pr: row?.number ? String(row.number) : '', branch, review_branch: review } : null
+  const vars: Vars | null = branch && review ? { ticket, task, project: `${ticket.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-review`, pr: row?.number ? String(row.number) : '', branch, review_branch: review, fixture: '' } : null
   return { t, a, r, row, task, ticket, branch, review, vars, title: (t as { teamTitle?: string | null }).teamTitle || t.title }
 }
 
@@ -291,9 +291,10 @@ export async function makeReviewCopy(issueId: string, i: { /** The fixture its d
   const was = await reviewCopy(issueId, { fresh: true })
   const hard = was.waits
   if (hard.length) throw new PlanError(`The review copy cannot be made yet. ${hard.join(' ')}`)
-  const repo = c.r!.localPath!, branch = c.branch!, review = c.review!, vars = c.vars!, head = was.pr!.head!
-  const kit = readKit(kitDirOf(c.a.setup)!, vars)
+  const repo = c.r!.localPath!, branch = c.branch!, review = c.review!, head = was.pr!.head!
   const fixture = i.fixture === undefined ? was.made?.fixture ?? null : i.fixture || null
+  const vars: Vars = { ...c.vars!, fixture: fixture ?? '' } // the kit's own scripts are told which fixture: what they make of it is the app's business
+  const kit = readKit(kitDirOf(c.a.setup)!, vars)
   const tryText = (i.try === undefined ? was.made?.try ?? '' : i.try).trim().slice(0, TRY_MAX)
   if (fixture && !was.fixtures.includes(fixture)) throw new PlanError(`"${fixture}" is not a fixture a reviewer can be given (${was.fixtures.join(', ') || 'the app has none that is made up'})`)
   if ((await git(repo, ['cat-file', '-e', `${head}:review`], { allowFail: true })).code === 0) throw new PlanError('the pull request\'s own branch already has a review/ folder, and a review copy would write over it')
@@ -359,7 +360,7 @@ export async function reviewSectionFor(issueId: string): Promise<string | null> 
     const rc = await reviewCopy(issueId)
     const kitDir = kitDirOf(c.a.setup)
     if (!rc.made?.pushed || !kitDir || !c.vars || !c.r?.fullName) return null
-    return reviewSection(rc.made, readKit(kitDir, c.vars), c.r.fullName)
+    return reviewSection(rc.made, readKit(kitDir, { ...c.vars, fixture: rc.made.fixture ?? '' }), c.r.fullName)
   } catch { return null }
 }
 

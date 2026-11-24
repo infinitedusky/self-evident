@@ -490,6 +490,9 @@ export function buildApp(bus: EventBus) {
     return new Response(await readFile(f.path), { headers: { 'content-type': inline ? f.mediaType : 'application/octet-stream', 'content-disposition': `${inline ? 'inline' : 'attachment'}; filename="${f.name.replace(/"/g, '')}"`, 'x-content-type-options': 'nosniff' } })
   } catch (err) { return planError(c, err, 404) } })
   // Fixtures (fixtures.ts): the app's shared scenarios, a table's rows to pick a person from, and an endpoint's data made for one of them.
+  // The app's workbench folder and its hooks (hooks.ts).
+  api.get('/apps/:id/workbench', async (c) => { try { return c.json(await (await import('./hooks.js')).workbench(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  api.put('/apps/:id/workbench', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { dir?: string | null }; return c.json(await (await import('./hooks.js')).setWorkbench(c.req.param('id'), b.dir ?? null)) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/fixtures', async (c) => { try { const issueId = c.req.query('issue') || null; return c.json({ fixtures: await listFixtures(c.req.param('id')), used: await fixtureForTask(c.req.param('id'), issueId), make: await canMakeFixture(c.req.param('id')) }) } catch (err) { return planError(c, err, 404) } })
   // Made from the app's seed (minutes: its schema and seed commands run), looked into, renamed, deleted.
   api.post('/apps/:id/fixtures', async (c) => { const b = await c.req.json<{ name?: string }>().catch(() => ({} as { name?: string })); try { return c.json(await makeFixtureFromSeed(c.req.param('id'), b.name?.trim() || undefined)) } catch (err) { return planError(c, err) } })
