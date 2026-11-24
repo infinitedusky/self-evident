@@ -7665,3 +7665,17 @@ titles, and could only offer to ask all of them again for Sandy to reject the ol
 - The prompt says a question already here is brought up to date in place, never asked a second time.
 
 An agent still cannot remove a decision: dropping one is the person's (Not needed).
+
+## The Data step's Approve and Skip are at its top (Sandy, 2026-11-24: "the data tab doesn't have an approve button at the top. A skip, you know")
+
+On CEB-111 the Data step showed neither where a person looks. Approve is in a step's head but only once the step is
+started, and the data agent's rounds never start the step; Skip was under the whole page, which on this step is
+every service and its data.
+
+- On a task's Data step, **Approve is in the head whether or not the step is started**: its page (the services and
+  their data) is there before any agent is asked, so it can be approved as it stands. Pressed on a step not
+  started, it starts it and approves it.
+- **Skip is in the head too**, and no longer under the page.
+
+Not done: the data agent's own three approvals and the step's approval are still two things, and approving the
+agent's last step does not approve the Data step.

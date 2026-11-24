@@ -44,7 +44,8 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   const [error, setError] = useState<string | null>(null)
   const s = row.state
   // The Data step shows what its agent wrote inside its panel, at the top of the services: not again below it.
-  const dataInside = row.key === 'data' && on === 'task' && row.state.status !== 'skipped'
+  const dataStep = row.key === 'data' && on === 'task' // its Approve and Skip are in its head: the page under it is long
+  const dataInside = dataStep && row.state.status !== 'skipped'
   // The Test plan step shows its plan as the trajectory: the table with what the engine saw of each row, not the same table again as text.
   const [trajectory, setTrajectory] = useState<Trajectory | null>(null)
   const planStep = row.key === 'testplan' && on === 'task'
@@ -100,8 +101,10 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
         )}
         {row.required ? <Badge tone={finished(s, on) ? 'ok' : 'warn'}>required</Badge> : skipped(s) ? <Badge>skipped</Badge> : <span className="faint" style={{ fontSize: 13 }}>optional</span>}
         {/* The check mark is the person's: the agent can only say a step is ready (Sandy, 2026-11-10: "an approve button for each step"). */}
-        {approves && !s.approved && s.status !== 'none' && !skipped(s) && !row.waitingOn && <button className={ready(s, on) && !s.needs ? 'btn small' : 'btn quiet small'} disabled={busy || !!s.needs} onClick={() => act(() => engine.approveStep(subject.id, row.key))} title={row.key === 'prototype' && on === 'task' ? 'Your last press: it approves the brief too when the brief is ready, and the analysis, the ADR, the plan, its audit and the build follow by themselves' : 'Approve this step: it gets its check, and the steps after it can go on'}>{row.key === 'prototype' && on === 'task' ? 'Approve the prototype' : 'Approve'}</button>}
+        {/* The Data step's page is its services and their data, there before anything is started: it is approved as it stands (Sandy, 2026-11-24: "the data tab doesn't have an approve button at the top. A skip, you know"). */}
+        {approves && !s.approved && (s.status !== 'none' || dataStep) && !skipped(s) && !row.waitingOn && <button className={ready(s, on) && !s.needs ? 'btn small' : 'btn quiet small'} disabled={busy || !!s.needs} onClick={() => act(async () => { if (s.status === 'none') await engine.setStep(subject, row.key, { status: 'started' }); return engine.approveStep(subject.id, row.key) })} title={row.key === 'prototype' && on === 'task' ? 'Your last press: it approves the brief too when the brief is ready, and the analysis, the ADR, the plan, its audit and the build follow by themselves' : 'Approve this step: it gets its check, and the steps after it can go on'}>{row.key === 'prototype' && on === 'task' ? 'Approve the prototype' : 'Approve'}</button>}
         {approves && s.approved && <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.approveStep(subject.id, row.key, false))} title="Take the approval back">Withdraw</button>}
+        {dataStep && canSkip(row) && !finished(s, on) && !skipped(s) && !row.waitingOn && <button className="btn quiet small" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'skipped' }))} title="Say this optional step is not being done on this task: the app's defaults are used">Skip this step</button>}
       </div>
       {s.needs && !s.approved && <p className="smoke-stale" role="note">{s.needs}</p>}
       {showView && viewed && <Viewer tab={viewed} embedded />}
@@ -176,7 +179,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
                 ? <button className="btn" disabled={busy || asked} onClick={ask}>{row.key === 'prototype' ? 'Start a prototype with the agent' : 'Start with the agent'}</button>
                 : null}{/* once a step is under way there is nothing to press: its agent is beside the page, and what it wrote is above (Sandy, 2026-11-15: "we don't need to push a button that says ask the agent to carry on … what we need is the content") */}
               {own && !approves && s.status === 'started' && row.key !== 'prototype' && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'done' }))}>Mark done</button>}
-              {on === 'task' && canSkip(row) && !finished(s, on) && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'skipped' }))} title="Say this optional step is not being done on this task">Skip this step</button>}
+              {on === 'task' && !dataStep && canSkip(row) && !finished(s, on) && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'skipped' }))} title="Say this optional step is not being done on this task">Skip this step</button>}
               {asked && <span className="faint">{ownAgent ? 'Handed to this task\'s agent, on the right.' : 'Handed to the agent: it\'s in the agent panel.'}</span>}
             </div>
           )}
