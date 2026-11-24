@@ -152,7 +152,10 @@ export interface Made {
   at: string
 }
 const steps = (text: string) => text.split('\n').map((l) => l.replace(/^\s*(?:[-*]\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s+)/, '').trim()).filter(Boolean)
-const checkout = (b: string) => `git fetch origin ${b} && git checkout -B ${b} FETCH_HEAD`
+/** Two plain commands (Sandy, 2026-11-23): a reviewer's clone is an ordinary one, where checking out a branch it has not got makes it from origin's. */
+const checkout = (b: string) => `git fetch origin\ngit checkout ${b}`
+/** The branch is made again whole when the pull request moves, so one checked out before does not follow by a pull. */
+const again = (b: string) => `Had it checked out before? It is made again when the pull request moves, so take it afresh: \`git fetch origin && git checkout -B ${b} origin/${b}\`.`
 const servicesSay = (m: Made) => (m.services.length ? m.services.map((s) => s.name).join(', ') : null)
 
 /** The folder's README: how to start it, what to try, what is real (nothing), what is in it. */
@@ -170,6 +173,7 @@ export function readme(m: Made, kit: Kit, title: string): string {
     `${title ? `${title}\n\n` : ''}This branch is the pull request's branch at \`${m.from.slice(0, 9)}\` plus this \`review/\` folder. It exists so a reviewer can run the change. **It is never merged**: it carries a sign-in for a reviewer and made-up data.`,
     '## Start it', '```\n' + checkout(m.reviewBranch) + '\n' + kit.start + '\n```',
     [kit.about, kit.stop ? `\`${kit.stop}\` removes it.` : ''].filter(Boolean).join(' '),
+    again(m.reviewBranch),
     ...(steps(m.try).length ? ['## What to try', steps(m.try).map((s, i) => `${i + 1}. ${s}`).join('\n')] : []),
     '## What is real here',
     `Nothing. ${servicesSay(m) ? `${servicesSay(m)} ${m.services.length === 1 ? 'is' : 'are'} answered by ${m.services.length === 1 ? 'a mock' : 'mocks'} in this copy (\`review/mocks/\`) from made-up data: where it was made from a real response, the shape is real and every name, address, link, date and sentence is invented. The real ${m.services.length === 1 ? 'service is' : 'services are'} never called, whatever your own settings hold: the copy sets its own address${m.services.length === 1 ? '' : 'es'} and a key that is not one.` : 'It calls no outside service.'}${m.fixture ? ` Its database starts from the fixture "${m.fixture}", which is made up.` : ' Its database starts empty.'}`,
@@ -202,7 +206,7 @@ export function reviewSection(m: Made, kit: Kit, repo: string): string {
       `**It is this pull request's code.** \`${m.reviewBranch}\` is this branch at \`${m.from.slice(0, 9)}\` plus one commit that adds one folder, \`review/\`. [GitHub's comparison of the two branches](${compare}) shows it: only added files, all in that folder. Not one line of the app differs, so what you run is what would merge. The app is pointed at the mock${m.services.length === 1 ? '' : 's'} by settings alone.`,
       `**What the folder adds, and why:**\n\n| Added | Why it is needed |\n|---|---|\n${adds.map(([f, w]) => `| ${f} | ${w} |`).join('\n')}`,
       `**What it cannot show:**\n\n${cannot.map((c) => `- ${c}`).join('\n')}`,
-      `**Kept in step.** The review branch is made again, whole, from this branch's head whenever this pull request moves on. It is never merged and has no pull request of its own. Nothing real is in it: where the made-up data came from a real response, every value was replaced and checked against the original before it left the computer it was made on.`,
+      `**Kept in step.** The review branch is made again, whole, from this branch's head whenever this pull request moves on. ${again(m.reviewBranch)} It is never merged and has no pull request of its own. Nothing real is in it: where the made-up data came from a real response, every value was replaced and checked against the original before it left the computer it was made on.`,
     ].join('\n\n')}\n\n</details>`,
   ].filter(Boolean).join('\n\n')
 }

@@ -12,6 +12,7 @@ import { Md } from './Md'
 import { EndpointDataCell } from './EndpointData'
 import { Fixtures } from './Fixtures'
 import { Sources } from './MockPlaces'
+import { DataAgent } from './DataAgent'
 import { TaskCalls } from './TaskCalls'
 import { TestFiles } from './TestFiles'
 import { engine, type Mock, type MockChange, type MockData, type MockEndpoint, type MockPlacesRow, type MockReal } from '../engine'
@@ -64,6 +65,8 @@ export function MockLibrary({ appId, issueId, needs }: { /** On a task: what its
           <button className="btn quiet small" onClick={() => setAdding(!adding)}>Add a service</button>
         </div>
       )}
+      {/* On a task, its data agent leads: what follows is what it reads and, once approved, builds. */}
+      {issueId && <DataAgent appId={appId} issueId={issueId} onChanged={() => { void reload(); setTick((t) => t + 1) }} />}
       {/* The fixtures come first: the app's own database, and the files a tester brings. Then the services outside it, with what they are said at the top of that section. */}
       {list !== null && <Fixtures appId={appId} issueId={issueId} version={tick} onChanged={() => reload()} files={<TestFiles appId={appId} issueId={issueId} />} />}
       {issueId && <TaskCalls appId={appId} issueId={issueId} mocks={list ?? []} places={places} version={tick} onChanged={() => reload()} intro={intro} needs={needs && <details className="lv-item" data-component="WhatTheTaskNeeds"><summary className="lv-item-head"><span className="lv-item-name">What the task needs</span><span className="lv-item-meta lv-end">The agent's report</span></summary><div className="lv-part">{needs}</div></details>} />}
