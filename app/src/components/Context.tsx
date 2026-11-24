@@ -98,7 +98,6 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
             <div>
               <div className="context-detail">
                 {n.waitingOn ? <><Badge tone="warn">Waiting on {n.waitingOn}</Badge> asked {day(n.on)}, {ago(n.on)}</> : <><Badge tone="accent">Unanswered</Badge> {n.status === 'proposed' ? `the agent proposes an answer, ${day(n.on)}` : `asked by ${who(n.addedBy)}, ${day(n.on)}`}</>}
-                {n.status === 'open' && n.body ? <> · <Md text={n.body} inline /></> : null}
               </div>
               {n.status === 'proposed' && <div className="context-why"><span className="faint">The agent proposes: </span><strong>{n.answer}</strong></div>}
               {n.status === 'proposed' && n.body && <div className="context-why"><span className="faint">Why: </span><Md text={n.body} inline /></div>}

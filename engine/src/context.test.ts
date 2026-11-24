@@ -109,12 +109,12 @@ describe.skipIf(!reachable)('context', () => {
   it('holds a decision that is not made yet: asked, counted, told to agents as not decided, and made by answering it', async () => {
     const t = (await createProject({ appId, name: 'Open ones (sample)', issues: [{ title: 'A task with a question (sample)', brief: 'Build it.' }] })).issues[0].id
     expect((await addContextNote({ issueId: t }, { kind: 'decision', title: 'Do we support gift cards? (sample)' })).status).toBe('open')
-    expect((await addContextNote({ issueId: t }, { kind: 'decision', title: 'What is shown for an expired card? (sample)', body: 'The list depends on it.' }, 'agent')).status).toBe('open') // an agent may ask
+    expect((await addContextNote({ issueId: t }, { kind: 'decision', title: 'What is shown for an expired card? (sample)', background: 'The list depends on it.' }, 'agent')).status).toBe('open') // an agent may ask
     await expect(addContextNote({ issueId: t }, { kind: 'decision', title: 'Do we support gift cards? (sample)' }, 'agent')).rejects.toThrow('already asked')
     expect(await contextCount({ issueId: t })).toEqual({ count: 0, proposed: 2, waiting: 0 })
     expect(await listNotes(appId, { issueId: t })).toEqual([]) // nothing decided: nothing for a report
     const prompt = await contextPrompt({ issueId: t })
-    expect(prompt).toMatch(/### Not decided yet[\s\S]*Do not guess one[\s\S]*- Do we support gift cards\? \(sample\)\n- What is shown for an expired card\? \(sample\) \(The list depends on it\.\)/)
+    expect(prompt).toMatch(/### Not decided yet[\s\S]*Do not guess one[\s\S]*- Do we support gift cards\? \(sample\)\n- What is shown for an expired card\? \(sample\)\n  Background: The list depends on it\./)
     expect(prompt).not.toContain('### Decisions')
     // An agent's answer to an open question goes onto that question, proposed; the person's own answer makes it.
     expect((await addContextNote({ issueId: t }, { kind: 'decision', title: 'do we support gift cards? (sample)', answer: 'Not in this task' }, 'agent')).status).toBe('proposed')
@@ -173,6 +173,9 @@ describe.skipIf(!reachable)('context', () => {
     const tool = engineTools({ appId, actor: 'agent' }).find((x) => x.name === 'context')!
     await tool.handler({ op: 'ask', issueId: t, title: 'Is an expired card listed? (sample)', background: 'The list is built from the vault, which still returns them.' })
     expect((await contextOf({ issueId: t })).notes.find((n) => n.title.startsWith('Is an expired'))).toMatchObject({ status: 'open', addedBy: 'agent', background: 'The list is built from the vault, which still returns them.', body: '' })
+    // Said beside a question with no answer, by anyone, it is the question's background: there is no answer for it to be the why of.
+    await addContextNote({ issueId: t }, { kind: 'decision', title: 'Is there a limit on saved cards? (sample)', body: 'May be tied to pricing.' }, 'agent')
+    expect((await contextOf({ issueId: t })).notes.find((x) => x.title.startsWith('Is there a limit'))).toMatchObject({ status: 'open', body: '', background: 'May be tied to pricing.' })
     const n = (await addContextNote({ issueId: t }, { title: 'A plain note (sample)' })).view.notes.find((x) => x.kind === 'note')!
     await expect(editContextNote({ issueId: t }, n.id, { background: 'x' })).rejects.toThrow('only a decision')
   })

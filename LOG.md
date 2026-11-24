@@ -7590,3 +7590,18 @@ there". The screens are stories, but none of Storybook is around them on the wal
 Not done: Mockups and Sketches have no such switch; other Storybook controls (a story's args) are still not on the
 wall; the values asked for are `light` and `dark` only, so a Storybook whose theme global uses other names is not
 switched; an app whose Storybook is run from outside its repository is not read, so the page says nothing for it.
+
+## What an agent wrote beside a question it asked is the question's background (Sandy, 2026-11-24: "the decisions that the agent created … has what seems like a fifth field … why can't we have access to that when we create our own?")
+
+Not a fifth field. Before decisions had a background, the `context` tool told an agent that asked a question to put
+"what turns on it" in `body`. The page showed that beside "asked by the agent", and the form, which knows `body` as
+"Why this answer", did not show it for an unanswered decision. So it could be read and not changed.
+
+A decision with no answer has no "why this answer", so what is said beside it is its background:
+
+- Migration `0062_asked_why_is_background` moves `body` to `background` on every unanswered decision that has no
+  background. A proposed answer's `body` is why that answer, and stays.
+- From now on, text given with a question and no answer is kept as its background, whoever asks.
+- The page no longer shows a `body` beside an unanswered decision; there is none.
+
+Built, not merged.
