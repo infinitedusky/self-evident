@@ -101,6 +101,7 @@ export function IssuePage() {
             {i.build && <Badge tone={STATUS_TONE[i.build.status]}>build: {i.build.status.replace('_', ' ')}{i.build.attempt ? ` · attempt ${i.build.attempt}` : ''}</Badge>}
             {i.waitingOn && <Badge tone="warn">waiting on {i.waitingOn}</Badge>}
             {task && <TeamNames issueId={i.id} ticket={i.ticket ?? null} from={i.ticketFrom ?? null} missing={i.ticketMissing} set={i.teamTicket ?? null} title={i.teamTitle ?? null} ourTitle={i.title} onSaved={() => void act(async () => {})} />}
+            {task && i.ticket && <Link className="badge" to={`/tickets/${i.ticket}`} title={`Every task under ${i.ticket}: a ticket bigger than one pull request is several tasks`}>{i.ticket}'s tasks →</Link>}
             {i.pr?.url && <a className="badge accent" href={i.pr.url} target="_blank" rel="noreferrer">Pull request #{i.pr.number} · {i.pr.status}</a>}
           </div>
         </div>

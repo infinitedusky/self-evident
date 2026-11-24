@@ -119,6 +119,17 @@ export const origin = pgTable('origin', {
   fetchedAt: at('fetched_at').notNull().defaultNow(), createdAt: createdAt(),
 }, (t) => [uniqueIndex('origin_app_source_ref').on(t.appId, t.source, t.ref)])
 
+// A team's ticket, as a record of its own (tickets.ts; Sandy, 2026-11-24: "ticket needs to become an actual record, not
+// just text … and then we can link them that way"). One per app and key (ENT-323). A task links to it, and several may:
+// a ticket bigger than one pull request is several tasks under one ticket. It organises and nothing else: no brief, no
+// approval, no build of its own. Its title, link and origin are filled when it is read from its tracker.
+export const ticket = pgTable('ticket', {
+  id: id(), appId: appId(), key: text('key').notNull(),
+  source: text('source'), // 'linear' once it was read from there; null: only its key is known
+  title: text('title'), url: text('url'), originId: text('origin_id').references(() => origin.id), // the ticket word for word, when it was read
+  createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [uniqueIndex('ticket_app_key').on(t.appId, t.key)])
+
 export const idea = pgTable('idea', { // [IF] the unit of work that outlives the merge
   id: id(), appId: appId(), number: integer('number').notNull(),
   title: text('title').notNull(), body: text('body'),
@@ -189,7 +200,7 @@ export const issue = pgTable('issue', {
   brief: text('brief'), // for the builder: its instructions, Markdown
   briefApprovedBy: text('brief_approved_by'), briefApprovedAt: at('brief_approved_at'), // a task completes only once its brief is approved
   branch: text('branch'), // the branch its work lands on, when the app's template named it (conventions.ts); null: the engine's own name (branches.ts)
-  teamTicket: text('team_ticket'), // the team's own ticket for it (ENT-322), when a person or its agent set it; else read from its import or a link (ticket.ts)
+  ticketId: text('ticket_id').references(() => ticket.id), // the team's ticket it is linked to (ENT-322), when a person or its agent set it; else read from its import or a link (ticket.ts)
   teamTitle: text('team_title'), // its name as the team would say it, for a pull request's title and a branch's name; null: our title
   prBody: text('pr_body'), // its pull request's description, written for the team in their repository's own style; null: the engine's merge guide leads (pr.ts)
   prTitle: text('pr_title'), // its pull request's title, exactly, when the repository's convention needs more than the app's template can say (pr.ts)

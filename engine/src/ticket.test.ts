@@ -2,10 +2,11 @@
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, idea, issue, project, workspace } from './db/schema.js'
+import { app, idea, issue, project, ticket, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { issueDetail, createProject } from './projects.js'
-import { needsTicket, setTeamNames, teamTicket, ticketIn, ticketOfTask, ticketRequired } from './ticket.js'
+import { keepOrigin } from './origins.js'
+import { needsTicket, setTeamNames, teamTicket, ticketIn, ticketOf, ticketOfTask, ticketRequired, ticketsOf } from './ticket.js'
 
 describe('a team ticket', () => {
   it('is read from a link to it, never from a bare mention', () => {
@@ -51,5 +52,44 @@ describe.skipIf(!reachable)('a task\'s team ticket and its name for the team', (
     await db.insert(idea).values({ id: ideaId, appId, number: 1, title: 'Brand fields (sample)', body: 'From https://linear.app/sample-co/issue/ENT-500/y (sample)', source: 'person' })
     await db.update(issue).set({ description: 'no link', ideaId }).where(eq(issue.id, t.id))
     expect(await teamTicket((await db.select().from(issue).where(eq(issue.id, t.id)))[0])).toEqual({ ticket: 'ENT-500', from: 'idea' })
+  })
+
+  it('is a record several tasks are under: one ticket, a task per pull request, done when they all are', async () => {
+    const { issues: [one, two, three, other] } = await createProject({ appId, name: 'Executive protection (sample)', issues: [
+      { title: 'The group stored, with add and remove (sample)', brief: 'Build it.' },
+      { title: 'Add and remove on the employee record (sample)', brief: 'Build it.' },
+      { title: 'Badge, filter and row menu (sample)', brief: 'Build it.', description: 'For https://linear.app/sample-co/issue/ENT-323/protected (sample)' },
+      { title: 'Takedowns (sample)', brief: 'Build it.' },
+    ] })
+    // Two linked by hand, the second in lower case, and a third read from a link: one record, three tasks.
+    await setTeamNames(one.id, { ticket: 'ENT-323' })
+    await setTeamNames(two.id, { ticket: 'ent-323', title: 'On the employee record (sample)' })
+    expect(await db.select().from(ticket).where(eq(ticket.appId, appId)).then((r) => r.filter((x) => x.key === 'ENT-323'))).toHaveLength(1)
+    const [a, b] = await db.select().from(issue).where(eq(issue.projectId, one.projectId!)).then((r) => r.filter((x) => [one.id, two.id].includes(x.id)))
+    expect(a.ticketId).toBeTruthy(); expect(a.ticketId).toBe(b.ticketId)
+    let g = await ticketOf(appId, 'ent-323')
+    expect(g).toMatchObject({ key: 'ENT-323', title: null, read: false, done: 0, total: 3, finished: false })
+    expect(g.tasks.map((t) => [t.id, t.from, t.teamTitle])).toEqual([[one.id, 'set', null], [two.id, 'set', 'On the employee record (sample)'], [three.id, 'link', null]])
+    expect(g.tasks[0].project).toMatchObject({ name: 'Executive protection (sample)' })
+    expect(g.tasks.some((t) => t.id === other.id)).toBe(false)
+    // Read from its tracker: the same record gains its title and link; nothing about its tasks changes.
+    await keepOrigin(db, appId, { source: 'linear', ref: 'ENT-323', url: 'https://linear.app/sample-co/issue/ENT-323/protected', title: 'Protected people (sample)', body: 'Made up.' })
+    g = await ticketOf(appId, 'ENT-323')
+    expect(g).toMatchObject({ title: 'Protected people (sample)', url: 'https://linear.app/sample-co/issue/ENT-323/protected', source: 'linear', read: true, total: 3 })
+    expect((await db.select().from(issue).where(eq(issue.id, one.id)))[0].ticketId).toBe(a.ticketId)
+    // A dropped task is listed and not counted; the ticket is done when the rest are.
+    await db.update(issue).set({ state: 'done' }).where(eq(issue.id, one.id)); await db.update(issue).set({ state: 'done' }).where(eq(issue.id, two.id))
+    expect(await ticketOf(appId, 'ENT-323')).toMatchObject({ done: 2, total: 3, finished: false })
+    await db.update(issue).set({ state: 'canceled', reason: 'folded into the first (sample)' }).where(eq(issue.id, three.id))
+    g = await ticketOf(appId, 'ENT-323')
+    expect(g).toMatchObject({ done: 2, total: 2, finished: true }); expect(g.tasks).toHaveLength(3)
+    // Unlinked, a task leaves the ticket; the record stays. A ticket still being worked comes before a finished one.
+    await setTeamNames(two.id, { ticket: '' })
+    expect((await ticketOf(appId, 'ENT-323')).tasks.map((t) => t.id)).toEqual([one.id, three.id])
+    await setTeamNames(other.id, { ticket: 'ENT-900' }, async () => { throw new Error('the tracker is not set (sample)') }) // it can't be read: the link stands with its key alone
+    const all = await ticketsOf(appId)
+    expect(all.findIndex((x) => x.key === 'ENT-900')).toBeLessThan(all.findIndex((x) => x.key === 'ENT-323'))
+    await expect(ticketOf(appId, 'ENT-1')).rejects.toThrow(/no ticket ENT-1 here/)
+    await expect(setTeamNames((await db.select().from(issue).where(eq(issue.parentId, one.id)))[0]?.id ?? 'iss_none', { ticket: 'ENT-323' })).rejects.toThrow(/no task|not a sub-task/)
   })
 })

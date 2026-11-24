@@ -229,6 +229,15 @@ export interface OriginView {
   /** Images and uploads in its text: kept on this computer for the agents, or not, with why. */
   files: { url: string; kept: boolean; note: string | null }[]; fetchedAt: string
 }
+/** A task under a ticket (the engine's ticket.ts): where its ticket was read from, its project and its pull request. */
+export interface TicketTask { id: string; identifier: string; title: string; teamTitle: string | null; state: IssueState; from: 'set' | 'import' | 'link' | 'idea'; project: { id: string; name: string } | null; pr: { number: number | null; url: string | null; status: string } | null }
+/** A team's ticket and the tasks under it: one ticket, a task per pull request. It organises and builds nothing. */
+export interface TicketGroup {
+  key: string; title: string | null; url: string | null; source: string | null
+  /** It was read from its tracker; else only its key is known. */ read: boolean
+  /** Dropped tasks are listed and not counted. */ tasks: TicketTask[]; done: number; total: number
+  /** Every task that counts is done. */ finished: boolean
+}
 export interface IssueDetail extends Issue {
   /** The team's ticket in force (ENT-322) and where it was read from: set on the task, its import, a link in its text, or the idea it came from. */ ticket?: string | null; ticketFrom?: 'set' | 'import' | 'link' | 'idea' | null
   /** The app requires a team ticket and this task has none: its branch and its pull request wait for one. */ ticketMissing?: boolean
@@ -861,6 +870,11 @@ export const engine = {
   fixFinalize: (issueId: string, kind: 'survivor' | 'row' | 'gate', id: string) => call<FinalizeView>('POST', `/issues/${issueId}/finalize/fix`, { kind, id }),
   sendPr: (issueId: string, theirs?: 'keep' | 'replace') => call<{ number: number | null; url: string | null; status: string | null; ready: boolean; review: string | null }>('POST', `/issues/${issueId}/pr/send`, theirs ? { theirs } : {}),
   markPrReady: (issueId: string) => call<{ number: number; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/ready`),
+  /** The app's tickets, each with the tasks under it: the ones still being worked first. */
+  tickets: (appId: string) => call<TicketGroup[]>('GET', `/apps/${appId}/tickets`),
+  ticket: (appId: string, key: string) => call<TicketGroup>('GET', `/apps/${appId}/tickets/${encodeURIComponent(key)}`),
+  /** Read a ticket from its tracker: its title, link and words. */
+  readTicket: (appId: string, key: string) => call<TicketGroup>('POST', `/apps/${appId}/tickets/${encodeURIComponent(key)}/read`),
   setTeamNames: (issueId: string, names: { ticket?: string | null; title?: string | null }) => call<{ teamTicket: string | null; teamTitle: string | null; ticket: string | null; ticketFrom: string | null; ticketMissing: boolean }>('PUT', `/issues/${issueId}/team`, names),
   submitPr: (issueId: string) => call<{ id: string; number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/submit`),
   keepSecret: (name: string, value: string, appId?: string) => call<KeptKey>('PUT', `/secrets/${encodeURIComponent(name)}`, { value, ...(appId ? { appId } : {}) }),

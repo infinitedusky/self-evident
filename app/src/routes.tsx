@@ -17,6 +17,7 @@ import { Learn } from './pages/Learn'
 import { Mockups } from './pages/Mockups'
 import { Issues } from './pages/Issues'
 import { IssuePage } from './pages/IssuePage'
+import { Tickets } from './pages/Tickets'
 import { Observe } from './pages/Observe'
 import { Todos } from './pages/Todos'
 import { Summary } from './pages/Summary'
@@ -57,6 +58,8 @@ export function PageRoutes() {
       <Route path="/tasks" element={<Issues />} />
       <Route path="/tasks/:id" element={<IssuePage />} />
       <Route path="/tasks/:id/:section" element={<IssuePage />} />
+      <Route path="/tickets" element={<Tickets />} />
+      <Route path="/tickets/:key" element={<Tickets />} />
       <Route path="/issues" element={<Navigate to="/tasks" replace />} />
       <Route path="/issues/:id" element={<OldIssueLink />} />
       <Route path="/todos" element={<Todos />} />
