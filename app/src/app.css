@@ -1322,3 +1322,32 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 /* A test file that is a picture is shown small beside its name. */
 .tf-thumb { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); }
 .lv-item-name a { color: inherit; text-decoration: none; } .lv-item-name a:hover { text-decoration: underline; }
+
+/* A pull request's finalizing (Finalize.tsx): its steps, what it found, the gate, and the one press. */
+.finalize { margin: 0 0 18px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }
+.finalize-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 6px; }
+.finalize-lead { margin: 0 0 10px; font-size: 13px; }
+.finalize-steps, .finalize-gate { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.finalize-steps > li, .finalize-gate > li { display: grid; grid-template-columns: 20px 1fr; gap: 6px; align-items: start; }
+.finalize-steps > li strong, .finalize-gate > li strong { font-weight: 500; }
+.finalize-mark { font-weight: 600; text-align: center; }
+.finalize-mark.ok { color: var(--ok, #2f855a); }
+.finalize-mark.bad { color: var(--bad, #c53030); }
+.finalize-mark.warn { color: var(--warn, #b7791f); }
+.finalize-says { color: var(--muted, #667085); font-size: 13px; }
+.finalize-steps > li.fail .finalize-says, .finalize-gate > li.fail .finalize-says { color: inherit; }
+.finalize-h4 { margin: 14px 0 6px; font-size: 14px; font-weight: 600; }
+.finalize-h4 .faint { font-weight: 400; font-size: 13px; margin-left: 4px; }
+.finalize-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; font-size: 14px; }
+.finalize-list > li { padding: 8px 10px; border-left: 3px solid var(--warn, #b7791f); border-radius: 6px; display: grid; gap: 4px; }
+.finalize-list.aside > li { border-left-color: var(--line); padding: 4px 10px; }
+.finalize-code { margin: 0; padding: 4px 8px; border-radius: 6px; background: var(--code-bg, rgba(127, 127, 127, 0.12)); font-size: 12px; overflow-x: auto; white-space: pre; }
+.finalize-acts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.finalize-leave { display: grid; gap: 6px; }
+.finalize-leave label { display: grid; gap: 2px; font-size: 13px; }
+.finalize-leave label.check { display: flex; gap: 6px; align-items: center; }
+.finalize-leave textarea { width: 100%; }
+.finalize-details { margin: 4px 0 0; padding-left: 18px; font-size: 13px; }
+.finalize-evidence { margin: 0 0 12px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-size: 14px; }
+.finalize-evidence summary { cursor: pointer; font-weight: 500; }
+.finalize-press { margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }

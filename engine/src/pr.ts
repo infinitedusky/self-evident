@@ -3,9 +3,11 @@
  * updated as more issues land. The PR carries the support for the change: each sub-issue, its summary, its cost.
  */
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { commitParts } from './conventions.js'
 import { promisify } from 'node:util'
 import { push } from './git.js'
+import { withEvidence } from './evidence.js'
 
 const execFileP = promisify(execFile)
 
@@ -107,6 +109,45 @@ export function withDeploy(written: string, steps: string): string {
   return [lines.slice(0, at + 1).join('\n').trim(), steps, lines.slice(at + 1).join('\n').trim()].filter(Boolean).join('\n\n')
 }
 
+// ---- what was edited on GitHub -----------------------------------------------------------------------------------------------
+
+const norm = (s: string) => s.replace(/\r\n/g, '\n').trim()
+/** A text's mark, for telling whether it is the one last sent. */
+export const markOf = (s: string) => createHash('sha1').update(norm(s)).digest('hex').slice(0, 16)
+/** What the engine sent last, as marks: the whole body, and the description written here that it was made from. */
+export interface Sent { body: string; written: string }
+/**
+ * Whether a pull request's description was edited on GitHub since the engine last sent it (Sandy, 2026-11-23: "Edits
+ * made on GitHub directly are read back before an update, never overwritten silently"). `theirs`: only there, so it is
+ * read back. `both`: there and here, which only a person can settle. Nothing recorded of the last send: it cannot be
+ * told, and is taken as not edited. Pure.
+ */
+export function editsThere(last: Sent | null, thereBody: string, writtenNow: string): 'none' | 'theirs' | 'both' {
+  if (!last || markOf(thereBody) === last.body) return 'none'
+  return markOf(writtenNow) === last.written ? 'theirs' : 'both'
+}
+/**
+ * The description a person wrote, read back from a pull request's body as GitHub has it: what is above the fine
+ * print, without the line that says it is still being built and without the engine's own blocks (the evidence, the
+ * deploy steps, the Review section), which are put back when it is sent.
+ */
+export function writtenFrom(body: string): string {
+  let lead = norm(body).split(/\n## Fine print\s*\n/)[0].replace(/\n*🤖 Generated with \[Claude Code\][^\n]*$/, '')
+  lead = lead.replace(/^\*\*\d+ of \d+ sub-tasks? ha(s|ve) landed:[^\n]*\*\*\n*/, '')
+  // A block put straight under the writer's heading leaves their words where they were, straight under it.
+  lead = lead.replace(/(^|\n)(#{1,6} [^\n]*\n)\n*<!-- evident:(\w+) -->[\s\S]*?<!-- \/evident:\3 -->\n*/g, '$1$2')
+  lead = lead.replace(/\n*<!-- evident:(\w+) -->[\s\S]*?<!-- \/evident:\1 -->\n*/g, '\n\n')
+  const lines = lead.split('\n'), out: string[] = []
+  let fenced = false, skipping = false
+  for (const l of lines) {
+    if (/^\s*```/.test(l)) fenced = !fenced
+    if (!fenced && /^##\s/.test(l)) skipping = /^##\s+(review|run it yourself)\s*$/i.test(l)
+    if (!skipping) out.push(l)
+  }
+  // A heading the engine added for a block of its own, left with nothing under it.
+  return out.join('\n').replace(/\n## (Evidence|At deploy)\s*(?=\n## |\s*$)/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
 export interface Landed { identifier: string; title: string; summary?: string | null; costUsd?: number | null; sha?: string | null }
 
 /**
@@ -116,9 +157,10 @@ export interface Landed { identifier: string; title: string; summary?: string | 
  * description leads, every criterion and decision, and what each sub-task's builder reported (a client's pull
  * request, 2026-11-20: the description was 511 lines of our build log, opening with our project's id).
  */
-export function prBody(project: { name: string; content?: string | null; id: string }, landed: Landed[], pending: { identifier: string; title: string }[], backlog: { title: string; state: string; reason: string | null }[] = [], /** The merge guide, for whoever approves it (merge-guide.ts): short. */ guide = '', /** Everything the guide left out: folded away, with what landed. */ record = '', /** The description written for the team, when the task has one: it leads, and the guide joins the fold. */ written: string | null = null, /** The Review section, when the task has a review copy (review-copy.ts): the engine's own, in the description proper. */ review: string | null = null, /** What is owed at deploy, in order (smoke.ts, deploySteps): the engine's own, under the description's own heading for it. */ deploy = ''): string {
+export function prBody(project: { name: string; content?: string | null; id: string }, landed: Landed[], pending: { identifier: string; title: string }[], backlog: { title: string; state: string; reason: string | null }[] = [], /** The merge guide, for whoever approves it (merge-guide.ts): short. */ guide = '', /** Everything the guide left out: folded away, with what landed. */ record = '', /** The description written for the team, when the task has one: it leads, and the guide joins the fold. */ written: string | null = null, /** The Review section, when the task has a review copy (review-copy.ts): the engine's own, in the description proper. */ review: string | null = null, /** What is owed at deploy, in order (smoke.ts, deploySteps): the engine's own, under the description's own heading for it. */ deploy = '', /** The Evidence section, as the person last sent it (finalize.ts): never a draft they have not pressed for. */ evidence = ''): string {
   const said = written?.trim() || guide || project.content?.trim() || ''
-  const reviewed = review ? withReview(said, review) : said
+  const proven = evidence || /<!-- evident:evidence -->/.test(said) ? withEvidence(said, evidence) : said
+  const reviewed = review ? withReview(proven, review) : proven
   const lead = deploy || /<!-- evident:deploy -->/.test(reviewed) ? withDeploy(reviewed, deploy) : reviewed
   const all = landed.length + pending.length
   const building = pending.length ? `**${landed.length} of ${all} sub-task${all === 1 ? ' has' : 's have'} landed: this pull request is still being built, and is not ready to review until they all have.**` : ''

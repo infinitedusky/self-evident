@@ -796,3 +796,37 @@ export const dataAgentStep2Sample: import('../engine').DataAgentView = { ...data
 export const dataAgentStep3Sample: import('../engine').DataAgentView = { ...dataAgentWorkingSample, state: 'proposed', step: 3, proposal: dataStep3, approved: [dataStep1, dataStep2], busy: false }
 /** All three approved (sample). */
 export const dataAgentDoneSample: import('../engine').DataAgentView = { ...dataAgentWorkingSample, state: 'done', step: 3, proposal: null, approved: [dataStep1, dataStep2, dataStep3], busy: false }
+
+// A pull request's finalizing (made up): run on the head, two breaks no test caught, one check of the gate failing.
+const sampleEvidence = '**Tests written by this pull request:** 3 unit, 1 integration. All pass.\n\n**Red before green:** 4 of 4 were run and seen to fail on an assertion before the code that makes them pass was written, then seen to pass.\n\n**Mutation testing:** of 12 meaningful breaks made to the lines this pull request changed, the tests catch 10 (83%).\n\nNot caught:\n- `src/export/rows.ts:41`: `<=` became `<`. No test checks the value exactly at this limit.\n- `src/export/rows.ts:58`: `&&` became `||`. The tests pass when either condition alone is enough.\n\n**Everything else:** Tests, Lint all pass on this branch: nothing else broke.'
+export const finalizeSample: import('../engine').FinalizeView = {
+  state: 'done', sha: 'abc1234def0', head: 'abc1234def0', stale: false, error: null,
+  steps: [
+    { key: 'trajectory', name: 'The trajectory holds', state: 'pass', says: 'All 4 planned tests were seen red, then green.' },
+    { key: 'mutation', name: 'Mutation testing of the changed lines', state: 'fail', says: 'Of 12 meaningful breaks, the tests catch 10 (83%). 2 not caught. 1 left out as equivalent.' },
+    { key: 'review', name: 'The review copy, built on the head', state: 'pass', says: 'Built on abc1234 with nothing real in it (1 service faked), and not sent: REVIEW-export-SS-20 goes to GitHub when you push.' },
+    { key: 'gate', name: 'The gate checks', state: 'fail', says: '1 of 6 stand in the way.' },
+    { key: 'evidence', name: 'The evidence drafted', state: 'pass', says: 'Drafted from what was measured. It is sent only when you push.' },
+  ],
+  unproven: [],
+  mutation: { tool: 'evident', found: 14, tried: 14, caught: 10, invalid: 1, files: 2, tests: ['src/export/rows.test.ts'], meaningful: 12, percent: 83, survivors: [
+    { id: 'sv_1', file: 'src/export/rows.ts', line: 41, op: 'boundary', from: '<=', to: '<', means: 'no test checks the value exactly at this limit: the code behaves the same to them whether `<=` lets it through or not', code: 'if (rows.length <= limit) return rows (sample)', accepted: null, fix: null },
+    { id: 'sv_2', file: 'src/export/rows.ts', line: 58, op: 'logic', from: '&&', to: '||', means: 'the tests pass when either condition alone is enough: no test has one true and the other false', code: 'if (order.paid && order.shipped) out.push(order) (sample)', accepted: null, fix: null },
+    { id: 'sv_3', file: 'src/export/limits.ts', line: 3, op: 'number', from: '500', to: '501', means: 'the tests pass with 501 here in place of 500: nothing pins the number', code: 'export const PAGE_SIZE = 500 (sample)', equivalent: 'a limit nudged by one: no input sits exactly on it, so nothing a test does can tell', accepted: null, fix: null },
+  ] },
+  gate: [
+    { key: 'github', name: 'GitHub\'s checks are green', state: 'pass', says: '3 pass.', sent: null },
+    { key: 'commands', name: 'The app\'s held commands pass on the head', state: 'pass', says: 'Tests, Lint: all pass.', sent: null },
+    { key: 'title', name: 'The title fits the app\'s rule and carries the team\'s ticket', state: 'pass', says: '"feat(export)[SHOP-12]: Export orders (sample)" fits {type}{scope}[{ticket}]: {title}', sent: null },
+    { key: 'description', name: 'The description follows the app\'s form, every section filled, nothing of ours above the fold', state: 'fail', says: '"Merge Danger" has nothing under it.', sent: null },
+    { key: 'rollback', name: 'The rollback agrees with the blast radius', state: 'pass', says: 'The blast radius names no one-way door, and the description claims nothing it does not.', sent: null },
+    { key: 'smoke', name: 'Your smoke checks are done', state: 'pass', says: 'Accepted, on this commit.', sent: null },
+  ],
+  evidence: sampleEvidence, sent: null,
+  canStart: true, startWaits: null, press: 'ready', canPush: false,
+  pushWaits: ['The description follows the app\'s form, every section filled, nothing of ours above the fold: "Merge Danger" has nothing under it.'],
+}
+/** The same with the gate passing (made up): the press is there to make. */
+export const finalizeReadySample: import('../engine').FinalizeView = { ...finalizeSample, steps: finalizeSample.steps.map((s) => (s.key === 'gate' ? { ...s, state: 'pass' as const, says: 'All 6 pass.' } : s)), gate: finalizeSample.gate.map((c) => (c.key === 'description' ? { ...c, state: 'pass' as const, says: 'Every section of the app\'s form is there, in order, and filled.' } : c)), canPush: true, pushWaits: [] }
+/** Never run (made up): the smoke test has not been accepted. */
+export const finalizeNoneSample: import('../engine').FinalizeView = { ...finalizeSample, state: 'none', sha: null, steps: finalizeSample.steps.map((s) => ({ ...s, state: 'waiting' as const, says: '' })), mutation: null, evidence: '', canPush: false, gate: finalizeSample.gate.map((c) => (c.key === 'smoke' ? { ...c, state: 'fail' as const, says: 'The smoke test has not been accepted.' } : c)), pushWaits: ['The finalizing has not run: accept the smoke test, or run it here.', 'Your smoke checks are done: The smoke test has not been accepted.'] }

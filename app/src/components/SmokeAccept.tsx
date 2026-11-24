@@ -32,7 +32,7 @@ export function SmokeAccept({ base, accepted, canAccept, waits, release = [], on
           {accepted?.stale && <p className="smoke-stale" role="note" style={{ margin: '0 0 6px' }}>You accepted it on an earlier commit{accepted.sha ? <> (<span className="mono">{accepted.sha.slice(0, 7)}</span>)</> : ''}, and the branch has moved since. Look again, then accept what is there now.</p>}
           <button className="btn" disabled={busy || !canAccept} onClick={() => void accept()} title={canAccept ? 'You have tried the built code and it is what goes to review. Nothing is pushed or marked ready by this.' : waits ?? undefined}>{busy ? 'Accepting…' : accepted?.stale ? 'Accept it again' : 'Accept the smoke test'}</button>
           {!canAccept && waits && <span className="faint" style={{ marginLeft: 8 }}>{waits}.</span>}
-          {canAccept && <span className="faint" style={{ marginLeft: 8 }}>You have tried it and it is what goes to review. Nothing is pushed by this.</span>}
+          {canAccept && <span className="faint" style={{ marginLeft: 8 }}>You have tried it and it is what goes to review. It starts the pull request's finalizing; nothing is pushed by this.</span>}
         </>
       )}
       {owed > 0 && <p className="faint" style={{ margin: '6px 0 0', fontSize: 13 }}>{owed} release check{owed === 1 ? ' is' : 's are'} owed at deploy, by whoever deploys. {owed === 1 ? 'It is' : 'They are'} not checked here and {owed === 1 ? 'does' : 'do'} not hold this: see <Link to={`${base}/pr`}>the pull request step</Link>.</p>}

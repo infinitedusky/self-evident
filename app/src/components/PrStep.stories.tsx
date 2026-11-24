@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { PrStep } from './PrStep'
 import { withEngine } from '../stories/mock-engine'
-import { prDraftSample, prSample } from '../stories/sample'
+import { finalizeReadySample, finalizeSample, prDraftSample, prSample } from '../stories/sample'
 
 /** A task's pull request as a step of its own, after the smoke test. Made-up task, people and pull request (sample). */
 const meta = { title: 'Components/PrStep', component: PrStep, parameters: { layout: 'padded' }, args: { issueId: 'iss_sample20', appId: 'app_sample', base: '/tasks/iss_sample20' },
@@ -21,7 +21,9 @@ export const NotSubmitted: Story = {
     await userEvent.click(c.getByRole('button', { name: 'Submit pull request' }))
     await userEvent.click(c.getByRole('button', { name: 'Submit it' }))
     await expect(await c.findByText('Draft')).toBeInTheDocument()
-    await expect(await c.findByRole('button', { name: 'Ready for review' })).toBeInTheDocument()
+    // Marking it ready is the finalizing's press, which has not run: it is there, and off.
+    await expect(await c.findByRole('button', { name: 'Push and mark ready for review' })).toBeDisabled()
+    await expect(c.getByText(/Accepting the smoke test starts it/)).toBeInTheDocument()
   },
 }
 
@@ -49,9 +51,9 @@ export const NotReadyYet: Story = {
   },
 }
 
-/** A draft on GitHub: its review and checks, what was said on it oldest first, and the press that takes it out of draft. */
+/** A draft on GitHub, finalized with its gate passing (made up): its review and checks, what was said on it oldest first, and the one press that sends the results and takes it out of draft. */
 export const Draft: Story = {
-  beforeEach: withEngine({ prView: prDraftSample }),
+  beforeEach: withEngine({ prView: prDraftSample, finalize: finalizeReadySample }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await expect(await c.findByText('1 of 3 checks failing')).toBeInTheDocument()
@@ -60,11 +62,42 @@ export const Draft: Story = {
     const said = within(c.getByRole('list', { name: 'Comments' })).getAllByRole('listitem')
     await expect(said).toHaveLength(3)
     await expect(said[1]).toHaveTextContent('reviewer-a on a line src/edges/portal.ts:41')
-    await userEvent.click(c.getByRole('button', { name: 'Ready for review' }))
+    await userEvent.click(await c.findByRole('button', { name: 'Push and mark ready for review' }))
     await expect(c.getByText(/takes #412 out of draft/)).toBeInTheDocument()
-    await userEvent.click(c.getByRole('button', { name: 'Mark it ready' }))
+    await userEvent.click(c.getByRole('button', { name: 'Push it and mark it ready' }))
     await expect(await c.findByText('Open, ready for review')).toBeInTheDocument()
-    await waitFor(() => expect(c.queryByRole('button', { name: 'Ready for review' })).toBeNull())
+    // Ready: the evidence went with it, and the same press now updates it, through the same gate.
+    await waitFor(() => expect(c.queryByRole('button', { name: 'Push and mark ready for review' })).toBeNull())
+    await expect(await c.findByText('GitHub has this evidence.')).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Update pull request' })).toBeEnabled()
+    await expect(c.getAllByText(/of 12 meaningful breaks made to the lines this pull request changed/)).toHaveLength(2) // drafted in the finalizing, and now in the message GitHub has
+  },
+}
+
+/** A draft whose gate does not pass (made up): what the finalizing found is on the step, the press is off, and what it waits on is said. */
+export const GateHolds: Story = {
+  beforeEach: withEngine({ prView: prDraftSample, finalize: finalizeSample }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('Run on abc1234')).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Push and mark ready for review' })).toBeDisabled()
+    await expect(within(c.getByRole('list', { name: 'What the press waits on' })).getByText(/"Merge Danger" has nothing under it/)).toBeInTheDocument()
+    // A break no test caught: a sub-task is sent after it.
+    await userEvent.click(within(c.getByRole('list', { name: 'Breaks no test caught' })).getAllByRole('button', { name: 'Fix this' })[0])
+    await expect(await c.findByText(/A fix is on its way: Fix what the finalizing found \(sample\)/)).toBeInTheDocument()
+  },
+}
+
+/** Its description was edited on GitHub and here (made up): nothing is written over until the person says which stands. */
+export const EditedOnGithub: Story = {
+  beforeEach: withEngine({ prView: { ...prDraftSample, editedThere: 'both', behind: true }, finalize: finalizeSample }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const ask = within(await c.findByRole('group', { name: 'Edited on GitHub and here' }))
+    await expect(ask.getByText(/Nothing is written over until you say which stands/)).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Update pull request' })).toBeDisabled()
+    await userEvent.click(ask.getByRole('button', { name: 'Send this one over it' }))
+    await waitFor(() => expect(c.queryByRole('group', { name: 'Edited on GitHub and here' })).toBeNull())
   },
 }
 

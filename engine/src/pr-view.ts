@@ -14,14 +14,14 @@
  */
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { acceptanceOf, later } from './acceptance.js'
 import { db } from './db/client.js'
-import { app, build, issue, pr as prTable, project } from './db/schema.js'
+import { app, build, event, issue, pr as prTable, project } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { getIssue, identifier, PlanError } from './issues.js'
 import { needsTicket, teamTicket, ticketRequired } from './ticket.js'
-import { prAuto, prDescription, prDraft } from './pr.js'
+import { editsThere, prAuto, prDescription, prDraft, type Sent } from './pr.js'
 import { releaseChecks, smokeOwed, watchChecks } from './smoke.js'
 import { inForce, type Covered } from './requirements.js'
 import { afterDescription, unchecked as notChecked } from './verify.js'
@@ -92,6 +92,10 @@ export async function prView(issueId: string, deps: { gh?: Gh; preview: (project
   }
   const pr = onGithub ?? (row?.number ? { number: row.number, url: row.url ?? '', status: row.status as PrOnGithub['status'], title: '', body: '', review: null, mergeable: null, checks: [], updatedAt: null } : null)
   const liveNow = !!pr && pr.status !== 'closed' && pr.status !== 'merged'
+  // Edited on GitHub since the engine last sent it: read back before the next update, and where it was edited here too, the person's to settle (pr.ts, editsThere).
+  const sentRows = onGithub && liveNow ? await db.select({ payload: event.payload }).from(event).where(and(eq(event.issueId, t.id), inArray(event.type, ['pr.opened', 'pr.updated']))).orderBy(desc(event.seq)).limit(20) : []
+  const lastSent = sentRows.map((x) => (x.payload as { sent?: Sent }).sent).find((s) => s?.body) ?? null
+  const editedThere = onGithub && liveNow ? editsThere(lastSent, onGithub.body, t.prBody ?? '') : 'none'
   const waits: string[] = []
   if (!r?.fullName) waits.push('This app\'s repository is not on GitHub, so there is no pull request to open.')
   if (ticketRequired(a?.setup) && !(await teamTicket(t))) waits.push(needsTicket(identifier(a.key, t.number), 'its pull request is titled by it'))
@@ -109,6 +113,7 @@ export async function prView(issueId: string, deps: { gh?: Gh; preview: (project
     /** It can be submitted now (a new one, or the closed one again); else why not. */ canSubmit: !liveNow && pr?.status !== 'merged' && waits.length === 0, waits,
     /** It is a draft: the person can mark it ready for review. */ canReady: pr?.status === 'draft',
     /** What is owed at deploy, in order, each with whether whoever deployed has said it is done; and what is watched after. */ release: releaseChecks(criteria), watch: watchChecks(criteria),
+    /** Its description was edited on GitHub since it was last sent from here. theirs: only there, and the next update reads it back. both: here too, and the update asks which stands. */ editedThere,
     comments, problem,
   }
 }
