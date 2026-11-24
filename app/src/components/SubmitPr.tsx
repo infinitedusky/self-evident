@@ -8,16 +8,21 @@
  * After a "Create pull request" button on a pushed branch, with the confirmation a publish step has.
  */
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { engine, type TaskPr } from '../engine'
 
 const problem = (e: any) => { const m = String(e?.message ?? e); try { return String(JSON.parse(m).error ?? m) } catch { return m } }
 
-export function SubmitPr({ issueId, pr, landed, total, unchecked = 0, draft = true, auto = false, onChanged }: {
+export function SubmitPr({ issueId, pr, landed, total, unchecked = 0, failed = 0, checkAt, draft = true, auto = false, onChanged }: {
   issueId: string; pr: TaskPr | null
   /** Sub-tasks landed, of those in the plan. */
   landed: number; total: number
-  /** Acceptance criteria not marked as met by the build. */
+  /** Acceptance criteria with no mark yet: the check has not looked at them. Said as that, never as a failure. */
   unchecked?: number
+  /** Acceptance criteria the build does not meet. */
+  failed?: number
+  /** Where the check is run again for what is not checked yet: the task's checklist. Left out, it is only said. */
+  checkAt?: string
   /** The app opens its pull requests as drafts. */
   draft?: boolean
   /** The engine opens a draft by itself once the task is built and checked (the app's setting, on unless switched off). */
@@ -50,7 +55,8 @@ export function SubmitPr({ issueId, pr, landed, total, unchecked = 0, draft = tr
           {ready
             ? <p className="faint" style={{ margin: '0 0 8px' }}>{auto ? 'A draft is opened by itself once the build is checked and its tests pass. You can also submit it now.' : 'Run your own checks first: the ones only you can do. Evident never opens a pull request by itself.'}</p>
             : <p className="faint" style={{ margin: '0 0 8px' }}>{auto ? 'A draft is opened by itself once they all have, and the build is checked.' : 'It can be submitted once they all have, and you have run your own checks.'}</p>}
-          {ready && unchecked > 0 && <p className="submit-pr-warn">{unchecked} acceptance {unchecked === 1 ? 'criterion is' : 'criteria are'} not marked as met by the build.</p>}
+          {ready && failed > 0 && <p className="submit-pr-warn">{failed} acceptance {failed === 1 ? 'criterion is' : 'criteria are'} not met by the build.</p>}
+          {ready && unchecked > 0 && <p className="submit-pr-warn">{unchecked} acceptance {unchecked === 1 ? 'criterion is' : 'criteria are'} not checked yet: added or changed since the build was checked.{checkAt && <> <Link to={checkAt}>Run the check</Link> for {unchecked === 1 ? 'it' : 'them'}.</>}</p>}
           {asking ? (
             <div className="submit-pr-ask" role="group" aria-label="Submit the pull request">
               <div>This pushes the branch and {closed ? `reopens #${now!.number}` : 'opens the pull request'}{draft ? ' as a draft' : ', ready for review'}. Your team can see it from then on.</div>

@@ -205,7 +205,7 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
             {row.key === 'brief' ? <BriefStep i={i} busy={busy} act={act} feeds={rows.filter((r) => r.key !== 'brief')} base={base} /> : undefined}
           </StepSection>
         )}
-        {here === 'checklist' && checklist && <ChecklistView checklist={checklist} base={base} onTestAgain={() => engine.testAgain(i.id).then(() => engine.checklist(i.id)).then(setChecklist)} />}
+        {here === 'checklist' && checklist && <ChecklistView checklist={checklist} base={base} onTestAgain={() => engine.testAgain(i.id).then(() => engine.checklist(i.id)).then(setChecklist)} onCheckAgain={() => engine.checkAgain(i.id).then(() => engine.checklist(i.id)).then(setChecklist)} />}
         {here === 'smoke' && (checklist || staged) && <SmokeTest issueId={i.id} appId={i.appId} base={base} small={small} />}
         {here === 'pr' && <PrStep issueId={i.id} appId={i.appId} base={base} />}
         {here === 'saves' && <TaskBranches issueId={i.id} at={new URLSearchParams(window.location.search).get('at')} stamp={savesStamp} onMoved={() => void act(async () => {})} onChanged={readSaves} />}

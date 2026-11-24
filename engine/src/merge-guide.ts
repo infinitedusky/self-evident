@@ -51,6 +51,8 @@ export function taskGuide(t: GuideTask, opts: { heading?: boolean } = {}): strin
   const met = t.acceptance.filter((c) => c.built === true)
   const unmet = t.acceptance.filter((c) => c.built === false)
   const open = t.acceptance.filter((c) => c.built === undefined)
+  // Of what has no mark: left to a person by the check, or not looked at yet. The second is never said as the first, nor as a failure.
+  const yours = open.filter((c) => c.builtEvidence), unlooked = open.filter((c) => !c.builtEvidence)
   const all = t.acceptance.length
   const act = [
     t.pending.length ? `**Not finished:** ${count(t.pending.length, 'sub-task', 'sub-tasks')} still to land (${clip(t.pending.join(', '), 80)}).` : '',
@@ -58,12 +60,13 @@ export function taskGuide(t: GuideTask, opts: { heading?: boolean } = {}): strin
     !all ? 'This task has no acceptance criteria, so nothing was checked against a list.'
       : !unmet.length && !open.length ? `All ${count(all, 'acceptance criterion was', 'acceptance criteria were')} checked against the build and met.`
       : !met.length && !unmet.length && !open.some((c) => c.builtEvidence) ? `The ${count(all, 'acceptance criterion has', 'acceptance criteria have')} not been checked against the build yet.`
-      : `${met.length} of ${all} acceptance criteria were checked against the build and met.${open.length ? ` ${count(open.length, 'is', 'are')} left for you.` : ''}`,
+      : `${met.length} of ${all} acceptance criteria were checked against the build and met.${yours.length ? ` ${count(yours.length, 'is', 'are')} left for you.` : ''}${unlooked.length ? ` ${count(unlooked.length, 'is', 'are')} not checked yet.` : ''}`,
   ].filter(Boolean).join(' ')
   const row = (c: Criterion) => c.built === false
     ? `- ❌ ${clip(c.text, 110)}${c.builtEvidence ? ` Missing: ${clip(c.builtEvidence, 110)}` : ''}`
-    : `- ⬜ ${clip(c.text, 110)}${c.builtEvidence || c.check ? ` ${c.builtEvidence ? '' : 'How: '}${clip(c.builtEvidence ?? c.check!, 110)}` : ''}`
-  const listed = [...unmet, ...open]
+    : c.builtEvidence ? `- 👀 ${clip(c.text, 110)} ${clip(c.builtEvidence, 110)}`
+    : `- ⬜ Not checked yet: ${clip(c.text, 110)}${c.check ? ` How: ${clip(c.check, 110)}` : ''}`
+  const listed = [...unmet, ...yours, ...unlooked]
   const mine = (t.checklist ?? '').split('\n').map((l) => l.trim().replace(/^([-*]|\d+\.)\s+(\[.\]\s*)?/, '')).filter(Boolean)
   const firstLine = (s?: string | null) => (s ?? '').split('\n').map((l) => l.replace(/^\s*([-*]|\d+\.)\s+/, '').trim()).find(Boolean) ?? ''
   const build = (n: { rows: number; boxes: number; decisions: number; risk: boolean; needs: boolean; what: number }) => [
@@ -74,7 +77,7 @@ export function taskGuide(t: GuideTask, opts: { heading?: boolean } = {}): strin
     listed.length && n.rows ? `**For you to check**\n\n${listed.slice(0, n.rows).map(row).join('\n')}${listed.length > n.rows ? `\n- and ${listed.length - n.rows} more in the record below` : ''}` : '',
     t.decisions.length && n.decisions ? `**Decisions**\n\n${t.decisions.slice(0, n.decisions).map((d) => `- ${clip(d.question, 70)} → **${clip(d.chosen, 90)}**`).join('\n')}${t.decisions.length > n.decisions ? `\n- and ${t.decisions.length - n.decisions} more in the record below` : ''}` : '',
     firstLine(t.risk) && n.risk ? `**Risk:** ${clip(firstLine(t.risk), 200)}` : '',
-    t.requirements?.length && n.needs ? `**Required of every change:** ${t.requirements.map((c) => `${c.built === false ? '❌' : c.how && notYet(c.how) ? '⬜' : c.built === true ? (c.applies ? '✅' : '➖') : !c.how ? '⬜' : c.applies ? '✅' : '➖'} ${c.name}`).join(' · ')}` : '',
+    t.requirements?.length && n.needs ? `**Required of every change:** ${t.requirements.map((c) => `${c.built === false ? '❌' : c.left ? '👀' : c.how && notYet(c.how) ? '⬜' : c.built === true ? (c.applies ? '✅' : '➖') : !c.how ? '⬜' : c.applies ? '✅' : '➖'} ${c.name}`).join(' · ')}` : '',
   ].filter(Boolean).join('\n\n')
   // From the fullest that fits to the leanest: what is cut first is what matters least to someone about to merge.
   const tries = [
@@ -93,8 +96,8 @@ export function taskRecord(t: GuideTask, opts: { heading?: boolean } = {}): stri
   const unmet = t.acceptance.filter((c) => c.built === false)
   const open = t.acceptance.filter((c) => c.built === undefined)
   const row = (c: Criterion) => {
-    const mark = c.built === true ? '✅' : c.built === false ? '❌' : '⬜'
-    const how = c.builtEvidence ? ` ${c.byHand && c.built !== undefined ? (c.built ? 'Checked by hand' : 'Failed by hand') : c.built === false ? 'Missing' : c.built === true ? 'Seen' : 'For a person'}: ${one(c.builtEvidence)}` : c.check ? ` How to check: ${one(c.check)}` : ''
+    const mark = c.built === true ? '✅' : c.built === false ? '❌' : c.builtEvidence ? '👀' : '⬜'
+    const how = c.builtEvidence ? ` ${c.byHand && c.built !== undefined ? (c.built ? 'Checked by hand' : 'Failed by hand') : c.built === false ? 'Missing' : c.built === true ? 'Seen' : 'For a person'}: ${one(c.builtEvidence)}` : `${c.built === undefined ? ' Not checked yet.' : ''}${c.check ? ` How to check: ${one(c.check)}` : ''}`
     return `- ${mark} ${one(c.text)}.${how}`.replace(/\.\./g, '.')
   }
   return [

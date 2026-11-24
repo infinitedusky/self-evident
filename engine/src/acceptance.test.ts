@@ -13,6 +13,19 @@ import { approveBrief } from './work.js'
 
 describe('acceptance criteria, as a list', () => {
   const at = new Date('2026-11-13T10:00:00Z')
+  it('a mark is on a statement and how it is checked: change either and the criterion is not checked yet; a mark given with the change stays', () => {
+    const { list: [c] } = applyAcceptance([], { add: [{ text: 'The file has every order (sample)', check: 'export.test' }] }, 'agent', at)
+    const marked = applyAcceptance([c], { update: [{ id: c.id, built: true, builtEvidence: 'export.test passes', builtWhere: '/export', byHand: { pass: true, note: 'saw it', sha: 'abc', at: at.toISOString(), by: 'Sam (sample)' } }] }, 'engine', at).list
+    expect(marked[0].built).toBe(true)
+    const same = applyAcceptance(marked, { update: [{ id: c.id, text: 'The file has every order (sample)', check: 'export.test' }] }, 'user', at)
+    expect([same.changed, same.list[0].built]).toEqual([false, true]) // said again as it was: nothing changed
+    for (const change of [{ text: 'The file has every order, newest first (sample)' }, { check: 'export-order.test' }]) {
+      const after = applyAcceptance(marked, { update: [{ id: c.id, ...change }] }, 'user', at).list[0]
+      expect([after.built, after.builtEvidence, after.builtWhere, after.byHand]).toEqual([undefined, undefined, undefined, undefined])
+    }
+    const both = applyAcceptance(marked, { update: [{ id: c.id, text: 'The file has every order, newest first (sample)', built: false, builtEvidence: 'oldest first' }] }, 'engine', at).list[0]
+    expect([both.built, both.builtEvidence, both.byHand]).toEqual([false, 'oldest first', undefined])
+  })
   it('adds, sharpens, records what the prototype showed and removes; only a change to what is approved counts as a change', () => {
     const a = applyAcceptance([], { add: [{ text: '  A returning customer pays\n in one tap (sample) ', check: 'the returning-customer scenario' }, { text: 'Running it twice makes no duplicates (sample)' }, { text: 'a returning customer pays in one tap (sample)' }] }, 'agent', at)
     expect(a.changed).toBe(true)

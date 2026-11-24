@@ -6,7 +6,7 @@
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { appendEvent } from './events.js'
 import { setTeamNames } from './ticket.js'
@@ -21,7 +21,9 @@ import { approveStep, setStep } from './work.js'
 import { now } from './now.js'
 import { FIX_TITLE, MAX_CARRY_ONS, ranOutOfTurns, Runner, turnsFor } from './runner.js'
 import { setAcceptance } from './acceptance.js'
-import { CHECK_TITLE, FINISH_TITLE } from './verify.js'
+import { CHECK_TITLE, FINISH_TITLE, RECHECK_TITLE } from './verify.js'
+import { checklistOf } from './checklist.js'
+import { setPrMessage } from './pr-view.js'
 import { afterOf } from './steps.js'
 import { ensureMain, listWorkflows } from './work.js'
 import { markSmoke, smokeOwed, smokeView } from './smoke.js'
@@ -392,6 +394,57 @@ describe.skipIf(!reachable)('runner', () => {
     expect((after.acceptance as { built?: boolean }[])[0].built).toBe(true)
     const order = (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => ['task.checked', 'task.tested', 'issue.planned'].includes(e.type)).sort((a, b) => a.seq - b.seq).map((e) => e.type)
     expect(order).toEqual(['issue.planned', 'task.checked', 'task.checked', 'task.tested']) // the whole test run once, last
+  })
+
+  it('a criterion added to a built task is not checked yet; the check asked for again looks at only that, marks it, and runs nothing else again', async () => {
+    const own = newId('app')
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'check again', key: own.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md', held: [{ key: 'break', on: false }, { key: 'comments', on: false }, { key: 'telemetry', kind: 'judged', on: false }, { key: 'docs', kind: 'judged', on: false }, { key: 'test_plan', kind: 'judged', on: false }] } })
+    await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: repoPath })
+    await db.transaction((tx) => ensureMain({ tx, appId: own }))
+    const { project: p, issues: [t] } = await createProject({ appId: own, name: 'check again', issues: [{ title: 'Export (sample)', brief: 'People download their orders (sample).' }] })
+    const { acceptance: [first] } = await setAcceptance(t.id, { add: [{ text: 'The file has every order (sample)', check: 'export.test' }] })
+    await setStep({ issueId: t.id }, 'prototype', { status: 'done', detail: 'the whole flow (sample)' }); await approveStep(t.id, 'prototype', 'Sam (sample)')
+    const seen: { title: string; brief: string; readOnly?: boolean }[] = []
+    const verdict = (list: object[]) => `Checked.\n\n\`\`\`acceptance\n${JSON.stringify(list)}\n\`\`\``
+    let added = ''
+    const execute: Execute = async (i) => {
+      seen.push({ title: i.subIssue.title, brief: i.subIssue.brief ?? '', readOnly: i.readOnly })
+      const r = await commits('again')(i)
+      if (i.subIssue.title.startsWith(RECHECK_TITLE)) return { ...r, summary: verdict([{ id: added, met: true, evidence: 'export-empty.test passes at the head' }, { id: 'req_risks', met: null, when: 'pr', evidence: 'No description yet: read the Risks section once it is written' }]) }
+      if (i.subIssue.title.startsWith(CHECK_TITLE)) return { ...r, summary: verdict([{ id: first.id, met: true, evidence: 'export.test passes' }, { id: 'req_tests', met: true, evidence: 'export.test' }, { id: 'req_adr', met: true, evidence: 'docs/adr/0001' }, { id: 'req_risks', met: true, evidence: 'the description says what could break' }]) }
+      return r
+    }
+    const runner = new Runner({ execute, sessionsMax: 1, propose: async () => { throw new Error('Main has no planner') } })
+    await approveBriefs(own)
+    await runner.buildTask(t.id)
+    await until(cleaned(p.id))
+    expect(seen.map((s) => s.title)).toEqual(['Build it', CHECK_TITLE])
+    let list = (await checklistOf(t.id))!
+    expect([list.met, list.unmet, list.unchecked, list.check.canRun]).toEqual([4, 0, 0, false]); expect(list.check.why).toContain('nothing not checked yet')
+    expect(list.stages.find((x) => x.key === 'check')).toMatchObject({ state: 'done', detail: '4 of 4 met' })
+    await expect(runner.checkAgain(t.id)).rejects.toThrow('nothing not checked yet')
+    // Added after the check: not checked yet, which is neither met nor failed, and the step is open again.
+    const said = await setAcceptance(t.id, { add: [{ text: 'An empty export is a file with only its header (sample)', check: 'export-empty.test' }] }, 'agent')
+    added = said.acceptance[1].id; expect(said.check).toContain('one criterion is not checked yet')
+    // The description written: what the check said of it no longer stands.
+    expect((await setPrMessage(t.id, '## Risks\n\nThe orders query is shared (sample).')).reopened).toEqual(['risks'])
+    list = (await checklistOf(t.id))!
+    expect([list.met, list.unmet, list.unchecked, list.total, list.check.canRun]).toEqual([3, 0, 2, 5, true])
+    expect(list.stages.find((x) => x.key === 'check')).toMatchObject({ state: 'doing', detail: 'open again: 2 not checked yet' })
+    expect(list.items.filter((x) => x.mark === 'unchecked').map((x) => x.id).sort()).toEqual([added, 'req_risks'].sort())
+    const tested = async () => (await db.select().from(event).where(and(eq(event.issueId, t.id), eq(event.type, 'task.tested')))).length
+    const runs = await tested()
+    expect(await runner.checkAgain(t.id, 'agent')).toMatchObject({ started: true, checking: 2 })
+    await expect(runner.checkAgain(t.id)).rejects.toThrow('has not landed yet') // one press is one check
+    await until(async () => (await projectGraph(p.id))!.subIssues.some((x) => x.title === RECHECK_TITLE && x.status === 'done'))
+    await until(async () => (await checklistOf(t.id))!.unchecked === 0)
+    expect(seen.map((s) => s.title)).toEqual(['Build it', CHECK_TITLE, RECHECK_TITLE]); expect(seen[2].readOnly).toBe(true)
+    expect(seen[2].brief).toMatch(/^This task was built and checked/); expect(seen[2].brief).toContain(`[${added}]`); expect(seen[2].brief).toContain('[req_risks]'); expect(seen[2].brief).not.toContain(first.id); expect(seen[2].brief).not.toContain('[req_tests]')
+    expect(seen[2].brief).toContain('The orders query is shared (sample).') // the description it is judged from
+    list = (await checklistOf(t.id))!
+    expect([list.met, list.unmet, list.unchecked, list.person]).toEqual([4, 0, 0, 1]) // the criterion met; the requirement left to the person
+    expect(list.stages.find((x) => x.key === 'check')).toMatchObject({ state: 'done', detail: '4 of 5 met' })
+    await sleep(400); expect(await tested()).toBe(runs) // nothing changed in the code: the whole run is not made again
   })
 
   it('a check left to a person holds the task: it is not landed until they mark it by hand; a fail is sent back, and comes back to them', async () => {

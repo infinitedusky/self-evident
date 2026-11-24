@@ -181,7 +181,7 @@ export interface PrView {
   written?: string | null
   /** The app's own form for a description (Settings › Landing), to start writing from. */
   template?: string | null
-  landed: number; total: number; unchecked: number; byHand: number
+  landed: number; total: number; /** Criteria the build does not meet. */ failed?: number; /** Criteria with no mark yet: the check has not looked at them. Not a failure. */ unchecked: number; byHand: number
   draft: boolean; auto: boolean
   canSubmit: boolean; waits: string[]; canReady: boolean
   comments: PrComment[]; problem: string | null
@@ -348,7 +348,9 @@ export interface ChecklistStage { key: 'build' | 'check' | 'probe' | 'test' | 's
 export interface ChecklistItem { id: string; kind: 'criterion' | 'requirement'; text: string; what?: string; mark: 'met' | 'unmet' | 'person' | 'na' | 'unchecked'; evidence?: string }
 /** One node of a checklist task's flow: a sub-task that exists (`sub`), or a stage still to come. `after`: what it follows; null keeps the sub-task's own dependencies. */
 export interface FlowNode { id: string; sub?: string; title: string; state: ChecklistStage['state']; detail: string; after: string[] | null }
-export interface Checklist { /** The whole test run as it last was, and whether it can be asked for again; absent when the app has no test command. */ tests?: { ok: boolean | null; at: string | null; flaky: boolean; output?: string; running: boolean; canRun: boolean }; build: 'one' | 'planned'; stages: ChecklistStage[]; items: ChecklistItem[]; met: number; unmet: number; total: number; flow?: FlowNode[] }
+/** The check asked for again, of what is not checked yet: how many items, whether it can be asked for now (and why not), whether one is under way. */
+export interface CheckAgain { unchecked: number; canRun: boolean; running: boolean; why?: string }
+export interface Checklist { check?: CheckAgain; /** Left to the person, in the smoke test. */ person?: number; /** Not checked yet: no mark, left to nobody. Never a failure. */ unchecked?: number; /** The whole test run as it last was, and whether it can be asked for again; absent when the app has no test command. */ tests?: { ok: boolean | null; at: string | null; flaky: boolean; output?: string; running: boolean; canRun: boolean }; build: 'one' | 'planned'; stages: ChecklistStage[]; items: ChecklistItem[]; met: number; unmet: number; total: number; flow?: FlowNode[] }
 /** A task's smoke test (the engine's smoke module): where the built code runs, and the checks left to a person with their marks. */
 export interface SmokeCheck { /** Which of the app's set-ups it needs up (its key). */ setup?: string; /** When it can be done: here on the built code, on the pull request, or after the merge. */ when?: 'here' | 'pr' | 'after' | 'nightly'; id: string; text: string; where?: string; /** That place as an address to open, while its set-up is up or deployed. */ link?: string; how?: string; mark: 'todo' | 'pass' | 'fail' | 'skip'; note?: string; stale?: boolean; before?: { pass: boolean; note: string }; /** What an agent saw when asked to try it: its word, not a mark. stale: said on an earlier commit. */ tried?: { verdict: 'holds' | 'fails' | 'unsure'; note: string; sha: string | null; at: string; stale?: boolean }; /** An agent is trying it now. */ trying?: boolean }
 /** One of an app's smoke test set-ups on a task: where it is and whether it is up. */
@@ -720,6 +722,8 @@ export const engine = {
   markSmoke: (issueId: string, criterionId: string, pass: boolean, note?: string, skip?: boolean) => call<SmokeView>('POST', `/issues/${issueId}/smoke/${criterionId}`, skip ? { skip: true, note } : { pass, note }),
   checklist: (issueId: string) => call<Checklist | null>('GET', `/issues/${issueId}/checklist`),
   /** The whole test run again, on the task's branch as it is now. Answers once it has started. */
+  /** The check again, of only what is not checked yet (a criterion added or changed since the build's check). */
+  checkAgain: (issueId: string) => call<{ started: true; checking: number; subTask: string }>('POST', `/issues/${issueId}/check`),
   testAgain: (issueId: string) => call<{ started: true; head: string }>('POST', `/issues/${issueId}/test`),
   learning: (appId: string) => call<Learning>('GET', `/apps/${appId}/learning`),
   learn: (appId: string) => call<{ sessionId: string; started: boolean }>('POST', `/apps/${appId}/learn`),

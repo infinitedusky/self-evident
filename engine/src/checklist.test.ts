@@ -1,7 +1,7 @@
 /** Where a checklist task stands: its stages from its sub-tasks, pure. */
 import { describe, expect, it } from 'vitest'
-import { flowOf, stagesOf } from './checklist.js'
-import { CHECK_TITLE, FINISH_TITLE } from './verify.js'
+import { flowOf, stagesOf, whyNotCheck } from './checklist.js'
+import { CHECK_TITLE, FINISH_TITLE, RECHECK_TITLE } from './verify.js'
 const PROBE_TITLE = 'Probe: Try to break it'
 
 const B = 'Build it'
@@ -30,6 +30,23 @@ describe('the stages of a checklist task', () => {
     expect(at([[B, 'done'], [CHECK_TITLE, 'done'], [FINISH_TITLE, 'running']], { unmet: 2, met: 3 })[1]).toEqual(['check', 'doing', 'round 1: 2 not done, sent back'])
     expect(at([[B, 'done'], [CHECK_TITLE, 'done'], [FINISH_TITLE, 'done'], [`${CHECK_TITLE} (2)`, 'done']], { met: 5 })[1]).toEqual(['check', 'done', '5 of 5 met, in 2 rounds'])
     expect(at([[B, 'done'], [CHECK_TITLE, 'done']], { met: 5 })[1]).toEqual(['check', 'done', '5 of 5 met'])
+  })
+  it('checked, and something on the list has no mark: the check is open again, and that is never said as a failure', () => {
+    const done: [string, string][] = [[B, 'done'], [CHECK_TITLE, 'done']]
+    expect(at(done, { met: 5, total: 6, unchecked: 1 })[1]).toEqual(['check', 'doing', 'open again: 1 not checked yet'])
+    expect(at(done, { met: 3, unmet: 1, total: 6, unchecked: 2 })[1]).toEqual(['check', 'doing', 'round 1: 1 not done, sent back; 2 not checked yet'])
+    expect(at([...done, [RECHECK_TITLE, 'running']], { met: 5, total: 6, unchecked: 1 })[1]).toEqual(['check', 'doing', 'checking what is not checked yet'])
+    expect(at([...done, [RECHECK_TITLE, 'done']], { met: 6, total: 6 })[1]).toEqual(['check', 'done', '6 of 6 met']) // closed again, and still one round
+    expect(at([[B, 'done']], { total: 5, unchecked: 5 })[1]).toEqual(['check', 'todo', '5 to check']) // before the first check nothing is "open again"
+    // The smoke test with nothing left to the person is not called done while the check is open.
+    expect(at(done, { met: 5, total: 6, unchecked: 1, byHand: { todo: 0, failed: 0, total: 0 } }).find((s) => s[0] === 'smoke')).toEqual(['smoke', 'todo', 'yours, after the check'])
+  })
+  it('the check can be asked for again only when there is something not checked yet and nothing is going', () => {
+    expect(whyNotCheck({ unchecked: 2, subs: 3, going: false })).toBeNull()
+    expect(whyNotCheck({ unchecked: 2, subs: 0, going: false })).toContain('nothing is built yet')
+    expect(whyNotCheck({ unchecked: 2, subs: 3, going: true })).toContain('has not landed yet')
+    expect(whyNotCheck({ unchecked: 2, subs: 3, going: false, testing: true })).toContain('test run is under way')
+    expect(whyNotCheck({ unchecked: 0, subs: 3, going: false })).toContain('nothing not checked yet')
   })
   it('three rounds and still not done: it is the person\'s', () => {
     const three: [string, string][] = [[B, 'done'], [CHECK_TITLE, 'done'], [FINISH_TITLE, 'done'], [`${CHECK_TITLE} (2)`, 'done'], [`${FINISH_TITLE} (2)`, 'done'], [`${CHECK_TITLE} (3)`, 'done'], [`${FINISH_TITLE} (3)`, 'done'], [`${CHECK_TITLE} (4)`, 'done']]

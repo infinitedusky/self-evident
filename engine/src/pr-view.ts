@@ -23,6 +23,9 @@ import { getIssue, identifier, PlanError } from './issues.js'
 import { needsTicket, teamTicket, ticketRequired } from './ticket.js'
 import { prAuto, prDescription, prDraft } from './pr.js'
 import { smokeOwed } from './smoke.js'
+import { inForce, type Covered } from './requirements.js'
+import { afterDescription, unchecked as notChecked } from './verify.js'
+import { workflowFor } from './work.js'
 import { homeRepo } from './workbench.js'
 
 const execFileP = promisify(execFile)
@@ -79,7 +82,8 @@ export async function prView(issueId: string, deps: { gh?: Gh; preview: (project
   const builds = live.length ? await db.select({ issueId: build.issueId, status: build.status }).from(build).where(inArray(build.issueId, live.map((s) => s.id))) : []
   const landed = live.filter((s) => builds.find((b) => b.issueId === s.id)?.status === 'done').length
   const criteria = acceptanceOf(t)
-  const unchecked = criteria.filter((c) => c.built !== true).length, byHand = smokeOwed(criteria)
+  // Three counts, never one (Sandy, 2026-11-23: "Not checked yet" is never shown as a failure): what the build failed, what has no mark yet, what waits for the person.
+  const failed = criteria.filter((c) => c.built === false).length, unchecked = criteria.filter(notChecked).length, byHand = smokeOwed(criteria)
   const message = t.projectId ? await deps.preview(t.projectId, mine ? t.id : undefined).catch(() => null) : null
   let onGithub: PrOnGithub | null = null, comments: PrComment[] = [], problem: string | null = null
   if (row?.number && r?.fullName) {
@@ -100,7 +104,7 @@ export async function prView(issueId: string, deps: { gh?: Gh; preview: (project
     /** What GitHub has differs from what would be sent: it is brought up to date when the next sub-task lands, or on submitting again. */ behind: !!(onGithub && message && liveNow && (onGithub.title !== message.title || onGithub.body.trim() !== message.body.trim())),
     /** Its description was written for the team (and is what leads); else the engine's merge guide leads. */ written: t.prBody?.trim() ? t.prBody : null,
     /** The app's own form for a description (Settings › Landing), to start writing from; null when it has none. */ template: prDescription(a?.setup).template,
-    landed, total: live.length, unchecked, byHand,
+    landed, total: live.length, /** Criteria the build does not meet. */ failed, /** Criteria with no mark yet, left to nobody: the check has not looked at them. */ unchecked, byHand,
     /** The app opens pull requests as drafts; and opens one by itself once the task is built and checked. */ draft: prDraft(a?.setup), auto: prAuto(a?.setup),
     /** It can be submitted now (a new one, or the closed one again); else why not. */ canSubmit: !liveNow && pr?.status !== 'merged' && waits.length === 0, waits,
     /** It is a draft: the person can mark it ready for review. */ canReady: pr?.status === 'draft',
@@ -118,8 +122,15 @@ export async function setPrMessage(issueId: string, body: string | null) {
   if (t.parentId) throw new PlanError('a pull request is a task\'s, not a sub-task\'s')
   const clean = (body ?? '').trim()
   if (clean.length > 30_000) throw new PlanError('a pull request\'s description is at most 30,000 characters: it is read by a reviewer, not kept as a record')
-  await db.update(issue).set({ prBody: clean || null, updatedAt: new Date() }).where(eq(issue.id, t.id))
-  return { written: clean || null }
+  // What the check said of the description was said of other words: the requirements judged from it are not checked yet (verify.ts).
+  const same = clean === (t.prBody ?? '').trim()
+  const [a] = same ? [] : await db.select().from(app).where(eq(app.id, t.appId))
+  const [p] = same || !t.projectId ? [] : await db.select().from(project).where(eq(project.id, t.projectId))
+  const w = same ? null : (await workflowFor(db, { issueId: t.id })).workflow
+  const { held, reopened } = same ? { held: [], reopened: [] as string[] } : afterDescription(inForce(a?.setup, p?.requirements, w?.requirements), t.requirements as Covered[] | null)
+  await db.update(issue).set({ prBody: clean || null, updatedAt: new Date(), ...(reopened.length ? { requirements: held } : {}) }).where(eq(issue.id, t.id))
+  if (reopened.length && a) await db.transaction((tx) => appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId: t.id, actor: 'engine', type: 'task.check_reopened', payload: { why: 'its pull request\'s description changed', requirements: reopened } }))
+  return { written: clean || null, ...(reopened.length ? { /** Requirements judged from the description, whose mark no longer stands: the check is run again for them. */ reopened } : {}) }
 }
 
 /** A draft marked ready for review: the person's, never an agent's. */
