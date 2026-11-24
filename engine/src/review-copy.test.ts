@@ -69,9 +69,11 @@ describe('the app\'s kit', () => {
   it('is read with the task\'s names filled in', () => {
     const dir = mkdtempSync(join(tmpdir(), 'kit-'))
     try {
-      writeFileSync(join(dir, 'kit.json'), JSON.stringify({ start: './review/start.sh', stop: './review/stop.sh', about: 'Project {{project}} for #{{pr}}.', cannot: ['Sign-in.'], files: { 'start.sh, stop.sh': 'The one command, and its undo' } }))
+      writeFileSync(join(dir, 'kit.json'), JSON.stringify({ start: './review/start.sh', stop: './review/stop.sh', about: 'Project {{project}} for #{{pr}}, from "{{fixture}}".', cannot: ['Sign-in.'], files: { 'start.sh, stop.sh': 'The one command, and its undo' } }))
       const k = readKit(dir, vars)
-      expect(k.about).toBe('Project ent-1-review for #12.')
+      expect(k.about).toBe('Project ent-1-review for #12, from "{{fixture}}".')
+      expect(readKit(dir, { ...vars, fixture: 'Meridian' }).about).toBe('Project ent-1-review for #12, from "Meridian".')
+      expect(readKit(dir, { ...vars, fixture: '' }).about).toBe('Project ent-1-review for #12, from "".')
       expect(k.stop).toBe('./review/stop.sh')
       expect(() => readKit(join(dir, 'nowhere'), vars)).toThrow(/not at/)
     } finally { rmSync(dir, { recursive: true, force: true }) }

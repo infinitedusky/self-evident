@@ -138,7 +138,7 @@ export async function runPrototype(id: string, actor = 'person', opts: { restart
   const pointed = envOf(p.id, standIns, await startStandIns(p.id, standIns, p.path, { ...process.env, ...(await prototypeEnv(p)) }), p.path)
   const envFile = writeEnvFile(p.id, pointed) // for a container: a compose service names it as an env_file once
   // Its own process group, so stopping it also stops what the command started (a package manager's dev server).
-  const proc = spawn('sh', ['-c', cmd], { cwd: p.path, env: { ...process.env, ...(await prototypeEnv(p)), ...pointed, STAND_INS_ENV: envFile, PORT: String(port), ...more.env, BROWSER: 'none', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+  const proc = spawn('sh', ['-c', cmd], { cwd: p.path, env: { ...process.env, ...(await prototypeEnv(p)), ...pointed, STAND_INS_ENV: envFile, ...(dbCfg ? { FIXTURE: (await rowOf(id)).scenario ?? '' } : {}), PORT: String(port), ...more.env, BROWSER: 'none', CI: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   const log: string[] = []
   const keep = (b: Buffer) => { for (const line of b.toString().split('\n')) if (line.trim()) log.push(line.slice(0, 300)); if (log.length > 300) log.splice(0, log.length - 300) }
   proc.stdout?.on('data', keep); proc.stderr?.on('data', keep)
