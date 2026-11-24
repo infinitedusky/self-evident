@@ -55,8 +55,11 @@ source has it; one that was pasted or imported can be edited.
 - Work in a git worktree. Write what is decided into LOG.md and SHAPE.md.
 - Ask when an instruction has two readings.
 
-## Not decided
+## Settled since (2026-11-24)
 
-- Where this goes in the order of work in [reviewable-prs-brief.md](reviewable-prs-brief.md).
-- Whether a proposed decision that is rejected is kept, marked as rejected, or removed.
-- Size limits on a pasted or imported doc.
+Built the same day; LOG.md, "Context: a section above the brief", has how it works and what is not done.
+
+- Order of work: before the gate in [reviewable-prs-brief.md](reviewable-prs-brief.md).
+- A rejected proposed decision is kept, marked rejected and folded away; agents are told not to propose it again.
+- Size: a doc up to 200,000 characters; one given to every agent in full, up to 20,000.
+- Notes and decisions here are the app's existing notes: one set, still in the reports.

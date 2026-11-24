@@ -7,6 +7,7 @@
  * "starts as an idea" is the idea it came from, and the rest are step_work rows.
  */
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { moveContext } from './context.js'
 import { db, type Tx } from './db/client.js'
 import { app, idea, issue, project, prototype, session, stepWork, workflow } from './db/schema.js'
 import { appendEvent } from './events.js'
@@ -438,6 +439,7 @@ async function convertIdeaTx(ideaId: string, as: 'task' | 'project', opts: { tit
     }
     if (draft) await tx.delete(stepWork).where(eq(stepWork.id, draft.id))
     await tx.update(prototype).set({ ideaId: null, ...target, updatedAt: new Date() }).where(eq(prototype.ideaId, ideaId))
+    await moveContext(tx, ideaId, made ? { projectId: made.id } : target) // its context goes along (context.ts): to the project it became, so every task in it has it; else to the task
     await tx.update(idea).set({ lane: 'build', updatedAt: new Date() }).where(eq(idea.id, ideaId))
     await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, ideaId, ...target, ...(projectId ? { projectId } : {}), actor, type: 'idea.converted', payload: { as, title, ...(opts.why ? { why: opts.why } : {}) } })
     return { as, ...target, ...(made ? { projectId: made.id } : {}), ...(moved ? { moved } : {}) }

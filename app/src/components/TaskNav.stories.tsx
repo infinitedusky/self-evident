@@ -101,3 +101,18 @@ export const SmokeTestNothingLeft: Story = {
     await expect(link).toHaveAttribute('href', '/tasks/iss_sample20/smoke'); await expect(link).toHaveTextContent('nothing left to you; look anyway')
   },
 }
+
+/** Context, above the brief and its steps and never one of them: how much it holds, and that a proposed decision waits for the person. */
+export const WithContext: Story = {
+  args: { context: { count: 11, proposed: 1 } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const link = c.getByRole('link', { name: /Context/ })
+    await expect(link).toHaveAttribute('href', '/tasks/iss_sample20/context')
+    await expect(link).toHaveTextContent('1 for you to decide')
+    const names = [...canvasElement.querySelectorAll('.task-nav > .link, .task-nav > .task-nav-label')].map((e) => e.textContent ?? '')
+    await expect(names.findIndex((t) => t.includes('Context'))).toBeLessThan(names.findIndex((t) => t === 'Brief'))
+  },
+}
+/** On its page. */
+export const OnContext: Story = { args: { context: { count: 3, proposed: 0 }, here: 'context' } }

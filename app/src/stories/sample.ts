@@ -830,3 +830,41 @@ export const finalizeSample: import('../engine').FinalizeView = {
 export const finalizeReadySample: import('../engine').FinalizeView = { ...finalizeSample, steps: finalizeSample.steps.map((s) => (s.key === 'gate' ? { ...s, state: 'pass' as const, says: 'All 6 pass.' } : s)), gate: finalizeSample.gate.map((c) => (c.key === 'description' ? { ...c, state: 'pass' as const, says: 'Every section of the app\'s form is there, in order, and filled.' } : c)), canPush: true, pushWaits: [] }
 /** Never run (made up): the smoke test has not been accepted. */
 export const finalizeNoneSample: import('../engine').FinalizeView = { ...finalizeSample, state: 'none', sha: null, steps: finalizeSample.steps.map((s) => ({ ...s, state: 'waiting' as const, says: '' })), mutation: null, evidence: '', canPush: false, gate: finalizeSample.gate.map((c) => (c.key === 'smoke' ? { ...c, state: 'fail' as const, says: 'The smoke test has not been accepted.' } : c)), pushWaits: ['The finalizing has not run: accept the smoke test, or run it here.', 'Your smoke checks are done: The smoke test has not been accepted.'] }
+
+/**
+ * Made up: the Context of the sample task, idea and project (docs/context-brief.md). The task is in a project, so it
+ * also sees the project's; one decision waits for the person and one was rejected.
+ */
+const otherTicket: import('../engine').OriginView = {
+  id: 'origin_sample2', source: 'linear', sourceName: 'Linear', ref: 'SHOP-37', url: 'https://linear.app/example/issue/SHOP-37', title: 'Remove a saved card (sample)',
+  body: 'A customer can remove a card from their account page. It must be gone from the checkout too.', comments: [], links: [], files: [], fetchedAt: '2026-11-22T09:00:00Z',
+}
+const vaultNotes = '## What the vault returns (made up)\n\n- `last4`, `expiry`, `brand`\n- Never the full number, never the security code\n\nA card is removed with `DELETE /cards/:id`. A removed card cannot be brought back.'
+const ctxDoc = (d: Partial<import('../engine').ContextDoc> & { id: string; title: string }): import('../engine').ContextDoc => ({ description: null, from: 'pasted', ticket: null, fileName: null, body: null, chars: (d.body ?? '').length, inFull: false, addedBy: 'user', addedAt: '2026-11-22T10:00:00Z', fromProject: false, ...d })
+const ctxNote = (n: Partial<import('../engine').ContextNote> & { id: string; title: string }): import('../engine').ContextNote => ({ kind: 'note', status: 'settled', body: '', on: '2026-11-22', addedBy: 'user', fromProject: false, alsoAbout: [], ...n })
+export const contextLimits = { doc: 200_000, inFull: 20_000 }
+export const taskContext: import('../engine').ContextView = {
+  on: 'task', project: { id: 'proj_checkout', name: 'One-page checkout (sample)' }, limits: contextLimits,
+  docs: [
+    ctxDoc({ id: 'origin_sample1', title: 'Saved cards at checkout (sample)', from: 'ticket', ticket: { originating: true, origin: sampleOrigin }, chars: 900, inFull: true, addedAt: '2026-11-20T12:00:00Z' }),
+    ctxDoc({ id: 'cdoc_sample1', title: 'Card vault API notes (sample)', description: 'What the payment provider returns for a saved card, and what it never returns.', body: vaultNotes, addedAt: '2026-11-22T10:00:00Z' }),
+    ctxDoc({ id: 'cdoc_sample2', title: 'Support requests about saved cards (sample)', description: 'Forty made-up requests from customers asking to pay with a card they used before.', from: 'file', fileName: 'support-export.md', body: 'Request 1 (made up): "Why do I have to type my card every time?"\n\nRequest 2 (made up): "Please remember my card."', chars: 38_400, addedBy: 'agent', addedAt: '2026-11-23T14:00:00Z' }),
+    ctxDoc({ id: 'origin_sample2', title: 'Remove a saved card (sample)', from: 'ticket', ticket: { originating: false, origin: otherTicket }, chars: 120, addedAt: '2026-11-22T09:00:00Z' }),
+    ctxDoc({ id: 'cdoc_proj1', title: 'Checkout design principles (sample)', description: 'The four rules the one-page checkout is designed to.', body: '1. One page, no steps.\n2. Nothing asked twice.\n3. The total is always in view.\n4. An error is said beside what caused it.', inFull: true, fromProject: true, addedAt: '2026-11-18T10:00:00Z' }),
+  ],
+  notes: [
+    ctxNote({ id: 'note_ctx1', kind: 'decision', status: 'proposed', title: 'Only cards used in the last 12 months are offered (sample)', body: 'Older ones are often expired, and the vault charges to check each.', on: '2026-11-24', addedBy: 'agent' }),
+    ctxNote({ id: 'note_ctx2', kind: 'decision', title: 'A saved card shows its last four digits and its expiry, nothing more (sample)', body: 'The vault never returns more, and support asked for no more.', on: '2026-11-21' }),
+    ctxNote({ id: 'note_ctx3', kind: 'decision', title: 'A removed card is deleted at the provider, not hidden here (sample)', on: '2026-11-23', addedBy: 'agent' }),
+    ctxNote({ id: 'note_ctxp1', kind: 'decision', title: 'The checkout is one page on a phone too (sample)', on: '2026-11-18', fromProject: true }),
+    ctxNote({ id: 'note_ctx4', kind: 'decision', status: 'rejected', title: 'Save every card without asking (sample)', body: 'One less box to tick.', on: '2026-11-22', addedBy: 'agent' }),
+    ctxNote({ id: 'note_ctx5', title: 'Talked with Em about mobile (sample)', body: 'Support hears the same request from people on phones.\n\nOutcome: mobile gets a ticket of its own; not done under this task.', on: '2026-11-23', alsoAbout: [{ id: 'iss_sample5', name: 'SS-5', title: 'Submit an order (sample)' }] }),
+    ctxNote({ id: 'note_ctx6', title: 'The vault is slow on its first call (sample)', body: 'About two seconds, then fast. Found while reading its guide.', on: '2026-11-22', addedBy: 'agent' }),
+  ],
+}
+/** An idea that came from a ticket and has had nothing added: the ticket is its one reference doc. */
+export const ideaContext: import('../engine').ContextView = { on: 'idea', project: null, limits: contextLimits, docs: [taskContext.docs[0]], notes: [] }
+/** A project's own: what its tasks see as "from the project". */
+export const projectContext: import('../engine').ContextView = { on: 'project', project: null, limits: contextLimits, docs: taskContext.docs.filter((d) => d.fromProject).map((d) => ({ ...d, fromProject: false })), notes: taskContext.notes.filter((n) => n.fromProject).map((n) => ({ ...n, fromProject: false })) }
+/** Made here, from nothing outside, and nothing added yet. */
+export const emptyContext: import('../engine').ContextView = { on: 'task', project: null, limits: contextLimits, docs: [], notes: [] }

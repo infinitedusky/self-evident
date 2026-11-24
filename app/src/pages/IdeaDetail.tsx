@@ -14,7 +14,7 @@ import { StepSection } from '../components/StepSection'
 import { TaskNav } from '../components/TaskNav'
 import { TASK_AGENT_ASKED, TaskAgent, useTaskAgent } from '../components/TaskAgent'
 import { engine, type IdeaRow, type OriginView } from '../engine'
-import { Origin } from '../components/Origin'
+import { Context } from '../components/Context'
 import { useCurrentApp } from '../current-app'
 import { Md } from '../components/Md'
 import { label } from '@self-evident/engine/steps'
@@ -56,6 +56,9 @@ function Work({ idea, section, open }: { idea: IdeaRow; section?: string; open: 
   // Where it came from, word for word, when it came from a tracker: what its agent and every agent after it reads.
   const [origin, setOrigin] = useState<OriginView | null>(null)
   useEffect(() => { engine.idea(idea.id).then((r) => setOrigin(r.origin ?? null)).catch(() => setOrigin(null)) }, [idea.id])
+  const [ctx, setCtx] = useState<{ count: number; proposed: number } | null>(null)
+  const readCtx = () => { void engine.contextCount(subject).then(setCtx).catch(() => setCtx({ count: 0, proposed: 0 })) }
+  useEffect(() => { readCtx() }, [idea.id, section]) // eslint-disable-line react-hooks/exhaustive-deps
   const convert = async (as: 'task' | 'project') => {
     setBusy(true)
     try { const out = await engine.convertIdea(idea.id, { as }); nav(out.projectId ? `/projects/${out.projectId}` : `/tasks/${out.issueId}`) } catch (e: any) { setError(String(e.message ?? e)); setBusy(false) }
@@ -67,14 +70,14 @@ function Work({ idea, section, open }: { idea: IdeaRow; section?: string; open: 
   if (stepsError && !v) return <div className="empty bad">{stepsError}</div>
   if (!v) return <p className="muted">Loading…</p>
   const rows = v.rows
-  const here = rows.some((r) => r.key === section) ? section! : 'overview'
+  const here = section === 'context' || rows.some((r) => r.key === section) ? section! : 'overview'
   if (section && here === 'overview') return <Navigate to={base} replace />
   const row = rows.find((r) => r.key === here)
   const next = rows.find((r) => !r.waitingOn && r.state.status === 'none' && r.key !== 'idea')
   const hasAgent = open || !!agent.session // a converted idea's agent went with it; one that stayed is still shown
   return (
     <div className={`task-layout ${hasAgent ? 'with-agent' : ''} ${agent.open ? '' : 'agent-folded'} ${navOpen ? '' : 'nav-folded'}`}>
-      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} on="idea" rows={rows} />
+      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} on="idea" rows={rows} context={ctx ?? { count: 0, proposed: 0 }} />
       <div className="task-main">
         {here === 'overview' && (
           <>
@@ -83,11 +86,11 @@ function Work({ idea, section, open }: { idea: IdeaRow; section?: string; open: 
               {idea.body ? <Md text={idea.body} /> : <p className="muted" style={{ margin: 0 }}>Only its title so far.</p>}
               {open && next && <p style={{ margin: '10px 0 0' }}>Next, if you want it: <Link to={`${base}/${next.key}`}>{label(next.key, 'idea')}</Link>. Nothing here commits to building it.</p>}
             </section>
-            {origin && <Origin origin={origin} />}
+            {origin && <p className="muted" style={{ margin: '-6px 0 16px', fontSize: 14 }} data-component="CameFrom">It came from {origin.sourceName} {origin.ref}. The ticket, word for word, is in its <Link to={`${base}/context`}>Context</Link>.</p>}
             {open && (
               <section className="panel">
                 <h2>Convert it</h2>
-                <p className="muted" style={{ margin: '0 0 10px', fontSize: 14 }}>When it's something we'll build. As a task, its agent, its worktree and its steps go with it, and its rough draft becomes the brief, waiting for your approval.</p>
+                <p className="muted" style={{ margin: '0 0 10px', fontSize: 14 }}>When it's something we'll build. As a task, its agent, its worktree, its steps and its context go with it, and its rough draft becomes the brief, waiting for your approval.</p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button className="btn" disabled={busy} onClick={ask}>Ask the agent to convert it</button>
                   <button className="btn quiet" disabled={busy} onClick={() => convert('task')}>As a task</button>
@@ -98,6 +101,7 @@ function Work({ idea, section, open }: { idea: IdeaRow; section?: string; open: 
             )}
           </>
         )}
+        {here === 'context' && <Context subject={subject} onChange={readCtx} />}
         {row && <StepSection subject={subject} appId={idea.appId} name={idea.title} on="idea" row={row} base={base} waitingState={rows.find((r) => r.key === row.waitingOn)?.state} session={agent.session?.id} />}
       </div>
       {hasAgent && agent.session !== undefined && (

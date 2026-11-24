@@ -27,6 +27,9 @@ export const Converted: Story = { beforeEach: withEngine({ ideas: ideaRows.map((
   play: async ({ canvas }) => { await canvas.findByText('converted'); if (canvas.queryByRole('button', { name: 'Work on this idea' })) throw new Error('a converted idea offers an agent') } }
 /** No such idea. */
 export const Missing: Story = { args: { id: 'idea_nothing' } }
-/** Brought in from a Linear ticket (made up): the ticket, word for word, sits under the idea, folded. */
+/** Brought in from a Linear ticket (made up): the overview says which, and its Context holds the ticket word for word. */
 export const FromATicket: Story = { beforeEach: withEngine({ ideas: inbox.map((i, n) => (n === 0 ? { ...i, origin: sampleOrigin } : i)) as never, ideaTalk: null }),
-  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText('Where this came from')).toBeInTheDocument() } }
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/It came from Linear SHOP-41/)).toBeInTheDocument() } }
+/** An idea's Context: the same section as a task's, and what is in it goes with the idea when it is converted. */
+export const ItsContext: Story = { args: { section: 'context' }, beforeEach: withEngine({ ideas: inbox, ideaTalk: null }),
+  play: async ({ canvasElement }) => { const c = within(canvasElement); await expect(await c.findByText(/it goes with the idea when it becomes a task or a project/)).toBeVisible(); await expect((await c.findByRole('link', { name: /Context/ })).className).toContain('active') } }
