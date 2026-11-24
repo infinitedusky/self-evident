@@ -189,6 +189,30 @@ describe.skipIf(!reachable)('context', () => {
     await expect(editContextNote({ issueId: t }, n.id, { background: 'x' })).rejects.toThrow('only a decision')
   })
 
+  it('lets an agent bring a question that is already there up to date, and never its answer', async () => {
+    const t = (await createProject({ appId, name: 'Updating (sample)', issues: [{ title: 'A task with old questions (sample)', brief: 'Build it.' }] })).issues[0].id
+    const tool = engineTools({ appId, actor: 'agent' }).find((x) => x.name === 'context')!
+    const call = async (args: Record<string, unknown>) => { const r = await tool.handler(args); return { error: !!r.isError, said: r.content[0].text } }
+    await call({ op: 'ask', issueId: t, title: 'Open: who may change the group? (sample)' })
+    const id = (await contextOf({ issueId: t })).notes[0].id
+    // By its id: its words, its background, its options.
+    expect((await call({ op: 'update', issueId: t, id, title: 'Who may change the group? (sample)', background: 'PRD assumption 1 says admins can add or remove.', options: '(a) admins only (b) any member. Recommendation: (a).' })).error).toBe(false)
+    expect((await contextOf({ issueId: t })).notes).toMatchObject([{ id, status: 'open', title: 'Who may change the group? (sample)', background: 'PRD assumption 1 says admins can add or remove.', options: '(a) admins only (b) any member. Recommendation: (a).' }])
+    // Asked again in the same words with more to say: added to the one that is there, not a second question.
+    expect((await call({ op: 'ask', issueId: t, title: 'who may change the group? (sample)', background: 'The ticket only says add.' })).error).toBe(false)
+    expect((await contextOf({ issueId: t })).notes).toMatchObject([{ id, background: 'The ticket only says add.', options: '(a) admins only (b) any member. Recommendation: (a).' }])
+    expect((await call({ op: 'ask', issueId: t, title: 'Who may change the group? (sample)' })).said).toContain('use op "update"')
+    expect((await call({ op: 'update', issueId: t, id })).said).toContain('give what changes')
+    expect((await call({ op: 'update', issueId: t, title: 'No id' })).said).toContain('needs the id')
+    // Once it is made, its question is not reworded by an agent; what it carries still can be. The answer is never touched.
+    await editContextNote({ issueId: t }, id, { answer: 'Admins only' })
+    expect((await call({ op: 'update', issueId: t, id, title: 'Something else?' })).said).toContain('that decision is made')
+    expect((await call({ op: 'update', issueId: t, id, options: '' })).error).toBe(false)
+    expect((await contextOf({ issueId: t })).notes).toMatchObject([{ id, status: 'settled', answer: 'Admins only', title: 'Who may change the group? (sample)', options: null }])
+    const n = (await addContextNote({ issueId: t }, { title: 'A plain note (sample)' })).view.notes.find((x) => x.kind === 'note')!
+    expect((await call({ op: 'update', issueId: t, id: n.id, background: 'x' })).said).toContain('only a decision')
+  })
+
   it('shows a decision made as one statement as an answer with no question, and takes a question when it is given one', async () => {
     const t = (await createProject({ appId, name: 'Statements (sample)', issues: [{ title: 'A task from before (sample)', brief: 'Build it.' }] })).issues[0].id
     const n = await addNote(appId, { title: 'Test on an empty company first (sample)', kind: 'decision', issueIds: [t] }) // as the Reports page makes one
