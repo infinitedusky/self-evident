@@ -246,7 +246,9 @@ export async function addContextNote(s: Subject, i: { kind?: string; title?: str
       return { status, view: await contextOf(s) }
     }
   }
-  await addNote(f.appId, { title, answer, body: i.body, background: decision ? i.background : undefined, on: i.on, kind: decision ? 'decision' : 'note', status, ...('issueId' in f.key ? { issueIds: [f.key.issueId] } : 'ideaId' in f.key ? { ideaIds: [f.key.ideaId] } : { projectIds: [f.key.projectId] }) }, actor)
+  // With no answer there is no "why this answer": what is said beside a question is why it is asked, its background.
+  const asking = status === 'open' && !i.background?.trim()
+  await addNote(f.appId, { title, answer, body: status === 'open' ? '' : i.body, background: decision ? (asking ? i.body : i.background) : undefined, on: i.on, kind: decision ? 'decision' : 'note', status, ...('issueId' in f.key ? { issueIds: [f.key.issueId] } : 'ideaId' in f.key ? { ideaIds: [f.key.ideaId] } : { projectIds: [f.key.projectId] }) }, actor)
   return { status, view: await contextOf(s) }
 }
 
@@ -315,7 +317,7 @@ export async function contextPrompt(s: { issueId?: string; ideaId?: string; proj
   const background = (r: NoteRow) => (r.background ? `\n  Background: ${r.background.trim().replace(/\n+/g, '\n  ')}` : '')
   const decision = ({ row: r, fromProject }: (typeof notes)[number]) => `- ${r.answer ? `${r.title} → ${r.answer}` : r.title}${why(r)}${asked(r)}${from(fromProject)}${background(r)}`
   if (settled.length) out.push('### Decisions', '', 'Each a question and the answer the person settled on. Work to each one. Do not reopen them, argue with them or ask about them again; if one makes the work impossible, say so plainly and stop.', '', ...settled.map(decision), '')
-  if (undecided.length) out.push('### Not decided yet', '', 'Questions with no answer. Do not guess one and do not work as if one were given. Where your work does not turn on one, carry on. Where it does, say so plainly to the person and ask, or propose an answer.', '', ...undecided.map(({ row: r, fromProject }) => `- ${r.title}${r.body ? ` (${r.body.replace(/\s+/g, ' ')})` : ''}${asked(r)}${from(fromProject)}${background(r)}`), '')
+  if (undecided.length) out.push('### Not decided yet', '', 'Questions with no answer. Do not guess one and do not work as if one were given. Where your work does not turn on one, carry on. Where it does, say so plainly to the person and ask, or propose an answer.', '', ...undecided.map(({ row: r, fromProject }) => `- ${r.title}${asked(r)}${from(fromProject)}${background(r)}`), '')
   if (proposed.length) out.push('### Answers proposed, waiting for the person', '', 'Not settled. Do not work as if they were, and do not propose them again.', '', ...proposed.map(decision), '')
   if (rejected.length) out.push('### Answers proposed and turned down by the person', '', 'Do not do these, and do not propose them again.', '', ...rejected.map(decision), '')
   if (said.length) out.push('### Notes', '', 'What was said or found along the way.', '', ...said.map(({ row: r, fromProject }) => `**${r.title}** (${r.on})${from(fromProject)}${r.body ? `\n\n${r.body.trim()}` : ''}`).flatMap((t) => [t, '']))
