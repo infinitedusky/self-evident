@@ -9,6 +9,10 @@
  * A note can be marked a decision, so what was settled along the way can be listed apart from what merely happened.
  * (The planner's decision cards, a question with options and the one chosen, are their own thing: the `decision`
  * table.)
+ *
+ * They are also what a Context holds (context.ts; Sandy, 2026-11-24, "one set"): a note can be in an idea's or a
+ * project's context as well as about tasks, and a decision an agent proposed waits as `proposed` until the person
+ * accepts it (settled) or turns it down (rejected). Only settled ones are listed here and reach a report.
  */
 import { and, desc, eq, gte, inArray, lte } from 'drizzle-orm'
 import { db } from './db/client.js'
@@ -19,7 +23,9 @@ import { identifier, PlanError } from './issues.js'
 
 export const NOTE_KINDS = ['note', 'decision'] as const
 export type NoteKind = (typeof NOTE_KINDS)[number]
-export interface NoteView { id: string; on: string; kind: NoteKind; title: string; body: string; tasks: { id: string; name: string; title: string }[]; createdBy: string | null; updatedAt: string | null }
+export const NOTE_STATUSES = ['settled', 'proposed', 'rejected'] as const
+export type NoteStatus = (typeof NOTE_STATUSES)[number]
+export interface NoteView { id: string; on: string; kind: NoteKind; status: NoteStatus; title: string; body: string; tasks: { id: string; name: string; title: string }[]; createdBy: string | null; updatedAt: string | null }
 type Row = typeof note.$inferSelect
 
 /** A day as the person's calendar has it, in this computer's time. */
@@ -30,13 +36,13 @@ async function views(appId: string, rows: Row[]): Promise<NoteView[]> {
   const ids = [...new Set(rows.flatMap((r) => r.issueIds ?? []))]
   const [a] = await db.select({ key: app.key }).from(app).where(eq(app.id, appId))
   const tasks = ids.length ? await db.select({ id: issue.id, number: issue.number, title: issue.title }).from(issue).where(and(eq(issue.appId, appId), inArray(issue.id, ids))) : []
-  return rows.map((r) => ({ id: r.id, on: r.on, kind: r.kind as NoteKind, title: r.title, body: r.body, createdBy: r.createdBy, updatedAt: (r.updatedAt ?? r.createdAt)?.toISOString() ?? null,
+  return rows.map((r) => ({ id: r.id, on: r.on, kind: r.kind as NoteKind, status: r.status as NoteStatus, title: r.title, body: r.body, createdBy: r.createdBy, updatedAt: (r.updatedAt ?? r.createdAt)?.toISOString() ?? null,
     tasks: (r.issueIds ?? []).flatMap((id) => { const t = tasks.find((x) => x.id === id); return t ? [{ id: t.id, name: identifier(a?.key ?? '', t.number), title: t.title }] : [] }) }))
 }
 
-/** The app's notes, newest day first. issueId: those attached to that task. from, to: days, both included. kind: only decisions, say. */
-export async function listNotes(appId: string, o: { issueId?: string | null; from?: string | null; to?: string | null; kind?: string | null } = {}): Promise<NoteView[]> {
-  const rows = await db.select().from(note).where(and(eq(note.appId, appId), o.from ? gte(note.on, aDay(o.from)) : undefined, o.to ? lte(note.on, aDay(o.to)) : undefined, o.kind ? eq(note.kind, o.kind) : undefined)).orderBy(desc(note.on), desc(note.createdAt))
+/** The app's notes, newest day first. issueId: those attached to that task. from, to: days, both included. kind: only decisions, say. Settled ones only, unless `all`. */
+export async function listNotes(appId: string, o: { issueId?: string | null; from?: string | null; to?: string | null; kind?: string | null; all?: boolean } = {}): Promise<NoteView[]> {
+  const rows = await db.select().from(note).where(and(eq(note.appId, appId), o.from ? gte(note.on, aDay(o.from)) : undefined, o.to ? lte(note.on, aDay(o.to)) : undefined, o.kind ? eq(note.kind, o.kind) : undefined, o.all ? undefined : eq(note.status, 'settled'))).orderBy(desc(note.on), desc(note.createdAt))
   return views(appId, o.issueId ? rows.filter((r) => (r.issueIds ?? []).includes(o.issueId!)) : rows)
 }
 
@@ -49,17 +55,18 @@ async function tasksOf(appId: string, ids: unknown): Promise<string[]> {
   return want
 }
 const kindOf = (k: unknown): NoteKind => { if (!(NOTE_KINDS as readonly string[]).includes(String(k))) throw new PlanError(`a note is one of: ${NOTE_KINDS.join(', ')}`); return k as NoteKind }
+const statusOf = (v: unknown): NoteStatus => { if (!(NOTE_STATUSES as readonly string[]).includes(String(v))) throw new PlanError(`a decision is one of: ${NOTE_STATUSES.join(', ')}`); return v as NoteStatus }
 async function said(appId: string, actor: string, type: string, r: Row) {
   const [a] = await db.select({ workspaceId: app.workspaceId }).from(app).where(eq(app.id, appId))
   // Once for the app, and once for each task it is about, so a task's history has it too.
-  await db.transaction(async (tx) => { for (const issueId of r.issueIds?.length ? r.issueIds : [null]) await appendEvent(tx, { workspaceId: a.workspaceId, appId, issueId, actor, type, payload: { noteId: r.id, on: r.on, kind: r.kind, heading: r.title } }) })
+  await db.transaction(async (tx) => { for (const issueId of r.issueIds?.length ? r.issueIds : [null]) await appendEvent(tx, { workspaceId: a.workspaceId, appId, issueId, ...(issueId ? {} : { ideaId: r.ideaIds?.[0] ?? null, projectId: r.projectIds?.[0] ?? null }), actor, type, payload: { noteId: r.id, on: r.on, kind: r.kind, status: r.status, heading: r.title } }) })
 }
 
 /** A note written down: for today unless it says which day. */
-export async function addNote(appId: string, i: { title: string; body?: string; on?: string; kind?: string; issueIds?: string[] }, actor = 'user'): Promise<NoteView> {
+export async function addNote(appId: string, i: { title: string; body?: string; on?: string; kind?: string; issueIds?: string[]; /** A Context's (context.ts): checked there. */ ideaIds?: string[]; projectIds?: string[]; status?: NoteStatus }, actor = 'user'): Promise<NoteView> {
   const title = String(i.title ?? '').trim().slice(0, 200)
   if (!title) throw new PlanError('a note needs a title: what it is about, in a line')
-  const [row] = await db.insert(note).values({ id: newId('note'), appId, on: i.on ? aDay(i.on) : dayOf(new Date()), kind: i.kind ? kindOf(i.kind) : 'note', title, body: String(i.body ?? '').trim().slice(0, 20_000), issueIds: await tasksOf(appId, i.issueIds), createdBy: actor }).returning()
+  const [row] = await db.insert(note).values({ id: newId('note'), appId, on: i.on ? aDay(i.on) : dayOf(new Date()), kind: i.kind ? kindOf(i.kind) : 'note', title, body: String(i.body ?? '').trim().slice(0, 20_000), issueIds: await tasksOf(appId, i.issueIds), ideaIds: i.ideaIds ?? [], projectIds: i.projectIds ?? [], status: i.status ?? 'settled', createdBy: actor }).returning()
   await said(appId, actor, 'note.added', row)
   return (await views(appId, [row]))[0]
 }
@@ -69,11 +76,11 @@ async function rowOf(appId: string, id: string) {
   return r
 }
 /** Any of it changed: what it says, its day, what kind it is, the tasks it is about. */
-export async function editNote(appId: string, id: string, i: { title?: string; body?: string; on?: string; kind?: string; issueIds?: string[] }, actor = 'user'): Promise<NoteView> {
+export async function editNote(appId: string, id: string, i: { title?: string; body?: string; on?: string; kind?: string; issueIds?: string[]; status?: NoteStatus }, actor = 'user'): Promise<NoteView> {
   const r = await rowOf(appId, id)
   const title = i.title === undefined ? r.title : String(i.title).trim().slice(0, 200)
   if (!title) throw new PlanError('a note needs a title')
-  const [row] = await db.update(note).set({ title, body: i.body === undefined ? r.body : String(i.body).trim().slice(0, 20_000), on: i.on === undefined ? r.on : aDay(i.on), kind: i.kind === undefined ? r.kind : kindOf(i.kind), issueIds: i.issueIds === undefined ? r.issueIds : await tasksOf(appId, i.issueIds), updatedAt: new Date() }).where(eq(note.id, id)).returning()
+  const [row] = await db.update(note).set({ title, body: i.body === undefined ? r.body : String(i.body).trim().slice(0, 20_000), on: i.on === undefined ? r.on : aDay(i.on), kind: i.kind === undefined ? r.kind : kindOf(i.kind), issueIds: i.issueIds === undefined ? r.issueIds : await tasksOf(appId, i.issueIds), status: i.status === undefined ? r.status : statusOf(i.status), updatedAt: new Date() }).where(eq(note.id, id)).returning()
   await said(appId, actor, 'note.changed', row)
   return (await views(appId, [row]))[0]
 }

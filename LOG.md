@@ -7282,6 +7282,166 @@ real before its last lines are kept; the smoke set-ups' scripts, seed and the pr
 own settings and were not moved into the folder; no agent tool reads or writes hooks; more points (a fixture
 loaded, a review copy made, a build finished) are added when something needs one.
 
+## Context: a section above the brief, on an idea, a project and a task (Sandy, 2026-11-24; brief in docs/context-brief.md)
+
+Built from the brief, story first. Sandy approved the layout and the four points below as one ("looks good").
+
+**What it is.** A place to put things ahead of research, and to record what guides every agent on a piece of work.
+It is always there, on an idea, a project and a task, and is not a step.
+
+**Decided:**
+
+- **Notes are one set** (Sandy, asked): Context's notes and decisions are the app's notes (`notes.ts`, built
+  2026-11-23). What is written in Context is given to the agents and still goes into a report by its day. A task's
+  Notes panel left its overview for Context; ideas and projects gained notes; the Reports page keeps the list of
+  them all. `note` gained `idea_ids`, `project_ids` and `status`.
+- **The order of work**: this came before the gate (7 in reviewable-prs-brief.md).
+- **A rejected proposal is kept**, folded under Decisions as "n proposed and rejected". Every agent is told the
+  person turned it down, and the engine refuses the same statement proposed again. The person can accept it after
+  all, or delete it (then it may be proposed again).
+- **Size**: a doc holds up to 200,000 characters; one given to every agent in full, up to 20,000. A longer one
+  stays listed and says why the mark is off. A file is up to 20 MB.
+- **Assets stay as they are** (`assets.ts`). An asset says where a thing is; a reference doc holds the thing.
+
+**How it works:**
+
+- **In the nav**: a Context row under Overview and above the Brief label and its steps, with how many things it
+  holds and "1 for you to decide" when an agent has proposed a decision. On a project it is a panel above Tasks
+  (a task on its own has its own, not its hidden project's).
+- **The page**, top to bottom: For you to decide (only when something is proposed), Reference docs, Decisions,
+  Notes. Each section has one line saying how agents get it.
+- **Reference docs** (`context_doc`): text pasted in, a file brought in, or another Linear ticket by its id. The
+  ticket the work came from is first and is not a row: it is the origin the work already points at. It is never
+  edited or taken out here, and Refresh reads it again from Linear (`keepTicket` in `linear-import.ts`, which
+  keeps one ticket and makes nothing from it). The "Where this came from" panel left the overviews; a line there
+  points at Context.
+- **A PDF is kept as the file it was**, not turned into text. The agent that needs it opens it. So a PDF cannot be
+  edited or given in full. Text and Markdown files become text that can be edited.
+- **What an agent is given** (`contextPrompt`, added wherever `originPrompt` was: the task's and idea's agents and
+  their steps' agents, the planner, every builder): each decision in full as something not to reopen; proposals
+  as not settled; rejected ones as not to be done or proposed again; each note in full; docs marked "in full", in
+  full; the rest by title and description with a path on this computer to open with Read
+  (`~/.self-evident/context/<app>/`, written when the prompt is made). The originating ticket is still given
+  whole by `originPrompt`.
+- **Agents add to it** with the `context` tool: `note` and `doc` freely, marked as the agent's. `decide` records a
+  decision the person agreed to in conversation. `propose` leaves one waiting for the person. Only a person
+  accepts or rejects. The planner and the builders are given the context but have no tool to add to it.
+- **It moves with the work** (`moveContext`, called by `convertIdea`): an idea that becomes a task takes its
+  context to the task. One that becomes a project takes it to the project, so every task in it sees it as "from
+  the project". That second part was my reading of "everything goes along"; say if it should go to the first
+  task instead.
+- **A task in a project sees the project's**, marked and with no Edit. A sub-task has its task's.
+
+Code: `engine/src/context.ts` (+ test), migration `0058_context`, routes `/{ideas,issues,projects}/:id/context…`
+in `server.ts`, `app/src/components/Context.tsx` (+ stories), `TaskNav`, `IssuePage`, `IdeaDetail`, `ProjectPage`.
+
+**Looked at for real**: this branch's engine and page on their own ports against a scratch database (made, then
+dropped), with a made-up app. An idea's context filled through the routes, the idea converted to a project, and
+the task, idea and project pages opened in a browser.
+
+**Not done:**
+
+- A ticket was not brought in from the real Linear (the scratch app had no Linear set). `keepTicket` is tested
+  with a made-up tracker only.
+- No agent has yet been run with a context: what it is given is checked as text in `context.test.ts`.
+- A note written in Context is about that one task. Attaching it to other tasks too is still done from Reports.
+- No app-level context (Sandy expects one later).
+- A page address that names a section (`/ideas/<id>/context`) opened the tab on its overview when I loaded it
+  directly; clicking Context in the nav works. Not looked into: it may be how tabs restore, for any section.
+
+## A fixture loads into a database with computed columns (2026-11-24)
+
+Sandy could not start CEB-90's smoke test from the fixture "Meridian". The cause was not who is signed in, as we
+both guessed: the load itself failed. A fixture kept from a database has every column, and the loader put every
+column back, including one the database works out itself (`employees.composite_risk_score`, generated), which
+Postgres refuses. The start answered with a bare server error, so the page said nothing useful.
+
+- **Only the columns that take a value are loaded** (`prototype-data.ts`, `load`): generated ones are left to the
+  database; an identity column keeps the row's own id.
+- **The review copy's `fixture.sql` does the same**, reading the columns from the database it is run on
+  (`fixtureSql`): it would have failed on a reviewer's machine the same way.
+- **A load that fails says which table and why**, as a refusal a page can show.
+- The loader's test database has a generated column now, and its scenario carries a value for it.
+
+With it, the Cloaked workbench's `before-start` hook ran for the first time (it gave `DEMO_TENANT_ID`), and the
+two smoke set-ups' scripts use what it gives. Tried from a throwaway process, not yet from the page.
+
+## An endpoint's data, a file per fixture; the fixture picks (Sandy, 2026-11-24)
+
+With Meridian's smoke test up, Sandy wanted a mock response with a row for each of its 250 people, and asked:
+"should the endpoints be connected to whatever fixture you're on, or should you be able to do multiple of the same
+endpoint tied to different fixtures?" The second. Until now an endpoint had one made-up file (and a task's own), and
+filling it out for a fixture's people changed that one file, so the data decided the fixture and never the reverse.
+
+- **An endpoint holds several files**, each made for one fixture's people, or for none.
+- **The fixture a run starts from picks** (`pickForFixture`, mock-serve.ts): the file made for it; else one made for
+  no fixture; else the order there was. Started empty: one made for no fixture first. A prototype (its scenario), a
+  smoke test (what its database was built from) and a review copy (its fixture) all say which.
+- **Filling out for a fixture adds a file** beside the one it was made from, which is left as it is; filling out
+  again for the same fixture changes that fixture's file. (`assignFixture` says `fresh`.)
+- **Where the fixture is not known** (the Data step's own view, an export), nothing changes: the order alone.
+- The page names an endpoint's other files by fixture, and says the rule.
+
+Not done: the Data step and the smoke page do not yet show, for a fixture chosen there, which file each endpoint
+would serve; a fixture's file cannot be removed from the page; `fixtureForTask` still takes the first fixture any
+data was made for when the person picks none; a server written by hand that writes over what it is sent (CEB-90's)
+gets the right file but may still overwrite its people. Meridian's own file is not made yet: Sandy wants it without
+the deep enrichment that makes one person's rows large ("we don't need any of that").
+
+## A response per fixture (Sandy, 2026-11-24)
+
+The file-per-fixture work (#401) only made a copy of one template with other people in it. Sandy, on why that is not
+enough: a template is one person at full depth, so all 250 of a company would come out as that person's shape ("how
+many of those people we want to have doxing, how many people we don't"); and then the model: "we just want to be
+able to have multiple responses … a response per fixture. And then in that response, we can do whatever we want. We
+can make it fake or not fake. We can have its own CSV."
+
+So: **an endpoint has a response for any fixture, and may have one for each fixture; each is a whole response.**
+
+Built now, the made-up half:
+- **"Add for a fixture"** on an endpoint's data: a file given as that fixture's own, kept beside the data there is.
+  A run started from the fixture is served it (`pickForFixture`).
+- **Its fields are mapped row by row.** A file given for a fixture has its rows already, one for each person, mixed
+  as its writer chose. Mapping from the fixture sets the chosen columns of the first row from the first person and
+  so on, adds no row, and leaves what else each row says.
+- The limit of 200 people on a mapping is 2000.
+
+Not done, and next: **a real response per fixture, faked** (refused for now: "a file for one fixture is made up").
+Whose a response is has two parts today, the endpoint and the task (`Scope`); the fixture is marked on the side
+(`madeFor`). Making the fixture a third part of that is what lets a fixture's response be anything the main one can
+be: recorded, faked, its own answer to "the faked version?". Also not done: two files for one fixture are not
+refused (the newer is served); a fixture's file is removed only with the rest; the page shows one response at a
+time and names the others in a line.
+
+## A response per fixture, built as that (Sandy, 2026-11-24)
+
+The two merges before this (#401, #402) answered a different question with field mapping, and Sandy said so: "What
+you seem to be doing is trying to come up with some way to map things together to solve that problem. What I'm
+arguing for is don't … do that. Instead, allow an endpoint to have responses per fixture so I can … say do it this
+way for this fixture, do it this way for that fixture … and this is the default." And where: "It shouldn't have to
+be done in the settings. The settings are really about setting defaults … it's really in the tasks." And of the two
+places: "the task data and the mock in the settings should pretty much be identical. Just one is going to override
+the other."
+
+- **Whose a response is has three parts** (`Scope`, mock-data.ts): the endpoint, the task (none: the app's), and now
+  the fixture (none: the default). So a fixture's response is whatever the default can be: a real response kept
+  here and its fake, or a file provided; with its own removal, its own fake, and a task's own over the app's.
+- **A run is served its fixture's response, else the default** (`itemOf`): a task's own for that fixture, the task's
+  default, the app's for that fixture, the app's default.
+- **Any endpoint**, not only one that answers with people.
+- **One control, the same in Settings and on a task's Data step** (`EndpointData.tsx`): Default, then a tab for each
+  fixture that has a response, then "+ For a fixture". What is chosen is what the rest of the cell shows and
+  changes. On a task, a response added for a fixture is that task's own.
+- **Mapping fields is only what it was**: an override of who a response answers for, on the response chosen. It
+  makes no response. On a fixture's own response it is row by row and adds no row.
+- Taken out: the choice by `madeFor` (`pickForFixture`), the copy a mapping used to make for another fixture, the
+  "Add for a fixture" button that took made-up files only.
+
+Not done: a mapping from a tester's file is of the default response only; "use the faked version" is one answer for
+an endpoint, not one for each response; agents' tools name no response, so the data agent works on defaults; the
+Data step does not yet say which response a run from the fixture chosen on the smoke page will be served; nothing
+has been tried on the real page or with Meridian.
+
 ### The pull request has a step on Settings › Skills (2026-11-24)
 
 Sandy, reading the Verify stage of the build on Settings › Skills: "there should be more sections here, based on what

@@ -413,6 +413,31 @@ export interface Learned { key: string; title: string; summary: string; body: st
 export interface Learning { docs: Learned[]; missing: string[]; working: { sessionId: string } | null; sessionId: string | null; stale: number }
 /** A note (engine/src/notes.ts): something said, found or decided, on a day, about the tasks it names. */
 export interface Note { id: string; on: string; kind: 'note' | 'decision'; title: string; body: string; tasks: { id: string; name: string; title: string }[]; createdBy: string | null; updatedAt: string | null }
+/** Who a Context is of: an idea, a task or a project (docs/context-brief.md). */
+export type ContextSubject = { kind: 'ideas' | 'issues' | 'projects'; id: string }
+/** A reference doc in a Context: a ticket kept as its tracker has it, text pasted in, or a file brought in. */
+export interface ContextDoc {
+  id: string; title: string; /** One line on what it is: what an agent reads in the list before opening it. */ description: string | null
+  from: 'ticket' | 'pasted' | 'file'
+  /** A ticket: where it is from, and whether the work came from it (then every agent has it whole, always). */
+  ticket?: { originating: boolean; origin: OriginView } | null
+  /** A file brought in: its name as it was. */ fileName?: string | null
+  /** Its text, for one pasted or brought in. A ticket's is in `ticket.origin`. */ body: string | null
+  /** A PDF: kept on this computer as the file it was, for the agent that needs it to open. It has no text here. */ kept?: boolean
+  chars: number; /** Given to every agent whole, not listed for them to open. */ inFull: boolean
+  addedBy: string | null; addedAt: string; /** A task's view of its project's: shown, never changed there. */ fromProject: boolean
+}
+/** A note or a decision in a Context. They are the app's notes (engine/src/notes.ts): dated, and in the reports. */
+export interface ContextNote {
+  id: string; kind: 'note' | 'decision'; /** A decision an agent proposed waits for the person; a note is always settled. */ status: 'settled' | 'proposed' | 'rejected'
+  /** A note: what it is about. A decision: the decision, in one statement. */ title: string; /** A note: what was said. A decision: why, if said. */ body: string
+  on: string; addedBy: string | null; fromProject: boolean; /** Other tasks it is also about. */ alsoAbout: { id: string; name: string; title: string }[]
+}
+export interface ContextView {
+  on: 'idea' | 'project' | 'task'; /** A task in a project: whose context it also sees. */ project: { id: string; name: string } | null
+  docs: ContextDoc[]; notes: ContextNote[]
+  /** In characters: the most a doc may hold, and the most one given to every agent in full may hold. */ limits: { doc: number; inFull: number }
+}
 export interface Reports { writing: boolean; format: { daily: string; weekly: string }; reports: Report[] }
 /** A version of a task: the git branch each of its worktrees is on, and (set aside) the task as it was left. */
 export interface TaskBranch { id: string; name: string; current: boolean; fromSave: string | null; createdAt: string; gitBranches: string[]; /** Set aside: what is only on it. */ work: { commits: number; comments: number } | null }
@@ -445,12 +470,13 @@ export interface MockEndpoint {
   key: string; method: string; path: string; what?: string; file?: string
   /** A real response of it is never stored: one that comes in is faked at once and the original deleted. */ sensitive?: boolean
   /** A second step: this call is made to a link that another endpoint's answer gives. follows: that endpoint's key (it is thereby intermediate); linkField: the field of its answer holding the link. */ follows?: string; linkField?: string
-  /** Its data (engine/src/mock-serve.ts): the app's, set in its settings, and a task's own in place of it, where a task was asked about. */ data: { app: EndpointItem | null; task: EndpointItem | null; /** Do a person's own runs get its faked version? The app's answer, and this task's own where it has one. A reviewer always gets the faked one. */ faked?: { app: boolean; task: boolean | null } }
+  /** Its data (engine/src/mock-serve.ts): the app's, set in its settings, and a task's own in place of it, where a task was asked about. */ data: { app: EndpointItem | null; task: EndpointItem | null; /** Do a person's own runs get its faked version? The app's answer, and this task's own where it has one. A reviewer always gets the faked one. */ faked?: { app: boolean; task: boolean | null }; /** Its responses for one fixture each, beside the default: the app's and this task's own. */ responses?: { fixture: string; app: EndpointItem | null; task: EndpointItem | null }[] }
   /** The real response behind it on this computer. None: its shape is taken from the code that calls it. */ real: { at: string; how: 'given' | 'recorded' } | null
   /** Its files in the data the mock serves by default. */ files: string[]
 }
 /** One endpoint's data at one level. recorded: a real response as it came, on this computer only. safe: a fake of it, or a file provided as holding nothing real; what a reviewer gets. */
 export interface EndpointItem {
+  /** Which response this is: one fixture's, or (null) the default. */ fixture?: string | null
   recorded: { id: string; at: string; how: 'given' | 'recorded'; files: string[] } | null
   safe: { kind: 'faked' | 'provided'; set: string; files: string[]; note: string; stale?: boolean; /** The column names of its data: what can be set from a fixture. */ columns?: string[]; /** Fields mapped from a file of the fixtures, worked out when it is served: data column ← the file's column ('' leaves it empty). */ fromFile?: { file: string; map: Record<string, string> }; /** The fixture people it was filled out for. */ madeFor?: { fixture: string; table: string; who: string; people: number; map: Record<string, string> } } | null
 }
@@ -619,10 +645,10 @@ export const engine = {
   removeMockReal: (appId: string, key: string, id: string) => call<MockReal[]>('DELETE', `/apps/${appId}/mocks/${key}/real?id=${encodeURIComponent(id)}`),
   addMockEndpoint: (appId: string, key: string, body: { method: string; path?: string; what?: string; sensitive?: boolean; follows?: string | null; linkField?: string }) => call<Mock>('POST', `/apps/${appId}/mocks/${key}/endpoints`, body),
   /** One endpoint's data: the app's, or (issueId) one task's own in place of it. real: a response the service sent; otherwise the person states it holds nothing real. */
-  giveEndpointData: async (appId: string, key: string, endpoint: string, files: File[], o: { real: boolean; issueId?: string | null }) => {
+  giveEndpointData: async (appId: string, key: string, endpoint: string, files: File[], o: { real: boolean; issueId?: string | null; /** The response is this fixture's. None: the default. */ fixture?: string | null }) => {
     const form = new FormData()
     for (const f of files) form.append('file', f)
-    form.append('real', String(o.real)); if (o.issueId) form.append('issueId', o.issueId)
+    form.append('real', String(o.real)); if (o.issueId) form.append('issueId', o.issueId); if (o.fixture) form.append('fixture', o.fixture)
     const res = await fetch(`${API}/apps/${appId}/mocks/${key}/endpoints/${endpoint}/data`, { method: 'POST', body: form })
     const text = await res.text()
     if (!res.ok) throw new Error(text || `${res.status}`)
@@ -655,13 +681,13 @@ export const engine = {
   /** An endpoint's data filled out for a fixture's people: count of them from one row on, the columns in map set from each. */
   /** Fields of an endpoint's data mapped from a file of the fixtures. file null: no longer. */
   mapFromFile: (appId: string, key: string, endpoint: string, body: { file: string | null; map?: Record<string, string>; issueId?: string | null }) => call<{ fromFile: { file: string; map: Record<string, string> } | null }>('PUT', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}/file-map`, body),
-  assignFixture: (appId: string, key: string, endpoint: string, body: { fixture: string; table: string; row: number; count: number; map: Record<string, string>; issueId?: string | null }) => call<{ madeFor: { fixture: string; who: string; people: number }; changed: number }>('PUT', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}/fixture`, body),
+  assignFixture: (appId: string, key: string, endpoint: string, body: { fixture: string; table: string; row: number; count: number; map: Record<string, string>; issueId?: string | null; /** Which response's data: one fixture's. None: the default. */ response?: string | null }) => call<{ madeFor: { fixture: string; who: string; people: number }; changed: number }>('PUT', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}/fixture`, body),
   /** Whether a person's own runs get an endpoint's faked version: the app's answer, or (issueId) one task's own. null: the task follows the app again. */
   /** The saved real response of one endpoint, faked now: with the plan its fake had, else everything not plainly structure replaced. Refused while a real value is still in it. */
-  fakeEndpoint: (appId: string, key: string, endpoint: string, issueId?: string | null) => call<{ data: MockEndpoint['data']; replaced: number; kept: number }>('POST', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}/fake`, { issueId: issueId ?? null }),
+  fakeEndpoint: (appId: string, key: string, endpoint: string, issueId?: string | null, /** Which response: one fixture's. */ fixture?: string | null) => call<{ data: MockEndpoint['data']; replaced: number; kept: number }>('POST', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}/fake`, { issueId: issueId ?? null, fixture: fixture ?? null }),
   setEndpointFaked: (appId: string, key: string, endpoint: string, faked: boolean | null, issueId?: string | null) => call<MockEndpoint['data']>('PUT', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}/faked`, { faked, issueId: issueId ?? null }),
   /** Taken away at one level: a task's own gone, it gets the app's again. real: the real response behind it is deleted from this computer too. */
-  removeEndpointData: (appId: string, key: string, endpoint: string, o: { issueId?: string | null; real?: boolean } = {}) => call<{ removed: boolean; real: number }>('DELETE', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}/data?${o.issueId ? `issue=${o.issueId}&` : ''}${o.real ? 'real=1' : ''}`),
+  removeEndpointData: (appId: string, key: string, endpoint: string, o: { issueId?: string | null; real?: boolean; /** Which response: one fixture's. */ fixture?: string | null } = {}) => call<{ removed: boolean; real: number }>('DELETE', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}/data?${o.issueId ? `issue=${o.issueId}&` : ''}${o.fixture ? `fixture=${encodeURIComponent(o.fixture)}&` : ''}${o.real ? 'real=1' : ''}`),
   editMockEndpoint: (appId: string, key: string, endpoint: string, body: { method?: string; path?: string; what?: string; sensitive?: boolean; follows?: string | null; linkField?: string }) => call<Mock>('PATCH', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}`, body),
   removeMockEndpoint: (appId: string, key: string, endpoint: string) => call<Mock>('DELETE', `/apps/${appId}/mocks/${key}/endpoints/${endpoint}`),
   renameMockData: (appId: string, key: string, data: string, name: string) => call<MockData[]>('PATCH', `/apps/${appId}/mocks/${key}/data/${data}`, { name }),
@@ -787,6 +813,28 @@ export const engine = {
   addNote: (appId: string, b: { on: string; kind: 'note' | 'decision'; title: string; body: string; issueIds: string[] }) => call<Note>('POST', `/apps/${appId}/notes`, b),
   editNote: (appId: string, id: string, b: Partial<{ on: string; kind: 'note' | 'decision'; title: string; body: string; issueIds: string[] }>) => call<Note>('PATCH', `/apps/${appId}/notes/${id}`, b),
   removeNote: (appId: string, id: string) => call<{ removed: string }>('DELETE', `/apps/${appId}/notes/${id}`),
+  /** Context (docs/context-brief.md): the reference docs, notes and decisions of an idea, a task or a project. */
+  context: (s: ContextSubject) => call<ContextView>('GET', `/${s.kind}/${s.id}/context`),
+  /** For a nav: how much it holds, and how many proposed decisions wait for the person. */
+  contextCount: (s: ContextSubject) => call<{ count: number; proposed: number }>('GET', `/${s.kind}/${s.id}/context/count`),
+  addContextDoc: (s: ContextSubject, b: { title: string; description?: string; body: string; inFull?: boolean }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/docs`, b),
+  /** Another ticket, by its id in the tracker (SHOP-12). */
+  addContextTicket: (s: ContextSubject, ref: string) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/tickets`, { ref }),
+  importContextDoc: async (s: ContextSubject, file: File) => {
+    const form = new FormData(); form.append('file', file)
+    const res = await fetch(`${API}/${s.kind}/${s.id}/context/files`, { method: 'POST', body: form })
+    const text = await res.text()
+    if (!res.ok) throw new Error(text || `${res.status}`)
+    return JSON.parse(text) as ContextView
+  },
+  editContextDoc: (s: ContextSubject, id: string, b: Partial<{ title: string; description: string; body: string; inFull: boolean }>) => call<ContextView>('PATCH', `/${s.kind}/${s.id}/context/docs/${id}`, b),
+  /** A ticket, as its tracker has it now. */
+  refreshContextDoc: (s: ContextSubject, id: string) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/docs/${id}/refresh`),
+  removeContextDoc: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/docs/${id}`),
+  addContextNote: (s: ContextSubject, b: { kind: 'note' | 'decision'; title: string; body: string; on?: string }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/notes`, b),
+  /** status: accept a proposed decision (settled) or reject it. */
+  editContextNote: (s: ContextSubject, id: string, b: Partial<{ title: string; body: string; on: string; status: 'settled' | 'rejected' }>) => call<ContextView>('PATCH', `/${s.kind}/${s.id}/context/notes/${id}`, b),
+  removeContextNote: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/notes/${id}`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
   writeReport: (appId: string, body: { period: ReportPeriod; notes?: string }) => call<{ writing: boolean }>('POST', `/apps/${appId}/reports`, body),
   editReport: (id: string, body: string) => call<Report>('PUT', `/reports/${id}`, { body }),

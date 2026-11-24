@@ -66,7 +66,7 @@ const callSays = (m: Row, keys: string[]) => { const all = cleanEndpoints(m.endp
  * asks for. dry: only say (for a page); otherwise a whole-run fake made with a plan is first made again from a
  * newer recorded run.
  */
-export async function planOf(m: Row, place: Place, issueId?: string | null, opts: { dry?: boolean } = {}): Promise<Plan> {
+export async function planOf(m: Row, place: Place, issueId?: string | null, opts: { dry?: boolean; fixture?: string | null } = {}): Promise<Plan> {
   const [own] = issueId ? await db.select().from(mockChoice).where(and(eq(mockChoice.mockId, m.id), eq(mockChoice.issueId, issueId), eq(mockChoice.place, place))) : []
   const app = cleanChoice((m.places ?? {})[place])
   const choice: Choice = cleanChoice(own) ?? app ?? { source: 'default' }
@@ -85,7 +85,7 @@ export async function planOf(m: Row, place: Place, issueId?: string | null, opts
       if (opts.dry) note = note ?? `a newer real response (${day(newest.at)}) is faked when this next runs`
       else try { await fakeData(m.appId, m.key, { recording: newest.dir, plan: whole.plan as Record<string, never>, dataKey: 'faked', issueId: issueId ?? null }, 'engine') } catch (err) { note = `a newer real response could not be faked with the plan it has, so the last fake is used: ${String((err as Error).message).split('\n')[0]}` }
     }
-    const s = await served(m, { form, issueId, place })
+    const s = await served(m, { form, issueId, place, fixture: opts.fixture })
     const waiting = s.unfaked[0] === '*' ? 'its real response is not faked yet' : `${s.unfaked.length} call${s.unfaked.length === 1 ? ' has a real response that is' : 's have a real response that is'} not faked yet`
     if (s.unfaked.length) note = note ?? waiting
     const kinds = new Set(Object.values(s.per).map((p) => p.kind))
@@ -105,7 +105,7 @@ export async function planOf(m: Row, place: Place, issueId?: string | null, opts
 }
 
 /** Every mock of the app in one place, for a run: the form each is served in, which are called for real, which are on real data. */
-export async function plansFor(appId: string, place: Place, issueId?: string | null, opts: { dry?: boolean } = {}) {
+export async function plansFor(appId: string, place: Place, issueId?: string | null, opts: { dry?: boolean; /** The fixture the run starts from (null: empty): picks among an endpoint's data files (mock-serve.ts). */ fixture?: string | null } = {}) {
   const rows = await db.select().from(mock).where(eq(mock.appId, appId)).orderBy(asc(mock.key))
   const plans: Plan[] = []
   for (const m of rows) plans.push(await planOf(m, place, issueId, opts))
@@ -113,7 +113,7 @@ export async function plansFor(appId: string, place: Place, issueId?: string | n
   if (blocked.length && !opts.dry) throw new PlanError(blocked.map((p) => p.blocked).join('; '))
   return {
     plans,
-    /** What each mock is given: its endpoints' data in this form, with this task's own where it has any. */ pick: Object.fromEntries(plans.filter((p) => p.how !== 'live').map((p) => [p.mock, { form: p.form ?? 'faked', issueId: issueId ?? null, place }])) as Record<string, { form: Form; issueId: string | null; place: Place }>,
+    /** What each mock is given: its endpoints' data in this form, with this task's own where it has any. */ pick: Object.fromEntries(plans.filter((p) => p.how !== 'live').map((p) => [p.mock, { form: p.form ?? 'faked', issueId: issueId ?? null, place, fixture: opts.fixture }])) as Record<string, { form: Form; issueId: string | null; place: Place; fixture?: string | null }>,
     /** Called for real: left out of the mocks that are started. */ live: plans.filter((p) => p.how === 'live').map((p) => p.mock),
     /** Of those, the ones whose answers are kept. */ record: plans.filter((p) => p.how === 'live' && p.record).map((p) => p.mock),
     /** Answering with a real response: this must not be shared. */ real: plans.filter((p) => p.how === 'live' || p.real).map((p) => p.mock),

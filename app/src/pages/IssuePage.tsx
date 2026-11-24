@@ -6,7 +6,7 @@
  * A task (a top-level code issue) is laid out like Settings: its own nav down the left (TaskNav), its overview first,
  * then a page per step in its workflow's order, then the build, each at its own address: /tasks/:id/:section.
  */
-import { Notes } from '../components/Notes'
+import { Context } from '../components/Context'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router'
 import Markdown from 'react-markdown'
@@ -34,7 +34,6 @@ import { ChecklistView } from '../components/ChecklistView'
 import { SmokeTest } from '../components/SmokeTest'
 import { openEvents, useLiveProject, type Events, type Checklist, API, engine, useWorkflows, EVENT_TYPES, STATE_LABEL, type IssueDetail, type IssueState, type TaskBranches as TaskBranchesView } from '../engine'
 import { Md } from '../components/Md'
-import { Origin } from '../components/Origin'
 
 /** Where a task's workflow comes from, after its name. */
 const FROM = { task: ', its own', project: ', from its project', app: ', the app\'s default' }
@@ -157,6 +156,10 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
   // A staged task's smoke test: every criterion no agent marked is the person's to check by hand. Read with the task, for the nav.
   const [smoke, setSmoke] = useState<{ owed: number; total: number; failed: number; built?: boolean } | null>(null)
   useEffect(() => { if (i && !i.parentId && i.kind === 'code') void engine.smoke(i.id).then((s) => setSmoke(s.staged ? { owed: s.owed, total: s.checks.length, failed: s.failed, built: !!s.head } : null)).catch(() => setSmoke(null)) }, [i?.id, i?.updatedAt, subStamp, section]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Its Context (Context.tsx): how much it holds and what waits for the person, for the nav. Read with the task, and when something in it changes.
+  const [ctx, setCtx] = useState<{ count: number; proposed: number } | null>(null)
+  const readCtx = useCallback(() => { void engine.contextCount(subject).then(setCtx).catch(() => setCtx({ count: 0, proposed: 0 })) }, [i.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { readCtx() }, [readCtx, section, i.updatedAt])
   const navSaves = saved ? { current: saved.branches.find((b) => b.current)?.name ?? null, points: saved.saves.map((s) => ({ id: s.id, name: s.name })), aside: saved.branches.filter((b) => !b.current).map((b) => ({ id: b.id, name: b.name })) } : undefined
   const saveHere = async (name: string) => { await engine.saveHere(i.id, name).catch(() => {}); readSaves(); setSavesStamp((n) => n + 1) }
   if (error && !v) return <div className="empty bad">{error}</div>
@@ -164,7 +167,7 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
   const rows = v.rows
   const live0 = i.subIssues.filter((s) => !dropped(s)).length // something is planned: its pull request has a page
   const staged = !checklist && !!smoke && (smoke.total > 0 || !!smoke.built) // it stays once the task is built, with nothing left to check too: they may want to look anyway
-  const here = section === 'build' || section === 'saves' || (section === 'pr' && live0 > 0) || (section === 'checklist' && checklist) || (section === 'smoke' && (checklist || staged)) || rows.some((r) => r.key === section) ? section! : 'overview'
+  const here = section === 'context' || section === 'build' || section === 'saves' || (section === 'pr' && live0 > 0) || (section === 'checklist' && checklist) || (section === 'smoke' && (checklist || staged)) || rows.some((r) => r.key === section) ? section! : 'overview'
   if (section && here === 'overview') return <Navigate to={base} replace />
   const live = i.subIssues.filter((s) => !dropped(s)) // canceled sub-tasks are out of the plan
   const done = live.filter((s) => s.state === 'done').length
@@ -175,12 +178,12 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
   const reading = rows.filter((r) => step(r.key).place === 'check' && r.state.status !== 'done') // after a prototype the plan is read before it is built
   return (
     <div className={`task-layout with-agent ${agent.open ? '' : 'agent-folded'} ${navOpen ? '' : 'nav-folded'}`}>
-      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} rows={rows} saves={navSaves} onSave={saveHere} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: live.length, waitingOn: buildWaits }} smoke={staged ? smoke : null} checklist={checklist} pr={live0 > 0 ? { status: i.pr?.status ?? null, number: i.pr?.number ?? null } : null} />
+      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} rows={rows} context={ctx ?? { count: 0, proposed: 0 }} saves={navSaves} onSave={saveHere} workflow={wf && { name: wf.name, from: FROM[v.resolved.from!] }} build={{ done, total: live.length, waitingOn: buildWaits }} smoke={staged ? smoke : null} checklist={checklist} pr={live0 > 0 ? { status: i.pr?.status ?? null, number: i.pr?.number ?? null } : null} />
       <div className="task-main">
         {here === 'overview' && (
           <>
             <section className="panel"><Brief description={i.description} brief={null} /></section>
-            {i.origin && <Origin origin={i.origin} />}
+            {i.origin && <p className="muted" style={{ margin: '-6px 0 16px', fontSize: 14 }} data-component="CameFrom">It came from {i.origin.sourceName} {i.origin.ref}. The ticket, word for word, is in its <Link to={`${base}/context`}>Context</Link>.</p>}
             <Handover madeBy={i.madeBy} handover={i.handover} onWrite={(again) => engine.writeHandover(i.id, again)} />
             <section className="panel">
               <h2>Where it stands</h2>
@@ -195,7 +198,6 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
                 <Link to={`/settings/apps/${i.appId}/workflows`}>Configure the rules</Link>
               </p>
             </section>
-            <Notes appId={i.appId} issueId={i.id} />
             <Comments i={i} />
             <Planner i={i} busy={busy} act={act} />
           </>
@@ -205,6 +207,7 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
             {row.key === 'brief' ? <BriefStep i={i} busy={busy} act={act} feeds={rows.filter((r) => r.key !== 'brief')} base={base} /> : undefined}
           </StepSection>
         )}
+        {here === 'context' && <Context subject={subject} version={+new Date(i.updatedAt ?? 0)} onChange={readCtx} />}
         {here === 'checklist' && checklist && <ChecklistView checklist={checklist} base={base} onTestAgain={() => engine.testAgain(i.id).then(() => engine.checklist(i.id)).then(setChecklist)} onCheckAgain={() => engine.checkAgain(i.id).then(() => engine.checklist(i.id)).then(setChecklist)} />}
         {here === 'smoke' && (checklist || staged) && <SmokeTest issueId={i.id} appId={i.appId} base={base} small={small} />}
         {here === 'pr' && <PrStep issueId={i.id} appId={i.appId} base={base} />}

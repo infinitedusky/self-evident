@@ -6,6 +6,7 @@
  * server sets the cost of every question, never the agent.
  */
 import { originOf, originPrompt } from './origins.js'
+import { contextPrompt } from './context.js'
 import { covered, inForce, requirementLines, type Requirement } from './requirements.js'
 import { acceptanceLines, acceptanceOf, type Criterion } from './acceptance.js'
 import { buildOf } from './steps.js'
@@ -308,7 +309,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
   return {
     runId, issueId, projectId: t.projectId, appId: a.id, attempt, base, oneGo: fixed ? undefined : oneGo, fixed,
     input: {
-      repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, origin: originPrompt(await originOf({ issueId })), acceptance: acceptanceOf(t).length ? acceptanceLines(acceptanceOf(t)) : null, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, analysis: (await getStep({ issueId }, 'analysis'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
+      repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, origin: originPrompt(await originOf({ issueId: issueId })) + await contextPrompt({ issueId: issueId }, { canWrite: false }).catch(() => ''), acceptance: acceptanceOf(t).length ? acceptanceLines(acceptanceOf(t)) : null, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, analysis: (await getStep({ issueId }, 'analysis'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
       testCmd: setup.test_cmd, storybook: storiesLead(setup), references: await referencesOf(a.id), requirements: inForce(setup, g.project.requirements, wf?.requirements), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }

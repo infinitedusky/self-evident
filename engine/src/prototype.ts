@@ -107,10 +107,10 @@ export async function listPrototypes(appId: string) {
 }
 
 /** Its own stand-ins, then every mock in the app's library it has none of its own for. */
-async function withLibrary(p: { appId: string; standIns: unknown; issueId?: string | null }, opts: { dry?: boolean } = {}) {
+async function withLibrary(p: { appId: string; standIns: unknown; issueId?: string | null; scenario?: string | null }, opts: { dry?: boolean } = {}) {
   const own = cleanStandIns(p.standIns)
   // Which data each mock serves here, and which services are called for real instead, is the task's to say (mock-places.ts).
-  const plans = await plansFor(p.appId, 'prototype', p.issueId ?? null, opts)
+  const plans = await plansFor(p.appId, 'prototype', p.issueId ?? null, { ...opts, ...(p.scenario ? { fixture: p.scenario } : {}) }) // the scenario its database was built from picks each endpoint's data
   return { standIns: [...own, ...(await libraryStandIns(p.appId, [...own.map((s) => s.key), ...plans.live], plans.pick))], real: plans.real.filter((k) => !own.some((s) => s.key === k)) }
 }
 

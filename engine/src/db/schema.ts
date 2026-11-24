@@ -538,8 +538,23 @@ export const note = pgTable('note', {
   /** note: something that happened or was found. decision: something settled, to be listed with the others. */ kind: text('kind').notNull().default('note'),
   title: text('title').notNull(), body: text('body').notNull().default(''),
   /** The tasks it is about. A task deleted is simply no longer shown. */ issueIds: jsonb('issue_ids').$type<string[]>().notNull().default([]),
+  /** The ideas and projects whose Context it is in (context.ts): an idea's go with it when it becomes a task or a project. */ ideaIds: jsonb('idea_ids').$type<string[]>().notNull().default([]), projectIds: jsonb('project_ids').$type<string[]>().notNull().default([]),
+  /** A decision an agent proposed waits for the person (proposed), who accepts it (settled) or turns it down (rejected: kept, so it is not proposed again). */ status: text('status').notNull().default('settled'),
   createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
-}, (t) => [index('note_app').on(t.appId, t.on), inList('note_kind', t.kind, ['note', 'decision'])])
+}, (t) => [index('note_app').on(t.appId, t.on), inList('note_kind', t.kind, ['note', 'decision']), inList('note_status', t.status, ['settled', 'proposed', 'rejected'])])
+
+// Reference docs in a Context (context.ts; Sandy, 2026-11-24): what an idea, a project or a task is to be read against.
+// Text pasted in, a file brought in, or another ticket kept as an origin. The ticket the work came from is not a row:
+// it is the origin the idea, project or task already points at.
+export const contextDoc = pgTable('context_doc', {
+  id: id(), appId: appId(),
+  issueId: text('issue_id').references(() => issue.id, { onDelete: 'cascade' }), ideaId: text('idea_id').references(() => idea.id, { onDelete: 'cascade' }), projectId: text('project_id').references(() => project.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(), /** A ticket: the origin it is. */ originId: text('origin_id').references(() => origin.id),
+  title: text('title').notNull(), /** One line: what an agent reads in the list before it opens it. */ description: text('description'),
+  /** Its text. Null for a ticket, and for a PDF, which is kept as the file it was. */ body: text('body'), fileName: text('file_name'), filePath: text('file_path'),
+  /** Given to every agent whole, not listed for it to open. */ inFull: boolean('in_full').notNull().default(false),
+  createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [index('context_doc_app').on(t.appId), inList('context_doc_kind', t.kind, ['pasted', 'file', 'ticket'])])
 
 // Reports on an app's work over a period (reports.ts; Sandy, 2026-11-13): the end-of-day note, the weekly status. Written
 // by a model from what happened in the period, in the person's own format, then theirs to edit and send. `facts` is

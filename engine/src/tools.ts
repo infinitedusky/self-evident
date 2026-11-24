@@ -11,6 +11,7 @@ import { addCall, addTaskService, listTaskServices, removeCall, removeTaskServic
 import { addEndpoint, addService, editEndpoint, getMock, listMocks, needsRecording, saveMock, setMockDetails } from './mocks.js'
 import { addTestFile, listTestFiles, removeTestFile } from './test-files.js'
 import { addNote, editNote, listNotes, removeNote } from './notes.js'
+import { addContextNote, addDoc, contextOf } from './context.js'
 import { assignFixture, mapFromFile, deleteFixture, listFixtures, makeFixtureFromSeed, renameFixture } from './fixtures.js'
 import { giveEndpointData, removeEndpointData } from './mock-serve.js'
 import { mainStatus, setMainAddress, setMainStandIn, startMain, stopMain } from './main-running.js'
@@ -357,6 +358,16 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         if (a.op === 'add') { if (!a.title) throw new PlanError('add needs a title'); return addNote(appId, { title: a.title, body: a.body, on: a.on, kind: a.kind, issueIds: a.issueIds ?? (a.issueId ? [a.issueId] : []) }, actor) }
         if (!a.id) throw new PlanError(`${a.op} needs id`)
         return a.op === 'edit' ? editNote(appId, a.id, { title: a.title, body: a.body, on: a.on, kind: a.kind, issueIds: a.issueIds }, actor) : removeNote(appId, a.id, actor)
+      })),
+      def('context', 'The Context of an idea, a task or a project (give one of ideaId, issueId, projectId): what the person has put beside the work, and what has been settled along the way. Reference docs, notes and decisions; a task in a project also has its project\'s. Every agent on the work is given it. op "read": all of it, with each doc\'s text. op "note": something said or found that the next agent should know (title, a line; body). op "doc": a reference doc you were given or wrote, as text (title; description, one line an agent reads to decide whether to open it; body). op "decide": a decision the person AGREED TO in this conversation, in their own words, as one statement (title) with why (body, optional); it is recorded as settled and marked as recorded by you. op "propose": a decision you think should be made and the person has not agreed to; it waits for them to accept or reject on the Context page, and is not settled until they do. Never use "decide" for something the person has not said yes to. A decision they turned down is not proposed again.', {
+        op: z.enum(['read', 'note', 'doc', 'decide', 'propose']), ideaId: z.string().optional(), issueId: z.string().optional(), projectId: z.string().optional(), title: z.string().optional(), description: z.string().optional(), body: z.string().optional(),
+      }, async (a) => tryIt(async () => {
+        const s = await own(a)
+        if (a.op === 'read') return contextOf(s)
+        if (!a.title) throw new PlanError(`${a.op} needs a title`)
+        if (a.op === 'doc') { await addDoc(s, { title: a.title, description: a.description, body: a.body }, actor); return { added: a.title, where: 'its Context, listed for every agent' } }
+        const r = await addContextNote(s, { kind: a.op === 'note' ? 'note' : 'decision', title: a.title, body: a.body, agreed: a.op === 'decide' }, actor)
+        return a.op === 'note' ? { noted: a.title } : r.status === 'proposed' ? { proposed: a.title, now: 'it waits for the person on the Context page; it is not settled, so do not work as if it were' } : { recorded: a.title, as: 'settled' }
       })),
       def('set_prototype_database', 'Where this app\'s prototypes get their throwaway databases: url, the app\'s development Postgres (any database on that server; each prototype gets its own beside it); env, the variable the app reads (default DATABASE_URL); schema_cmd, a shell command run in the prototype\'s worktree that makes the schema in the database that variable names (the app\'s migrations, or its ORM\'s create/push); seed_cmd, a shell command run the same way after it that fills that database with the app\'s own made-up data, which is what a fixture is made from (service, op fixture_make). Work these out from the app and confirm them with the person first.', { url: z.string(), env: z.string().optional(), schema_cmd: z.string().optional(), seed_cmd: z.string().optional() },
         async (a) => tryIt(() => setPrototypeDatabase(appId, a))),

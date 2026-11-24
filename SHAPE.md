@@ -1005,6 +1005,13 @@ conversation at this moment, that is the key info.")
   what it taught. Right for a team and production; clunky alone and early, when you'd throw away code you just
   liked. Proposed: the stage decides. Early, the accepted prototype is the starting point and the build tidies it
   and adds tests; later, it's a reference and the build starts clean.
+- **Context: what the work is read against, and what is settled** (Sandy, 2026-11-24). An idea, a project and a
+  task each have a Context, always, above the brief: reference docs (the ticket it came from first, word for
+  word), notes and decisions. Every agent on the work is given it, with decisions stated as settled. An agent may
+  add a note or a doc, and may record a decision only once the person has agreed to it; otherwise it proposes one
+  and the person accepts or rejects. It moves with the work when an idea becomes a task or a project, and a task
+  also sees its project's. Its notes and decisions are the same notes a report is written from. LOG.md,
+  "Context: a section above the brief".
 
 ## Open questions
 

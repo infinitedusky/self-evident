@@ -51,6 +51,7 @@ export interface MockData {
   setup: { done: boolean; did: string[]; ask: string | null; detail: string; talkId: string | null }
   trackerGuide: string
   githubRepos: typeof s.githubRepos; repoNote: string | null; folder: typeof s.folder
+  /** The Context of an idea, a task and a project (Context.tsx); `contextProblem`: why a ticket can't be brought in. */ context?: Partial<Record<'ideas' | 'issues' | 'projects', import('../engine').ContextView>>; contextProblem?: string
   /** Why a task can't be deleted, as the engine says it; null when it can. */ deleteProblem: string | null
   /** Repositories skills were pulled from (made up). */ skillSources: { url: string; commit: string; pulledAt: string; skills: string[] }[]
   /** Which Claude account the app's agents run on, as the engine finds it. */ account: { kind: 'default' | 'key' | 'login'; ok: boolean; note: string }
@@ -155,7 +156,8 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/apps/:id/mocks/:key/endpoints', async ({ params, request }) => { const b = await request.json() as { method: string; path?: string; what?: string; sensitive?: boolean; follows?: string; linkField?: string }; d.mocks = d.mocks.map((m) => (m.key === params.key ? { ...m, endpoints: [...m.endpoints, { key: `e${m.endpoints.length + 1}`, method: b.method, path: b.path || `the link in ${b.linkField} that ${m.endpoints.find((e) => e.key === b.follows)?.method} ${m.endpoints.find((e) => e.key === b.follows)?.path} answers with`, what: b.what, ...(b.sensitive ? { sensitive: true } : {}), ...(b.follows ? { follows: b.follows, linkField: b.linkField } : {}), real: null, files: [], data: { app: null, task: null } }] } : m)); return reply(d.mocks.find((m) => m.key === params.key)) }),
     // One endpoint's data given: the app's, or one task's own. A sensitive endpoint's real response is faked at once and not kept.
     http.post('/api/apps/:id/mocks/:key/endpoints/:endpoint/data', async ({ params, request }) => {
-      const f = await request.formData(), real = f.get('real') === 'true', task = !!f.get('issueId')
+      const f = await request.formData(), real = f.get('real') === 'true', task = !!f.get('issueId'), forFixture = f.get('fixture') as string | null
+      if (forFixture) return reply({ kept: real ? 'recorded' : 'provided', asked: null }) // one fixture's response: the default, which the stories show, is as it was
       const name = (e: import('../engine').MockEndpoint) => `${e.key}.${((f.get('file') as File | null)?.name ?? 'x.json').split('.').pop()}`
       const item = (e: import('../engine').MockEndpoint): import('../engine').EndpointItem => (real && !e.sensitive
         ? { recorded: { id: `sample/given-${e.key}`, at: '2026-11-22T10:00:00Z', how: 'given', files: [name(e)] }, safe: null }
@@ -302,6 +304,26 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     // Reports: the engine's rules, roughly. Writing one here answers at once.
     http.get('/api/apps/:id/learning', () => reply(d.learning ?? { docs: [], missing: ['What it is', 'The parts', 'Running and testing it', 'What is fragile'], working: null, sessionId: null, stale: 0 })),
     http.post('/api/apps/:id/learn', () => { const now = d.learning ?? { docs: [], missing: [], working: null, sessionId: null, stale: 0 }; d.learning = { ...now, working: { sessionId: 'talk_sample_learn' }, sessionId: 'talk_sample_learn' }; return reply({ sessionId: 'talk_sample_learn', started: true }) }),
+    // Context: one view per kind of thing; every change answers with the view as it now is.
+    ...(['ideas', 'issues', 'projects'] as const).flatMap((kind) => {
+      const all: Record<typeof kind, import('../engine').ContextView> = { ideas: s.ideaContext, issues: s.taskContext, projects: s.projectContext, ...d.context }
+      let v = structuredClone(all[kind])
+      const at = `/api/${kind}/:id/context`
+      const doc = (o: Partial<import('../engine').ContextDoc>): import('../engine').ContextDoc => ({ id: `cdoc_new${v.docs.length}`, title: '', description: null, from: 'pasted', ticket: null, fileName: null, body: null, chars: 0, inFull: false, addedBy: 'user', addedAt: new Date().toISOString(), fromProject: false, ...o })
+      return [
+        http.get(at, () => reply(v)),
+        http.get(`${at}/count`, () => reply({ count: v.docs.length + v.notes.filter((n) => n.status === 'settled').length, proposed: v.notes.filter((n) => n.status === 'proposed').length })),
+        http.post(`${at}/docs`, async ({ request }) => { const b = await request.json() as { title: string; description?: string; body: string; inFull?: boolean }; v = { ...v, docs: [...v.docs, doc({ title: b.title, description: b.description || null, body: b.body, chars: b.body.length, inFull: !!b.inFull })] }; return reply(v) }),
+        http.post(`${at}/tickets`, async ({ request }) => { const b = await request.json() as { ref: string }; if (d.contextProblem) return HttpResponse.json({ error: d.contextProblem }, { status: 400 }); v = { ...v, docs: [...v.docs, doc({ id: `origin_new${v.docs.length}`, title: `A ticket brought in (sample)`, from: 'ticket', chars: 60, ticket: { originating: false, origin: { ...s.sampleOrigin, id: 'origin_new', ref: b.ref.toUpperCase(), title: 'A ticket brought in (sample)', body: 'Made up: what the ticket says.', comments: [], links: [], files: [] } } })] }; return reply(v) }),
+        http.post(`${at}/files`, async ({ request }) => { const f = (await request.formData()).get('file') as File; const pdf = f.name.endsWith('.pdf'); v = { ...v, docs: [...v.docs, doc({ title: f.name.replace(/\.\w+$/, ''), from: 'file', fileName: f.name, body: pdf ? null : 'Made up: the text read out of the file.', kept: pdf, chars: pdf ? 0 : f.size })] }; return reply(v) }),
+        http.patch(`${at}/docs/:doc`, async ({ params, request }) => { const b = await request.json() as Partial<import('../engine').ContextDoc>; v = { ...v, docs: v.docs.map((x) => (x.id === params.doc ? { ...x, ...b, chars: b.body !== undefined && b.body !== null ? b.body.length : x.chars } : x)) }; return reply(v) }),
+        http.post(`${at}/docs/:doc/refresh`, ({ params }) => { v = { ...v, docs: v.docs.map((x) => (x.id === params.doc && x.ticket ? { ...x, ticket: { ...x.ticket, origin: { ...x.ticket.origin, fetchedAt: '2026-11-24T16:00:00Z', comments: [...x.ticket.origin.comments, { author: 'Made-up Teammate', at: '2026-11-24T15:00:00Z', body: 'Added since it was last read (sample).' }] } } } : x)) }; return reply(v) }),
+        http.delete(`${at}/docs/:doc`, ({ params }) => { v = { ...v, docs: v.docs.filter((x) => x.id !== params.doc) }; return reply(v) }),
+        http.post(`${at}/notes`, async ({ request }) => { const b = await request.json() as { kind: 'note' | 'decision'; title: string; body: string; on?: string }; v = { ...v, notes: [...v.notes, { id: `note_new${v.notes.length}`, kind: b.kind, status: 'settled', title: b.title, body: b.body, on: b.on ?? '2026-11-24', addedBy: 'user', fromProject: false, alsoAbout: [] }] }; return reply(v) }),
+        http.patch(`${at}/notes/:note`, async ({ params, request }) => { const b = await request.json() as Partial<import('../engine').ContextNote>; v = { ...v, notes: v.notes.map((x) => (x.id === params.note ? { ...x, ...b } : x)) }; return reply(v) }),
+        http.delete(`${at}/notes/:note`, ({ params }) => { v = { ...v, notes: v.notes.filter((x) => x.id !== params.note) }; return reply(v) }),
+      ]
+    }),
     // Notes: the app's, or (?issue=) the ones about one task.
     http.get('/api/apps/:id/notes', ({ request }) => { const i = new URL(request.url).searchParams.get('issue'); return reply(d.notes.filter((n) => !i || n.tasks.some((t) => t.id === i))) }),
     http.post('/api/apps/:id/notes', async ({ request }) => { const b = await request.json() as { on: string; kind: 'note' | 'decision'; title: string; body: string; issueIds: string[] }; const n = { id: `note_new${d.notes.length}`, on: b.on, kind: b.kind, title: b.title, body: b.body, tasks: b.issueIds.map((id) => ({ id, name: id === 'iss_sample2' ? 'SS-2' : 'SS-5', title: 'A task (sample)' })), createdBy: 'user', updatedAt: null }; d.notes = [n, ...d.notes]; return reply(n) }),

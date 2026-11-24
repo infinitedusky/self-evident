@@ -31,8 +31,13 @@ export function briefStands(rows: Row[], on: On) {
 /** ✓ finished (approved, where a person approves it), ◐ started or ready for the person, ○ not started. */
 export const mark = (r: Row, on: On) => (finished(r.state, on) ? '✓' : skipped(r.state) ? '–' : r.state.status === 'none' ? '○' : '◐') // – skipped by a person
 
-export function TaskNav({ pr, checklist, smoke, base, here, on = 'task', rows, workflow, build, folded, onToggle, saves, onSave }: {
+export function TaskNav({ context, pr, checklist, smoke, base, here, on = 'task', rows, workflow, build, folded, onToggle, saves, onSave }: {
   base: string; here: string; on?: On; rows: Row[]
+  /**
+   * Its Context (Context.tsx): always there, above the brief and its steps, and not a step itself. How many things it
+   * holds, and how many decisions an agent proposed that wait for the person. Left out: no row.
+   */
+  context?: { count: number; proposed: number }
   /** The workflow in force and where it comes from (", the app's default"); its steps are the list. */
   workflow?: { name: string; from: string } | null
   /** The build: how many sub-tasks are done, and what it waits on, if anything. */
@@ -83,6 +88,7 @@ export function TaskNav({ pr, checklist, smoke, base, here, on = 'task', rows, w
       <nav className="task-nav folded" aria-label={`This ${on}`} data-component="TaskNav">
         {toggle}
         {icon('overview', base, '⌂', 'Overview', `this ${on}`, null, false)}
+        {context && icon('context', `${base}/context`, '📎', 'Context', context.proposed ? `${context.proposed} for you to decide` : context.count ? `${context.count} in it` : 'nothing in it yet', null, false)}
         {brief && icon('brief', `${base}/brief`, step('brief').icon, on === 'task' ? 'The brief' : label('brief', on), stands ?? said(brief), null, finished(brief.state, on))}
         {feeds.map((r) => icon(r.key, `${base}/${r.key}`, step(r.key).icon, label(r.key, on), said(r), after(r, rows, on), finished(r.state, on)))}
         {build && icon('build', `${base}/build`, '🏗️', 'Sub-tasks', build.total ? `${build.done}/${build.total}` : 'not planned', build.waitingOn, !!build.total && build.done === build.total)}
@@ -96,6 +102,11 @@ export function TaskNav({ pr, checklist, smoke, base, here, on = 'task', rows, w
     <nav className="task-nav" aria-label={`This ${on}`} data-component="TaskNav">
       {toggle}
       {item('overview', base, <span className="task-nav-row"><span className="task-nav-mark">⌂</span>Overview</span>, null)}
+      {context && item('context', `${base}/context`,
+        <>
+          <span className="task-nav-row"><span className="task-nav-mark wide">📎</span><span className="task-nav-text">Context</span>{context.count > 0 && <span className="faint mono" style={{ fontSize: 12 }}>{context.count}</span>}</span>
+          {context.proposed > 0 && <span className="task-nav-after task-nav-ready" title="An agent proposed a decision: yours to accept or reject">{context.proposed} for you to decide</span>}
+        </>, null)}
       <div className="task-nav-label faint">Brief</div>
       {workflow && <div className="task-nav-workflow faint" title={`The workflow this ${on} follows${workflow.from}`}>Workflow: <b>{workflow.name}</b>{workflow.from}</div>}
       {brief && item('brief', `${base}/brief`,

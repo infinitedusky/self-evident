@@ -1,0 +1,241 @@
+import type { Meta, StoryObj } from '@storybook/react-vite'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
+import { Context } from './Context'
+import { withEngine } from '../stories/mock-engine'
+import { contextLimits, emptyContext, taskContext } from '../stories/sample'
+
+// The Context of a made-up task, idea and project of the sample shop: its reference docs, decisions and notes, and how
+// the agents are given each. Every name, ticket and word in it is invented.
+const meta = { title: 'Components/Context', component: Context, args: { subject: { kind: 'issues', id: 'iss_sample20' } },
+  render: (a) => <div style={{ maxWidth: 900 }}><Context {...a} /></div> } satisfies Meta<typeof Context>
+export default meta
+type Story = StoryObj<typeof meta>
+
+const section = (el: HTMLElement, name: string) => within(el.querySelector(`[data-section="${name}"]`) as HTMLElement)
+
+/**
+ * The whole section, on a task in a project. A decision the agent proposed is asked first. Then the reference docs,
+ * the ticket the work came from at their head; the decisions; the notes. Each part says how the agents get it, and
+ * what comes from the project is marked and not changed here.
+ */
+export const OnATask: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('For you to decide')).toBeVisible()
+    await expect(c.getByText('Only cards used in the last 12 months are offered (sample)')).toBeVisible()
+    const docs = section(canvasElement, 'docs')
+    await expect(docs.getByText(/From Linear, SHOP-41 · the work came from it/)).toBeVisible()
+    await expect(docs.getAllByText('Every agent, in full')).toHaveLength(2) // the ticket, and the project's principles
+    await expect(docs.getAllByText('Listed, opened when needed')).toHaveLength(3)
+    await expect(docs.getByText(/Imported file, support-export.md/)).toBeVisible()
+    await expect(docs.getByText(/From the project/)).toBeVisible()
+    const order = [...canvasElement.querySelectorAll('.context-h')].map((h) => h.textContent?.replace(/\d+$/, '').trim())
+    await expect(order).toEqual(['For you to decide', 'Reference docs', 'Decisions', 'Notes'])
+    const decisions = section(canvasElement, 'decisions')
+    await expect(decisions.getByText(/Recorded by the agent once you agreed/)).toBeVisible()
+    await expect(decisions.getByText('1 proposed and rejected')).toBeVisible()
+    const notes = section(canvasElement, 'notes')
+    await expect(notes.getByRole('link', { name: 'SS-5' })).toBeVisible()
+    await expect(notes.getByText(/added by the agent/)).toBeVisible()
+  },
+}
+
+/** Nothing in it yet: a task made here, from no ticket. Each part says what it is for. */
+export const Empty: Story = {
+  beforeEach: withEngine({ context: { issues: emptyContext } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/None yet. A design note, a spec/)).toBeVisible()
+    await expect(c.queryByText('For you to decide')).toBeNull()
+  },
+}
+
+/** An idea that came in from Linear: the ticket is its one reference doc, and what is added here goes with it when it becomes a task or a project. */
+export const AnIdeaFromATicket: Story = {
+  args: { subject: { kind: 'ideas', id: 'idea_sample1' } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/it goes with the idea when it becomes a task or a project/)).toBeVisible()
+    await expect(c.getByText(/From Linear, SHOP-41/)).toBeVisible()
+  },
+}
+
+/** A project's own: what each of its tasks sees as "from the project". */
+export const OnAProject: Story = {
+  args: { subject: { kind: 'projects', id: 'proj_checkout' } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('Checkout design principles (sample)')).toBeVisible()
+    await expect(c.queryByText(/From the project/)).toBeNull()
+    await expect(c.getByRole('button', { name: 'Edit: The checkout is one page on a phone too (sample)' })).toBeVisible()
+  },
+}
+
+/** The ticket, opened: word for word, with its comments, and brought up to date from Linear by a press. It is never edited here and cannot be taken out. */
+export const TheTicketOpen: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await c.findByText('For you to decide')
+    const row = within(canvasElement.querySelector('[data-doc="origin_sample1"]') as HTMLElement)
+    await userEvent.click(row.getByText('Saved cards at checkout (sample)', { selector: '.context-title' }))
+    await expect(row.getByText(/Returning customers should be able to pay/)).toBeVisible()
+    await expect(row.getByText(/Never edited here: it stays as Linear has it/)).toBeVisible()
+    await expect(row.queryByRole('button', { name: 'Take out SHOP-41' })).toBeNull()
+    await expect(c.getByRole('button', { name: 'Take out SHOP-37', hidden: true })).toBeInTheDocument() // another ticket can be
+    await userEvent.click(row.getByRole('button', { name: 'Refresh SHOP-41 from Linear' }))
+    await expect(await c.findByText('Added since it was last read (sample).')).toBeVisible()
+  },
+}
+
+/** A pasted doc, opened: its line of description, who added it and how long it is, and the mark that gives it to every agent in full. */
+export const GiveADocInFull: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByText('Card vault API notes (sample)'))
+    const row = within(canvasElement.querySelector('[data-doc="cdoc_sample1"]') as HTMLElement)
+    await expect(row.getByText('Listed, opened when needed')).toBeVisible()
+    await userEvent.click(row.getByRole('checkbox', { name: /Give it to every agent in full/ }))
+    await waitFor(() => expect(within(canvasElement.querySelector('[data-doc="cdoc_sample1"]') as HTMLElement).getByText('Every agent, in full')).toBeInTheDocument())
+  },
+}
+
+/** A long doc stays listed: it is over the size that may be put in front of every agent, and says so. */
+export const TooLongToGiveInFull: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByText('Support requests about saved cards (sample)'))
+    const row = within(canvasElement.querySelector('[data-doc="cdoc_sample2"]') as HTMLElement)
+    await expect(row.getByRole('checkbox', { name: /Give it to every agent in full/ })).toBeDisabled()
+    await expect(row.getByText(new RegExp(`too long for that: over ${contextLimits.inFull.toLocaleString('en-US')} characters`))).toBeVisible()
+    await expect(row.getByText(/Added by the agent/)).toBeVisible()
+  },
+}
+
+/** Text pasted in: a title, the line an agent reads in the list, the text. */
+export const PasteADoc: Story = {
+  beforeEach: withEngine({ context: { issues: emptyContext } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Paste text' }))
+    const add = c.getByRole('button', { name: 'Add the doc' })
+    await expect(add).toBeDisabled()
+    await userEvent.type(c.getByRole('textbox', { name: 'Title' }), 'Refund rules (sample)')
+    await userEvent.type(c.getByRole('textbox', { name: 'What it is, in a line' }), 'When a saved card may be refunded to.')
+    await userEvent.type(c.getByRole('textbox', { name: 'The text' }), 'A refund goes to the card that paid.')
+    await expect(c.getByText(`36 of ${contextLimits.doc.toLocaleString('en-US')} characters`)).toBeVisible()
+    await userEvent.click(add)
+    await expect(await c.findByText('Refund rules (sample)')).toBeVisible()
+    await expect(c.getByText('Pasted text')).toBeVisible()
+  },
+}
+
+/** A text or Markdown file brought in: its text is kept, and can be edited after. */
+export const ImportAFile: Story = {
+  beforeEach: withEngine({ context: { issues: emptyContext } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await c.findByRole('button', { name: 'Import a file' })
+    await userEvent.upload(c.getByLabelText('A file to import'), new File(['made up'], 'pricing-notes.md', { type: 'text/markdown' }))
+    await expect(await c.findByText('pricing-notes')).toBeVisible()
+    await expect(c.getByText(/Imported file, pricing-notes.md/)).toBeVisible()
+  },
+}
+
+/** A PDF brought in is kept as the file it was: the agent that needs it opens it, and it is never put in front of every agent. */
+export const ImportAPdf: Story = {
+  beforeEach: withEngine({ context: { issues: emptyContext } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await c.findByRole('button', { name: 'Import a file' })
+    await userEvent.upload(c.getByLabelText('A file to import'), new File(['%PDF made up'], 'contract.pdf', { type: 'application/pdf' }))
+    await userEvent.click(await c.findByText('contract'))
+    await expect(c.getByText(/A PDF, kept on this computer as the file it was/)).toBeVisible()
+    await expect(c.queryByRole('checkbox', { name: /Give it to every agent in full/ })).toBeNull()
+  },
+}
+
+/** Another ticket, by its id: kept like the first, and this one can be taken out again. */
+export const AddATicket: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Add a ticket' }))
+    await userEvent.type(c.getByRole('textbox', { name: 'The ticket\'s id in Linear' }), 'shop-52')
+    await userEvent.click(c.getByRole('button', { name: 'Bring it in' }))
+    await expect(await c.findByText(/From Linear, SHOP-52/)).toBeVisible()
+  },
+}
+
+/** A ticket that can't be read: Linear's reason is said, and the form stays. */
+export const ATicketThatCannotBeRead: Story = {
+  beforeEach: withEngine({ context: { issues: taskContext }, contextProblem: 'Linear has no ticket SHOP-999 that this key can read.' }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Add a ticket' }))
+    await userEvent.type(c.getByRole('textbox', { name: 'The ticket\'s id in Linear' }), 'SHOP-999')
+    await userEvent.click(c.getByRole('button', { name: 'Bring it in' }))
+    await expect(await c.findByText('Linear has no ticket SHOP-999 that this key can read.')).toBeVisible()
+    await expect(c.getByRole('button', { name: 'Bring it in' })).toBeVisible()
+  },
+}
+
+/** Accepting what the agent proposed: it joins the decisions, and nothing is left to decide. */
+export const AcceptAProposal: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Accept: Only cards used in the last 12 months are offered (sample)' }))
+    await waitFor(() => expect(c.queryByText('For you to decide')).toBeNull())
+    await expect(section(canvasElement, 'decisions').getByText('Only cards used in the last 12 months are offered (sample)')).toBeVisible()
+  },
+}
+
+/** Rejecting it: kept, folded under the decisions, so the agents are told it was turned down and do not propose it again. It can be accepted after all, or deleted. */
+export const RejectAProposal: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Reject: Only cards used in the last 12 months are offered (sample)' }))
+    const decisions = section(canvasElement, 'decisions')
+    await userEvent.click(await decisions.findByText('2 proposed and rejected'))
+    await expect(decisions.getByText(/does not propose it again/)).toBeVisible()
+    await expect(decisions.getByRole('button', { name: 'Accept after all: Save every card without asking (sample)' })).toBeVisible()
+  },
+}
+
+/** A decision of the person's own: one statement, and why if there is a why. */
+export const AddADecision: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Add a decision' }))
+    await userEvent.type(c.getByRole('textbox', { name: 'The decision, in one statement' }), 'An expired card is shown, greyed out (sample)')
+    await userEvent.type(c.getByRole('textbox', { name: 'Why (optional)' }), 'So nobody wonders where it went.')
+    await userEvent.click(c.getByRole('button', { name: 'Save the decision' }))
+    const decisions = section(canvasElement, 'decisions')
+    await expect(await decisions.findByText('An expired card is shown, greyed out (sample)')).toBeVisible()
+    await expect(decisions.getByText('So nobody wonders where it went.')).toBeVisible()
+  },
+}
+
+/** A note: what it is about, what was said, and its day, which is what puts it in a report. */
+export const AddANote: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Add a note' }))
+    await expect(c.getByLabelText('Day')).toHaveValue(new Date().toLocaleDateString('en-CA'))
+    await userEvent.type(c.getByRole('textbox', { name: 'What it is about' }), 'Asked the vendor about limits (sample)')
+    await userEvent.click(c.getByRole('button', { name: 'Save the note' }))
+    await expect(await section(canvasElement, 'notes').findByText('Asked the vendor about limits (sample)')).toBeVisible()
+  },
+}
+
+/** A decision changed, from its Edit. What comes from the project has no Edit here. */
+export const EditADecision: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('The checkout is one page on a phone too (sample)')).toBeVisible()
+    await expect(c.queryByRole('button', { name: 'Edit: The checkout is one page on a phone too (sample)' })).toBeNull()
+    await userEvent.click(c.getByRole('button', { name: 'Edit: A removed card is deleted at the provider, not hidden here (sample)' }))
+    const t = c.getByRole('textbox', { name: 'The decision, in one statement' })
+    await userEvent.clear(t); await userEvent.type(t, 'A removed card is deleted everywhere (sample)')
+    await userEvent.click(c.getByRole('button', { name: 'Save the decision' }))
+    await expect(await c.findByText('A removed card is deleted everywhere (sample)')).toBeVisible()
+  },
+}

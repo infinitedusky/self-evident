@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { Assets } from '../components/Assets'
+import { Context } from '../components/Context'
 import { AddTasks } from '../components/AddTasks'
 import { Badge, type Tone } from '../components/Badge'
 import { asked, PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
@@ -82,6 +83,7 @@ export function ProjectPage() {
         </div>
       </div>
 
+      {!solo && <Context subject={{ kind: 'projects', id: graph.project.id }} />}{/* a task on its own has its own; this is for a project's tasks to share */}
       <section className="panel" data-component="ProjectTasks">
         <h2>Tasks <Badge>{graph.issues.length}</Badge></h2>
         {graph.issues.length === 0 && <p className="muted" style={{ margin: 0 }}>No tasks yet. Add one below.</p>}

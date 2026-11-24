@@ -202,8 +202,26 @@ export const SmallHead: Story = {
     await expect(c.getByRole('button', { name: /Less/ })).toBeInTheDocument()
   },
 }
-/** A task from a Linear ticket (made up): the ticket, word for word, on its overview, folded. */
+/** A task from a Linear ticket (made up): its overview says which, and points at its Context, where the ticket is word for word. */
 export const FromATicket: Story = {
   parameters: at('iss_sample20'), beforeEach: withEngine({ issueDetails: { ...sampleData.issueDetails, iss_sample20: { ...issueDetails.iss_sample20, origin: sampleOrigin } } }),
-  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText('Where this came from')).toBeInTheDocument() },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/It came from Linear SHOP-41/)).toBeInTheDocument()
+    await expect(c.queryByText('Where this came from')).toBeNull()
+    await expect(c.queryByRole('button', { name: 'Add a note' })).toBeNull() // its notes are in its Context now
+  },
+}
+/** Its Context: a page of its own, above the brief and its steps in the nav, which says a proposed decision waits. */
+export const ItsContext: Story = {
+  parameters: { route: { path: '/tasks/:id/:section', url: '/tasks/iss_sample20/context' } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('For you to decide')).toBeVisible()
+    await expect(c.getByText(/From Linear, SHOP-41 · the work came from it/)).toBeVisible()
+    const link = await c.findByRole('link', { name: /Context.*1 for you to decide/ })
+    await expect(link.className).toContain('active')
+    await userEvent.click(c.getByRole('button', { name: 'Accept: Only cards used in the last 12 months are offered (sample)' }))
+    await waitFor(() => expect(c.getByRole('link', { name: /Context/ })).not.toHaveTextContent('for you to decide'))
+  },
 }

@@ -206,7 +206,7 @@ export async function mapFromFile(appId: string, key: string, endpoint: string, 
 }
 
 /** How many of a fixture's people one endpoint's data is filled out for, at most. */
-export const PEOPLE_MAX = 200
+export const PEOPLE_MAX = 2000
 export interface MadeFor { fixture: string; table: string; /** Who, as the fixture names them: made-up. */ who: string; /** How many of the fixture's people it was filled out for. */ people: number; /** data column ← fixture column */ map: Record<string, string> }
 /**
  * An endpoint's faked (or provided) data made for a fixture's people (Sandy, 2026-11-22: "you'd use the fixture to
@@ -217,7 +217,7 @@ export interface MadeFor { fixture: string; table: string; /** Who, as the fixtu
  * otherwise the template's rows are used again for each. For the app (its settings), or one task's own data.
  * Checked against the real response, where that is still here.
  */
-export async function assignFixture(appId: string, key: string, endpoint: string, i: { fixture: string; table: string; row?: number; where?: { column: string; value: string }; /** How many people, from that row on: 1 unless said. */ count?: number; map: Record<string, string> }, issueId: string | null, actor = 'user') {
+export async function assignFixture(appId: string, key: string, endpoint: string, i: { fixture: string; table: string; row?: number; where?: { column: string; value: string }; /** How many people, from that row on: 1 unless said. */ count?: number; map: Record<string, string>; /** Which response's data: one fixture's. None: the default. */ response?: string | null }, issueId: string | null, actor = 'user') {
   const m = await rowOf(appId, key)
   if (!m) throw new PlanError(`this app has no service "${key}"`)
   const e = cleanEndpoints(m.endpoints).find((x) => x.key === standInKey(endpoint))
@@ -232,18 +232,29 @@ export async function assignFixture(appId: string, key: string, endpoint: string
   if (!Object.keys(map).length) throw new PlanError('say which columns of the data are set from which columns of the fixture: { tracking_id: "id", work_email: "work_email" }')
   const setOf = (row: Record<string, unknown>) => { const set: Record<string, string> = {}; for (const [dataCol, fxCol] of Object.entries(map)) { const v = row[fxCol]; if (v === null || v === undefined || typeof v === 'object') throw new PlanError(`the fixture's "${fxCol}" holds nothing to set "${dataCol}" from`); set[dataCol] = String(v) } return set }
   const sets = people.map(setOf)
-  const item = (await endpointData(m, issueId))[e.key]
+  // Mapping is of one response, the one chosen: an override of who it answers for, never a way to make another response.
+  const all = (await endpointData(m, issueId))[e.key]
+  const item = i.response ? all.responses.find((x) => x.fixture === i.response) ?? { app: null, task: null } : all
   const safe = (issueId ? item.task : item.app)?.safe
-  if (!safe) throw new PlanError(`${e.method} ${e.path} has no faked or provided data${issueId ? ' of this task\'s own' : ''} yet to make for a fixture: the real response is faked first`)
+  if (!safe) throw new PlanError(`${e.method} ${e.path} has no faked or provided data${issueId ? ' of this task\'s own' : ''}${i.response ? ` for the fixture "${i.response}"` : ''} yet to map fields into: the real response is faked first`)
   const [d] = await db.select().from(mockData).where(and(eq(mockData.mockId, m.id), eq(mockData.key, safe.set)))
   const files = { ...d.files }
   const prov = (d.provenance ?? {}) as DataProvenance & { template?: Record<string, string> }
   // The template is the data as it was before it was first filled out: filling it out again starts from that, not from the last filling.
   const template = { ...Object.fromEntries(safe.files.map((f) => [f, files[f]])), ...(prov.template ?? {}) }
   const real = d.kind === 'faked' && d.recording && existsSync(d.recording) ? readRecording(d.recording) : null
+  // A fixture's own response has its rows already, written for its people one by one: the mapped columns
+  // are set row by row (the first row from the first person), and what else each row says is left as it was given.
+  const rowwise = !!i.response
   let changed = 0, seen = 0
   for (const f of safe.files) {
     const cols = dataColumns(template[f]); seen += Object.keys(map).filter((c) => cols.includes(c)).length
+    if (rowwise && looksCsv(template[f])) {
+      const [head, ...own] = parseCsv(template[f]), eol = template[f].includes('\r\n') ? '\r\n' : '\n'
+      const out = own.filter((x) => x.length === head.length).map((r, n) => { const row = [...r], set = sets[n]; if (set) { for (const [c, v] of Object.entries(set)) { const at = head.indexOf(c); if (at >= 0) row[at] = v } changed++ } return row })
+      files[f] = [head, ...out].map((r) => r.map(csvCell).join(',')).join(eol) + eol
+      continue
+    }
     if (!looksCsv(template[f])) { const r = pin(template[f], sets[0]); files[f] = r.text; changed += r.changed; continue }
     const [head, ...own] = parseCsv(template[f]), eol = template[f].includes('\r\n') ? '\r\n' : '\n'
     const original = real?.find((x) => x.name === f)

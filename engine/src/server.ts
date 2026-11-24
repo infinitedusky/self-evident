@@ -51,6 +51,7 @@ import { getIssue, changeState, commentOnIssue, createIssue, listComments, ident
 import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
 import { addNote, editNote, listNotes, removeNote } from './notes.js'
+import { addContextNote, addDoc, addFile, addTicket, contextCount, contextOf, editContextNote, editDoc, refreshDoc, removeContextNote, removeDoc, type Subject as ContextSubject } from './context.js'
 import { deleteReport, editReport, getReport, isWritingReport, listReports, setReportFormat, writeReport, type Period } from './reports.js'
 import { listSketches, readSketch } from './sketches.js'
 import { listScreens } from './screens.js'
@@ -141,6 +142,7 @@ export function buildApp(bus: EventBus) {
       'GET /apps/:id/claude-sessions': 'the Claude Code sessions run on this app in a terminal or an editor, newest first', 'POST /talks/ask': '{appId, subjectRef?, text} — said to the task\'s own agent when subjectRef names a task (issueId), else to a new conversation brought to the front', 'GET /issues/:id/talk': 'the task\'s own agent: its one conversation, or null', 'POST /issues/:id/handover': '{again?} — what the conversation that made the task said about it, written from a copy of that conversation (once; again: true writes it anew); null when it was not made from one', 'POST /issues/:id/talk': 'the same, started if the task has none', 'GET /issues/:id/agents': 'the agents the task\'s conductor has out (a prototype\'s conversation): sessionId, what, title, busy', 'POST /{apps|projects|issues}/:id/workflow': '{workflowId | null} — attach one, or inherit again',
       'GET /projects/:id/backlog': 'what the project has to cover', 'POST /projects/:id/backlog': '{text, body?} | {items: [{text, body?}]} | {ideaId}',
       'POST /backlog/:id/take': '{title?, brief?} — becomes Todo at the end', 'POST /backlog/:id/duplicate': '{of, reason?}', 'POST /backlog/:id/drop': '{reason}', 'POST /backlog/:id/reopen': '', 'POST /backlog/:id/todo': '{title?, checklist?} — work outside the code',
+      'GET /{ideas|issues|projects}/:id/context': 'its Context (context.ts): reference docs, notes and decisions, with its project\'s for a task; /count: for a nav', 'POST …/context/docs': '{title, description?, body, inFull?}', 'POST …/context/tickets': '{ref}: a Linear ticket by its id', 'POST …/context/files': 'multipart `file`: text, Markdown or a PDF', 'PATCH|DELETE …/context/docs/:doc': '{title?, description?, body?, inFull?}', 'POST …/context/docs/:doc/refresh': 'a ticket, read again from its tracker', 'POST …/context/notes': '{kind: note|decision, title, body?, on?}', 'PATCH|DELETE …/context/notes/:note': '{title?, body?, on?, status?: settled|rejected}',
       'GET /todos?app=': 'the app\'s to-dos with their checklists', 'POST /todos': '{appId, title, notes?, owner?, projectId?, checklist?: [text | {text, waitingOn?}]}',
       'PATCH /todos/:id': '{title?, notes?, owner?, projectId?}', 'POST /todos/:id/checklist': '{items}', 'PATCH /checklist/:id': '{done?, waitingOn?, text?}', 'DELETE /checklist/:id': '',
       'POST /todos/:id/draft': 'the agent drafts the checklist, or what is missing from it', 'POST /todos/:id/done': '', 'POST /todos/:id/drop': '{reason}', 'POST /todos/:id/reopen': '',
@@ -463,7 +465,9 @@ export function buildApp(bus: EventBus) {
     const appId = c.req.param('id'), key = c.req.param('key')
     const body = await c.req.parseBody({ all: true })
     const given = ([] as unknown[]).concat(body.file ?? []).filter((f): f is File => typeof f === 'object' && f !== null && 'arrayBuffer' in f)
-    const r = await giveEndpointData(appId, key, c.req.param('endpoint'), await Promise.all(given.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }))), { real: body.real === 'true', issueId: typeof body.issueId === 'string' && body.issueId ? body.issueId : null }, 'user')
+    const fixture = typeof body.fixture === 'string' && body.fixture ? body.fixture : null
+    if (fixture && !(await listFixtures(appId)).some((f) => f.name === fixture)) throw new PlanError(`this app has no fixture "${fixture}"`)
+    const r = await giveEndpointData(appId, key, c.req.param('endpoint'), await Promise.all(given.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) }))), { real: body.real === 'true', issueId: typeof body.issueId === 'string' && body.issueId ? body.issueId : null, fixture }, 'user')
     if (r.kept === 'recorded' && r.issueId) await askToMine(r.issueId, key, r.dir, r.files)
     return c.json({ kept: r.kept, asked: r.kept === 'recorded' ? r.issueId : null, ...('maybeStructure' in r ? { maybeStructure: r.maybeStructure } : {}) }, 201)
   } catch (err) { return planError(c, err) } })
@@ -498,13 +502,13 @@ export function buildApp(bus: EventBus) {
   api.patch('/apps/:id/fixtures/:name', async (c) => { const b = await c.req.json<{ name?: string }>().catch(() => ({} as { name?: string })); try { return c.json(await renameFixture(c.req.param('id'), c.req.param('name'), b.name?.trim() ?? '')) } catch (err) { return planError(c, err) } })
   api.delete('/apps/:id/fixtures/:name', async (c) => { try { return c.json(await deleteFixture(c.req.param('id'), c.req.param('name'))) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/fixtures/:name/:table', async (c) => { try { return c.json(await fixtureRows(c.req.param('id'), c.req.param('name'), c.req.param('table'))) } catch (err) { return planError(c, err, 404) } })
-  api.put('/apps/:id/mocks/:key/endpoints/:endpoint/fixture', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { fixture?: string; table?: string; row?: number; count?: number; map?: Record<string, string>; issueId?: string | null }; return c.json(await assignFixture(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), { fixture: String(b.fixture ?? ''), table: String(b.table ?? ''), row: b.row, count: b.count, map: b.map ?? {} }, b.issueId || null, 'user')) } catch (err) { return planError(c, err) } })
+  api.put('/apps/:id/mocks/:key/endpoints/:endpoint/fixture', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { fixture?: string; table?: string; row?: number; count?: number; map?: Record<string, string>; issueId?: string | null; response?: string | null }; return c.json(await assignFixture(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), { fixture: String(b.fixture ?? ''), table: String(b.table ?? ''), row: b.row, count: b.count, map: b.map ?? {} }, b.issueId || null, 'user')) } catch (err) { return planError(c, err) } })
   // Fields of an endpoint's data mapped from a file of the fixtures (mock-file-map.ts). file null: no longer.
   api.put('/apps/:id/mocks/:key/endpoints/:endpoint/file-map', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { file?: string | null; map?: Record<string, string>; issueId?: string | null }; return c.json(await mapFromFile(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), { file: b.file || null, map: b.map ?? {} }, b.issueId || null, 'user')) } catch (err) { return planError(c, err) } })
   // The saved real response of one endpoint, faked now.
-  api.post('/apps/:id/mocks/:key/endpoints/:endpoint/fake', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { issueId?: string | null }; return c.json(await fakeEndpoint(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), b.issueId || null, 'user')) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/mocks/:key/endpoints/:endpoint/fake', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { issueId?: string | null; fixture?: string | null }; return c.json(await fakeEndpoint(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), b.issueId || null, 'user', b.fixture || null)) } catch (err) { return planError(c, err) } })
   api.put('/apps/:id/mocks/:key/endpoints/:endpoint/faked', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { faked?: boolean | null; issueId?: string | null }; return c.json(await setEndpointFaked(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), b.faked ?? null, b.issueId || null, 'user')) } catch (err) { return planError(c, err) } })
-  api.delete('/apps/:id/mocks/:key/endpoints/:endpoint/data', async (c) => { try { return c.json(await removeEndpointData(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), { issueId: c.req.query('issue') || null, real: c.req.query('real') === '1' }, 'user')) } catch (err) { return planError(c, err) } })
+  api.delete('/apps/:id/mocks/:key/endpoints/:endpoint/data', async (c) => { try { return c.json(await removeEndpointData(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), { issueId: c.req.query('issue') || null, real: c.req.query('real') === '1', fixture: c.req.query('fixture') || null }, 'user')) } catch (err) { return planError(c, err) } })
   api.patch('/apps/:id/mocks/:key/endpoints/:endpoint', async (c) => { try { return c.json(await editEndpoint(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), await c.req.json().catch(() => ({})), 'user')) } catch (err) { return planError(c, err) } })
   api.delete('/apps/:id/mocks/:key/endpoints/:endpoint', async (c) => { try { return c.json(await editEndpoint(c.req.param('id'), c.req.param('key'), c.req.param('endpoint'), null, 'user')) } catch (err) { return planError(c, err) } })
   api.patch('/apps/:id/mocks/:key/data/:data', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { name?: string }; return c.json(await renameData(c.req.param('id'), c.req.param('key'), c.req.param('data'), String(b.name ?? ''), 'user')) } catch (err) { return planError(c, err) } })
@@ -1135,6 +1139,27 @@ export function buildApp(bus: EventBus) {
   api.post('/apps/:id/notes', async (c) => { try { return c.json(await addNote(c.req.param('id'), await c.req.json().catch(() => ({})), 'user'), 201) } catch (err) { return planError(c, err) } })
   api.patch('/apps/:id/notes/:note', async (c) => { try { return c.json(await editNote(c.req.param('id'), c.req.param('note'), await c.req.json().catch(() => ({})), 'user')) } catch (err) { return planError(c, err) } })
   api.delete('/apps/:id/notes/:note', async (c) => { try { return c.json(await removeNote(c.req.param('id'), c.req.param('note'), 'user')) } catch (err) { return planError(c, err) } })
+  // Context (context.ts): the reference docs, notes and decisions of an idea, a task or a project. Every change answers with the context as it now is.
+  for (const kind of ['ideas', 'issues', 'projects'] as const) {
+    const at = `/${kind}/:id/context`
+    const of = async (c: any): Promise<ContextSubject> => (kind === 'ideas' ? { ideaId: c.req.param('id') } : kind === 'projects' ? { projectId: c.req.param('id') } : { issueId: (await resolveIssue(db, c.req.param('id'))).id })
+    const json = (c: any) => c.req.json().catch(() => ({}))
+    api.get(at, async (c) => { try { return c.json(await contextOf(await of(c))) } catch (err) { return planError(c, err) } })
+    api.get(`${at}/count`, async (c) => { try { return c.json(await contextCount(await of(c))) } catch (err) { return planError(c, err) } })
+    api.post(`${at}/docs`, async (c) => { try { return c.json(await addDoc(await of(c), await json(c), 'user'), 201) } catch (err) { return planError(c, err) } })
+    api.post(`${at}/tickets`, async (c) => { try { return c.json(await addTicket(await of(c), (await json(c)).ref, 'user'), 201) } catch (err) { return planError(c, err) } })
+    api.post(`${at}/files`, async (c) => { try {
+      const f = (await c.req.parseBody()).file
+      if (!f || typeof f !== 'object' || !('arrayBuffer' in f)) throw new PlanError('send the file as `file`')
+      return c.json(await addFile(await of(c), { name: f.name, type: f.type, bytes: Buffer.from(await f.arrayBuffer()) }, 'user'), 201)
+    } catch (err) { return planError(c, err) } })
+    api.patch(`${at}/docs/:doc`, async (c) => { try { return c.json(await editDoc(await of(c), c.req.param('doc'), await json(c))) } catch (err) { return planError(c, err) } })
+    api.post(`${at}/docs/:doc/refresh`, async (c) => { try { return c.json(await refreshDoc(await of(c), c.req.param('doc'))) } catch (err) { return planError(c, err) } })
+    api.delete(`${at}/docs/:doc`, async (c) => { try { return c.json(await removeDoc(await of(c), c.req.param('doc'))) } catch (err) { return planError(c, err) } })
+    api.post(`${at}/notes`, async (c) => { try { return c.json((await addContextNote(await of(c), await json(c), 'user')).view, 201) } catch (err) { return planError(c, err) } })
+    api.patch(`${at}/notes/:note`, async (c) => { try { return c.json(await editContextNote(await of(c), c.req.param('note'), await json(c), 'user')) } catch (err) { return planError(c, err) } })
+    api.delete(`${at}/notes/:note`, async (c) => { try { return c.json(await removeContextNote(await of(c), c.req.param('note'), 'user')) } catch (err) { return planError(c, err) } })
+  }
   // Reports on an app's work over a period (reports.ts): the end-of-day note, the weekly status. Drafts; nothing is sent.
   api.get('/apps/:id/reports', async (c) => { try { return c.json(await listReports(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/reports', async (c) => { // {period: today|yesterday|this_week|last_week} or {from, to, kind?}; notes?: what the person adds. A model call of a minute or so: 202, report.written or report.failed says when

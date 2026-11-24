@@ -457,10 +457,10 @@ export async function smokeDataOf(issueId: string, setupKey?: string | null) {
  * the script and into $STAND_INS_ENV, for a container's env_file, as a prototype's do. A recorded run is marked
  * SELF_EVIDENT_RECORDING=1: the base URL is on this computer, but every call reaches the real service and costs.
  */
-export async function mocksFor(appId: string, issueId: string, key: string, path: string, live: string[], base: Record<string, string>) {
+export async function mocksFor(appId: string, issueId: string, key: string, path: string, live: string[], base: Record<string, string>, /** The fixture its database was built from (null: none): picks each endpoint's data. Not said: not known. */ fixture?: string | null) {
   const id = `smoke-${issueId}-${key}`.toLowerCase()
   // The task's table says which data each mock serves in a smoke test, and which services it calls for real (mock-places.ts).
-  const plans = await plansFor(appId, 'smoke', issueId)
+  const plans = await plansFor(appId, 'smoke', issueId, { fixture })
   live = [...new Set([...live, ...plans.record])]
   const lib = await libraryStandIns(appId, live, plans.pick)
   const ports = await startStandIns(id, lib, path, { ...process.env, ...base })
@@ -557,7 +557,7 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   const more = await morePorts()
   const env = { ...more.env, ...await smokeEnv(a.id, setup, { port, db: dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : undefined, clean: opts.clean, key: named.key, fixture: dbCfg ? (builtFrom !== undefined ? builtFrom : old?.fixture ?? null) : undefined }) }
   if (setup.stop && old) await runStop(setup.stop, old.path, { ...env, PORT: String(old.port) }) // what the last run left up, when the engine has been started again since
-  const mocks = await mocksFor(a.id, t.id, key, path, opts.live ?? [], env)
+  const mocks = await mocksFor(a.id, t.id, key, path, opts.live ?? [], env, dbCfg ? (builtFrom !== undefined ? builtFrom : old?.fixture ?? null) : undefined)
   Object.assign(env, mocks.env)
   // What a tester brings to it (test-files.ts): the versions the task says a smoke test uses, in a folder outside every repository.
   Object.assign(env, { TEST_FILES: (await placeTestFiles(a.id, t.id, 'smoke', smokeFilesDir(t.id, key))).dir })
