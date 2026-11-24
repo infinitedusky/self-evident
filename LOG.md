@@ -7545,3 +7545,26 @@ record as a made one; only the page set it apart, and that read as a temporary s
   have waiting on someone there?"). It stays unanswered, keeps its proposed answer, and can still be accepted.
 
 The words "open" and "proposed" stay in the code and the database as the two unanswered states.
+
+### Screens are looked at in light and in dark (2026-11-24)
+
+Sandy, on the Screens page: "the same way I can do phone, tablet, desktop, there should be a light or dark mode
+there". The screens are stories, but none of Storybook is around them on the wall, so its toolbar is not there to use.
+
+- **Light and Dark beside the widths** (Screens.tsx), for the wall and for a screen opened large. It starts as the
+  person's system is set, and what they pick is kept on this computer.
+- **The page asks each story the way Storybook's own toolbar does**: the global named `theme`
+  (`iframe.html?id=…&globals=theme:dark`). That is what @storybook/addon-themes and a hand-written toolbar both use,
+  and it needs nothing of ours inside the app's Storybook. The frames are another origin, so the page could not set
+  an attribute in them itself.
+- **A Storybook with no theme to switch says so.** The engine reads the Storybook's preview file for a `theme`
+  global or the themes addon's decorator (`declaresTheme`, `themedAt`, screens.ts; `themed` on the list). When there
+  is none, the page says every screen looks the same in both and what to ask for. When the file cannot be read, it
+  says nothing.
+- **The agent that draws screens is told** (talk.ts): the person looks at each in both, so an app with both needs the
+  global declared and applied the way the app itself switches, and each screen right in both; an app with one scheme
+  says so.
+
+Not done: Mockups and Sketches have no such switch; other Storybook controls (a story's args) are still not on the
+wall; the values asked for are `light` and `dark` only, so a Storybook whose theme global uses other names is not
+switched; an app whose Storybook is run from outside its repository is not read, so the page says nothing for it.

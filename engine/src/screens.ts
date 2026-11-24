@@ -12,11 +12,13 @@
  * A task's screens are the ones its branch made or changed, as with its sketches: the story's file is among what
  * differs from where the branch left main. The rest are counted and a press away.
  */
+import { readdir, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app } from './db/schema.js'
 import { ownFiles, placeOf } from './sketches.js'
-import { storyIndex, storybookStatus } from './storybook.js'
+import { storyIndex, storybookPlace, storybookStatus } from './storybook.js'
 
 /** What a screen's story title starts with: `Screens/Checkout`, and its stories are its states. */
 export const SCREENS = 'Screens'
@@ -47,13 +49,42 @@ export const madeHere = (file: string | null, own: Set<string>) => {
 }
 
 /**
+ * The page asks a screen for light or dark the way Storybook's own toolbar does: a global named `theme`
+ * (`iframe.html?id=…&globals=theme:dark`), which is what @storybook/addon-themes and a hand-written toolbar both
+ * use. A Storybook that declares none draws every screen one way whatever is asked, and the page has to say so.
+ */
+export const THEME_GLOBAL = 'theme'
+/** Whether a Storybook's preview declares a theme to switch: a `theme` global, or the themes addon's decorator. Pure. */
+export function declaresTheme(preview: string): boolean {
+  if (/\bwithThemeBy(ClassName|DataAttribute)?\b|withThemeFromJSXProvider/.test(preview)) return true
+  const at = preview.search(/globalTypes\s*[:=]\s*\{/)
+  if (at < 0) return false
+  const open = preview.indexOf('{', at)
+  let depth = 0, end = open
+  for (; end < preview.length; end++) { if (preview[end] === '{') depth++; else if (preview[end] === '}' && --depth === 0) break }
+  return /(^|[\s{,'"])theme['"]?\s*:/.test(preview.slice(open, end)) // inside globalTypes' own braces, not a parameter beside them
+}
+/** Read from the Storybook's own folder under `cwd` (or a package's, one level down); null when there is no preview file to read. */
+export async function themedAt(cwd: string | null | undefined): Promise<boolean | null> {
+  if (!cwd) return null
+  const dirs = [cwd, ...(await readdir(cwd, { withFileTypes: true }).catch(() => [])).filter((d) => d.isDirectory() && !d.name.startsWith('.') && d.name !== 'node_modules').map((d) => join(cwd, d.name))]
+  for (const dir of dirs) for (const name of await readdir(join(dir, '.storybook')).catch(() => [] as string[])) {
+    if (!/^preview\.[cm]?[jt]sx?$/.test(name)) continue
+    return declaresTheme(await readFile(join(dir, '.storybook', name), 'utf8').catch(() => ''))
+  }
+  return null
+}
+
+/**
  * The screens to show: `sessionId` is the conversation whose worktree's Storybook renders them (else the app's);
  * `all` brings back the ones earlier tasks left. With Storybook not answering there are none to list, and the
  * status says why and whether it can be started.
  */
 export async function listScreens(appId: string, sessionId?: string | null, o: { all?: boolean } = {}) {
-  const status = await storybookStatus(appId, sessionId)
-  if (!status.up) return { ...status, screens: [] as Screen[], earlier: 0 }
+  const found = await storybookStatus(appId, sessionId)
+  if (!found.up) return { ...found, screens: [] as Screen[], earlier: 0 }
+  /** `themed`: its Storybook has a light and dark to switch (null: its settings could not be read, so the page does not say). */
+  const status = { ...found, themed: await themedAt(await storybookPlace(appId, sessionId)) }
   const every = groupScreens(await storyIndex(appId, sessionId))
   if (!sessionId) return { ...status, screens: every, earlier: 0 }
   const place = await placeOf(sessionId)

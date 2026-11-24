@@ -516,7 +516,7 @@ export interface MockPlacesRow { mock: string; name: string; status: Mock['statu
 /** One change to a mock: the app's own (no task), or a task's. */
 export interface MockChange { at: string; by: string; issue: { id: string; identifier: string } | null; what: string }
 /** Where the Storybook that renders them stands, and the screens it has. */
-export interface ScreensView { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean; screens: Screen[]; earlier: number }
+export interface ScreensView { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean; screens: Screen[]; earlier: number; /** Its Storybook declares a light and dark to switch (the engine's screens.ts); false: every screen is drawn one way whatever is asked; null or absent: not known. */ themed?: boolean | null }
 
 /** Something made public for a look: a prototype, a place's mockups or its sketches, at a temporary address. */
 export type ShareKind = 'prototype' | 'storybook' | 'sketch'

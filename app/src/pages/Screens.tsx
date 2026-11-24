@@ -7,8 +7,10 @@
  * Each one is a story under Screens/ in the app's Storybook, so it is made from the app's own components, and is
  * framed here by its plain address with none of Storybook around it. The wall is after Figma's frames on a canvas
  * and Chromatic's review grid: everything at once, small, and one press to see a screen large and step to the next.
- * Widths after the device toolbar in browser dev tools, as on Sketches. The way on is Mockups: the same screens,
- * clickable.
+ * Widths after the device toolbar in browser dev tools, as on Sketches. Light and dark beside them, after the same
+ * toolbar's colour scheme switch and Storybook's own theme toolbar: the page asks each story for the global `theme`
+ * (Sandy, 2026-11-24: "the same way I can do phone, tablet, desktop, there should be a light or dark mode there").
+ * The way on is Mockups: the same screens, clickable.
  */
 import { useEffect, useState } from 'react'
 import { useCurrentApp } from '../current-app'
@@ -19,6 +21,14 @@ import { StorybookOff } from './Mockups'
 type List = Awaited<ReturnType<typeof engine.screens>>
 /** The size a screen is drawn at; the wall shows it scaled down to a tile. */
 const WIDTHS = [{ key: 'phone', label: 'Phone', px: 390, high: 780 }, { key: 'tablet', label: 'Tablet', px: 820, high: 1000 }, { key: 'desktop', label: 'Desktop', px: 1280, high: 800 }] as const
+const THEMES = [{ key: 'light', label: 'Light' }, { key: 'dark', label: 'Dark' }] as const
+type Theme = (typeof THEMES)[number]['key']
+const THEME_KEY = 'if.screens.theme'
+/** What was last picked on this computer, else what the person's system is set to. */
+const startTheme = (): Theme => {
+  try { const kept = localStorage.getItem(THEME_KEY); if (kept === 'light' || kept === 'dark') return kept } catch { /* no storage: the system's */ }
+  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
 const TILE = { phone: 200, tablet: 300, desktop: 380 } as const // a tile's width on the wall
 
 /** `story`: the one to open large (else the wall); `session`: the conversation whose worktree's Storybook draws them (else the one in front). */
@@ -33,6 +43,8 @@ export function Screens({ story, session, embedded }: { story?: string; session?
   const [all, setAll] = useState(false) // with the screens earlier tasks left in the repository
   const [starting, setStarting] = useState(false)
   const [width, setWidth] = useState<(typeof WIDTHS)[number]['key']>('desktop')
+  const [theme, setTheme] = useState<Theme>(startTheme)
+  const pick = (t: Theme) => { setTheme(t); try { localStorage.setItem(THEME_KEY, t) } catch { /* it lasts for this page */ } }
   useEffect(() => { setOpen(story ?? null) }, [story])
   useEffect(() => {
     setError(null)
@@ -48,7 +60,7 @@ export function Screens({ story, session, embedded }: { story?: string; session?
 
   const w = WIDTHS.find((x) => x.key === width)!
   const base = (list?.frame ?? list?.url)?.replace(/\/$/, '') ?? null // framed at the address the engine gives, as Mockups is
-  const src = (id: string) => `${base}/iframe.html?id=${encodeURIComponent(id)}&viewMode=story`
+  const src = (id: string) => `${base}/iframe.html?id=${encodeURIComponent(id)}&viewMode=story&globals=theme:${theme}` // Storybook's own way to set a toolbar's global
   const screens = list?.screens ?? []
   const states = screens.flatMap((s) => s.states.map((st) => ({ ...st, screen: s.title })))
   const at = open ? states.findIndex((s) => s.id === open) : -1
@@ -67,12 +79,16 @@ export function Screens({ story, session, embedded }: { story?: string; session?
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {states.length > 0 && <span className="faint" style={{ fontSize: 13 }}>{screens.length} {screens.length === 1 ? 'screen' : 'screens'}, {states.length} {states.length === 1 ? 'state' : 'states'}</span>}
           {states.length > 0 && <div className="seg" role="group" aria-label="Width">{WIDTHS.map((x) => <button key={x.key} className={x.key === width ? 'on' : ''} onClick={() => setWidth(x.key)}>{x.label}</button>)}</div>}
+          {states.length > 0 && <div className="seg" role="group" aria-label="Colour scheme">{THEMES.map((x) => <button key={x.key} className={x.key === theme ? 'on' : ''} aria-pressed={x.key === theme} onClick={() => pick(x.key)}>{x.label}</button>)}</div>}
           {!embedded && ws && <button className="btn quiet" onClick={() => ws.open({ kind: 'storybook', session })}>Mockups →</button>}
         </div>
       </div>
       {error && <div className="empty bad">{error}</div>}
       {!app && <div className="empty">Pick an app in the nav.</div>}
       <StorybookOff s={list} starting={starting} start={start} />
+      {list?.up && list.themed === false && states.length > 0 && (
+        <p className="faint screens-unthemed" role="note" style={{ margin: '0 0 8px', fontSize: 13 }}>This app's Storybook has no light and dark to switch, so every screen looks the same in both. Ask the agent to add a theme switch to its Storybook.</p>
+      )}
 
       {list?.up && !screens.length && (
         <div className="empty">
@@ -96,7 +112,7 @@ export function Screens({ story, session, embedded }: { story?: string; session?
             <button className="btn quiet small" disabled={at === states.length - 1} onClick={() => setOpen(states[at + 1].id)}>Next →</button>
           </div>
           <div className="sketch-stage">
-            <iframe key={one.id} className="sb-frame sketch-frame" style={{ width: w.px, maxWidth: '100%' }} src={src(one.id)} title={`${one.screen}, ${one.name}`} />
+            <iframe key={`${one.id}:${theme}`} className="sb-frame sketch-frame" style={{ width: w.px, maxWidth: '100%' }} src={src(one.id)} title={`${one.screen}, ${one.name}`} />
           </div>
         </>
       )}
@@ -110,7 +126,7 @@ export function Screens({ story, session, embedded }: { story?: string; session?
                 {s.states.map((st) => (
                   <figure key={st.id} className="screen-tile" style={{ width: TILE[width] }}>
                     <button type="button" aria-label={`Open ${s.title}, ${st.name}`} onClick={() => setOpen(st.id)} style={{ height: Math.round(w.high * scale) }}>
-                      <iframe loading="lazy" tabIndex={-1} aria-hidden src={src(st.id)} title={`${s.title}, ${st.name}, small`} style={{ width: w.px, height: w.high, transform: `scale(${scale})` }} />
+                      <iframe key={theme} loading="lazy" tabIndex={-1} aria-hidden src={src(st.id)} title={`${s.title}, ${st.name}, small`} style={{ width: w.px, height: w.high, transform: `scale(${scale})` }} />
                     </button>
                     <figcaption>{st.name}</figcaption>
                   </figure>

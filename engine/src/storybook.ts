@@ -168,6 +168,9 @@ export function resolveStory(asked: string, ids: string[]): { asked: string; sho
   return { asked, show: ids.find((id) => id.split('--')[0] === component) ?? null, missing: true }
 }
 
+/** The folder a conversation's Storybook runs from (else the app's); null when it has none on this computer. */
+export const storybookPlace = async (appId: string, sessionId?: string | null): Promise<string | null> => (await placeFor(appId, sessionId)).cwd ?? null
+
 /** `story`: a story someone wants shown; the answer says which one this Storybook can show for it (resolveStory). */
 export async function storybookStatus(appId: string, sessionId?: string | null, story?: string | null) {
   const { url, cmd, cwd, branch, main } = await placeFor(appId, sessionId)
