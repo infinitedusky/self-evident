@@ -7727,3 +7727,11 @@ does not group its tasks by ticket; an idea or a project is not linked to a tick
 the origin); a ticket found only by a link has no record until it is read or set; Tickets is not in the nav.
 Not tried: two tasks of one ticket building at once. Their branches differ only by the task's title, so two
 tasks with the same key and the same name for the team would ask for the same branch.
+
+## A ticket is read with the app's kept keys, wherever it is read (Sandy, 2026-11-24)
+
+Adding a ticket to a project's Context as a reference doc said "LINEAR_API_KEY has no key", while bringing tickets
+in as ideas and tasks worked. The import routes pass the keys kept for the app (Settings › Integrations); the
+Context's add and refresh, and the agents' tools, passed none, so the read fell back to the engine's own
+environment, where a key pasted under Settings never is. Now a Linear read that is told no keys reads the ones
+kept for the app (linear-import.ts, `connection`), so every caller gets them.
