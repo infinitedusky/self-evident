@@ -5,7 +5,7 @@
  * landing, prototype, Storybook, integration values, and its workflow rules.
  */
 import { StepContracts, type NightView, type TrialView } from '../components/StepContracts'
-import { applyProbeChanges, contractsOf, type ProbeChange } from '@self-evident/engine/contracts'
+import { applyFinalizeChange, applyProbeChanges, contractsOf, type FinalizeChange, type ProbeChange } from '@self-evident/engine/contracts'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useMatch, useNavigate, useParams } from 'react-router'
 import { Badge } from '../components/Badge'
@@ -568,11 +568,12 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         <button type="button" className="small" onClick={() => setChanging(!changing)}>{changing ? 'Done' : 'Change'}</button>
       </div>
       {info === null ? <p className="muted">Loading…</p> : <StepContracts
-        groups={contractsOf({ setup: held, workflow: shownWorkflow, usable: info.usable ?? [] })} open={changing ? ['build'] : []} trials={trials} nightly={nightly} workflows={night.workflows}
+        groups={contractsOf({ setup: held, workflow: shownWorkflow, usable: info.usable ?? [] })} open={changing ? ['build', 'pr'] : []} trials={trials} nightly={nightly} workflows={night.workflows}
         {...(changing ? {
           usable: info.usable ?? [],
           onSkills: (step: string, names: string[]) => { const { [step]: _, ...rest } = setup.step_skills ?? {}; const next = names.length ? { ...rest, [step]: names } : rest; set({ step_skills: Object.keys(next).length ? next : undefined }) },
           onProbe: (change: ProbeChange) => setOps([...ops, change]),
+          onFinalize: (change: FinalizeChange) => { const next = applyFinalizeChange(setup, change); set({ mutation: next.mutation ?? undefined, finalize: next.finalize ?? undefined }) },
           tryOn: tried.tasks,
           onTry: (p: { key: string; name: string; kind: Trial['probe']['kind']; runs: string }) => { void engine.startTrial(app.id, { key: p.key, probe: { name: p.name, kind: p.kind, runs: p.runs } }).then(loadTrials).catch((e) => setError(err(e))) },
           onWorkflow: (key: string, on: boolean | null) => setWfSwitch({ ...wfSwitch, [key.replace(/^req:/, '')]: on }),

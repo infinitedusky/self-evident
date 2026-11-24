@@ -5,6 +5,28 @@ import { StepContracts } from './StepContracts'
 
 // Sample data throughout: a made-up app with two repositories (enterprise-dashboard, backend-core), made-up skills and probes.
 const skill = (name: string, from: string, more: object = {}) => ({ name, label: name.split(':').pop()!, from, ...more })
+type Row = NonNullable<StepGroup['steps'][number]['stages'][number]['finalize']>[number]
+/** The finalizing as the engine lists it: five steps in order, then the six gate checks. Sample settings for mutation testing. */
+function finalizing(set: Partial<NonNullable<Row['set']>> = {}): Row[] {
+  const all = { off: false, tool: null, testCmd: 'cd backend && uv run pytest -q {files}', prepare: 'cd backend && uv sync --all-extras', max: 150, maxDefault: 150, ...set }
+  const step = (key: string, name: string, what: string): Row => ({ key, name, what, group: 'step', on: true, fixed: 'Always run.' })
+  const gate = (key: string, name: string, what: string): Row => ({ key: `gate:${key}`, name, what, group: 'gate', on: true, fixed: 'Always checked: it holds the press.' })
+  return [
+    step('trajectory', 'The trajectory holds', 'every planned test was seen to fail, then to pass; a task with no test plan says so'),
+    { key: 'mutation', name: 'Mutation testing of the changed lines', what: 'a small break in each line the branch changed, run against its tests; each one no test catches is named', group: 'step', on: !all.off, set: all },
+    step('review', 'The review copy, built on the head', 'the reviewer\'s copy with nothing real in it; behind the head, it is made again when you push'),
+    step('gate', 'The gate checks', 'the six below'),
+    step('evidence', 'The evidence drafted', 'what the others found, written for the description and sent only when you push'),
+    gate('github', 'GitHub\'s checks are green', 'the pull request\'s own checks, read from GitHub'),
+    gate('commands', 'The app\'s held commands pass on the head', 'the tests and every command the build is held to'),
+    gate('title', 'The title fits the app\'s rule and carries the team\'s ticket', 'the app\'s title rule and the task\'s ticket'),
+    gate('description', 'The description follows the app\'s form, every section filled, nothing of ours above the fold', 'the app\'s form for a description'),
+    gate('rollback', 'The rollback agrees with the blast radius', 'what the description says of taking it back, against the blast radius'),
+    gate('smoke', 'Your smoke checks are done', 'your marks on the Smoke page, on this head'),
+  ]
+}
+/** The sample steps with the pull request's mutation testing set another way. */
+const withMutation = (set: Partial<NonNullable<Row['set']>>): StepGroup[] => groups.map((g) => ({ ...g, steps: g.steps.map((s) => (s.key === 'pr' ? { ...s, stages: s.stages.map((t) => (t.finalize ? { ...t, finalize: finalizing(set) } : t)) } : s)) }))
 const groups: StepGroup[] = [
   { title: 'Before the build', steps: [
     { key: 'research', icon: '🔎', label: 'Research', needs: ['The idea or task'], leaves: ['A research note'], done: 'The note says who does this best and the case against.', stages: [
@@ -42,6 +64,10 @@ const groups: StepGroup[] = [
       { key: 'prepare', by: 'engine', what: 'Brings up the set-up each check needs.' },
       { key: 'do', by: 'person', what: 'You try what only a person can judge.' },
     ] },
+    { key: 'pr', icon: '🔀', label: 'Pull request', needs: ['The built branch', 'Your accepted smoke test'], leaves: ['The breaks no test caught, each named', 'The evidence, drafted for the description', 'The pull request, ready for review'], done: 'Every gate check passes and you pushed it.', stages: [
+      { key: 'verify', by: 'engine', what: 'Finalizes when you accept the smoke test, on this computer and never in the team\'s CI. Nothing reaches GitHub from it.', finalize: finalizing() },
+      { key: 'do', by: 'person', what: 'You send a fix after what it found, or leave it with a reason; then you push and mark it ready for review.' },
+    ] },
   ] },
 ]
 const usable = [{ name: 'ticket-naming-convention', label: 'ticket-naming-convention', from: 'enterprise-dashboard (sample)' }, { name: 'design-system', label: 'design-system', from: 'enterprise-dashboard (sample)' }, { name: 'backend-core:security-review', label: 'security-review', from: 'backend-core (sample)' }]
@@ -57,6 +83,7 @@ export const AtAGlance: Story = {
     await expect(c.getByText('Do · ticket-naming-convention')).toBeVisible()
     await expect(c.getByText('8 probes')).toBeVisible() // the ones that run; one of the nine is off
     await expect(c.getAllByText('nothing attached').length).toBe(2) // Research and the smoke test
+    await expect(c.getByText('6 gate checks')).toBeVisible() // the pull request: what holds its press
   },
 }
 
@@ -263,5 +290,74 @@ export const JudgesAndScripts: Story = {
     await expect(c.getByText('Scripts. The engine runs each one itself, last. No agent: exit 0 passes.')).toBeVisible()
     await userEvent.click(c.getByRole('button', { name: 'Add a probe to Build' }))
     await expect(within(c.getByLabelText('Probe kind')).getAllByRole('option').map((o) => o.textContent)).toEqual(['Command: a script, no agent', 'Skill: a probe, its own agent', 'Judged: a sentence, in the check'])
+  },
+}
+
+/** The pull request opened: what the finalizing does, in order, and the six checks that hold the press. A reading view. */
+export const PullRequestOpen: Story = {
+  args: { open: ['pr'] },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const verify = within(c.getByRole('listitem', { name: 'Pull request, Verify' }))
+    const steps = within(verify.getByRole('rowgroup', { name: 'The finalizing' })), gate = within(verify.getByRole('rowgroup', { name: 'Gate checks' }))
+    await expect(steps.getAllByRole('row').slice(1).filter((r) => !r.classList.contains('step-probe-trial-row')).map((r) => r.querySelector('td')?.textContent)).toEqual(['The trajectory holds', 'Mutation testing of the changed lines', 'The review copy, built on the head', 'The gate checks', 'The evidence drafted'])
+    await expect(steps.getAllByText('reports')).toHaveLength(4); await expect(steps.getAllByText('holds the press')).toHaveLength(1) // only the gate holds the press
+    await expect(gate.getAllByText('holds the press')).toHaveLength(6)
+    await expect(gate.getByText('The rollback agrees with the blast radius')).toBeVisible()
+    // How this app's mutation testing is set, under its row.
+    const how = within(verify.getByLabelText('How mutation testing is set'))
+    await expect(how.getByText(/The engine's own breaks, at most 150/)).toBeVisible()
+    await expect(how.getByText('cd backend && uv run pytest -q {files}')).toBeVisible()
+    await expect(how.getByText('cd backend && uv sync --all-extras')).toBeVisible()
+    await expect(c.queryByRole('checkbox')).toBeNull(); await expect(c.queryByRole('button', { name: /Edit/ })).toBeNull()
+  },
+}
+
+/** Nothing set for it yet, as an app starts: the page says what the engine will do instead, and that a checkout may need preparing. */
+export const MutationNotSet: Story = {
+  args: { open: ['pr'], groups: withMutation({ testCmd: null, prepare: null }) },
+  play: async ({ canvasElement }) => {
+    const how = within(within(canvasElement).getByLabelText('How mutation testing is set'))
+    await expect(how.getByText(/each test file the branch changed, by the app's test command/)).toBeVisible()
+    await expect(how.getByText(/Nothing is run in its checkout first/)).toBeVisible()
+  },
+}
+
+/** Switched off, and with the app's own tool: the row says each. */
+export const MutationOffOrOwnTool: Story = {
+  args: { open: ['pr'], groups: withMutation({ off: true, tool: { cmd: 'npx stryker run', report: 'reports/mutation/mutation.json' } }) },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(within(c.getByRole('rowgroup', { name: 'The finalizing' })).getByText('off')).toBeVisible()
+    await expect(c.getByText('mutation testing off')).toBeVisible() // on the step's one line too
+    await expect(c.getByText('npx stryker run')).toBeVisible(); await expect(c.getByText('reports/mutation/mutation.json')).toBeVisible()
+  },
+}
+
+/** Being changed: mutation testing is switched and set; nothing else on the pull request is an app's to change. */
+export const ChangingThePullRequest: Story = {
+  args: { open: ['pr'], onFinalize: fn() },
+  play: async ({ canvasElement, args }) => {
+    const c = within(canvasElement)
+    await expect(c.getAllByRole('checkbox')).toHaveLength(11)
+    await expect(c.getAllByRole('checkbox').filter((b) => !(b as HTMLInputElement).disabled)).toHaveLength(1)
+    await userEvent.click(c.getByRole('checkbox', { name: 'Run Mutation testing of the changed lines' }))
+    await expect(args.onFinalize).toHaveBeenLastCalledWith({ off: true })
+    await userEvent.click(c.getByRole('button', { name: 'Edit how mutation testing is run' }))
+    const form = within(c.getByRole('form', { name: 'How mutation testing is run' }))
+    await expect(form.getByLabelText('How its tests are run')).toHaveValue('cd backend && uv run pytest -q {files}')
+    await userEvent.clear(form.getByLabelText('Run first in its checkout')); await userEvent.type(form.getByLabelText('Run first in its checkout'), 'make deps')
+    await userEvent.clear(form.getByLabelText('Most breaks tried')); await userEvent.type(form.getByLabelText('Most breaks tried'), '60')
+    await userEvent.click(form.getByRole('button', { name: 'Save' }))
+    await expect(args.onFinalize).toHaveBeenLastCalledWith({ testCmd: 'cd backend && uv run pytest -q {files}', prepare: 'make deps', max: 60, tool: null })
+    await expect(c.queryByRole('form', { name: 'How mutation testing is run' })).toBeNull()
+    // The app's own tool needs both its command and where its report is written.
+    await userEvent.click(c.getByRole('button', { name: 'Edit how mutation testing is run' }))
+    const again = within(c.getByRole('form', { name: 'How mutation testing is run' }))
+    await userEvent.type(again.getByLabelText('The app\'s own tool'), 'npx stryker run')
+    await expect(again.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await userEvent.type(again.getByLabelText('Where it writes its report'), 'reports/mutation/mutation.json')
+    await userEvent.click(again.getByRole('button', { name: 'Save' }))
+    await expect(args.onFinalize).toHaveBeenLastCalledWith({ testCmd: 'cd backend && uv run pytest -q {files}', prepare: 'cd backend && uv sync --all-extras', max: null, tool: { cmd: 'npx stryker run', report: 'reports/mutation/mutation.json' } })
   },
 }

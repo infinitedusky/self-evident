@@ -1,6 +1,6 @@
 /** The steps' contracts as an app sees them, and a change made on Settings › Skills as a change to its settings. Sample data. */
 import { describe, expect, it } from 'vitest'
-import { contractsOf, CONTRACTS, heldTo, TAKES_SKILLS } from './contracts.js'
+import { applyFinalizeChange, contractsOf, CONTRACTS, finalizingOf, heldTo, TAKES_SKILLS } from './contracts.js'
 import { CHECKS, DEFAULT_STEPS, type Workflow } from './steps.js'
 
 const main: Workflow = { id: 'w1', name: 'Main', ordered: false, build: 'one', style: 'checklist', requirements: { adr: true }, steps: [...DEFAULT_STEPS.map((s) => ({ ...s, on: ['idea', 'brief', 'research', 'prototype'].includes(s.key) })), ...CHECKS.map((key) => ({ key, on: false, required: false }))] } // as Main is: no check between the prototype and the build
@@ -10,8 +10,8 @@ const setup = { test_cmd: 'pnpm test', step_skills: { build: ['ticket-naming-con
 describe('contractsOf', () => {
   const groups = contractsOf({ setup, workflow: main, usable })
   const stepOf = (k: string) => groups.flatMap((g) => g.steps).find((s) => s.key === k)!
-  it('shows only the steps the workflow uses, then the build and the smoke test', () => {
-    expect(groups.map((g) => g.steps.map((s) => s.key))).toEqual([['research', 'brief', 'prototype'], ['build', 'smoke']]) // no blast radius on Main
+  it('shows only the steps the workflow uses, then the build, the smoke test and the pull request', () => {
+    expect(groups.map((g) => g.steps.map((s) => s.key))).toEqual([['research', 'brief', 'prototype'], ['build', 'smoke', 'pr']]) // no blast radius on Main
     expect(contractsOf({ setup: {} })[0].steps.map((s) => s.key)).toContain('risk') // with no workflow to go by, every step
   })
   it('every step has a contract, and its stages say who runs them', () => {
@@ -34,5 +34,27 @@ describe('contractsOf', () => {
   })
   it('a staged workflow is held to its criteria and the test run only', () => {
     expect(heldTo(setup, { ...main, style: 'staged' }).map((p) => p.key)).toEqual(['criteria', 'tests'])
+  })
+})
+
+describe('the pull request\'s finalizing, as Settings shows it', () => {
+  it('lists its five steps in order, then the six gate checks, on the engine\'s Verify stage', () => {
+    const pr = contractsOf({ setup: {} })[1].steps.find((s) => s.key === 'pr')!
+    expect(pr.stages.map((s) => [s.key, s.by])).toEqual([['verify', 'engine'], ['do', 'person']])
+    const rows = pr.stages[0].finalize!
+    expect(rows.map((r) => r.key)).toEqual(['trajectory', 'mutation', 'review', 'gate', 'evidence', 'gate:github', 'gate:commands', 'gate:title', 'gate:description', 'gate:rollback', 'gate:smoke'])
+    expect(rows.filter((r) => !r.fixed).map((r) => r.key)).toEqual(['mutation']) // the one part an app sets
+    expect(rows.find((r) => r.key === 'mutation')).toMatchObject({ on: true, set: { off: false, tool: null, testCmd: null, prepare: null, max: 150, maxDefault: 150 } })
+  })
+  it('reads the app\'s mutation settings and its prepare command', () => {
+    const m = finalizingOf({ mutation: { off: true, test_cmd: 'pytest {files}', max: 40 }, finalize: { prepare: 'uv sync' } }).find((r) => r.key === 'mutation')!
+    expect(m).toMatchObject({ on: false, set: { testCmd: 'pytest {files}', prepare: 'uv sync', max: 40 } })
+  })
+  it('a change is kept as the two settings, and one emptied is removed', () => {
+    expect(applyFinalizeChange({}, { off: true })).toEqual({ mutation: { off: true }, finalize: null })
+    expect(applyFinalizeChange({ mutation: { off: true, test_cmd: 'pytest {files}' }, finalize: { prepare: 'uv sync' } }, { off: false, testCmd: '', prepare: 'uv sync --all-extras', max: 60, tool: { cmd: 'npx stryker run', report: 'reports/mutation.json' } }))
+      .toEqual({ mutation: { tool: { cmd: 'npx stryker run', report: 'reports/mutation.json' }, max: 60 }, finalize: { prepare: 'uv sync --all-extras' } })
+    expect(applyFinalizeChange({ mutation: { max: 60 }, finalize: { prepare: 'uv sync' } }, { max: null, prepare: '' })).toEqual({ mutation: null, finalize: null })
+    expect(applyFinalizeChange({ mutation: { max: 60 } }, { tool: { cmd: 'x', report: '' } })).toEqual({ mutation: { max: 60 }, finalize: null }) // a tool with no report is no tool
   })
 })

@@ -41,19 +41,15 @@ import { addSubTask } from './projects.js'
 import { makeReviewCopy, reviewCopy } from './review-copy.js'
 import { built, smokeOwed } from './smoke.js'
 import { teamTicket, ticketRequired } from './ticket.js'
+import { FINALIZE_STEPS } from './contracts.js'
+import { finalizePrepare } from './mutation-setup.js'
 import { rowCommand, rowState, runsOf, STATE_SAYS, testPlanOf, TEST_FILE, type RowRun, type TestPlan } from './trajectory.js'
 import { markReady, prView } from './pr-view.js'
 
 export const FINALIZE_FIX_TITLE = 'Fix what the finalizing found'
 export type StepKey = 'trajectory' | 'mutation' | 'review' | 'gate' | 'evidence'
 export interface Step { key: StepKey; name: string; state: 'waiting' | 'running' | 'pass' | 'fail' | 'skipped'; says: string }
-const STEPS: { key: StepKey; name: string }[] = [
-  { key: 'trajectory', name: 'The trajectory holds' },
-  { key: 'mutation', name: 'Mutation testing of the changed lines' },
-  { key: 'review', name: 'The review copy, built on the head' },
-  { key: 'gate', name: 'The gate checks' },
-  { key: 'evidence', name: 'The evidence drafted' },
-]
+const STEPS: readonly { key: StepKey; name: string }[] = FINALIZE_STEPS
 
 /** What the runner does for it: nothing here knows of the runner, which calls this in its turn. */
 export interface Deps {
@@ -131,7 +127,7 @@ async function mutate(f: Awaited<ReturnType<typeof facts>>, base: string, plan: 
   // Its own checkout, at the commit and on no branch, kept from one finalizing to the next so what it installs stays.
   const path = join(`${repo}-worktrees`, `finalize--${f.name.toLowerCase()}`)
   if (existsSync(path)) { await git(path, ['checkout', '--detach', '--force', head]); await git(path, ['clean', '-fdq', '--exclude=node_modules', '--exclude=.venv'], { allowFail: true }) } else await git(repo, ['worktree', 'add', '--detach', path, head])
-  const prepare = ((f.a.setup ?? {}) as { finalize?: { prepare?: string } }).finalize?.prepare?.trim()
+  const prepare = finalizePrepare(f.a.setup)
   if (prepare) { onProgress('Preparing its checkout…'); const p = await run(prepare, path, 15 * 60_000); if (p.exit !== 0) return { result: null, state: 'fail', says: `Its checkout could not be prepared (\`${prepare.slice(0, 120)}\`): ${p.output.trim().split('\n').slice(-4).join(' ').slice(-400)}` } }
   if (set.tool) {
     onProgress('Running the app\'s own mutation tool…')

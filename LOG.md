@@ -7281,3 +7281,25 @@ reviewer's computer, so no hook runs for it (its kit is its own part); a hook's 
 real before its last lines are kept; the smoke set-ups' scripts, seed and the prototype command still live in their
 own settings and were not moved into the folder; no agent tool reads or writes hooks; more points (a fixture
 loaded, a review copy made, a build finished) are added when something needs one.
+
+### The pull request has a step on Settings › Skills (2026-11-24)
+
+Sandy, reading the Verify stage of the build on Settings › Skills: "there should be more sections here, based on what
+we added in section four". The page stopped at the smoke test, so nothing of the finalizing could be seen or set.
+
+- **A Pull request step after the Smoke test** (`CONTRACTS.pr`, contracts.ts): Verify, by the engine, then Do, by
+  the person. Its Verify lists the finalizing's five steps in the order they run, then the six gate checks
+  (`finalizingOf`). A step reports and a gate check holds the press; the page says which on each row. The names are
+  the ones the finalizing and the gate use (`FINALIZE_STEPS`, `GATE_NAMES`), so they cannot drift.
+- **Only mutation testing is an app's to change there.** It is switched, and set: how its tests are run (`{files}`),
+  what is run first in its checkout, the most breaks tried, or the app's own tool and its report
+  (`applyFinalizeChange`, mutation-setup.ts; kept as before in `setup.mutation` and `setup.finalize.prepare`). How it
+  is set is said under its row whether or not anything is set, because an app that needs its checkout prepared and
+  has not said how fails the step. The gate checks are fixed: an app does not switch off what holds a pull request.
+- **The build's Verify list was not split.** Its probes run at one moment on one commit; smoke, release and watch
+  are per criterion and set on the brief.
+- The build's own words now say a test plan's build is a test phase then slices, and its done-when names the
+  trajectory.
+
+Not done: no agent tool sets the mutation settings; the page does not say whether the command given would run (no
+"Try" as probes have); the trajectory and review copy steps cannot be switched off for an app that has neither.
