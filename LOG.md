@@ -6973,3 +6973,9 @@ Not done: the review copy is not checked a second time against the real response
 the check made when each fake was made); the gate (step 7) does not ask for it yet; nothing remakes it when
 someone other than the engine pushes to the pull request's branch, until the next update from here.
 
+The checkout a reviewer is given (Sandy, 2026-11-23, passed on from CEB-90's agent): two plain commands, `git fetch
+origin` then `git checkout <review branch>`, in the pull request and the branch's README. The one-line form that
+fetched to FETCH_HEAD worked in any clone but read as a trick. Because the branch is made again whole, a line under
+it says how to take it afresh when it was checked out before. The enterprise kit's empty company is now "Sample
+Company": the name it had was a real company's.
+
