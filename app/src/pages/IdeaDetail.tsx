@@ -56,7 +56,7 @@ function Work({ idea, section, open }: { idea: IdeaRow; section?: string; open: 
   // Where it came from, word for word, when it came from a tracker: what its agent and every agent after it reads.
   const [origin, setOrigin] = useState<OriginView | null>(null)
   useEffect(() => { engine.idea(idea.id).then((r) => setOrigin(r.origin ?? null)).catch(() => setOrigin(null)) }, [idea.id])
-  const [ctx, setCtx] = useState<{ count: number; proposed: number } | null>(null)
+  const [ctx, setCtx] = useState<{ count: number; proposed: number; waiting?: number } | null>(null)
   const readCtx = () => { void engine.contextCount(subject).then(setCtx).catch(() => setCtx({ count: 0, proposed: 0 })) }
   useEffect(() => { readCtx() }, [idea.id, section]) // eslint-disable-line react-hooks/exhaustive-deps
   const convert = async (as: 'task' | 'project') => {

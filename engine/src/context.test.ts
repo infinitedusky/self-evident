@@ -11,6 +11,7 @@ import { newId } from './ids.js'
 import { addNote, listNotes } from './notes.js'
 import { keepOrigin } from './origins.js'
 import { createProject } from './projects.js'
+import { reportFacts } from './reports.js'
 import { engineTools } from './tools.js'
 import { convertIdea } from './work.js'
 
@@ -87,7 +88,7 @@ describe.skipIf(!reachable)('context', () => {
     expect((await addContextNote({ issueId: task }, { kind: 'decision', title: 'Which cards are offered? (sample)', answer: 'Those of the last year' }, 'agent')).status).toBe('proposed')
     await expect(addContextNote({ issueId: task }, { kind: 'decision', title: 'Which cards are offered? (sample)', answer: 'All of them' }, 'agent')).rejects.toThrow('already proposed')
     await expect(addContextNote({ issueId: task }, { kind: 'decision', title: ' ', answer: 'Yes' })).rejects.toThrow('needs its question')
-    expect(await contextCount({ issueId: task })).toEqual({ count: 3, proposed: 1 }) // a doc and two settled decisions
+    expect(await contextCount({ issueId: task })).toEqual({ count: 3, proposed: 1, waiting: 0 }) // a doc and two settled decisions
     const v = await contextOf({ issueId: task })
     const proposed = v.notes.find((n) => n.status === 'proposed')!
     expect(proposed).toMatchObject({ kind: 'decision', addedBy: 'agent', title: 'Which cards are offered? (sample)', answer: 'Those of the last year' })
@@ -110,7 +111,7 @@ describe.skipIf(!reachable)('context', () => {
     expect((await addContextNote({ issueId: t }, { kind: 'decision', title: 'Do we support gift cards? (sample)' })).status).toBe('open')
     expect((await addContextNote({ issueId: t }, { kind: 'decision', title: 'What is shown for an expired card? (sample)', body: 'The list depends on it.' }, 'agent')).status).toBe('open') // an agent may ask
     await expect(addContextNote({ issueId: t }, { kind: 'decision', title: 'Do we support gift cards? (sample)' }, 'agent')).rejects.toThrow('already asked')
-    expect(await contextCount({ issueId: t })).toEqual({ count: 0, proposed: 2 })
+    expect(await contextCount({ issueId: t })).toEqual({ count: 0, proposed: 2, waiting: 0 })
     expect(await listNotes(appId, { issueId: t })).toEqual([]) // nothing decided: nothing for a report
     const prompt = await contextPrompt({ issueId: t })
     expect(prompt).toMatch(/### Not decided yet[\s\S]*Do not guess one[\s\S]*- Do we support gift cards\? \(sample\)\n- What is shown for an expired card\? \(sample\) \(The list depends on it\.\)/)
@@ -123,7 +124,35 @@ describe.skipIf(!reachable)('context', () => {
     await expect(editContextNote({ issueId: t }, open.id, { status: 'settled' })).rejects.toThrow('made by giving its answer')
     v = await editContextNote({ issueId: t }, open.id, { answer: 'Shown, greyed out' })
     expect(v.notes.find((n) => n.id === open.id)).toMatchObject({ status: 'settled', answer: 'Shown, greyed out' })
-    expect(await contextCount({ issueId: t })).toEqual({ count: 1, proposed: 1 })
+    expect(await contextCount({ issueId: t })).toEqual({ count: 1, proposed: 1, waiting: 0 })
+  })
+
+  it('marks an open decision as waiting on someone, counts it apart, tells agents and a report, and forgets it once answered', async () => {
+    const t = (await createProject({ appId, name: 'Waiting (sample)', issues: [{ title: 'A task that waits (sample)', brief: 'Build it.' }] })).issues[0].id
+    await addContextNote({ issueId: t }, { kind: 'decision', title: 'Can an app card be used on the web? (sample)', on: '2026-11-20' })
+    await addContextNote({ issueId: t }, { kind: 'decision', title: 'Is the list sorted? (sample)' })
+    let v = await contextOf({ issueId: t })
+    const q = v.notes.find((n) => n.title.startsWith('Can an app card'))!
+    v = await editContextNote({ issueId: t }, q.id, { waitingOn: '  Em ' })
+    expect(v.notes.find((n) => n.id === q.id)).toMatchObject({ status: 'open', waitingOn: 'Em', on: '2026-11-20' })
+    expect(await contextCount({ issueId: t })).toEqual({ count: 0, proposed: 1, waiting: 1 })
+    expect(await contextPrompt({ issueId: t })).toContain('- Can an app card be used on the web? (sample) [the person asked Em and is waiting for the answer]')
+    const { facts } = await reportFacts(appId, new Date('2026-11-24T00:00:00'), new Date('2026-11-25T00:00:00'), { me: async () => 'sam' })
+    expect(facts.openDecisions).toContainEqual({ question: 'Can an app card be used on the web? (sample)', askedOn: '2026-11-20', waitingOn: 'Em', proposedAnswer: null, tasks: [expect.stringMatching(/-\d+$/)] })
+    expect(facts.openDecisions.some((d) => d.question === 'Is the list sorted? (sample)' && d.waitingOn === null)).toBe(true)
+    expect(facts.openDecisions.every((d) => d.question !== 'What is shown of a saved card? (sample)')).toBe(true) // a made one is not open
+    expect((await editContextNote({ issueId: t }, q.id, { waitingOn: '' })).notes.find((n) => n.id === q.id)!.waitingOn).toBeNull()
+    await editContextNote({ issueId: t }, q.id, { waitingOn: 'Em' })
+    v = await editContextNote({ issueId: t }, q.id, { answer: 'Yes' })
+    expect(v.notes.find((n) => n.id === q.id)).toMatchObject({ status: 'settled', answer: 'Yes', waitingOn: null })
+    await expect(editContextNote({ issueId: t }, q.id, { waitingOn: 'Em' })).rejects.toThrow('only a decision with no answer yet')
+    // A decision with an answer an agent proposed can wait on someone too: it is still unanswered.
+    await addContextNote({ issueId: t }, { kind: 'decision', title: 'Is the list sorted? (sample)', answer: 'By last use' }, 'agent')
+    const p = (await contextOf({ issueId: t })).notes.find((n) => n.status === 'proposed')!
+    expect((await editContextNote({ issueId: t }, p.id, { waitingOn: 'the vendor' })).notes.find((n) => n.id === p.id)).toMatchObject({ status: 'proposed', answer: 'By last use', waitingOn: 'the vendor' })
+    expect(await contextCount({ issueId: t })).toEqual({ count: 1, proposed: 0, waiting: 1 })
+    expect(await contextPrompt({ issueId: t })).toContain('- Is the list sorted? (sample) → By last use [the person asked the vendor and is waiting for the answer]')
+    expect((await editContextNote({ issueId: t }, p.id, { status: 'settled' })).notes.find((n) => n.id === p.id)).toMatchObject({ status: 'settled', waitingOn: null })
   })
 
   it('shows a decision made as one statement as an answer with no question, and takes a question when it is given one', async () => {

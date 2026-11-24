@@ -14,27 +14,30 @@ type Story = StoryObj<typeof meta>
 const section = (el: HTMLElement, name: string) => within(el.querySelector(`[data-section="${name}"]`) as HTMLElement)
 
 /**
- * The whole section, on a task in a project. A decision the agent proposed is asked first. Then the reference docs,
- * the ticket the work came from at their head; the decisions; the notes. Each part says how the agents get it, and
+ * The whole section, on a task in a project: the reference docs, the ticket the work came from at their head; the
+ * decisions, the unanswered ones first among them; the notes. Each part says how the agents get it, and
  * what comes from the project is marked and not changed here.
  */
 export const OnATask: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByText('For you to decide')).toBeVisible()
-    const ask = within(canvasElement.querySelector('[data-component="ContextProposed"]') as HTMLElement)
+    await c.findByText('Reference docs')
+    const ask = section(canvasElement, 'decisions') // unanswered ones are decisions like the rest, first among them
+    await expect(c.queryByText('For you to decide')).toBeNull()
+    await expect(await ask.findByText('2 unanswered')).toBeVisible()
     await expect(ask.getByText('Which saved cards are offered? (sample)')).toBeVisible() // the agent proposes an answer
     await expect(ask.getByText('Only the ones used in the last 12 months')).toBeVisible()
     await expect(ask.getByText('What is shown when a saved card has expired? (sample)')).toBeVisible() // asked, not answered
-    await expect(ask.getByText(/No answer yet/)).toBeVisible()
+    const rows = [...canvasElement.querySelectorAll('[data-section="decisions"] > .context-row')].map((r) => r.getAttribute('data-unanswered'))
+    await expect(rows).toEqual(['proposed', 'open', 'waiting', null, null, null]) // unanswered first, the one waiting on someone last of them, then the answered and the project's
     const docs = section(canvasElement, 'docs')
     await expect(docs.getByText(/From Linear, SHOP-41 · the work came from it/)).toBeVisible()
     await expect(docs.getAllByText('Every agent, in full')).toHaveLength(2) // the ticket, and the project's principles
     await expect(docs.getAllByText('Listed, opened when needed')).toHaveLength(3)
     await expect(docs.getByText(/Imported file, support-export.md/)).toBeVisible()
     await expect(docs.getByText(/From the project/)).toBeVisible()
-    const order = [...canvasElement.querySelectorAll('.context-h')].map((h) => h.textContent?.replace(/\d+$/, '').trim())
-    await expect(order).toEqual(['For you to decide', 'Reference docs', 'Decisions', 'Notes'])
+    const order = [...canvasElement.querySelectorAll('.context-h')].map((h) => h.firstChild?.textContent?.trim())
+    await expect(order).toEqual(['Reference docs', 'Decisions', 'Notes'])
     const decisions = section(canvasElement, 'decisions')
     await expect(decisions.getByText('What happens to a card when it is removed? (sample)')).toBeVisible() // the question
     await expect(decisions.getByText('It is deleted at the provider, not hidden here')).toBeVisible() // and its answer
@@ -52,7 +55,7 @@ export const Empty: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await expect(await c.findByText(/None yet. A design note, a spec/)).toBeVisible()
-    await expect(c.queryByText('For you to decide')).toBeNull()
+    await expect(c.queryByText(/\d unanswered/)).toBeNull()
   },
 }
 
@@ -81,7 +84,7 @@ export const OnAProject: Story = {
 export const TheTicketOpen: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await c.findByText('For you to decide')
+    await c.findByText('2 unanswered')
     const row = within(canvasElement.querySelector('[data-doc="origin_sample1"]') as HTMLElement)
     await userEvent.click(row.getByText('Saved cards at checkout (sample)', { selector: '.context-title' }))
     await expect(row.getByText(/Returning customers should be able to pay/)).toBeVisible()
@@ -197,14 +200,14 @@ export const ATicketThatCannotBeRead: Story = {
   },
 }
 
-/** Accepting the answer the agent proposed: it joins the decisions, and one question is left to decide. */
+/** Accepting the answer the agent proposed: the decision is answered, and one is left unanswered. */
 export const AcceptAProposal: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Accept: Which saved cards are offered? (sample)' }))
     await waitFor(() => expect(c.queryByRole('button', { name: /^Accept:/ })).toBeNull())
     await expect(section(canvasElement, 'decisions').getByText('Only the ones used in the last 12 months')).toBeVisible()
-    await expect(c.getByText('For you to decide')).toBeVisible() // the open question is still there
+    await expect(c.getByText('1 unanswered')).toBeVisible() // the open question is still there
   },
 }
 
@@ -238,17 +241,46 @@ export const AnswerAnOpenDecision: Story = {
   },
 }
 
-/** A decision put in to make later: a question with no answer. It waits under For you to decide. */
+/** A decision that needs someone else: marked as waiting on them. It leaves the count of what is unanswered and yours, says who it waits on and for how long, and can still be answered when they reply. */
+export const WaitingOnSomeone: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await c.findByText('2 unanswered')
+    const ask = section(canvasElement, 'decisions')
+    await expect(ask.getByText('Waiting on Em')).toBeVisible() // one already asked of someone
+    await expect(ask.getByText('1 waiting on someone')).toBeVisible()
+    await userEvent.click(c.getByRole('button', { name: 'Waiting on someone: What is shown when a saved card has expired? (sample)' }))
+    const mark = c.getByRole('button', { name: 'Mark it as waiting' })
+    await expect(mark).toBeDisabled() // until it says who
+    await userEvent.type(c.getByRole('textbox', { name: 'Who you asked' }), 'the vendor')
+    await userEvent.click(mark)
+    await expect(await ask.findByText('Waiting on the vendor')).toBeVisible()
+    await expect(ask.getByText('2 waiting on someone')).toBeVisible()
+    await expect(ask.getByText('1 unanswered')).toBeVisible() // only the proposed answer is left for the person now
+    // One with an answer the agent proposed can wait on someone too.
+    await userEvent.click(c.getByRole('button', { name: 'Waiting on someone: Which saved cards are offered? (sample)' }))
+    await userEvent.type(c.getByRole('textbox', { name: 'Who you asked' }), 'legal')
+    await userEvent.click(c.getByRole('button', { name: 'Mark it as waiting' }))
+    await expect(await ask.findByText('Waiting on legal')).toBeVisible()
+    await expect(c.getByRole('button', { name: 'Accept: Which saved cards are offered? (sample)' })).toBeVisible() // and still be accepted
+    await expect(ask.queryByText(/\d unanswered/)).toBeNull()
+    await expect(c.getByRole('button', { name: 'Answer: What is shown when a saved card has expired? (sample)' })).toBeVisible()
+    await userEvent.click(c.getByRole('button', { name: 'No longer waiting: Can a card saved in the app be used on the web? (sample)' }))
+    await expect(await ask.findByText('2 waiting on someone')).toBeVisible()
+  },
+}
+
+/** A decision put in to answer later: a question with no answer. It is a decision like the rest, marked Unanswered. */
 export const AddOneToDecideLater: Story = {
   beforeEach: withEngine({ context: { issues: emptyContext } }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Add a decision' }))
     await userEvent.type(c.getByRole('textbox', { name: 'The question' }), 'Do we support gift cards? (sample)')
-    await userEvent.click(c.getByRole('button', { name: 'Add it, to decide later' }))
-    await expect(await c.findByText('For you to decide')).toBeVisible()
+    await userEvent.click(c.getByRole('button', { name: 'Add it, unanswered' }))
+    await expect(await c.findByText('1 unanswered')).toBeVisible()
     await expect(c.getByRole('button', { name: 'Answer: Do we support gift cards? (sample)' })).toBeVisible()
-    await expect(section(canvasElement, 'decisions').getByText('None made yet.')).toBeVisible()
+    await expect(section(canvasElement, 'decisions').getByText('Do we support gift cards? (sample)')).toBeVisible()
     await expect(c.getByRole('button', { name: 'Not needed: Do we support gift cards? (sample)' })).toBeVisible() // or it is dropped
   },
 }

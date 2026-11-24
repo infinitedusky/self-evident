@@ -157,7 +157,7 @@ function Task({ i, section, busy, act, small = false }: { i: IssueDetail; sectio
   const [smoke, setSmoke] = useState<{ owed: number; total: number; failed: number; built?: boolean } | null>(null)
   useEffect(() => { if (i && !i.parentId && i.kind === 'code') void engine.smoke(i.id).then((s) => setSmoke(s.staged ? { owed: s.owed, total: s.checks.length, failed: s.failed, built: !!s.head } : null)).catch(() => setSmoke(null)) }, [i?.id, i?.updatedAt, subStamp, section]) // eslint-disable-line react-hooks/exhaustive-deps
   // Its Context (Context.tsx): how much it holds and what waits for the person, for the nav. Read with the task, and when something in it changes.
-  const [ctx, setCtx] = useState<{ count: number; proposed: number } | null>(null)
+  const [ctx, setCtx] = useState<{ count: number; proposed: number; waiting?: number } | null>(null)
   const readCtx = useCallback(() => { void engine.contextCount(subject).then(setCtx).catch(() => setCtx({ count: 0, proposed: 0 })) }, [i.id]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { readCtx() }, [readCtx, section, i.updatedAt])
   const navSaves = saved ? { current: saved.branches.find((b) => b.current)?.name ?? null, points: saved.saves.map((s) => ({ id: s.id, name: s.name })), aside: saved.branches.filter((b) => !b.current).map((b) => ({ id: b.id, name: b.name })) } : undefined

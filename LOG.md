@@ -7492,3 +7492,40 @@ the build. Every agent is told an open one is not decided and not to guess its a
 Looked at for real on a scratch database (made, then dropped): an open decision and a made one added through the
 routes, the task's Context page opened in a browser. Not done: no agent has been run against an open decision, so
 whether it holds back from guessing is untested.
+
+## An open decision can be waiting on someone, and a report says what is open (Sandy, 2026-11-24: "there's two different types of decisions … the other one is where I need help from someone else to answer it … I have asked so and so and I'm waiting for an answer")
+
+Kept small, as Sandy said it: "record when the question was asked … and then we say open in our reports". No
+delegation, no reminders, no way for the other person to answer.
+
+- An open decision has **Waiting on someone**: the person types who they asked (`note.waiting_on`, migration
+  `0060_decision_waiting`). The day the question was asked is the note's own day, as before.
+- Under **For you to decide**, the ones waiting on someone sit last, under that label, each with who and how long
+  ("Waiting on Em · asked 20 Nov, 4 days ago"). They can still be answered, marked "No longer waiting", or dropped.
+- The count of what is the person's to decide leaves them out; the heading and the nav say "n waiting on someone"
+  beside it.
+- Once a decision has an answer it waits on nobody: the name is cleared.
+- **Agents** are told, on the open question: "the person asked Em and is waiting for the answer".
+- **Reports**: a report's facts now carry `openDecisions`, every decision of the app not made yet whenever it was
+  asked, with the day it was asked, who it waits on, and an agent's proposed answer if there is one. The writer is
+  told to list them as open and never as decided.
+
+Not done: a report has not been written with open decisions in it by the real model; the facts and the
+instruction are tested, the wording that comes out is not. My earlier suggestion to keep "answered by Em" beside a
+made decision was left out.
+
+## An unanswered decision is a decision, and sits with them (Sandy, 2026-11-24: "they should be actual decision records, just not completed … incomplete or unanswered")
+
+The "For you to decide" box at the top of Context is gone. In the database an open decision was always the same
+record as a made one; only the page set it apart, and that read as a temporary state. Now:
+
+- **Decisions** holds every decision. Unanswered ones come first, marked **Unanswered**, then the ones waiting on
+  someone (marked with who), then the answered, then the project's.
+- The section's heading counts them all, and says "n unanswered" and "n waiting on someone". The nav says the same
+  ("2 unanswered", where it said "2 for you to decide").
+- Each unanswered one is acted on where it sits: Answer it, Waiting on someone, Not needed; and for one with an
+  answer an agent proposed, Accept and Reject too.
+- **A decision with a proposed answer can wait on someone as well** (Sandy, looking at the story: "why don't we
+  have waiting on someone there?"). It stays unanswered, keeps its proposed answer, and can still be accepted.
+
+The words "open" and "proposed" stay in the code and the database as the two unanswered states.

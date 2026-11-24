@@ -102,17 +102,19 @@ export const SmokeTestNothingLeft: Story = {
   },
 }
 
-/** Context, above the brief and its steps and never one of them: how much it holds, and that a proposed decision waits for the person. */
+/** Context, above the brief and its steps and never one of them: how much it holds, and that a decision in it is unanswered. */
 export const WithContext: Story = {
   args: { context: { count: 11, proposed: 1 } },
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     const link = c.getByRole('link', { name: /Context/ })
     await expect(link).toHaveAttribute('href', '/tasks/iss_sample20/context')
-    await expect(link).toHaveTextContent('1 for you to decide')
+    await expect(link).toHaveTextContent('1 unanswered')
     const names = [...canvasElement.querySelectorAll('.task-nav > .link, .task-nav > .task-nav-label')].map((e) => e.textContent ?? '')
     await expect(names.findIndex((t) => t.includes('Context'))).toBeLessThan(names.findIndex((t) => t === 'Brief'))
   },
 }
+/** Nothing of the person's to decide, and one decision they have asked someone about. */
+export const ContextWaitingOnSomeone: Story = { args: { context: { count: 4, proposed: 0, waiting: 1 } }, play: async ({ canvasElement }) => { await expect(within(canvasElement).getByRole('link', { name: /Context/ })).toHaveTextContent('1 waiting on someone') } }
 /** On its page. */
 export const OnContext: Story = { args: { context: { count: 3, proposed: 0 }, here: 'context' } }

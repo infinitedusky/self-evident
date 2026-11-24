@@ -35,9 +35,9 @@ export function TaskNav({ context, pr, checklist, smoke, base, here, on = 'task'
   base: string; here: string; on?: On; rows: Row[]
   /**
    * Its Context (Context.tsx): always there, above the brief and its steps, and not a step itself. How many things it
-   * holds, and how many decisions an agent proposed that wait for the person. Left out: no row.
+   * holds, and how many of its decisions are unanswered. Left out: no row.
    */
-  context?: { count: number; proposed: number }
+  context?: { count: number; proposed: number; /** Open decisions the person has asked someone else about. */ waiting?: number }
   /** The workflow in force and where it comes from (", the app's default"); its steps are the list. */
   workflow?: { name: string; from: string } | null
   /** The build: how many sub-tasks are done, and what it waits on, if anything. */
@@ -88,7 +88,7 @@ export function TaskNav({ context, pr, checklist, smoke, base, here, on = 'task'
       <nav className="task-nav folded" aria-label={`This ${on}`} data-component="TaskNav">
         {toggle}
         {icon('overview', base, '⌂', 'Overview', `this ${on}`, null, false)}
-        {context && icon('context', `${base}/context`, '📎', 'Context', context.proposed ? `${context.proposed} for you to decide` : context.count ? `${context.count} in it` : 'nothing in it yet', null, false)}
+        {context && icon('context', `${base}/context`, '📎', 'Context', context.proposed ? `${context.proposed} unanswered` : context.waiting ? `${context.waiting} waiting on someone` : context.count ? `${context.count} in it` : 'nothing in it yet', null, false)}
         {brief && icon('brief', `${base}/brief`, step('brief').icon, on === 'task' ? 'The brief' : label('brief', on), stands ?? said(brief), null, finished(brief.state, on))}
         {feeds.map((r) => icon(r.key, `${base}/${r.key}`, step(r.key).icon, label(r.key, on), said(r), after(r, rows, on), finished(r.state, on)))}
         {build && icon('build', `${base}/build`, '🏗️', 'Sub-tasks', build.total ? `${build.done}/${build.total}` : 'not planned', build.waitingOn, !!build.total && build.done === build.total)}
@@ -105,7 +105,8 @@ export function TaskNav({ context, pr, checklist, smoke, base, here, on = 'task'
       {context && item('context', `${base}/context`,
         <>
           <span className="task-nav-row"><span className="task-nav-mark wide">📎</span><span className="task-nav-text">Context</span>{context.count > 0 && <span className="faint mono" style={{ fontSize: 12 }}>{context.count}</span>}</span>
-          {context.proposed > 0 && <span className="task-nav-after task-nav-ready" title="An agent proposed a decision: yours to accept or reject">{context.proposed} for you to decide</span>}
+          {context.proposed > 0 && <span className="task-nav-after task-nav-ready" title="Decisions with no answer yet: yours to answer, or an agent's proposed answer to accept or reject">{context.proposed} unanswered</span>}
+          {!!context.waiting && <span className="task-nav-after" title="Decisions you have asked someone about and are waiting on">{context.waiting} waiting on someone</span>}
         </>, null)}
       <div className="task-nav-label faint">Brief</div>
       {workflow && <div className="task-nav-workflow faint" title={`The workflow this ${on} follows${workflow.from}`}>Workflow: <b>{workflow.name}</b>{workflow.from}</div>}
