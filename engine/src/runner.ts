@@ -19,6 +19,8 @@ import { newId } from './ids.js'
 import { commentOnIssue, identifier, setState } from './issues.js'
 import { commandRun, CutOff, land, wholeRun, withLock } from './landing.js'
 import { whyNotCheck } from './checklist.js'
+import { gateSubTask } from './trajectory.js'
+import { advanceTestPlan } from './test-plan.js'
 import { agentProbes, builderHeld, commandFixBrief, commandProbes, leftTo, reviewerSkills, nextProbe, PROBE_FIX_TITLE, PROBE_PREFIX, probeBrief, probeFixBrief, probeOfTitle, probesOf, probeTitle, resultOf, TESTS_KEY, withResult, BUILT_IN, type ProbeResult } from './probes.js'
 import { skillOptions } from './skills.js'
 import { guideTasks, mergeGuide, mergeRecord } from './merge-guide.js'
@@ -122,12 +124,14 @@ export class Runner {
    * task's project (its own hidden one when it is in none) is only where the engine keeps the build; nobody runs it.
    * A task that is already planned just starts. Planning that fails or asks a question says so on the task as before.
    */
-  async buildTask(issueId: string, actor = 'engine'): Promise<{ planning: boolean; started: boolean }> {
+  async buildTask(issueId: string, actor = 'engine'): Promise<{ planning: boolean; started: boolean; /** What it waits on, when neither. */ waits?: string }> {
     const [t] = await db.select().from(issue).where(eq(issue.id, issueId))
     if (!t) throw new PlanError(`no task ${issueId}`)
     const planned = (await db.select({ id: issue.id }).from(issue).where(and(eq(issue.parentId, issueId), eq(issue.kind, 'code'), notInArray(issue.state, ['canceled', 'duplicate'])))).length > 0
     if (planned) return { planning: false, started: await this.startIfWaiting(t.projectId) }
     if (this.planningIssues.has(issueId)) return { planning: true, started: false }
+    // A workflow with a test plan (test-plan.ts): the build is made from the approved plan, so nothing is planned or built until there is one. Its agent is sent out here, once.
+    if (await advanceTestPlan(issueId) === 'wait') return { planning: false, started: false, waits: 'its test plan: written by its agent, then approved by you on the task\'s Test plan step' }
     this.planningIssues.add(issueId)
     try {
       const ctx = await preparePlanning(issueId, { actor })
@@ -147,6 +151,7 @@ export class Runner {
     if (!t.briefApprovedBy) return 'waiting'
     if ((await db.select({ id: issue.id }).from(issue).where(and(eq(issue.parentId, issueId), eq(issue.kind, 'code'), notInArray(issue.state, ['canceled', 'duplicate'])))).length > 0) return 'planned'
     if (this.planningIssues.has(issueId)) return 'planning'
+    if (await advanceTestPlan(issueId) === 'wait') return 'waiting' // its sub-tasks are its test plan's slices: the plan is made once that is approved
     const [last] = await db.select().from(event).where(and(eq(event.issueId, issueId), inArray(event.type, PLANNING))).orderBy(desc(event.seq)).limit(1)
     const restarted = last?.type === 'issue.plan_failed' && String((last.payload as any)?.error ?? '').includes('engine restarted')
     if (last && ['issue.planning', 'issue.plan_waiting'].includes(last.type)) return 'planning'
@@ -303,6 +308,13 @@ export class Runner {
     if (result.status === 'completed' && this.outages) { this.outages = 0; this.hold = null; await this.emit({ ...base, type: 'engine.resumed', payload: {} }) }
     if (result.status !== 'completed' && ranOutOfTurns(result.error) && result.agentSessionId && await this.carryOn(subId, runId, attempt, rb)) return
     if (result.status !== 'completed') return this.failed(subId, attempt, x.maxAttempts, `the run ${result.error ?? 'failed'}`, rb)
+
+    // A test-first build (trajectory.ts): before this sub-task lands, the engine runs the tests its plan says are due
+    // here, itself, and keeps what it saw. A test that did not fail for the right reason, or is not green when due,
+    // sends the sub-task back with what the run printed: the builder's word is not taken for either.
+    const refused = await gateSubTask({ taskId: t.id, subId, title: x.title, worktreePath, setup, sha: await headSha(worktreePath).catch(() => null), emit: (type, payload) => this.emit({ ...rb, issueId: t.id, type, payload }) })
+      .catch(async (err) => { await this.emit({ ...rb, issueId: t.id, type: 'trajectory.error', payload: { error: String(err?.message ?? err) } }); return [] as string[] })
+    if (refused.length) return this.failed(subId, attempt, x.maxAttempts, `the engine ran this sub-task's tests itself, and ${refused.length === 1 ? 'one is' : `${refused.length} are`} not as the test plan requires:\n\n${refused.map((r) => `- ${r}`).join('\n')}`, rb)
 
     await db.transaction((tx) => setBuild(tx, subId, { status: 'merging' }, { runId }))
     const landed = await withLock(`land:${projectId}`, () => land({
@@ -705,6 +717,7 @@ export class Runner {
     // After a prototype the plan is made from the analysis and the draft ADR: until they are in, the checks' line plans it (checks.ts), not this pass.
     const v = await stepsOf({ issueId })
     if (checksOwed(v.states, v.resolved.workflow).some((k) => BEFORE_PLAN.includes(k))) return
+    if (await advanceTestPlan(issueId) === 'wait') return // the build is its approved test plan's: its agent is out, or it waits for the person
     const [last] = await db.select().from(event).where(and(eq(event.issueId, issueId), inArray(event.type, PLANNING))).orderBy(desc(event.seq)).limit(1)
     const restarted = last?.type === 'issue.plan_failed' && String((last.payload as any)?.error ?? '').includes('engine restarted') // a restart is not a failure: plan it again
     if (last && ['issue.planning', 'issue.plan_waiting', 'issue.plan_failed'].includes(last.type) && !restarted) return

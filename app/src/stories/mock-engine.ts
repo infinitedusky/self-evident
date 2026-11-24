@@ -26,6 +26,7 @@ export interface MockData {
   sketches: { scope: string; branch: string | null; main: boolean; dir: string; sketches: { file: string; changedAt: number }[]; earlier?: number; /** With the earlier tasks' ones, when asked for. */ all?: { file: string; changedAt: number }[] }
   /** A task's smoke test; left out, there is nothing for a person on it. */ smoke?: import('../engine').SmokeView
   /** Where a checklist task stands; left out, the task's workflow is staged and it has none. */ checklist?: import('../engine').Checklist
+  /** A task's test trajectory; none written when left out. */ trajectory?: import('../engine').Trajectory
   /** What a task's pull request will open with; none when left out. */ mergeGuide?: string; /** The record folded away under it. */ mergeRecord?: string
   /** The last run of each command step of a prototype's guide; none when left out. */ prototypeRuns?: import('../engine').StepRun[]
   /** Nightly checks' last runs and the repository's workflows; none when left out. */ nightly?: Awaited<ReturnType<typeof import('../engine').engine.nightly>>
@@ -381,6 +382,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       return reply({ ...d.smoke, sentBack: owed === 0 ? failed : 0 })
     }),
     http.get('/api/issues/:id/checklist', () => reply(d.checklist ?? null)),
+    http.get('/api/issues/:id/trajectory', () => reply(d.trajectory ?? { plan: null, approved: false, changed: false, rows: [], holds: false, proven: 0, total: 0, canRun: true, stray: [] })),
     // The pull request step: the engine's rules, roughly. Submitting opens a draft; marking it ready opens it.
     http.get('/api/issues/:id/pr', () => reply(d.prView ?? s.prSample)),
     http.get('/api/issues/:id/data-agent', () => reply(d.dataAgent ?? s.dataAgentSample)),

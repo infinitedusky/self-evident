@@ -7092,3 +7092,50 @@ Not done: the acceptance starts nothing yet. The Pull request finalizing it star
 `smoke.accepted`. Watch criteria are only listed (on the pull request step): reading them from telemetry is part 5.
 A requirement the check leaves to the person (part 1) is still not markable on the Smoke page. The agents that write
 criteria are told about the tags by `set_acceptance`'s own description, not yet by the planner's prompt.
+
+### 3. Test-first builds: plan, red, green (2026-11-23)
+
+"186 new tests, and nothing proved any of them had ever been red." The model is InDusk's Test Trajectory
+(`~/code/indusk/apps/docs/src/guide/test-trajectory.md`, `test-levels.md`): a table of every test with where it is
+written and where it passes, a test phase first, a register of what is deferred, regression guards declared, real red
+told from fake red. One thing is different, and it is the point: there a row's state was the builder's word, reviewed
+by a person, because InDusk refused to read a runner's output. Here the engine runs each row's test itself and reads
+what it printed.
+
+- **A Test plan step** (`testplan`, steps.ts): last before the build, after the prototype and whatever reads it,
+  approved by the person. It holds the build and never the brief (it is made from an approved brief). A workflow
+  switches it on (Settings › Workflow); it is off in every workflow saved before today and in a new app's default,
+  because it changes how every task of that workflow is built. Skipped on a task, the task is built as before.
+- **The trajectory** (trajectory.ts; `set_test_plan`, `test_plan`): slices (what the build is cut into, in order) and
+  rows, each with ID, what it asserts, level (unit, integration, component, browser, contract, live), the criteria it
+  proves, its test file (and the test's name where rows share a file), Writable at (the test phase or a slice) and
+  Passes at. A plan is refused, with every reason, unless: every acceptance criterion has a row or says how else it is
+  proven (part 2's smoke, release, watch); a row not written in the test phase says why, and should carry its code; a
+  row green when written says why it is a regression guard; no row passes before it can be written; every slice has a
+  row turning green at it or says why not.
+- **Its agent** (test-plan.ts): wherever a build would start (a press, a project's run, the line after a prototype),
+  a task whose workflow has the step sends a fresh agent to read the code and write the plan, and waits for the
+  person's approval on the step's page, which shows the table (`TrajectoryView`).
+- **The build is the plan's** (`trajectoryProposal`): no planner and no one-go builder. "Write the tests, and see
+  them fail", then each slice in order, each waiting on the one before. A slice with tests deferred to it is two
+  sub-tasks, "…: its tests first" and then its code, so the engine sees the red between them. Builders have no engine
+  tools, so a red inside one run could only have been taken on trust.
+- **The engine's own runs** (`gateSubTask`, before a sub-task lands; `classifyRun`): it runs each row due there in
+  the sub-task's checkout (`setup.test_row_cmd` with {file} and {name}, else the app's test command with the file
+  after it) and keeps each run as an event (`trajectory.run`). **Real red** (the runner counted a failed test) is
+  required of a test before its code. **Fake red** (it failed to load: an unresolved import, a collection error, a
+  build failure) is refused. **Green on its first run** is refused unless the row is a declared guard. A failure whose
+  output does not say how is not taken as red. Once a slice's code is in, every row due by then must be green and
+  have been seen red. What is refused sends the sub-task back with what the run printed, as any failed attempt.
+  Vitest, Jest, pytest, Go and TAP are read; another runner sets its own command and is judged on an assertion's words.
+- **It blocks the Check step**: a row never seen red, never written, or due green and not, keeps the Check stage
+  open ("N of M planned tests not proven"). A test file on the branch that no row names is flagged on the step's page.
+- **Changing an approved plan asks the person again**; a build under way stays held to the plan they approved.
+
+Kept on the step's own row (`step_work.refs` as `{ plan, approved }`, the table as Markdown in its body) and runs as
+events, so no migration: two other branches were adding steps and data the same day.
+
+Not done: it has not run on a real task; the first one will show what the plan's agent gets wrong. The step is off
+by default, as said. A changed plan that is approved again does not add sub-tasks for new slices to a build under
+way. The Evidence the pull request shows from all this (red before green, tests by level, criteria to tests) is part
+4. `set_step` can still mark the step done with no plan, and approving that builds the old way.

@@ -25,10 +25,13 @@
  * The app imports this module too (`@self-evident/engine/steps`), so the rules live in one place.
  */
 
-export type StepKey = 'idea' | 'research' | 'brief' | 'sketch' | 'screen' | 'mockup' | 'data' | 'prototype' | 'analysis' | 'adr' | 'risk' | 'audit' | 'final'
+export type StepKey = 'idea' | 'research' | 'brief' | 'sketch' | 'screen' | 'mockup' | 'data' | 'prototype' | 'analysis' | 'adr' | 'risk' | 'audit' | 'final' | 'testplan'
 export type On = 'idea' | 'task' | 'project'
-/** What kind of step it is: the idea, first; research; the brief, the parent of the rest; a way of looking (sketch, mockup, prototype); a check, after those, added or removed. */
-export type Place = 'first' | 'before' | 'brief' | 'either' | 'check'
+/**
+ * What kind of step it is: the idea, first; research; the brief, the parent of the rest; a way of looking (sketch, mockup, prototype); a check, after those, added or removed;
+ * the plan of the build's tests, last before the build: after the prototype and its checks, approved by the person, and what the build is then made from (trajectory.ts).
+ */
+export type Place = 'first' | 'before' | 'brief' | 'either' | 'check' | 'plan'
 
 export interface StepDef { key: StepKey; label: string; icon: string; what: string; place: Place }
 export const STEPS: StepDef[] = [
@@ -44,6 +47,7 @@ export const STEPS: StepDef[] = [
   { key: 'adr', label: 'Draft ADR', icon: '🏛️', what: 'A first pass at the architecture decision, from the analysis and the code: the options, a proposed choice, why. A draft: the planner settles it, and the record is written with the build.', place: 'check' },
   { key: 'risk', label: 'Blast radius', icon: '💥', what: 'What the plan touches, what could break, and how we\'d know. It is the risks on the pull request\'s merge guide.', place: 'check' },
   { key: 'audit', label: 'Audit', icon: '🧐', what: 'The plan read against the brief, the ADR, the code and the prototype by a fresh agent, last before the build: gaps, wrong guesses, what could go wrong.', place: 'check' },
+  { key: 'testplan', label: 'Test plan', icon: '🧭', what: 'Every test the build commits to, in one table: what each proves, the criterion it proves, the sub-task it is written in and the one it turns green in. You approve it; the build then writes the tests first, sees each fail for the right reason, and builds until it passes.', place: 'plan' },
   { key: 'final', label: 'Final ADR and plan', icon: '📌', what: 'The ADR and the plan put right from what the blast radius and the audit found, and the merge checklist for the pull request. The only step after the prototype that changes anything, and the last before the build.', place: 'check' },
 ]
 export const step = (key: StepKey) => STEPS.find((s) => s.key === key)!
@@ -124,7 +128,7 @@ export const styleOf = (w: { style?: string | null } | null | undefined): Style 
 export interface Workflow { id: string; name: string; steps: WorkflowStep[]; ordered: boolean; build?: Build; style?: Style; /** The app's requirements it switches on or off; the rest are as the app has them. */ requirements?: Record<string, boolean> | null } // steps in its order; its check steps say what follows the prototype (After)
 
 /** What a workflow may switch: research, sketches, mockups and the prototype on or off; the idea and the brief are always on. */
-export const canTurnOff = (key: StepKey) => key === 'research' || step(key).place === 'either'
+export const canTurnOff = (key: StepKey) => key === 'research' || step(key).place === 'either' || step(key).place === 'plan'
 export const canMakeOptional = (key: StepKey) => key !== 'brief'
 /** Nothing is removed from a workflow: a check it does not run is switched off (withChecks), not taken out. */
 export const canRemove = (_key: StepKey) => false
@@ -138,13 +142,14 @@ export function validOrder(steps: { key: StepKey }[]): boolean {
   return list.every((s, i) => {
     const place = step(s.key).place
     if (place === 'first') return i === 0
+    if (place === 'plan') return i === list.length - 1 // last before the build: after the prototype and whatever reads it
     if (place !== 'check') return firstCheck < 0 || i < firstCheck
     return true
   })
 }
 
 /** The default list: the idea, research, sketches, screens, mockups, the prototype, and the brief they feed; no checks; nothing but the brief required. */
-export const DEFAULT_STEPS: WorkflowStep[] = ['idea', 'research', 'sketch', 'screen', 'mockup', 'data', 'prototype', 'brief'].map((key) => ({ key: key as StepKey, on: true, required: key === 'brief' }))
+export const DEFAULT_STEPS: WorkflowStep[] = ['idea', 'research', 'sketch', 'screen', 'mockup', 'data', 'prototype', 'testplan', 'brief'].map((key) => ({ key: key as StepKey, on: key !== 'testplan', required: key === 'brief' })) // the test plan is switched on by a workflow: it changes how every task of that workflow is built (2026-11-23)
 
 /**
  * The workflow every app starts with, made with the app (Sandy, 2026-10-29: a task's workflow "can't be nothing").
@@ -184,10 +189,12 @@ export function normalize(w: Workflow): Workflow {
   // every check in their order, each on or off; one never set runs them all, as before. A check that runs is required
   // (it is a report, not something to skip). A workflow without a prototype has none.
   const savedOn = new Map(steps.filter((s) => !chosen(s.key)).map((s) => [s.key, s.on !== false]))
-  steps = steps.filter((s) => chosen(s.key))
+  const testPlan = steps.find((s) => s.key === 'testplan')
+  steps = steps.filter((s) => chosen(s.key) && s.key !== 'testplan')
   if (steps.some((s) => s.key === 'prototype' && s.on)) steps.push(...CHECKS.map((key) => ({ key, on: savedOn.get(key) ?? true, required: true })))
+  if (testPlan) steps.push(testPlan) // after the checks: it is the last thing before the build
   if (!validOrder(steps)) {
-    const rank = (k: StepKey) => ['first', 'before', 'either', 'check', 'brief'].indexOf(step(k).place)
+    const rank = (k: StepKey) => ['first', 'before', 'either', 'check', 'plan', 'brief'].indexOf(step(k).place)
     steps = [...steps].sort((a, b) => rank(a.key) - rank(b.key))
   }
   steps = [...steps.filter((s) => s.key !== 'brief'), ...steps.filter((s) => s.key === 'brief')] // the parent, kept last
@@ -266,7 +273,7 @@ export function rows(on: On, states: StepState[], workflow: Workflow | null): Ro
 
 /** What a task's brief still waits on before it can be approved: the required steps that feed it and aren't finished. */
 export function owed(states: StepState[], workflow: Workflow | null): StepKey[] {
-  return rows('task', states, workflow).filter((r) => r.key !== 'brief' && step(r.key).place !== 'check' && r.required && !finished(r.state, 'task')).map((r) => r.key) // not the checks: they come after the prototype, and the build waits for them, not the brief
+  return rows('task', states, workflow).filter((r) => r.key !== 'brief' && step(r.key).place !== 'check' && step(r.key).place !== 'plan' && r.required && !finished(r.state, 'task')).map((r) => r.key) // not the test plan either, which is made from an approved brief; not the checks: they come after the prototype, and the build waits for them, not the brief
 }
 
 /** The checks a task still has to get through before it is built: the ones in play and not done. */
@@ -282,7 +289,16 @@ export function checksOwed(states: StepState[], workflow: Workflow | null): Step
  * done or it is skipped by a person, never just left. (Starting as an idea is a fact about the task, not work.)
  */
 export function undecided(states: StepState[], workflow: Workflow | null): StepKey[] {
-  return rows('task', states, workflow).filter((r) => canSkip(r) && !settled(r.state, 'task')).map((r) => r.key)
+  return rows('task', states, workflow).filter((r) => canSkip(r) && step(r.key).place !== 'plan' && !settled(r.state, 'task')).map((r) => r.key) // the test plan comes after the brief's approval: it does not hold it
+}
+
+/**
+ * Whether a task's build waits for its test plan: the step is on its workflow, and is neither approved nor skipped.
+ * The build is made from the approved plan (trajectory.ts), so nothing is built until then.
+ */
+export function testPlanOwed(states: StepState[], workflow: Workflow | null): boolean {
+  const r = rows('task', states, workflow).find((x) => x.key === 'testplan')
+  return !!r && !settled(r.state, 'task')
 }
 
 /** What still stops a task being completed: its required steps that aren't finished, the brief always among them. */

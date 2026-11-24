@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { appendEvent } from './events.js'
 import { setTeamNames } from './ticket.js'
 import { db, pool } from './db/client.js'
-import { app, build, event, issue, project, repo, run, step, workspace } from './db/schema.js'
+import { app, build, event, issue, project, repo, run, step, workflow as workflowTable, workspace } from './db/schema.js'
 import type { Execute } from './executor.js'
 import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
@@ -23,6 +23,7 @@ import { FIX_TITLE, MAX_CARRY_ONS, ranOutOfTurns, Runner, turnsFor } from './run
 import { setAcceptance } from './acceptance.js'
 import { CHECK_TITLE, FINISH_TITLE, RECHECK_TITLE } from './verify.js'
 import { checklistOf } from './checklist.js'
+import { redTitle, sealTestPlan, setTestPlan, TEST_PHASE_TITLE, testPlanOf, trajectoryView } from './trajectory.js'
 import { setPrMessage } from './pr-view.js'
 import { afterOf } from './steps.js'
 import { ensureMain, listWorkflows } from './work.js'
@@ -446,6 +447,70 @@ describe.skipIf(!reachable)('runner', () => {
     expect(list.stages.find((x) => x.key === 'check')).toMatchObject({ state: 'done', detail: '4 of 5 met' })
     await sleep(400); expect(await tested()).toBe(runs) // nothing changed in the code: the whole run is not made again
   })
+
+  it('test-first: the build waits for an approved test plan, then runs as a test phase and slices; the engine sees each test red before green, and refuses a fake red and a first-run green', async () => {
+    const own = newId('app')
+    // A "test" here is a shell script: the app's command for one row runs the file, and what it prints is what a runner would.
+    await db.insert(app).values({ id: own, workspaceId: wsId, name: 'test first', key: own.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md', test_row_cmd: 'sh {file}', held: [{ key: 'break', on: false }, { key: 'comments', on: false }, { key: 'telemetry', kind: 'judged', on: false }, { key: 'docs', kind: 'judged', on: false }, { key: 'test_plan', kind: 'judged', on: false }, { key: 'tests', kind: 'judged', on: false }] } })
+    await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: repoPath })
+    await db.transaction((tx) => ensureMain({ tx, appId: own }))
+    const [w] = (await listWorkflows(own)).filter((x) => x.appDefault)
+    expect(w.steps.find((x) => x.key === 'testplan')).toMatchObject({ on: false }) // a workflow switches it on
+    await db.update(workflowTable).set({ steps: w.steps.map((x) => (x.key === 'testplan' ? { ...x, on: true, required: true } : x)), requirements: { adr: false, risks: false } }).where(eq(workflowTable.id, w.id))
+    const { project: p, issues: [t] } = await createProject({ appId: own, name: 'test first', issues: [{ title: 'Export (sample)', brief: 'People download their orders (sample).' }] })
+    const { acceptance: [every, twice] } = await setAcceptance(t.id, { add: [{ text: 'The file has every order (sample)' }, { text: 'Running it twice makes no duplicates (sample)' }] })
+    await setStep({ issueId: t.id }, 'prototype', { status: 'done', detail: 'the whole flow (sample)' }); await approveStep(t.id, 'prototype', 'Sam (sample)')
+    await approveBriefs(own)
+    const red = 'echo "AssertionError: expected 404 to be 200"; echo " Tests  1 failed (1)"; exit 1', green = 'echo " Tests  1 passed (1)"; exit 0', fake = 'echo "Error: Cannot find module ../src/export"; echo " Tests  no tests"; exit 1'
+    const seen: string[] = []
+    const execute: Execute = async (i) => {
+      const n = seen.filter((x) => x === i.subIssue.title).length + 1
+      seen.push(i.subIssue.title)
+      const put = async (file: string, body: string) => { await writeFile(join(i.worktreePath, file), `${body}\n`) }
+      if (i.subIssue.title === TEST_PHASE_TITLE) { await put('t1.sh', n === 1 ? fake : red); await put('t3.sh', green) } // its first try imports what is not built yet
+      else if (i.subIssue.title === 'The orders query (sample)') await put('t1.sh', green)
+      else if (i.subIssue.title === redTitle('The export file (sample)')) await put('t2.sh', n === 1 ? green : red) // its first try passes at once
+      else if (i.subIssue.title === 'The export file (sample)') await put('t2.sh', green)
+      await writeFile(join(i.worktreePath, `tf-${i.subIssue.identifier}-${n}.txt`), 'x\n'); await commitAll(i.worktreePath, `build ${i.subIssue.identifier}`)
+      return i.subIssue.title.startsWith(CHECK_TITLE) ? { status: 'completed', costUsd: 0, summary: `Checked.\n\n\`\`\`acceptance\n${JSON.stringify([{ id: every.id, met: true, evidence: 't1.sh' }, { id: twice.id, met: true, evidence: 't2.sh' }])}\n\`\`\`` } : { status: 'completed', costUsd: 0, summary: `did ${i.subIssue.title}` }
+    }
+    const runner = new Runner({ execute, sessionsMax: 1, propose: async () => { throw new Error('a test-first build has no planner') } })
+    // Its agent is writing the plan: nothing is built, and the build says what it waits on.
+    await setStep({ issueId: t.id }, 'testplan', { status: 'started', detail: 'Its agent is writing it' }, 'engine')
+    expect(await runner.buildTask(t.id)).toMatchObject({ planning: false, started: false, waits: expect.stringContaining('its test plan') })
+    expect((await projectGraph(p.id))!.subIssues).toEqual([])
+    // A plan that breaks a rule is refused with every reason; one that holds is kept, ready for the person.
+    const slices = [{ key: 'query', title: 'The orders query (sample)', what: 'Read every order.' }, { key: 'file', title: 'The export file (sample)', what: 'Write the file.' }]
+    await expect(setTestPlan(t.id, { slices, rows: [{ asserts: 'every order is in the file', level: 'unit', criteria: [every.id], test: 't1.sh', writableAt: 'tests', passesAt: 'query' }] })).rejects.toThrow(`No row proves the criterion ${twice.id}`)
+    expect(await setTestPlan(t.id, { slices, rows: [
+      { id: 'T1', asserts: 'every order is in the file', level: 'unit', criteria: [every.id], test: 't1.sh', writableAt: 'tests', passesAt: 'query' },
+      { id: 'T2', asserts: 'a second export adds no rows', level: 'integration', criteria: [twice.id], test: 't2.sh', writableAt: 'file', passesAt: 'file', deferred: { why: 'it calls the writer the query slice introduces' } },
+      { id: 'T3', asserts: 'the orders page still lists orders', level: 'component', test: 't3.sh', writableAt: 'tests', passesAt: 'tests', guard: 'the query it reads is being changed' },
+    ] })).toMatchObject({ rows: 3, slices: 2, writtenUpFront: 2 })
+    expect(await runner.buildTask(t.id)).toMatchObject({ started: false, waits: expect.any(String) }) // written, and still the person's to approve
+    await approveStep(t.id, 'testplan', 'Sam (sample)'); await sealTestPlan(t.id)
+    await runner.buildTask(t.id)
+    await until(cleaned(p.id), 40_000)
+    // The test phase twice (a fake red is not a failing test), the first slice, the second slice's tests twice (a first-run green proves nothing), its code, then the check.
+    expect(seen).toEqual([TEST_PHASE_TITLE, TEST_PHASE_TITLE, 'The orders query (sample)', redTitle('The export file (sample)'), redTitle('The export file (sample)'), 'The export file (sample)', CHECK_TITLE])
+    const retries = (await db.select().from(event).where(and(eq(event.projectId, p.id), eq(event.type, 'build.retry')))).sort((x, y) => x.seq - y.seq).map((e) => String((e.payload as { why: string }).why))
+    expect(retries[0]).toContain('T1 (t1.sh) failed to load, which is not a failing test'); expect(retries[0]).toContain('Cannot find module')
+    expect(retries[1]).toContain('T2 (t2.sh) passed the first time it ran')
+    const v = await trajectoryView(t.id)
+    expect(v).toMatchObject({ approved: true, holds: true, proven: 3, total: 3, canRun: true })
+    expect(v.rows.map((r) => [r.id, r.state, r.runs.map((x) => `${x.at}:${x.outcome}`).join(' ')])).toEqual([
+      ['T1', 'green', 'tests:fake tests:red query:green file:green'],
+      ['T2', 'green', 'file:red:green file:red:red file:green'],
+      ['T3', 'green', 'tests:green tests:green query:green file:green'],
+    ])
+    expect(v.stray.sort()).toEqual([]) // nothing here is named like a test
+    const list = (await checklistOf(t.id))!
+    expect(list.trajectory).toEqual({ proven: 3, total: 3, open: [] }); expect(list.build).toBe('planned')
+    expect(list.stages.find((x) => x.key === 'check')).toMatchObject({ state: 'done', detail: '2 of 2 met' })
+    // Changing the plan after approval asks the person again; the build stays held to what they approved.
+    expect((await setTestPlan(t.id, { slices, rows: v.plan!.rows.map((r) => (r.id === 'T1' ? { ...r, asserts: 'every order is in the file, newest first' } : r)) })).note).toContain('asks for the person\'s approval again')
+    expect(await trajectoryView(t.id)).toMatchObject({ approved: true, changed: true, holds: true }); expect((await testPlanOf(t.id)).approved!.rows[0].asserts).toBe('every order is in the file')
+  }, 60_000)
 
   it('a check left to a person holds the task: it is not landed until they mark it by hand; a fail is sent back, and comes back to them', async () => {
     const own = newId('app')

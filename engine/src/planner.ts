@@ -257,6 +257,8 @@ export interface PlanningContext {
   runId: string; issueId: string; projectId: string; appId: string; attempt: number
   /** Its workflow builds in one go: there is no planner, and this is the one sub-task's brief. */
   oneGo?: string
+  /** It has an approved test plan (trajectory.ts): the build is the plan's own, a test phase and then its slices, and no planner is asked. */
+  fixed?: Proposal
   input: Omit<ProposeInput, 'onEvent' | 'abort'>
   base: Omit<NewEvent, 'type'>
 }
@@ -295,10 +297,16 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
   const { workflowFor } = await import('./work.js')
   const wf = (await workflowFor(db, { issueId })).workflow
   const one = buildOf(wf) === 'one'
-  const [proto] = one ? await db.select().from(prototype).where(and(eq(prototype.issueId, issueId), inArray(prototype.status, ['running', 'stopped']))).orderBy(desc(prototype.createdAt)).limit(1) : []
+  const { testPlanOf, trajectoryProposal, rowCommand } = await import('./trajectory.js')
+  const testPlan = (await testPlanOf(issueId)).approved
+  const [proto] = one || testPlan ? await db.select().from(prototype).where(and(eq(prototype.issueId, issueId), inArray(prototype.status, ['running', 'stopped']))).orderBy(desc(prototype.createdAt)).limit(1) : []
+  const required = inForce(setup, g.project.requirements, wf?.requirements)
+  // Test-first (Sandy, 2026-11-23): the build stops being one run, or a planner's cut, and becomes the approved plan's test phase and slices.
+  const fixed = testPlan ? trajectoryProposal(testPlan, { criteria: acceptanceOf(t), base: a.defaultBranch, prototype: proto ? { branch: proto.branch, path: proto.path } : null, rowCmd: (r) => rowCommand(setup, r),
+    held: [acceptanceOf(t).length ? `### What the whole task is held to\n\nThis sub-task is one slice of it. These are the task's acceptance criteria, checked when every slice is in:\n\n${acceptanceLines(acceptanceOf(t))}` : '', required.length ? `### What this app requires of every change\n\n${requirementLines(required)}` : ''].filter(Boolean).join('\n\n') }) : undefined
   const oneGo = one ? oneGoBrief({ criteria: acceptanceOf(t), required: inForce(setup, g.project.requirements, wf?.requirements), prototype: proto ? { branch: proto.branch, path: proto.path, rough: proto.depth === 'rough' } : null, base: a.defaultBranch }) : undefined
   return {
-    runId, issueId, projectId: t.projectId, appId: a.id, attempt, base, oneGo,
+    runId, issueId, projectId: t.projectId, appId: a.id, attempt, base, oneGo: fixed ? undefined : oneGo, fixed,
     input: {
       repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, origin: originPrompt(await originOf({ issueId })), acceptance: acceptanceOf(t).length ? acceptanceLines(acceptanceOf(t)) : null, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, analysis: (await getStep({ issueId }, 'analysis'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
       testCmd: setup.test_cmd, storybook: storiesLead(setup), references: await referencesOf(a.id), requirements: inForce(setup, g.project.requirements, wf?.requirements), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
@@ -321,7 +329,7 @@ const whenPlanned = new Set<(issueId: string) => void>()
 export function onAnyPlanned(fn: (issueId: string) => void) { whenPlanned.add(fn); return () => { whenPlanned.delete(fn) } }
 
 export async function finishPlanning(ctx: PlanningContext, opts: { propose?: Propose; abort?: AbortController; retryAfterMs?: (minutes: number) => number; onPlanned?: () => void } = {}): Promise<PlanningResult> {
-  const propose: Propose = ctx.oneGo !== undefined ? async () => ({ status: 'completed', costUsd: 0, proposal: oneGoProposal(ctx.oneGo!) }) : opts.propose ?? proposeWithAgent
+  const propose: Propose = ctx.fixed ? async () => ({ status: 'completed', costUsd: 0, proposal: ctx.fixed! }) : ctx.oneGo !== undefined ? async () => ({ status: 'completed', costUsd: 0, proposal: oneGoProposal(ctx.oneGo!) }) : opts.propose ?? proposeWithAgent
   const onEvent: ProposeInput['onEvent'] = async (type, payload) => { await emit({ ...ctx.base, actor: `agent:${ctx.runId}`, type, payload }) }
   const failed = async (error: string, out?: ProposeOutput): Promise<PlanningResult> => {
     await db.update(run).set({ status: 'failed', endedAt: new Date(), error, costUsd: out?.costUsd?.toString() ?? null, agentSessionId: out?.agentSessionId ?? null }).where(eq(run.id, ctx.runId))

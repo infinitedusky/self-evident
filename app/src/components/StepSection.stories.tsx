@@ -3,7 +3,7 @@ import { rows } from '@self-evident/engine/steps'
 import { StepSection } from './StepSection'
 import { withEngine } from '../stories/mock-engine'
 import { expect, userEvent, within } from 'storybook/test'
-import { prototypes, riskWork, sampleApp, taskStepsView } from '../stories/sample'
+import { prototypes, riskWork, sampleApp, taskStepsView, trajectorySample } from '../stories/sample'
 
 // One step of a task as its own page. Made up: the sample task's steps under "UI change (sample)".
 const all = rows('task', taskStepsView.states, taskStepsView.resolved.workflow)
@@ -38,6 +38,23 @@ export const RequiredCannotBeSkipped: Story = {
   play: async ({ canvasElement }) => { const c = within(canvasElement); await c.findByRole('button', { name: /Start with the agent/ }); await expect(c.queryByRole('button', { name: 'Skip this step' })).toBeNull() },
 }
 /** The prototype's step: the thing running (View), every file it changed and what the agent shows (Code), and what it wrote for the brief. Here the agent has just shown a file. */
+const planRow = { key: 'testplan' as const, required: true, position: null, waitingOn: null, state: { key: 'testplan' as const, status: 'done' as const, detail: '4 tests, 3 written up front; 2 slices' } }
+/** The Test plan step, written and waiting for you (made up): the trajectory is the page, with what approving it starts, and the button that does. */
+export const TestPlanToApprove: Story = {
+  args: { row: planRow }, beforeEach: withEngine({ trajectory: trajectorySample, stepWork: { ...riskWork, key: 'testplan', summary: null, body: '## Test trajectory\n\n(the same table, as text, for agents)' } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('region', { name: 'Test trajectory' })).toBeInTheDocument()
+    await expect(c.getByText(/Approving it starts the build: a test phase/)).toBeInTheDocument()
+    await expect(c.queryByText(/the same table, as text/)).toBeNull() // not shown twice
+    await expect(c.getByRole('button', { name: /Approve/ })).toBeEnabled()
+  },
+}
+/** The Test plan step before its agent has written anything (made up): it says who writes it and what waits. */
+export const TestPlanNotStarted: Story = {
+  args: { row: { ...planRow, state: { key: 'testplan', status: 'none' } } }, beforeEach: withEngine({ stepWork: null }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/Its agent writes it once the brief is approved; the build waits for it/)).toBeInTheDocument() },
+}
 export const PrototypeCodeView: Story = {
   args: { row: { ...row('research'), key: 'prototype', state: { key: 'prototype', status: 'started', detail: 'A first version is up (sample)' }, waitingOn: null } as typeof all[number] },
   beforeEach: withEngine({ prototypes: prototypes.map((p, i) => i === 0 ? { ...p, issueId: 'iss_sample20' } : p) }),
