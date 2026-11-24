@@ -121,13 +121,17 @@ export const SCRIPT_MAX = 20_000
 export const SEED_MAX = 400_000
 export const smokeHome = () => process.env.SMOKE_HOME ?? join(homedir(), '.self-evident', 'smoke')
 
-/** What a script is run with, beyond the engine's own environment: its port, its database, where its seed is, and whether to start from nothing. */
-export async function smokeEnv(appId: string, setup: SmokeSetup, i: { port: number; db?: Record<string, string>; clean?: boolean; /** Which set-up, when it is not the app's first. */ key?: string }) {
+/**
+ * What a script is run with, beyond the engine's own environment: its port, its database, where its seed is, whether
+ * to start from nothing, and which of the app's fixtures its database was built from ($FIXTURE). What the script
+ * makes of the fixture is the app's own business: who is signed in, say, where an app signs its tester in.
+ */
+export async function smokeEnv(appId: string, setup: SmokeSetup, i: { port: number; db?: Record<string, string>; clean?: boolean; /** Which set-up, when it is not the app's first. */ key?: string; /** The fixture its database was built from; none: its own seed alone. Given: the script is told ($FIXTURE, empty for none). */ fixture?: string | null }) {
   const dir = join(smokeHome(), appId)
   const seed = join(dir, i.key && i.key !== MAIN ? `seed-${i.key}.sql` : 'seed.sql')
   if (setup.seed) { await mkdir(dir, { recursive: true }); await writeFile(seed, setup.seed.endsWith('\n') ? setup.seed : `${setup.seed}\n`) }
   else await rm(seed, { force: true })
-  return { ...(i.db ?? {}), PORT: String(i.port), BROWSER: 'none', CI: '1', ...(setup.seed ? { SMOKE_SEED: seed } : {}), ...(i.clean ? { SMOKE_CLEAN: '1' } : {}) }
+  return { ...(i.db ?? {}), PORT: String(i.port), BROWSER: 'none', CI: '1', ...(setup.seed ? { SMOKE_SEED: seed } : {}), ...(i.clean ? { SMOKE_CLEAN: '1' } : {}), ...(i.fixture !== undefined ? { FIXTURE: i.fixture ?? '' } : {}) }
 }
 
 /** The app's stop script, run where the start one was, with what it had; what it prints is kept, a failure is not an error. */
@@ -550,7 +554,7 @@ export async function startSmoke(issueId: string, actor = 'user', opts: { /** St
   const [old] = await db.select().from(smokeRun).where(and(eq(smokeRun.issueId, t.id), eq(smokeRun.setup, key)))
   const port = await freePort(old?.port ?? 0)
   const more = await morePorts()
-  const env = { ...more.env, ...await smokeEnv(a.id, setup, { port, db: dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : undefined, clean: opts.clean, key: named.key }) }
+  const env = { ...more.env, ...await smokeEnv(a.id, setup, { port, db: dbCfg ? { [dbCfg.env ?? 'DATABASE_URL']: databaseUrl(dbCfg, slug) } : undefined, clean: opts.clean, key: named.key, fixture: dbCfg ? (builtFrom !== undefined ? builtFrom : old?.fixture ?? null) : undefined }) }
   if (setup.stop && old) await runStop(setup.stop, old.path, { ...env, PORT: String(old.port) }) // what the last run left up, when the engine has been started again since
   const mocks = await mocksFor(a.id, t.id, key, path, opts.live ?? [], env)
   Object.assign(env, mocks.env)
