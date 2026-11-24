@@ -18,6 +18,11 @@
   </div>
   <script>
     const id = new URLSearchParams(location.search).get('id') || ''
+    // As a Storybook with a theme toolbar would: globals=theme:dark draws it dark.
+    if (/(^|;)theme:dark($|;)/.test(new URLSearchParams(location.search).get('globals') || '')) {
+      document.body.style.background = '#16181c'; document.body.style.color = '#e8e6e1'
+      for (const el of document.querySelectorAll('[style]')) el.setAttribute('style', el.getAttribute('style').replace('#fff;', '#1f2228;').replace(/#e9e5da/g, '#343842').replace(/#e4e0d6|#d9d4c7/g, '#343842').replace('#555', '#a8a59c'))
+    }
     const [screen, state] = id.replace(/^screens-/, '').split('--')
     document.getElementById('id').textContent = 'A made-up screen, in place of the story ' + id
     document.getElementById('screen').textContent = screen || ''

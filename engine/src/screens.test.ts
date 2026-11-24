@@ -1,6 +1,6 @@
 /** Screens are the stories under Screens/, by screen; a task's own are the ones whose file its branch made or changed. */
 import { describe, expect, it } from 'vitest'
-import { groupScreens, madeHere } from './screens.js'
+import { declaresTheme, groupScreens, madeHere } from './screens.js'
 import { DEFAULT_STEPS, normalize, type Workflow } from './steps.js'
 
 const story = (title: string, name: string, file = `./src/screens/${title.split('/').pop()}.stories.tsx`) => ({ id: `${title}--${name}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-'), title, name, file })
@@ -39,5 +39,17 @@ describe('the Screens step', () => {
   it('one that has it keeps it as saved', () => {
     const saved: Workflow = { id: 'w', name: 'Saved', ordered: false, steps: DEFAULT_STEPS.map((s) => (s.key === 'screen' ? { ...s, required: true } : s)) }
     expect(normalize(saved).steps.find((s) => s.key === 'screen')).toEqual({ key: 'screen', on: true, required: true })
+  })
+})
+
+describe('a Storybook with a light and dark to switch', () => {
+  it('is one whose preview declares a theme global, by hand or with the themes addon', () => {
+    expect(declaresTheme("export default { globalTypes: {\n  locale: { toolbar: {} },\n  theme: { toolbar: { items: ['light', 'dark'] } } } }")).toBe(true)
+    expect(declaresTheme("import { withThemeByDataAttribute } from '@storybook/addon-themes'\nexport const decorators = [withThemeByDataAttribute({ themes: { light: 'light', dark: 'dark' }, attributeName: 'data-theme' })]")).toBe(true)
+    expect(declaresTheme("import { withThemeByClassName } from '@storybook/addon-themes'")).toBe(true)
+  })
+  it('and not one that only mentions a theme', () => {
+    expect(declaresTheme("import '../src/theme.css'\nexport default { parameters: { layout: 'fullscreen' } }")).toBe(false)
+    expect(declaresTheme("export default { globalTypes: { locale: { toolbar: {} } }, parameters: { theme: 'x' } }")).toBe(false)
   })
 })

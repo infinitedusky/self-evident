@@ -44,6 +44,28 @@ export const OpenFromTheWall: Story = {
 export const AtPhoneWidth: Story = {
   play: async ({ canvasElement }) => { const c = within(canvasElement); await userEvent.click(await c.findByRole('button', { name: 'Phone' })); await expect(c.getByRole('button', { name: 'Phone' })).toHaveClass('on') },
 }
+/** In dark: every screen is asked for its dark scheme, on the wall and opened large; the pick is kept. */
+export const InDark: Story = {
+  beforeEach: () => { localStorage.removeItem('if.screens.theme') },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const scheme = within(await c.findByRole('group', { name: 'Colour scheme' }))
+    await userEvent.click(scheme.getByRole('button', { name: 'Dark' }))
+    await expect(scheme.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(c.getByTitle('Checkout, Empty, small')).toHaveAttribute('src', expect.stringContaining('globals=theme:dark'))
+    await expect(localStorage.getItem('if.screens.theme')).toBe('dark')
+    await userEvent.click(c.getByRole('button', { name: 'Open Checkout, Empty' }))
+    await expect(await c.findByTitle('Checkout, Empty')).toHaveAttribute('src', expect.stringContaining('globals=theme:dark'))
+    await userEvent.click(within(c.getByRole('group', { name: 'Colour scheme' })).getByRole('button', { name: 'Light' }))
+    await expect(await c.findByTitle('Checkout, Empty')).toHaveAttribute('src', expect.stringContaining('globals=theme:light'))
+    await expect(c.queryByRole('note')).toBeNull() // this Storybook has both
+  },
+}
+/** The app's Storybook has no theme to switch: the page says the two look the same, and what to ask for. */
+export const NoThemeToSwitch: Story = {
+  beforeEach: withEngine({ screens: { ...sc, themed: false } }),
+  play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('note')).toHaveTextContent(/no light and dark to switch/) },
+}
 /** Nothing drawn yet: what to do next. */
 export const None: Story = { beforeEach: withEngine({ screens: { ...sc, screens: [] } }) }
 /** A new task: the screens merged with earlier tasks are not its own, so they are counted, not shown. */
