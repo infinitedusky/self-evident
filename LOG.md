@@ -7624,3 +7624,30 @@ was a state for it), and one of them ("do new executives join the group automati
 copy made the old way; the unanswered copy is still there for Sandy to drop with Not needed.
 
 Built, not merged.
+
+## Each section of Context folds (Sandy, 2026-11-24: "Reference docs, decisions, and notes can be collapsed. Collapsed would keep the tags and so you can see like status stuff")
+
+Built, not merged. The name of each section is a button that folds it to its heading. Folded, the heading keeps its
+counts and marks: Reference docs its count and "n in full" (new); Decisions its count, "n unanswered" and "n waiting
+on someone"; Notes its count. The buttons that add to a section go with it when it is folded. What is folded is
+remembered on this browser (`se.context.folded`), for every Context and not per task.
+
+## A decision has options, below its question; background is where the question came from (Sandy, 2026-11-24: "what you're showing there is really like options or additional information for the question … Background is like where we got this stuff. Like in the PRD … it says specifically you need to make this decision. Or we looked through all the PRDs and we couldn't find")
+
+Built, not merged. A decision's question now carries two things, kept apart:
+
+- **Background**, above the question: where it came from. The PRD says it must be decided; the ticket leaves it
+  out; we looked and found nothing.
+- **Options**, below the question (`note.options`, migration `0064_decision_options`, Markdown): what there is to
+  choose between, what each would mean, a recommendation, anything more about the question. Free text, not a list
+  to pick from.
+
+The form is always the same five fields, in order: Background, The question, Options, The answer, Why this answer.
+On the page both sit across the two columns, open while the decision is unanswered and folded once it is answered.
+Every agent is given both with the decision, and the `context` tool tells an agent which is which: the source goes
+in `background`, never the options. Text given with a question and nothing else is kept as its options.
+
+**The data**: the same migration moves `background` to `options` on every decision an agent made that has no
+options. That is all of Sandy's today, whose backgrounds were options and recommendations put there by the two
+migrations before. Some of that text also says where the question came from ("The PRD says…"); it moves whole, and
+that part is Sandy's to cut back up into Background. A person's own background is left where it is.

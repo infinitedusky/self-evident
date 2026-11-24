@@ -177,9 +177,14 @@ describe.skipIf(!reachable)('context', () => {
     const tool = engineTools({ appId, actor: 'agent' }).find((x) => x.name === 'context')!
     await tool.handler({ op: 'ask', issueId: t, title: 'Is an expired card listed? (sample)', background: 'The list is built from the vault, which still returns them.' })
     expect((await contextOf({ issueId: t })).notes.find((n) => n.title.startsWith('Is an expired'))).toMatchObject({ status: 'open', addedBy: 'agent', background: 'The list is built from the vault, which still returns them.', body: '' })
-    // Said beside a question with no answer, by anyone, it is the question's background: there is no answer for it to be the why of.
+    // Said beside a question with no answer, by anyone, it is more about the question, kept with its options: there is no answer for it to be the why of.
     await addContextNote({ issueId: t }, { kind: 'decision', title: 'Is there a limit on saved cards? (sample)', body: 'May be tied to pricing.' }, 'agent')
-    expect((await contextOf({ issueId: t })).notes.find((x) => x.title.startsWith('Is there a limit'))).toMatchObject({ status: 'open', body: '', background: 'May be tied to pricing.' })
+    expect((await contextOf({ issueId: t })).notes.find((x) => x.title.startsWith('Is there a limit'))).toMatchObject({ status: 'open', body: '', background: null, options: 'May be tied to pricing.' })
+    // Where it came from and what there is to choose between are kept apart, and an agent is given both.
+    const o = (await addContextNote({ issueId: t }, { kind: 'decision', title: 'Who may change the group? (sample)', background: 'The PRD says this must be decided before launch.', options: '(a) admins only\n(b) any member\n\nRecommendation: (a).' })).view.notes.find((x) => x.title.startsWith('Who may change'))!
+    expect(o).toMatchObject({ background: 'The PRD says this must be decided before launch.', options: '(a) admins only\n(b) any member\n\nRecommendation: (a).' })
+    expect(await contextPrompt({ issueId: t })).toContain('- Who may change the group? (sample)\n  Background: The PRD says this must be decided before launch.\n  Options: (a) admins only\n  (b) any member\n  Recommendation: (a).')
+    expect((await editContextNote({ issueId: t }, o.id, { options: '' })).notes.find((x) => x.id === o.id)).toMatchObject({ options: null, background: 'The PRD says this must be decided before launch.' })
     const n = (await addContextNote({ issueId: t }, { title: 'A plain note (sample)' })).view.notes.find((x) => x.kind === 'note')!
     await expect(editContextNote({ issueId: t }, n.id, { background: 'x' })).rejects.toThrow('only a decision')
   })

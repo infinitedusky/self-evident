@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, userEvent, waitFor, within } from 'storybook/test'
-import { Context } from './Context'
+import { Context, FOLDED } from './Context'
 import { withEngine } from '../stories/mock-engine'
 import { contextLimits, emptyContext, taskContext } from '../stories/sample'
 
@@ -36,7 +36,7 @@ export const OnATask: Story = {
     await expect(docs.getAllByText('Listed, opened when needed')).toHaveLength(3)
     await expect(docs.getByText(/Imported file, support-export.md/)).toBeVisible()
     await expect(docs.getByText(/From the project/)).toBeVisible()
-    const order = [...canvasElement.querySelectorAll('.context-h')].map((h) => h.firstChild?.textContent?.trim())
+    const order = [...canvasElement.querySelectorAll('.context-fold-name')].map((h) => h.textContent)
     await expect(order).toEqual(['Reference docs', 'Decisions', 'Notes'])
     const decisions = section(canvasElement, 'decisions')
     await expect(decisions.getByText('What happens to a card when it is removed? (sample)')).toBeVisible() // the question
@@ -46,6 +46,26 @@ export const OnATask: Story = {
     const notes = section(canvasElement, 'notes')
     await expect(notes.getByRole('link', { name: 'SS-5' })).toBeVisible()
     await expect(notes.getByText(/added by the agent/)).toBeVisible()
+  },
+}
+
+/** Each section folds to its heading, which keeps its counts and marks: how many docs and how many in full, how many decisions are unanswered or waiting on someone, how many notes. It stays folded on the next visit. */
+export const SectionsFolded: Story = {
+  beforeEach: () => { localStorage.removeItem(FOLDED); return () => localStorage.removeItem(FOLDED) },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await c.findByText('2 unanswered')
+    for (const name of ['reference docs', 'decisions', 'notes']) await userEvent.click(c.getByRole('button', { name: `Hide ${name}` }))
+    await expect(c.queryByText('Saved cards at checkout (sample)')).toBeNull()
+    await expect(c.queryByText('Which saved cards are offered? (sample)')).toBeNull()
+    await expect(c.queryByText('Talked with Em about mobile (sample)')).toBeNull()
+    await expect(c.queryByRole('button', { name: 'Add a decision' })).toBeNull()
+    await expect(section(canvasElement, 'docs').getByText('2 in full')).toBeVisible()
+    await expect(section(canvasElement, 'decisions').getByText('2 unanswered')).toBeVisible()
+    await expect(section(canvasElement, 'decisions').getByText('1 waiting on someone')).toBeVisible()
+    await expect(JSON.parse(localStorage.getItem(FOLDED) ?? '{}')).toEqual({ docs: true, decisions: true, notes: true })
+    await userEvent.click(c.getByRole('button', { name: 'Show decisions' }))
+    await expect(c.getByText('Which saved cards are offered? (sample)')).toBeVisible()
   },
 }
 
@@ -270,22 +290,27 @@ export const WaitingOnSomeone: Story = {
   },
 }
 
-/** A decision's background: the story of why it is a question. Open to read while the decision is unanswered, folded once it is answered. The form is always the same four fields: the question, its background, the answer, why that answer. */
+/** A decision's background: the story of why it is a question. Open to read while the decision is unanswered, folded once it is answered. Its options (what there is to choose between, a recommendation) sit below the question the same way. The form is always the same five fields: background, the question, options, the answer, why that answer. */
 export const TheStoryBehindAQuestion: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await c.findByText('2 unanswered')
-    await expect(c.getByText(/The app saves cards with one vendor and the web checkout with another/)).toBeVisible() // unanswered: in full
+    await expect(c.getByText(/The ticket does not say. Support is asked about it most weeks/)).toBeVisible() // unanswered: its background in full, above the question
+    await expect(c.getByText(/Recommendation: \(b\) for this task/)).toBeVisible() // and its options, below it
+    const parts = [...(canvasElement.querySelector('[data-note="note_ctx8"]') as HTMLElement).children].map((e) => e.getAttribute('data-component') ?? e.className)
+    await expect(parts).toEqual(['ContextBackground', 'context-q', '', 'ContextOptions'])
     await expect(c.getByText(/Design first drew the whole number/)).not.toBeVisible() // answered: folded
     await userEvent.click(c.getByRole('button', { name: 'Add a decision' }))
     await userEvent.type(c.getByRole('textbox', { name: 'The question' }), 'Do we keep cards of closed accounts? (sample)')
     await userEvent.type(c.getByRole('textbox', { name: /^Background/ }), 'Legal asked last spring and nobody answered.')
-    for (const name of ['The question', /^Background/, /^The answer/, 'Why this answer (optional)']) await expect(c.getByRole('textbox', { name })).toBeVisible() // always the same four
+    await expect([...canvasElement.querySelectorAll('[data-component="ContextDecisionForm"] label')].map((l) => l.firstChild?.textContent?.split(/[ (:]/)[0])).toEqual(['Background', 'The', 'Options', 'The', 'Why']) // always the same five, in this order
+    await userEvent.type(c.getByRole('textbox', { name: /^Options/ }), '(a) Keep them. (b) Delete them.')
     await userEvent.click(c.getByRole('button', { name: 'Add it, unanswered' }))
     await expect(await c.findByText('Legal asked last spring and nobody answered.')).toBeVisible()
+    await expect(c.getByText('(a) Keep them. (b) Delete them.')).toBeVisible()
     // The story can be added to a question already asked, without answering it.
     await userEvent.click(c.getByRole('button', { name: 'Edit the question: What is shown when a saved card has expired? (sample)' }))
-    for (const name of ['The question', /^Background/, /^The answer/, 'Why this answer (optional)']) await expect(c.getByRole('textbox', { name })).toBeVisible()
+    for (const name of ['The question', /^Background/, /^Options/, /^The answer/, 'Why this answer (optional)']) await expect(c.getByRole('textbox', { name })).toBeVisible()
     await userEvent.type(c.getByRole('textbox', { name: /^Background/ }), 'The vault still returns expired cards.')
     await userEvent.click(c.getByRole('button', { name: 'Save it, unanswered' }))
     await expect(await c.findByText('The vault still returns expired cards.')).toBeVisible()

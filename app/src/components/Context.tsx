@@ -17,6 +17,8 @@
  *
  * Every row says how the agents get it. A task in a project also sees its project's, marked and not changed here.
  *
+ * Each of the three sections folds to its heading, which keeps its counts and marks.
+ *
  * The levels, one text style each: the page (h2), a section (h3, its count, what to add), one line on how agents get
  * that section, a row (its title in bold, then where it is from), and a row's detail (small and faint).
  */
@@ -35,6 +37,8 @@ const words = (chars: number) => { const n = Math.max(1, Math.round(chars / 6));
 /** How long since a day: "today", "1 day", "3 days". */
 const ago = (on: string) => { const n = Math.max(0, Math.round((+new Date(`${today()}T12:00:00`) - +new Date(`${on}T12:00:00`)) / 86_400_000)); return n === 0 ? 'today' : `${n} day${n === 1 ? '' : 's'} ago` }
 const NAME = { idea: 'idea', project: 'project', task: 'task' }
+/** Where the folded sections are remembered, on this browser. */
+export const FOLDED = 'se.context.folded'
 
 export function Context({ subject, version = 0, onChange }: { subject: ContextSubject; /** Read again when it changes. */ version?: number; /** Something in it changed: for a nav that counts it. */ onChange?: () => void }) {
   const [v, setV] = useState<ContextView | null>(null)
@@ -42,6 +46,9 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const file = useRef<HTMLInputElement>(null)
+  // Each section folds to its heading, which keeps its counts and marks (Sandy, 2026-11-24: "collapsed would keep the tags, so you can see status stuff"). Remembered on this browser, for every Context.
+  const [folded, setFolded] = useState<Record<string, boolean>>(() => { try { return JSON.parse(localStorage.getItem(FOLDED) ?? '{}') as Record<string, boolean> } catch { return {} } })
+  const fold = (k: string) => setFolded((f) => { const to = { ...f, [k]: !f[k] }; try { localStorage.setItem(FOLDED, JSON.stringify(to)) } catch { /* fine without it */ } return to })
   useEffect(() => { engine.context(subject).then((r) => { setV(r); setError(null) }).catch((e) => setError(err(e))) }, [subject.kind, subject.id, version]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!v) return error ? <div className="empty bad">{error}</div> : null
   const act = async (fn: () => Promise<ContextView>) => { setBusy(true); try { setV(await fn()); setOpen(null); setError(null); onChange?.() } catch (e) { setError(err(e)) } finally { setBusy(false) } }
@@ -65,14 +72,17 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
       <p className="muted context-lede">What is known before the work starts, and what is settled along the way. Every agent working on this {on} is given it{v.on === 'idea' ? ', and it goes with the idea when it becomes a task or a project' : ''}.</p>
       {error && <div className="empty bad" style={{ margin: '8px 0' }}>{error}</div>}
 
-      <div className="context-section" data-section="docs">
+      <div className={`context-section ${folded.docs ? 'folded' : ''}`} data-section="docs">
         <div className="context-head">
-          <h3 className="context-h">Reference docs {v.docs.length > 0 && <Badge>{v.docs.length}</Badge>}</h3>
+          <h3 className="context-h"><button type="button" className="context-fold" aria-expanded={!folded.docs} aria-label={`${folded.docs ? 'Show' : 'Hide'} reference docs`} onClick={() => fold('docs')}><span aria-hidden="true" className="context-fold-mark">{folded.docs ? '▸' : '▾'}</span><span className="context-fold-name">Reference docs</span></button> {v.docs.length > 0 && <Badge>{v.docs.length}</Badge>}{v.docs.filter((d) => d.inFull).length > 0 && <Badge tone="accent">{v.docs.filter((d) => d.inFull).length} in full</Badge>}</h3>
+          {!folded.docs && <>
           <button className="btn quiet small" onClick={() => setOpen(open === 'paste' ? null : 'paste')}>Paste text</button>
           <button className="btn quiet small" disabled={busy} onClick={() => file.current?.click()}>Import a file</button>
           <button className="btn quiet small" onClick={() => setOpen(open === 'ticket' ? null : 'ticket')}>Add a ticket</button>
           <input ref={file} type="file" hidden aria-label="A file to import" accept=".txt,.md,.markdown,.pdf,.html,.htm,text/plain,text/markdown,application/pdf,text/html" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void act(() => engine.importContextDoc(subject, f)) }} />
+          </>}
         </div>
+        {!folded.docs && <>
         <p className="context-how">The ticket the work came from goes to every agent whole. The others are listed for an agent by title and description, and it opens one when it needs it, unless you mark it to be given in full.</p>
         {open === 'paste' && <DocForm limits={v.limits} busy={busy} onSave={(b) => act(() => engine.addContextDoc(subject, { ...b, body: b.body ?? '' }))} onCancel={() => setOpen(null)} />}
         {open === 'ticket' && <TicketForm busy={busy} onSave={(ref) => act(() => engine.addContextTicket(subject, ref))} onCancel={() => setOpen(null)} />}
@@ -81,19 +91,23 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
           ? <DocForm key={d.id} start={d} limits={v.limits} busy={busy} onSave={(b) => act(() => engine.editContextDoc(subject, d.id, b))} onCancel={() => setOpen(null)} onRemove={() => { if (window.confirm(`Delete "${d.title}" from this ${on}'s context?`)) void act(() => engine.removeContextDoc(subject, d.id)) }} />
           : <Doc key={d.id} d={d} limits={v.limits} busy={busy} onEdit={() => setOpen(d.id)} onInFull={(to) => act(() => engine.editContextDoc(subject, d.id, { inFull: to }))} onRefresh={() => act(() => engine.refreshContextDoc(subject, d.id))} onRemove={() => { if (window.confirm(`Take ${d.ticket?.origin.ref ?? d.title} out of this ${on}'s context? The ticket itself is not touched.`)) void act(() => engine.removeContextDoc(subject, d.id)) }} />)}
         {projects(v.docs).length > 0 && <>{fromProject}{projects(v.docs).map((d) => <Doc key={d.id} d={d} limits={v.limits} busy={busy} />)}</>}
+        </>}
       </div>
 
-      <div className="context-section" data-section="decisions">
+      <div className={`context-section ${folded.decisions ? 'folded' : ''}`} data-section="decisions">
         <div className="context-head">
-          <h3 className="context-h">Decisions {settled.length + waiting.length > 0 && <Badge>{settled.length + waiting.length}</Badge>}{yours > 0 && <Badge tone="accent">{yours} unanswered</Badge>}{asked.length > 0 && <Badge tone="warn">{asked.length} waiting on someone</Badge>}</h3>
+          <h3 className="context-h"><button type="button" className="context-fold" aria-expanded={!folded.decisions} aria-label={`${folded.decisions ? 'Show' : 'Hide'} decisions`} onClick={() => fold('decisions')}><span aria-hidden="true" className="context-fold-mark">{folded.decisions ? '▸' : '▾'}</span><span className="context-fold-name">Decisions</span></button> {settled.length + waiting.length > 0 && <Badge>{settled.length + waiting.length}</Badge>}{yours > 0 && <Badge tone="accent">{yours} unanswered</Badge>}{asked.length > 0 && <Badge tone="warn">{asked.length} waiting on someone</Badge>}</h3>
+          {!folded.decisions && <>
           <button className="btn quiet small" onClick={() => setOpen(open === 'decision' ? null : 'decision')}>Add a decision</button>
+          </>}
         </div>
+        {!folded.decisions && <>
         <p className="context-how">Each a question and its answer. Every agent is told each answered one in full, as something not to reopen, and each unanswered one as not decided, so it does not guess. A report lists the unanswered ones as open.</p>
         {open === 'decision' && <DecisionForm busy={busy} onSave={(b) => act(() => engine.addContextNote(subject, { kind: 'decision', ...b }))} onCancel={() => setOpen(null)} />}
         {!settled.length && !waiting.length && open !== 'decision' && <div className="empty">None yet.</div>}
         {waiting.map((n) => (
           <div className="context-row context-qa context-unmade" key={n.id} data-note={n.id} data-unanswered={n.waitingOn ? 'waiting' : n.status}>
-            {n.background && open !== n.id && open !== `edit:${n.id}` && <Background text={n.background} open />}
+            {n.background && open !== n.id && open !== `edit:${n.id}` && <More name="Background" text={n.background} open />}
             <div className="context-q">{n.title}</div>
             <div>
               <div className="context-detail">
@@ -104,7 +118,7 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
               {open === `wait:${n.id}`
                 ? <WaitingForm start={n.waitingOn ?? ''} busy={busy} onSave={(to) => act(() => engine.editContextNote(subject, n.id, { waitingOn: to }))} onCancel={() => setOpen(null)} />
                 : open === `edit:${n.id}`
-                  ? <DecisionForm start={n} asking busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, b.answer ? { ...b, status: 'settled' } : { title: b.title, background: b.background }))} onCancel={() => setOpen(null)} />
+                  ? <DecisionForm start={n} asking busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, b.answer ? { ...b, status: 'settled' } : { title: b.title, background: b.background, options: b.options }))} onCancel={() => setOpen(null)} />
                 : open === n.id
                   ? <DecisionForm start={n} answering busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, { ...b, status: 'settled' }))} onCancel={() => setOpen(null)} />
                   : (
@@ -119,6 +133,7 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
                     </div>
                   )}
             </div>
+            {n.options && open !== n.id && open !== `edit:${n.id}` && <More name="Options" text={n.options} open />}
           </div>
         ))}
         {mine(settled).map((n) => open === n.id
@@ -145,13 +160,17 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
             ))}
           </details>
         )}
+        </>}
       </div>
 
-      <div className="context-section" data-section="notes">
+      <div className={`context-section ${folded.notes ? 'folded' : ''}`} data-section="notes">
         <div className="context-head">
-          <h3 className="context-h">Notes {notes.length > 0 && <Badge>{notes.length}</Badge>}</h3>
+          <h3 className="context-h"><button type="button" className="context-fold" aria-expanded={!folded.notes} aria-label={`${folded.notes ? 'Show' : 'Hide'} notes`} onClick={() => fold('notes')}><span aria-hidden="true" className="context-fold-mark">{folded.notes ? '▸' : '▾'}</span><span className="context-fold-name">Notes</span></button> {notes.length > 0 && <Badge>{notes.length}</Badge>}</h3>
+          {!folded.notes && <>
           <button className="btn quiet small" onClick={() => setOpen(open === 'note' ? null : 'note')}>Add a note</button>
+          </>}
         </div>
+        {!folded.notes && <>
         <p className="context-how">What was said or found. Every agent is given each one in full, and a report includes the ones dated in its period.</p>
         {open === 'note' && <NoteForm busy={busy} onSave={(b) => act(() => engine.addContextNote(subject, { kind: 'note', ...b }))} onCancel={() => setOpen(null)} />}
         {!notes.length && open !== 'note' && <div className="empty">None yet.</div>}
@@ -159,6 +178,7 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
           ? <NoteForm key={n.id} start={n} busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, b))} onCancel={() => setOpen(null)} onRemove={() => { if (window.confirm(`Delete the note "${n.title}"?`)) void act(() => engine.removeContextNote(subject, n.id)) }} />
           : <NoteRow key={n.id} n={n} onEdit={() => setOpen(n.id)} />)}
         {projects(notes).length > 0 && <>{fromProject}{projects(notes).map((n) => <NoteRow key={n.id} n={n} />)}</>}
+        </>}
       </div>
     </section>
   )
@@ -203,7 +223,7 @@ function DecisionRow({ n, onEdit }: { n: ContextNote; onEdit?: () => void }) {
   const made = n.status === 'settled'
   return (
     <div className={`context-row ${n.title ? 'context-qa' : ''}`} data-note={n.id}>
-      {n.background && <Background text={n.background} />}
+      {n.background && <More name="Background" text={n.background} />}
       {n.title && <div className="context-q">{n.title}</div>}
       <div>
         {made ? <div className="context-title">{n.answer}</div> : <div className="context-detail">{n.status === 'proposed' ? `Unanswered: the agent proposes "${n.answer}"` : n.waitingOn ? `Unanswered: waiting on ${n.waitingOn}` : 'Unanswered'}</div>}
@@ -213,29 +233,35 @@ function DecisionRow({ n, onEdit }: { n: ContextNote; onEdit?: () => void }) {
           {onEdit && <>{' · '}<button className="link-btn" aria-label={`Edit: ${n.title || n.answer}`} onClick={onEdit}>Edit</button></>}
         </div>}
       </div>
+      {n.options && <More name="Options" text={n.options} />}
     </div>
   )
 }
 
-/** A decision's background: the story of why it is a question. In full while it is unanswered; folded once it is answered. */
-function Background({ text, open }: { text: string; open?: boolean }) {
+/**
+ * What a decision's question carries beside it, each across both columns and in full while the decision is unanswered,
+ * folded once it is answered. Background, above the question: where it came from (the PRD asks for it; we looked and
+ * found nothing). Options, below it: what there is to choose between, a recommendation, more about the question.
+ */
+function More({ name, text, open }: { name: 'Background' | 'Options'; text: string; open?: boolean }) {
   return (
-    <details className="context-bg" open={open} data-component="ContextBackground">
-      <summary className="context-detail">Background</summary>
+    <details className="context-bg" open={open} data-component={`Context${name}`}>
+      <summary className="context-detail">{name}</summary>
       <Md text={text} className="context-text" />
     </details>
   )
 }
 
 /** A decision asked, made or changed. Adding one, the answer may be left empty: it then waits to be decided. */
-function DecisionForm({ start, answering, asking, busy, onSave, onCancel, onRemove }: { start?: ContextNote; /** An open or proposed one being answered: the answer is what is asked for. */ answering?: boolean; /** An unanswered one edited: its question and background, and an answer if one is given now. */ asking?: boolean; busy: boolean; onSave: (b: { title: string; answer: string; body: string; background: string; on: string }) => void; onCancel: () => void; onRemove?: () => void }) {
-  const [d, setD] = useState({ title: start?.title ?? '', answer: asking ? '' : start?.answer ?? '', body: asking ? '' : start?.body ?? '', background: start?.background ?? '', on: answering ? today() : start?.on ?? today() })
+function DecisionForm({ start, answering, asking, busy, onSave, onCancel, onRemove }: { start?: ContextNote; /** An open or proposed one being answered: the answer is what is asked for. */ answering?: boolean; /** An unanswered one edited: its question and background, and an answer if one is given now. */ asking?: boolean; busy: boolean; onSave: (b: { title: string; answer: string; body: string; background: string; options: string; on: string }) => void; onCancel: () => void; onRemove?: () => void }) {
+  const [d, setD] = useState({ title: start?.title ?? '', answer: asking ? '' : start?.answer ?? '', body: asking ? '' : start?.body ?? '', background: start?.background ?? '', options: start?.options ?? '', on: answering ? today() : start?.on ?? today() })
   const needs = !!start && !asking // one already made, or being answered, has an answer
-  // Always the same four, in the order they are thought (Sandy: "background should be above the question"): what led to the question, the question, the answer, why that answer.
+  // Always the same four, in the order they are thought (Sandy: "background should be above the question"; options "below the question"): where the question came from, the question, what there is to choose between, the answer, why that answer.
   return (
-    <form className="mock-edit context-form" data-component="ContextDecisionForm" onSubmit={(e) => { e.preventDefault(); onSave({ title: d.title.trim(), answer: d.answer.trim(), body: d.answer.trim() ? d.body.trim() : '', background: d.background.trim(), on: d.on }) }}>
-      <label>Background (optional): what led to the question, and what turns on it<textarea autoFocus={!start} rows={3} value={d.background} onChange={(e) => setD({ ...d, background: e.target.value })} placeholder="The story, and anything to read. Whoever answers it, and every agent, is given this." /></label>
+    <form className="mock-edit context-form" data-component="ContextDecisionForm" onSubmit={(e) => { e.preventDefault(); onSave({ title: d.title.trim(), answer: d.answer.trim(), body: d.answer.trim() ? d.body.trim() : '', background: d.background.trim(), options: d.options.trim(), on: d.on }) }}>
+      <label>Background (optional): where the question comes from<textarea autoFocus={!start} rows={3} value={d.background} onChange={(e) => setD({ ...d, background: e.target.value })} placeholder="The PRD says this must be decided. We looked through the docs and found nothing on it." /></label>
       <label>The question<input autoFocus={!!start && !answering} value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} placeholder="What happens to a card when it is removed?" /></label>
+      <label>Options (optional): what there is to choose between, a recommendation, anything more about the question<textarea rows={3} value={d.options} onChange={(e) => setD({ ...d, options: e.target.value })} placeholder="(a) Deleted at the provider. (b) Hidden here, kept there. Recommendation: (a)." /></label>
       <label>{needs ? 'The answer' : 'The answer (leave it empty to answer later)'}<input autoFocus={answering} value={d.answer} onChange={(e) => setD({ ...d, answer: e.target.value })} placeholder="It is deleted at the provider, not hidden here" /></label>
       <label>Why this answer (optional)<textarea rows={2} value={d.body} onChange={(e) => setD({ ...d, body: e.target.value })} placeholder={d.answer.trim() ? 'The reason it was decided this way' : 'Once there is an answer: the reason it was decided this way'} /></label>
       <div className="row">
