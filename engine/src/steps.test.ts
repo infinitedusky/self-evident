@@ -49,10 +49,13 @@ describe('steps', () => {
 
   it('finishes a task\'s research, sketches, mockups and prototype only on a person\'s approval; a check is finished when done', () => {
     const done = { key: 'sketch' as const, status: 'done' as const }
-    expect([needsApproval('sketch', 'task'), needsApproval('prototype', 'task'), needsApproval('brief', 'task'), needsApproval('risk', 'task'), needsApproval('idea', 'task'), needsApproval('sketch', 'idea'), needsApproval('sketch', 'project')]).toEqual([true, true, true, false, false, false, false])
+    expect([needsApproval('sketch', 'task'), needsApproval('prototype', 'task'), needsApproval('brief', 'task'), needsApproval('risk', 'task'), needsApproval('idea', 'task'), needsApproval('sketch', 'idea'), needsApproval('research', 'idea'), needsApproval('brief', 'idea'), needsApproval('sketch', 'project')]).toEqual([true, true, true, false, false, true, true, false, false])
     expect([finished(done, 'task'), ready(done, 'task')]).toEqual([false, true])
     expect([finished({ ...done, approved: { by: 'sam', at: 'now' } }, 'task'), ready({ ...done, approved: { by: 'sam', at: 'now' } }, 'task')]).toEqual([true, false])
-    expect(finished(done, 'idea')).toBe(true) // an idea commits to nothing
+    // An idea's steps are the person's to approve too (Sandy, 2026-11-24); its rough draft is only a draft, and done is done.
+    expect([finished(done, 'idea'), ready(done, 'idea')]).toEqual([false, true])
+    expect(finished({ ...done, approved: { by: 'sam', at: 'now' } }, 'idea')).toBe(true)
+    expect(finished({ key: 'brief', status: 'done' }, 'idea')).toBe(true)
     expect(finished({ key: 'risk', status: 'done' }, 'task')).toBe(true) // read and approved with the brief
     expect(ready({ key: 'sketch', status: 'started' }, 'task')).toBe(false)
   })

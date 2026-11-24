@@ -270,6 +270,22 @@ export async function setStep(s: Subject, key: StepKey, input: { status?: 'start
   })
 }
 
+/** A person approves a step of an idea, or takes the approval back: as on a task, the check is theirs and the agent can only say it is ready. */
+export async function approveIdeaStep(ideaId: string, key: StepKey, by: string, approve = true) {
+  if (!KEYS.includes(key)) throw new PlanError(`no step "${key}"; the steps are ${KEYS.join(', ')}`)
+  if (!needsApproval(key, 'idea')) throw new PlanError(`${step(key).label} isn't approved on an idea`)
+  return db.transaction(async (tx) => {
+    const s = { ideaId }
+    const a = await subjectApp(tx, s)
+    const [old] = await tx.select().from(stepWork).where(and(subjectCol(s), eq(stepWork.key, key)))
+    if (approve && (!old || old.status === 'none' || old.status === 'skipped')) throw new PlanError(`${step(key).label} hasn't been started: there is nothing to approve yet`)
+    if (!old) throw new PlanError(`${step(key).label} hasn't been started`)
+    const [row] = await tx.update(stepWork).set(approve ? { status: 'done', approvedBy: by, approvedAt: new Date() } : { approvedBy: null, approvedAt: null }).where(eq(stepWork.id, old.id)).returning()
+    await appendEvent(tx, { workspaceId: a.workspaceId, appId: a.id, actor: by, type: 'step.updated', ideaId, payload: { key, status: row.status, approved: approve } })
+    return row
+  })
+}
+
 /**
  * A person approves a step of a task, or takes the approval back. Approving finishes it (its status becomes done
  * whatever the agent had said); the agent changing the step afterwards asks for approval again (setStep).

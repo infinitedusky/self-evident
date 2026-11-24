@@ -7697,3 +7697,21 @@ agent. The call's own key is only something the mock needs."
 Not done: data given before this has no name to show (give it again to name it); a name cannot be changed on the
 page; a real response's given name is shown on its own line and in "a fake of", both on this computer's page only,
 and is not written anywhere a reviewer reads.
+
+## An idea's steps are the person's to approve; research is a conversation (Sandy, 2026-11-24)
+
+"Research isn't something that you can approve. It's just something that gives itself a check. I don't like that. I
+want to be able to approve it because I want to do research. Should be a conversation." On a task it already was
+the person's; on an idea a step was finished the moment its agent said done ("an idea commits to nothing", the rule
+until now). Idea #4's research had its check that way.
+
+- **An idea's steps need the person's approval**, like a task's (`needsApproval`): research, sketch, screens,
+  mockup, prototype. Done by the agent reads "ready for you"; the check comes with Approve. Not its rough draft,
+  which stays a draft until the idea becomes a task.
+- **Approve and Withdraw are on an idea's step page** (`approveIdeaStep`; `POST /ideas/:id/steps/:key/approve`).
+  Changing an approved step asks again, as on a task.
+- **Agents are told research is done with the person**: say what was found, ask what they make of it and what else
+  to look into, record as it goes; never finish it alone and present it as settled (`set_step`).
+
+Nothing waits on an idea's steps, so nothing is held up by this: it changes what a check means. A step already
+marked done on an idea now reads "ready for you" until approved. Converting an idea carries its approvals with it.

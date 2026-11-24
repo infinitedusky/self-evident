@@ -784,6 +784,7 @@ export const engine = {
   setStep: (s: StepSubject, key: StepKey, body: { status?: 'none' | 'started' | 'done' | 'skipped'; detail?: string | null; body?: string | null; refs?: string[] }) => call<StepWork>('PUT', `/${s.kind}/${s.id}/steps/${key}`, body),
   /** A person approves a step of a task (research, sketches, mockups, the prototype), or takes it back. */
   approveStep: (issueId: string, key: StepKey, approve = true) => call<StepWork>('POST', `/issues/${issueId}/steps/${key}/approve`, { approve }),
+  approveIdeaStep: (ideaId: string, key: StepKey, approve = true) => call<StepWork>('POST', `/ideas/${ideaId}/steps/${key}/approve`, { approve }),
   setAcceptance: (issueId: string, change: AcceptanceChange) => call<{ acceptance: Criterion[]; note?: string }>('PUT', `/issues/${issueId}/acceptance`, change),
   mergeGuide: (issueId: string) => call<{ guide: string; /** Everything the guide left out. */ record?: string; subTasks: number }>('GET', `/issues/${issueId}/merge-guide`),
   smoke: (issueId: string) => call<SmokeView>('GET', `/issues/${issueId}/smoke`),
