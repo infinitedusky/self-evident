@@ -4,6 +4,7 @@
  * project's PR current, cleans up when a project lands, and recovers after a restart. One process; all state in Postgres.
  */
 import { originOf, originPrompt } from './origins.js'
+import { contextPrompt } from './context.js'
 import { and, asc, desc, eq, inArray, notInArray } from 'drizzle-orm'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -289,7 +290,7 @@ export class Runner {
     const names = skillsWanted.filter((n) => has?.skills.includes(n))
     const skill = names.length ? { names, plugins: has!.plugins, mcpServers: has!.mcpServers } : undefined
     const result = probe?.kind === 'skill' && !skill ? { status: 'completed' as const, summary: `The skill \`${probe.runs}\` is not one this app's agents have, so this probe was not run.` } : await this.execute({
-      subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief }, origin: originPrompt(await originOf({ issueId: t.id })),
+      subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief }, origin: originPrompt(await originOf({ issueId: t.id })) + await contextPrompt({ issueId: t.id }, { canWrite: false }).catch(() => ''),
       readOnly: onlyLooks(x.title), skills: skill, ...(told ? { heldTo: builderHeld(a.setup) } : {}),
       ticket: ticket ?? t.identifier, commitFormat: commits.format ?? undefined, hooksPath,
       worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: storiesLead(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, maxTurns: turnsFor(x.title, setup), maxBudgetUsd: setup.max_budget_usd,

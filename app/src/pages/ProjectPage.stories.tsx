@@ -103,3 +103,12 @@ export const InAnotherApp: Story = { parameters: at('proj_checkout'), beforeEach
 export const Loading: Story = { parameters: at('proj_checkout'), beforeEach: withEngine({}, { latency: 'infinite' }) }
 /** The engine is down. */
 export const EngineDown: Story = { parameters: at('proj_checkout'), beforeEach: withEngine(engineDown) }
+/** A project's Context, above its tasks: what each of them sees as "from the project". A task on its own has none here: it has its own. */
+export const ItsContext: Story = {
+  parameters: at('proj_checkout'),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('Checkout design principles (sample)')).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Add a decision' })).toBeInTheDocument()
+  },
+}

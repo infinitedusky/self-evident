@@ -1362,3 +1362,34 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 .workbench-hook-says { font-size: 13px; }
 .workbench-last { font-size: 13px; margin-top: 4px; }
 .workbench-script { margin: 6px 0 0; padding: 8px 10px; font-size: 12px; overflow-x: auto; background: var(--code-bg, rgba(127,127,127,.12)); border-radius: 6px; white-space: pre-wrap; }
+/* Context (Context.tsx): the page, a section, how agents get it, a row, a row's detail. One text style each. */
+.context-lede { margin: 0 0 4px; font-size: 14px; }
+.context-section { margin-top: 22px; }
+.context-head { display: flex; align-items: center; gap: 8px; }
+.context-h { margin: 0 auto 0 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.context-how { margin: 4px 0 8px; font-size: 13px; color: var(--ink-faint); max-width: 720px; }
+.context-row { padding: 10px 0; border-top: 1px solid var(--line); }
+.context-title { font-size: 14px; font-weight: 600; }
+.context-title.rejected { text-decoration: line-through; color: var(--ink-soft); font-weight: 500; }
+.context-why, .context-text { font-size: 14px; margin: 2px 0; }
+.context-text > :first-child { margin-top: 0; } .context-text > :last-child { margin-bottom: 0; }
+.context-detail { font-size: 13px; color: var(--ink-faint); }
+.context-desc { margin: 0 0 4px; font-size: 14px; }
+.context-from { margin: 14px 0 0; padding: 6px 0; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); }
+.context-from a { text-transform: none; letter-spacing: 0; font-size: 13px; }
+.context-from + .context-row { border-top: 1px solid var(--line); }
+.context-doc > summary { cursor: pointer; display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: baseline; list-style: none; padding-left: 18px; position: relative; }
+.context-doc > summary::-webkit-details-marker { display: none; }
+.context-doc > summary::before { content: '▸'; position: absolute; left: 0; color: var(--ink-faint); }
+.context-doc[open] > summary::before { content: '▾'; }
+.context-doc > summary .context-detail { grid-column: 1; }
+.context-doc > summary .context-gets { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+.context-doc-body { margin: 8px 0 4px 18px; padding: 10px 12px; border-left: 2px solid var(--line); }
+.context-check { display: block; margin: 8px 0; font-size: 13px; }
+.context-form { margin: 8px 0 12px; }
+.context-proposed { margin-top: 16px; padding: 12px 14px 4px; border: 1px solid var(--accent); border-radius: var(--radius); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.context-proposed .context-row:first-of-type { border-top: 0; padding-top: 2px; }
+.context-rejected { border-top: 1px solid var(--line); padding-top: 10px; }
+.context-rejected > summary { cursor: pointer; }
+.context .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.task-nav-mark.wide { width: 14px; font-size: 12px; }

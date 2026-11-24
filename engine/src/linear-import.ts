@@ -165,3 +165,18 @@ export async function importTickets(appId: string, identifiers: string[], actor 
     return { made, updated, missing }
   })
 }
+
+/**
+ * One ticket kept whole as an origin, or brought up to date, and nothing made from it: a reference doc in a Context
+ * (context.ts), and what its Refresh does.
+ */
+export async function keepTicket(appId: string, identifier: string, env: Record<string, string | undefined> = process.env, fetch: FetchTickets = fetchTickets, getFile: typeof globalThis.fetch = globalThis.fetch) {
+  const wanted = identifier.trim().toUpperCase()
+  if (!wanted) throw new PlanError('name the ticket: its id in Linear, like SHOP-12')
+  const { team, key } = await connection(appId, env)
+  let t: LinearTicket | undefined
+  try { t = (await fetch(key, team, { identifiers: [wanted] })).find((x) => x.identifier === wanted) } catch (e) { throw said(e) }
+  if (!t) throw new PlanError(`Linear's team ${team} has no ticket ${wanted} that this key can read.`)
+  const files = await keepFiles(appId, 'linear', t.identifier, [t.description, ...(t.comments ?? []).map((c) => c.body)], LINEAR_UPLOAD, { Authorization: key }, getFile)
+  return keepOrigin(db, appId, { source: 'linear', ref: t.identifier, url: t.url, title: t.title, body: t.description, comments: t.comments ?? [], links: t.links ?? [], files })
+}

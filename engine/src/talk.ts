@@ -5,6 +5,7 @@
  * the UI, Claude Code's default mode. Development runs on the operator's login, the product on an API key.
  */
 import { originOf, originPrompt } from './origins.js'
+import { contextPrompt } from './context.js'
 import type { ImageSaved } from './uploads.js'
 import { STOP_ONLY_YOURS, stopsOthers } from './guard.js'
 import { BRIEF_FORM } from './brief.js'
@@ -693,7 +694,8 @@ async function open(sessionId: string): Promise<Live> {
   const taskCalls = ownTask || dataTask ? callsPrompt(await listTaskServices((ownTask ?? dataTask)!.id).catch(() => []), mockList.map((m) => ({ key: m.key, name: m.name })), !dataTask) : ''
   // Where the work came from, word for word (origins.ts): the ticket, for every agent on a task, an idea, a project or one of their steps.
   const about = s.subjectRef as SubjectRef | null
-  const origin = originPrompt(await originOf(ownTaskId ? { issueId: ownTaskId } : about?.dataOf ? { issueId: about.dataOf } : proto?.issueId ? { issueId: proto.issueId } : about?.checkOf ? { issueId: about.checkOf } : about?.issueId ? { issueId: about.issueId } : proto?.ideaId ? { ideaId: proto.ideaId } : about?.ideaId ? { ideaId: about.ideaId } : about?.projectId ? { projectId: about.projectId } : {}).catch(() => null))
+  const aboutWork = ownTaskId ? { issueId: ownTaskId } : about?.dataOf ? { issueId: about.dataOf } : proto?.issueId ? { issueId: proto.issueId } : about?.checkOf ? { issueId: about.checkOf } : about?.issueId ? { issueId: about.issueId } : proto?.ideaId ? { ideaId: proto.ideaId } : about?.ideaId ? { ideaId: about.ideaId } : about?.projectId ? { projectId: about.projectId } : {}
+  const origin = originPrompt(await originOf(aboutWork).catch(() => null)) + await contextPrompt(aboutWork).catch(() => '') // and its Context (context.ts): decisions, notes, reference docs
   const q = query({
     prompt: input.it,
     options: {

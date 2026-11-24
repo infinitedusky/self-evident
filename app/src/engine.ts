@@ -413,6 +413,31 @@ export interface Learned { key: string; title: string; summary: string; body: st
 export interface Learning { docs: Learned[]; missing: string[]; working: { sessionId: string } | null; sessionId: string | null; stale: number }
 /** A note (engine/src/notes.ts): something said, found or decided, on a day, about the tasks it names. */
 export interface Note { id: string; on: string; kind: 'note' | 'decision'; title: string; body: string; tasks: { id: string; name: string; title: string }[]; createdBy: string | null; updatedAt: string | null }
+/** Who a Context is of: an idea, a task or a project (docs/context-brief.md). */
+export type ContextSubject = { kind: 'ideas' | 'issues' | 'projects'; id: string }
+/** A reference doc in a Context: a ticket kept as its tracker has it, text pasted in, or a file brought in. */
+export interface ContextDoc {
+  id: string; title: string; /** One line on what it is: what an agent reads in the list before opening it. */ description: string | null
+  from: 'ticket' | 'pasted' | 'file'
+  /** A ticket: where it is from, and whether the work came from it (then every agent has it whole, always). */
+  ticket?: { originating: boolean; origin: OriginView } | null
+  /** A file brought in: its name as it was. */ fileName?: string | null
+  /** Its text, for one pasted or brought in. A ticket's is in `ticket.origin`. */ body: string | null
+  /** A PDF: kept on this computer as the file it was, for the agent that needs it to open. It has no text here. */ kept?: boolean
+  chars: number; /** Given to every agent whole, not listed for them to open. */ inFull: boolean
+  addedBy: string | null; addedAt: string; /** A task's view of its project's: shown, never changed there. */ fromProject: boolean
+}
+/** A note or a decision in a Context. They are the app's notes (engine/src/notes.ts): dated, and in the reports. */
+export interface ContextNote {
+  id: string; kind: 'note' | 'decision'; /** A decision an agent proposed waits for the person; a note is always settled. */ status: 'settled' | 'proposed' | 'rejected'
+  /** A note: what it is about. A decision: the decision, in one statement. */ title: string; /** A note: what was said. A decision: why, if said. */ body: string
+  on: string; addedBy: string | null; fromProject: boolean; /** Other tasks it is also about. */ alsoAbout: { id: string; name: string; title: string }[]
+}
+export interface ContextView {
+  on: 'idea' | 'project' | 'task'; /** A task in a project: whose context it also sees. */ project: { id: string; name: string } | null
+  docs: ContextDoc[]; notes: ContextNote[]
+  /** In characters: the most a doc may hold, and the most one given to every agent in full may hold. */ limits: { doc: number; inFull: number }
+}
 export interface Reports { writing: boolean; format: { daily: string; weekly: string }; reports: Report[] }
 /** A version of a task: the git branch each of its worktrees is on, and (set aside) the task as it was left. */
 export interface TaskBranch { id: string; name: string; current: boolean; fromSave: string | null; createdAt: string; gitBranches: string[]; /** Set aside: what is only on it. */ work: { commits: number; comments: number } | null }
@@ -787,6 +812,28 @@ export const engine = {
   addNote: (appId: string, b: { on: string; kind: 'note' | 'decision'; title: string; body: string; issueIds: string[] }) => call<Note>('POST', `/apps/${appId}/notes`, b),
   editNote: (appId: string, id: string, b: Partial<{ on: string; kind: 'note' | 'decision'; title: string; body: string; issueIds: string[] }>) => call<Note>('PATCH', `/apps/${appId}/notes/${id}`, b),
   removeNote: (appId: string, id: string) => call<{ removed: string }>('DELETE', `/apps/${appId}/notes/${id}`),
+  /** Context (docs/context-brief.md): the reference docs, notes and decisions of an idea, a task or a project. */
+  context: (s: ContextSubject) => call<ContextView>('GET', `/${s.kind}/${s.id}/context`),
+  /** For a nav: how much it holds, and how many proposed decisions wait for the person. */
+  contextCount: (s: ContextSubject) => call<{ count: number; proposed: number }>('GET', `/${s.kind}/${s.id}/context/count`),
+  addContextDoc: (s: ContextSubject, b: { title: string; description?: string; body: string; inFull?: boolean }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/docs`, b),
+  /** Another ticket, by its id in the tracker (SHOP-12). */
+  addContextTicket: (s: ContextSubject, ref: string) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/tickets`, { ref }),
+  importContextDoc: async (s: ContextSubject, file: File) => {
+    const form = new FormData(); form.append('file', file)
+    const res = await fetch(`${API}/${s.kind}/${s.id}/context/files`, { method: 'POST', body: form })
+    const text = await res.text()
+    if (!res.ok) throw new Error(text || `${res.status}`)
+    return JSON.parse(text) as ContextView
+  },
+  editContextDoc: (s: ContextSubject, id: string, b: Partial<{ title: string; description: string; body: string; inFull: boolean }>) => call<ContextView>('PATCH', `/${s.kind}/${s.id}/context/docs/${id}`, b),
+  /** A ticket, as its tracker has it now. */
+  refreshContextDoc: (s: ContextSubject, id: string) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/docs/${id}/refresh`),
+  removeContextDoc: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/docs/${id}`),
+  addContextNote: (s: ContextSubject, b: { kind: 'note' | 'decision'; title: string; body: string; on?: string }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/notes`, b),
+  /** status: accept a proposed decision (settled) or reject it. */
+  editContextNote: (s: ContextSubject, id: string, b: Partial<{ title: string; body: string; on: string; status: 'settled' | 'rejected' }>) => call<ContextView>('PATCH', `/${s.kind}/${s.id}/context/notes/${id}`, b),
+  removeContextNote: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/notes/${id}`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
   writeReport: (appId: string, body: { period: ReportPeriod; notes?: string }) => call<{ writing: boolean }>('POST', `/apps/${appId}/reports`, body),
   editReport: (id: string, body: string) => call<Report>('PUT', `/reports/${id}`, { body }),
