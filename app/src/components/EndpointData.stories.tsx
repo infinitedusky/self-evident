@@ -65,6 +65,28 @@ export const PeopleAreNotTheLargestTable: Story = {
 }
 /** Data already filled out for fixture people says who, and can be changed. */
 export const MadeForFixturePeople: Story = { args: { endpoint: { ...mockEndpointsSample[3], data: { ...mockEndpointsSample[3].data, app: { ...resultsItem, safe: { ...resultsItem.safe!, madeFor: { fixture: 'northwind-company', table: 'employees', who: '3 people, from Blake Sample, blake.sample@northwind.example', people: 3, map: { tracking_id: 'id', work_email: 'work_email' } } } } } } } }
+/** A file is shown under the name it was given and with where it came from, never under the name it is kept under for the mock: one uploaded by the person, one written by an agent, and a real one with the fake made of it. */
+export const NamedAsItWasGiven: Story = {
+  args: { endpoint: { ...mockEndpointsSample[3], data: { ...mockEndpointsSample[3].data,
+    app: { fixture: null, recorded: { id: 'sample/given-results', at: '2026-11-23T10:00:00Z', how: 'given', files: ['results.csv'], shown: ['sample-run-export.csv'] }, safe: { kind: 'faked', set: 'faked-results', files: ['results.csv'], note: 'Faked from a real response the person gave 23 Nov 2026.' } },
+    responses: [
+      { fixture: 'northwind-company', app: { fixture: 'northwind-company', recorded: null, safe: { kind: 'provided', by: 'person', shown: ['northwind-250-people.csv'], set: 'provided-results-for-northwind-company', files: ['results.csv'], note: 'Provided by a person, who states it holds nothing real.' } }, task: null },
+      { fixture: 'harbor-sample', app: { fixture: 'harbor-sample', recorded: null, safe: { kind: 'provided', by: 'agent', shown: ['harbor-three-people.csv'], set: 'provided-results-for-harbor-sample', files: ['results.csv'], note: 'Written by hand, invented.' } }, task: null },
+    ] } } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/A response you gave: sample-run-export\.csv/)).toBeInTheDocument()
+    await expect(c.getByText(/A fake of sample-run-export\.csv/)).toBeInTheDocument()
+    await expect(c.queryByText(/results\.csv/)).toBeNull() // the name it is kept under is the mock's business
+    await userEvent.click(c.getByRole('tab', { name: 'northwind-company' }))
+    await expect(await c.findByText('northwind-250-people.csv')).toBeInTheDocument()
+    await expect(c.getByText(/uploaded by you, and stated to hold nothing real/)).toBeInTheDocument()
+    await userEvent.click(c.getByRole('tab', { name: 'harbor-sample' }))
+    await expect(await c.findByText('harbor-three-people.csv')).toBeInTheDocument()
+    await expect(c.getByText(/written by an agent, and checked against the real responses here/)).toBeInTheDocument()
+    await expect(c.queryByText(/results\.csv/)).toBeNull()
+  },
+}
 /** A response per fixture: the default, then one for each fixture that has its own. Choosing one shows that response, and everything on the cell is then of it. */
 export const AResponsePerFixture: Story = {
   args: { endpoint: { ...mockEndpointsSample[3], data: { ...mockEndpointsSample[3].data, responses: [{ fixture: 'northwind-company', app: { fixture: 'northwind-company', recorded: null, safe: { kind: 'provided', set: 'provided-results-for-northwind-company', files: ['results.csv'], note: 'Provided by a person, who states it holds nothing real.', columns: ['tracking_id', 'work_email'] } }, task: null }] } } },

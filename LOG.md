@@ -7679,3 +7679,21 @@ every service and its data.
 
 Not done: the data agent's own three approvals and the step's approval are still two things, and approving the
 agent's last step does not approve the Data step.
+
+## A file keeps the name it was given (Sandy, 2026-11-24, by way of CEB-111's agent)
+
+A file given for an endpoint is kept under the endpoint's key, because that is how the mock finds it, and the page
+showed that key: every file of the results call read `results-download-links-download-url.csv`, whoever made it and
+whatever it was. The agent's note, agreed with Sandy: "each file should keep a name that says what it is … The page
+should show that name and where the file came from: faked from a real file, uploaded by you, or written by an
+agent. The call's own key is only something the mock needs."
+
+- **The name a file was given under is kept** beside it (`provenance.given`, with who gave it); a real response's
+  was already in its folder's note. It is still kept and served under the endpoint's key.
+- **The page shows the given name and where the file came from**: "A response you gave: <name>", "A fake of
+  <name>", "<name>, uploaded by you", "<name>, written by an agent". The key shows only for data from before names
+  were kept.
+
+Not done: data given before this has no name to show (give it again to name it); a name cannot be changed on the
+page; a real response's given name is shown on its own line and in "a fake of", both on this computer's page only,
+and is not written anywhere a reviewer reads.
