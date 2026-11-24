@@ -540,6 +540,7 @@ export const note = pgTable('note', {
   /** The tasks it is about. A task deleted is simply no longer shown. */ issueIds: jsonb('issue_ids').$type<string[]>().notNull().default([]),
   /** The ideas and projects whose Context it is in (context.ts): an idea's go with it when it becomes a task or a project. */ ideaIds: jsonb('idea_ids').$type<string[]>().notNull().default([]), projectIds: jsonb('project_ids').$type<string[]>().notNull().default([]),
   /** A decision is a question (title) and its answer (Sandy, 2026-11-24). No answer yet: it is open. One made before questions were asked has only its title, a statement. */ answer: text('answer'),
+  /** An open decision the person has asked someone else about (Sandy, 2026-11-24: "I have asked so and so and I'm waiting for an answer"): who. `on` is the day the question was asked. */ waitingOn: text('waiting_on'),
   /** A decision: open (asked, not answered); proposed (an agent's answer, waiting for the person), who accepts it (settled) or turns it down (rejected: kept, so it is not proposed again). */ status: text('status').notNull().default('settled'),
   createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [index('note_app').on(t.appId, t.on), inList('note_kind', t.kind, ['note', 'decision']), inList('note_status', t.status, ['settled', 'proposed', 'rejected', 'open'])])

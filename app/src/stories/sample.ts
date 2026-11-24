@@ -874,6 +874,7 @@ export const taskContext: import('../engine').ContextView = {
     ctxNote({ id: 'note_ctxp1', kind: 'decision', title: 'Is the checkout one page on a phone too? (sample)', answer: 'Yes', on: '2026-11-18', fromProject: true }),
     ctxNote({ id: 'note_ctx4', kind: 'decision', status: 'rejected', title: 'Is a card saved without asking? (sample)', answer: 'Yes, every card', body: 'One less box to tick.', on: '2026-11-22', addedBy: 'agent' }),
     ctxNote({ id: 'note_ctx7', kind: 'decision', status: 'open', title: 'What is shown when a saved card has expired? (sample)', on: '2026-11-24' }),
+    ctxNote({ id: 'note_ctx8', kind: 'decision', status: 'open', title: 'Can a card saved in the app be used on the web? (sample)', waitingOn: 'Em', on: '2026-11-20' }),
     ctxNote({ id: 'note_ctx5', title: 'Talked with Em about mobile (sample)', body: 'Support hears the same request from people on phones.\n\nOutcome: mobile gets a ticket of its own; not done under this task.', on: '2026-11-23', alsoAbout: [{ id: 'iss_sample5', name: 'SS-5', title: 'Submit an order (sample)' }] }),
     ctxNote({ id: 'note_ctx6', title: 'The vault is slow on its first call (sample)', body: 'About two seconds, then fast. Found while reading its guide.', on: '2026-11-22', addedBy: 'agent' }),
   ],

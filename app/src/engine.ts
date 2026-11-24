@@ -431,6 +431,7 @@ export interface ContextDoc {
 export interface ContextNote {
   id: string; kind: 'note' | 'decision'; /** A decision: open (asked, no answer yet), proposed (an agent's answer, waiting for the person), settled, or rejected. A note is always settled. */ status: 'settled' | 'proposed' | 'rejected' | 'open'
   /** A note: what it is about. A decision: its question (empty for one made before questions were asked). */ title: string; /** A decision's answer: none while it is open. A note has none. */ answer: string | null; /** A note: what was said. A decision: why, if said. */ body: string
+  /** An open decision: who the person asked and is waiting on. `on` is the day it was asked. */ waitingOn?: string | null
   on: string; addedBy: string | null; fromProject: boolean; /** Other tasks it is also about. */ alsoAbout: { id: string; name: string; title: string }[]
 }
 export interface ContextView {
@@ -816,7 +817,7 @@ export const engine = {
   /** Context (docs/context-brief.md): the reference docs, notes and decisions of an idea, a task or a project. */
   context: (s: ContextSubject) => call<ContextView>('GET', `/${s.kind}/${s.id}/context`),
   /** For a nav: how much it holds, and how many proposed decisions wait for the person. */
-  contextCount: (s: ContextSubject) => call<{ count: number; proposed: number }>('GET', `/${s.kind}/${s.id}/context/count`),
+  contextCount: (s: ContextSubject) => call<{ count: number; proposed: number; waiting?: number }>('GET', `/${s.kind}/${s.id}/context/count`),
   addContextDoc: (s: ContextSubject, b: { title: string; description?: string; body: string; inFull?: boolean }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/docs`, b),
   /** Another ticket, by its id in the tracker (SHOP-12). */
   addContextTicket: (s: ContextSubject, ref: string) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/tickets`, { ref }),
@@ -833,7 +834,7 @@ export const engine = {
   removeContextDoc: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/docs/${id}`),
   addContextNote: (s: ContextSubject, b: { kind: 'note' | 'decision'; title: string; /** A decision's: left out, it is open. */ answer?: string; body: string; on?: string }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/notes`, b),
   /** status: accept a proposed decision (settled) or reject it. */
-  editContextNote: (s: ContextSubject, id: string, b: Partial<{ title: string; answer: string; body: string; on: string; status: 'settled' | 'rejected' }>) => call<ContextView>('PATCH', `/${s.kind}/${s.id}/context/notes/${id}`, b),
+  editContextNote: (s: ContextSubject, id: string, b: Partial<{ title: string; answer: string; body: string; on: string; status: 'settled' | 'rejected'; /** An open decision: who it waits on; empty: nobody. */ waitingOn: string }>) => call<ContextView>('PATCH', `/${s.kind}/${s.id}/context/notes/${id}`, b),
   removeContextNote: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/notes/${id}`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
   writeReport: (appId: string, body: { period: ReportPeriod; notes?: string }) => call<{ writing: boolean }>('POST', `/apps/${appId}/reports`, body),

@@ -6,8 +6,11 @@
  *   other tickets by their id, text pasted in, files brought in (a PDF or an HTML page is kept as the file it was).
  * - Decisions: each a question and its answer, with why if there is one (Sandy, 2026-11-24: "key value, question
  *   answer … we can put unmade decisions in and then make them later and make sure that we make them"). One with no
- *   answer yet is open. An agent that was not told the answer in conversation proposes one. What is open and what is
- *   proposed is asked at the top of the page, and counted in the nav; nothing is held up by it.
+ *   answer yet is unanswered. It is a decision record like any other and sits with them, first, marked Unanswered
+ *   (Sandy, 2026-11-24: "they should be actual decision records, just not completed … incomplete or unanswered").
+ *   An agent that was not told the answer in conversation proposes one, which the person accepts or rejects there.
+ *   Either kind can be marked as waiting on someone the person has asked. The nav counts what is unanswered;
+ *   nothing is held up by it.
  * - Notes: what was said or found, by day. These and the decisions are the app's notes (Notes.tsx), so a report
  *   includes them.
  *
@@ -28,6 +31,8 @@ const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(
 const day = (on: string) => new Date(on.length === 10 ? `${on}T12:00:00` : on).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 const who = (by: string | null) => (by?.startsWith('agent') ? 'the agent' : 'you')
 const words = (chars: number) => { const n = Math.max(1, Math.round(chars / 6)); return n < 1000 ? `about ${n} words` : `about ${(n / 1000).toFixed(1).replace('.0', '')} thousand words` }
+/** How long since a day: "today", "1 day", "3 days". */
+const ago = (on: string) => { const n = Math.max(0, Math.round((+new Date(`${today()}T12:00:00`) - +new Date(`${on}T12:00:00`)) / 86_400_000)); return n === 0 ? 'today' : `${n} day${n === 1 ? '' : 's'} ago` }
 const NAME = { idea: 'idea', project: 'project', task: 'task' }
 
 export function Context({ subject, version = 0, onChange }: { subject: ContextSubject; /** Read again when it changes. */ version?: number; /** Something in it changed: for a nav that counts it. */ onChange?: () => void }) {
@@ -46,7 +51,10 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
   const settled = decisions.filter((n) => n.status === 'settled')
   const proposed = decisions.filter((n) => n.status === 'proposed')
   const undecided = decisions.filter((n) => n.status === 'open')
-  const waiting = [...mine(proposed), ...mine(undecided)]
+  // Yours to make now first; then the ones you have asked someone about, longest wait first.
+  const asked = mine([...proposed, ...undecided]).filter((n) => n.waitingOn).sort((a, b) => a.on.localeCompare(b.on))
+  const waiting = [...mine(proposed).filter((n) => !n.waitingOn), ...mine(undecided).filter((n) => !n.waitingOn), ...asked]
+  const yours = waiting.length - asked.length
   const rejected = decisions.filter((n) => n.status === 'rejected')
   const notes = v.notes.filter((n) => n.kind === 'note')
   const fromProject = v.project && <div className="context-from">From the project, <Link to={`/projects/${v.project.id}`}>{v.project.name}</Link>. Changed there.</div>
@@ -55,35 +63,6 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
       <h2>📎 Context</h2>
       <p className="muted context-lede">What is known before the work starts, and what is settled along the way. Every agent working on this {on} is given it{v.on === 'idea' ? ', and it goes with the idea when it becomes a task or a project' : ''}.</p>
       {error && <div className="empty bad" style={{ margin: '8px 0' }}>{error}</div>}
-
-      {waiting.length > 0 && (
-        <div className="context-proposed" data-component="ContextProposed">
-          <h3 className="context-h">For you to decide <Badge tone="accent">{waiting.length}</Badge></h3>
-          <p className="context-how">Not decided. Every agent is told so, and not to guess an answer.</p>
-          {waiting.map((n) => (
-            <div className="context-row" key={n.id} data-note={n.id}>
-              <div className="context-title">{n.title}</div>
-              {n.status === 'proposed'
-                ? <>
-                    <div className="context-why"><span className="faint">The agent proposes: </span><strong>{n.answer}</strong></div>
-                    {n.body && <div className="context-why"><span className="faint">Why: </span><Md text={n.body} inline /></div>}
-                    <div className="context-detail">Proposed {day(n.on)}</div>
-                  </>
-                : <div className="context-detail">No answer yet · asked by {who(n.addedBy)}, {day(n.on)}{n.body ? <> · <Md text={n.body} inline /></> : null}</div>}
-              {open === n.id
-                ? <DecisionForm start={n} answering busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, { ...b, status: 'settled' }))} onCancel={() => setOpen(null)} />
-                : (
-                  <div className="row">
-                    {n.status === 'proposed' && <button className="btn small" disabled={busy} aria-label={`Accept: ${n.title}`} onClick={() => act(() => engine.editContextNote(subject, n.id, { status: 'settled' }))}>Accept</button>}
-                    {n.status === 'proposed' && <button className="btn quiet small" disabled={busy} aria-label={`Reject: ${n.title}`} onClick={() => act(() => engine.editContextNote(subject, n.id, { status: 'rejected' }))}>Reject</button>}
-                    <button className={`btn small ${n.status === 'proposed' ? 'quiet' : ''}`} disabled={busy} aria-label={`Answer: ${n.title}`} onClick={() => setOpen(n.id)}>{n.status === 'proposed' ? 'Answer it yourself' : 'Answer it'}</button>
-                    {n.status === 'open' && <button className="btn quiet small" disabled={busy} aria-label={`Not needed: ${n.title}`} onClick={() => { if (window.confirm(`Drop the question "${n.title}"? It will not be asked again.`)) void act(() => engine.removeContextNote(subject, n.id)) }}>Not needed</button>}
-                  </div>
-                )}
-            </div>
-          ))}
-        </div>
-      )}
 
       <div className="context-section" data-section="docs">
         <div className="context-head">
@@ -105,12 +84,39 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
 
       <div className="context-section" data-section="decisions">
         <div className="context-head">
-          <h3 className="context-h">Decisions {settled.length > 0 && <Badge>{settled.length}</Badge>}</h3>
+          <h3 className="context-h">Decisions {settled.length + waiting.length > 0 && <Badge>{settled.length + waiting.length}</Badge>}{yours > 0 && <Badge tone="accent">{yours} unanswered</Badge>}{asked.length > 0 && <Badge tone="warn">{asked.length} waiting on someone</Badge>}</h3>
           <button className="btn quiet small" onClick={() => setOpen(open === 'decision' ? null : 'decision')}>Add a decision</button>
         </div>
-        <p className="context-how">Each a question and its answer. Every agent is told each one in full, as something not to reopen. One added with no answer waits above until it has one.</p>
+        <p className="context-how">Each a question and its answer. Every agent is told each answered one in full, as something not to reopen, and each unanswered one as not decided, so it does not guess. A report lists the unanswered ones as open.</p>
         {open === 'decision' && <DecisionForm busy={busy} onSave={(b) => act(() => engine.addContextNote(subject, { kind: 'decision', ...b }))} onCancel={() => setOpen(null)} />}
-        {!settled.length && open !== 'decision' && <div className="empty">None made yet.</div>}
+        {!settled.length && !waiting.length && open !== 'decision' && <div className="empty">None yet.</div>}
+        {waiting.map((n) => (
+          <div className="context-row context-qa context-unmade" key={n.id} data-note={n.id} data-unanswered={n.waitingOn ? 'waiting' : n.status}>
+            <div className="context-q">{n.title}</div>
+            <div>
+              <div className="context-detail">
+                {n.waitingOn ? <><Badge tone="warn">Waiting on {n.waitingOn}</Badge> asked {day(n.on)}, {ago(n.on)}</> : <><Badge tone="accent">Unanswered</Badge> {n.status === 'proposed' ? `the agent proposes an answer, ${day(n.on)}` : `asked by ${who(n.addedBy)}, ${day(n.on)}`}</>}
+                {n.status === 'open' && n.body ? <> · <Md text={n.body} inline /></> : null}
+              </div>
+              {n.status === 'proposed' && <div className="context-why"><span className="faint">The agent proposes: </span><strong>{n.answer}</strong></div>}
+              {n.status === 'proposed' && n.body && <div className="context-why"><span className="faint">Why: </span><Md text={n.body} inline /></div>}
+              {open === `wait:${n.id}`
+                ? <WaitingForm start={n.waitingOn ?? ''} busy={busy} onSave={(to) => act(() => engine.editContextNote(subject, n.id, { waitingOn: to }))} onCancel={() => setOpen(null)} />
+                : open === n.id
+                  ? <DecisionForm start={n} answering busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, { ...b, status: 'settled' }))} onCancel={() => setOpen(null)} />
+                  : (
+                    <div className="row">
+                      {n.status === 'proposed' && <button className="btn small" disabled={busy} aria-label={`Accept: ${n.title}`} onClick={() => act(() => engine.editContextNote(subject, n.id, { status: 'settled' }))}>Accept</button>}
+                      {n.status === 'proposed' && <button className="btn quiet small" disabled={busy} aria-label={`Reject: ${n.title}`} onClick={() => act(() => engine.editContextNote(subject, n.id, { status: 'rejected' }))}>Reject</button>}
+                      <button className={`btn small ${n.status === 'proposed' ? 'quiet' : ''}`} disabled={busy} aria-label={`Answer: ${n.title}`} onClick={() => setOpen(n.id)}>{n.status === 'proposed' ? 'Answer it yourself' : 'Answer it'}</button>
+                      {!n.waitingOn && <button className="btn quiet small" disabled={busy} aria-label={`Waiting on someone: ${n.title}`} title="You have asked someone and are waiting for their answer" onClick={() => setOpen(`wait:${n.id}`)}>Waiting on someone</button>}
+                      {n.waitingOn && <button className="btn quiet small" disabled={busy} aria-label={`No longer waiting: ${n.title}`} onClick={() => act(() => engine.editContextNote(subject, n.id, { waitingOn: '' }))}>No longer waiting</button>}
+                      {n.status === 'open' && <button className="btn quiet small" disabled={busy} aria-label={`Not needed: ${n.title}`} onClick={() => { if (window.confirm(`Drop the question "${n.title}"? It will not be asked again.`)) void act(() => engine.removeContextNote(subject, n.id)) }}>Not needed</button>}
+                    </div>
+                  )}
+            </div>
+          </div>
+        ))}
         {mine(settled).map((n) => open === n.id
           ? <DecisionForm key={n.id} start={n} busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, b))} onCancel={() => setOpen(null)} onRemove={() => { if (window.confirm(`Delete the decision "${n.title || n.answer}"?`)) void act(() => engine.removeContextNote(subject, n.id)) }} />
           : <DecisionRow key={n.id} n={n} onEdit={() => setOpen(n.id)} />)}
@@ -127,7 +133,7 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
                   {n.body && <div className="context-why"><span className="faint">Why it was proposed: </span><Md text={n.body} inline /></div>}
                   <div className="context-detail">Proposed by the agent, {day(n.on)} · rejected by you
                     {' · '}<button className="link-btn" disabled={busy} aria-label={`Accept after all: ${n.title}`} onClick={() => act(() => engine.editContextNote(subject, n.id, { status: 'settled' }))}>Accept after all</button>
-                    {' · '}<button className="link-btn" disabled={busy} aria-label={`Ask again: ${n.title}`} title="The question goes back to For you to decide, with no answer. This answer stays turned down." onClick={() => act(() => engine.addContextNote(subject, { kind: 'decision', title: n.title, body: '' }))}>Ask the question again</button>
+                    {' · '}<button className="link-btn" disabled={busy} aria-label={`Ask again: ${n.title}`} title="The question goes back among the decisions, unanswered. This answer stays turned down." onClick={() => act(() => engine.addContextNote(subject, { kind: 'decision', title: n.title, body: '' }))}>Ask the question again</button>
                     {' · '}<button className="link-btn" disabled={busy} aria-label={`Delete: ${n.title}`} onClick={() => { if (window.confirm(`Delete "${n.answer}"? An agent may then propose it again.`)) void act(() => engine.removeContextNote(subject, n.id)) }}>Delete</button>
                   </div>
                 </div>
@@ -195,7 +201,7 @@ function DecisionRow({ n, onEdit }: { n: ContextNote; onEdit?: () => void }) {
     <div className={`context-row ${n.title ? 'context-qa' : ''}`} data-note={n.id}>
       {n.title && <div className="context-q">{n.title}</div>}
       <div>
-        {made ? <div className="context-title">{n.answer}</div> : <div className="context-detail">{n.status === 'proposed' ? `Not decided: the agent proposes "${n.answer}"` : 'Not decided yet'}</div>}
+        {made ? <div className="context-title">{n.answer}</div> : <div className="context-detail">{n.status === 'proposed' ? `Unanswered: the agent proposes "${n.answer}"` : n.waitingOn ? `Unanswered: waiting on ${n.waitingOn}` : 'Unanswered'}</div>}
         {made && n.body && <div className="context-why"><span className="faint">Why: </span><Md text={n.body} inline /></div>}
         {made && <div className="context-detail">
           {n.addedBy?.startsWith('agent') ? `Recorded by the agent once you agreed, ${day(n.on)}` : `Decided ${day(n.on)}`}
@@ -213,11 +219,25 @@ function DecisionForm({ start, answering, busy, onSave, onCancel, onRemove }: { 
   return (
     <form className="mock-edit context-form" data-component="ContextDecisionForm" onSubmit={(e) => { e.preventDefault(); onSave({ title: d.title.trim(), answer: d.answer.trim(), body: d.body.trim(), on: d.on }) }}>
       <label>The question<input autoFocus={!answering} value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} placeholder="What happens to a card when it is removed?" /></label>
-      <label>{needs ? 'The answer' : 'The answer (leave it empty to decide later)'}<input autoFocus={answering} value={d.answer} onChange={(e) => setD({ ...d, answer: e.target.value })} placeholder="It is deleted at the provider, not hidden here" /></label>
+      <label>{needs ? 'The answer' : 'The answer (leave it empty to answer later)'}<input autoFocus={answering} value={d.answer} onChange={(e) => setD({ ...d, answer: e.target.value })} placeholder="It is deleted at the provider, not hidden here" /></label>
       <label>Why (optional)<textarea rows={2} value={d.body} onChange={(e) => setD({ ...d, body: e.target.value })} /></label>
       <div className="row">
-        <button className="btn small" type="submit" disabled={busy || (!d.title.trim() && !d.answer.trim()) || (needs && !d.answer.trim()) || (!needs && !d.title.trim())}>{busy ? 'Saving…' : !needs && !d.answer.trim() ? 'Add it, to decide later' : 'Save the decision'}</button>
+        <button className="btn small" type="submit" disabled={busy || (!d.title.trim() && !d.answer.trim()) || (needs && !d.answer.trim()) || (!needs && !d.title.trim())}>{busy ? 'Saving…' : !needs && !d.answer.trim() ? 'Add it, unanswered' : 'Save the decision'}</button>
         {onRemove && <button className="btn quiet small" type="button" onClick={onRemove}>Delete</button>}
+        <button className="btn quiet small" type="button" onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
+  )
+}
+
+/** Who an open decision waits on: the person has asked them, and says so. */
+function WaitingForm({ start, busy, onSave, onCancel }: { start: string; busy: boolean; onSave: (to: string) => void; onCancel: () => void }) {
+  const [to, setTo] = useState(start)
+  return (
+    <form className="mock-edit context-form" data-component="ContextWaitingForm" onSubmit={(e) => { e.preventDefault(); onSave(to.trim()) }}>
+      <label>Who you asked<input autoFocus value={to} onChange={(e) => setTo(e.target.value)} placeholder="Em, the vendor, legal" /></label>
+      <div className="row">
+        <button className="btn small" type="submit" disabled={busy || !to.trim()}>{busy ? 'Saving…' : 'Mark it as waiting'}</button>
         <button className="btn quiet small" type="button" onClick={onCancel}>Cancel</button>
       </div>
     </form>

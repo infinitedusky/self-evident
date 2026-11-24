@@ -217,11 +217,11 @@ export const ItsContext: Story = {
   parameters: { route: { path: '/tasks/:id/:section', url: '/tasks/iss_sample20/context' } },
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByText('For you to decide')).toBeVisible()
-    await expect(c.getByText(/From Linear, SHOP-41 · the work came from it/)).toBeVisible()
-    const link = await c.findByRole('link', { name: /Context.*2 for you to decide/ }) // an answer proposed, and a question with none
+    await expect((await c.findAllByText('2 unanswered')).length).toBeGreaterThan(0) // on the page; the nav says it too, below
+    await expect(await c.findByText(/From Linear, SHOP-41 · the work came from it/)).toBeVisible()
+    const link = await c.findByRole('link', { name: /Context.*2 unanswered.*1 waiting on someone/ }) // an answer proposed and a question with none; one more asked of someone
     await expect(link.className).toContain('active')
     await userEvent.click(c.getByRole('button', { name: 'Accept: Which saved cards are offered? (sample)' }))
-    await waitFor(() => expect(c.getByRole('link', { name: /Context/ })).toHaveTextContent('1 for you to decide'))
+    await waitFor(() => expect(c.getByRole('link', { name: /Context/ })).toHaveTextContent('1 unanswered'))
   },
 }
