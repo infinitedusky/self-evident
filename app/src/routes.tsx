@@ -14,6 +14,7 @@ import { NewProject } from './pages/NewProject'
 import { AppGraph } from './pages/AppGraph'
 import { Now } from './pages/Now'
 import { Learn } from './pages/Learn'
+import { Docs } from './pages/Docs'
 import { Mockups } from './pages/Mockups'
 import { Issues } from './pages/Issues'
 import { IssuePage } from './pages/IssuePage'
@@ -50,6 +51,7 @@ export function PageRoutes() {
       <Route path="/reports" element={<Reports />} />
       <Route path="/observe" element={<Observe />} />
       <Route path="/learn" element={<Learn />} />
+      <Route path="/docs" element={<Docs />} />
       <Route path="/projects" element={<Projects mode="project" />} />
       <Route path="/plan" element={<Plan />} />
       <Route path="/plan/workflows" element={<WorkflowsMoved />} />

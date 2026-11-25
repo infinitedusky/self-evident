@@ -500,6 +500,9 @@ export function buildApp(bus: EventBus) {
   } catch (err) { return planError(c, err, 404) } })
   // Fixtures (fixtures.ts): the app's shared scenarios, a table's rows to pick a person from, and an endpoint's data made for one of them.
   // The app's workbench folder and its hooks (hooks.ts).
+  // An app's docs site (docs-site.ts): the VitePress site in its workbench folder, started here and framed by the Docs page.
+  api.get('/apps/:id/docs-site', async (c) => { try { return c.json(await (await import('./docs-site.js')).docsSite(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
+  api.post('/apps/:id/docs-site/start', async (c) => { try { return c.json(await (await import('./docs-site.js')).startDocsSite(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/workbench', async (c) => { try { return c.json(await (await import('./hooks.js')).workbench(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.put('/apps/:id/workbench', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { dir?: string | null }; return c.json(await (await import('./hooks.js')).setWorkbench(c.req.param('id'), b.dir ?? null)) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/fixtures', async (c) => { try { const issueId = c.req.query('issue') || null; return c.json({ fixtures: await listFixtures(c.req.param('id')), used: await fixtureForTask(c.req.param('id'), issueId), make: await canMakeFixture(c.req.param('id')) }) } catch (err) { return planError(c, err, 404) } })
