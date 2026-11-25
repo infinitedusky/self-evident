@@ -1,24 +1,26 @@
 /**
- * Evident on a phone: one chat on the screen, and everything else a pull away (Sandy, 2026-11-23: "it needs to hold
- * the agents chat only and then have ways to look at things that are needed outside of those chats"; 2026-11-25:
- * "just implement what we have for C and then try it out"). The workspace of tabs does not fit a phone, so a narrow
- * screen gets this instead of it.
+ * Evident on a phone. The workspace of tabs does not fit one, so a narrow screen gets this instead (Sandy, 2026-11-23:
+ * "it needs to hold the agents chat only and then have ways to look at things that are needed outside of those chats").
  *
- * - The chat: a task's own agent, with the agents it has out as tabs under the task's name (TaskAgent, as on the
- *   task's page), or a conversation about the app as a whole.
- * - The tray, from the left: what needs you, the project's tasks, this task's steps, the other chats. It is how you
- *   change chat.
- * - Look, from the bottom: this task's pages and the rest of the app.
- * - A page looked at opens over the chat (the app's own page, in a PagePane), with the way back at its top.
+ * You are at a place in the app: a task, a project, an idea, My Stuff, a list. A place has three things, and the
+ * phone shows one at a time (Sandy, 2026-11-25: "the task or project view should be moving between the chat window
+ * … the whatever page we are on at that time, and the left nav, and then we are always able to navigate to wherever
+ * else in the app … by going to like the grid thing in the top"):
+ * - its page: the app's own page, in a PagePane. Links in it go where they go, and where you go is where you are.
+ * - its chat: a task's own agent with the agents it has out as tabs (TaskAgent, as on the task's page), an idea's
+ *   agent, a project's conversation, and anywhere else a conversation about the app as a whole. The chat is always
+ *   the chat of where you are, so there is no going "back" to a task you have left.
+ * - its nav, the tray from the left: a task's steps, a project's tasks, what needs you, the chats.
+ * The grid at the top right goes anywhere in the app. The phone opens where it was last, else on My Stuff.
  *
- * After Slack's phone app (the channel list slides in from the left over one conversation) and Linear's (an issue's
- * detail as a sheet over the list). Prototypes, Storybook and the terminal stay on the computer.
+ * After Slack's phone app (the list slides in from the left) and GitHub's (an issue's own tabs under its name).
+ * Prototypes, Storybook and the terminal stay on the computer.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { label, ready, step, type Row } from '@self-evident/engine/steps'
-import { openEvents, API, engine, EVENT_TYPES, type Attention, type Graph, type IssueDetail, type Now, type StepsView, type TalkSession } from '../engine'
+import { openEvents, API, engine, EVENT_TYPES, type Attention, type Graph, type IssueDetail, type Now, type Question, type StepsView, type TalkSession } from '../engine'
 import { useCurrentApp } from '../current-app'
-import { tabTitle, talkColor, WorkspaceContext, type Tab, type WorkspaceApi } from '../workspace'
+import { tabTitle, WorkspaceContext, talkColor, type Tab, type WorkspaceApi } from '../workspace'
 import { Conversation } from './Conversation'
 import { EngineLink } from './EngineLink'
 import { PagePane } from './PagePane'
@@ -26,11 +28,14 @@ import { QuestionAsk } from './QuestionAsk'
 import { TaskAgent, useTaskAgent } from './TaskAgent'
 import { briefStands, mark } from './TaskNav'
 
-export type PhoneChat = { kind: 'task'; /** The task's id, or its identifier (SE-12): the engine knows both. */ id: string } | { kind: 'talk'; id: string }
+type View = 'chat' | 'page'
+/** What a place is about, when it is about one thing: that thing has its own chat and its own nav. */
+type Subject = { kind: 'task' | 'project' | 'idea'; id: string } | null
 
 const NARROW = '(max-width: 700px)'
 const FULL_KEY = 'se.phone.full' // "the full site", asked for on a phone: for this visit only
-const chatKey = (appId: string) => `se.phone.chat.${appId}`
+const atKey = (appId: string) => `se.phone.at.${appId}` // where this phone was in the app, and on which of chat and page
+const talkKey = (appId: string) => `se.phone.talk.${appId}` // the conversation about the app it was on
 const recall = (k: string) => { try { return localStorage.getItem(k) } catch { return null } }
 const remember = (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* fine */ } }
 const wantsFull = () => { try { return sessionStorage.getItem(FULL_KEY) === '1' } catch { return false } }
@@ -47,59 +52,60 @@ export function useIsPhone() {
   return narrow && !wantsFull()
 }
 
-/** What needs the person and belongs to one task: pressing it goes to that task's chat. */
-function asksOf(a: Attention): { id: string; title: string; why: string } | null {
+const parts = (path: string) => path.split(/[?#]/)[0].split('/').filter(Boolean)
+function subjectOf(path: string): Subject {
+  const [a, b] = parts(path)
+  if (a === 'tasks' && b) return { kind: 'task', id: b }
+  if (a === 'projects' && b && b !== 'new') return { kind: 'project', id: b }
+  if (a === 'ideas' && b?.startsWith('idea_')) return { kind: 'idea', id: b }
+  return null
+}
+const PLACES: Record<string, string> = { '': 'My Stuff', projects: 'Projects', tasks: 'Tasks', ideas: 'Ideas', todos: 'To-dos', settings: 'Settings', summary: 'Summary', reports: 'Reports', observe: 'Observe', learn: 'Learn', plan: 'Plan', build: 'Build', mockups: 'Mockups', graph: 'Graph' }
+const placeName = (path: string) => { const a = parts(path)[0] ?? ''; return PLACES[a] ?? (a ? a[0].toUpperCase() + a.slice(1) : 'My Stuff') }
+
+/** Where something that needs the person is dealt with: a question in its task's chat, the rest on a page. */
+function asksOf(a: Attention): { path: string; view: View; title: string; why: string } | null {
   switch (a.kind) {
-    case 'failed_build': return { id: a.issueId, title: `${a.identifier} ${a.title}`, why: 'its build failed' }
-    case 'plan_issue': return { id: a.issueId, title: `${a.identifier} ${a.issueTitle}`, why: 'not planned yet' }
-    case 'smoke_test': return { id: a.issueId, title: `${a.identifier} ${a.issueTitle}`, why: `${a.owed} check${a.owed === 1 ? '' : 's'} only you can do` }
-    case 'approve_brief': return { id: a.issueId, title: `${a.identifier} ${a.issueTitle}`, why: 'its brief is ready to approve' }
-    case 'question': return a.issueIdentifier ? { id: a.issueIdentifier, title: a.issueIdentifier, why: a.text } : null
+    case 'failed_build': return { path: `/tasks/${a.issueId}/build`, view: 'page', title: `${a.identifier} ${a.title}`, why: 'its build failed' }
+    case 'plan_issue': return { path: `/tasks/${a.issueId}`, view: 'page', title: `${a.identifier} ${a.issueTitle}`, why: 'not planned yet' }
+    case 'smoke_test': return { path: `/tasks/${a.issueId}/smoke`, view: 'page', title: `${a.identifier} ${a.issueTitle}`, why: `${a.owed} check${a.owed === 1 ? '' : 's'} only you can do` }
+    case 'approve_brief': return { path: `/tasks/${a.issueId}/brief`, view: 'page', title: `${a.identifier} ${a.issueTitle}`, why: 'its brief is ready to approve' }
+    case 'question': return a.issueIdentifier ? { path: `/tasks/${a.issueIdentifier}`, view: 'chat', title: a.issueIdentifier, why: a.text } : null
     default: return null
   }
 }
 
-/** A task's chat named by the address (/tasks/SE-12, /tasks/iss_…/brief), and the page to open over it. */
-function fromAddress(path: string): { chat: PhoneChat | null; sheet: string | null } {
-  const task = path.match(/^\/tasks\/([^/?#]+)(\/[^?#]+)?/)
-  if (task) return { chat: { kind: 'task', id: task[1] }, sheet: task[2] ? path : null }
-  return { chat: null, sheet: path !== '/' && path !== '' ? path : null }
-}
-
-/** A looked-at page's name, for the top of it. */
-function sheetTitle(path: string) {
-  const first = path.split('?')[0].split('/')[1] ?? ''
-  if (!first) return 'My Stuff'
-  if (first === 'tasks' && path.split('?')[0].split('/').length > 2) return 'Task'
-  if (first === 'todos') return 'To-dos'
-  return first[0].toUpperCase() + first.slice(1)
-}
-
-const isTask = (i: IssueDetail, id: string) => i.id === id || i.identifier === id
 const dropped = (s: { state: string }) => s.state === 'canceled' || s.state === 'duplicate'
 const stateMark = (state: string) => (state === 'done' ? '✓' : state === 'in_progress' || state === 'in_review' ? '◐' : '○')
 
-/** The task in the chat: itself, its steps, and its project's tasks. Read again on every `stamp`. */
-function useTask(id: string | null, stamp: number) {
-  const [d, setD] = useState<{ i: IssueDetail; v: StepsView | null; g: Graph | null } | null>(null)
+interface About { key: string; task?: { i: IssueDetail; v: StepsView | null }; graph?: Graph | null; idea?: { id: string; title: string } }
+/** What the place is about, read from the engine: the task with its steps and its project, the project, the idea. Read again on every `stamp`. */
+function useAbout(subject: Subject, stamp: number) {
+  const key = subject ? `${subject.kind}:${subject.id}` : ''
+  const [d, setD] = useState<About | null>(null)
   const [error, setError] = useState<string | null>(null)
-  useEffect(() => { setD(null); setError(null) }, [id])
+  useEffect(() => { setError(null) }, [key])
   useEffect(() => {
-    if (!id) return
+    if (!subject) return
     let closed = false
     void (async () => {
       try {
-        const i = await engine.issue(id)
-        const [v, g] = await Promise.all([
-          engine.steps({ kind: 'issues', id: i.id }).catch(() => null),
-          i.project && !i.project.solo ? engine.graph(i.project.id).catch(() => null) : Promise.resolve(null),
-        ])
-        if (!closed) { setD({ i, v, g }); setError(null) }
+        let about: About
+        if (subject.kind === 'task') {
+          const i = await engine.issue(subject.id)
+          const [v, graph] = await Promise.all([
+            engine.steps({ kind: 'issues', id: i.id }).catch(() => null),
+            i.project && !i.project.solo ? engine.graph(i.project.id).catch(() => null) : Promise.resolve(null),
+          ])
+          about = { key, task: { i, v }, graph }
+        } else if (subject.kind === 'project') about = { key, graph: await engine.graph(subject.id) }
+        else { const idea = await engine.idea(subject.id); about = { key, idea: { id: idea.id, title: idea.title } } }
+        if (!closed) { setD(about); setError(null) }
       } catch (e: any) { if (!closed) setError(String(e?.message ?? e)) }
     })()
     return () => { closed = true }
-  }, [id, stamp])
-  return { task: d && id && isTask(d.i, id) ? d : null, error }
+  }, [key, stamp]) // eslint-disable-line react-hooks/exhaustive-deps
+  return { about: d && d.key === key ? d : null, error }
 }
 
 const Icon = ({ d }: { d: string }) => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
@@ -107,44 +113,63 @@ const LIST = 'M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01'
 const GRID = 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z'
 
 export function Phone({ initial = {}, address = true }: {
-  /** Where a story starts: the chat, and what is pulled out over it. */
-  initial?: { chat?: PhoneChat; tray?: boolean; shelf?: boolean; sheet?: string }
-  /** Read the chat and the page from the address bar (off where the page is not the app's, like a story). */
+  /** Where a story starts: the place, which of its chat and its page shows, and what is pulled out over it. */
+  initial?: { path?: string; view?: View; tray?: boolean; shelf?: boolean }
+  /** Read the place from the address bar and keep it there (off where the page is not the app's, like a story). */
   address?: boolean
 }) {
   const { app, apps, loaded, setAppId } = useCurrentApp()
-  const arrived = useMemo(() => (address ? fromAddress(window.location.pathname) : { chat: null, sheet: null }), [address])
-  const [chat, setChatState] = useState<PhoneChat | null>(initial.chat ?? arrived.chat)
+  const arrived = useMemo(() => (address && window.location.pathname !== '/' ? window.location.pathname + window.location.search : null), [address])
+  const [at, setAt] = useState<{ path: string; view: View } | null>(initial.path || arrived ? { path: initial.path ?? arrived!, view: initial.view ?? 'page' } : null)
   const [tray, setTray] = useState(!!initial.tray)
   const [shelf, setShelf] = useState(!!initial.shelf)
-  const [sheet, setSheet] = useState<string | null>(initial.sheet ?? arrived.sheet)
   const [note, setNote] = useState<{ text: string; path?: string } | null>(null)
   const [now, setNow] = useState<Now | null>(null)
   const [talks, setTalks] = useState<TalkSession[] | null>(null)
+  const [appTalk, setAppTalk] = useState<string | null>(null)
   const [stamp, setStamp] = useState(0)
   const [starting, setStarting] = useState(false)
-  const picked = useRef<string | null>(chat ? '*' : null) // the app a chat was picked for; '*': given from outside
-  const { task, error } = useTask(chat?.kind === 'task' ? chat.id : null, stamp)
+  const subject = useMemo(() => (at ? subjectOf(at.path) : null), [at?.path]) // eslint-disable-line react-hooks/exhaustive-deps
+  const { about, error } = useAbout(subject, stamp)
+  const bump = useCallback(() => setStamp((n) => n + 1), [])
 
-  const setChat = useCallback((c: PhoneChat | null) => {
-    setChatState(c); setTray(false); setShelf(false)
-    if (app && c) remember(chatKey(app.id), JSON.stringify(c))
+  /** Go somewhere in the app: its page, or its chat. */
+  const go = useCallback((path: string, view: View = 'page') => { setAt({ path, view }); setTray(false); setShelf(false); setNote(null) }, [])
+  const show = (view: View) => setAt((a) => (a ? { ...a, view } : a))
+  /** The page moved by itself (a link pressed in it): that is where the phone is now. */
+  const moved = useCallback((path: string) => setAt((a) => (a && a.path !== path ? { path, view: 'page' } : a)), [])
+
+  const lastApp = useRef<string | null>(null)
+  useEffect(() => { // where this phone was in the app, else My Stuff; another app starts on its own
+    if (!app) return
+    const switched = !!lastApp.current && lastApp.current !== app.id
+    lastApp.current = app.id
+    if (switched) { setNow(null); setTalks(null) }
+    setAppTalk(recall(talkKey(app.id)))
+    if (at && !switched) return
+    let kept: { path: string; view: View } | null = null
+    try { kept = JSON.parse(recall(atKey(app.id)) ?? 'null') } catch { /* start on My Stuff */ }
+    setAt(kept?.path ? { path: kept.path, view: kept.view === 'chat' ? 'chat' : 'page' } : { path: '/', view: 'page' })
   }, [app?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-  const look = useCallback((path: string) => { setSheet(path); setTray(false); setShelf(false); setNote(null) }, [])
+  useEffect(() => {
+    if (!app || !at) return
+    remember(atKey(app.id), JSON.stringify(at))
+    if (address && at.path !== window.location.pathname + window.location.search) window.history.replaceState(null, '', at.path)
+  }, [app?.id, at, address])
 
   useEffect(() => { // the app's events: one refetch per burst, as on My Stuff
     if (!app) return
     let timer: number | undefined
     const es = openEvents(`${API}/events?since=now&app=${app.id}`)
-    const bump = () => { window.clearTimeout(timer); timer = window.setTimeout(() => setStamp((n) => n + 1), 300) }
-    for (const type of EVENT_TYPES) if (!type.startsWith('run.tool') && type !== 'run.message') es.addEventListener(type, bump)
-    // The agent opened a page: on the computer it becomes a tab; here it is offered, never thrown over the chat.
+    const later = () => { window.clearTimeout(timer); timer = window.setTimeout(bump, 300) }
+    for (const type of EVENT_TYPES) if (!type.startsWith('run.tool') && type !== 'run.message') es.addEventListener(type, later)
+    // The agent opened a page: on the computer it becomes a tab; here it is offered, and the person stays where they are.
     es.addEventListener('ui.open', ((ev: MessageEvent) => {
       const tab = (JSON.parse(ev.data) as { payload?: { tab?: Tab } }).payload?.tab
       if (tab?.kind === 'page') setNote({ text: `The agent opened ${tabTitle(tab)}.`, path: tab.path })
     }) as EventListener)
     return () => { es.close(); window.clearTimeout(timer) }
-  }, [app?.id])
+  }, [app?.id, bump])
   useEffect(() => {
     if (!app) return
     let closed = false
@@ -153,83 +178,97 @@ export function Phone({ initial = {}, address = true }: {
     return () => { closed = true }
   }, [app?.id, stamp])
 
-  const lastApp = useRef<string | null>(null)
-  useEffect(() => { // another app: its own chat, picked afresh
-    if (!app) return
-    if (lastApp.current && lastApp.current !== app.id) { picked.current = null; setChatState(null); setNow(null); setTalks(null) }
-    lastApp.current = app.id
-  }, [app?.id])
-  useEffect(() => { // no chat given: the one this phone was on, else what needs you first, else the newest conversation
-    if (!app || picked.current === '*' || picked.current === app.id) return
-    try { const kept = JSON.parse(recall(chatKey(app.id)) ?? 'null') as PhoneChat | null; if (kept?.id) { picked.current = app.id; setChatState(kept); return } } catch { /* pick afresh */ }
-    if (!now || !talks) return
-    picked.current = app.id
-    const asks = now.needsYou.map(asksOf).find((a) => a)
-    const own = talks.find((t) => t.taskId)
-    setChatState(asks ? { kind: 'task', id: asks.id } : own?.taskId ? { kind: 'task', id: own.taskId } : talks[0] ? { kind: 'talk', id: talks[0].id } : null)
-  }, [app?.id, now, talks])
-
-  const newChat = async () => {
+  /** The conversations that belong to no task and no idea: about a project, or about the app. */
+  const loose = (talks ?? []).filter((t) => !t.taskId && !t.ideaId)
+  const aboutApp = loose.filter((t) => !t.subjectRef?.projectId)
+  const projectTalk = subject?.kind === 'project' ? loose.find((t) => t.subjectRef?.projectId === subject.id) ?? null : null
+  const appChat = aboutApp.find((t) => t.id === appTalk) ?? (talks ?? []).find((t) => t.id === appTalk) ?? aboutApp[0] ?? null
+  const pickTalk = (t: TalkSession) => {
+    if (t.taskId) return go(`/tasks/${t.taskId}`, 'chat')
+    if (t.ideaId) return go(`/ideas/${t.ideaId}`, 'chat')
+    if (t.subjectRef?.projectId) return go(`/projects/${t.subjectRef.projectId}`, 'chat')
+    setAppTalk(t.id); if (app) remember(talkKey(app.id), t.id)
+    go(subject ? '/' : at?.path ?? '/', 'chat') // a chat about the app is the chat of the app's own places
+  }
+  const newChat = async (projectId?: string) => {
     if (!app) return
     setStarting(true)
-    try { const t = await engine.startTalk({ appId: app.id, subjectRef: { app: true } }); setTalks((all) => [t, ...(all ?? [])]); setChat({ kind: 'talk', id: t.id }) }
-    catch (e: any) { setNote({ text: String(e?.message ?? e) }) }
-    finally { setStarting(false) }
+    try {
+      const t = await engine.startTalk({ appId: app.id, subjectRef: projectId ? { projectId } : { app: true } })
+      setTalks((all) => [t, ...(all ?? [])])
+      if (projectId) go(`/projects/${projectId}`, 'chat'); else pickTalk(t)
+    } catch (e: any) { setNote({ text: String(e?.message ?? e) }) } finally { setStarting(false) }
   }
 
-  // Pages and conversations ask the workspace to open things: a page opens over the chat; the rest needs the computer.
+  // Pages and conversations ask the workspace to open things: a page is gone to; the rest needs the computer.
   const ws = useMemo<WorkspaceApi>(() => ({
-    open: (tab: Tab) => { if (tab.kind === 'page') look(tab.path); else setNote({ text: `${tabTitle(tab)} opens on the computer.` }) },
+    open: (tab: Tab) => { if (tab.kind === 'page') go(tab.path); else setNote({ text: `${tabTitle(tab)} opens on the computer.` }) },
     tabs: [], focused: null,
-  }), [look])
-  /** A link in the chat to a page of the app: it opens over the chat, not as a new browser tab. */
+  }), [go])
+  /** A link in the chat to a page of the app: the phone goes there, not to a new browser tab. */
   const onClick = (e: React.MouseEvent) => {
     const el = e.target as HTMLElement
-    if (el.closest('.tab-page')) return // a page over the chat follows its own links
+    if (el.closest('.tab-page')) return // the page follows its own links
     const href = el.closest('a')?.getAttribute('href')
     if (!href?.startsWith('/') || href.startsWith('/api')) return
-    e.preventDefault(); look(href)
+    e.preventDefault(); go(href)
   }
 
+  if (loaded && !app) return <div className="phone"><div className="phone-empty"><p>No app yet. Add one on the computer, in Settings.</p></div></div>
+  if (!at) return <div className="phone"><div className="phone-empty"><p className="muted">Loading…</p></div></div>
+
+  const task = about?.task ?? null
   const asks = (now?.needsYou ?? []).map(asksOf).filter((a): a is NonNullable<ReturnType<typeof asksOf>> => !!a)
   const needs = now?.needsYou.length ?? 0
-  const talk = chat?.kind === 'talk' ? talks?.find((t) => t.id === chat.id) ?? null : null
-  const title = chat?.kind === 'task' ? (task ? `${task.i.identifier} ${task.i.title}` : chat.id) : chat ? talk?.subject ?? talk?.title ?? 'A conversation' : app?.name ?? 'Evident'
-  const under = chat?.kind === 'task'
-    ? task ? `${task.i.project && !task.i.project.solo ? `${task.i.project.name} · ` : ''}${task.i.briefApprovedBy ? 'Build' : 'Brief'}` : error ? 'Could not be read' : 'Loading…'
-    : chat ? `About ${app?.name ?? 'the app'}` : null
-  const color = chat?.kind === 'talk' ? talkColor(chat.id) : undefined
+  const title = task ? `${task.i.identifier} ${task.i.title}` : subject?.kind === 'project' ? about?.graph?.project.name ?? 'Project' : subject?.kind === 'idea' ? about?.idea?.title ?? 'Idea' : placeName(at.path)
+  const under = task?.i.project && !task.i.project.solo ? task.i.project.name : subject ? (error ? 'Could not be read' : app?.name) : app?.name
+  const section = parts(at.path)[2]
+  const pageName = subject?.kind === 'task' ? (section ? (task?.v?.rows.find((r) => r.key === section) ? label(section as Row['key'], 'task') : section[0].toUpperCase() + section.slice(1)) : 'Overview')
+    : subject?.kind === 'project' ? 'Project' : subject?.kind === 'idea' ? 'Idea' : placeName(at.path)
+  const shownTalk = subject ? projectTalk?.id ?? null : appChat?.id ?? null
 
-  if (loaded && !app) return <div className="phone"><div className="phone-empty"><p>No app yet. Add one on the computer, in Settings.</p></div></div>
   return (
     <WorkspaceContext.Provider value={ws}>
       <div className="phone" data-component="Phone" onClick={onClick}>
         <EngineLink />
         <header className="phone-head">
-          <button type="button" className="phone-btn" aria-label="Tasks, steps and chats" aria-expanded={tray} onClick={() => { setTray(true); setShelf(false) }}>
+          <button type="button" className="phone-btn" aria-label="This place's nav, and the chats" aria-expanded={tray} onClick={() => { setTray(true); setShelf(false) }}>
             <Icon d={LIST} />{needs > 0 && <span className="phone-count" aria-label={`${needs} need you`}>{needs}</span>}
           </button>
-          <div className="phone-title">
-            <strong>{color && <span className="phone-dot" style={{ background: color }} aria-hidden="true" />}{title}</strong>
-            {under && <span>{under}</span>}
-          </div>
-          <button type="button" className="phone-btn" aria-label="Look" aria-expanded={shelf} onClick={() => { setShelf(true); setTray(false) }}><Icon d={GRID} /></button>
+          <div className="phone-title"><strong>{title}</strong>{under && <span>{under}</span>}</div>
+          <button type="button" className="phone-btn" aria-label="Go anywhere in the app" aria-expanded={shelf} onClick={() => { setShelf(true); setTray(false) }}><Icon d={GRID} /></button>
         </header>
+        <div className="phone-views" role="tablist" aria-label="Chat or page">
+          <button type="button" role="tab" aria-selected={at.view === 'chat'} className={at.view === 'chat' ? 'on' : ''} onClick={() => show('chat')}>Chat</button>
+          <button type="button" role="tab" aria-selected={at.view === 'page'} className={at.view === 'page' ? 'on' : ''} onClick={() => show('page')}>{pageName}</button>
+        </div>
 
-        {chat?.kind === 'task' && task ? <TaskChat key={task.i.id} i={task.i} onAnswered={() => setStamp((n) => n + 1)} />
-          : chat?.kind === 'task' ? <div className="phone-empty">{error ? <><p>{error}</p><button type="button" className="btn quiet" onClick={() => { setChatState(null); setTray(true) }}>Pick another chat</button></> : <p className="muted">Loading…</p>}</div>
-          : chat ? <div className="phone-chat"><Conversation key={chat.id} sessionId={chat.id} compact context={{ path: '/', appId: app?.id }} /></div>
-          : <div className="phone-empty">
-              {!now || !talks ? <p className="muted">Loading…</p> : <>
-                <p>No chat yet. Start one about {app?.name ?? 'the app'}, or pick a task from the tray.</p>
+        {/* Both stay mounted: flipping between them loses neither the page's scroll nor what was being typed. */}
+        <div className="phone-pane" hidden={at.view !== 'chat'}>
+          {subject?.kind === 'task' ? (task
+              ? <AgentChat key={task.i.id} of="task" id={task.i.id} appId={task.i.appId} stage={task.i.briefApprovedBy ? 'Build' : 'Brief'} questions={task.i.questions} onAnswered={bump} />
+              : <div className="phone-empty"><p className={error ? '' : 'muted'}>{error ?? 'Loading…'}</p></div>)
+            : subject?.kind === 'idea' && app ? <AgentChat key={subject.id} of="idea" id={subject.id} appId={app.id} stage="Idea" questions={[]} onAnswered={bump} />
+            : subject?.kind === 'project' ? (projectTalk
+              ? <div className="phone-chat"><Conversation key={projectTalk.id} sessionId={projectTalk.id} compact context={{ path: at.path, projectId: subject.id, appId: app?.id }} /></div>
+              : <div className="phone-empty">{!talks ? <p className="muted">Loading…</p> : <>
+                  <p>No chat about this project yet. Each of its tasks has its own.</p>
+                  <button type="button" className="btn" disabled={starting} onClick={() => void newChat(subject.id)}>{starting ? 'Starting…' : 'Chat about this project'}</button>
+                </>}</div>)
+            : appChat ? <div className="phone-chat"><Conversation key={appChat.id} sessionId={appChat.id} compact context={{ path: at.path, appId: app?.id }} /></div>
+            : <div className="phone-empty">{!talks ? <p className="muted">Loading…</p> : <>
+                <p>No chat about {app?.name ?? 'the app'} yet. A task, an idea and a project each have their own, on their page.</p>
                 <button type="button" className="btn" disabled={starting} onClick={() => void newChat()}>{starting ? 'Starting…' : 'New chat'}</button>
-              </>}
-            </div>}
+              </>}</div>}
+        </div>
+        <div className="phone-pane phone-page" hidden={at.view !== 'page'}>
+          <PagePane path={at.path} onNavigate={moved} />
+        </div>
 
         {note && (
           <div className="phone-note" role="status">
             <span>{note.text}</span>
-            {note.path && <button type="button" onClick={() => look(note.path!)}>Look</button>}
+            {note.path && <button type="button" onClick={() => go(note.path!)}>Go</button>}
             <button type="button" aria-label="Dismiss" onClick={() => setNote(null)}>×</button>
           </div>
         )}
@@ -237,7 +276,7 @@ export function Phone({ initial = {}, address = true }: {
         {(tray || shelf) && <button type="button" className="phone-scrim" aria-label="Close" onClick={() => { setTray(false); setShelf(false) }} />}
 
         {tray && (
-          <nav className="phone-tray" aria-label="Tasks, steps and chats">
+          <nav className="phone-tray" aria-label="This place's nav, and the chats">
             <div className="phone-tray-head">
               {apps.length > 1
                 ? <select aria-label="App" value={app?.id ?? ''} onChange={(e) => setAppId(e.target.value)}>{apps.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select>
@@ -245,77 +284,66 @@ export function Phone({ initial = {}, address = true }: {
               <button type="button" className="phone-btn plain" aria-label="Close the tray" onClick={() => setTray(false)}>×</button>
             </div>
 
+            {task && <>
+              <h2>{about?.graph ? about.graph.project.name : 'This task'}</h2>
+              {about?.graph && <button type="button" className="phone-row" onClick={() => go(`/projects/${about.graph!.project.id}`)}><span className="mark" aria-hidden="true">‹</span><span className="text"><span>The project</span></span></button>}
+              {(about?.graph ? (about.graph.issues.some((t) => t.id === task.i.id) ? about.graph.issues : [task.i, ...about.graph.issues]) : [task.i]).map((t) => t.id === task.i.id // a sub-task is not among the project's tasks: it goes first
+                ? <div key={t.id} className="phone-here">
+                    <div className="phone-row on"><span className="mark" aria-hidden="true">{stateMark(t.state)}</span><span className="text"><span>{t.identifier} {t.title}</span><small>You are here</small></span></div>
+                    <Steps i={task.i} rows={task.v?.rows ?? []} here={section ?? ''} go={go} />
+                  </div>
+                : <button type="button" key={t.id} className="phone-row" onClick={() => go(`/tasks/${t.id}`, at.view)}>
+                    <span className={`mark ${t.state === 'done' ? 'ok' : ''}`} aria-hidden="true">{stateMark(t.state)}</span><span className="text"><span>{t.identifier} {t.title}</span></span>
+                  </button>)}
+            </>}
+            {subject?.kind === 'project' && about?.graph && <>
+              <h2>Its tasks</h2>
+              {about.graph.issues.map((t) => (
+                <button type="button" key={t.id} className="phone-row" onClick={() => go(`/tasks/${t.id}`)}>
+                  <span className={`mark ${t.state === 'done' ? 'ok' : ''}`} aria-hidden="true">{stateMark(t.state)}</span><span className="text"><span>{t.identifier} {t.title}</span></span>
+                </button>
+              ))}
+              {!about.graph.issues.length && <p className="phone-aside">No tasks yet.</p>}
+            </>}
+
             {needs > 0 && <h2>Needs you · {needs}</h2>}
             {asks.map((a, n) => (
-              <button type="button" key={`${a.id}:${n}`} className="phone-row asks" onClick={() => setChat({ kind: 'task', id: a.id })}>
+              <button type="button" key={`${a.path}:${n}`} className="phone-row asks" onClick={() => go(a.path, a.view)}>
                 <span className="mark" aria-hidden="true">●</span><span className="text"><span>{a.title}</span><small>{a.why}</small></span>
               </button>
             ))}
             {needs > asks.length && (
-              <button type="button" className="phone-row" onClick={() => look('/')}>
+              <button type="button" className="phone-row" onClick={() => go('/')}>
                 <span className="mark" aria-hidden="true">›</span><span className="text"><span>{asks.length ? `${needs - asks.length} more on My Stuff` : 'See them on My Stuff'}</span></span>
               </button>
             )}
 
-            {task && <>
-              <h2>{task.g ? task.g.project.name : 'This task'}</h2>
-              {(task.g ? (task.g.issues.some((t) => t.id === task.i.id) ? task.g.issues : [task.i, ...task.g.issues]) : [task.i]).map((t) => t.id === task.i.id // a sub-task is not among the project's tasks: it goes first
-                ? <div key={t.id} className="phone-here">
-                    <div className="phone-row on"><span className="mark" aria-hidden="true">{stateMark(t.state)}</span><span className="text"><span>{t.identifier} {t.title}</span><small>This chat</small></span></div>
-                    <Steps i={task.i} rows={task.v?.rows ?? []} look={look} />
-                  </div>
-                : <button type="button" key={t.id} className="phone-row" onClick={() => setChat({ kind: 'task', id: t.id })}>
-                    <span className={`mark ${t.state === 'done' ? 'ok' : ''}`} aria-hidden="true">{stateMark(t.state)}</span><span className="text"><span>{t.identifier} {t.title}</span></span>
-                  </button>)}
-            </>}
-
-            <h2>Other chats</h2>
-            {(talks ?? []).filter((t) => !(chat?.kind === 'talk' && t.id === chat.id) && !(task && t.taskId === task.i.id)).map((t) => (
-              <button type="button" key={t.id} className="phone-row" onClick={() => setChat(t.taskId ? { kind: 'task', id: t.taskId } : { kind: 'talk', id: t.id })}>
+            <h2>Chats</h2>
+            {(talks ?? []).filter((t) => t.id !== shownTalk && !(task && t.taskId === task.i.id) && !(subject?.kind === 'idea' && t.ideaId === subject.id)).map((t) => (
+              <button type="button" key={t.id} className="phone-row" onClick={() => pickTalk(t)}>
                 <span className="phone-dot" style={{ background: talkColor(t.id) }} aria-hidden="true" />
-                <span className="text"><span>{t.subject ?? t.title ?? 'A conversation'}</span>{t.busy && <small>working</small>}</span>
+                <span className="text"><span>{t.subject ?? t.title ?? 'A conversation'}</span><small>{t.taskId ? 'a task\'s' : t.ideaId ? 'an idea\'s' : t.subjectRef?.projectId ? 'a project\'s' : 'about the app'}{t.busy ? ' · working' : ''}</small></span>
               </button>
             ))}
             <button type="button" className="phone-row" disabled={starting} onClick={() => void newChat()}>
-              <span className="mark" aria-hidden="true">+</span><span className="text"><span>{starting ? 'Starting…' : 'New chat'}</span></span>
+              <span className="mark" aria-hidden="true">+</span><span className="text"><span>{starting ? 'Starting…' : 'New chat about the app'}</span></span>
             </button>
           </nav>
         )}
 
         {shelf && (
-          <section className="phone-shelf" aria-label="Look">
+          <section className="phone-shelf" aria-label="Go anywhere in the app">
             <span className="phone-grab" aria-hidden="true" />
-            {task && <>
-              <h2>On {task.i.identifier}</h2>
-              <div className="phone-tiles">
-                <button type="button" className="phone-tile" onClick={() => look(`/tasks/${task.i.id}`)}><span>Overview</span></button>
-                <button type="button" className="phone-tile" onClick={() => look(`/tasks/${task.i.id}/brief`)}><span>Brief</span><small>{task.i.briefApprovedBy ? 'approved' : briefStands(task.v?.rows ?? [], 'task') ?? 'not approved'}</small></button>
-                <button type="button" className="phone-tile" onClick={() => look(`/tasks/${task.i.id}/build`)}><span>Build</span><small>{buildSays(task.i)}</small></button>
-                {task.i.pr?.url
-                  ? <a className="phone-tile" href={task.i.pr.url} target="_blank" rel="noreferrer"><span>Pull request</span><small>#{task.i.pr.number} on GitHub</small></a>
-                  : <div className="phone-tile off"><span>Pull request</span><small>not open yet</small></div>}
-              </div>
-            </>}
-            <h2>Everything else</h2>
-            <button type="button" className="phone-row" onClick={() => look('/')}><span className="text"><span>My Stuff</span></span>{needs > 0 && <span className="badge warn">{needs}</span>}</button>
-            <button type="button" className="phone-row" onClick={() => look('/projects')}><span className="text"><span>Projects</span></span></button>
-            <button type="button" className="phone-row" onClick={() => look('/tasks')}><span className="text"><span>Tasks</span></span></button>
-            <button type="button" className="phone-row" onClick={() => look('/ideas')}><span className="text"><span>Ideas</span></span></button>
-            <button type="button" className="phone-row" onClick={() => look('/todos')}><span className="text"><span>To-dos</span></span></button>
+            <h2>{app?.name ?? 'The app'}</h2>
+            {[['/', 'My Stuff'], ['/projects', 'Projects'], ['/tasks', 'Tasks'], ['/ideas', 'Ideas'], ['/todos', 'To-dos'], ['/learn', 'Learn'], ['/settings', 'Settings']].map(([path, name]) => (
+              <button type="button" key={path} className={`phone-row ${!subject && placeName(at.path) === name ? 'on' : ''}`} onClick={() => go(path)}>
+                <span className="text"><span>{name}</span></span>{path === '/' && needs > 0 && <span className="badge warn">{needs}</span>}
+              </button>
+            ))}
             <p className="phone-aside">Prototypes, Storybook and the terminal stay on the computer.</p>
             <button type="button" className="phone-row" onClick={() => { try { sessionStorage.setItem(FULL_KEY, '1') } catch { /* fine */ } window.location.reload() }}>
               <span className="text"><span>The full site, on this phone</span><small>Until this tab is closed</small></span>
             </button>
-          </section>
-        )}
-
-        {sheet && (
-          <section className="phone-sheet" aria-label={sheetTitle(sheet)}>
-            <header className="phone-sheet-head">
-              <button type="button" aria-label="Back to the chat" onClick={() => setSheet(null)}>‹ Chat</button>
-              <strong>{sheetTitle(sheet)}</strong>
-            </header>
-            <PagePane path={sheet} onNavigate={setSheet} />
           </section>
         )}
       </div>
@@ -330,24 +358,24 @@ function buildSays(i: IssueDetail) {
   return `${live.filter((s) => s.state === 'done').length} of ${live.length} sub-tasks done`
 }
 
-/** This task's steps, under it in the tray: the brief and what feeds it, then the build. Each opens its page. */
-function Steps({ i, rows, look }: { i: IssueDetail; rows: Row[]; look: (path: string) => void }) {
+/** This task's steps, under it in the tray: the brief and what feeds it, then the build. Each is a page of the task. */
+function Steps({ i, rows, here, go }: { i: IssueDetail; rows: Row[]; /** The step whose page is open; '' the overview. */ here: string; go: (path: string) => void }) {
   const base = `/tasks/${i.id}`
   const brief = rows.find((r) => r.key === 'brief')
   const stands = briefStands(rows, 'task')
   const live = i.subIssues.filter((s) => !dropped(s))
   const row = (r: Row, text: string, under: string | null) => (
-    <button type="button" key={r.key} className="phone-row step" disabled={!!r.waitingOn} onClick={() => look(`${base}/${r.key}`)}>
+    <button type="button" key={r.key} className={`phone-row step ${here === r.key ? 'here' : ''}`} disabled={!!r.waitingOn} onClick={() => go(`${base}/${r.key}`)}>
       <span className={`mark ${mark(r, 'task') === '✓' ? 'ok' : ''}`} aria-hidden="true">{mark(r, 'task')}</span>
       <span className="text"><span>{text}</span>{r.waitingOn ? <small>after {label(r.waitingOn, 'task')}</small> : under ? <small className={ready(r.state, 'task') ? 'asks' : ''}>{under}</small> : null}</span>
     </button>
   )
   return (
     <div className="phone-steps">
-      <button type="button" className="phone-row step" onClick={() => look(base)}><span className="mark" aria-hidden="true">⌂</span><span className="text"><span>Overview</span></span></button>
+      <button type="button" className={`phone-row step ${here === '' ? 'here' : ''}`} onClick={() => go(base)}><span className="mark" aria-hidden="true">⌂</span><span className="text"><span>Overview</span></span></button>
       {brief && row(brief, `${step('brief').icon} The brief`, stands)}
       {rows.filter((r) => r.key !== 'brief' && r.key !== 'idea').map((r) => row(r, `${step(r.key).icon} ${label(r.key, 'task')}`, ready(r.state, 'task') ? 'ready for you' : null))}
-      <button type="button" className="phone-row step" onClick={() => look(`${base}/build`)}>
+      <button type="button" className={`phone-row step ${here === 'build' ? 'here' : ''}`} onClick={() => go(`${base}/build`)}>
         <span className={`mark ${live.length && live.every((s) => s.state === 'done') ? 'ok' : ''}`} aria-hidden="true">{live.length ? (live.every((s) => s.state === 'done') ? '✓' : '◐') : '○'}</span>
         <span className="text"><span>🏗️ Build</span><small>{buildSays(i)}</small></span>
       </button>
@@ -355,16 +383,16 @@ function Steps({ i, rows, look }: { i: IssueDetail; rows: Row[]; look: (path: st
   )
 }
 
-/** A task's chat: its own agent, the agents it has out as tabs, and what it asks, answered where it is read. */
-function TaskChat({ i, onAnswered }: { i: IssueDetail; onAnswered: () => void }) {
-  const agent = useTaskAgent(i.id, i.appId)
+/** A task's or an idea's chat: its own agent, the agents it has out as tabs, and what it asks, answered where it is read. */
+function AgentChat({ of, id, appId, stage, questions, onAnswered }: { of: 'task' | 'idea'; id: string; appId: string; stage: string; questions: Question[]; onAnswered: () => void }) {
+  const agent = useTaskAgent(id, appId, of)
   const [busy, setBusy] = useState(false)
-  const open = i.questions.filter((q) => q.status === 'open')
-  const answer = async (id: string, text: string) => { setBusy(true); try { await engine.answer(id, text); onAnswered() } finally { setBusy(false) } }
+  const open = questions.filter((q) => q.status === 'open')
+  const answer = async (qid: string, text: string) => { setBusy(true); try { await engine.answer(qid, text); onAnswered() } finally { setBusy(false) } }
   return (
     <div className="phone-chat">
       {open.length > 0 && <div className="phone-asks">{open.map((q) => <QuestionAsk key={q.id} q={q} busy={busy} onAnswer={(a) => answer(q.id, a)} />)}</div>}
-      <TaskAgent open onToggle={() => {}} sessionId={agent.session?.id ?? null} taskId={i.id} stage={i.briefApprovedBy ? 'Build' : 'Brief'}
+      <TaskAgent open onToggle={() => {}} of={of} sessionId={agent.session?.id ?? null} taskId={id} stage={stage}
         state={agent.out.some((a) => a.asking) ? 'waiting' : agent.session?.busy ? 'working' : 'idle'}
         deployed={agent.out.map((a) => ({ what: a.what, icon: a.icon ?? '🛠️', title: a.title, sessionId: a.sessionId, runId: a.runId, detail: a.detail, failed: a.failed, state: a.busy ? 'out' as const : 'back' as const, asking: a.asking ? `${a.asking.tool}: ${a.asking.what}` : undefined }))}
         onStart={() => void agent.start()} starting={agent.starting} error={agent.error} />
