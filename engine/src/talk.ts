@@ -14,7 +14,7 @@ import { createSdkMcpServer, query, tool, type Query, type SDKMessage, type SDKU
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
-import { replyCost } from './reply-cost.js'
+import { limitOf, replyCost, replyUsage, usageSoFar, type Limits, type Usage } from './reply-cost.js'
 import { db } from './db/client.js'
 import { app, event, idea, issue, project, prototype, repo, run, session, sessionMessage, workspace } from './db/schema.js'
 import { step, type StepKey } from './steps.js'
@@ -116,7 +116,7 @@ Your first message is the brief: write the checklist, build it, and report again
 type Answer = { allow: boolean; always?: boolean; timedOut?: boolean }
 interface Pending { resolve: (v: Answer) => void; tool: string; /** What it wants to do, in a line. */ what: string; risk: Risk; since: Date }
 type Rated = { risk: Risk; why: string }
-interface Live { q: Query; push: (m: SDKUserMessage) => void; close: () => void; pending: Map<string, Pending>; rated: Map<string, Rated>; lastPrompt?: string; outages: number; always: Set<string>; busy: boolean; autoApprove: Risk; cwd: string; model?: string }
+interface Live { q: Query; push: (m: SDKUserMessage) => void; close: () => void; pending: Map<string, Pending>; rated: Map<string, Rated>; lastPrompt?: string; outages: number; always: Set<string>; busy: boolean; autoApprove: Risk; cwd: string; model?: string; limits?: Limits }
 const execFileP = promisify(execFile)
 const branchOf = (cwd: string) => execFileP('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd }).then((r) => r.stdout.trim()).catch(() => null)
 const key = (tool: string, input: unknown) => tool + JSON.stringify(input).slice(0, 200)
@@ -815,6 +815,11 @@ async function open(sessionId: string): Promise<Live> {
 
 async function handle(sessionId: string, entry: Live, m: SDKMessage) {
   const a = m as any
+  if (a.type === 'rate_limit_event') { // where a limit of the plan stands: kept for the result line of the reply it came in
+    const got = limitOf(a.rate_limit_info)
+    if (got) entry.limits = { ...entry.limits, [got[0]]: got[1] }
+    return
+  }
   switch (m.type) {
     case 'system':
       if (a.subtype === 'init') await db.update(session).set({ agentSessionId: a.session_id }).where(eq(session.id, sessionId))
@@ -840,7 +845,11 @@ async function handle(sessionId: string, entry: Live, m: SDKMessage) {
       entry.outages = 0
       // costUsd is the SDK's running total; stepUsd is this reply alone and totalUsd the conversation so far (reply-cost.ts).
       const [before] = await db.select({ payload: sessionMessage.payload }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, sessionId), eq(sessionMessage.kind, 'result'), sql`(${sessionMessage.payload}->>'costUsd')::numeric > 0`)).orderBy(desc(sessionMessage.id)).limit(1)
-      await record(sessionId, 'engine', 'result', a.subtype === 'success' ? 'done' : `${a.subtype}`, { subtype: a.subtype, costUsd: a.total_cost_usd, ...replyCost(before?.payload as { costUsd?: unknown; totalUsd?: unknown } | null, a.total_cost_usd), ...(entry.model ? { model: entry.model } : {}), turns: a.num_turns, durationMs: a.duration_ms })
+      // The same for tokens: usageSoFar is the SDK's running total for each model, usage is this reply alone. limits is where the plan's limits stood.
+      const was = before?.payload as { costUsd?: unknown; totalUsd?: unknown; usageSoFar?: Usage } | null | undefined
+      const soFar = usageSoFar(a.modelUsage)
+      const usage = replyUsage(was?.usageSoFar, soFar, !before)
+      await record(sessionId, 'engine', 'result', a.subtype === 'success' ? 'done' : `${a.subtype}`, { subtype: a.subtype, costUsd: a.total_cost_usd, ...replyCost(was, a.total_cost_usd), ...(entry.model ? { model: entry.model } : {}), ...(usage ? { usage } : {}), ...(soFar ? { usageSoFar: soFar } : {}), ...(entry.limits && Object.keys(entry.limits).length ? { limits: entry.limits } : {}), turns: a.num_turns, durationMs: a.duration_ms })
       for (const fn of turnEnded) { try { fn(sessionId) } catch { /* what follows a turn never breaks the turn */ } }
       return
   }

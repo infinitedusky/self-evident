@@ -11,6 +11,7 @@ import { StepTracker } from './step-track.js'
 import { referencePrompt, type Reference } from './references.js'
 import { LEAVE_LONG_RUNS } from './verify.js'
 import { hookEnv } from './conventions.js'
+import { limitOf } from './reply-cost.js'
 
 export interface RunInput {
   subIssue: { id: string; identifier: string; title: string; brief: string | null }
@@ -178,7 +179,7 @@ export async function handle(m: SDKMessage, emit: RunInput['onEvent'], setOut: (
       await emit('run.result', { subtype: a.subtype, costUsd: a.total_cost_usd, turns: a.num_turns, durationMs: a.duration_ms })
       return
     default:
-      if ((m as any).type === 'rate_limit_event') await emit('run.rate_limit', { status: a.rate_limit_info?.status })
+      if ((m as any).type === 'rate_limit_event') { const got = limitOf(a.rate_limit_info); await emit('run.rate_limit', { status: a.rate_limit_info?.status, ...(got ? { limit: got[0], ...got[1] } : {}) }) } // which limit, how much of it is used and when it resets (reply-cost.ts)
   }
 }
 

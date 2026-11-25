@@ -8197,3 +8197,25 @@ questions we have about this project?"
 
 Not done: answering or marking as waiting from the project; answered task decisions on the project; remembering
 which groups are folded; an idea does not list anything of the tasks made from it.
+
+## A card under each reply: model, time, tokens, cost and the plan limits (Sandy, 2026-11-25)
+
+Sandy: "We are using Claude Code. It is not really dollars that we care about. It is like credits … some amount
+that we have used", then "let us do all three … create a little card … collapsed by default to just say the
+model, the amount of time, and for right now the usage for that last query".
+
+- **The result line is a card** (`ReplyCard`). Closed: "Worked for 22 seconds · opus-5-5 · 426k tokens". Opened:
+  the model, the time and steps, tokens by kind for each model that ran, the cost estimate (this reply, this
+  conversation so far) and where the plan limits stood. A limit that is close or used up shows on the closed line.
+- **Tokens are per reply**, worked out like the cost: the SDK gives a running total for each model
+  (`modelUsage`), kept as `usageSoFar`, and the reply is the difference (`usage`). The first reply after one
+  recorded before this has nothing to take away, so it shows its cost instead.
+- **Plan limits** come from the SDK's `rate_limit_event` (subscription logins only): which limit (five-hour,
+  seven-day, …), the share used, when it starts again, and whether the plan is on extra usage. A conversation
+  keeps the last it heard for each limit and puts them on the result (`limits`); a build run's
+  `run.rate_limit` event now carries the same, where it kept only the status.
+- My reading, not checked against a real event: the share used is read as a fraction when it is 1 or less and as
+  a percentage above that, and a reset time as seconds when it is too small to be milliseconds.
+
+Not done: the limits are on each reply, not in one place for the whole app; build and plan runs, reports and
+summaries have no card; there is no single "credits" figure, since the SDK gives none.
