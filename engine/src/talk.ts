@@ -14,6 +14,7 @@ import { createSdkMcpServer, query, tool, type Query, type SDKMessage, type SDKU
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
+import { replyCost } from './reply-cost.js'
 import { db } from './db/client.js'
 import { app, event, idea, issue, project, prototype, repo, run, session, sessionMessage, workspace } from './db/schema.js'
 import { step, type StepKey } from './steps.js'
@@ -115,7 +116,7 @@ Your first message is the brief: write the checklist, build it, and report again
 type Answer = { allow: boolean; always?: boolean; timedOut?: boolean }
 interface Pending { resolve: (v: Answer) => void; tool: string; /** What it wants to do, in a line. */ what: string; risk: Risk; since: Date }
 type Rated = { risk: Risk; why: string }
-interface Live { q: Query; push: (m: SDKUserMessage) => void; close: () => void; pending: Map<string, Pending>; rated: Map<string, Rated>; lastPrompt?: string; outages: number; always: Set<string>; busy: boolean; autoApprove: Risk; cwd: string }
+interface Live { q: Query; push: (m: SDKUserMessage) => void; close: () => void; pending: Map<string, Pending>; rated: Map<string, Rated>; lastPrompt?: string; outages: number; always: Set<string>; busy: boolean; autoApprove: Risk; cwd: string; model?: string }
 const execFileP = promisify(execFile)
 const branchOf = (cwd: string) => execFileP('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd }).then((r) => r.stdout.trim()).catch(() => null)
 const key = (tool: string, input: unknown) => tool + JSON.stringify(input).slice(0, 200)
@@ -819,6 +820,7 @@ async function handle(sessionId: string, entry: Live, m: SDKMessage) {
       if (a.subtype === 'init') await db.update(session).set({ agentSessionId: a.session_id }).where(eq(session.id, sessionId))
       return
     case 'assistant':
+      if (!a.parent_tool_use_id && typeof a.message?.model === 'string' && !a.message.model.startsWith('<')) entry.model = a.message.model // the model that answered, for the result line (not a sub-agent's, not the SDK's own placeholder)
       for (const block of a.message?.content ?? []) {
         if (block.type === 'text' && block.text?.trim()) await record(sessionId, 'agent', 'text', block.text)
         else if (block.type === 'tool_use') await record(sessionId, 'tool', 'tool_call', block.name, { tool: block.name, input: summariseInput(block.name, block.input), toolUseId: block.id })
@@ -836,7 +838,9 @@ async function handle(sessionId: string, entry: Live, m: SDKMessage) {
       entry.busy = false
       if (a.subtype !== 'success' && isOutage(`${a.subtype} ${a.result ?? ''} ${JSON.stringify(a.errors ?? '')} ${a.terminal_reason ?? ''}`)) return waitAndResend(sessionId, entry, String(a.result ?? a.terminal_reason ?? a.subtype))
       entry.outages = 0
-      await record(sessionId, 'engine', 'result', a.subtype === 'success' ? 'done' : `${a.subtype}`, { subtype: a.subtype, costUsd: a.total_cost_usd, turns: a.num_turns, durationMs: a.duration_ms })
+      // costUsd is the SDK's running total; stepUsd is this reply alone and totalUsd the conversation so far (reply-cost.ts).
+      const [before] = await db.select({ payload: sessionMessage.payload }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, sessionId), eq(sessionMessage.kind, 'result'), sql`(${sessionMessage.payload}->>'costUsd')::numeric > 0`)).orderBy(desc(sessionMessage.id)).limit(1)
+      await record(sessionId, 'engine', 'result', a.subtype === 'success' ? 'done' : `${a.subtype}`, { subtype: a.subtype, costUsd: a.total_cost_usd, ...replyCost(before?.payload as { costUsd?: unknown; totalUsd?: unknown } | null, a.total_cost_usd), ...(entry.model ? { model: entry.model } : {}), turns: a.num_turns, durationMs: a.duration_ms })
       for (const fn of turnEnded) { try { fn(sessionId) } catch { /* what follows a turn never breaks the turn */ } }
       return
   }

@@ -17,7 +17,7 @@ const working: TalkMessage[] = [
   msg(3, 'tool', 'tool_result', '{"subIssues": 4, "held": ["SS-6"]}', { ok: true }),
   msg(4, 'agent', 'auto', '', { tool: 'Bash', input: { command: 'git log --oneline -3' }, risk: 'cheap', why: 'reads the history' }),
   msg(5, 'agent', 'text', 'SS-6 and SS-5 both change `web/checkout/submit.ts`, so they take turns. SS-5 is building now.'),
-  msg(6, 'engine', 'result', 'done', { costUsd: 0.04, turns: 3 }),
+  msg(6, 'engine', 'result', 'done', { costUsd: 1.27, stepUsd: 0.04, totalUsd: 1.27, model: 'claude-opus-5-5', turns: 3, durationMs: 28000 }),
 ]
 const asking = msg(7, 'agent', 'permission', '', { requestId: 'req_sample', tool: 'Edit', risk: 'moderate', why: 'changes a file in this checkout', input: { file: 'web/checkout/submit.ts', old: 'retries: 0', new: 'retries: 1' } })
 const t = (extra: Partial<Transcript> & { busy?: boolean; status?: string } = {}): Transcript => ({ ...transcript, messages: working, pending: [], ...extra, session: { ...talkSession, busy: extra.busy ?? false, status: extra.status ?? 'open' } })

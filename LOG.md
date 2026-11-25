@@ -8012,3 +8012,27 @@ Not done: pages laid out for a phone (they are the computer's pages, narrow); th
 phone screen; swiping the tray and Look open; a step pressed taking the chat to where that step happened; agents
 out being read-only on the phone (their tab has a message box, as on the computer); prototypes, Storybook and the
 terminal, which stay on the computer.
+## A reply says what it cost, what the conversation has cost, and which model answered (Sandy, 2026-11-25)
+
+Sandy, on a line that read "Worked for 28 seconds · $192.58": "where is the price coming from?" It was the
+SDK's running total for the whole conversation (`total_cost_usd`), shown beside the time one reply took. Then:
+"for each cost thing to mention the cost of the specific bit of work that just finished … and then have the
+conversation total. So there are two different things", and "also add what model was used".
+
+- **The line now reads** "Worked for 28 seconds · opus-5-5 · $7.19 · $192.58 total": the time and the first figure
+  are that reply, the total is the conversation so far. Both figures are the SDK's estimates.
+- **A result keeps three figures** (`engine/src/reply-cost.ts`): `costUsd`, the SDK's running total as before;
+  `stepUsd`, the difference from the result before; `totalUsd`, the conversation so far. Where the running total
+  starts again, the new figure is the reply's cost and the conversation total keeps counting.
+- **The model** is the one that answered the main thread of that reply, not a sub-agent's.
+- **Results already recorded** get `stepUsd` and `totalUsd` from a migration (0071); they have no model.
+
+Found on the way, in the local database (12 to 24 November, estimates): about $520 in all, 77% of it in
+conversations; 46 replies that came more than an hour after the one before cost about $205, eleven times a
+warm reply each. Every plan and build run was on `claude-opus-5-5`, because the app's `model` is unset and one
+setting serves all of them.
+
+Not done: build and plan runs, reports and summaries still show one figure each (theirs is already the cost of
+that one piece of work); tokens per model are not recorded (`run.tokens` is empty); nothing is done yet about
+what conversations cost: starting afresh per task, compacting before resuming a cold one, a model per role, a
+budget cap.
