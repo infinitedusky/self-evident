@@ -33,7 +33,8 @@ type Story = StoryObj<typeof meta>
 export const Closed: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(c.getByText('Worked for 22 seconds · opus-5-5 · 426k tokens')).toBeInTheDocument()
+    await expect(c.getByText('Worked for 22 seconds · opus-5-5')).toBeInTheDocument()
+    await expect(c.getByText('426k tokens · $2.96 · $11.96 total')).toBeInTheDocument()
     await expect(c.getByText('this reply')).not.toBeVisible()
   },
 }
@@ -62,7 +63,7 @@ export const OverTheLimit: Story = {
 /** A reply recorded before tokens and limits were kept: the cost stands in for what it used. */
 export const AnOlderReply: Story = {
   args: { open: true, payload: { subtype: 'success', turns: 3, durationMs: 160000, costUsd: 0.31, stepUsd: 0.04, totalUsd: 0.31 } },
-  play: async ({ canvasElement }) => { await expect(within(canvasElement).getByText('Worked for 3 minutes · $0.04')).toBeInTheDocument() },
+  play: async ({ canvasElement }) => { await expect(within(canvasElement).getByText('$0.04 · $0.31 total')).toBeInTheDocument() },
 }
 
 /** The reply stopped on an error: the line says how it ended. */

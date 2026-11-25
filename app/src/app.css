@@ -714,7 +714,7 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .action-ico { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--idle-wash); font: 600 13px var(--mono); color: var(--ink-soft); }
 .actions-list { margin: 6px 0 0 6px; padding-left: 8px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
 .msg.reply-card { align-self: flex-start; background: none; padding: 0; max-width: 100%; font-size: 13px; }
-.msg.reply-card > summary { cursor: pointer; list-style: none; display: inline-flex; gap: 6px; align-items: center; padding: 3px 8px; border: 1px solid transparent; border-radius: 8px; }
+.msg.reply-card > summary { cursor: pointer; list-style: none; display: inline-flex; flex-direction: column; gap: 1px; align-items: flex-start; padding: 3px 8px; border: 1px solid transparent; border-radius: 8px; }
 .msg.reply-card > summary::-webkit-details-marker { display: none; }
 .msg.reply-card > summary:hover, .msg.reply-card[open] > summary { border-color: var(--line); }
 .reply-card-rows { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 6px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }

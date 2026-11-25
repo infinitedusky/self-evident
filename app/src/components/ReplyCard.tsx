@@ -41,17 +41,21 @@ export function ReplyCard({ body, payload, open }: { body: string; payload: Repl
   const account = [p.account?.organization, p.account?.plan].filter(Boolean).join(' · ')
   /** A login billed in dollars against a budget (an enterprise seat): Claude calls it extra usage, in use. */
   const byUse = !!p.limits?.overage?.overage
-  const head = [
-    body === 'done' && p.durationMs ? `Worked for ${took(Number(p.durationMs))}` : body,
-    p.model ? short(p.model) : null,
+  // Closed, two lines: what ran and for how long; then what the reply used and what the conversation has cost so far.
+  const head = [body === 'done' && p.durationMs ? `Worked for ${took(Number(p.durationMs))}` : body, p.model ? short(p.model) : null].filter(Boolean).join(' · ')
+  const spent = [
     models.length ? `${tokens(used)} tokens` : null,
-    p.stepUsd != null && (byUse || !models.length) ? usd(p.stepUsd) : !models.length && p.costUsd != null ? `${usd(p.costUsd)} total` : null, // dollars are the usage where the login is billed by use
+    p.stepUsd != null ? usd(p.stepUsd) : null,
+    p.totalUsd != null || p.costUsd != null ? `${usd(p.totalUsd ?? p.costUsd)} total` : null,
   ].filter(Boolean).join(' · ')
   const worst = limits.map(([, l]) => state(l)).find((s) => s?.tone === 'bad') ?? limits.map(([, l]) => state(l)).find(Boolean)
   return (
     // The last reply's card sits at the bottom of the chat: opened, it grows below what is on screen, so it brings itself into view.
     <details className="msg engine reply-card" open={open} onToggle={(e) => { if (e.currentTarget.open) e.currentTarget.scrollIntoView({ block: 'nearest' }) }}>
-      <summary className="faint">{head}{worst && <> <Badge tone={worst.tone} dot>limit {worst.word}</Badge></>}</summary>
+      <summary className="faint">
+        <span>{head}{worst && <> <Badge tone={worst.tone} dot>limit {worst.word}</Badge></>}</span>
+        {spent && <span>{spent}</span>}
+      </summary>
       <dl className="reply-card-rows">
         {p.model && <><dt>Model</dt><dd>{short(p.model)}</dd></>}
         {(p.durationMs != null || p.turns != null) && <><dt>Time</dt><dd>{[p.durationMs != null ? took(Number(p.durationMs)) : null, p.turns != null ? `${p.turns} step${p.turns === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')}</dd></>}

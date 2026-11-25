@@ -8385,3 +8385,9 @@ was added. A tab that is put away is taken out of the page and loses its place, 
 
 Story: Components/Conversation › OpensAtTheEnd. Not done: the planner's log and the build log (not
 conversations) still follow only a new line; not tried in the running app's tabs, only in Storybook.
+
+## The reply card, closed, is two lines with the conversation total (Sandy, 2026-11-25)
+
+Sandy: "include the total as well, so that we can see what we have spent so far for the
+whole conversation as well as the last one … on a second line". Closed, the card is two lines: "Worked for 22
+seconds · opus-5-5", then "426k tokens · $2.96 · $11.96 total", on every login, not only one billed by use.
