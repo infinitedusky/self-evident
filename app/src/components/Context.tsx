@@ -131,11 +131,12 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
               <div className="context-detail">
                 {n.waitingOn ? <><Badge tone="warn">Waiting on {n.waitingOn}</Badge> asked {day(n.on)}, {ago(n.on)}</> : <><Badge tone="accent">Unanswered</Badge> {n.status === 'proposed' ? `the agent proposes an answer, ${day(n.on)}` : `asked by ${who(n.addedBy)}, ${day(n.on)}`}</>}
               </div>
+              {n.waitingOn && n.ask && open !== `wait:${n.id}` && <Ask to={n.waitingOn} text={n.ask} />}
               <Depends n={n} />
               {n.status === 'proposed' && <div className="context-why"><span className="faint">The agent proposes: </span><strong>{n.answer}</strong></div>}
               {n.status === 'proposed' && n.body && <div className="context-why"><span className="faint">Why: </span><Md text={n.body} inline /></div>}
               {open === `wait:${n.id}`
-                ? <WaitingForm start={n.waitingOn ?? ''} busy={busy} onSave={(to) => act(() => engine.editContextNote(subject, n.id, { waitingOn: to }))} onCancel={() => setOpen(null)} />
+                ? <WaitingForm start={n.waitingOn ?? ''} startAsk={n.ask ?? ''} busy={busy} onSave={(to, ask) => act(() => engine.editContextNote(subject, n.id, { waitingOn: to, ask }))} onCancel={() => setOpen(null)} />
                 : open === `edit:${n.id}`
                   ? <DecisionForm others={decisions} start={n} asking busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, b.answer ? { ...b, status: 'settled' } : { title: b.title, background: b.background, options: b.options, dependsOn: b.dependsOn, dependsOnNew: b.dependsOnNew }))} onCancel={() => setOpen(null)} />
                 : open === n.id
@@ -145,7 +146,8 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
                       {n.status === 'proposed' && <button className="btn small" disabled={busy} aria-label={`Accept: ${n.title}`} onClick={() => act(() => engine.editContextNote(subject, n.id, { status: 'settled' }))}>Accept</button>}
                       {n.status === 'proposed' && <button className="btn quiet small" disabled={busy} aria-label={`Reject: ${n.title}`} onClick={() => act(() => engine.editContextNote(subject, n.id, { status: 'rejected' }))}>Reject</button>}
                       <button className={`btn small ${n.status === 'proposed' ? 'quiet' : ''}`} disabled={busy} aria-label={`Answer: ${n.title}`} onClick={() => setOpen(n.id)}>{n.status === 'proposed' ? 'Answer it yourself' : 'Answer it'}</button>
-                      {!n.waitingOn && <button className="btn quiet small" disabled={busy} aria-label={`Waiting on someone: ${n.title}`} title="You have asked someone and are waiting for their answer" onClick={() => setOpen(`wait:${n.id}`)}>Waiting on someone</button>}
+                      {!n.waitingOn && <button className="btn quiet small" disabled={busy} aria-label={`Waiting on someone: ${n.title}`} title="Someone else has the answer: say who, and what you want to ask them" onClick={() => setOpen(`wait:${n.id}`)}>Waiting on someone</button>}
+                      {n.waitingOn && <button className="btn quiet small" disabled={busy} aria-label={`Who and what to ask: ${n.title}`} title="Change who it waits on, or what you want to ask them" onClick={() => setOpen(`wait:${n.id}`)}>{n.ask ? 'Change what to ask' : 'Write what to ask'}</button>}
                       {n.waitingOn && <button className="btn quiet small" disabled={busy} aria-label={`No longer waiting: ${n.title}`} onClick={() => act(() => engine.editContextNote(subject, n.id, { waitingOn: '' }))}>No longer waiting</button>}
                       <button className="btn quiet small" disabled={busy} aria-label={`Edit the question: ${n.title}`} title="Its question and its background; give an answer too, or leave it unanswered" onClick={() => setOpen(`edit:${n.id}`)}>Edit</button>
                       {n.status === 'open' && <button className="btn quiet small" disabled={busy} aria-label={`Not needed: ${n.title}`} onClick={() => { if (window.confirm(`Drop the question "${n.title}"? It will not be asked again.`)) void act(() => engine.removeContextNote(subject, n.id)) }}>Not needed</button>}
@@ -367,14 +369,28 @@ function DecisionForm({ others, start, answering, asking, busy, onSave, onCancel
   )
 }
 
-/** Who an open decision waits on: the person has asked them, and says so. */
-function WaitingForm({ start, busy, onSave, onCancel }: { start: string; busy: boolean; onSave: (to: string) => void; onCancel: () => void }) {
-  const [to, setTo] = useState(start)
+/** What the person wants to ask whoever a decision waits on, as they wrote it, to copy into a message. */
+function Ask({ to, text }: { to: string; text: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = async () => { try { await navigator.clipboard.writeText(text); setCopied(true); window.setTimeout(() => setCopied(false), 2000) } catch { /* the text is on the page to select */ } }
   return (
-    <form className="mock-edit context-form" data-component="ContextWaitingForm" onSubmit={(e) => { e.preventDefault(); onSave(to.trim()) }}>
-      <label>Who you asked<input autoFocus value={to} onChange={(e) => setTo(e.target.value)} placeholder="Em, the vendor, legal" /></label>
+    <div className="context-ask" data-component="ContextAsk">
+      <div className="context-ask-head"><span className="faint">To ask {to}:</span> <button type="button" className="btn quiet small" aria-label={`Copy what to ask ${to}`} onClick={() => void copy()}>{copied ? 'Copied' : 'Copy'}</button></div>
+      <div className="context-ask-text">{text}</div>
+    </div>
+  )
+}
+
+/** Who an open decision waits on, and what the person wants to ask them (Sandy, 2026-11-25: "who it is and then what we want to ask … so I can write an email and I don't forget"). */
+function WaitingForm({ start, startAsk, busy, onSave, onCancel }: { start: string; startAsk: string; busy: boolean; onSave: (to: string, ask: string) => void; onCancel: () => void }) {
+  const [to, setTo] = useState(start)
+  const [ask, setAsk] = useState(startAsk)
+  return (
+    <form className="mock-edit context-form" data-component="ContextWaitingForm" onSubmit={(e) => { e.preventDefault(); onSave(to.trim(), ask.trim()) }}>
+      <label>Who it is<input autoFocus value={to} onChange={(e) => setTo(e.target.value)} placeholder="Em, the vendor, legal" /></label>
+      <label>What you want to ask them<textarea rows={4} value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Optional. In your words, as you would send it: it is kept here to copy into an email or a message." /></label>
       <div className="row">
-        <button className="btn small" type="submit" disabled={busy || !to.trim()}>{busy ? 'Saving…' : 'Mark it as waiting'}</button>
+        <button className="btn small" type="submit" disabled={busy || !to.trim()}>{busy ? 'Saving…' : start ? 'Save' : 'Mark it as waiting'}</button>
         <button className="btn quiet small" type="button" onClick={onCancel}>Cancel</button>
       </div>
     </form>

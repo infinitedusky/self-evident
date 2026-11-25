@@ -25,7 +25,7 @@ export const NOTE_KINDS = ['note', 'decision'] as const
 export type NoteKind = (typeof NOTE_KINDS)[number]
 export const NOTE_STATUSES = ['settled', 'proposed', 'rejected', 'open'] as const
 export type NoteStatus = (typeof NOTE_STATUSES)[number]
-export interface NoteView { id: string; on: string; kind: NoteKind; status: NoteStatus; title: string; /** A decision's answer, when it was asked as a question (context.ts). */ answer: string | null; /** An open decision: who the person is waiting on for its answer. */ waitingOn: string | null; /** A decision's background: where its question came from. */ background: string | null; /** A decision's options: what there is to choose between, a recommendation, more about the question. */ options: string | null; body: string; tasks: { id: string; name: string; title: string }[]; createdBy: string | null; updatedAt: string | null }
+export interface NoteView { id: string; on: string; kind: NoteKind; status: NoteStatus; title: string; /** A decision's answer, when it was asked as a question (context.ts). */ answer: string | null; /** An open decision: who the person is waiting on for its answer. */ waitingOn: string | null; /** What the person wants to ask whoever it waits on. */ ask: string | null; /** A decision's background: where its question came from. */ background: string | null; /** A decision's options: what there is to choose between, a recommendation, more about the question. */ options: string | null; body: string; tasks: { id: string; name: string; title: string }[]; createdBy: string | null; updatedAt: string | null }
 type Row = typeof note.$inferSelect
 
 /** A day as the person's calendar has it, in this computer's time. */
@@ -36,7 +36,7 @@ async function views(appId: string, rows: Row[]): Promise<NoteView[]> {
   const ids = [...new Set(rows.flatMap((r) => r.issueIds ?? []))]
   const [a] = await db.select({ key: app.key }).from(app).where(eq(app.id, appId))
   const tasks = ids.length ? await db.select({ id: issue.id, number: issue.number, title: issue.title }).from(issue).where(and(eq(issue.appId, appId), inArray(issue.id, ids))) : []
-  return rows.map((r) => ({ id: r.id, on: r.on, kind: r.kind as NoteKind, status: r.status as NoteStatus, title: r.title, answer: r.answer, waitingOn: r.waitingOn, background: r.background, options: r.options, body: r.body, createdBy: r.createdBy, updatedAt: (r.updatedAt ?? r.createdAt)?.toISOString() ?? null,
+  return rows.map((r) => ({ id: r.id, on: r.on, kind: r.kind as NoteKind, status: r.status as NoteStatus, title: r.title, answer: r.answer, waitingOn: r.waitingOn, ask: r.ask, background: r.background, options: r.options, body: r.body, createdBy: r.createdBy, updatedAt: (r.updatedAt ?? r.createdAt)?.toISOString() ?? null,
     tasks: (r.issueIds ?? []).flatMap((id) => { const t = tasks.find((x) => x.id === id); return t ? [{ id: t.id, name: identifier(a?.key ?? '', t.number), title: t.title }] : [] }) }))
 }
 
@@ -85,11 +85,11 @@ async function rowOf(appId: string, id: string) {
   return r
 }
 /** Any of it changed: what it says, its day, what kind it is, the tasks it is about. */
-export async function editNote(appId: string, id: string, i: { title?: string; body?: string; on?: string; kind?: string; issueIds?: string[]; status?: NoteStatus; answer?: string | null; waitingOn?: string | null; background?: string | null; options?: string | null }, actor = 'user'): Promise<NoteView> {
+export async function editNote(appId: string, id: string, i: { title?: string; body?: string; on?: string; kind?: string; issueIds?: string[]; status?: NoteStatus; answer?: string | null; waitingOn?: string | null; ask?: string | null; background?: string | null; options?: string | null }, actor = 'user'): Promise<NoteView> {
   const r = await rowOf(appId, id)
   const title = i.title === undefined ? r.title : String(i.title).trim().slice(0, 200)
   if (!title && !(i.answer ?? r.answer)) throw new PlanError('a note needs a title')
-  const [row] = await db.update(note).set({ title, body: i.body === undefined ? r.body : String(i.body).trim().slice(0, 20_000), on: i.on === undefined ? r.on : aDay(i.on), kind: i.kind === undefined ? r.kind : kindOf(i.kind), issueIds: i.issueIds === undefined ? r.issueIds : await tasksOf(appId, i.issueIds), status: i.status === undefined ? r.status : statusOf(i.status), answer: i.answer === undefined ? r.answer : String(i.answer ?? '').trim().slice(0, 500) || null, waitingOn: i.waitingOn === undefined ? r.waitingOn : String(i.waitingOn ?? '').trim().replace(/\s+/g, ' ').slice(0, 120) || null, background: i.background === undefined ? r.background : String(i.background ?? '').trim().slice(0, 20_000) || null, options: i.options === undefined ? r.options : String(i.options ?? '').trim().slice(0, 20_000) || null, updatedAt: new Date() }).where(eq(note.id, id)).returning()
+  const [row] = await db.update(note).set({ title, body: i.body === undefined ? r.body : String(i.body).trim().slice(0, 20_000), on: i.on === undefined ? r.on : aDay(i.on), kind: i.kind === undefined ? r.kind : kindOf(i.kind), issueIds: i.issueIds === undefined ? r.issueIds : await tasksOf(appId, i.issueIds), status: i.status === undefined ? r.status : statusOf(i.status), answer: i.answer === undefined ? r.answer : String(i.answer ?? '').trim().slice(0, 500) || null, waitingOn: i.waitingOn === undefined ? r.waitingOn : String(i.waitingOn ?? '').trim().replace(/\s+/g, ' ').slice(0, 120) || null, ask: i.ask === undefined ? r.ask : String(i.ask ?? '').trim().slice(0, 5_000) || null, background: i.background === undefined ? r.background : String(i.background ?? '').trim().slice(0, 20_000) || null, options: i.options === undefined ? r.options : String(i.options ?? '').trim().slice(0, 20_000) || null, updatedAt: new Date() }).where(eq(note.id, id)).returning()
   await said(appId, actor, 'note.changed', row)
   return (await views(appId, [row]))[0]
 }

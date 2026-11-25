@@ -261,7 +261,7 @@ export const AnswerAnOpenDecision: Story = {
   },
 }
 
-/** A decision that needs someone else: marked as waiting on them. It leaves the count of what is unanswered and yours, says who it waits on and for how long, and can still be answered when they reply. */
+/** A decision that needs someone else: marked as waiting on them, with what to ask them written down, so it is there to copy into an email and is not forgotten. It leaves the count of what is unanswered and yours, says who it waits on and for how long, and can still be answered when they reply. */
 export const WaitingOnSomeone: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
@@ -269,17 +269,30 @@ export const WaitingOnSomeone: Story = {
     const ask = section(canvasElement, 'decisions')
     await expect(ask.getByText('Waiting on Em')).toBeVisible() // one already asked of someone
     await expect(ask.getByText('1 waiting on someone')).toBeVisible()
+    await expect(ask.getByText('To ask Em:')).toBeVisible() // what to ask them, as it was written
+    await expect(ask.getByText(/Can the web checkout read the cards the app saved/)).toBeVisible()
+    await expect(c.getByRole('button', { name: 'Copy what to ask Em' })).toBeVisible()
     await userEvent.click(c.getByRole('button', { name: 'Waiting on someone: What is shown when a saved card has expired? (sample)' }))
     const mark = c.getByRole('button', { name: 'Mark it as waiting' })
     await expect(mark).toBeDisabled() // until it says who
-    await userEvent.type(c.getByRole('textbox', { name: 'Who you asked' }), 'the vendor')
+    await userEvent.type(c.getByRole('textbox', { name: 'Who it is' }), 'the vendor')
+    await userEvent.type(c.getByRole('textbox', { name: 'What you want to ask them' }), 'Does the vault tell us when a card expires? (sample)')
     await userEvent.click(mark)
     await expect(await ask.findByText('Waiting on the vendor')).toBeVisible()
+    await expect(ask.getByText('To ask the vendor:')).toBeVisible()
+    await expect(ask.getByText('Does the vault tell us when a card expires? (sample)')).toBeVisible()
+    await waitFor(() => expect(c.queryByRole('button', { name: 'Mark it as waiting' })).toBeNull())
+    // Who it is and what to ask can be changed after.
+    await userEvent.click(c.getByRole('button', { name: 'Who and what to ask: What is shown when a saved card has expired? (sample)' }))
+    await waitFor(() => expect(c.getByRole('textbox', { name: 'What you want to ask them' })).toHaveValue('Does the vault tell us when a card expires? (sample)'))
+    await userEvent.type(c.getByRole('textbox', { name: 'What you want to ask them' }), ' And how far ahead?')
+    await userEvent.click(c.getByRole('button', { name: 'Save' }))
+    await expect(await ask.findByText('Does the vault tell us when a card expires? (sample) And how far ahead?')).toBeVisible()
     await expect(ask.getByText('2 waiting on someone')).toBeVisible()
     await expect(ask.getByText('1 unanswered')).toBeVisible() // only the proposed answer is left for the person now
     // One with an answer the agent proposed can wait on someone too.
     await userEvent.click(c.getByRole('button', { name: 'Waiting on someone: Which saved cards are offered? (sample)' }))
-    await userEvent.type(c.getByRole('textbox', { name: 'Who you asked' }), 'legal')
+    await userEvent.type(c.getByRole('textbox', { name: 'Who it is' }), 'legal') // what to ask is optional
     await userEvent.click(c.getByRole('button', { name: 'Mark it as waiting' }))
     await expect(await ask.findByText('Waiting on legal')).toBeVisible()
     await expect(c.getByRole('button', { name: 'Accept: Which saved cards are offered? (sample)' })).toBeVisible() // and still be accepted
@@ -287,6 +300,7 @@ export const WaitingOnSomeone: Story = {
     await expect(c.getByRole('button', { name: 'Answer: What is shown when a saved card has expired? (sample)' })).toBeVisible()
     await userEvent.click(c.getByRole('button', { name: 'No longer waiting: Can a card saved in the app be used on the web? (sample)' }))
     await expect(await ask.findByText('2 waiting on someone')).toBeVisible()
+    await expect(ask.queryByText('To ask Em:')).toBeNull() // what to ask goes with it
   },
 }
 

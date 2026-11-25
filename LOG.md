@@ -7913,3 +7913,20 @@ As built (context.ts, `gather`):
 Not done: a pulled-in ticket is listed for the agent to open, not given whole (mark it "in full" on the task);
 a project doc that is not a ticket cannot be withheld from one task; sub-tasks' builders get what their task
 gets.
+
+## 2026-11-25: what to ask whoever a decision waits on
+
+Sandy: "when there's still a question, if we do waiting on someone, we should add a thing where we can write
+exactly what we want to ask them. So who it is and then what we want to ask, and eventually we'll be able to
+just send that through to Slack or something. But for right now … so I can write an email and I don't forget."
+
+- **Waiting on someone now takes two things:** who it is, and what you want to ask them (optional, in the
+  person's words). Kept on the decision (`note.ask`, migration 0070).
+- **Shown on the decision** under "Waiting on Em" as "To ask Em:", with a Copy button, so it goes into an email
+  or a message as written. "Change what to ask" (or "Write what to ask") opens the same two fields again.
+- **It goes with the waiting:** "No longer waiting" or answering the decision clears it.
+- **In the open questions doc** it is printed under the question as "To ask Em".
+- **Only the person writes it.** An agent's Context tool cannot set it, and agents are not given it.
+
+Not done, on purpose: sending it anywhere (Slack, email); marking whether it has been sent yet, so "Waiting on
+Em" still reads the same before and after you actually ask; it is not in the reports.
