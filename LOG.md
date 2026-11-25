@@ -7913,3 +7913,33 @@ As built (context.ts, `gather`):
 Not done: a pulled-in ticket is listed for the agent to open, not given whole (mark it "in full" on the task);
 a project doc that is not a ticket cannot be withheld from one task; sub-tasks' builders get what their task
 gets.
+
+## A phone gets one chat, with the rest pulled out over it (Sandy, 2026-11-23: "if you try to use the mobile it is unusable as there is too much info on too small a scree. somehow it needs to hold the agents chat only and then have ways to look at things that are needed outside of those chats"; 2026-11-25: "just implement what we have for C and then try it out, it is really hard to know what will and won't work ahead of time")
+
+Three arrangements were drawn (chats as a list; what needs you as a feed; one chat with things pulled out over it).
+Sandy took the third, added "the steps for the projec as a tray from the left" and "the chat has subagents, so for
+each task we should see tabs", and asked for it built so it can be tried. It is a first cut to find out what works.
+
+Built: a screen 700px wide or less gets `Phone.tsx` in place of the workspace (`main.tsx`).
+- **The chat** is a task's own agent, with the agents it has out as tabs under the task's name: the task page's
+  `TaskAgent`, restyled, so nothing about agents is written twice. A question the task has open is answered at the
+  top of the chat. A conversation about the app as a whole shows with no tabs.
+- **The tray, from the left**: what needs you, the project's tasks, this task's steps under it (the brief and what
+  feeds it, then the build), the other chats, New chat, and the app. It is how the chat is changed. A step opens its
+  page.
+- **Look, from the bottom**: this task's overview, brief, build and pull request, then My Stuff, Projects, Tasks,
+  Ideas, To-dos.
+- **A page looked at** is the app's own page in a `PagePane` over the chat, with "‹ Chat" at its top; a task's page
+  there has no nav and no agent column, since the tray and the chat are those. A link in the chat to a page of the
+  app opens the same way. When an agent opens a page, the phone offers it ("The agent opened …, Look") and does not
+  put it over the chat.
+- The address is read: `/tasks/SE-12` lands in that task's chat, `/tasks/SE-12/brief` with its brief open.
+- The phone remembers its chat per app. "The full site, on this phone" in Look gives the workspace until the tab is
+  closed.
+
+After Slack's phone app (the list slides in from the left over one conversation) and Linear's (detail as a sheet).
+
+Not done: pages laid out for a phone (they are the computer's pages, narrow); the smoke test's checks as their own
+phone screen; swiping the tray and Look open; a step pressed taking the chat to where that step happened; agents
+out being read-only on the phone (their tab has a message box, as on the computer); prototypes, Storybook and the
+terminal, which stay on the computer.
