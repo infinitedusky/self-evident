@@ -7820,3 +7820,37 @@ Not done: nothing stops the site (it is left running); agents have no tool for w
 the workbench folder edits the files); a folder with no site is not given one from the template. **Open: "Your docs"
 on the Learn page (pages in the database) is still there.** With the docs being this site, it is a second place for
 the same thing; whether it goes is Sandy's to say.
+
+## A project's page is laid out like a task's, with an agent of its own (Sandy, 2026-11-25)
+
+Sandy, on Cloaked's Executive Protection project, with its PRD and six tickets in the project's Context: "on the
+project page we need the steps at the bottom to have a similar UI to tasks. They need a 'project' agent, just like
+the ticket agent … The next step is to build out the tasks and link them to the tickets. But first I want to plan
+it out. I ran the research step and it did something, but I can't see it."
+
+What had happened to the research: the step went to a new conversation about the app, which read the Context and
+the project (nine seconds), then asked to be allowed a shell command and waited. Nothing on the project's page
+showed the conversation or the question, the step's card said only "Reading the PRD, the six tickets and the
+code", and the engine was restarted while it waited, so the question died with it. Nothing was written.
+
+- **A project has an agent of its own** (talk.ts, `projectTalk`): the oldest open conversation pinned to the
+  project and to nothing under it (not a task's, an idea's or a prototype's). So a step handed over before this
+  is the project's agent now, and the stuck research conversation shows on the project's page. It has no
+  worktree: it plans, in the app's checkout, and each task builds in its own.
+- **What it is told**: it plans across the project's tasks and builds nothing. It reads the Context first,
+  records steps with a summary for the person, and when asked for the tasks proposes them first, in order, each
+  with the ticket it is under (a ticket bigger than one pull request is several tasks under it); once agreed it
+  makes them and sets their tickets, and leaves each brief to that task's own agent.
+- **The page**: a nav down the left (Overview, Context, a page per step of the project as a whole, each at
+  `/projects/:id/:section`) and the agent in a column on the right, as on a task and an idea. The overview is
+  what the page was: tasks first. Context has a page of its own. A step under way is said at the top of the
+  overview, with a link. A step's page is the task's (StepSection): what was written, its summary, Start.
+- **A project's step goes to the project's agent** (`POST /talks/ask` with a projectId), not to a new
+  conversation each time.
+- A task on its own, whose plan and build the project page also is, keeps the plain page: its agent and steps
+  are on the task's page.
+
+Not done: the project's agent is still listed in the app's column on the left as well; a project's sketches have
+no worktree of their own to be written in (the agent has no editing tools: it can research and plan, and a
+prototype it starts gets its own worktree); `project_graph` on this project returns 190,000 characters, more than
+an agent can read in one go, which is what sent the research agent to the shell (it is told to use `tasks`).

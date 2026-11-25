@@ -10,7 +10,7 @@ import { createIssue } from './issues.js'
 import { createIdea } from './ideas.js'
 import { convertIdea } from './work.js'
 import { eq } from 'drizzle-orm'
-import { agentsOut, answerPermission, askPerson, conductorOf, liveForTest, talkTranscript, closeTalk, closeTalks, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, listTalks, modelFor, readAgent, reopenTalk, showTalk, startCheckTalk, takeReply, taskAgents, taskTalk } from './talk.js'
+import { agentsOut, answerPermission, askPerson, conductorOf, liveForTest, talkTranscript, closeTalk, closeTalks, ensureIdeaTalk, ensureProjectTalk, ensureTaskTalk, ideaAgents, ideaTalk, listTalks, projectAgents, projectTalk, modelFor, readAgent, reopenTalk, showTalk, startCheckTalk, takeReply, taskAgents, taskTalk } from './talk.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -164,6 +164,25 @@ describe.skipIf(!reachable)('a task\'s own agent', () => {
     const [left] = await db.select().from(session).where(eq(session.id, about.id))
     expect(left.subjectRef).toEqual({ ideaId: i.id, app: true }) // the one about the app stays where it was
     await expect(ensureIdeaTalk(i.id)).rejects.toThrow(/was converted/)
+  })
+
+  it('a project has an agent of its own: the oldest open conversation pinned to the project, not one of a task, an idea or a prototype in it', async () => {
+    const { createProject } = await import('./projects.js')
+    const { project: p, issues: [t] } = await createProject({ appId, name: 'Executive protection (sample)', issues: [{ title: 'Protected people (sample)', brief: 'Build it.' }] })
+    expect(await projectTalk(p.id)).toBeNull()
+    await talk({ issueId: t.id, projectId: p.id }) // a task's agent
+    await talk({ projectId: 'proj_other', app: true })
+    await talk({ projectId: p.id, app: true }, { status: 'ended' })
+    const builder = await talk({ prototypeId: 'proto_made_up_p', projectId: p.id }) // a prototype on the project: its builder, one the agent has out
+    expect(await projectTalk(p.id)).toBeNull()
+    const own = await talk({ projectId: p.id, app: true }) // a step handed over before the page had an agent column: an app conversation about the project
+    await talk({ projectId: p.id, app: true }, { createdAt: new Date(Date.now() + 60_000) })
+    expect(await projectTalk(p.id)).toMatchObject({ id: own.id, live: false, busy: false })
+    expect(await ensureProjectTalk(p.id)).toMatchObject({ id: own.id }) // asked for again: the same one, nothing started
+    await db.insert(prototype).values({ id: newId('prototype'), appId, projectId: p.id, title: 'The whole flow (sample)', branch: 'prototype/flow', path: '/tmp/none', status: 'running', sessionId: builder.id })
+    await db.insert(prototype).values({ id: newId('prototype'), appId, projectId: p.id, issueId: t.id, title: 'One task\'s (sample)', branch: 'prototype/one', path: '/tmp/none', status: 'running', sessionId: (await talk({ prototypeId: 'proto_made_up_t' })).id })
+    expect(await projectAgents(p.id)).toMatchObject([{ sessionId: builder.id, kind: 'prototype', title: 'The whole flow (sample)' }])
+    await expect(ensureProjectTalk('proj_nope')).rejects.toThrow(/no project proj_nope/)
   })
 
   it('is only for a top-level code task', async () => {

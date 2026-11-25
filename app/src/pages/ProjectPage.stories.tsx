@@ -9,7 +9,7 @@ import type { Graph, GraphSubIssue } from '../engine'
 const meta = { title: 'Pages/ProjectPage', component: ProjectPage, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><ProjectPage /></div> } satisfies Meta<typeof ProjectPage>
 export default meta
 type Story = StoryObj<typeof meta>
-const at = (id: string) => ({ route: { path: '/projects/:id', url: `/projects/${id}` } })
+const at = (id: string, section?: string) => ({ route: { path: section ? '/projects/:id/:section' : '/projects/:id', url: `/projects/${id}${section ? `/${section}` : ''}` } })
 const withGraph = (g: Graph) => withEngine({ graphs: { ...sampleData.graphs, [g.project.id]: g } })
 
 // Made-up variants of the sample project, built from it.
@@ -40,12 +40,16 @@ const bare: Graph = { ...graph, project: { ...graph.project, id: 'proj_bare' }, 
 /** Running, mid-run: one sub-task landed, one building, two waiting; an open question, a decision, a to-do and a backlog with a duplicate. */
 export const Running: Story = {
   parameters: at('proj_checkout'),
-  play: async ({ canvasElement }) => { // the tasks lead: before the graph, the assets and the project's own steps
+  play: async ({ canvasElement }) => { // the tasks lead the overview: before the graph and the assets; the project's own steps are pages in its nav, and its agent is beside them
     const c = within(canvasElement)
     const tasks = await c.findByRole('heading', { name: /^Tasks/ }, { timeout: 5000 })
-    const steps = await c.findByText('Steps for the project as a whole')
-    await expect(tasks.compareDocumentPosition(steps) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     await expect(tasks.compareDocumentPosition(await c.findByRole('heading', { name: /^Assets/ })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const nav = within(c.getByRole('navigation', { name: 'This project' }))
+    await expect(nav.getByRole('link', { name: /Overview/ })).toHaveAttribute('href', expect.stringMatching(/\/projects\/proj_checkout$/))
+    await expect(nav.getByRole('link', { name: /Research/ })).toHaveAttribute('href', expect.stringContaining('/projects/proj_checkout/research'))
+    await expect(nav.getByRole('link', { name: /Context/ })).toHaveAttribute('href', expect.stringContaining('/projects/proj_checkout/context'))
+    await expect(c.queryByText('Steps for the project as a whole')).not.toBeInTheDocument()
+    await expect(await c.findByRole('button', { name: 'Start this project\'s agent' })).toBeInTheDocument() // no agent yet
   },
 }
 /** A long description written in markdown (made up): shown formatted, its first lines only, with the rest a press away. */
@@ -105,10 +109,44 @@ export const Loading: Story = { parameters: at('proj_checkout'), beforeEach: wit
 export const EngineDown: Story = { parameters: at('proj_checkout'), beforeEach: withEngine(engineDown) }
 /** A project's Context, above its tasks: what each of them sees as "from the project". A task on its own has none here: it has its own. */
 export const ItsContext: Story = {
-  parameters: at('proj_checkout'),
+  parameters: at('proj_checkout', 'context'),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await expect(await c.findByText('Checkout design principles (sample)')).toBeInTheDocument()
     await expect(c.getByRole('button', { name: 'Add a decision' })).toBeInTheDocument()
+  },
+}
+
+const projectTalk = { ...sampleData.talks[0], subject: 'Checkout (sample)', subjectRef: { projectId: 'proj_checkout', app: true } }
+const researching = { ...sampleData.steps, projects: { ...sampleData.steps.projects, states: [{ key: 'research' as const, status: 'started' as const, detail: 'Reading the six tickets and the code (sample)' }] } }
+/** The project's own agent, in the column on the right, as a task's is: it stays while the pages beside it change. A step handed over before is under way, and the overview says so with a link to its page. */
+export const WithItsAgent: Story = {
+  parameters: at('proj_checkout'),
+  beforeEach: withEngine({ projectTalk, steps: researching }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('This project\'s agent')).toBeInTheDocument()
+    await expect(c.queryByRole('button', { name: 'Start this project\'s agent' })).not.toBeInTheDocument()
+    const under = await c.findByText(/Under way for the project as a whole/)
+    await expect(within(under).getByRole('link', { name: 'Research' })).toHaveAttribute('href', expect.stringContaining('/projects/proj_checkout/research'))
+  },
+}
+/** A step of the project as a whole, on a page of its own: what its agent wrote, as on a task. */
+export const AStepsPage: Story = {
+  parameters: at('proj_checkout', 'research'),
+  beforeEach: withEngine({ projectTalk, steps: { ...sampleData.steps, projects: { ...sampleData.steps.projects, states: [{ key: 'research' as const, status: 'done' as const, detail: '3 comps, one case against' }] } } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/Who does it best/)).toBeInTheDocument()
+    await expect(c.queryByRole('heading', { name: /^Tasks/ })).not.toBeInTheDocument()
+  },
+}
+/** A step not started: one press hands it to the project's agent, which opens beside the page. */
+export const StartAStep: Story = {
+  parameters: at('proj_checkout', 'research'),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Start with the agent' }))
+    await expect(await c.findByText('Handed to this project\'s agent, on the right.')).toBeInTheDocument()
   },
 }
