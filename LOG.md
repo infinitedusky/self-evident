@@ -7782,3 +7782,12 @@ Not done: nothing stops the site (it is left running); agents have no tool for w
 the workbench folder edits the files); a folder with no site is not given one from the template. **Open: "Your docs"
 on the Learn page (pages in the database) is still there.** With the docs being this site, it is a second place for
 the same thing; whether it goes is Sandy's to say.
+
+## "Your docs" is gone from Learn (Sandy, 2026-11-24: "remove from the learn page")
+
+The docs are the site in the workbench folder, shown from Docs in the rail (above), so the pages kept in the database
+were a second place for the same thing. Removed the same day they were added: the section of the Learn page, the
+`app_doc` table (migration 0068 drops it; it held no pages in the database on this computer), the `app_docs` and
+`write_app_doc` tools, and the line that told Learn's agent to read them. Learn is its two halves again.
+
+Still not done, from the Docs entry: agents have no tool for writing a docs page, and nothing stops the site.

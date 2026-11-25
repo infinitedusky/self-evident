@@ -422,8 +422,6 @@ export interface DocsSite { /** The workbench folder; null when none is named. *
 /** What an agent learned from an app's code: a short document each, the part for a person and the part for agents. */
 export interface Learned { key: string; title: string; summary: string; body: string; sha: string | null; updatedAt: string }
 export interface Learning { docs: Learned[]; missing: string[]; working: { sessionId: string } | null; sessionId: string | null; stale: number }
-/** A page of an app's own docs: what the person understands about the app, in their words (the Learn page). */
-export interface AppDoc { id: string; title: string; body: string; /** Who wrote it last: `user`, or an agent. */ by: string; createdAt: string; updatedAt: string }
 /** A note (engine/src/notes.ts): something said, found or decided, on a day, about the tasks it names. */
 export interface Note { id: string; on: string; kind: 'note' | 'decision'; title: string; /** A decision asked as a question in a Context: its answer. */ answer?: string | null; body: string; tasks: { id: string; name: string; title: string }[]; createdBy: string | null; updatedAt: string | null }
 /** Who a Context is of: an idea, a task or a project (docs/context-brief.md). */
@@ -824,10 +822,6 @@ export const engine = {
   testAgain: (issueId: string) => call<{ started: true; head: string }>('POST', `/issues/${issueId}/test`),
   learning: (appId: string) => call<Learning>('GET', `/apps/${appId}/learning`),
   learn: (appId: string) => call<{ sessionId: string; started: boolean }>('POST', `/apps/${appId}/learn`),
-  appDocs: (appId: string) => call<AppDoc[]>('GET', `/apps/${appId}/docs`),
-  writeAppDoc: (appId: string, page: { title: string; body: string }) => call<AppDoc>('POST', `/apps/${appId}/docs`, page),
-  editAppDoc: (id: string, page: { title?: string; body?: string }) => call<AppDoc>('PATCH', `/app-docs/${id}`, page),
-  removeAppDoc: (id: string) => call<{ removed: string }>('DELETE', `/app-docs/${id}`),
   /** The app's notes, newest day first; issueId: one task's. */
   notes: (appId: string, f: { issueId?: string; from?: string; to?: string } = {}) => call<Note[]>('GET', `/apps/${appId}/notes?${new URLSearchParams(Object.entries({ issue: f.issueId, from: f.from, to: f.to }).filter((e): e is [string, string] => !!e[1])).toString()}`),
   addNote: (appId: string, b: { on: string; kind: 'note' | 'decision'; title: string; body: string; issueIds: string[] }) => call<Note>('POST', `/apps/${appId}/notes`, b),
@@ -1025,7 +1019,7 @@ export const EVENT_TYPES = [
   'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted', 'build.carried_on',
   'run.started', 'run.message', 'run.steps', 'run.tool_call', 'run.tool_result', 'run.result', 'run.error', 'run.rate_limit',
   'land.committed', 'land.tested', 'land.landed', 'land.conflict', 'land.retry', 'pr.opened', 'pr.updated', 'pr.error',
-  'task.tested', 'task.testing', 'task.test_ran', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked', 'learn.written', 'doc.written', 'doc.removed', 'smoke.started', 'smoke.marked', 'smoke.skipped', 'smoke.trying', 'smoke.tried', 'task.smoke_waiting',
+  'task.tested', 'task.testing', 'task.test_ran', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked', 'learn.written', 'smoke.started', 'smoke.marked', 'smoke.skipped', 'smoke.trying', 'smoke.tried', 'task.smoke_waiting',
   'task.check_again', 'task.check_reopened', 'smoke.accepted', 'release.marked', 'trajectory.run', 'trajectory.cannot_run', 'trajectory.error',
   'finalize.started', 'finalize.step', 'finalize.done', 'finalize.failed', 'finalize.survivor', 'finalize.fix', 'finalize.sent', 'pr.sent', 'pr.read_back', 'pr.edited_there',
 ]
