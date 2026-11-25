@@ -28,7 +28,7 @@ export const OnATask: Story = {
     await expect(ask.getByText('Which saved cards are offered? (sample)', { selector: '.context-q' })).toBeVisible() // the agent proposes an answer
     await expect(ask.getByText('Only the ones used in the last 12 months')).toBeVisible()
     await expect(ask.getByText('What is shown when a saved card has expired? (sample)', { selector: '.context-q' })).toBeVisible() // asked, not answered
-    const rows = [...canvasElement.querySelectorAll('[data-section="decisions"] > .context-row')].map((r) => r.getAttribute('data-unanswered'))
+    const rows = [...canvasElement.querySelectorAll('[data-section="decisions"] > .context-card')].map((r) => r.getAttribute('data-unanswered'))
     await expect(rows).toEqual(['proposed', 'open', 'waiting', null, null, null]) // unanswered first, the one waiting on someone last of them, then the answered and the project's
     const docs = section(canvasElement, 'docs')
     await expect(docs.getByText(/From Linear, SHOP-41 · the work came from it/)).toBeVisible()
@@ -309,10 +309,13 @@ export const TheStoryBehindAQuestion: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await c.findByText('2 unanswered')
-    await expect(c.getByText(/The ticket does not say. Support is asked about it most weeks/)).toBeVisible() // unanswered: its background in full, above the question
-    await expect(c.getByText(/Recommendation: \(b\) for this task/)).toBeVisible() // and its options, below it
+    await expect(c.getByText(/The ticket does not say. Support is asked about it most weeks/)).toBeVisible() // unanswered: its background in full
+    await expect(c.getByText(/Recommendation: \(b\) for this task/)).toBeVisible() // and its options
     const parts = [...(canvasElement.querySelector('[data-note="note_ctx8"]') as HTMLElement).children].map((e) => e.getAttribute('data-component') ?? e.className)
-    await expect(parts).toEqual(['ContextBackground', 'context-q', '', 'ContextOptions'])
+    await expect(parts).toEqual(['context-q', 'context-status', 'ContextBackground', 'ContextOptions', 'context-rest']) // each decision is a card: the question at its top, where it stands, then background, then options, each under its own heading, then what to do
+    const made = [...(canvasElement.querySelector('[data-note="note_ctx3"]') as HTMLElement).children].map((e) => e.getAttribute('data-component') ?? e.className)
+    await expect(made.slice(0, 2)).toEqual(['context-q', 'context-answer']) // an answered one: the question, then its answer, then the same two folded
+    await expect(canvasElement.querySelectorAll('.context-card[data-note]').length).toBeGreaterThan(4)
     await expect(c.getByText(/Design first drew the whole number/)).not.toBeVisible() // answered: folded
     await userEvent.click(c.getByRole('button', { name: 'Add a decision' }))
     await userEvent.type(c.getByRole('textbox', { name: 'The question' }), 'Do we keep cards of closed accounts? (sample)')

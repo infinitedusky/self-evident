@@ -124,13 +124,14 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
         {open === 'decision' && <DecisionForm others={decisions} busy={busy} onSave={(b) => act(() => engine.addContextNote(subject, { kind: 'decision', ...b }))} onCancel={() => setOpen(null)} />}
         {!settled.length && !waiting.length && open !== 'decision' && <div className="empty">None yet.</div>}
         {waiting.map((n) => (
-          <div className="context-row context-qa context-unmade" key={n.id} data-note={n.id} data-unanswered={n.waitingOn ? 'waiting' : n.status}>
-            {n.background && open !== n.id && open !== `edit:${n.id}` && <More name="Background" text={n.background} open />}
+          <div className="context-card context-unmade" key={n.id} data-note={n.id} data-unanswered={n.waitingOn ? 'waiting' : n.status}>
             <div className="context-q">{n.title}</div>
-            <div>
-              <div className="context-detail">
+              <div className="context-status">
                 {n.waitingOn ? <><Badge tone="warn">Waiting on {n.waitingOn}</Badge> asked {day(n.on)}, {ago(n.on)}</> : <><Badge tone="accent">Unanswered</Badge> {n.status === 'proposed' ? `the agent proposes an answer, ${day(n.on)}` : `asked by ${who(n.addedBy)}, ${day(n.on)}`}</>}
               </div>
+            {n.background && open !== n.id && open !== `edit:${n.id}` && <More name="Background" text={n.background} open />}
+            {n.options && open !== n.id && open !== `edit:${n.id}` && <More name="Options" text={n.options} open />}
+            <div className="context-rest">
               {n.waitingOn && n.ask && open !== `wait:${n.id}` && <Ask to={n.waitingOn} text={n.ask} />}
               <Depends n={n} />
               {n.status === 'proposed' && <div className="context-why"><span className="faint">The agent proposes: </span><strong>{n.answer}</strong></div>}
@@ -154,7 +155,6 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
                     </div>
                   )}
             </div>
-            {n.options && open !== n.id && open !== `edit:${n.id}` && <More name="Options" text={n.options} open />}
           </div>
         ))}
         {mine(settled).map((n) => open === n.id
@@ -166,9 +166,9 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
             <summary className="context-detail">{rejected.length} answer{rejected.length === 1 ? '' : 's'} proposed and rejected</summary>
             <p className="context-how">Kept so the agents know: each is told you turned it down, and does not propose it again.</p>
             {rejected.map((n) => (
-              <div className="context-row context-qa" key={n.id} data-note={n.id}>
+              <div className="context-card" key={n.id} data-note={n.id}>
                 <div className="context-q">{n.title}</div>
-                <div>
+                <div className="context-answer">
                   <div className="context-title rejected">{n.answer}</div>
                   {n.body && <div className="context-why"><span className="faint">Why it was proposed: </span><Md text={n.body} inline /></div>}
                   <div className="context-detail">Proposed by the agent, {day(n.on)} · rejected by you
@@ -239,14 +239,14 @@ function Doc({ d, limits, busy, onEdit, onInFull, onRefresh, onRemove }: { d: Co
   )
 }
 
-/** A decision: its question on the left, its answer on the right, with why and when. One made before questions were asked has only its answer. */
+/** A decision, as a card (Sandy, 2026-11-25: "the question should be at the top and then it should be background and then options, but we need more prominent separation. Maybe each one of them is a card"): its question at the top, its answer with why and when, then its background and its options, folded. One made before questions were asked has only its answer. */
 function DecisionRow({ n, onEdit }: { n: ContextNote; onEdit?: () => void }) {
   const made = n.status === 'settled'
   return (
-    <div className={`context-row ${n.title ? 'context-qa' : ''}`} data-note={n.id}>
-      {n.background && <More name="Background" text={n.background} />}
+    <div className="context-card" data-note={n.id}>
       {n.title && <div className="context-q">{n.title}</div>}
-      <div>
+      <div className="context-answer">
+        {made && n.title && <div className="context-label">Answer</div>}
         {made ? <div className="context-title">{n.answer}</div> : <div className="context-detail">{n.status === 'proposed' ? `Unanswered: the agent proposes "${n.answer}"` : n.waitingOn ? `Unanswered: waiting on ${n.waitingOn}` : 'Unanswered'}</div>}
         {made && n.body && <div className="context-why"><span className="faint">Why: </span><Md text={n.body} inline /></div>}
         <Depends n={n} />
@@ -255,6 +255,7 @@ function DecisionRow({ n, onEdit }: { n: ContextNote; onEdit?: () => void }) {
           {onEdit && <>{' · '}<button className="link-btn" aria-label={`Edit: ${n.title || n.answer}`} onClick={onEdit}>Edit</button></>}
         </div>}
       </div>
+      {n.background && <More name="Background" text={n.background} />}
       {n.options && <More name="Options" text={n.options} />}
     </div>
   )
@@ -318,7 +319,7 @@ function Depends({ n }: { n: ContextNote }) {
 function More({ name, text, open }: { name: 'Background' | 'Options'; text: string; open?: boolean }) {
   return (
     <details className="context-bg" open={open} data-component={`Context${name}`}>
-      <summary className="context-detail">{name}</summary>
+      <summary className="context-label">{name}</summary>
       <Md text={text} className="context-text" />
     </details>
   )
