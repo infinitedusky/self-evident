@@ -8219,3 +8219,23 @@ model, the amount of time, and for right now the usage for that last query".
 
 Not done: the limits are on each reply, not in one place for the whole app; build and plan runs, reports and
 summaries have no card; there is no single "credits" figure, since the SDK gives none.
+
+## A conversation follows its app to another Claude login (Sandy, 2026-11-25)
+
+Sandy: "I changed the user claude and lost the conversation. We should have some way to migrate." The app's
+account had been set to a login folder of its own (Settings › Agents), and a conversation begun on the engine's
+login answered "No conversation found with session ID": Claude Code keeps a session under the folder of the
+login it ran on, and `--resume` looked under the new one. Nothing was lost; the session was still where it was
+written.
+
+- **Before a conversation is resumed, its session is copied to the login it is about to run on**
+  (`engine/src/session-move.ts`): the `.jsonl` and the folder beside it (tool results, sub-agents). It is looked
+  for under the engine's login, `~/.claude`, and every login an app here runs on. The conversation says so in
+  one line when it happens. The hand-over to a new task's agent does the same before it reads a conversation.
+- **Copied, never moved**, so the login it came from keeps its own. Where more than one has the session, the one
+  written to last is the conversation: going back to an earlier login brings what was said since.
+
+Not done: a login an app used to run on, that no app names now and that is not the engine's, is not looked
+in; build runs that resume a session (`resumeSessionId`) do not bring it along; not tried on a real conversation,
+so whether the other login will carry on from a session it did not write (the SDK ties a model's thinking to
+the account that produced it) is not known.
