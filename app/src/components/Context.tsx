@@ -68,6 +68,8 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
   const yours = waiting.length - asked.length
   const rejected = decisions.filter((n) => n.status === 'rejected')
   const notes = v.notes.filter((n) => n.kind === 'note')
+  const onTasks = v.tasks ?? []
+  const taskOpen = onTasks.reduce((n, g) => n + g.notes.length, 0)
   const fromProject = v.project && <div className="context-from">From the project, <Link to={`/projects/${v.project.id}`}>{v.project.name}</Link>. Changed there.</div>
   return (
     <section className="panel context" data-component="Context">
@@ -112,9 +114,9 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
 
       <div className={`context-section ${folded.decisions ? 'folded' : ''}`} data-section="decisions">
         <div className="context-head">
-          <h3 className="context-h"><button type="button" className="context-fold" aria-expanded={!folded.decisions} aria-label={`${folded.decisions ? 'Show' : 'Hide'} decisions`} onClick={() => fold('decisions')}><span aria-hidden="true" className="context-fold-mark">{folded.decisions ? '▸' : '▾'}</span><span className="context-fold-name">Decisions</span></button> {settled.length + waiting.length > 0 && <Badge>{settled.length + waiting.length}</Badge>}{yours > 0 && <Badge tone="accent">{yours} unanswered</Badge>}{asked.length > 0 && <Badge tone="warn">{asked.length} waiting on someone</Badge>}</h3>
+          <h3 className="context-h"><button type="button" className="context-fold" aria-expanded={!folded.decisions} aria-label={`${folded.decisions ? 'Show' : 'Hide'} decisions`} onClick={() => fold('decisions')}><span aria-hidden="true" className="context-fold-mark">{folded.decisions ? '▸' : '▾'}</span><span className="context-fold-name">Decisions</span></button> {settled.length + waiting.length > 0 && <Badge>{settled.length + waiting.length}</Badge>}{yours > 0 && <Badge tone="accent">{yours} unanswered</Badge>}{asked.length > 0 && <Badge tone="warn">{asked.length} waiting on someone</Badge>}{taskOpen > 0 && <Badge tone="accent">{taskOpen} unanswered on its tasks</Badge>}</h3>
           {!folded.decisions && <>
-          {waiting.length + projects([...undecided, ...proposed]).length > 0 && <button className="btn quiet small" onClick={() => setOpen(open === 'doc:open-questions' ? null : 'doc:open-questions')} title="Every unanswered decision as one document, to copy, download or print">Open questions doc</button>}
+          {waiting.length + projects([...undecided, ...proposed]).length + taskOpen > 0 && <button className="btn quiet small" onClick={() => setOpen(open === 'doc:open-questions' ? null : 'doc:open-questions')} title="Every unanswered decision as one document, to copy, download or print">Open questions doc</button>}
           <button className="btn quiet small" onClick={() => setOpen(open === 'decision' ? null : 'decision')}>Add a decision</button>
           </>}
         </div>
@@ -161,6 +163,18 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
           ? <DecisionForm others={decisions} key={n.id} start={n} busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, b))} onCancel={() => setOpen(null)} onRemove={() => { if (window.confirm(`Delete the decision "${n.title || n.answer}"?`)) void act(() => engine.removeContextNote(subject, n.id)) }} />
           : <DecisionRow key={n.id} n={n} onEdit={() => setOpen(n.id)} />)}
         {projects([...settled, ...undecided, ...proposed]).length > 0 && <>{fromProject}{projects([...settled, ...undecided, ...proposed]).map((n) => <DecisionRow key={n.id} n={n} />)}</>}
+        {onTasks.length > 0 && <>
+          <div className="context-from">Unanswered on this project's tasks. Each is answered on its task.</div>
+          {onTasks.map((g) => {
+            const wait = g.notes.filter((n) => n.waitingOn).length
+            return (
+              <details className="context-task" key={g.task.id} open data-component="ContextTaskQuestions" data-task={g.task.id}>
+                <summary><span className="context-task-name"><Link to={`/tasks/${g.task.id}/context`} onClick={(e) => e.stopPropagation()}>{g.task.name} {g.task.title}</Link></span> <Badge tone="accent">{g.notes.length} unanswered</Badge>{wait > 0 && <Badge tone="warn">{wait} waiting on someone</Badge>}</summary>
+                {g.notes.map((n) => <DecisionRow key={n.id} n={n} />)}
+              </details>
+            )
+          })}
+        </>}
         {rejected.length > 0 && (
           <details className="context-rejected">
             <summary className="context-detail">{rejected.length} answer{rejected.length === 1 ? '' : 's'} proposed and rejected</summary>
@@ -243,11 +257,13 @@ function Doc({ d, limits, busy, onEdit, onInFull, onRefresh, onRemove }: { d: Co
 function DecisionRow({ n, onEdit }: { n: ContextNote; onEdit?: () => void }) {
   const made = n.status === 'settled'
   return (
-    <div className="context-card" data-note={n.id}>
+    <div className={`context-card ${made ? '' : 'context-unmade'}`} data-note={n.id} data-unanswered={made ? undefined : n.waitingOn ? 'waiting' : n.status}>
       {n.title && <div className="context-q">{n.title}</div>}
+      {!made && <div className="context-status">{n.waitingOn ? <><Badge tone="warn">Waiting on {n.waitingOn}</Badge> asked {day(n.on)}, {ago(n.on)}</> : <><Badge tone="accent">Unanswered</Badge> {n.status === 'proposed' ? `the agent proposes an answer, ${day(n.on)}` : `asked ${day(n.on)}`}</>}</div>}
       <div className="context-answer">
         {made && n.title && <div className="context-label">Answer</div>}
-        {made ? <div className="context-title">{n.answer}</div> : <div className="context-detail">{n.status === 'proposed' ? `Unanswered: the agent proposes "${n.answer}"` : n.waitingOn ? `Unanswered: waiting on ${n.waitingOn}` : 'Unanswered'}</div>}
+        {made ? <div className="context-title">{n.answer}</div> : n.status === 'proposed' ? <div className="context-why"><span className="faint">The agent proposes: </span><strong>{n.answer}</strong></div> : null}
+        {!made && n.waitingOn && n.ask && <Ask to={n.waitingOn} text={n.ask} />}
         {made && n.body && <div className="context-why"><span className="faint">Why: </span><Md text={n.body} inline /></div>}
         <Depends n={n} />
         {made && <div className="context-detail">
@@ -255,8 +271,8 @@ function DecisionRow({ n, onEdit }: { n: ContextNote; onEdit?: () => void }) {
           {onEdit && <>{' · '}<button className="link-btn" aria-label={`Edit: ${n.title || n.answer}`} onClick={onEdit}>Edit</button></>}
         </div>}
       </div>
-      {n.background && <More name="Background" text={n.background} />}
-      {n.options && <More name="Options" text={n.options} />}
+      {n.background && <More name="Background" text={n.background} open={!made} />}
+      {n.options && <More name="Options" text={n.options} open={!made} />}
     </div>
   )
 }

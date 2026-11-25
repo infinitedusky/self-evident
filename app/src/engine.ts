@@ -459,6 +459,8 @@ export interface ContextNote {
 export interface ContextView {
   on: 'idea' | 'project' | 'task'; /** A task in a project: whose context it also sees. */ project: { id: string; name: string } | null
   docs: ContextDoc[]; notes: ContextNote[]
+  /** A project: the unanswered decisions on its tasks, under each task. They are the tasks' own, and answered there. */
+  tasks?: { task: { id: string; name: string; title: string }; notes: ContextNote[] }[]
   /** A task in a project: the project's tickets that are not this task's. By title only; its agents are not given them. One can be pulled in. */
   otherTickets?: { id: string; ref: string; sourceName: string; title: string; url: string | null }[]
   /** In characters: the most a doc may hold, and the most one given to every agent in full may hold. */ limits: { doc: number; inFull: number }

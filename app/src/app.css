@@ -1428,6 +1428,14 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 .context-rest { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
 .context-rest:empty { display: none; }
 .context-from + .context-card { margin-top: 4px; }
+.context-answer:empty { display: none; }
+/* A project: its tasks' unanswered decisions, a group per task. */
+.context-task { margin: 10px 0 16px; }
+.context-task > summary { cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 14px; font-weight: 600; list-style: none; }
+.context-task > summary::-webkit-details-marker { display: none; }
+.context-task > summary::before { content: '▸'; color: var(--ink-soft); width: 14px; }
+.context-task[open] > summary::before { content: '▾'; }
+.context-task > .context-card { margin-left: 22px; }
 .context-depends { margin: 2px 0; } .context-depends .link-btn { color: var(--ink-soft); }
 .context-found { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 .context-share { margin: 8px 0 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); }

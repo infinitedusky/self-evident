@@ -397,4 +397,28 @@ describe.skipIf(!reachable)('context', () => {
     expect(pulled.otherTickets.map((o) => o.ref)).toEqual(['EXP-2'])
     expect((await removeDoc({ issueId: first.id }, pulled.docs[0].id)).otherTickets.map((o) => o.ref)).toEqual(['EXP-2', 'EXP-3'])
   })
+  it('a project shows its tasks\' unanswered decisions, under each task', async () => {
+    const p = await createProject({ appId, name: 'Protected people (sample)', issues: [{ title: 'Mark someone protected (sample)', brief: 'Build it.' }, { title: 'List the protected (sample)', brief: 'Build it.' }, { title: 'Nothing open here (sample)', brief: 'Build it.' }] })
+    const [a, b, c] = p.issues
+    await addContextNote({ projectId: p.project.id }, { kind: 'decision', title: 'Is it per company? (sample)' })
+    await addContextNote({ issueId: a.id }, { kind: 'decision', title: 'Who can mark someone? (sample)', on: '2026-11-20', background: 'The ticket only says add.' })
+    await addContextNote({ issueId: a.id }, { kind: 'decision', title: 'Is there an undo? (sample)', on: '2026-11-21' })
+    await addContextNote({ issueId: b.id }, { kind: 'decision', title: 'How many per page? (sample)', answer: 'Fifty' }, 'agent') // proposed: still unanswered
+    await addContextNote({ issueId: c.id }, { kind: 'decision', title: 'Is it one page? (sample)', answer: 'Yes' }) // answered: not listed
+    const mine = (await contextOf({ issueId: a.id })).notes.find((n) => n.title.startsWith('Who can mark'))!
+    await editContextNote({ issueId: a.id }, mine.id, { waitingOn: 'Em', ask: 'Admins only?' })
+    const v = await contextOf({ projectId: p.project.id })
+    expect(v.notes.map((n) => n.title)).toEqual(['Is it per company? (sample)']) // its own are still its own
+    expect(v.tasks.map((g) => [g.task.title, g.task.name, g.notes.map((n) => n.title)])).toEqual([
+      ['Mark someone protected (sample)', expect.stringMatching(/-\d+$/), ['Is there an undo? (sample)', 'Who can mark someone? (sample)']], // the one waiting on someone last
+      ['List the protected (sample)', expect.stringMatching(/-\d+$/), ['How many per page? (sample)']],
+    ])
+    expect(v.tasks[0].notes[1]).toMatchObject({ waitingOn: 'Em', ask: 'Admins only?', background: 'The ticket only says add.', status: 'open' })
+    expect(await contextCount({ projectId: p.project.id })).toEqual({ count: 0, proposed: 3, waiting: 1 })
+    expect((await contextOf({ issueId: a.id })).tasks).toEqual([]) // only a project lists them
+    const d = await openQuestionsDoc({ projectId: p.project.id })
+    expect(d.count).toBe(4)
+    expect(d.markdown).toMatch(/### 1\. Who can mark someone\? \(sample\)\n\nAsked 20 Nov 2026 · waiting on Em · on \S+-\d+ Mark someone protected \(sample\)/)
+    expect(d.markdown).not.toContain('Is it one page?')
+  })
 })

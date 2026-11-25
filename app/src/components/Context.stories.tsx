@@ -89,7 +89,7 @@ export const AnIdeaFromATicket: Story = {
   },
 }
 
-/** A project's own: what each of its tasks sees as "from the project". */
+/** A project's own: what each of its tasks sees as "from the project". Below its own decisions, the unanswered ones on its tasks, under each task's name: every open question about the project in one place. A task's group folds; each is answered on its task. */
 export const OnAProject: Story = {
   args: { subject: { kind: 'projects', id: 'proj_checkout' } },
   play: async ({ canvasElement }) => {
@@ -97,6 +97,22 @@ export const OnAProject: Story = {
     await expect(await c.findByText('Checkout design principles (sample)')).toBeVisible()
     await expect(c.queryByText(/From the project/)).toBeNull()
     await expect(c.getByRole('button', { name: 'Edit: Is the checkout one page on a phone too? (sample)' })).toBeVisible()
+    const d = section(canvasElement, 'decisions')
+    await expect(d.getByText('4 unanswered on its tasks')).toBeVisible()
+    const groups = [...canvasElement.querySelectorAll<HTMLElement>('[data-component="ContextTaskQuestions"]')]
+    await expect(groups.map((g) => g.getAttribute('data-task'))).toEqual(['iss_sample20', 'iss_sample21'])
+    const first = within(groups[0])
+    await expect(first.getByRole('link', { name: 'SS-20 Address and payment on one page (sample)' })).toHaveAttribute('href', '/tasks/iss_sample20/context')
+    await expect(first.getByText('3 unanswered')).toBeVisible()
+    await expect(first.getByText('1 waiting on someone')).toBeVisible()
+    await expect(first.getByText('Can a card saved in the app be used on the web? (sample)')).toBeVisible()
+    await expect(first.getByText('Waiting on Em')).toBeVisible()
+    await expect(first.getByText(/The ticket does not say. Support is asked about it most weeks/)).toBeVisible() // an unanswered one's background is open
+    await expect(first.queryByRole('button', { name: /^Answer/ })).toBeNull() // answered on its task, not here
+    await expect(within(groups[1]).getByText('Does the summary show tax before the address is known? (sample)')).toBeVisible()
+    await userEvent.click(first.getByText('3 unanswered')) // a task's group folds, by its heading
+    await waitFor(() => expect(first.queryByText('Can a card saved in the app be used on the web? (sample)')).not.toBeVisible())
+    await expect(c.getByRole('button', { name: 'Open questions doc' })).toBeVisible() // and they are in the project's document
   },
 }
 

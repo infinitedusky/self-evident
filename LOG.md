@@ -8176,3 +8176,24 @@ own (`main-running.test.ts`, `prototype-data.test.ts`) stalled for the whole two
 they take six seconds, and they did the same before any of this. Why is not found. `mock-data.test.ts` hung once
 in some fifteen runs (a request with no time limit, to a mock on a port it was just given). The old shared
 `selfevident_test` database is left for branches made before this.
+
+## 2026-11-25: a project shows its tasks' open questions
+
+Sandy: "all decisions should be shown at the project level, but clearly marked as being on a specific task …
+have the different tasks and then have their decisions underneath … You can collapse those different tasks …
+for now it's just open ones is the important part. I can look at a project and say, hey, what are all the
+questions we have about this project?"
+
+- **A project's Decisions list its tasks' unanswered decisions**, below its own, in a group per task: the task's
+  name as the heading (a link to that task's Context), how many are unanswered and how many wait on someone, and
+  each as a card with its background, options and what to ask. A group folds; it starts open.
+- **Only unanswered ones** (open, or with an answer an agent proposed). Answered ones stay on their task.
+- **Read here, answered on the task.** They are the task's records; the project does not copy them
+  (`taskQuestions` in context.ts reads them each time).
+- **Counted on the project:** the Decisions heading says "n unanswered on its tasks", and the project's nav count
+  of unanswered and waiting includes them.
+- **In the project's open questions doc**, each marked "on SS-20 …".
+- A project's agents are not given them: they are the tasks' questions, and each task's agents already have theirs.
+
+Not done: answering or marking as waiting from the project; answered task decisions on the project; remembering
+which groups are folded; an idea does not list anything of the tasks made from it.
