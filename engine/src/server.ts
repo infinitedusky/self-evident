@@ -1288,6 +1288,7 @@ export function buildApp(bus: EventBus) {
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()!)) {
+  { const said = (await import('./gh-account.js')).useGhAccount(); if (said) console.log(`[engine] ${said}`) } // before anything runs gh or git: which GitHub account this Evident acts as
   for (let waited = 0; ; waited++) { // the database may be on another machine, behind a proxy that starts after us: wait for it, never exit (nothing would start us again)
     try { await ensureDatabase(DATABASE_URL); break } catch (err) {
       if (waited % 15 === 0) console.warn(`[engine] waiting for the database: ${(err as Error).message}`)

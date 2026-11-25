@@ -8422,3 +8422,18 @@ Not done: the button does not start the other one; nothing stops the same checko
 Tailscale from a phone the other's address is this computer's `localhost`, which a phone cannot open; `pnpm local`
 is a terminal command, not kept running by launchd.
 
+### The shared Evident acts as its own GitHub account (2026-11-25)
+
+Sandy's first `pnpm arrive` on the computer with both stopped at the state repository: "Repository not found". The
+active `gh` account there is the employer's, which this computer's own Evident needs, and git over https asks `gh`
+for the active account's token. The same would have stopped each app's clone, and then every pull request the
+shared engine opened.
+
+- `engine/src/gh-account.ts`: when the engine starts, and in `pnpm arrive` / `pnpm leave`, the process takes the
+  token of one `gh` account into its own `GH_TOKEN`, which `gh` and its credential helper use before the active
+  account. `GH_ACCOUNT` names it; with none named it is the owner of `STATE_REPO`. Nothing is switched, so the
+  other Evident is not touched. This computer's own Evident has no `STATE_REPO` and uses the active account as
+  before.
+- Not done: an app whose repositories belong to yet another account still needs the SSH alias way
+  (docs/running-it.md).
+

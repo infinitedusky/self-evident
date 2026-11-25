@@ -212,6 +212,12 @@ git -C REPO config user.email "the address that account's commits carry"
 ssh-add --apple-use-keychain ~/.ssh/id_ed25519_second   # a key with a passphrase: the engine cannot type it
 ```
 
+**Two Evidents, two accounts.** The shared Evident acts as its own GitHub account whatever account is active:
+when it starts, and in `pnpm arrive` and `pnpm leave`, it takes the token of the `gh` account named by `GH_ACCOUNT`,
+or with none named the owner of the state repository (`STATE_REPO`), and its `gh` and `git` use that. So the active
+account can stay the one this computer's own Evident needs. `gh auth login` as that account once; nothing is
+switched. The engine's log says `GitHub: acting as <account>` at start.
+
 Git in that checkout then uses the second account without any switching. For Evident to open pull requests
 there too, `gh` must be signed in as that account and active (`gh auth login`, `gh auth switch -u <account>`);
 with the GitHub repo field filled and `gh` on the other account, the sync and pull requests for that app fail.
