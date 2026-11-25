@@ -6,7 +6,7 @@ import { draftGraph, graph, run, subIssues, todos } from '../stories/sample'
 import type { Graph, GraphSubIssue } from '../engine'
 
 // One project at /projects/:id, live from the sample engine. Each story stands on a project in a different state.
-const meta = { title: 'Pages/ProjectPage', component: ProjectPage, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><ProjectPage /></div> } satisfies Meta<typeof ProjectPage>
+const meta = { title: 'Pages/ProjectPage', component: ProjectPage, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page" style={{ height: '100vh' }}><ProjectPage /></div> } satisfies Meta<typeof ProjectPage>
 export default meta
 type Story = StoryObj<typeof meta>
 const at = (id: string, section?: string) => ({ route: { path: section ? '/projects/:id/:section' : '/projects/:id', url: `/projects/${id}${section ? `/${section}` : ''}` } })

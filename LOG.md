@@ -8234,24 +8234,27 @@ What needs you, every chat, New chat and the app are under the grid, with the ap
 Found on the way: the phone's styles had a `.phone-dot` of their own, and the rail's phone link already has one, so
 a conversation's dot was drawn in a corner. The phone's is `.phone-talk-dot`.
 
-## A box that scrolls goes down to the bottom of the screen (Sandy, 2026-11-25)
+## A task's page stays put; its columns scroll (Sandy, 2026-11-25)
 
 Sandy, on a task's Research page: "the height of the section in the middle seems to be limited … It should just
 go down to the bottom of the screen with a little bit of padding … that should just be a general rule of thumb."
-The report was in a box of its own, 420px tall, with empty page under it, while the agent's column beside it ran
-on down.
+The report was in a box of its own, 420px tall, with empty page under it. The first go (#438) let the step's
+panel grow to the bottom of the screen while the page still scrolled around it. Sandy: "not crazy about this, I
+think the outer part of the page should be fixed unless it is running off the edge. The container holding the
+content should extend to the bottom with some padding (based on the screen height) then the scrolling only
+scrolls inside that or inside the agent."
 
-- **A step's page is as tall as what is written on it, up to the bottom of the screen**, where the agent's column
-  ends too (`calc(100vh - 160px)`, both). Past that it scrolls inside its panel. The report in it has no box of
-  its own.
-- **The same rule for its neighbours**: the agent's column lost its 820px cap, and a step showing its View is
-  the same height as the other two (it was 90px shorter).
-- On a phone, and where a tab is narrow enough that the columns stack, the step's page is not held to the screen:
-  the page itself scrolls there.
+- **The page of a task, an idea or a project does not scroll.** The head is at the top; the nav, the content and
+  the agent take what is left of the tab, down to 16px from its bottom, and each scrolls in itself. It is laid
+  out from the tab's own height, not guessed from the window's (`calc(100vh - 160px)` is gone).
+- **A step's page is one panel that fills its column**, short report or long, and scrolls inside. The report in
+  it has no box of its own. A page of several panels (Overview, Build) scrolls as a column.
+- **The page scrolls only when it runs off the edge**: a tab too short for the columns (under 420px of room), or
+  one narrow enough that they stack (under 960px, and a phone), where it scrolls as a page as before.
 
 Story: Pages/TaskPage › LongResearchReport. Not done: the other fixed heights in `app.css` (a summary on a card,
-a tool's result, a log) are small boxes inside lists and were left as they are; not looked at in the running app,
-only in Storybook.
+a tool's result, a log) are small boxes inside lists and were left as they are; other pages (Settings, Plan) still
+scroll as pages; not looked at in the running app, only in Storybook.
 
 ### The Reviews list is kept, and a pull request can be named (2026-11-25)
 
