@@ -11,7 +11,7 @@
  *
  * - before-start: before a prototype's command or a smoke test's script, once the database is built. Lines it prints
  *   as NAME=value are given to that command, over what it would have had. A failure stops the start.
- * - after-stop, task-closed: nothing waits on them; a failure is recorded.
+ * - after-stop, task-closed, docs-written (docs-agent.ts): nothing waits on them; a failure is recorded.
  *
  * Every run is an event (`hook.ran`): the point, whether it worked, the names of what it gave (never the values), and
  * on a failure its last lines. No table.
@@ -26,11 +26,12 @@ import { appendEvent } from './events.js'
 import { identifier, PlanError } from './issues.js'
 import { merged } from './setup.js'
 
-export type Point = 'before-start' | 'after-stop' | 'task-closed'
+export type Point = 'before-start' | 'after-stop' | 'task-closed' | 'docs-written'
 export const POINTS: { point: Point; when: string; given: string[]; then: string }[] = [
   { point: 'before-start', when: 'Before a prototype or a smoke test starts, once its database is built.', given: ['PLACE', 'FIXTURE', 'DATABASE_URL', 'PORT', 'TASK'], then: 'Lines it prints as NAME=value are given to the start script. If it fails, nothing starts.' },
   { point: 'after-stop', when: 'After a prototype or a smoke test is stopped.', given: ['PLACE', 'DATABASE_URL', 'TASK'], then: 'Nothing waits on it. A failure is shown here.' },
   { point: 'task-closed', when: 'When a task is closed.', given: ['TASK', 'BRANCH'], then: 'Nothing waits on it. A failure is shown here.' },
+  { point: 'docs-written', when: 'When the docs agent\'s pages have passed their check and been committed in this folder.', given: ['FILES', 'COMMIT'], then: 'Nothing waits on it. A failure is shown here. It is where the pages are pushed, or someone is told.' },
 ]
 const TEXT_MAX = 20_000, TIMEOUT = 60_000
 
