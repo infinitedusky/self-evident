@@ -39,7 +39,7 @@ export function Issues() {
     <>
       <div className="page-head"><div>
         <h1>📋 Tasks{app ? <span className="muted" style={{ fontWeight: 400 }}> · {app.name}</span> : null}</h1>
-        <p className="muted" style={{ margin: '4px 0 0', maxWidth: 760 }}>Every task of code work: what it will change, and where it stands. One in no project is planned and built on its own, or added to a project; a project builds its tasks in order, each planned into sub-tasks when its turn comes.</p>
+        <p className="muted" style={{ margin: '4px 0 0', maxWidth: 760 }}>Every task of code work: what it will change, and where it stands. One in no project is planned and built on its own, or added to a project; a project builds its tasks in order, each planned into sub-tasks when its turn comes. <Link to="/tickets">By team ticket →</Link></p>
       </div></div>
       {error && <div className="empty bad">{error}</div>}
       {rows && !rows.length && <div className="empty">No tasks yet. Ask in the conversation, start a project, or make an idea a task.</div>}

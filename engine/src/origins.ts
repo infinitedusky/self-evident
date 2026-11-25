@@ -18,6 +18,7 @@ import { eq } from 'drizzle-orm'
 import { db, type Tx } from './db/client.js'
 import { idea, issue, origin, project } from './db/schema.js'
 import { newId } from './ids.js'
+import { keepTicketRecord } from './ticket.js'
 
 export type Origin = typeof origin.$inferSelect
 export interface OriginInput {
@@ -33,6 +34,7 @@ export async function keepOrigin(tx: Tx | typeof db, appId: string, o: OriginInp
   const values = { title: o.title.slice(0, 500), url: o.url ?? null, body: o.body ?? null, comments: o.comments ?? [], links: o.links ?? [], files: o.files ?? [], fetchedAt: new Date() }
   const [row] = await tx.insert(origin).values({ id: newId('origin'), appId, source: o.source, ref: o.ref, ...values })
     .onConflictDoUpdate({ target: [origin.appId, origin.source, origin.ref], set: values }).returning()
+  await keepTicketRecord(tx, appId, o.ref, { title: row.title, url: row.url, source: o.source, originId: row.id }) // a ticket read from its tracker is a ticket record (ticket.ts)
   return row
 }
 

@@ -7698,6 +7698,44 @@ Not done: data given before this has no name to show (give it again to name it);
 page; a real response's given name is shown on its own line and in "a fake of", both on this computer's page only,
 and is not written anywhere a reviewer reads.
 
+## A ticket is a record, and several tasks can be under it (Sandy, 2026-11-24, by way of an idea's agent)
+
+Cloaked's ENT-323 is bigger than one pull request. A task is one pull request, so the ticket becomes several tasks,
+and until now the only thing joining them was the same text in each one's ticket field. Sandy: "ticket needs to
+become an actual record, not just text … and then we can link them that way. And that way it would just be an
+organizational thing." Not nested projects: the levels stay initiative → project → task → sub-task.
+
+- **A ticket is a row** (`ticket`: one per app and key, with its title, link, source and the origin it is). A task
+  links to it (`issue.ticket_id`) where it carried text (`team_ticket`, gone). Two tasks given the same key are
+  under the same record. Existing tickets were carried over: the ones set on tasks, and every ticket already read
+  from Linear.
+- **It organises and nothing else.** No brief, no approval, no build. Each task under it keeps its own brief,
+  prototype, build and pull request, and its branch, commits and pull request title still read the ticket's key.
+- **A task is under the ticket in force for it**, however that was read: linked, imported, or a link in its text
+  or its idea's (ticket.ts, unchanged order). So ENT-322's tasks, found by a link, group without anyone linking them.
+- **Read from Linear, the record has its title and link.** Any ticket read as an origin is kept as a record too.
+  Setting a ticket on a task reads it when Linear is set for the app; when it can't be read the link stands with
+  the key alone, and the ticket's page has "Read it from Linear".
+- **Tickets page** (`/tickets`, from "By team ticket →" on Tasks; `/tickets/:key`, from "ENT-323's tasks →" on a
+  task): each ticket with its tasks in their projects' order, their states and pull requests, "2 of 3 tasks
+  done", and Done when every task that counts is. Dropped tasks are listed and not counted.
+- **The agents are told**: when one ticket is more than one pull request, make a task for each and give them all
+  its key, each with its own name for the team.
+
+Not done: a ticket's state is not written back to Linear, and Linear's own state is not shown; the project page
+does not group its tasks by ticket; an idea or a project is not linked to a ticket record (they still point at
+the origin); a ticket found only by a link has no record until it is read or set; Tickets is not in the nav.
+Not tried: two tasks of one ticket building at once. Their branches differ only by the task's title, so two
+tasks with the same key and the same name for the team would ask for the same branch.
+
+## A ticket is read with the app's kept keys, wherever it is read (Sandy, 2026-11-24)
+
+Adding a ticket to a project's Context as a reference doc said "LINEAR_API_KEY has no key", while bringing tickets
+in as ideas and tasks worked. The import routes pass the keys kept for the app (Settings › Integrations); the
+Context's add and refresh, and the agents' tools, passed none, so the read fell back to the engine's own
+environment, where a key pasted under Settings never is. Now a Linear read that is told no keys reads the ones
+kept for the app (linear-import.ts, `connection`), so every caller gets them.
+
 ## Your docs: an app's own pages, in Learn (Sandy, 2026-11-24: "documentation that represents my personal understanding of the project so that I can probe and build up … we should host this inside of Evident … and it is in Learn")
 
 What there was: Learn's four documents (an agent's account, replaced when the code is learned again), and a docs
