@@ -20,12 +20,28 @@ export const OpenPullRequests: Story = {
     await expect(within(rows[0]).getByText('3 comments drafted')).toBeVisible()
     await expect(within(rows[1]).getByText('not reviewed')).toBeVisible()
     await expect(c.getByText(/nothing is posted from here/)).toBeVisible()
+    await expect(c.getByText(/Read from GitHub 2 minutes ago/)).toBeVisible(); await expect(c.getByRole('button', { name: 'Refresh' })).toBeVisible() // kept, not asked for on every look
     // A long list is found by who wrote it.
     await userEvent.type(c.getByRole('searchbox', { name: 'Find a pull request' }), 'kim')
     await expect(c.getAllByRole('row').slice(1)).toHaveLength(1)
     await expect(c.getByText('1 of 3 open')).toBeVisible()
     await userEvent.type(c.getByRole('searchbox', { name: 'Find a pull request' }), ' nobody')
     await expect(c.getByText('None of the open pull requests match.')).toBeVisible()
+  },
+}
+
+/** GitHub has not answered with the list yet: one is opened by its number or link without waiting. */
+export const OpenedByNumber: Story = {
+  beforeEach: withEngine({ reviewPullsSlow: true, review: reviewDoneSample }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/To go straight to one, paste its number or link above/)).toBeVisible()
+    const box = c.getByRole('searchbox', { name: 'Find a pull request' })
+    await userEvent.type(box, 'robin'); await expect(c.queryByRole('button', { name: /^Open #/ })).toBeNull() // words only find
+    await userEvent.clear(box); await userEvent.type(box, 'https://github.com/someone/else/pull/3'); await expect(c.queryByRole('button', { name: /^Open #/ })).toBeNull() // not this app's
+    await userEvent.clear(box); await userEvent.type(box, 'https://github.com/sample-org/sample-shop/pull/212')
+    await userEvent.click(await c.findByRole('button', { name: 'Open #212' }))
+    await expect(await c.findByRole('region', { name: 'Suggested comments' })).toBeVisible()
   },
 }
 

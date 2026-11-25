@@ -8131,3 +8131,19 @@ an agent, and a way to hold what it says to the diff); nothing from Evident's ow
 earlier tasks on the same files, the blast radius); it cannot be brought up to try as a smoke test is; a second run
 does not say what changed since the first; a comment made on GitHub is not read back, so a draft already said still
 shows; it has not been run on a real pull request yet.
+
+### The Reviews list is kept, and a pull request can be named (2026-11-25)
+
+Sandy: "Pull of all the different unmerged PRs just took a really long time … is that a one-shot thing, or do we have
+to name the PR we want?" It was not one-shot: the page read a hundred pull requests from each repository every time
+it was opened and every 15 seconds while open, one repository after another (about four seconds a look, measured).
+
+- **GitHub's answer is kept five minutes per app** (`kept`, pr-review.ts), and the repositories are read at once, not
+  in turn. The page says when it was read and has **Refresh**. Where each review stands is still read every time: it
+  is the engine's own.
+- **A pull request can be named without the list** (`namedPull`, pr-named.ts): its number, `org/repo#n`, or its
+  address pasted into the find box opens it, before GitHub has answered. A repository that is not the app's is not
+  opened.
+
+Not done: the list is not kept across an engine restart; a pull request opened on GitHub in the last five minutes is
+not there until Refresh.

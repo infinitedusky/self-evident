@@ -920,7 +920,7 @@ export const projectTickets: import('../engine').ProjectTicket[] = [
 const WARNING_SAMPLE = 'This runs the pull request\'s code on this computer: its tests, and whatever installing it runs. Nobody here has reviewed that code yet. Run it for people you trust.'
 const pullSample = (number: number, title: string, author: string, more: Partial<import('../engine').ReviewPull> = {}): import('../engine').ReviewPull => ({ repo: 'sample-org/sample-shop', number, title, url: `https://github.com/sample-org/sample-shop/pull/${number}`, author, draft: false, branch: `feature/sample-${number}`, base: 'main', head: `${number}`.padEnd(40, 'a'), updatedAt: '2026-11-25T09:30:00Z', files: 6, mine: false, ...more })
 export const reviewPullsSample: import('../engine').ReviewPulls = {
-  me: 'you-sample', problems: [], warning: WARNING_SAMPLE,
+  me: 'you-sample', problems: [], warning: WARNING_SAMPLE, repos: ['sample-org/sample-shop'], readAt: new Date(Date.now() - 2 * 60_000).toISOString(),
   pulls: [
     { ...pullSample(212, 'Free delivery over a limit (sample)', 'robin-sample'), review: { state: 'done', sha: '212'.padEnd(40, 'a'), at: '2026-11-25T10:05:00Z', stale: false, suggestions: 3, survivors: 2, failed: 1 } },
     { ...pullSample(209, 'Gift notes at checkout (sample)', 'kim-sample', { files: 14 }), review: null },

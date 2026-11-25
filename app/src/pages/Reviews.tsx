@@ -13,6 +13,7 @@
  * after a CI run's page (GitHub Actions) for the steps and what each said.
  */
 import { useEffect, useState } from 'react'
+import { namedPull } from '@self-evident/engine/pr-named'
 import { Badge } from '../components/Badge'
 import { useCurrentApp } from '../current-app'
 import { engine, type ReviewPulls, type ReviewView } from '../engine'
@@ -32,6 +33,8 @@ export function Reviews({ open: first }: { open?: Which }) {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
+  const [repoNames, setRepoNames] = useState<string[]>([])
+  const [refreshing, setRefreshing] = useState(false)
   const [find, setFind] = useState('') // a repository with a hundred open is found by who or what
 
   useEffect(() => {
@@ -40,7 +43,8 @@ export function Reviews({ open: first }: { open?: Which }) {
     let gone = false
     const load = () => engine.reviewPulls(app.id).then((l) => { if (!gone) setList(l) }).catch((e) => { if (!gone) setError(problem(e)) })
     void load()
-    const t = window.setInterval(load, 15_000) // a review running elsewhere, a pull request opened since
+    engine.reviewRepos(app.id).then((r) => { if (!gone) setRepoNames(r.repos) }).catch(() => {}) // to open one by its number before GitHub has answered with the list
+    const t = window.setInterval(load, 15_000) // where each review stands; GitHub itself is asked again only every few minutes, or on Refresh
     return () => { gone = true; window.clearInterval(t) }
   }, [app?.id, open])
   useEffect(() => {
@@ -55,6 +59,9 @@ export function Reviews({ open: first }: { open?: Which }) {
   const run = async () => { if (!app || !open) return; setStarting(true); setError(null); try { setView(await engine.startReview(app.id, open.repo, open.number)) } catch (e) { setError(problem(e)) } finally { setStarting(false) } }
   const copy = async (id: string, text: string) => { try { await navigator.clipboard.writeText(text); setCopied(id); setTimeout(() => setCopied((c) => (c === id ? null : c)), 1500) } catch { /* no clipboard here */ } }
   const repos = [...new Set((list?.pulls ?? []).map((p) => p.repo))]
+  const named = namedPull(find, list?.repos ?? repoNames) // a number or a link: opened without the list
+  const refresh = async () => { if (!app) return; setRefreshing(true); try { setList(await engine.reviewPulls(app.id, true)); setError(null) } catch (e) { setError(problem(e)) } finally { setRefreshing(false) } }
+  const ago = (iso?: string) => { if (!iso) return ''; const m = Math.round((Date.now() - new Date(iso).getTime()) / 60_000); return m < 1 ? 'just now' : m === 1 ? 'a minute ago' : `${m} minutes ago` }
   const words = find.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const shown = (list?.pulls ?? []).filter((p) => words.every((w) => `${p.author} ${p.title} #${p.number} ${p.branch} ${p.repo}`.toLowerCase().includes(w)))
 
@@ -72,15 +79,15 @@ export function Reviews({ open: first }: { open?: Which }) {
       {app && !open && (
         <>
           {list?.problems.map((p) => <div key={p} className="empty bad">{p}</div>)}
-          {list === null && !error && <p className="muted">Reading the open pull requests from GitHub…</p>}
+          <form className="reviews-find" onSubmit={(e) => { e.preventDefault(); if (named) { setOpen(named); setFind('') } }}>
+            <input type="search" aria-label="Find a pull request" placeholder="Find by person or title, or paste a number or link" value={find} onChange={(e) => setFind(e.target.value)} />
+            {named && <button type="submit" className="btn small">Open #{named.number}</button>}
+            {list && list.pulls.length > 0 && <span className="faint">{shown.length === list.pulls.length ? `${list.pulls.length} open` : `${shown.length} of ${list.pulls.length} open`}</span>}
+            {list?.readAt && <span className="faint" style={{ marginLeft: 'auto' }}>Read from GitHub {ago(list.readAt)} <button type="button" className="linkish" disabled={refreshing} onClick={() => void refresh()}>{refreshing ? 'Reading…' : 'Refresh'}</button></span>}
+          </form>
+          {list === null && !error && <p className="muted">Reading the open pull requests from GitHub. To go straight to one, paste its number or link above.</p>}
           {list && !list.pulls.length && !list.problems.length && <div className="empty">No open pull requests in this app's repositories.</div>}
-          {list && list.pulls.length > 0 && (
-            <div className="reviews-find">
-              <input type="search" aria-label="Find a pull request" placeholder="Find by person, title, number or branch" value={find} onChange={(e) => setFind(e.target.value)} />
-              <span className="faint">{shown.length === list.pulls.length ? `${list.pulls.length} open` : `${shown.length} of ${list.pulls.length} open`}</span>
-            </div>
-          )}
-          {list && list.pulls.length > 0 && !shown.length && <div className="empty">None of the open pull requests match.</div>}
+          {list && list.pulls.length > 0 && !shown.length && !named && <div className="empty">None of the open pull requests match.</div>}
           {list && shown.length > 0 && (
             <table className="reviews-list">
               <thead><tr><th>Pull request</th><th>By</th><th>Updated</th><th>Review</th><th /></tr></thead>

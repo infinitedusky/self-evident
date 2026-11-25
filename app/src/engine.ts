@@ -470,7 +470,7 @@ export interface ReviewStep { key: 'checkout' | 'mutation' | 'commands'; name: s
 export interface ReviewSurvivor { id: string; file: string; line: number; from: string; to: string; means: string; code: string; equivalent?: string }
 export interface ReviewCommand { key: string; name: string; runs: string; pass: boolean; output: string }
 export interface ReviewSuggestion { id: string; from: 'mutation' | 'command'; file: string | null; line: number | null; url: string | null; text: string }
-export interface ReviewPulls { me: string | null; pulls: (ReviewPull & { review: ReviewSummary | null })[]; problems: string[]; warning: string }
+export interface ReviewPulls { me: string | null; pulls: (ReviewPull & { review: ReviewSummary | null })[]; problems: string[]; warning: string; /** The app's repositories, home first. */ repos?: string[]; /** When GitHub was last read: the list is kept a few minutes. */ readAt?: string }
 export interface ReviewView { pull: ReviewPull | null; state: 'none' | 'running' | 'done' | 'failed'; sha: string | null; stale: boolean; at: string | null; problem: string | null; warning: string; steps: ReviewStep[]; mutation: { tool: 'evident' | 'app'; tried: number; caught: number; meaningful: number; percent: number | null; survivors: ReviewSurvivor[]; partial?: string } | null; commands: ReviewCommand[]; suggestions: ReviewSuggestion[] }
 export interface Reports { writing: boolean; format: { daily: string; weekly: string }; reports: Report[] }
 /** A version of a task: the git branch each of its worktrees is on, and (set aside) the task as it was left. */
@@ -879,7 +879,9 @@ export const engine = {
   removeContextNote: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/notes/${id}`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
   /** The app's open pull requests, other people's first, each with where its review stands. */
-  reviewPulls: (appId: string) => call<ReviewPulls>('GET', `/apps/${appId}/pr-reviews`),
+  reviewPulls: (appId: string, fresh = false) => call<ReviewPulls>('GET', `/apps/${appId}/pr-reviews${fresh ? '?fresh=1' : ''}`),
+  /** The repositories a pull request can be opened from, without asking GitHub. */
+  reviewRepos: (appId: string) => call<{ repos: string[] }>('GET', `/apps/${appId}/pr-reviews/repos`),
   /** One pull request's review: where it stands and what it found. */
   review: (appId: string, repo: string, number: number) => call<ReviewView>('GET', `/apps/${appId}/pr-reviews/one?${new URLSearchParams({ repo, number: String(number) })}`),
   /** Run it: its code is checked out and run on this computer. Nothing is sent to GitHub. */

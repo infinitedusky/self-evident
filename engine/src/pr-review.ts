@@ -116,15 +116,33 @@ async function latest(appId: string): Promise<Map<string, { started: typeof even
   return by
 }
 
-/** The open pull requests of the app's repositories, other people's first, each with where its review stands. */
-export async function listPulls(appId: string, deps: Deps = {}): Promise<{ me: string | null; pulls: (Pull & { review: ReviewSummary | null })[]; problems: string[]; warning: string }> {
+/**
+ * What GitHub last said is open, by app. Reading a hundred pull requests from each repository takes seconds, and the
+ * page asks every time it is opened: so it is read once and kept for a few minutes, and read again when the person
+ * presses Refresh. Where each review stands is not kept: that is the engine's own and is read each time.
+ */
+const LIST_KEPT_MS = 5 * 60_000
+const kept = new Map<string, { at: number; me: string | null; pulls: Pull[]; problems: string[]; repos: string[] }>()
+let login: string | null = null
+const meOf = async (gh: Gh) => (login ??= await gh(['api', 'user', '--jq', '.login'], process.cwd()).catch(() => null))
+/** For a test: nothing kept. */
+export const forgetPulls = () => { kept.clear(); login = null }
+
+/** The open pull requests of the app's repositories, other people's first, each with where its review stands. `fresh`: read from GitHub now, whatever is kept. */
+export async function listPulls(appId: string, deps: Deps = {}, o: { fresh?: boolean } = {}): Promise<{ me: string | null; pulls: (Pull & { review: ReviewSummary | null })[]; problems: string[]; warning: string; /** The app's repositories a pull request can be opened from, home first. */ repos: string[]; /** When GitHub was last read. */ readAt: string }> {
   const gh = deps.gh ?? realGh
-  const repos = (await db.select().from(repoTable).where(eq(repoTable.appId, appId))).filter((r) => r.fullName && r.localPath)
-  const me = await gh(['api', 'user', '--jq', '.login'], process.cwd()).catch(() => null)
-  const pulls: Pull[] = [], problems: string[] = []
-  for (const r of repos) {
-    try { for (const p of JSON.parse(await gh(['pr', 'list', '-R', r.fullName, '--state', 'open', '--limit', '100', '--json', FIELDS], r.localPath!)) as GhPull[]) pulls.push(pullOf(r.fullName, p, me)) }
-    catch (err) { problems.push(`${r.fullName} could not be read from GitHub: ${String((err as { stderr?: string }).stderr ?? (err as Error).message).trim().split('\n')[0].slice(0, 200)}`) }
+  let got = kept.get(appId)
+  if (!got || o.fresh || Date.now() - got.at > LIST_KEPT_MS) {
+    const repos = (await db.select().from(repoTable).where(eq(repoTable.appId, appId))).filter((r) => r.fullName && r.localPath)
+    // Every repository at once, and who is asking beside them: one after another is the sum of their waits.
+    const [me, ...read] = await Promise.all([meOf(gh), ...repos.map(async (r) => {
+      try { return { pulls: JSON.parse(await gh(['pr', 'list', '-R', r.fullName, '--state', 'open', '--limit', '100', '--json', FIELDS], r.localPath!)) as GhPull[], repo: r.fullName, problem: null } }
+      catch (err) { return { pulls: [] as GhPull[], repo: r.fullName, problem: `${r.fullName} could not be read from GitHub: ${String((err as { stderr?: string }).stderr ?? (err as Error).message).trim().split('\n')[0].slice(0, 200)}` } }
+    })])
+    const pulls = read.flatMap((x) => x.pulls.map((p) => pullOf(x.repo, p, me)))
+    pulls.sort((x, y) => Number(x.mine) - Number(y.mine) || String(y.updatedAt).localeCompare(String(x.updatedAt)))
+    got = { at: Date.now(), me, pulls, problems: read.flatMap((x) => (x.problem ? [x.problem] : [])), repos: repos.map((r) => r.fullName) }
+    if (!got.problems.length) kept.set(appId, got); else kept.delete(appId) // a failure is not kept: the next look asks again
   }
   const last = await latest(appId)
   const summary = (p: Pull): ReviewSummary | null => {
@@ -133,9 +151,10 @@ export async function listPulls(appId: string, deps: Deps = {}): Promise<{ me: s
     const running = going.has(keyOf(appId, p.repo, p.number))
     return { state: running ? 'running' : l.ended?.type === 'pr_review.done' ? 'done' : 'failed', sha, at: (l.ended ?? l.started).ts.toISOString(), stale: !!p.head && !!sha && p.head !== sha, suggestions: found?.suggestions.length ?? 0, survivors: found?.mutation?.survivors.filter((s) => !s.equivalent).length ?? 0, failed: found?.commands.filter((c) => !c.pass).length ?? 0 }
   }
-  pulls.sort((x, y) => Number(x.mine) - Number(y.mine) || String(y.updatedAt).localeCompare(String(x.updatedAt)))
-  return { me, pulls: pulls.map((p) => ({ ...p, review: summary(p) })), problems, warning: WARNING }
+  return { me: got.me, pulls: got.pulls.map((p) => ({ ...p, review: summary(p) })), problems: got.problems, warning: WARNING, repos: got.repos, readAt: new Date(got.at).toISOString() }
 }
+
+export { namedPull } from './pr-named.js'
 
 const waiting = (): Step[] => REVIEW_STEPS.map((s) => ({ ...s, state: 'waiting', says: '' }))
 
@@ -144,7 +163,7 @@ export async function reviewView(appId: string, fullName: string, number: number
   const { local } = await placeOf(appId, fullName)
   const gh = deps.gh ?? realGh
   let pull: Pull | null = null, problem: string | null = null
-  try { const me = await gh(['api', 'user', '--jq', '.login'], local).catch(() => null); pull = pullOf(fullName, JSON.parse(await gh(['pr', 'view', String(number), '-R', fullName, '--json', FIELDS], local)) as GhPull, me) }
+  try { const me = await meOf(gh); pull = pullOf(fullName, JSON.parse(await gh(['pr', 'view', String(number), '-R', fullName, '--json', FIELDS], local)) as GhPull, me) }
   catch (err) { problem = `GitHub could not be asked about #${number}: ${String((err as { stderr?: string }).stderr ?? (err as Error).message).trim().split('\n')[0].slice(0, 200)}` }
   const now = going.get(keyOf(appId, fullName, number))
   const l = (await latest(appId)).get(`${fullName}#${number}`)

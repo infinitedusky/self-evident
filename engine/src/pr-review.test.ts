@@ -11,7 +11,7 @@ import { db, pool } from './db/client.js'
 import { app, event, repo, workspace } from './db/schema.js'
 import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
-import { lineUrl, listPulls, reviewView, runReview, suggest, type Gh } from './pr-review.js'
+import { forgetPulls, lineUrl, listPulls, namedPull, reviewView, runReview, suggest, type Gh } from './pr-review.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -25,6 +25,20 @@ describe('the comments drafted', () => {
     expect(got[0].url).toBe(lineUrl('https://github.test/sample-org/sample/pull/7', 'src/limit.js', 4))
     expect(got[0].url).toMatch(/\/pull\/7\/files#diff-[0-9a-f]{64}R4$/)
     expect(got[1].text).toMatch(/^Lint fails for me on this branch \(`pnpm lint`\):[\s\S]*x\.js: unused/)
+  })
+})
+
+describe('a pull request named by the person', () => {
+  const repos = ['sample-org/shop', 'sample-org/api']
+  it('is its number in the home repository, a repository and number, or its address', () => {
+    expect(namedPull('412', repos)).toEqual({ repo: 'sample-org/shop', number: 412 })
+    expect(namedPull(' #412 ', repos)).toEqual({ repo: 'sample-org/shop', number: 412 })
+    expect(namedPull('sample-org/api#9', repos)).toEqual({ repo: 'sample-org/api', number: 9 })
+    expect(namedPull('https://github.com/Sample-Org/API/pull/9/files#diff-abc', repos)).toEqual({ repo: 'sample-org/api', number: 9 })
+  })
+  it('and nothing else: words, or a repository that is not the app\'s', () => {
+    expect(namedPull('robin', repos)).toBeNull(); expect(namedPull('fix 412', repos)).toBeNull()
+    expect(namedPull('https://github.com/someone/else/pull/3', repos)).toBeNull(); expect(namedPull('12', [])).toBeNull()
   })
 })
 
@@ -62,8 +76,14 @@ describe.skipIf(!reachable)('a review of someone else\'s pull request (sample da
       if (args[0] === 'pr' && args[1] === 'view') return JSON.stringify(pull())
       throw new Error(`not asked for in a review: gh ${args.join(' ')}`)
     }
+    forgetPulls()
     // Before anything is run: other people's first, none reviewed, and the warning there to be read.
     const before = await listPulls(appId, { gh })
+    // GitHub is read once and kept: a second look asks it nothing, until the person asks for it fresh.
+    const lists = () => asked.filter((a) => a[1] === 'list').length
+    expect(lists()).toBe(1); expect(before.repos).toEqual([full])
+    expect((await listPulls(appId, { gh })).readAt).toBe(before.readAt); expect(lists()).toBe(1)
+    await listPulls(appId, { gh }, { fresh: true }); expect(lists()).toBe(2)
     expect(before.pulls.map((p) => [p.number, p.author, p.mine, p.review])).toEqual([[7, 'a-colleague', false, null], [8, 'me-myself', true, null]])
     expect(before.warning).toMatch(/Nobody here has reviewed that code yet/)
     expect(await reviewView(appId, full, 7, { gh })).toMatchObject({ state: 'none', suggestions: [], pull: { title: 'A limit of three (sample)' } })
