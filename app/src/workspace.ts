@@ -89,7 +89,7 @@ export function tabThing(t: Tab): string {
 export const specific = (path: string) => path.includes('?') || path.split('?')[0].replace(/\/$/, '') !== tabThing({ kind: 'page', path })
 
 const PAGES: [RegExp, string][] = [
-  [/^\/$/, 'My Stuff'], [/^\/summary/, 'Summary'], [/^\/observe/, 'Observe'], [/^\/learn/, 'Learn'],
+  [/^\/$/, 'My Stuff'], [/^\/summary/, 'Summary'], [/^\/observe/, 'Observe'], [/^\/learn/, 'Learn'], [/^\/docs/, 'Docs'],
   [/^\/ideas\/?$/, 'Ideas'], [/^\/ideas\//, 'Idea'], [/^\/projects\/new/, 'New project'], [/^\/projects\/?$/, 'Projects'], [/^\/projects\//, 'Project'],
   [/^\/plan\/?$/, 'Plan'], [/^\/tasks\/?$/, 'Tasks'], [/^\/tasks\//, 'Task'], [/^\/todos/, 'To-dos'], [/^\/mockups/, 'Mockups'],
   [/^\/build/, 'Build'], [/^\/graph/, 'Graph'], [/^\/settings/, 'Settings'],

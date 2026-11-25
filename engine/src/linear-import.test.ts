@@ -14,7 +14,10 @@ import { importTickets, linearTickets, type FetchTickets, type LinearTicket } fr
 import { insertIssues } from './issues.js'
 import { originOf, originPrompt } from './origins.js'
 import { prompt as plannerPrompt } from './planner.js'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { keepSecret } from './secrets.js'
 
 const ticket = (n: number, over: Partial<LinearTicket> = {}): LinearTicket => ({
   id: `lin-${n}`, identifier: `SHOP-${n}`, title: `Made-up ticket ${n}`, description: `What ticket ${n} asks for.`, url: `https://linear.app/made-up/issue/SHOP-${n}`,
@@ -56,6 +59,17 @@ describe.skipIf(!reachable)('Linear tickets brought in', () => {
   it('says what is missing: Linear not set for the app, or the key not in the environment', async () => {
     await expect(linearTickets(bare, 'mine', env, fake)).rejects.toThrow("Linear isn't set for Blog")
     await expect(linearTickets(appId, 'mine', {}, fake)).rejects.toThrow("SHOP_LINEAR_KEY has no key")
+  })
+
+  it('told no keys, reads the ones kept for the app: a key pasted under Settings is found wherever a ticket is read', async () => {
+    const home = process.env.SECRETS_HOME, was = process.env.SHOP_LINEAR_KEY
+    process.env.SECRETS_HOME = mkdtempSync(join(tmpdir(), 'se-linear-keys-')); delete process.env.SHOP_LINEAR_KEY
+    try {
+      await expect(linearTickets(appId, 'mine', undefined, fake)).rejects.toThrow("SHOP_LINEAR_KEY has no key")
+      const [a] = await db.select().from(app).where(eq(app.id, appId))
+      await keepSecret('SHOP_LINEAR_KEY', 'made-up-key', a.key)
+      await expect(linearTickets(appId, 'mine', undefined, fake)).resolves.toMatchObject({ team: 'SHOP' })
+    } finally { if (home === undefined) delete process.env.SECRETS_HOME; else process.env.SECRETS_HOME = home; if (was !== undefined) process.env.SHOP_LINEAR_KEY = was }
   })
 
   it('lists the team\'s tickets in the scope asked, none of them here yet, without their descriptions', async () => {

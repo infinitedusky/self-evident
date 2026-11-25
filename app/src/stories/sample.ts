@@ -885,3 +885,23 @@ export const ideaContext: import('../engine').ContextView = { on: 'idea', projec
 export const projectContext: import('../engine').ContextView = { on: 'project', project: null, limits: contextLimits, docs: taskContext.docs.filter((d) => d.fromProject).map((d) => ({ ...d, fromProject: false })), notes: taskContext.notes.filter((n) => n.fromProject).map((n) => ({ ...n, fromProject: false })) }
 /** Made here, from nothing outside, and nothing added yet. */
 export const emptyContext: import('../engine').ContextView = { on: 'task', project: null, limits: contextLimits, docs: [], notes: [] }
+
+/** Made-up tickets of the sample team, each with the tasks under it: one bigger than a pull request and part built, one known by its key alone, one finished. */
+export const tickets: import('../engine').TicketGroup[] = [
+  { key: 'SHOP-323', title: 'Protected people (sample)', url: 'https://linear.app/sample-shop/issue/SHOP-323/protected-people', source: 'linear', read: true, done: 1, total: 3, finished: false, tasks: [
+    { id: 'iss_sample40', identifier: 'SS-40', title: 'SHOP-323, first: the group stored (sample)', teamTitle: 'The protected group, stored (sample)', state: 'done', from: 'set', project: { id: 'proj_checkout', name: 'Executive protection (sample)' }, pr: { number: 31, url: 'https://example.com/sample-shop/pull/31', status: 'merged' } },
+    { id: 'iss_sample41', identifier: 'SS-41', title: 'Add and remove on the employee record (sample)', teamTitle: null, state: 'in_review', from: 'set', project: { id: 'proj_checkout', name: 'Executive protection (sample)' }, pr: { number: 32, url: 'https://example.com/sample-shop/pull/32', status: 'open' } },
+    { id: 'iss_sample42', identifier: 'SS-42', title: 'Badge, filter and row menu on Employees (sample)', teamTitle: null, state: 'todo', from: 'link', project: { id: 'proj_checkout', name: 'Executive protection (sample)' }, pr: null },
+    { id: 'iss_sample43', identifier: 'SS-43', title: 'Bulk add from a file (sample)', teamTitle: null, state: 'canceled', from: 'set', project: null, pr: null },
+  ] },
+  { key: 'SHOP-330', title: null, url: null, source: null, read: false, done: 0, total: 1, finished: false, tasks: [
+    { id: 'iss_sample44', identifier: 'SS-44', title: 'Takedown requests (sample)', teamTitle: null, state: 'in_progress', from: 'link', project: null, pr: null },
+  ] },
+  { key: 'SHOP-301', title: 'Faster product images (sample)', url: 'https://linear.app/sample-shop/issue/SHOP-301/faster-product-images', source: 'linear', read: true, done: 2, total: 2, finished: true, tasks: [
+    { id: 'iss_sample45', identifier: 'SS-45', title: 'Image sizes on upload (sample)', teamTitle: null, state: 'done', from: 'import', project: null, pr: { number: 20, url: 'https://example.com/sample-shop/pull/20', status: 'merged' } },
+    { id: 'iss_sample46', identifier: 'SS-46', title: 'Product page uses the sizes (sample)', teamTitle: null, state: 'done', from: 'set', project: null, pr: { number: 22, url: 'https://example.com/sample-shop/pull/22', status: 'merged' } },
+  ] },
+]
+
+// An app's docs site (made up): running, framed at an empty page here since no site runs beside Storybook.
+export const docsSiteSample: import('../engine').DocsSite = { dir: '/Users/sample/code/shop-workbench', found: true, has: true, problem: null, url: 'http://localhost:6912', frame: 'about:blank', up: true, startedHere: false, log: [] }

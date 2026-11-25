@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
 import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
+import { editAppDoc, listAppDocs, removeAppDoc, writeAppDoc } from './app-docs.js'
 import { checklistOf } from './checklist.js'
 import { sealTestPlan, trajectoryView } from './trajectory.js'
 import { closeTask, closeView, reopenUnclosed } from './close.js'
@@ -87,7 +88,7 @@ import { homeRepo, inOrder } from './workbench.js'
 import { chooseFolder } from './folders.js'
 import { deleteIssue } from './delete-issue.js'
 import { addAsset, listAssets, removeAsset, updateAsset } from './assets.js'
-import { importTickets, linearTickets, type Scope } from './linear-import.js'
+import { importTickets, keepTicket, linearTickets, type Scope } from './linear-import.js'
 import { originOf, originView } from './origins.js'
 import { accountStatus, cleanAccount } from './account.js'
 import { pullSkills, removeSkillSource, skillSources } from './skill-sources.js'
@@ -123,7 +124,7 @@ export function buildApp(bus: EventBus) {
     routes: {
       'GET /health': 'database reachable?', 'POST /devices/serve': 'put the page on the Tailscale network (this computer\'s page only); the same answer as GET /devices, plus enable (a page on Tailscale) when the account must allow serving first', 'POST /devices/serve/stop': 'take it off again', 'GET /devices': '{tailscale: missing | off | ready, address, remote, devices} — the page\'s address on the Tailscale network (null when not served), whether the one asking came over it, and the other devices with the page open: ip, name, kind (phone | computer), since',
       'POST /workspaces': '{name}', 'POST /apps': '{workspaceId, name, key?, defaultBranch?, setup?}', 'POST /repos': '{appId, fullName, localPath?, baseBranch?}',
-      'GET /apps': 'the apps in use, each with its repos; ?removed=1: the ones put away, with what each holds', 'POST /apps/:id/remove': 'put it away: out of every list, nothing of it runs, can be brought back', 'POST /apps/:id/restore': 'bring a put-away app back', 'DELETE /apps/:id': '{name}: delete a put-away app and every row of it, for good', 'PATCH /apps/:id': '{name?, defaultBranch?, setup?}', 'PATCH /repos/:id': '{fullName?, localPath?, baseBranch?}', 'DELETE /repos/:id': 'the repository leaves the app', 'GET /skills/sources': 'the repositories skills were pulled from', 'POST /skills/sources': '{url} → pulls that repository\'s skills into the shared skills, or brings them up to date: {source, added, updated, unchanged, removed, skipped}', 'DELETE /skills/sources?url=': 'stops pulling from it and removes its skills', 'POST /skills/shared': '{name, description, body} → one of your own skills, for every app (a SKILL.md outside every repo)', 'GET /apps/:id/account': 'which Claude account the app\'s agents run on: {kind: default|key|login, ok, note}', 'GET /apps/:id/linear/tickets?scope=mine|unassigned|all': 'the Linear team\'s open tickets, each with the task or idea it already is here', 'POST /apps/:id/linear/import': '{identifiers: ["ENG-12"], as?: idea|task} → each ticket an idea (or a task) here: {made, updated, missing}', 'GET /apps/:id/assets?project=': 'the app\'s assets, or one project\'s own', 'POST /assets': '{appId, projectId?, name, location, note?}', 'PATCH /assets/:id': '{name?, location?, note?}', 'DELETE /assets/:id': 'removes it',  'POST /folders/choose': '{path?} → {path, repos: [{name, path, fullName, branch}]}; no path opens the folder dialog', 'GET /workspaces': 'all workspaces',
+      'GET /apps': 'the apps in use, each with its repos; ?removed=1: the ones put away, with what each holds', 'POST /apps/:id/remove': 'put it away: out of every list, nothing of it runs, can be brought back', 'POST /apps/:id/restore': 'bring a put-away app back', 'DELETE /apps/:id': '{name}: delete a put-away app and every row of it, for good', 'PATCH /apps/:id': '{name?, defaultBranch?, setup?}', 'PATCH /repos/:id': '{fullName?, localPath?, baseBranch?}', 'DELETE /repos/:id': 'the repository leaves the app', 'GET /skills/sources': 'the repositories skills were pulled from', 'POST /skills/sources': '{url} → pulls that repository\'s skills into the shared skills, or brings them up to date: {source, added, updated, unchanged, removed, skipped}', 'DELETE /skills/sources?url=': 'stops pulling from it and removes its skills', 'POST /skills/shared': '{name, description, body} → one of your own skills, for every app (a SKILL.md outside every repo)', 'GET /apps/:id/account': 'which Claude account the app\'s agents run on: {kind: default|key|login, ok, note}', 'GET /apps/:id/tickets': 'the app\'s tickets, each with the tasks under it and how many are done (ticket.ts); /:key: one', 'POST /apps/:id/tickets/:key/read': 'the ticket read from its tracker: its title, link and words', 'GET /apps/:id/linear/tickets?scope=mine|unassigned|all': 'the Linear team\'s open tickets, each with the task or idea it already is here', 'POST /apps/:id/linear/import': '{identifiers: ["ENG-12"], as?: idea|task} → each ticket an idea (or a task) here: {made, updated, missing}', 'GET /apps/:id/assets?project=': 'the app\'s assets, or one project\'s own', 'POST /assets': '{appId, projectId?, name, location, note?}', 'PATCH /assets/:id': '{name?, location?, note?}', 'DELETE /assets/:id': 'removes it',  'POST /folders/choose': '{path?} → {path, repos: [{name, path, fullName, branch}]}; no path opens the folder dialog', 'GET /workspaces': 'all workspaces',
       'GET /apps/:id/graph': 'the top-level graph: every sub-task of every project in the app', 'GET /now': 'the front door: running, needs you, recent',
       'POST /projects': '{appId, name, content?, description?, ideaId?, issues: [{title, description?, brief?, subIssues?: [{key, title, brief?, dependsOn?, files?}]}]}',
       'GET /projects?app=': 'the app\'s projects with counts', 'GET /projects/:id/graph': 'tasks in order, sub-tasks with builds, edges, claims, held reasons, last run, steps, the PR, backlog, to-dos',
@@ -146,6 +147,7 @@ export function buildApp(bus: EventBus) {
       'GET /todos?app=': 'the app\'s to-dos with their checklists', 'POST /todos': '{appId, title, notes?, owner?, projectId?, checklist?: [text | {text, waitingOn?}]}',
       'PATCH /todos/:id': '{title?, notes?, owner?, projectId?}', 'POST /todos/:id/checklist': '{items}', 'PATCH /checklist/:id': '{done?, waitingOn?, text?}', 'DELETE /checklist/:id': '',
       'POST /todos/:id/draft': 'the agent drafts the checklist, or what is missing from it', 'POST /todos/:id/done': '', 'POST /todos/:id/drop': '{reason}', 'POST /todos/:id/reopen': '',
+      'GET /apps/:id/docs': 'the app\'s own docs: the pages a person keeps about how they understand it (Learn)', 'POST /apps/:id/docs': '{title, body}', 'PATCH /app-docs/:id': '{title?, body?}', 'DELETE /app-docs/:id': '',
       'GET /initiatives?app=': 'goals, with their projects', 'POST /initiatives': '{appId, name, description?, targetDate?, projectIds?}', 'PATCH /initiatives/:id': '{name?, description?, status?, targetDate?, addProjects?, removeProjects?}',
       'GET /cycles?app=': 'stretches of time with their tasks', 'POST /cycles': '{appId, startsAt, endsAt, name?, description?, issueIds?}',
       'POST /projects/:id/start': 'run it: worktrees, agent runs, landing, PR', 'POST /projects/:id/tick?room=N': 'one dispatch pass for a draft (no launching)',
@@ -187,6 +189,11 @@ export function buildApp(bus: EventBus) {
   // Learn, the codebase half (learn.ts): the documents an agent wrote from reading the code, and the press that starts it.
   api.get('/apps/:id/learning', async (c) => { try { return c.json(await listLearning(c.req.param('id'), talkBusy)) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/learn', async (c) => { try { return c.json(await startLearning(c.req.param('id'), 'user'), 202) } catch (err) { return planError(c, err) } })
+  // An app's own docs (app-docs.ts): the pages a person keeps about how they understand the app, on the Learn page.
+  api.get('/apps/:id/docs', async (c) => c.json(await listAppDocs(c.req.param('id'))))
+  api.post('/apps/:id/docs', async (c) => { try { return c.json(await writeAppDoc(c.req.param('id'), await c.req.json<{ title: string; body: string }>(), 'user'), 201) } catch (err) { return planError(c, err) } })
+  api.patch('/app-docs/:id', async (c) => { try { return c.json(await editAppDoc(c.req.param('id'), await c.req.json<{ title?: string; body?: string }>(), 'user')) } catch (err) { return planError(c, err) } })
+  api.delete('/app-docs/:id', async (c) => { try { return c.json(await removeAppDoc(c.req.param('id'), 'user')) } catch (err) { return planError(c, err, 404) } })
   api.get('/apps/:id/holds', async (c) => { try { return c.json(await appHolds(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/remove', async (c) => { try { return c.json(await putAway(c.req.param('id'), putAwayDeps)) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/restore', async (c) => { try { return c.json(await bringBack(c.req.param('id'))) } catch (err) { return planError(c, err) } })
@@ -493,6 +500,9 @@ export function buildApp(bus: EventBus) {
   } catch (err) { return planError(c, err, 404) } })
   // Fixtures (fixtures.ts): the app's shared scenarios, a table's rows to pick a person from, and an endpoint's data made for one of them.
   // The app's workbench folder and its hooks (hooks.ts).
+  // An app's docs site (docs-site.ts): the VitePress site in its workbench folder, started here and framed by the Docs page.
+  api.get('/apps/:id/docs-site', async (c) => { try { return c.json(await (await import('./docs-site.js')).docsSite(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
+  api.post('/apps/:id/docs-site/start', async (c) => { try { return c.json(await (await import('./docs-site.js')).startDocsSite(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/workbench', async (c) => { try { return c.json(await (await import('./hooks.js')).workbench(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.put('/apps/:id/workbench', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { dir?: string | null }; return c.json(await (await import('./hooks.js')).setWorkbench(c.req.param('id'), b.dir ?? null)) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/fixtures', async (c) => { try { const issueId = c.req.query('issue') || null; return c.json({ fixtures: await listFixtures(c.req.param('id')), used: await fixtureForTask(c.req.param('id'), issueId), make: await canMakeFixture(c.req.param('id')) }) } catch (err) { return planError(c, err, 404) } })
@@ -975,8 +985,12 @@ export function buildApp(bus: EventBus) {
   api.get('/issues/:id', async (c) => { try { const d = await issueDetail((await resolveIssue(db, c.req.param('id'))).id); return c.json(!d.parentId && d.kind === 'code' && d.state === 'in_review' ? { ...d, close: await closeView(d.id) } : d) } catch (err) { return planError(c, err, 404) } })
   // A person closes a task: it is Done. Only once its pull request is merged and every check of theirs is passed or skipped (close.ts).
   api.post('/issues/:id/close', async (c) => { try { return c.json(await closeTask((await resolveIssue(db, c.req.param('id'))).id, 'user')) } catch (err) { return planError(c, err) } })
+  // An app's tickets, each with the tasks under it (ticket.ts): one ticket, several tasks, a pull request each. Reading one brings its title, link and words from its tracker.
+  api.get('/apps/:id/tickets', async (c) => { try { return c.json(await (await import('./ticket.js')).ticketsOf(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  api.get('/apps/:id/tickets/:key', async (c) => { try { return c.json(await (await import('./ticket.js')).ticketOf(c.req.param('id'), c.req.param('key'))) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/tickets/:key/read', async (c) => { try { await keepTicket(c.req.param('id'), c.req.param('key'), await envOfApp(c.req.param('id'))); return c.json(await (await import('./ticket.js')).ticketOf(c.req.param('id'), c.req.param('key'))) } catch (err) { return planError(c, err) } })
   // A task's team ticket and its name for the team (ticket.ts): set by the person on its page; a build held for want of a ticket carries on.
-  api.put('/issues/:id/team', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const b = await c.req.json() as { ticket?: string | null; title?: string | null }; const out = await (await import('./ticket.js')).setTeamNames(t.id, b); void runner.dispatch(); return c.json(out) } catch (err) { return planError(c, err) } })
+  api.put('/issues/:id/team', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const b = await c.req.json() as { ticket?: string | null; title?: string | null }; const out = await (await import('./ticket.js')).setTeamNames(t.id, b, async (appId, key) => keepTicket(appId, key, await envOfApp(appId))); void runner.dispatch(); return c.json(out) } catch (err) { return planError(c, err) } })
   api.patch('/issues/:id', async (c) => { try { return c.json(settle(await updateIssue((await resolveIssue(db, c.req.param('id'))).id, await c.req.json(), 'user'))) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/state', async (c) => {
     const { state, reason } = await c.req.json<{ state: IssueState; reason?: string }>()

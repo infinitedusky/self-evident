@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { fn } from 'storybook/test'
+import { expect, fn, userEvent, within } from 'storybook/test'
 import { Rail } from './Rail'
 
 // The loop as icons. `here` is the tab in front; hovering an icon shows its name; nothing sits under it.
@@ -18,3 +18,13 @@ export const OnAPrototype: Story = { args: { here: 'prototype:proto_sample1' } }
 export const AgentFolded: Story = { args: { agentOpen: false } }
 /** The chevron at the top shows or hides the apps strip; here the strip is hidden. */
 export const AppsHidden: Story = { args: { appsOpen: false, onToggleApps: fn() } }
+/** Docs is below the rule, next to My Stuff: the app's docs site, opened as a page. */
+export const OnDocs: Story = {
+  args: { here: '/docs' },
+  play: async ({ canvasElement, args }) => {
+    const docs = within(canvasElement).getByRole('button', { name: 'Docs' })
+    await expect(docs).toHaveClass('active')
+    await userEvent.click(docs)
+    await expect(args.onOpen).toHaveBeenCalledWith({ kind: 'page', path: '/docs' })
+  },
+}

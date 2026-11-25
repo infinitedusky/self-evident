@@ -7703,3 +7703,120 @@ Built, not merged, with the dependencies above.
 Mine to decide, and Sandy's to change: it is one task's, idea's or project's, not the whole app's; and it is made
 when asked for, not kept or versioned. Not done: no choice of which questions go in; no link to a page others can
 open, since the people it is for are not in Evident.
+
+## The Data step's Approve and Skip are at its top (Sandy, 2026-11-24: "the data tab doesn't have an approve button at the top. A skip, you know")
+
+On CEB-111 the Data step showed neither where a person looks. Approve is in a step's head but only once the step is
+started, and the data agent's rounds never start the step; Skip was under the whole page, which on this step is
+every service and its data.
+
+- On a task's Data step, **Approve is in the head whether or not the step is started**: its page (the services and
+  their data) is there before any agent is asked, so it can be approved as it stands. Pressed on a step not
+  started, it starts it and approves it.
+- **Skip is in the head too**, and no longer under the page.
+
+Not done: the data agent's own three approvals and the step's approval are still two things, and approving the
+agent's last step does not approve the Data step.
+
+## A file keeps the name it was given (Sandy, 2026-11-24, by way of CEB-111's agent)
+
+A file given for an endpoint is kept under the endpoint's key, because that is how the mock finds it, and the page
+showed that key: every file of the results call read `results-download-links-download-url.csv`, whoever made it and
+whatever it was. The agent's note, agreed with Sandy: "each file should keep a name that says what it is … The page
+should show that name and where the file came from: faked from a real file, uploaded by you, or written by an
+agent. The call's own key is only something the mock needs."
+
+- **The name a file was given under is kept** beside it (`provenance.given`, with who gave it); a real response's
+  was already in its folder's note. It is still kept and served under the endpoint's key.
+- **The page shows the given name and where the file came from**: "A response you gave: <name>", "A fake of
+  <name>", "<name>, uploaded by you", "<name>, written by an agent". The key shows only for data from before names
+  were kept.
+
+Not done: data given before this has no name to show (give it again to name it); a name cannot be changed on the
+page; a real response's given name is shown on its own line and in "a fake of", both on this computer's page only,
+and is not written anywhere a reviewer reads.
+
+## A ticket is a record, and several tasks can be under it (Sandy, 2026-11-24, by way of an idea's agent)
+
+Cloaked's ENT-323 is bigger than one pull request. A task is one pull request, so the ticket becomes several tasks,
+and until now the only thing joining them was the same text in each one's ticket field. Sandy: "ticket needs to
+become an actual record, not just text … and then we can link them that way. And that way it would just be an
+organizational thing." Not nested projects: the levels stay initiative → project → task → sub-task.
+
+- **A ticket is a row** (`ticket`: one per app and key, with its title, link, source and the origin it is). A task
+  links to it (`issue.ticket_id`) where it carried text (`team_ticket`, gone). Two tasks given the same key are
+  under the same record. Existing tickets were carried over: the ones set on tasks, and every ticket already read
+  from Linear.
+- **It organises and nothing else.** No brief, no approval, no build. Each task under it keeps its own brief,
+  prototype, build and pull request, and its branch, commits and pull request title still read the ticket's key.
+- **A task is under the ticket in force for it**, however that was read: linked, imported, or a link in its text
+  or its idea's (ticket.ts, unchanged order). So ENT-322's tasks, found by a link, group without anyone linking them.
+- **Read from Linear, the record has its title and link.** Any ticket read as an origin is kept as a record too.
+  Setting a ticket on a task reads it when Linear is set for the app; when it can't be read the link stands with
+  the key alone, and the ticket's page has "Read it from Linear".
+- **Tickets page** (`/tickets`, from "By team ticket →" on Tasks; `/tickets/:key`, from "ENT-323's tasks →" on a
+  task): each ticket with its tasks in their projects' order, their states and pull requests, "2 of 3 tasks
+  done", and Done when every task that counts is. Dropped tasks are listed and not counted.
+- **The agents are told**: when one ticket is more than one pull request, make a task for each and give them all
+  its key, each with its own name for the team.
+
+Not done: a ticket's state is not written back to Linear, and Linear's own state is not shown; the project page
+does not group its tasks by ticket; an idea or a project is not linked to a ticket record (they still point at
+the origin); a ticket found only by a link has no record until it is read or set; Tickets is not in the nav.
+Not tried: two tasks of one ticket building at once. Their branches differ only by the task's title, so two
+tasks with the same key and the same name for the team would ask for the same branch.
+
+## A ticket is read with the app's kept keys, wherever it is read (Sandy, 2026-11-24)
+
+Adding a ticket to a project's Context as a reference doc said "LINEAR_API_KEY has no key", while bringing tickets
+in as ideas and tasks worked. The import routes pass the keys kept for the app (Settings › Integrations); the
+Context's add and refresh, and the agents' tools, passed none, so the read fell back to the engine's own
+environment, where a key pasted under Settings never is. Now a Linear read that is told no keys reads the ones
+kept for the app (linear-import.ts, `connection`), so every caller gets them.
+
+## Your docs: an app's own pages, in Learn (Sandy, 2026-11-24: "documentation that represents my personal understanding of the project so that I can probe and build up … we should host this inside of Evident … and it is in Learn")
+
+What there was: Learn's four documents (an agent's account, replaced when the code is learned again), and a docs
+site in the Cloaked workbench folder (VitePress, from a template) whose only real page is "Running it". Nothing held
+what Sandy understands. Sandy: not the docs site; inside Evident, in Learn.
+
+- **"Your docs" is a section of the Learn page**, per app, between the codebase and the running app. Any number of
+  pages, each a title and Markdown. Read folded under their titles (the first open), written and changed in place,
+  deleted with a second press.
+- **They are the person's, and learning the code again does not touch them.** Each says who wrote it last: you, or an
+  agent at your word.
+- **Kept in the database** (table `app_doc`; `engine/src/app-docs.ts`), not in a folder beside the app. A second page
+  with a title the app already has is refused.
+- **Agents read them and Learn's agent writes them when asked**: `app_docs` to read; `write_app_doc` for "write down
+  what you just told me" (a new page, or one replaced whole by its id). No agent can delete one. This is the probing:
+  ask Learn's agent about the code, have it write the answer as a page, or ask it to check a page against the code.
+- **Learning the code reads them first** and reports where the code says otherwise, without changing the page.
+
+Not done: a press that checks a page against the code and marks each claim (today it is asked for in Learn's
+conversation, which exists only once the code has been learned); diagrams (the page shows Markdown, and a Mermaid
+block shows as code); the pages are not handed to planners and builders as they start (a tool they may call, as
+Learn's four are); the workbench docs site is left as it is, with nothing moved from it. Not tried with a real agent.
+
+## Docs: the app's docs site, in the nav (Sandy, 2026-11-24: "the docs would just be in the left nav near my stuff, and … we would just be showing the VitePress page")
+
+Said after "Your docs" (above) was on the Learn page: Sandy asked whether it was VitePress, and it was not. The docs
+are the VitePress site in the app's workbench folder, and Evident shows it.
+
+- **Docs is in the rail, below the rule, after My Stuff** (📚, `/docs`), for the app in front.
+- **It frames the site**, as Mockups frames Storybook: the site's own sidebar, search and diagrams, nothing drawn
+  over it, and a link that opens it on its own.
+- **The site is `docs/` (VitePress) in the app's workbench folder** (`setup.workbench.dir`, the folder the hooks are
+  in). The docs are files there, versioned with it. Nothing new is set.
+- **The engine starts it on a press** (`engine/src/docs-site.ts`): the folder's own VitePress, on a port that is the
+  folder's (6900 to 6989), running on its own so it outlives an engine restart. One already answering there is used.
+- **The page says what is missing**: no workbench folder (to Settings › Workbench), a folder that is not on this
+  computer, a folder with no docs site, or VitePress not installed there (run `pnpm install`).
+
+Tried by hand: the Cloaked workbench's site starts this way and sends nothing that stops it being framed. Not tried:
+the page against a running engine; the site framed when Evident is served under a name (it goes through the
+Storybook frame address, and VitePress may refuse a name it was not told).
+
+Not done: nothing stops the site (it is left running); agents have no tool for writing a docs page (one working in
+the workbench folder edits the files); a folder with no site is not given one from the template. **Open: "Your docs"
+on the Learn page (pages in the database) is still there.** With the docs being this site, it is a second place for
+the same thing; whether it goes is Sandy's to say.

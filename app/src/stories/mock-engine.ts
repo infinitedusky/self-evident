@@ -14,6 +14,7 @@ export interface MockData {
   issueDetails: typeof s.issueDetails; todos: typeof s.todos; ideas: typeof s.ideaRows; initiatives: typeof s.initiatives; cycles: typeof s.cycles
   summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript; /** A task's own agent, or null when it has none. */ taskTalk: typeof s.talkSession | null; /** The agents it has out. */ taskAgents?: import('../engine').TaskAgentOut[]; /** An idea's own agent, or null when it has none. */ ideaTalk?: typeof s.talkSession | null
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
+  /** The app's tickets, each with its tasks. */ tickets: import('../engine').TicketGroup[]
   /** The app's mock library. */ mocks: import('../engine').Mock[]
   /** Where each mock's data comes from: the app's defaults, and one task's. */ mockPlaces: import('../engine').MockPlacesRow[]; mockPlacesForTask: import('../engine').MockPlacesRow[]
   mockChanges: import('../engine').MockChange[]
@@ -34,9 +35,11 @@ export interface MockData {
   /** The apps put away; none when left out. */ removedApps?: import('../engine').AppHolds[]; /** Why an app can't be removed yet, as the engine says it. */ removeProblem?: string
   /** The app's reports; none when left out. */ reports?: import('../engine').Reports
   /** What was learned from the app's code; nothing yet when left out. */ learning?: import('../engine').Learning
+  /** The person's own pages about the app; none when left out. */ appDocs?: import('../engine').AppDoc[]; /** Why writing a page fails, when it should. */ appDocError?: string
   /** Why submitting a pull request fails, when it should. */ submitPrError?: string
   /** A task's pull request as a step; not submitted (prSample) when left out. */ prView?: import('../engine').PrView
   /** A task's data agent; never asked (dataAgentSample) when left out. */ dataAgent?: import('../engine').DataAgentView
+  /** An app's docs site; running (docsSiteSample) when left out. */ docsSite?: import('../engine').DocsSite; /** Why starting it fails, when it should. */ docsSiteError?: string
   /** An app's workbench folder and hooks; workbenchSample when left out. */ workbench?: import('../engine').WorkbenchView
   /** A task's review copy; not made yet (reviewCopySample) when left out. */ reviewCopy?: import('../engine').ReviewCopyView
   /** A pull request's finalizing; never run (finalizeNoneSample) when left out. */ finalize?: import('../engine').FinalizeView
@@ -66,6 +69,7 @@ export const sampleData: MockData = {
   talks: [s.talkSession], transcript: s.transcript, taskTalk: { ...s.talkSession, subject: 'SS-20 Address and payment on one page (sample)', subjectRef: { issueId: 'iss_sample20' } },
   storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [], branch: 'talk/sample', main: false },
   screens: s.screensView,
+  tickets: s.tickets,
   mocks: s.mocks,
   notes: s.notes, mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls, mockReal: s.mockReal, taskServices: s.taskServices, testFiles: s.testFiles, fixtures: s.fixtures, fixtureUsed: null, fixtureMake: { ok: true, missing: null },
   sketches: { scope: 'sess_sample', branch: 'talk/sample', main: false, dir: 'sketches', sketches: [{ file: 'home.html', changedAt: 1794250000000 }, { file: 'checkout.html', changedAt: 1794240000000 }] },
@@ -132,6 +136,10 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/talks/ask', () => reply(d.talks[0] ?? s.talkSession)),
     http.delete('/api/repos/:id', ({ params }) => reply({ removed: params.id })),
     http.post('/api/folders/choose', () => reply(d.folder)),
+    http.get('/api/apps/:id/tickets', () => reply(d.tickets)),
+    http.get('/api/apps/:id/tickets/:key', ({ params }) => { const t = d.tickets.find((x) => x.key === String(params.key).toUpperCase()); return t ? reply(t) : HttpResponse.json({ error: `no ticket ${String(params.key).toUpperCase()} here: no task is under it, and it was never read from its tracker` }, { status: 400 }) }),
+    // Read from the tracker (made up): a ticket known by its key alone gains a title and a link.
+    http.post('/api/apps/:id/tickets/:key/read', ({ params }) => { const t = d.tickets.find((x) => x.key === params.key); if (!t) return missing('ticket'); const read = { ...t, title: t.title ?? 'Takedown requests for protected people (sample)', url: t.url ?? `https://linear.app/sample-shop/issue/${t.key}`, source: 'linear', read: true }; d.tickets = d.tickets.map((x) => (x.key === t.key ? read : x)); return reply(read) }),
     http.get('/api/apps/:id/linear/tickets', ({ request }) => {
       if (d.linearProblem) return HttpResponse.json({ error: d.linearProblem }, { status: 400 })
       const scope = new URL(request.url).searchParams.get('scope')
@@ -304,6 +312,10 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     // Reports: the engine's rules, roughly. Writing one here answers at once.
     http.get('/api/apps/:id/learning', () => reply(d.learning ?? { docs: [], missing: ['What it is', 'The parts', 'Running and testing it', 'What is fragile'], working: null, sessionId: null, stale: 0 })),
     http.post('/api/apps/:id/learn', () => { const now = d.learning ?? { docs: [], missing: [], working: null, sessionId: null, stale: 0 }; d.learning = { ...now, working: { sessionId: 'talk_sample_learn' }, sessionId: 'talk_sample_learn' }; return reply({ sessionId: 'talk_sample_learn', started: true }) }),
+    http.get('/api/apps/:id/docs', () => reply(d.appDocs ?? [])),
+    http.post('/api/apps/:id/docs', async ({ request }) => { if (d.appDocError) return HttpResponse.json({ error: d.appDocError }, { status: 400 }); const b = await request.json() as { title: string; body: string }; const page = { id: `adoc_sample_${(d.appDocs ?? []).length + 1}`, title: b.title, body: b.body, by: 'user', createdAt: '2026-11-24T10:00:00Z', updatedAt: '2026-11-24T10:00:00Z' }; d.appDocs = [...(d.appDocs ?? []), page]; return reply(page) }),
+    http.patch('/api/app-docs/:id', async ({ params, request }) => { const b = await request.json() as { title?: string; body?: string }; const old = (d.appDocs ?? []).find((x) => x.id === params.id); if (!old) return missing('page'); const page = { ...old, ...b, by: 'user', updatedAt: '2026-11-24T11:00:00Z' }; d.appDocs = (d.appDocs ?? []).map((x) => x.id === old.id ? page : x); return reply(page) }),
+    http.delete('/api/app-docs/:id', ({ params }) => { d.appDocs = (d.appDocs ?? []).filter((x) => x.id !== params.id); return reply({ removed: params.id }) }),
     // Context: one view per kind of thing; every change answers with the view as it now is.
     ...(['ideas', 'issues', 'projects'] as const).flatMap((kind) => {
       const all: Record<typeof kind, import('../engine').ContextView> = { ideas: s.ideaContext, issues: s.taskContext, projects: s.projectContext, ...d.context }
@@ -437,6 +449,8 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/issues/:id/finalize/survivors/:survivor', async ({ params, request }) => { const b = await request.json() as { reason?: string; equivalent?: boolean; undo?: boolean }; const v = d.finalize ?? s.finalizeSample; if (!b.undo && !b.reason?.trim()) return HttpResponse.json({ error: 'say why it is left as it is: the reason goes into the evidence, for the reviewer' }, { status: 400 }); d.finalize = { ...v, mutation: v.mutation && { ...v.mutation, survivors: v.mutation.survivors.map((x) => (x.id === params.survivor ? { ...x, accepted: b.undo ? null : { reason: b.reason!, ...(b.equivalent ? { equivalent: true } : {}), by: 'user' } } : x)) } }; return reply(d.finalize) }),
     http.post('/api/issues/:id/finalize/fix', async ({ request }) => { const b = await request.json() as { kind: string; id: string }; const v = d.finalize ?? s.finalizeSample; const fix = { subTask: 'iss_fix_sample', title: 'Fix what the finalizing found (sample)', landed: false }; d.finalize = { ...v, mutation: v.mutation && { ...v.mutation, survivors: v.mutation.survivors.map((x) => (b.kind === 'survivor' && x.id === b.id ? { ...x, fix } : x)) }, gate: v.gate.map((c) => (b.kind === 'gate' && c.key === b.id ? { ...c, sent: fix } : c)) }; return reply(d.finalize) }),
     http.post('/api/issues/:id/pr/send', () => { const f = d.finalize ?? s.finalizeNoneSample; if (!f.canPush) return HttpResponse.json({ error: `it cannot be sent yet. ${f.pushWaits.join(' ')}` }, { status: 400 }); const v = d.prView ?? s.prSample; const pr = v.pr ?? { number: 412, url: 'https://example.com/pull/412', status: 'draft' as const, title: v.message?.title ?? '', body: v.message?.body ?? '', review: null, mergeable: 'mergeable', checks: [], updatedAt: '2026-11-23T12:00:00Z' }; const body = `${v.message?.body ?? pr.body}\n\n## Evidence\n\n${f.evidence}`; d.prView = { ...v, behind: false, canSubmit: false, canReady: false, editedThere: 'none', pr: { ...pr, status: 'open', body }, message: v.message && { ...v.message, body } }; d.finalize = { ...f, press: 'update', sent: { sha: f.sha, at: '2026-11-23T12:00:00Z', same: true } }; return reply({ number: pr.number, url: pr.url, status: 'open', ready: true, review: null }) }),
+    http.get('/api/apps/:id/docs-site', () => reply(d.docsSite ?? s.docsSiteSample)),
+    http.post('/api/apps/:id/docs-site/start', () => { if (d.docsSiteError) return HttpResponse.json({ error: d.docsSiteError }, { status: 400 }); d.docsSite = { ...(d.docsSite ?? s.docsSiteSample), startedHere: true }; return reply(d.docsSite) }),
     http.get('/api/apps/:id/workbench', () => reply(d.workbench ?? s.workbenchSample)),
     http.put('/api/apps/:id/workbench', async ({ request }) => {
       const b = await request.json() as { dir?: string | null }

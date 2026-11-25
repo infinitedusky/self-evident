@@ -39,11 +39,13 @@ export type Form = 'faked' | 'recorded'
 /** One endpoint's data at one level: the app's, or a task's own. */
 export interface EndpointItem {
   /** Which response this is: one fixture's, or (null) the default. */ fixture: string | null
-  /** The real response behind it on this computer. id: its folder from the recordings home. */ recorded: { id: string; at: string; how: 'given' | 'recorded'; files: string[] } | null
-  /** What may leave this computer: a fake of the recorded one, or a file provided as holding nothing real. */ safe: { kind: 'faked' | 'provided'; set: string; files: string[]; note: string; /** The column names of its first file: what can be set from a fixture. */ columns: string[]; /** The fixture person it was made for (fixtures.ts). */ madeFor?: { fixture: string; table: string; who: string; people: number; map: Record<string, string> }; /** Fields mapped from a file of the fixtures, worked out when it is served (mock-file-map.ts). */ fromFile?: FromFile; /** Faked from a response that is no longer the newest one. */ stale?: boolean } | null
+  /** The real response behind it on this computer. id: its folder from the recordings home. */ recorded: { id: string; at: string; how: 'given' | 'recorded'; files: string[]; /** The names the files were given under, where they differ: what a person is shown. */ shown?: string[] } | null
+  /** What may leave this computer: a fake of the recorded one, or a file provided as holding nothing real. */ safe: { /** The names the files were given under, where they differ: what a person is shown. */ shown?: string[]; /** provided: who gave it, a person (uploaded) or an agent (written). */ by?: 'person' | 'agent'; kind: 'faked' | 'provided'; set: string; files: string[]; note: string; /** The column names of its first file: what can be set from a fixture. */ columns: string[]; /** The fixture person it was made for (fixtures.ts). */ madeFor?: { fixture: string; table: string; who: string; people: number; map: Record<string, string> }; /** Fields mapped from a file of the fixtures, worked out when it is served (mock-file-map.ts). */ fromFile?: FromFile; /** Faked from a response that is no longer the newest one. */ stale?: boolean } | null
 }
 export interface EndpointData { /** The app's: set in its settings. */ app: EndpointItem | null; /** This task's own, in place of the app's. */ task: EndpointItem | null; /** Do a person's own runs get its faked version? The app's answer (faked unless it says otherwise), and this task's own where it has one. A reviewer always gets the faked one. */ faked: { app: boolean; task: boolean | null }; /** Its responses for one fixture each, beside the default above: the app's and this task's own. */ responses: { fixture: string; app: EndpointItem | null; task: EndpointItem | null }[] }
 
+/** What a folder of given responses says each file was called when it was given. */
+const wasGiven = (dir: string): Record<string, string> => { try { const meta = JSON.parse(readFileSync(join(dir, 'given.meta.json'), 'utf8')) as { files?: { name?: string; was?: string }[] }; return Object.fromEntries((meta.files ?? []).filter((f) => f.name && f.was).map((f) => [f.name!, f.was!])) } catch { return {} } }
 const visible = (dir: string) => { try { return readdirSync(dir).filter((f) => !f.startsWith('.') && !f.endsWith('.meta.json')).sort() } catch { return [] as string[] } }
 const prov = (d: DataRow) => (d.provenance ?? {}) as DataProvenance
 const filesOf = (endpoints: Endpoint[], e: string, names: string[]) => names.filter((f) => endpointOfFile(endpoints, f)?.key === e).sort()
@@ -54,11 +56,11 @@ async function taskFaked(mockId: string, issueId?: string | null): Promise<Recor
   const [t] = await db.select({ faked: taskService.faked }).from(taskService).where(and(eq(taskService.issueId, issueId), eq(taskService.mockId, mockId)))
   return t?.faked ?? {}
 }
-interface Read { m: Row; endpoints: Endpoint[]; sets: DataRow[]; recs: { dir: string; at: string; view: string; names: string[]; scope?: Scope; given: boolean }[] }
+interface Read { m: Row; endpoints: Endpoint[]; sets: DataRow[]; recs: { dir: string; at: string; view: string; names: string[]; scope?: Scope; given: boolean; /** The name each file was given under, by the name it is kept under. */ was: Record<string, string> }[] }
 async function read(m: Row): Promise<Read> {
   const endpoints = cleanEndpoints(m.endpoints)
   const sets = (await db.select().from(mockData).where(eq(mockData.mockId, m.id)).orderBy(asc(mockData.key))).filter((d) => d.kind !== 'real')
-  const recs = recordingsFor(m).map((r) => { const view = keyed(r.dir, endpoints, m.upstream); return { dir: r.dir, at: r.at, view, names: visible(view), scope: scopeOfRecording(r.dir), given: isGiven(r.dir) } })
+  const recs = recordingsFor(m).map((r) => { const view = keyed(r.dir, endpoints, m.upstream); return { dir: r.dir, at: r.at, view, names: visible(view), scope: scopeOfRecording(r.dir), given: isGiven(r.dir), was: wasGiven(r.dir) } })
   return { m, endpoints, sets, recs }
 }
 const newest = (a: DataRow, b: DataRow) => (b.updatedAt ?? b.createdAt ?? new Date(0)).getTime() - (a.updatedAt ?? a.createdAt ?? new Date(0)).getTime()
@@ -72,6 +74,8 @@ const columnsOfFirst = (files: Record<string, string>, names: string[]): string[
  * app's) and the fixture (none: the default). A run started from a fixture gets that fixture's, else the default.
  */
 const fxOf = (s?: Scope) => s?.fixture ?? null
+/** The names a person gave these files, where any differs from the name it is kept under. None: nothing to say beyond the kept names. */
+const shownOf = (names: string[], was: Record<string, string>): string[] | null => (names.some((n) => was[n]) ? names.map((n) => was[n] ?? n) : null)
 const levelOf = (s: Scope | undefined, task: string | null) => (s?.task ?? null) === task
 /** The fixtures an endpoint has a response for, at one level. */
 function fixturesOf(r: Read, e: string, task: string | null): string[] {
@@ -88,8 +92,8 @@ function itemOf(r: Read, e: string, task: string | null, fixture?: string | null
   if (!rec && !set) return null
   return {
     fixture: which,
-    recorded: rec ? { id: relative(recordingsHome(), rec.dir), at: rec.at, how: rec.given ? 'given' : 'recorded', files: filesOf(r.endpoints, e, rec.names) } : null,
-    safe: set ? { kind: set.kind === 'faked' ? 'faked' : 'provided', set: set.key, files: filesOf(r.endpoints, e, Object.keys(set.files)), note: dataNote(set), columns: columnsOfFirst(set.files, filesOf(r.endpoints, e, Object.keys(set.files))), ...((prov(set) as { madeFor?: NonNullable<EndpointItem['safe']>['madeFor'] }).madeFor ? { madeFor: (prov(set) as { madeFor?: NonNullable<EndpointItem['safe']>['madeFor'] }).madeFor } : {}), ...((prov(set) as { fromFile?: FromFile }).fromFile ? { fromFile: (prov(set) as { fromFile?: FromFile }).fromFile } : {}), ...(rec && set.kind === 'faked' && set.recording !== rec.dir ? { stale: true } : {}) } : null,
+    recorded: rec ? { id: relative(recordingsHome(), rec.dir), at: rec.at, how: rec.given ? 'given' : 'recorded', files: filesOf(r.endpoints, e, rec.names), ...(shownOf(filesOf(r.endpoints, e, rec.names), rec.was) ? { shown: shownOf(filesOf(r.endpoints, e, rec.names), rec.was)! } : {}) } : null,
+    safe: set ? { ...(shownOf(filesOf(r.endpoints, e, Object.keys(set.files)), prov(set).given?.names ?? {}) ? { shown: shownOf(filesOf(r.endpoints, e, Object.keys(set.files)), prov(set).given?.names ?? {})! } : {}), ...(set.kind !== 'faked' ? { by: (prov(set).given?.by ?? prov(set).stated?.by) === 'user' ? 'person' as const : 'agent' as const } : {}), kind: set.kind === 'faked' ? 'faked' : 'provided', set: set.key, files: filesOf(r.endpoints, e, Object.keys(set.files)), note: dataNote(set), columns: columnsOfFirst(set.files, filesOf(r.endpoints, e, Object.keys(set.files))), ...((prov(set) as { madeFor?: NonNullable<EndpointItem['safe']>['madeFor'] }).madeFor ? { madeFor: (prov(set) as { madeFor?: NonNullable<EndpointItem['safe']>['madeFor'] }).madeFor } : {}), ...((prov(set) as { fromFile?: FromFile }).fromFile ? { fromFile: (prov(set) as { fromFile?: FromFile }).fromFile } : {}), ...(rec && set.kind === 'faked' && set.recording !== rec.dir ? { stale: true } : {}) } : null,
   }
 }
 /** Every endpoint's data: the default response (or, with a fixture, the one a run from it is served), the app's and (for a task) the task's own; and its responses for one fixture each. */
@@ -178,7 +182,14 @@ async function endpointOf(appId: string, key: string, endpoint: string) {
   return { m, e }
 }
 const textOf = (f: { name: string; bytes: Uint8Array }) => { if (f.bytes.includes(0)) throw new PlanError(`${f.name} is not text: give a response as the service sent it (JSON, CSV or other text)`); return Buffer.from(f.bytes).toString('utf8') }
-const named = (e: Endpoint, files: { name: string; bytes: Uint8Array }[]) => files.map((f, i) => { const ext = /\.[A-Za-z0-9]{1,8}$/.exec(f.name)?.[0] ?? '.txt'; return { name: i ? `${e.key}.${i + 1}${ext}` : `${e.key}${ext}`, text: textOf(f) } })
+/**
+ * A file given for an endpoint is kept under the endpoint's key, which is how the mock finds it. That name is the
+ * mock's business: a person sees the name they gave it (Sandy, 2026-11-24, by way of a task's agent: "each file
+ * should keep a name that says what it is … the call's own key is only something the mock needs").
+ */
+const ownName = (n: string) => (n.split(/[\\/]/).pop() ?? '').replace(/[^\w.\- ()]+/g, '_').slice(0, 120)
+const named = (e: Endpoint, files: { name: string; bytes: Uint8Array }[]) => files.map((f, i) => { const ext = /\.[A-Za-z0-9]{1,8}$/.exec(f.name)?.[0] ?? '.txt'; return { name: i ? `${e.key}.${i + 1}${ext}` : `${e.key}${ext}`, text: textOf(f), was: ownName(f.name) } })
+const wasOf = (files: { name: string; was: string }[]) => Object.fromEntries(files.filter((f) => f.was && f.was !== f.name).map((f) => [f.name, f.was]))
 
 /**
  * Data given for one endpoint: for the app (its settings), or for one task alone, in place of the app's.
@@ -191,7 +202,7 @@ export async function giveEndpointData(appId: string, key: string, endpoint: str
   if (!files.length) throw new PlanError('give at least one file')
   const scope: Scope = { endpoint: e.key, ...(o.issueId ? { task: o.issueId } : {}), ...(o.fixture ? { fixture: o.fixture } : {}) }
   if (!o.real) {
-    await saveData(appId, key, { dataKey: scopeKey('provided', scope), name: `Provided${o.fixture ? ` for ${o.fixture}` : ''}: ${e.method} ${e.path}`.slice(0, 80), files: Object.fromEntries(named(e, files).map((f) => [f.name, f.text])), stated: o.stated !== false, issueId: o.issueId ?? null, scope }, actor)
+    await saveData(appId, key, { dataKey: scopeKey('provided', scope), name: `Provided${o.fixture ? ` for ${o.fixture}` : ''}: ${e.method} ${e.path}`.slice(0, 80), files: Object.fromEntries(named(e, files).map((f) => [f.name, f.text])), stated: o.stated !== false, issueId: o.issueId ?? null, scope, was: wasOf(named(e, files)) }, actor)
     return { kept: 'provided' as const, faked: false }
   }
   if (e.sensitive) { const r = await fakeGiven(appId, key, { endpoint: e.key, recorded: named(e, files), issueId: o.issueId ?? null, fixture: o.fixture ?? null }, actor); return { kept: 'faked' as const, faked: true, maybeStructure: r.maybeStructure } }

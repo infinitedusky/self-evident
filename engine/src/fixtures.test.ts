@@ -102,11 +102,14 @@ describe.skipIf(!reachable)('fixtures', () => {
     expect(await rowsFor('meridian')).toEqual(dflt) // no response of its own: the default
     expect((await listMocks(appId))[0].endpoints[0].data.app?.fixture).toBeNull()
     expect((await responses()).map((x) => [x.fixture, x.app?.safe?.kind])).toEqual([['northwind', 'provided']])
+    // It is kept under the endpoint's key, for the mock, and shown under the name it was given, with who gave it.
+    expect((await responses())[0].app?.safe).toMatchObject({ files: ['results.csv'], shown: ['company.csv'], by: 'person' })
 
     // A real response for another fixture: kept here, then faked, like the default's. Nothing of it is served until then.
     await giveEndpointData(appId, 'scanner', 'results', [{ name: 'export2.csv', bytes: new TextEncoder().encode(`${head}\n9d2e6a1b-3c4d-4f5a-8b6c-1d2e3f4a5b6c,quinn.hart@harbor-works.com,Quinn Hart,completed,"Quinn Hart leads operations at Harbor Works in Tulsa."\n`) }], { real: true, fixture: 'meridian' })
     const given = (await responses()).find((x) => x.fixture === 'meridian')!
     expect(given.app?.recorded?.how).toBe('given')
+    expect(given.app?.recorded).toMatchObject({ files: ['results.csv'], shown: ['export2.csv'] })
     expect(given.app?.safe).toBeNull()
     await fakeEndpoint(appId, 'scanner', 'results', null, 'user', 'meridian')
     const mer = await rowsFor('meridian')

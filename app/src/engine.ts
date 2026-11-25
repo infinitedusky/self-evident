@@ -229,6 +229,15 @@ export interface OriginView {
   /** Images and uploads in its text: kept on this computer for the agents, or not, with why. */
   files: { url: string; kept: boolean; note: string | null }[]; fetchedAt: string
 }
+/** A task under a ticket (the engine's ticket.ts): where its ticket was read from, its project and its pull request. */
+export interface TicketTask { id: string; identifier: string; title: string; teamTitle: string | null; state: IssueState; from: 'set' | 'import' | 'link' | 'idea'; project: { id: string; name: string } | null; pr: { number: number | null; url: string | null; status: string } | null }
+/** A team's ticket and the tasks under it: one ticket, a task per pull request. It organises and builds nothing. */
+export interface TicketGroup {
+  key: string; title: string | null; url: string | null; source: string | null
+  /** It was read from its tracker; else only its key is known. */ read: boolean
+  /** Dropped tasks are listed and not counted. */ tasks: TicketTask[]; done: number; total: number
+  /** Every task that counts is done. */ finished: boolean
+}
 export interface IssueDetail extends Issue {
   /** The team's ticket in force (ENT-322) and where it was read from: set on the task, its import, a link in its text, or the idea it came from. */ ticket?: string | null; ticketFrom?: 'set' | 'import' | 'link' | 'idea' | null
   /** The app requires a team ticket and this task has none: its branch and its pull request wait for one. */ ticketMissing?: boolean
@@ -408,9 +417,13 @@ export interface SmokeSetupView { /** The fixtures' files it was given when it l
 /** In place of a fixture's name: start a smoke test from no fixture. No fixture can be named this. */
 export const EMPTY = '(empty)'
 export interface SmokeView { /** The one set-up's files, as on SmokeSetupView. */ files?: SmokeSetupView['files']; /** The one set-up's database, as on SmokeSetupView. */ data?: { builtFrom: string | null; ran: boolean }; /** Every set-up of the app; left out, the app has the one the fields below describe. */ setups?: SmokeSetupView[]; /** A staged task: the checks are every criterion no agent marked, not what a check after the build left. */ staged?: boolean; /** Its pull request, when there is one: a preview is of it. */ pr?: { number: number; url: string | null } | null; where: 'local' | 'preview' | 'staging' | 'flag' | 'terminal'; says: string; account: string | null; flag: string | null; branch: string | null; head: string | null; running: string | null; url: string | null; up: boolean; canRun: boolean; /** There is something to start from nothing: a database, a seed, or a script of its own. */ canClean?: boolean; terminal?: { folder: 'build' | 'temp'; open: boolean }; scratch?: { open: boolean }; log: string[]; checks: SmokeCheck[]; owed: number; failed: number; /** After a mark: how many that failed were sent back. */ sentBack?: number; /** Accepted by the person, or null. */ accepted?: SmokeAccepted | null; /** It can be accepted now; else what it waits on. */ canAccept?: boolean; acceptWaits?: string | null; release?: ReleaseCheck[]; watch?: WatchCheck[] }
+/** An app's docs site (engine docs-site.ts): the VitePress site in its workbench folder, which the Docs page frames. */
+export interface DocsSite { /** The workbench folder; null when none is named. */ dir: string | null; /** The folder is on this computer. */ found: boolean; /** It holds a docs site. */ has: boolean; /** Why it cannot be started. */ problem: string | null; url: string | null; frame: string | null; up: boolean; startedHere: boolean; log: string[] }
 /** What an agent learned from an app's code: a short document each, the part for a person and the part for agents. */
 export interface Learned { key: string; title: string; summary: string; body: string; sha: string | null; updatedAt: string }
 export interface Learning { docs: Learned[]; missing: string[]; working: { sessionId: string } | null; sessionId: string | null; stale: number }
+/** A page of an app's own docs: what the person understands about the app, in their words (the Learn page). */
+export interface AppDoc { id: string; title: string; body: string; /** Who wrote it last: `user`, or an agent. */ by: string; createdAt: string; updatedAt: string }
 /** A note (engine/src/notes.ts): something said, found or decided, on a day, about the tasks it names. */
 export interface Note { id: string; on: string; kind: 'note' | 'decision'; title: string; /** A decision asked as a question in a Context: its answer. */ answer?: string | null; body: string; tasks: { id: string; name: string; title: string }[]; createdBy: string | null; updatedAt: string | null }
 /** Who a Context is of: an idea, a task or a project (docs/context-brief.md). */
@@ -482,8 +495,8 @@ export interface MockEndpoint {
 /** One endpoint's data at one level. recorded: a real response as it came, on this computer only. safe: a fake of it, or a file provided as holding nothing real; what a reviewer gets. */
 export interface EndpointItem {
   /** Which response this is: one fixture's, or (null) the default. */ fixture?: string | null
-  recorded: { id: string; at: string; how: 'given' | 'recorded'; files: string[] } | null
-  safe: { kind: 'faked' | 'provided'; set: string; files: string[]; note: string; stale?: boolean; /** The column names of its data: what can be set from a fixture. */ columns?: string[]; /** Fields mapped from a file of the fixtures, worked out when it is served: data column ← the file's column ('' leaves it empty). */ fromFile?: { file: string; map: Record<string, string> }; /** The fixture people it was filled out for. */ madeFor?: { fixture: string; table: string; who: string; people: number; map: Record<string, string> } } | null
+  recorded: { id: string; at: string; how: 'given' | 'recorded'; files: string[]; /** The names the files were given under: what is shown. */ shown?: string[] } | null
+  safe: { /** The names the files were given under: what is shown, in place of the names they are kept under for the mock. */ shown?: string[]; /** provided: who gave it. */ by?: 'person' | 'agent'; kind: 'faked' | 'provided'; set: string; files: string[]; note: string; stale?: boolean; /** The column names of its data: what can be set from a fixture. */ columns?: string[]; /** Fields mapped from a file of the fixtures, worked out when it is served: data column ← the file's column ('' leaves it empty). */ fromFile?: { file: string; map: Record<string, string> }; /** The fixture people it was filled out for. */ madeFor?: { fixture: string; table: string; who: string; people: number; map: Record<string, string> } } | null
 }
 /** A test file (engine/src/test-files.ts): something a person needs in their hands to try a change, and what to do with it. Made-up only. */
 export interface TestFile { id: string; name: string; what: string; mediaType: string; bytes: number; /** The app's, for every task, or one task's own. */ scope: 'app' | 'task'; /** The version a reviewer gets, read against the real responses on this computer when it is text. faked: made from the real version, values replaced. */ checked: { at: string; against: number; faked?: number } | null; /** Which versions are on this computer. real: this computer only. */ has: { fake: boolean; real: boolean }; /** Which version each place uses. A reviewer: the fake, or nothing while there is none. */ use: { prototype: 'fake' | 'real' | null; smoke: 'fake' | 'real' | null; review: 'fake' | null }; /** Why the real version has no fake. */ note?: string; /** A CSV: its column names, which an endpoint's data can be mapped from. */ columns?: string[]; here: boolean }
@@ -813,6 +826,10 @@ export const engine = {
   testAgain: (issueId: string) => call<{ started: true; head: string }>('POST', `/issues/${issueId}/test`),
   learning: (appId: string) => call<Learning>('GET', `/apps/${appId}/learning`),
   learn: (appId: string) => call<{ sessionId: string; started: boolean }>('POST', `/apps/${appId}/learn`),
+  appDocs: (appId: string) => call<AppDoc[]>('GET', `/apps/${appId}/docs`),
+  writeAppDoc: (appId: string, page: { title: string; body: string }) => call<AppDoc>('POST', `/apps/${appId}/docs`, page),
+  editAppDoc: (id: string, page: { title?: string; body?: string }) => call<AppDoc>('PATCH', `/app-docs/${id}`, page),
+  removeAppDoc: (id: string) => call<{ removed: string }>('DELETE', `/app-docs/${id}`),
   /** The app's notes, newest day first; issueId: one task's. */
   notes: (appId: string, f: { issueId?: string; from?: string; to?: string } = {}) => call<Note[]>('GET', `/apps/${appId}/notes?${new URLSearchParams(Object.entries({ issue: f.issueId, from: f.from, to: f.to }).filter((e): e is [string, string] => !!e[1])).toString()}`),
   addNote: (appId: string, b: { on: string; kind: 'note' | 'decision'; title: string; body: string; issueIds: string[] }) => call<Note>('POST', `/apps/${appId}/notes`, b),
@@ -853,6 +870,8 @@ export const engine = {
   askDataAgent: (issueId: string, message: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent`, { message }),
   approveDataStep: (issueId: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent/approve`),
   changeDataStep: (issueId: string, text: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent/change`, { text }),
+  docsSite: (appId: string) => call<DocsSite>('GET', `/apps/${appId}/docs-site`),
+  startDocsSite: (appId: string) => call<DocsSite>('POST', `/apps/${appId}/docs-site/start`),
   workbench: (appId: string) => call<WorkbenchView>('GET', `/apps/${appId}/workbench`),
   setWorkbench: (appId: string, dir: string | null) => call<WorkbenchView>('PUT', `/apps/${appId}/workbench`, { dir }),
   reviewCopy: (issueId: string, fresh = false) => call<ReviewCopyView>('GET', `/issues/${issueId}/review-copy${fresh ? '?fresh=1' : ''}`),
@@ -865,6 +884,11 @@ export const engine = {
   fixFinalize: (issueId: string, kind: 'survivor' | 'row' | 'gate', id: string) => call<FinalizeView>('POST', `/issues/${issueId}/finalize/fix`, { kind, id }),
   sendPr: (issueId: string, theirs?: 'keep' | 'replace') => call<{ number: number | null; url: string | null; status: string | null; ready: boolean; review: string | null }>('POST', `/issues/${issueId}/pr/send`, theirs ? { theirs } : {}),
   markPrReady: (issueId: string) => call<{ number: number; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/ready`),
+  /** The app's tickets, each with the tasks under it: the ones still being worked first. */
+  tickets: (appId: string) => call<TicketGroup[]>('GET', `/apps/${appId}/tickets`),
+  ticket: (appId: string, key: string) => call<TicketGroup>('GET', `/apps/${appId}/tickets/${encodeURIComponent(key)}`),
+  /** Read a ticket from its tracker: its title, link and words. */
+  readTicket: (appId: string, key: string) => call<TicketGroup>('POST', `/apps/${appId}/tickets/${encodeURIComponent(key)}/read`),
   setTeamNames: (issueId: string, names: { ticket?: string | null; title?: string | null }) => call<{ teamTicket: string | null; teamTitle: string | null; ticket: string | null; ticketFrom: string | null; ticketMissing: boolean }>('PUT', `/issues/${issueId}/team`, names),
   submitPr: (issueId: string) => call<{ id: string; number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/submit`),
   keepSecret: (name: string, value: string, appId?: string) => call<KeptKey>('PUT', `/secrets/${encodeURIComponent(name)}`, { value, ...(appId ? { appId } : {}) }),
@@ -1005,7 +1029,7 @@ export const EVENT_TYPES = [
   'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted', 'build.carried_on',
   'run.started', 'run.message', 'run.steps', 'run.tool_call', 'run.tool_result', 'run.result', 'run.error', 'run.rate_limit',
   'land.committed', 'land.tested', 'land.landed', 'land.conflict', 'land.retry', 'pr.opened', 'pr.updated', 'pr.error',
-  'task.tested', 'task.testing', 'task.test_ran', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked', 'learn.written', 'smoke.started', 'smoke.marked', 'smoke.skipped', 'smoke.trying', 'smoke.tried', 'task.smoke_waiting',
+  'task.tested', 'task.testing', 'task.test_ran', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked', 'learn.written', 'doc.written', 'doc.removed', 'smoke.started', 'smoke.marked', 'smoke.skipped', 'smoke.trying', 'smoke.tried', 'task.smoke_waiting',
   'task.check_again', 'task.check_reopened', 'smoke.accepted', 'release.marked', 'trajectory.run', 'trajectory.cannot_run', 'trajectory.error',
   'finalize.started', 'finalize.step', 'finalize.done', 'finalize.failed', 'finalize.survivor', 'finalize.fix', 'finalize.sent', 'pr.sent', 'pr.read_back', 'pr.edited_there',
 ]

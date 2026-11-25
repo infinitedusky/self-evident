@@ -98,5 +98,7 @@ export const learnBrief = (a: { name: string }, repos: string[]) => [
   '',
   `Then, if you saw things that should change, keep up to ${IDEAS_MAX} of them as ideas with create_idea: the ones that would save the most time or risk. One sentence of why each, with the evidence. No ideas is a fine answer.`,
   '',
+  'The person may keep pages of their own about this app (app_docs): how they understand it, in their words. Read them before you start. Where the code says otherwise, do not change their page: tell them which page, what it says and what you found, in your last message.',
+  '',
   'Finish with three lines for the person: what you wrote, the idea or two you kept, and anything you could not find out.',
 ].join('\n')

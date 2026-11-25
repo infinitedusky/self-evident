@@ -11,12 +11,18 @@
  *
  * The other half, the running app, is still a statement of intent: nothing reads the telemetry back yet.
  *
+ * Between them, "Your docs" (Sandy, 2026-11-24: "documentation that represents my personal understanding of the
+ * project so that I can probe and build up … host this inside of Evident … in Learn"): the person's own pages about
+ * the app, any number, a title and Markdown each. The four above are the agent's account and are replaced when the
+ * code is learned again; these are the person's and are not. Written here, or by Learn's agent at their word; agents
+ * read them, so one can be asked to check a page against the code.
+ *
  * The documents after an architecture decision record and a README's "getting started": a fixed, small set with the
  * same headings in every app, so a person and an agent both know where to look.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { API, engine, openEvents, type Learning } from '../engine'
+import { API, engine, openEvents, type AppDoc, type Learning } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { Badge } from '../components/Badge'
 import { Md } from '../components/Md'
@@ -72,6 +78,8 @@ export function Learn() {
         {l && l.docs.length > 0 && <p style={{ margin: '12px 0 0' }}>What it thought should change is in <Link to="/ideas">Ideas</Link>.</p>}
       </section>
 
+      {app && <YourDocs appId={app.id} hasAgent={!!l?.sessionId} />}
+
       <section className="panel" aria-label="The running app">
         <h2>The running app <span className="faint">not built yet</span></h2>
         <p style={{ margin: 0 }}>The other half: reading what the app reports when it runs (counts, timings, outcomes) and saying what is true. A baseline when an idea is kept, what changed after it shipped, a guard after a merge. Nothing reads the telemetry back yet.</p>
@@ -85,5 +93,83 @@ export function Learn() {
       )}
       </div>
     </>
+  )
+}
+
+const said = (e: unknown) => { const m = String((e as Error)?.message ?? e); try { return (JSON.parse(m) as { error?: string }).error ?? m } catch { return m } }
+
+/** The person's own pages about the app: read folded under their titles, written and changed in place. */
+function YourDocs({ appId, hasAgent }: { appId: string; hasAgent: boolean }) {
+  const [docs, setDocs] = useState<AppDoc[] | null>(null)
+  const [open, setOpen] = useState<Set<string> | null>(null) // none chosen yet: the first is open
+  const [editing, setEditing] = useState<string | 'new' | null>(null)
+  const [asking, setAsking] = useState<string | null>(null) // the page a delete was pressed on, until it is confirmed
+  const [error, setError] = useState<string | null>(null)
+  const timer = useRef<number | undefined>(undefined)
+  const load = useCallback(() => { void engine.appDocs(appId).then(setDocs).catch((e) => setError(said(e))) }, [appId])
+  useEffect(() => {
+    setDocs(null); setOpen(null); setEditing(null); setAsking(null); setError(null); load()
+    const es = openEvents(`${API}/events?since=now&app=${appId}`)
+    const bump = () => { window.clearTimeout(timer.current); timer.current = window.setTimeout(load, 300) }
+    for (const t of ['doc.written', 'doc.removed']) es.addEventListener(t, bump)
+    return () => { es.close(); window.clearTimeout(timer.current) }
+  }, [appId, load])
+  const isOpen = (d: AppDoc, i: number) => (open ? open.has(d.id) : i === 0)
+  const toggle = (id: string, to: boolean) => setOpen((now) => { const next = new Set(now ?? (docs?.[0] ? [docs[0].id] : [])); if (to) next.add(id); else next.delete(id); return next })
+  const save = async (id: string | null, page: { title: string; body: string }) => {
+    const saved = id ? await engine.editAppDoc(id, page) : await engine.writeAppDoc(appId, page)
+    setDocs((now) => (id ? (now ?? []).map((d) => (d.id === id ? saved : d)) : [...(now ?? []), saved]))
+    toggle(saved.id, true); setEditing(null)
+  }
+  const remove = async (id: string) => {
+    setError(null)
+    try { await engine.removeAppDoc(id); setDocs((now) => (now ?? []).filter((d) => d.id !== id)); setAsking(null) } catch (e) { setError(said(e)) }
+  }
+  return (
+    <section className="panel" data-component="YourDocs" aria-label="Your docs">
+      <h2>Your docs {docs && docs.length > 0 && <span className="faint">{docs.length} {docs.length === 1 ? 'page' : 'pages'}</span>}
+        {editing !== 'new' && <button className={`btn small ${docs?.length ? 'quiet' : ''}`} style={{ marginLeft: 'auto' }} onClick={() => setEditing('new')}>New page</button>}
+      </h2>
+      {error && <p className="bad" style={{ margin: '0 0 8px' }}>{error}</p>}
+      {docs?.length === 0 && editing !== 'new' && <p style={{ margin: 0 }}>Write down how you understand this app, in your own words: how a part works, what you are not sure of. Write a page here, or tell Learn's agent to write down what you said. Agents read these pages, and Learn's agent can check one against the code. Learning the code again does not change them.</p>}
+      {docs && docs.length > 0 && <p className="faint" style={{ margin: '0 0 4px', fontSize: 13 }}>What you understand, in your words. Agents read these.{hasAgent ? ' Ask Learn\'s agent to check a page against the code, or to write down what you tell it.' : ''}</p>}
+      {docs?.map((d, i) => editing === d.id
+        ? <PageEditor key={d.id} page={d} onSave={(p) => save(d.id, p)} onCancel={() => setEditing(null)} />
+        : (
+          <details key={d.id} className="learn-doc your-doc" open={isOpen(d, i)} onToggle={(e) => { const to = e.currentTarget.open; if (to !== isOpen(d, i)) toggle(d.id, to) }}>
+            <summary><span className="your-doc-title">{d.title}</span> <span className="faint">{d.by === 'user' ? 'you' : 'an agent, at your word'} · {new Date(d.updatedAt).toLocaleDateString()}</span></summary>
+            {d.body ? <Md text={d.body} /> : <p className="faint" style={{ margin: '6px 0 0' }}>Nothing written in it yet.</p>}
+            <div className="your-doc-actions">
+              {asking === d.id
+                ? <><span>Delete "{d.title}"? It cannot be brought back.</span> <button className="btn small" onClick={() => void remove(d.id)}>Delete this page</button> <button className="btn small quiet" onClick={() => setAsking(null)}>Keep it</button></>
+                : <><button className="btn small quiet" onClick={() => { setEditing(d.id); setAsking(null) }}>Edit</button> <button className="btn small quiet" onClick={() => setAsking(d.id)}>Delete</button></>}
+            </div>
+          </details>
+        ))}
+      {editing === 'new' && <PageEditor onSave={(p) => save(null, p)} onCancel={() => setEditing(null)} />}
+    </section>
+  )
+}
+
+/** A page being written or changed: its title and the page in Markdown. What was typed stays when saving is refused. */
+function PageEditor({ page, onSave, onCancel }: { page?: AppDoc; onSave: (p: { title: string; body: string }) => Promise<void>; onCancel: () => void }) {
+  const [title, setTitle] = useState(page?.title ?? '')
+  const [body, setBody] = useState(page?.body ?? '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const submit = async () => {
+    setBusy(true); setError(null)
+    try { await onSave({ title, body }) } catch (e) { setError(said(e)); setBusy(false) }
+  }
+  return (
+    <form className="form-grid your-doc-editor" onSubmit={(e) => { e.preventDefault(); void submit() }}>
+      <label style={{ gridColumn: '1 / -1' }}>Title<input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="How sign-in works" autoFocus={!page} /></label>
+      <label style={{ gridColumn: '1 / -1' }}>Page<textarea value={body} onChange={(e) => setBody(e.target.value)} rows={12} placeholder="As you understand it. Markdown: lists, headings and code are shown as such." /></label>
+      {error && <p className="bad" style={{ gridColumn: '1 / -1', margin: 0 }}>{error}</p>}
+      <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8 }}>
+        <button className="btn small" type="submit" disabled={busy || !title.trim()}>Save</button>
+        <button className="btn small quiet" type="button" onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
   )
 }

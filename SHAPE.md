@@ -288,6 +288,13 @@ Details and sources in `research/`.
     app (what it is, the parts, running and testing it, what is fragile). They are the workbench docs; the Learn
     page is where they are read, and agents read them through a tool before reading the code from nothing. Each
     has a short part for a person, held to a size, and a longer part for agents. Built first (`engine/src/learn.ts`).
+  - **Your docs** (Sandy, 2026-11-24): the person's own pages about the app, any number, a title and Markdown each:
+    how they understand it, in their words. On the Learn page, kept in the database, never replaced by learning the
+    code again. Written there, or by Learn's agent at the person's word; agents read them, so a page can be checked
+    against the code by asking (`engine/src/app-docs.ts`).
+  - **Docs** (Sandy, 2026-11-24, after Your docs): the app's docs are a VitePress site in its workbench folder
+    (`docs/`), files versioned there, with diagrams. Evident shows the site as it is, framed, from Docs in the rail
+    beside My Stuff, and starts it when it is not running (`engine/src/docs-site.ts`).
   - **The running app**: reading what it reports (Observe) and saying what is true: baselines, what changed after
     a merge, the guard. Not built; it needs a way for the engine to read the telemetry back.
   - What either thinks should change is kept as an idea, so Learn feeds Ideate.
@@ -1005,6 +1012,10 @@ conversation at this moment, that is the key info.")
   what it taught. Right for a team and production; clunky alone and early, when you'd throw away code you just
   liked. Proposed: the stage decides. Early, the accepted prototype is the starting point and the build tidies it
   and adds tests; later, it's a reference and the build starts clean.
+- **A ticket is a record that tasks are under** (Sandy, 2026-11-24; LOG.md, "A ticket is a record"). The team's
+  ticket (ENT-323) is a row of its own, one per app and key, and a task links to it. A ticket bigger than one pull
+  request is several tasks under one ticket: each with its own brief, prototype, build and pull request. The
+  ticket only organises: it lists its tasks and is done when they are. There are no projects inside projects.
 - **Context: what the work is read against, and what is settled** (Sandy, 2026-11-24). An idea, a project and a
   task each have a Context, always, above the brief: reference docs (the ticket it came from first, word for
   word), notes and decisions. Every agent on the work is given it, with decisions stated as settled. An agent may
