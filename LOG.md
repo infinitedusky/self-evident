@@ -8054,3 +8054,19 @@ Not done: build and plan runs, reports and summaries still show one figure each 
 that one piece of work); tokens per model are not recorded (`run.tokens` is empty); nothing is done yet about
 what conversations cost: starting afresh per task, compacting before resuming a cold one, a model per role, a
 budget cap.
+
+## 2026-11-25: each decision is a card
+
+Sandy: "The separation of the decisions is not clear enough. It's hard to know whether background is coming
+after options … I think the question should be at the top and then it should be background and then options,
+but we need more prominent separation. Maybe each one of them is a card."
+
+- **A decision is a card** with its own border, so where one ends and the next starts is plain. The two columns
+  (question left, answer right) are gone: one column, read top to bottom.
+- **Order in an unanswered one:** the question, where it stands (unanswered, or waiting on whom), Background,
+  Options, then what to ask, what it depends on, a proposed answer, and the buttons. Background and Options each
+  have a heading and a rule above them.
+- **Order in an answered one:** the question, the answer under an "Answer" heading with why and when, then
+  Background and Options, folded as before.
+- An unanswered card has a coloured left edge: accent when it is yours, amber when it waits on someone.
+- The form is unchanged: Background is still above the question there, as Sandy asked on 2026-11-24.

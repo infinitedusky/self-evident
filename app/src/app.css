@@ -1414,11 +1414,20 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 .endpoint-response.on { background: var(--surface); border-color: currentColor; font-weight: 600; }
 .endpoint-responses select { font-size: 12px; max-width: 220px; }
 /* A decision: its question, then its answer. Side by side where there is room. */
-.context-qa { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); column-gap: 20px; align-items: baseline; }
-.context-q { font-size: 14px; color: var(--ink-soft); }
-.context-bg { grid-column: 1 / -1; margin: 0 0 8px; padding: 4px 12px; border-left: 2px solid var(--line); }
+/* A decision is a card: the question, where it stands or its answer, then Background and Options each under its own heading. */
+.context-card { margin: 10px 0; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.context-card.context-unmade { border-left: 3px solid var(--accent); }
+.context-card.context-unmade[data-unanswered="waiting"] { border-left-color: var(--warn); }
+.context-q { font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1.35; }
+.context-status { margin-top: 6px; font-size: 13px; color: var(--ink-faint); }
+.context-answer { margin-top: 8px; }
+.context-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint); }
+.context-bg { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
 .context-bg > summary { cursor: pointer; }
-.context-bg .context-text { margin-top: 4px; max-width: 720px; }
+.context-bg .context-text { margin-top: 6px; max-width: 720px; }
+.context-rest { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.context-rest:empty { display: none; }
+.context-from + .context-card { margin-top: 4px; }
 .context-depends { margin: 2px 0; } .context-depends .link-btn { color: var(--ink-soft); }
 .context-found { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 .context-share { margin: 8px 0 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); }
@@ -1429,8 +1438,6 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 .context-ask { margin: 6px 0; padding: 8px 10px; border-left: 3px solid var(--warn); background: var(--warn-wash); border-radius: 4px; font-size: 14px; }
 .context-ask-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .context-ask-text { white-space: pre-wrap; margin-top: 2px; }
-@container (max-width: 560px) { .context-qa { grid-template-columns: 1fr; } }
-.context-unmade .context-q { color: var(--ink); font-weight: 600; }
 .context-unmade .badge { margin-right: 4px; }
 /* A section of Context folds to its heading: the name is the button, the counts stay beside it. */
 .context-fold { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; }
