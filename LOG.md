@@ -8012,6 +8012,7 @@ Not done: pages laid out for a phone (they are the computer's pages, narrow); th
 phone screen; swiping the tray and Look open; a step pressed taking the chat to where that step happened; agents
 out being read-only on the phone (their tab has a message box, as on the computer); prototypes, Storybook and the
 terminal, which stay on the computer.
+
 ## A reply says what it cost, what the conversation has cost, and which model answered (Sandy, 2026-11-25)
 
 Sandy, on a line that read "Worked for 28 seconds · $192.58": "where is the price coming from?" It was the
