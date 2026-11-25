@@ -3,7 +3,7 @@
  * input. Used in full on the Talk page and compact in the drawer that follows you around. Each message sent
  * carries where the person is (`context`), so "project this" needs no explaining.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Badge } from './Badge'
@@ -42,7 +42,12 @@ export function Conversation({ sessionId, context, compact, onChanged }: { sessi
     setImages((now) => { const all = [...now, ...read]; if (all.length > MAX_IMAGES) setError(`${MAX_IMAGES} images at most in one message.`); return all.slice(0, MAX_IMAGES) })
   }
   const timer = useRef<number | undefined>(undefined)
-  const bottom = useRef<HTMLDivElement>(null)
+  // Where it is scrolled to: the end (Sandy, 2026-11-25: "the default state when you come back or open a new page …
+  // scrolled to the end of the conversation"). It stays at the end as more is said, unless the person has scrolled up to
+  // read; and it is put back at the end each time it comes into sight again, since a tab that is put away loses its place.
+  const chat = useRef<HTMLDivElement>(null)
+  const atEnd = useRef(true)
+  const toEnd = () => { const c = chat.current; if (c) c.scrollTop = c.scrollHeight }
 
   useEffect(() => {
     let closed = false
@@ -58,7 +63,19 @@ export function Conversation({ sessionId, context, compact, onChanged }: { sessi
     es.onerror = () => setError('event stream disconnected; retrying')
     return () => { closed = true; es.close(); window.clearTimeout(timer.current) }
   }, [sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { bottom.current?.scrollIntoView({ block: 'end' }) }, [t?.messages.length])
+  useEffect(() => { atEnd.current = true }, [sessionId])
+  useLayoutEffect(() => { if (atEnd.current) toEnd() }, [t])
+  const loaded = !!t
+  useEffect(() => {
+    const c = chat.current
+    if (!c || typeof ResizeObserver === 'undefined') return
+    let was = c.clientHeight
+    const sized = new ResizeObserver(() => { const h = c.clientHeight; if (!was && h) atEnd.current = true; was = h; if (atEnd.current) toEnd() }) // out of sight it has no height
+    sized.observe(c)
+    const grew = () => { if (atEnd.current) toEnd() } // a picture that has arrived makes it longer
+    c.addEventListener('load', grew, true)
+    return () => { sized.disconnect(); c.removeEventListener('load', grew, true) }
+  }, [loaded, sessionId])
 
   const send = async () => {
     if (!text.trim() && !images.length) return
@@ -76,13 +93,12 @@ export function Conversation({ sessionId, context, compact, onChanged }: { sessi
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false) }}
       onDrop={(e) => { if (!open || !e.dataTransfer.files.length) return; e.preventDefault(); setOver(false); void take([...e.dataTransfer.files]) }}>
       {over && <div className="drop-here" aria-hidden="true">Drop the image to send it with your message</div>}
-      <div className="chat">
+      <div className="chat" ref={chat} onScroll={(e) => { const c = e.currentTarget; if (c.clientHeight) atEnd.current = c.scrollHeight - c.scrollTop - c.clientHeight < 48 }}>
         {t.messages.length === 0 && <div className="msg engine faint">Say what you want. It can read this checkout, has the engine as tools, and asks before it edits or runs anything.</div>}
         {grouped(t.messages).map((g) => Array.isArray(g)
           ? <Actions key={g[0].id} ms={g} sessionId={sessionId} />
           : <Message key={g.id} m={g} pending={t.pending.includes(g.payload?.requestId)} sessionId={sessionId} />)}
         {busy && !waiting && <div className="msg engine faint"><Badge tone="accent" dot>thinking</Badge></div>}
-        <div ref={bottom} />
       </div>
       {error && <div className="faint" style={{ fontSize: 12 }}>{error}</div>}
       {open && images.length > 0 && (

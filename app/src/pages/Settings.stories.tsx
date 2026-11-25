@@ -261,6 +261,11 @@ export const NewApp: Story = {
     await expect(await c.findByText(/The prefix of its tasks \(RG-12\)/)).toBeInTheDocument()
     await userEvent.type(await c.findByLabelText(/^Abbreviation/), 'golf')
     await expect(await c.findByText(/The prefix of its tasks \(GOLF-12\)/)).toBeInTheDocument()
+    // Its workbench folder is offered once there is code on this machine to put it beside, ticked, saying where it goes.
+    await expect(c.queryByLabelText(/Make its workbench folder too/)).toBeNull()
+    await userEvent.type(c.getByPlaceholderText(/absolute\/path\/to\/the\/folder/), '/Users/sample/code/ragdoll-golf')
+    await expect(await c.findByLabelText(/Make its workbench folder too/)).toBeChecked()
+    await expect(c.getByText('/Users/sample/code/ragdoll-golf-workbench')).toBeInTheDocument()
   },
 }
 /** An app's abbreviation, changed after the fact: it says what follows before it is saved. */

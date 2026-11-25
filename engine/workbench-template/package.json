@@ -1,0 +1,24 @@
+{
+	"name": "{{slug}}-workbench",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vitepress dev docs --port ${PORT:-4173}",
+		"build": "vitepress build docs",
+		"preview": "vitepress preview docs --port ${PORT:-4173}"
+	},
+	"devDependencies": {
+		"@bonkei/vitepress": "file:./vendor/bonkei-vitepress-0.0.0.tgz",
+		"mermaid": "^11.17.2",
+		"panzoom": "^9.4.4",
+		"vitepress": "^1.6.4",
+		"vitepress-plugin-mermaid": "^2.0.17",
+		"vue": "^3.5.0"
+	},
+	"pnpm": {
+		"overrides": {
+			"bonkei": "file:./vendor/bonkei-0.0.0.tgz"
+		}
+	}
+}

@@ -15,10 +15,12 @@ import { Command } from 'commander'
 import { git, hasUncommitted } from '../git.js'
 import { machineName } from '../machine.js'
 import { arrive, leave, openState, readHolder, type Line, type Options, type Plan } from '../handoff.js'
+import { useGhAccount } from '../gh-account.js'
 
 const ENGINE = 'com.thedusky.self-evident'
 const PROXY = 'com.thedusky.self-evident-dbproxy'
 const HOST = machineName()
+{ const said = useGhAccount(); if (said) console.log(said) } // the shared Evident's own GitHub account, on a computer whose active one is another's (gh-account.ts)
 const DATABASE_URL = process.env.DATABASE_URL
 const here = fileURLToPath(new URL('../../..', import.meta.url))
 
@@ -180,6 +182,10 @@ program.command('leave').description('stop the engine here and send everything o
 
 program.command('arrive').description('bring everything in and start the engine here').option('--force', 'take the engine although another Mac holds it')
   .action(async (a: { force?: boolean }) => {
+    // The shared Evident takes the usual address. This computer's own one, if it is running there, has to move
+    // beside it first (instance.ts): said before anything is brought in.
+    const there = await fetch('http://localhost:4000/api/instance', { signal: AbortSignal.timeout(3000) }).then((r) => (r.ok ? r.json() as Promise<{ kind?: string }> : null)).catch(() => null)
+    if (there?.kind === 'local') throw new Error('This computer\'s own Evident is running at the usual address (`pnpm dev`).\nStop it (Ctrl-C in its terminal, or `lsof -tiTCP:4000,5180 -sTCP:LISTEN | xargs kill`), run `pnpm arrive` again, then start it beside the shared one with `pnpm local` (its page: http://localhost:5181).')
     const plan = await readPlan()
     report(await arrive(plan, options({ force: a.force })))
     await startEngine()

@@ -60,7 +60,7 @@ export function funnelRefused(all: string): string | null {
 /** A local address a share must never reach: Evident's own page or its engine. Neither has a sign-in. */
 export function ownAddress(target: string): boolean {
   const port = Number(new URL(target).port)
-  return port === 5180 || port === Number(process.env.PORT ?? 4000) || (!!process.env.UI_URL && port === Number(new URL(process.env.UI_URL).port || 0))
+  return port === 5180 || port === Number(process.env.UI_PORT ?? 5180) || port === Number(process.env.PORT ?? 4000) || (!!process.env.UI_URL && port === Number(new URL(process.env.UI_URL).port || 0))
 }
 
 /**

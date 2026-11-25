@@ -2336,7 +2336,6 @@ Evident itself, whichever app it is working in (`GUIDE` in `engine/src/talk.ts`)
 file moves or loses a section the agents are told it has. Linked from CLAUDE.md, the README and `engine/README.md`,
 whose own account of running it now points there.
 
-
 ## The workbench: an app is one or more repositories (Sandy, 2026-11-12: "a single project that could have multiple repos underneath it … the agent's job was to make edits to the repos and to do PRs for those repos, create work trees")
 
 This reverses the morning's decision ("Reference apps": two apps, each naming the other). What changed: Sandy's
@@ -2594,7 +2593,6 @@ prototype's code, not for the finished build.
 
 Not changed: the planner can still ask a question when the brief leaves a choice open. By the same reasoning that
 should be rare or gone; left for Sandy to say.
-
 
 ## Only a task's agent has a worktree (Sandy, 2026-11-13: "They shouldn't be doing that anymore, only tasks should … They are now just different conversations about the app as a whole")
 
@@ -3076,7 +3074,6 @@ only in memory, and the engine's restart-on-change does not run its shutdown.
 The list is now also written to `~/.self-evident/ngrok-paused.json`, before a service is stopped, and a starting
 engine puts back whatever is in it (no share outlives the engine, so nothing still needs the address). The service
 was started again by hand that day.
-
 
 ## Save points and task branches (Sandy, 2026-11-13: "I get to a point and I don't know if it's right to move forward yet … but I also don't want to stop")
 
@@ -4542,7 +4539,6 @@ Nothing merged that branch, but nothing stopped a build copying the folder acros
 Not done: removing `.prototype/` folders already committed on old prototype branches; a place on the page to see
 and share an app's scenarios (the tool only, for now).
 
-
 ## The smoke test on staged tasks too (Sandy, 2026-11-17: "can we add it to the other ones, goes after subtask in the build section")
 
 The smoke test was a stage of a checklist task only, and its checks were the criteria the check after the build left
@@ -4639,7 +4635,6 @@ shared") and the prototype skill's definition of done, which never named it.
 Not done: checking that the steps really cover each criterion (it is asked for, not verified); a guide whose
 steps are all commands is not rechecked after a rebuild.
 
-
 ## The smoke test stays when nothing is left to check (Sandy, 2026-11-17: "I might want to look anyway … let it stay")
 
 On a task whose every criterion the check verified itself, the smoke test row left the nav the moment the check
@@ -4666,7 +4661,6 @@ The live view of a build existed (the build log tab: its status, the builder's s
 runs, reads and changes, as it happens) but only an agent could open it. Now pressing a node in any graph (a
 task's, a project's, an app's) opens it beside the graph. A step drawn before it exists has nothing to open. The
 project page still shows the pressed node's detail under the graph.
-
 
 ## Smoke test checks link to where they are tried (Sandy, 2026-11-17: "smoke tests should have links to test like the prototype guides")
 
@@ -4799,7 +4793,6 @@ and starts it itself (`run_prototype`) once there is something to run. Until the
 setting it up, with "Start it now" for the person. One made with no brief starts at once, as before.
 
 Not done: a prototype with no screen and a brief shows the same "setting it up" line until it has a guide.
-
 
 ## The page from a phone, over Tailscale (Sandy, 2026-11-18: "could we have a mobile version that works not on the machine where this is running" … "So let's set up Tailscale then.")
 
@@ -5443,7 +5436,6 @@ through the app on the laptop, which is where Cloudflare is blocked.
 Not done: hosted links (next: which host is Sandy's choice); waking a stopped prototype when someone opens its link
 (possible with Funnel, since its address does not change: asked about, not built); the smoke test as something to share.
 
-
 ## Compare with main is a main of the task's own (Sandy, 2026-11-20: "compare with main should be a new port. The app-wide main is just the default scenario that we can look at whenever we want … we should be able to spin up a new one. But there should only be one per task")
 
 On 2026-11-19 comparing was made to open the app's one running main. That is undone: the app's main stays as the
@@ -5464,7 +5456,6 @@ database would also test that a schema change is backwards compatible, talked ab
 task's main from the page (the app's tab has it; here it is stopped and started); a prototype's main is not removed
 when a prototype with no task is discarded; `app_main` (the agent's tool) reaches only the app's own.
 
-
 ## Room for what is being looked at, on the smoke test (Sandy, 2026-11-20: "the ability to collapse the cards on the right for smoke tests and … more vertical real estate … we're taking up 1/3 of the screen before we get to the thing we're actually looking at")
 
 Asked first as "open them as separate pages", then narrowed by Sandy to this. On a task's smoke test:
@@ -5479,7 +5470,6 @@ Asked first as "open them as separate pages", then narrowed by Sandy to this. On
 Not done: the same on the prototype's page and the other views (the smoke test is the first, Sandy's word); folding
 the task's left nav and the agent's column with one press (each folds by its own); a page of its own for the smoke
 test.
-
 
 ## A compared main's data is chosen: a copy, or the same database (Sandy, 2026-11-20: "we want the ability to choose the two options, one to literally use the same database and the other one is to mimic the data on its own")
 
@@ -5503,7 +5493,6 @@ Not done: a copy of the data as it is now (it is as the work started; the rows m
 database); a choice of some other scenario for main; saying on the page, when main breaks on the same database, that
 it is likely the schema; the app's own main is unchanged (its "default" scenario).
 
-
 ## A task's head, full or small (Sandy, 2026-11-20: "it still taking up a bunch of space … now we just have less information … reverting to what we had, but having a toggle")
 
 Trimming the smoke test's head saved little room and lost what it said. Undone, and made a choice instead:
@@ -5515,7 +5504,6 @@ Trimming the smoke test's head saved little room and lost what it said. Undone, 
   line, the badges, Delete, what the task waits on before it can be closed, and the top of the page being worked on:
   what the step is (and the prototype's "last thing you press" note), or what the smoke test is.
 - The smoke test's "Hide checks" stays as it was, on its own.
-
 
 ## Compare with: the app's main, or a new main on a copy or on the same database (Sandy, 2026-11-20: "the two options are copy it as it is now or share a database. If we want to look at the standard data set, we can just look at the main app level one. So it's like compare with app level … or do a new one in which you are copying or just running it off the same db")
 
@@ -5548,7 +5536,6 @@ Not done: telemetry on Self Evident itself (it has events and each server's last
 a prototype is started with the app's plain command (a prototype has no script of its own); replaying a recorded
 vendor response into main so the same person can be scanned on both without paying twice; a main run with the smoke
 set-up's variables can reach the real vendor, as the build can.
-
 
 ## The pull request is a step of its own, after the smoke test (Sandy, 2026-11-20: "a new step to the build section after smoke test, 'PR'. This will show us the PR status, the message, let us submit (new PR or draft to complete conversion) and let us see any comments. It will also in the future give us tools to help reviewers")
 
@@ -5632,7 +5619,6 @@ Not done: a page with a strict Content-Security-Policy that does not allow its o
 (it still shows; the bar behaves as before). A link in the app to its own absolute `http://localhost:<port>` address
 leaves the proxy, and the view stops reporting until the bar sends it somewhere.
 
-
 ## A comment written on GitHub is shown as GitHub shows it (Sandy, 2026-11-20: "can we make sure that all the Wiz findings are formatted?")
 
 On a task's pull request page a scanner's comment showed as its own source: GitHub lets a comment carry HTML (a
@@ -5647,7 +5633,6 @@ Only where the text came from GitHub. Everything else that is Markdown is as it 
 Not done: findings a scanner keeps on its own site and only counts in its comment are not brought in (the comment
 links to them); GitHub's own rendering (mentions, issue links, code at a commit) is not copied; a check's
 annotations are not shown.
-
 
 ## A task has a team ticket and a name for the team; an app can require the ticket (from a client app's first pull request, passed on by Sandy, 2026-11-20: "Team tickets on tasks, and PRs that read like the team's")
 
@@ -5671,7 +5656,6 @@ title whose bracket is not one of their keys. And {title} was our working title 
 
 Not done: an app that requires a ticket and a task already building under our id (it is left as it is; the pull
 request is still held); checking that the key belongs to the team's tracker; a task's ticket shown in lists.
-
 
 ## A pull request reads like the team's: a description written for them, our record folded under it, and a merge guide that does not contradict the task (from a client app's first pull request, passed on by Sandy, 2026-11-20)
 
@@ -5701,7 +5685,6 @@ on the page); checking a written description against the repository's template; 
 pull request (pr_mode "project"), which has no task to hold one; an open pull request is not rewritten until its
 next update or submit.
 
-
 ## Update pull request: an open one is brought up to date by a press (asked for from a client app, passed on by Sandy, 2026-11-20: "push the current title and description without needing a new commit")
 
 A description written after a pull request was submitted had no way to GitHub but the next sub-task landing. Now an
@@ -5717,7 +5700,6 @@ is not. Its draft state is left as it is.
 
 Not done: updating by itself when a description or a team ticket changes; a project's single pull request from a
 project's own page (it is updated from any of its tasks).
-
 
 ## A page that calls an address fixed to this computer is said so (Sandy, 2026-11-20: "the reason I need to make this change seems like something that should be universally set for Self Evident, not just on this project … Why is it not in the database?")
 
@@ -5758,7 +5740,6 @@ new branch, and a new task opened with them.
 - When it cannot be told (not a git checkout, no such branch), nothing is hidden.
 
 Not done: taking old sketches out of the repository once their task is done. They stay in git either way.
-
 
 ## Each step settles its own question (Sandy, 2026-11-20: "the whole point is during the sketch. It's really easy to change things when you get to the prototype. It's not easy to change things. Therefore we should do as much as we can in the sketch")
 
@@ -5862,7 +5843,6 @@ height is one guess per width, so a long screen is cut off on the wall and whole
 itself (sharing shares the Storybook); comparing a mockup against its screens; the Screens step on the workflow
 card's story; the planner and builders are not told to hold the build to the prototype in words of their own.
 
-
 ## The whole test run can be asked for again, and one a restart cut off is made again (Sandy, 2026-11-20: "the Tests tab shows an x and says the whole run failed. What is up with that?")
 
 A task showed a failed run that was hours old and no longer true. The run had failed on a set-up problem, a fix
@@ -5888,9 +5868,6 @@ landing or a run is going, and before the check and the probes are done.
 Not done: the test checkout is not removed when the task is done (nor is the smoke test's); a run made again after
 a restart starts from the beginning; the build page's graph does not show a run under way; not yet seen on a real
 task (the one that showed this is the first to try it on).
-
-
-
 
 ## The engine went deaf to its own events, and now notices (Sandy, 2026-11-21: "I type something and nothing comes in, and then if I refresh the page I see it")
 
@@ -8256,6 +8233,209 @@ What needs you, every chat, New chat and the app are under the grid, with the ap
 
 Found on the way: the phone's styles had a `.phone-dot` of their own, and the rail's phone link already has one, so
 a conversation's dot was drawn in a corner. The phone's is `.phone-talk-dot`.
+
+## A task's page stays put; its columns scroll (Sandy, 2026-11-25)
+
+Sandy, on a task's Research page: "the height of the section in the middle seems to be limited … It should just
+go down to the bottom of the screen with a little bit of padding … that should just be a general rule of thumb."
+The report was in a box of its own, 420px tall, with empty page under it. The first go (#438) let the step's
+panel grow to the bottom of the screen while the page still scrolled around it. Sandy: "not crazy about this, I
+think the outer part of the page should be fixed unless it is running off the edge. The container holding the
+content should extend to the bottom with some padding (based on the screen height) then the scrolling only
+scrolls inside that or inside the agent."
+
+- **The page of a task, an idea or a project does not scroll.** The head is at the top; the nav, the content and
+  the agent take what is left of the tab, down to 16px from its bottom, and each scrolls in itself. It is laid
+  out from the tab's own height, not guessed from the window's (`calc(100vh - 160px)` is gone).
+- **A step's page is one panel that fills its column**, short report or long, and scrolls inside. The report in
+  it has no box of its own. A page of several panels (Overview, Build) scrolls as a column.
+- **The page scrolls only when it runs off the edge**: a tab too short for the columns (under 420px of room), or
+  one narrow enough that they stack (under 960px, and a phone), where it scrolls as a page as before.
+
+Story: Pages/TaskPage › LongResearchReport. Not done: the other fixed heights in `app.css` (a summary on a card,
+a tool's result, a log) are small boxes inside lists and were left as they are; other pages (Settings, Plan) still
+scroll as pages; not looked at in the running app, only in Storybook.
+
+### The Reviews list is kept, and a pull request can be named (2026-11-25)
+
+Sandy: "Pull of all the different unmerged PRs just took a really long time … is that a one-shot thing, or do we have
+to name the PR we want?" It was not one-shot: the page read a hundred pull requests from each repository every time
+it was opened and every 15 seconds while open, one repository after another (about four seconds a look, measured).
+
+- **GitHub's answer is kept five minutes per app** (`kept`, pr-review.ts), and the repositories are read at once, not
+  in turn. The page says when it was read and has **Refresh**. Where each review stands is still read every time: it
+  is the engine's own.
+- **A pull request can be named without the list** (`namedPull`, pr-named.ts): its number, `org/repo#n`, or its
+  address pasted into the find box opens it, before GitHub has answered. A repository that is not the app's is not
+  opened.
+
+Not done: the list is not kept across an engine restart; a pull request opened on GitHub in the last five minutes is
+not there until Refresh.
+
+### A review runs a repository its own way, and never blames a pull request for what could not run (2026-11-25)
+
+Sandy's first real review, of a coworker's pull request in the app's second repository, drafted five comments, every
+one of them `cd: backend: No such file or directory`. Two mistakes of mine in the first version:
+
+- **The app's commands are its home repository's.** Its test command, what a build is held to and the finalizing's
+  prepare are written for one layout. A review of a pull request in another repository now runs none of them. That
+  repository has its own (`setup.review_repos[<full name>]`: what is run first, how its tests are run with `{files}`,
+  and its commands; `repoRunOf`, `setRepoRun`), set in a form on the review itself, open while nothing is set. Until
+  then the steps are skipped and say why, and nothing is drafted.
+- **"Could not be run" is not "fails".** A command the shell could not start (a folder or a program that is not
+  there: `couldNotRun`) is shown as that, counted apart, and never drafted as a comment. Tests that fail with nothing
+  changed were already never drafted; the step now says that is usually this computer, not the pull request.
+
+The rule under both: a comment on someone else's work is drafted only from something that ran and then failed.
+
+Not done: the per-repository settings are only on the review page, not in Settings; a command that starts and then
+fails because this computer lacks something (a database not up, a service not running) still reads as a failure and
+is drafted, so the person has to read each draft's output before using it; nothing compares against the base branch
+to tell a failure the pull request caused from one that was already there.
+
+### How a repository is run is set once, as scripts in the workbench (2026-11-25)
+
+Sandy, after the entry above: "for whatever repo we can get the environment up every time. We shouldn't be doing it on
+a PR by PR basis. It should be on a repository basis." Asked where it lives, he chose **scripts in the workbench**
+over fields in Settings, and **reviews first** over moving the app's own tasks now. This replaces the three text boxes
+of the entry above (`setup.review_repos`, never merged).
+
+- **A folder per repository in the workbench** (repo-run.ts): `<workbench>/repos/<short name>/` with `setup` (once per
+  checkout), `up` (what its tests need; NAME=value lines it prints are given to the rest, as a before-start hook's
+  are), `test` (the test files given as arguments), `checks/*` (one script per check) and `down` (always run after
+  `up`). Any extension; run from the checkout's top with CHECKOUT, REPO, BASE, HEAD and PR. The folder is the record:
+  nothing is kept in Evident.
+- **A review runs them** (pr-review.ts): setup and up before anything, the breaks against `test`, each check, then
+  down whatever happened. A repository with no folder: the home one is run as the app's settings say and the page
+  says so; any other is not run at all.
+- **Check it** (Settings › Repo, "How each repository is run"; `checkRepo`): every script, in order, on the default
+  branch, in a checkout of the engine's own (`<repo>-worktrees/review-of--check`). Each step passed, failed or could
+  not be run, with the failing one's last lines; kept as `repo_run.checked`. It is how a failure in a review is known
+  to be the pull request's and not this computer's.
+- **Start its folder** writes a stub of each script that says it is not written and exits as "could not be run", so a
+  stub is never taken for a result. Nothing there is overwritten.
+- Scripts are given nothing to read (`</dev/null`): one that waits for typing would never end.
+
+Not done: no scripts are written for either repository of the dashboard app yet (the second one's tests run inside
+its own docker container, mounted from its main checkout, so its `up` and `test` need thought); the app's own tasks
+(build, check, finalizing) still run from the app's settings; a script is not edited or shown on the page; a review
+does not refuse to run when the last check failed, it only can be seen in Settings.
+
+## The reply card says whose limits it shows, and that there is no figure for what is left (Sandy, 2026-11-25)
+
+Sandy, on the card: "it shows plan limits within, is there any more info? How much is left? also I think it is
+showing the limits from a different account". The first real limit events came from an enterprise login: Claude
+named only "extra usage", in use, allowed, starting again at the turn of the month, with no share used.
+
+- **The card names the account**: the organization and plan of the login the reply ran on (asked of the SDK once
+  a conversation, `accountInfo`; never the email).
+- **No figure for what is left.** The SDK gives a share used only when a limit is close, and nothing else to ask.
+  The card says so in place of "within it"; a limit with no share reads "not close", extra usage "in use".
+- **The last reply's card opened below the edge of the chat**, so it looked as if it did not open. It now brings
+  itself into view.
+
+Not done: how much is left, from anywhere else (Claude's own usage page is not something the SDK reads).
+
+Sandy, after looking at the Cloaked account: it is "dollar denominated … you have used $14.80 of your $1,000
+monthly budget", starting again on the 30th. So what Claude calls extra usage, in use, is a login billed in
+dollars against a budget its organization sets. The card calls it "Usage budget: billed by use", says the
+cost estimate is what the reply took from it, and puts the cost on the closed line beside the tokens. How much
+of the budget is used is still not something the SDK says.
+
+## A workbench is made by Evident, from a template it carries (Sandy, 2026-11-25: "there's no template in place or sort of setup script for a workbench … it should either be created automatically when you create a new app or have you choose a folder at that point, or it should let you create a folder and it would seed it")
+
+Found setting up a second copy of Evident: Settings › Workbench could only be pointed at a folder that was already
+there, and the only template was a private repository of ours (`infinitedusky/self-evident-docs`), copied by hand.
+
+- **The template is in this repository**, `engine/workbench-template/`: the docs site (two sections, sidebars built
+  from the pages, the diagram library in `vendor/`), the docs agent's skills (`docs-pages` with `task-page.md`,
+  `vitepress`), `hooks/` and `mockups/` each with a README, a README for the folder, a `.gitignore` (kept there as
+  `gitignore`). It is the one to change from now on; the separate docs repository is no longer what a workbench is
+  made from.
+- **Seeding** (`engine/src/workbench-seed.ts`, `POST /apps/:id/workbench/seed`): each file of the template the
+  folder does not have is put in, and none is written over. So one act serves a new folder, an empty one somebody
+  chose, and an old workbench with hooks and no docs. The app's name goes into the README, the site's title and
+  the package name. A folder in no git repository becomes one, with what was put in committed; one already in a
+  repository is left for its people to commit. Then `pnpm install` runs in the folder on its own, which is what
+  the docs site waits for. A folder inside the app's own code is refused.
+- **Where it is offered**:
+  - Settings › Workbench, with no folder: "Create the workbench", at a place it suggests and the person can change
+    (beside the app's first checkout, `<the app's name>-workbench`). A folder that lacks pieces says which, with
+    "Add what is missing". A folder named that is not on this computer: "Make it here".
+  - New app: a box, ticked, once a folder on this machine is given, saying where the workbench will go. If it
+    cannot be made the app is still made and the note says why.
+- Decided here, not asked: it is not made silently for every new app (an app with only a GitHub repository has
+  nowhere to put it beside, and a folder appearing on disk should be seen first); the person can untick it.
+
+Not done: no remote is made for the new repository (it is local until someone pushes it); the template's diagram
+library is still two tarballs in `vendor/`; apps that exist already are not offered it anywhere but Settings.
+
+## A conversation is at its end when you come to it (Sandy, 2026-11-25)
+
+Sandy: "is it possible for the default state when you come back or open a new page … that has a conversation for
+it to be scrolled to the end of the conversation for any of the agents?" It went to the end only when a message
+was added. A tab that is put away is taken out of the page and loses its place, so coming back showed the top.
+
+- **It opens at the end, and is put back at the end each time it comes into sight again** (`Conversation.tsx`),
+  wherever it was left. That is every agent's conversation: a task's, an idea's, a project's, the ones it has
+  out, the drawer, the phone.
+- **It stays at the end as more is said**, and as a reply grows or a picture arrives, unless you have scrolled up
+  to read: then it stays where you are until you go back down.
+- It moves only its own box now, never the page around it.
+
+Story: Components/Conversation › OpensAtTheEnd. Not done: the planner's log and the build log (not
+conversations) still follow only a new line; not tried in the running app's tabs, only in Storybook.
+
+## The reply card, closed, is two lines with the conversation total (Sandy, 2026-11-25)
+
+Sandy: "include the total as well, so that we can see what we have spent so far for the
+whole conversation as well as the last one … on a second line". Closed, the card is two lines: "Worked for 22
+seconds · opus-5-5", then "426k tokens · $2.96 · $11.96 total", on every login, not only one billed by use.
+
+## Two Evidents on one computer, and a switch between them (Sandy, 2026-11-25: "Evident can have a remote database or local. I have some ones that have remote. Can I have them on the same Evident version and switch between them?" then "I think 2 and we can create a button to switch between the 2")
+
+An engine reads one database, fixed when it starts, and the page shows that one. Three ways were put to Sandy:
+restart onto the other database, two Evidents side by side, or one Evident reading both. He chose the second. The
+third would mean every query knowing which database its app is in (the connection is one module nearly every file
+imports), and a row written to the wrong one is the risk.
+
+- **The page's port and the engine it calls are settings** (`UI_PORT`, `PORT`; `app/vite.config.ts`), so a second
+  Evident runs from the same checkout: `pnpm local` starts this computer's own on 4001 and 5181, with the shared
+  one's settings taken out of its environment. Its page keeps its own dependency cache.
+- **Which is which is read from the database** (`engine/src/instance.ts`): the checkout's own container is "This
+  computer", anything else "Shared"; `EVIDENT_NAME` says otherwise. The shared one keeps the usual address, as on
+  every other computer, so `UI_URL` and the launchd agent are as they were.
+- **Each engine asks the other's whether it is up** (`GET /api/instance` on the other of the two ports, or
+  `OTHER_ENGINE_URL`), and that is all one knows of the other. `GET /api/instances` gives the page both.
+- **The switch** is in the rail above the phone (`InstanceSwitch`): which Evident this is, and "Switch to …" in
+  the same window. The tab's title names the one it is. When the other is not running it says what starts it. It
+  is shown only when there is another: it answers, this one was started beside it, or this browser has seen it.
+- **One database twice is said**: each engine gives a mark of its database (host, port and name, hashed), and when
+  the two match the switch says to stop one.
+- `pnpm arrive` refuses while this computer's own Evident holds the usual address, and says how to move it.
+
+Tried: a second Evident from the worktree on 4001/5181 against an empty throwaway database, beside the running
+one; both answered, each with its own apps, and the switch showed in the page. Not tried: both real ones together
+(the shared one needs `pnpm arrive`, which is Sandy's to run), so the link across has only been seen in a story.
+
+Not done: the button does not start the other one; nothing stops the same checkout being an app in both; over
+Tailscale from a phone the other's address is this computer's `localhost`, which a phone cannot open; `pnpm local`
+is a terminal command, not kept running by launchd.
+
+### The shared Evident acts as its own GitHub account (2026-11-25)
+
+Sandy's first `pnpm arrive` on the computer with both stopped at the state repository: "Repository not found". The
+active `gh` account there is the employer's, which this computer's own Evident needs, and git over https asks `gh`
+for the active account's token. The same would have stopped each app's clone, and then every pull request the
+shared engine opened.
+
+- `engine/src/gh-account.ts`: when the engine starts, and in `pnpm arrive` / `pnpm leave`, the process takes the
+  token of one `gh` account into its own `GH_TOKEN`, which `gh` and its credential helper use before the active
+  account. `GH_ACCOUNT` names it; with none named it is the owner of `STATE_REPO`. Nothing is switched, so the
+  other Evident is not touched. This computer's own Evident has no `STATE_REPO` and uses the active account as
+  before.
+- Not done: an app whose repositories belong to yet another account still needs the SSH alias way
+  (docs/running-it.md).
 
 ## The address bar on a narrow screen: two rows, and the text stays in its box (Sandy, 2026-11-25: "the address bar gets really shrunk in and the text starts to extend beyond it and overlap with the next button … go into two rows probably")
 

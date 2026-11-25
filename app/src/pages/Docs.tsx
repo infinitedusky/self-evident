@@ -108,9 +108,9 @@ export function Docs() {
       </div>
       {error && <div className="empty bad">{error}</div>}
       {!app && <div className="empty">Pick an app in the nav.</div>}
-      {s && !s.dir && <div className="empty">{app?.name} has no workbench folder. Name one under {bench}: the docs site in it shows here.</div>}
+      {s && !s.dir && <div className="empty">{app?.name} has no workbench folder. Make one under {bench}: the docs site in it shows here.</div>}
       {s?.dir && !s.found && <div className="empty">There is no folder at <code>{s.dir}</code> on this computer. Change it under {bench}.</div>}
-      {s?.found && !s.has && <div className="empty">There is no docs site in <code>{s.dir}</code> yet: a <code>docs/</code> folder with VitePress in it. Make one from the docs template, and it shows here.</div>}
+      {s?.found && !s.has && <div className="empty">There is no docs site in <code>{s.dir}</code> yet: a <code>docs/</code> folder with VitePress in it. Add one under {bench} ("Add what is missing"), and it shows here.</div>}
       {s?.has && !s.up && (
         <div className="empty">
           {s.problem ? <p style={{ margin: 0 }}>{s.problem}</p> : <>

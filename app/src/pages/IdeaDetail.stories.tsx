@@ -6,7 +6,7 @@ import { ideaRows, sampleOrigin, talkSession } from '../stories/sample'
 
 // One idea from the inbox, worked through like a task: its steps down the side, its own agent beside it, and
 // converting it. Made up: the sample engine's first idea and a made-up conversation.
-const meta = { title: 'Pages/IdeaDetail', component: IdeaDetail, parameters: { layout: 'fullscreen' }, args: { id: ideaRows[0].id }, render: (a) => <div className="tab-page"><IdeaDetail {...a} /></div> } satisfies Meta<typeof IdeaDetail>
+const meta = { title: 'Pages/IdeaDetail', component: IdeaDetail, parameters: { layout: 'fullscreen' }, args: { id: ideaRows[0].id }, render: (a) => <div className="tab-page" style={{ height: '100vh' }}><IdeaDetail {...a} /></div> } satisfies Meta<typeof IdeaDetail>
 export default meta
 type Story = StoryObj<typeof meta>
 

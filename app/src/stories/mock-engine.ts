@@ -36,7 +36,7 @@ export interface MockData {
   /** Probes tried on past work, and the merged tasks a trial would run on; none when left out. */ trials?: import('../engine').Trial[]; trialTasks?: { issueId: string; identifier: string; title: string; pr: number | null }[]
   /** The apps put away; none when left out. */ removedApps?: import('../engine').AppHolds[]; /** Why an app can't be removed yet, as the engine says it. */ removeProblem?: string
   /** The app's reports; none when left out. */ reports?: import('../engine').Reports
-  /** The app's open pull requests to review; none when left out. */ reviewPulls?: import('../engine').ReviewPulls; /** One pull request's review, whichever is asked for. */ review?: import('../engine').ReviewView; /** What a press of Run answers with; else the review as it is, running. */ reviewStarted?: import('../engine').ReviewView
+  /** The app's open pull requests to review; none when left out. */ reviewPulls?: import('../engine').ReviewPulls; /** GitHub has not answered with the list yet. */ reviewPullsSlow?: boolean; /** Each repository's scripts and their last check; none when left out. */ repoRuns?: import('../engine').RepoRuns; /** One pull request's review, whichever is asked for. */ review?: import('../engine').ReviewView; /** What a press of Run answers with; else the review as it is, running. */ reviewStarted?: import('../engine').ReviewView
   /** What was learned from the app's code; nothing yet when left out. */ learning?: import('../engine').Learning
   /** Why submitting a pull request fails, when it should. */ submitPrError?: string
   /** A task's pull request as a step; not submitted (prSample) when left out. */ prView?: import('../engine').PrView
@@ -44,6 +44,7 @@ export interface MockData {
   /** The app's docs agent; one that has written (docsAgentSample) when left out. */ docsAgent?: import('../engine').DocsAgent
   /** An app's docs site; running (docsSiteSample) when left out. */ docsSite?: import('../engine').DocsSite; /** Why starting it fails, when it should. */ docsSiteError?: string
   /** An app's workbench folder and hooks; workbenchSample when left out. */ workbench?: import('../engine').WorkbenchView
+  /** What New app last sent, for a story to read. */ madeApp?: { name: string; workbench?: boolean }
   /** A task's review copy; not made yet (reviewCopySample) when left out. */ reviewCopy?: import('../engine').ReviewCopyView
   /** A pull request's finalizing; never run (finalizeNoneSample) when left out. */ finalize?: import('../engine').FinalizeView
   /** Making it is refused, with this. */ reviewCopyError?: string
@@ -104,6 +105,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/events', () => silentStream()),
     http.get('/api/frame', () => HttpResponse.json({ frame: null })), // a story's views are shown as they are, not through the engine's proxy
     http.get('/api/devices', () => reply({ tailscale: 'missing', address: null, remote: false, devices: [] })),
+    http.get('/api/instances', () => reply({ here: { name: 'This computer', kind: 'local', url: 'http://localhost:5180', database: 'aaaa1111bbbb', beside: false }, other: { up: false, name: 'Shared', kind: 'shared', start: 'pnpm arrive' } })), // one Evident: the switch is not shown
     http.get('/api/apps', ({ request }) => reply(new URL(request.url).searchParams.get('removed') === '1' ? d.removedApps ?? [] : d.apps)),
     http.post('/api/apps/:id/remove', () => d.removeProblem ? HttpResponse.json({ error: d.removeProblem }, { status: 400 }) : reply({})),
     http.post('/api/apps/:id/restore', ({ params }) => { d.removedApps = (d.removedApps ?? []).filter((a) => a.id !== params.id); return reply({}) }),
@@ -128,7 +130,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/integrations/:key/check', () => reply(d.check)),
     http.post('/api/integrations/:key/setup', () => reply(d.setup)),
     http.get('/api/github/repos', () => reply(d.githubRepos)),
-    http.post('/api/apps', async ({ request }) => { const b = await request.json() as { name: string }; return reply({ ...s.otherApp, id: 'app_new', name: b.name, key: 'NEW', note: d.repoNote }) }),
+    http.post('/api/apps', async ({ request }) => { const b = await request.json() as { name: string; workbench?: boolean }; d.madeApp = b; return reply({ ...s.otherApp, id: 'app_new', name: b.name, key: 'NEW', note: d.repoNote }) }),
     http.post('/api/repos', () => reply({ ...s.sampleApp.repos![0], note: d.repoNote })),
     http.patch('/api/repos/:id', () => reply({ ...s.sampleApp.repos![0], note: d.repoNote })),
     http.delete('/api/issues/:id', () => (d.deleteProblem ? HttpResponse.json({ error: d.deleteProblem }, { status: 400 }) : reply({ deleted: 'SS-16', title: 'sample', subIssues: 0, talksEnded: 0 }))),
@@ -360,7 +362,12 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.patch('/api/apps/:id/notes/:note', async ({ params, request }) => { const b = await request.json() as Partial<{ on: string; kind: 'note' | 'decision'; title: string; body: string }>; d.notes = d.notes.map((n) => (n.id === params.note ? { ...n, ...Object.fromEntries(Object.entries(b).filter(([k]) => k !== 'issueIds')) } : n)); return reply(d.notes.find((n) => n.id === params.note) ?? null) }),
     http.delete('/api/apps/:id/notes/:note', ({ params }) => { d.notes = d.notes.filter((n) => n.id !== params.note); return reply({ removed: String(params.note) }) }),
     // Reviews of other people's pull requests: the list, one, and the press that runs it.
-    http.get('/api/apps/:id/pr-reviews', () => reply(d.reviewPulls ?? { me: null, pulls: [], problems: [], warning: '' })),
+    http.get('/api/apps/:id/pr-reviews', async () => { if (d.reviewPullsSlow) await delay('infinite'); return reply(d.reviewPulls ?? { me: null, pulls: [], problems: [], warning: '' }) }),
+    // How each repository is run: its scripts in the workbench, the check of them, and the stubs to start from.
+    http.get('/api/apps/:id/repo-runs', () => reply(d.repoRuns ?? { workbench: null, says: { setup: '', up: '', test: '', checks: '', down: '' }, repos: [] })),
+    http.post('/api/apps/:id/repo-runs/check', async ({ request }) => { const b = await request.json() as { repo: string }; if (d.repoRuns) d.repoRuns = { ...d.repoRuns, repos: d.repoRuns.repos.map((r) => (r.repo === b.repo ? { ...r, check: { state: 'running' as const, at: new Date().toISOString(), sha: null, branch: 'main', ok: false, steps: [{ key: 'setup', name: 'setup', state: 'pass' as const, output: '' }, { key: 'up', name: 'up', state: 'none' as const, output: '' }] } } : r)) }; return reply(d.repoRuns) }),
+    http.post('/api/apps/:id/repo-runs/scaffold', async ({ request }) => { const b = await request.json() as { repo: string }; if (d.repoRuns) d.repoRuns = { ...d.repoRuns, repos: d.repoRuns.repos.map((r) => (r.repo === b.repo ? { ...r, scripts: { ...r.scripts, has: true, setup: true, up: true, test: true, down: true, checks: ['Lint'] } } : r)) }; return reply(d.repoRuns) }),
+    http.get('/api/apps/:id/pr-reviews/repos', () => reply({ repos: d.reviewPulls?.repos ?? ['sample-org/sample-shop'] })),
     http.get('/api/apps/:id/pr-reviews/one', () => (d.review ? reply(d.review) : new HttpResponse(JSON.stringify({ error: 'no such pull request (sample)' }), { status: 400 }))),
     http.post('/api/apps/:id/pr-reviews', () => { if (d.review) d.review = d.reviewStarted ?? { ...d.review, state: 'running', mutation: null, commands: [], suggestions: [], steps: d.review.steps.map((x, n) => ({ ...x, state: n ? 'waiting' as const : 'running' as const, says: '' })) }; return reply(d.review) }),
     http.get('/api/apps/:id/reports', () => reply(d.reports ?? { writing: false, format: { daily: '', weekly: '' }, reports: [] })),
@@ -463,6 +470,12 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       if (b.dir && /nowhere/.test(b.dir)) return HttpResponse.json({ error: `there is no folder at ${b.dir} on this computer` }, { status: 400 })
       d.workbench = b.dir ? { ...s.workbenchSample, dir: b.dir } : s.workbenchNoneSample
       return reply(d.workbench)
+    }),
+    http.post('/api/apps/:id/workbench/seed', async ({ request }) => {
+      const b = await request.json() as { dir?: string | null }, now = d.workbench ?? s.workbenchSample
+      if (b.dir && /inside/.test(b.dir)) return HttpResponse.json({ error: `${b.dir} is inside the app's own code (/Users/sample/code/inside): a workbench is a folder outside its repositories, so nothing in it goes into the app` }, { status: 400 })
+      d.workbench = now.dir ? { ...now, found: true, seed: { ...now.seed, missing: [], installing: true } } : { ...s.workbenchInstallingSample, dir: b.dir ?? now.seed.suggested }
+      return reply({ ...d.workbench, added: ['docs/index.md'], made: !now.dir })
     }),
     http.get('/api/issues/:id/review-copy', () => reply(d.reviewCopy ?? s.reviewCopySample)),
     http.post('/api/issues/:id/review-copy', async ({ request }) => {

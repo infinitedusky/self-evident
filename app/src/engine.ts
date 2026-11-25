@@ -164,7 +164,9 @@ export interface DataAgentView {
  */
 export interface HookRun { at: string; ok: boolean; /** The task it ran for, as CEB-90; none for the app itself. */ task: string | null; /** prototype, smoke: where it ran. */ place: string | null; /** Its last lines. */ out: string[]; /** before-start: the names of the settings it gave the start script (never their values). */ gave?: string[] }
 export interface HookView { point: string; /** When Evident runs it, in a sentence. */ when: string; /** What it is run with. */ given: string[]; /** What Evident does with what it prints or how it ends. */ then: string; /** Its file in the folder; none: nothing is hooked here. */ file: string | null; text: string | null; last: HookRun | null }
-export interface WorkbenchView { dir: string | null; /** The folder is on this computer. */ found: boolean; hooks: HookView[]; /** What else of the app's is in the folder and named in its settings (the review kit). */ also: { what: string; path: string }[] }
+/** What a workbench folder has of what one starts with (engine workbench-seed.ts): the docs site, the docs agent's skills, the hooks and mockups folders. */
+export interface WorkbenchSeed { /** Where Evident would make the folder, when none is named; null: the app has no code on this computer to put it beside. */ suggested: string | null; /** What the folder lacks, in a person's words; of a folder not made yet, everything. */ missing: string[]; /** Its dependencies are being installed. */ installing: boolean; /** They are installed: the docs site can be started. */ installed: boolean; /** The install's last lines, when it failed. */ problem: string | null }
+export interface WorkbenchView { dir: string | null; /** The folder is on this computer. */ found: boolean; seed: WorkbenchSeed; hooks: HookView[]; /** What else of the app's is in the folder and named in its settings (the review kit). */ also: { what: string; path: string }[] }
 
 /** A task's review copy (engine review-copy.ts): a branch a reviewer checks out and starts with one command, on made-up data. */
 export interface ReviewCopyView {
@@ -470,10 +472,16 @@ export interface ReviewPull { repo: string; number: number; title: string; url: 
 export interface ReviewSummary { state: 'running' | 'done' | 'failed'; sha: string; at: string; stale: boolean; suggestions: number; survivors: number; failed: number }
 export interface ReviewStep { key: 'checkout' | 'mutation' | 'commands'; name: string; state: 'waiting' | 'running' | 'pass' | 'fail' | 'skipped'; says: string }
 export interface ReviewSurvivor { id: string; file: string; line: number; from: string; to: string; means: string; code: string; equivalent?: string }
-export interface ReviewCommand { key: string; name: string; runs: string; pass: boolean; output: string }
+export interface ReviewCommand { key: string; name: string; runs: string; pass: boolean; output: string; /** false: it could not be run here at all, which says nothing about the pull request. */ ran?: boolean }
+/** How a pull request's repository is run for a review: by its own scripts in the workbench, as the app's settings say (the home repository, until it has scripts), or not at all. */
+export interface ReviewRepoRun { home: boolean; mode: 'scripts' | 'app' | 'none'; dir: string | null; setup: boolean; up: boolean; test: boolean; down: boolean; checks: string[] }
+/** A repository's scripts in the workbench folder (the engine's repo-run.ts) and the last check of them on its default branch. */
+export interface RepoRunStep { key: string; name: string; state: 'pass' | 'fail' | 'unrun' | 'none'; output: string }
+export interface RepoRunView { repo: string; home: boolean; local: boolean; scripts: { dir: string | null; has: boolean; setup: boolean; up: boolean; test: boolean; down: boolean; checks: string[] }; check: { state: 'running' | 'done'; at: string; sha: string | null; branch: string; steps: RepoRunStep[]; ok: boolean } | null }
+export interface RepoRuns { workbench: string | null; says: Record<'setup' | 'up' | 'test' | 'checks' | 'down', string>; repos: RepoRunView[] }
 export interface ReviewSuggestion { id: string; from: 'mutation' | 'command'; file: string | null; line: number | null; url: string | null; text: string }
-export interface ReviewPulls { me: string | null; pulls: (ReviewPull & { review: ReviewSummary | null })[]; problems: string[]; warning: string }
-export interface ReviewView { pull: ReviewPull | null; state: 'none' | 'running' | 'done' | 'failed'; sha: string | null; stale: boolean; at: string | null; problem: string | null; warning: string; steps: ReviewStep[]; mutation: { tool: 'evident' | 'app'; tried: number; caught: number; meaningful: number; percent: number | null; survivors: ReviewSurvivor[]; partial?: string } | null; commands: ReviewCommand[]; suggestions: ReviewSuggestion[] }
+export interface ReviewPulls { me: string | null; pulls: (ReviewPull & { review: ReviewSummary | null })[]; problems: string[]; warning: string; /** The app's repositories, home first. */ repos?: string[]; /** When GitHub was last read: the list is kept a few minutes. */ readAt?: string }
+export interface ReviewView { repoRun?: ReviewRepoRun; pull: ReviewPull | null; state: 'none' | 'running' | 'done' | 'failed'; sha: string | null; stale: boolean; at: string | null; problem: string | null; warning: string; steps: ReviewStep[]; mutation: { tool: 'evident' | 'app'; tried: number; caught: number; meaningful: number; percent: number | null; survivors: ReviewSurvivor[]; partial?: string } | null; commands: ReviewCommand[]; suggestions: ReviewSuggestion[] }
 export interface Reports { writing: boolean; format: { daily: string; weekly: string }; reports: Report[] }
 /** A version of a task: the git branch each of its worktrees is on, and (set aside) the task as it was left. */
 export interface TaskBranch { id: string; name: string; current: boolean; fromSave: string | null; createdAt: string; gitBranches: string[]; /** Set aside: what is only on it. */ work: { commits: number; comments: number } | null }
@@ -569,6 +577,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
 /** Another device with the page open, over the private network. */
 export interface Device { ip: string; name: string; kind: 'phone' | 'computer'; since: string }
+/** Two Evidents on one computer (engine instance.ts): this one, and the other, up with its page or with what starts it. */
+export interface Instance { name: string; /** Its database: this computer's own, or one shared with other computers. */ kind: 'local' | 'shared'; url: string; database: string; /** Started to run beside another. */ beside: boolean }
+export interface Instances { here: Instance; other: { up: true; name: string; kind: Instance['kind']; url: string; /** Both engines are on one database. */ same: boolean } | { up: false; name: string; kind: Instance['kind']; start: string } }
 /** `address`: the page on the private network, null when it is not served there. `remote`: this page is the one that came over it. */
 export interface DevicesHere { /** Tailscale on this computer: not installed, not connected, or connected. */ tailscale: 'missing' | 'off' | 'ready'; address: string | null; remote: boolean; devices: Device[]; /** Where to allow serving on the Tailscale account, when it said no. */ enable?: string }
 export const devicesHere = () => call<DevicesHere>('GET', '/devices')
@@ -881,7 +892,15 @@ export const engine = {
   removeContextNote: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/notes/${id}`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
   /** The app's open pull requests, other people's first, each with where its review stands. */
-  reviewPulls: (appId: string) => call<ReviewPulls>('GET', `/apps/${appId}/pr-reviews`),
+  reviewPulls: (appId: string, fresh = false) => call<ReviewPulls>('GET', `/apps/${appId}/pr-reviews${fresh ? '?fresh=1' : ''}`),
+  /** Each repository's scripts and the last check of them. */
+  repoRuns: (appId: string) => call<RepoRuns>('GET', `/apps/${appId}/repo-runs`),
+  /** Run a repository's scripts, all of them, on its default branch. */
+  checkRepoRun: (appId: string, repo: string) => call<RepoRuns>('POST', `/apps/${appId}/repo-runs/check`, { repo }),
+  /** Start its folder in the workbench with a stub of each script. Nothing there is overwritten. */
+  scaffoldRepoRun: (appId: string, repo: string) => call<RepoRuns>('POST', `/apps/${appId}/repo-runs/scaffold`, { repo }),
+  /** The repositories a pull request can be opened from, without asking GitHub. */
+  reviewRepos: (appId: string) => call<{ repos: string[] }>('GET', `/apps/${appId}/pr-reviews/repos`),
   /** One pull request's review: where it stands and what it found. */
   review: (appId: string, repo: string, number: number) => call<ReviewView>('GET', `/apps/${appId}/pr-reviews/one?${new URLSearchParams({ repo, number: String(number) })}`),
   /** Run it: its code is checked out and run on this computer. Nothing is sent to GitHub. */
@@ -900,8 +919,11 @@ export const engine = {
   docsAgent: (appId: string) => call<DocsAgent>('GET', `/apps/${appId}/docs-agent`),
   askDocsAgent: (appId: string, message: string) => call<DocsAgent>('POST', `/apps/${appId}/docs-agent`, { message }),
   startDocsSite: (appId: string) => call<DocsSite>('POST', `/apps/${appId}/docs-site/start`),
+  instances: () => call<Instances>('GET', '/instances'),
   workbench: (appId: string) => call<WorkbenchView>('GET', `/apps/${appId}/workbench`),
   setWorkbench: (appId: string, dir: string | null) => call<WorkbenchView>('PUT', `/apps/${appId}/workbench`, { dir }),
+  /** Make the folder from Evident's template, or put into the one named what it lacks. dir: where, when not the folder named or the one suggested. */
+  seedWorkbench: (appId: string, dir?: string | null) => call<WorkbenchView & { added: string[]; made: boolean }>('POST', `/apps/${appId}/workbench/seed`, { dir: dir ?? null }),
   reviewCopy: (issueId: string, fresh = false) => call<ReviewCopyView>('GET', `/issues/${issueId}/review-copy${fresh ? '?fresh=1' : ''}`),
   makeReviewCopy: (issueId: string, body: { fixture: string | null; try: string }) => call<ReviewCopyView>('POST', `/issues/${issueId}/review-copy`, body),
   updatePr: (issueId: string, theirs?: 'keep' | 'replace') => call<{ number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/update`, theirs ? { theirs } : {}),
@@ -976,7 +998,7 @@ export const engine = {
   fileSkill: (key: string, body: { category?: string | null; on?: boolean }) => call<{ ok: true }>('PATCH', `/skills/${key.split('/').map(encodeURIComponent).join('/')}`, body),
   createWorkspace: (name: string) => call<Workspace>('POST', '/workspaces', { name }),
   // The code may come with the app; a local checkout is made ready as it is set, and `note` says what the engine did.
-  createApp: (body: { workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: AppSetup; repo?: { fullName?: string; localPath?: string } }) => call<App & { note: string | null }>('POST', '/apps', body),
+  createApp: (body: { workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: AppSetup; repo?: { fullName?: string; localPath?: string }; /** Make its workbench folder too, beside its code. */ workbench?: boolean }) => call<App & { note: string | null }>('POST', '/apps', body),
   githubRepos: () => call<GitHubRepos>('GET', '/github/repos'),
   updateApp: (id: string, body: { name?: string; /** Its abbreviation: MER in MER-50. */ key?: string; defaultBranch?: string; /** Only the settings that change: a value sets one, null removes it, the rest stay as the engine has them. */ setup?: Record<string, unknown>; /** Changes to what a build is held to, applied in order to the list as the engine has it. */ held?: import('@self-evident/engine/contracts').ProbeChange[] }) => call<App>('PATCH', `/apps/${id}`, body),
   createRepo: (body: { appId: string; fullName: string; localPath?: string; baseBranch?: string }) => call<Repo & { note: string | null }>('POST', '/repos', body),

@@ -56,6 +56,28 @@ while that agent runs: the ports are taken.
 **One engine at a time.** Two engines on one database would both schedule and build. The state repository records
 which computer holds the engine, and `pnpm arrive` refuses while another one does.
 
+## Both on one computer
+
+(LOG.md, "Two Evidents on one computer".) One Evident reads one database. To have this computer's own apps and the
+shared ones at once, run two Evidents from the same checkout, each on its own address, and switch with the button
+in the rail (💻 or ☁️, above the phone): it says which one you are in and goes to the other.
+
+| | Its page | Its engine | Started by |
+| --- | --- | --- | --- |
+| Shared | `http://localhost:5180` (or `UI_URL`) | 4000 | `pnpm arrive` (launchd keeps it running) |
+| This computer | `http://localhost:5181` | 4001 | `pnpm local`, in a terminal |
+
+If this computer's own Evident is already running with `pnpm dev`, stop it first: `pnpm arrive` refuses while it
+holds the usual address. Then `pnpm arrive`, then `pnpm local`.
+
+- Each keeps running while you are in the other. Their apps, tasks and conversations are separate.
+- The shared one is still one engine across all your computers: `pnpm leave` on the other computer first.
+- Do not add the same checkout as an app in both: two engines would make worktrees and branches in one folder.
+- Both keep per-app files under `~/.self-evident/apps/<abbreviation>/`, so give apps in the two different
+  abbreviations.
+- `pnpm local` with nothing else running is the same as `pnpm dev` on the other address. Other ports:
+  `PORT`, `UI_PORT`, and `OTHER_ENGINE_URL` to say where the other engine is. `EVIDENT_NAME` renames one.
+
 ## Which way is this computer using?
 
 - `launchctl print gui/$(id -u)/com.thedusky.self-evident` succeeds: way 2, kept running by launchd.
@@ -190,6 +212,12 @@ git -C REPO config user.email "the address that account's commits carry"
 ssh-add --apple-use-keychain ~/.ssh/id_ed25519_second   # a key with a passphrase: the engine cannot type it
 ```
 
+**Two Evidents, two accounts.** The shared Evident acts as its own GitHub account whatever account is active:
+when it starts, and in `pnpm arrive` and `pnpm leave`, it takes the token of the `gh` account named by `GH_ACCOUNT`,
+or with none named the owner of the state repository (`STATE_REPO`), and its `gh` and `git` use that. So the active
+account can stay the one this computer's own Evident needs. `gh auth login` as that account once; nothing is
+switched. The engine's log says `GitHub: acting as <account>` at start.
+
 Git in that checkout then uses the second account without any switching. For Evident to open pull requests
 there too, `gh` must be signed in as that account and active (`gh auth login`, `gh auth switch -u <account>`);
 with the GitHub repo field filled and `gh` on the other account, the sync and pull requests for that app fail.
@@ -216,6 +244,22 @@ one folder per skill, holding a `SKILL.md` (a `name` and `description` at the to
 from Settings › All apps › **Your skills** (write one, or pull every skill from a repository and update them there), or make the folder by hand. Then file it under a job
 there, or choose it for a step under an app's Settings › Skills. This folder stays on this computer: copy it to
 another by hand.
+
+## An app's workbench folder
+
+A folder beside the app's code for what is ours about working on it: its docs site, the docs agent's skills, hooks
+and mockups. Evident makes it from a template it carries (`engine/workbench-template/`):
+
+- When adding an app with a folder on this machine, "Make its workbench folder too" is ticked. The folder goes
+  beside the checkout, named `<the app's name>-workbench`.
+- For an app that has none: Settings › the app › Workbench › Create the workbench. Change where it goes first if
+  you want it elsewhere.
+- For a folder you already have: choose it there, and "Add what is missing" puts in what it lacks without changing
+  what is there.
+
+The folder is a git repository of its own, local until you push it somewhere. Its dependencies are installed for
+you (`pnpm install` in the folder); the Docs page can start the site once that is done. On another computer, clone
+the folder's repository to the same place, or choose where it is under Settings › Workbench.
 
 ## A product in two repositories
 
@@ -261,7 +305,8 @@ checkout, normally the default branch.
 ## Known limits
 
 - Way 2 runs one engine at a time. Assigning each app to a computer, so several can run at once, is not built.
-- One page shows one database. Seeing a local and a shared one side by side is not built.
+- One page shows one database. A local and a shared one run as two Evidents with a switch between them ("Both on
+  one computer"); one list of apps from both is not built.
 - Resuming a conversation on a computer with a different user is untried: its history arrives in the right
   place, but its earlier turns mention the first computer's paths.
 - `pnpm arrive` does not install an app's own dependencies, and does not carry the global Claude Code set-up in

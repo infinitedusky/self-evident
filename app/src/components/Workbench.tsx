@@ -6,6 +6,11 @@
  * one app (who a tester is signed in as, say) is a script of that app's, in a folder of ours beside its repositories.
  * Evident knows only the points at which it runs one, and says here which are hooked and how each last went.
  *
+ * No folder yet: Evident makes one from its template (engine workbench-seed.ts; Sandy, 2026-11-25: "it should let you
+ * create a folder and it would seed it"), where it says or where the person says, or one they already have is chosen.
+ * A folder that lacks what a workbench starts with (the docs site, the docs agent's skills) says so, and one press puts
+ * that in without touching what is there.
+ *
  * Top to bottom: the folder; then each point, hooked or not, with what the script is given and what Evident does
  * with it; its text to read (it is changed in the folder, where it is versioned); its last run.
  */
@@ -16,16 +21,23 @@ import { engine, type WorkbenchView } from '../engine'
 const problemOf = (e: any) => { const m = String(e?.message ?? e); try { return String(JSON.parse(m).error ?? m) } catch { return m } }
 const when = (at: string) => new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
+const sentence = (xs: string[], last: string) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} ${last} ${xs[xs.length - 1]}`
+
 export function Workbench({ appId }: { appId: string }) {
   const [v, setV] = useState<WorkbenchView | null>(null)
   const [dir, setDir] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [shown, setShown] = useState<string | null>(null)
-  const take = (x: WorkbenchView) => { setV(x); setDir(x.dir ?? '') }
+  const [where, setWhere] = useState('')
+  const take = (x: WorkbenchView) => { setV(x); setDir(x.dir ?? ''); if (!x.dir) setWhere((w) => w || x.seed.suggested || '') }
   useEffect(() => { engine.workbench(appId).then(take).catch((e) => setError(problemOf(e))) }, [appId])
   const put = async (to: string | null) => { setBusy(true); setError(null); try { take(await engine.setWorkbench(appId, to)) } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
   const save = () => put(dir.trim() || null)
+  // Make the folder from the template, or put into the one named what it lacks; then its dependencies install on their own.
+  const seed = async (to?: string) => { setBusy(true); setError(null); try { take(await engine.seedWorkbench(appId, to)) } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
+  const installing = !!v?.seed.installing
+  useEffect(() => { if (!installing) return; const t = window.setInterval(() => { engine.workbench(appId).then(setV).catch(() => {}) }, 2500); return () => window.clearInterval(t) }, [installing, appId])
   // The computer's own folder dialog, as for a repository (it opens on the computer Evident runs on). Choosing is saving.
   const choose = async () => { setBusy(true); setError(null); try { const f = await engine.chooseFolder(v?.dir ?? undefined); if (f.path) { setDir(f.path); await put(f.path) } } catch (e) { setError(problemOf(e)) } finally { setBusy(false) } }
   if (!v) return error ? <div className="empty bad">{error}</div> : <p className="muted">Loading…</p>
@@ -40,6 +52,22 @@ export function Workbench({ appId }: { appId: string }) {
         {changed && <button className="btn quiet small" disabled={busy} onClick={() => void save()}>{busy ? 'Saving…' : dir.trim() ? 'Save' : 'Take it away'}</button>}
         {v.dir && !changed && (v.found ? <Badge tone="ok">On this computer</Badge> : <Badge tone="warn">Not on this computer</Badge>)}
       </div>
+      {!v.dir && (
+        <div className="workbench-make" aria-label="Make a workbench">
+          <p style={{ margin: 0 }}><strong>There is none yet.</strong> Evident can make it. It starts with {sentence(v.seed.missing, 'and')}, as a git repository of its own.</p>
+          <div className="workbench-dir" style={{ margin: 0 }}>
+            <label>Where to make it<input className="mono" value={where} disabled={busy} onChange={(e) => setWhere(e.target.value)} placeholder="/the/whole/path/of/a/new/folder" /></label>
+            <button className="btn small" disabled={busy || !where.trim()} onClick={() => void seed(where.trim())}>{busy ? 'Making it…' : 'Create the workbench'}</button>
+          </div>
+          <p className="faint" style={{ margin: 0, fontSize: 12 }}>{v.seed.suggested ? 'Beside the app\'s code, where nothing in it goes into the app.' : 'This app has no code on this computer to put it beside, so say where.'} Or choose a folder you already have, above: what it lacks can be added after.</p>
+        </div>
+      )}
+      {v.dir && !v.found && <p className="workbench-make">There is no folder at <code>{v.dir}</code> on this computer. <button className="btn small" disabled={busy} onClick={() => void seed(v.dir!)}>Make it here</button></p>}
+      {v.dir && v.found && v.seed.missing.length > 0 && (
+        <p className="workbench-make">This folder does not have {sentence(v.seed.missing, 'or')}. <button className="btn small" disabled={busy} onClick={() => void seed()}>{busy ? 'Adding…' : 'Add what is missing'}</button> <span className="faint" style={{ fontSize: 12 }}>Nothing that is there is changed.</span></p>
+      )}
+      {v.seed.installing && <p role="status" className="faint">Installing what the docs site needs (<code>pnpm install</code> in the folder). The docs can be started when it is done.</p>}
+      {v.seed.problem && <div className="bad" style={{ fontSize: 13 }}>Installing what the docs site needs failed.<pre className="workbench-script">{v.seed.problem}</pre><button className="btn small" disabled={busy} onClick={() => void seed()}>Install again</button></div>}
       {error && <p className="bad" role="alert">{error}</p>}
       {v.also.length > 0 && <p className="faint" style={{ fontSize: 13 }}>Also in it: {v.also.map((a) => <span key={a.path}>{a.what} at <code>{a.path}</code> </span>)}</p>}
 

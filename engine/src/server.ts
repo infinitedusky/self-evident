@@ -160,6 +160,9 @@ export function buildApp(bus: EventBus) {
 
   const settle = <T>(v: T) => { void runner.dispatch(); return v } // a change to the plan can free work: one dispatch pass after it
   api.get('/health', async (c) => { await db.execute('select 1'); return c.json({ ok: true }) })
+  // Two Evidents on one computer (instance.ts): which this one is, and the other one, for the way across.
+  api.get('/instance', async (c) => c.json((await import('./instance.js')).thisInstance()))
+  api.get('/instances', async (c) => c.json(await (await import('./instance.js')).instances()))
   // The other devices with the page open (a phone, over Tailscale); the one asking is left out.
   api.get('/devices', async (c) => { const from = remoteIp((n) => c.req.header(n)); return c.json({ ...(await phoneState()), remote: !!from, devices: devicesHere(from) }) })
   // Put the page on the private network, or take it off: from the page on this computer only, never from the phone.
@@ -425,7 +428,7 @@ export function buildApp(bus: EventBus) {
   })
   api.get('/github/repos', async (c) => c.json(await myRepos()))
   api.post('/apps', async (c) => {
-    const body = await c.req.json<{ workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: Record<string, unknown>; repo?: { fullName?: string; localPath?: string } }>()
+    const body = await c.req.json<{ workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: Record<string, unknown>; repo?: { fullName?: string; localPath?: string }; /** Make its workbench folder too: true beside its code, or the folder's path. */ workbench?: boolean | string }>()
     const taken = (await activeApps()).filter((r) => r.workspaceId === body.workspaceId).map((r) => r.key) // a put-away app's abbreviation is free
     let key: string
     try { key = body.key?.trim() ? cleanKey(body.key) : appKey(body.name, taken) } catch (err) { return c.json({ error: (err as Error).message }, 400) }
@@ -444,6 +447,11 @@ export function buildApp(bus: EventBus) {
       const [now] = await tx.select({ workflowId: appTable.workflowId }).from(appTable).where(eq(appTable.id, made.id))
       return { ...made, repos, workflowId: now.workflowId, note }
     })
+    // Its workbench folder, when asked for: made after the app is, so a folder that cannot be made is said and the app still stands.
+    if (body.workbench) {
+      try { const made = await (await import('./workbench-seed.js')).seedWorkbench(row.id, typeof body.workbench === 'string' ? body.workbench : null); return c.json({ ...row, setup: { ...(row.setup as object), workbench: { dir: made.dir } }, workbench: { dir: made.dir, made: made.made } }, 201) }
+      catch (err) { return c.json({ ...row, note: [row.note, `Its workbench folder was not made: ${(err as Error).message}. Make it under Settings › Workbench.`].filter(Boolean).join(' ') }, 201) }
+    }
     return c.json(row, 201)
   })
   // ?session=: the conversation the person is in; its worktree's Storybook when it has one, else the app's.
@@ -499,8 +507,10 @@ export function buildApp(bus: EventBus) {
   api.get('/apps/:id/docs-agent', async (c) => { try { return c.json(await (await import('./docs-agent.js')).docsAgent(c.req.param('id'), talkBusy)) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/docs-agent', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { message?: string }; const d = await import('./docs-agent.js'); await d.askDocsAgent(c.req.param('id'), b.message ?? '', { actor: 'user' }); return c.json(await d.docsAgent(c.req.param('id'), talkBusy), 202) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/docs-site/start', async (c) => { try { return c.json(await (await import('./docs-site.js')).startDocsSite(c.req.param('id'))) } catch (err) { return planError(c, err) } })
-  api.get('/apps/:id/workbench', async (c) => { try { return c.json(await (await import('./hooks.js')).workbench(c.req.param('id'))) } catch (err) { return planError(c, err) } })
-  api.put('/apps/:id/workbench', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { dir?: string | null }; return c.json(await (await import('./hooks.js')).setWorkbench(c.req.param('id'), b.dir ?? null)) } catch (err) { return planError(c, err) } })
+  api.get('/apps/:id/workbench', async (c) => { try { return c.json(await (await import('./workbench-seed.js')).workbenchView(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  api.put('/apps/:id/workbench', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { dir?: string | null }; await (await import('./hooks.js')).setWorkbench(c.req.param('id'), b.dir ?? null); return c.json(await (await import('./workbench-seed.js')).workbenchView(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  // Make the folder from the template, or put into the one it has what it lacks (workbench-seed.ts). dir: where, when not the one named or suggested.
+  api.post('/apps/:id/workbench/seed', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { dir?: string | null }; return c.json(await (await import('./workbench-seed.js')).seedWorkbench(c.req.param('id'), b.dir ?? null)) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/fixtures', async (c) => { try { const issueId = c.req.query('issue') || null; return c.json({ fixtures: await listFixtures(c.req.param('id')), used: await fixtureForTask(c.req.param('id'), issueId), make: await canMakeFixture(c.req.param('id')) }) } catch (err) { return planError(c, err, 404) } })
   // Made from the app's seed (minutes: its schema and seed commands run), looked into, renamed, deleted.
   api.post('/apps/:id/fixtures', async (c) => { const b = await c.req.json<{ name?: string }>().catch(() => ({} as { name?: string })); try { return c.json(await makeFixtureFromSeed(c.req.param('id'), b.name?.trim() || undefined)) } catch (err) { return planError(c, err) } })
@@ -872,7 +882,12 @@ export function buildApp(bus: EventBus) {
   // The person accepts the smoke test: the built code is what goes to review (smoke.ts, acceptSmoke).
   api.post('/issues/:id/smoke/accept', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const v = await acceptSmoke(t.id, 'user'); await (await import('./finalize.js')).startFinalize(t.id, runner.finalizeDeps(), 'user').catch(() => null); return c.json(v) } catch (err) { return planError(c, err) } }) // accepting it starts the pull request's finalizing (finalize.ts): nothing is sent by it
   // Reviewing a pull request that is someone else's (pr-review.ts): the app's open ones, one's review, and the press that runs it. Nothing here writes to GitHub.
-  api.get('/apps/:id/pr-reviews', async (c) => { try { return c.json(await (await import('./pr-review.js')).listPulls(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  api.get('/apps/:id/pr-reviews', async (c) => { try { return c.json(await (await import('./pr-review.js')).listPulls(c.req.param('id'), {}, { fresh: c.req.query('fresh') === '1' })) } catch (err) { return planError(c, err) } })
+  api.get('/apps/:id/pr-reviews/repos', async (c) => c.json({ repos: (await (await import('./workbench.js')).reposOf(c.req.param('id'))).repos.filter((r) => r.fullName && r.localPath).map((r) => r.fullName) }))
+  // How each repository is run (repo-run.ts): its scripts in the workbench, a check of them on the default branch, and a folder of stubs to start from.
+  api.get('/apps/:id/repo-runs', async (c) => { try { return c.json(await (await import('./repo-run.js')).repoRuns(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/repo-runs/check', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { repo?: string }; const r = await import('./repo-run.js'); await r.startCheck(c.req.param('id'), String(b.repo ?? '')); await new Promise((done) => setTimeout(done, 150)); return c.json(await r.repoRuns(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  api.post('/apps/:id/repo-runs/scaffold', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { repo?: string }; const r = await import('./repo-run.js'); await r.scaffold(c.req.param('id'), String(b.repo ?? '')); return c.json(await r.repoRuns(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/pr-reviews/one', async (c) => { try { return c.json(await (await import('./pr-review.js')).reviewView(c.req.param('id'), String(c.req.query('repo') ?? ''), Number(c.req.query('number')))) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/pr-reviews', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { repo?: string; number?: number }; const r = await import('./pr-review.js'); if (!b.repo || !Number.isInteger(b.number)) return c.json({ error: 'say which pull request: its repository and its number' }, 400); await r.startReview(c.req.param('id'), b.repo, b.number!); await new Promise((done) => setTimeout(done, 150)); return c.json(await r.reviewView(c.req.param('id'), b.repo, b.number!)) } catch (err) { return planError(c, err) } })
   // The pull request's finalizing (finalize.ts): where it stands and what it found; run again; a survivor left as it is, with why; a sub-task sent after one thing; and the one press that sends the results to GitHub.
@@ -1273,6 +1288,7 @@ export function buildApp(bus: EventBus) {
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()!)) {
+  { const said = (await import('./gh-account.js')).useGhAccount(); if (said) console.log(`[engine] ${said}`) } // before anything runs gh or git: which GitHub account this Evident acts as
   for (let waited = 0; ; waited++) { // the database may be on another machine, behind a proxy that starts after us: wait for it, never exit (nothing would start us again)
     try { await ensureDatabase(DATABASE_URL); break } catch (err) {
       if (waited % 15 === 0) console.warn(`[engine] waiting for the database: ${(err as Error).message}`)
