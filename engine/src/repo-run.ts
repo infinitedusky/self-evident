@@ -14,7 +14,10 @@
  *       down        stop what up started; always run after up, whatever happened between
  *
  * Any extension. One that can be executed is run as it is; any other with sh. Each is run from the checkout's top
- * folder with CHECKOUT, REPO, BASE and HEAD set, and PR for a pull request. A review (pr-review.ts) uses them;
+ * folder with CHECKOUT, REPO, BASE and HEAD set, and PR and BRANCH (its head branch's name) for a pull request. A
+ * script may call whatever the repository's people already bring it up with (a compose file, a company CLI). While
+ * the breaks are run, each one is an uncommitted change in the checkout: a `test` that runs somewhere else has to
+ * carry that change there first, or every break will seem to get past the tests. A review (pr-review.ts) uses them;
  * **Check it** runs them all on the default branch, so they are known to work before any pull request is looked at.
  *
  * The app's own tasks (the build, the check, the finalizing) still run from the app's settings: those move here once
@@ -150,7 +153,7 @@ export async function startCheck(appId: string, fullName: string, deps: { sh?: S
 
 const STUB = (part: string, says: string, example: string) => `#!/bin/sh
 # ${part}: ${says}
-# Run from the top folder of a checkout of this repository. Given: CHECKOUT, REPO, BASE, HEAD, and PR for a pull request.
+# Run from the top folder of a checkout of this repository. Given: CHECKOUT, REPO, BASE, HEAD, and PR and BRANCH for a pull request.
 # Not written yet: until it is, it says so and nothing is drawn from it.
 #
 # ${example}

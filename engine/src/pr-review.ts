@@ -225,7 +225,7 @@ export async function runReview(appId: string, fullName: string, number: number,
     const baseRef = `origin/${base}`
     const files = (await git(local, ['diff', '--name-only', '--diff-filter=AM', `${baseRef}...${head}`], { allowFail: true })).stdout.split('\n').filter(Boolean)
     checkout = path
-    env = { CHECKOUT: path, REPO: fullName, BASE: base, HEAD: head, PR: String(number) }
+    env = { CHECKOUT: path, REPO: fullName, BASE: base, HEAD: head, PR: String(number), BRANCH: pr.headRefName ?? '' } // BRANCH: for a tool that brings an environment up from a branch's name
     let prepared = true
     const where = how.dir ? ` Its scripts go in ${how.dir}.` : ''
     if (how.mode === 'scripts') {

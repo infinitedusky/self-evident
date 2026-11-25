@@ -172,7 +172,7 @@ describe.skipIf(!reachable)('a review of someone else\'s pull request (sample da
     // The repository's own scripts, written once: installed, brought up, its tests and a check run, and brought down.
     const script = (name: string, body: string) => { mkdirSync(join(dir, 'checks'), { recursive: true }); writeFileSync(join(dir, name), `#!/bin/sh\n${body}\n`); chmodSync(join(dir, name), 0o755) }
     const log = join(bench, 'ran.log')
-    script('setup.sh', `echo "setup in $(basename "$CHECKOUT") pr=$PR" >> ${log}`)
+    script('setup.sh', `echo "setup in $(basename "$CHECKOUT") pr=$PR branch=$BRANCH" >> ${log}`)
     script('up.sh', `echo up >> ${log}\necho "SAMPLE_DB=postgres://sample"`)
     script('test.sh', `test -n "$SAMPLE_DB" || { echo "no database (sample)" >&2; exit 1; }\nnode "$@"`)
     script('checks/lint.sh', 'echo "cap.js: no semicolons (sample)" >&2; exit 1')
@@ -188,7 +188,7 @@ describe.skipIf(!reachable)('a review of someone else\'s pull request (sample da
     expect(again.commands.map((c) => [c.name, c.runs, c.pass])).toEqual([['Lint', 'checks/lint.sh', false], ['Loads', 'checks/loads.sh', true]])
     expect(again.suggestions.map((s) => s.from)).toEqual(['mutation', 'mutation', 'command'])
     const { readFileSync } = await import('node:fs')
-    expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual(['setup in review-of--3 pr=3', 'up', 'down postgres://sample']) // brought down, with what up gave
+    expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual(['setup in review-of--3 pr=3 branch=theirs', 'up', 'down postgres://sample']) // brought down, with what up gave
 
     // Check it: the same scripts on the default branch, before any pull request. Here main has no cap.js, so one check fails, and it says which.
     await checkRepo(appId, other)
