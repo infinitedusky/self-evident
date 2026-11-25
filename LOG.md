@@ -8239,3 +8239,22 @@ Not done: a login an app used to run on, that no app names now and that is not t
 in; build runs that resume a session (`resumeSessionId`) do not bring it along; not tried on a real conversation,
 so whether the other login will carry on from a session it did not write (the SDK ties a model's thinking to
 the account that produced it) is not known.
+
+## A box that scrolls goes down to the bottom of the screen (Sandy, 2026-11-25)
+
+Sandy, on a task's Research page: "the height of the section in the middle seems to be limited … It should just
+go down to the bottom of the screen with a little bit of padding … that should just be a general rule of thumb."
+The report was in a box of its own, 420px tall, with empty page under it, while the agent's column beside it ran
+on down.
+
+- **A step's page is as tall as what is written on it, up to the bottom of the screen**, where the agent's column
+  ends too (`calc(100vh - 160px)`, both). Past that it scrolls inside its panel. The report in it has no box of
+  its own.
+- **The same rule for its neighbours**: the agent's column lost its 820px cap, and a step showing its View is
+  the same height as the other two (it was 90px shorter).
+- On a phone, and where a tab is narrow enough that the columns stack, the step's page is not held to the screen:
+  the page itself scrolls there.
+
+Story: Pages/TaskPage › LongResearchReport. Not done: the other fixed heights in `app.css` (a summary on a card,
+a tool's result, a log) are small boxes inside lists and were left as they are; not looked at in the running app,
+only in Storybook.
