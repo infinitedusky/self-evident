@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { addContextNote, addDoc, addFile, addTicket, contextCount, contextOf, contextPrompt, editContextNote, openQuestionsDoc, editDoc, LIMITS, refreshDoc, removeContextNote, removeDoc } from './context.js'
+import { addContextNote, addDoc, addFile, addTicket, contextCount, contextOf, contextPrompt, editContextNote, openQuestionsDoc, editDoc, LIMITS, pullTicket, refreshDoc, removeContextNote, removeDoc } from './context.js'
 import { db, pool } from './db/client.js'
 import { app, workspace } from './db/schema.js'
 import { createIdea } from './ideas.js'
@@ -354,5 +354,42 @@ describe.skipIf(!reachable)('context', () => {
     const t = await contextOf({ issueId: out.issueId })
     expect(t.docs).toMatchObject([{ title: 'A spec (sample)', fromProject: true }])
     expect(t.notes).toMatchObject([{ title: 'Found while reading (sample)', fromProject: true }])
+  })
+
+  it('gives a task its own ticket, not every ticket in its project: the others are listed by title and can be pulled in', async () => {
+    const { setTeamNames } = await import('./ticket.js')
+    const { project: p, issues: [first, second, bare] } = await createProject({ appId, name: 'Executive protection (sample)', issues: [{ title: 'Protected people (sample)', brief: 'Build it.' }, { title: 'Takedowns (sample)', brief: 'Build it.' }, { title: 'Tidy up (sample)', brief: 'Build it.' }] })
+    await addDoc({ projectId: p.id }, { title: 'PRD (sample)', body: 'The whole product, made up.' })
+    for (const ref of ['EXP-1', 'EXP-2', 'EXP-3']) await addTicket({ projectId: p.id }, ref, 'user', keep)
+    await setTeamNames(first.id, { ticket: 'EXP-1' })
+    await setTeamNames(second.id, { ticket: 'EXP-2', also: ['EXP-9'] })
+    await keep(appId, 'EXP-9') // read from the tracker, and in no Context: still the second task's, because it is under it
+    // The project itself holds all three.
+    expect((await contextOf({ projectId: p.id })).docs.map((d) => d.ticket?.origin.ref ?? d.title)).toEqual(['PRD (sample)', 'EXP-1', 'EXP-2', 'EXP-3'])
+    expect((await contextOf({ projectId: p.id })).otherTickets).toEqual([])
+    // A task: the PRD, its own ticket in full, and the other two by title only.
+    const v = await contextOf({ issueId: first.id })
+    expect(v.docs.map((d) => [d.ticket?.origin.ref ?? d.title, d.fromProject, d.under, d.inFull])).toEqual([['PRD (sample)', true, false, false], ['EXP-1', true, true, true]])
+    expect(v.otherTickets.map((o) => [o.ref, o.title, o.sourceName])).toEqual([['EXP-2', 'Ticket EXP-2 (sample)', 'Linear'], ['EXP-3', 'Ticket EXP-3 (sample)', 'Linear']])
+    const said = await contextPrompt({ issueId: first.id })
+    expect(said).toContain('### The ticket this task is under: Linear EXP-1')
+    expect(said).toContain('### The project\'s other tickets: not this task\'s work')
+    expect(said).toContain('- Linear EXP-2: Ticket EXP-2 (sample)')
+    expect(said).not.toMatch(/Reference[^\n]*EXP-2|kept[^\n]*EXP-2/) // not given, in full or as a file to open
+    // Under a ticket by its other tickets too, and one no Context lists.
+    const w = await contextOf({ issueId: second.id })
+    expect(w.docs.filter((d) => d.under).map((d) => [d.ticket!.origin.ref, d.fromProject])).toEqual([['EXP-2', true], ['EXP-9', false]])
+    expect(w.otherTickets.map((o) => o.ref)).toEqual(['EXP-1', 'EXP-3'])
+    // A task under no ticket: the PRD, and every ticket by title.
+    const b = await contextOf({ issueId: bare.id })
+    expect(b.docs.map((d) => d.title)).toEqual(['PRD (sample)']); expect(b.otherTickets).toHaveLength(3)
+    // Pulled in: one shared record on the task, out of the others, and it can be taken out again.
+    await expect(pullTicket({ issueId: first.id }, 'EXP-9')).rejects.toThrow(/not one of the project's other tickets/)
+    await expect(pullTicket({ projectId: p.id }, 'EXP-2')).rejects.toThrow(/only a task pulls in/)
+    const pulled = await pullTicket({ issueId: first.id }, 'exp-3')
+    expect(pulled.docs.map((d) => [d.ticket?.origin.ref ?? d.title, d.fromProject, d.under])).toEqual([['EXP-3', false, false], ['PRD (sample)', true, false], ['EXP-1', true, true]])
+    expect(pulled.docs[0].ticket!.origin.id).toBe((await contextOf({ projectId: p.id })).docs.find((d) => d.ticket?.origin.ref === 'EXP-3')!.ticket!.origin.id)
+    expect(pulled.otherTickets.map((o) => o.ref)).toEqual(['EXP-2'])
+    expect((await removeDoc({ issueId: first.id }, pulled.docs[0].id)).otherTickets.map((o) => o.ref)).toEqual(['EXP-2', 'EXP-3'])
   })
 })

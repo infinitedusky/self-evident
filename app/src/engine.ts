@@ -442,6 +442,7 @@ export interface ContextDoc {
   /** A PDF: kept on this computer as the file it was, for the agent that needs it to open. It has no text here. */ kept?: boolean
   chars: number; /** Given to every agent whole, not listed for them to open. */ inFull: boolean
   addedBy: string | null; addedAt: string; /** A task's view of its project's: shown, never changed there. */ fromProject: boolean
+  /** A ticket this task is under: what was asked of it, given to its agents whole. */ under?: boolean
 }
 /** A note or a decision in a Context. They are the app's notes (engine/src/notes.ts): dated, and in the reports. */
 export interface ContextNote {
@@ -457,6 +458,8 @@ export interface ContextNote {
 export interface ContextView {
   on: 'idea' | 'project' | 'task'; /** A task in a project: whose context it also sees. */ project: { id: string; name: string } | null
   docs: ContextDoc[]; notes: ContextNote[]
+  /** A task in a project: the project's tickets that are not this task's. By title only; its agents are not given them. One can be pulled in. */
+  otherTickets?: { id: string; ref: string; sourceName: string; title: string; url: string | null }[]
   /** In characters: the most a doc may hold, and the most one given to every agent in full may hold. */ limits: { doc: number; inFull: number }
 }
 export interface Reports { writing: boolean; format: { daily: string; weekly: string }; reports: Report[] }
@@ -848,6 +851,8 @@ export const engine = {
   openQuestions: (s: ContextSubject) => call<{ title: string; count: number; markdown: string }>('GET', `/${s.kind}/${s.id}/context/open-questions`),
   /** For a nav: how much it holds, and how many proposed decisions wait for the person. */
   contextCount: (s: ContextSubject) => call<{ count: number; proposed: number; waiting?: number }>('GET', `/${s.kind}/${s.id}/context/count`),
+  /** Bring one of the project's other tickets into a task's Context: the same record, not a copy. */
+  pullContextTicket: (s: ContextSubject, id: string) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/pull`, { id }),
   addContextDoc: (s: ContextSubject, b: { title: string; description?: string; body: string; inFull?: boolean }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/docs`, b),
   /** Another ticket, by its id in the tracker (SHOP-12). */
   addContextTicket: (s: ContextSubject, ref: string) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/tickets`, { ref }),

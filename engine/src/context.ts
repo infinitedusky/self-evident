@@ -24,12 +24,13 @@ import { join } from 'node:path'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 import { db, type Tx } from './db/client.js'
-import { contextDoc, idea, issue, note, origin, project } from './db/schema.js'
+import { contextDoc, idea, issue, issueTicket, note, origin, project, ticket } from './db/schema.js'
 import { newId } from './ids.js'
 import { identifier, PlanError } from './issues.js'
 import { keepTicket } from './linear-import.js'
 import { addNote, dayOf, editNote, removeNote, type NoteStatus } from './notes.js'
 import { originOf, originPrompt, originView, sourceName, type Origin } from './origins.js'
+import { teamTicket } from './ticket.js'
 import { app } from './db/schema.js'
 
 export type Subject = { ideaId: string } | { issueId: string } | { projectId: string }
@@ -66,36 +67,76 @@ const has = (col: AnyPgColumn, id: string) => sql`${col} @> ${JSON.stringify([id
 const notesOf = (appId: string, k: Found['key']) => db.select().from(note).where(and(eq(note.appId, appId), 'issueId' in k ? has(note.issueIds, k.issueId) : 'ideaId' in k ? has(note.ideaIds, k.ideaId) : has(note.projectIds, k.projectId))).orderBy(asc(note.on), asc(note.createdAt))
 const originChars = (o: Origin) => (o.body?.length ?? 0) + o.comments.reduce((n, c) => n + c.body.length, 0)
 
-/** Everything a Context holds, with the project's for a task in one: the rows the view and the prompt are made from. */
+/**
+ * The origins of the tickets a task is under (ticket.ts): its team ticket, however that was read, and its other
+ * tickets. Only the ones that were read from their tracker have an origin.
+ */
+async function ticketsOver(issueId: string): Promise<string[]> {
+  let [t] = await db.select().from(issue).where(eq(issue.id, issueId))
+  for (let up = 0; t?.parentId && up < 5; up++) [t] = await db.select().from(issue).where(eq(issue.id, t.parentId))
+  if (!t) return []
+  const first = (await teamTicket(t))?.ticket.toUpperCase()
+  const rest = (await db.select({ key: ticket.key }).from(issueTicket).innerJoin(ticket, eq(ticket.id, issueTicket.ticketId)).where(eq(issueTicket.issueId, t.id))).map((r) => r.key)
+  const keys = [...new Set([first, ...rest].filter((k): k is string => !!k))]
+  if (!keys.length) return []
+  return (await db.select({ originId: ticket.originId }).from(ticket).where(and(eq(ticket.appId, t.appId), inArray(ticket.key, keys)))).flatMap((r) => (r.originId ? [r.originId] : []))
+}
+
+/**
+ * Everything a Context holds, with the project's for a task in one: the rows the view and the prompt are made from.
+ *
+ * A task in a project gets the project's docs about the whole project (a PRD, a summary), and of the project's tickets
+ * only the ones it is under (Sandy, 2026-11-25: the project's six tickets "are also showing up in … one of the tasks
+ * … having it repeated seems a little bit silly"; its agent read the other five as if they were its own). The
+ * project's other tickets are `others`: listed by title, not given. One of them is pulled in (`pullTicket`) when the
+ * task needs it: a row on the task pointing at the same ticket, never a copy. The ticket a task is under is its own
+ * (`under`) whether or not the project lists it.
+ */
 async function gather(s: Subject) {
   const f = await found(s)
   const own = await originOf(f.key)
   const origins = new Map<string, Origin>()
   const byId = async (id: string | null) => { if (!id) return null; if (!origins.has(id)) { const [o] = await db.select().from(origin).where(eq(origin.id, id)); if (o) origins.set(id, o) } return origins.get(id) ?? null }
-  const docs: { row: DocRow | null; origin: Origin | null; originating: boolean; fromProject: boolean }[] = []
+  const docs: { row: DocRow | null; origin: Origin | null; originating: boolean; fromProject: boolean; /** A ticket this task is under: what was asked of it. */ under?: boolean }[] = []
+  const others: Origin[] = [] // the project's tickets that are not this task's
   if (own) docs.push({ row: null, origin: own, originating: true, fromProject: false })
   for (const row of await docsOf(f.key)) docs.push({ row, origin: await byId(row.originId), originating: false, fromProject: false })
   const notes: { row: NoteRow; fromProject: boolean }[] = (await notesOf(f.appId, f.key)).map((row) => ({ row, fromProject: false }))
+  const over = 'issueId' in f.key ? await ticketsOver(f.key.issueId) : []
+  const held = () => new Set(docs.flatMap((d) => (d.origin ? [d.origin.id] : []))) // tickets already in it: its own, pulled in, or the one it is under
+  for (const d of docs) if (d.origin && over.includes(d.origin.id)) d.under = true
   if (f.project) {
+    const mine = held()
     const theirs = await byId(f.project.originId)
-    if (theirs && theirs.id !== own?.id) docs.push({ row: null, origin: theirs, originating: false, fromProject: true })
-    for (const row of await docsOf({ projectId: f.project.id })) docs.push({ row, origin: await byId(row.originId), originating: false, fromProject: true })
+    const tickets: { row: DocRow | null; origin: Origin }[] = theirs ? [{ row: null, origin: theirs }] : []
+    for (const row of await docsOf({ projectId: f.project.id })) {
+      const o = await byId(row.originId)
+      if (row.kind === 'ticket') { if (o) tickets.push({ row, origin: o }) } else docs.push({ row, origin: null, originating: false, fromProject: true })
+    }
+    for (const t of tickets) {
+      if (mine.has(t.origin.id)) continue // already the task's own
+      if (over.includes(t.origin.id)) docs.push({ row: t.row, origin: t.origin, originating: false, fromProject: true, under: true })
+      else if (!others.some((o) => o.id === t.origin.id)) others.push(t.origin)
+    }
     for (const row of await notesOf(f.appId, { projectId: f.project.id })) if (!notes.some((n) => n.row.id === row.id)) notes.push({ row, fromProject: true })
   }
-  return { f, docs: docs.filter((d) => d.row?.kind !== 'ticket' || d.origin), notes }
+  for (const id of over) if (!held().has(id)) { const o = await byId(id); if (o) docs.push({ row: null, origin: o, originating: false, fromProject: false, under: true }) } // the ticket it is under, when neither it nor its project lists it
+  return { f, docs: docs.filter((d) => d.row?.kind !== 'ticket' || d.origin), notes, others }
 }
 
 /** A Context as its page shows it. */
 export async function contextOf(s: Subject) {
-  const { f, docs, notes } = await gather(s)
+  const { f, docs, notes, others: otherTickets } = await gather(s)
   const [a] = await db.select({ key: app.key }).from(app).where(eq(app.id, f.appId))
   const others = [...new Set(notes.flatMap((n) => n.row.issueIds ?? []))].filter((id) => !('issueId' in f.key) || id !== f.key.issueId)
   const tasks = others.length ? await db.select({ id: issue.id, number: issue.number, title: issue.title }).from(issue).where(and(eq(issue.appId, f.appId), inArray(issue.id, others))) : []
   return {
     on: f.on, project: f.project ? { id: f.project.id, name: f.project.name } : null, limits: LIMITS,
-    docs: docs.map(({ row, origin: o, originating, fromProject }) => o
-      ? { id: row?.id ?? o.id, title: o.title, description: row?.description ?? null, from: 'ticket' as const, ticket: { originating, origin: originView(o)! }, fileName: null, body: null, kept: false, chars: originChars(o), inFull: originating || !!row?.inFull, addedBy: row?.createdBy ?? null, addedAt: (row?.createdAt ?? o.createdAt).toISOString(), fromProject }
-      : { id: row!.id, title: row!.title, description: row!.description, from: row!.kind as 'pasted' | 'file', ticket: null, fileName: row!.fileName, body: row!.body, kept: !!row!.filePath, chars: row!.body?.length ?? 0, inFull: row!.inFull, addedBy: row!.createdBy, addedAt: row!.createdAt.toISOString(), fromProject }),
+    /** The project's tickets that are not this task's: by title, to pull in when the task needs one. */
+    otherTickets: otherTickets.map((o) => ({ id: o.id, ref: o.ref, sourceName: sourceName(o), title: o.title, url: o.url })),
+    docs: docs.map(({ row, origin: o, originating, fromProject, under }) => o
+      ? { under: !!under, id: row?.id ?? o.id, title: o.title, description: row?.description ?? null, from: 'ticket' as const, ticket: { originating, origin: originView(o)! }, fileName: null, body: null, kept: false, chars: originChars(o), inFull: originating || !!under || !!row?.inFull, addedBy: row?.createdBy ?? null, addedAt: (row?.createdAt ?? o.createdAt).toISOString(), fromProject }
+      : { under: false, id: row!.id, title: row!.title, description: row!.description, from: row!.kind as 'pasted' | 'file', ticket: null, fileName: row!.fileName, body: row!.body, kept: !!row!.filePath, chars: row!.body?.length ?? 0, inFull: row!.inFull, addedBy: row!.createdBy, addedAt: row!.createdAt.toISOString(), fromProject }),
     notes: notes.map(({ row: r, fromProject }) => ({ dependsOn: (r.dependsOn ?? []).flatMap((id) => { const d = notes.find((n) => n.row.id === id)?.row; return d ? [{ id: d.id, ...qa(d), status: d.status as NoteStatus }] : [] }), neededBy: notes.filter((n) => (n.row.dependsOn ?? []).includes(r.id)).map((n) => ({ id: n.row.id, title: qa(n.row).title || n.row.title })), id: r.id, kind: r.kind as 'note' | 'decision', status: r.status as NoteStatus, ...qa(r), background: r.background, options: r.options, waitingOn: ['open', 'proposed'].includes(r.status) ? r.waitingOn : null, body: r.body, on: r.on, addedBy: r.createdBy, fromProject,
       alsoAbout: fromProject ? [] : (r.issueIds ?? []).flatMap((id) => { const t = tasks.find((x) => x.id === id); return t ? [{ id: t.id, name: identifier(a?.key ?? '', t.number), title: t.title }] : [] }) })),
   }
@@ -166,6 +207,19 @@ export async function addTicket(s: Subject, ref: unknown, actor = 'user', keep: 
   const o = await keep(f.appId, String(ref ?? ''))
   const own = await originOf(f.key)
   if (own?.id === o.id || (await docsOf(f.key)).some((d) => d.originId === o.id)) throw new PlanError(`${sourceName(o)} ${o.ref} is already in this context.`)
+  await db.insert(contextDoc).values({ id: newId('contextDoc'), appId: f.appId, ...f.key, kind: 'ticket', originId: o.id, title: o.title.slice(0, 200), createdBy: actor })
+  return contextOf(s)
+}
+
+/**
+ * One of the project's other tickets pulled into a task's Context, by the ticket's id as `otherTickets` lists it: a
+ * row on the task pointing at the same ticket, so there is one record and it is brought up to date in one place.
+ */
+export async function pullTicket(s: Subject, id: unknown, actor = 'user') {
+  const { f, others } = await gather(s)
+  if (f.on !== 'task') throw new PlanError('only a task pulls in one of its project\'s tickets')
+  const o = others.find((x) => x.id === String(id ?? '') || x.ref.toUpperCase() === String(id ?? '').trim().toUpperCase())
+  if (!o) throw new PlanError('that is not one of the project\'s other tickets: give its id or its key from the list')
   await db.insert(contextDoc).values({ id: newId('contextDoc'), appId: f.appId, ...f.key, kind: 'ticket', originId: o.id, title: o.title.slice(0, 200), createdBy: actor })
   return contextOf(s)
 }
@@ -408,7 +462,7 @@ async function keptAt(appId: string, id: string, text: string) {
 export async function contextPrompt(s: { issueId?: string; ideaId?: string; projectId?: string }, opts: { canWrite?: boolean } = {}): Promise<string> {
   const of_ = s.issueId ? { issueId: s.issueId } : s.ideaId ? { ideaId: s.ideaId } : s.projectId ? { projectId: s.projectId } : null
   if (!of_) return ''
-  const { f, docs, notes } = await gather(of_)
+  const { f, docs, notes, others } = await gather(of_)
   const from = (p: boolean) => (p ? ' (from the project)' : '')
   const of = (kind: string, status: string) => notes.filter((n) => n.row.kind === kind && n.row.status === status)
   const out: string[] = []
@@ -423,8 +477,8 @@ export async function contextPrompt(s: { issueId?: string; ideaId?: string; proj
   if (rejected.length) out.push('### Answers proposed and turned down by the person', '', 'Do not do these, and do not propose them again.', '', ...rejected.map(decision), '')
   if (said.length) out.push('### Notes', '', 'What was said or found along the way.', '', ...said.map(({ row: r, fromProject }) => `**${r.title}** (${r.on})${from(fromProject)}${r.body ? `\n\n${r.body.trim()}` : ''}`).flatMap((t) => [t, '']))
   const rest = docs.filter((d) => !(d.originating && !d.fromProject)) // the ticket the work came from is given whole already (originPrompt)
-  const whole = rest.filter((d) => d.row?.inFull), listed = rest.filter((d) => !d.row?.inFull)
-  for (const d of whole) out.push(d.origin ? originPrompt(d.origin).replace('## Where this came from:', '### Reference, in full:').replace(/This work came from[^\n]*\n/, `A ticket the person put beside this work${from(d.fromProject)}. Read it as reference: it is not what was asked.\n`).trim() : `### Reference, in full: ${d.row!.title}${from(d.fromProject)}\n\n${d.row!.description ? `${d.row!.description}\n\n` : ''}${d.row!.body ?? ''}`, '')
+  const whole = rest.filter((d) => d.under || d.row?.inFull), listed = rest.filter((d) => !d.under && !d.row?.inFull)
+  for (const d of whole) out.push(d.origin && d.under ? originPrompt(d.origin).replace('## Where this came from:', '### The ticket this task is under:').replace(/This work came from/, 'This task is under').trim() : d.origin ? originPrompt(d.origin).replace('## Where this came from:', '### Reference, in full:').replace(/This work came from[^\n]*\n/, `A ticket the person put beside this work${from(d.fromProject)}. Read it as reference: it is not what was asked.\n`).trim() : `### Reference, in full: ${d.row!.title}${from(d.fromProject)}\n\n${d.row!.description ? `${d.row!.description}\n\n` : ''}${d.row!.body ?? ''}`, '')
   if (listed.length) {
     out.push('### Reference docs, to open when the work needs one', '', 'Each is kept on this computer. Open one with Read when what it is about bears on what you are doing; do not open them all to begin with.', '')
     for (const d of listed) {
@@ -434,6 +488,7 @@ export async function contextPrompt(s: { issueId?: string; ideaId?: string; proj
     }
     out.push('')
   }
+  if (others.length) out.push('### The project\'s other tickets: not this task\'s work', '', 'Each belongs to another task of the project. They are listed so you know what they cover; you are not given their text, and nothing they ask for is yours to build. If your work truly turns on one, pull it in with the `context` tool (op "pull", id: its key) and say why.', '', ...others.map((o) => `- ${sourceName(o)} ${o.ref}: ${o.title}`), '')
   const how = opts.canWrite === false ? '' : `\nThe \`context\` tool adds to it (${'issueId' in f.key ? `issueId ${f.key.issueId}` : 'ideaId' in f.key ? `ideaId ${f.key.ideaId}` : `projectId ${f.key.projectId}`}): a note of something found or said, a doc, a decision. A decision is a question and its answer. When something needs deciding and you have no answer to offer, ask it: it waits for the person. A decision can depend on another: when the right answer to one turns on something not yet settled, ask that as its own question and say the first depends on it. A question already here is brought up to date in place (its background, its options, its words while unanswered), never asked a second time. Record an answer as decided only when the person has given it or agreed to it in this conversation, in their own words. When you have an answer to suggest and they have not said yes, propose it: it waits for them, and is not settled until they accept it.\n`
   if (!out.length) return how ? `\n## Context\n\nNothing has been put in this ${f.on}'s context yet beyond what is above.\n${how}` : ''
   return ['', `## Context: what the person has put beside this ${f.on}`, '', ...out].join('\n') + how
