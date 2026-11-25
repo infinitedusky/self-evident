@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react'
 import { namedPull } from '@self-evident/engine/pr-named'
 import { Badge } from '../components/Badge'
 import { useCurrentApp } from '../current-app'
-import { engine, type ReviewPulls, type ReviewView } from '../engine'
+import { engine, type ReviewPulls, type ReviewRepoRun, type ReviewView } from '../engine'
 
 const problem = (e: any) => { const m = String(e?.message ?? e); try { return String(JSON.parse(m).error ?? m) } catch { return m } }
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '')
@@ -144,12 +144,15 @@ export function Reviews({ open: first }: { open?: Which }) {
                 </ol>
               )}
 
+              {view.repoRun && !view.repoRun.home && view.pull && view.state !== 'running' && (
+                <RepoRunForm key={`${view.pull.repo}:${JSON.stringify(view.repoRun)}`} repo={view.pull.repo} run={view.repoRun} onSave={async (i) => { if (!app) return; try { const repoRun = await engine.setReviewRepoRun(app.id, view.pull!.repo, i); setView({ ...view, repoRun }); setError(null) } catch (e) { setError(problem(e)) } }} />
+              )}
               {view.state === 'done' && (
                 <>
                   <section aria-label="Suggested comments">
                     <h2>Suggested comments <span className="faint">{view.suggestions.length}</span></h2>
                     {view.suggestions.length === 0
-                      ? <p className="muted">Nothing to suggest from what was run. That is not a review: it only says the tests hold on the changed lines and the commands pass.</p>
+                      ? <p className="muted">{view.steps.slice(1).every((x) => x.state === 'skipped') ? 'Nothing was run on it, so there is nothing to suggest.' : 'Nothing to suggest from what was run. That is not a review: it only says the tests hold on the changed lines and the commands pass.'}</p>
                       : <p className="muted">Drafts, for you to make or not. Copy one, open its line on GitHub, and say it your way. Nothing is posted from here.</p>}
                     {view.suggestions.map((s) => (
                       <article key={s.id} className="reviews-suggestion" aria-label={s.file ? `Comment on ${s.file}, line ${s.line}` : 'A general comment'}>
@@ -186,11 +189,12 @@ export function Reviews({ open: first }: { open?: Which }) {
 
                   {view.commands.length > 0 && (
                     <section aria-label="Commands">
-                      <h2>Commands <span className="faint">{view.commands.filter((c) => c.pass).length} of {view.commands.length} pass</span></h2>
+                      <h2>Commands <span className="faint">{view.commands.filter((c) => c.pass).length} of {view.commands.length} pass{view.commands.some((c) => c.ran === false) ? `, ${view.commands.filter((c) => c.ran === false).length} could not be run here` : ''}</span></h2>
                       <ul className="reviews-commands">
                         {view.commands.map((c) => (
                           <li key={c.key}>
-                            <span className="reviews-mark" aria-label={c.pass ? 'passed' : 'failed'}>{c.pass ? '✓' : '✗'}</span> <strong>{c.name}</strong> <code>{c.runs}</code>
+                            <span className="reviews-mark" aria-label={c.pass ? 'passed' : c.ran === false ? 'could not be run here' : 'failed'}>{c.pass ? '✓' : c.ran === false ? '–' : '✗'}</span> <strong>{c.name}</strong> <code>{c.runs}</code>
+                            {c.ran === false && <div className="faint">Could not be run here: a folder or a program it needs is not there. That is this computer or the app's settings, not the pull request, so no comment is drafted from it.</div>}
                             {!c.pass && c.output && <pre>{c.output}</pre>}
                           </li>
                         ))}
@@ -204,5 +208,33 @@ export function Reviews({ open: first }: { open?: Which }) {
         </>
       )}
     </div>
+  )
+}
+
+/**
+ * How a repository that is not the app's home one is run for a review. The app's own commands are its home
+ * repository's, and running them elsewhere fails before it starts (Sandy's first review, 2026-11-25). Open while
+ * nothing is set; one line otherwise. After a CI config's three parts: install, test, checks.
+ */
+function RepoRunForm({ repo, run, onSave }: { repo: string; run: ReviewRepoRun; onSave: (i: { prepare: string; testCmd: string; commands: { name: string; runs: string }[] }) => Promise<void> }) {
+  const [prepare, setPrepare] = useState(run.prepare ?? '')
+  const [testCmd, setTestCmd] = useState(run.testCmd ?? '')
+  const [lines, setLines] = useState(run.commands.map((c) => `${c.name}: ${c.runs}`).join('\n'))
+  const [busy, setBusy] = useState(false)
+  const commands = lines.split('\n').map((l) => { const at = l.indexOf(':'); return at > 0 ? { name: l.slice(0, at).trim(), runs: l.slice(at + 1).trim() } : null }).filter((c): c is { name: string; runs: string } => !!c && !!c.name && !!c.runs)
+  const unread = lines.split('\n').filter((l) => l.trim()).length - commands.length
+  return (
+    <details className="reviews-repo-run" open={!run.set || undefined}>
+      <summary>How <code>{repo}</code> is run {run.set ? <span className="faint">· {[run.prepare && 'prepared', run.testCmd && 'tests', run.commands.length && `${run.commands.length} command${run.commands.length === 1 ? '' : 's'}`].filter(Boolean).join(', ')}</span> : <span className="faint">· not set yet, so nothing is run on its pull requests</span>}</summary>
+      <form aria-label={`How ${repo} is run`} onSubmit={(e) => { e.preventDefault(); setBusy(true); void onSave({ prepare: prepare.trim(), testCmd: testCmd.trim(), commands }).finally(() => setBusy(false)) }}>
+        <p className="muted">This app's own commands are for its home repository and are not run here. Each of these is run in a checkout of the pull request, from the repository's top folder.</p>
+        <label><span>Run first in its checkout</span><input className="mono" aria-label="Run first in its checkout" placeholder="e.g. uv sync" value={prepare} onChange={(e) => setPrepare(e.target.value)} /></label>
+        <label><span>How its tests are run</span><input className="mono" aria-label="How its tests are run" placeholder="e.g. uv run pytest -q {files}" value={testCmd} onChange={(e) => setTestCmd(e.target.value)} /></label>
+        <p className="faint">{'{files}'} is replaced by the test files the pull request added or changed. This is what each small break is run against.</p>
+        <label><span>Commands it is held to</span><textarea className="mono" aria-label="Commands it is held to" rows={3} placeholder={'One a line, as  Name: command\nLint: uv run ruff check .'} value={lines} onChange={(e) => setLines(e.target.value)} /></label>
+        {unread > 0 && <p className="faint">{unread} line{unread === 1 ? ' is' : 's are'} not read: each needs a name, a colon, then the command.</p>}
+        <div><button type="submit" className="btn small" disabled={busy || unread > 0}>Save</button> <span className="faint">Then run the review again.</span></div>
+      </form>
+    </details>
   )
 }

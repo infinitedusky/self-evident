@@ -8147,3 +8147,24 @@ it was opened and every 15 seconds while open, one repository after another (abo
 
 Not done: the list is not kept across an engine restart; a pull request opened on GitHub in the last five minutes is
 not there until Refresh.
+
+### A review runs a repository its own way, and never blames a pull request for what could not run (2026-11-25)
+
+Sandy's first real review, of a coworker's pull request in the app's second repository, drafted five comments, every
+one of them `cd: backend: No such file or directory`. Two mistakes of mine in the first version:
+
+- **The app's commands are its home repository's.** Its test command, what a build is held to and the finalizing's
+  prepare are written for one layout. A review of a pull request in another repository now runs none of them. That
+  repository has its own (`setup.review_repos[<full name>]`: what is run first, how its tests are run with `{files}`,
+  and its commands; `repoRunOf`, `setRepoRun`), set in a form on the review itself, open while nothing is set. Until
+  then the steps are skipped and say why, and nothing is drafted.
+- **"Could not be run" is not "fails".** A command the shell could not start (a folder or a program that is not
+  there: `couldNotRun`) is shown as that, counted apart, and never drafted as a comment. Tests that fail with nothing
+  changed were already never drafted; the step now says that is usually this computer, not the pull request.
+
+The rule under both: a comment on someone else's work is drafted only from something that ran and then failed.
+
+Not done: the per-repository settings are only on the review page, not in Settings; a command that starts and then
+fails because this computer lacks something (a database not up, a service not running) still reads as a failure and
+is drafted, so the person has to read each draft's output before using it; nothing compares against the base branch
+to tell a failure the pull request caused from one that was already there.

@@ -945,3 +945,16 @@ export const reviewDoneSample: import('../engine').ReviewView = {
     { id: 'c:lint', from: 'command', file: null, line: null, url: null, text: 'Lint (sample) fails for me on this branch (`pnpm lint`):\n\n```\nsrc/checkout/delivery.ts\n  31:7  error  \'reduced\' is assigned a value but never used (sample)\n```' },
   ],
 }
+/** A pull request in a second repository of the app's (made up), which Evident has not been told how to run: nothing was run in it. */
+export const reviewOtherRepoSample: import('../engine').ReviewView = {
+  ...reviewNoneSample, pull: { ...pullSample(88, 'Rate limits per tenant (sample)', 'kim-sample'), repo: 'sample-org/sample-api', url: 'https://github.com/sample-org/sample-api/pull/88' }, state: 'done', sha: '88'.padEnd(40, 'a'), at: '2026-11-25T11:00:00Z',
+  repoRun: { home: false, set: false, prepare: null, testCmd: null, commands: [] },
+  steps: reviewSteps(['pass', 'skipped', 'skipped'], ['At 88aaaaa: 9 files changed against main. Nothing was run in it first.', 'Evident has not been told how sample-org/sample-api is run: the app\'s own commands are for its home repository and are not run here. Say how below, and run it again.', 'Evident has not been told how sample-org/sample-api is run: the app\'s own commands are for its home repository and are not run here. Say how below, and run it again.']),
+}
+/** One command could not be run here: said, and not drafted as a comment. */
+export const reviewUnrunSample: import('../engine').ReviewView = {
+  ...reviewDoneSample, repoRun: { home: true, set: true, prepare: 'pnpm install', testCmd: null, commands: [] },
+  steps: reviewSteps(['pass', 'fail', 'skipped'], ['At 212aaaa: 6 files changed against main.', 'Of 11 meaningful breaks, the tests catch 9 (82%). 2 not caught.', '2 pass. 1 could not be run here (Licence scan (sample)): a folder or a program they need is not there. That is not the pull request\'s.']),
+  commands: [{ key: 'tests', name: 'Tests', runs: 'pnpm test', pass: true, output: '' }, { key: 'licences', name: 'Licence scan (sample)', runs: 'licence-scan .', pass: false, ran: false, output: '/bin/sh: licence-scan: command not found' }, { key: 'types', name: 'Types (sample)', runs: 'pnpm typecheck', pass: true, output: '' }],
+  suggestions: reviewDoneSample.suggestions.filter((x) => x.from === 'mutation'),
+}

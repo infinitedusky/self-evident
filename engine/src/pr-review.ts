@@ -29,7 +29,9 @@ import { appendEvent } from './events.js'
 import { checkoutAt, mutateAt } from './finalize.js'
 import { git } from './git.js'
 import { heldOf, whenRun } from './held.js'
+import { patchSetup } from './setup.js'
 import { PlanError } from './issues.js'
+import { reposOf } from './workbench.js'
 import { scoreOf, sh as realSh, type Sh, type Survivor } from './mutation.js'
 import { finalizePrepare } from './mutation-setup.js'
 import { TEST_FILE } from './trajectory.js'
@@ -46,7 +48,7 @@ export const REVIEW_STEPS: readonly { key: StepKey; name: string }[] = [
   { key: 'mutation', name: 'Mutation testing of the lines it changed' },
   { key: 'commands', name: 'The commands this app is held to' },
 ]
-export interface CommandRan { key: string; name: string; runs: string; pass: boolean; /** Its last lines. */ output: string }
+export interface CommandRan { key: string; name: string; runs: string; pass: boolean; /** Its last lines. */ output: string; /** false: it could not be run here at all (a folder or a program it needs is not there), which says nothing about the pull request. */ ran?: boolean }
 /** A comment the person might make. `file` and `line` when it is about one line; `url` opens that line in the pull request. */
 export interface Suggestion { id: string; from: 'mutation' | 'command'; file: string | null; line: number | null; url: string | null; text: string }
 export interface Found {
@@ -59,6 +61,7 @@ export interface Pull { repo: string; number: number; title: string; url: string
 export interface ReviewSummary { state: 'running' | 'done' | 'failed'; sha: string; at: string; /** The pull request has moved since. */ stale: boolean; suggestions: number; survivors: number; failed: number }
 export interface ReviewView extends Found {
   pull: Pull | null
+  /** How this pull request's repository is run, so the page can say when nothing is set for it. */ repoRun: RepoRun
   state: 'none' | 'running' | 'done' | 'failed'
   /** The commit reviewed, and whether the pull request has moved since. */ sha: string | null; stale: boolean
   at: string | null; problem: string | null
@@ -76,11 +79,41 @@ export function suggest(i: { prUrl: string; survivors: Survivor[]; commands: Com
     id: `m:${s.id}`, from: 'mutation', file: s.file, line: s.line, url: lineUrl(i.prUrl, s.file, s.line),
     text: `Changing \`${s.from.trim()}\` to \`${s.to.trim() || 'nothing'}\` on this line doesn't fail any of the tests in this pull request. ${cap(s.means)}. Is it worth a test that pins it?`,
   }))
-  const fromCommands = i.commands.filter((c) => !c.pass).map((c): Suggestion => ({
+  const fromCommands = i.commands.filter((c) => !c.pass && c.ran !== false).map((c): Suggestion => ({
     id: `c:${c.key}`, from: 'command', file: null, line: null, url: null,
     text: `${c.name} fails for me on this branch (\`${c.runs.length > 140 ? `${c.runs.slice(0, 140)}…` : c.runs}\`):\n\n\`\`\`\n${c.output}\n\`\`\``,
   }))
   return [...fromBreaks, ...fromCommands]
+}
+
+/**
+ * A command that never started: the shell could not find a folder or a program it names. That is this computer or
+ * the app's settings, not the pull request (Sandy's first review, 2026-11-25: five comments drafted from
+ * `cd: backend: No such file or directory`, the dashboard's commands run in another repository). Pure.
+ */
+export const couldNotRun = (r: { exit: number | null; output: string }) => r.exit === 126 || r.exit === 127 || /^(\/bin\/)?(ba|z)?sh: (line \d+: )?(cd: )?[^\n]*: (No such file or directory|command not found|not found|Permission denied)\s*$/.test(r.output.trim())
+
+/**
+ * How one of the app's repositories is run. The app's own settings (its test command, what a build is held to, the
+ * finalizing's prepare) are its home repository's. Another repository has its own, kept under
+ * `setup.review_repos[<full name>]`, and until it has some nothing of the home's is run in it.
+ */
+export interface RepoRun { /** The app's home repository: run as the app's settings say. */ home: boolean; /** Something is set for it. */ set: boolean; prepare: string | null; /** How its tests are run against a break, with {files}. */ testCmd: string | null; commands: { key: string; name: string; runs: string }[] }
+type RepoRunSetting = { prepare?: string; test_cmd?: string; commands?: { name?: string; runs?: string }[] }
+export function repoRunOf(setup: unknown, fullName: string, home: boolean): RepoRun {
+  if (home) { const held = heldOf(setup).filter((h) => h.kind === 'command' && h.on && whenRun(h) === 'build' && h.runs.trim()); return { home, set: true, prepare: finalizePrepare(setup), testCmd: null, commands: held.map((h) => ({ key: h.id, name: h.name, runs: h.runs })) } }
+  const r = (((setup ?? {}) as { review_repos?: Record<string, RepoRunSetting> }).review_repos ?? {})[fullName] ?? {}
+  const commands = (r.commands ?? []).filter((c) => c.name?.trim() && c.runs?.trim()).map((c, n) => ({ key: `own:${n}`, name: c.name!.trim(), runs: c.runs!.trim() }))
+  const prepare = r.prepare?.trim() || null, testCmd = r.test_cmd?.trim() || null
+  return { home, set: !!(prepare || testCmd || commands.length), prepare, testCmd, commands }
+}
+/** What the page saves for a repository that is not the home one; emptied, it is removed. Pure. */
+export function withRepoRun(setup: unknown, fullName: string, i: { prepare?: string; testCmd?: string; commands?: { name: string; runs: string }[] }): { review_repos: Record<string, RepoRunSetting> | null } {
+  const all = { ...(((setup ?? {}) as { review_repos?: Record<string, RepoRunSetting> }).review_repos ?? {}) }
+  const commands = (i.commands ?? []).filter((c) => c.name.trim() && c.runs.trim()).map((c) => ({ name: c.name.trim(), runs: c.runs.trim() }))
+  const one: RepoRunSetting = { ...(i.prepare?.trim() ? { prepare: i.prepare.trim() } : {}), ...(i.testCmd?.trim() ? { test_cmd: i.testCmd.trim() } : {}), ...(commands.length ? { commands } : {}) }
+  if (Object.keys(one).length) all[fullName] = one; else delete all[fullName]
+  return { review_repos: Object.keys(all).length ? all : null }
 }
 
 interface Going { run: string; sha: string; steps: Step[]; abort: AbortController }
@@ -94,7 +127,8 @@ async function placeOf(appId: string, fullName: string) {
   const [r] = (await db.select().from(repoTable).where(eq(repoTable.appId, appId))).filter((x) => x.fullName === fullName)
   if (!r) throw new PlanError(`${fullName} is not one of this app's repositories`)
   if (!r.localPath || !existsSync(r.localPath)) throw new PlanError(`${fullName} has no folder on this computer to check a pull request out in`)
-  return { a, r, local: r.localPath }
+  const home = (await reposOf(appId)).repos[0]?.fullName === fullName
+  return { a, r, local: r.localPath, home }
 }
 
 type GhPull = { number: number; title: string; url: string; isDraft?: boolean; author?: { login?: string } | null; headRefName?: string; baseRefName?: string; headRefOid?: string; updatedAt?: string; changedFiles?: number; state?: string }
@@ -149,7 +183,7 @@ export async function listPulls(appId: string, deps: Deps = {}, o: { fresh?: boo
     const l = last.get(`${p.repo}#${p.number}`); if (!l?.started) return null
     const sha = String((l.started.payload as { sha?: string }).sha ?? ''), found = (l.ended?.payload as { found?: Found } | undefined)?.found
     const running = going.has(keyOf(appId, p.repo, p.number))
-    return { state: running ? 'running' : l.ended?.type === 'pr_review.done' ? 'done' : 'failed', sha, at: (l.ended ?? l.started).ts.toISOString(), stale: !!p.head && !!sha && p.head !== sha, suggestions: found?.suggestions.length ?? 0, survivors: found?.mutation?.survivors.filter((s) => !s.equivalent).length ?? 0, failed: found?.commands.filter((c) => !c.pass).length ?? 0 }
+    return { state: running ? 'running' : l.ended?.type === 'pr_review.done' ? 'done' : 'failed', sha, at: (l.ended ?? l.started).ts.toISOString(), stale: !!p.head && !!sha && p.head !== sha, suggestions: found?.suggestions.length ?? 0, survivors: found?.mutation?.survivors.filter((s) => !s.equivalent).length ?? 0, failed: found?.commands.filter((c) => !c.pass && c.ran !== false).length ?? 0 }
   }
   return { me: got.me, pulls: got.pulls.map((p) => ({ ...p, review: summary(p) })), problems: got.problems, warning: WARNING, repos: got.repos, readAt: new Date(got.at).toISOString() }
 }
@@ -160,7 +194,8 @@ const waiting = (): Step[] => REVIEW_STEPS.map((s) => ({ ...s, state: 'waiting',
 
 /** One pull request's review: where it stands and what it found. */
 export async function reviewView(appId: string, fullName: string, number: number, deps: Deps = {}): Promise<ReviewView> {
-  const { local } = await placeOf(appId, fullName)
+  const { a, local, home } = await placeOf(appId, fullName)
+  const repoRun = repoRunOf(a.setup, fullName, home)
   const gh = deps.gh ?? realGh
   let pull: Pull | null = null, problem: string | null = null
   try { const me = await meOf(gh); pull = pullOf(fullName, JSON.parse(await gh(['pr', 'view', String(number), '-R', fullName, '--json', FIELDS], local)) as GhPull, me) }
@@ -168,18 +203,19 @@ export async function reviewView(appId: string, fullName: string, number: number
   const now = going.get(keyOf(appId, fullName, number))
   const l = (await latest(appId)).get(`${fullName}#${number}`)
   const none: Found = { steps: waiting(), mutation: null, commands: [], suggestions: [] }
-  if (now) return { ...none, steps: now.steps, pull, state: 'running', sha: now.sha, stale: false, at: null, problem, warning: WARNING }
-  if (!l?.started) return { ...none, pull, state: 'none', sha: null, stale: false, at: null, problem, warning: WARNING }
+  if (now) return { ...none, steps: now.steps, pull, state: 'running', sha: now.sha, stale: false, at: null, problem, warning: WARNING, repoRun }
+  if (!l?.started) return { ...none, pull, state: 'none', sha: null, stale: false, at: null, problem, warning: WARNING, repoRun }
   const sha = String((l.started.payload as { sha?: string }).sha ?? '')
   const stale = !!pull?.head && pull.head !== sha
-  if (l.ended?.type === 'pr_review.done') return { ...((l.ended.payload as { found: Found }).found), pull, state: 'done', sha, stale, at: l.ended.ts.toISOString(), problem, warning: WARNING }
+  if (l.ended?.type === 'pr_review.done') return { ...((l.ended.payload as { found: Found }).found), pull, state: 'done', sha, stale, at: l.ended.ts.toISOString(), problem, warning: WARNING, repoRun }
   // Failed, or started by an engine that has since stopped: either way it did not finish.
-  return { ...none, pull, state: 'failed', sha, stale, at: (l.ended ?? l.started).ts.toISOString(), problem: problem ?? String((l.ended?.payload as { error?: string } | undefined)?.error ?? 'The engine stopped while it was running. Run it again.'), warning: WARNING }
+  return { ...none, pull, state: 'failed', sha, stale, at: (l.ended ?? l.started).ts.toISOString(), problem: problem ?? String((l.ended?.payload as { error?: string } | undefined)?.error ?? 'The engine stopped while it was running. Run it again.'), warning: WARNING, repoRun }
 }
 
 /** One review, start to end. Awaited by a test; started and left to run by the page's press (startReview). */
 export async function runReview(appId: string, fullName: string, number: number, deps: Deps = {}, actor = 'user'): Promise<void> {
-  const { a, local } = await placeOf(appId, fullName)
+  const { a, local, home } = await placeOf(appId, fullName)
+  const how = repoRunOf(a.setup, fullName, home)
   const gh = deps.gh ?? realGh, run = deps.sh ?? realSh
   const key = keyOf(appId, fullName, number)
   if (going.has(key)) throw new PlanError('this pull request is already being reviewed')
@@ -205,37 +241,42 @@ export async function runReview(appId: string, fullName: string, number: number,
     await checkoutAt(local, path, head)
     const baseRef = `origin/${base}`
     const files = (await git(local, ['diff', '--name-only', '--diff-filter=AM', `${baseRef}...${head}`], { allowFail: true })).stdout.split('\n').filter(Boolean)
-    const prepare = finalizePrepare(a.setup)
+    const prepare = how.prepare
     let prepared = true
     if (prepare) { const p = await run(prepare, path, 15 * 60_000); if (p.exit !== 0) { prepared = false; await set('checkout', 'fail', `At ${head.slice(0, 7)}, but it could not be prepared (\`${prepare.slice(0, 120)}\`): ${tail(p.output, 4)}`) } }
-    if (prepared) await set('checkout', 'pass', `At ${head.slice(0, 7)}: ${files.length} file${files.length === 1 ? '' : 's'} changed against ${base}.${prepare ? '' : ' Nothing was run in it first (the app\'s settings, finalize.prepare).'}`)
+    if (prepared) await set('checkout', 'pass', `At ${head.slice(0, 7)}: ${files.length} file${files.length === 1 ? '' : 's'} changed against ${base}.${prepare ? '' : ' Nothing was run in it first.'}`)
 
     // 2. The breaks, against the tests it changed.
     let mutation: Found['mutation'] = null
+    const notSet = `Evident has not been told how ${fullName} is run: the app's own commands are for its home repository and are not run here. Say how below, and run it again.`
     if (!prepared) await set('mutation', 'skipped', 'Its checkout could not be prepared, so its tests cannot be run.')
+    else if (!how.home && !how.testCmd) await set('mutation', 'skipped', how.set ? `No test command is set for ${fullName}, so a break cannot be run against its tests.` : notSet)
     else {
       await set('mutation', 'running', '')
       const tests = files.filter((f) => TEST_FILE.test(f) && existsSync(join(path, f)))
-      const m = await mutateAt({ setup: a.setup, repo: local, head, base: baseRef, path, tests, run, signal: abort.signal, prepared: true, onProgress: (says) => { const s = steps.find((x) => x.key === 'mutation')!; s.says = says } })
+      const m = await mutateAt({ setup: how.home ? a.setup : { mutation: { test_cmd: how.testCmd } }, repo: local, head, base: baseRef, path, tests, run, signal: abort.signal, prepared: true, onProgress: (says) => { const s = steps.find((x) => x.key === 'mutation')!; s.says = says } })
       if (m.result) { const s = scoreOf(m.result); mutation = { tool: m.result.tool, tried: m.result.tried, caught: s.caught, meaningful: s.meaningful, percent: s.percent, survivors: m.result.survivors, ...(m.result.partial ? { partial: m.result.partial } : {}) } }
-      await set('mutation', m.state, m.says.replace('The pull request has no tests of its own to run a break against: no test plan, and no test file added or changed.', 'It adds or changes no test file, so there is nothing of its own to run a break against.'))
+      // The tests failing with nothing changed is this computer not being ready for them far more often than the pull request: it is said, and never drafted as a comment.
+      await set('mutation', m.state, m.says.replace(" If this checkout needs something installed first, say how in the app's settings (finalize.prepare).", ' That is usually this computer not being set up for them, not the pull request: check what is run first in its checkout.').replace('The pull request has no tests of its own to run a break against: no test plan, and no test file added or changed.', 'It adds or changes no test file, so there is nothing of its own to run a break against.'))
     }
 
     // 3. What every build of this app is held to, as commands.
     const commands: CommandRan[] = []
-    const held = heldOf(a.setup).filter((h) => h.kind === 'command' && h.on && whenRun(h) === 'build' && h.runs.trim())
+    const held = how.commands
     if (!prepared) await set('commands', 'skipped', 'Its checkout could not be prepared, so nothing can be run in it.')
-    else if (!held.length) await set('commands', 'skipped', 'This app holds a build to no command (Settings › Skills).')
+    else if (!held.length) await set('commands', 'skipped', how.home ? 'This app holds a build to no command (Settings › Skills).' : how.set ? `No command is set for ${fullName}.` : notSet)
     else {
       await set('commands', 'running', '')
       for (const h of held) {
         if (abort.signal.aborted) break
         steps.find((x) => x.key === 'commands')!.says = `Running ${h.name}… (${commands.length + 1} of ${held.length})`
         const r = await run(h.runs, path, 30 * 60_000)
-        commands.push({ key: h.id, name: h.name, runs: h.runs, pass: r.exit === 0, output: r.exit === 0 ? '' : r.timedOut ? 'It did not finish in 30 minutes.' : tail(r.output) })
+        const ran = !couldNotRun(r)
+        commands.push({ key: h.key, name: h.name, runs: h.runs, pass: r.exit === 0, output: r.exit === 0 ? '' : r.timedOut ? 'It did not finish in 30 minutes.' : tail(r.output), ...(ran ? {} : { ran: false }) })
       }
-      const failed = commands.filter((c) => !c.pass)
-      await set('commands', failed.length ? 'fail' : 'pass', failed.length ? `${failed.length} of ${commands.length} fail: ${failed.map((c) => c.name).join(', ')}.` : `All ${commands.length} pass.`)
+      const failed = commands.filter((c) => !c.pass && c.ran !== false), unrun = commands.filter((c) => c.ran === false)
+      const says = [failed.length ? `${failed.length} of ${commands.length} fail: ${failed.map((c) => c.name).join(', ')}.` : unrun.length < commands.length ? `${commands.length - unrun.length} pass.` : '', unrun.length ? `${unrun.length} could not be run here (${unrun.map((c) => c.name).join(', ')}): a folder or a program they need is not there. That is not the pull request's.` : ''].filter(Boolean).join(' ')
+      await set('commands', failed.length ? 'fail' : unrun.length ? 'skipped' : 'pass', says || `All ${commands.length} pass.`)
     }
     await git(path, ['checkout', '--force', '--', '.'], { allowFail: true })
     const found: Found = { steps, mutation, commands, suggestions: suggest({ prUrl: pr.url, survivors: mutation?.survivors ?? [], commands }) }
@@ -251,4 +292,12 @@ export async function startReview(appId: string, fullName: string, number: numbe
   await placeOf(appId, fullName)
   if (going.has(keyOf(appId, fullName, number))) throw new PlanError('this pull request is already being reviewed')
   void runReview(appId, fullName, number, deps, actor).catch((err) => console.warn(`[engine] a review would not start: ${(err as Error).message}`))
+}
+
+/** The page's form: how a repository that is not the app's home one is run for a review. */
+export async function setRepoRun(appId: string, fullName: string, i: { prepare?: string; testCmd?: string; commands?: { name: string; runs: string }[] }): Promise<RepoRun> {
+  const { home } = await placeOf(appId, fullName)
+  if (home) throw new PlanError(`${fullName} is the app's home repository: it is run as the app's settings say (Settings › Skills)`)
+  const setup = await patchSetup(appId, (now) => withRepoRun(now, fullName, i))
+  return repoRunOf(setup, fullName, false)
 }
