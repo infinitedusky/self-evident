@@ -8100,3 +8100,34 @@ is the last tab and stays at the right end while the others scroll under it. A p
 list) has that page and Chat.
 
 The tray still lists a task's steps under it. After GitHub's phone site, where a repository's tabs scroll sideways.
+
+### Reviews: someone else's pull request, reviewed from here (2026-11-25)
+
+Sandy: "I want to choose a PR that isn't mine and I want to review it … all from here somehow, using the context we
+built up", and then, of what I proposed: "An agent shouldn't comment on other people's PRs. It could suggest comments,
+but we would do that", "a warning that this is unreviewed code would be fine", "let's build the simplest possible
+version because I would like to start doing PR reviews for one of my coworkers".
+
+- **A Reviews page** (`/reviews`, in the rail under Reports): the open pull requests of the app's repositories, other
+  people's first, found by person, title, number or branch. Open one and press **Run the review**.
+- **It runs what the engine already runs on a task of ours** (pr-review.ts), on a checkout of the pull request's head
+  that is the engine's own (`<repo>-worktrees/review-of--<number>`, fetched from `refs/pull/<n>/head`, so a fork
+  works too): mutation testing of the lines it changed against the test files it changed (`mutateAt`, taken out of
+  the finalizing so both use it), then every command the app holds a build to. The checkout is prepared by the same
+  command the finalizing uses (`finalize.prepare`).
+- **Comments are drafted and never sent.** One per break no test caught, tied to its line with a link to that line in
+  the pull request's Files tab; one per command that fails. Each has Copy. There is no call in pr-review.ts that
+  writes to GitHub, and its test fails if one is made. The person says them on GitHub, in their own words.
+- **The warning is beside the press, every time**: it runs code nobody here has read, on this computer. A review is
+  only ever started by that press.
+- **Kept as events on the app** (`pr_review.started`, `.step`, `.done`, `.failed`), as a finalizing is: no table, and
+  a review belongs to no task. One whose pull request has moved since says so.
+- A run that finds nothing says it is not a review: it only says the tests hold on the changed lines and the commands
+  pass.
+
+Not done, and where this goes next: nothing reads the change itself, so there is no comment on what it does, only on
+what its tests and the commands show; the app's judged requirements and skill reviewers are not run on it (they need
+an agent, and a way to hold what it says to the diff); nothing from Evident's own context is brought to it (decisions,
+earlier tasks on the same files, the blast radius); it cannot be brought up to try as a smoke test is; a second run
+does not say what changed since the first; a comment made on GitHub is not read back, so a draft already said still
+shows; it has not been run on a real pull request yet.

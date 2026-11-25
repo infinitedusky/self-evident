@@ -1516,3 +1516,30 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 @keyframes phone-from-left { from { transform: translateX(-24px); opacity: 0; } }
 @keyframes phone-from-below { from { transform: translateY(24px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .phone-tray, .phone-shelf { animation: none; } }
+
+/* Reviews: other people's pull requests. A list, then one: the warning and its press, what was run, the drafts to copy. */
+.reviews h2 { font-size: 15px; margin: 22px 0 4px; }
+.reviews h2 .faint { font-weight: 400; font-size: 13px; margin-left: 4px; }
+.reviews-list, .reviews-breaks { width: 100%; border-collapse: collapse; }
+.reviews-list th { text-align: left; font-size: 12px; font-weight: 600; color: var(--ink-soft); padding: 6px 16px 6px 0; border-bottom: 1px solid var(--line); }
+.reviews-list td { padding: 9px 16px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.reviews-list td:last-child { text-align: right; padding-right: 0; white-space: nowrap; }
+.reviews-title { font-weight: 600; text-align: left; }
+.reviews-run { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 12px 0; padding: 12px 14px; border: 1px solid var(--warn-line, #e6c97a); background: var(--warn-wash, #fdf6e0); border-radius: 10px; }
+.reviews-run p { margin: 0; flex-basis: 100%; }
+.reviews-steps { list-style: none; margin: 12px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.reviews-steps li { display: grid; grid-template-columns: 20px 1fr; gap: 6px; }
+.reviews-mark { font-weight: 700; }
+.reviews-steps li.pass .reviews-mark { color: var(--good, #2f6f4f); }
+.reviews-steps li.fail .reviews-mark, .reviews-commands .reviews-mark[aria-label="failed"] { color: var(--bad, #b42318); }
+.reviews-steps li.waiting, .reviews-steps li.skipped { color: var(--ink-faint); }
+.reviews-suggestion { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 8px 0; }
+.reviews-suggestion header { display: flex; gap: 12px; align-items: center; font-size: 13px; }
+.reviews-suggestion p { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reviews-breaks td { padding: 5px 20px 5px 0; vertical-align: top; font-size: 13px; }
+.reviews-breaks tr.off td { color: var(--ink-faint); }
+.reviews-code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.reviews-commands { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.reviews-commands pre { margin: 4px 0 0 20px; padding: 8px 10px; background: var(--wash, rgba(0,0,0,.04)); border-radius: 6px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reviews-find { display: flex; gap: 12px; align-items: center; margin: 8px 0; }
+.reviews-find input { width: 360px; max-width: 100%; margin: 0; }
