@@ -64,7 +64,7 @@ function subjectOf(path: string): Subject {
   if (a === 'ideas' && b?.startsWith('idea_')) return { kind: 'idea', id: b }
   return null
 }
-const PLACES: Record<string, string> = { '': 'My Stuff', projects: 'Projects', tasks: 'Tasks', ideas: 'Ideas', todos: 'To-dos', settings: 'Settings', summary: 'Summary', reports: 'Reports', observe: 'Observe', learn: 'Learn', plan: 'Plan', build: 'Build', mockups: 'Mockups', graph: 'Graph' }
+const PLACES: Record<string, string> = { '': 'My Stuff', projects: 'Projects', tasks: 'Tasks', ideas: 'Ideas', todos: 'To-dos', settings: 'Settings', summary: 'Summary', reports: 'Reports', reviews: 'Reviews', observe: 'Observe', learn: 'Learn', plan: 'Plan', build: 'Build', mockups: 'Mockups', graph: 'Graph' }
 const placeName = (path: string) => { const a = parts(path)[0] ?? ''; return PLACES[a] ?? (a ? a[0].toUpperCase() + a.slice(1) : 'My Stuff') }
 
 /** Where something that needs the person is dealt with: a question in its task's chat, the rest on a page. */

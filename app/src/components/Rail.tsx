@@ -20,6 +20,7 @@ const LOOP: Item[] = [
 const OUTSIDE: Item[] = [
   { icon: '📰', label: 'Summary', tab: page('/summary') },
   { icon: '🗞️', label: 'Reports', tab: page('/reports') },
+  { icon: '🔍', label: 'Reviews', tab: page('/reviews') }, // other people's pull requests, reviewed from here (Sandy, 2026-11-25)
   { icon: '📌', label: 'My Stuff', tab: page('/'), also: /^\/$/ },
   { icon: '📚', label: 'Docs', tab: page('/docs') }, // the app's docs site, from its workbench folder (Sandy, 2026-11-24: "in the left nav near my stuff")
 ]

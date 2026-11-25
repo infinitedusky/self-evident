@@ -915,3 +915,33 @@ export const projectTickets: import('../engine').ProjectTicket[] = [
   { ...tickets[0], inContext: true, here: 3 },
   { key: 'SHOP-340', title: null, url: null, source: null, read: false, done: 0, total: 1, finished: false, inContext: false, here: 1, tasks: [{ ...tickets[0].tasks[1], from: 'also' }] },
 ]
+
+// Reviews of other people's pull requests (made up): a repository with three open, one reviewed. Names, numbers and findings are samples.
+const WARNING_SAMPLE = 'This runs the pull request\'s code on this computer: its tests, and whatever installing it runs. Nobody here has reviewed that code yet. Run it for people you trust.'
+const pullSample = (number: number, title: string, author: string, more: Partial<import('../engine').ReviewPull> = {}): import('../engine').ReviewPull => ({ repo: 'sample-org/sample-shop', number, title, url: `https://github.com/sample-org/sample-shop/pull/${number}`, author, draft: false, branch: `feature/sample-${number}`, base: 'main', head: `${number}`.padEnd(40, 'a'), updatedAt: '2026-11-25T09:30:00Z', files: 6, mine: false, ...more })
+export const reviewPullsSample: import('../engine').ReviewPulls = {
+  me: 'you-sample', problems: [], warning: WARNING_SAMPLE,
+  pulls: [
+    { ...pullSample(212, 'Free delivery over a limit (sample)', 'robin-sample'), review: { state: 'done', sha: '212'.padEnd(40, 'a'), at: '2026-11-25T10:05:00Z', stale: false, suggestions: 3, survivors: 2, failed: 1 } },
+    { ...pullSample(209, 'Gift notes at checkout (sample)', 'kim-sample', { files: 14 }), review: null },
+    { ...pullSample(214, 'Receipt wording (sample)', 'you-sample', { mine: true, draft: true, files: 2 }), review: null },
+  ],
+}
+const reviewSteps = (states: import('../engine').ReviewStep['state'][], says: string[]): import('../engine').ReviewStep[] => (['checkout', 'mutation', 'commands'] as const).map((key, n) => ({ key, name: ['Its code, checked out here', 'Mutation testing of the lines it changed', 'The commands this app is held to'][n], state: states[n], says: says[n] }))
+export const reviewNoneSample: import('../engine').ReviewView = { pull: reviewPullsSample.pulls[1], state: 'none', sha: null, stale: false, at: null, problem: null, warning: WARNING_SAMPLE, steps: reviewSteps(['waiting', 'waiting', 'waiting'], ['', '', '']), mutation: null, commands: [], suggestions: [] }
+export const reviewRunningSample: import('../engine').ReviewView = { ...reviewNoneSample, state: 'running', sha: '209'.padEnd(40, 'a'), steps: reviewSteps(['pass', 'running', 'waiting'], ['At 209aaaa: 14 files changed against main.', '15 of 40 breaks tried…', '']) }
+const survivorsSample: import('../engine').ReviewSurvivor[] = [
+  { id: 's1', file: 'src/checkout/delivery.ts', line: 18, from: '>=', to: '>', means: 'no test checks the value exactly at this limit: the code behaves the same to them whether `>=` lets it through or not', code: '  if (subtotal >= FREE_DELIVERY_OVER) return 0' },
+  { id: 's2', file: 'src/checkout/delivery.ts', line: 24, from: '&&', to: '||', means: 'the tests pass when either condition alone is enough: no test has one true and the other false', code: '  return member && subtotal > 0 ? reduced : standard' },
+]
+export const reviewDoneSample: import('../engine').ReviewView = {
+  pull: reviewPullsSample.pulls[0], state: 'done', sha: '212'.padEnd(40, 'a'), stale: false, at: '2026-11-25T10:05:00Z', problem: null, warning: WARNING_SAMPLE,
+  steps: reviewSteps(['pass', 'fail', 'fail'], ['At 212aaaa: 6 files changed against main.', 'Of 11 meaningful breaks, the tests catch 9 (82%). 2 not caught.', '1 of 3 fail: Lint (sample).']),
+  mutation: { tool: 'evident', tried: 11, caught: 9, meaningful: 11, percent: 82, survivors: survivorsSample },
+  commands: [{ key: 'tests', name: 'Tests', runs: 'pnpm test', pass: true, output: '' }, { key: 'lint', name: 'Lint (sample)', runs: 'pnpm lint', pass: false, output: 'src/checkout/delivery.ts\n  31:7  error  \'reduced\' is assigned a value but never used (sample)' }, { key: 'types', name: 'Types (sample)', runs: 'pnpm typecheck', pass: true, output: '' }],
+  suggestions: [
+    { id: 'm:s1', from: 'mutation', file: 'src/checkout/delivery.ts', line: 18, url: 'https://github.com/sample-org/sample-shop/pull/212/files#diff-sampleR18', text: 'Changing `>=` to `>` on this line doesn\'t fail any of the tests in this pull request. No test checks the value exactly at this limit: the code behaves the same to them whether `>=` lets it through or not. Is it worth a test that pins it?' },
+    { id: 'm:s2', from: 'mutation', file: 'src/checkout/delivery.ts', line: 24, url: 'https://github.com/sample-org/sample-shop/pull/212/files#diff-sampleR24', text: 'Changing `&&` to `||` on this line doesn\'t fail any of the tests in this pull request. The tests pass when either condition alone is enough: no test has one true and the other false. Is it worth a test that pins it?' },
+    { id: 'c:lint', from: 'command', file: null, line: null, url: null, text: 'Lint (sample) fails for me on this branch (`pnpm lint`):\n\n```\nsrc/checkout/delivery.ts\n  31:7  error  \'reduced\' is assigned a value but never used (sample)\n```' },
+  ],
+}

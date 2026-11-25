@@ -463,6 +463,15 @@ export interface ContextView {
   otherTickets?: { id: string; ref: string; sourceName: string; title: string; url: string | null }[]
   /** In characters: the most a doc may hold, and the most one given to every agent in full may hold. */ limits: { doc: number; inFull: number }
 }
+/** A review of someone else's pull request (the engine's pr-review.ts). Nothing of it is ever sent to GitHub. */
+export interface ReviewPull { repo: string; number: number; title: string; url: string; author: string; draft: boolean; branch: string; base: string; head: string; updatedAt: string | null; files: number; mine: boolean }
+export interface ReviewSummary { state: 'running' | 'done' | 'failed'; sha: string; at: string; stale: boolean; suggestions: number; survivors: number; failed: number }
+export interface ReviewStep { key: 'checkout' | 'mutation' | 'commands'; name: string; state: 'waiting' | 'running' | 'pass' | 'fail' | 'skipped'; says: string }
+export interface ReviewSurvivor { id: string; file: string; line: number; from: string; to: string; means: string; code: string; equivalent?: string }
+export interface ReviewCommand { key: string; name: string; runs: string; pass: boolean; output: string }
+export interface ReviewSuggestion { id: string; from: 'mutation' | 'command'; file: string | null; line: number | null; url: string | null; text: string }
+export interface ReviewPulls { me: string | null; pulls: (ReviewPull & { review: ReviewSummary | null })[]; problems: string[]; warning: string }
+export interface ReviewView { pull: ReviewPull | null; state: 'none' | 'running' | 'done' | 'failed'; sha: string | null; stale: boolean; at: string | null; problem: string | null; warning: string; steps: ReviewStep[]; mutation: { tool: 'evident' | 'app'; tried: number; caught: number; meaningful: number; percent: number | null; survivors: ReviewSurvivor[]; partial?: string } | null; commands: ReviewCommand[]; suggestions: ReviewSuggestion[] }
 export interface Reports { writing: boolean; format: { daily: string; weekly: string }; reports: Report[] }
 /** A version of a task: the git branch each of its worktrees is on, and (set aside) the task as it was left. */
 export interface TaskBranch { id: string; name: string; current: boolean; fromSave: string | null; createdAt: string; gitBranches: string[]; /** Set aside: what is only on it. */ work: { commits: number; comments: number } | null }
@@ -869,6 +878,12 @@ export const engine = {
   editContextNote: (s: ContextSubject, id: string, b: Partial<{ title: string; answer: string; body: string; background: string; options: string; dependsOn: string[]; dependsOnNew: string[]; on: string; status: 'settled' | 'rejected'; /** An open decision: who it waits on; empty: nobody. */ waitingOn: string; /** What to ask them. */ ask: string }>) => call<ContextView>('PATCH', `/${s.kind}/${s.id}/context/notes/${id}`, b),
   removeContextNote: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/notes/${id}`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
+  /** The app's open pull requests, other people's first, each with where its review stands. */
+  reviewPulls: (appId: string) => call<ReviewPulls>('GET', `/apps/${appId}/pr-reviews`),
+  /** One pull request's review: where it stands and what it found. */
+  review: (appId: string, repo: string, number: number) => call<ReviewView>('GET', `/apps/${appId}/pr-reviews/one?${new URLSearchParams({ repo, number: String(number) })}`),
+  /** Run it: its code is checked out and run on this computer. Nothing is sent to GitHub. */
+  startReview: (appId: string, repo: string, number: number) => call<ReviewView>('POST', `/apps/${appId}/pr-reviews`, { repo, number }),
   writeReport: (appId: string, body: { period: ReportPeriod; notes?: string }) => call<{ writing: boolean }>('POST', `/apps/${appId}/reports`, body),
   editReport: (id: string, body: string) => call<Report>('PUT', `/reports/${id}`, { body }),
   deleteReport: (id: string) => call<{ deleted: string }>('DELETE', `/reports/${id}`),
