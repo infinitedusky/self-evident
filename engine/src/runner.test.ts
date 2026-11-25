@@ -7,7 +7,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { and, eq, inArray } from 'drizzle-orm'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { appendEvent } from './events.js'
 import { setTeamNames } from './ticket.js'
 import { db, pool } from './db/client.js'
@@ -37,11 +37,17 @@ let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-async function until(check: () => Promise<boolean>, timeoutMs = 20_000) {
+async function until(check: () => Promise<boolean>, timeoutMs = 60_000) {
   const t0 = Date.now()
   while (!(await check())) { if (Date.now() - t0 > timeoutMs) throw new Error('timed out'); await sleep(100) }
 }
 const cleaned = (projectId: string) => async () => (await db.select().from(event).where(eq(event.projectId, projectId))).some((e) => e.type === 'project.cleaned')
+
+// A runner dispatches every running project there is, and goes on doing so when a build of its own ends. So each
+// test's runners are shut down when it is over and what it left running is closed: else a later test's runner
+// builds an earlier test's leftovers with its own made-up executor, or an earlier runner builds the later test's.
+const made: Runner[] = []
+class TestRunner extends Runner { constructor(o: ConstructorParameters<typeof Runner>[0]) { super(o); made.push(this) } }
 
 describe.skipIf(!reachable)('runner', () => {
   const wsId = newId('workspace')
@@ -58,6 +64,10 @@ describe.skipIf(!reachable)('runner', () => {
     await db.insert(app).values({ id: appId, workspaceId: wsId, name: 'fake app', key: appId.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md', pr_mode: 'project' } }) // these tests are of one branch for the project; a task's own branch is tested below
     await db.insert(repo).values({ id: newId('repo'), appId, fullName: '', localPath: repoPath }) // no fullName: no PR step
   })
+  afterEach(async () => {
+    for (const r of made.splice(0)) await r.shutdown()
+    await db.update(project).set({ status: 'superseded' }).where(inArray(project.status, ['running', 'paused']))
+  })
   afterAll(async () => {
     await db.update(project).set({ status: 'superseded' }).where(eq(project.appId, appId))
     await pool.end()
@@ -69,6 +79,8 @@ describe.skipIf(!reachable)('runner', () => {
     await commitAll(i.worktreePath, `build ${i.subIssue.identifier}`)
     return { status: 'completed', summary: `did ${i.subIssue.title}`, costUsd: 0 }
   }
+  /** A made-up build stays open until two are going at once (or ten seconds): a test of builds overlapping must not turn on the first being slower than the second is to start. */
+  const overlap = async (most: () => number) => { for (const t = Date.now(); most() < 2 && Date.now() - t < 10_000;) await sleep(20) }
   const one = (title: string, subIssues: { key: string; title: string; files?: string[]; dependsOn?: string[] }[]) => ({ title, subIssues })
 
   it('runs independent phases in parallel under the cap, dependents only after their parents land, then cleans up', async () => {
@@ -81,9 +93,10 @@ describe.skipIf(!reachable)('runner', () => {
     const execute: Execute = async (i) => {
       live++; maxLive = Math.max(maxLive, live)
       if (i.subIssue.title === 'D') parentsWhenDStarted = (await db.select().from(build).where(inArray(build.issueId, parents))).map((x) => x.status)
+      else await overlap(() => maxLive)
       try { return await commits('f')(i) } finally { live-- }
     }
-    const runner = new Runner({ execute, sessionsMax: 2 })
+    const runner = new TestRunner({ execute, sessionsMax: 2 })
     await approveBriefs(appId)
     await runner.startProject(p.id)
     await until(cleaned(p.id))
@@ -105,7 +118,7 @@ describe.skipIf(!reachable)('runner', () => {
       one('second', [{ key: 'c', title: 'C', files: ['oc.txt'] }]),
     ] })
     const order: string[] = []; let firstDoneWhenCStarted = false
-    const runner = new Runner({ execute: async (i) => {
+    const runner = new TestRunner({ execute: async (i) => {
       order.push(i.subIssue.title)
       if (i.subIssue.title === 'C') firstDoneWhenCStarted = (await projectGraph(p.id))!.subIssues.filter((x) => x.title !== 'C').every((x) => x.status === 'done')
       return commits('o')(i)
@@ -126,9 +139,10 @@ describe.skipIf(!reachable)('runner', () => {
     const execute: Execute = async (i) => {
       live.add(i.subIssue.title); maxLive = Math.max(maxLive, live.size)
       if (i.files.includes('shared.txt')) overlapsOnShared.push([...live].filter((x) => ['A1', 'B1'].includes(x)))
+      await overlap(() => maxLive)
       try { return await commits('x')(i) } finally { live.delete(i.subIssue.title) }
     }
-    const runner = new Runner({ execute, sessionsMax: 4 })
+    const runner = new TestRunner({ execute, sessionsMax: 4 })
     await approveBriefs(appId)
     await runner.startProject(A.project.id); await runner.startProject(B.project.id)
     await until(async () => (await cleaned(A.project.id)()) && (await cleaned(B.project.id)()))
@@ -141,7 +155,7 @@ describe.skipIf(!reachable)('runner', () => {
   it('retries a failed run with the reason, and gives up after max attempts', async () => {
     const { project: p, subIssues: phases } = await createProject({ appId, name: 'retries', issues: [one('T', [{ key: 'x', title: 'X', files: ['x.txt'] }])] })
     const reasons: (string | undefined)[] = []
-    const runner = new Runner({ execute: async (i) => { reasons.push(i.previousFailure); return { status: 'failed', error: 'boom' } }, sessionsMax: 2 })
+    const runner = new TestRunner({ execute: async (i) => { reasons.push(i.previousFailure); return { status: 'failed', error: 'boom' } }, sessionsMax: 2 })
     await approveBriefs(appId)
     await runner.startProject(p.id)
     await until(async () => (await projectGraph(p.id))!.subIssues[0].status === 'failed')
@@ -163,7 +177,7 @@ describe.skipIf(!reachable)('runner', () => {
       if (mine === 1) return out // ran out once; resumed, it finishes
       return commits('turns')(i)
     }
-    const runner = new Runner({ execute, sessionsMax: 1 })
+    const runner = new TestRunner({ execute, sessionsMax: 1 })
     await approveBriefs(appId)
     await runner.startProject(p.id)
     const status = async (title: string) => (await projectGraph(p.id))!.subIssues.find((x) => x.title === title)!
@@ -186,7 +200,7 @@ describe.skipIf(!reachable)('runner', () => {
     const { project: p, subIssues: phases } = await createProject({ appId, name: 'retry by hand', issues: [one('T', [{ key: 'r', title: 'R', files: ['r.txt'] }])] })
     let fail = true
     const told: (string | undefined)[] = []
-    const runner = new Runner({ execute: async (i) => { told.push(i.previousFailure); return fail ? { status: 'failed', error: 'flaky' } : commits('r')(i) }, sessionsMax: 2 })
+    const runner = new TestRunner({ execute: async (i) => { told.push(i.previousFailure); return fail ? { status: 'failed', error: 'flaky' } : commits('r')(i) }, sessionsMax: 2 })
     await approveBriefs(appId)
     await runner.startProject(p.id)
     await until(async () => (await projectGraph(p.id))!.subIssues[0].status === 'failed')
@@ -202,10 +216,10 @@ describe.skipIf(!reachable)('runner', () => {
   it('losing the model is not a failure: the attempt is given back, the engine holds, and the sub-issue resumes', async () => {
     const { project: p, subIssues: phases } = await createProject({ appId, name: 'outage', issues: [one('T', [{ key: 'o', title: 'O', files: ['o.txt'] }])] })
     let calls = 0
-    const runner = new Runner({ execute: async (i) => (++calls === 1 ? { status: 'failed', error: 'API Error: 529 overloaded_error' } : commits('o')(i)), sessionsMax: 2 })
+    const runner = new TestRunner({ execute: async (i) => (++calls === 1 ? { status: 'failed', error: 'API Error: 529 overloaded_error' } : commits('o')(i)), sessionsMax: 2 })
     await approveBriefs(appId)
     await runner.startProject(p.id)
-    await until(async () => !!runner.hold)
+    await until(async () => !!runner.hold && (await projectGraph(p.id))!.subIssues[0].status === 'queued') // the hold is set a moment before the sub-issue is written back as queued
     const held = (await projectGraph(p.id))!.subIssues[0]
     expect(held).toMatchObject({ status: 'queued', attempt: 0 })
     expect(held.heldReason).toContain('waiting for the model')
@@ -220,7 +234,7 @@ describe.skipIf(!reachable)('runner', () => {
     const { project: p, subIssues: phases } = await createProject({ appId, name: 'pause', issues: [one('T', [{ key: 'q', title: 'Q', files: ['q.txt'] }])] })
     const resumedWith: (string | undefined)[] = []
     let first = true
-    const runner = new Runner({ execute: async (i) => {
+    const runner = new TestRunner({ execute: async (i) => {
       resumedWith.push(i.resumeSessionId)
       if (first) { first = false; await new Promise<void>((r) => i.abort?.signal.addEventListener('abort', () => r())); return { status: 'failed', error: 'aborted', agentSessionId: 'sess-pause' } }
       return commits('q')(i)
@@ -251,7 +265,7 @@ describe.skipIf(!reachable)('runner', () => {
         phases: [{ key: 's', title: 'S', description: 'second', summary: 's', depends_on: [], files: ['s.txt'], steps: [], checks: [], done_when: '' }],
         decisions: [], questions: [], notes: '' } }
     }
-    const runner = new Runner({ execute: commits('tbt'), sessionsMax: 2, propose })
+    const runner = new TestRunner({ execute: commits('tbt'), sessionsMax: 2, propose })
     await approveBriefs(appId)
     await runner.startProject(p.id)
     await until(cleaned(p.id))
@@ -269,7 +283,7 @@ describe.skipIf(!reachable)('runner', () => {
     ] })
     let proposed = 0
     const propose: Propose = async () => { proposed++; return { status: 'completed', costUsd: 0, proposal: { phases: [{ key: 'x', title: 'X', description: 'x', summary: 'x', depends_on: [], files: ['x.txt'], steps: [], checks: [], done_when: '' }], decisions: [], questions: [], notes: '' } } }
-    const runner = new Runner({ execute: commits('cfp'), sessionsMax: 2, propose })
+    const runner = new TestRunner({ execute: commits('cfp'), sessionsMax: 2, propose })
     await approveBriefs(appId)
     await setStep({ issueId: tasks[1].id }, 'prototype', { status: 'done', detail: 'the whole flow (sample)' })
     await approveStep(tasks[1].id, 'prototype', 'Sam (sample)')
@@ -288,7 +302,7 @@ describe.skipIf(!reachable)('runner', () => {
     const { project: p } = await createProject({ appId, name: 'backlog gate', issues: [one('T', [{ key: 'b', title: 'B', files: ['b.txt'] }])] })
     const [kept] = await addItems(p.id, [{ text: 'Refunds' }])
     const [extra] = await addItems(p.id, [{ text: 'Gift cards' }])
-    const runner = new Runner({ execute: async (i) => ({ ...(await commits('bg')(i)), summary: 'did B\n\nLater:\n- The header link 404s' }), sessionsMax: 2 })
+    const runner = new TestRunner({ execute: async (i) => ({ ...(await commits('bg')(i)), summary: 'did B\n\nLater:\n- The header link 404s' }), sessionsMax: 2 })
     await approveBriefs(appId)
     await runner.startProject(p.id)
     const waiting = async () => (await db.select().from(event).where(eq(event.projectId, p.id))).some((e) => e.type === 'project.backlog_open')
@@ -301,7 +315,7 @@ describe.skipIf(!reachable)('runner', () => {
     await approveBriefs(appId)
     const propose: Propose = async () => ({ status: 'completed', costUsd: 0, proposal: {
       phases: [{ key: 'h', title: 'H', description: 'h', summary: 'h', depends_on: [], files: ['h.txt'], steps: [], checks: [], done_when: '' }], decisions: [], questions: [], notes: '' } })
-    const again = new Runner({ execute: commits('bg2'), sessionsMax: 2, propose })
+    const again = new TestRunner({ execute: commits('bg2'), sessionsMax: 2, propose })
     await again.dispatch()
     await until(cleaned(p.id))
     g = (await projectGraph(p.id))!
@@ -315,7 +329,7 @@ describe.skipIf(!reachable)('runner', () => {
     await db.insert(app).values({ id: stackApp, workspaceId: wsId, name: 'stacked app', key: stackApp.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md', pr_mode: 'issue' } })
     await db.insert(repo).values({ id: newId('repo'), appId: stackApp, fullName: '', localPath: repoPath })
     const { project: p, issues: tasks } = await createProject({ appId: stackApp, name: 'stacked', issues: [one('One', [{ key: 'x', title: 'X', files: ['x.txt'] }]), one('Two', [{ key: 'y', title: 'Y', files: ['y.txt'] }])] })
-    const runner = new Runner({ execute: commits('st'), sessionsMax: 2 })
+    const runner = new TestRunner({ execute: commits('st'), sessionsMax: 2 })
     await approveBriefs(appId)
     await runner.startProject(p.id)
     await until(cleaned(p.id))
@@ -333,7 +347,7 @@ describe.skipIf(!reachable)('runner', () => {
     await db.insert(app).values({ id: tApp, workspaceId: wsId, name: 'ticketed app (sample)', key: tApp.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md', pr_mode: 'issue', ticket_required: true, branch_name: 'feature/{ticket}-{title}' } })
     await db.insert(repo).values({ id: newId('repo'), appId: tApp, fullName: '', localPath: repoPath })
     const { project: p, issues: [t], subIssues: [x] } = await createProject({ appId: tApp, name: 'ticketed (sample)', issues: [one('Third build: brand fields (sample)', [{ key: 'x', title: 'X', files: ['tk.txt'] }])] })
-    const runner = new Runner({ execute: commits('tk'), sessionsMax: 2 })
+    const runner = new TestRunner({ execute: commits('tk'), sessionsMax: 2 })
     await approveBriefs(tApp)
     await runner.startProject(p.id)
     await until(async () => !!(await db.select().from(build).where(eq(build.issueId, x.id)))[0]?.heldReason)
@@ -374,7 +388,7 @@ describe.skipIf(!reachable)('runner', () => {
       return r
     }
     const propose: Propose = async () => { throw new Error('the planner was asked, and Main has none') }
-    const runner = new Runner({ execute, sessionsMax: 1, propose })
+    const runner = new TestRunner({ execute, sessionsMax: 1, propose })
     await approveBriefs(own)
     await runner.buildTask(t.id)
     await until(cleaned(p.id))
@@ -415,7 +429,7 @@ describe.skipIf(!reachable)('runner', () => {
       if (i.subIssue.title.startsWith(CHECK_TITLE)) return { ...r, summary: verdict([{ id: first.id, met: true, evidence: 'export.test passes' }, { id: 'req_tests', met: true, evidence: 'export.test' }, { id: 'req_adr', met: true, evidence: 'docs/adr/0001' }, { id: 'req_risks', met: true, evidence: 'the description says what could break' }]) }
       return r
     }
-    const runner = new Runner({ execute, sessionsMax: 1, propose: async () => { throw new Error('Main has no planner') } })
+    const runner = new TestRunner({ execute, sessionsMax: 1, propose: async () => { throw new Error('Main has no planner') } })
     await approveBriefs(own)
     await runner.buildTask(t.id)
     await until(cleaned(p.id))
@@ -474,7 +488,7 @@ describe.skipIf(!reachable)('runner', () => {
       await writeFile(join(i.worktreePath, `tf-${i.subIssue.identifier}-${n}.txt`), 'x\n'); await commitAll(i.worktreePath, `build ${i.subIssue.identifier}`)
       return i.subIssue.title.startsWith(CHECK_TITLE) ? { status: 'completed', costUsd: 0, summary: `Checked.\n\n\`\`\`acceptance\n${JSON.stringify([{ id: every.id, met: true, evidence: 't1.sh' }, { id: twice.id, met: true, evidence: 't2.sh' }])}\n\`\`\`` } : { status: 'completed', costUsd: 0, summary: `did ${i.subIssue.title}` }
     }
-    const runner = new Runner({ execute, sessionsMax: 1, propose: async () => { throw new Error('a test-first build has no planner') } })
+    const runner = new TestRunner({ execute, sessionsMax: 1, propose: async () => { throw new Error('a test-first build has no planner') } })
     // Its agent is writing the plan: nothing is built, and the build says what it waits on.
     await setStep({ issueId: t.id }, 'testplan', { status: 'started', detail: 'Its agent is writing it' }, 'engine')
     expect(await runner.buildTask(t.id)).toMatchObject({ planning: false, started: false, waits: expect.stringContaining('its test plan') })
@@ -527,7 +541,7 @@ describe.skipIf(!reachable)('runner', () => {
       // The check cannot judge how it looks: it leaves it to a person, and says where to look.
       return i.subIssue.title.startsWith(CHECK_TITLE) ? { ...r, summary: `\`\`\`acceptance\n${JSON.stringify([{ id: look.id, met: null, where: 'edges-tunnel--default', evidence: 'Open the story: the edge should dip under the lip' }])}\n\`\`\`` } : r
     }
-    const runner = new Runner({ execute, sessionsMax: 1 })
+    const runner = new TestRunner({ execute, sessionsMax: 1 })
     await approveBriefs(own)
     await runner.buildTask(t.id)
     const events = async (type: string) => (await db.select().from(event).where(eq(event.projectId, p.id))).filter((e) => e.type === type)
@@ -567,7 +581,7 @@ describe.skipIf(!reachable)('runner', () => {
       const r = await commits('chk')(i)
       return i.subIssue.title === CHECK_TITLE ? { ...r, summary: `Checked.\n\n\`\`\`acceptance\n${JSON.stringify([{ id: there, met: true, evidence: 'ls shows it' }, { id: looks, met: null, evidence: 'for a person: open the page' }, { id: fast, met: false, evidence: 'took 9 s' }])}\n\`\`\`` } : r
     }
-    const runner = new Runner({ execute, sessionsMax: 1 })
+    const runner = new TestRunner({ execute, sessionsMax: 1 })
     await approveBriefs(own)
     await runner.startProject(p.id)
     await until(cleaned(p.id))
@@ -589,7 +603,7 @@ describe.skipIf(!reachable)('runner', () => {
     const { project: p, issues: [t] } = await createProject({ appId: own, name: 'tested once', issues: [one('Two parts', [{ key: 'a', title: 'A', files: ['a1.txt'] }, { key: 'b', title: 'B', files: ['b1.txt'] }])] })
     const briefs: string[] = []
     const execute: Execute = async (i) => { briefs.push(i.subIssue.brief ?? ''); return commits('once')(i) }
-    const runner = new Runner({ execute, sessionsMax: 1 })
+    const runner = new TestRunner({ execute, sessionsMax: 1 })
     await approveBriefs(own)
     await runner.startProject(p.id)
     await until(cleaned(p.id))
@@ -611,7 +625,7 @@ describe.skipIf(!reachable)('runner', () => {
     const propose: Propose = async () => ({ status: 'completed', costUsd: 0, proposal: {
       phases: [{ key: 'a', title: 'A', description: 'a', summary: 'a', depends_on: [], files: [`${newId('issue')}.txt`], steps: [], checks: [], done_when: '' }],
       decisions: [], questions: [], notes: '' } })
-    const runner = new Runner({ execute: commits('own'), sessionsMax: 2, propose })
+    const runner = new TestRunner({ execute: commits('own'), sessionsMax: 2, propose })
     await approveBriefs(own)
     expect(await runner.buildTask(t.id)).toEqual({ planning: true, started: false }) // no Plan it, no Run
     expect(await runner.buildTask(t.id)).toEqual({ planning: true, started: false }) // asked twice while it plans: planned once
@@ -642,7 +656,7 @@ describe.skipIf(!reachable)('runner', () => {
     const propose: Propose = async () => ({ status: 'completed', costUsd: 0, proposal: {
       phases: [{ key: 'a', title: 'A', description: 'a', summary: 'a', depends_on: [], files: [`${newId('issue')}.txt`], steps: [], checks: [], done_when: '' }],
       decisions: [], questions: [], notes: '' } })
-    const runner = new Runner({ execute: commits('pf'), sessionsMax: 2, propose })
+    const runner = new TestRunner({ execute: commits('pf'), sessionsMax: 2, propose })
     expect(await runner.planTask(t.id)).toBe('waiting') // its brief is not approved: the plan is made from an approved brief
     await approveBriefs(own)
     let told = 0
@@ -668,7 +682,7 @@ describe.skipIf(!reachable)('runner', () => {
     // The second task has a prototype in play, so it owes the steps that follow one.
     await setStep({ issueId: second.id }, 'prototype', { status: 'done' })
     await approveStep(second.id, 'prototype', 'sam')
-    const runner = new Runner({ execute: commits('rf'), sessionsMax: 2 })
+    const runner = new TestRunner({ execute: commits('rf'), sessionsMax: 2 })
     await runner.startProject(p.id)
     const subOf = async (taskId: string) => (await projectGraph(p.id))!.subIssues.find((x) => x.parentId === taskId)!
     await until(async () => (await subOf(first.id)).status === 'done')
@@ -705,7 +719,7 @@ describe.skipIf(!reachable)('runner', () => {
 
   it('stores the builder\'s todo list as the sub-issue\'s steps, latest list wins', async () => {
     const { project: p, subIssues: phases } = await createProject({ appId, name: 'steps', issues: [one('T', [{ key: 's', title: 'S', files: ['s.txt'] }])] })
-    const runner = new Runner({ execute: async (i) => {
+    const runner = new TestRunner({ execute: async (i) => {
       await i.onEvent('run.steps', { steps: [{ text: 'read the code', status: 'completed' }, { text: 'write it', status: 'in_progress' }, { text: 'test it', status: 'pending' }] })
       await i.onEvent('run.steps', { steps: [{ text: 'read the code', status: 'completed' }, { text: 'write it', status: 'completed' }, { text: 'test it', status: 'in_progress' }] })
       return commits('s')(i)
@@ -723,7 +737,7 @@ describe.skipIf(!reachable)('runner', () => {
     await db.insert(app).values({ id: own, workspaceId: wsId, name: 'tested again (sample)', key: own.slice(-6).toUpperCase(), setup: { test_cmd: 'test -f README.md' } })
     await db.insert(repo).values({ id: newId('repo'), appId: own, fullName: '', localPath: repoPath })
     const { project: p, issues: [t] } = await createProject({ appId: own, name: 'tested again', issues: [one('One part', [{ key: 'a', title: 'A', files: ['again1.txt'] }])] })
-    const runner = new Runner({ execute: commits('again'), sessionsMax: 1 })
+    const runner = new TestRunner({ execute: commits('again'), sessionsMax: 1 })
     await approveBriefs(own)
     await runner.startProject(p.id)
     const runs = async () => (await db.select().from(event).where(eq(event.issueId, t.id))).filter((e) => e.type.startsWith('task.test')).sort((a, b) => a.seq - b.seq)
@@ -740,7 +754,7 @@ describe.skipIf(!reachable)('runner', () => {
     await expect(runner.testAgain(sub.id)).rejects.toThrow(/of a task that has been built/) // a sub-task has no run of its own
     // A start with no end: the engine stopped under it. The next start makes the run again.
     await db.transaction((tx) => appendEvent(tx, { workspaceId: wsId, appId: own, projectId: p.id, issueId: t.id, actor: 'engine', type: 'task.testing', payload: { head: again.head, again: false } }))
-    const back = new Runner({ execute: commits('again'), sessionsMax: 1 })
+    const back = new TestRunner({ execute: commits('again'), sessionsMax: 1 })
     expect((await back.recover()).tests).toBeGreaterThanOrEqual(1)
     await until(ended(3))
     expect((await runs()).slice(-3).map((e) => [e.type, (e.payload as { ok?: boolean }).ok])).toEqual([['task.testing', undefined], ['task.tested', true], ['task.test_ran', undefined]])
@@ -753,7 +767,7 @@ describe.skipIf(!reachable)('runner', () => {
     await db.insert(run).values({ id: newId('run'), appId, issueId: phases[0].id, attempt: 1, kind: 'build', agent: 'claude-code', status: 'working', agentSessionId: 'sess-123' })
     await git(repoPath, ['branch', p.integrationBranch!, 'main'])
     let resumed: string | undefined
-    const runner = new Runner({ execute: async (i) => { resumed = i.resumeSessionId; return commits('r')(i) }, sessionsMax: 2 })
+    const runner = new TestRunner({ execute: async (i) => { resumed = i.resumeSessionId; return commits('r')(i) }, sessionsMax: 2 })
     const r = await runner.recover()
     expect(r.builds).toBeGreaterThanOrEqual(1)
     await until(cleaned(p.id))

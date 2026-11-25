@@ -50,12 +50,12 @@ export const AllAppsSkillsFromARepo: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await expect(await c.findByText('pulled from git@example.com:sample/team-skills.git')).toBeVisible()
-    await userEvent.click(c.getByRole('button', { name: 'Update git@example.com:sample/team-skills.git' }))
+    await userEvent.click(await c.findByRole('button', { name: 'Update git@example.com:sample/team-skills.git' }))
     await expect(await c.findByText(/Updated decision-record\./)).toBeVisible()
     await userEvent.type(c.getByLabelText('Repository'), '/Users/sample/code/shop-skills')
     await userEvent.click(c.getByRole('button', { name: 'Pull skills' }))
     await expect(await c.findByText(/Added shop-design, shop-voice\./)).toBeVisible()
-    await expect(c.getByRole('button', { name: 'Update /Users/sample/code/shop-skills' })).toBeVisible()
+    await expect(await c.findByRole('button', { name: 'Update /Users/sample/code/shop-skills' })).toBeVisible() // listed once the sources are read again
   },
 }
 /** Plugins no longer lists your own skills: they have their own section. */

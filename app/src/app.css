@@ -695,7 +695,15 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .msg.actions summary::-webkit-details-marker { display: none; }
 .action-ico { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--idle-wash); font: 600 13px var(--mono); color: var(--ink-soft); }
 .actions-list { margin: 6px 0 0 6px; padding-left: 8px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
-.msg.worked { font-size: 13px; }
+.msg.reply-card { align-self: flex-start; background: none; padding: 0; max-width: 100%; font-size: 13px; }
+.msg.reply-card > summary { cursor: pointer; list-style: none; display: inline-flex; gap: 6px; align-items: center; padding: 3px 8px; border: 1px solid transparent; border-radius: 8px; }
+.msg.reply-card > summary::-webkit-details-marker { display: none; }
+.msg.reply-card > summary:hover, .msg.reply-card[open] > summary { border-color: var(--line); }
+.reply-card-rows { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 6px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.reply-card-rows dt { color: var(--ink-faint); }
+.reply-card-rows dd { margin: 0; display: grid; gap: 2px; }
+.reply-card-model { font-family: var(--mono); font-size: 12px; }
+.reply-card-note { margin: 6px 2px 0; font-size: 12px; }
 .preview-empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 6px; text-align: center; padding: 24px; background: var(--surface); }
 .preview-empty .big { font-size: 40px; line-height: 1; opacity: .7; }
 .preview-empty h3 { font-size: 18px; }
@@ -1428,6 +1436,14 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 .context-rest { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
 .context-rest:empty { display: none; }
 .context-from + .context-card { margin-top: 4px; }
+.context-answer:empty { display: none; }
+/* A project: its tasks' unanswered decisions, a group per task. */
+.context-task { margin: 10px 0 16px; }
+.context-task > summary { cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 14px; font-weight: 600; list-style: none; }
+.context-task > summary::-webkit-details-marker { display: none; }
+.context-task > summary::before { content: '▸'; color: var(--ink-soft); width: 14px; }
+.context-task[open] > summary::before { content: '▾'; }
+.context-task > .context-card { margin-left: 22px; }
 .context-depends { margin: 2px 0; } .context-depends .link-btn { color: var(--ink-soft); }
 .context-found { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 .context-share { margin: 8px 0 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); }

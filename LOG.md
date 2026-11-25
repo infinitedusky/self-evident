@@ -8132,6 +8132,114 @@ earlier tasks on the same files, the blast radius); it cannot be brought up to t
 does not say what changed since the first; a comment made on GitHub is not read back, so a draft already said still
 shows; it has not been run on a real pull request yet.
 
+## Tests that failed on files nobody changed (Sandy, 2026-11-25)
+
+Sandy: "Every time we test something or run something, we're getting this thing that says that unrelated stories
+failed, or we had unrelated failures … but it's on files I didn't change." Counted across past sessions, it was a
+small set again and again: `github.test.ts` (stacked PRs), several of `runner.test.ts`, `pr-submit.test.ts`,
+`finalize.test.ts`, and the stories Compared With What, All Apps Skills From A Repo, Compare With Main, Fill Out
+For Fixture People and the Context ones. Clean main failed three engine tests on the first run. Six causes:
+
+- **Every test file shared one database, never emptied, with every checkout.** The runner dispatches every running
+  project in the database (right for the one engine a person runs), so one test file's runner built another
+  file's projects with its own made-up executor: which test lost depended on timing. A test that read "pull
+  request 12" got one left by an earlier run. A checkout on newer migrations changed the schema under the others.
+  Now each run makes and migrates its own database, each test file that uses it works on its own copy, and all are
+  dropped when the run ends (`engine/vitest.config.ts`, `src/test-setup.ts`, `src/test-db.ts`). The folders that
+  stand in for the person's are each file's own too. A run takes the same time as before, about a minute.
+- **The story tests' server had a fixed port and was told to fail if it was taken**, because the app's Vite config
+  is also theirs. Two checkouts running the stories at once: one got "Port 63315 is already in use" and ran
+  nothing. Under the tests the next free port is taken.
+- **A story waited for text it had typed itself.** A box that was typed into holds that text, so "save, then wait
+  for it to show" was met at once by the form's own box, before the save landed; the form then closed under the
+  next step. Text is no longer looked for inside a text box, for every story (`.storybook/preview.tsx`).
+- **A choice made on a disabled control does nothing.** Compared With What chose the next main while the picker
+  was still disabled by the stop before it. It waits for the picker to take a choice.
+- **Waits sized for a quiet computer.** Stories wait ten seconds for what they look for, not one; the engine's
+  tests wait up to a minute where they waited five to twenty seconds. A passing run is no slower.
+- **The main checkout follows GitHub by itself**, about every ten minutes. A run there can see the code change half
+  way: the "type error on main" in the first run was that. Tests are run in a worktree, as the work is.
+
+After: the engine's tests and the app's pass run after run, in the same time as before, and the app's pass with
+the engine's going beside them. Nothing is left behind on the database server or in the temp folder.
+
+- **`runner.test.ts` made 27 runners and shut none down.** A runner dispatches every running project and goes on
+  doing so when a build of its own ends, so a later test's runner built an earlier test's leftovers, and the other
+  way round. Each test's runners are shut down and its projects closed when it ends (the file takes 36 seconds, not
+  60). Two tests that assert builds overlap keep a made-up build open until a second is going; one waits for the
+  row the hold writes, not just the hold.
+
+With these, two engine runs at once both pass.
+
+Not done: with the app's tests going beside them, two of the engine's that start a server on a database of its
+own (`main-running.test.ts`, `prototype-data.test.ts`) stalled for the whole two minutes in one run of three; alone
+they take six seconds, and they did the same before any of this. Why is not found. `mock-data.test.ts` hung once
+in some fifteen runs (a request with no time limit, to a mock on a port it was just given). The old shared
+`selfevident_test` database is left for branches made before this.
+
+## 2026-11-25: a project shows its tasks' open questions
+
+Sandy: "all decisions should be shown at the project level, but clearly marked as being on a specific task …
+have the different tasks and then have their decisions underneath … You can collapse those different tasks …
+for now it's just open ones is the important part. I can look at a project and say, hey, what are all the
+questions we have about this project?"
+
+- **A project's Decisions list its tasks' unanswered decisions**, below its own, in a group per task: the task's
+  name as the heading (a link to that task's Context), how many are unanswered and how many wait on someone, and
+  each as a card with its background, options and what to ask. A group folds; it starts open.
+- **Only unanswered ones** (open, or with an answer an agent proposed). Answered ones stay on their task.
+- **Read here, answered on the task.** They are the task's records; the project does not copy them
+  (`taskQuestions` in context.ts reads them each time).
+- **Counted on the project:** the Decisions heading says "n unanswered on its tasks", and the project's nav count
+  of unanswered and waiting includes them.
+- **In the project's open questions doc**, each marked "on SS-20 …".
+- A project's agents are not given them: they are the tasks' questions, and each task's agents already have theirs.
+
+Not done: answering or marking as waiting from the project; answered task decisions on the project; remembering
+which groups are folded; an idea does not list anything of the tasks made from it.
+
+## A card under each reply: model, time, tokens, cost and the plan limits (Sandy, 2026-11-25)
+
+Sandy: "We are using Claude Code. It is not really dollars that we care about. It is like credits … some amount
+that we have used", then "let us do all three … create a little card … collapsed by default to just say the
+model, the amount of time, and for right now the usage for that last query".
+
+- **The result line is a card** (`ReplyCard`). Closed: "Worked for 22 seconds · opus-5-5 · 426k tokens". Opened:
+  the model, the time and steps, tokens by kind for each model that ran, the cost estimate (this reply, this
+  conversation so far) and where the plan limits stood. A limit that is close or used up shows on the closed line.
+- **Tokens are per reply**, worked out like the cost: the SDK gives a running total for each model
+  (`modelUsage`), kept as `usageSoFar`, and the reply is the difference (`usage`). The first reply after one
+  recorded before this has nothing to take away, so it shows its cost instead.
+- **Plan limits** come from the SDK's `rate_limit_event` (subscription logins only): which limit (five-hour,
+  seven-day, …), the share used, when it starts again, and whether the plan is on extra usage. A conversation
+  keeps the last it heard for each limit and puts them on the result (`limits`); a build run's
+  `run.rate_limit` event now carries the same, where it kept only the status.
+- My reading, not checked against a real event: the share used is read as a fraction when it is 1 or less and as
+  a percentage above that, and a reset time as seconds when it is too small to be milliseconds.
+
+Not done: the limits are on each reply, not in one place for the whole app; build and plan runs, reports and
+summaries have no card; there is no single "credits" figure, since the SDK gives none.
+
+## A conversation follows its app to another Claude login (Sandy, 2026-11-25)
+
+Sandy: "I changed the user claude and lost the conversation. We should have some way to migrate." The app's
+account had been set to a login folder of its own (Settings › Agents), and a conversation begun on the engine's
+login answered "No conversation found with session ID": Claude Code keeps a session under the folder of the
+login it ran on, and `--resume` looked under the new one. Nothing was lost; the session was still where it was
+written.
+
+- **Before a conversation is resumed, its session is copied to the login it is about to run on**
+  (`engine/src/session-move.ts`): the `.jsonl` and the folder beside it (tool results, sub-agents). It is looked
+  for under the engine's login, `~/.claude`, and every login an app here runs on. The conversation says so in
+  one line when it happens. The hand-over to a new task's agent does the same before it reads a conversation.
+- **Copied, never moved**, so the login it came from keeps its own. Where more than one has the session, the one
+  written to last is the conversation: going back to an earlier login brings what was said since.
+
+Not done: a login an app used to run on, that no app names now and that is not the engine's, is not looked
+in; build runs that resume a session (`resumeSessionId`) do not bring it along; not tried on a real conversation,
+so whether the other login will carry on from a session it did not write (the SDK ties a model's thinking to
+the account that produced it) is not known.
+
 ### The Reviews list is kept, and a pull request can be named (2026-11-25)
 
 Sandy: "Pull of all the different unmerged PRs just took a really long time … is that a one-shot thing, or do we have

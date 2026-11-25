@@ -9,7 +9,6 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pg from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { TEST_DATABASE_URL } from '../vitest.config.js'
 import { db, pool } from './db/client.js'
 import { app, repo, workspace } from './db/schema.js'
 import { commitAll, git } from './git.js'
@@ -26,13 +25,13 @@ const nodeModules = fileURLToPath(new URL('../node_modules', import.meta.url))
 const SCHEMA = `NODE_PATH=${nodeModules} node -e "const pg=require('pg');const c=new pg.Client({connectionString:process.env.SHOP_DB});c.connect().then(()=>c.query('create table product (id serial primary key, name text not null); create table line_item (id serial primary key, product_id int not null references product(id), qty int not null, total int generated always as (qty * 2) stored); create table schema_version (version int primary key); insert into schema_version values (1)')).then(()=>c.end())"`
 // Its server says which database it was given.
 const SERVER = `node -e "require('http').createServer((q, s) => s.end(process.env.SHOP_DB)).listen(process.env.PORT)"`
-const until = async (ok: () => Promise<boolean>) => { for (let i = 0; i < 50; i++) { if (await ok()) return true; await new Promise((r) => setTimeout(r, 100)) } return false }
+const until = async (ok: () => Promise<boolean>) => { for (let i = 0; i < 300; i++) { if (await ok()) return true; await new Promise((r) => setTimeout(r, 100)) } return false }
 
 describe.skipIf(!reachable)('prototype data', () => {
   const wsId = newId('workspace')
   const appId = newId('app')
   let repoPath: string
-  const cfg = { url: TEST_DATABASE_URL, env: 'SHOP_DB', schema_cmd: SCHEMA }
+  const cfg = { url: process.env.DATABASE_URL!, env: 'SHOP_DB', schema_cmd: SCHEMA }
   beforeAll(async () => {
     const dir = await mkdtemp(join(tmpdir(), 'if-proto-data-'))
     await git(dir, ['init', '-q', '-b', 'main', 'repo'])
@@ -103,12 +102,12 @@ describe.skipIf(!reachable)('prototype data', () => {
     await expect(makeFixtureFromSeed(appId, 'seeded')).rejects.toThrow('no seed command')
     const SEED = `NODE_PATH=${nodeModules} node -e "const pg=require('pg');const c=new pg.Client({connectionString:process.env.SHOP_DB});c.connect().then(()=>c.query(\\"insert into product (id, name) values (7, 'Sample lamp'), (8, 'Sample rug')\\")).then(()=>c.end())"`
     await setPrototypeDatabase(appId, { ...cfg, seed_cmd: SEED })
-    const admin = new pg.Client({ connectionString: TEST_DATABASE_URL }); await admin.connect()
+    const admin = new pg.Client({ connectionString: process.env.DATABASE_URL! }); await admin.connect()
     const scratch = async () => (await admin.query("select datname from pg_database where datname like 'proto_fixture_%'")).rows.length
     try {
       const before = await scratch()
       expect(await makeFixtureFromSeed(appId, 'seeded')).toEqual({ name: 'seeded', tables: { product: 2 } }) // the schema's bookkeeping is not kept
-      expect(await scratch()).toBe(before)
+      expect(await until(async () => (await scratch()) <= before)).toBe(true) // none of its own is left; another checkout's run may have one for a moment, on the same server
       expect((await listFixtures(appId)).find((f) => f.name === 'seeded')).toMatchObject({ tables: [{ name: 'product', rows: 2 }] })
       // A prototype can be built from it like any shared scenario, with the seed's ids.
       const p = await startPrototype({ appId, title: 'From the seed' })
@@ -117,7 +116,7 @@ describe.skipIf(!reachable)('prototype data', () => {
       // A seed that fails says so, and leaves no database behind.
       await setPrototypeDatabase(appId, { ...cfg, seed_cmd: 'echo no such table >&2; exit 3' })
       await expect(makeFixtureFromSeed(appId, 'broken')).rejects.toThrow(/the seed command failed \(exit 3\): no such table/)
-      expect(await scratch()).toBe(before)
+      expect(await until(async () => (await scratch()) <= before)).toBe(true) // none of its own is left; another checkout's run may have one for a moment, on the same server
     } finally { await admin.end(); await setPrototypeDatabase(appId, cfg) }
   })
 })

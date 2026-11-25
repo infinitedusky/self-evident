@@ -470,17 +470,18 @@ export const ComparedWithWhat: Story = {
   beforeEach: withEngine({ smoke: smokeSample, main: { ...MAIN_OFF, database: 'proto_main_sample' }, mainUrl: 'http://localhost:6600' }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    // Each choice waits for the one before to be turned off, then for its own to come up: more than the usual second when the computer is busy.
-    const pick = () => c.findByRole('combobox', { name: 'Compare with main' })
+    // Each choice waits for the one before to be turned off, then for its own to come up. Until the stop is answered the
+    // choice is there but disabled, and choosing on a disabled one does nothing: wait for it to take a choice.
+    const pick = () => waitFor(() => { const s = c.getByRole('combobox', { name: 'Compare with main' }); expect(s).toBeEnabled(); return s })
     await expect(within(await pick()).getAllByRole('option').map((o) => o.textContent)).toEqual(['Compare with main…', "The app's main (standard data)", 'A new main, on a copy of this data as it is now', 'A new main, on this same database'])
     await userEvent.selectOptions(await pick(), 'copy')
-    await expect(await c.findByText('· on a copy of the data', {}, { timeout: 5000 })).toBeInTheDocument()
+    await expect(await c.findByText('· on a copy of the data')).toBeInTheDocument()
     await userEvent.click(c.getByRole('button', { name: 'Stop comparing' }))
     await userEvent.selectOptions(await pick(), 'shared')
-    await expect(await c.findByText('· on the same database', {}, { timeout: 5000 })).toBeInTheDocument()
+    await expect(await c.findByText('· on the same database')).toBeInTheDocument()
     await userEvent.click(c.getByRole('button', { name: 'Stop comparing' }))
     await userEvent.selectOptions(await pick(), 'app')
-    await expect(await c.findByText("· the app's main, standard data", {}, { timeout: 5000 })).toBeInTheDocument()
+    await expect(await c.findByText("· the app's main, standard data")).toBeInTheDocument()
   },
 }
 

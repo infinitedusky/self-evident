@@ -882,7 +882,12 @@ export const taskContext: import('../engine').ContextView = {
 /** An idea that came from a ticket and has had nothing added: the ticket is its one reference doc. */
 export const ideaContext: import('../engine').ContextView = { on: 'idea', project: null, limits: contextLimits, docs: [taskContext.docs[0]], notes: [] }
 /** A project's own: what its tasks see as "from the project". */
-export const projectContext: import('../engine').ContextView = { on: 'project', project: null, limits: contextLimits, docs: taskContext.docs.filter((d) => d.fromProject).map((d) => ({ ...d, fromProject: false })), notes: taskContext.notes.filter((n) => n.fromProject).map((n) => ({ ...n, fromProject: false })) }
+// The open questions on the project's tasks, as the project shows them: made up, like the rest.
+const projectTaskQuestions: NonNullable<import('../engine').ContextView['tasks']> = [
+  { task: { id: 'iss_sample20', name: 'SS-20', title: 'Address and payment on one page (sample)' }, notes: taskContext.notes.filter((n) => n.kind === 'decision' && ['open', 'proposed'].includes(n.status) && !n.fromProject).map((n) => ({ ...n, dependsOn: [], neededBy: [] })) },
+  { task: { id: 'iss_sample21', name: 'SS-21', title: 'Order summary beside the form (sample)' }, notes: [ctxNote({ id: 'note_ctx21', kind: 'decision', status: 'open', title: 'Does the summary show tax before the address is known? (sample)', on: '2026-11-22', background: 'The design shows a total, and tax depends on where it ships.', options: '(a) Show "tax worked out at the next step".\n\n(b) Estimate it from the last address used.' })] },
+]
+export const projectContext: import('../engine').ContextView = { on: 'project', project: null, limits: contextLimits, docs: taskContext.docs.filter((d) => d.fromProject).map((d) => ({ ...d, fromProject: false })), notes: taskContext.notes.filter((n) => n.fromProject).map((n) => ({ ...n, fromProject: false })), tasks: projectTaskQuestions }
 /** Made here, from nothing outside, and nothing added yet. */
 export const emptyContext: import('../engine').ContextView = { on: 'task', project: null, limits: contextLimits, docs: [], notes: [] }
 

@@ -17,7 +17,7 @@ import { forgetBlocked, share, shared, sharesOf, sketchServer, stopShares, unsha
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
 const SERVER = `node -e "require('http').createServer((q, s) => s.end('host ' + q.headers.host)).listen(process.env.PORT)"`
-const until = async (ok: () => Promise<boolean>) => { for (let i = 0; i < 50; i++) { if (await ok()) return true; await new Promise((r) => setTimeout(r, 100)) } return false }
+const until = async (ok: () => Promise<boolean>) => { for (let i = 0; i < 300; i++) { if (await ok()) return true; await new Promise((r) => setTimeout(r, 100)) } return false }
 
 describe.skipIf(!reachable)('sharing', () => {
   const wsId = newId('workspace')

@@ -147,9 +147,12 @@ committed event as it happens, via Postgres `LISTEN/NOTIFY`. Several clients can
 
 `pnpm test` runs the scheduler and landing tests anywhere (landing uses a throwaway git repo) and, when Postgres
 is up, the project, issue, planner and runner tests (a fake proposer; a fake executor on a throwaway repo: the cap,
-dependents after parents, two projects at once, retries with the reason, recovery, cleanup) against **their own
-database**, `selfevident_test`, which the global setup creates and migrates (`DATABASE_URL_TEST` to override). The
-server's database is never touched.
+dependents after parents, two projects at once, retries with the reason, recovery, cleanup) against **databases of
+their own**. Each run makes one and migrates it (`selfevident_test_r…`, `src/test-setup.ts`); each test file that
+uses the database works on its own copy of it (`src/test-db.ts`), and all of them are dropped when the run ends (a
+killed run's are dropped by a later run, once an hour old). So a test file never sees another file's rows, an
+earlier run's, or another checkout's run going at the same time. `DATABASE_URL_TEST` names another server and the
+start of the names. The server's database is never touched.
 
 ## Planning
 

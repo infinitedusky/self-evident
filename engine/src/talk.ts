@@ -14,7 +14,7 @@ import { createSdkMcpServer, query, tool, type Query, type SDKMessage, type SDKU
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
-import { replyCost } from './reply-cost.js'
+import { limitOf, replyCost, replyUsage, usageSoFar, type Limits, type Usage } from './reply-cost.js'
 import { db } from './db/client.js'
 import { app, event, idea, issue, project, prototype, repo, run, session, sessionMessage, workspace } from './db/schema.js'
 import { step, type StepKey } from './steps.js'
@@ -46,6 +46,7 @@ import { gate, NOT_IN_THE_CHECKOUT } from './gate.js'
 import { existsSync, statSync } from 'node:fs'
 import { stopStorybookAt, storiesNote } from './storybook.js'
 import { prDescriptionNote } from './pr.js'
+import { bringSessionFor } from './session-move.js'
 import { lastUuid, latestSession, readTurns, sessionFile, sessionLabel, sessionsIn, sessionTitle } from './terminal.js'
 
 const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']
@@ -116,7 +117,7 @@ Your first message is the brief: write the checklist, build it, and report again
 type Answer = { allow: boolean; always?: boolean; timedOut?: boolean }
 interface Pending { resolve: (v: Answer) => void; tool: string; /** What it wants to do, in a line. */ what: string; risk: Risk; since: Date }
 type Rated = { risk: Risk; why: string }
-interface Live { q: Query; push: (m: SDKUserMessage) => void; close: () => void; pending: Map<string, Pending>; rated: Map<string, Rated>; lastPrompt?: string; outages: number; always: Set<string>; busy: boolean; autoApprove: Risk; cwd: string; model?: string }
+interface Live { q: Query; push: (m: SDKUserMessage) => void; close: () => void; pending: Map<string, Pending>; rated: Map<string, Rated>; lastPrompt?: string; outages: number; always: Set<string>; busy: boolean; autoApprove: Risk; cwd: string; model?: string; limits?: Limits }
 const execFileP = promisify(execFile)
 const branchOf = (cwd: string) => execFileP('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd }).then((r) => r.stdout.trim()).catch(() => null)
 const key = (tool: string, input: unknown) => tool + JSON.stringify(input).slice(0, 200)
@@ -737,6 +738,10 @@ async function open(sessionId: string): Promise<Live> {
   const refs = await referencesOf(s.appId)
   const mates = await matesOf(s.appId, s.worktreePath)
   const account = accountEnv(a?.setup) // the app's own Claude account, when it has one; throws when that can't be used
+  if (s.agentSessionId) { // the app's login changed since this conversation last ran: its session comes along (session-move.ts)
+    const brought = await bringSessionFor(s.cwd!, s.agentSessionId, a?.setup).catch((err) => { console.error(`[talk] could not bring ${sessionId}'s session to this login: ${String(err?.message ?? err)}`); return null })
+    if (brought) await record(sessionId, 'engine', 'handoff', `This app's agents now run on another Claude login. This conversation was copied to it from ${brought.from}, and carries on here.`, { to: 'login', from: brought.from }).catch(() => {})
+  }
   const assets = await assetsFor(s.appId, (s.subjectRef as SubjectRef | null)?.projectId ?? ownTask?.projectId) // the app's, and the project's when it is about one
   // What real services sent back for this work, kept raw outside the repository (recordings.ts): the task's, else the idea's, else the app's.
   const recordings = s.appId ? recordingsDir(s.appId, proto ? { issueId: proto.issueId, ideaId: proto.ideaId } : { issueId: ownTaskId ?? (s.subjectRef as SubjectRef | null)?.checkOf, ideaId: (s.subjectRef as SubjectRef | null)?.ideaId }) : null
@@ -815,6 +820,11 @@ async function open(sessionId: string): Promise<Live> {
 
 async function handle(sessionId: string, entry: Live, m: SDKMessage) {
   const a = m as any
+  if (a.type === 'rate_limit_event') { // where a limit of the plan stands: kept for the result line of the reply it came in
+    const got = limitOf(a.rate_limit_info)
+    if (got) entry.limits = { ...entry.limits, [got[0]]: got[1] }
+    return
+  }
   switch (m.type) {
     case 'system':
       if (a.subtype === 'init') await db.update(session).set({ agentSessionId: a.session_id }).where(eq(session.id, sessionId))
@@ -840,7 +850,11 @@ async function handle(sessionId: string, entry: Live, m: SDKMessage) {
       entry.outages = 0
       // costUsd is the SDK's running total; stepUsd is this reply alone and totalUsd the conversation so far (reply-cost.ts).
       const [before] = await db.select({ payload: sessionMessage.payload }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, sessionId), eq(sessionMessage.kind, 'result'), sql`(${sessionMessage.payload}->>'costUsd')::numeric > 0`)).orderBy(desc(sessionMessage.id)).limit(1)
-      await record(sessionId, 'engine', 'result', a.subtype === 'success' ? 'done' : `${a.subtype}`, { subtype: a.subtype, costUsd: a.total_cost_usd, ...replyCost(before?.payload as { costUsd?: unknown; totalUsd?: unknown } | null, a.total_cost_usd), ...(entry.model ? { model: entry.model } : {}), turns: a.num_turns, durationMs: a.duration_ms })
+      // The same for tokens: usageSoFar is the SDK's running total for each model, usage is this reply alone. limits is where the plan's limits stood.
+      const was = before?.payload as { costUsd?: unknown; totalUsd?: unknown; usageSoFar?: Usage } | null | undefined
+      const soFar = usageSoFar(a.modelUsage)
+      const usage = replyUsage(was?.usageSoFar, soFar, !before)
+      await record(sessionId, 'engine', 'result', a.subtype === 'success' ? 'done' : `${a.subtype}`, { subtype: a.subtype, costUsd: a.total_cost_usd, ...replyCost(was, a.total_cost_usd), ...(entry.model ? { model: entry.model } : {}), ...(usage ? { usage } : {}), ...(soFar ? { usageSoFar: soFar } : {}), ...(entry.limits && Object.keys(entry.limits).length ? { limits: entry.limits } : {}), turns: a.num_turns, durationMs: a.duration_ms })
       for (const fn of turnEnded) { try { fn(sessionId) } catch { /* what follows a turn never breaks the turn */ } }
       return
   }
