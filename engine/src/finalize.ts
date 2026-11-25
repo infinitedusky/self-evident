@@ -116,18 +116,29 @@ async function gateNow(issueId: string, deps: Deps, ran: Found['ran'] | null): P
 }
 
 /** Step 2: the breaks, made and run in a checkout of the head that is the engine's own. */
-async function mutate(f: Awaited<ReturnType<typeof facts>>, base: string, plan: TestPlan | null, testFiles: string[], run: Sh, onProgress: (says: string) => void, signal: AbortSignal): Promise<{ result: MutationResult | null; says: string; state: Step['state'] }> {
-  const set = mutationSetup(f.a.setup)
+const mutate = (f: Awaited<ReturnType<typeof facts>>, base: string, plan: TestPlan | null, testFiles: string[], run: Sh, onProgress: (says: string) => void, signal: AbortSignal) =>
+  mutateAt({ setup: f.a.setup, repo: f.repoPath!, head: f.head!, base, path: join(`${f.repoPath!}-worktrees`, `finalize--${f.name.toLowerCase()}`), tests: [...new Set([...(plan?.rows.map((r) => r.test) ?? []), ...testFiles])], run, onProgress, signal })
+
+/** A checkout of the engine's own at a commit, on no branch, kept from one run to the next so what it installs stays. */
+export async function checkoutAt(repo: string, path: string, head: string): Promise<void> {
+  if (existsSync(path)) { await git(path, ['checkout', '--detach', '--force', head]); await git(path, ['clean', '-fdq', '--exclude=node_modules', '--exclude=.venv'], { allowFail: true }) } else await git(repo, ['worktree', 'add', '--detach', path, head])
+}
+
+/**
+ * The breaks made and run on any commit, in a checkout at `path` that is the engine's own: the finalizing's for a task
+ * of ours, and a review's for a pull request that is someone else's (pr-review.ts). `tests` are the files run against
+ * each break.
+ */
+export async function mutateAt(i: { setup: unknown; repo: string; head: string; base: string; path: string; tests: string[]; run: Sh; onProgress: (says: string) => void; signal: AbortSignal; /** Its checkout is already at the head with its prepare command run. */ prepared?: boolean }): Promise<{ result: MutationResult | null; says: string; state: Step['state'] }> {
+  const { repo, head, base, path, tests, run, onProgress, signal } = i
+  const set = mutationSetup(i.setup)
   if (set.off) return { result: null, state: 'skipped', says: 'This app has mutation testing switched off (its settings, mutation.off).' }
-  const repo = f.repoPath!, head = f.head!
   const changed = new Map([...(await changedLines(repo, base, head))].filter(([file]) => mutable(file)))
   if (!changed.size) return { result: null, state: 'skipped', says: 'The pull request changes no lines of source the engine can break (Python, TypeScript or JavaScript, outside tests).' }
-  const tests = [...new Set([...(plan?.rows.map((r) => r.test) ?? []), ...testFiles])]
   if (!tests.length) return { result: null, state: 'fail', says: 'The pull request has no tests of its own to run a break against: no test plan, and no test file added or changed.' }
   // Its own checkout, at the commit and on no branch, kept from one finalizing to the next so what it installs stays.
-  const path = join(`${repo}-worktrees`, `finalize--${f.name.toLowerCase()}`)
-  if (existsSync(path)) { await git(path, ['checkout', '--detach', '--force', head]); await git(path, ['clean', '-fdq', '--exclude=node_modules', '--exclude=.venv'], { allowFail: true }) } else await git(repo, ['worktree', 'add', '--detach', path, head])
-  const prepare = finalizePrepare(f.a.setup)
+  if (!i.prepared) await checkoutAt(repo, path, head)
+  const prepare = i.prepared ? null : finalizePrepare(i.setup)
   if (prepare) { onProgress('Preparing its checkout…'); const p = await run(prepare, path, 15 * 60_000); if (p.exit !== 0) return { result: null, state: 'fail', says: `Its checkout could not be prepared (\`${prepare.slice(0, 120)}\`): ${p.output.trim().split('\n').slice(-4).join(' ').slice(-400)}` } }
   if (set.tool) {
     onProgress('Running the app\'s own mutation tool…')
@@ -137,7 +148,7 @@ async function mutate(f: Awaited<ReturnType<typeof facts>>, base: string, plan: 
     try { const result = fromReport(JSON.parse(readFileSync(at, 'utf8')), changed, tests); return { result, ...saysOf(result) } } catch (err) { return { result: null, state: 'fail', says: `The app's mutation tool's report could not be read: ${(err as Error).message}` } }
   }
   const q = (v: string) => `'${v.replace(/'/g, `'\\''`)}'`
-  const each = tests.map((t) => rowCommand(f.a.setup, { test: t }))
+  const each = tests.map((t) => rowCommand(i.setup, { test: t }))
   const testCmd = set.testCmd ? set.testCmd.replace(/\{files\}/g, tests.map(q).join(' ')) : each.every(Boolean) ? each.join(' && ') : null
   if (!testCmd) return { result: null, state: 'skipped', says: 'This app has no test command, so a break cannot be run against its tests.' }
   const all: Mutant[] = []

@@ -36,6 +36,7 @@ export interface MockData {
   /** Probes tried on past work, and the merged tasks a trial would run on; none when left out. */ trials?: import('../engine').Trial[]; trialTasks?: { issueId: string; identifier: string; title: string; pr: number | null }[]
   /** The apps put away; none when left out. */ removedApps?: import('../engine').AppHolds[]; /** Why an app can't be removed yet, as the engine says it. */ removeProblem?: string
   /** The app's reports; none when left out. */ reports?: import('../engine').Reports
+  /** The app's open pull requests to review; none when left out. */ reviewPulls?: import('../engine').ReviewPulls; /** One pull request's review, whichever is asked for. */ review?: import('../engine').ReviewView; /** What a press of Run answers with; else the review as it is, running. */ reviewStarted?: import('../engine').ReviewView
   /** What was learned from the app's code; nothing yet when left out. */ learning?: import('../engine').Learning
   /** Why submitting a pull request fails, when it should. */ submitPrError?: string
   /** A task's pull request as a step; not submitted (prSample) when left out. */ prView?: import('../engine').PrView
@@ -358,6 +359,10 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/apps/:id/notes', async ({ request }) => { const b = await request.json() as { on: string; kind: 'note' | 'decision'; title: string; body: string; issueIds: string[] }; const n = { id: `note_new${d.notes.length}`, on: b.on, kind: b.kind, title: b.title, body: b.body, tasks: b.issueIds.map((id) => ({ id, name: id === 'iss_sample2' ? 'SS-2' : 'SS-5', title: 'A task (sample)' })), createdBy: 'user', updatedAt: null }; d.notes = [n, ...d.notes]; return reply(n) }),
     http.patch('/api/apps/:id/notes/:note', async ({ params, request }) => { const b = await request.json() as Partial<{ on: string; kind: 'note' | 'decision'; title: string; body: string }>; d.notes = d.notes.map((n) => (n.id === params.note ? { ...n, ...Object.fromEntries(Object.entries(b).filter(([k]) => k !== 'issueIds')) } : n)); return reply(d.notes.find((n) => n.id === params.note) ?? null) }),
     http.delete('/api/apps/:id/notes/:note', ({ params }) => { d.notes = d.notes.filter((n) => n.id !== params.note); return reply({ removed: String(params.note) }) }),
+    // Reviews of other people's pull requests: the list, one, and the press that runs it.
+    http.get('/api/apps/:id/pr-reviews', () => reply(d.reviewPulls ?? { me: null, pulls: [], problems: [], warning: '' })),
+    http.get('/api/apps/:id/pr-reviews/one', () => (d.review ? reply(d.review) : new HttpResponse(JSON.stringify({ error: 'no such pull request (sample)' }), { status: 400 }))),
+    http.post('/api/apps/:id/pr-reviews', () => { if (d.review) d.review = d.reviewStarted ?? { ...d.review, state: 'running', mutation: null, commands: [], suggestions: [], steps: d.review.steps.map((x, n) => ({ ...x, state: n ? 'waiting' as const : 'running' as const, says: '' })) }; return reply(d.review) }),
     http.get('/api/apps/:id/reports', () => reply(d.reports ?? { writing: false, format: { daily: '', weekly: '' }, reports: [] })),
     http.post('/api/apps/:id/reports', async ({ params, request }) => {
       const b = await request.json() as { period: string; notes?: string }
