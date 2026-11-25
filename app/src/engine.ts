@@ -421,12 +421,12 @@ export interface SmokeSetupView { /** The fixtures' files it was given when it l
 export const EMPTY = '(empty)'
 export interface SmokeView { /** The one set-up's files, as on SmokeSetupView. */ files?: SmokeSetupView['files']; /** The one set-up's database, as on SmokeSetupView. */ data?: { builtFrom: string | null; ran: boolean }; /** Every set-up of the app; left out, the app has the one the fields below describe. */ setups?: SmokeSetupView[]; /** A staged task: the checks are every criterion no agent marked, not what a check after the build left. */ staged?: boolean; /** Its pull request, when there is one: a preview is of it. */ pr?: { number: number; url: string | null } | null; where: 'local' | 'preview' | 'staging' | 'flag' | 'terminal'; says: string; account: string | null; flag: string | null; branch: string | null; head: string | null; running: string | null; url: string | null; up: boolean; canRun: boolean; /** There is something to start from nothing: a database, a seed, or a script of its own. */ canClean?: boolean; terminal?: { folder: 'build' | 'temp'; open: boolean }; scratch?: { open: boolean }; log: string[]; checks: SmokeCheck[]; owed: number; failed: number; /** After a mark: how many that failed were sent back. */ sentBack?: number; /** Accepted by the person, or null. */ accepted?: SmokeAccepted | null; /** It can be accepted now; else what it waits on. */ canAccept?: boolean; acceptWaits?: string | null; release?: ReleaseCheck[]; watch?: WatchCheck[] }
 /** An app's docs site (engine docs-site.ts): the VitePress site in its workbench folder, which the Docs page frames. */
+/** An app's docs agent (docs-agent.ts): the one agent that writes its docs, in two sections. */
+export interface DocsAgent { /** The app has a docs site it can write in. */ ready: boolean; problem: string | null; /** Its conversation; null when it has never been asked. */ sessionId: string | null; busy: boolean; /** Pages in each section. */ pages: { system: number; work: number }; /** What it was last asked: by the engine when the codebase was learned or a task closed, or by someone. */ asked: { why: 'learned' | 'work' | 'asked'; label: string; at: string } | null; /** What its last turn left: pages, the commit they went into, and what their check still found. */ wrote: { files: string[]; commit: string | null; problems: string[]; at: string } | null }
 export interface DocsSite { /** The workbench folder; null when none is named. */ dir: string | null; /** The folder is on this computer. */ found: boolean; /** It holds a docs site. */ has: boolean; /** Why it cannot be started. */ problem: string | null; url: string | null; frame: string | null; up: boolean; startedHere: boolean; log: string[] }
 /** What an agent learned from an app's code: a short document each, the part for a person and the part for agents. */
 export interface Learned { key: string; title: string; summary: string; body: string; sha: string | null; updatedAt: string }
 export interface Learning { docs: Learned[]; missing: string[]; working: { sessionId: string } | null; sessionId: string | null; stale: number }
-/** A page of an app's own docs: what the person understands about the app, in their words (the Learn page). */
-export interface AppDoc { id: string; title: string; body: string; /** Who wrote it last: `user`, or an agent. */ by: string; createdAt: string; updatedAt: string }
 /** A note (engine/src/notes.ts): something said, found or decided, on a day, about the tasks it names. */
 export interface Note { id: string; on: string; kind: 'note' | 'decision'; title: string; /** A decision asked as a question in a Context: its answer. */ answer?: string | null; body: string; tasks: { id: string; name: string; title: string }[]; createdBy: string | null; updatedAt: string | null }
 /** Who a Context is of: an idea, a task or a project (docs/context-brief.md). */
@@ -837,10 +837,6 @@ export const engine = {
   testAgain: (issueId: string) => call<{ started: true; head: string }>('POST', `/issues/${issueId}/test`),
   learning: (appId: string) => call<Learning>('GET', `/apps/${appId}/learning`),
   learn: (appId: string) => call<{ sessionId: string; started: boolean }>('POST', `/apps/${appId}/learn`),
-  appDocs: (appId: string) => call<AppDoc[]>('GET', `/apps/${appId}/docs`),
-  writeAppDoc: (appId: string, page: { title: string; body: string }) => call<AppDoc>('POST', `/apps/${appId}/docs`, page),
-  editAppDoc: (id: string, page: { title?: string; body?: string }) => call<AppDoc>('PATCH', `/app-docs/${id}`, page),
-  removeAppDoc: (id: string) => call<{ removed: string }>('DELETE', `/app-docs/${id}`),
   /** The app's notes, newest day first; issueId: one task's. */
   notes: (appId: string, f: { issueId?: string; from?: string; to?: string } = {}) => call<Note[]>('GET', `/apps/${appId}/notes?${new URLSearchParams(Object.entries({ issue: f.issueId, from: f.from, to: f.to }).filter((e): e is [string, string] => !!e[1])).toString()}`),
   addNote: (appId: string, b: { on: string; kind: 'note' | 'decision'; title: string; body: string; issueIds: string[] }) => call<Note>('POST', `/apps/${appId}/notes`, b),
@@ -884,6 +880,8 @@ export const engine = {
   approveDataStep: (issueId: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent/approve`),
   changeDataStep: (issueId: string, text: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent/change`, { text }),
   docsSite: (appId: string) => call<DocsSite>('GET', `/apps/${appId}/docs-site`),
+  docsAgent: (appId: string) => call<DocsAgent>('GET', `/apps/${appId}/docs-agent`),
+  askDocsAgent: (appId: string, message: string) => call<DocsAgent>('POST', `/apps/${appId}/docs-agent`, { message }),
   startDocsSite: (appId: string) => call<DocsSite>('POST', `/apps/${appId}/docs-site/start`),
   workbench: (appId: string) => call<WorkbenchView>('GET', `/apps/${appId}/workbench`),
   setWorkbench: (appId: string, dir: string | null) => call<WorkbenchView>('PUT', `/apps/${appId}/workbench`, { dir }),
@@ -1044,7 +1042,7 @@ export const EVENT_TYPES = [
   'build.status', 'build.held', 'build.retry', 'build.failed', 'build.error', 'build.interrupted', 'build.carried_on',
   'run.started', 'run.message', 'run.steps', 'run.tool_call', 'run.tool_result', 'run.result', 'run.error', 'run.rate_limit',
   'land.committed', 'land.tested', 'land.landed', 'land.conflict', 'land.retry', 'pr.opened', 'pr.updated', 'pr.error',
-  'task.tested', 'task.testing', 'task.test_ran', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked', 'learn.written', 'doc.written', 'doc.removed', 'smoke.started', 'smoke.marked', 'smoke.skipped', 'smoke.trying', 'smoke.tried', 'task.smoke_waiting',
+  'task.tested', 'task.testing', 'task.test_ran', 'task.test_again', 'task.test_failed', 'task.test_error', 'task.checked', 'learn.written', 'smoke.started', 'smoke.marked', 'smoke.skipped', 'smoke.trying', 'smoke.tried', 'task.smoke_waiting',
   'task.check_again', 'task.check_reopened', 'smoke.accepted', 'release.marked', 'trajectory.run', 'trajectory.cannot_run', 'trajectory.error',
   'finalize.started', 'finalize.step', 'finalize.done', 'finalize.failed', 'finalize.survivor', 'finalize.fix', 'finalize.sent', 'pr.sent', 'pr.read_back', 'pr.edited_there',
 ]

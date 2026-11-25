@@ -31,7 +31,7 @@ describe('an app\'s hooks', () => {
     expect(gaveOf('')).toEqual({})
   })
   it('every point says when it runs, what it is given and what follows', () => {
-    expect(POINTS.map((p) => p.point)).toEqual(['before-start', 'after-stop', 'task-closed'])
+    expect(POINTS.map((p) => p.point)).toEqual(['before-start', 'after-stop', 'task-closed', 'docs-written'])
     for (const p of POINTS) { expect(p.when).toBeTruthy(); expect(p.given.length).toBeGreaterThan(0); expect(p.then).toBeTruthy() }
   })
 })

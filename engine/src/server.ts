@@ -9,13 +9,12 @@ import { tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
 import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
-import { editAppDoc, listAppDocs, removeAppDoc, writeAppDoc } from './app-docs.js'
 import { checklistOf } from './checklist.js'
 import { sealTestPlan, trajectoryView } from './trajectory.js'
 import { closeTask, closeView, reopenUnclosed } from './close.js'
 import { acceptSmoke, askToMine, keepSmokeDatabase, markRelease, revealSmokeFiles, markSmoke, smokeView, startSmoke, stopSmoke, stopSmokes, trySmoke } from './smoke.js'
 import { closeTerminal, closeTerminals, openTerminal, ownPage, resizeTerminal, scratchKey, typeInTerminal, watchTerminal } from './smoke-terminal.js'
-import { startLearning, talkBusy } from './talk.js'
+import { onTurnEnd, startLearning, talkBusy } from './talk.js'
 import { serve } from '@hono/node-server'
 import { frameFor } from './frame-proxy.js'
 import { appendEvent } from './events.js'
@@ -147,7 +146,6 @@ export function buildApp(bus: EventBus) {
       'GET /todos?app=': 'the app\'s to-dos with their checklists', 'POST /todos': '{appId, title, notes?, owner?, projectId?, checklist?: [text | {text, waitingOn?}]}',
       'PATCH /todos/:id': '{title?, notes?, owner?, projectId?}', 'POST /todos/:id/checklist': '{items}', 'PATCH /checklist/:id': '{done?, waitingOn?, text?}', 'DELETE /checklist/:id': '',
       'POST /todos/:id/draft': 'the agent drafts the checklist, or what is missing from it', 'POST /todos/:id/done': '', 'POST /todos/:id/drop': '{reason}', 'POST /todos/:id/reopen': '',
-      'GET /apps/:id/docs': 'the app\'s own docs: the pages a person keeps about how they understand it (Learn)', 'POST /apps/:id/docs': '{title, body}', 'PATCH /app-docs/:id': '{title?, body?}', 'DELETE /app-docs/:id': '',
       'GET /initiatives?app=': 'goals, with their projects', 'POST /initiatives': '{appId, name, description?, targetDate?, projectIds?}', 'PATCH /initiatives/:id': '{name?, description?, status?, targetDate?, addProjects?, removeProjects?}',
       'GET /cycles?app=': 'stretches of time with their tasks', 'POST /cycles': '{appId, startsAt, endsAt, name?, description?, issueIds?}',
       'POST /projects/:id/start': 'run it: worktrees, agent runs, landing, PR', 'POST /projects/:id/tick?room=N': 'one dispatch pass for a draft (no launching)',
@@ -189,11 +187,6 @@ export function buildApp(bus: EventBus) {
   // Learn, the codebase half (learn.ts): the documents an agent wrote from reading the code, and the press that starts it.
   api.get('/apps/:id/learning', async (c) => { try { return c.json(await listLearning(c.req.param('id'), talkBusy)) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/learn', async (c) => { try { return c.json(await startLearning(c.req.param('id'), 'user'), 202) } catch (err) { return planError(c, err) } })
-  // An app's own docs (app-docs.ts): the pages a person keeps about how they understand the app, on the Learn page.
-  api.get('/apps/:id/docs', async (c) => c.json(await listAppDocs(c.req.param('id'))))
-  api.post('/apps/:id/docs', async (c) => { try { return c.json(await writeAppDoc(c.req.param('id'), await c.req.json<{ title: string; body: string }>(), 'user'), 201) } catch (err) { return planError(c, err) } })
-  api.patch('/app-docs/:id', async (c) => { try { return c.json(await editAppDoc(c.req.param('id'), await c.req.json<{ title?: string; body?: string }>(), 'user')) } catch (err) { return planError(c, err) } })
-  api.delete('/app-docs/:id', async (c) => { try { return c.json(await removeAppDoc(c.req.param('id'), 'user')) } catch (err) { return planError(c, err, 404) } })
   api.get('/apps/:id/holds', async (c) => { try { return c.json(await appHolds(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/remove', async (c) => { try { return c.json(await putAway(c.req.param('id'), putAwayDeps)) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/restore', async (c) => { try { return c.json(await bringBack(c.req.param('id'))) } catch (err) { return planError(c, err) } })
@@ -502,6 +495,9 @@ export function buildApp(bus: EventBus) {
   // The app's workbench folder and its hooks (hooks.ts).
   // An app's docs site (docs-site.ts): the VitePress site in its workbench folder, started here and framed by the Docs page.
   api.get('/apps/:id/docs-site', async (c) => { try { return c.json(await (await import('./docs-site.js')).docsSite(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
+  // The app's docs agent (docs-agent.ts): where it stands, and the person's own ask from the Docs page.
+  api.get('/apps/:id/docs-agent', async (c) => { try { return c.json(await (await import('./docs-agent.js')).docsAgent(c.req.param('id'), talkBusy)) } catch (err) { return planError(c, err, 404) } })
+  api.post('/apps/:id/docs-agent', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { message?: string }; const d = await import('./docs-agent.js'); await d.askDocsAgent(c.req.param('id'), b.message ?? '', { actor: 'user' }); return c.json(await d.docsAgent(c.req.param('id'), talkBusy), 202) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/docs-site/start', async (c) => { try { return c.json(await (await import('./docs-site.js')).startDocsSite(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/workbench', async (c) => { try { return c.json(await (await import('./hooks.js')).workbench(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.put('/apps/:id/workbench', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { dir?: string | null }; return c.json(await (await import('./hooks.js')).setWorkbench(c.req.param('id'), b.dir ?? null)) } catch (err) { return planError(c, err) } })
@@ -1301,6 +1297,8 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   void ensureMain().then((r) => { if (r.made) console.log(`[engine] ${r.made} app${r.made === 1 ? '' : 's'} given a Main workflow; what they had is Legacy`) }).catch((err) => console.error('workflows: could not make Main', err))
   void speedIntoWorkflows().then((r) => { if (r.moved) console.log(`[engine] ${r.moved} app${r.moved === 1 ? '' : 's'} set to Fast moved onto a fast workflow`) }).catch((err) => console.error('workflows: could not move the old speed setting', err))
   setTimeout(() => void resumeChecks().catch((err) => console.error('checks: could not resume after the restart', err)), 8_000) // a task's checks that were under way carry on
+  // The docs agent (docs-agent.ts): its pages are checked and committed when its turn ends, and it is asked when Learn's agent has written.
+  onTurnEnd((id) => { void import('./docs-agent.js').then(async (d) => { await d.afterDocsTurn(id); await d.afterLearning(id) }).catch((err) => console.error('docs agent: could not follow the turn', err)) })
   void watchTerminals().catch(() => {}) // conversations still in a terminal: keep copying what's said there
   const stopSync = process.env.GITHUB_SYNC === '0' ? () => undefined : startSync(Number(process.env.GITHUB_SYNC_MINUTES ?? 2)) // GitHub: reviews, checks, merges, main moving
   const stopSummaries = process.env.SUMMARY === '0' ? () => undefined : startSummaries(Number(process.env.SUMMARY_HOURS ?? 24)) // the summary page, rewritten when a day old and something moved

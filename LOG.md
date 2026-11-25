@@ -7821,6 +7821,75 @@ the workbench folder edits the files); a folder with no site is not given one fr
 on the Learn page (pages in the database) is still there.** With the docs being this site, it is a second place for
 the same thing; whether it goes is Sandy's to say.
 
+## "Your docs" is gone from Learn (Sandy, 2026-11-24: "remove from the learn page")
+
+The docs are the site in the workbench folder, shown from Docs in the rail (above), so the pages kept in the database
+were a second place for the same thing. Removed the same day they were added: the section of the Learn page, the
+`app_doc` table (migration 0068 drops it; it held no pages in the database on this computer), the `app_docs` and
+`write_app_doc` tools, and the line that told Learn's agent to read them. Learn is its two halves again.
+
+Still not done, from the Docs entry: agents have no tool for writing a docs page, and nothing stops the site.
+
+## The docs agent, and two sections (Sandy, 2026-11-25: "we should have a subagent manages the docs. We can then give it skills and any hooks that we need ensure we get what we want. Docs maintenance is a difficult thing to do well")
+
+Asked after the docs site was up and empty: nothing in the workflow wrote to it. Learn's documents, the brief and the
+steps are in the database, and decision records go to the app's own repository.
+
+- **One agent per app writes the docs** (`engine/src/docs-agent.ts`): a conversation of its own in the workbench
+  folder, with the app's repositories to read. Nobody else has a tool that writes a page. Every other agent asks it
+  (`docs_agent`: "put that in the docs"), and so does the person, from the Docs page, where its conversation opens
+  beside the site.
+- **Two sections** (Sandy: "1 is a 'how the system works' section. This gets added to through codebase learning
+  process. 2 is 'our work' this maintains a record of what we built, why we built it etc. It would point back to the
+  how the system works wherever that was caused by our work"):
+  - `docs/system/`, How the system works: what is true now, no history. The agent is asked when Learn's agent has
+    written (a turn of Learn's that wrote a document, once).
+  - `docs/work/`, Our work: a page per task, written when the task is closed. In the same turn the agent puts right
+    the pages of How the system works the task changed, and the task's page links to each of them.
+- **A task's page has a set structure, and a project has a page** (Sandy, later that day: "for each task … we have a
+  page in the docs … an introduction, like explanation, then … decisions we made, questions … call-outs. I don't know,
+  we could have a whole set of these things, and it could be the structure of how a task page gets set up … everything
+  we're doing in the task would then link back to the general docs … projects would also exist linking all the tasks
+  … a simplified version of the actual user interface, but in the documentation that we can share with people"):
+  - The structure is a file of the workbench folder, `.claude/skills/docs-pages/task-page.md`: each `##` heading is a
+    section every task's page must have, and the text under it tells the agent what goes there. It ships as
+    Introduction, Decisions, Questions, Call-outs, What it changed in the system. Change the file and the next page
+    is written and checked that way (`taskPage`); the last section is kept whatever the file says. No folder file:
+    the same five, from the engine.
+  - The engine hands the agent the task's record when it asks (`recordOf`): its description, each decision with what
+    was chosen, what was turned down and why, and each question with its answer. The page is to hold every one and
+    make none up.
+  - A project is a folder, `docs/work/<its name in small letters>/`: `index.md` is the project's page (what it is
+    for, then `## Tasks`, a linked line per task) and its tasks' pages are beside it. A task on its own (a solo
+    project) sits in `docs/work/`. The check holds each page to a line in its folder's index and each project's page
+    to a line in Our work's; the sidebar lists a project's tasks under it.
+- **Skills**: the workbench folder's own `.claude/skills/` arrive with the folder, so an app says how its docs are
+  written there (the template ships `docs-pages`). Nothing new in Evident for it.
+- **It knows VitePress** (Sandy, after a colon in a page's frontmatter stopped the site: "make sure that our docs
+  agent is a VitePress expert so we don't run into problems"): the template ships a second skill, `vitepress`, with
+  what breaks a page (YAML frontmatter, angle brackets, curly braces, dead links, unclosed containers) and what to
+  use (containers for call-outs, code groups, anchors). Its own instructions carry the short form, and the check
+  names an unquoted colon in frontmatter, `{{` outside code and a second title before the build is run.
+- **What it is held to**, since it runs with nobody watching:
+  - A wall: it edits only `docs/system/`, `docs/work/` and `docs/public/`, and runs nothing that leaves a mark. It is
+    refused, never asked.
+  - A check when its turn ends: both sections have an index; every page has a title and its line in its section's
+    index; every link leads to a page; each task's page of Our work has the structure's sections and, under the last, links into
+    How the system works or says "Nothing in how the system works changed". Then the site's own build. What fails is
+    said back to it, twice at most; after that the pages stay in the folder uncommitted and the Docs page says what
+    was wrong.
+  - Pages that pass are committed in the workbench folder by the engine (only the three folders; not pushed), and the
+    folder's `docs-written` hook is run, a new point in hooks.ts, which is where an app pushes them.
+- **The site**: the template and the first workbench now have the two sections in the nav and nothing else. Their
+  sidebars are read from the pages (`docs/.vitepress/sections.ts`), since the agent cannot edit the configuration; a
+  running site picks up a new page by itself.
+- Decided here, not asked: Our work is written at Close, not at merge (Close is the person saying it is done, and its
+  checks are in); a turn of the person's own in the agent's conversation is checked and committed like any other.
+
+Not done: the agent has not yet been run for real (it is live once this is merged and the engine restarts); nothing
+writes Our work for tasks closed before this; no setting switches it off for an app that has a docs site; the site is
+still not stopped or restarted from Evident; a project renamed after its first page gets a second folder; the docs
+are shared by whatever the `docs-written` hook does with them (nothing publishes them yet).
 ## A project's page is laid out like a task's, with an agent of its own (Sandy, 2026-11-25)
 
 Sandy, on Cloaked's Executive Protection project, with its PRD and six tickets in the project's Context: "on the
@@ -7921,7 +7990,7 @@ exactly what we want to ask them. So who it is and then what we want to ask, and
 just send that through to Slack or something. But for right now … so I can write an email and I don't forget."
 
 - **Waiting on someone now takes two things:** who it is, and what you want to ask them (optional, in the
-  person's words). Kept on the decision (`note.ask`, migration 0070).
+  person's words). Kept on the decision (`note.ask`, migration 0071).
 - **Shown on the decision** under "Waiting on Em" as "To ask Em:", with a Copy button, so it goes into an email
   or a message as written. "Change what to ask" (or "Write what to ask") opens the same two fields again.
 - **It goes with the waiting:** "No longer waiting" or answering the decision clears it.
@@ -7930,3 +7999,33 @@ just send that through to Slack or something. But for right now … so I can wri
 
 Not done, on purpose: sending it anywhere (Slack, email); marking whether it has been sent yet, so "Waiting on
 Em" still reads the same before and after you actually ask; it is not in the reports.
+
+## A phone gets one chat, with the rest pulled out over it (Sandy, 2026-11-23: "if you try to use the mobile it is unusable as there is too much info on too small a scree. somehow it needs to hold the agents chat only and then have ways to look at things that are needed outside of those chats"; 2026-11-25: "just implement what we have for C and then try it out, it is really hard to know what will and won't work ahead of time")
+
+Three arrangements were drawn (chats as a list; what needs you as a feed; one chat with things pulled out over it).
+Sandy took the third, added "the steps for the projec as a tray from the left" and "the chat has subagents, so for
+each task we should see tabs", and asked for it built so it can be tried. It is a first cut to find out what works.
+
+Built: a screen 700px wide or less gets `Phone.tsx` in place of the workspace (`main.tsx`).
+- **The chat** is a task's own agent, with the agents it has out as tabs under the task's name: the task page's
+  `TaskAgent`, restyled, so nothing about agents is written twice. A question the task has open is answered at the
+  top of the chat. A conversation about the app as a whole shows with no tabs.
+- **The tray, from the left**: what needs you, the project's tasks, this task's steps under it (the brief and what
+  feeds it, then the build), the other chats, New chat, and the app. It is how the chat is changed. A step opens its
+  page.
+- **Look, from the bottom**: this task's overview, brief, build and pull request, then My Stuff, Projects, Tasks,
+  Ideas, To-dos.
+- **A page looked at** is the app's own page in a `PagePane` over the chat, with "‹ Chat" at its top; a task's page
+  there has no nav and no agent column, since the tray and the chat are those. A link in the chat to a page of the
+  app opens the same way. When an agent opens a page, the phone offers it ("The agent opened …, Look") and does not
+  put it over the chat.
+- The address is read: `/tasks/SE-12` lands in that task's chat, `/tasks/SE-12/brief` with its brief open.
+- The phone remembers its chat per app. "The full site, on this phone" in Look gives the workspace until the tab is
+  closed.
+
+After Slack's phone app (the list slides in from the left over one conversation) and Linear's (detail as a sheet).
+
+Not done: pages laid out for a phone (they are the computer's pages, narrow); the smoke test's checks as their own
+phone screen; swiping the tray and Look open; a step pressed taking the chat to where that step happened; agents
+out being read-only on the phone (their tab has a message box, as on the computer); prototypes, Storybook and the
+terminal, which stay on the computer.

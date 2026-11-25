@@ -130,6 +130,11 @@ only your own devices are on:
 A green dot, with the device's name, shows while a phone (or another computer) has the page open. The buttons work
 from this computer's page only, never from the phone.
 
+On a phone the page is laid out for one: a single chat, with a button at its top left for the tray (what needs you,
+the project's tasks, this task's steps, the other chats) and one at its top right for Look (the task's pages and the
+rest of the app). A page opens over the chat; **‹ Chat** goes back. Any window 700px wide or less gets this layout.
+**The full site, on this phone**, at the bottom of Look, gives the computer's layout until the tab is closed.
+
 By hand: `tailscale serve --bg 5180`, `tailscale serve status`, `tailscale serve --https=443 off`. If the address
 errors, turn on HTTPS certificates in Tailscale's admin console, under DNS. Checking the address from this computer
 itself fails where Caddy has the secure port: try it from the phone.

@@ -1,5 +1,5 @@
 {
-  "id": "94faf6cf-fa72-462a-b06c-650e10f8e736",
+  "id": "1d969c65-433c-42d0-abf2-01ea3f2b9042",
   "prevId": "edec383f-cc98-4dc6-8db1-b6823cf2f3b8",
   "version": "7",
   "dialect": "postgresql",
@@ -110,101 +110,6 @@
           "tableTo": "workflow",
           "columnsFrom": [
             "workflow_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.app_doc": {
-      "name": "app_doc",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "app_id": {
-          "name": "app_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "body": {
-          "name": "body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'user'"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'user'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "app_doc_app": {
-          "name": "app_doc_app",
-          "columns": [
-            {
-              "expression": "app_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "app_doc_app_id_app_id_fk": {
-          "name": "app_doc_app_id_app_id_fk",
-          "tableFrom": "app_doc",
-          "tableTo": "app",
-          "columnsFrom": [
-            "app_id"
           ],
           "columnsTo": [
             "id"
@@ -3665,12 +3570,6 @@
         },
         "waiting_on": {
           "name": "waiting_on",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ask": {
-          "name": "ask",
           "type": "text",
           "primaryKey": false,
           "notNull": false
