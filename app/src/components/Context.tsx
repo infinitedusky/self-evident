@@ -9,6 +9,9 @@
  *   answer yet is unanswered. It is a decision record like any other and sits with them, first, marked Unanswered
  *   (Sandy, 2026-11-24: "they should be actual decision records, just not completed … incomplete or unanswered").
  *   An agent that was not told the answer in conversation proposes one, which the person accepts or rejects there.
+ *   A decision can depend on others (Sandy, 2026-11-24): ones already here, or a question written in the form and
+ *   asked when it is saved. Each shows what it depends on and how that stands, and what depends on it.
+ *   The unanswered ones can be had as one document to share: "Open questions doc".
  *   Either kind can be marked as waiting on someone the person has asked. A decision can carry its background:
  *   the story of why it is a question, shown in full while it is unanswered and folded once it is answered. The nav counts what is unanswered;
  *   nothing is held up by it.
@@ -98,12 +101,14 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
         <div className="context-head">
           <h3 className="context-h"><button type="button" className="context-fold" aria-expanded={!folded.decisions} aria-label={`${folded.decisions ? 'Show' : 'Hide'} decisions`} onClick={() => fold('decisions')}><span aria-hidden="true" className="context-fold-mark">{folded.decisions ? '▸' : '▾'}</span><span className="context-fold-name">Decisions</span></button> {settled.length + waiting.length > 0 && <Badge>{settled.length + waiting.length}</Badge>}{yours > 0 && <Badge tone="accent">{yours} unanswered</Badge>}{asked.length > 0 && <Badge tone="warn">{asked.length} waiting on someone</Badge>}</h3>
           {!folded.decisions && <>
+          {waiting.length + projects([...undecided, ...proposed]).length > 0 && <button className="btn quiet small" onClick={() => setOpen(open === 'doc:open-questions' ? null : 'doc:open-questions')} title="Every unanswered decision as one document, to copy, download or print">Open questions doc</button>}
           <button className="btn quiet small" onClick={() => setOpen(open === 'decision' ? null : 'decision')}>Add a decision</button>
           </>}
         </div>
         {!folded.decisions && <>
         <p className="context-how">Each a question and its answer. Every agent is told each answered one in full, as something not to reopen, and each unanswered one as not decided, so it does not guess. A report lists the unanswered ones as open.</p>
-        {open === 'decision' && <DecisionForm busy={busy} onSave={(b) => act(() => engine.addContextNote(subject, { kind: 'decision', ...b }))} onCancel={() => setOpen(null)} />}
+        {open === 'doc:open-questions' && <OpenQuestions subject={subject} onClose={() => setOpen(null)} />}
+        {open === 'decision' && <DecisionForm others={decisions} busy={busy} onSave={(b) => act(() => engine.addContextNote(subject, { kind: 'decision', ...b }))} onCancel={() => setOpen(null)} />}
         {!settled.length && !waiting.length && open !== 'decision' && <div className="empty">None yet.</div>}
         {waiting.map((n) => (
           <div className="context-row context-qa context-unmade" key={n.id} data-note={n.id} data-unanswered={n.waitingOn ? 'waiting' : n.status}>
@@ -113,14 +118,15 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
               <div className="context-detail">
                 {n.waitingOn ? <><Badge tone="warn">Waiting on {n.waitingOn}</Badge> asked {day(n.on)}, {ago(n.on)}</> : <><Badge tone="accent">Unanswered</Badge> {n.status === 'proposed' ? `the agent proposes an answer, ${day(n.on)}` : `asked by ${who(n.addedBy)}, ${day(n.on)}`}</>}
               </div>
+              <Depends n={n} />
               {n.status === 'proposed' && <div className="context-why"><span className="faint">The agent proposes: </span><strong>{n.answer}</strong></div>}
               {n.status === 'proposed' && n.body && <div className="context-why"><span className="faint">Why: </span><Md text={n.body} inline /></div>}
               {open === `wait:${n.id}`
                 ? <WaitingForm start={n.waitingOn ?? ''} busy={busy} onSave={(to) => act(() => engine.editContextNote(subject, n.id, { waitingOn: to }))} onCancel={() => setOpen(null)} />
                 : open === `edit:${n.id}`
-                  ? <DecisionForm start={n} asking busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, b.answer ? { ...b, status: 'settled' } : { title: b.title, background: b.background, options: b.options }))} onCancel={() => setOpen(null)} />
+                  ? <DecisionForm others={decisions} start={n} asking busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, b.answer ? { ...b, status: 'settled' } : { title: b.title, background: b.background, options: b.options, dependsOn: b.dependsOn, dependsOnNew: b.dependsOnNew }))} onCancel={() => setOpen(null)} />
                 : open === n.id
-                  ? <DecisionForm start={n} answering busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, { ...b, status: 'settled' }))} onCancel={() => setOpen(null)} />
+                  ? <DecisionForm others={decisions} start={n} answering busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, { ...b, status: 'settled' }))} onCancel={() => setOpen(null)} />
                   : (
                     <div className="row">
                       {n.status === 'proposed' && <button className="btn small" disabled={busy} aria-label={`Accept: ${n.title}`} onClick={() => act(() => engine.editContextNote(subject, n.id, { status: 'settled' }))}>Accept</button>}
@@ -137,7 +143,7 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
           </div>
         ))}
         {mine(settled).map((n) => open === n.id
-          ? <DecisionForm key={n.id} start={n} busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, b))} onCancel={() => setOpen(null)} onRemove={() => { if (window.confirm(`Delete the decision "${n.title || n.answer}"?`)) void act(() => engine.removeContextNote(subject, n.id)) }} />
+          ? <DecisionForm others={decisions} key={n.id} start={n} busy={busy} onSave={(b) => act(() => engine.editContextNote(subject, n.id, b))} onCancel={() => setOpen(null)} onRemove={() => { if (window.confirm(`Delete the decision "${n.title || n.answer}"?`)) void act(() => engine.removeContextNote(subject, n.id)) }} />
           : <DecisionRow key={n.id} n={n} onEdit={() => setOpen(n.id)} />)}
         {projects([...settled, ...undecided, ...proposed]).length > 0 && <>{fromProject}{projects([...settled, ...undecided, ...proposed]).map((n) => <DecisionRow key={n.id} n={n} />)}</>}
         {rejected.length > 0 && (
@@ -228,12 +234,63 @@ function DecisionRow({ n, onEdit }: { n: ContextNote; onEdit?: () => void }) {
       <div>
         {made ? <div className="context-title">{n.answer}</div> : <div className="context-detail">{n.status === 'proposed' ? `Unanswered: the agent proposes "${n.answer}"` : n.waitingOn ? `Unanswered: waiting on ${n.waitingOn}` : 'Unanswered'}</div>}
         {made && n.body && <div className="context-why"><span className="faint">Why: </span><Md text={n.body} inline /></div>}
+        <Depends n={n} />
         {made && <div className="context-detail">
           {n.addedBy?.startsWith('agent') ? `Recorded by the agent once you agreed, ${day(n.on)}` : `Decided ${day(n.on)}`}
           {onEdit && <>{' · '}<button className="link-btn" aria-label={`Edit: ${n.title || n.answer}`} onClick={onEdit}>Edit</button></>}
         </div>}
       </div>
       {n.options && <More name="Options" text={n.options} />}
+    </div>
+  )
+}
+
+/**
+ * The open questions as a document to share (Sandy, 2026-11-24: "nicely formatted that I can then share with people"):
+ * every unanswered decision, as the engine writes it from what is stored. Shown as it reads; taken away as Markdown
+ * (copied, or a file) or printed, which is also how it becomes a PDF. Nothing is sent from here.
+ */
+function OpenQuestions({ subject, onClose }: { subject: ContextSubject; onClose: () => void }) {
+  const [doc, setDoc] = useState<{ title: string; count: number; markdown: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const page = useRef<HTMLDivElement>(null)
+  useEffect(() => { engine.openQuestions(subject).then(setDoc).catch((e) => setError(err(e))) }, [subject.kind, subject.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (error) return <div className="empty bad" style={{ margin: '8px 0' }}>{error}</div>
+  if (!doc) return null
+  const name = `${doc.title.replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase()}.md`
+  const copy = async () => { try { await navigator.clipboard.writeText(doc.markdown); setCopied(true); window.setTimeout(() => setCopied(false), 2000) } catch { setError('The browser would not copy it. Download it instead.') } }
+  const download = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([doc.markdown], { type: 'text/markdown' })); a.download = name; a.click(); URL.revokeObjectURL(a.href) }
+  const print = () => {
+    const w = window.open('', '_blank'); if (!w || !page.current) return
+    w.document.write(`<!doctype html><title>${doc.title.replace(/</g, '&lt;')}</title><style>body{font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:760px;margin:40px auto;padding:0 24px;color:#1a1a1a}h1{font-size:24px;margin:0 0 4px}h2{font-size:17px;margin:28px 0 8px;padding-bottom:4px;border-bottom:1px solid #ddd}h3{font-size:15px;margin:20px 0 4px}table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top}th{background:#f5f5f5}p{margin:6px 0}h3{break-after:avoid}</style>${page.current.innerHTML}`)
+    w.document.close(); w.focus(); w.print()
+  }
+  return (
+    <div className="context-share" data-component="ContextOpenQuestions">
+      <div className="row" style={{ marginTop: 0 }}>
+        <span className="context-detail" style={{ marginRight: 'auto' }}>As it will read. Written from the decisions as they are now; nothing is sent from here.</span>
+        <button className="btn small" onClick={() => void copy()}>{copied ? 'Copied' : 'Copy as Markdown'}</button>
+        <button className="btn quiet small" onClick={download} title={name}>Download</button>
+        <button className="btn quiet small" onClick={print} title="Opens it on its own, ready to print or save as a PDF">Print or save as PDF</button>
+        <button className="btn quiet small" onClick={onClose}>Close</button>
+      </div>
+      <div className="context-share-page" ref={page}><Md text={doc.markdown} /></div>
+    </div>
+  )
+}
+
+/** Go to a decision on the page, and mark it for a moment. */
+const goTo = (id: string) => { const el = document.querySelector(`[data-note="${id}"]`); if (!el) return; el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.add('context-found'); window.setTimeout(() => el.classList.remove('context-found'), 1600) }
+
+/** What a decision depends on, each as it stands, and what depends on it. */
+function Depends({ n }: { n: ContextNote }) {
+  const on = n.dependsOn ?? [], by = n.neededBy ?? []
+  if (!on.length && !by.length) return null
+  return (
+    <div className="context-detail context-depends" data-component="ContextDepends">
+      {on.length > 0 && <div>Depends on: {on.map((d, i) => <span key={d.id}>{i > 0 && '; '}<button type="button" className="link-btn" onClick={() => goTo(d.id)}>{d.title || d.answer}</button>{' '}{d.status === 'settled' ? <span>({d.title ? d.answer : 'decided'})</span> : <span className="context-waiting">(unanswered)</span>}</span>)}</div>}
+      {by.length > 0 && <div>Needed for: {by.map((d, i) => <span key={d.id}>{i > 0 && '; '}<button type="button" className="link-btn" onClick={() => goTo(d.id)}>{d.title}</button></span>)}</div>}
     </div>
   )
 }
@@ -253,15 +310,39 @@ function More({ name, text, open }: { name: 'Background' | 'Options'; text: stri
 }
 
 /** A decision asked, made or changed. Adding one, the answer may be left empty: it then waits to be decided. */
-function DecisionForm({ start, answering, asking, busy, onSave, onCancel, onRemove }: { start?: ContextNote; /** An open or proposed one being answered: the answer is what is asked for. */ answering?: boolean; /** An unanswered one edited: its question and background, and an answer if one is given now. */ asking?: boolean; busy: boolean; onSave: (b: { title: string; answer: string; body: string; background: string; options: string; on: string }) => void; onCancel: () => void; onRemove?: () => void }) {
+function DecisionForm({ others, start, answering, asking, busy, onSave, onCancel, onRemove }: { /** The Context's decisions, to depend on. */ others: ContextNote[]; start?: ContextNote; /** An open or proposed one being answered: the answer is what is asked for. */ answering?: boolean; /** An unanswered one edited: its question and background, and an answer if one is given now. */ asking?: boolean; busy: boolean; onSave: (b: { title: string; answer: string; body: string; background: string; options: string; dependsOn: string[]; dependsOnNew: string[]; on: string }) => void; onCancel: () => void; onRemove?: () => void }) {
   const [d, setD] = useState({ title: start?.title ?? '', answer: asking ? '' : start?.answer ?? '', body: asking ? '' : start?.body ?? '', background: start?.background ?? '', options: start?.options ?? '', on: answering ? today() : start?.on ?? today() })
+  // What it depends on: decisions already here, and questions written now, which are asked when it is saved.
+  const [deps, setDeps] = useState<string[]>((start?.dependsOn ?? []).map((x) => x.id))
+  const [asks, setAsks] = useState<string[]>([])
+  const [ask, setAsk] = useState<string | null>(null) // the new question being written; null: not writing one
+  const can = others.filter((o) => o.id !== start?.id && o.status !== 'rejected' && !deps.includes(o.id) && !(start && (o.dependsOn ?? []).some((x) => x.id === start.id)))
+  const addAsk = () => { const q = (ask ?? '').trim(); if (q && !asks.includes(q)) setAsks([...asks, q]); setAsk(null) }
   const needs = !!start && !asking // one already made, or being answered, has an answer
   // Always the same four, in the order they are thought (Sandy: "background should be above the question"; options "below the question"): where the question came from, the question, what there is to choose between, the answer, why that answer.
   return (
-    <form className="mock-edit context-form" data-component="ContextDecisionForm" onSubmit={(e) => { e.preventDefault(); onSave({ title: d.title.trim(), answer: d.answer.trim(), body: d.answer.trim() ? d.body.trim() : '', background: d.background.trim(), options: d.options.trim(), on: d.on }) }}>
+    <form className="mock-edit context-form" data-component="ContextDecisionForm" onSubmit={(e) => { e.preventDefault(); onSave({ title: d.title.trim(), answer: d.answer.trim(), body: d.answer.trim() ? d.body.trim() : '', background: d.background.trim(), options: d.options.trim(), dependsOn: deps, dependsOnNew: [...asks, ...((ask ?? '').trim() ? [(ask ?? '').trim()] : [])], on: d.on }) }}>
       <label>Background (optional): where the question comes from<textarea autoFocus={!start} rows={3} value={d.background} onChange={(e) => setD({ ...d, background: e.target.value })} placeholder="The PRD says this must be decided. We looked through the docs and found nothing on it." /></label>
       <label>The question<input autoFocus={!!start && !answering} value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} placeholder="What happens to a card when it is removed?" /></label>
       <label>Options (optional): what there is to choose between, a recommendation, anything more about the question<textarea rows={3} value={d.options} onChange={(e) => setD({ ...d, options: e.target.value })} placeholder="(a) Deleted at the provider. (b) Hidden here, kept there. Recommendation: (a)." /></label>
+      <div data-component="ContextDependsOn">
+        <div style={{ fontSize: 13, marginBottom: 4 }}>Depends on (optional): decisions that have to be made before this one can be</div>
+        <div className="row" style={{ marginTop: 0 }}>
+          {deps.map((id) => { const o = others.find((x) => x.id === id); return <span className="chip" key={id}>{o ? o.title || o.answer : 'a decision'}<button type="button" className="btn quiet small" aria-label={`No longer depends on ${o?.title || o?.answer || 'that decision'}`} onClick={() => setDeps(deps.filter((x) => x !== id))}>×</button></span> })}
+          {asks.map((q) => <span className="chip" key={q}>{q} <span className="faint">(new)</span><button type="button" className="btn quiet small" aria-label={`Do not ask ${q}`} onClick={() => setAsks(asks.filter((x) => x !== q))}>×</button></span>)}
+          {ask === null && <select aria-label="Depends on" value="" onChange={(e) => { if (e.target.value === 'new') setAsk(''); else if (e.target.value) setDeps([...deps, e.target.value]) }}>
+            <option value="">{deps.length || asks.length ? 'another decision…' : 'nothing: choose a decision…'}</option>
+            <option value="new">A new question…</option>
+            {can.map((o) => <option key={o.id} value={o.id}>{(o.title || o.answer || '').slice(0, 90)}{o.status === 'settled' ? '' : ' (unanswered)'}</option>)}
+          </select>}
+        </div>
+        {ask !== null && <div className="row">
+          <input aria-label="The question it depends on" autoFocus value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAsk() } else if (e.key === 'Escape') setAsk(null) }} placeholder="Does the backend use the core permissions?" style={{ flex: 1, minWidth: 240 }} />
+          <button type="button" className="btn quiet small" disabled={!ask.trim()} onClick={addAsk}>Add it</button>
+          <button type="button" className="btn quiet small" onClick={() => setAsk(null)}>Cancel</button>
+        </div>}
+        {(asks.length > 0 || ask?.trim()) && <div className="faint" style={{ fontSize: 13, marginTop: 4 }}>A new question is added to the decisions, unanswered, when this is saved.</div>}
+      </div>
       <label>{needs ? 'The answer' : 'The answer (leave it empty to answer later)'}<input autoFocus={answering} value={d.answer} onChange={(e) => setD({ ...d, answer: e.target.value })} placeholder="It is deleted at the provider, not hidden here" /></label>
       <label>Why this answer (optional)<textarea rows={2} value={d.body} onChange={(e) => setD({ ...d, body: e.target.value })} placeholder={d.answer.trim() ? 'The reason it was decided this way' : 'Once there is an answer: the reason it was decided this way'} /></label>
       <div className="row">

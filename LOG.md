@@ -7665,3 +7665,41 @@ titles, and could only offer to ask all of them again for Sandy to reject the ol
 - The prompt says a question already here is brought up to date in place, never asked a second time.
 
 An agent still cannot remove a decision: dropping one is the person's (Not needed).
+
+## A decision can depend on another (Sandy, 2026-11-24: "a question like, who can set someone as protected. The correct answer may depend on the backend-core permissions being used. But … it's not clear, so I need to create a new question that this one depends on")
+
+Built, not merged.
+
+- **In the form**, between Options and The answer: **Depends on**. Decisions already here are chosen from a list
+  (the project's too, on a task); **A new question…** is written there and asked, unanswered, when the decision is
+  saved. Each is a chip that can be taken off.
+- **On a decision**: "Depends on:" each one, with how it stands ("(unanswered)", or its answer), and on the other
+  side "Needed for:" what depends on it. Each is a link that goes to that decision on the page.
+- **Kept** as the ids of the decisions it depends on (`note.depends_on`, migration `0065_decision_depends`). A
+  decision cannot depend on itself, nor on one that depends on it in turn. One that is dropped is no longer
+  depended on.
+- **Agents** are told what each decision depends on and whether that is decided, and told to ask a prerequisite as
+  its own question. Their tool takes `dependsOn` (ids) and `dependsOnQuestions` (words, asked if not there) on
+  `ask`, `propose`, `decide` and `update`.
+
+Nothing is held up by it: a decision whose prerequisite is unanswered can still be answered. Not done: the list of
+decisions is not reordered to put prerequisites first, and a report does not say what an open decision depends on.
+
+## The open questions as a document to share (Sandy, 2026-11-24: "an open questions doc that is nicely formatted that I can then share with people")
+
+Built, not merged, with the dependencies above.
+
+- **Open questions doc**, a button on the Decisions section when anything is unanswered. It shows the document as
+  it will read, with **Copy as Markdown**, **Download** (a `.md` file) and **Print or save as PDF** (opens it on
+  its own, plainly styled, with the browser's print). Nothing is sent from Evident.
+- **What it says**: a title naming the task, idea or project; the app, the day, how many are open; a table of them
+  all (number, question, waiting on, asked); then each in full: when it was asked and who it waits on, its
+  background, its options, an answer an agent proposed (said as not decided), what it depends on (by number when
+  that is also open). Those waiting on someone come first, under "Waiting on <who>", so each person finds theirs.
+  A task's includes its project's, marked.
+- **Written by the engine from what is stored** (`openQuestionsDoc`, `GET …/context/open-questions`), by no
+  model: it says only what the decisions say. An agent can get the same with the `context` tool, `open_questions`.
+
+Mine to decide, and Sandy's to change: it is one task's, idea's or project's, not the whole app's; and it is made
+when asked for, not kept or versioned. Not done: no choice of which questions go in; no link to a page others can
+open, since the people it is for are not in Evident.

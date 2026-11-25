@@ -434,6 +434,8 @@ export interface ContextNote {
   /** An open decision: who the person asked and is waiting on. `on` is the day it was asked. */ waitingOn?: string | null
   /** A decision's background: where its question came from. Markdown. */ background?: string | null
   /** A decision's options: what there is to choose between, a recommendation, more about the question. Markdown. */ options?: string | null
+  /** The decisions this one depends on, each as it stands; and the decisions that depend on this one. */
+  dependsOn?: { id: string; title: string; answer: string | null; status: ContextNote['status'] }[]; neededBy?: { id: string; title: string }[]
   on: string; addedBy: string | null; fromProject: boolean; /** Other tasks it is also about. */ alsoAbout: { id: string; name: string; title: string }[]
 }
 export interface ContextView {
@@ -818,6 +820,8 @@ export const engine = {
   removeNote: (appId: string, id: string) => call<{ removed: string }>('DELETE', `/apps/${appId}/notes/${id}`),
   /** Context (docs/context-brief.md): the reference docs, notes and decisions of an idea, a task or a project. */
   context: (s: ContextSubject) => call<ContextView>('GET', `/${s.kind}/${s.id}/context`),
+  /** Its unanswered decisions as a document to share (the engine's openQuestionsDoc): Markdown, written from what is stored. */
+  openQuestions: (s: ContextSubject) => call<{ title: string; count: number; markdown: string }>('GET', `/${s.kind}/${s.id}/context/open-questions`),
   /** For a nav: how much it holds, and how many proposed decisions wait for the person. */
   contextCount: (s: ContextSubject) => call<{ count: number; proposed: number; waiting?: number }>('GET', `/${s.kind}/${s.id}/context/count`),
   addContextDoc: (s: ContextSubject, b: { title: string; description?: string; body: string; inFull?: boolean }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/docs`, b),
@@ -834,9 +838,9 @@ export const engine = {
   /** A ticket, as its tracker has it now. */
   refreshContextDoc: (s: ContextSubject, id: string) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/docs/${id}/refresh`),
   removeContextDoc: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/docs/${id}`),
-  addContextNote: (s: ContextSubject, b: { kind: 'note' | 'decision'; title: string; /** A decision's: left out, it is open. */ answer?: string; body: string; background?: string; options?: string; on?: string }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/notes`, b),
+  addContextNote: (s: ContextSubject, b: { kind: 'note' | 'decision'; title: string; /** A decision's: left out, it is open. */ answer?: string; body: string; background?: string; options?: string; /** Decisions it depends on: by id, and questions by their words, asked now if they are not here. */ dependsOn?: string[]; dependsOnNew?: string[]; on?: string }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/notes`, b),
   /** status: accept a proposed decision (settled) or reject it. */
-  editContextNote: (s: ContextSubject, id: string, b: Partial<{ title: string; answer: string; body: string; background: string; options: string; on: string; status: 'settled' | 'rejected'; /** An open decision: who it waits on; empty: nobody. */ waitingOn: string }>) => call<ContextView>('PATCH', `/${s.kind}/${s.id}/context/notes/${id}`, b),
+  editContextNote: (s: ContextSubject, id: string, b: Partial<{ title: string; answer: string; body: string; background: string; options: string; dependsOn: string[]; dependsOnNew: string[]; on: string; status: 'settled' | 'rejected'; /** An open decision: who it waits on; empty: nobody. */ waitingOn: string }>) => call<ContextView>('PATCH', `/${s.kind}/${s.id}/context/notes/${id}`, b),
   removeContextNote: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/notes/${id}`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
   writeReport: (appId: string, body: { period: ReportPeriod; notes?: string }) => call<{ writing: boolean }>('POST', `/apps/${appId}/reports`, body),
