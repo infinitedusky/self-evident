@@ -1,7 +1,7 @@
 /**
  * The loop as a thin strip of icons on the far left, like VS Code's activity bar: each opens its page as a tab
  * (or brings it to the front). Hovering one shows its name. The rail holds only the stages of work, with nothing under
- * them: projects, tasks and the steps live inside their stage (LOG.md, 2026-10-29). Below the rule: Summary and My Stuff.
+ * them: projects, tasks and the steps live inside their stage (LOG.md, 2026-10-29). Below the rule: Summary, Reports, My Stuff and Docs.
  * Settings sits at the bottom. The apps have their own strip outside it, on the far left as in Slack (AppPicker); the
  * tiny chevron at the top shows or hides that strip.
  */
@@ -21,6 +21,7 @@ const OUTSIDE: Item[] = [
   { icon: '📰', label: 'Summary', tab: page('/summary') },
   { icon: '🗞️', label: 'Reports', tab: page('/reports') },
   { icon: '📌', label: 'My Stuff', tab: page('/'), also: /^\/$/ },
+  { icon: '📚', label: 'Docs', tab: page('/docs') }, // the app's docs site, from its workbench folder (Sandy, 2026-11-24: "in the left nav near my stuff")
 ]
 
 /** `here` is the key of the tab in front (tabKey), which lights its icon. */

@@ -7758,3 +7758,27 @@ Not done: a press that checks a page against the code and marks each claim (toda
 conversation, which exists only once the code has been learned); diagrams (the page shows Markdown, and a Mermaid
 block shows as code); the pages are not handed to planners and builders as they start (a tool they may call, as
 Learn's four are); the workbench docs site is left as it is, with nothing moved from it. Not tried with a real agent.
+
+## Docs: the app's docs site, in the nav (Sandy, 2026-11-24: "the docs would just be in the left nav near my stuff, and … we would just be showing the VitePress page")
+
+Said after "Your docs" (above) was on the Learn page: Sandy asked whether it was VitePress, and it was not. The docs
+are the VitePress site in the app's workbench folder, and Evident shows it.
+
+- **Docs is in the rail, below the rule, after My Stuff** (📚, `/docs`), for the app in front.
+- **It frames the site**, as Mockups frames Storybook: the site's own sidebar, search and diagrams, nothing drawn
+  over it, and a link that opens it on its own.
+- **The site is `docs/` (VitePress) in the app's workbench folder** (`setup.workbench.dir`, the folder the hooks are
+  in). The docs are files there, versioned with it. Nothing new is set.
+- **The engine starts it on a press** (`engine/src/docs-site.ts`): the folder's own VitePress, on a port that is the
+  folder's (6900 to 6989), running on its own so it outlives an engine restart. One already answering there is used.
+- **The page says what is missing**: no workbench folder (to Settings › Workbench), a folder that is not on this
+  computer, a folder with no docs site, or VitePress not installed there (run `pnpm install`).
+
+Tried by hand: the Cloaked workbench's site starts this way and sends nothing that stops it being framed. Not tried:
+the page against a running engine; the site framed when Evident is served under a name (it goes through the
+Storybook frame address, and VitePress may refuse a name it was not told).
+
+Not done: nothing stops the site (it is left running); agents have no tool for writing a docs page (one working in
+the workbench folder edits the files); a folder with no site is not given one from the template. **Open: "Your docs"
+on the Learn page (pages in the database) is still there.** With the docs being this site, it is a second place for
+the same thing; whether it goes is Sandy's to say.

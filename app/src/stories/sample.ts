@@ -902,3 +902,6 @@ export const tickets: import('../engine').TicketGroup[] = [
     { id: 'iss_sample46', identifier: 'SS-46', title: 'Product page uses the sizes (sample)', teamTitle: null, state: 'done', from: 'set', project: null, pr: { number: 22, url: 'https://example.com/sample-shop/pull/22', status: 'merged' } },
   ] },
 ]
+
+// An app's docs site (made up): running, framed at an empty page here since no site runs beside Storybook.
+export const docsSiteSample: import('../engine').DocsSite = { dir: '/Users/sample/code/shop-workbench', found: true, has: true, problem: null, url: 'http://localhost:6912', frame: 'about:blank', up: true, startedHere: false, log: [] }

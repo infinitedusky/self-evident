@@ -417,6 +417,8 @@ export interface SmokeSetupView { /** The fixtures' files it was given when it l
 /** In place of a fixture's name: start a smoke test from no fixture. No fixture can be named this. */
 export const EMPTY = '(empty)'
 export interface SmokeView { /** The one set-up's files, as on SmokeSetupView. */ files?: SmokeSetupView['files']; /** The one set-up's database, as on SmokeSetupView. */ data?: { builtFrom: string | null; ran: boolean }; /** Every set-up of the app; left out, the app has the one the fields below describe. */ setups?: SmokeSetupView[]; /** A staged task: the checks are every criterion no agent marked, not what a check after the build left. */ staged?: boolean; /** Its pull request, when there is one: a preview is of it. */ pr?: { number: number; url: string | null } | null; where: 'local' | 'preview' | 'staging' | 'flag' | 'terminal'; says: string; account: string | null; flag: string | null; branch: string | null; head: string | null; running: string | null; url: string | null; up: boolean; canRun: boolean; /** There is something to start from nothing: a database, a seed, or a script of its own. */ canClean?: boolean; terminal?: { folder: 'build' | 'temp'; open: boolean }; scratch?: { open: boolean }; log: string[]; checks: SmokeCheck[]; owed: number; failed: number; /** After a mark: how many that failed were sent back. */ sentBack?: number; /** Accepted by the person, or null. */ accepted?: SmokeAccepted | null; /** It can be accepted now; else what it waits on. */ canAccept?: boolean; acceptWaits?: string | null; release?: ReleaseCheck[]; watch?: WatchCheck[] }
+/** An app's docs site (engine docs-site.ts): the VitePress site in its workbench folder, which the Docs page frames. */
+export interface DocsSite { /** The workbench folder; null when none is named. */ dir: string | null; /** The folder is on this computer. */ found: boolean; /** It holds a docs site. */ has: boolean; /** Why it cannot be started. */ problem: string | null; url: string | null; frame: string | null; up: boolean; startedHere: boolean; log: string[] }
 /** What an agent learned from an app's code: a short document each, the part for a person and the part for agents. */
 export interface Learned { key: string; title: string; summary: string; body: string; sha: string | null; updatedAt: string }
 export interface Learning { docs: Learned[]; missing: string[]; working: { sessionId: string } | null; sessionId: string | null; stale: number }
@@ -864,6 +866,8 @@ export const engine = {
   askDataAgent: (issueId: string, message: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent`, { message }),
   approveDataStep: (issueId: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent/approve`),
   changeDataStep: (issueId: string, text: string) => call<DataAgentView>('POST', `/issues/${issueId}/data-agent/change`, { text }),
+  docsSite: (appId: string) => call<DocsSite>('GET', `/apps/${appId}/docs-site`),
+  startDocsSite: (appId: string) => call<DocsSite>('POST', `/apps/${appId}/docs-site/start`),
   workbench: (appId: string) => call<WorkbenchView>('GET', `/apps/${appId}/workbench`),
   setWorkbench: (appId: string, dir: string | null) => call<WorkbenchView>('PUT', `/apps/${appId}/workbench`, { dir }),
   reviewCopy: (issueId: string, fresh = false) => call<ReviewCopyView>('GET', `/issues/${issueId}/review-copy${fresh ? '?fresh=1' : ''}`),
