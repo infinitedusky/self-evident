@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { expect, userEvent, within } from 'storybook/test'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { PrototypePane } from './PrototypePane'
 import { MAIN_OFF, withEngine } from '../stories/mock-engine'
 import { apps, prototypes, sampleApp } from '../stories/sample'
@@ -114,11 +114,11 @@ export const CompareWithMain: Story = {
     // Each view has a bar of its own: main goes somewhere, and back, without the prototype moving.
     const main = c.getByRole('textbox', { name: 'Address (main)' })
     await userEvent.clear(main); await userEvent.type(main, '/iframe.html?id=pages-now--busy&viewMode=story{Enter}')
-    await expect(c.getByTitle('main')).toHaveAttribute('src', expect.stringContaining('pages-now--busy'))
+    await waitFor(() => expect(c.getByTitle('main')).toHaveAttribute('src', expect.stringContaining('pages-now--busy')))
     await expect(c.getByTitle(running.title)).toHaveAttribute('src', expect.stringContaining(at))
     await expect(c.getByRole('textbox', { name: 'Address (prototype)' })).toHaveValue(at)
     await userEvent.click(c.getByRole('button', { name: 'Back (main)' }))
-    await expect(c.getByTitle('main')).toHaveAttribute('src', expect.stringContaining(at))
+    await waitFor(() => expect(c.getByTitle('main')).toHaveAttribute('src', expect.stringContaining(at)))
     await expect(c.getByRole('button', { name: 'Forward (main)' })).toBeEnabled()
     await expect(c.getByRole('button', { name: 'Reload (prototype)' })).toBeInTheDocument()
     // Detached, main is in a browser tab of its own and the prototype has the room; put back, it is beside it again.

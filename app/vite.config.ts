@@ -11,7 +11,9 @@ const dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(file
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5180, strictPort: true, host: '127.0.0.1', // IPv4 too: some browsers resolve localhost to 127.0.0.1, and Node binds only ::1 by default // one address to remember; `pnpm dev` at the repo root prints it
+    // Under the tests this config is also the story tests' own server, on Vitest's port: two checkouts testing at
+    // once must not fail each other over it, so there the next free port is taken.
+    port: 5180, strictPort: !process.env.VITEST, host: '127.0.0.1', // IPv4 too: some browsers resolve localhost to 127.0.0.1, and Node binds only ::1 by default // one address to remember; `pnpm dev` at the repo root prints it
     // The idea files live one level up, at the repo root.
     fs: { allow: ['..'] },
     // The engine serves its API under /api (and the built UI at / in production); the UI never talks to the database.

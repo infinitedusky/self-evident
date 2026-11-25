@@ -324,14 +324,14 @@ export const TheStoryBehindAQuestion: Story = {
     await userEvent.type(c.getByRole('textbox', { name: /^Options/ }), '(a) Keep them. (b) Delete them.')
     await userEvent.click(c.getByRole('button', { name: 'Add it, unanswered' }))
     await expect(await c.findByText('Legal asked last spring and nobody answered.')).toBeVisible()
-    await expect(c.getByText('(a) Keep them. (b) Delete them.')).toBeVisible()
+    await expect(await c.findByText('(a) Keep them. (b) Delete them.')).toBeVisible()
     // The story can be added to a question already asked, without answering it.
     await userEvent.click(c.getByRole('button', { name: 'Edit the question: What is shown when a saved card has expired? (sample)' }))
     for (const name of ['The question', /^Background/, /^Options/, /^The answer/, 'Why this answer (optional)']) await expect(c.getByRole('textbox', { name })).toBeVisible()
     await userEvent.type(c.getByRole('textbox', { name: /^Background/ }), 'The vault still returns expired cards.')
     await userEvent.click(c.getByRole('button', { name: 'Save it, unanswered' }))
     await expect(await c.findByText('The vault still returns expired cards.')).toBeVisible()
-    await expect(c.getByRole('button', { name: 'Answer: What is shown when a saved card has expired? (sample)' })).toBeVisible() // still unanswered
+    await expect(await c.findByRole('button', { name: 'Answer: What is shown when a saved card has expired? (sample)' })).toBeVisible() // still unanswered
   },
 }
 

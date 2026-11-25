@@ -85,7 +85,7 @@ describe.skipIf(!reachable)('summary', () => {
 
     await createTodo({ appId, title: 'Something new' })
     expect((await latestFocus(appId)).stale).toBe(true)
-    expect(await dueApps(0)).toContain(appId)
+    await expect.poll(() => dueApps(0), { timeout: 10_000 }).toContain(appId) // the summary's time is the database's clock, which can be a moment ahead of this one
     expect(await dueApps(24)).not.toContain(appId) // stale, but not a day old
   })
 })

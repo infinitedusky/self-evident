@@ -8131,3 +8131,48 @@ an agent, and a way to hold what it says to the diff); nothing from Evident's ow
 earlier tasks on the same files, the blast radius); it cannot be brought up to try as a smoke test is; a second run
 does not say what changed since the first; a comment made on GitHub is not read back, so a draft already said still
 shows; it has not been run on a real pull request yet.
+
+## Tests that failed on files nobody changed (Sandy, 2026-11-25)
+
+Sandy: "Every time we test something or run something, we're getting this thing that says that unrelated stories
+failed, or we had unrelated failures … but it's on files I didn't change." Counted across past sessions, it was a
+small set again and again: `github.test.ts` (stacked PRs), several of `runner.test.ts`, `pr-submit.test.ts`,
+`finalize.test.ts`, and the stories Compared With What, All Apps Skills From A Repo, Compare With Main, Fill Out
+For Fixture People and the Context ones. Clean main failed three engine tests on the first run. Six causes:
+
+- **Every test file shared one database, never emptied, with every checkout.** The runner dispatches every running
+  project in the database (right for the one engine a person runs), so one test file's runner built another
+  file's projects with its own made-up executor: which test lost depended on timing. A test that read "pull
+  request 12" got one left by an earlier run. A checkout on newer migrations changed the schema under the others.
+  Now each run makes and migrates its own database, each test file that uses it works on its own copy, and all are
+  dropped when the run ends (`engine/vitest.config.ts`, `src/test-setup.ts`, `src/test-db.ts`). The folders that
+  stand in for the person's are each file's own too. A run takes the same time as before, about a minute.
+- **The story tests' server had a fixed port and was told to fail if it was taken**, because the app's Vite config
+  is also theirs. Two checkouts running the stories at once: one got "Port 63315 is already in use" and ran
+  nothing. Under the tests the next free port is taken.
+- **A story waited for text it had typed itself.** A box that was typed into holds that text, so "save, then wait
+  for it to show" was met at once by the form's own box, before the save landed; the form then closed under the
+  next step. Text is no longer looked for inside a text box, for every story (`.storybook/preview.tsx`).
+- **A choice made on a disabled control does nothing.** Compared With What chose the next main while the picker
+  was still disabled by the stop before it. It waits for the picker to take a choice.
+- **Waits sized for a quiet computer.** Stories wait ten seconds for what they look for, not one; the engine's
+  tests wait up to a minute where they waited five to twenty seconds. A passing run is no slower.
+- **The main checkout follows GitHub by itself**, about every ten minutes. A run there can see the code change half
+  way: the "type error on main" in the first run was that. Tests are run in a worktree, as the work is.
+
+After: the engine's tests and the app's pass run after run, in the same time as before, and the app's pass with
+the engine's going beside them. Nothing is left behind on the database server or in the temp folder.
+
+- **`runner.test.ts` made 27 runners and shut none down.** A runner dispatches every running project and goes on
+  doing so when a build of its own ends, so a later test's runner built an earlier test's leftovers, and the other
+  way round. Each test's runners are shut down and its projects closed when it ends (the file takes 36 seconds, not
+  60). Two tests that assert builds overlap keep a made-up build open until a second is going; one waits for the
+  row the hold writes, not just the hold.
+
+With these, two engine runs at once both pass.
+
+Not done: with the app's tests going beside them, two of the engine's that start a server on a database of its
+own (`main-running.test.ts`, `prototype-data.test.ts`) stalled for the whole two minutes in one run of three; alone
+they take six seconds, and they did the same before any of this. Why is not found. `mock-data.test.ts` hung once
+in some fifteen runs (a request with no time limit, to a mock on a port it was just given). The old shared
+`selfevident_test` database is left for branches made before this.

@@ -40,7 +40,7 @@ export const FillOutForFixturePeople: Story = {
     await waitFor(() => expect(c.getByRole('combobox', { name: 'Fixture' })).toHaveValue('northwind-company')) // once the app's fixtures are read
     await expect(await c.findByRole('combobox', { name: 'Data column 1' })).toHaveValue('work_email') // a column both have, that says who someone is
     await userEvent.click(c.getByRole('button', { name: 'Add a column' }))
-    await userEvent.selectOptions(c.getByRole('combobox', { name: 'Data column 2' }), 'tracking_id')
+    await userEvent.selectOptions(await c.findByRole('combobox', { name: 'Data column 2' }), 'tracking_id')
     await userEvent.selectOptions(c.getByRole('combobox', { name: 'Fixture column 2' }), 'id')
     const many = c.getByRole('spinbutton', { name: 'How many people' })
     await userEvent.clear(many); await userEvent.type(many, '3')

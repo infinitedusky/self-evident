@@ -43,7 +43,7 @@ describe('how a pull request is titled and opened', () => {
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-async function until(check: () => Promise<boolean>, timeoutMs = 20_000) { const t0 = Date.now(); while (!(await check())) { if (Date.now() - t0 > timeoutMs) throw new Error('timed out'); await sleep(100) } }
+async function until(check: () => Promise<boolean>, timeoutMs = 60_000) { const t0 = Date.now(); while (!(await check())) { if (Date.now() - t0 > timeoutMs) throw new Error('timed out'); await sleep(100) } }
 
 describe.skipIf(!reachable)('a pull request waits for the person (sample data)', () => {
   const wsId = newId('workspace'), appId = newId('app')
