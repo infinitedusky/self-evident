@@ -8055,6 +8055,52 @@ that one piece of work); tokens per model are not recorded (`run.tokens` is empt
 what conversations cost: starting afresh per task, compacting before resuming a cold one, a model per role, a
 budget cap.
 
+## 2026-11-25: each decision is a card
+
+Sandy: "The separation of the decisions is not clear enough. It's hard to know whether background is coming
+after options … I think the question should be at the top and then it should be background and then options,
+but we need more prominent separation. Maybe each one of them is a card."
+
+- **A decision is a card** with its own border, so where one ends and the next starts is plain. The two columns
+  (question left, answer right) are gone: one column, read top to bottom.
+- **Order in an unanswered one:** the question, where it stands (unanswered, or waiting on whom), Background,
+  Options, then what to ask, what it depends on, a proposed answer, and the buttons. Background and Options each
+  have a heading and a rule above them.
+- **Order in an answered one:** the question, the answer under an "Answer" heading with why and when, then
+  Background and Options, folded as before.
+- An unanswered card has a coloured left edge: accent when it is yours, amber when it waits on someone.
+- The form is unchanged: Background is still above the question there, as Sandy asked on 2026-11-24.
+
+## On a phone you are at a place, and its chat goes with you (Sandy, 2026-11-25, after trying the first cut: "the chat it's suggesting to go back to is like on the whatever task we were on, but if I've navigated away from that, I don't want to be on that task anymore … I don't know how it chooses what task to to land on … the task or project view should be moving between the chat window or section, the whatever page we are on at that time, and the left nav, and then we are always able to navigate to wherever else in the app we want to go by going to like the grid thing in the in the top")
+
+The first cut was a chat with pages laid over it, and "‹ Chat" went back to a task the person had left. Turned
+round: the phone is at a place in the app, and a place has a page, a chat and a nav.
+
+- **Chat and the page are two tabs** under the place's name. Both stay as they were when flipped between.
+- **The chat is the chat of where you are**: a task's own agent with its agents as tabs, an idea's agent, a
+  project's conversation (started from there if it has none), and anywhere else a conversation about the app. Going
+  to another task in the page changes the chat with it.
+- **The tray is the place's nav**: at a task, its project's tasks with this task's steps under it and the open one
+  marked; at a project, its tasks. Then what needs you (a question goes to its task's chat, the rest to their page)
+  and every chat, each going to the place it belongs to.
+- **The grid goes anywhere**: My Stuff, Projects, Tasks, Ideas, To-dos, Learn, Settings.
+- **It opens where it was last, else on My Stuff.** No task is picked for the person any more. The address bar
+  keeps the place, so a reload stays put.
+
+Not done: the same as the first cut (pages are the computer's, narrow; no swiping; agents out are not read-only).
+A task's page still carries the task's agent column, hidden, under the phone's own chat: two copies listening.
+
+## On a phone, a place's pages are tabs across the top, and Chat is at the right (Sandy, 2026-11-25: "We need a way to navigate through projects and tasks to get the differnt sections. Currently it is just overview" and "I would also put the chat tab to the right of overview or whatever else we put there")
+
+The two tabs were Chat and one page, and the other pages of a task were only in the tray, where they were not found.
+Now the pages are the tabs: Overview, Context, the brief and each step with its mark (✓ ◐ ○; one that waits on
+another is greyed), then Build, and Smoke test and Pull request once something is planned. A project has Overview,
+Context, Tickets and its steps; an idea its own. They scroll sideways and the open one is brought into sight. Chat
+is the last tab and stays at the right end while the others scroll under it. A place with one page (My Stuff, a
+list) has that page and Chat.
+
+The tray still lists a task's steps under it. After GitHub's phone site, where a repository's tabs scroll sideways.
+
 ## Tests that failed on files nobody changed (Sandy, 2026-11-25)
 
 Sandy: "Every time we test something or run something, we're getting this thing that says that unrelated stories

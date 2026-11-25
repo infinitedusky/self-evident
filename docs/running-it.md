@@ -130,10 +130,11 @@ only your own devices are on:
 A green dot, with the device's name, shows while a phone (or another computer) has the page open. The buttons work
 from this computer's page only, never from the phone.
 
-On a phone the page is laid out for one: a single chat, with a button at its top left for the tray (what needs you,
-the project's tasks, this task's steps, the other chats) and one at its top right for Look (the task's pages and the
-rest of the app). A page opens over the chat; **‹ Chat** goes back. Any window 700px wide or less gets this layout.
-**The full site, on this phone**, at the bottom of Look, gives the computer's layout until the tab is closed.
+On a phone the page is laid out for one. You are at a place in the app (a task, a project, My Stuff), named at the
+top, with tabs under it: its pages (a task's overview, context, brief, each step and build; scroll them sideways),
+and at the right end **Chat**, the conversation that belongs to that place. The button at the top left is the
+place's nav (a project's tasks), what needs you and the chats; the grid at the top right goes anywhere in the app. It opens where it was last. Any window 700px wide or less gets this layout.
+**The full site, on this phone**, at the bottom of the grid's list, gives the computer's layout until the tab is closed.
 
 By hand: `tailscale serve --bg 5180`, `tailscale serve status`, `tailscale serve --https=443 off`. If the address
 errors, turn on HTTPS certificates in Tailscale's admin console, under DNS. Checking the address from this computer
