@@ -15,6 +15,7 @@ export interface MockData {
   summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript; /** A task's own agent, or null when it has none. */ taskTalk: typeof s.talkSession | null; /** The agents it has out. */ taskAgents?: import('../engine').TaskAgentOut[]; /** An idea's own agent, or null when it has none. */ ideaTalk?: typeof s.talkSession | null
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
   /** A project's own agent, or none; and the agents it has out. */ projectTalk?: typeof s.talkSession | null; projectAgents?: import('../engine').TaskAgentOut[]
+  /** A project's tickets; the sample's when left out. */ projectTickets?: import('../engine').ProjectTicket[]
   /** The app's tickets, each with its tasks. */ tickets: import('../engine').TicketGroup[]
   /** The app's mock library. */ mocks: import('../engine').Mock[]
   /** Where each mock's data comes from: the app's defaults, and one task's. */ mockPlaces: import('../engine').MockPlacesRow[]; mockPlacesForTask: import('../engine').MockPlacesRow[]
@@ -520,6 +521,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.put('/api/:kind/:id/steps/:key', () => reply(d.stepWork)),
     http.get('/api/initiatives', () => reply(d.initiatives)),
     http.get('/api/cycles', () => reply(d.cycles)),
+    http.get('/api/projects/:id/tickets', () => reply(d.projectTickets ?? s.projectTickets)),
     http.get('/api/projects/:id/agents', () => reply(d.projectAgents ?? [])),
     http.get('/api/projects/:id/talk', () => reply(d.projectTalk ?? null)),
     http.post('/api/projects/:id/talk', () => { d.projectTalk = d.projectTalk ?? { ...s.talkSession, subject: 'Checkout (sample)', subjectRef: { projectId: 'proj_checkout', app: true } }; return reply(d.projectTalk) }),

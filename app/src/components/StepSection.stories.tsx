@@ -1,8 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { rows } from '@self-evident/engine/steps'
 import { StepSection } from './StepSection'
-import { withEngine } from '../stories/mock-engine'
-import { expect, userEvent, within } from 'storybook/test'
+import { http, HttpResponse } from 'msw'
+import { mockEngine, sampleData, withEngine } from '../stories/mock-engine'
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test'
+
+const asked = fn()
 import { prototypes, riskWork, sampleApp, taskStepsView, trajectorySample } from '../stories/sample'
 
 // One step of a task as its own page. Made up: the sample task's steps under "UI change (sample)".
@@ -36,6 +39,30 @@ export const Skipped: Story = {
 export const RequiredCannotBeSkipped: Story = {
   args: { row: { ...row('research'), required: true, state: { key: 'research', status: 'none' } } }, beforeEach: withEngine({ stepWork: null }),
   play: async ({ canvasElement }) => { const c = within(canvasElement); await c.findByRole('button', { name: /Start with the agent/ }); await expect(c.queryByRole('button', { name: 'Skip this step' })).toBeNull() },
+}
+/** Start asks first whether there is anything to add: what is written goes to the agent with the step, and nothing written starts it just the same. */
+export const AddBeforeItStarts: Story = {
+  args: { row: { ...row('research'), state: { key: 'research', status: 'none' } } },
+  beforeEach: ({ msw }: any) => { asked.mockClear(); msw.use(http.post('/api/talks/ask', async ({ request }) => { asked(await request.json()); return HttpResponse.json(sampleData.talks[0], { status: 201 }) }), ...mockEngine({ stepWork: null })) },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Start with the agent' }))
+    await expect(asked).not.toHaveBeenCalled() // nothing is sent until Start
+    await userEvent.type(c.getByRole('textbox', { name: /Anything to add before it starts/ }), 'Leave billing out; look at how returns work (sample)')
+    await userEvent.click(c.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(asked).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringMatching(/Do the Research step[\s\S]*From me, before you start:\nLeave billing out; look at how returns work \(sample\)$/) })))
+    await expect(await c.findByText(/Handed to this task's agent/)).toBeInTheDocument()
+  },
+}
+/** Cancel puts the button back and sends nothing. */
+export const AddThenCancel: Story = {
+  args: { row: { ...row('research'), state: { key: 'research', status: 'none' } } }, beforeEach: withEngine({ stepWork: null }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Start with the agent' }))
+    await userEvent.click(c.getByRole('button', { name: 'Cancel' }))
+    await expect(c.getByRole('button', { name: 'Start with the agent' })).toBeInTheDocument()
+  },
 }
 /** The prototype's step: the thing running (View), every file it changed and what the agent shows (Code), and what it wrote for the brief. Here the agent has just shown a file. */
 const planRow = { key: 'testplan' as const, required: true, position: null, waitingOn: null, state: { key: 'testplan' as const, status: 'done' as const, detail: '4 tests, 3 written up front; 2 slices' } }

@@ -147,6 +147,27 @@ export const StartAStep: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: 'Start with the agent' }))
+    await userEvent.click(c.getByRole('button', { name: 'Start' })) // nothing to add
     await expect(await c.findByText('Handed to this project\'s agent, on the right.')).toBeInTheDocument()
   },
 }
+/** What the project is made up of, by ticket: the ones in its Context with no task yet come first (what is still to plan), then the ones being worked, each with its tasks. One is over a task here and not in the Context. */
+export const ItsTickets: Story = {
+  parameters: at('proj_checkout', 'tickets'),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/2 have no task yet/)).toBeInTheDocument()
+    const nav = within(c.getByRole('navigation', { name: 'This project' }))
+    await expect(nav.getByText('2 with no task yet')).toBeInTheDocument()
+    const first = (await c.findAllByRole('region'))[0]
+    await expect(first).toHaveAccessibleName('SHOP-331')
+    await expect(within(first).getByText(/No task is under it/)).toBeInTheDocument()
+    const worked = c.getByRole('region', { name: 'SHOP-323' })
+    await expect(within(worked).getByText('1 of 3 tasks done')).toBeInTheDocument()
+    const other = c.getByRole('region', { name: 'SHOP-340' })
+    await expect(within(other).getByText(/Not in this project's Context/)).toBeInTheDocument()
+    await expect(within(other).getByText(/one of its other tickets/)).toBeInTheDocument()
+  },
+}
+/** A project with no tickets in its Context or on its tasks. */
+export const NoTickets: Story = { parameters: at('proj_checkout', 'tickets'), beforeEach: withEngine({ projectTickets: [] }), play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByText(/No tickets yet/)).toBeInTheDocument() } }

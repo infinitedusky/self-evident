@@ -2,11 +2,11 @@
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db, pool } from './db/client.js'
-import { app, idea, issue, project, ticket, workspace } from './db/schema.js'
+import { app, contextDoc, idea, issue, project, ticket, workspace } from './db/schema.js'
 import { newId } from './ids.js'
 import { issueDetail, createProject } from './projects.js'
 import { keepOrigin } from './origins.js'
-import { needsTicket, setTeamNames, teamTicket, ticketIn, ticketOf, ticketOfTask, ticketRequired, ticketsOf } from './ticket.js'
+import { needsTicket, setTeamNames, teamTicket, ticketIn, projectTickets, ticketOf, ticketOfTask, ticketRequired, ticketsOf } from './ticket.js'
 
 describe('a team ticket', () => {
   it('is read from a link to it, never from a bare mention', () => {
@@ -91,5 +91,33 @@ describe.skipIf(!reachable)('a task\'s team ticket and its name for the team', (
     expect(all.findIndex((x) => x.key === 'ENT-900')).toBeLessThan(all.findIndex((x) => x.key === 'ENT-323'))
     await expect(ticketOf(appId, 'ENT-1')).rejects.toThrow(/no ticket ENT-1 here/)
     await expect(setTeamNames((await db.select().from(issue).where(eq(issue.parentId, one.id)))[0]?.id ?? 'iss_none', { ticket: 'ENT-323' })).rejects.toThrow(/no task|not a sub-task/)
+  })
+
+  it('a task can be under more than one ticket: the first names its branch, the rest only place it', async () => {
+    const { issues: [both, one] } = await createProject({ appId, name: 'Two tickets (sample)', issues: [{ title: 'Shared list screen (sample)', brief: 'Build it.' }, { title: 'Detail screen (sample)', brief: 'Build it.' }] })
+    await setTeamNames(both.id, { ticket: 'ENT-610', also: ['ent-611', 'ENT-610', ' ENT-612 '] })
+    await setTeamNames(one.id, { ticket: 'ENT-611' })
+    expect(await issueDetail(both.id)).toMatchObject({ ticket: 'ENT-610', ticketFrom: 'set', alsoTickets: ['ENT-611', 'ENT-612'] }) // its first ticket is not one of the rest
+    expect((await ticketOf(appId, 'ENT-611')).tasks.map((t) => [t.id, t.from])).toEqual([[both.id, 'also'], [one.id, 'set']])
+    expect((await ticketOf(appId, 'ENT-610')).tasks.map((t) => [t.id, t.from])).toEqual([[both.id, 'set']])
+    await expect(setTeamNames(both.id, { also: ['nope'] })).rejects.toThrow(/its key, like ENT-322/)
+    // One of the rest made the first: it is no longer among the rest. The list replaced: what is left out goes.
+    await setTeamNames(both.id, { ticket: 'ENT-612' })
+    expect(await issueDetail(both.id)).toMatchObject({ ticket: 'ENT-612', alsoTickets: ['ENT-611'] })
+    await setTeamNames(both.id, { also: [] })
+    expect(await issueDetail(both.id)).toMatchObject({ ticket: 'ENT-612', alsoTickets: [] })
+    expect((await ticketOf(appId, 'ENT-611')).tasks.map((t) => t.id)).toEqual([one.id])
+  })
+
+  it('a project\'s tickets are the ones in its Context and the ones its tasks are under, the unplanned first', async () => {
+    const { project: p, issues: [t] } = await createProject({ appId, name: 'Its tickets (sample)', issues: [{ title: 'Authorization form (sample)', brief: 'Build it.' }] })
+    const planned = await keepOrigin(db, appId, { source: 'linear', ref: 'ENT-701', title: 'Executive authorization (sample)', body: 'Made up.' })
+    const waiting = await keepOrigin(db, appId, { source: 'linear', ref: 'ENT-702', title: 'Deepfake checks (sample)', body: 'Made up.' })
+    await keepOrigin(db, appId, { source: 'linear', ref: 'ENT-703', title: 'Another project\'s (sample)', body: 'Made up.' })
+    for (const o of [planned, waiting]) await db.insert(contextDoc).values({ id: `cdoc_${o.id.slice(-10)}`, appId, projectId: p.id, kind: 'ticket', originId: o.id, title: o.title, createdBy: 'user' })
+    await setTeamNames(t.id, { ticket: 'ENT-701', also: ['ENT-704'] })
+    const got = await projectTickets(p.id)
+    expect(got.map((g) => [g.key, g.inContext, g.here, g.tasks.length])).toEqual([['ENT-702', true, 0, 0], ['ENT-701', true, 1, 1], ['ENT-704', false, 1, 1]])
+    await expect(projectTickets('proj_nope')).rejects.toThrow(/no project proj_nope/)
   })
 })

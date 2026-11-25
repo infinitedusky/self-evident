@@ -7854,3 +7854,28 @@ Not done: the project's agent is still listed in the app's column on the left as
 no worktree of their own to be written in (the agent has no editing tools: it can research and plan, and a
 prototype it starts gets its own worktree); `project_graph` on this project returns 190,000 characters, more than
 an agent can read in one go, which is what sent the research agent to the shell (it is told to use `tasks`).
+
+## A project's Tickets page, a task under more than one ticket, and a note before a step starts (Sandy, 2026-11-25)
+
+Sandy, after the project page gained its nav: "where do we have the stuff that is more like organizational, like
+what it's made up of … let's have a ticket page", and "a task can have more than one ticket it's pointing at".
+Then, on a step's page: "we have this button that says start … what that should actually do should be start it,
+but before the agent responds, prompts you to add anything that you want."
+
+- **A project has a Tickets page** (`/projects/:id/tickets`, in its nav under Context): the tickets in its
+  Context as reference docs (and the one it came from) and the tickets its tasks are under, each with all its
+  tasks. A ticket no task is under yet comes first, and the nav says how many: that is what is still to plan.
+  A ticket over one of its tasks that is not in its Context says so; tasks of the ticket elsewhere are counted.
+- **A task can be under more than one ticket.** Its team ticket (`issue.ticket_id`) still names its branch,
+  commits and pull request, which carry one key. The others (`issue_ticket`) only place it under those tickets
+  too: "Also under" on the task's ticket badge, `alsoTickets` for the agents. On a ticket's page such a task
+  says "one of its other tickets". My reading of "more than one ticket it's pointing at": many to many, with
+  one ticket first. Not: tickets with tickets under them.
+- **Start asks first whether there is anything to add.** Pressing "Start with the agent" on a step's page (a
+  task's, an idea's, a project's) opens a box, optional; Start sends the step with what was written under
+  "From me, before you start:". Nothing is sent until Start; Cancel puts the button back.
+
+Not done: the tasks on the project's overview are not grouped by ticket (the Tickets page is where that is);
+a ticket cannot be made a task from the Tickets page with one press; which ticket is a task's first cannot be
+swapped with one of the rest in one move (set the other as its team ticket); Linear's own parent and sub-issues
+are not read.

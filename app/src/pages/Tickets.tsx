@@ -14,11 +14,12 @@ import { engine, STATE_LABEL, type IssueState, type TicketGroup } from '../engin
 import { useCurrentApp } from '../current-app'
 
 const TONE: Record<IssueState, Tone> = { triage: 'neutral', backlog: 'neutral', todo: 'neutral', in_progress: 'accent', in_review: 'accent', done: 'ok', canceled: 'neutral', duplicate: 'neutral' }
-const FROM = { set: 'linked on the task', import: 'brought in from it', link: 'read from a link in the task', idea: 'read from a link in its idea' } as const
+const FROM = { set: 'linked on the task', import: 'brought in from it', link: 'read from a link in the task', idea: 'read from a link in its idea', also: 'one of its other tickets' } as const
 const problemOf = (e: any) => { const m = String(e?.message ?? e); try { return String(JSON.parse(m).error ?? m) } catch { return m } }
 const SOURCE: Record<string, string> = { linear: 'Linear' }
 
-function Ticket({ t, alone, onRead }: { t: TicketGroup; /** The page is this ticket's own. */ alone: boolean; onRead: (t: TicketGroup) => void }) {
+/** One ticket and the tasks under it. `note` is said beside its count (a project says how it comes to be there). */
+export function Ticket({ t, alone, onRead, note }: { t: TicketGroup; /** The page is this ticket's own. */ alone: boolean; onRead: (t: TicketGroup) => void; note?: React.ReactNode }) {
   const { app } = useCurrentApp()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -34,6 +35,7 @@ function Ticket({ t, alone, onRead }: { t: TicketGroup; /** The page is this tic
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '6px 0 10px' }}>
         {t.finished ? <Badge tone="ok">Done</Badge> : t.total ? <Badge tone={t.done ? 'accent' : 'neutral'}>{t.done} of {t.total} task{t.total === 1 ? '' : 's'} done</Badge> : <Badge>no tasks</Badge>}
         {t.url && <a href={t.url} target="_blank" rel="noreferrer">Open it in {SOURCE[t.source ?? ''] ?? 'its tracker'}</a>}
+        {note}
         {!t.read && <span className="faint" style={{ fontSize: 13 }}>Only its key is known.</span>}
         {alone && <button type="button" className="btn small quiet" disabled={busy} onClick={() => void read()} title="Its title, link and words, as Linear has them now">{busy ? 'Reading…' : t.read ? 'Read it again from Linear' : 'Read it from Linear'}</button>}
         {error && <span className="bad" role="alert">{error}</span>}
