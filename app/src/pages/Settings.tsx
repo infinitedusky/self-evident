@@ -5,6 +5,7 @@
  * landing, prototype, Storybook, integration values, and its workflow rules.
  */
 import { StepContracts, type NightView, type TrialView } from '../components/StepContracts'
+import { RepoRuns } from '../components/RepoRuns'
 import { applyFinalizeChange, applyProbeChanges, contractsOf, type FinalizeChange, type ProbeChange } from '@self-evident/engine/contracts'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useMatch, useNavigate, useParams } from 'react-router'
@@ -530,6 +531,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         <label>Default branch<input className="mono" value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" /></label>
       </Group>
       <Repos appName={app.name} defaultBranch={branch.trim() || 'main'} rows={repos} home={homeOf(repos, home)} gh={gh} onRows={setRepos} onHome={setHome} />
+      <RepoRuns appId={app.id} />
       <References app={app} others={others} value={setup.references ?? []} onChange={(references) => set({ references: references.length ? references : undefined })} />
       {note && <p className="settings-note" data-component="CheckoutNote"><Badge tone="ok">Set up</Badge><span>{note}</span></p>}
     </>,

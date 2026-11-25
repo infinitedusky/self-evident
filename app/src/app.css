@@ -284,7 +284,15 @@ select, input { color-scheme: light dark; }
 .viewer.embedded:has(> .preview) > .viewer-bar { top: 9px; right: 8px; }
 .viewer.embedded > .preview > .preview-bar:first-child { padding-right: 196px; } /* room for Share and Detach, after the server's buttons */
 /* A step's page showing its view: the panel takes the height of the tab, so the view is all in sight. */
-.step-section.viewing { display: flex; flex-direction: column; height: calc(100vh - 250px); min-height: 520px; }
+.step-section.viewing { display: flex; flex-direction: column; height: calc(100vh - 160px); min-height: 520px; }
+/* The rule of thumb (Sandy, 2026-11-25): nothing is at the bottom of the screen, so a box that scrolls goes down to it,
+   less a little padding, and is never cut short at a fixed height. A step's page is as tall as what is written on it,
+   up to the bottom of the screen, where the agent's column beside it ends too; past that the page scrolls inside it,
+   and the report has no box of its own. */
+.task-main > .step-section { max-height: calc(100vh - 160px); overflow: auto; }
+.task-main > .step-section .md { max-height: none; overflow: visible; padding-right: 0; }
+@container tab (max-width: 620px) { .task-main > .step-section { max-height: none; overflow: visible; } }
+.phone-page .task-main > .step-section { max-height: none; overflow: visible; }
 .step-section .card-head .step-tabs { margin-left: auto; margin-right: 10px; }
 .viewer-out { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .viewer-window { height: 100vh; display: flex; flex-direction: column; padding: 10px 14px; box-sizing: border-box; }
@@ -793,7 +801,7 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .task-nav.folded .link { position: relative; }
 .task-nav.folded .link.done::after { content: '✓'; position: absolute; right: -4px; top: 50%; transform: translateY(-50%); font: 700 11px/1 var(--sans); color: var(--ok); }
 .task-nav.folded .link.locked { opacity: .45; }
-.task-agent { position: sticky; top: 20px; height: calc(100vh - 160px); min-height: 420px; max-height: 820px; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.task-agent { position: sticky; top: 20px; height: calc(100vh - 160px); min-height: 420px; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .task-agent-head { display: flex; align-items: center; gap: 6px; padding-right: 8px; border-bottom: 1px solid var(--line); }
 .task-agent-head .agent-strip { flex: 1; }
 .task-agent-tabs { display: flex; gap: 4px; padding: 6px 8px 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
@@ -1554,3 +1562,17 @@ p.workbench-make { display: block; }
 .reviews-commands pre { margin: 4px 0 0 20px; padding: 8px 10px; background: var(--wash, rgba(0,0,0,.04)); border-radius: 6px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .reviews-find { display: flex; gap: 12px; align-items: center; margin: 8px 0; }
 .reviews-find input { width: 360px; max-width: 100%; margin: 0; }
+.reviews-how { margin: 12px 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; }
+/* How each repository is run (Settings > Repo): one card per repository, its scripts, the last check of them. */
+.repo-runs { margin-top: 22px; }
+.repo-run { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
+.repo-run header { display: flex; gap: 8px; align-items: center; }
+.repo-run p { margin: 0; }
+.repo-run-parts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; }
+.repo-run-parts li.missing code { color: var(--ink-faint); text-decoration: line-through; }
+.repo-run-steps { list-style: none; margin: 2px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; }
+.repo-run-steps li.pass .reviews-mark { color: var(--good, #2f6f4f); }
+.repo-run-steps li.fail .reviews-mark { color: var(--bad, #b42318); }
+.repo-run-steps li.none, .repo-run-steps li.unrun { color: var(--ink-faint); }
+.repo-run-steps li:has(pre) { flex-basis: 100%; }
+.repo-run-steps pre { margin: 4px 0 0 20px; padding: 8px 10px; background: var(--wash, rgba(0,0,0,.04)); border-radius: 6px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }

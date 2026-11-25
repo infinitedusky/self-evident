@@ -3,7 +3,7 @@ import { expect, spyOn, userEvent, within, waitFor } from 'storybook/test'
 import { IssuePage, TASK_HEAD } from './IssuePage'
 import { step } from '@self-evident/engine/steps'
 import { engineDown, sampleData, withEngine } from '../stories/mock-engine'
-import { acceptance, approvedTaskStepsView, issueDetails, sampleOrigin, waitingTaskStepsView } from '../stories/sample'
+import { acceptance, approvedTaskStepsView, issueDetails, researchWork, sampleOrigin, waitingTaskStepsView } from '../stories/sample'
 
 // One task at /tasks/:id, from the sample engine. Each story stands on a different task. A task has its own nav down
 // the left: overview, then its two stages: the brief, with the steps that feed it under it ("UI change (sample)", in
@@ -41,6 +41,16 @@ export const WaitsToBeClosed: Story = {
 /** A step's page: research, approved, with its notes and a way to take the approval back. */
 export const ResearchStep: Story = { parameters: at('iss_sample20', 'research') }
 /** The mockups' page: the agent says it is done, so it is ready for you, with Approve; the task's Storybook right on it (here not running). */
+/** A long research report (sample): it is as long as it is, with no box of its own to scroll in. The page scrolls, down to the bottom of the screen. */
+export const LongResearchReport: Story = {
+  parameters: at('iss_sample20', 'research'),
+  beforeEach: withEngine({ stepWork: { ...researchWork, body: Array.from({ length: 14 }, (_, n) => `### Comparison ${n + 1} (sample)\n- Shop ${String.fromCharCode(65 + n)}: one page, address autocompleted, wallet buttons first.\n- What it costs them: a long page on a phone.\n\nMade-up finding ${n + 1}: people who see the total early finish more often.`).join('\n\n') } }),
+  play: async ({ canvasElement }) => {
+    const last = await within(canvasElement).findByText(/Made-up finding 14/)
+    const box = last.closest('.md')!
+    await expect(box.scrollHeight).toBeLessThanOrEqual(box.clientHeight + 1) // nothing of the report is hidden inside a scrolling box
+  },
+}
 export const MockupsStep: Story = { parameters: at('iss_sample20', 'mockup') }
 /** The prototype's page: started, with the agent. */
 export const PrototypeStep: Story = { parameters: at('iss_sample20', 'prototype') }
