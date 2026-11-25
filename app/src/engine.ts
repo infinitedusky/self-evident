@@ -469,8 +469,12 @@ export interface ReviewSummary { state: 'running' | 'done' | 'failed'; sha: stri
 export interface ReviewStep { key: 'checkout' | 'mutation' | 'commands'; name: string; state: 'waiting' | 'running' | 'pass' | 'fail' | 'skipped'; says: string }
 export interface ReviewSurvivor { id: string; file: string; line: number; from: string; to: string; means: string; code: string; equivalent?: string }
 export interface ReviewCommand { key: string; name: string; runs: string; pass: boolean; output: string; /** false: it could not be run here at all, which says nothing about the pull request. */ ran?: boolean }
-/** How a pull request's repository is run for a review: the app's settings for its home repository, its own for another. */
-export interface ReviewRepoRun { home: boolean; set: boolean; prepare: string | null; testCmd: string | null; commands: { key: string; name: string; runs: string }[] }
+/** How a pull request's repository is run for a review: by its own scripts in the workbench, as the app's settings say (the home repository, until it has scripts), or not at all. */
+export interface ReviewRepoRun { home: boolean; mode: 'scripts' | 'app' | 'none'; dir: string | null; setup: boolean; up: boolean; test: boolean; down: boolean; checks: string[] }
+/** A repository's scripts in the workbench folder (the engine's repo-run.ts) and the last check of them on its default branch. */
+export interface RepoRunStep { key: string; name: string; state: 'pass' | 'fail' | 'unrun' | 'none'; output: string }
+export interface RepoRunView { repo: string; home: boolean; local: boolean; scripts: { dir: string | null; has: boolean; setup: boolean; up: boolean; test: boolean; down: boolean; checks: string[] }; check: { state: 'running' | 'done'; at: string; sha: string | null; branch: string; steps: RepoRunStep[]; ok: boolean } | null }
+export interface RepoRuns { workbench: string | null; says: Record<'setup' | 'up' | 'test' | 'checks' | 'down', string>; repos: RepoRunView[] }
 export interface ReviewSuggestion { id: string; from: 'mutation' | 'command'; file: string | null; line: number | null; url: string | null; text: string }
 export interface ReviewPulls { me: string | null; pulls: (ReviewPull & { review: ReviewSummary | null })[]; problems: string[]; warning: string; /** The app's repositories, home first. */ repos?: string[]; /** When GitHub was last read: the list is kept a few minutes. */ readAt?: string }
 export interface ReviewView { repoRun?: ReviewRepoRun; pull: ReviewPull | null; state: 'none' | 'running' | 'done' | 'failed'; sha: string | null; stale: boolean; at: string | null; problem: string | null; warning: string; steps: ReviewStep[]; mutation: { tool: 'evident' | 'app'; tried: number; caught: number; meaningful: number; percent: number | null; survivors: ReviewSurvivor[]; partial?: string } | null; commands: ReviewCommand[]; suggestions: ReviewSuggestion[] }
@@ -882,8 +886,12 @@ export const engine = {
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
   /** The app's open pull requests, other people's first, each with where its review stands. */
   reviewPulls: (appId: string, fresh = false) => call<ReviewPulls>('GET', `/apps/${appId}/pr-reviews${fresh ? '?fresh=1' : ''}`),
-  /** How a repository that is not the app's home one is run for a review. */
-  setReviewRepoRun: (appId: string, repo: string, i: { prepare: string; testCmd: string; commands: { name: string; runs: string }[] }) => call<ReviewRepoRun>('PUT', `/apps/${appId}/pr-reviews/repo-run`, { repo, ...i }),
+  /** Each repository's scripts and the last check of them. */
+  repoRuns: (appId: string) => call<RepoRuns>('GET', `/apps/${appId}/repo-runs`),
+  /** Run a repository's scripts, all of them, on its default branch. */
+  checkRepoRun: (appId: string, repo: string) => call<RepoRuns>('POST', `/apps/${appId}/repo-runs/check`, { repo }),
+  /** Start its folder in the workbench with a stub of each script. Nothing there is overwritten. */
+  scaffoldRepoRun: (appId: string, repo: string) => call<RepoRuns>('POST', `/apps/${appId}/repo-runs/scaffold`, { repo }),
   /** The repositories a pull request can be opened from, without asking GitHub. */
   reviewRepos: (appId: string) => call<{ repos: string[] }>('GET', `/apps/${appId}/pr-reviews/repos`),
   /** One pull request's review: where it stands and what it found. */

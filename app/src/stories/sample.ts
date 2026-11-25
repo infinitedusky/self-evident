@@ -948,13 +948,24 @@ export const reviewDoneSample: import('../engine').ReviewView = {
 /** A pull request in a second repository of the app's (made up), which Evident has not been told how to run: nothing was run in it. */
 export const reviewOtherRepoSample: import('../engine').ReviewView = {
   ...reviewNoneSample, pull: { ...pullSample(88, 'Rate limits per tenant (sample)', 'kim-sample'), repo: 'sample-org/sample-api', url: 'https://github.com/sample-org/sample-api/pull/88' }, state: 'done', sha: '88'.padEnd(40, 'a'), at: '2026-11-25T11:00:00Z',
-  repoRun: { home: false, set: false, prepare: null, testCmd: null, commands: [] },
-  steps: reviewSteps(['pass', 'skipped', 'skipped'], ['At 88aaaaa: 9 files changed against main. Nothing was run in it first.', 'Evident has not been told how sample-org/sample-api is run: the app\'s own commands are for its home repository and are not run here. Say how below, and run it again.', 'Evident has not been told how sample-org/sample-api is run: the app\'s own commands are for its home repository and are not run here. Say how below, and run it again.']),
+  repoRun: { home: false, mode: 'none', dir: '~/code/sample-workbench/repos/sample-api', setup: false, up: false, test: false, down: false, checks: [] },
+  steps: reviewSteps(['pass', 'skipped', 'skipped'], ['At 88aaaaa: 9 files changed against main. Nothing was run in it first.', 'Evident has not been told how sample-org/sample-api is run, so nothing is run on its pull requests. Its scripts go in ~/code/sample-workbench/repos/sample-api.', 'Evident has not been told how sample-org/sample-api is run, so nothing is run on its pull requests. Its scripts go in ~/code/sample-workbench/repos/sample-api.']),
 }
 /** One command could not be run here: said, and not drafted as a comment. */
 export const reviewUnrunSample: import('../engine').ReviewView = {
-  ...reviewDoneSample, repoRun: { home: true, set: true, prepare: 'pnpm install', testCmd: null, commands: [] },
+  ...reviewDoneSample, repoRun: { home: true, mode: 'scripts', dir: '~/code/sample-workbench/repos/sample-shop', setup: true, up: true, test: true, down: true, checks: ['Tests', 'Licence scan (sample)', 'Types (sample)'] },
   steps: reviewSteps(['pass', 'fail', 'skipped'], ['At 212aaaa: 6 files changed against main.', 'Of 11 meaningful breaks, the tests catch 9 (82%). 2 not caught.', '2 pass. 1 could not be run here (Licence scan (sample)): a folder or a program they need is not there. That is not the pull request\'s.']),
   commands: [{ key: 'tests', name: 'Tests', runs: 'pnpm test', pass: true, output: '' }, { key: 'licences', name: 'Licence scan (sample)', runs: 'licence-scan .', pass: false, ran: false, output: '/bin/sh: licence-scan: command not found' }, { key: 'types', name: 'Types (sample)', runs: 'pnpm typecheck', pass: true, output: '' }],
   suggestions: reviewDoneSample.suggestions.filter((x) => x.from === 'mutation'),
+}
+// How each repository of a made-up app is run: one with its scripts written and checked, one with one failing, one with none.
+const REPO_SAYS = { setup: 'Once per checkout: installs what it needs.', up: 'Brings up what its tests need. NAME=value lines it prints are given to the rest.', test: 'Runs the test files given as arguments; with none, whatever it chooses.', checks: 'One script per check; exit 0 passes.', down: 'Stops what up started. Always run after up.' }
+const ranStep = (key: string, state: import('../engine').RepoRunStep['state'] = 'pass', output = ''): import('../engine').RepoRunStep => ({ key, name: key.replace(/^check:/, ''), state, output })
+export const repoRunsSample: import('../engine').RepoRuns = {
+  workbench: '~/code/sample-workbench', says: REPO_SAYS,
+  repos: [
+    { repo: 'sample-org/sample-shop', home: true, local: true, scripts: { dir: '~/code/sample-workbench/repos/sample-shop', has: true, setup: true, up: true, test: true, down: true, checks: ['Lint', 'Types'] }, check: { state: 'done', at: '2026-11-25T11:40:00Z', sha: 'abc1234'.padEnd(40, '0'), branch: 'main', ok: true, steps: [ranStep('setup'), ranStep('up'), ranStep('test'), ranStep('check:Lint'), ranStep('check:Types'), ranStep('down')] } },
+    { repo: 'sample-org/sample-api', home: false, local: true, scripts: { dir: '~/code/sample-workbench/repos/sample-api', has: true, setup: true, up: true, test: true, down: false, checks: ['Lint'] }, check: { state: 'done', at: '2026-11-25T11:42:00Z', sha: 'def5678'.padEnd(40, '0'), branch: 'main', ok: false, steps: [ranStep('setup'), ranStep('up', 'fail', 'Error response from daemon: port 5434 is already allocated (sample)'), ranStep('test', 'none'), ranStep('check:Lint', 'none'), ranStep('down', 'none')] } },
+    { repo: 'sample-org/sample-jobs', home: false, local: true, scripts: { dir: '~/code/sample-workbench/repos/sample-jobs', has: false, setup: false, up: false, test: false, down: false, checks: [] }, check: null },
+  ],
 }

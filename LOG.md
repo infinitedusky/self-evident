@@ -8168,3 +8168,31 @@ Not done: the per-repository settings are only on the review page, not in Settin
 fails because this computer lacks something (a database not up, a service not running) still reads as a failure and
 is drafted, so the person has to read each draft's output before using it; nothing compares against the base branch
 to tell a failure the pull request caused from one that was already there.
+
+### How a repository is run is set once, as scripts in the workbench (2026-11-25)
+
+Sandy, after the entry above: "for whatever repo we can get the environment up every time. We shouldn't be doing it on
+a PR by PR basis. It should be on a repository basis." Asked where it lives, he chose **scripts in the workbench**
+over fields in Settings, and **reviews first** over moving the app's own tasks now. This replaces the three text boxes
+of the entry above (`setup.review_repos`, never merged).
+
+- **A folder per repository in the workbench** (repo-run.ts): `<workbench>/repos/<short name>/` with `setup` (once per
+  checkout), `up` (what its tests need; NAME=value lines it prints are given to the rest, as a before-start hook's
+  are), `test` (the test files given as arguments), `checks/*` (one script per check) and `down` (always run after
+  `up`). Any extension; run from the checkout's top with CHECKOUT, REPO, BASE, HEAD and PR. The folder is the record:
+  nothing is kept in Evident.
+- **A review runs them** (pr-review.ts): setup and up before anything, the breaks against `test`, each check, then
+  down whatever happened. A repository with no folder: the home one is run as the app's settings say and the page
+  says so; any other is not run at all.
+- **Check it** (Settings › Repo, "How each repository is run"; `checkRepo`): every script, in order, on the default
+  branch, in a checkout of the engine's own (`<repo>-worktrees/review-of--check`). Each step passed, failed or could
+  not be run, with the failing one's last lines; kept as `repo_run.checked`. It is how a failure in a review is known
+  to be the pull request's and not this computer's.
+- **Start its folder** writes a stub of each script that says it is not written and exits as "could not be run", so a
+  stub is never taken for a result. Nothing there is overwritten.
+- Scripts are given nothing to read (`</dev/null`): one that waits for typing would never end.
+
+Not done: no scripts are written for either repository of the dashboard app yet (the second one's tests run inside
+its own docker container, mounted from its main checkout, so its `up` and `test` need thought); the app's own tasks
+(build, check, finalizing) still run from the app's settings; a script is not edited or shown on the page; a review
+does not refuse to run when the last check failed, it only can be seen in Settings.

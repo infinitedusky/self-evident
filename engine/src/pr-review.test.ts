@@ -11,7 +11,9 @@ import { db, pool } from './db/client.js'
 import { app, event, repo, workspace } from './db/schema.js'
 import { commitAll, git } from './git.js'
 import { newId } from './ids.js'
-import { couldNotRun, forgetPulls, lineUrl, listPulls, namedPull, repoRunOf, reviewView, runReview, setRepoRun, suggest, withRepoRun, type Gh } from './pr-review.js'
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
+import { couldNotRun, forgetPulls, lineUrl, listPulls, namedPull, reviewView, runReview, suggest, type Gh } from './pr-review.js'
+import { checkRepo, repoRuns, scaffold, scriptsOf } from './repo-run.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
@@ -44,23 +46,6 @@ describe('a command that could not be run here', () => {
   })
 })
 
-describe('how a repository is run', () => {
-  const setup = { test_cmd: 'pnpm test', finalize: { prepare: 'pnpm install' }, held: [{ key: 'lint', name: 'Lint', kind: 'command', runs: 'pnpm lint' }], review_repos: { 'sample-org/api': { prepare: 'uv sync', test_cmd: 'uv run pytest {files}', commands: [{ name: 'Ruff', runs: 'uv run ruff check .' }, { name: '', runs: 'x' }] } } }
-  it('the home repository as the app\'s settings say', () => {
-    const r = repoRunOf(setup, 'sample-org/shop', true)
-    expect(r).toMatchObject({ home: true, set: true, prepare: 'pnpm install' })
-    expect(r.commands.map((c) => c.runs)).toEqual(expect.arrayContaining(['pnpm test', 'pnpm lint']))
-  })
-  it('another by its own, and by nothing of the home\'s until it has some', () => {
-    expect(repoRunOf(setup, 'sample-org/api', false)).toEqual({ home: false, set: true, prepare: 'uv sync', testCmd: 'uv run pytest {files}', commands: [{ key: 'own:0', name: 'Ruff', runs: 'uv run ruff check .' }] })
-    expect(repoRunOf(setup, 'sample-org/other', false)).toEqual({ home: false, set: false, prepare: null, testCmd: null, commands: [] })
-  })
-  it('is saved for that repository only, and removed when emptied', () => {
-    expect(withRepoRun(setup, 'sample-org/other', { prepare: ' make deps ', commands: [{ name: 'Tests', runs: 'make test' }, { name: ' ', runs: '' }] }).review_repos).toMatchObject({ 'sample-org/api': { prepare: 'uv sync' }, 'sample-org/other': { prepare: 'make deps', commands: [{ name: 'Tests', runs: 'make test' }] } })
-    expect(withRepoRun({ review_repos: { 'sample-org/api': { prepare: 'uv sync' } } }, 'sample-org/api', { prepare: '' })).toEqual({ review_repos: null })
-  })
-})
-
 describe('a pull request named by the person', () => {
   const repos = ['sample-org/shop', 'sample-org/api']
   it('is its number in the home repository, a repository and number, or its address', () => {
@@ -78,7 +63,7 @@ describe('a pull request named by the person', () => {
 describe.skipIf(!reachable)('a review of someone else\'s pull request (sample data)', () => {
   const wsId = newId('workspace'), appId = newId('app'), full = `sample-org/sample-review-${appId.slice(-5)}`
   const other = `sample-org/sample-other-${appId.slice(-5)}`
-  let repoPath: string, head: string, otherPath: string, otherHead: string
+  let repoPath: string, head: string, otherPath: string, otherHead: string, bench: string
   beforeAll(async () => {
     const dir = await mkdtemp(join(tmpdir(), 'if-review-of-'))
     repoPath = join(dir, 'repo')
@@ -110,7 +95,8 @@ describe.skipIf(!reachable)('a review of someone else\'s pull request (sample da
     otherHead = (await git(otherPath, ['rev-parse', 'HEAD'])).stdout.trim()
     await git(otherPath, ['push', '-q', 'origin', 'theirs:refs/pull/3/head']); await git(otherPath, ['checkout', '-q', 'main'])
     await db.insert(repo).values({ id: newId('repo'), appId, fullName: other, localPath: otherPath })
-    await db.update(app).set({ setup: { home_repo: homeId, mutation: { test_cmd: 'node {files}' }, held: [{ key: 'style', name: 'Style (sample)', kind: 'command', runs: 'echo "limit.js: no semicolons (sample)" && exit 1' }, { key: 'loads', name: 'Loads (sample)', kind: 'command', runs: 'node -e "require(\'./limit.js\')"' }, { key: 'gone', name: 'Elsewhere (sample)', kind: 'command', runs: 'cd not-a-folder && true' }] } }).where(eq(app.id, appId))
+    bench = join(dir, 'workbench')
+    await db.update(app).set({ setup: { workbench: { dir: bench }, home_repo: homeId, mutation: { test_cmd: 'node {files}' }, held: [{ key: 'style', name: 'Style (sample)', kind: 'command', runs: 'echo "limit.js: no semicolons (sample)" && exit 1' }, { key: 'loads', name: 'Loads (sample)', kind: 'command', runs: 'node -e "require(\'./limit.js\')"' }, { key: 'gone', name: 'Elsewhere (sample)', kind: 'command', runs: 'cd not-a-folder && true' }] } }).where(eq(app.id, appId))
   })
   afterAll(async () => { await pool.end() })
 
@@ -147,7 +133,8 @@ describe.skipIf(!reachable)('a review of someone else\'s pull request (sample da
     // One fails, one passes, and one could not be run here at all: that one is said and is nobody's comment.
     expect(v.commands.map((c) => [c.name, c.pass, c.ran ?? true])).toEqual([['Style (sample)', false, true], ['Loads (sample)', true, true], ['Elsewhere (sample)', false, false]])
     expect(v.steps[2].says).toMatch(/1 of 3 fail: Style \(sample\)\. 1 could not be run here \(Elsewhere \(sample\)\)/)
-    expect(v.repoRun).toMatchObject({ home: true })
+    expect(v.repoRun).toMatchObject({ home: true, mode: 'app' }) // the home repository with no scripts of its own yet: as the app's settings say
+    expect(v.steps[0].says).toMatch(/Run as the app's settings say/)
     expect(v.commands[0].output).toMatch(/no semicolons \(sample\)/)
     expect(v.suggestions.map((s) => [s.from, s.file, s.line])).toEqual([['mutation', 'limit.js', 1], ['mutation', 'limit.js', 1], ['command', null, null]])
     // Nothing was written to GitHub: it was only ever read.
@@ -165,22 +152,50 @@ describe.skipIf(!reachable)('a review of someone else\'s pull request (sample da
     expect(types).toEqual(expect.arrayContaining(['pr_review.started', 'pr_review.step', 'pr_review.done']))
   }, 120_000)
 
-  it('runs nothing of the home repository\'s in another one, until that one has its own', async () => {
+  it('runs another repository by its own scripts in the workbench, and by nothing until it has some', async () => {
     const gh: Gh = async (args) => { if (args[0] === 'api') return 'me-myself'; return JSON.stringify({ number: 3, title: 'A cap of nine (sample)', url: `https://github.test/${other}/pull/3`, author: { login: 'a-colleague' }, headRefName: 'theirs', baseRefName: 'main', headRefOid: otherHead, state: 'OPEN' }) }
     await runReview(appId, other, 3, { gh })
     const v = await reviewView(appId, other, 3, { gh })
-    expect(v.repoRun).toEqual({ home: false, set: false, prepare: null, testCmd: null, commands: [] })
+    const dir = join(bench, 'repos', other.split('/')[1])
+    expect(v.repoRun).toEqual({ home: false, mode: 'none', dir, setup: false, up: false, test: false, down: false, checks: [] })
     expect(Object.fromEntries(v.steps.map((s) => [s.key, s.state]))).toEqual({ checkout: 'pass', mutation: 'skipped', commands: 'skipped' })
-    expect(v.steps[1].says).toMatch(/has not been told how .* is run: the app's own commands are for its home repository/)
+    expect(v.steps[1].says).toMatch(/has not been told how .* is run, so nothing is run on its pull requests\. Its scripts go in /)
     expect(v.commands).toEqual([]); expect(v.suggestions).toEqual([]) // nothing run, so nothing to say of it
-    // Told how: its own tests and its own command, and now there is something to find.
-    await expect(setRepoRun(appId, full, { prepare: 'x' })).rejects.toThrow(/home repository/)
-    expect(await setRepoRun(appId, other, { testCmd: 'node {files}', commands: [{ name: 'Loads (sample)', runs: 'node -e "require(\'./cap.js\')"' }] })).toMatchObject({ set: true, testCmd: 'node {files}' })
+
+    // A folder of stubs to start from: each says it is not written, and none is taken for a result.
+    const stubs = await scaffold(appId, other)
+    expect(stubs).toMatchObject({ has: true, setup: join(dir, 'setup.sh'), test: join(dir, 'test.sh') }); expect(stubs.checks.map((c) => c.name)).toEqual(['Lint'])
+    await checkRepo(appId, other)
+    const stubbed = (await repoRuns(appId)).repos.find((r) => r.repo === other)!
+    expect(stubbed.check).toMatchObject({ state: 'done', ok: false }); expect(stubbed.check!.steps.find((s) => s.key === 'setup')).toMatchObject({ state: 'unrun', output: expect.stringMatching(/not written yet/) })
+
+    // The repository's own scripts, written once: installed, brought up, its tests and a check run, and brought down.
+    const script = (name: string, body: string) => { mkdirSync(join(dir, 'checks'), { recursive: true }); writeFileSync(join(dir, name), `#!/bin/sh\n${body}\n`); chmodSync(join(dir, name), 0o755) }
+    const log = join(bench, 'ran.log')
+    script('setup.sh', `echo "setup in $(basename "$CHECKOUT") pr=$PR" >> ${log}`)
+    script('up.sh', `echo up >> ${log}\necho "SAMPLE_DB=postgres://sample"`)
+    script('test.sh', `test -n "$SAMPLE_DB" || { echo "no database (sample)" >&2; exit 1; }\nnode "$@"`)
+    script('checks/lint.sh', 'echo "cap.js: no semicolons (sample)" >&2; exit 1')
+    script('checks/loads.sh', 'node -e "require(\'./cap.js\')"')
+    script('down.sh', `echo "down $SAMPLE_DB" >> ${log}`)
+    expect(scriptsOf({ workbench: { dir: bench } }, other).checks.map((c) => c.name)).toEqual(['Lint', 'Loads'])
     await runReview(appId, other, 3, { gh })
     const again = await reviewView(appId, other, 3, { gh })
-    expect(Object.fromEntries(again.steps.map((s) => [s.key, s.state]))).toEqual({ checkout: 'pass', mutation: 'fail', commands: 'pass' })
-    expect(again.mutation!.survivors.map((s) => `${s.from}>${s.to}`)).toEqual(['>=>>', '9>10']) // its test never sits on the cap
-    expect(again.suggestions).toHaveLength(2)
+    expect(again.repoRun).toMatchObject({ mode: 'scripts', setup: true, up: true, test: true, down: true, checks: ['Lint', 'Loads'] })
+    expect(Object.fromEntries(again.steps.map((s) => [s.key, s.state]))).toEqual({ checkout: 'pass', mutation: 'fail', commands: 'fail' })
+    expect(again.steps[0].says).toMatch(/Installed and brought up\./)
+    expect(again.mutation!.survivors.map((s) => `${s.from}>${s.to}`)).toEqual(['>=>>', '9>10']) // its test never sits on the cap; and it only ran because up gave it its database
+    expect(again.commands.map((c) => [c.name, c.runs, c.pass])).toEqual([['Lint', 'checks/lint.sh', false], ['Loads', 'checks/loads.sh', true]])
+    expect(again.suggestions.map((s) => s.from)).toEqual(['mutation', 'mutation', 'command'])
+    const { readFileSync } = await import('node:fs')
+    expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual(['setup in review-of--3 pr=3', 'up', 'down postgres://sample']) // brought down, with what up gave
+
+    // Check it: the same scripts on the default branch, before any pull request. Here main has no cap.js, so one check fails, and it says which.
+    await checkRepo(appId, other)
+    const checked = (await repoRuns(appId)).repos.find((r) => r.repo === other)!
+    expect(checked).toMatchObject({ home: false, local: true, scripts: { has: true, checks: ['Lint', 'Loads'] }, check: { state: 'done', branch: 'main', ok: false } })
+    expect(Object.fromEntries(checked.check!.steps.map((s) => [s.key, s.state]))).toMatchObject({ setup: 'pass', up: 'pass', 'check:Lint': 'fail', down: 'pass' })
+    expect((await repoRuns(appId)).repos.find((r) => r.repo === full)).toMatchObject({ home: true, scripts: { has: false }, check: null })
   }, 120_000)
 
   it('refuses a repository that is not the app\'s', async () => {

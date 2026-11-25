@@ -105,23 +105,18 @@ export const DidNotFinish: Story = {
   play: async ({ canvasElement }) => { const c = within(canvasElement); await expect((await c.findAllByText(/could not be fetched from GitHub \(sample\)/)).length).toBeGreaterThan(0); await expect(c.getByRole('button', { name: 'Run it again' })).toBeVisible() },
 }
 
-/** A pull request in a second repository Evident has not been told how to run: nothing of the home repository's is run in it, no comment is drafted, and the page asks how. */
+/** A pull request in a repository Evident has not been told how to run: nothing is run in it, no comment is drafted, and the page says where its scripts go. */
 export const AnotherRepository: Story = {
   args: { open: { repo: 'sample-org/sample-api', number: 88 } },
   beforeEach: withEngine({ reviewPulls: reviewPullsSample, review: reviewOtherRepoSample }),
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    const form = within(await c.findByRole('form', { name: 'How sample-org/sample-api is run' }))
-    await expect(c.getByText(/not set yet, so nothing is run on its pull requests/)).toBeVisible()
+    const note = within(await c.findByRole('note', { name: 'How this repository is run' }))
+    await expect(note.getByText(/Evident has not been told how/)).toBeVisible()
+    await expect(note.getByText('~/code/sample-workbench/repos/sample-api')).toBeVisible()
+    await expect(note.getByText(/set once, used for every pull request/)).toBeVisible()
     await expect(c.getByText('Nothing was run on it, so there is nothing to suggest.')).toBeVisible()
     await expect(c.queryAllByRole('article')).toHaveLength(0)
-    await userEvent.type(form.getByLabelText('Run first in its checkout'), 'uv sync')
-    await userEvent.type(form.getByLabelText('How its tests are run'), 'uv run pytest -q {{files}')
-    await userEvent.type(form.getByLabelText('Commands it is held to'), 'Lint: uv run ruff check .{enter}just a command')
-    await expect(form.getByText(/1 line is not read/)).toBeVisible(); await expect(form.getByRole('button', { name: 'Save' })).toBeDisabled()
-    await userEvent.type(form.getByLabelText('Commands it is held to'), '{backspace}'.repeat('just a command'.length))
-    await userEvent.click(form.getByRole('button', { name: 'Save' }))
-    await expect(await c.findByText(/· prepared, tests, 1 command/)).toBeVisible()
   },
 }
 
@@ -136,7 +131,7 @@ export const CouldNotBeRunHere: Story = {
     await expect(commands.getByLabelText('could not be run here')).toBeVisible()
     await expect(commands.getByText(/no comment is drafted from it/)).toBeVisible()
     await expect(within(c.getByRole('region', { name: 'Suggested comments' })).getAllByRole('article')).toHaveLength(2) // the two breaks only
-    await expect(c.queryByRole('form')).toBeNull() // the home repository is set in Settings, not here
+    await expect(c.queryByRole('note', { name: 'How this repository is run' })).toBeNull() // it has its scripts
   },
 }
 
