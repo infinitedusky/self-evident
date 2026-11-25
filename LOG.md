@@ -8073,3 +8073,14 @@ round: the phone is at a place in the app, and a place has a page, a chat and a 
 
 Not done: the same as the first cut (pages are the computer's, narrow; no swiping; agents out are not read-only).
 A task's page still carries the task's agent column, hidden, under the phone's own chat: two copies listening.
+
+## On a phone, a place's pages are tabs across the top, and Chat is at the right (Sandy, 2026-11-25: "We need a way to navigate through projects and tasks to get the differnt sections. Currently it is just overview" and "I would also put the chat tab to the right of overview or whatever else we put there")
+
+The two tabs were Chat and one page, and the other pages of a task were only in the tray, where they were not found.
+Now the pages are the tabs: Overview, Context, the brief and each step with its mark (✓ ◐ ○; one that waits on
+another is greyed), then Build, and Smoke test and Pull request once something is planned. A project has Overview,
+Context, Tickets and its steps; an idea its own. They scroll sideways and the open one is brought into sight. Chat
+is the last tab and stays at the right end while the others scroll under it. A place with one page (My Stuff, a
+list) has that page and Chat.
+
+The tray still lists a task's steps under it. After GitHub's phone site, where a repository's tabs scroll sideways.
