@@ -3,6 +3,7 @@ import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { addressOf, goable, SmokeTest } from './SmokeTest'
 import { MAIN_OFF, withEngine } from '../stories/mock-engine'
 import { smokeSample } from '../stories/sample'
+import { addressFits, onARowBelow, overlap } from '../stories/fits'
 
 // A task's smoke test: the built code beside the checks left to a person. All made up: a diagram library's edges.
 const meta = { title: 'Components/SmokeTest', component: SmokeTest, parameters: { layout: 'padded' }, args: { issueId: 'iss_sample20', appId: 'app_sample', base: '/tasks/iss_sample20' },
@@ -334,6 +335,73 @@ export const AddressBar: Story = {
     await userEvent.click(c.getByRole('button', { name: 'Forward' }))
     await waitFor(() => expect(c.getByRole('textbox', { name: 'Address' })).toHaveValue('/employees'))
     await expect(c.getByRole('button', { name: 'Reload' })).toBeEnabled()
+  },
+}
+
+/**
+ * Where there is little room (made up; Sandy, 2026-11-25: "the address bar gets really shrunk in and the text starts
+ * to extend beyond it and overlap with the next button … go into two rows probably"): back, forward, reload and the
+ * address keep the first row, the buttons go to a row below, and the address's text stays inside its box. Where the
+ * address is short of room for both, it shows the path alone, as Replit's preview does.
+ */
+export const Narrow: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, url: 'http://localhost:65487', checks: pathChecks } }),
+  render: (a) => <div style={{ width: 360 }}><SmokeTest {...a} /></div>,
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const form = (await c.findByRole('textbox', { name: 'Address' })).closest('form')!
+    const open = c.getByRole('link', { name: 'Open in a new tab' })
+    await expect(addressFits(form)).toBe(true)
+    await expect(form.getBoundingClientRect().width).toBeGreaterThanOrEqual(200)
+    await expect(onARowBelow(open, form)).toBe(true)
+    await expect(onARowBelow(form, c.getByRole('button', { name: 'Back' }))).toBe(false) // the address stays with its buttons
+    for (const b of [open, c.getByRole('button', { name: 'Restart' }), c.getByRole('button', { name: 'Stop' })]) await expect(overlap(form, b)).toBe(false)
+    await expect(c.getByText('http://localhost:65487')).not.toBeVisible() // the path alone
+    const bar = canvasElement.querySelector('.smoke-bar')!
+    await expect(bar.scrollWidth).toBeLessThanOrEqual(bar.clientWidth)
+    // It still goes where it is told.
+    const address = c.getByRole('textbox', { name: 'Address' })
+    await userEvent.clear(address); await userEvent.type(address, 'employees{Enter}')
+    await waitFor(() => expect(c.getByTitle('The built code')).toHaveAttribute('src', 'http://localhost:65487/employees'))
+  },
+}
+/** The width the view has beside its checks on a laptop (made up): too little for the address and five buttons on one row, so the address has the first row to itself and shows the whole address. */
+export const BesideItsChecks: Story = {
+  beforeEach: withEngine({ smoke: { ...smokeSample, url: 'http://localhost:65487', checks: pathChecks, canClean: true }, main: MAIN_OFF }),
+  render: (a) => <div style={{ width: 620 }}><SmokeTest {...a} /></div>,
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const form = (await c.findByRole('textbox', { name: 'Address' })).closest('form')!
+    await expect(addressFits(form)).toBe(true)
+    await expect(c.getByText('http://localhost:65487')).toBeVisible()
+    for (const b of [c.getByRole('link', { name: 'Open in a new tab' }), c.getByRole('button', { name: 'Start clean' }), await c.findByRole('combobox', { name: 'Compare with main' }), c.getByRole('button', { name: 'Stop' })]) await expect(onARowBelow(b, form)).toBe(true)
+  },
+}
+/** With room for all of it (made up), it is one row as before. */
+export const OneRowWhenWide: Story = {
+  beforeEach: (ctx) => { try { localStorage.removeItem('se.smoke.checks') } catch { /* fine */ } withEngine({ smoke: { ...smokeSample, url: 'http://localhost:65487', checks: pathChecks } })(ctx) },
+  render: (a) => <div style={{ width: 1000 }}><SmokeTest {...a} /></div>,
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const form = (await c.findByRole('textbox', { name: 'Address' })).closest('form')!
+    await userEvent.click(c.getByRole('button', { name: 'Hide checks' }))
+    await waitFor(() => expect(onARowBelow(c.getByRole('button', { name: 'Stop' }), form)).toBe(false))
+    await expect(addressFits(form)).toBe(true)
+    await expect(c.getByText('http://localhost:65487')).toBeVisible()
+    await userEvent.click(c.getByRole('button', { name: /Show checks/ })) // put back: it is remembered on this browser
+  },
+}
+/** Main beside the build where there is little room (made up): the two views stack, and each address keeps inside its own bar. */
+export const NarrowComparedWithMain: Story = {
+  beforeEach: (ctx) => { try { localStorage.removeItem('se.smoke.checks') } catch { /* fine */ } withEngine({ smoke: smokeSample, main: MAIN_OFF, mainUrl: 'http://localhost:6600', mainFor: 'iss_sample20' })(ctx) },
+  render: (a) => <div style={{ width: 360 }}><SmokeTest {...a} /></div>,
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.selectOptions(await c.findByRole('combobox', { name: 'Compare with main' }), 'copy')
+    const theirs = (await c.findByRole('textbox', { name: 'Address (main)' })).closest('form')!
+    const mine = c.getByRole('textbox', { name: 'Address' }).closest('form')!
+    for (const f of [mine, theirs]) { await expect(addressFits(f)).toBe(true); await expect(f.getBoundingClientRect().width).toBeGreaterThanOrEqual(200) }
+    await expect(onARowBelow(await c.findByTitle('main'), c.getByTitle('The built code'))).toBe(true)
   },
 }
 

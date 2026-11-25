@@ -231,11 +231,13 @@ export function SmokeTest({ issueId, appId, base, small = false }: { issueId: st
               <>
                 <div className="smoke-bar">
                   {local ? (cmp ? null : <Nav t={mine} home={home} src={src} />) : <code className="smoke-address">{src}</code>}
+                  <div className="smoke-bar-actions">
                   <a className="btn quiet small" href={src} target="_blank" rel="noreferrer">Open in a new tab</a>
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => start())}>{behind ? `Run the new commit${chosen ? ` ${fromSays}` : ''}` : chosen ? `Restart ${fromSays}` : 'Restart'}</button>}
                   {local && su.canClean && <button className="btn quiet small" disabled={busy} title="Its database made again and filled, and its script told to start from nothing" onClick={() => void act(() => engine.startSmoke(issueId, true, many ? su.key : undefined))}>Start clean</button>}
                   {local && <CompareWith c={compare} beside={`smoke:${issueId}:${su.key}`} onStop={() => theirs.setAt(null)} />}
                   {local && <button className="btn quiet small" disabled={busy} onClick={() => void act(() => engine.stopSmoke(issueId, many ? su.key : undefined))}>Stop</button>}
+                  </div>
                 </div>
                 {local && su.fixedAddresses?.length ? <div className="smoke-stale" role="note"><Md text={su.fixedNote ?? `Its page names an address fixed to this computer: ${su.fixedAddresses.join(', ')}.`} /></div> : null}
                 {local && su.strayPorts?.length ? <p className="smoke-stale" role="note">{su.strayNote ?? `It also listens on ${su.strayPorts.join(', ')}, which it chose itself.`}</p> : null}
