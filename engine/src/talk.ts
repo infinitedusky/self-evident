@@ -117,7 +117,7 @@ Your first message is the brief: write the checklist, build it, and report again
 type Answer = { allow: boolean; always?: boolean; timedOut?: boolean }
 interface Pending { resolve: (v: Answer) => void; tool: string; /** What it wants to do, in a line. */ what: string; risk: Risk; since: Date }
 type Rated = { risk: Risk; why: string }
-interface Live { q: Query; push: (m: SDKUserMessage) => void; close: () => void; pending: Map<string, Pending>; rated: Map<string, Rated>; lastPrompt?: string; outages: number; always: Set<string>; busy: boolean; autoApprove: Risk; cwd: string; model?: string; limits?: Limits }
+interface Live { q: Query; push: (m: SDKUserMessage) => void; close: () => void; pending: Map<string, Pending>; rated: Map<string, Rated>; lastPrompt?: string; outages: number; always: Set<string>; busy: boolean; autoApprove: Risk; cwd: string; model?: string; limits?: Limits; account?: { organization?: string; plan?: string } | null }
 const execFileP = promisify(execFile)
 const branchOf = (cwd: string) => execFileP('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd }).then((r) => r.stdout.trim()).catch(() => null)
 const key = (tool: string, input: unknown) => tool + JSON.stringify(input).slice(0, 200)
@@ -854,7 +854,9 @@ async function handle(sessionId: string, entry: Live, m: SDKMessage) {
       const was = before?.payload as { costUsd?: unknown; totalUsd?: unknown; usageSoFar?: Usage } | null | undefined
       const soFar = usageSoFar(a.modelUsage)
       const usage = replyUsage(was?.usageSoFar, soFar, !before)
-      await record(sessionId, 'engine', 'result', a.subtype === 'success' ? 'done' : `${a.subtype}`, { subtype: a.subtype, costUsd: a.total_cost_usd, ...replyCost(was, a.total_cost_usd), ...(entry.model ? { model: entry.model } : {}), ...(usage ? { usage } : {}), ...(soFar ? { usageSoFar: soFar } : {}), ...(entry.limits && Object.keys(entry.limits).length ? { limits: entry.limits } : {}), turns: a.num_turns, durationMs: a.duration_ms })
+      // Whose limits those are: the organization and plan of the login this conversation ran on (asked once; never the email).
+      if (entry.account === undefined) entry.account = await Promise.race([entry.q.accountInfo(), new Promise<null>((done) => setTimeout(() => done(null), 3000))]).then((i) => (i?.organization || i?.subscriptionType ? { ...(i.organization ? { organization: i.organization } : {}), ...(i.subscriptionType ? { plan: i.subscriptionType } : {}) } : null)).catch(() => null)
+      await record(sessionId, 'engine', 'result', a.subtype === 'success' ? 'done' : `${a.subtype}`, { subtype: a.subtype, costUsd: a.total_cost_usd, ...replyCost(was, a.total_cost_usd), ...(entry.model ? { model: entry.model } : {}), ...(usage ? { usage } : {}), ...(soFar ? { usageSoFar: soFar } : {}), ...(entry.limits && Object.keys(entry.limits).length ? { limits: entry.limits } : {}), ...(entry.account ? { account: entry.account } : {}), turns: a.num_turns, durationMs: a.duration_ms })
       for (const fn of turnEnded) { try { fn(sessionId) } catch { /* what follows a turn never breaks the turn */ } }
       return
   }
