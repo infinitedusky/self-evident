@@ -413,7 +413,7 @@ export const prototypeTranscript: Transcript = {
   messages: [
     { id: 1, sessionId: prototypeTalk.id, author: 'engine', kind: 'brief', body: '**Sample brief.** A checkout that takes one tap for a returning customer.\n\n- Follow the mockup `pages-checkout--one-tap`.\n- Fake the saved card; no real payments.\n- We want to learn whether people trust paying without a confirm step.', payload: null, sentAt: at(40) },
     { id: 2, sessionId: prototypeTalk.id, author: 'agent', kind: 'text', body: 'First version is up: the cart has a **Pay now** button for a returning customer, with a made-up saved card. Try it in the Prototype tab. What should change?', payload: null, sentAt: at(43) },
-    { id: 3, sessionId: prototypeTalk.id, author: 'engine', kind: 'result', body: 'done', payload: { costUsd: 0.31, turns: 14, durationMs: 160000 }, sentAt: at(43) },
+    { id: 3, sessionId: prototypeTalk.id, author: 'engine', kind: 'result', body: 'done', payload: { costUsd: 0.31, stepUsd: 0.31, totalUsd: 0.31, model: 'claude-sonnet-5-5', turns: 14, durationMs: 160000 }, sentAt: at(43) },
   ],
 }
 
