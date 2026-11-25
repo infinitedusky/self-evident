@@ -141,6 +141,8 @@ function Actions({ ms, sessionId }: { ms: TalkMessage[]; sessionId: string }) {
 
 const took = (ms: number) => ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))} seconds` : `${Math.round(ms / 60_000)} minute${Math.round(ms / 60_000) === 1 ? '' : 's'}`
 
+const usd = (n: unknown) => `$${Number(n).toFixed(2)}`
+
 export function Message({ m, pending, sessionId }: { m: TalkMessage; pending: boolean; sessionId: string }) {
   const p = m.payload ?? {}
   switch (m.kind) {
@@ -162,7 +164,7 @@ export function Message({ m, pending, sessionId }: { m: TalkMessage; pending: bo
         ) : <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>answered</div>}
       </div>
     )
-    case 'result': return <div className="msg engine faint worked" title={`${p.turns ?? '?'} turns${p.costUsd != null ? ` · $${Number(p.costUsd).toFixed(2)}` : ''}`}>{m.body === 'done' && p.durationMs ? `Worked for ${took(Number(p.durationMs))}` : m.body}{p.costUsd != null ? ` · $${Number(p.costUsd).toFixed(2)}` : ''}</div>
+    case 'result': return <div className="msg engine faint worked" title={`${p.turns ?? '?'} turns. The first figure is this reply; the total is the conversation so far. Both are estimates.`}>{m.body === 'done' && p.durationMs ? `Worked for ${took(Number(p.durationMs))}` : m.body}{p.model ? ` · ${String(p.model).replace('claude-', '')}` : ''}{p.stepUsd != null ? ` · ${usd(p.stepUsd)}` : ''}{p.totalUsd != null || p.costUsd != null ? ` · ${usd(p.totalUsd ?? p.costUsd)} total` : ''}</div>
     case 'brief': return <div className="msg brief"><div className="faint brief-label">{p.label ?? 'Brief'}</div><div className="msg-body md-chat"><Markdown remarkPlugins={[remarkGfm]}>{m.body}</Markdown></div></div>
     case 'error': return <div className={`msg engine ${p.waiting ? 'faint' : 'bad'}`}>{m.body}</div>
     case 'handoff': return <div className="msg engine faint handoff"><span aria-hidden="true">{p.to === 'terminal' ? '⌨' : '↩'}</span> {m.body}</div>
