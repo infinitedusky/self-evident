@@ -254,6 +254,7 @@ checkout, normally the default branch.
 | A reference app shows "no checkout set" | That app has no local checkout on this computer | Clone it and set its Local checkout |
 | Background fetches hang for a repository cloned over SSH | Its key has a passphrase the engine can't type | `ssh-add --apple-use-keychain <key>` |
 | The engine's tests fail to connect | They use their own database on the local container, whichever way the engine runs | Start Docker or OrbStack; `pnpm --filter @self-evident/engine db:up` |
+| Tests fail on files nobody changed | Run from the main checkout, which follows GitHub by itself and can change under a run | Run them in the branch's worktree. Several checkouts can test at once: each run has its own databases and the story tests take a free port |
 
 ## Known limits
 

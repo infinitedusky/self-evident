@@ -37,7 +37,7 @@ let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-async function until(check: () => Promise<boolean>, timeoutMs = 20_000) {
+async function until(check: () => Promise<boolean>, timeoutMs = 60_000) {
   const t0 = Date.now()
   while (!(await check())) { if (Date.now() - t0 > timeoutMs) throw new Error('timed out'); await sleep(100) }
 }

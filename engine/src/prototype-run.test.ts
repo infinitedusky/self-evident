@@ -12,7 +12,7 @@ import { cleanGuide, setGuide } from './share-guide.js'
 
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
-const until = async (ok: () => boolean, ms = 8000) => { const t = Date.now(); while (!ok()) { if (Date.now() - t > ms) throw new Error('timed out'); await new Promise((r) => setTimeout(r, 40)) } }
+const until = async (ok: () => boolean, ms = 30_000) => { const t = Date.now(); while (!ok()) { if (Date.now() - t > ms) throw new Error('timed out'); await new Promise((r) => setTimeout(r, 40)) } }
 
 describe('a guide step that is a command', () => {
   it('is one line, has no path beside it, and may not stop other processes', () => {
@@ -45,9 +45,10 @@ describe.skipIf(!reachable)('running a guide step (sample data)', () => {
     expect((await runStep(id, 0)).status).toBe('running')
     await until(() => runsOf(id)[0].status !== 'running')
     expect(runsOf(id)[0]).toMatchObject({ step: 0, status: 'passed', exitCode: 0, lines: ['in the worktree (sample)', 'second line'], command: 'cat here.txt && echo second line' })
-    await until(() => true)
-    await new Promise((r) => setTimeout(r, 200))
-    const [e] = await db.select().from(event).where(eq(event.appId, appId)).orderBy(desc(event.seq)).limit(1)
+    // The event is written after the run ends: looked for until it is there, not after a guessed pause.
+    const last = async () => (await db.select().from(event).where(eq(event.appId, appId)).orderBy(desc(event.seq)).limit(1))[0]
+    for (const t = Date.now(); (await last())?.type !== 'prototype.step_ran' && Date.now() - t < 30_000;) await new Promise((r) => setTimeout(r, 50))
+    const e = await last()
     expect(e).toMatchObject({ type: 'prototype.step_ran', payload: { prototypeId: id, step: 0, status: 'passed', title: 'It runs where the prototype is' } })
   })
 

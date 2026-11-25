@@ -1,12 +1,20 @@
 import type { Preview } from '@storybook/react-vite'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { mswLoader } from 'msw-storybook-addon/csf3'
+import { configure } from 'storybook/test'
 import { CurrentAppProvider } from '../src/current-app'
 import { mockEngine } from '../src/stories/mock-engine'
 import { sampleApp } from '../src/stories/sample'
 import '../src/tokens.css'
 import '../src/app.css'
 import './story-flow.css' // the screen map: titles stay in their strip when zoomed out, a line under each
+
+// A story waits for what it looks for (findBy…, waitFor) up to ten seconds, not the usual one: the story tests run many
+// files at once in one browser, often while other checkouts test too, and a wait that is generous costs a passing run nothing.
+// And text is never looked for inside a text box. A box that was typed into holds that text, so a story that saves a
+// form and then waits for what it typed to show would find it at once, in the form itself, before the save had
+// landed; then the form closed under its next step, whenever the save was the slower of the two.
+configure({ asyncUtilTimeout: 10_000, defaultIgnore: 'script, style, textarea' })
 
 // The engine is faked with MSW: stories render the real pages, which fetch /api as they do in the app. A story
 // changes what the engine says with `beforeEach: withEngine({...})`; its handlers go in front of these.

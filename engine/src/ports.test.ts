@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import { listening, morePorts, portsIn, strays, straySays, straysOf } from './ports.js'
 
-const until = async (ok: () => Promise<boolean>) => { for (let i = 0; i < 60; i++) { if (await ok()) return true; await new Promise((r) => setTimeout(r, 100)) } return false }
+const until = async (ok: () => Promise<boolean>) => { for (let i = 0; i < 300; i++) { if (await ok()) return true; await new Promise((r) => setTimeout(r, 100)) } return false }
 
 describe('the ports it listens on', () => {
   it('are read from what lsof prints, whatever the address', () => {

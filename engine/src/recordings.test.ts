@@ -40,7 +40,7 @@ try { await db.execute('select 1') } catch { reachable = false }
 // The stand-in serves the raw recording the task already has; the app reaches it through a variable.
 const APP = `node -e "require('http').createServer(async (q, s) => { try { s.end('app got: ' + await (await fetch(process.env.VENDOR_BASE_URL)).text()) } catch (e) { s.end('no vendor') } }).listen(process.env.PORT)"`
 const STUB = `node -e "require('http').createServer((q, s) => s.end(require('fs').readFileSync(process.env.RECORDINGS + '/vendor-scan.json', 'utf8'))).listen(process.env.PORT)"`
-const until = async (ok: () => Promise<boolean>) => { for (let i = 0; i < 60; i++) { if (await ok()) return true; await new Promise((r) => setTimeout(r, 100)) } return false }
+const until = async (ok: () => Promise<boolean>) => { for (let i = 0; i < 300; i++) { if (await ok()) return true; await new Promise((r) => setTimeout(r, 100)) } return false }
 const says = async (url: string) => fetch(url, { signal: AbortSignal.timeout(1500) }).then((r) => r.text()).catch(() => '')
 
 describe.skipIf(!reachable)('a task\'s recordings and its prototype', () => {

@@ -1,4 +1,5 @@
 /** The app's main, running: on and off by hand, off by itself when nobody looks, behind when main moves, or an address. Made-up app (sample). */
+import { randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -17,8 +18,11 @@ import { patchSetup } from './setup.js'
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
 const SERVER = `node -e "require('http').createServer((q, s) => s.end(require('fs').readFileSync('a.txt', 'utf8') + (process.env.VENDOR_URL || '') + ' ' + process.cwd())).listen(process.env.PORT)"`
-const until = async (ok: () => Promise<boolean>) => { for (let i = 0; i < 60; i++) { if (await ok()) return true; await new Promise((r) => setTimeout(r, 100)) } return false }
+const until = async (ok: () => Promise<boolean>) => { for (let i = 0; i < 300; i++) { if (await ok()) return true; await new Promise((r) => setTimeout(r, 100)) } return false }
 
+// The databases a main and the work beside it get are named after the task and the work, on the one Postgres every
+// checkout's tests share: named apart for each run, so two runs at once do not rebuild and drop each other's.
+const TAG = randomBytes(3).toString('hex'), TASK = `iss_Data${TAG}`, MAIN_SLUG = `main-iss-data${TAG}`, SMOKE_SLUG = `smoke-sample-${TAG}`
 describe.skipIf(!reachable)('the app\'s main, running', () => {
   const wsId = newId('workspace'), appId = newId('app')
   let repoPath: string
@@ -86,34 +90,34 @@ describe.skipIf(!reachable)('the app\'s main, running', () => {
     await setPrototypeCommand(appId, says); await patchSetup(appId, { prototype_db: cfg })
     const rows = async (slug: string) => { const c = new pg.Client({ connectionString: databaseUrl(cfg, slug) }); await c.connect(); try { return (await c.query('select n from seeded order by n')).rows.map((r) => r.n) } finally { await c.end() } }
     // The work beside it (made up): a smoke test's database, on a schema ahead of main's (a column and a table main lacks), with a row made while testing.
-    const { url } = await rebuild({ ...cfg, schema_cmd: undefined }, 'smoke-sample', repoPath, null, { appId })
+    const { url } = await rebuild({ ...cfg, schema_cmd: undefined }, SMOKE_SLUG, repoPath, null, { appId })
     const c = new pg.Client({ connectionString: url }); await c.connect()
     await c.query('create table seeded (n int primary key, added_by_the_build text); insert into seeded values (7, \'x\'), (8, \'made while testing\'); create table only_on_the_build (y int); insert into only_on_the_build values (1)'); await c.end()
-    const beside = { beside: 'the smoke test (sample)', slug: 'smoke-sample' }
+    const beside = { beside: 'the smoke test (sample)', slug: SMOKE_SLUG }
     try {
       // A copy: its own database on main's schema, with the work's rows as they are now. The field main lacks is ignored, the table it lacks left out and said.
-      const copy = await startMain(appId, 'person', { for: 'iss_Data', data: { mode: 'copy', ...beside, env: { TENANT: 'lazer' } } })
-      expect(copy).toMatchObject({ database: databaseName('main-iss-data'), data: { mode: 'copy' }, exited: null })
-      expect(await rows('main-iss-data')).toEqual([7, 8])
+      const copy = await startMain(appId, 'person', { for: TASK, data: { mode: 'copy', ...beside, env: { TENANT: 'lazer' } } })
+      expect(copy).toMatchObject({ database: databaseName(MAIN_SLUG), data: { mode: 'copy' }, exited: null })
+      expect(await rows(MAIN_SLUG)).toEqual([7, 8])
       expect(copy.log.join('\n')).toMatch(/Copied 2 rows in 1 table[\s\S]*left out: only_on_the_build/)
-      expect(await until(async () => (await mainStatus(appId, false, 'iss_Data')).up)).toBe(true)
-      expect(await (await fetch(copy.url!)).text()).toBe(`${databaseUrl(cfg, 'main-iss-data')} own lazer`) // started the way the set-up is: its variables
-      expect((await startMain(appId, 'person', { for: 'iss_Data' })).data).toMatchObject({ mode: 'copy' }) // asked for again with no choice: as it is
+      expect(await until(async () => (await mainStatus(appId, false, TASK)).up)).toBe(true)
+      expect(await (await fetch(copy.url!)).text()).toBe(`${databaseUrl(cfg, MAIN_SLUG)} own lazer`) // started the way the set-up is: its variables
+      expect((await startMain(appId, 'person', { for: TASK })).data).toMatchObject({ mode: 'copy' }) // asked for again with no choice: as it is
       // The same database: main is brought up again on the work's own, told so, and nothing is made or dropped for it.
-      const shared = await startMain(appId, 'person', { for: 'iss_Data', data: { mode: 'shared', ...beside } })
-      expect(shared).toMatchObject({ database: databaseName('smoke-sample'), data: { mode: 'shared' }, url: copy.url })
-      expect(await until(async () => (await mainStatus(appId, false, 'iss_Data')).up)).toBe(true)
-      expect(await (await fetch(shared.url!)).text()).toBe(`${databaseUrl(cfg, 'smoke-sample')} 1 default`)
-      expect(await rows('smoke-sample')).toEqual([7, 8])
-      await expect(startMain(appId, 'person', { for: 'iss_Data', data: { mode: 'shared', beside: 'a prototype (sample)', slug: 'never-run' } })).rejects.toThrow(/no database yet to share/)
-      expect((await mainStatus(appId, false, 'iss_Data')).running).toBe(true) // refused before anything was stopped
+      const shared = await startMain(appId, 'person', { for: TASK, data: { mode: 'shared', ...beside } })
+      expect(shared).toMatchObject({ database: databaseName(SMOKE_SLUG), data: { mode: 'shared' }, url: copy.url })
+      expect(await until(async () => (await mainStatus(appId, false, TASK)).up)).toBe(true)
+      expect(await (await fetch(shared.url!)).text()).toBe(`${databaseUrl(cfg, SMOKE_SLUG)} 1 default`)
+      expect(await rows(SMOKE_SLUG)).toEqual([7, 8])
+      await expect(startMain(appId, 'person', { for: TASK, data: { mode: 'shared', beside: 'a prototype (sample)', slug: 'never-run' } })).rejects.toThrow(/no database yet to share/)
+      expect((await mainStatus(appId, false, TASK)).running).toBe(true) // refused before anything was stopped
       // A script that stops by itself (as one that migrates a database ahead of its code does): it says so, with its last lines.
-      await startMain(appId, 'person', { for: 'iss_Data', data: { mode: 'shared', ...beside, cmd: 'echo "cannot locate revision (sample)"; exit 3' } })
-      expect(await until(async () => !(await mainStatus(appId, false, 'iss_Data')).running)).toBe(true)
-      expect((await mainStatus(appId, false, 'iss_Data')).exited).toMatchObject({ code: 3, log: expect.arrayContaining(['cannot locate revision (sample)']) })
-      await removeMain(appId, 'iss_Data')
-      expect(await rows('smoke-sample')).toEqual([7, 8]) // removing the task's main never drops the work's database
-    } finally { stopMains(); await dropDatabase(cfg, 'smoke-sample'); await dropDatabase(cfg, 'main-iss-data'); await patchSetup(appId, { prototype_db: null }); await setPrototypeCommand(appId, SERVER) }
+      await startMain(appId, 'person', { for: TASK, data: { mode: 'shared', ...beside, cmd: 'echo "cannot locate revision (sample)"; exit 3' } })
+      expect(await until(async () => !(await mainStatus(appId, false, TASK)).running)).toBe(true)
+      expect((await mainStatus(appId, false, TASK)).exited).toMatchObject({ code: 3, log: expect.arrayContaining(['cannot locate revision (sample)']) })
+      await removeMain(appId, TASK)
+      expect(await rows(SMOKE_SLUG)).toEqual([7, 8]) // removing the task's main never drops the work's database
+    } finally { stopMains(); await dropDatabase(cfg, SMOKE_SLUG); await dropDatabase(cfg, MAIN_SLUG); await patchSetup(appId, { prototype_db: null }); await setPrototypeCommand(appId, SERVER) }
   })
 
   it('turns itself off when nobody has looked for a while; a look keeps it up', async () => {

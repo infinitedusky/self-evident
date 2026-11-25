@@ -97,7 +97,7 @@ describe.skipIf(!reachable)('github sync', () => {
     const out = await syncPrs(appId, fake([one, two]))
     expect(out.changes).toEqual(expect.arrayContaining(['#11 pr.merged', '#12 retargeted']))
     expect(retargeted).toContainEqual([12, 'main'])
-    expect((await db.select().from(pr).where(eq(pr.number, 12)))[0].baseBranch).toBe('main')
+    expect((await db.select().from(pr).where(and(eq(pr.appId, appId), eq(pr.number, 12))))[0].baseBranch).toBe('main')
     expect((await now(appId)).needsYou.some((n) => n.kind === 'review' || n.kind === 'overlap')).toBe(false) // our issue branches are not a teammate's
 
     await writeFile(join(teammate, 'news.md'), 'news\n'); await commitAll(teammate, 'news'); await git(teammate, ['push', '-q', 'origin', 'main'])

@@ -23,7 +23,7 @@ import { approveBriefs } from './test-briefs.js'
 let reachable = true
 try { await db.execute('select 1') } catch { reachable = false }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-async function until(check: () => Promise<boolean>, timeoutMs = 40_000) { const t0 = Date.now(); while (!(await check())) { if (Date.now() - t0 > timeoutMs) throw new Error('timed out'); await sleep(150) } }
+async function until(check: () => Promise<boolean>, timeoutMs = 60_000) { const t0 = Date.now(); while (!(await check())) { if (Date.now() - t0 > timeoutMs) throw new Error('timed out'); await sleep(150) } }
 
 const OFF_THE_LIMIT = "const f = require('./limit.js'); if (f(5) !== true || f(1) !== false) { console.error('AssertionError: expected'); process.exit(1) }\n"
 const ON_THE_LIMIT = "const f = require('./limit.js'); if (f(3) !== true || f(2) !== false) { console.error('AssertionError: expected'); process.exit(1) }\n"
