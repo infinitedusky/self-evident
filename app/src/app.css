@@ -285,14 +285,24 @@ select, input { color-scheme: light dark; }
 .viewer.embedded > .preview > .preview-bar:first-child { padding-right: 196px; } /* room for Share and Detach, after the server's buttons */
 /* A step's page showing its view: the panel takes the height of the tab, so the view is all in sight. */
 .step-section.viewing { display: flex; flex-direction: column; height: calc(100vh - 160px); min-height: 520px; }
-/* The rule of thumb (Sandy, 2026-11-25): nothing is at the bottom of the screen, so a box that scrolls goes down to it,
-   less a little padding, and is never cut short at a fixed height. A step's page is as tall as what is written on it,
-   up to the bottom of the screen, where the agent's column beside it ends too; past that the page scrolls inside it,
-   and the report has no box of its own. */
-.task-main > .step-section { max-height: calc(100vh - 160px); overflow: auto; }
+/* A task's, idea's or project's page stays put (Sandy, 2026-11-25: "the outer part of the page should be fixed unless it
+   is running off the edge. The container holding the content should extend to the bottom with some padding … then the
+   scrolling only scrolls inside that or inside the agent"). The head is at the top, and the three columns take what is
+   left of the tab down to a little padding at its bottom; each scrolls in itself. A step's page is one panel that
+   fills its column, and the report in it has no box of its own. The tab scrolls only when it is too short for the
+   columns. Where they stack (a narrow tab, a phone) the page scrolls as a page. */
+.tab-page:has(> .task-layout) { display: flex; flex-direction: column; padding-bottom: 16px; }
+.tab-page:has(> .task-layout) > * { flex: none; }
+@container tab (min-width: 961px) {
+  .tab-page > .task-layout { flex: 1 1 0; min-height: 420px; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+  .tab-page > .task-layout > .task-nav { position: static; min-height: 0; overflow-y: auto; align-content: start; scrollbar-width: thin; }
+  .tab-page > .task-layout > .task-main { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+  .tab-page > .task-layout > .task-main > * { flex: none; }
+  .tab-page > .task-layout > .task-main > .step-section:only-child { flex: 1 1 0; height: auto; min-height: 0; overflow-y: auto; margin-bottom: 0; }
+  .tab-page > .task-layout > .task-agent { position: static; height: auto; min-height: 0; }
+  .tab-page > .task-layout > .task-agent.folded { align-self: start; }
+}
 .task-main > .step-section .md { max-height: none; overflow: visible; padding-right: 0; }
-@container tab (max-width: 620px) { .task-main > .step-section { max-height: none; overflow: visible; } }
-.phone-page .task-main > .step-section { max-height: none; overflow: visible; }
 .step-section .card-head .step-tabs { margin-left: auto; margin-right: 10px; }
 .viewer-out { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .viewer-window { height: 100vh; display: flex; flex-direction: column; padding: 10px 14px; box-sizing: border-box; }

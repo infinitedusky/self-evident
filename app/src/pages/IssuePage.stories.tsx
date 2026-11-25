@@ -8,7 +8,7 @@ import { acceptance, approvedTaskStepsView, issueDetails, researchWork, sampleOr
 // One task at /tasks/:id, from the sample engine. Each story stands on a different task. A task has its own nav down
 // the left: overview, then its two stages: the brief, with the steps that feed it under it ("UI change (sample)", in
 // order), and the build. On the right, the task's own agent, which stays as the step changes.
-const meta = { title: 'Pages/TaskPage', component: IssuePage, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page"><IssuePage /></div> } satisfies Meta<typeof IssuePage>
+const meta = { title: 'Pages/TaskPage', component: IssuePage, parameters: { layout: 'fullscreen' }, render: () => <div className="tab-page" style={{ height: '100vh' }}><IssuePage /></div> } satisfies Meta<typeof IssuePage>
 export default meta
 type Story = StoryObj<typeof meta>
 const at = (id: string, section?: string) => ({ route: { path: section ? '/tasks/:id/:section' : '/tasks/:id', url: `/tasks/${id}${section ? `/${section}` : ''}` } })
@@ -41,14 +41,20 @@ export const WaitsToBeClosed: Story = {
 /** A step's page: research, approved, with its notes and a way to take the approval back. */
 export const ResearchStep: Story = { parameters: at('iss_sample20', 'research') }
 /** The mockups' page: the agent says it is done, so it is ready for you, with Approve; the task's Storybook right on it (here not running). */
-/** A long research report (sample): it is as long as it is, with no box of its own to scroll in. The page scrolls, down to the bottom of the screen. */
+/** A long research report (sample): the page stays put, and the report scrolls inside its panel, which goes down to the bottom of the tab beside the agent. The report has no box of its own. */
 export const LongResearchReport: Story = {
   parameters: at('iss_sample20', 'research'),
   beforeEach: withEngine({ stepWork: { ...researchWork, body: Array.from({ length: 14 }, (_, n) => `### Comparison ${n + 1} (sample)\n- Shop ${String.fromCharCode(65 + n)}: one page, address autocompleted, wallet buttons first.\n- What it costs them: a long page on a phone.\n\nMade-up finding ${n + 1}: people who see the total early finish more often.`).join('\n\n') } }),
   play: async ({ canvasElement }) => {
     const last = await within(canvasElement).findByText(/Made-up finding 14/)
     const box = last.closest('.md')!
-    await expect(box.scrollHeight).toBeLessThanOrEqual(box.clientHeight + 1) // nothing of the report is hidden inside a scrolling box
+    await expect(box.scrollHeight).toBeLessThanOrEqual(box.clientHeight + 1) // nothing of the report is hidden inside a box of its own
+    const page = canvasElement.querySelector('.tab-page')!, panel = last.closest('.step-section')!
+    if (page.clientWidth > 1020 && page.clientHeight > 700) { // three columns, and a tab tall enough for them
+      await expect(page.scrollHeight).toBeLessThanOrEqual(page.clientHeight + 1) // the page itself does not scroll
+      await expect(panel.scrollHeight).toBeGreaterThan(panel.clientHeight) // the panel does
+      await expect(Math.abs(panel.getBoundingClientRect().bottom - canvasElement.querySelector('.task-agent')!.getBoundingClientRect().bottom)).toBeLessThanOrEqual(1)
+    }
   },
 }
 export const MockupsStep: Story = { parameters: at('iss_sample20', 'mockup') }
