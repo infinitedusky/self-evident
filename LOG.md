@@ -8070,3 +8070,22 @@ but we need more prominent separation. Maybe each one of them is a card."
   Background and Options, folded as before.
 - An unanswered card has a coloured left edge: accent when it is yours, amber when it waits on someone.
 - The form is unchanged: Background is still above the question there, as Sandy asked on 2026-11-24.
+
+## On a phone you are at a place, and its chat goes with you (Sandy, 2026-11-25, after trying the first cut: "the chat it's suggesting to go back to is like on the whatever task we were on, but if I've navigated away from that, I don't want to be on that task anymore … I don't know how it chooses what task to to land on … the task or project view should be moving between the chat window or section, the whatever page we are on at that time, and the left nav, and then we are always able to navigate to wherever else in the app we want to go by going to like the grid thing in the in the top")
+
+The first cut was a chat with pages laid over it, and "‹ Chat" went back to a task the person had left. Turned
+round: the phone is at a place in the app, and a place has a page, a chat and a nav.
+
+- **Chat and the page are two tabs** under the place's name. Both stay as they were when flipped between.
+- **The chat is the chat of where you are**: a task's own agent with its agents as tabs, an idea's agent, a
+  project's conversation (started from there if it has none), and anywhere else a conversation about the app. Going
+  to another task in the page changes the chat with it.
+- **The tray is the place's nav**: at a task, its project's tasks with this task's steps under it and the open one
+  marked; at a project, its tasks. Then what needs you (a question goes to its task's chat, the rest to their page)
+  and every chat, each going to the place it belongs to.
+- **The grid goes anywhere**: My Stuff, Projects, Tasks, Ideas, To-dos, Learn, Settings.
+- **It opens where it was last, else on My Stuff.** No task is picked for the person any more. The address bar
+  keeps the place, so a reload stays put.
+
+Not done: the same as the first cut (pages are the computer's, narrow; no swiping; agents out are not read-only).
+A task's page still carries the task's agent column, hidden, under the phone's own chat: two copies listening.
