@@ -1419,6 +1419,12 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 .context-bg { grid-column: 1 / -1; margin: 0 0 8px; padding: 4px 12px; border-left: 2px solid var(--line); }
 .context-bg > summary { cursor: pointer; }
 .context-bg .context-text { margin-top: 4px; max-width: 720px; }
+.context-depends { margin: 2px 0; } .context-depends .link-btn { color: var(--ink-soft); }
+.context-found { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.context-share { margin: 8px 0 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); }
+.context-share-page { margin-top: 10px; padding: 20px 28px; background: var(--bg); border-radius: 8px; max-height: 520px; overflow: auto; font-size: 14px; }
+.context-share-page h1 { font-size: 20px; margin: 0 0 4px; } .context-share-page h2 { font-size: 15px; margin: 20px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--line); } .context-share-page h3 { font-size: 14px; margin: 14px 0 2px; }
+.context-share-page table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; } .context-share-page th, .context-share-page td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
 .context-waiting { color: var(--warn); font-weight: 500; }
 @container (max-width: 560px) { .context-qa { grid-template-columns: 1fr; } }
 .context-unmade .context-q { color: var(--ink); font-weight: 600; }

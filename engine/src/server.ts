@@ -52,7 +52,7 @@ import { getIssue, changeState, commentOnIssue, createIssue, listComments, ident
 import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
 import { addNote, editNote, listNotes, removeNote } from './notes.js'
-import { addContextNote, addDoc, addFile, addTicket, contextCount, contextOf, editContextNote, editDoc, refreshDoc, removeContextNote, removeDoc, type Subject as ContextSubject } from './context.js'
+import { addContextNote, addDoc, addFile, addTicket, contextCount, contextOf, openQuestionsDoc, editContextNote, editDoc, refreshDoc, removeContextNote, removeDoc, type Subject as ContextSubject } from './context.js'
 import { deleteReport, editReport, getReport, isWritingReport, listReports, setReportFormat, writeReport, type Period } from './reports.js'
 import { listSketches, readSketch } from './sketches.js'
 import { listScreens } from './screens.js'
@@ -1159,6 +1159,7 @@ export function buildApp(bus: EventBus) {
     const of = async (c: any): Promise<ContextSubject> => (kind === 'ideas' ? { ideaId: c.req.param('id') } : kind === 'projects' ? { projectId: c.req.param('id') } : { issueId: (await resolveIssue(db, c.req.param('id'))).id })
     const json = (c: any) => c.req.json().catch(() => ({}))
     api.get(at, async (c) => { try { return c.json(await contextOf(await of(c))) } catch (err) { return planError(c, err) } })
+    api.get(`${at}/open-questions`, async (c) => { try { return c.json(await openQuestionsDoc(await of(c))) } catch (err) { return planError(c, err) } }) // the unanswered decisions as a document to share: {title, count, markdown}
     api.get(`${at}/count`, async (c) => { try { return c.json(await contextCount(await of(c))) } catch (err) { return planError(c, err) } })
     api.post(`${at}/docs`, async (c) => { try { return c.json(await addDoc(await of(c), await json(c), 'user'), 201) } catch (err) { return planError(c, err) } })
     api.post(`${at}/tickets`, async (c) => { try { return c.json(await addTicket(await of(c), (await json(c)).ref, 'user'), 201) } catch (err) { return planError(c, err) } })

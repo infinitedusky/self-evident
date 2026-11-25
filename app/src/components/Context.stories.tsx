@@ -25,9 +25,9 @@ export const OnATask: Story = {
     const ask = section(canvasElement, 'decisions') // unanswered ones are decisions like the rest, first among them
     await expect(c.queryByText('For you to decide')).toBeNull()
     await expect(await ask.findByText('2 unanswered')).toBeVisible()
-    await expect(ask.getByText('Which saved cards are offered? (sample)')).toBeVisible() // the agent proposes an answer
+    await expect(ask.getByText('Which saved cards are offered? (sample)', { selector: '.context-q' })).toBeVisible() // the agent proposes an answer
     await expect(ask.getByText('Only the ones used in the last 12 months')).toBeVisible()
-    await expect(ask.getByText('What is shown when a saved card has expired? (sample)')).toBeVisible() // asked, not answered
+    await expect(ask.getByText('What is shown when a saved card has expired? (sample)', { selector: '.context-q' })).toBeVisible() // asked, not answered
     const rows = [...canvasElement.querySelectorAll('[data-section="decisions"] > .context-row')].map((r) => r.getAttribute('data-unanswered'))
     await expect(rows).toEqual(['proposed', 'open', 'waiting', null, null, null]) // unanswered first, the one waiting on someone last of them, then the answered and the project's
     const docs = section(canvasElement, 'docs')
@@ -39,7 +39,7 @@ export const OnATask: Story = {
     const order = [...canvasElement.querySelectorAll('.context-fold-name')].map((h) => h.textContent)
     await expect(order).toEqual(['Reference docs', 'Decisions', 'Notes'])
     const decisions = section(canvasElement, 'decisions')
-    await expect(decisions.getByText('What happens to a card when it is removed? (sample)')).toBeVisible() // the question
+    await expect(decisions.getByText('What happens to a card when it is removed? (sample)', { selector: '.context-q' })).toBeVisible() // the question
     await expect(decisions.getByText('It is deleted at the provider, not hidden here')).toBeVisible() // and its answer
     await expect(decisions.getByText(/Recorded by the agent once you agreed/)).toBeVisible()
     await expect(decisions.getByText('1 answer proposed and rejected')).toBeVisible()
@@ -303,7 +303,7 @@ export const TheStoryBehindAQuestion: Story = {
     await userEvent.click(c.getByRole('button', { name: 'Add a decision' }))
     await userEvent.type(c.getByRole('textbox', { name: 'The question' }), 'Do we keep cards of closed accounts? (sample)')
     await userEvent.type(c.getByRole('textbox', { name: /^Background/ }), 'Legal asked last spring and nobody answered.')
-    await expect([...canvasElement.querySelectorAll('[data-component="ContextDecisionForm"] label')].map((l) => l.firstChild?.textContent?.split(/[ (:]/)[0])).toEqual(['Background', 'The', 'Options', 'The', 'Why']) // always the same five, in this order
+    await expect([...canvasElement.querySelectorAll('[data-component="ContextDecisionForm"] label')].map((l) => l.firstChild?.textContent?.split(/[ (:]/)[0])).toEqual(['Background', 'The', 'Options', 'The', 'Why']) // always the same five, in this order, with what it depends on between the options and the answer
     await userEvent.type(c.getByRole('textbox', { name: /^Options/ }), '(a) Keep them. (b) Delete them.')
     await userEvent.click(c.getByRole('button', { name: 'Add it, unanswered' }))
     await expect(await c.findByText('Legal asked last spring and nobody answered.')).toBeVisible()
@@ -316,6 +316,57 @@ export const TheStoryBehindAQuestion: Story = {
     await expect(await c.findByText('The vault still returns expired cards.')).toBeVisible()
     await expect(c.getByRole('button', { name: 'Answer: What is shown when a saved card has expired? (sample)' })).toBeVisible() // still unanswered
   },
+}
+
+/** A decision that depends on others says so, with how each stands, and the one it waits for says what needs it. In the form, what it depends on is chosen from the decisions here or written as a new question, which is asked when the decision is saved. */
+export const DependsOnAnotherDecision: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await c.findByText('2 unanswered')
+    const row = within(canvasElement.querySelector('[data-note="note_ctx7"]') as HTMLElement)
+    await expect(row.getByText(/Depends on:/)).toBeVisible()
+    await expect(row.getByText('(unanswered)')).toBeVisible() // one it waits for is not made
+    await expect(row.getByText('(Its last four digits and its expiry, nothing more)')).toBeVisible() // the other is, and says its answer
+    await expect(within(canvasElement.querySelector('[data-note="note_ctx8"]') as HTMLElement).getByText(/Needed for:/)).toBeVisible()
+    // A new decision that depends on one here and on a question not asked yet.
+    await userEvent.click(c.getByRole('button', { name: 'Add a decision' }))
+    await userEvent.type(c.getByRole('textbox', { name: 'The question' }), 'Who can set someone as protected? (sample)')
+    await userEvent.selectOptions(c.getByRole('combobox', { name: 'Depends on' }), 'note_ctx3')
+    await userEvent.selectOptions(c.getByRole('combobox', { name: 'Depends on' }), 'new')
+    await userEvent.type(c.getByRole('textbox', { name: 'The question it depends on' }), 'Does the backend use the core permissions? (sample)')
+    await userEvent.click(c.getByRole('button', { name: 'Add it' }))
+    await expect(c.getByText(/A new question is added to the decisions, unanswered/)).toBeVisible()
+    await userEvent.click(c.getByRole('button', { name: 'Add it, unanswered' }))
+    await expect(await c.findByRole('button', { name: 'Answer: Does the backend use the core permissions? (sample)' })).toBeVisible() // asked, as a decision of its own
+    const made = within([...canvasElement.querySelectorAll('[data-note]')].find((e) => e.textContent?.includes('Who can set someone as protected? (sample)') && e.getAttribute('data-unanswered')) as HTMLElement)
+    await expect(made.getByRole('button', { name: 'Does the backend use the core permissions? (sample)' })).toBeVisible()
+    await expect(made.getByRole('button', { name: 'What happens to a card when it is removed? (sample)' })).toBeVisible()
+    await expect(c.getByText('4 unanswered')).toBeVisible()
+  },
+}
+
+/** The open questions as one document to share: a list of them, then each in full with its background, its options and what it depends on, those waiting on someone first. Copied as Markdown, downloaded, or printed (which is how it becomes a PDF). */
+export const OpenQuestionsDoc: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Open questions doc' }))
+    const doc = within(await waitFor(() => { const el = canvasElement.querySelector('[data-component="ContextOpenQuestions"]'); if (!el) throw new Error('not yet'); return el as HTMLElement }))
+    await expect(doc.getByRole('heading', { level: 1, name: /Open questions: SS-20/ })).toBeVisible()
+    await expect(doc.getByText(/as of 24 Nov 2026 · 3 open/)).toBeVisible()
+    await expect(doc.getByRole('table')).toBeVisible()
+    await expect(doc.getByRole('heading', { level: 2, name: 'Waiting on Em' })).toBeVisible()
+    await expect(doc.getByRole('heading', { level: 3, name: /1\. Can a card saved in the app be used on the web/ })).toBeVisible()
+    await expect(doc.getByText(/Recommendation: \(b\) for this task/)).toBeVisible()
+    await expect(doc.getByText(/Only the ones used in the last 12 months/)).toBeVisible() // an answer the agent proposed, said as not decided
+    for (const name of ['Copy as Markdown', 'Download', 'Print or save as PDF']) await expect(doc.getByRole('button', { name })).toBeVisible()
+    await userEvent.click(doc.getByRole('button', { name: 'Close' }))
+    await expect(canvasElement.querySelector('[data-component="ContextOpenQuestions"]')).toBeNull()
+  },
+}
+/** With nothing unanswered there is no document to make, and no button for it. */
+export const NoOpenQuestions: Story = {
+  beforeEach: withEngine({ context: { issues: { ...taskContext, notes: taskContext.notes.filter((n) => n.status === 'settled') } } }),
+  play: async ({ canvasElement }) => { const c = within(canvasElement); await c.findByRole('button', { name: 'Add a decision' }); await expect(c.queryByRole('button', { name: 'Open questions doc' })).toBeNull() },
 }
 
 /** A decision put in to answer later: a question with no answer. It is a decision like the rest, marked Unanswered. */
