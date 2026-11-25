@@ -37,13 +37,19 @@ const PIECES: Record<string, string> = {
   '.claude': 'the docs agent\'s skills', 'hooks': 'the hooks folder', 'mockups': 'the mockups folder', 'README.md': 'a README', '.gitignore': 'a .gitignore',
 }
 
+/** Pieces that are only a folder to put things in. */
+const FOLDERS = new Set(['hooks', 'mockups'])
+
 const filesIn = (root: string, at = ''): string[] => readdirSync(join(root, at)).sort().flatMap((f) => statSync(join(root, at, f)).isDirectory() ? filesIn(root, join(at, f)) : [join(at, f)])
 /** The template's files, as they are named in a workbench (the template keeps .gitignore as `gitignore`, so it is not this repository's). */
 export const templateFiles = (): { from: string; to: string }[] => filesIn(TEMPLATE).map((f) => ({ from: f, to: f === 'gitignore' ? '.gitignore' : f }))
 
+const has = (dir: string, f: string) => existsSync(join(dir, f)) || (FOLDERS.has(dirname(f)) && existsSync(join(dir, dirname(f))))
+
 /** What a folder lacks of the template: its files, and the pieces they belong to in a person's words. No folder: everything. */
 export function missingIn(dir: string | null): { files: string[]; pieces: string[] } {
-  const files = templateFiles().map((f) => f.to).filter((f) => !dir || !existsSync(join(dir, f)))
+  // A folder that is there is not lacking for want of the template's README in it: hooks/ with a hook and no README is a hooks folder.
+  const files = templateFiles().map((f) => f.to).filter((f) => !dir || !has(dir, f))
   return { files, pieces: [...new Set(files.map((f) => PIECES[f.split(sep)[0]] ?? f.split(sep)[0]))] }
 }
 
@@ -121,7 +127,7 @@ export async function seedWorkbench(appId: string, to?: string | null, deps: { i
   const added: string[] = []
   for (const f of templateFiles()) {
     const at = join(dir, f.to)
-    if (existsSync(at)) continue
+    if (has(dir, f.to)) continue
     mkdirSync(dirname(at), { recursive: true })
     if (NAMED.has(f.from)) writeFileSync(at, readFileSync(join(TEMPLATE, f.from), 'utf8').replace(/\{\{(app|slug)\}\}/g, (_, k: string) => values[k]))
     else copyFileSync(join(TEMPLATE, f.from), at)

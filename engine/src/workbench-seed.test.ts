@@ -65,9 +65,11 @@ describe.skipIf(!reachable)('seeding a workbench', () => {
     mkdirSync(join(dir, 'hooks'), { recursive: true })
     writeFileSync(join(dir, 'README.md'), '# Ours\n'); writeFileSync(join(dir, 'hooks', 'before-start.sh'), 'echo A=1\n')
     execFileSync('git', ['init', '-q'], { cwd: dir })
+    expect(missingIn(dir).pieces).not.toContain('the hooks folder'); expect(missingIn(dir).pieces).toContain('the mockups folder')
     const made = await seedWorkbench(id, `${dir}/`, { install })
     expect(made).toMatchObject({ dir, made: false, repoMade: false })
     expect(made.added).not.toContain('README.md'); expect(made.added).toContain('docs/index.md')
+    expect(made.added).not.toContain('hooks/README.md'); expect(made.added).toContain('mockups/README.md') // its hooks folder is a hooks folder already
     expect(readFileSync(join(dir, 'README.md'), 'utf8')).toBe('# Ours\n')
     expect(execFileSync('git', ['status', '--porcelain'], { cwd: dir, encoding: 'utf8' })).toContain('?? docs/')
     expect((await seedWorkbench(id, null, { install })).added).toEqual([]) // again: nothing to add, and the folder named is the one filled
