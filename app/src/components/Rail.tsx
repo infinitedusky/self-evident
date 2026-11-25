@@ -2,10 +2,11 @@
  * The loop as a thin strip of icons on the far left, like VS Code's activity bar: each opens its page as a tab
  * (or brings it to the front). Hovering one shows its name. The rail holds only the stages of work, with nothing under
  * them: projects, tasks and the steps live inside their stage (LOG.md, 2026-10-29). Below the rule: Summary, Reports, My Stuff and Docs.
- * Settings sits at the bottom. The apps have their own strip outside it, on the far left as in Slack (AppPicker); the
+ * Settings sits at the bottom, with the switch to the other Evident on this computer when there is one (InstanceSwitch). The apps have their own strip outside it, on the far left as in Slack (AppPicker); the
  * tiny chevron at the top shows or hides that strip.
  */
 import type { Tab } from '../workspace'
+import { InstanceSwitch } from './InstanceSwitch'
 import { PhoneLink } from './PhoneLink'
 
 interface Item { icon: string; label: string; tab: Tab; also?: RegExp }
@@ -44,6 +45,7 @@ export function Rail({ here, onOpen, agentOpen, onToggleAgent, appsOpen, onToggl
       <div className="rail-rule" />
       {OUTSIDE.map(button)}
       <div className="rail-end">
+        <InstanceSwitch />
         <PhoneLink />
         {button({ icon: '⚙️', label: 'Settings', tab: page('/settings') })}
       </div>

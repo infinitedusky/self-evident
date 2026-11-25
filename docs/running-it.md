@@ -56,6 +56,28 @@ while that agent runs: the ports are taken.
 **One engine at a time.** Two engines on one database would both schedule and build. The state repository records
 which computer holds the engine, and `pnpm arrive` refuses while another one does.
 
+## Both on one computer
+
+(LOG.md, "Two Evidents on one computer".) One Evident reads one database. To have this computer's own apps and the
+shared ones at once, run two Evidents from the same checkout, each on its own address, and switch with the button
+in the rail (💻 or ☁️, above the phone): it says which one you are in and goes to the other.
+
+| | Its page | Its engine | Started by |
+| --- | --- | --- | --- |
+| Shared | `http://localhost:5180` (or `UI_URL`) | 4000 | `pnpm arrive` (launchd keeps it running) |
+| This computer | `http://localhost:5181` | 4001 | `pnpm local`, in a terminal |
+
+If this computer's own Evident is already running with `pnpm dev`, stop it first: `pnpm arrive` refuses while it
+holds the usual address. Then `pnpm arrive`, then `pnpm local`.
+
+- Each keeps running while you are in the other. Their apps, tasks and conversations are separate.
+- The shared one is still one engine across all your computers: `pnpm leave` on the other computer first.
+- Do not add the same checkout as an app in both: two engines would make worktrees and branches in one folder.
+- Both keep per-app files under `~/.self-evident/apps/<abbreviation>/`, so give apps in the two different
+  abbreviations.
+- `pnpm local` with nothing else running is the same as `pnpm dev` on the other address. Other ports:
+  `PORT`, `UI_PORT`, and `OTHER_ENGINE_URL` to say where the other engine is. `EVIDENT_NAME` renames one.
+
 ## Which way is this computer using?
 
 - `launchctl print gui/$(id -u)/com.thedusky.self-evident` succeeds: way 2, kept running by launchd.
@@ -277,7 +299,8 @@ checkout, normally the default branch.
 ## Known limits
 
 - Way 2 runs one engine at a time. Assigning each app to a computer, so several can run at once, is not built.
-- One page shows one database. Seeing a local and a shared one side by side is not built.
+- One page shows one database. A local and a shared one run as two Evidents with a switch between them ("Both on
+  one computer"); one list of apps from both is not built.
 - Resuming a conversation on a computer with a different user is untried: its history arrives in the right
   place, but its earlier turns mention the first computer's paths.
 - `pnpm arrive` does not install an app's own dependencies, and does not carry the global Claude Code set-up in

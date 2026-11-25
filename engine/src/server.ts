@@ -160,6 +160,9 @@ export function buildApp(bus: EventBus) {
 
   const settle = <T>(v: T) => { void runner.dispatch(); return v } // a change to the plan can free work: one dispatch pass after it
   api.get('/health', async (c) => { await db.execute('select 1'); return c.json({ ok: true }) })
+  // Two Evidents on one computer (instance.ts): which this one is, and the other one, for the way across.
+  api.get('/instance', async (c) => c.json((await import('./instance.js')).thisInstance()))
+  api.get('/instances', async (c) => c.json(await (await import('./instance.js')).instances()))
   // The other devices with the page open (a phone, over Tailscale); the one asking is left out.
   api.get('/devices', async (c) => { const from = remoteIp((n) => c.req.header(n)); return c.json({ ...(await phoneState()), remote: !!from, devices: devicesHere(from) }) })
   // Put the page on the private network, or take it off: from the page on this computer only, never from the phone.

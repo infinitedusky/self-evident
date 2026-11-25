@@ -577,6 +577,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
 /** Another device with the page open, over the private network. */
 export interface Device { ip: string; name: string; kind: 'phone' | 'computer'; since: string }
+/** Two Evidents on one computer (engine instance.ts): this one, and the other, up with its page or with what starts it. */
+export interface Instance { name: string; /** Its database: this computer's own, or one shared with other computers. */ kind: 'local' | 'shared'; url: string; database: string; /** Started to run beside another. */ beside: boolean }
+export interface Instances { here: Instance; other: { up: true; name: string; kind: Instance['kind']; url: string; /** Both engines are on one database. */ same: boolean } | { up: false; name: string; kind: Instance['kind']; start: string } }
 /** `address`: the page on the private network, null when it is not served there. `remote`: this page is the one that came over it. */
 export interface DevicesHere { /** Tailscale on this computer: not installed, not connected, or connected. */ tailscale: 'missing' | 'off' | 'ready'; address: string | null; remote: boolean; devices: Device[]; /** Where to allow serving on the Tailscale account, when it said no. */ enable?: string }
 export const devicesHere = () => call<DevicesHere>('GET', '/devices')
@@ -916,6 +919,7 @@ export const engine = {
   docsAgent: (appId: string) => call<DocsAgent>('GET', `/apps/${appId}/docs-agent`),
   askDocsAgent: (appId: string, message: string) => call<DocsAgent>('POST', `/apps/${appId}/docs-agent`, { message }),
   startDocsSite: (appId: string) => call<DocsSite>('POST', `/apps/${appId}/docs-site/start`),
+  instances: () => call<Instances>('GET', '/instances'),
   workbench: (appId: string) => call<WorkbenchView>('GET', `/apps/${appId}/workbench`),
   setWorkbench: (appId: string, dir: string | null) => call<WorkbenchView>('PUT', `/apps/${appId}/workbench`, { dir }),
   /** Make the folder from Evident's template, or put into the one named what it lacks. dir: where, when not the folder named or the one suggested. */

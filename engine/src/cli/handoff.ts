@@ -180,6 +180,10 @@ program.command('leave').description('stop the engine here and send everything o
 
 program.command('arrive').description('bring everything in and start the engine here').option('--force', 'take the engine although another Mac holds it')
   .action(async (a: { force?: boolean }) => {
+    // The shared Evident takes the usual address. This computer's own one, if it is running there, has to move
+    // beside it first (instance.ts): said before anything is brought in.
+    const there = await fetch('http://localhost:4000/api/instance', { signal: AbortSignal.timeout(3000) }).then((r) => (r.ok ? r.json() as Promise<{ kind?: string }> : null)).catch(() => null)
+    if (there?.kind === 'local') throw new Error('This computer\'s own Evident is running at the usual address (`pnpm dev` in a terminal).\nStop it there, run `pnpm arrive` again, then start it beside the shared one with `pnpm local` (its page: http://localhost:5181).')
     const plan = await readPlan()
     report(await arrive(plan, options({ force: a.force })))
     await startEngine()

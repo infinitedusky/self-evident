@@ -55,7 +55,7 @@ function guideMismatch(ctx: TktContext, guide: string): { kind: string | null } 
   return guide.includes(id) && new RegExp(`\\b${ticketKey(ctx)}-`).test(guide) ? null : 'app'
 }
 /** Where the skills reach us: the engine's API, and the UI the ticket links point at (UI_URL; Vite's port in development). */
-export const urls = () => ({ engineUrl: `http://localhost:${Number(process.env.PORT ?? 4000)}/api`, uiUrl: process.env.UI_URL ?? 'http://localhost:5180' })
+export const urls = () => ({ engineUrl: `http://localhost:${Number(process.env.PORT ?? 4000)}/api`, uiUrl: process.env.UI_URL ?? `http://localhost:${Number(process.env.UI_PORT ?? 5180)}` })
 /** This app as tkt's check and guide need it, or null when there is no such app. */
 export async function contextFor(appId: string): Promise<TktContext | null> {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
