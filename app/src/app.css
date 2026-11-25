@@ -1558,3 +1558,17 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 .reviews-commands pre { margin: 4px 0 0 20px; padding: 8px 10px; background: var(--wash, rgba(0,0,0,.04)); border-radius: 6px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .reviews-find { display: flex; gap: 12px; align-items: center; margin: 8px 0; }
 .reviews-find input { width: 360px; max-width: 100%; margin: 0; }
+.reviews-how { margin: 12px 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; }
+/* How each repository is run (Settings > Repo): one card per repository, its scripts, the last check of them. */
+.repo-runs { margin-top: 22px; }
+.repo-run { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
+.repo-run header { display: flex; gap: 8px; align-items: center; }
+.repo-run p { margin: 0; }
+.repo-run-parts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; }
+.repo-run-parts li.missing code { color: var(--ink-faint); text-decoration: line-through; }
+.repo-run-steps { list-style: none; margin: 2px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; }
+.repo-run-steps li.pass .reviews-mark { color: var(--good, #2f6f4f); }
+.repo-run-steps li.fail .reviews-mark { color: var(--bad, #b42318); }
+.repo-run-steps li.none, .repo-run-steps li.unrun { color: var(--ink-faint); }
+.repo-run-steps li:has(pre) { flex-basis: 100%; }
+.repo-run-steps pre { margin: 4px 0 0 20px; padding: 8px 10px; background: var(--wash, rgba(0,0,0,.04)); border-radius: 6px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }

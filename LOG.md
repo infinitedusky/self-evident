@@ -8275,3 +8275,68 @@ on down.
 Story: Pages/TaskPage › LongResearchReport. Not done: the other fixed heights in `app.css` (a summary on a card,
 a tool's result, a log) are small boxes inside lists and were left as they are; not looked at in the running app,
 only in Storybook.
+
+### The Reviews list is kept, and a pull request can be named (2026-11-25)
+
+Sandy: "Pull of all the different unmerged PRs just took a really long time … is that a one-shot thing, or do we have
+to name the PR we want?" It was not one-shot: the page read a hundred pull requests from each repository every time
+it was opened and every 15 seconds while open, one repository after another (about four seconds a look, measured).
+
+- **GitHub's answer is kept five minutes per app** (`kept`, pr-review.ts), and the repositories are read at once, not
+  in turn. The page says when it was read and has **Refresh**. Where each review stands is still read every time: it
+  is the engine's own.
+- **A pull request can be named without the list** (`namedPull`, pr-named.ts): its number, `org/repo#n`, or its
+  address pasted into the find box opens it, before GitHub has answered. A repository that is not the app's is not
+  opened.
+
+Not done: the list is not kept across an engine restart; a pull request opened on GitHub in the last five minutes is
+not there until Refresh.
+
+### A review runs a repository its own way, and never blames a pull request for what could not run (2026-11-25)
+
+Sandy's first real review, of a coworker's pull request in the app's second repository, drafted five comments, every
+one of them `cd: backend: No such file or directory`. Two mistakes of mine in the first version:
+
+- **The app's commands are its home repository's.** Its test command, what a build is held to and the finalizing's
+  prepare are written for one layout. A review of a pull request in another repository now runs none of them. That
+  repository has its own (`setup.review_repos[<full name>]`: what is run first, how its tests are run with `{files}`,
+  and its commands; `repoRunOf`, `setRepoRun`), set in a form on the review itself, open while nothing is set. Until
+  then the steps are skipped and say why, and nothing is drafted.
+- **"Could not be run" is not "fails".** A command the shell could not start (a folder or a program that is not
+  there: `couldNotRun`) is shown as that, counted apart, and never drafted as a comment. Tests that fail with nothing
+  changed were already never drafted; the step now says that is usually this computer, not the pull request.
+
+The rule under both: a comment on someone else's work is drafted only from something that ran and then failed.
+
+Not done: the per-repository settings are only on the review page, not in Settings; a command that starts and then
+fails because this computer lacks something (a database not up, a service not running) still reads as a failure and
+is drafted, so the person has to read each draft's output before using it; nothing compares against the base branch
+to tell a failure the pull request caused from one that was already there.
+
+### How a repository is run is set once, as scripts in the workbench (2026-11-25)
+
+Sandy, after the entry above: "for whatever repo we can get the environment up every time. We shouldn't be doing it on
+a PR by PR basis. It should be on a repository basis." Asked where it lives, he chose **scripts in the workbench**
+over fields in Settings, and **reviews first** over moving the app's own tasks now. This replaces the three text boxes
+of the entry above (`setup.review_repos`, never merged).
+
+- **A folder per repository in the workbench** (repo-run.ts): `<workbench>/repos/<short name>/` with `setup` (once per
+  checkout), `up` (what its tests need; NAME=value lines it prints are given to the rest, as a before-start hook's
+  are), `test` (the test files given as arguments), `checks/*` (one script per check) and `down` (always run after
+  `up`). Any extension; run from the checkout's top with CHECKOUT, REPO, BASE, HEAD and PR. The folder is the record:
+  nothing is kept in Evident.
+- **A review runs them** (pr-review.ts): setup and up before anything, the breaks against `test`, each check, then
+  down whatever happened. A repository with no folder: the home one is run as the app's settings say and the page
+  says so; any other is not run at all.
+- **Check it** (Settings › Repo, "How each repository is run"; `checkRepo`): every script, in order, on the default
+  branch, in a checkout of the engine's own (`<repo>-worktrees/review-of--check`). Each step passed, failed or could
+  not be run, with the failing one's last lines; kept as `repo_run.checked`. It is how a failure in a review is known
+  to be the pull request's and not this computer's.
+- **Start its folder** writes a stub of each script that says it is not written and exits as "could not be run", so a
+  stub is never taken for a result. Nothing there is overwritten.
+- Scripts are given nothing to read (`</dev/null`): one that waits for typing would never end.
+
+Not done: no scripts are written for either repository of the dashboard app yet (the second one's tests run inside
+its own docker container, mounted from its main checkout, so its `up` and `test` need thought); the app's own tasks
+(build, check, finalizing) still run from the app's settings; a script is not edited or shown on the page; a review
+does not refuse to run when the last check failed, it only can be seen in Settings.

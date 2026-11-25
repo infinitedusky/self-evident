@@ -470,10 +470,16 @@ export interface ReviewPull { repo: string; number: number; title: string; url: 
 export interface ReviewSummary { state: 'running' | 'done' | 'failed'; sha: string; at: string; stale: boolean; suggestions: number; survivors: number; failed: number }
 export interface ReviewStep { key: 'checkout' | 'mutation' | 'commands'; name: string; state: 'waiting' | 'running' | 'pass' | 'fail' | 'skipped'; says: string }
 export interface ReviewSurvivor { id: string; file: string; line: number; from: string; to: string; means: string; code: string; equivalent?: string }
-export interface ReviewCommand { key: string; name: string; runs: string; pass: boolean; output: string }
+export interface ReviewCommand { key: string; name: string; runs: string; pass: boolean; output: string; /** false: it could not be run here at all, which says nothing about the pull request. */ ran?: boolean }
+/** How a pull request's repository is run for a review: by its own scripts in the workbench, as the app's settings say (the home repository, until it has scripts), or not at all. */
+export interface ReviewRepoRun { home: boolean; mode: 'scripts' | 'app' | 'none'; dir: string | null; setup: boolean; up: boolean; test: boolean; down: boolean; checks: string[] }
+/** A repository's scripts in the workbench folder (the engine's repo-run.ts) and the last check of them on its default branch. */
+export interface RepoRunStep { key: string; name: string; state: 'pass' | 'fail' | 'unrun' | 'none'; output: string }
+export interface RepoRunView { repo: string; home: boolean; local: boolean; scripts: { dir: string | null; has: boolean; setup: boolean; up: boolean; test: boolean; down: boolean; checks: string[] }; check: { state: 'running' | 'done'; at: string; sha: string | null; branch: string; steps: RepoRunStep[]; ok: boolean } | null }
+export interface RepoRuns { workbench: string | null; says: Record<'setup' | 'up' | 'test' | 'checks' | 'down', string>; repos: RepoRunView[] }
 export interface ReviewSuggestion { id: string; from: 'mutation' | 'command'; file: string | null; line: number | null; url: string | null; text: string }
-export interface ReviewPulls { me: string | null; pulls: (ReviewPull & { review: ReviewSummary | null })[]; problems: string[]; warning: string }
-export interface ReviewView { pull: ReviewPull | null; state: 'none' | 'running' | 'done' | 'failed'; sha: string | null; stale: boolean; at: string | null; problem: string | null; warning: string; steps: ReviewStep[]; mutation: { tool: 'evident' | 'app'; tried: number; caught: number; meaningful: number; percent: number | null; survivors: ReviewSurvivor[]; partial?: string } | null; commands: ReviewCommand[]; suggestions: ReviewSuggestion[] }
+export interface ReviewPulls { me: string | null; pulls: (ReviewPull & { review: ReviewSummary | null })[]; problems: string[]; warning: string; /** The app's repositories, home first. */ repos?: string[]; /** When GitHub was last read: the list is kept a few minutes. */ readAt?: string }
+export interface ReviewView { repoRun?: ReviewRepoRun; pull: ReviewPull | null; state: 'none' | 'running' | 'done' | 'failed'; sha: string | null; stale: boolean; at: string | null; problem: string | null; warning: string; steps: ReviewStep[]; mutation: { tool: 'evident' | 'app'; tried: number; caught: number; meaningful: number; percent: number | null; survivors: ReviewSurvivor[]; partial?: string } | null; commands: ReviewCommand[]; suggestions: ReviewSuggestion[] }
 export interface Reports { writing: boolean; format: { daily: string; weekly: string }; reports: Report[] }
 /** A version of a task: the git branch each of its worktrees is on, and (set aside) the task as it was left. */
 export interface TaskBranch { id: string; name: string; current: boolean; fromSave: string | null; createdAt: string; gitBranches: string[]; /** Set aside: what is only on it. */ work: { commits: number; comments: number } | null }
@@ -881,7 +887,15 @@ export const engine = {
   removeContextNote: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/notes/${id}`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
   /** The app's open pull requests, other people's first, each with where its review stands. */
-  reviewPulls: (appId: string) => call<ReviewPulls>('GET', `/apps/${appId}/pr-reviews`),
+  reviewPulls: (appId: string, fresh = false) => call<ReviewPulls>('GET', `/apps/${appId}/pr-reviews${fresh ? '?fresh=1' : ''}`),
+  /** Each repository's scripts and the last check of them. */
+  repoRuns: (appId: string) => call<RepoRuns>('GET', `/apps/${appId}/repo-runs`),
+  /** Run a repository's scripts, all of them, on its default branch. */
+  checkRepoRun: (appId: string, repo: string) => call<RepoRuns>('POST', `/apps/${appId}/repo-runs/check`, { repo }),
+  /** Start its folder in the workbench with a stub of each script. Nothing there is overwritten. */
+  scaffoldRepoRun: (appId: string, repo: string) => call<RepoRuns>('POST', `/apps/${appId}/repo-runs/scaffold`, { repo }),
+  /** The repositories a pull request can be opened from, without asking GitHub. */
+  reviewRepos: (appId: string) => call<{ repos: string[] }>('GET', `/apps/${appId}/pr-reviews/repos`),
   /** One pull request's review: where it stands and what it found. */
   review: (appId: string, repo: string, number: number) => call<ReviewView>('GET', `/apps/${appId}/pr-reviews/one?${new URLSearchParams({ repo, number: String(number) })}`),
   /** Run it: its code is checked out and run on this computer. Nothing is sent to GitHub. */
