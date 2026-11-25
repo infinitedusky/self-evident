@@ -8240,6 +8240,23 @@ in; build runs that resume a session (`resumeSessionId`) do not bring it along; 
 so whether the other login will carry on from a session it did not write (the SDK ties a model's thinking to
 the account that produced it) is not known.
 
+## On a phone: three tabs, Nav, the page, Chat; and Nav is the page's own left nav (Sandy, 2026-11-25: "What I was thinking is that we would have 3 tabs. A nav, x, and chat" and "I want to have the actual nav for the task I'm on … as if I was literally looking at the left nav, so it would be overview, context, tickets, etc. Whether you're on a project or a task")
+
+The row of one tab per section is gone, and so is the button at the top left, whose list was not the place's nav.
+Under the place's name there are three tabs:
+- **Nav** is the left nav the place's page has on the computer, the same component (`TaskNav`), shown alone: the
+  page is told to show only its nav. So a task has Overview, Context, the brief and its steps, the build, the smoke
+  test, the pull request and the save points; a project has Overview, Context, Tickets and its steps; an idea its
+  own. Nothing about a nav is written twice, and what is added to it on the computer shows on the phone. A row
+  pressed goes to its page. A place with no nav of its own (My Stuff, a list) lists the app's places.
+- **The middle tab is named for the page that is open** (Overview, Brief, Tickets), which answers what to call it.
+- **Chat** is at the right.
+
+What needs you, every chat, New chat and the app are under the grid, with the app's places.
+
+Found on the way: the phone's styles had a `.phone-dot` of their own, and the rail's phone link already has one, so
+a conversation's dot was drawn in a corner. The phone's is `.phone-talk-dot`.
+
 ## A box that scrolls goes down to the bottom of the screen (Sandy, 2026-11-25)
 
 Sandy, on a task's Research page: "the height of the section in the middle seems to be limited … It should just
