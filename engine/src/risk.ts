@@ -54,6 +54,7 @@ const ENGINE: Record<string, [Risk, string]> = {
   update_initiative: ['cheap', 'edits a goal; easy to change back'],
   create_cycle: ['cheap', 'a stretch of time with its tasks; easy to change'],
   sync_github: ['cheap', 'reads GitHub; merges main into open project branches, conflicts only reported'],
+  docs_agent: ['cheap', 'asks the app\'s docs agent; it writes pages in the workbench folder, checked and committed there'],
   tell_agent: ['cheap', 'a message to an agent this task has out; it works in its own folder'],
   set_step: ['cheap', 'notes on a step of an idea, task or project; written over again easily'],
   convert_idea: ['moderate', 'turns an idea into a task or a project and moves its steps over'],

@@ -905,3 +905,5 @@ export const tickets: import('../engine').TicketGroup[] = [
 
 // An app's docs site (made up): running, framed at an empty page here since no site runs beside Storybook.
 export const docsSiteSample: import('../engine').DocsSite = { dir: '/Users/sample/code/shop-workbench', found: true, has: true, problem: null, url: 'http://localhost:6912', frame: 'about:blank', up: true, startedHere: false, log: [] }
+/** The docs agent after a closed task: it wrote the task's page and put one page of How the system works right. */
+export const docsAgentSample: import('../engine').DocsAgent = { ready: true, problem: null, sessionId: 'talk_sample_docs', busy: false, pages: { system: 4, work: 7 }, asked: { why: 'work', label: 'SHOP-12 was closed', at: '2026-11-24T16:02:00Z' }, wrote: { files: ['docs/system/sign-in.md', 'docs/work/SHOP-12-sessions-last-a-day.md', 'docs/work/index.md'], commit: 'a1b2c3d', problems: [], at: '2026-11-24T16:09:00Z' } }

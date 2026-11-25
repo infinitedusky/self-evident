@@ -188,7 +188,7 @@ async function record(sessionId: string, author: string, kind: string, body: str
 }
 
 /** `issueId` pins a task's own agent; `checkOf` and `check` mark a fresh agent out on one check of that task (checks.ts). */
-export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string; checkOf?: string; check?: StepKey; /** The task this conversation is the data agent of (data-agent.ts). */ dataOf?: string; setup?: string; /** Reading the app's code to write its documents (learn.ts); one per app at a time. */ learn?: 'codebase'; /** About the app as a whole: in its checkout, reading, with no worktree. */ app?: boolean }
+export interface SubjectRef { projectId?: string; issueId?: string; ideaId?: string; prototypeId?: string; path?: string; checkOf?: string; check?: StepKey; /** The task this conversation is the data agent of (data-agent.ts). */ dataOf?: string; /** The app this conversation is the docs agent of (docs-agent.ts). */ docsOf?: string; setup?: string; /** Reading the app's code to write its documents (learn.ts); one per app at a time. */ learn?: 'codebase'; /** About the app as a whole: in its checkout, reading, with no worktree. */ app?: boolean }
 
 /** What a conversation is about, from where it started: a project's title, an idea's title, or nothing yet. */
 async function subjectFrom(ref?: SubjectRef): Promise<{ subject: string | null; subjectRef: SubjectRef | null }> {
@@ -511,7 +511,7 @@ export async function takeReply(sessionId: string): Promise<{ from: string; what
   const [said] = await db.select({ body: sessionMessage.body }).from(sessionMessage).where(and(eq(sessionMessage.sessionId, sessionId), eq(sessionMessage.author, 'agent'), eq(sessionMessage.kind, 'text'), sql`${sessionMessage.id} > ${asks[0].id}`)).orderBy(desc(sessionMessage.id)).limit(1)
   const [s] = await db.select().from(session).where(eq(session.id, sessionId))
   const ref = s?.subjectRef as SubjectRef | null
-  return { from: (asks[asks.length - 1].payload as { from: string }).from, what: ref?.dataOf ? 'Data' : ref?.check ? step(ref.check).label : ref?.prototypeId ? 'Prototype' : ref?.learn ? 'Learn' : s?.subject ?? 'An', said: said?.body ?? null }
+  return { from: (asks[asks.length - 1].payload as { from: string }).from, what: ref?.dataOf ? 'Data' : ref?.docsOf ? 'Docs' : ref?.check ? step(ref.check).label : ref?.prototypeId ? 'Prototype' : ref?.learn ? 'Learn' : s?.subject ?? 'An', said: said?.body ?? null }
 }
 
 async function reportBack(sessionId: string) {
@@ -678,6 +678,10 @@ async function open(sessionId: string): Promise<Live> {
   // A task's data agent (data-agent.ts): its own instructions, the task's calls and the app's services in front of it, and nothing it can edit.
   const dataOfId = (s.subjectRef as SubjectRef | null)?.dataOf
   const [dataTask] = dataOfId ? await db.select().from(issue).where(eq(issue.id, dataOfId)) : []
+  // An app's docs agent (docs-agent.ts): in the workbench folder, with the app's repositories to read and a wall around what it writes.
+  const docsOf = !!(s.subjectRef as SubjectRef | null)?.docsOf && !!a
+  const docsRepos = docsOf ? (await (await import('./workbench.js')).reposOf(a!.id)).repos.filter((r) => r.localPath).map((r) => ({ name: r.fullName || r.localPath!, path: r.localPath! })) : []
+  const docs = docsOf ? await import('./docs-agent.js') : null
   const ownIdeaId = s.worktreePath && !(s.subjectRef as SubjectRef | null)?.app ? (s.subjectRef as SubjectRef | null)?.ideaId : undefined
   const [ownIdeaRow] = ownIdeaId ? await db.select().from(idea).where(eq(idea.id, ownIdeaId)) : []
   const whole = !!(s.subjectRef as SubjectRef | null)?.app && !s.worktreePath // about the app as a whole: it reads the app's checkout
@@ -700,12 +704,12 @@ async function open(sessionId: string): Promise<Live> {
     prompt: input.it,
     options: {
       cwd: s.cwd!,
-      ...(refs.length || mates.length || recordings ? { additionalDirectories: [...mates.map((m) => m.path), ...refs.map((r) => r.path), ...(recordings ? [recordings] : [])] } : {}),
+      ...(refs.length || mates.length || recordings || docsRepos.length ? { additionalDirectories: [...mates.map((m) => m.path), ...refs.map((r) => r.path), ...(recordings ? [recordings] : []), ...docsRepos.map((r) => r.path)] } : {}),
       env: { ...(account.env ?? process.env), ...(proto ? await prototypeEnv(proto) : {}), ...(recordings ? { RECORDINGS: recordings } : {}) },
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (dataTask && a ? dataPrompt(dataTask, taskIdent(a.key, dataTask.number), await roundOf(dataTask.id)) : '') + (ownTask && a ? taskPrompt(ownTask, a.key) + DATA_AGENT_NOTE + prDescriptionNote(a.setup) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + origin + storiesNote(a?.setup) + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) + (recordings && !unwatched ? recordingsPrompt(recordings, listRecordings(recordings).length) : '') + (proto || ownTask || ownIdeaRow ? mocksPrompt(mockList) + mockPlaces + taskCalls : whole && a ? servicesPrompt(mockList) : '') },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : docs ? docs.docsPrompt(a!, s.cwd!, docsRepos) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (dataTask && a ? dataPrompt(dataTask, taskIdent(a.key, dataTask.number), await roundOf(dataTask.id)) : '') + (ownTask && a ? taskPrompt(ownTask, a.key) + DATA_AGENT_NOTE + prDescriptionNote(a.setup) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + origin + storiesNote(a?.setup) + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) + (recordings && !unwatched ? recordingsPrompt(recordings, listRecordings(recordings).length) : '') + (proto || ownTask || ownIdeaRow ? mocksPrompt(mockList) + mockPlaces + taskCalls : whole && a ? servicesPrompt(mockList) : '') },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...(check || whole || dataTask ? CHECK_TOOLS : ASK_TOOLS)],
@@ -718,6 +722,13 @@ async function open(sessionId: string): Promise<Live> {
         const ref = EDIT_TOOLS.has(h.tool_name) ? referenceHolding(refs, entry.cwd, input.file_path ?? input.notebook_path) : null
         if (ref) return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: refusal(ref) } } // not asked: a reference is never changed from here
         if (h.tool_name === 'Bash' && stopsOthers(String(input.command ?? ''))) return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: STOP_ONLY_YOURS } } // not asked either: it would take the engine down with it (guard.ts)
+        if (docs) { // never put to a person: the wall says yes or no (docs-agent.ts)
+          const rated = riskOf(h.tool_name, input, { cwd: entry.cwd, branch: null })
+          const w = docs.wall(entry.cwd, h.tool_name, input, rated.risk)
+          if (!w.allow) return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: w.why } }
+          if (rated.risk !== 'free') await record(sessionId, 'engine', 'auto', `${h.tool_name} · ${EDIT_TOOLS.has(h.tool_name) ? 'a page' : rated.risk}`, { tool: h.tool_name, risk: rated.risk, why: rated.why, input: summariseInput(h.tool_name, input) })
+          return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow' } }
+        }
         const at = (EDIT_TOOLS.has(h.tool_name) ? mateHolding(mates, entry.cwd, input.file_path ?? input.notebook_path)?.path : null) ?? entry.cwd // an edit in another of the app's repos is rated by that worktree and its branch
         const branch = ASK_TOOLS.includes(h.tool_name) ? await branchOf(at) : undefined
         const { risk, why } = riskOf(h.tool_name, input, { cwd: at, branch })

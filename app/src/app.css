@@ -1013,6 +1013,12 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 
 .learn-layout.with-agent { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 38%); gap: 16px; align-items: start; }
 .learn-main { min-width: 0; }
+/* Docs: the site, and its agent beside it when opened. */
+.docs-layout { flex: 1; min-height: 0; display: flex; gap: 16px; }
+.docs-layout > .sb-frame { min-width: 0; }
+.docs-agent { flex: none; width: min(38%, 520px); min-width: 300px; display: flex; flex-direction: column; min-height: 0; margin: 0; }
+.docs-agent .conversation { flex: 1; min-height: 0; } .docs-agent .chat { overflow-y: auto; }
+@media (max-width: 900px) { .docs-layout.with-agent { flex-direction: column; } .docs-agent { width: auto; max-height: 60vh; } }
 .learn-agent { position: sticky; top: 12px; max-height: calc(100vh - 140px); display: flex; flex-direction: column; min-height: 320px; }
 .learn-agent .conversation { flex: 1; min-height: 0; }
 .learn-agent .chat { overflow-y: auto; }
