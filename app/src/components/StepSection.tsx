@@ -40,6 +40,9 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
   const [protos, setProtos] = useState<Prototype[]>([])
   const [busy, setBusy] = useState(false)
   const [asked, setAsked] = useState(false)
+  // Start asks first whether there is anything to add (Sandy, 2026-11-25: "start it, but before the agent responds, prompts you to add anything that you want"): the note goes to the agent with the step.
+  const [adding, setAdding] = useState(false)
+  const [note, setNote] = useState('')
   const [pane, setPane] = useState<'view' | 'code' | 'notes'>('view')
   const [error, setError] = useState<string | null>(null)
   const s = row.state
@@ -79,7 +82,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
 
   const act = async (fn: () => Promise<unknown>) => { setBusy(true); setError(null); try { await fn() } catch (e) { setError(err(e)) } finally { setBusy(false) } }
   const ownAgent = true // a task's steps go to the task's own agent, an idea's to the idea's and a project's to the project's, each on its page
-  const ask = () => act(async () => { await askStep(subject, appId, name, row.key, on); if (ownAgent) window.dispatchEvent(new Event(TASK_AGENT_ASKED)); setAsked(true) })
+  const ask = () => act(async () => { await askStep(subject, appId, name, row.key, on, note); setAdding(false); setNote(''); if (ownAgent) window.dispatchEvent(new Event(TASK_AGENT_ASKED)); setAsked(true) })
 
   // With something to look at, the step's page is two tabs: the view (the sketch, the story, the prototype), which gets the whole
   // page so it is never pushed out of sight, and what the step wrote for the brief (Sandy, 2026-11-10: "we make them tabs so you go
@@ -176,7 +179,13 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
           {!row.waitingOn && !skipped(s) && (
             <div className="step-actions">
               {s.status === 'none'
-                ? <button className="btn" disabled={busy || asked} onClick={ask}>{row.key === 'prototype' ? 'Start a prototype with the agent' : 'Start with the agent'}</button>
+                ? adding
+                  ? <form className="step-start" data-component="StepStart" style={{ display: 'grid', gap: 8, width: '100%', maxWidth: 640 }} onSubmit={(e) => { e.preventDefault(); void ask() }}>
+                      <label style={{ display: 'grid', gap: 4 }}><span>Anything to add before it starts? <span className="faint">Optional.</span></span>
+                        <textarea autoFocus rows={3} value={note} onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void ask() } if (e.key === 'Escape') setAdding(false) }} placeholder="What to look at, what to leave out, what you already know. It goes to the agent with the step." /></label>
+                      <span style={{ display: 'flex', gap: 8 }}><button className="btn" disabled={busy}>{busy ? 'Starting…' : 'Start'}</button><button type="button" className="btn quiet" disabled={busy} onClick={() => setAdding(false)}>Cancel</button></span>
+                    </form>
+                  : <button className="btn" disabled={busy || asked} onClick={() => setAdding(true)}>{row.key === 'prototype' ? 'Start a prototype with the agent' : 'Start with the agent'}</button>
                 : null}{/* once a step is under way there is nothing to press: its agent is beside the page, and what it wrote is above (Sandy, 2026-11-15: "we don't need to push a button that says ask the agent to carry on … what we need is the content") */}
               {own && !approves && s.status === 'started' && row.key !== 'prototype' && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'done' }))}>Mark done</button>}
               {on === 'task' && !dataStep && canSkip(row) && !finished(s, on) && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'skipped' }))} title="Say this optional step is not being done on this task">Skip this step</button>}

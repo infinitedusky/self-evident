@@ -39,3 +39,16 @@ export const Required: Story = {
 }
 /** None, and none required: said quietly; its branch and pull request carry our id. */
 export const None: Story = { args: { ticket: null, from: null }, play: async ({ canvasElement }) => { await expect(await within(canvasElement).findByRole('button', { name: /no team ticket/ })).toBeInTheDocument() } }
+/** Under more than one ticket: the first names its branch and pull request; the rest are said beside it and set in "Also under", by key. */
+export const AlsoUnderOthers: Story = {
+  args: { from: 'set', set: 'ENT-322', also: ['ENT-324'] },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: /ENT-322 · also ENT-324/ }))
+    const also = c.getByRole('textbox', { name: 'Also under' })
+    await expect(also).toHaveValue('ENT-324')
+    await userEvent.type(also, ', ent-325')
+    await userEvent.click(c.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(saved).toHaveBeenCalledWith({ ticket: 'ENT-322', title: '', also: ['ENT-324', 'ent-325'] }))
+  },
+}

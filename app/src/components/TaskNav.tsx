@@ -31,8 +31,10 @@ export function briefStands(rows: Row[], on: On) {
 /** ✓ finished (approved, where a person approves it), ◐ started or ready for the person, ○ not started. */
 export const mark = (r: Row, on: On) => (finished(r.state, on) ? '✓' : skipped(r.state) ? '–' : r.state.status === 'none' ? '○' : '◐') // – skipped by a person
 
-export function TaskNav({ context, pr, checklist, smoke, base, here, on = 'task', rows, workflow, build, folded, onToggle, saves, onSave }: {
+export function TaskNav({ tickets, context, pr, checklist, smoke, base, here, on = 'task', rows, workflow, build, folded, onToggle, saves, onSave }: {
   base: string; here: string; on?: On; rows: Row[]
+  /** A project's tickets: how many, and how many have no task yet. Left out: no row. */
+  tickets?: { count: number; unplanned: number }
   /**
    * Its Context (Context.tsx): always there, above the brief and its steps, and not a step itself. How many things it
    * holds, and how many of its decisions are unanswered. Left out: no row.
@@ -89,6 +91,7 @@ export function TaskNav({ context, pr, checklist, smoke, base, here, on = 'task'
         {toggle}
         {icon('overview', base, '⌂', 'Overview', `this ${on}`, null, false)}
         {context && icon('context', `${base}/context`, '📎', 'Context', context.proposed ? `${context.proposed} unanswered` : context.waiting ? `${context.waiting} waiting on someone` : context.count ? `${context.count} in it` : 'nothing in it yet', null, false)}
+        {tickets && icon('tickets', `${base}/tickets`, '🎫', 'Tickets', tickets.unplanned ? `${tickets.unplanned} with no task yet` : tickets.count ? `${tickets.count}` : 'none yet', null, false)}
         {brief && icon('brief', `${base}/brief`, step('brief').icon, on === 'task' ? 'The brief' : label('brief', on), stands ?? said(brief), null, finished(brief.state, on))}
         {feeds.map((r) => icon(r.key, `${base}/${r.key}`, step(r.key).icon, label(r.key, on), said(r), after(r, rows, on), finished(r.state, on)))}
         {build && icon('build', `${base}/build`, '🏗️', 'Sub-tasks', build.total ? `${build.done}/${build.total}` : 'not planned', build.waitingOn, !!build.total && build.done === build.total)}
@@ -108,7 +111,12 @@ export function TaskNav({ context, pr, checklist, smoke, base, here, on = 'task'
           {context.proposed > 0 && <span className="task-nav-after task-nav-ready" title="Decisions with no answer yet: yours to answer, or an agent's proposed answer to accept or reject">{context.proposed} unanswered</span>}
           {!!context.waiting && <span className="task-nav-after" title="Decisions you have asked someone about and are waiting on">{context.waiting} waiting on someone</span>}
         </>, null)}
-      <div className="task-nav-label faint">Brief</div>
+      {tickets && item('tickets', `${base}/tickets`,
+        <>
+          <span className="task-nav-row"><span className="task-nav-mark wide">🎫</span><span className="task-nav-text">Tickets</span>{tickets.count > 0 && <span className="faint mono" style={{ fontSize: 12 }}>{tickets.count}</span>}</span>
+          {tickets.unplanned > 0 && <span className="task-nav-after task-nav-ready" title="Tickets in this project's Context that no task is under yet">{tickets.unplanned} with no task yet</span>}
+        </>, null)}
+      <div className="task-nav-label faint">{on === 'project' ? 'Steps' : 'Brief'}</div>
       {workflow && <div className="task-nav-workflow faint" title={`The workflow this ${on} follows${workflow.from}`}>Workflow: <b>{workflow.name}</b>{workflow.from}</div>}
       {brief && item('brief', `${base}/brief`,
         <>

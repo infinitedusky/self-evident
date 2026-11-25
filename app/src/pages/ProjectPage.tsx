@@ -23,7 +23,8 @@ import { StepSection } from '../components/StepSection'
 import { TaskNav } from '../components/TaskNav'
 import { TaskAgent, useTaskAgent } from '../components/TaskAgent'
 import { label, type StepKey } from '@self-evident/engine/steps'
-import { engine, STATE_LABEL, useLiveProject, type BacklogIssue, type Graph, type IdeaRow, type Decision, type Event, type GraphSubIssue, type GraphIssue, type Pr, type Question } from '../engine'
+import { Ticket } from './Tickets'
+import { engine, STATE_LABEL, useLiveProject, type ProjectTicket, type BacklogIssue, type Graph, type IdeaRow, type Decision, type Event, type GraphSubIssue, type GraphIssue, type Pr, type Question } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { pendingOpen } from '../workspace'
 import { TodoCard } from './Todos'
@@ -172,6 +173,26 @@ export function ProjectPage() {
 }
 
 /**
+ * What the project is made up of, by ticket (Sandy, 2026-11-25: "where do we have the stuff that is more organizational,
+ * like what it's made up of … let's have a ticket page"): each ticket in its Context or over one of its tasks, with
+ * the tasks under it. A ticket no task is under yet comes first: that is what is still to plan.
+ */
+function ProjectTickets({ tickets, base, onRead }: { tickets: ProjectTicket[] | null; base: string; onRead: (t: import('../engine').TicketGroup) => void }) {
+  if (!tickets) return <p className="muted">Loading…</p>
+  const unplanned = tickets.filter((t) => !t.tasks.length).length
+  return (
+    <div data-component="ProjectTickets">
+      <section className="panel">
+        <h2>🎫 Tickets <Badge>{tickets.length}</Badge></h2>
+        <p className="muted" style={{ margin: 0, fontSize: 14 }}>What this project is made up of, by the team's tickets: the ones in its <Link to={`${base}/context`}>Context</Link> and the ones its tasks are under. A ticket bigger than one pull request has several tasks, and a task can be under more than one ticket. {unplanned > 0 ? `${unplanned} ${unplanned === 1 ? 'has' : 'have'} no task yet.` : tickets.length ? 'Every one has a task.' : ''}</p>
+      </section>
+      {!tickets.length && <div className="empty">No tickets yet. Add one to the project's <Link to={`${base}/context`}>Context</Link> as a reference doc, or set a team ticket on one of its tasks.</div>}
+      {tickets.map((t) => <Ticket key={t.key} t={t} alone={false} onRead={onRead} note={<span className="faint" style={{ fontSize: 13 }}>{t.inContext ? 'In this project\'s Context' : 'Not in this project\'s Context'}{t.tasks.length > t.here ? ` · ${t.tasks.length - t.here} of its tasks ${t.tasks.length - t.here === 1 ? 'is' : 'are'} elsewhere` : ''}</span>} />)}
+    </div>
+  )
+}
+
+/**
  * A project's nav, the section the address names, and its own agent: the overview is the tasks and everything about
  * them; Context and each step of the project as a whole have a page of their own.
  */
@@ -185,17 +206,21 @@ function Work({ graph, section, children }: { graph: Graph; section?: string; ch
   const [ctx, setCtx] = useState<{ count: number; proposed: number; waiting?: number } | null>(null)
   const readCtx = () => { void engine.contextCount(subject).then(setCtx).catch(() => setCtx({ count: 0, proposed: 0 })) }
   useEffect(() => { readCtx() }, [p.id, section]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Its tickets (the engine's projectTickets): the ones in its Context and the ones its tasks are under. Read again when its tasks change.
+  const [tickets, setTickets] = useState<ProjectTicket[] | null>(null)
+  const taskStamp = graph.issues.map((t) => `${t.id}:${t.state}`).join('|')
+  useEffect(() => { void engine.projectTickets(p.id).then(setTickets).catch(() => setTickets([])) }, [p.id, section, taskStamp])
   const base = `/projects/${p.id}`
   if (error && !v) return <div className="empty bad">{error}</div>
   if (!v) return <p className="muted">Loading…</p>
   const rows = v.rows.filter((r) => r.key !== 'idea') // where it came from is not a step to do here
-  const here = section === 'context' || rows.some((r) => r.key === section) ? section! : 'overview'
+  const here = section === 'context' || section === 'tickets' || rows.some((r) => r.key === section) ? section! : 'overview'
   if (section && here === 'overview') return <Navigate to={base} replace />
   const row = rows.find((r) => r.key === here)
   const under = rows.filter((r) => r.state.status !== 'none' && r.state.status !== 'done' && r.state.status !== 'skipped')
   return (
     <div className={`task-layout with-agent ${agent.open ? '' : 'agent-folded'} ${navOpen ? '' : 'nav-folded'}`} data-component="ProjectWork">
-      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} on="project" rows={rows} context={ctx ?? { count: 0, proposed: 0 }} />
+      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} on="project" rows={rows} context={ctx ?? { count: 0, proposed: 0 }} tickets={{ count: tickets?.length ?? 0, unplanned: tickets?.filter((t) => !t.tasks.length).length ?? 0 }} />
       <div className="task-main">
         {here === 'overview' && (
           <>
@@ -204,10 +229,11 @@ function Work({ graph, section, children }: { graph: Graph; section?: string; ch
           </>
         )}
         {here === 'context' && <Context subject={subject} onChange={readCtx} />}
+        {here === 'tickets' && <ProjectTickets tickets={tickets} base={base} onRead={(t) => setTickets((was) => was?.map((x) => (x.key === t.key ? { ...x, ...t } : x)) ?? null)} />}
         {row && <StepSection subject={subject} appId={graph.app.id} name={p.name} on="project" row={row} base={base} waitingState={rows.find((r) => r.key === row.waitingOn)?.state} />}
       </div>
       {agent.session !== undefined && (
-        <TaskAgent sessionId={agent.session?.id ?? null} taskId={p.id} of="project" stage={row ? label(row.key, 'project') : here === 'context' ? 'Context' : 'Plan'} state={agent.out.some((a) => a.asking) ? 'waiting' : agent.session?.busy ? 'working' : 'idle'}
+        <TaskAgent sessionId={agent.session?.id ?? null} taskId={p.id} of="project" stage={row ? label(row.key, 'project') : here === 'context' ? 'Context' : here === 'tickets' ? 'Tickets' : 'Plan'} state={agent.out.some((a) => a.asking) ? 'waiting' : agent.session?.busy ? 'working' : 'idle'}
           deployed={agent.out.map((a) => ({ what: a.what, icon: a.icon ?? '🛠️', title: a.title, sessionId: a.sessionId, runId: a.runId, detail: a.detail, failed: a.failed, state: a.busy ? 'out' as const : 'back' as const, asking: a.asking ? `${a.asking.tool}: ${a.asking.what}` : undefined }))}
           open={agent.open} onToggle={agent.toggle} onStart={agent.start} starting={agent.starting} error={agent.error} />
       )}

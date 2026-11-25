@@ -905,3 +905,11 @@ export const tickets: import('../engine').TicketGroup[] = [
 
 // An app's docs site (made up): running, framed at an empty page here since no site runs beside Storybook.
 export const docsSiteSample: import('../engine').DocsSite = { dir: '/Users/sample/code/shop-workbench', found: true, has: true, problem: null, url: 'http://localhost:6912', frame: 'about:blank', up: true, startedHere: false, log: [] }
+
+/** The sample project's tickets (made up): two in its Context with no task yet, one being worked, one over a task and not in the Context. */
+export const projectTickets: import('../engine').ProjectTicket[] = [
+  { key: 'SHOP-331', title: 'Executive authorization (sample)', url: 'https://linear.app/sample-shop/issue/SHOP-331', source: 'linear', read: true, done: 0, total: 0, finished: false, tasks: [], inContext: true, here: 0 },
+  { key: 'SHOP-332', title: 'Deepfake checks on suspect media (sample)', url: 'https://linear.app/sample-shop/issue/SHOP-332', source: 'linear', read: true, done: 0, total: 0, finished: false, tasks: [], inContext: true, here: 0 },
+  { ...tickets[0], inContext: true, here: 3 },
+  { key: 'SHOP-340', title: null, url: null, source: null, read: false, done: 0, total: 1, finished: false, inContext: false, here: 1, tasks: [{ ...tickets[0].tasks[1], from: 'also' }] },
+]

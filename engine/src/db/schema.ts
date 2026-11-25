@@ -394,6 +394,14 @@ export const summary = pgTable('summary', {
 }, (t) => [index('summary_app_section').on(t.appId, t.section, t.id), inList('summary_section', t.section, SUMMARY_SECTIONS),
   inList('summary_trigger', t.trigger, ['person', 'schedule'])])
 
+// The other tickets a task is under (ticket.ts; Sandy, 2026-11-25: "a task can have more than one ticket it's pointing
+// at"). `issue.ticket_id` is the one that names its branch, commits and pull request, which carry one key; these are
+// the rest. Organisational, like the ticket itself: they change nothing about how the task is built.
+export const issueTicket = pgTable('issue_ticket', {
+  issueId: text('issue_id').notNull().references(() => issue.id, { onDelete: 'cascade' }), ticketId: text('ticket_id').notNull().references(() => ticket.id),
+  appId: appId(), createdAt: createdAt(),
+}, (t) => [primaryKey({ columns: [t.issueId, t.ticketId] })])
+
 export const pr = pgTable('pr', { // [LS] githubPullRequests + review hub; [IF] pitch. One per project, or one per issue when stacked.
   id: id(), appId: appId(), projectId: text('project_id').notNull().references(() => project.id), repoId: text('repo_id').references(() => repo.id),
   issueId: text('issue_id').references(() => issue.id), // a PR per issue (stacked, setup.pr_mode = 'issue'); null: the project's one PR

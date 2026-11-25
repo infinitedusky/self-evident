@@ -22,10 +22,14 @@
  * under one ticket: each still has its own brief, prototype, build and pull request, and the ticket builds and
  * approves nothing. `ticketsOf` is every ticket of an app with its tasks, whichever way each task's ticket was read;
  * it is done when all of them are.
+ *
+ * A task can be under more than one ticket (Sandy, 2026-11-25: "a task can have more than one ticket it's pointing
+ * at"): one piece of work that answers two tickets. The first, above, is the one that names its branch, commits and
+ * pull request, which carry one key. The others (`issue_ticket`) only place the task under those tickets as well.
  */
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { db, type Tx } from './db/client.js'
-import { app, idea, issue, pr, project, ticket } from './db/schema.js'
+import { app, contextDoc, idea, issue, issueTicket, pr, project, ticket } from './db/schema.js'
 import { newId } from './ids.js'
 import { identifier, PlanError } from './issues.js'
 
@@ -91,7 +95,7 @@ export const needsTicket = (identifier: string, what: string) => `${identifier} 
  * keepTicket): given, a ticket with no title yet is read, so the record has its title and link; when the tracker
  * can't be reached or has no such ticket, the link stands with the key alone.
  */
-export async function setTeamNames(issueId: string, i: { ticket?: string | null; title?: string | null }, read?: (appId: string, key: string) => Promise<unknown>) {
+export async function setTeamNames(issueId: string, i: { ticket?: string | null; title?: string | null; /** The other tickets it is under, by key: the whole list, replacing what was there. */ also?: string[] | null }, read?: (appId: string, key: string) => Promise<unknown>) {
   const [was] = await db.select().from(issue).where(eq(issue.id, issueId))
   if (!was) throw new PlanError(`no task ${issueId}`)
   if (was.parentId) throw new PlanError('a team ticket is a task\'s, not a sub-task\'s')
@@ -104,8 +108,19 @@ export async function setTeamNames(issueId: string, i: { ticket?: string | null;
     if (record && !record.title && read) await read(was.appId, t).catch(() => {})
   }
   if (i.title !== undefined) set.teamTitle = (i.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 200) || null
-  if (!Object.keys(set).length) throw new PlanError('give a ticket or a title for the team')
+  if (!Object.keys(set).length && i.also === undefined) throw new PlanError('give a ticket or a title for the team')
   const [row] = await db.update(issue).set({ ...set, updatedAt: new Date() }).where(eq(issue.id, issueId)).returning()
+  if (i.also !== undefined) {
+    const keys = [...new Set((i.also ?? []).map((k) => k.trim().toUpperCase()).filter(Boolean))]
+    for (const k of keys) if (!TICKET.test(k)) throw new PlanError(`a team ticket is its key, like ENT-322 (got "${k}")`)
+    const records = []
+    for (const k of keys) { const r = await keepTicketRecord(db, was.appId, k); records.push(r); if (!r.title && read) await read(was.appId, k).catch(() => {}) }
+    const others = records.filter((r) => r.id !== row.ticketId) // the one that names its branch is not also one of the rest
+    await db.transaction(async (tx) => {
+      await tx.delete(issueTicket).where(eq(issueTicket.issueId, issueId))
+      if (others.length) await tx.insert(issueTicket).values(others.map((r) => ({ issueId, ticketId: r.id, appId: was.appId })))
+    })
+  } else if (row.ticketId) await db.delete(issueTicket).where(and(eq(issueTicket.issueId, issueId), eq(issueTicket.ticketId, row.ticketId))) // made its first ticket: no longer one of the rest
   return { teamTitle: row.teamTitle, ...(await ticketView(row)) }
 }
 
@@ -113,13 +128,14 @@ export async function setTeamNames(issueId: string, i: { ticket?: string | null;
  * For the task's page: the ticket in force and where it was read from, the key it is linked to by hand (`teamTicket`),
  * and whether the app requires one that is missing.
  */
-export async function ticketView(t: Task, setup?: unknown) {
+export async function ticketView(t: Task & { id?: string }, setup?: unknown) {
   const found = await teamTicket(t)
-  return { ticket: found?.ticket ?? null, ticketFrom: found?.from ?? null, teamTicket: await linkedKey(t), ticketMissing: !found && ticketRequired(setup) }
+  const also = t.id ? (await db.select({ key: ticket.key }).from(issueTicket).innerJoin(ticket, eq(ticket.id, issueTicket.ticketId)).where(eq(issueTicket.issueId, t.id))).map((r) => r.key).filter((k) => k !== found?.ticket).sort((x, y) => x.localeCompare(y, undefined, { numeric: true })) : []
+  return { ticket: found?.ticket ?? null, ticketFrom: found?.from ?? null, teamTicket: await linkedKey(t), /** The other tickets it is under. */ alsoTickets: also, ticketMissing: !found && ticketRequired(setup) }
 }
 
 const OVER = ['canceled', 'duplicate']
-export interface TicketTask { id: string; identifier: string; title: string; teamTitle: string | null; state: string; from: TicketFrom; project: { id: string; name: string } | null; pr: { number: number | null; url: string | null; status: string } | null }
+export interface TicketTask { id: string; identifier: string; title: string; teamTitle: string | null; state: string; /** How it comes under this ticket; `also`: one of its other tickets, not the one that names its branch. */ from: TicketFrom | 'also'; projectId: string | null; project: { id: string; name: string } | null; pr: { number: number | null; url: string | null; status: string } | null }
 export interface TicketGroup {
   key: string; title: string | null; url: string | null; source: string | null
   /** It was read from its tracker, word for word: its tasks' agents are given it when it is their origin. */ read: boolean
@@ -143,15 +159,18 @@ export async function ticketsOf(appId: string): Promise<TicketGroup[]> {
   const ideas = new Map((ideaIds.length ? await db.select({ id: idea.id, title: idea.title, body: idea.body }).from(idea).where(inArray(idea.id, ideaIds)) : []).map((i) => [i.id, `${i.title}\n${i.body ?? ''}`]))
   const prs = await db.select().from(pr).where(eq(pr.appId, appId))
   const keyOf = new Map(records.map((r) => [r.id, r.key]))
+  const also = new Map<string, string[]>() // a task's other tickets, by key
+  for (const l of await db.select().from(issueTicket).where(eq(issueTicket.appId, appId))) { const k = keyOf.get(l.ticketId); if (k) also.set(l.issueId, [...(also.get(l.issueId) ?? []), k]) }
   const groups = new Map<string, TicketTask[]>(records.map((r) => [r.key, []]))
   const order = (t: typeof tasks[number]) => [live.get(t.projectId ?? '')?.createdAt.getTime() ?? 0, t.sortOrder, t.number]
   for (const t of [...tasks].sort((x, y) => { const p = order(x), q = order(y); return p[0] - q[0] || p[1] - q[1] || p[2] - q[2] })) {
     const found = ticketOfTask({ ...t, teamTicket: t.ticketId ? keyOf.get(t.ticketId) : null }, t.ideaId ? ideas.get(t.ideaId) : null)
-    if (!found) continue
+    const under: [string, TicketFrom | 'also'][] = found ? [[found.ticket.toUpperCase(), found.from]] : []
+    for (const k of also.get(t.id) ?? []) if (!under.some(([u]) => u === k)) under.push([k, 'also'])
+    if (!under.length) continue
     const p = t.projectId ? live.get(t.projectId) : null
     const q = prs.find((x) => x.issueId === t.id) ?? prs.find((x) => !x.issueId && !!t.projectId && x.projectId === t.projectId)
-    const key = found.ticket.toUpperCase()
-    groups.set(key, [...(groups.get(key) ?? []), { id: t.id, identifier: identifier(a.key, t.number), title: t.title, teamTitle: t.teamTitle, state: t.state, from: found.from,
+    for (const [key, from] of under) groups.set(key, [...(groups.get(key) ?? []), { id: t.id, identifier: identifier(a.key, t.number), title: t.title, teamTitle: t.teamTitle, state: t.state, from, projectId: t.projectId,
       project: p && !p.solo ? { id: p.id, name: p.name } : null, pr: q ? { number: q.number, url: q.url, status: q.status } : null }])
   }
   const out = [...groups].map(([key, of]): TicketGroup => {
@@ -169,4 +188,21 @@ export async function ticketOf(appId: string, key: string): Promise<TicketGroup>
   const found = (await ticketsOf(appId)).find((g) => g.key === k)
   if (!found) throw new PlanError(`no ticket ${k} here: no task is under it, and it was never read from its tracker`)
   return found
+}
+
+
+/**
+ * A project's tickets: the ones in its Context as reference docs (and the one it came from), and the ones its tasks
+ * are under. Each with all its tasks, wherever they are, so a ticket shared with another project shows whole. The
+ * ones still to be worked first: a ticket in the Context with no task yet is what there is still to plan.
+ */
+export async function projectTickets(projectId: string): Promise<(TicketGroup & { /** It is in the project's Context. */ inContext: boolean; /** How many of its tasks are in this project. */ here: number })[]> {
+  const [p] = await db.select().from(project).where(eq(project.id, projectId))
+  if (!p) throw new PlanError(`no project ${projectId}`)
+  const docs = await db.select({ originId: contextDoc.originId }).from(contextDoc).where(and(eq(contextDoc.projectId, projectId), eq(contextDoc.kind, 'ticket')))
+  const origins = [p.originId, ...docs.map((d) => d.originId)].filter((x): x is string => !!x)
+  const inContext = new Set((origins.length ? await db.select({ key: ticket.key }).from(ticket).where(and(eq(ticket.appId, p.appId), inArray(ticket.originId, origins))) : []).map((r) => r.key))
+  const out = (await ticketsOf(p.appId)).map((g) => ({ ...g, inContext: inContext.has(g.key), here: g.tasks.filter((t) => t.projectId === projectId).length })).filter((g) => g.inContext || g.here > 0)
+  const rank = (g: typeof out[number]) => (!g.tasks.length ? 0 : g.finished ? 2 : 1) // nothing planned for it yet, then being worked, then done
+  return out.sort((x, y) => rank(x) - rank(y) || x.key.localeCompare(y.key, undefined, { numeric: true }))
 }
