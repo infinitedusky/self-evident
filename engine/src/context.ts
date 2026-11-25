@@ -125,8 +125,27 @@ async function gather(s: Subject) {
 }
 
 /** A Context as its page shows it. */
+/**
+ * A project's tasks' unanswered decisions, under each task (Sandy, 2026-11-25: "I can look at a project and say, hey,
+ * what are all the questions we have about this project"). They stay the tasks' own: listed on the project, answered
+ * on the task. Those the project already holds itself are left out. Yours first, then those waiting on someone.
+ */
+async function taskQuestions(f: Found, have: Set<string>) {
+  if (!('projectId' in f.key)) return []
+  const [a] = await db.select({ key: app.key }).from(app).where(eq(app.id, f.appId))
+  const tasks = await db.select({ id: issue.id, number: issue.number, title: issue.title }).from(issue).where(and(eq(issue.appId, f.appId), eq(issue.projectId, f.key.projectId))).orderBy(issue.number)
+  if (!tasks.length) return []
+  const rows = await db.select().from(note).where(and(eq(note.appId, f.appId), eq(note.kind, 'decision'), inArray(note.status, ['open', 'proposed']))).orderBy(note.on, note.createdAt)
+  return tasks.flatMap((t) => {
+    const mine = rows.filter((r) => !have.has(r.id) && (r.issueIds ?? []).includes(t.id)).sort((x, y) => (x.waitingOn ? 1 : 0) - (y.waitingOn ? 1 : 0))
+    return mine.length ? [{ task: { id: t.id, name: identifier(a?.key ?? '', t.number), title: t.title }, notes: mine }] : []
+  })
+}
 export async function contextOf(s: Subject) {
   const { f, docs, notes, others: otherTickets } = await gather(s)
+  const onTasks = await taskQuestions(f, new Set(notes.map((n) => n.row.id)))
+  const pool = [...notes.map((n) => n.row), ...onTasks.flatMap((g) => g.notes)]
+  const view = (r: NoteRow, fromProject: boolean) => ({ dependsOn: (r.dependsOn ?? []).flatMap((id) => { const d = pool.find((n) => n.id === id); return d ? [{ id: d.id, ...qa(d), status: d.status as NoteStatus }] : [] }), neededBy: pool.filter((n, i) => (n.dependsOn ?? []).includes(r.id) && pool.findIndex((x) => x.id === n.id) === i).map((n) => ({ id: n.id, title: qa(n).title || n.title })), id: r.id, kind: r.kind as 'note' | 'decision', status: r.status as NoteStatus, ...qa(r), background: r.background, options: r.options, waitingOn: ['open', 'proposed'].includes(r.status) ? r.waitingOn : null, ask: ['open', 'proposed'].includes(r.status) && r.waitingOn ? r.ask : null, body: r.body, on: r.on, addedBy: r.createdBy, fromProject })
   const [a] = await db.select({ key: app.key }).from(app).where(eq(app.id, f.appId))
   const others = [...new Set(notes.flatMap((n) => n.row.issueIds ?? []))].filter((id) => !('issueId' in f.key) || id !== f.key.issueId)
   const tasks = others.length ? await db.select({ id: issue.id, number: issue.number, title: issue.title }).from(issue).where(and(eq(issue.appId, f.appId), inArray(issue.id, others))) : []
@@ -137,7 +156,9 @@ export async function contextOf(s: Subject) {
     docs: docs.map(({ row, origin: o, originating, fromProject, under }) => o
       ? { under: !!under, id: row?.id ?? o.id, title: o.title, description: row?.description ?? null, from: 'ticket' as const, ticket: { originating, origin: originView(o)! }, fileName: null, body: null, kept: false, chars: originChars(o), inFull: originating || !!under || !!row?.inFull, addedBy: row?.createdBy ?? null, addedAt: (row?.createdAt ?? o.createdAt).toISOString(), fromProject }
       : { under: false, id: row!.id, title: row!.title, description: row!.description, from: row!.kind as 'pasted' | 'file', ticket: null, fileName: row!.fileName, body: row!.body, kept: !!row!.filePath, chars: row!.body?.length ?? 0, inFull: row!.inFull, addedBy: row!.createdBy, addedAt: row!.createdAt.toISOString(), fromProject }),
-    notes: notes.map(({ row: r, fromProject }) => ({ dependsOn: (r.dependsOn ?? []).flatMap((id) => { const d = notes.find((n) => n.row.id === id)?.row; return d ? [{ id: d.id, ...qa(d), status: d.status as NoteStatus }] : [] }), neededBy: notes.filter((n) => (n.row.dependsOn ?? []).includes(r.id)).map((n) => ({ id: n.row.id, title: qa(n.row).title || n.row.title })), id: r.id, kind: r.kind as 'note' | 'decision', status: r.status as NoteStatus, ...qa(r), background: r.background, options: r.options, waitingOn: ['open', 'proposed'].includes(r.status) ? r.waitingOn : null, ask: ['open', 'proposed'].includes(r.status) && r.waitingOn ? r.ask : null, body: r.body, on: r.on, addedBy: r.createdBy, fromProject,
+    /** A project: its tasks' unanswered decisions, under each task. */
+    tasks: onTasks.map((g) => ({ task: g.task, notes: g.notes.map((r) => ({ ...view(r, false), alsoAbout: [] as { id: string; name: string; title: string }[] })) })),
+    notes: notes.map(({ row: r, fromProject }) => ({ ...view(r, fromProject),
       alsoAbout: fromProject ? [] : (r.issueIds ?? []).flatMap((id) => { const t = tasks.find((x) => x.id === id); return t ? [{ id: t.id, name: identifier(a?.key ?? '', t.number), title: t.title }] : [] }) })),
   }
 }
@@ -148,8 +169,10 @@ const qa = (r: NoteRow) => (r.kind === 'decision' && r.status === 'settled' && !
 
 /** How much it holds, for a nav: everything in it, the decisions that are the person's to make now, and the ones they are waiting on someone for. */
 export async function contextCount(s: Subject) {
-  const { docs, notes } = await gather(s)
-  return { count: docs.length + notes.filter((n) => n.row.status === 'settled').length, proposed: notes.filter((n) => !n.fromProject && ['proposed', 'open'].includes(n.row.status) && !n.row.waitingOn).length, waiting: notes.filter((n) => !n.fromProject && ['proposed', 'open'].includes(n.row.status) && !!n.row.waitingOn).length }
+  const { f, docs, notes } = await gather(s)
+  // A project counts its tasks' unanswered decisions with its own: they are all questions about it.
+  const open = [...notes.filter((n) => !n.fromProject && ['proposed', 'open'].includes(n.row.status)).map((n) => n.row), ...new Map((await taskQuestions(f, new Set(notes.map((n) => n.row.id)))).flatMap((g) => g.notes).map((r) => [r.id, r])).values()]
+  return { count: docs.length + notes.filter((n) => n.row.status === 'settled').length, proposed: open.filter((r) => !r.waitingOn).length, waiting: open.filter((r) => !!r.waitingOn).length }
 }
 
 const line = (v: unknown, max: number) => String(v ?? '').trim().replace(/\s+/g, ' ').slice(0, max)
@@ -431,7 +454,8 @@ export async function openQuestionsDoc(s: Subject, now = new Date()) {
   const about = 'issueId' in f.key ? await db.select({ number: issue.number, title: issue.title }).from(issue).where(eq(issue.id, f.key.issueId)).then(([t]) => `${identifier(a?.key ?? '', t.number)} ${t.title}`)
     : 'ideaId' in f.key ? await db.select({ title: idea.title }).from(idea).where(eq(idea.id, f.key.ideaId)).then(([i]) => i.title)
     : await db.select({ name: project.name }).from(project).where(eq(project.id, f.key.projectId)).then(([p]) => p.name)
-  const open = notes.filter((n) => n.row.kind === 'decision' && ['open', 'proposed'].includes(n.row.status))
+  const open: { row: NoteRow; fromProject: boolean; /** A project's document: the task it is on. */ task?: string }[] = notes.filter((n) => n.row.kind === 'decision' && ['open', 'proposed'].includes(n.row.status))
+  for (const g of await taskQuestions(f, new Set(notes.map((n) => n.row.id)))) for (const row of g.notes) if (!open.some((n) => n.row.id === row.id)) open.push({ row, fromProject: false, task: `${g.task.name} ${g.task.title}` })
   // Those waiting on someone first, by who and then by how long; then the rest, oldest first. A number each, to speak of them by.
   const rows = [...open].sort((x, y) => (x.row.waitingOn ? 0 : 1) - (y.row.waitingOn ? 0 : 1) || (x.row.waitingOn ?? '').localeCompare(y.row.waitingOn ?? '') || x.row.on.localeCompare(y.row.on))
   const number = new Map(rows.map((n, i) => [n.row.id, i + 1]))
@@ -440,14 +464,14 @@ export async function openQuestionsDoc(s: Subject, now = new Date()) {
   if (!rows.length) return { title, count: 0, markdown: [...out, 'Every decision here has its answer.', ''].join('\n') }
   out.push('| # | Question | Waiting on | Asked |', '| --- | --- | --- | --- |', ...rows.map((n) => `| ${number.get(n.row.id)} | ${n.row.title.replace(/\|/g, '\\|')} | ${n.row.waitingOn ?? ''} | ${longDay(n.row.on)} |`), '')
   let group: string | null | undefined
-  for (const { row: r, fromProject } of rows) {
+  for (const { row: r, fromProject, task } of rows) {
     if (group !== (r.waitingOn ?? null)) { group = r.waitingOn ?? null; out.push(`## ${group ? `Waiting on ${group}` : rows.some((n) => n.row.waitingOn) ? 'Not yet with anyone' : 'The questions'}`, '') }
-    out.push(`### ${number.get(r.id)}. ${r.title}`, '', `Asked ${longDay(r.on)}${r.waitingOn ? ` · waiting on ${r.waitingOn}` : ''}${fromProject && f.project ? ` · from the project, ${f.project.name}` : ''}`, '')
+    out.push(`### ${number.get(r.id)}. ${r.title}`, '', `Asked ${longDay(r.on)}${r.waitingOn ? ` · waiting on ${r.waitingOn}` : ''}${fromProject && f.project ? ` · from the project, ${f.project.name}` : ''}${task ? ` · on ${task}` : ''}`, '')
     if (r.waitingOn && r.ask?.trim()) out.push(`**To ask ${r.waitingOn}**`, '', r.ask.trim(), '')
     if (r.background?.trim()) out.push('**Background**', '', r.background.trim(), '')
     if (r.options?.trim()) out.push('**Options**', '', r.options.trim(), '')
     if (r.status === 'proposed' && r.answer) out.push(`**Proposed answer** (not decided): ${r.answer}${r.body?.trim() ? `\n\n${r.body.trim()}` : ''}`, '')
-    const deps = (r.dependsOn ?? []).flatMap((d) => { const x = notes.find((n) => n.row.id === d)?.row; return x ? [number.has(x.id) ? `question ${number.get(x.id)} (${x.title})` : x.status === 'settled' ? `${x.answer ? x.title : x.title}${x.answer ? `, decided: ${x.answer}` : ''}` : x.title] : [] })
+    const deps = (r.dependsOn ?? []).flatMap((d) => { const x = [...notes, ...open].find((n) => n.row.id === d)?.row; return x ? [number.has(x.id) ? `question ${number.get(x.id)} (${x.title})` : x.status === 'settled' ? `${x.answer ? x.title : x.title}${x.answer ? `, decided: ${x.answer}` : ''}` : x.title] : [] })
     if (deps.length) out.push(`**Depends on**: ${deps.join('; ')}`, '')
   }
   return { title, count: rows.length, markdown: out.join('\n') }
