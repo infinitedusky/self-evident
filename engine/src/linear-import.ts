@@ -24,6 +24,7 @@ import { newId } from './ids.js'
 import { effectiveIntegrations, type Values } from './integrations.js'
 import { identifier, insertIssues, PlanError } from './issues.js'
 import { keepFiles, keepOrigin } from './origins.js'
+import { envFor } from './secrets.js'
 
 export interface LinearTicket {
   id: string; identifier: string; title: string; description: string | null; url: string; branchName: string | null
@@ -65,9 +66,13 @@ const fetchTickets: FetchTickets = async (apiKey, teamKey, opts) => {
 }
 
 /** The app's Linear team and key, or why there is none, in words for the page. */
-async function connection(appId: string, env: Record<string, string | undefined>): Promise<{ team: string; key: string }> {
+async function connection(appId: string, given?: Record<string, string | undefined>): Promise<{ team: string; key: string }> {
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   if (!a) throw new PlanError(`no app ${appId}`)
+  // Not told which keys: the ones kept for this app, over the shared ones, over the engine's environment (secrets.ts).
+  // The engine's environment alone has no key pasted under Settings, which is where the page says to put it (found
+  // 2026-11-24: a ticket added to a Context as a reference doc said "LINEAR_API_KEY has no key" while importing worked).
+  const env = given ?? await envFor(a.key)
   const [w] = await db.select().from(workspace).where(eq(workspace.id, a.workspaceId))
   const eff = effectiveIntegrations(((w?.settings ?? {}) as { integrations?: Values }).integrations ?? {}, (a.setup as { integrations?: Values }).integrations ?? {})
   const team = eff.linear?.team?.value?.trim().toUpperCase()
@@ -89,7 +94,7 @@ async function broughtIn(appId: string) {
 }
 
 /** The team's open tickets, each with what it already is here, if anything: the task it became, or the idea it is. */
-export async function linearTickets(appId: string, scope: Scope = 'mine', env: Record<string, string | undefined> = process.env, fetch: FetchTickets = fetchTickets) {
+export async function linearTickets(appId: string, scope: Scope = 'mine', env: Record<string, string | undefined> | undefined = undefined, fetch: FetchTickets = fetchTickets) {
   const { team, key } = await connection(appId, env)
   const [a] = await db.select().from(app).where(eq(app.id, appId))
   let tickets: LinearTicket[]
@@ -118,7 +123,7 @@ const LINEAR_UPLOAD = (url: string) => /^https:\/\/uploads\.linear\.app\//.test(
  * named is kept whole as an origin (origins.ts), its images fetched beside it, and brought up to date each time it is
  * brought in, whatever became of it here. Returns both lists, in the order asked, and the tickets not found.
  */
-export async function importTickets(appId: string, identifiers: string[], actor = 'user', env: Record<string, string | undefined> = process.env, fetch: FetchTickets = fetchTickets, as: ImportAs = 'idea', getFile: typeof globalThis.fetch = globalThis.fetch) {
+export async function importTickets(appId: string, identifiers: string[], actor = 'user', env: Record<string, string | undefined> | undefined = undefined, fetch: FetchTickets = fetchTickets, as: ImportAs = 'idea', getFile: typeof globalThis.fetch = globalThis.fetch) {
   const wanted = [...new Set(identifiers.map((i) => i.trim().toUpperCase()).filter(Boolean))]
   if (!wanted.length) throw new PlanError('name at least one ticket')
   const { team, key } = await connection(appId, env)
@@ -170,7 +175,7 @@ export async function importTickets(appId: string, identifiers: string[], actor 
  * One ticket kept whole as an origin, or brought up to date, and nothing made from it: a reference doc in a Context
  * (context.ts), and what its Refresh does.
  */
-export async function keepTicket(appId: string, identifier: string, env: Record<string, string | undefined> = process.env, fetch: FetchTickets = fetchTickets, getFile: typeof globalThis.fetch = globalThis.fetch) {
+export async function keepTicket(appId: string, identifier: string, env: Record<string, string | undefined> | undefined = undefined, fetch: FetchTickets = fetchTickets, getFile: typeof globalThis.fetch = globalThis.fetch) {
   const wanted = identifier.trim().toUpperCase()
   if (!wanted) throw new PlanError('name the ticket: its id in Linear, like SHOP-12')
   const { team, key } = await connection(appId, env)

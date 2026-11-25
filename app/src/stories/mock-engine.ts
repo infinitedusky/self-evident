@@ -14,6 +14,7 @@ export interface MockData {
   issueDetails: typeof s.issueDetails; todos: typeof s.todos; ideas: typeof s.ideaRows; initiatives: typeof s.initiatives; cycles: typeof s.cycles
   summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript; /** A task's own agent, or null when it has none. */ taskTalk: typeof s.talkSession | null; /** The agents it has out. */ taskAgents?: import('../engine').TaskAgentOut[]; /** An idea's own agent, or null when it has none. */ ideaTalk?: typeof s.talkSession | null
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
+  /** The app's tickets, each with its tasks. */ tickets: import('../engine').TicketGroup[]
   /** The app's mock library. */ mocks: import('../engine').Mock[]
   /** Where each mock's data comes from: the app's defaults, and one task's. */ mockPlaces: import('../engine').MockPlacesRow[]; mockPlacesForTask: import('../engine').MockPlacesRow[]
   mockChanges: import('../engine').MockChange[]
@@ -66,6 +67,7 @@ export const sampleData: MockData = {
   talks: [s.talkSession], transcript: s.transcript, taskTalk: { ...s.talkSession, subject: 'SS-20 Address and payment on one page (sample)', subjectRef: { issueId: 'iss_sample20' } },
   storybook: { url: 'http://localhost:6007', configured: true, startable: true, up: false, startedHere: false, log: [], branch: 'talk/sample', main: false },
   screens: s.screensView,
+  tickets: s.tickets,
   mocks: s.mocks,
   notes: s.notes, mockPlaces: s.mockPlaces, mockPlacesForTask: s.mockPlacesForTask, mockChanges: s.mockChanges, taskCalls: s.taskCalls, mockReal: s.mockReal, taskServices: s.taskServices, testFiles: s.testFiles, fixtures: s.fixtures, fixtureUsed: null, fixtureMake: { ok: true, missing: null },
   sketches: { scope: 'sess_sample', branch: 'talk/sample', main: false, dir: 'sketches', sketches: [{ file: 'home.html', changedAt: 1794250000000 }, { file: 'checkout.html', changedAt: 1794240000000 }] },
@@ -132,6 +134,10 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/talks/ask', () => reply(d.talks[0] ?? s.talkSession)),
     http.delete('/api/repos/:id', ({ params }) => reply({ removed: params.id })),
     http.post('/api/folders/choose', () => reply(d.folder)),
+    http.get('/api/apps/:id/tickets', () => reply(d.tickets)),
+    http.get('/api/apps/:id/tickets/:key', ({ params }) => { const t = d.tickets.find((x) => x.key === String(params.key).toUpperCase()); return t ? reply(t) : HttpResponse.json({ error: `no ticket ${String(params.key).toUpperCase()} here: no task is under it, and it was never read from its tracker` }, { status: 400 }) }),
+    // Read from the tracker (made up): a ticket known by its key alone gains a title and a link.
+    http.post('/api/apps/:id/tickets/:key/read', ({ params }) => { const t = d.tickets.find((x) => x.key === params.key); if (!t) return missing('ticket'); const read = { ...t, title: t.title ?? 'Takedown requests for protected people (sample)', url: t.url ?? `https://linear.app/sample-shop/issue/${t.key}`, source: 'linear', read: true }; d.tickets = d.tickets.map((x) => (x.key === t.key ? read : x)); return reply(read) }),
     http.get('/api/apps/:id/linear/tickets', ({ request }) => {
       if (d.linearProblem) return HttpResponse.json({ error: d.linearProblem }, { status: 400 })
       const scope = new URL(request.url).searchParams.get('scope')

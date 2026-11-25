@@ -5,7 +5,7 @@ const alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
 const nano = customAlphabet(alphabet, 12)
 
 export const PREFIXES = {
-  workspace: 'ws', scenario: 'scn', user: 'usr', app: 'app', repo: 'repo', provider: 'prov', idea: 'idea', origin: 'orig', project: 'proj',
+  workspace: 'ws', scenario: 'scn', user: 'usr', app: 'app', repo: 'repo', provider: 'prov', idea: 'idea', origin: 'orig', ticket: 'tkt', project: 'proj',
   decision: 'dec', trial: 'trial', nightly: 'night', question: 'q', task: 'task', phase: 'ph', session: 'sess', run: 'run', pr: 'pr', verification: 'ver', backlog: 'bl', todo: 'todo', issue: 'iss', initiative: 'init', cycle: 'cyc', comment: 'cmt', prototype: 'proto', workflow: 'wf', stepWork: 'step', asset: 'asset', testFile: 'tfile', note: 'note', contextDoc: 'cdoc', taskBranch: 'tb', savePoint: 'save', report: 'rep',
 } as const
 
