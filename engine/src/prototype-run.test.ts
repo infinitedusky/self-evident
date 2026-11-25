@@ -65,7 +65,7 @@ describe.skipIf(!reachable)('running a guide step (sample data)', () => {
     expect((await runStep(id, 2)).status).toBe('running') // pressed again: the same run
     stopStep(id, 2)
     await until(() => runsOf(id).find((r) => r.step === 2)!.status !== 'running')
-    expect(runsOf(id).find((r) => r.step === 2)).toMatchObject({ status: 'stopped', lines: ['started'] })
+    expect(runsOf(id).find((r) => r.step === 2)).toMatchObject({ status: 'stopped', lines: expect.arrayContaining(['started']) }) // the shell sometimes adds its own line that the sleep was terminated
     expect((await runStep(id, 0)).status).toBe('running') // free again
     await until(() => runsOf(id)[0].status !== 'running')
   })

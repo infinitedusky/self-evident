@@ -8160,13 +8160,19 @@ For Fixture People and the Context ones. Clean main failed three engine tests on
 - **The main checkout follows GitHub by itself**, about every ten minutes. A run there can see the code change half
   way: the "type error on main" in the first run was that. Tests are run in a worktree, as the work is.
 
-After: the engine's 908 and the app's 954 pass run after run, in the same time as before, and both pass with the
-other going beside them. Nothing is left behind on the database server or in the temp folder.
+After: the engine's tests and the app's pass run after run, in the same time as before, and the app's pass with
+the engine's going beside them. Nothing is left behind on the database server or in the temp folder.
 
-Not done: `runner.test.ts` still has tests that turn on their own timing (pause, losing the model, the session
-cap, a test run asked for again). With two engine runs at once, one of them failed once in two runs; with two
-engine runs and the app's at once (three times what this computer has), those and the slowest of
-`main-running.test.ts` and `prototype-data.test.ts` ran out of time. `mock-data.test.ts` hung once in some
-fifteen runs (a request with no time limit, to a mock on a port it was just given). Running a failed test again
-before calling it failed, as the engine does for an app's own tests, is not set for these. The old shared
+- **`runner.test.ts` made 27 runners and shut none down.** A runner dispatches every running project and goes on
+  doing so when a build of its own ends, so a later test's runner built an earlier test's leftovers, and the other
+  way round. Each test's runners are shut down and its projects closed when it ends (the file takes 36 seconds, not
+  60). Two tests that assert builds overlap keep a made-up build open until a second is going; one waits for the
+  row the hold writes, not just the hold.
+
+With these, two engine runs at once both pass.
+
+Not done: with the app's tests going beside them, two of the engine's that start a server on a database of its
+own (`main-running.test.ts`, `prototype-data.test.ts`) stalled for the whole two minutes in one run of three; alone
+they take six seconds, and they did the same before any of this. Why is not found. `mock-data.test.ts` hung once
+in some fifteen runs (a request with no time limit, to a mock on a port it was just given). The old shared
 `selfevident_test` database is left for branches made before this.
