@@ -5,9 +5,10 @@ import { withEngine } from '../stories/mock-engine'
 import { plannerLog, quietNow, talkSession, transcript } from '../stories/sample'
 import type { TalkMessage } from '../engine'
 
-// Evident on a phone: you are at a place in the app (a task, a project, My Stuff), and flip between its chat and its
-// page. The tray from the left is the place's nav (a task's steps, a project's tasks) and the chats; the grid goes
-// anywhere in the app. Everything here is made up: the sample engine's task SS-20, its transcript, its agents.
+// Evident on a phone: you are at a place in the app (a task, a project, My Stuff), with three tabs under its name:
+// Nav (the place's own left nav), the page that is open, and Chat (the chat of that place). The grid goes anywhere:
+// the app's places, what needs you, every chat. Everything here is made up: the sample engine's task SS-20, its
+// transcript, its agents.
 const forget = () => {
   const clear = () => { try { Object.keys(localStorage).filter((k) => k.startsWith('se.phone')).forEach((k) => localStorage.removeItem(k)) } catch { /* fine */ } }
   clear()
@@ -15,7 +16,7 @@ const forget = () => {
 }
 const TASK = '/tasks/iss_sample20'
 /** The chat's side of the phone: a task's page under it has the task's agent too, folded away. */
-const chatOf = (el: HTMLElement) => within(el.querySelector<HTMLElement>('.phone-pane')!)
+const chatOf = (el: HTMLElement) => within(el.querySelector<HTMLElement>('.phone-chat-pane')!)
 const meta = { title: 'Components/Phone', component: Phone, parameters: { layout: 'fullscreen', router: false },
   args: { address: false, initial: { path: TASK, view: 'chat' } },
   render: (a) => <div className="phone-frame" style={{ width: 390, height: 844, margin: '0 auto', border: '1px solid var(--line)' }}><Phone {...a} /></div>,
@@ -31,7 +32,7 @@ const talking = { transcript: { ...transcript, pending: [], session: { ...talkSe
   msg(4, 'agent', 'Moved. The brief is ready for you to read.'),
 ] } }
 
-/** At a task, on its chat: the task's name at the top, Chat and its page as two tabs, the tray's button on the left and the grid on the right. */
+/** At a task, on its chat: the task's name at the top, then three tabs: Nav, the page that is open, Chat. */
 export const TaskChat: Story = {
   beforeEach: [forget(), withEngine(talking)],
   play: async ({ canvasElement }) => {
@@ -44,15 +45,17 @@ export const TaskChat: Story = {
   },
 }
 
-/** A task's pages are tabs across the top: the overview, the context, the brief and each step, the build. Pressing one goes to it. */
-export const SectionsAcrossTheTop: Story = {
+/** Nav, the first tab: the task's own left nav, as its page has it on the computer. Pressing a row goes to that page, and the middle tab takes its name. */
+export const NavTab: Story = {
+  args: { initial: { path: TASK, view: 'nav' } },
   beforeEach: [forget(), withEngine(talking)],
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    for (const name of ['Overview', 'Context', /Brief/, /Mockups/, /Build/]) await expect(await c.findByRole('tab', { name })).toBeInTheDocument()
-    await userEvent.click(c.getByRole('tab', { name: /Research/ }))
-    await expect(await c.findByRole('tab', { name: /Research/ })).toHaveAttribute('aria-selected', 'true')
-    await expect(c.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'false')
+    await expect(await c.findByRole('tab', { name: 'Nav' })).toHaveAttribute('aria-selected', 'true')
+    const nav = within(await c.findByRole('navigation', { name: 'This task' }))
+    for (const name of [/Overview/, /Context/, /The brief/, /Sketches/]) await expect(await nav.findByRole('link', { name })).toBeVisible()
+    await userEvent.click(nav.getByRole('link', { name: /Research/ }))
+    await expect(await c.findByRole('tab', { name: 'Research', selected: true })).toBeInTheDocument()
   },
 }
 
@@ -62,7 +65,7 @@ export const TaskPage: Story = {
   beforeEach: [forget(), withEngine(talking)],
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByRole('tab', { name: /Brief/, selected: true })).toBeInTheDocument()
+    await expect(await c.findByRole('tab', { name: 'Brief', selected: true })).toBeInTheDocument()
     await userEvent.click(c.getByRole('tab', { name: 'Chat' }))
     await expect(await chatOf(canvasElement).findByText('Moved. The brief is ready for you to read.')).toBeVisible()
   },
@@ -81,49 +84,40 @@ export const AgentsAsTabs: Story = {
   },
 }
 
-/** The tray at a task: what needs you, the project's tasks with this task's steps under it, and the chats. */
-export const TrayAtATask: Story = {
-  args: { initial: { path: TASK, view: 'chat', tray: true } },
-  beforeEach: [forget(), withEngine(talking)],
-  play: async ({ canvasElement }) => {
-    const c = within(canvasElement)
-    await expect(await c.findByRole('heading', { name: 'Chats' })).toBeInTheDocument()
-    await expect(await c.findByRole('button', { name: /The brief/ })).toBeInTheDocument()
-  },
-}
-
-/** A step pressed in the tray: the task's page goes to it, and the page is what shows. */
-export const StepGoesToItsPage: Story = {
-  args: { initial: { path: TASK, view: 'chat', tray: true } },
-  beforeEach: [forget(), withEngine(talking)],
-  play: async ({ canvasElement }) => {
-    const c = within(canvasElement)
-    await userEvent.click(await c.findByRole('button', { name: /The brief/ }))
-    await expect(await c.findByRole('tab', { name: /Brief/, selected: true })).toBeInTheDocument()
-  },
-}
-
-/** At a project: its page, its own chat, and its tasks in the tray. Going to one of them moves the chat with you. */
+/** At a project, on Nav: the project's own left nav, with Tickets in it. */
 export const AtAProject: Story = {
-  args: { initial: { path: '/projects/proj_checkout', view: 'page', tray: true } },
+  args: { initial: { path: '/projects/proj_checkout', view: 'nav' } },
   beforeEach: [forget(), withEngine()],
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByRole('heading', { name: 'Its tasks' })).toBeInTheDocument()
-    await expect(await c.findByRole('tab', { name: 'Tickets' })).toBeInTheDocument()
-    await userEvent.click(await c.findByRole('button', { name: /SS-1 / }))
-    await expect(c.queryByRole('heading', { name: 'Its tasks' })).toBeNull()
+    const nav = within(await c.findByRole('navigation', { name: 'This project' }))
+    await expect(await nav.findByRole('link', { name: /Tickets/ })).toBeVisible()
+    await userEvent.click(nav.getByRole('link', { name: /Tickets/ }))
+    await expect(await c.findByRole('tab', { name: 'Tickets', selected: true })).toBeInTheDocument()
   },
 }
 
-/** The grid: anywhere in the app, from anywhere. */
+/** The grid: the app's places, what needs you and every chat, from anywhere. */
 export const Places: Story = {
   args: { initial: { path: TASK, view: 'chat', shelf: true } },
   beforeEach: [forget(), withEngine(talking)],
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
+    await expect(await c.findByRole('heading', { name: 'Chats' })).toBeInTheDocument()
+    await expect(await c.findByRole('heading', { name: 'Needs you' })).toBeInTheDocument()
     await userEvent.click(await c.findByRole('button', { name: /Projects/ }))
     await expect(await c.findByRole('tab', { name: 'Projects' })).toHaveAttribute('aria-selected', 'true')
+  },
+}
+
+/** A place with no nav of its own: Nav lists the app's places. */
+export const NavAwayFromATask: Story = {
+  args: { initial: { path: '/', view: 'nav' } },
+  beforeEach: [forget(), withEngine()],
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByRole('button', { name: 'Tasks' }))
+    await expect(await c.findByRole('tab', { name: 'Tasks', selected: true })).toBeInTheDocument()
   },
 }
 
