@@ -17,6 +17,7 @@ import { app, issue, session } from './db/schema.js'
 import { appendEvent } from './events.js'
 import { withLock } from './landing.js'
 import { PlanError } from './projects.js'
+import { bringSessionFor } from './session-move.js'
 
 export type Handover = { text: string | null; sessionId: string; at: string }
 /** Asks a fork of one conversation one question and returns its answer. Swapped out in tests. */
@@ -35,6 +36,7 @@ export const handoverPrompt = (t: { identifier: string; title: string; descripti
 
 const askFork: AskFork = async ({ cwd, agentSessionId, prompt, setup, model }) => {
   let out = ''
+  await bringSessionFor(cwd, agentSessionId, setup).catch(() => null) // the app's login may have changed since that conversation ran (session-move.ts)
   // forkSession: the conversation's own file is read, never written; persistSession false: the fork leaves no file.
   for await (const m of query({ prompt, options: { ...accountEnv(setup), cwd, model, resume: agentSessionId, forkSession: true, persistSession: false, maxTurns: 1, tools: [], allowedTools: [], settingSources: [] } })) {
     if (m.type === 'result') { if (m.subtype !== 'success') throw new PlanError(`the hand-over could not be written: ${m.subtype}`); out = m.result }

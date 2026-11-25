@@ -46,6 +46,7 @@ import { gate, NOT_IN_THE_CHECKOUT } from './gate.js'
 import { existsSync, statSync } from 'node:fs'
 import { stopStorybookAt, storiesNote } from './storybook.js'
 import { prDescriptionNote } from './pr.js'
+import { bringSessionFor } from './session-move.js'
 import { lastUuid, latestSession, readTurns, sessionFile, sessionLabel, sessionsIn, sessionTitle } from './terminal.js'
 
 const READ_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']
@@ -737,6 +738,10 @@ async function open(sessionId: string): Promise<Live> {
   const refs = await referencesOf(s.appId)
   const mates = await matesOf(s.appId, s.worktreePath)
   const account = accountEnv(a?.setup) // the app's own Claude account, when it has one; throws when that can't be used
+  if (s.agentSessionId) { // the app's login changed since this conversation last ran: its session comes along (session-move.ts)
+    const brought = await bringSessionFor(s.cwd!, s.agentSessionId, a?.setup).catch((err) => { console.error(`[talk] could not bring ${sessionId}'s session to this login: ${String(err?.message ?? err)}`); return null })
+    if (brought) await record(sessionId, 'engine', 'handoff', `This app's agents now run on another Claude login. This conversation was copied to it from ${brought.from}, and carries on here.`, { to: 'login', from: brought.from }).catch(() => {})
+  }
   const assets = await assetsFor(s.appId, (s.subjectRef as SubjectRef | null)?.projectId ?? ownTask?.projectId) // the app's, and the project's when it is about one
   // What real services sent back for this work, kept raw outside the repository (recordings.ts): the task's, else the idea's, else the app's.
   const recordings = s.appId ? recordingsDir(s.appId, proto ? { issueId: proto.issueId, ideaId: proto.ideaId } : { issueId: ownTaskId ?? (s.subjectRef as SubjectRef | null)?.checkOf, ideaId: (s.subjectRef as SubjectRef | null)?.ideaId }) : null
