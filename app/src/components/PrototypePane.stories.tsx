@@ -3,6 +3,7 @@ import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { PrototypePane } from './PrototypePane'
 import { MAIN_OFF, withEngine } from '../stories/mock-engine'
 import { apps, prototypes, sampleApp } from '../stories/sample'
+import { addressFits, onARowBelow, overlap } from '../stories/fits'
 
 // A prototype, in a tab: the actual thing built fast in its own worktree. All made up. The "running prototype" is one
 // of these stories, served by Storybook itself.
@@ -66,6 +67,43 @@ export const Narrow: Story = {
     await expect(phone.getBoundingClientRect().top).toBeGreaterThanOrEqual(stop.getBoundingClientRect().bottom)
     const bar = canvasElement.querySelector('.preview-bar')!
     await expect(bar.scrollWidth).toBeLessThanOrEqual(bar.clientWidth)
+    const form = c.getByRole('textbox', { name: 'Address' }).closest('form')!
+    await expect(addressFits(form)).toBe(true)
+    await expect(onARowBelow(stop, form)).toBe(false) // still one row at this width
+    await expect(overlap(form, c.getByRole('link', { name: 'Open in a browser tab' }))).toBe(false)
+  },
+}
+/** Narrower still (Sandy, 2026-11-25: "it can accommodate much smaller screens, to go into two rows probably"): the address keeps the first row with back, forward and reload, the server's buttons go to a row below, and the address shows the path alone. */
+export const VeryNarrow: Story = {
+  args: { id: running.id, path: at }, beforeEach: withEngine({ prototypes: [running] }),
+  decorators: [(Story) => <div style={{ width: 300 }}><Story /></div>],
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const stop = await c.findByRole('button', { name: 'Stop its server' })
+    const address = c.getByRole('textbox', { name: 'Address' })
+    const form = address.closest('form')!
+    await expect(addressFits(form)).toBe(true)
+    await expect(form.getBoundingClientRect().width).toBeGreaterThanOrEqual(150)
+    await expect(onARowBelow(stop, form)).toBe(true)
+    await expect(onARowBelow(form, c.getByRole('button', { name: 'Back' }))).toBe(false)
+    await expect(onARowBelow(c.getByRole('button', { name: 'Phone' }), stop)).toBe(true)
+    await expect(c.getByText(running.url, { selector: '.preview-address span' })).not.toBeVisible()
+    await expect(address).toHaveValue(at)
+  },
+}
+/** Main beside it in a narrow column: the two views stack, and each address stays inside its own bar, clear of Detach. */
+export const NarrowCompareWithMain: Story = {
+  args: { id: running.id, path: at },
+  beforeEach: withEngine({ prototypes: [running], main: MAIN_OFF, mainFor: (running as { issueId?: string | null }).issueId ?? running.id }),
+  decorators: [(Story) => <div style={{ width: 360 }}><Story /></div>],
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.selectOptions(await c.findByRole('combobox', { name: 'Compare with main' }), 'copy')
+    const theirs = (await c.findByRole('textbox', { name: 'Address (main)' })).closest('form')!
+    const mine = c.getByRole('textbox', { name: 'Address (prototype)' }).closest('form')!
+    for (const f of [mine, theirs]) { await expect(addressFits(f)).toBe(true); await expect(f.getBoundingClientRect().width).toBeGreaterThanOrEqual(150) }
+    await expect(overlap(theirs, c.getByRole('button', { name: '↗ Detach' }))).toBe(false)
+    await expect(onARowBelow(c.getByRole('figure', { name: 'main' }), c.getByRole('figure', { name: 'This prototype' }))).toBe(true)
   },
 }
 /** At a phone's width. */

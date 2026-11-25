@@ -8256,3 +8256,26 @@ What needs you, every chat, New chat and the app are under the grid, with the ap
 
 Found on the way: the phone's styles had a `.phone-dot` of their own, and the rail's phone link already has one, so
 a conversation's dot was drawn in a corner. The phone's is `.phone-talk-dot`.
+
+## The address bar on a narrow screen: two rows, and the text stays in its box (Sandy, 2026-11-25: "the address bar gets really shrunk in and the text starts to extend beyond it and overlap with the next button … go into two rows probably")
+
+In the smoke test the address could shrink to nothing while its text was allowed to spill out, so it never asked for
+a row of its own and its text ran over the button beside it. Three things changed, in the smoke test and the
+prototype (they share the bar, `Nav` in `Trail.tsx`):
+
+- **Back, forward, reload and the address are one group** that is never split and asks for enough room to be read.
+  Where a bar has less than that beside its buttons, the buttons go to a row below. In the smoke test the buttons are
+  a group too, so they go down together: the address, then the buttons.
+- **The address keeps its text inside its box.** Where it runs (`http://localhost:65487`) is the part that gives
+  way: cut short first, and left out where the address is under 260px, which leaves the path alone, as Replit's
+  preview shows it. Hover says the whole of it.
+- **The smoke test and the prototype lay out by their own width, not the window's.** They sit in a tab, beside the
+  task's nav and the agent's column, so a wide window said nothing about the room they had: the view could be a
+  sliver with the checks still beside it. The checks go under the view when the smoke test is 720px or less (it was
+  the window at 1000px), and the two compared views stack at 660px (prototype: 800px, of its own width).
+
+Stories first: `SmokeTest` Narrow, Beside its checks, One row when wide, Narrow compared with main; `PrototypePane`
+Very narrow, Narrow compare with main, and Narrow now measures the address too. They fail on the old bar. What they
+measure is in `app/src/stories/fits.ts`.
+
+Not done: the same change by the tab's width for the smoke settings form (`.smoke-setting`, still by the window).

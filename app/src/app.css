@@ -619,12 +619,20 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 .dockview-theme-se .tab-page, .dockview-theme-se .preview { background: var(--surface); }
 
 /* Preview: the app running, after Replit's */
-.preview { height: 100%; display: flex; flex-direction: column; background: var(--ground); }
-.preview-bar { display: flex; gap: 6px; align-items: center; padding: 6px 8px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.preview { height: 100%; display: flex; flex-direction: column; background: var(--ground); container: preview / inline-size; } /* laid out by its own width: a tab is not as wide as the window */
+.preview-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; background: var(--surface); border-bottom: 1px solid var(--line); }
 .preview-bar.second { flex-wrap: wrap; gap: 6px 14px; padding-top: 5px; padding-bottom: 5px; }
 .preview-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; flex: none; }
-.preview-address { flex: 1; min-width: 0; max-width: 460px; display: flex; align-items: center; gap: 0; border: 1px solid var(--line); border-radius: 8px; padding: 0 0 0 8px; background: var(--ground); }
-.preview-address span { white-space: nowrap; }
+/* A view's back, forward, reload and address (Trail.tsx's Nav): one group that is never split. It asks for enough
+   room for the address to be read; where a bar has less than that beside its buttons, the bar wraps and the buttons
+   go to a row below (Sandy, 2026-11-25: "go into two rows probably"). */
+.view-nav { flex: 1 1 260px; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.view-nav .icon-btn { flex: none; }
+/* The address keeps its text inside its box. Where it runs at is the part that gives way: cut short first, and left
+   out where there is only room for the path (after Replit's preview, which shows the path alone). */
+.preview-address { flex: 1; min-width: 0; max-width: 460px; display: flex; align-items: center; gap: 0; border: 1px solid var(--line); border-radius: 8px; padding: 0 0 0 8px; background: var(--ground); overflow: hidden; container: address / inline-size; }
+.preview-address span { flex: 0 1 auto; min-width: 0; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@container address (max-width: 260px) { .preview-address span { display: none; } }
 .preview-address input { flex: 1; min-width: 60px; border: 0; background: none; margin: 0; padding: 5px 8px 5px 0; color: var(--ink); outline: none; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; background: none; padding: 4px 9px; font: 12px var(--sans); color: var(--ink-soft); cursor: pointer; }
@@ -655,12 +663,12 @@ div.rail-fly-head { padding: 4px 10px 2px; }
 /* Main beside the prototype: two views under one address bar. */
 .preview-pair { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); }
 .preview-pair figure { margin: 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; background: var(--surface); }
-.preview-pair figcaption { align-self: stretch; display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--ink-faint); padding: 4px 8px; border-bottom: 1px solid var(--line); }
+.preview-pair figcaption { align-self: stretch; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--ink-faint); padding: 4px 8px; border-bottom: 1px solid var(--line); }
 .preview-pair figcaption > span { white-space: nowrap; }
 .preview-pair figcaption .preview-address { flex: 1; min-width: 0; max-width: none; }
 .preview-pair iframe { flex: 1; min-height: 0; }
 .preview-pair .empty { margin: 16px; }
-@media (max-width: 800px) { .preview-pair { grid-template-columns: 1fr; } }
+@container preview (max-width: 800px) { .preview-pair { grid-template-columns: 1fr; } }
 .preview-stage iframe[style] { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 
 /* A build's log, after Replit's action feed: one line per action, output folded */
@@ -1051,10 +1059,16 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .submit-pr-warn { margin: 0 0 8px; color: var(--warn); font-size: 14px; }
 .submit-pr-ask { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
 
+/* Laid out by its own width, not the window's: it sits in a tab, beside the task's nav and the agent's column. */
+.smoke { container: smoke / inline-size; }
 .smoke-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 14px; align-items: start; }
-@media (max-width: 1000px) { .smoke-layout { grid-template-columns: 1fr; } }
+@container smoke (max-width: 720px) { .smoke-layout { grid-template-columns: 1fr; } }
 .smoke-view { min-width: 0; }
 .smoke-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+/* Its buttons are one group: beside the address where both fit, a row of their own below it where they do not. */
+.smoke-bar .view-nav { flex-basis: 360px; }
+.smoke-bar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-width: 0; }
+code.smoke-address { flex-basis: 200px; }
 .smoke-address { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .smoke-frame { width: 100%; height: var(--smoke-room, min(70vh, 640px)); border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 .smoke-log { text-align: left; font-size: 12px; margin: 8px 0 0; white-space: pre-wrap; }
@@ -1065,7 +1079,7 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .smoke-check-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .smoke-how { font-size: 14px; }
 .smoke-before { font-size: 13px; }
-.smoke-bar .preview-address { max-width: none; white-space: normal; overflow: visible; }
+.smoke-bar .preview-address { max-width: none; }
 .smoke-where a { word-break: break-all; }
 .smoke-where code { font-size: 12px; }
 .smoke-actions { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -1172,7 +1186,7 @@ a.task-nav-save:hover { background: var(--idle-wash); color: var(--ink); }
 .smoke-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .smoke-pair figure { margin: 0; min-width: 0; }
 .smoke-pair figcaption { font-size: 12px; color: var(--ink-faint); margin: 0 0 4px; }
-@media (max-width: 800px) { .smoke-pair { grid-template-columns: 1fr; } }
+@container smoke (max-width: 660px) { .smoke-pair { grid-template-columns: 1fr; } }
 .smoke-tried { font-size: 13px; margin: 6px 0 0; padding: 6px 8px; border-left: 3px solid var(--line, #ddd); background: color-mix(in srgb, var(--line, #ddd) 25%, transparent); border-radius: 4px; }
 .smoke-tried.holds { border-left-color: var(--ok, #2a8f5a); }
 .smoke-tried.fails { border-left-color: var(--bad, #c0392b); }

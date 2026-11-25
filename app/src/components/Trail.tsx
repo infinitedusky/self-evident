@@ -36,21 +36,25 @@ export function useTrail() {
   return { at: trail.list[trail.i] ?? null, canBack: trail.i > trail.floor, canForward: trail.i < trail.list.length - 1, typed, setTyped, reloads, reload: () => setReloads((n) => n + 1), setAt, step, seen, frameAt }
 }
 export type Trail = ReturnType<typeof useTrail>
-/** Back, forward, reload and an address, for one view. `of` names it when there are two ("main"). */
+/**
+ * Back, forward, reload and an address, for one view. `of` names it when there are two ("main"). One group, so a bar
+ * that wraps never parts the address from its buttons; where the address is short of room it shows the path alone
+ * (app.css, `.view-nav` and `.preview-address`).
+ */
 export function Nav({ t, home, src, of }: { t: Trail; home: string; src: string; of?: string }) {
   const path = src.startsWith(home) ? src.slice(home.length) || '/' : src // somewhere else entirely: the whole address
   const go = (to: string) => { const x = to.trim(); if (x) t.setAt(/^https?:\/\//.test(x) ? x : `${home}${x.startsWith('/') ? x : `/${x}`}`) }
   const n = (what: string) => (of ? `${what} (${of})` : what)
   return (
-    <>
+    <div className="view-nav">
       <button className="icon-btn" disabled={!t.canBack} onClick={() => t.step(-1)} title={n('Back')} aria-label={n('Back')}>←</button>
       <button className="icon-btn" disabled={!t.canForward} onClick={() => t.step(1)} title={n('Forward')} aria-label={n('Forward')}>→</button>
       <button className="icon-btn" onClick={t.reload} title={n('Reload')} aria-label={n('Reload')}>↻</button>
       <form className="preview-address smoke-address" onSubmit={(e) => { e.preventDefault(); go(t.typed ?? path) }}>
-        {src.startsWith(home) && <span className="faint mono">{home}</span>}
+        {src.startsWith(home) && <span className="faint mono" title={home}>{home}</span>}
         <input className="mono" value={t.typed ?? path} onChange={(e) => t.setTyped(e.target.value)} aria-label={n('Address')} title="A path, or a whole address. Enter goes there." />
       </form>
-    </>
+    </div>
   )
 }
 
