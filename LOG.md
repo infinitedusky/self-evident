@@ -7735,3 +7735,26 @@ in as ideas and tasks worked. The import routes pass the keys kept for the app (
 Context's add and refresh, and the agents' tools, passed none, so the read fell back to the engine's own
 environment, where a key pasted under Settings never is. Now a Linear read that is told no keys reads the ones
 kept for the app (linear-import.ts, `connection`), so every caller gets them.
+
+## Your docs: an app's own pages, in Learn (Sandy, 2026-11-24: "documentation that represents my personal understanding of the project so that I can probe and build up … we should host this inside of Evident … and it is in Learn")
+
+What there was: Learn's four documents (an agent's account, replaced when the code is learned again), and a docs
+site in the Cloaked workbench folder (VitePress, from a template) whose only real page is "Running it". Nothing held
+what Sandy understands. Sandy: not the docs site; inside Evident, in Learn.
+
+- **"Your docs" is a section of the Learn page**, per app, between the codebase and the running app. Any number of
+  pages, each a title and Markdown. Read folded under their titles (the first open), written and changed in place,
+  deleted with a second press.
+- **They are the person's, and learning the code again does not touch them.** Each says who wrote it last: you, or an
+  agent at your word.
+- **Kept in the database** (table `app_doc`; `engine/src/app-docs.ts`), not in a folder beside the app. A second page
+  with a title the app already has is refused.
+- **Agents read them and Learn's agent writes them when asked**: `app_docs` to read; `write_app_doc` for "write down
+  what you just told me" (a new page, or one replaced whole by its id). No agent can delete one. This is the probing:
+  ask Learn's agent about the code, have it write the answer as a page, or ask it to check a page against the code.
+- **Learning the code reads them first** and reports where the code says otherwise, without changing the page.
+
+Not done: a press that checks a page against the code and marks each claim (today it is asked for in Learn's
+conversation, which exists only once the code has been learned); diagrams (the page shows Markdown, and a Mermaid
+block shows as code); the pages are not handed to planners and builders as they start (a tool they may call, as
+Learn's four are); the workbench docs site is left as it is, with nothing moved from it. Not tried with a real agent.

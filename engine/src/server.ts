@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
 import { imageFile, saveImages, type ImageIn } from './uploads.js'
 import { listLearning } from './learn.js'
+import { editAppDoc, listAppDocs, removeAppDoc, writeAppDoc } from './app-docs.js'
 import { checklistOf } from './checklist.js'
 import { sealTestPlan, trajectoryView } from './trajectory.js'
 import { closeTask, closeView, reopenUnclosed } from './close.js'
@@ -146,6 +147,7 @@ export function buildApp(bus: EventBus) {
       'GET /todos?app=': 'the app\'s to-dos with their checklists', 'POST /todos': '{appId, title, notes?, owner?, projectId?, checklist?: [text | {text, waitingOn?}]}',
       'PATCH /todos/:id': '{title?, notes?, owner?, projectId?}', 'POST /todos/:id/checklist': '{items}', 'PATCH /checklist/:id': '{done?, waitingOn?, text?}', 'DELETE /checklist/:id': '',
       'POST /todos/:id/draft': 'the agent drafts the checklist, or what is missing from it', 'POST /todos/:id/done': '', 'POST /todos/:id/drop': '{reason}', 'POST /todos/:id/reopen': '',
+      'GET /apps/:id/docs': 'the app\'s own docs: the pages a person keeps about how they understand it (Learn)', 'POST /apps/:id/docs': '{title, body}', 'PATCH /app-docs/:id': '{title?, body?}', 'DELETE /app-docs/:id': '',
       'GET /initiatives?app=': 'goals, with their projects', 'POST /initiatives': '{appId, name, description?, targetDate?, projectIds?}', 'PATCH /initiatives/:id': '{name?, description?, status?, targetDate?, addProjects?, removeProjects?}',
       'GET /cycles?app=': 'stretches of time with their tasks', 'POST /cycles': '{appId, startsAt, endsAt, name?, description?, issueIds?}',
       'POST /projects/:id/start': 'run it: worktrees, agent runs, landing, PR', 'POST /projects/:id/tick?room=N': 'one dispatch pass for a draft (no launching)',
@@ -187,6 +189,11 @@ export function buildApp(bus: EventBus) {
   // Learn, the codebase half (learn.ts): the documents an agent wrote from reading the code, and the press that starts it.
   api.get('/apps/:id/learning', async (c) => { try { return c.json(await listLearning(c.req.param('id'), talkBusy)) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/learn', async (c) => { try { return c.json(await startLearning(c.req.param('id'), 'user'), 202) } catch (err) { return planError(c, err) } })
+  // An app's own docs (app-docs.ts): the pages a person keeps about how they understand the app, on the Learn page.
+  api.get('/apps/:id/docs', async (c) => c.json(await listAppDocs(c.req.param('id'))))
+  api.post('/apps/:id/docs', async (c) => { try { return c.json(await writeAppDoc(c.req.param('id'), await c.req.json<{ title: string; body: string }>(), 'user'), 201) } catch (err) { return planError(c, err) } })
+  api.patch('/app-docs/:id', async (c) => { try { return c.json(await editAppDoc(c.req.param('id'), await c.req.json<{ title?: string; body?: string }>(), 'user')) } catch (err) { return planError(c, err) } })
+  api.delete('/app-docs/:id', async (c) => { try { return c.json(await removeAppDoc(c.req.param('id'), 'user')) } catch (err) { return planError(c, err, 404) } })
   api.get('/apps/:id/holds', async (c) => { try { return c.json(await appHolds(c.req.param('id'))) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/remove', async (c) => { try { return c.json(await putAway(c.req.param('id'), putAwayDeps)) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/restore', async (c) => { try { return c.json(await bringBack(c.req.param('id'))) } catch (err) { return planError(c, err) } })

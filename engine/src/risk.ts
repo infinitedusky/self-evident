@@ -19,7 +19,7 @@ export interface RiskContext { cwd: string; branch?: string | null } // branch: 
 
 const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'TodoWrite', 'WebFetch', 'WebSearch', 'Skill']) // Skill loads instructions; what they lead to is rated on its own
 export const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
-const ENGINE_FREE = new Set(['smoke_setup', 'learning', 'now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'show_code', 'task_branches', 'merge_guide', 'shares'])
+const ENGINE_FREE = new Set(['smoke_setup', 'learning', 'app_docs', 'now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'show_code', 'task_branches', 'merge_guide', 'shares'])
 const ENGINE: Record<string, [Risk, string]> = {
   create_idea: ['cheap', 'keeps an idea; easy to drop'],
   create_project: ['cheap', 'a draft project; nothing runs'],
@@ -73,6 +73,7 @@ const ENGINE: Record<string, [Risk, string]> = {
   go_back: ['expensive', 'moves every worktree of the task and the task itself to another task branch'],
   delete_saved: ['expensive', 'removes a save point or a set-aside task branch, with the work that is only there'],
   set_learning: ['cheap', 'writes a document about the codebase on the Learn page; writing it again replaces it'],
+  write_app_doc: ['cheap', 'writes a page in the person\'s docs on the Learn page; with an id it replaces that page'],
   set_guide: ['cheap', 'writes the prototype\'s guide: what to try and in what order; easy to change'],
   start_project: ['expensive', 'runs agents, spends money, opens a pull request'],
 }
