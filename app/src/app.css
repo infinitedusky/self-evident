@@ -1426,6 +1426,9 @@ details.lv-item[open] > summary .lv-item-name::before { content: '▾'; }
 .context-share-page h1 { font-size: 20px; margin: 0 0 4px; } .context-share-page h2 { font-size: 15px; margin: 20px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--line); } .context-share-page h3 { font-size: 14px; margin: 14px 0 2px; }
 .context-share-page table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; } .context-share-page th, .context-share-page td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
 .context-waiting { color: var(--warn); font-weight: 500; }
+.context-ask { margin: 6px 0; padding: 8px 10px; border-left: 3px solid var(--warn); background: var(--warn-wash); border-radius: 4px; font-size: 14px; }
+.context-ask-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.context-ask-text { white-space: pre-wrap; margin-top: 2px; }
 @container (max-width: 560px) { .context-qa { grid-template-columns: 1fr; } }
 .context-unmade .context-q { color: var(--ink); font-weight: 600; }
 .context-unmade .badge { margin-right: 4px; }

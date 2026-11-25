@@ -563,6 +563,7 @@ export const note = pgTable('note', {
   /** More about a decision's question (Sandy, 2026-11-24: "options or added info … below the question"): the options, a recommendation, what each would mean. Markdown. Background is where the question came from; this is what there is to choose between. */ options: text('options'),
   /** The decisions this one depends on (Sandy, 2026-11-24: "the correct answer may depend on … so I need to create a new question that this one depends on"): their ids, in this Context or its project's. */ dependsOn: jsonb('depends_on').$type<string[]>().notNull().default([]),
   /** An open decision the person has asked someone else about (Sandy, 2026-11-24: "I have asked so and so and I'm waiting for an answer"): who. `on` is the day the question was asked. */ waitingOn: text('waiting_on'),
+  /** What the person wants to ask whoever it waits on, in their words (Sandy, 2026-11-25: "so I can write an email and I don't forget"). Goes when it stops waiting. */ ask: text('ask'),
   /** A decision: open (asked, not answered); proposed (an agent's answer, waiting for the person), who accepts it (settled) or turns it down (rejected: kept, so it is not proposed again). */ status: text('status').notNull().default('settled'),
   createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [index('note_app').on(t.appId, t.on), inList('note_kind', t.kind, ['note', 'decision']), inList('note_status', t.status, ['settled', 'proposed', 'rejected', 'open'])])

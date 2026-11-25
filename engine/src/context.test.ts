@@ -145,10 +145,15 @@ describe.skipIf(!reachable)('context', () => {
     expect(facts.openDecisions).toContainEqual({ question: 'Can an app card be used on the web? (sample)', askedOn: '2026-11-20', waitingOn: 'Em', background: null, proposedAnswer: null, tasks: [expect.stringMatching(/-\d+$/)] })
     expect(facts.openDecisions.some((d) => d.question === 'Is the list sorted? (sample)' && d.waitingOn === null)).toBe(true)
     expect(facts.openDecisions.every((d) => d.question !== 'What is shown of a saved card? (sample)')).toBe(true) // a made one is not open
-    expect((await editContextNote({ issueId: t }, q.id, { waitingOn: '' })).notes.find((n) => n.id === q.id)!.waitingOn).toBeNull()
-    await editContextNote({ issueId: t }, q.id, { waitingOn: 'Em' })
+    // What to ask them is kept beside who, and goes when it stops waiting.
+    expect((await editContextNote({ issueId: t }, q.id, { ask: ' Are the two vaults one?\nIf not, when? ' })).notes.find((n) => n.id === q.id)).toMatchObject({ waitingOn: 'Em', ask: 'Are the two vaults one?\nIf not, when?' })
+    expect((await openQuestionsDoc({ issueId: t })).markdown).toContain('**To ask Em**\n\nAre the two vaults one?\nIf not, when?')
+    await expect(editContextNote({ issueId: t }, q.id, { ask: 'x' }, 'agent')).rejects.toThrow('the person')
+    expect((await editContextNote({ issueId: t }, q.id, { waitingOn: '' })).notes.find((n) => n.id === q.id)).toMatchObject({ waitingOn: null, ask: null })
+    await expect(editContextNote({ issueId: t }, q.id, { ask: 'With nobody to ask' })).rejects.toThrow('say who it waits on')
+    await editContextNote({ issueId: t }, q.id, { waitingOn: 'Em', ask: 'Are the two vaults one?' })
     v = await editContextNote({ issueId: t }, q.id, { answer: 'Yes' })
-    expect(v.notes.find((n) => n.id === q.id)).toMatchObject({ status: 'settled', answer: 'Yes', waitingOn: null })
+    expect(v.notes.find((n) => n.id === q.id)).toMatchObject({ status: 'settled', answer: 'Yes', waitingOn: null, ask: null })
     await expect(editContextNote({ issueId: t }, q.id, { waitingOn: 'Em' })).rejects.toThrow('only a decision with no answer yet')
     // A decision with an answer an agent proposed can wait on someone too: it is still unanswered.
     await addContextNote({ issueId: t }, { kind: 'decision', title: 'Is the list sorted? (sample)', answer: 'By last use' }, 'agent')
