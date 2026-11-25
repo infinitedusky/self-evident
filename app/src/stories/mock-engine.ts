@@ -44,6 +44,7 @@ export interface MockData {
   /** The app's docs agent; one that has written (docsAgentSample) when left out. */ docsAgent?: import('../engine').DocsAgent
   /** An app's docs site; running (docsSiteSample) when left out. */ docsSite?: import('../engine').DocsSite; /** Why starting it fails, when it should. */ docsSiteError?: string
   /** An app's workbench folder and hooks; workbenchSample when left out. */ workbench?: import('../engine').WorkbenchView
+  /** What New app last sent, for a story to read. */ madeApp?: { name: string; workbench?: boolean }
   /** A task's review copy; not made yet (reviewCopySample) when left out. */ reviewCopy?: import('../engine').ReviewCopyView
   /** A pull request's finalizing; never run (finalizeNoneSample) when left out. */ finalize?: import('../engine').FinalizeView
   /** Making it is refused, with this. */ reviewCopyError?: string
@@ -128,7 +129,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.post('/api/integrations/:key/check', () => reply(d.check)),
     http.post('/api/integrations/:key/setup', () => reply(d.setup)),
     http.get('/api/github/repos', () => reply(d.githubRepos)),
-    http.post('/api/apps', async ({ request }) => { const b = await request.json() as { name: string }; return reply({ ...s.otherApp, id: 'app_new', name: b.name, key: 'NEW', note: d.repoNote }) }),
+    http.post('/api/apps', async ({ request }) => { const b = await request.json() as { name: string; workbench?: boolean }; d.madeApp = b; return reply({ ...s.otherApp, id: 'app_new', name: b.name, key: 'NEW', note: d.repoNote }) }),
     http.post('/api/repos', () => reply({ ...s.sampleApp.repos![0], note: d.repoNote })),
     http.patch('/api/repos/:id', () => reply({ ...s.sampleApp.repos![0], note: d.repoNote })),
     http.delete('/api/issues/:id', () => (d.deleteProblem ? HttpResponse.json({ error: d.deleteProblem }, { status: 400 }) : reply({ deleted: 'SS-16', title: 'sample', subIssues: 0, talksEnded: 0 }))),
@@ -463,6 +464,12 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       if (b.dir && /nowhere/.test(b.dir)) return HttpResponse.json({ error: `there is no folder at ${b.dir} on this computer` }, { status: 400 })
       d.workbench = b.dir ? { ...s.workbenchSample, dir: b.dir } : s.workbenchNoneSample
       return reply(d.workbench)
+    }),
+    http.post('/api/apps/:id/workbench/seed', async ({ request }) => {
+      const b = await request.json() as { dir?: string | null }, now = d.workbench ?? s.workbenchSample
+      if (b.dir && /inside/.test(b.dir)) return HttpResponse.json({ error: `${b.dir} is inside the app's own code (/Users/sample/code/inside): a workbench is a folder outside its repositories, so nothing in it goes into the app` }, { status: 400 })
+      d.workbench = now.dir ? { ...now, found: true, seed: { ...now.seed, missing: [], installing: true } } : { ...s.workbenchInstallingSample, dir: b.dir ?? now.seed.suggested }
+      return reply({ ...d.workbench, added: ['docs/index.md'], made: !now.dir })
     }),
     http.get('/api/issues/:id/review-copy', () => reply(d.reviewCopy ?? s.reviewCopySample)),
     http.post('/api/issues/:id/review-copy', async ({ request }) => {

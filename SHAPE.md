@@ -291,6 +291,9 @@ Details and sources in `research/`.
   - **Docs** (Sandy, 2026-11-24): the app's docs are a VitePress site in its workbench folder
     (`docs/`), files versioned there, with diagrams. Evident shows the site as it is, framed, from Docs in the rail
     beside My Stuff, and starts it when it is not running (`engine/src/docs-site.ts`).
+    The folder itself is made by Evident from a template it carries (`engine/workbench-template/`,
+    `engine/src/workbench-seed.ts`): offered when an app is made and under Settings › Workbench, where a folder
+    that lacks the docs is also filled in, nothing in it written over.
     One agent per app writes them, the docs agent (Sandy, 2026-11-25; `engine/src/docs-agent.ts`), in two sections:
     How the system works (what is true now; added to when the codebase is learned) and Our work (what we built and
     why, to share with people who were not there: a page per closed task, set out as the folder's own

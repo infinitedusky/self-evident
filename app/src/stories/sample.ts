@@ -838,13 +838,17 @@ const hookPoints: Pick<import('../engine').HookView, 'point' | 'when' | 'given' 
   { point: 'task-closed', when: 'When a task is closed.', given: ['TASK', 'BRANCH'], then: 'Nothing waits on it. A failure is shown here.' },
 ]
 export const workbenchSample: import('../engine').WorkbenchView = {
-  dir: '/Users/sample/code/sample-workbench', found: true,
+  dir: '/Users/sample/code/sample-workbench', found: true, seed: { suggested: null, missing: [], installing: false, installed: true, problem: null },
   hooks: hookPoints.map((h) => h.point === 'before-start'
     ? { ...h, file: 'hooks/before-start.sh', text: '#!/bin/sh\n# Sign the tester in as the one company in the database (sample).\necho "DEMO_COMPANY_ID=$(psql "$DATABASE_URL" -Atc \'select id from companies limit 1\')"\n', last: { at: '2026-11-24T16:02:00.000Z', ok: true, task: 'SS-20', place: 'smoke', out: [], gave: ['DEMO_COMPANY_ID'] } }
     : { ...h, file: null, text: null, last: null }),
   also: [{ what: 'The review kit', path: 'tools/review' }],
 }
-export const workbenchNoneSample: import('../engine').WorkbenchView = { dir: null, found: false, hooks: hookPoints.map((h) => ({ ...h, file: null, text: null, last: null })), also: [] }
+/** A folder somebody made by hand, with a hook and no docs (made up). */
+export const workbenchLackingSample: import('../engine').WorkbenchView = { ...workbenchSample, seed: { suggested: null, missing: ['the docs site', 'the docs agent\'s skills', 'the mockups folder'], installing: false, installed: false, problem: null } }
+/** Just made: its dependencies are being installed (made up). */
+export const workbenchInstallingSample: import('../engine').WorkbenchView = { ...workbenchSample, dir: '/Users/sample/code/sample-shop-workbench', hooks: workbenchSample.hooks.map((h) => ({ ...h, file: null, text: null, last: null })), also: [], seed: { suggested: null, missing: [], installing: true, installed: false, problem: null } }
+export const workbenchNoneSample: import('../engine').WorkbenchView = { dir: null, found: false, seed: { suggested: '/Users/sample/code/sample-shop-workbench', missing: ['the docs site', 'the docs agent\'s skills', 'the hooks folder', 'the mockups folder'], installing: false, installed: false, problem: null }, hooks: hookPoints.map((h) => ({ ...h, file: null, text: null, last: null })), also: [] }
 export const workbenchFailedSample: import('../engine').WorkbenchView = { ...workbenchSample, hooks: workbenchSample.hooks.map((h) => h.point === 'before-start' ? { ...h, last: { at: '2026-11-24T16:05:00.000Z', ok: false, task: 'SS-20', place: 'smoke', out: ['psql: error: relation "companies" does not exist (sample)', 'exited with 1'] } } : h) }
 /**
  * Made up: the Context of the sample task, idea and project (docs/context-brief.md). The task is in a project, so it

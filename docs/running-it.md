@@ -217,6 +217,22 @@ from Settings › All apps › **Your skills** (write one, or pull every skill f
 there, or choose it for a step under an app's Settings › Skills. This folder stays on this computer: copy it to
 another by hand.
 
+## An app's workbench folder
+
+A folder beside the app's code for what is ours about working on it: its docs site, the docs agent's skills, hooks
+and mockups. Evident makes it from a template it carries (`engine/workbench-template/`):
+
+- When adding an app with a folder on this machine, "Make its workbench folder too" is ticked. The folder goes
+  beside the checkout, named `<the app's name>-workbench`.
+- For an app that has none: Settings › the app › Workbench › Create the workbench. Change where it goes first if
+  you want it elsewhere.
+- For a folder you already have: choose it there, and "Add what is missing" puts in what it lacks without changing
+  what is there.
+
+The folder is a git repository of its own, local until you push it somewhere. Its dependencies are installed for
+you (`pnpm install` in the folder); the Docs page can start the site once that is done. On another computer, clone
+the folder's repository to the same place, or choose where it is under Settings › Workbench.
+
 ## A product in two repositories
 
 (LOG.md, "The workbench".) Two ways, by whether the work crosses them:

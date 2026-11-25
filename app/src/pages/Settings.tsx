@@ -89,6 +89,9 @@ function Removed({ onChanged }: { onChanged: () => Promise<unknown> }) {
  * A new app, with its code (Sandy, 2026-11-09): a GitHub repo of yours, picked from gh's list or typed, the folder on
  * this machine, or both. The engine makes a folder that isn't a repository one, and says so on the app's Repo page.
  */
+/** Where the engine puts a new app's workbench: beside its checkout, named for the app (engine workbench-seed.ts, suggestedDir). */
+const benchBeside = (localPath: string, name: string) => `${localPath.trim().replace(/\/+$/, '').replace(/\/[^/]*$/, '')}/${name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'app'}-workbench`
+
 function NewApp({ onMade }: { onMade: () => Promise<unknown> }) {
   const navigate = useNavigate()
   const [name, setName] = useState('')
@@ -97,6 +100,7 @@ function NewApp({ onMade }: { onMade: () => Promise<unknown> }) {
   const [localPath, setLocalPath] = useState('')
   const [gh, setGh] = useState<GitHubRepos | null>(null)
   const [busy, setBusy] = useState(false)
+  const [bench, setBench] = useState(true)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => { engine.githubRepos().then(setGh).catch((e) => setGh({ repos: [], problem: err(e) })) }, [])
   const picked = gh?.repos.find((r) => r.fullName === fullName.trim())
@@ -105,7 +109,7 @@ function NewApp({ onMade }: { onMade: () => Promise<unknown> }) {
     setBusy(true); setError(null)
     try {
       const ws = (await engine.workspaces())[0] ?? (await engine.createWorkspace('My workspace'))
-      const made = await engine.createApp({ workspaceId: ws.id, name: name.trim(), key: abbr.trim() || undefined, defaultBranch: picked?.defaultBranch, repo: { fullName: fullName.trim(), localPath: localPath.trim() } })
+      const made = await engine.createApp({ workspaceId: ws.id, name: name.trim(), key: abbr.trim() || undefined, defaultBranch: picked?.defaultBranch, repo: { fullName: fullName.trim(), localPath: localPath.trim() }, workbench: bench && !!localPath.trim() })
       await onMade()
       navigate(`/settings/apps/${made.id}`, { state: { note: made.note } })
     } catch (e) { setError(err(e)); setBusy(false) }
@@ -117,6 +121,12 @@ function NewApp({ onMade }: { onMade: () => Promise<unknown> }) {
         <label>Abbreviation<input className="mono" value={abbr} onChange={(e) => setAbbr(e.target.value.toUpperCase())} placeholder={guessKey(name) || 'RG'} maxLength={5} aria-describedby="abbr-hint" /><span id="abbr-hint" className="faint" style={{ fontSize: 12 }}>The prefix of its tasks ({(abbr || guessKey(name) || 'RG')}-12) and its square in the app strip. Left empty, it is made from the name.</span></label>
         <label>Default branch<input className="mono" value={picked?.defaultBranch ?? 'main'} readOnly title="Follows the GitHub repo picked, or the folder's own branch" /></label>
         <RepoFields fullName={fullName} localPath={localPath} gh={gh} onChange={(p) => { if (p.fullName !== undefined) setFullName(p.fullName); if (p.localPath !== undefined) setLocalPath(p.localPath) }} />
+        {localPath.trim()
+          ? <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" style={{ width: 'auto', margin: 0 }} checked={bench} onChange={(e) => setBench(e.target.checked)} /> Make its workbench folder too</label>
+              <div className="faint settings-desc">A folder beside the code, <span className="mono">{benchBeside(localPath, name)}</span>, for what is ours about working on it: its docs, hooks and mockups. Nothing in it goes into the app.</div>
+            </div>
+          : <span className="faint" style={{ fontSize: 12, gridColumn: '1 / -1' }}>With a folder on this machine, its workbench folder (docs, hooks, mockups) can be made beside it. Without one, make it later under the app's Workbench settings.</span>}
       </Group>
       <div className="settings-save">
         <button className="btn" disabled={!ready || busy} onClick={add}>Add</button>
