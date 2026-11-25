@@ -8338,3 +8338,31 @@ monthly budget", starting again on the 30th. So what Claude calls extra usage, i
 dollars against a budget its organization sets. The card calls it "Usage budget: billed by use", says the
 cost estimate is what the reply took from it, and puts the cost on the closed line beside the tokens. How much
 of the budget is used is still not something the SDK says.
+
+## A workbench is made by Evident, from a template it carries (Sandy, 2026-11-25: "there's no template in place or sort of setup script for a workbench … it should either be created automatically when you create a new app or have you choose a folder at that point, or it should let you create a folder and it would seed it")
+
+Found setting up a second copy of Evident: Settings › Workbench could only be pointed at a folder that was already
+there, and the only template was a private repository of ours (`infinitedusky/self-evident-docs`), copied by hand.
+
+- **The template is in this repository**, `engine/workbench-template/`: the docs site (two sections, sidebars built
+  from the pages, the diagram library in `vendor/`), the docs agent's skills (`docs-pages` with `task-page.md`,
+  `vitepress`), `hooks/` and `mockups/` each with a README, a README for the folder, a `.gitignore` (kept there as
+  `gitignore`). It is the one to change from now on; the separate docs repository is no longer what a workbench is
+  made from.
+- **Seeding** (`engine/src/workbench-seed.ts`, `POST /apps/:id/workbench/seed`): each file of the template the
+  folder does not have is put in, and none is written over. So one act serves a new folder, an empty one somebody
+  chose, and an old workbench with hooks and no docs. The app's name goes into the README, the site's title and
+  the package name. A folder in no git repository becomes one, with what was put in committed; one already in a
+  repository is left for its people to commit. Then `pnpm install` runs in the folder on its own, which is what
+  the docs site waits for. A folder inside the app's own code is refused.
+- **Where it is offered**:
+  - Settings › Workbench, with no folder: "Create the workbench", at a place it suggests and the person can change
+    (beside the app's first checkout, `<the app's name>-workbench`). A folder that lacks pieces says which, with
+    "Add what is missing". A folder named that is not on this computer: "Make it here".
+  - New app: a box, ticked, once a folder on this machine is given, saying where the workbench will go. If it
+    cannot be made the app is still made and the note says why.
+- Decided here, not asked: it is not made silently for every new app (an app with only a GitHub repository has
+  nowhere to put it beside, and a folder appearing on disk should be seen first); the person can untick it.
+
+Not done: no remote is made for the new repository (it is local until someone pushes it); the template's diagram
+library is still two tarballs in `vendor/`; apps that exist already are not offered it anywhere but Settings.

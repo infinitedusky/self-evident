@@ -164,7 +164,9 @@ export interface DataAgentView {
  */
 export interface HookRun { at: string; ok: boolean; /** The task it ran for, as CEB-90; none for the app itself. */ task: string | null; /** prototype, smoke: where it ran. */ place: string | null; /** Its last lines. */ out: string[]; /** before-start: the names of the settings it gave the start script (never their values). */ gave?: string[] }
 export interface HookView { point: string; /** When Evident runs it, in a sentence. */ when: string; /** What it is run with. */ given: string[]; /** What Evident does with what it prints or how it ends. */ then: string; /** Its file in the folder; none: nothing is hooked here. */ file: string | null; text: string | null; last: HookRun | null }
-export interface WorkbenchView { dir: string | null; /** The folder is on this computer. */ found: boolean; hooks: HookView[]; /** What else of the app's is in the folder and named in its settings (the review kit). */ also: { what: string; path: string }[] }
+/** What a workbench folder has of what one starts with (engine workbench-seed.ts): the docs site, the docs agent's skills, the hooks and mockups folders. */
+export interface WorkbenchSeed { /** Where Evident would make the folder, when none is named; null: the app has no code on this computer to put it beside. */ suggested: string | null; /** What the folder lacks, in a person's words; of a folder not made yet, everything. */ missing: string[]; /** Its dependencies are being installed. */ installing: boolean; /** They are installed: the docs site can be started. */ installed: boolean; /** The install's last lines, when it failed. */ problem: string | null }
+export interface WorkbenchView { dir: string | null; /** The folder is on this computer. */ found: boolean; seed: WorkbenchSeed; hooks: HookView[]; /** What else of the app's is in the folder and named in its settings (the review kit). */ also: { what: string; path: string }[] }
 
 /** A task's review copy (engine review-copy.ts): a branch a reviewer checks out and starts with one command, on made-up data. */
 export interface ReviewCopyView {
@@ -916,6 +918,8 @@ export const engine = {
   startDocsSite: (appId: string) => call<DocsSite>('POST', `/apps/${appId}/docs-site/start`),
   workbench: (appId: string) => call<WorkbenchView>('GET', `/apps/${appId}/workbench`),
   setWorkbench: (appId: string, dir: string | null) => call<WorkbenchView>('PUT', `/apps/${appId}/workbench`, { dir }),
+  /** Make the folder from Evident's template, or put into the one named what it lacks. dir: where, when not the folder named or the one suggested. */
+  seedWorkbench: (appId: string, dir?: string | null) => call<WorkbenchView & { added: string[]; made: boolean }>('POST', `/apps/${appId}/workbench/seed`, { dir: dir ?? null }),
   reviewCopy: (issueId: string, fresh = false) => call<ReviewCopyView>('GET', `/issues/${issueId}/review-copy${fresh ? '?fresh=1' : ''}`),
   makeReviewCopy: (issueId: string, body: { fixture: string | null; try: string }) => call<ReviewCopyView>('POST', `/issues/${issueId}/review-copy`, body),
   updatePr: (issueId: string, theirs?: 'keep' | 'replace') => call<{ number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/update`, theirs ? { theirs } : {}),
@@ -990,7 +994,7 @@ export const engine = {
   fileSkill: (key: string, body: { category?: string | null; on?: boolean }) => call<{ ok: true }>('PATCH', `/skills/${key.split('/').map(encodeURIComponent).join('/')}`, body),
   createWorkspace: (name: string) => call<Workspace>('POST', '/workspaces', { name }),
   // The code may come with the app; a local checkout is made ready as it is set, and `note` says what the engine did.
-  createApp: (body: { workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: AppSetup; repo?: { fullName?: string; localPath?: string } }) => call<App & { note: string | null }>('POST', '/apps', body),
+  createApp: (body: { workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: AppSetup; repo?: { fullName?: string; localPath?: string }; /** Make its workbench folder too, beside its code. */ workbench?: boolean }) => call<App & { note: string | null }>('POST', '/apps', body),
   githubRepos: () => call<GitHubRepos>('GET', '/github/repos'),
   updateApp: (id: string, body: { name?: string; /** Its abbreviation: MER in MER-50. */ key?: string; defaultBranch?: string; /** Only the settings that change: a value sets one, null removes it, the rest stay as the engine has them. */ setup?: Record<string, unknown>; /** Changes to what a build is held to, applied in order to the list as the engine has it. */ held?: import('@self-evident/engine/contracts').ProbeChange[] }) => call<App>('PATCH', `/apps/${id}`, body),
   createRepo: (body: { appId: string; fullName: string; localPath?: string; baseBranch?: string }) => call<Repo & { note: string | null }>('POST', '/repos', body),

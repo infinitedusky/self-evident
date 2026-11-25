@@ -425,7 +425,7 @@ export function buildApp(bus: EventBus) {
   })
   api.get('/github/repos', async (c) => c.json(await myRepos()))
   api.post('/apps', async (c) => {
-    const body = await c.req.json<{ workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: Record<string, unknown>; repo?: { fullName?: string; localPath?: string } }>()
+    const body = await c.req.json<{ workspaceId: string; name: string; key?: string; defaultBranch?: string; setup?: Record<string, unknown>; repo?: { fullName?: string; localPath?: string }; /** Make its workbench folder too: true beside its code, or the folder's path. */ workbench?: boolean | string }>()
     const taken = (await activeApps()).filter((r) => r.workspaceId === body.workspaceId).map((r) => r.key) // a put-away app's abbreviation is free
     let key: string
     try { key = body.key?.trim() ? cleanKey(body.key) : appKey(body.name, taken) } catch (err) { return c.json({ error: (err as Error).message }, 400) }
@@ -444,6 +444,11 @@ export function buildApp(bus: EventBus) {
       const [now] = await tx.select({ workflowId: appTable.workflowId }).from(appTable).where(eq(appTable.id, made.id))
       return { ...made, repos, workflowId: now.workflowId, note }
     })
+    // Its workbench folder, when asked for: made after the app is, so a folder that cannot be made is said and the app still stands.
+    if (body.workbench) {
+      try { const made = await (await import('./workbench-seed.js')).seedWorkbench(row.id, typeof body.workbench === 'string' ? body.workbench : null); return c.json({ ...row, setup: { ...(row.setup as object), workbench: { dir: made.dir } }, workbench: { dir: made.dir, made: made.made } }, 201) }
+      catch (err) { return c.json({ ...row, note: [row.note, `Its workbench folder was not made: ${(err as Error).message}. Make it under Settings › Workbench.`].filter(Boolean).join(' ') }, 201) }
+    }
     return c.json(row, 201)
   })
   // ?session=: the conversation the person is in; its worktree's Storybook when it has one, else the app's.
@@ -499,8 +504,10 @@ export function buildApp(bus: EventBus) {
   api.get('/apps/:id/docs-agent', async (c) => { try { return c.json(await (await import('./docs-agent.js')).docsAgent(c.req.param('id'), talkBusy)) } catch (err) { return planError(c, err, 404) } })
   api.post('/apps/:id/docs-agent', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { message?: string }; const d = await import('./docs-agent.js'); await d.askDocsAgent(c.req.param('id'), b.message ?? '', { actor: 'user' }); return c.json(await d.docsAgent(c.req.param('id'), talkBusy), 202) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/docs-site/start', async (c) => { try { return c.json(await (await import('./docs-site.js')).startDocsSite(c.req.param('id'))) } catch (err) { return planError(c, err) } })
-  api.get('/apps/:id/workbench', async (c) => { try { return c.json(await (await import('./hooks.js')).workbench(c.req.param('id'))) } catch (err) { return planError(c, err) } })
-  api.put('/apps/:id/workbench', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { dir?: string | null }; return c.json(await (await import('./hooks.js')).setWorkbench(c.req.param('id'), b.dir ?? null)) } catch (err) { return planError(c, err) } })
+  api.get('/apps/:id/workbench', async (c) => { try { return c.json(await (await import('./workbench-seed.js')).workbenchView(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  api.put('/apps/:id/workbench', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { dir?: string | null }; await (await import('./hooks.js')).setWorkbench(c.req.param('id'), b.dir ?? null); return c.json(await (await import('./workbench-seed.js')).workbenchView(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  // Make the folder from the template, or put into the one it has what it lacks (workbench-seed.ts). dir: where, when not the one named or suggested.
+  api.post('/apps/:id/workbench/seed', async (c) => { try { const b = await c.req.json().catch(() => ({})) as { dir?: string | null }; return c.json(await (await import('./workbench-seed.js')).seedWorkbench(c.req.param('id'), b.dir ?? null)) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/fixtures', async (c) => { try { const issueId = c.req.query('issue') || null; return c.json({ fixtures: await listFixtures(c.req.param('id')), used: await fixtureForTask(c.req.param('id'), issueId), make: await canMakeFixture(c.req.param('id')) }) } catch (err) { return planError(c, err, 404) } })
   // Made from the app's seed (minutes: its schema and seed commands run), looked into, renamed, deleted.
   api.post('/apps/:id/fixtures', async (c) => { const b = await c.req.json<{ name?: string }>().catch(() => ({} as { name?: string })); try { return c.json(await makeFixtureFromSeed(c.req.param('id'), b.name?.trim() || undefined)) } catch (err) { return planError(c, err) } })

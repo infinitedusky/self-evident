@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, userEvent, within } from 'storybook/test'
 import { Workbench } from './Workbench'
 import { withEngine } from '../stories/mock-engine'
-import { workbenchFailedSample, workbenchNoneSample, workbenchSample } from '../stories/sample'
+import { workbenchFailedSample, workbenchInstallingSample, workbenchLackingSample, workbenchNoneSample, workbenchSample } from '../stories/sample'
 
 /** An app's workbench folder and its hooks, in the app's settings. Made-up folder, script and runs (sample). */
 const meta = { title: 'Components/Workbench', component: Workbench, parameters: { layout: 'padded' }, args: { appId: 'app_sample' },
@@ -47,6 +47,69 @@ export const NoFolderYet: Story = {
     await expect(await c.findByText('On this computer')).toBeInTheDocument()
     await expect(c.getByLabelText('The folder')).toHaveValue('/code')
     await expect(await c.findByText('Hooked')).toBeInTheDocument()
+  },
+}
+
+/** No folder yet, as it is first seen: Evident offers to make one, saying where and what it starts with. */
+export const NoneYetOffered: Story = {
+  beforeEach: withEngine({ workbench: workbenchNoneSample }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('There is none yet.')).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Create the workbench' })).toBeEnabled()
+  },
+}
+
+/** No folder yet, and Evident makes it: the place it would go is offered (beside the app's code) and can be changed; one inside the app's code is refused; made, it is the app's workbench and its dependencies are being installed. */
+export const MadeFromTheTemplate: Story = {
+  beforeEach: withEngine({ workbench: workbenchNoneSample }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    const where = await c.findByLabelText('Where to make it')
+    await expect(where).toHaveValue('/Users/sample/code/sample-shop-workbench')
+    await expect(c.getByText(/It starts with the docs site, the docs agent's skills, the hooks folder and the mockups folder/)).toBeInTheDocument()
+    await userEvent.clear(where); await userEvent.type(where, '/Users/sample/code/inside/bench')
+    await userEvent.click(c.getByRole('button', { name: 'Create the workbench' }))
+    await expect(await c.findByRole('alert')).toHaveTextContent(/inside the app's own code/)
+    await userEvent.clear(where); await userEvent.type(where, '/Users/sample/code/sample-shop-workbench')
+    await userEvent.click(c.getByRole('button', { name: 'Create the workbench' }))
+    await expect(await c.findByText('On this computer')).toBeInTheDocument()
+    await expect(c.getByLabelText('The folder')).toHaveValue('/Users/sample/code/sample-shop-workbench')
+    await expect(c.getByRole('status')).toHaveTextContent(/Installing what the docs site needs/)
+    await expect(c.queryByLabelText('Where to make it')).toBeNull()
+  },
+}
+
+/** A folder somebody made by hand, with a hook and no docs: what it lacks is said, and one press puts that in without touching what is there. */
+export const LacksTheDocs: Story = {
+  beforeEach: withEngine({ workbench: workbenchLackingSample }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/This folder does not have the docs site, the docs agent's skills or the mockups folder/)).toBeInTheDocument()
+    await expect(c.getByText('Hooked')).toBeInTheDocument()
+    await userEvent.click(c.getByRole('button', { name: 'Add what is missing' }))
+    await expect(await c.findByRole('status')).toHaveTextContent(/Installing what the docs site needs/)
+    await expect(c.queryByRole('button', { name: 'Add what is missing' })).toBeNull()
+    await expect(c.getByText('Hooked')).toBeInTheDocument()
+  },
+}
+
+/** Just made, still installing: said, and nothing else is asked of the person. */
+export const Installing: Story = {
+  beforeEach: withEngine({ workbench: workbenchInstallingSample }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByRole('status')).toHaveTextContent(/Installing what the docs site needs/)
+  },
+}
+
+/** The install failed: its last lines, and the press to try again. */
+export const InstallFailed: Story = {
+  beforeEach: withEngine({ workbench: { ...workbenchInstallingSample, seed: { ...workbenchInstallingSample.seed, installing: false, problem: 'ERR_PNPM_FETCH_404  GET https://registry.example/vitepress: Not Found (sample)' } } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/ERR_PNPM_FETCH_404/)).toBeInTheDocument()
+    await expect(c.getByRole('button', { name: 'Install again' })).toBeInTheDocument()
   },
 }
 
