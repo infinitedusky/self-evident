@@ -22,6 +22,23 @@ const working: TalkMessage[] = [
 const asking = msg(7, 'agent', 'permission', '', { requestId: 'req_sample', tool: 'Edit', risk: 'moderate', why: 'changes a file in this checkout', input: { file: 'web/checkout/submit.ts', old: 'retries: 0', new: 'retries: 1' } })
 const t = (extra: Partial<Transcript> & { busy?: boolean; status?: string } = {}): Transcript => ({ ...transcript, messages: working, pending: [], ...extra, session: { ...talkSession, busy: extra.busy ?? false, status: extra.status ?? 'open' } })
 
+/** A long conversation (made up) opens at its end, and is at its end again when its tab is put away and brought back, wherever it was left. */
+export const OpensAtTheEnd: Story = {
+  beforeEach: withEngine({ transcript: t({ messages: Array.from({ length: 60 }, (_, n) => msg(n + 1, n % 2 ? 'agent' : 'user', 'text', `Sample message ${n + 1}: made up, to fill the conversation.`)) }) }),
+  render: (a) => <div data-testid="tab"><Conversation {...a} /></div>,
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await c.findByText(/Sample message 60:/)
+    const chat = canvasElement.querySelector('.chat')!, left = () => chat.scrollHeight - chat.scrollTop - chat.clientHeight
+    await expect(chat.scrollHeight).toBeGreaterThan(chat.clientHeight)
+    await waitFor(() => expect(left()).toBeLessThanOrEqual(1))
+    chat.scrollTop = 0 // the person reads back up, then goes to another tab
+    const tab = c.getByTestId('tab')
+    await new Promise((r) => setTimeout(r, 100)); tab.style.display = 'none'
+    await new Promise((r) => setTimeout(r, 100)); tab.style.display = ''
+    await waitFor(() => expect(left()).toBeLessThanOrEqual(1))
+  },
+}
 /** A message sent with pictures (made up): they show under what was said, and open full size. */
 export const WithImages: Story = { beforeEach: withEngine({ transcript: t({ messages: [msg(1, 'user', 'text', 'Sample: the pay button overlaps the total on a phone. See the two screenshots.', { images: [{ id: 'img_sample1', name: 'checkout-phone.png (sample)', mediaType: 'image/png' }, { id: 'img_sample2', name: 'checkout-total.png (sample)', mediaType: 'image/png' }] }), ...working.slice(1)] }) }) }
 /** An image dropped on the conversation waits above the box, with a way to take it off; Send works with no words. Not an image: it says so. */

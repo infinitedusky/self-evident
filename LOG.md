@@ -8369,3 +8369,19 @@ there, and the only template was a private repository of ours (`infinitedusky/se
 
 Not done: no remote is made for the new repository (it is local until someone pushes it); the template's diagram
 library is still two tarballs in `vendor/`; apps that exist already are not offered it anywhere but Settings.
+
+## A conversation is at its end when you come to it (Sandy, 2026-11-25)
+
+Sandy: "is it possible for the default state when you come back or open a new page … that has a conversation for
+it to be scrolled to the end of the conversation for any of the agents?" It went to the end only when a message
+was added. A tab that is put away is taken out of the page and loses its place, so coming back showed the top.
+
+- **It opens at the end, and is put back at the end each time it comes into sight again** (`Conversation.tsx`),
+  wherever it was left. That is every agent's conversation: a task's, an idea's, a project's, the ones it has
+  out, the drawer, the phone.
+- **It stays at the end as more is said**, and as a reply grows or a picture arrives, unless you have scrolled up
+  to read: then it stays where you are until you go back down.
+- It moves only its own box now, never the page around it.
+
+Story: Components/Conversation › OpensAtTheEnd. Not done: the planner's log and the build log (not
+conversations) still follow only a new line; not tried in the running app's tabs, only in Storybook.
