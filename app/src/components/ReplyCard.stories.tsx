@@ -8,6 +8,18 @@ const reply = {
   costUsd: 11.96, stepUsd: 2.96, totalUsd: 11.96,
   usage: { 'claude-opus-5-5': { input: 1240, output: 3180, cacheRead: 412000, cacheWrite: 9600 } },
   limits: { five_hour: { status: 'allowed', utilization: 0.62, resetsAt: 1795712400 }, seven_day: { status: 'allowed', utilization: 0.31, resetsAt: 1796144400 } },
+  account: { organization: 'Sample Shop', plan: 'max' },
+}
+
+/** A plan billed by use: Claude names only "extra usage", in use, with no share of anything. The closed line adds the cost, and the card says the budget is in dollars. */
+export const BilledByUse: StoryObj<typeof ReplyCard> = {
+  args: { open: true, payload: { ...reply, account: { organization: 'Sample Shop', plan: 'enterprise' }, limits: { overage: { status: 'allowed', overage: true, resetsAt: 1796083200 } } } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(c.getByText('Sample Shop · enterprise')).toBeVisible()
+    await expect(c.getByText('billed by use')).toBeVisible()
+    await expect(c.getByText(/billed in dollars against a budget/)).toBeVisible()
+  },
 }
 
 const meta = {
