@@ -288,6 +288,10 @@ Details and sources in `research/`.
     app (what it is, the parts, running and testing it, what is fragile). They are the workbench docs; the Learn
     page is where they are read, and agents read them through a tool before reading the code from nothing. Each
     has a short part for a person, held to a size, and a longer part for agents. Built first (`engine/src/learn.ts`).
+  - **Your docs** (Sandy, 2026-11-24): the person's own pages about the app, any number, a title and Markdown each:
+    how they understand it, in their words. On the Learn page, kept in the database, never replaced by learning the
+    code again. Written there, or by Learn's agent at the person's word; agents read them, so a page can be checked
+    against the code by asking (`engine/src/app-docs.ts`).
   - **The running app**: reading what it reports (Observe) and saying what is true: baselines, what changed after
     a merge, the guard. Not built; it needs a way for the engine to read the telemetry back.
   - What either thinks should change is kept as an idea, so Learn feeds Ideate.

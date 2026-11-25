@@ -514,6 +514,14 @@ export const learning = pgTable('learning', {
   createdAt: createdAt(), updatedAt: at('updated_at'),
 }, (t) => [uniqueIndex('learning_app_key').on(t.appId, t.key)])
 
+// An app's own docs (app-docs.ts): the pages a person keeps about how they understand the app, read on the Learn
+// page. Any number per app, a title and Markdown each; written by the person or by an agent at their word.
+export const appDoc = pgTable('app_doc', {
+  id: id(), appId: appId(), title: text('title').notNull(), body: text('body').notNull().default(''),
+  createdBy: text('created_by').notNull().default('user'), updatedBy: text('updated_by').notNull().default('user'),
+  createdAt: createdAt(), updatedAt: at('updated_at'),
+}, (t) => [index('app_doc_app').on(t.appId)])
+
 // plan. It is not merged. Its server is the engine's to start and stop; the row outlives it.
 export const PROTOTYPE_STATUSES = ['running', 'stopped', 'discarded'] as const
 export const prototype = pgTable('prototype', {

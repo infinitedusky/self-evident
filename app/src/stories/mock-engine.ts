@@ -34,6 +34,7 @@ export interface MockData {
   /** The apps put away; none when left out. */ removedApps?: import('../engine').AppHolds[]; /** Why an app can't be removed yet, as the engine says it. */ removeProblem?: string
   /** The app's reports; none when left out. */ reports?: import('../engine').Reports
   /** What was learned from the app's code; nothing yet when left out. */ learning?: import('../engine').Learning
+  /** The person's own pages about the app; none when left out. */ appDocs?: import('../engine').AppDoc[]; /** Why writing a page fails, when it should. */ appDocError?: string
   /** Why submitting a pull request fails, when it should. */ submitPrError?: string
   /** A task's pull request as a step; not submitted (prSample) when left out. */ prView?: import('../engine').PrView
   /** A task's data agent; never asked (dataAgentSample) when left out. */ dataAgent?: import('../engine').DataAgentView
@@ -304,6 +305,10 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     // Reports: the engine's rules, roughly. Writing one here answers at once.
     http.get('/api/apps/:id/learning', () => reply(d.learning ?? { docs: [], missing: ['What it is', 'The parts', 'Running and testing it', 'What is fragile'], working: null, sessionId: null, stale: 0 })),
     http.post('/api/apps/:id/learn', () => { const now = d.learning ?? { docs: [], missing: [], working: null, sessionId: null, stale: 0 }; d.learning = { ...now, working: { sessionId: 'talk_sample_learn' }, sessionId: 'talk_sample_learn' }; return reply({ sessionId: 'talk_sample_learn', started: true }) }),
+    http.get('/api/apps/:id/docs', () => reply(d.appDocs ?? [])),
+    http.post('/api/apps/:id/docs', async ({ request }) => { if (d.appDocError) return HttpResponse.json({ error: d.appDocError }, { status: 400 }); const b = await request.json() as { title: string; body: string }; const page = { id: `adoc_sample_${(d.appDocs ?? []).length + 1}`, title: b.title, body: b.body, by: 'user', createdAt: '2026-11-24T10:00:00Z', updatedAt: '2026-11-24T10:00:00Z' }; d.appDocs = [...(d.appDocs ?? []), page]; return reply(page) }),
+    http.patch('/api/app-docs/:id', async ({ params, request }) => { const b = await request.json() as { title?: string; body?: string }; const old = (d.appDocs ?? []).find((x) => x.id === params.id); if (!old) return missing('page'); const page = { ...old, ...b, by: 'user', updatedAt: '2026-11-24T11:00:00Z' }; d.appDocs = (d.appDocs ?? []).map((x) => x.id === old.id ? page : x); return reply(page) }),
+    http.delete('/api/app-docs/:id', ({ params }) => { d.appDocs = (d.appDocs ?? []).filter((x) => x.id !== params.id); return reply({ removed: params.id }) }),
     // Context: one view per kind of thing; every change answers with the view as it now is.
     ...(['ideas', 'issues', 'projects'] as const).flatMap((kind) => {
       const all: Record<typeof kind, import('../engine').ContextView> = { ideas: s.ideaContext, issues: s.taskContext, projects: s.projectContext, ...d.context }

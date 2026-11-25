@@ -15,6 +15,7 @@ import { addContextNote, addDoc, contextOf, updateQuestion } from './context.js'
 import { assignFixture, mapFromFile, deleteFixture, listFixtures, makeFixtureFromSeed, renameFixture } from './fixtures.js'
 import { giveEndpointData, removeEndpointData } from './mock-serve.js'
 import { mainStatus, setMainAddress, setMainStandIn, startMain, stopMain } from './main-running.js'
+import { listAppDocs, PAGE_MAX, writeAppDoc } from './app-docs.js'
 import { LEARN_DOCS, listLearning, setLearning, SUMMARY_MAX } from './learn.js'
 import { BRIEF_FORM, briefTooLong } from './brief.js'
 import { eq } from 'drizzle-orm'
@@ -68,7 +69,7 @@ async function learnSource(sessionId: string | null | undefined): Promise<{ sess
   return (s?.ref as { learn?: string } | null)?.learn ? { sessionId, what: 'learn' } : undefined
 }
 
-export const READ_ONLY_TOOLS = new Set(['mocks', 'smoke_setup', 'learning', 'now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'shares', 'task_branches', 'merge_guide'])
+export const READ_ONLY_TOOLS = new Set(['mocks', 'smoke_setup', 'learning', 'app_docs', 'now', 'projects', 'project_graph', 'task', 'tasks', 'ideas', 'events', 'todos', 'initiatives', 'cycles', 'open_tab', 'stories', 'prototypes', 'prototype', 'steps', 'get_step', 'workflows', 'agents_out', 'read_agent', 'prototype_code', 'shares', 'task_branches', 'merge_guide'])
 
 export function engineTools(opts: ToolScope): EngineTool[] {
   const { appId, sessionId } = opts
@@ -111,6 +112,10 @@ export function engineTools(opts: ToolScope): EngineTool[] {
         async () => tryIt(() => listLearning(appId))),
       def('set_learning', `Write one of the documents about this app's codebase, replacing what was there: key is one of ${LEARN_DOCS.map((d) => d.key).join(', ')}. summary is for the person (plain words, ${SUMMARY_MAX} characters at most: too long is refused); body is for the agents that work here next (exact paths, commands and names).`, { key: z.string(), summary: z.string(), body: z.string() },
         async (a) => tryIt(() => setLearning(appId, a, actor, sessionId ?? null))),
+      def('app_docs', 'The person\'s own docs about this app (the Learn page, "Your docs"): pages in their words saying how they understand it, each with its id, title and body. They are what the person believes, not what the code was checked to do: where a page and the code disagree, say so to the person.', {},
+        async () => tryIt(() => listAppDocs(appId))),
+      def('write_app_doc', `Write a page in the person's own docs about this app, when they ask for it ("write that down", "make a page of this"): a title and the page in Markdown (${PAGE_MAX} characters at most). Keep their words and their understanding; what you would add or correct, say in the conversation and put in only once they agree. Without id a new page is made (a title the app already has is refused); with id that page is replaced whole, so read it first with app_docs and send back everything that should stay.`, { id: z.string().optional().describe('the page to replace; leave out for a new page'), title: z.string(), body: z.string() },
+        async (a) => tryIt(() => writeAppDoc(appId, a, actor, sessionId ?? null))),
       def('create_idea', 'Keep an idea in this app: a title and, optionally, why and what is already decided.', { title: z.string(), body: z.string().optional() }, async (a) => tryIt(async () => createIdea({ ...a, appId, actor: actor, from: await learnSource(sessionId) }))),
       def('create_project', 'Create a project in this app: its tasks in order (the issues field), each a title and a brief. Sub-tasks (each task\'s subIssues) come from the planner (plan_task) or can be given.', {
         name: z.string(), content: z.string().optional().describe('why it exists and what it must do, Markdown'), description: z.string().optional().describe('one line'), ideaId: z.string().optional(), workflowId: z.string().optional().describe('its workflow rules (see workflows); without, the app\'s'),
