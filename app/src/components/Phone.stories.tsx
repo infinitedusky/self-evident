@@ -39,6 +39,20 @@ export const TaskChat: Story = {
     await expect(await c.findByText(/SS-20 Address and payment on one page/)).toBeInTheDocument()
     await expect(await chatOf(canvasElement).findByText('Moved. The brief is ready for you to read.')).toBeVisible()
     await expect(c.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true')
+    const tabs = within(canvasElement.querySelector<HTMLElement>('.phone-views')!).getAllByRole('tab')
+    await expect(tabs[tabs.length - 1]).toHaveTextContent('Chat') // Chat is the last tab, at the right
+  },
+}
+
+/** A task's pages are tabs across the top: the overview, the context, the brief and each step, the build. Pressing one goes to it. */
+export const SectionsAcrossTheTop: Story = {
+  beforeEach: [forget(), withEngine(talking)],
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    for (const name of ['Overview', 'Context', /Brief/, /Mockups/, /Build/]) await expect(await c.findByRole('tab', { name })).toBeInTheDocument()
+    await userEvent.click(c.getByRole('tab', { name: /Research/ }))
+    await expect(await c.findByRole('tab', { name: /Research/ })).toHaveAttribute('aria-selected', 'true')
+    await expect(c.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'false')
   },
 }
 
@@ -48,7 +62,7 @@ export const TaskPage: Story = {
   beforeEach: [forget(), withEngine(talking)],
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
-    await expect(await c.findByRole('tab', { name: 'Brief' })).toHaveAttribute('aria-selected', 'true')
+    await expect(await c.findByRole('tab', { name: /Brief/, selected: true })).toBeInTheDocument()
     await userEvent.click(c.getByRole('tab', { name: 'Chat' }))
     await expect(await chatOf(canvasElement).findByText('Moved. The brief is ready for you to read.')).toBeVisible()
   },
@@ -61,7 +75,7 @@ export const AgentsAsTabs: Story = {
     { sessionId: null, runId: 'run_sample_plan', kind: 'planner', what: 'Planner', icon: '🗺️', title: 'Planning SS-20 (sample)', busy: false, detail: '3 sub-tasks' },
   ] })],
   play: async ({ canvasElement }) => {
-    const c = within(canvasElement)
+    const c = chatOf(canvasElement) // the task's Prototype step is a tab at the top too
     await expect(await c.findByRole('tab', { name: /Prototype/ })).toBeInTheDocument()
     await expect(await c.findByRole('tab', { name: /Planner/ })).toBeInTheDocument()
   },
@@ -85,7 +99,7 @@ export const StepGoesToItsPage: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await userEvent.click(await c.findByRole('button', { name: /The brief/ }))
-    await expect(await c.findByRole('tab', { name: 'Brief' })).toHaveAttribute('aria-selected', 'true')
+    await expect(await c.findByRole('tab', { name: /Brief/, selected: true })).toBeInTheDocument()
   },
 }
 
@@ -96,6 +110,7 @@ export const AtAProject: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement)
     await expect(await c.findByRole('heading', { name: 'Its tasks' })).toBeInTheDocument()
+    await expect(await c.findByRole('tab', { name: 'Tickets' })).toBeInTheDocument()
     await userEvent.click(await c.findByRole('button', { name: /SS-1 / }))
     await expect(c.queryByRole('heading', { name: 'Its tasks' })).toBeNull()
   },

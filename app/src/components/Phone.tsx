@@ -7,6 +7,10 @@
  * … the whatever page we are on at that time, and the left nav, and then we are always able to navigate to wherever
  * else in the app … by going to like the grid thing in the top"):
  * - its page: the app's own page, in a PagePane. Links in it go where they go, and where you go is where you are.
+ *   A task, a project and an idea have several pages (the overview, the context, the brief and each step, the
+ *   build): they are tabs across the top, scrolled sideways, with Chat kept at the right end (Sandy, 2026-11-25: "we
+ *   need a way to navigate through projects and tasks to get the differnt sections. Currently it is just overview"
+ *   and "I would also put the chat tab to the right of overview or whatever else we put there").
  * - its chat: a task's own agent with the agents it has out as tabs (TaskAgent, as on the task's page), an idea's
  *   agent, a project's conversation, and anywhere else a conversation about the app as a whole. The chat is always
  *   the chat of where you are, so there is no going "back" to a task you have left.
@@ -78,7 +82,7 @@ function asksOf(a: Attention): { path: string; view: View; title: string; why: s
 const dropped = (s: { state: string }) => s.state === 'canceled' || s.state === 'duplicate'
 const stateMark = (state: string) => (state === 'done' ? '✓' : state === 'in_progress' || state === 'in_review' ? '◐' : '○')
 
-interface About { key: string; task?: { i: IssueDetail; v: StepsView | null }; graph?: Graph | null; idea?: { id: string; title: string } }
+interface About { key: string; task?: { i: IssueDetail; v: StepsView | null }; graph?: Graph | null; idea?: { id: string; title: string }; /** The steps of a project or an idea; a task's are with the task. */ v?: StepsView | null }
 /** What the place is about, read from the engine: the task with its steps and its project, the project, the idea. Read again on every `stamp`. */
 function useAbout(subject: Subject, stamp: number) {
   const key = subject ? `${subject.kind}:${subject.id}` : ''
@@ -98,14 +102,41 @@ function useAbout(subject: Subject, stamp: number) {
             i.project && !i.project.solo ? engine.graph(i.project.id).catch(() => null) : Promise.resolve(null),
           ])
           about = { key, task: { i, v }, graph }
-        } else if (subject.kind === 'project') about = { key, graph: await engine.graph(subject.id) }
-        else { const idea = await engine.idea(subject.id); about = { key, idea: { id: idea.id, title: idea.title } } }
+        } else if (subject.kind === 'project') {
+          const [graph, v] = await Promise.all([engine.graph(subject.id), engine.steps({ kind: 'projects', id: subject.id }).catch(() => null)])
+          about = { key, graph, v }
+        } else {
+          const [idea, v] = await Promise.all([engine.idea(subject.id), engine.steps({ kind: 'ideas', id: subject.id }).catch(() => null)])
+          about = { key, idea: { id: idea.id, title: idea.title }, v }
+        }
         if (!closed) { setD(about); setError(null) }
       } catch (e: any) { if (!closed) setError(String(e?.message ?? e)) }
     })()
     return () => { closed = true }
   }, [key, stamp]) // eslint-disable-line react-hooks/exhaustive-deps
   return { about: d && d.key === key ? d : null, error }
+}
+
+/** One page of a task, a project or an idea: a tab at the top of the phone. */
+interface Section { key: string; path: string; name: string; mark?: string; /** Waits on a step before it. */ locked?: boolean; /** Ready for the person. */ asks?: boolean }
+/** The pages a place has, in the order its own nav on the computer gives them: overview, context, the brief and what feeds it, then the build. */
+function sectionsOf(subject: NonNullable<Subject>, about: About | null): Section[] {
+  const on = subject.kind
+  const base = `/${on}s/${subject.id}`
+  const rows = (on === 'task' ? about?.task?.v?.rows : about?.v?.rows) ?? []
+  const of = (r: Row): Section => ({ key: r.key, path: `${base}/${r.key}`, name: label(r.key, on), mark: mark(r, on), locked: !!r.waitingOn, asks: ready(r.state, on) })
+  const brief = rows.find((r) => r.key === 'brief')
+  const out: Section[] = [{ key: 'overview', path: base, name: 'Overview' }, { key: 'context', path: `${base}/context`, name: 'Context' }]
+  if (on === 'project') out.push({ key: 'tickets', path: `${base}/tickets`, name: 'Tickets' })
+  if (brief) out.push(of(brief))
+  out.push(...rows.filter((r) => r.key !== 'brief' && r.key !== 'idea').map(of))
+  const i = about?.task?.i
+  if (on === 'task' && i) {
+    const live = i.subIssues.filter((x) => !dropped(x))
+    out.push({ key: 'build', path: `${base}/build`, name: 'Build', mark: live.length ? (live.every((x) => x.state === 'done') ? '✓' : '◐') : '○' })
+    if (live.length) out.push({ key: 'smoke', path: `${base}/smoke`, name: 'Smoke test' }, { key: 'pr', path: `${base}/pr`, name: 'Pull request' })
+  }
+  return out
 }
 
 const Icon = ({ d }: { d: string }) => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
@@ -130,6 +161,7 @@ export function Phone({ initial = {}, address = true }: {
   const [stamp, setStamp] = useState(0)
   const [starting, setStarting] = useState(false)
   const subject = useMemo(() => (at ? subjectOf(at.path) : null), [at?.path]) // eslint-disable-line react-hooks/exhaustive-deps
+  const strip = useRef<HTMLDivElement>(null)
   const { about, error } = useAbout(subject, stamp)
   const bump = useCallback(() => setStamp((n) => n + 1), [])
 
@@ -178,6 +210,11 @@ export function Phone({ initial = {}, address = true }: {
     return () => { closed = true }
   }, [app?.id, stamp])
 
+  useEffect(() => { // the open page's tab is brought into sight in the strip, also once its steps have been read
+    const el = strip.current, on = el?.querySelector<HTMLElement>('[aria-selected="true"]')
+    if (el && on) el.scrollTo({ left: on.offsetLeft - (el.clientWidth - on.offsetWidth) / 2 })
+  }, [at?.path, at?.view, about])
+
   /** The conversations that belong to no task and no idea: about a project, or about the app. */
   const loose = (talks ?? []).filter((t) => !t.taskId && !t.ideaId)
   const aboutApp = loose.filter((t) => !t.subjectRef?.projectId)
@@ -223,8 +260,12 @@ export function Phone({ initial = {}, address = true }: {
   const title = task ? `${task.i.identifier} ${task.i.title}` : subject?.kind === 'project' ? about?.graph?.project.name ?? 'Project' : subject?.kind === 'idea' ? about?.idea?.title ?? 'Idea' : placeName(at.path)
   const under = task?.i.project && !task.i.project.solo ? task.i.project.name : subject ? (error ? 'Could not be read' : app?.name) : app?.name
   const section = parts(at.path)[2]
-  const pageName = subject?.kind === 'task' ? (section ? (task?.v?.rows.find((r) => r.key === section) ? label(section as Row['key'], 'task') : section[0].toUpperCase() + section.slice(1)) : 'Overview')
-    : subject?.kind === 'project' ? 'Project' : subject?.kind === 'idea' ? 'Idea' : placeName(at.path)
+  const here = section ?? 'overview'
+  // The place's pages: a task's, a project's or an idea's sections; anywhere else, the one page it is.
+  const known = subject ? sectionsOf(subject, about) : []
+  const sections: Section[] = subject
+    ? (known.some((x) => x.key === here) ? known : [...known, { key: here, path: at.path, name: here[0].toUpperCase() + here.slice(1) }]) // a page the list does not know (save points): it still has its tab
+    : [{ key: 'overview', path: at.path, name: placeName(at.path) }]
   const shownTalk = subject ? projectTalk?.id ?? null : appChat?.id ?? null
 
   return (
@@ -238,9 +279,18 @@ export function Phone({ initial = {}, address = true }: {
           <div className="phone-title"><strong>{title}</strong>{under && <span>{under}</span>}</div>
           <button type="button" className="phone-btn" aria-label="Go anywhere in the app" aria-expanded={shelf} onClick={() => { setShelf(true); setTray(false) }}><Icon d={GRID} /></button>
         </header>
-        <div className="phone-views" role="tablist" aria-label="Chat or page">
-          <button type="button" role="tab" aria-selected={at.view === 'chat'} className={at.view === 'chat' ? 'on' : ''} onClick={() => show('chat')}>Chat</button>
-          <button type="button" role="tab" aria-selected={at.view === 'page'} className={at.view === 'page' ? 'on' : ''} onClick={() => show('page')}>{pageName}</button>
+        <div className="phone-views" role="tablist" aria-label="This place's pages, and its chat">
+          <div className="phone-sections" ref={strip}>
+            {sections.map((x) => {
+              const on = at.view === 'page' && x.key === here
+              return (
+                <button type="button" role="tab" key={x.key} aria-selected={on} disabled={x.locked} className={`${on ? 'on' : ''} ${x.asks ? 'asks' : ''}`} onClick={() => (x.key === here ? show('page') : go(x.path))}>
+                  {x.mark && <span className={`mark ${x.mark === '✓' ? 'ok' : ''}`} aria-hidden="true">{x.mark}</span>}{x.name}
+                </button>
+              )
+            })}
+          </div>
+          <button type="button" role="tab" aria-selected={at.view === 'chat'} className={`phone-chat-tab ${at.view === 'chat' ? 'on' : ''}`} onClick={() => show('chat')}>Chat</button>
         </div>
 
         {/* Both stay mounted: flipping between them loses neither the page's scroll nor what was being typed. */}

@@ -131,9 +131,9 @@ A green dot, with the device's name, shows while a phone (or another computer) h
 from this computer's page only, never from the phone.
 
 On a phone the page is laid out for one. You are at a place in the app (a task, a project, My Stuff), named at the
-top, with two tabs under it: **Chat**, the conversation that belongs to that place, and its page. The button at the
-top left is the place's nav (a task's steps, a project's tasks), what needs you and the chats; the grid at the top
-right goes anywhere in the app. It opens where it was last. Any window 700px wide or less gets this layout.
+top, with tabs under it: its pages (a task's overview, context, brief, each step and build; scroll them sideways),
+and at the right end **Chat**, the conversation that belongs to that place. The button at the top left is the
+place's nav (a project's tasks), what needs you and the chats; the grid at the top right goes anywhere in the app. It opens where it was last. Any window 700px wide or less gets this layout.
 **The full site, on this phone**, at the bottom of the grid's list, gives the computer's layout until the tab is closed.
 
 By hand: `tailscale serve --bg 5180`, `tailscale serve status`, `tailscale serve --https=443 off`. If the address
