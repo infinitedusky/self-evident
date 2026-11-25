@@ -1012,6 +1012,10 @@ conversation at this moment, that is the key info.")
   what it taught. Right for a team and production; clunky alone and early, when you'd throw away code you just
   liked. Proposed: the stage decides. Early, the accepted prototype is the starting point and the build tidies it
   and adds tests; later, it's a reference and the build starts clean.
+- **A task gets its own ticket, not every ticket in its project** (Sandy, 2026-11-25; LOG.md, same title). A task
+  inherits its project's docs about the whole project, and of its tickets only the ones the task is under; the
+  others are listed by title as other tasks' work, and one is pulled in when the task needs it. One record, never
+  a copy.
 - **A project has an agent of its own, and a page like a task's** (Sandy, 2026-11-25; LOG.md, "A project's page
   is laid out like a task's"). One conversation pinned to the project, in a column on its page, beside a nav with
   its overview, its Context and a page per step of the project as a whole. It plans across the tasks (research,

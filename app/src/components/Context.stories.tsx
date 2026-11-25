@@ -424,3 +424,40 @@ export const EditADecision: Story = {
     await expect(await c.findByText('It is deleted everywhere')).toBeVisible()
   },
 }
+
+// Made up: a task under SHOP-323 in a project whose Context holds three tickets.
+const underATicket = { ...taskContext,
+  docs: [...taskContext.docs, { ...taskContext.docs.find((d) => d.ticket)!, id: 'cdoc_under', title: 'Protected people (sample)', fromProject: true, under: true, inFull: true, ticket: { originating: false, origin: { ...taskContext.docs.find((d) => d.ticket)!.ticket!.origin, id: 'orig_sample323', ref: 'SHOP-323', title: 'Protected people (sample)' } } }],
+  otherTickets: [
+    { id: 'orig_sample331', ref: 'SHOP-331', sourceName: 'Linear', title: 'Executive authorization (sample)', url: 'https://linear.app/sample-shop/issue/SHOP-331' },
+    { id: 'orig_sample332', ref: 'SHOP-332', sourceName: 'Linear', title: 'Deepfake checks on suspect media (sample)', url: null },
+  ] }
+/**
+ * A task in a project with several tickets: it gets the docs about the whole project and its own ticket, which its
+ * agents read whole. The project's other tickets are folded away by title: other tasks' work, not given to this task's agents.
+ */
+export const ItsOwnTicketNotEveryTicket: Story = {
+  beforeEach: withEngine({ context: { issues: underATicket } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/From Linear, SHOP-323 · this task is under it/)).toBeInTheDocument()
+    const others = canvasElement.querySelector('[data-component="ContextOtherTickets"]') as HTMLDetailsElement
+    await expect(others.open).toBe(false) // collapsed
+    await expect(within(others).getByText('The project\'s other tickets')).toBeVisible()
+    await userEvent.click(within(others).getByText('The project\'s other tickets'))
+    await expect(within(others).getByText('Executive authorization (sample)')).toBeVisible()
+    await expect(within(others).getByText('Deepfake checks on suspect media (sample)')).toBeVisible()
+  },
+}
+/** One of the others is pulled in: it joins this task's own docs, the same ticket and not a copy, and leaves the list. */
+export const PullInAnotherTicket: Story = {
+  beforeEach: withEngine({ context: { issues: underATicket } }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await userEvent.click(await c.findByText('The project\'s other tickets'))
+    await userEvent.click(c.getByRole('button', { name: 'Pull in SHOP-331' }))
+    await expect(await c.findByText(/From Linear, SHOP-331/)).toBeInTheDocument()
+    await waitFor(() => expect(c.queryByRole('button', { name: 'Pull in SHOP-331' })).toBeNull())
+    await expect(c.getByRole('button', { name: 'Pull in SHOP-332' })).toBeInTheDocument()
+  },
+}

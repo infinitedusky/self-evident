@@ -7879,3 +7879,37 @@ Not done: the tasks on the project's overview are not grouped by ticket (the Tic
 a ticket cannot be made a task from the Tickets page with one press; which ticket is a task's first cannot be
 swapped with one of the rest in one move (set the other as its team ticket); Linear's own parent and sub-issues
 are not read.
+
+## A task gets its own ticket, not every ticket in its project (Sandy, 2026-11-25)
+
+Sandy, on Cloaked's Executive Protection project (a PRD and six Linear tickets in the project's Context): the
+project's reference docs "are also showing up in … one of the tasks. … having it repeated seems a little bit
+silly." They were not copies: a task in a project shows its project's docs (one record, `fromProject`), and
+every agent on the task is given all of them. The cost is that a task's agent reads the other five tickets as
+if they were its own, which invites their scope into the build; ENT-322's task inherited ENT-323 to ENT-328
+and not its own ticket.
+
+- **Docs about the whole project are inherited by every task:** a PRD, a summary of the tickets. Every task
+  needs them.
+- **A ticket doc reaches only the task under that ticket.** The project's other tickets are listed on the task
+  by title, collapsed, so its agent knows what they cover and that they are not its work, without reading them.
+- **Anything else is pulled in from the project's list:** by the task's agent, or by the person, on the task's
+  Context. Still one shared record, never a copy.
+- Turned down: **copying the project's docs onto each task** (duplicates that drift), and **the task choosing
+  every doc itself** (each new task would start with nothing until someone picks).
+
+As built (context.ts, `gather`):
+
+- "Under" is the task's tickets as ticket.ts reads them: its team ticket, however found (linked, imported, a
+  link in its text or its idea's), and its other tickets. A ticket the task is under is its own whether or not
+  the project lists it, as long as it was read from the tracker: ENT-322's task now has ENT-322.
+- Such a ticket goes to the task's agents whole, as "the ticket this task is under", like the one the work came
+  from. The project's other tickets go to them as one line each, under "not this task's work".
+- Pulling one in (`pullTicket`; "Pull in" on the task's Context; the agents' `context` tool, op "pull") puts a
+  row on the task that points at the same ticket. It then counts as the task's own doc, listed for its agents
+  to open, and can be taken out again.
+- A task under no ticket gets none of the project's tickets, only their titles.
+
+Not done: a pulled-in ticket is listed for the agent to open, not given whole (mark it "in full" on the task);
+a project doc that is not a ticket cannot be withheld from one task; sub-tasks' builders get what their task
+gets.

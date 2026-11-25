@@ -86,7 +86,7 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
           </>}
         </div>
         {!folded.docs && <>
-        <p className="context-how">The ticket the work came from goes to every agent whole. The others are listed for an agent by title and description, and it opens one when it needs it, unless you mark it to be given in full.</p>
+        <p className="context-how">The ticket the work came from{on === 'task' ? ', or the one this task is under,' : ''} goes to every agent whole. The others are listed for an agent by title and description, and it opens one when it needs it, unless you mark it to be given in full.</p>
         {open === 'paste' && <DocForm limits={v.limits} busy={busy} onSave={(b) => act(() => engine.addContextDoc(subject, { ...b, body: b.body ?? '' }))} onCancel={() => setOpen(null)} />}
         {open === 'ticket' && <TicketForm busy={busy} onSave={(ref) => act(() => engine.addContextTicket(subject, ref))} onCancel={() => setOpen(null)} />}
         {!v.docs.length && !['paste', 'ticket'].includes(open ?? '') && <div className="empty">None yet. A design note, a spec, an email thread, another ticket: anything the work should be read against.</div>}
@@ -94,6 +94,19 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
           ? <DocForm key={d.id} start={d} limits={v.limits} busy={busy} onSave={(b) => act(() => engine.editContextDoc(subject, d.id, b))} onCancel={() => setOpen(null)} onRemove={() => { if (window.confirm(`Delete "${d.title}" from this ${on}'s context?`)) void act(() => engine.removeContextDoc(subject, d.id)) }} />
           : <Doc key={d.id} d={d} limits={v.limits} busy={busy} onEdit={() => setOpen(d.id)} onInFull={(to) => act(() => engine.editContextDoc(subject, d.id, { inFull: to }))} onRefresh={() => act(() => engine.refreshContextDoc(subject, d.id))} onRemove={() => { if (window.confirm(`Take ${d.ticket?.origin.ref ?? d.title} out of this ${on}'s context? The ticket itself is not touched.`)) void act(() => engine.removeContextDoc(subject, d.id)) }} />)}
         {projects(v.docs).length > 0 && <>{fromProject}{projects(v.docs).map((d) => <Doc key={d.id} d={d} limits={v.limits} busy={busy} />)}</>}
+        {(v.otherTickets?.length ?? 0) > 0 && (
+          <details className="context-row context-others" data-component="ContextOtherTickets">
+            <summary><span className="context-title">The project's other tickets</span> <Badge>{v.otherTickets!.length}</Badge><span className="context-detail">Other tasks' work. This task's agents see these titles and nothing more.</span></summary>
+            <ul className="list" style={{ margin: '6px 0 0' }}>
+              {v.otherTickets!.map((o) => (
+                <li key={o.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center' }}>
+                  <span><span className="mono faint">{o.ref}</span> <span>{o.title}</span>{o.url ? <> · <a href={o.url} target="_blank" rel="noreferrer">in {o.sourceName}</a></> : null}</span>
+                  <button className="btn quiet small" disabled={busy} aria-label={`Pull in ${o.ref}`} title="Put this ticket in this task's Context too: the same ticket, not a copy. Its agents can then open it." onClick={() => act(() => engine.pullContextTicket(subject, o.id))}>Pull in</button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         </>}
       </div>
 
@@ -194,7 +207,7 @@ export function Context({ subject, version = 0, onChange }: { subject: ContextSu
 function Doc({ d, limits, busy, onEdit, onInFull, onRefresh, onRemove }: { d: ContextDoc; limits: ContextView['limits']; busy: boolean; onEdit?: () => void; onInFull?: (to: boolean) => void; onRefresh?: () => void; onRemove?: () => void }) {
   const t = d.ticket
   const tooLong = d.chars > limits.inFull
-  const where = t ? `From ${t.origin.sourceName}, ${t.origin.ref}${t.originating ? ' · the work came from it' : ''}` : d.from === 'file' ? `Imported file${d.fileName ? `, ${d.fileName}` : ''}` : 'Pasted text'
+  const where = t ? `From ${t.origin.sourceName}, ${t.origin.ref}${t.originating ? ' · the work came from it' : d.under ? ' · this task is under it' : ''}` : d.from === 'file' ? `Imported file${d.fileName ? `, ${d.fileName}` : ''}` : 'Pasted text'
   const pdf = !!d.kept
   const editable = !d.fromProject
   return (
