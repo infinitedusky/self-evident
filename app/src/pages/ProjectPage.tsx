@@ -2,17 +2,27 @@
  * One project, live: its issues in order (plan one with a click; a draft's can be reordered), the graph of their
  * sub-issues, the planner's questions and decisions, the selected sub-issue's detail and steps, the event ticker, the PR.
  * The tasks lead (Sandy, 2026-11-15: "the tasks are what is important"): they are what is built and what gets a pull
- * request. The project's own steps and its assets are below everything, folded.
+ * request.
+ *
+ * Laid out like a task (Sandy, 2026-11-25: "the steps at the bottom to have a similar UI to tasks. They need a 'project'
+ * agent, just like the ticket agent"): its own nav down the left with its overview, its Context and a page per step of
+ * the project as a whole, each at its own address (/projects/:id/:section), and the project's own agent in a column
+ * on the right, staying put while the pages change. The agent plans across the tasks and builds nothing. A task on its
+ * own, whose plan and build this page also is, has its agent and steps on the task's page and keeps the plain page.
  */
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, Navigate, useNavigate, useParams } from 'react-router'
 import { Assets } from '../components/Assets'
 import { Context } from '../components/Context'
 import { AddTasks } from '../components/AddTasks'
 import { Badge, type Tone } from '../components/Badge'
 import { asked, PlanGraphView, STATUS_TONE } from '../components/PlanGraphView'
 import { Brief } from '../components/Brief'
-import { StepsPanel } from '../components/StepsPanel'
+import { StepsPanel, useSteps } from '../components/StepsPanel'
+import { StepSection } from '../components/StepSection'
+import { TaskNav } from '../components/TaskNav'
+import { TaskAgent, useTaskAgent } from '../components/TaskAgent'
+import { label, type StepKey } from '@self-evident/engine/steps'
 import { engine, STATE_LABEL, useLiveProject, type BacklogIssue, type Graph, type IdeaRow, type Decision, type Event, type GraphSubIssue, type GraphIssue, type Pr, type Question } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { pendingOpen } from '../workspace'
@@ -24,7 +34,7 @@ const COST_TONE: Record<string, Tone> = { cheap: 'neutral', moderate: 'warn', ex
 const short = (t: string) => (t.length > 28 ? t.slice(0, 26).trimEnd() + '…' : t)
 
 export function ProjectPage() {
-  const { id } = useParams()
+  const { id, section } = useParams()
   const nav = useNavigate()
   const { graph, events, error } = useLiveProject(id)
   const { app, setAppId } = useCurrentApp()
@@ -51,7 +61,7 @@ export function ProjectPage() {
   const waitingForModel = (issueId: string) => lastPlanEvent(issueId) === 'issue.plan_waiting'
   const move = (from: number, to: number) => { const ids = graph.issues.map((t) => t.id); const [x] = ids.splice(from, 1); ids.splice(to, 0, x); return act(() => engine.reorder(ids)) }
   const open = graph.questions.filter((q) => q.status === 'open')
-  return (
+  const head = (
     <>
       <p className="mono">{solo ? <Link to="/tasks">← Tasks</Link> : <Link to="/projects">← Projects</Link>}</p>
       <div className="page-head">
@@ -82,8 +92,10 @@ export function ProjectPage() {
           )}
         </div>
       </div>
-
-      {!solo && <Context subject={{ kind: 'projects', id: graph.project.id }} />}{/* a task on its own has its own; this is for a project's tasks to share */}
+    </>
+  )
+  const body = (
+    <>
       <section className="panel" data-component="ProjectTasks">
         <h2>Tasks <Badge>{graph.issues.length}</Badge></h2>
         {graph.issues.length === 0 && <p className="muted" style={{ margin: 0 }}>No tasks yet. Add one below.</p>}
@@ -143,13 +155,63 @@ export function ProjectPage() {
       <BacklogPanel graph={graph} busy={busy} act={act} />
 
       <Assets appId={graph.app.id} projectId={graph.project.id} />
-
+    </>
+  )
+  if (solo) return (
+    <>
+      {head}
+      {body}
       <details className="project-fold" data-component="ProjectSteps">
         <summary>Steps for the project as a whole</summary>
         <p className="muted" style={{ margin: '8px 0 12px', fontSize: 14 }}>Research, sketches or a prototype that cover every task here. Each task has its own steps on its page; these are optional.</p>
         <StepsPanel subject={{ kind: 'projects', id: graph.project.id }} appId={graph.app.id} name={graph.project.name} />
       </details>
     </>
+  )
+  return <>{head}<Work graph={graph} section={section}>{body}</Work></>
+}
+
+/**
+ * A project's nav, the section the address names, and its own agent: the overview is the tasks and everything about
+ * them; Context and each step of the project as a whole have a page of their own.
+ */
+function Work({ graph, section, children }: { graph: Graph; section?: string; children: React.ReactNode }) {
+  const p = graph.project
+  const subject = { kind: 'projects' as const, id: p.id }
+  const { v, error } = useSteps(subject, graph.app.id)
+  const agent = useTaskAgent(p.id, graph.app.id, 'project')
+  const [navOpen, setNavOpen] = useState(() => { try { return localStorage.getItem('se.task-nav.open') !== '0' } catch { return true } })
+  const toggleNav = () => setNavOpen((o) => { try { localStorage.setItem('se.task-nav.open', o ? '0' : '1') } catch { /* fine */ } return !o })
+  const [ctx, setCtx] = useState<{ count: number; proposed: number; waiting?: number } | null>(null)
+  const readCtx = () => { void engine.contextCount(subject).then(setCtx).catch(() => setCtx({ count: 0, proposed: 0 })) }
+  useEffect(() => { readCtx() }, [p.id, section]) // eslint-disable-line react-hooks/exhaustive-deps
+  const base = `/projects/${p.id}`
+  if (error && !v) return <div className="empty bad">{error}</div>
+  if (!v) return <p className="muted">Loading…</p>
+  const rows = v.rows.filter((r) => r.key !== 'idea') // where it came from is not a step to do here
+  const here = section === 'context' || rows.some((r) => r.key === section) ? section! : 'overview'
+  if (section && here === 'overview') return <Navigate to={base} replace />
+  const row = rows.find((r) => r.key === here)
+  const under = rows.filter((r) => r.state.status !== 'none' && r.state.status !== 'done' && r.state.status !== 'skipped')
+  return (
+    <div className={`task-layout with-agent ${agent.open ? '' : 'agent-folded'} ${navOpen ? '' : 'nav-folded'}`} data-component="ProjectWork">
+      <TaskNav folded={!navOpen} onToggle={toggleNav} base={base} here={here} on="project" rows={rows} context={ctx ?? { count: 0, proposed: 0 }} />
+      <div className="task-main">
+        {here === 'overview' && (
+          <>
+            {under.length > 0 && <p className="muted" style={{ margin: '0 0 12px', fontSize: 14 }} data-component="StepsUnderWay">Under way for the project as a whole: {under.map((r, n) => <span key={r.key}>{n ? ', ' : ''}<Link to={`${base}/${r.key}`}>{label(r.key as StepKey, 'project')}</Link>{r.state.detail ? ` (${r.state.detail})` : ''}</span>)}.</p>}
+            {children}
+          </>
+        )}
+        {here === 'context' && <Context subject={subject} onChange={readCtx} />}
+        {row && <StepSection subject={subject} appId={graph.app.id} name={p.name} on="project" row={row} base={base} waitingState={rows.find((r) => r.key === row.waitingOn)?.state} />}
+      </div>
+      {agent.session !== undefined && (
+        <TaskAgent sessionId={agent.session?.id ?? null} taskId={p.id} of="project" stage={row ? label(row.key, 'project') : here === 'context' ? 'Context' : 'Plan'} state={agent.out.some((a) => a.asking) ? 'waiting' : agent.session?.busy ? 'working' : 'idle'}
+          deployed={agent.out.map((a) => ({ what: a.what, icon: a.icon ?? '🛠️', title: a.title, sessionId: a.sessionId, runId: a.runId, detail: a.detail, failed: a.failed, state: a.busy ? 'out' as const : 'back' as const, asking: a.asking ? `${a.asking.tool}: ${a.asking.what}` : undefined }))}
+          open={agent.open} onToggle={agent.toggle} onStart={agent.start} starting={agent.starting} error={agent.error} />
+      )}
+    </div>
   )
 }
 

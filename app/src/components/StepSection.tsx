@@ -73,12 +73,12 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
     if (own && s.status !== 'none') engine.step(subject, row.key).then(setWork).catch((e) => { if (row.key === 'prototype') setWork(null); else setError(err(e)) }) // a prototype's step has notes for the brief too
     else setWork(null)
     // The prototypes started on this thing: a task's by the task, an idea's by the idea.
-    const mine = (p: Prototype) => (subject.kind === 'ideas' ? p.ideaId === subject.id : p.issueId === subject.id)
+    const mine = (p: Prototype) => (subject.kind === 'ideas' ? p.ideaId === subject.id : subject.kind === 'projects' ? p.projectId === subject.id && !p.issueId && !p.ideaId : p.issueId === subject.id)
     if (row.key === 'prototype') engine.prototypes(appId).then((all) => setProtos(all.filter((p) => mine(p) && p.status !== 'discarded'))).catch(() => {})
   }, [subject.id, row.key, s.status, s.detail]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const act = async (fn: () => Promise<unknown>) => { setBusy(true); setError(null); try { await fn() } catch (e) { setError(err(e)) } finally { setBusy(false) } }
-  const ownAgent = subject.kind !== 'projects' // a task's steps go to the task's own agent, an idea's to the idea's, on its page
+  const ownAgent = true // a task's steps go to the task's own agent, an idea's to the idea's and a project's to the project's, each on its page
   const ask = () => act(async () => { await askStep(subject, appId, name, row.key, on); if (ownAgent) window.dispatchEvent(new Event(TASK_AGENT_ASKED)); setAsked(true) })
 
   // With something to look at, the step's page is two tabs: the view (the sketch, the story, the prototype), which gets the whole
@@ -180,7 +180,7 @@ export function StepSection({ subject, appId, name, on = 'task', row, base, from
                 : null}{/* once a step is under way there is nothing to press: its agent is beside the page, and what it wrote is above (Sandy, 2026-11-15: "we don't need to push a button that says ask the agent to carry on … what we need is the content") */}
               {own && !approves && s.status === 'started' && row.key !== 'prototype' && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'done' }))}>Mark done</button>}
               {on === 'task' && !dataStep && canSkip(row) && !finished(s, on) && <button className="btn quiet" disabled={busy} onClick={() => act(() => engine.setStep(subject, row.key, { status: 'skipped' }))} title="Say this optional step is not being done on this task">Skip this step</button>}
-              {asked && <span className="faint">{ownAgent ? 'Handed to this task\'s agent, on the right.' : 'Handed to the agent: it\'s in the agent panel.'}</span>}
+              {asked && <span className="faint">{ownAgent ? `Handed to this ${on}'s agent, on the right.` : 'Handed to the agent: it\'s in the agent panel.'}</span>}
             </div>
           )}
         </>

@@ -22,8 +22,8 @@ export const TASK_AGENT_ASKED = 'se:task-agent-asked'
  * The task's own conversation, kept up to date on its app's talk events (so the dot shows it working), with the
  * column's open or folded state remembered in this browser, and a way to start the agent when the task has none.
  */
-export function useTaskAgent(taskId: string, appId: string, of: 'task' | 'idea' = 'task') {
-  const api = of === 'idea' ? { talk: engine.ideaTalk, agents: engine.ideaAgents, start: engine.startIdeaTalk } : { talk: engine.taskTalk, agents: engine.taskAgents, start: engine.startTaskTalk }
+export function useTaskAgent(taskId: string, appId: string, of: 'task' | 'idea' | 'project' = 'task') {
+  const api = of === 'project' ? { talk: engine.projectTalk, agents: engine.projectAgents, start: engine.startProjectTalk } : of === 'idea' ? { talk: engine.ideaTalk, agents: engine.ideaAgents, start: engine.startIdeaTalk } : { talk: engine.taskTalk, agents: engine.taskAgents, start: engine.startTaskTalk }
   const [session, setSession] = useState<TalkSession | null | undefined>(undefined)
   const [out, setOut] = useState<TaskAgentOut[]>([])
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0' } catch { return true } })
@@ -57,8 +57,8 @@ export function TaskAgent({ sessionId, taskId, of = 'task', stage, state = 'idle
   /** The task's conversation; none until its agent is started. */
   sessionId: string | null
   taskId: string
-  /** What it is the agent of: a task, or an idea being worked through before it is one (`taskId` is then the idea's id). */
-  of?: 'task' | 'idea'
+  /** What it is the agent of: a task, an idea being worked through before it is one, or a project, whose agent plans across its tasks (`taskId` is then the idea's or the project's id). */
+  of?: 'task' | 'idea' | 'project'
   /** The stage it's at now: Sketches, Brief, Build. */
   stage: string
   state?: AgentStripProps['state']
@@ -72,7 +72,7 @@ export function TaskAgent({ sessionId, taskId, of = 'task', stage, state = 'idle
 }) {
   const color = talkColor(sessionId ?? taskId)
   const name = `This ${of}'s agent`
-  const at = of === 'idea' ? { path: `/ideas/${taskId}`, ideaId: taskId } : { path: `/tasks/${taskId}`, issueId: taskId }
+  const at = of === 'project' ? { path: `/projects/${taskId}`, projectId: taskId } : of === 'idea' ? { path: `/ideas/${taskId}`, ideaId: taskId } : { path: `/tasks/${taskId}`, issueId: taskId }
   // Which conversation the column shows: the conductor's, or one of the agents it has out. They are tabs, so an agent at work is never out of sight.
   const [shown, setShown] = useState<string | null>(null)
   const idOf = (d: Deployed) => d.sessionId ?? d.runId
@@ -120,10 +120,12 @@ export function TaskAgent({ sessionId, taskId, of = 'task', stage, state = 'idle
         ? <Conversation key={sessionId} sessionId={sessionId} compact context={{ ...at, label: `this ${of}` }} />
         : (
           <div className="task-agent-empty">
-            <p className="faint">{of === 'idea'
+            <p className="faint">{of === 'project'
+              ? 'No agent on this project yet. It plans across the project\'s tasks: research, sketches for the whole flow, and which tasks there are and the ticket each is under. It builds nothing; each task has an agent of its own for that.'
+              : of === 'idea'
               ? 'No agent on this idea yet. Work on it and it gets one of its own, with its own worktree: research, sketches, mockups and a prototype, without committing to a task. If you convert it, the agent and everything it made go with it.'
               : 'No agent on this task yet. One agent stays with it from the first sketch to the merge, and sends out others where the work needs fresh eyes.'}</p>
-            <button className="btn" disabled={starting || !onStart} onClick={onStart}>{starting ? 'Starting…' : of === 'idea' ? 'Work on this idea' : 'Start this task\'s agent'}</button>
+            <button className="btn" disabled={starting || !onStart} onClick={onStart}>{starting ? 'Starting…' : of === 'idea' ? 'Work on this idea' : `Start this ${of}'s agent`}</button>
             {error && <div className="empty bad">{error}</div>}
           </div>
         )}

@@ -627,6 +627,10 @@ export const engine = {
   /** A task's own agent: its one conversation, or null; `startTaskTalk` starts it if the task has none. */
   taskTalk: (issueId: string) => call<TalkSession | null>('GET', `/issues/${issueId}/talk`),
   startTaskTalk: (issueId: string) => call<TalkSession>('POST', `/issues/${issueId}/talk`),
+  /** A project's own agent: it plans across the project's tasks, on the project's page. */
+  projectTalk: (projectId: string) => call<TalkSession | null>('GET', `/projects/${projectId}/talk`),
+  startProjectTalk: (projectId: string) => call<TalkSession>('POST', `/projects/${projectId}/talk`),
+  projectAgents: (projectId: string) => call<TaskAgentOut[]>('GET', `/projects/${projectId}/agents`),
   /** An idea's own agent, as a task's: started (with its worktree) when the person first works on the idea. */
   ideaTalk: (ideaId: string) => call<TalkSession | null>('GET', `/ideas/${ideaId}/talk`),
   startIdeaTalk: (ideaId: string) => call<TalkSession>('POST', `/ideas/${ideaId}/talk`),
