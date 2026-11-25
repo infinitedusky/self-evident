@@ -8391,3 +8391,34 @@ conversations) still follow only a new line; not tried in the running app's tabs
 Sandy: "include the total as well, so that we can see what we have spent so far for the
 whole conversation as well as the last one … on a second line". Closed, the card is two lines: "Worked for 22
 seconds · opus-5-5", then "426k tokens · $2.96 · $11.96 total", on every login, not only one billed by use.
+
+## Two Evidents on one computer, and a switch between them (Sandy, 2026-11-25: "Evident can have a remote database or local. I have some ones that have remote. Can I have them on the same Evident version and switch between them?" then "I think 2 and we can create a button to switch between the 2")
+
+An engine reads one database, fixed when it starts, and the page shows that one. Three ways were put to Sandy:
+restart onto the other database, two Evidents side by side, or one Evident reading both. He chose the second. The
+third would mean every query knowing which database its app is in (the connection is one module nearly every file
+imports), and a row written to the wrong one is the risk.
+
+- **The page's port and the engine it calls are settings** (`UI_PORT`, `PORT`; `app/vite.config.ts`), so a second
+  Evident runs from the same checkout: `pnpm local` starts this computer's own on 4001 and 5181, with the shared
+  one's settings taken out of its environment. Its page keeps its own dependency cache.
+- **Which is which is read from the database** (`engine/src/instance.ts`): the checkout's own container is "This
+  computer", anything else "Shared"; `EVIDENT_NAME` says otherwise. The shared one keeps the usual address, as on
+  every other computer, so `UI_URL` and the launchd agent are as they were.
+- **Each engine asks the other's whether it is up** (`GET /api/instance` on the other of the two ports, or
+  `OTHER_ENGINE_URL`), and that is all one knows of the other. `GET /api/instances` gives the page both.
+- **The switch** is in the rail above the phone (`InstanceSwitch`): which Evident this is, and "Switch to …" in
+  the same window. The tab's title names the one it is. When the other is not running it says what starts it. It
+  is shown only when there is another: it answers, this one was started beside it, or this browser has seen it.
+- **One database twice is said**: each engine gives a mark of its database (host, port and name, hashed), and when
+  the two match the switch says to stop one.
+- `pnpm arrive` refuses while this computer's own Evident holds the usual address, and says how to move it.
+
+Tried: a second Evident from the worktree on 4001/5181 against an empty throwaway database, beside the running
+one; both answered, each with its own apps, and the switch showed in the page. Not tried: both real ones together
+(the shared one needs `pnpm arrive`, which is Sandy's to run), so the link across has only been seen in a story.
+
+Not done: the button does not start the other one; nothing stops the same checkout being an app in both; over
+Tailscale from a phone the other's address is this computer's `localhost`, which a phone cannot open; `pnpm local`
+is a terminal command, not kept running by launchd.
+

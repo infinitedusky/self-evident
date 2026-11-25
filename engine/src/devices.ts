@@ -23,7 +23,7 @@ const BINS = ['tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale
 const run = (bin: string, args = ['status', '--json']) => new Promise<string | null>((resolve) => execFile(bin, args, { timeout: 4000, maxBuffer: 8 << 20 }, (err, out) => resolve(err ? null : out)))
 
 /** The page's port (app/vite.config.ts): the address to hand a phone is the one Tailscale sends on to it. */
-const UI_PORT = 5180
+const UI_PORT = Number(process.env.UI_PORT ?? 5180)
 
 /** The page's address on the Tailscale network, from `tailscale serve status --json`; null when it is not served. */
 export function addressIn(serveJson: string, port = UI_PORT): string | null {

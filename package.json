@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "pnpm --filter @self-evident/engine db:up && pnpm -r --parallel --stream dev",
     "build": "pnpm --filter app build",
+    "local": "env -u DATABASE_URL -u UI_URL -u STORYBOOK_FRAME -u STATE_REPO -u FLY_DB_APP PORT=4001 UI_PORT=5181 EVIDENT_BESIDE=1 pnpm dev",
     "start": "pnpm --filter @self-evident/engine db:up && pnpm --filter @self-evident/engine serve",
     "test": "pnpm -r test",
     "handoff": "doppler run --project self-evident --config dev -- pnpm --filter @self-evident/engine exec tsx src/cli/handoff.ts",

@@ -105,6 +105,7 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.get('/api/events', () => silentStream()),
     http.get('/api/frame', () => HttpResponse.json({ frame: null })), // a story's views are shown as they are, not through the engine's proxy
     http.get('/api/devices', () => reply({ tailscale: 'missing', address: null, remote: false, devices: [] })),
+    http.get('/api/instances', () => reply({ here: { name: 'This computer', kind: 'local', url: 'http://localhost:5180', database: 'aaaa1111bbbb', beside: false }, other: { up: false, name: 'Shared', kind: 'shared', start: 'pnpm arrive' } })), // one Evident: the switch is not shown
     http.get('/api/apps', ({ request }) => reply(new URL(request.url).searchParams.get('removed') === '1' ? d.removedApps ?? [] : d.apps)),
     http.post('/api/apps/:id/remove', () => d.removeProblem ? HttpResponse.json({ error: d.removeProblem }, { status: 400 }) : reply({})),
     http.post('/api/apps/:id/restore', ({ params }) => { d.removedApps = (d.removedApps ?? []).filter((a) => a.id !== params.id); return reply({}) }),
