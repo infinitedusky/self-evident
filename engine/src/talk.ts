@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { createSdkMcpServer, query, tool, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import { db } from './db/client.js'
 import { app, event, idea, issue, project, prototype, repo, run, session, sessionMessage, workspace } from './db/schema.js'
 import { step, type StepKey } from './steps.js'
@@ -248,6 +248,42 @@ export async function taskTalk(issueId: string) {
   const [row] = await db.select().from(session)
     .where(and(eq(session.kind, 'talk'), eq(session.status, 'open'), sql`${session.subjectRef}->>'issueId' = ${issueId}`)).orderBy(session.createdAt).limit(1)
   return row ? { ...row, live: live.has(row.id), busy: live.get(row.id)?.busy ?? false } : null
+}
+
+/** A project's own agent is a conversation pinned to the project and to nothing under it: not a prototype's, a task's or an idea's. */
+const ownProject = sql`${session.subjectRef}->>'prototypeId' is null and ${session.subjectRef}->>'issueId' is null and ${session.subjectRef}->>'ideaId' is null`
+
+/**
+ * A project's own agent: the one open conversation pinned to the project (Sandy, 2026-11-25: "a 'project' agent, just
+ * like the ticket agent"). The oldest, as for a task, so a step handed over before the project's page had an agent
+ * column is the one shown there. It has no worktree: it plans, in the app's checkout, and each task builds in its own.
+ */
+export async function projectTalk(projectId: string) {
+  const [row] = await db.select().from(session)
+    .where(and(eq(session.kind, 'talk'), eq(session.status, 'open'), sql`${session.subjectRef}->>'projectId' = ${projectId}`, ownProject)).orderBy(session.createdAt).limit(1)
+  return row ? { ...row, live: live.has(row.id), busy: live.get(row.id)?.busy ?? false } : null
+}
+
+/** The project's agent, started if it has none. */
+export async function ensureProjectTalk(projectId: string, actor = 'user') {
+  return withLock(`project-talk:${projectId}`, async () => {
+    const there = await projectTalk(projectId)
+    if (there) return there
+    const [p] = await db.select().from(project).where(eq(project.id, projectId))
+    if (!p) throw new PlanError(`no project ${projectId}`)
+    const row = await startTalk({ appId: p.appId, subjectRef: { projectId }, actor })
+    return { ...row, live: false, busy: false }
+  })
+}
+
+/** The agents a project's agent has out: the conversation of each prototype started on the project itself. */
+export async function projectAgents(projectId: string) {
+  const protos = await db.select().from(prototype).where(and(eq(prototype.projectId, projectId), isNull(prototype.issueId), isNull(prototype.ideaId), inArray(prototype.status, ['running', 'stopped']), isNotNull(prototype.sessionId))).orderBy(prototype.createdAt)
+  const rows = protos.length ? await db.select().from(session).where(inArray(session.id, protos.map((p) => p.sessionId!))) : []
+  return protos.flatMap((p) => {
+    const s = rows.find((r) => r.id === p.sessionId)
+    return s && s.status === 'open' ? [{ sessionId: s.id, kind: 'prototype' as const, what: 'Prototype', icon: step('prototype').icon, title: p.title, prototypeId: p.id, busy: live.get(s.id)?.busy ?? false, asking: askingOf(s.id) }] : []
+  })
 }
 
 /** An idea's own agent is a conversation pinned to the idea with a worktree of its own; one about the app that only started from the idea is not. */
@@ -560,6 +596,15 @@ export const STARTED_FIRST = 'Before you do any work on a step (the first search
 const ideaPrompt = (i: { id: string; number: number; title: string }) => `
 This conversation is the agent of one idea, #${i.number} "${i.title}" (${i.id}), and the only one: a task in all but name. You work it through in this one worktree without committing to anything: research, sketches, mockups, a prototype, and a rough draft of the brief (set_step on this idea, key brief). Record each with set_step on this idea (ideaId). ${STARTED_FIRST} The person sees this conversation on the idea's page, beside the step they are looking at, and "this" means this idea. open_tab with a sketch, a story or the prototype takes them to that step's page of this idea, where it shows beside you. A prototype you start gets an agent of its own, shown as a second tab at the top of this same column, named Prototype. Nothing here is planned or built: when the person says it is worth building, convert it with convert_idea. As a task, this conversation, this worktree and everything in it become the task's, and you carry on as its agent. Keep to this idea: for another idea or a task, point them to the app's agent in the left column.`
 
+/**
+ * A project's own agent (Sandy, 2026-11-25: "They need a 'project' agent, just like the ticket agent … The next step is
+ * to build out the tasks and link them to the tickets. But first I want to plan it out"). It plans across the
+ * project's tasks and builds nothing: each task has an agent and a worktree of its own for that.
+ */
+const projectPrompt = (p: { id: string; name: string }) => `
+
+This conversation is also the agent of one project, "${p.name}" (${p.id}), and the only one. The person sees it on the project's page, beside the step they are looking at, and "this" means this project. Your work is the planning that covers all of its tasks: its steps (research, sketches or screens for the whole flow), its Context, and what its tasks are. Record a step's work with set_step on this project (projectId): the body for the next agent, and a summary for the person, who reads that on the step's page and will not read the body. ${STARTED_FIRST} Its Context (the context tool, projectId) holds its reference docs, among them the tickets it answers, word for word; read it before anything else, and put what gets settled there as decisions. A task is one pull request with a brief of its own. When the person asks for the tasks, propose them first, in order, as a list they can change: a title each, what it covers in a line, and the team ticket it is under. A ticket bigger than one pull request is several tasks under the same ticket. Once they agree, make each with create_task (projectId) and set its ticket with update_task (ticket: its key, and teamTitle), and write no briefs unless asked: each task's own agent writes its brief with the person. project_graph on a large project returns more than you can read at once; use tasks for the list. You read the code and change none of it: nothing here is built. For one task's own work, point them to that task's page and its agent.`
+
 /** A fresh agent out on one check: it reads, reports once with set_step, and stops. Its first message says what to read and what to report. */
 const checkPrompt = (key: StepKey, cwd: string) => `You are a fresh agent sent out for one piece of work on one task: its ${step(key).label.toLowerCase()}. You start from the message you are given and nothing else; that is the point, eyes that have not seen the conversation. You work in ${cwd}, which is someone else's folder: read anything, change nothing. You have no editing tools; use the shell only to read (git log, git diff, git show, ls, cat, grep, rg). Never commit, push, install or start anything. Your report is the whole result: record it once with set_step as you are told, then say in two or three lines what you found and stop. If the person writes to you afterwards, answer from what you read.`
 
@@ -685,6 +730,8 @@ async function open(sessionId: string): Promise<Live> {
   const ownIdeaId = s.worktreePath && !(s.subjectRef as SubjectRef | null)?.app ? (s.subjectRef as SubjectRef | null)?.ideaId : undefined
   const [ownIdeaRow] = ownIdeaId ? await db.select().from(idea).where(eq(idea.id, ownIdeaId)) : []
   const whole = !!(s.subjectRef as SubjectRef | null)?.app && !s.worktreePath // about the app as a whole: it reads the app's checkout
+  const ownProjectId = whole && !proto ? (s.subjectRef as SubjectRef | null)?.projectId : undefined // a conversation about the app that is pinned to a project is that project's agent (projectTalk)
+  const [ownProjectRow] = ownProjectId ? await db.select({ id: project.id, name: project.name }).from(project).where(eq(project.id, ownProjectId)) : []
   const unwatched = !!(s.subjectRef as SubjectRef | null)?.checkOf // a check's agent: started by the engine, nobody watching it
   const refs = await referencesOf(s.appId)
   const mates = await matesOf(s.appId, s.worktreePath)
@@ -709,7 +756,7 @@ async function open(sessionId: string): Promise<Live> {
       resume: s.agentSessionId ?? undefined,
       model: modelFor(setup, !!proto),
       settingSources: ['project'],
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : docs ? docs.docsPrompt(a!, s.cwd!, docsRepos) : whole && a ? appPrompt(a.name, s.cwd!) : undefined) + (dataTask && a ? dataPrompt(dataTask, taskIdent(a.key, dataTask.number), await roundOf(dataTask.id)) : '') + (ownTask && a ? taskPrompt(ownTask, a.key) + DATA_AGENT_NOTE + prDescriptionNote(a.setup) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + origin + storiesNote(a?.setup) + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) + (recordings && !unwatched ? recordingsPrompt(recordings, listRecordings(recordings).length) : '') + (proto || ownTask || ownIdeaRow ? mocksPrompt(mockList) + mockPlaces + taskCalls : whole && a ? servicesPrompt(mockList) : '') },
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: talkPrompt(s.cwd!, s.branch, a?.defaultBranch ?? 'main', proto ? prototypePrompt(proto, prototypeSkill(skills.skills)) : check ? checkPrompt(check, s.cwd!) : docs ? docs.docsPrompt(a!, s.cwd!, docsRepos) : whole && a ? appPrompt(a.name, s.cwd!) + (ownProjectRow ? projectPrompt(ownProjectRow) : '') : undefined) + (dataTask && a ? dataPrompt(dataTask, taskIdent(a.key, dataTask.number), await roundOf(dataTask.id)) : '') + (ownTask && a ? taskPrompt(ownTask, a.key) + DATA_AGENT_NOTE + prDescriptionNote(a.setup) + handoverNote(handover, madeIn?.title ?? madeIn?.subject ?? null) : '') + (ownIdeaRow ? ideaPrompt(ownIdeaRow) : '') + origin + storiesNote(a?.setup) + matePrompt(mates, s.branch) + referencePrompt(refs) + assetPrompt(assets) + stepSkillPrompt(withStepDefaults((a?.setup as { step_skills?: StepSkills } | null)?.step_skills, skills.skills), skills.skills, check) + (recordings && !unwatched ? recordingsPrompt(recordings, listRecordings(recordings).length) : '') + (proto || ownTask || ownIdeaRow ? mocksPrompt(mockList) + mockPlaces + taskCalls : whole && a ? servicesPrompt(mockList) : '') },
       ...skills,
       mcpServers: { engine: engineServer(s.appId, s.id), ...skills.mcpServers },
       tools: [...READ_TOOLS, ...(check || whole || dataTask ? CHECK_TOOLS : ASK_TOOLS)],

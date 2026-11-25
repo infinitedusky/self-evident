@@ -14,6 +14,8 @@ export interface MockData {
   issueDetails: typeof s.issueDetails; todos: typeof s.todos; ideas: typeof s.ideaRows; initiatives: typeof s.initiatives; cycles: typeof s.cycles
   summary: typeof s.summary; settings: typeof s.factorySettings; appSettings: typeof s.appSettings; talks: (typeof s.talkSession)[]; transcript: typeof s.transcript; /** A task's own agent, or null when it has none. */ taskTalk: typeof s.talkSession | null; /** The agents it has out. */ taskAgents?: import('../engine').TaskAgentOut[]; /** An idea's own agent, or null when it has none. */ ideaTalk?: typeof s.talkSession | null
   storybook: { url: string | null; frame?: string | null; configured: boolean; startable: boolean; up: boolean; startedHere: boolean; log: string[]; branch?: string | null; main?: boolean }
+  /** A project's own agent, or none; and the agents it has out. */ projectTalk?: typeof s.talkSession | null; projectAgents?: import('../engine').TaskAgentOut[]
+  /** A project's tickets; the sample's when left out. */ projectTickets?: import('../engine').ProjectTicket[]
   /** The app's tickets, each with its tasks. */ tickets: import('../engine').TicketGroup[]
   /** The app's mock library. */ mocks: import('../engine').Mock[]
   /** Where each mock's data comes from: the app's defaults, and one task's. */ mockPlaces: import('../engine').MockPlacesRow[]; mockPlacesForTask: import('../engine').MockPlacesRow[]
@@ -320,6 +322,12 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
       const doc = (o: Partial<import('../engine').ContextDoc>): import('../engine').ContextDoc => ({ id: `cdoc_new${v.docs.length}`, title: '', description: null, from: 'pasted', ticket: null, fileName: null, body: null, chars: 0, inFull: false, addedBy: 'user', addedAt: new Date().toISOString(), fromProject: false, ...o })
       return [
         http.get(at, () => reply(v)),
+        http.get(`${at}/open-questions`, () => { // roughly what the engine writes (context.ts, openQuestionsDoc)
+          const open = v.notes.filter((n) => n.kind === 'decision' && ['open', 'proposed'].includes(n.status)).sort((x, y) => (x.waitingOn ? 0 : 1) - (y.waitingOn ? 0 : 1))
+          const md = ['# Open questions: SS-20 Address and payment on one page (sample)', '', `Sample Shop · as of 24 Nov 2026 · ${open.length} open`, '', '| # | Question | Waiting on | Asked |', '| --- | --- | --- | --- |', ...open.map((n, i) => `| ${i + 1} | ${n.title} | ${n.waitingOn ?? ''} | ${n.on} |`), '',
+            ...open.flatMap((n, i) => [...(i === 0 || !!open[i - 1].waitingOn !== !!n.waitingOn ? [`## ${n.waitingOn ? `Waiting on ${n.waitingOn}` : 'Not yet with anyone'}`, ''] : []), `### ${i + 1}. ${n.title}`, '', `Asked ${n.on}${n.waitingOn ? ` · waiting on ${n.waitingOn}` : ''}`, '', ...(n.background ? ['**Background**', '', n.background, ''] : []), ...(n.options ? ['**Options**', '', n.options, ''] : []), ...(n.status === 'proposed' ? [`**Proposed answer** (not decided): ${n.answer}`, ''] : []), ...(n.dependsOn?.length ? [`**Depends on**: ${n.dependsOn.map((d) => d.title).join('; ')}`, ''] : [])])].join('\n')
+          return reply({ title: 'Open questions: SS-20 Address and payment on one page (sample)', count: open.length, markdown: md })
+        }),
         http.get(`${at}/count`, () => reply({ count: v.docs.length + v.notes.filter((n) => n.status === 'settled').length, proposed: v.notes.filter((n) => ['proposed', 'open'].includes(n.status) && !n.waitingOn).length, waiting: v.notes.filter((n) => ['proposed', 'open'].includes(n.status) && !!n.waitingOn).length })),
         http.post(`${at}/docs`, async ({ request }) => { const b = await request.json() as { title: string; description?: string; body: string; inFull?: boolean }; v = { ...v, docs: [...v.docs, doc({ title: b.title, description: b.description || null, body: b.body, chars: b.body.length, inFull: !!b.inFull })] }; return reply(v) }),
         http.post(`${at}/tickets`, async ({ request }) => { const b = await request.json() as { ref: string }; if (d.contextProblem) return HttpResponse.json({ error: d.contextProblem }, { status: 400 }); v = { ...v, docs: [...v.docs, doc({ id: `origin_new${v.docs.length}`, title: `A ticket brought in (sample)`, from: 'ticket', chars: 60, ticket: { originating: false, origin: { ...s.sampleOrigin, id: 'origin_new', ref: b.ref.toUpperCase(), title: 'A ticket brought in (sample)', body: 'Made up: what the ticket says.', comments: [], links: [], files: [] } } })] }; return reply(v) }),
@@ -327,8 +335,20 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
         http.patch(`${at}/docs/:doc`, async ({ params, request }) => { const b = await request.json() as Partial<import('../engine').ContextDoc>; v = { ...v, docs: v.docs.map((x) => (x.id === params.doc ? { ...x, ...b, chars: b.body !== undefined && b.body !== null ? b.body.length : x.chars } : x)) }; return reply(v) }),
         http.post(`${at}/docs/:doc/refresh`, ({ params }) => { v = { ...v, docs: v.docs.map((x) => (x.id === params.doc && x.ticket ? { ...x, ticket: { ...x.ticket, origin: { ...x.ticket.origin, fetchedAt: '2026-11-24T16:00:00Z', comments: [...x.ticket.origin.comments, { author: 'Made-up Teammate', at: '2026-11-24T15:00:00Z', body: 'Added since it was last read (sample).' }] } } } : x)) }; return reply(v) }),
         http.delete(`${at}/docs/:doc`, ({ params }) => { v = { ...v, docs: v.docs.filter((x) => x.id !== params.doc) }; return reply(v) }),
-        http.post(`${at}/notes`, async ({ request }) => { const b = await request.json() as { kind: 'note' | 'decision'; title: string; answer?: string; body: string; background?: string; options?: string; on?: string }; v = { ...v, notes: [...v.notes, { background: b.background || null, options: b.options || null, id: `note_new${v.notes.length}`, kind: b.kind, status: b.kind === 'decision' && !b.answer ? 'open' : 'settled', answer: b.answer || null, title: b.title, body: b.body, on: b.on ?? '2026-11-24', addedBy: 'user', fromProject: false, alsoAbout: [] }] }; return reply(v) }),
-        http.patch(`${at}/notes/:note`, async ({ params, request }) => { const b = await request.json() as Partial<import('../engine').ContextNote>; v = { ...v, notes: v.notes.map((x) => (x.id === params.note ? { ...x, ...b, waitingOn: ['open', 'proposed'].includes(b.status ?? x.status) ? (b.waitingOn === undefined ? x.waitingOn : b.waitingOn || null) : null } : x)) }; return reply(v) }),
+        // A decision's dependencies, as the engine keeps them: ids, and questions by their words, asked if they are not there.
+        ...(() => {
+          type N = import('../engine').ContextNote
+          const link = (id: string, ids: string[] | undefined, asks: string[] | undefined) => {
+            const want = [...(ids ?? v.notes.find((x) => x.id === id)?.dependsOn?.map((x) => x.id) ?? [])]
+            for (const q of asks ?? []) { let t = v.notes.find((x) => x.kind === 'decision' && x.title === q); if (!t) { t = { id: `note_dep${v.notes.length}`, kind: 'decision', status: 'open', title: q, answer: null, body: '', on: '2026-11-24', addedBy: 'user', fromProject: false, alsoAbout: [] }; v = { ...v, notes: [...v.notes, t] } } want.push(t.id) }
+            v = { ...v, notes: v.notes.map((x): N => (x.id === id ? { ...x, dependsOn: [...new Set(want)].flatMap((d) => { const o = v.notes.find((y) => y.id === d); return o ? [{ id: o.id, title: o.title, answer: o.answer, status: o.status }] : [] }) } : x)) }
+            v = { ...v, notes: v.notes.map((x): N => ({ ...x, dependsOn: x.dependsOn?.map((d) => { const o = v.notes.find((y) => y.id === d.id); return o ? { id: o.id, title: o.title, answer: o.answer, status: o.status } : d }), neededBy: v.notes.filter((y) => y.dependsOn?.some((d) => d.id === x.id)).map((y) => ({ id: y.id, title: y.title })) })) }
+          }
+          return [
+            http.post(`${at}/notes`, async ({ request }) => { const b = await request.json() as { kind: 'note' | 'decision'; title: string; answer?: string; body: string; background?: string; options?: string; dependsOn?: string[]; dependsOnNew?: string[]; on?: string }; const id = `note_new${v.notes.length}`; v = { ...v, notes: [...v.notes, { background: b.background || null, options: b.options || null, id, kind: b.kind, status: b.kind === 'decision' && !b.answer ? 'open' : 'settled', answer: b.answer || null, title: b.title, body: b.body, on: b.on ?? '2026-11-24', addedBy: 'user', fromProject: false, alsoAbout: [] }] }; if (b.dependsOn || b.dependsOnNew) link(id, b.dependsOn, b.dependsOnNew); return reply(v) }),
+            http.patch(`${at}/notes/:note`, async ({ params, request }) => { const { dependsOn, dependsOnNew, ...b } = await request.json() as Partial<Omit<N, 'dependsOn'>> & { dependsOn?: string[]; dependsOnNew?: string[] }; v = { ...v, notes: v.notes.map((x) => (x.id === params.note ? { ...x, ...b, waitingOn: ['open', 'proposed'].includes(b.status ?? x.status) ? (b.waitingOn === undefined ? x.waitingOn : b.waitingOn || null) : null } : x)) }; link(String(params.note), dependsOn, dependsOnNew); return reply(v) }),
+          ]
+        })(),
         http.delete(`${at}/notes/:note`, ({ params }) => { v = { ...v, notes: v.notes.filter((x) => x.id !== params.note) }; return reply(v) }),
       ]
     }),
@@ -499,6 +519,10 @@ export function mockEngine(overrides: Partial<MockData> = {}, opts: { latency?: 
     http.put('/api/:kind/:id/steps/:key', () => reply(d.stepWork)),
     http.get('/api/initiatives', () => reply(d.initiatives)),
     http.get('/api/cycles', () => reply(d.cycles)),
+    http.get('/api/projects/:id/tickets', () => reply(d.projectTickets ?? s.projectTickets)),
+    http.get('/api/projects/:id/agents', () => reply(d.projectAgents ?? [])),
+    http.get('/api/projects/:id/talk', () => reply(d.projectTalk ?? null)),
+    http.post('/api/projects/:id/talk', () => { d.projectTalk = d.projectTalk ?? { ...s.talkSession, subject: 'Checkout (sample)', subjectRef: { projectId: 'proj_checkout', app: true } }; return reply(d.projectTalk) }),
     http.get('/api/ideas/:id/agents', () => reply(d.taskAgents ?? [])),
     http.get('/api/ideas/:id/talk', () => reply(d.ideaTalk ?? null)),
     http.post('/api/ideas/:id/talk', () => reply(d.ideaTalk ?? s.talkSession)),

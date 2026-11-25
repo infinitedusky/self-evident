@@ -1015,6 +1015,11 @@ conversation at this moment, that is the key info.")
   what it taught. Right for a team and production; clunky alone and early, when you'd throw away code you just
   liked. Proposed: the stage decides. Early, the accepted prototype is the starting point and the build tidies it
   and adds tests; later, it's a reference and the build starts clean.
+- **A project has an agent of its own, and a page like a task's** (Sandy, 2026-11-25; LOG.md, "A project's page
+  is laid out like a task's"). One conversation pinned to the project, in a column on its page, beside a nav with
+  its overview, its Context and a page per step of the project as a whole. It plans across the tasks (research,
+  the whole flow, which tasks there are and the ticket each is under) and builds nothing: each task has its own
+  agent and worktree for that.
 - **A ticket is a record that tasks are under** (Sandy, 2026-11-24; LOG.md, "A ticket is a record"). The team's
   ticket (ENT-323) is a row of its own, one per app and key, and a task links to it. A ticket bigger than one pull
   request is several tasks under one ticket: each with its own brief, prototype, build and pull request. The

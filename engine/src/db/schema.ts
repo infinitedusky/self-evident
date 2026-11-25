@@ -394,6 +394,14 @@ export const summary = pgTable('summary', {
 }, (t) => [index('summary_app_section').on(t.appId, t.section, t.id), inList('summary_section', t.section, SUMMARY_SECTIONS),
   inList('summary_trigger', t.trigger, ['person', 'schedule'])])
 
+// The other tickets a task is under (ticket.ts; Sandy, 2026-11-25: "a task can have more than one ticket it's pointing
+// at"). `issue.ticket_id` is the one that names its branch, commits and pull request, which carry one key; these are
+// the rest. Organisational, like the ticket itself: they change nothing about how the task is built.
+export const issueTicket = pgTable('issue_ticket', {
+  issueId: text('issue_id').notNull().references(() => issue.id, { onDelete: 'cascade' }), ticketId: text('ticket_id').notNull().references(() => ticket.id),
+  appId: appId(), createdAt: createdAt(),
+}, (t) => [primaryKey({ columns: [t.issueId, t.ticketId] })])
+
 export const pr = pgTable('pr', { // [LS] githubPullRequests + review hub; [IF] pitch. One per project, or one per issue when stacked.
   id: id(), appId: appId(), projectId: text('project_id').notNull().references(() => project.id), repoId: text('repo_id').references(() => repo.id),
   issueId: text('issue_id').references(() => issue.id), // a PR per issue (stacked, setup.pr_mode = 'issue'); null: the project's one PR
@@ -553,6 +561,7 @@ export const note = pgTable('note', {
   /** A decision is a question (title) and its answer (Sandy, 2026-11-24). No answer yet: it is open. One made before questions were asked has only its title, a statement. */ answer: text('answer'),
   /** A decision's background (Sandy, 2026-11-24: "some place where we can tell a story about why it's an open question"): what led to the question, what turns on it, what to read. Markdown. Apart from `body`, which is why the answer is the answer. */ background: text('background'),
   /** More about a decision's question (Sandy, 2026-11-24: "options or added info … below the question"): the options, a recommendation, what each would mean. Markdown. Background is where the question came from; this is what there is to choose between. */ options: text('options'),
+  /** The decisions this one depends on (Sandy, 2026-11-24: "the correct answer may depend on … so I need to create a new question that this one depends on"): their ids, in this Context or its project's. */ dependsOn: jsonb('depends_on').$type<string[]>().notNull().default([]),
   /** An open decision the person has asked someone else about (Sandy, 2026-11-24: "I have asked so and so and I'm waiting for an answer"): who. `on` is the day the question was asked. */ waitingOn: text('waiting_on'),
   /** A decision: open (asked, not answered); proposed (an agent's answer, waiting for the person), who accepts it (settled) or turns it down (rejected: kept, so it is not proposed again). */ status: text('status').notNull().default('settled'),
   createdBy: text('created_by'), createdAt: createdAt(), updatedAt: at('updated_at'),

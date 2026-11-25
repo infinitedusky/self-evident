@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { addContextNote, addDoc, addFile, addTicket, contextCount, contextOf, contextPrompt, editContextNote, editDoc, LIMITS, refreshDoc, removeDoc } from './context.js'
+import { addContextNote, addDoc, addFile, addTicket, contextCount, contextOf, contextPrompt, editContextNote, openQuestionsDoc, editDoc, LIMITS, refreshDoc, removeContextNote, removeDoc } from './context.js'
 import { db, pool } from './db/client.js'
 import { app, workspace } from './db/schema.js'
 import { createIdea } from './ideas.js'
@@ -211,6 +211,64 @@ describe.skipIf(!reachable)('context', () => {
     expect((await contextOf({ issueId: t })).notes).toMatchObject([{ id, status: 'settled', answer: 'Admins only', title: 'Who may change the group? (sample)', options: null }])
     const n = (await addContextNote({ issueId: t }, { title: 'A plain note (sample)' })).view.notes.find((x) => x.kind === 'note')!
     expect((await call({ op: 'update', issueId: t, id: n.id, background: 'x' })).said).toContain('only a decision')
+  })
+
+  it('lets a decision depend on another: one already here, or a question asked there and then; never itself, and never in a circle', async () => {
+    const p = await createProject({ appId, name: 'Depending (sample)', issues: [{ title: 'A task with a chain (sample)', brief: 'Build it.' }] })
+    const t = p.issues[0].id
+    // Asked with what it depends on, by its words: that question is asked too, unanswered.
+    let v = (await addContextNote({ issueId: t }, { kind: 'decision', title: 'Who can set someone as protected? (sample)', dependsOnNew: ['Does the backend use the core permissions? (sample)'] })).view
+    const who = v.notes.find((n) => n.title.startsWith('Who can set'))!, perms = v.notes.find((n) => n.title.startsWith('Does the backend'))!
+    expect(perms).toMatchObject({ status: 'open', neededBy: [{ id: who.id, title: 'Who can set someone as protected? (sample)' }] })
+    expect(who.dependsOn).toEqual([{ id: perms.id, title: 'Does the backend use the core permissions? (sample)', answer: null, status: 'open' }])
+    expect(await contextPrompt({ issueId: t })).toContain('- Who can set someone as protected? (sample)\n  Depends on: "Does the backend use the core permissions? (sample)" (not decided yet)')
+    // The same words again use the question that is there; an id adds one already here, the project's too.
+    await addContextNote({ projectId: p.project.id }, { kind: 'decision', title: 'Is the group per company? (sample)', answer: 'Yes' })
+    const theirs = (await contextOf({ issueId: t })).notes.find((n) => n.fromProject)!
+    v = await editContextNote({ issueId: t }, who.id, { dependsOn: [perms.id, theirs.id], dependsOnNew: ['does the backend use the core permissions? (sample)'] })
+    expect(v.notes.filter((n) => n.kind === 'decision' && !n.fromProject)).toHaveLength(2)
+    expect(v.notes.find((n) => n.id === who.id)!.dependsOn.map((d) => [d.title, d.answer, d.status])).toEqual([['Does the backend use the core permissions? (sample)', null, 'open'], ['Is the group per company? (sample)', 'Yes', 'settled']])
+    // Answering the one it waits on shows there, and to the agents.
+    await editContextNote({ issueId: t }, perms.id, { answer: 'Yes, the core ones' })
+    expect(await contextPrompt({ issueId: t })).toContain('Depends on: "Does the backend use the core permissions? (sample)" (decided: Yes, the core ones); "Is the group per company? (sample)" (decided: Yes)')
+    await expect(editContextNote({ issueId: t }, who.id, { dependsOn: [who.id] })).rejects.toThrow('does not depend on itself')
+    await expect(editContextNote({ issueId: t }, perms.id, { dependsOn: [who.id] })).rejects.toThrow('cannot each wait for the other')
+    await expect(editContextNote({ issueId: t }, who.id, { dependsOn: ['note_nothing'] })).rejects.toThrow('no decision note_nothing')
+    expect((await editContextNote({ issueId: t }, who.id, { dependsOn: [] })).notes.find((n) => n.id === who.id)!.dependsOn).toEqual([])
+    // An agent says it the same way, through its tool.
+    const tool = engineTools({ appId, actor: 'agent' }).find((x) => x.name === 'context')!
+    await tool.handler({ op: 'update', issueId: t, id: who.id, dependsOn: [perms.id] })
+    await tool.handler({ op: 'ask', issueId: t, title: 'Can a member remove someone? (sample)', dependsOnQuestions: ['Who can set someone as protected? (sample)'] })
+    v = await contextOf({ issueId: t })
+    expect(v.notes.find((n) => n.id === who.id)).toMatchObject({ dependsOn: [{ id: perms.id }], neededBy: [{ title: 'Can a member remove someone? (sample)' }] })
+    // One that is dropped is no longer depended on.
+    await removeContextNote({ issueId: t }, perms.id)
+    expect((await contextOf({ issueId: t })).notes.find((n) => n.id === who.id)!.dependsOn).toEqual([])
+  })
+
+  it('writes the open questions as a document to share: a list, then each in full, those waiting on someone first', async () => {
+    const p = await createProject({ appId, name: 'Sharing (sample)', issues: [{ title: 'Protect executives (sample)', brief: 'Build it.' }] })
+    const t = p.issues[0].id
+    expect(await openQuestionsDoc({ issueId: t }, new Date('2026-11-24T12:00:00'))).toMatchObject({ count: 0, markdown: expect.stringContaining('Every decision here has its answer.') })
+    await addContextNote({ issueId: t }, { kind: 'decision', title: 'Who can set someone as protected? (sample)', on: '2026-11-22', background: 'The ticket only says add.', options: '(a) admins only\n(b) any member', dependsOnNew: ['Does the backend use the core permissions? (sample)'] })
+    await addContextNote({ issueId: t }, { kind: 'decision', title: 'Is there a limit? (sample)', answer: 'Fifty', body: 'Scan cost.', on: '2026-11-23' }, 'agent')
+    await addContextNote({ issueId: t }, { kind: 'decision', title: 'Is it one page? (sample)', answer: 'Yes' }) // answered: not in it
+    await addContextNote({ projectId: p.project.id }, { kind: 'decision', title: 'Is it per company? (sample)', on: '2026-11-20' })
+    const v = await contextOf({ issueId: t })
+    await editContextNote({ issueId: t }, v.notes.find((n) => n.title.startsWith('Does the backend'))!.id, { waitingOn: 'Em' })
+    const d = await openQuestionsDoc({ issueId: t }, new Date('2026-11-24T12:00:00'))
+    expect(d.count).toBe(4)
+    expect(d.title).toMatch(/^Open questions: \S+-\d+ Protect executives \(sample\)$/)
+    const md = d.markdown
+    expect(md).toContain('Shop (sample) · as of 24 Nov 2026 · 4 open')
+    expect(md).toMatch(/\| 1 \| Does the backend use the core permissions\? \(sample\) \| Em \|/)
+    expect(md.indexOf('## Waiting on Em')).toBeLessThan(md.indexOf('## Not yet with anyone'))
+    expect(md).toContain('### 3. Who can set someone as protected? (sample)\n\nAsked 22 Nov 2026\n\n**Background**\n\nThe ticket only says add.\n\n**Options**\n\n(a) admins only\n(b) any member\n\n**Depends on**: question 1 (Does the backend use the core permissions? (sample))')
+    expect(md).toContain('**Proposed answer** (not decided): Fifty\n\nScan cost.')
+    expect(md).toContain('· from the project, Sharing (sample)')
+    expect(md).not.toContain('Is it one page?')
+    const tool = engineTools({ appId, actor: 'agent' }).find((x) => x.name === 'context')!
+    expect((await tool.handler({ op: 'open_questions', issueId: t })).content[0].text).toContain('# Open questions:')
   })
 
   it('shows a decision made as one statement as an answer with no question, and takes a question when it is given one', async () => {

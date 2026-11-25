@@ -74,6 +74,7 @@ export function PageRoutes() {
       <Route path="/graph" element={<AppGraph />} />
       <Route path="/projects/new" element={<NewProject />} />
       <Route path="/projects/:id" element={<ProjectPage />} />
+      <Route path="/projects/:id/:section" element={<ProjectPage />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/settings/new" element={<Settings />} />
       <Route path="/settings/:section" element={<Settings />} />

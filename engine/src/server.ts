@@ -39,7 +39,7 @@ import { advanceChecks, onChecksDone, onPlanWanted, resumeChecks } from './check
 import { checksOwed, step } from './steps.js'
 import { writeHandover } from './handover.js'
 import { skipUntouched, approveBrief, approveStep, convertIdea, getStep, guardComplete, guardDirect, listWorkflows, planView, saveWorkflow, setStep, speedIntoWorkflows, ensureMain, stepsOf, useWorkflow, type Subject, createDefaultWorkflow } from './work.js'
-import { adoptTalk, answerPermission, busyAmong, releaseTalks, closeTalk, closeTalks, endTalk, ensureIdeaTalk, ensureTaskTalk, ideaAgents, ideaTalk, runLog, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, setupTalk, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
+import { adoptTalk, answerPermission, busyAmong, releaseTalks, closeTalk, closeTalks, endTalk, ensureIdeaTalk, ensureProjectTalk, ensureTaskTalk, ideaAgents, ideaTalk, projectAgents, projectTalk, runLog, taskAgents, taskTalk, handOff, interruptTalk, listClaudeSessions, listTalks, renameTalk, reopenTalk, say, setAutoApprove, setupTalk, showTalk, startTalk, talkTranscript, watchTerminals, type SubjectRef, type TalkContext } from './talk.js'
 import { describeProject } from './describe.js'
 import { handleMcp } from './mcp.js'
 import { lastSync, myRepos, startSync, syncApp } from './github.js'
@@ -51,7 +51,7 @@ import { getIssue, changeState, commentOnIssue, createIssue, listComments, ident
 import { now } from './now.js'
 import { latestFocus, startSummaries, writeFocus } from './summary.js'
 import { addNote, editNote, listNotes, removeNote } from './notes.js'
-import { addContextNote, addDoc, addFile, addTicket, contextCount, contextOf, editContextNote, editDoc, refreshDoc, removeContextNote, removeDoc, type Subject as ContextSubject } from './context.js'
+import { addContextNote, addDoc, addFile, addTicket, contextCount, contextOf, openQuestionsDoc, editContextNote, editDoc, refreshDoc, removeContextNote, removeDoc, type Subject as ContextSubject } from './context.js'
 import { deleteReport, editReport, getReport, isWritingReport, listReports, setReportFormat, writeReport, type Period } from './reports.js'
 import { listSketches, readSketch } from './sketches.js'
 import { listScreens } from './screens.js'
@@ -139,7 +139,7 @@ export function buildApp(bus: EventBus) {
       'GET /{ideas|issues|projects}/:id/steps': 'the workflow in force, each step\'s state, the order, what blocks completing', 'PUT /{ideas|issues|projects}/:id/steps/:key': '{status?, detail?, body?, refs?}', 'POST /issues/:id/steps/:key/approve': '{approve?} — a person approves a step of a task (research, sketches, mockups, the prototype), or takes it back',
       'POST /issues/:id/brief/approve': '{approve?} — a person approves the brief; a task completes only once it is', 'POST /ideas/:id/convert': '{as: task|project, title?, projectId?, why?}',
       'GET /workflows?app=': 'the app\'s workflows', 'POST /workflows': '{appId, name, steps: [{key, on, required}], ordered?}', 'PUT /workflows/:id': 'the same',
-      'GET /apps/:id/claude-sessions': 'the Claude Code sessions run on this app in a terminal or an editor, newest first', 'POST /talks/ask': '{appId, subjectRef?, text} — said to the task\'s own agent when subjectRef names a task (issueId), else to a new conversation brought to the front', 'GET /issues/:id/talk': 'the task\'s own agent: its one conversation, or null', 'POST /issues/:id/handover': '{again?} — what the conversation that made the task said about it, written from a copy of that conversation (once; again: true writes it anew); null when it was not made from one', 'POST /issues/:id/talk': 'the same, started if the task has none', 'GET /issues/:id/agents': 'the agents the task\'s conductor has out (a prototype\'s conversation): sessionId, what, title, busy', 'POST /{apps|projects|issues}/:id/workflow': '{workflowId | null} — attach one, or inherit again',
+      'GET /apps/:id/claude-sessions': 'the Claude Code sessions run on this app in a terminal or an editor, newest first', 'POST /talks/ask': '{appId, subjectRef?, text} — said to the task\'s own agent when subjectRef names a task (issueId), else to a new conversation brought to the front', 'GET /issues/:id/talk': 'the task\'s own agent: its one conversation, or null', 'GET /projects/:id/talk': 'the project\'s own agent: its one conversation, or null (POST starts it); /agents: the agents it has out', 'POST /issues/:id/handover': '{again?} — what the conversation that made the task said about it, written from a copy of that conversation (once; again: true writes it anew); null when it was not made from one', 'POST /issues/:id/talk': 'the same, started if the task has none', 'GET /issues/:id/agents': 'the agents the task\'s conductor has out (a prototype\'s conversation): sessionId, what, title, busy', 'POST /{apps|projects|issues}/:id/workflow': '{workflowId | null} — attach one, or inherit again',
       'GET /projects/:id/backlog': 'what the project has to cover', 'POST /projects/:id/backlog': '{text, body?} | {items: [{text, body?}]} | {ideaId}',
       'POST /backlog/:id/take': '{title?, brief?} — becomes Todo at the end', 'POST /backlog/:id/duplicate': '{of, reason?}', 'POST /backlog/:id/drop': '{reason}', 'POST /backlog/:id/reopen': '', 'POST /backlog/:id/todo': '{title?, checklist?} — work outside the code',
       'GET /{ideas|issues|projects}/:id/context': 'its Context (context.ts): reference docs, notes and decisions, with its project\'s for a task; /count: for a nav', 'POST …/context/docs': '{title, description?, body, inFull?}', 'POST …/context/tickets': '{ref}: a Linear ticket by its id', 'POST …/context/files': 'multipart `file`: text, Markdown or a PDF', 'PATCH|DELETE …/context/docs/:doc': '{title?, description?, body?, inFull?}', 'POST …/context/docs/:doc/refresh': 'a ticket, read again from its tracker', 'POST …/context/notes': '{kind: note|decision, title, body?, on?}', 'PATCH|DELETE …/context/notes/:note': '{title?, body?, on?, status?: settled|rejected}',
@@ -691,6 +691,10 @@ export function buildApp(bus: EventBus) {
   api.get('/ideas/:id/talk', async (c) => c.json(await ideaTalk(c.req.param('id'))))
   api.get('/ideas/:id/agents', async (c) => c.json(await ideaAgents(c.req.param('id'))))
   api.post('/ideas/:id/talk', async (c) => { try { return c.json(await ensureIdeaTalk(c.req.param('id'))) } catch (err) { return planError(c, err) } })
+  // A project's own agent (talk.ts, projectTalk): the conversation its page shows beside its steps; it plans across the project's tasks.
+  api.get('/projects/:id/talk', async (c) => c.json(await projectTalk(c.req.param('id'))))
+  api.get('/projects/:id/agents', async (c) => c.json(await projectAgents(c.req.param('id'))))
+  api.post('/projects/:id/talk', async (c) => { try { return c.json(await ensureProjectTalk(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.post('/talks/ask', async (c) => { // a page hands the agent a job: a step on a task goes to the task's own agent; anything else (an idea to convert) starts a conversation, brought to the front
     const body = await c.req.json<{ appId?: string; subjectRef?: SubjectRef; text?: string; own?: boolean }>()
     if (!body.appId || !body.text?.trim()) return c.json({ error: 'appId and text are required' }, 400)
@@ -700,6 +704,7 @@ export function buildApp(bus: EventBus) {
         const t = body.own ? await ensureIdeaTalk(body.subjectRef.ideaId) : await ideaTalk(body.subjectRef.ideaId)
         if (t) { await say(t.id, body.text); return c.json(t, 201) }
       }
+      if (body.subjectRef?.projectId && !body.subjectRef.prototypeId) { const t = await ensureProjectTalk(body.subjectRef.projectId); await say(t.id, body.text); return c.json(t, 201) } // a project's step goes to the project's own agent, shown on the project's page
       const t = await startTalk({ appId: body.appId, subjectRef: body.subjectRef, actor: 'user' }); await say(t.id, body.text); await showTalk(t.id, body.appId); return c.json(t, 201)
     } catch (err) { return planError(c, err) }
   })
@@ -982,11 +987,12 @@ export function buildApp(bus: EventBus) {
   // A person closes a task: it is Done. Only once its pull request is merged and every check of theirs is passed or skipped (close.ts).
   api.post('/issues/:id/close', async (c) => { try { return c.json(await closeTask((await resolveIssue(db, c.req.param('id'))).id, 'user')) } catch (err) { return planError(c, err) } })
   // An app's tickets, each with the tasks under it (ticket.ts): one ticket, several tasks, a pull request each. Reading one brings its title, link and words from its tracker.
+  api.get('/projects/:id/tickets', async (c) => { try { return c.json(await (await import('./ticket.js')).projectTickets(c.req.param('id'))) } catch (err) { return planError(c, err) } }) // a project's tickets: the ones in its Context and the ones its tasks are under
   api.get('/apps/:id/tickets', async (c) => { try { return c.json(await (await import('./ticket.js')).ticketsOf(c.req.param('id'))) } catch (err) { return planError(c, err) } })
   api.get('/apps/:id/tickets/:key', async (c) => { try { return c.json(await (await import('./ticket.js')).ticketOf(c.req.param('id'), c.req.param('key'))) } catch (err) { return planError(c, err) } })
   api.post('/apps/:id/tickets/:key/read', async (c) => { try { await keepTicket(c.req.param('id'), c.req.param('key'), await envOfApp(c.req.param('id'))); return c.json(await (await import('./ticket.js')).ticketOf(c.req.param('id'), c.req.param('key'))) } catch (err) { return planError(c, err) } })
   // A task's team ticket and its name for the team (ticket.ts): set by the person on its page; a build held for want of a ticket carries on.
-  api.put('/issues/:id/team', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const b = await c.req.json() as { ticket?: string | null; title?: string | null }; const out = await (await import('./ticket.js')).setTeamNames(t.id, b, async (appId, key) => keepTicket(appId, key, await envOfApp(appId))); void runner.dispatch(); return c.json(out) } catch (err) { return planError(c, err) } })
+  api.put('/issues/:id/team', async (c) => { try { const t = await resolveIssue(db, c.req.param('id')); const b = await c.req.json() as { ticket?: string | null; title?: string | null; also?: string[] | null }; const out = await (await import('./ticket.js')).setTeamNames(t.id, b, async (appId, key) => keepTicket(appId, key, await envOfApp(appId))); void runner.dispatch(); return c.json(out) } catch (err) { return planError(c, err) } })
   api.patch('/issues/:id', async (c) => { try { return c.json(settle(await updateIssue((await resolveIssue(db, c.req.param('id'))).id, await c.req.json(), 'user'))) } catch (err) { return planError(c, err) } })
   api.post('/issues/:id/state', async (c) => {
     const { state, reason } = await c.req.json<{ state: IssueState; reason?: string }>()
@@ -1155,6 +1161,7 @@ export function buildApp(bus: EventBus) {
     const of = async (c: any): Promise<ContextSubject> => (kind === 'ideas' ? { ideaId: c.req.param('id') } : kind === 'projects' ? { projectId: c.req.param('id') } : { issueId: (await resolveIssue(db, c.req.param('id'))).id })
     const json = (c: any) => c.req.json().catch(() => ({}))
     api.get(at, async (c) => { try { return c.json(await contextOf(await of(c))) } catch (err) { return planError(c, err) } })
+    api.get(`${at}/open-questions`, async (c) => { try { return c.json(await openQuestionsDoc(await of(c))) } catch (err) { return planError(c, err) } }) // the unanswered decisions as a document to share: {title, count, markdown}
     api.get(`${at}/count`, async (c) => { try { return c.json(await contextCount(await of(c))) } catch (err) { return planError(c, err) } })
     api.post(`${at}/docs`, async (c) => { try { return c.json(await addDoc(await of(c), await json(c), 'user'), 201) } catch (err) { return planError(c, err) } })
     api.post(`${at}/tickets`, async (c) => { try { return c.json(await addTicket(await of(c), (await json(c)).ref, 'user'), 201) } catch (err) { return planError(c, err) } })

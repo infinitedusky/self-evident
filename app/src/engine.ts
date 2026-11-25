@@ -230,7 +230,7 @@ export interface OriginView {
   files: { url: string; kept: boolean; note: string | null }[]; fetchedAt: string
 }
 /** A task under a ticket (the engine's ticket.ts): where its ticket was read from, its project and its pull request. */
-export interface TicketTask { id: string; identifier: string; title: string; teamTitle: string | null; state: IssueState; from: 'set' | 'import' | 'link' | 'idea'; project: { id: string; name: string } | null; pr: { number: number | null; url: string | null; status: string } | null }
+export interface TicketTask { id: string; identifier: string; title: string; teamTitle: string | null; state: IssueState; /** `also`: one of the task's other tickets, not the one that names its branch. */ from: 'set' | 'import' | 'link' | 'idea' | 'also'; projectId?: string | null; project: { id: string; name: string } | null; pr: { number: number | null; url: string | null; status: string } | null }
 /** A team's ticket and the tasks under it: one ticket, a task per pull request. It organises and builds nothing. */
 export interface TicketGroup {
   key: string; title: string | null; url: string | null; source: string | null
@@ -238,10 +238,13 @@ export interface TicketGroup {
   /** Dropped tasks are listed and not counted. */ tasks: TicketTask[]; done: number; total: number
   /** Every task that counts is done. */ finished: boolean
 }
+/** A ticket of a project: in its Context, or one its tasks are under. */
+export interface ProjectTicket extends TicketGroup { /** It is in the project's Context as a reference doc. */ inContext: boolean; /** How many of its tasks are in this project. */ here: number }
 export interface IssueDetail extends Issue {
   /** The team's ticket in force (ENT-322) and where it was read from: set on the task, its import, a link in its text, or the idea it came from. */ ticket?: string | null; ticketFrom?: 'set' | 'import' | 'link' | 'idea' | null
   /** The app requires a team ticket and this task has none: its branch and its pull request wait for one. */ ticketMissing?: boolean
   /** What was set by hand: the ticket, and the task's name as the team would say it (the {title} of its pull request and branch). */ teamTicket?: string | null; teamTitle?: string | null
+  /** The other tickets it is under: they place it there and name nothing. */ alsoTickets?: string[]
   /** Where it came from, word for word, when it came from outside (its own, its project's or its idea's). */
   origin?: OriginView | null
   /** A built task not yet closed: whether a person can close it now, and if not, what it waits on, in their words. */
@@ -447,6 +450,8 @@ export interface ContextNote {
   /** An open decision: who the person asked and is waiting on. `on` is the day it was asked. */ waitingOn?: string | null
   /** A decision's background: where its question came from. Markdown. */ background?: string | null
   /** A decision's options: what there is to choose between, a recommendation, more about the question. Markdown. */ options?: string | null
+  /** The decisions this one depends on, each as it stands; and the decisions that depend on this one. */
+  dependsOn?: { id: string; title: string; answer: string | null; status: ContextNote['status'] }[]; neededBy?: { id: string; title: string }[]
   on: string; addedBy: string | null; fromProject: boolean; /** Other tasks it is also about. */ alsoAbout: { id: string; name: string; title: string }[]
 }
 export interface ContextView {
@@ -627,6 +632,10 @@ export const engine = {
   /** A task's own agent: its one conversation, or null; `startTaskTalk` starts it if the task has none. */
   taskTalk: (issueId: string) => call<TalkSession | null>('GET', `/issues/${issueId}/talk`),
   startTaskTalk: (issueId: string) => call<TalkSession>('POST', `/issues/${issueId}/talk`),
+  /** A project's own agent: it plans across the project's tasks, on the project's page. */
+  projectTalk: (projectId: string) => call<TalkSession | null>('GET', `/projects/${projectId}/talk`),
+  startProjectTalk: (projectId: string) => call<TalkSession>('POST', `/projects/${projectId}/talk`),
+  projectAgents: (projectId: string) => call<TaskAgentOut[]>('GET', `/projects/${projectId}/agents`),
   /** An idea's own agent, as a task's: started (with its worktree) when the person first works on the idea. */
   ideaTalk: (ideaId: string) => call<TalkSession | null>('GET', `/ideas/${ideaId}/talk`),
   startIdeaTalk: (ideaId: string) => call<TalkSession>('POST', `/ideas/${ideaId}/talk`),
@@ -831,6 +840,8 @@ export const engine = {
   removeNote: (appId: string, id: string) => call<{ removed: string }>('DELETE', `/apps/${appId}/notes/${id}`),
   /** Context (docs/context-brief.md): the reference docs, notes and decisions of an idea, a task or a project. */
   context: (s: ContextSubject) => call<ContextView>('GET', `/${s.kind}/${s.id}/context`),
+  /** Its unanswered decisions as a document to share (the engine's openQuestionsDoc): Markdown, written from what is stored. */
+  openQuestions: (s: ContextSubject) => call<{ title: string; count: number; markdown: string }>('GET', `/${s.kind}/${s.id}/context/open-questions`),
   /** For a nav: how much it holds, and how many proposed decisions wait for the person. */
   contextCount: (s: ContextSubject) => call<{ count: number; proposed: number; waiting?: number }>('GET', `/${s.kind}/${s.id}/context/count`),
   addContextDoc: (s: ContextSubject, b: { title: string; description?: string; body: string; inFull?: boolean }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/docs`, b),
@@ -847,9 +858,9 @@ export const engine = {
   /** A ticket, as its tracker has it now. */
   refreshContextDoc: (s: ContextSubject, id: string) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/docs/${id}/refresh`),
   removeContextDoc: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/docs/${id}`),
-  addContextNote: (s: ContextSubject, b: { kind: 'note' | 'decision'; title: string; /** A decision's: left out, it is open. */ answer?: string; body: string; background?: string; options?: string; on?: string }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/notes`, b),
+  addContextNote: (s: ContextSubject, b: { kind: 'note' | 'decision'; title: string; /** A decision's: left out, it is open. */ answer?: string; body: string; background?: string; options?: string; /** Decisions it depends on: by id, and questions by their words, asked now if they are not here. */ dependsOn?: string[]; dependsOnNew?: string[]; on?: string }) => call<ContextView>('POST', `/${s.kind}/${s.id}/context/notes`, b),
   /** status: accept a proposed decision (settled) or reject it. */
-  editContextNote: (s: ContextSubject, id: string, b: Partial<{ title: string; answer: string; body: string; background: string; options: string; on: string; status: 'settled' | 'rejected'; /** An open decision: who it waits on; empty: nobody. */ waitingOn: string }>) => call<ContextView>('PATCH', `/${s.kind}/${s.id}/context/notes/${id}`, b),
+  editContextNote: (s: ContextSubject, id: string, b: Partial<{ title: string; answer: string; body: string; background: string; options: string; dependsOn: string[]; dependsOnNew: string[]; on: string; status: 'settled' | 'rejected'; /** An open decision: who it waits on; empty: nobody. */ waitingOn: string }>) => call<ContextView>('PATCH', `/${s.kind}/${s.id}/context/notes/${id}`, b),
   removeContextNote: (s: ContextSubject, id: string) => call<ContextView>('DELETE', `/${s.kind}/${s.id}/context/notes/${id}`),
   reports: (appId: string) => call<Reports>('GET', `/apps/${appId}/reports`),
   writeReport: (appId: string, body: { period: ReportPeriod; notes?: string }) => call<{ writing: boolean }>('POST', `/apps/${appId}/reports`, body),
@@ -883,7 +894,9 @@ export const engine = {
   ticket: (appId: string, key: string) => call<TicketGroup>('GET', `/apps/${appId}/tickets/${encodeURIComponent(key)}`),
   /** Read a ticket from its tracker: its title, link and words. */
   readTicket: (appId: string, key: string) => call<TicketGroup>('POST', `/apps/${appId}/tickets/${encodeURIComponent(key)}/read`),
-  setTeamNames: (issueId: string, names: { ticket?: string | null; title?: string | null }) => call<{ teamTicket: string | null; teamTitle: string | null; ticket: string | null; ticketFrom: string | null; ticketMissing: boolean }>('PUT', `/issues/${issueId}/team`, names),
+  /** A project's tickets: the ones in its Context and the ones its tasks are under, the unplanned first. */
+  projectTickets: (projectId: string) => call<ProjectTicket[]>('GET', `/projects/${projectId}/tickets`),
+  setTeamNames: (issueId: string, names: { ticket?: string | null; title?: string | null; also?: string[] }) => call<{ teamTicket: string | null; teamTitle: string | null; ticket: string | null; ticketFrom: string | null; ticketMissing: boolean }>('PUT', `/issues/${issueId}/team`, names),
   submitPr: (issueId: string) => call<{ id: string; number: number | null; url: string | null; status: string }>('POST', `/issues/${issueId}/pr/submit`),
   keepSecret: (name: string, value: string, appId?: string) => call<KeptKey>('PUT', `/secrets/${encodeURIComponent(name)}`, { value, ...(appId ? { appId } : {}) }),
   dropSecret: (name: string, appId?: string) => call<KeptKey>('DELETE', `/secrets/${encodeURIComponent(name)}${appId ? `?app=${appId}` : ''}`),

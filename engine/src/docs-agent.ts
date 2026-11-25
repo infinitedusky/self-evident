@@ -140,6 +140,13 @@ export function checkPages(dir: string): string[] {
     const structure = s.key === 'work' ? taskPage(dir).headings : []
     for (const f of pagesIn(root)) {
       const text = readFileSync(f, 'utf8'), body = noFences(noFrontmatter(text))
+      // What VitePress would refuse, said before its build does and in plainer words.
+      for (const line of (text.match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? '').split('\n')) {
+        const m = line.match(/^([A-Za-z_][\w-]*):\s+(.+?)\s*$/)
+        if (m && !/^["'[{|>]/.test(m[2]) && /:\s|\s#/.test(m[2])) problems.push(`${name(f)}: in the frontmatter, the value of "${m[1]}" has a colon or a # in it and no quotes, which is not YAML and stops the whole site building. Put the value in double quotes`)
+      }
+      if (/\{\{/.test(body)) problems.push(`${name(f)} has "{{" outside a code span or a fenced block: VitePress runs what is between double curly braces as code when the page is drawn. Put it in a code span`)
+      if ((body.match(/^# \S/gm) ?? []).length > 1) problems.push(`${name(f)} has more than one "# " title: a page has one, and its sections are "## "`)
       if (!/^# \S/m.test(body)) problems.push(`${name(f)} has no title: its first line of text is "# " and what the page is about`)
       for (const m of body.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
         const to = linkedFile(docs, f, m[1])
@@ -395,6 +402,8 @@ A project has a page too: the index.md of its folder (docs/work/census-import/in
 Each index.md lists every page of its folder, a linked line each saying what the page is for. docs/work/index.md lists the projects and the tasks that are on their own, newest first. Write the index pages if they are not there. Link between pages from the site's root (/system/parts, /work/census-import/${a.key}-12-read-the-file), without .md.
 
 Write for a person who is building up their own understanding of this system and will ask you about what they read. Plain words, short paragraphs, the surprising thing first. Where a flow, a sequence between parts or a set of parts is easier seen than read, draw it: a fenced block marked mermaid (flowchart or sequenceDiagram), with a sentence before it saying what it shows. Outside a code span or a fenced block never write a word in angle brackets (a placeholder like <port>): the site reads it as HTML and the page breaks; keep a code span on one line.
+
+The site is VitePress, and you are expected to know it well: a page is compiled as a Vue template and its frontmatter is YAML, so a page that reads fine as Markdown can stop the whole site building. The ones that bite: a frontmatter value with a colon or a # in it must be in double quotes; a word in angle brackets or double curly braces outside a code span is read as HTML or run as code; a link to a page or a heading that is not there fails the build; every ":::" container that opens is closed. Use its containers (::: info, tip, warning, danger, details) for a call-out a reader must not miss. If a vitepress skill is in this folder, read it before your first page; where you are unsure what VitePress does with something, look it up (vitepress.dev) and do not guess.
 
 This folder may hold skills of its own for these docs (.claude/skills/). Use them: where one differs from what is said here, the skill is this app's standard and wins.
 

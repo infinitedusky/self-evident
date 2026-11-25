@@ -81,6 +81,16 @@ describe('the pages of the two sections, checked', () => {
     expect(checkPages(dir)).toEqual([])
     expect(slugOf('Sign-in (sample)')).toBe('sign-in-sample'); expect(slugOf('  ¡!  ')).toBe('project')
   })
+  it('what VitePress would refuse is said before its build: an unquoted colon in the frontmatter, curly braces, two titles', () => {
+    const dir = bench()
+    put(dir, 'docs/system/index.md', '# How the system works\n\n- [Sign-in](/system/sign-in)\n- [Jobs](/system/jobs)\n')
+    put(dir, 'docs/system/jobs.md', '---\ntitle: Jobs: how they run (sample)\nquoted: "Jobs: fine"\ndate: 2026-11-25\n---\n# Jobs\n\nThe step is `${{ matrix.os }}` in code, and {{ here }} in prose.\n\n# Again\n')
+    expect(checkPages(dir)).toEqual([
+      expect.stringMatching(/jobs\.md: in the frontmatter, the value of "title" has a colon.*double quotes/),
+      expect.stringMatching(/jobs\.md has "\{\{" outside a code span/),
+      expect.stringMatching(/jobs\.md has more than one "# " title/),
+    ])
+  })
   it('a link is read from the site\'s root or from the page, with or without .md, to a page or a folder\'s index', () => {
     const dir = bench(), docs = join(dir, 'docs'), page = join(docs, 'work', 'a.md')
     expect(linkedFile(docs, page, '/system/sign-in#sessions')).toBe(join(docs, 'system', 'sign-in.md'))
