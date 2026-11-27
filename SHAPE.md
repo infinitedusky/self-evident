@@ -281,6 +281,14 @@ Details and sources in `research/`.
     instructions and what is checked at the end." A staged workflow keeps the earlier settings. A task too big
     for one builder is two tasks, or a checklist with sub-tasks.
   - The check is an independent agent, never the builder.
+- **How Evident builds is improved the way an app is** (Sandy, 2026-11-26: "I am just looking for a way to make
+  this a continuous improvement process"). The same loop, turned on the building itself. Proposed, nothing built:
+  - **Observe**: what got through the checks is recorded against the task and the check that passed it.
+  - **Learn**: on a regular look, the misses are read together and one cause is named.
+  - **Change one setting**: a check's words, a requirement, a skill, a model, a workflow.
+  - **Try it**: a probe on past tasks (trials), anything that changes what is built on the next real tasks, as a
+    second build (below).
+  - **Keep it or put it back**, on the scores, and the change is linked to what it was tried on.
 - **A second build is the exception, and it is a test** (Sandy, 2026-11-26: "should we be A/B testing each task?
   so that as we are building we always get two versions and choose which to submit"). Not every task: the person's
   attention is what runs out, and two builds from the same settings say which won but not why. Nothing is built yet.

@@ -8520,6 +8520,10 @@ person picks blind with a line of why, and the pick is kept with the scores.
 
 **Nothing built**; this is the decision only.
 
+**What it is for** (Sandy, the same day: "I am just looking for a way to make this a continuous improvement
+process"). The second build is one step of a loop, the app's own loop turned on how Evident builds: record what got
+through, read the misses together, change one setting, try it, keep it or put it back. In SHAPE.md as proposed.
+
 **What it rests on, not decided.** Evident checks each build but keeps no score of the checks themselves. Proposed,
 in order: (1) a record of what got through (a failed smoke test, a closed pull request, a later task fixing an
 earlier one, tied back to the task and the check that passed it), which is part of how a pair is scored, so it
