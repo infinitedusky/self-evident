@@ -281,6 +281,34 @@ Details and sources in `research/`.
     instructions and what is checked at the end." A staged workflow keeps the earlier settings. A task too big
     for one builder is two tasks, or a checklist with sub-tasks.
   - The check is an independent agent, never the builder.
+- **How Evident builds is improved the way an app is** (Sandy, 2026-11-26: "I am just looking for a way to make
+  this a continuous improvement process"). The same loop, turned on the building itself. Proposed, nothing built:
+  - **Observe**: what got through the checks is recorded against the task and the check that passed it.
+  - **Learn**: on a regular look, the misses are read together and one cause is named.
+  - **Change one setting**: a check's words, a requirement, a skill, a model, a workflow.
+  - **Try it**: a probe on past tasks (trials), anything that changes what is built on the next real tasks, built twice
+    (below).
+  - **Keep it or put it back**, on the scores, and the change is linked to what it was tried on.
+- **Each piece of a build is built twice, and the result is kept with the option used** (Sandy, 2026-11-26: "each
+  build runs a subtask twice. It chooses from a set of options. We have an evaluator and the best / cheapest /
+  fastest is chosen. The result is recorded and saved to the option used. Then over time we have a constant eval
+  process running"). Until the same day this said a second build was the exception. Nothing is built yet.
+  - **It is a build mode, off unless turned on** (Sandy, 2026-11-26: "it would not be the default, but something
+    we can turn on. So for a critical task I need to complete don't use it. If we have more time we use it"). A
+    task built without it is built once, as now. Turned on, every sub-task of that task is built twice. Where it
+    is switched (the task, its project, the workflow) is not decided.
+  - **The unit is the sub-task**, or the whole task where a workflow has none (Main builds in one go).
+  - **An option** is one way of building: a model, a skill, a builder's instructions, a requirement. An app has a
+    set of them. Two are drawn for a sub-task and each builds it, from the same starting commit.
+  - **An evaluator chooses**, never a builder. Proposed order: first what passes (the check, the probe, mutation's
+    score), then the cheapest of those, then the fastest, so a cheap wrong build never wins.
+  - **The winner goes on**: the next sub-task starts from it, and the other is dropped. Both results are kept with
+    their options: won or lost, the scores, cost, time.
+  - **Over time** each option has a record against every other it has met, on the same work.
+  - **Proposed, not decided.** The evaluator is checked too: on a sample the person picks without knowing which is
+    which, and a miss found later (what got through) counts against the option that built it and the evaluator
+    that chose it. Otherwise the options are improved toward what the evaluator can be fooled by. Whether an
+    option that keeps winning is tried against less often.
 - **Learn has two roles, and both end in ideas** (Sandy, 2026-11-16: "1 is to analyze observations, the other is to
   analyze the codebase. The latter would be the first step when you approach a new project … the learn agent can
   create ideas … it would also be the access point to the workbench docs").

@@ -8510,3 +8510,38 @@ said per kind of job, and the proxy once for all apps.
 smoke test's agent stay on the app's account. Plain Claude models per job are stored and run but the page offers
 only the proxy's. No run of a whole task with a job on the proxy yet: the first one should be Check after the build
 on tkt-scratch. Not decided: whether the tkt integration leaves the product (still open from 2026-11-10).
+
+## 2026-11-26: a second build is the exception, and it is a test (Sandy: "should we be A/B testing each task?")
+
+Asked while looking at how Evident could know its way of building is the best one. **Decided** (SHAPE.md, under the
+workflow): one build per task stays the default; a second is made when a setting is on trial, when the person asks,
+or for a standing sample of about one task in five. One thing differs between the two, the checks score both, the
+person picks blind with a line of why, and the pick is kept with the scores.
+
+**Nothing built**; this is the decision only.
+
+**What it is for** (Sandy, the same day: "I am just looking for a way to make this a continuous improvement
+process"). The second build is one step of a loop, the app's own loop turned on how Evident builds: record what got
+through, read the misses together, change one setting, try it, keep it or put it back. In SHAPE.md as proposed.
+
+**What it rests on, not decided.** Evident checks each build but keeps no score of the checks themselves. Proposed,
+in order: (1) a record of what got through (a failed smoke test, a closed pull request, a later task fixing an
+earlier one, tied back to the task and the check that passed it), which is part of how a pair is scored, so it
+comes before any second build; (2) a set of merged tasks with one fault planted in each, for a catch rate that can
+be run again when a prompt or model changes (trials replay only on tasks assumed good); (3) rounds, cost and
+corrections per task, compared by workflow and model; (4) a page per app that shows them. Open for (1): whether a
+miss is marked by the person, inferred by Evident, or both. The one-in-five is a first figure, to adjust.
+
+**Changed the same day** (Sandy: "each build runs a subtask twice. It chooses from a set of options. We have an
+evaluator and the best / cheapest / fastest is chosen. The result is recorded and saved to the option used. Then
+over time we have a constant eval process running"). The second build is not the exception: each sub-task (or the
+task, where there are none) is built by two options drawn from the app's set, an evaluator chooses, the winner goes
+on and both results are kept with their options. SHAPE.md says this now. An evaluator choosing takes away the
+reason for "not every task", which was the person's attention; what is left is cost. Proposed with it: passing
+comes before cheapest and fastest; the evaluator is itself checked against the person's blind pick on a sample and
+against misses found later. Open: every sub-task or a share.
+
+**And it is a build mode** (Sandy: "it would not be the default, but something we can turn on. So for a critical
+task I need to complete don't use it. If we have more time we use it"). Off unless turned on; on, every sub-task of
+that task is built twice. That answers "every sub-task or a share": the switch is the share. Open: where it is
+switched (the task, its project, the workflow).
