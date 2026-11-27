@@ -317,9 +317,33 @@ export const sampleIntegrations: FactorySettings['integrations'] = [
   },
 ]
 
+/** The model proxy as the engine describes it (its integrations.ts). */
+export const proxyIntegration: FactorySettings['integrations'][number] = {
+  key: 'proxy', name: 'Model proxy', role: 'Models', does: 'Other vendors’ models for the agents: a gateway that speaks Anthropic’s Messages API (a company proxy, LiteLLM). Each app chooses a model per job under its Settings › Agents', calls: true,
+  fields: [
+    { key: 'url', label: 'Address', placeholder: 'https://proxy.example.com', required: true },
+    { key: 'key_env', label: 'Key variable', placeholder: 'MODEL_PROXY_KEY (the name only; the key is pasted below)', required: true, secret: true },
+    { key: 'models', label: 'Models offered', placeholder: 'the proxy’s own names, commas between: gpt-6.2-sol, gemini-4-neon', required: true },
+    { key: 'small', label: 'Small model', placeholder: 'for titles and other small calls; the job’s own model when empty' },
+  ],
+  actions: [],
+}
+/** An app's jobs and the model each runs on, made up: none chosen, no proxy set up. */
+export const sampleModels: NonNullable<AppSettings['models']> = {
+  jobs: [
+    { key: 'talk', name: 'Conversation', what: 'The agent you talk with: a task’s, an idea’s, the app’s', chosen: null, unchosen: null },
+    { key: 'prototype', name: 'Prototype', what: 'The agent that builds a prototype', chosen: null, unchosen: 'claude-sonnet-5-5' },
+    { key: 'checks', name: 'Checks before the build', what: 'Fresh agents that read the prototype and the plan: analysis, draft ADR, blast radius, audit', chosen: null, unchosen: null },
+    { key: 'plan', name: 'Plan', what: 'The planner, cutting a task into sub-tasks', chosen: null, unchosen: null },
+    { key: 'build', name: 'Build', what: 'The builders, one per sub-task', chosen: null, unchosen: null },
+    { key: 'review', name: 'Check after the build', what: 'Fresh agents that read the build against its criteria, and the reviewers', chosen: null, unchosen: null },
+  ],
+  offered: [], proxy: 'off', problem: null,
+}
+
 export const factorySettings: FactorySettings = {
   workspace,
-  integrations: sampleIntegrations,
+  integrations: [...sampleIntegrations, proxyIntegration],
   values: {
     posthog: { host: 'https://us.posthog.com' },
     linear: { team: 'SHOP', key_env: 'LINEAR_API_KEY' },
@@ -331,6 +355,7 @@ export const factorySettings: FactorySettings = {
     posthog: { state: 'ready', missing: [], keyVar: null },
     linear: { state: 'ready', missing: [], keyVar: 'LINEAR_API_KEY' },
     confluence: { state: 'no-key', missing: [], keyVar: 'CONFLUENCE_API_TOKEN' },
+    proxy: { state: 'off', missing: ['Address', 'Key variable', 'Models offered'], keyVar: null },
   },
   plugins: [{
     id: 'sample-plugin@sample', name: 'sample-plugin', version: '1.0.0', description: 'A made-up plugin with two skills.', source: 'sample', builtIn: false,
@@ -349,6 +374,7 @@ export const appSettings: AppSettings = {
   },
   status: { tkt: { state: 'ready', missing: [], keyVar: null }, storybook: { state: 'ready', missing: [], keyVar: null }, posthog: { state: 'ready', missing: [], keyVar: null }, linear: { state: 'ready', missing: [], keyVar: 'LINEAR_API_KEY' }, confluence: { state: 'off', missing: ['Site', 'Account email', 'Space key', 'Key variable'], keyVar: null } },
   plugins: [{ id: 'sample-plugin@sample', name: 'sample-plugin', factoryOn: true, own: null, on: true }],
+  models: sampleModels,
   jobs: [
     { key: 'testing', name: 'Testing', for: 'Writing and running tests', group: 'Build', builtIn: null, skills: [{ key: 'sample-plugin/write-tests', name: 'write-tests', plugin: 'sample-plugin' }, { key: 'other-plugin/test-first', name: 'test-first', plugin: 'other-plugin' }], factory: 'sample-plugin/write-tests', overridden: false, own: null },
     { key: 'review', name: 'Review', for: 'Reading a change before it lands', group: 'Build', builtIn: null, skills: [{ key: 'sample-plugin/audit', name: 'audit', plugin: 'sample-plugin' }], factory: null, overridden: false, own: null },

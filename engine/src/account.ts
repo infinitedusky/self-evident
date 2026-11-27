@@ -27,7 +27,7 @@ type Env = Record<string, string | undefined>
 export interface Account { key_env?: string; config_dir?: string }
 
 /** Credentials the override replaces: left in, any of them would win over the one the app chose. */
-const CREDENTIALS = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR']
+export const CREDENTIALS = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR']
 
 /** What Settings saved, tidied: one way or the other, never both (a key wins), or nothing. */
 export function cleanAccount(given: unknown): Account | undefined {

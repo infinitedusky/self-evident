@@ -8459,3 +8459,54 @@ Very narrow, Narrow compare with main, and Narrow now measures the address too. 
 measure is in `app/src/stories/fits.ts`.
 
 Not done: the same change by the tab's width for the smoke settings form (`.smoke-setting`, still by the window).
+
+## A model per job, and a proxy for other vendors' models (Sandy, 2026-11-26: "if we revisit tkt for Evident, could it be used just for the harness? so that we can use opencode?")
+
+**The question.** Whether tkt should come back, only as the thing that launches OpenCode, so Evident's work can run
+on other vendors' models. tkt is not a harness: it makes a worktree, opens a herdr tab and starts Claude Code or
+OpenCode there. Using it for that brings herdr, worktrunk and its worktree naming back, and the agent runs in a
+terminal tab the task's page cannot see.
+
+**What we found instead.** The Agent SDK is Claude Code's loop as a library, and it sends its requests wherever
+`ANTHROPIC_BASE_URL` points. Lazer's proxy (`proxy.lazertechnologies.com`) speaks Anthropic's Messages API and
+translates for the other vendors behind it. Tried by hand, with the key in Doppler as `LAZER_PROXY_KEY`:
+
+- One request to `/v1/messages`, `gpt-6.2-sol`, streaming, with a tool: a proper tool call came back.
+- Claude Code on `gpt-6.2-sol`, reviewing the slugify commit in tkt-scratch, read-only. Left open-ended it picked up
+  the built-in code-review skill at high effort and wandered for four minutes over an eight-line change (about 30
+  tool calls, no API errors; the permission limits held: `gh`, `curl` and `git ls-tree` were refused). Sandy stopped
+  it: "it was taking too long".
+- The same job told to read two files, no skills, ten turns at most: done in 9 seconds, 4 turns, "No findings",
+  `Verdict: READY_FOR_HUMAN`. Thin: the helper throws on a non-string and drops ß. One sample under a tight prompt,
+  so it says nothing yet about the model as a reviewer.
+- The key works as a bearer token (`ANTHROPIC_AUTH_TOKEN`). As `ANTHROPIC_API_KEY` in an empty config folder Claude
+  Code said "Not logged in". From the normal login folder the token wins over the login, and the conversation is
+  stored there as usual.
+- The small model must be named too (`ANTHROPIC_DEFAULT_HAIKU_MODEL`): the proxy's names are its own
+  (`claude-haiku-5.5`, with a dot). "unrecognized model" on stderr is only a warning.
+- One model carries on another's conversation: Claude resumed GPT's, and GPT resumed Claude's (with thinking in it).
+- Claude Code's cost for these models is a guess (it does not know their prices); the proxy's dashboard is the truth.
+
+**Decided** (SHAPE.md, "A model per job; other vendors' models through a proxy"). Asked where it is chosen, Sandy
+said per kind of job, and the proxy once for all apps.
+
+**Built** (branch `models-per-job`).
+
+- `engine/src/models.ts`: the jobs (`MODEL_JOBS`: talk, prototype, checks, plan, build, review), `setup.models_by_job`
+  (a job's key to a model's name; `proxy/<name>` is through the proxy), `resolveAgent` / `agentFor` (the model and
+  the SDK's environment for a job: the app's account as before, or the proxy's address, its key as the token, and
+  its names for every size of model), `describeModels` for Settings, `checkProxy`.
+- `proxy` in `INTEGRATIONS` (address, key variable, models offered, small model), so All apps › Integrations shows it,
+  keeps its key and checks it with no new screen. Its check asks each model offered for a word.
+- The conversation (`talk.ts`: prototype, checks, or talk), the planner and the builder (`runner.ts`: review for a
+  sub-task that only looks, else build) take their model and environment from `agentFor`. A run's row names the
+  model its job ran on.
+- Settings › the app › Agents: **Model per job**, a select per job; with no proxy, one line saying where to set one.
+  Stories first: Pages/Settings › AppModelsNoProxy, AppModelsPerJob, AppModelsProxyKeyMissing, AllAppsProxy,
+  AllAppsProxySetUp.
+- `docs/integrations/proxy.md`.
+
+**Not done.** A model per task. The small writers (summaries, reports, descriptions, to-dos, the hand-over) and the
+smoke test's agent stay on the app's account. Plain Claude models per job are stored and run but the page offers
+only the proxy's. No run of a whole task with a job on the proxy yet: the first one should be Check after the build
+on tkt-scratch. Not decided: whether the tkt integration leaves the product (still open from 2026-11-10).
