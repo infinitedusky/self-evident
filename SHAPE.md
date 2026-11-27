@@ -281,6 +281,18 @@ Details and sources in `research/`.
     instructions and what is checked at the end." A staged workflow keeps the earlier settings. A task too big
     for one builder is two tasks, or a checklist with sub-tasks.
   - The check is an independent agent, never the builder.
+- **A second build is the exception, and it is a test** (Sandy, 2026-11-26: "should we be A/B testing each task?
+  so that as we are building we always get two versions and choose which to submit"). Not every task: the person's
+  attention is what runs out, and two builds from the same settings say which won but not why. Nothing is built yet.
+  - **One build per task stays the default.** A second is made when a setting is on trial (a workflow, a model, a
+    skill, a requirement: the new against the old, on the next real tasks), when the person asks for one (a task
+    with more than one reasonable shape; the prototype is the cheaper place for that), or for a small standing
+    sample, about one task in five with the same settings twice, which says how much two runs differ by chance.
+  - **One thing differs**, and it is kept with the pair.
+  - **The checks score both first** (rounds to pass, what the probe found, mutation's score, cost). The person
+    picks without knowing which is which and gives a line of why. The pick and the scores are kept.
+  - **What it is for**: after enough pairs, whether the new setting wins, and whether the checks agree with the
+    person. Where they do not is where the checks are improved.
 - **Learn has two roles, and both end in ideas** (Sandy, 2026-11-16: "1 is to analyze observations, the other is to
   analyze the codebase. The latter would be the first step when you approach a new project … the learn agent can
   create ideas … it would also be the access point to the workbench docs").
