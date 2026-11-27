@@ -15,7 +15,7 @@ import { WorkflowSettings } from '../components/WorkflowSettings'
 import { MockLibrary } from '../components/MockLibrary'
 import { Workbench } from '../components/Workbench'
 import type { Workflow } from '@self-evident/engine/steps'
-import { engine, type AppHolds, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type SmokeSetupSetting, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type PluginInfo, type Trial } from '../engine'
+import { engine, type AppHolds, type PulledSkills, type SkillSource, type AccountStatus, type AgentRole, type App, type AppReference, type AppSettings as AppSettingsData, type AppSetup, type SmokeSetupSetting, type CategoryGroup, type EffectiveValues, type FactorySettings, type Folder, type GitHubRepos, type ModelsView, type PluginInfo, type Trial } from '../engine'
 import { useCurrentApp } from '../current-app'
 import { RemoveApp, RemovedApps } from '../components/RemoveApp'
 
@@ -540,6 +540,7 @@ function AppPage({ app, section, item, onSaved }: { app: App; section: string; i
         <label>Model<input className="mono" value={setup.model ?? ''} onChange={(e) => set({ model: e.target.value })} placeholder="default: the agent's own" /></label>
         <label>Budget per run (USD)<input type="number" min={0} step={1} value={setup.max_budget_usd ?? ''} onChange={(e) => set({ max_budget_usd: num(e.target.value) })} placeholder="no cap" /></label>
         <label>Turns per run<input type="number" min={1} step={1} value={setup.max_turns ?? ''} onChange={(e) => set({ max_turns: num(e.target.value) })} placeholder="60" /></label>
+        <JobModels models={info?.models} value={setup.models_by_job ?? undefined} onChange={(models_by_job) => set({ models_by_job })} />
         <Account appId={app.id} value={setup.account} saved={app.setup?.account} onChange={(account) => set({ account })} />
         <div style={{ gridColumn: '1 / -1' }}>
           <div className="label-text">Skills in this repo</div>
@@ -702,6 +703,40 @@ function Account({ appId, value, saved, onChange }: { appId: string; value?: Acc
       {changed
         ? <div className="faint settings-desc">Save to check this account.</div>
         : status && <p className="settings-note" style={{ margin: 0 }}><Badge tone={status.ok ? 'ok' : 'bad'}>{status.ok ? 'In use' : 'Not usable'}</Badge><span>{status.note}{!status.ok && status.kind !== 'default' ? ' Until this is fixed, this app\'s agents won\'t start: they never fall back to the default.' : ''}</span></p>}
+    </div>
+  )
+}
+
+/**
+ * The model each kind of job runs on (the engine's models.ts): a job left alone runs on the app's model; the others
+ * to choose from are the model proxy's, set once under All apps › Integrations. With no proxy, one line says where.
+ */
+function JobModels({ models, value, onChange }: { models?: ModelsView; value?: Record<string, string>; onChange: (v: Record<string, string> | undefined) => void }) {
+  if (!models) return null
+  const chosen = value ?? {}
+  const pick = (job: string, model: string) => { const next = { ...chosen, [job]: model }; if (!model) delete next[job]; onChange(Object.keys(next).length ? next : undefined) }
+  const any = models.offered.length > 0 || Object.keys(chosen).length > 0
+  return (
+    <div style={{ gridColumn: '1 / -1', display: 'grid', gap: 8 }} data-component="JobModels">
+      <div className="label-text">Model per job</div>
+      {!any
+        ? <div className="faint settings-desc">Every job runs on the app's model. For another vendor's, set up the <NavLink to="/settings/integrations/proxy">model proxy</NavLink> under All apps.</div>
+        : <div className="form-grid">
+            {models.jobs.map((j) => {
+              const now = chosen[j.key] ?? ''
+              const known = models.offered.some((o) => o.value === now)
+              return (
+                <label key={j.key} title={j.what}>{j.name}
+                  <select aria-label={`Model for ${j.name}`} value={now} onChange={(e) => pick(j.key, e.target.value)}>
+                    <option value="">{j.unchosen ? `The app's: ${j.unchosen}` : "The app's model"}</option>
+                    {models.offered.map((o) => <option key={o.value} value={o.value}>{o.name} · proxy</option>)}
+                    {now && !known && <option value={now}>{now.startsWith('proxy/') ? `${now.slice(6)} · proxy, no longer offered` : now}</option>}
+                  </select>
+                </label>
+              )
+            })}
+          </div>}
+      {models.problem && <p className="settings-note" style={{ margin: 0 }}><Badge tone="bad">Not usable</Badge><span>{models.problem} They never fall back to the app's model.</span></p>}
     </div>
   )
 }

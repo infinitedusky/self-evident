@@ -71,6 +71,19 @@ export const INTEGRATIONS: Integration[] = [
     ],
   },
   {
+    // A gateway that speaks Anthropic's Messages API with other vendors' models behind it (models.ts;
+    // docs/integrations/proxy.md). Set once; each app says which of its jobs run on which model, under Settings › Agents.
+    key: 'proxy', name: 'Model proxy', role: 'Models', does: 'Other vendors\' models for the agents: a gateway that speaks Anthropic\'s Messages API (a company proxy, LiteLLM). Each app chooses a model per job under its Settings › Agents',
+    fields: [
+      { key: 'url', label: 'Address', placeholder: 'https://proxy.example.com', required: true },
+      { key: 'key_env', label: 'Key variable', placeholder: 'MODEL_PROXY_KEY (the name only; the key is pasted below)', required: true, secret: true },
+      { key: 'models', label: 'Models offered', placeholder: 'the proxy\'s own names, commas between: gpt-6.2-sol, gemini-4-neon', required: true },
+      { key: 'small', label: 'Small model', placeholder: 'for titles and other small calls; the job\'s own model when empty' },
+    ],
+    calls: true,
+    actions: [],
+  },
+  {
     key: 'posthog', name: 'PostHog', role: 'Telemetry', does: 'What users do, and every log line: events, flags, experiments, LLM calls, logs over OTLP',
     fields: [
       { key: 'host', label: 'Host', placeholder: 'https://us.i.posthog.com' },
@@ -194,6 +207,7 @@ export async function checkIntegration(key: string, values: Record<string, strin
   const token = env[st.keyVar!]!
   const v = (k: string) => values[k]!.trim()
   try {
+    if (key === 'proxy') return await (await import('./models.js')).checkProxy(values, token, fetcher)
     if (key === 'linear') {
       const client = new LinearClient({ apiKey: token })
       const me = await client.viewer

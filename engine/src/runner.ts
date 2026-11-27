@@ -28,6 +28,7 @@ import { agentProbes, builderHeld, commandFixBrief, commandProbes, leftTo, revie
 import { skillOptions } from './skills.js'
 import { guideTasks, mergeGuide, mergeRecord } from './merge-guide.js'
 import { acceptanceOf, setAcceptance } from './acceptance.js'
+import { modelNameFor } from './models.js'
 import { unchecked, uncheckedReq, afterBuild, CHECK_TITLE, RECHECK_TITLE, checkTaskBrief, finishBrief, FINISH_TITLE, MAX_ROUNDS, numbered, OLD_PROBE_TITLE, readVerdicts, reqId, requirementsChecked, unmetOf, verdictChange } from './verify.js'
 import { inForce, type Covered } from './requirements.js'
 import { deploySteps, smokeOwed , smokeSetups } from './smoke.js'
@@ -274,7 +275,7 @@ export class Runner {
     const previousFailure = await this.lastFailure(subId)
     const attempt = x.attempt + 1
     const runId = newId('run')
-    await db.insert(run).values({ id: runId, appId: a.id, issueId: subId, attempt, kind: 'build', agent: 'claude-code', model: setup.model ?? null, status: 'working', budgetCapUsd: setup.max_budget_usd?.toString() ?? null })
+    await db.insert(run).values({ id: runId, appId: a.id, issueId: subId, attempt, kind: 'build', agent: 'claude-code', model: modelNameFor(a.setup, onlyLooks(x.title) ? 'review' : 'build') ?? null, status: 'working', budgetCapUsd: setup.max_budget_usd?.toString() ?? null })
     await db.transaction((tx) => setBuild(tx, subId, { status: 'running', attempt, branch, worktreePath, baseSha, heldReason: null }, { runId, payload: { attempt, branch, worktreePath, resumes: interrupted?.agentSessionId ?? null } }))
     const rb = { ...pb, runId }
 
@@ -293,7 +294,7 @@ export class Runner {
       subIssue: { id: x.id, identifier: x.identifier, title: x.title, brief: x.brief }, issue: { identifier: t.identifier, title: t.title, brief: t.brief }, origin: originPrompt(await originOf({ issueId: t.id })) + await contextPrompt({ issueId: t.id }, { canWrite: false }).catch(() => ''),
       readOnly: onlyLooks(x.title), skills: skill, ...(told ? { heldTo: builderHeld(a.setup) } : {}),
       ticket: ticket ?? t.identifier, commitFormat: commits.format ?? undefined, hooksPath,
-      worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: storiesLead(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, maxTurns: turnsFor(x.title, setup), maxBudgetUsd: setup.max_budget_usd,
+      worktreePath, branch, files: x.files, testCmd: setup.test_cmd, storybook: storiesLead(setup), references: await referencesOf(a.id), previousFailure, model: setup.model, setup, on: { app: a, job: onlyLooks(x.title) ? 'review' : 'build' }, maxTurns: turnsFor(x.title, setup), maxBudgetUsd: setup.max_budget_usd,
       resumeSessionId: interrupted?.agentSessionId ?? undefined, ...(interrupted?.error?.startsWith(OUT_OF_TURNS) ? { resumeWhy: 'turns' as const } : {}), abort: this.active.get(subId),
       onEvent: async (type, payload) => {
         if (type === 'run.steps') await this.saveSteps(a.id, subId, runId, (payload.steps as { text: string; status: string }[]) ?? [])

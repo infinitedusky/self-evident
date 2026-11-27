@@ -5,6 +5,7 @@
  * Development runs on the operator's own Claude Code login; a product deployment sets ANTHROPIC_API_KEY.
  */
 import { accountEnv } from './account.js'
+import { agentFor, type Agent, type AppRef, type ModelJob } from './models.js'
 import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import { builderGuard, guardOptions, STOP_ONLY_YOURS } from './guard.js'
 import { StepTracker } from './step-track.js'
@@ -40,6 +41,8 @@ export interface RunInput {
   model?: string
   /** The app's settings, for the Claude account its agents run on (account.ts). */
   setup?: unknown
+  /** The app and the kind of job this is: the model and the account or proxy come from them (models.ts), over `model` and `setup`. */
+  on?: { app: AppRef; job: ModelJob }
   maxTurns?: number
   maxBudgetUsd?: number
   resumeSessionId?: string // continue an interrupted run's conversation in the same worktree
@@ -112,16 +115,16 @@ export async function runTask(i: RunInput): Promise<RunOutput> {
   const used = new Set<string>()
   const has = (set: Set<string>, name: string) => set.has(name) || set.has(name.split(':').pop()!) // a session may call a plugin's skill by its short name
   try {
-    const account = accountEnv(i.setup)
+    const account: Agent = i.on ? await agentFor(i.on.app, i.on.job) : { model: i.model, ...accountEnv(i.setup) }
     for await (const m of query({
       prompt: prompt(i),
       options: {
         cwd: i.worktreePath,
-        ...(i.hooksPath ? { env: hookEnv(i.hooksPath, account.env ?? process.env) } : account),
+        ...(i.hooksPath ? { env: hookEnv(i.hooksPath, account.env ?? process.env) } : account.env ? { env: account.env } : {}),
         ...(i.references?.length ? { additionalDirectories: i.references.map((r) => r.path) } : {}), // readable; the guard keeps edits inside the worktree
         resume: i.resumeSessionId,
         abortController: i.abort,
-        model: i.model,
+        model: account.model,
         maxTurns: i.maxTurns ?? 60,
         maxBudgetUsd: i.maxBudgetUsd,
         settingSources: ['project'], // the repo's CLAUDE.md, not the operator's personal settings

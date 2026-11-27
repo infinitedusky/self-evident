@@ -24,6 +24,7 @@ import { newId } from './ids.js'
 import { identifier } from './issues.js'
 import { getStep } from './work.js'
 import { accountEnv } from './account.js'
+import { agentFor, modelNameFor, type Agent, type AppRef } from './models.js'
 import { addSubIssues, PlanError, projectGraph, type NewSubIssue } from './projects.js'
 import { ensureSolo } from './solo.js'
 import { storiesLead } from './storybook.js'
@@ -51,6 +52,8 @@ export interface ProposeInput {
   model?: string
   /** The app's settings, for the Claude account its agents run on (account.ts). */
   setup?: unknown
+  /** The app: the planner's model and the account or proxy it is on come from it (models.ts), over `model` and `setup`. */
+  on?: AppRef
   maxTurns?: number
   maxBudgetUsd?: number
   abort?: AbortController
@@ -165,17 +168,17 @@ export const proposeWithAgent: Propose = async (i) => {
   let structured: unknown
   try {
     const skills = i.appId ? await skillOptions('planner', i.repoPath, i.appId) : {}
-    const account = accountEnv(i.setup)
+    const account: Agent = i.on ? await agentFor(i.on, 'plan') : { model: i.model, ...accountEnv(i.setup) }
     // The app's skills for the draft ADR step are its standard for a decision record: the planner has them too, when its session does.
     const recordSkills = ((i.setup as { step_skills?: { adr?: string[] } } | undefined)?.step_skills?.adr ?? []).filter((n) => ((skills as { skills?: string[] }).skills ?? []).includes(n))
     for await (const m of query({
       prompt: prompt(i, recordSkills),
       options: {
         cwd: i.repoPath,
-        ...account,
+        ...(account.env ? { env: account.env } : {}),
         ...(i.references?.length ? { additionalDirectories: i.references.map((r) => r.path) } : {}),
         abortController: i.abort,
-        model: i.model,
+        model: account.model,
         maxTurns: i.maxTurns ?? 40,
         maxBudgetUsd: i.maxBudgetUsd,
         settingSources: ['project'],
@@ -287,7 +290,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
   const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(run).where(and(eq(run.issueId, issueId), eq(run.kind, 'plan')))
   const attempt = Number(n) + 1
   const runId = newId('run')
-  await db.insert(run).values({ id: runId, appId: a.id, issueId, attempt, kind: 'plan', agent: 'claude-code', model: setup.model ?? null, status: 'working', budgetCapUsd: setup.max_budget_usd?.toString() ?? null })
+  await db.insert(run).values({ id: runId, appId: a.id, issueId, attempt, kind: 'plan', agent: 'claude-code', model: modelNameFor(a.setup, 'plan') ?? null, status: 'working', budgetCapUsd: setup.max_budget_usd?.toString() ?? null })
   const base: Omit<NewEvent, 'type'> = { workspaceId: a.workspaceId, appId: a.id, projectId: t.projectId, issueId, runId, actor: opts.actor ?? 'engine' }
   await emit({ ...base, type: 'issue.planning', payload: { attempt, identifier: name, title: t.title } })
   const earlier = g.issues.filter((x) => x.sortOrder < t.sortOrder && x.state !== 'canceled').map((x) => ({
@@ -310,7 +313,7 @@ export async function preparePlanning(issueId: string, opts: { actor?: string } 
     runId, issueId, projectId: t.projectId, appId: a.id, attempt, base, oneGo: fixed ? undefined : oneGo, fixed,
     input: {
       repoPath: r.localPath, appId: a.id, issue: { identifier: name, title: t.title, brief: t.brief }, origin: originPrompt(await originOf({ issueId: issueId })) + await contextPrompt({ issueId: issueId }, { canWrite: false }).catch(() => ''), acceptance: acceptanceOf(t).length ? acceptanceLines(acceptanceOf(t)) : null, draftAdr: (await getStep({ issueId }, 'adr'))?.body ?? null, analysis: (await getStep({ issueId }, 'analysis'))?.body ?? null, project: { name: g.project.name, content: g.project.content }, earlier,
-      testCmd: setup.test_cmd, storybook: storiesLead(setup), references: await referencesOf(a.id), requirements: inForce(setup, g.project.requirements, wf?.requirements), model: setup.model, setup, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
+      testCmd: setup.test_cmd, storybook: storiesLead(setup), references: await referencesOf(a.id), requirements: inForce(setup, g.project.requirements, wf?.requirements), model: setup.model, setup, on: a, maxTurns: setup.max_turns, maxBudgetUsd: setup.max_budget_usd,
     },
   }
 }

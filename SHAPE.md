@@ -907,6 +907,18 @@ Details and sources in `research/`.
     first real service (SixtyFour) answers a batch with rows that must carry back the ids it was sent, which fixed
     answers cannot do and those tools do only by logic packed into templates. Ordinary code in a small server
     does it in a few lines.
+- **A model per job; other vendors' models through a proxy** (Sandy, 2026-11-26: "can we add this as an option in
+  the settings, then … you can choose it as an option for tasks"; asked which, "per kind of job", and the proxy
+  "once, for all apps"). The question was whether tkt should come back as the way to reach OpenCode and other
+  vendors' models. It does not need to: the Agent SDK is Claude Code's loop, and that loop talks to any address
+  that speaks Anthropic's Messages API. A model proxy (Lazer's, LiteLLM) is such an address with other vendors'
+  models behind it. So the proxy is an integration, set once for all apps (address, the name of its key's variable,
+  the models offered; `docs/integrations/proxy.md`), and each app says under Settings › Agents which model each kind
+  of job runs on: Conversation, Prototype, Checks before the build, Plan, Build, Check after the build. A job left
+  alone runs on the app's model. The first use is tkt's rule that the checker does not share the builder's blind
+  spots: Check after the build on another vendor's model. A choice that can't be used stops the job and says so; it
+  never falls back. Not chosen: a model per task (a picker on the task's page), OpenCode as a second executor, and
+  tkt as the launcher; LOG.md, "A model per job, and a proxy for other vendors' models".
 
 ## Explore fast, build rigorous (Sandy, 2026-11-01)
 

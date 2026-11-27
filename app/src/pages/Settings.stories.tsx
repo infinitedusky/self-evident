@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, userEvent, within } from 'storybook/test'
 import { Settings } from './Settings'
 import { engineDown, withEngine } from '../stories/mock-engine'
-import { appSettings, apps, factorySettings, otherApp, repoNote, sampleApp, storybookCheck, workflowRows } from '../stories/sample'
+import { appSettings, apps, factorySettings, otherApp, repoNote, sampleApp, sampleModels, storybookCheck, workflowRows } from '../stories/sample'
 import type { PluginInfo } from '../engine'
 
 // Settings: which settings across the top (All apps, each app), that scope's sections down the side.
@@ -177,6 +177,49 @@ export const AppAccountKeyMissing: Story = {
     await expect(c.getByText(/never fall back to the default/)).toBeVisible()
   },
 }
+/** Made-up: the model proxy set up for all apps, with three models offered. */
+const proxyOffered = [{ value: 'proxy/gpt-sample-2', name: 'gpt-sample-2' }, { value: 'proxy/gemini-sample-pro', name: 'gemini-sample-pro' }, { value: 'proxy/qwen-sample-max', name: 'qwen-sample-max' }]
+const withProxy = { ...factorySettings, values: { ...factorySettings.values, proxy: { url: 'https://proxy.example.com', key_env: 'MODEL_PROXY_KEY', models: 'gpt-sample-2, gemini-sample-pro, qwen-sample-max', small: 'gpt-sample-mini' } }, status: { ...factorySettings.status, proxy: { state: 'ready' as const, missing: [], keyVar: 'MODEL_PROXY_KEY' } } }
+/** No model proxy yet: every job runs on the app's model, and one line says where another vendor's would come from. */
+export const AppModelsNoProxy: Story = {
+  parameters: appPage(sampleApp.id, 'agents'),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/Every job runs on the app's model/)).toBeVisible()
+    await expect(c.getByRole('link', { name: 'model proxy' })).toHaveAttribute('href', '/settings/integrations/proxy')
+    await expect(c.queryByLabelText('Model for Build')).toBeNull()
+  },
+}
+/** The proxy is set up: each kind of job has a model. Here the check after the build is read by another vendor's (made up); choosing one for the build makes the page ready to save. */
+export const AppModelsPerJob: Story = {
+  parameters: appPage(sampleApp.id, 'agents'),
+  beforeEach: withEngine({
+    settings: withProxy,
+    apps: apps.map((a) => (a.id === sampleApp.id ? { ...a, setup: { ...a.setup, models_by_job: { review: 'proxy/gpt-sample-2' } } } : a)),
+    appSettings: { ...appSettings, models: { ...sampleModels, jobs: sampleModels.jobs.map((j) => (j.key === 'review' ? { ...j, chosen: 'proxy/gpt-sample-2' } : j)), offered: proxyOffered, proxy: 'ready' } },
+  }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByLabelText('Model for Check after the build')).toHaveValue('proxy/gpt-sample-2')
+    await expect(c.getByLabelText('Model for Build')).toHaveValue('')
+    await expect(within(c.getByLabelText('Model for Prototype')).getByRole('option', { name: "The app's: claude-sonnet-5-5" })).toBeInTheDocument()
+    await userEvent.selectOptions(c.getByLabelText('Model for Build'), 'proxy/qwen-sample-max')
+    await expect(c.getByRole('button', { name: /Save/ })).toBeEnabled()
+  },
+}
+/** A job is on the proxy and the proxy's key is gone from this computer: said plainly, and that job won't start on the app's model instead. */
+export const AppModelsProxyKeyMissing: Story = {
+  parameters: appPage(sampleApp.id, 'agents'),
+  beforeEach: withEngine({
+    apps: apps.map((a) => (a.id === sampleApp.id ? { ...a, setup: { ...a.setup, models_by_job: { review: 'proxy/gpt-sample-2' } } } : a)),
+    appSettings: { ...appSettings, models: { ...sampleModels, jobs: sampleModels.jobs.map((j) => (j.key === 'review' ? { ...j, chosen: 'proxy/gpt-sample-2' } : j)), offered: proxyOffered, proxy: 'no-key', problem: "MODEL_PROXY_KEY has no key, so the jobs on the proxy won't start." } },
+  }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText(/MODEL_PROXY_KEY has no key/)).toBeVisible()
+    await expect(c.getByText(/never fall back to the app's model/)).toBeVisible()
+  },
+}
 /** An app with nothing set: no repo, no skills, every value inherited. */
 /** Made-up apps: a frontend that reads its backend. One reference on, with its note; another app offered; one with no checkout on this computer. */
 const apiApp = { ...otherApp, id: 'app_sample_api', name: 'Sample Shop API', key: 'SA', repos: [{ id: 'repo_sample_api', appId: 'app_sample_api', fullName: 'example/sample-shop-api', localPath: '/code/sample-shop-api', baseBranch: 'main' }] }
@@ -286,6 +329,18 @@ export const EngineDown: Story = { parameters: all, beforeEach: withEngine(engin
 /** All apps: every integration and where it stands. */
 export const AllAppsIntegrations: Story = { parameters: allAt('integrations') }
 /** One integration's page under All apps. */
+/** The model proxy, for all apps: nothing set yet, so the page says what it is and offers to set it up. */
+export const AllAppsProxy: Story = { parameters: { route: { path: '/settings/:section/:item', url: '/settings/integrations/proxy' } } }
+/** Set up (made up): its address, the name of its key's variable and the models it offers. */
+export const AllAppsProxySetUp: Story = {
+  parameters: { route: { path: '/settings/:section/:item', url: '/settings/integrations/proxy' } },
+  beforeEach: withEngine({ settings: withProxy }),
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement)
+    await expect(await c.findByText('https://proxy.example.com')).toBeVisible()
+    await expect(c.getByText(/gpt-sample-2, gemini-sample-pro, qwen-sample-max/)).toBeVisible()
+  },
+}
 export const AllAppsLinear: Story = { parameters: { route: { path: '/settings/:section/:item', url: '/settings/integrations/linear' } } }
 /** An app's integrations: its overrides and what it inherits. */
 /** Settings › the app › Mocks: its library of mocks, one per outside service (made up). */
